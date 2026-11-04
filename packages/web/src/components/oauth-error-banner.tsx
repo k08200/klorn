@@ -44,7 +44,7 @@ export function OAuthErrorBanner() {
         role="status"
       >
         <h3 className="text-role-head text-ink">{t("oauthError.wipeInProgress.title")}</h3>
-        <p className="mt-1 text-label font-normal leading-5 text-ink-mid">
+        <p className="mt-1 text-role-label font-normal leading-5 text-ink-mid">
           {t("oauthError.wipeInProgress.body")}
         </p>
       </div>
@@ -57,10 +57,10 @@ export function OAuthErrorBanner() {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-role-head text-state-danger-ink">{t("oauthError.title")}</h3>
-          <p className="mt-1 text-label font-normal leading-5 text-ink-mid">
+          <p className="mt-1 text-role-label font-normal leading-5 text-ink-mid">
             {t("oauthError.body")}
           </p>
-          <ul className="mt-2 space-y-1 text-label font-normal leading-5 text-ink-mid">
+          <ul className="mt-2 space-y-1 text-role-label font-normal leading-5 text-ink-mid">
             <li>
               <span className="text-ink">{t("oauthError.policy.title")}</span>{" "}
               {t("oauthError.policy.body")}
@@ -74,14 +74,14 @@ export function OAuthErrorBanner() {
             <button
               type="button"
               onClick={() => void startGoogleConnect()}
-              className="rounded-control bg-accent-solid px-3 py-1.5 text-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
+              className="rounded-control bg-accent-solid px-3 py-1.5 text-role-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
             >
               {t("reconnect.googleAction")}
             </button>
             <button
               type="button"
               onClick={() => setDismissed(true)}
-              className="rounded-control border border-line px-3 py-1.5 text-caption text-ink-mid transition hover:text-ink"
+              className="rounded-control border border-line px-3 py-1.5 text-role-caption text-ink-mid transition hover:text-ink"
             >
               {t("common.dismiss")}
             </button>

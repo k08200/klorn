@@ -96,7 +96,7 @@ export function FilesView() {
           maxLength={SEARCH_MAX_CHARS}
           placeholder={t("files.search.placeholder")}
           autoComplete="off"
-          className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
+          className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-role-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
         />
       </div>
       <section
@@ -254,8 +254,8 @@ function FilesHeader({ driveLive }: { driveLive: boolean }) {
   const { t } = useT();
   return (
     <header className="flex flex-col gap-1">
-      <h1 className="text-display text-ink">{t("nav.files")}</h1>
-      <p className="text-body text-ink-muted [word-break:keep-all]">
+      <h1 className="text-role-page text-ink">{t("nav.files")}</h1>
+      <p className="text-role-body text-ink-muted [word-break:keep-all]">
         {t(driveLive ? "files.subtitle.live" : "files.subtitle")}
       </p>
     </header>
@@ -281,7 +281,7 @@ function FolderTrail({ trail, onWalk }: { trail: FolderCrumb[]; onWalk: (index: 
                 /
               </span>
               {last ? (
-                <span aria-current="page" className="truncate text-body text-ink">
+                <span aria-current="page" className="truncate text-role-body text-ink">
                   {crumb.name}
                 </span>
               ) : (

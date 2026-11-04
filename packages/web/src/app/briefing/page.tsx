@@ -374,7 +374,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         />
       </div>
       {guidance && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-control border border-state-warn-line bg-state-warn-bg px-3 py-2 text-caption leading-5 text-state-warn-ink">
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-control border border-state-warn-line bg-state-warn-bg px-3 py-2 text-role-caption leading-5 text-state-warn-ink">
           <span>{t(guidance.message)}</span>
           {guidance.action && (
             <Link
@@ -488,7 +488,9 @@ function DeliveryFact({
   }[tone];
   return (
     <div className={`rounded-control border px-3 py-2 ${toneClass}`}>
-      <p className="text-caption font-semibold uppercase tracking-[0.12em] opacity-60">{label}</p>
+      <p className="text-role-caption font-semibold uppercase tracking-[0.12em] opacity-60">
+        {label}
+      </p>
       <p className="mt-1 truncate text-role-caption font-medium">{value}</p>
     </div>
   );

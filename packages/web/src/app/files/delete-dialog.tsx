@@ -75,7 +75,7 @@ export function DeleteDialog({
         <p
           key={action.failure.attempt}
           role="alert"
-          className="text-body text-state-danger-ink [word-break:keep-all]"
+          className="text-role-body text-state-danger-ink [word-break:keep-all]"
         >
           {t(action.failure.key)}
         </p>

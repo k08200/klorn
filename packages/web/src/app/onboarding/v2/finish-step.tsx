@@ -25,26 +25,32 @@ export function FinishStep({ accounts, today, onOpen, onAddAccount }: FinishStep
   const { t } = useT();
   return (
     <section aria-labelledby="onboarding-finish-title">
-      <h1 id="onboarding-finish-title" tabIndex={-1} className="text-display text-ink outline-none">
+      <h1
+        id="onboarding-finish-title"
+        tabIndex={-1}
+        className="text-role-page text-ink outline-none"
+      >
         {t("onboardingV2.finish.title")}
       </h1>
-      <p className="mt-2 max-w-xl text-body text-ink-mid">
+      <p className="mt-2 max-w-xl text-role-body text-ink-mid">
         {t(today ? "onboardingV2.finish.bodyToday" : "onboardingV2.finish.bodyLegacy")}
       </p>
 
-      <h2 className="mt-6 text-head text-ink">{t("onboardingV2.finish.accountsTitle")}</h2>
+      <h2 className="mt-6 text-role-head text-ink">{t("onboardingV2.finish.accountsTitle")}</h2>
       <ul className="mt-3 divide-y divide-line-soft rounded-card border border-line bg-surface-panel">
         {accounts.map((account) => (
           <li key={account.scope} className="flex items-center gap-2 px-4 py-3">
             <SourceBadge provider={account.provider} />
-            <span className="min-w-0 truncate text-label text-ink">
+            <span className="min-w-0 truncate text-role-label text-ink">
               {account.email ?? sourceGlyph(account.provider).name}
             </span>
           </li>
         ))}
       </ul>
 
-      <p className="mt-4 text-caption text-ink-muted">{t("onboardingV2.finish.briefingNote")}</p>
+      <p className="mt-4 text-role-caption text-ink-muted">
+        {t("onboardingV2.finish.briefingNote")}
+      </p>
 
       <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
         <Button variant="secondary" size="lg" onClick={onAddAccount}>

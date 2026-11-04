@@ -64,8 +64,8 @@ export function TodayHeader({ time, accounts, showAccounts }: TodayHeaderProps) 
     <header className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <div className="flex flex-wrap items-baseline gap-x-3">
-          <h1 className="text-display text-ink">{t("nav.v2.today")}</h1>
-          <p className="text-body text-ink-muted">
+          <h1 className="text-role-page text-ink">{t("nav.v2.today")}</h1>
+          <p className="text-role-body text-ink-muted">
             <time dateTime={time.now.toISOString().slice(0, 10)}>{longDate(time)}</time>
           </p>
         </div>
@@ -103,7 +103,7 @@ function DayStrip() {
   return (
     <ul
       aria-label={t("today.strip.label")}
-      className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-caption tabular-nums text-ink-muted"
+      className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-role-caption tabular-nums text-ink-muted"
     >
       {needs.map(({ lane, count }) => (
         <li key={lane} className="flex items-center gap-1.5 text-ink-soft">
@@ -137,7 +137,9 @@ function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   if (accounts.failed) {
     return (
       <div role="alert" className="flex items-center gap-2 md:hidden">
-        <p className="text-label font-normal text-state-danger-ink">{t("today.accounts.error")}</p>
+        <p className="text-role-label font-normal text-state-danger-ink">
+          {t("today.accounts.error")}
+        </p>
         <Button variant="secondary" size="sm" onClick={accounts.retry}>
           {t("today.retry")}
         </Button>
@@ -171,9 +173,9 @@ function AccountChip({ account }: { account: ConnectedAccount }) {
       className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-control px-2 transition-colors duration-120 ease-fluid hover:bg-surface-hover"
     >
       <SourceBadge provider={account.provider} />
-      <span className="max-w-44 truncate text-label font-normal text-ink-soft">{name}</span>
+      <span className="max-w-44 truncate text-role-label font-normal text-ink-soft">{name}</span>
       <span
-        className={`inline-flex items-center gap-1.5 text-caption ${HEALTH_TEXT[account.health]}`}
+        className={`inline-flex items-center gap-1.5 text-role-caption ${HEALTH_TEXT[account.health]}`}
       >
         <span
           aria-hidden="true"

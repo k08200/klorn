@@ -9,7 +9,7 @@ export default function NotFound() {
   return (
     <main className="flex min-h-screen flex-col items-center bg-surface-app px-6 pb-12 pt-24 text-center text-ink">
       <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-10 w-10" />
-      <p className="mb-3 font-mono text-caption uppercase tracking-[0.18em] text-accent-deep [&:is(:lang(ko),:lang(ja),:lang(zh))]:tracking-normal">
+      <p className="mb-3 font-mono text-role-caption uppercase tracking-[0.18em] text-accent-deep [&:is(:lang(ko),:lang(ja),:lang(zh))]:tracking-normal">
         {t("statePage.notFound.eyebrow")}
       </p>
       <h1 className="text-role-page [word-break:keep-all]">{t("statePage.notFound.title")}</h1>

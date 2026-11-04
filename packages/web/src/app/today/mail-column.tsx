@@ -120,7 +120,7 @@ function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
         </ul>
       )}
       {loaded && mail.isDemo && shown.length > 0 && (
-        <p className="border-t border-line-soft px-4 py-2 text-caption text-ink-muted">
+        <p className="border-t border-line-soft px-4 py-2 text-role-caption text-ink-muted">
           {t("today.mail.sample")}
         </p>
       )}
@@ -198,10 +198,10 @@ function InfoRow() {
         onClick={() => preselectMailLane("INFO")}
         className="focus-ring flex min-h-12 items-center gap-2.5 px-4 text-ink-soft transition-colors duration-120 ease-fluid hover:bg-surface-raised focus-visible:-outline-offset-2"
       >
-        <h2 id={headingId} className="flex shrink-0 items-center gap-2 text-head text-ink">
+        <h2 id={headingId} className="flex shrink-0 items-center gap-2 text-role-head text-ink">
           <LaneChip tier="INFO" />
         </h2>
-        <span className="min-w-0 truncate text-label font-normal text-ink-muted">
+        <span className="min-w-0 truncate text-role-label font-normal text-ink-muted">
           {t("today.lane.info.hint")}
         </span>
         <span className="flex-1" />

@@ -16,7 +16,7 @@ export default function MailSubscriptionsEntry({ className = "" }: { className?:
   return (
     <Link
       href="/email/subscriptions"
-      className={`focus-ring inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel px-3 text-label text-ink-mid transition-colors duration-120 hover:bg-surface-hover hover:text-ink ${className}`}
+      className={`focus-ring inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel px-3 text-role-label text-ink-mid transition-colors duration-120 hover:bg-surface-hover hover:text-ink ${className}`}
     >
       {t("mailSubscriptions.entry")}
     </Link>

@@ -483,7 +483,7 @@ export function LoadMore({ shown, total, hasMore, loading, onLoadMore }: LoadMor
           {t(loading ? "mailV2.loadingMore" : "mailV2.loadMore")}
         </Button>
       )}
-      <p className="text-caption tabular-nums text-ink-muted">
+      <p className="text-role-caption tabular-nums text-ink-muted">
         {t("mailV2.shown", { shown: String(shown), total: String(total) })}
       </p>
     </div>

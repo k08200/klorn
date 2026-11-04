@@ -46,7 +46,7 @@ export function SettingsNav({ pathname, showTeam }: { pathname: string; showTeam
       aria-label={t("settings.nav.label")}
       className="mb-6 md:sticky md:top-6 md:mb-0 md:w-56 md:shrink-0 md:self-start"
     >
-      <p className="mb-2 hidden px-3 text-head text-ink md:block">{t("settings.title")}</p>
+      <p className="mb-2 hidden px-3 text-role-head text-ink md:block">{t("settings.title")}</p>
       <Button
         variant="secondary"
         aria-expanded={open}
@@ -70,7 +70,7 @@ export function SettingsNav({ pathname, showTeam }: { pathname: string; showTeam
                 href={href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
-                className={`focus-ring flex min-h-11 items-center rounded-control px-3 text-label transition-colors duration-120 ease-fluid ${
+                className={`focus-ring flex min-h-11 items-center rounded-control px-3 text-role-label transition-colors duration-120 ease-fluid ${
                   active
                     ? "bg-surface-hover text-ink"
                     : "text-ink-mid hover:bg-surface-hover hover:text-ink"

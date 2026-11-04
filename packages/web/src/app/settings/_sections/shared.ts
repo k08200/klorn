@@ -6,5 +6,5 @@
 export const PRIMARY_BTN =
   "glow-primary ease-strong inline-flex min-h-10 items-center justify-center rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40";
 export const SECTION_TITLE =
-  "mb-3 text-caption font-semibold uppercase tracking-wider text-ink-dim";
+  "mb-3 text-role-caption font-semibold uppercase tracking-wider text-ink-dim";
 export const PANEL = "panel-elevated rounded-card border border-line/70 bg-surface-panel";

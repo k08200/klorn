@@ -109,7 +109,7 @@ export default function PwaPrompts() {
     <>
       {offline && (
         <div
-          className="fixed inset-x-0 top-0 z-[100] border-b border-state-warn-line bg-state-warn-bg px-4 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.375rem)] text-center text-label text-state-warn-ink"
+          className="fixed inset-x-0 top-0 z-[100] border-b border-state-warn-line bg-state-warn-bg px-4 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.375rem)] text-center text-role-label text-state-warn-ink"
           role="status"
           aria-live="polite"
         >
@@ -119,7 +119,7 @@ export default function PwaPrompts() {
 
       {updateAvailable && (
         <section className={FLOATING} aria-label={t("pwa.update.region")}>
-          <p className="min-w-0 flex-1 text-body text-ink">{t("pwa.update.ready")}</p>
+          <p className="min-w-0 flex-1 text-role-body text-ink">{t("pwa.update.ready")}</p>
           <Button size="sm" onClick={handleUpdate}>
             {t("pwa.update.refresh")}
           </Button>
@@ -133,8 +133,8 @@ export default function PwaPrompts() {
         <section className={FLOATING} aria-label={t("pwa.install.title")}>
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-label text-ink">{t("pwa.install.title")}</p>
-            <p className="text-caption text-ink-mid">{t("pwa.install.body")}</p>
+            <p className="text-role-label text-ink">{t("pwa.install.title")}</p>
+            <p className="text-role-caption text-ink-mid">{t("pwa.install.body")}</p>
           </div>
           <Button size="sm" onClick={handleInstall}>
             {t("pwa.install.action")}

@@ -159,12 +159,12 @@ export function AgentActivity() {
                       className="bg-surface-raised/60 border border-line rounded-control px-3 py-2 text-role-body flex items-start gap-2"
                     >
                       <span
-                        className={`shrink-0 rounded border px-1 py-0.5 text-caption font-medium ${typeColor}`}
+                        className={`shrink-0 rounded border px-1 py-0.5 text-role-caption font-medium ${typeColor}`}
                       >
                         {confidenceLabel}
                       </span>
                       <span className="text-ink-mid flex-1">{p.description}</span>
-                      <span className="shrink-0 text-caption text-ink-dim">{p.evidence}×</span>
+                      <span className="shrink-0 text-role-caption text-ink-dim">{p.evidence}×</span>
                     </div>
                   );
                 })}

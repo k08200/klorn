@@ -345,7 +345,9 @@ function AdminDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-ink-dim">{r.id}</span>
                         <span className="text-ink-mid">{r.name}</span>
-                        <span className="text-caption uppercase text-ink-mid">[{r.severity}]</span>
+                        <span className="text-role-caption uppercase text-ink-mid">
+                          [{r.severity}]
+                        </span>
                       </div>
                       {!r.passed && r.message && (
                         <p className="text-state-danger-ink mt-0.5">{r.message}</p>
@@ -601,7 +603,7 @@ function AdminDashboard() {
                         <span className="flex items-center gap-2.5">
                           <span
                             aria-hidden="true"
-                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-caption font-semibold text-white ${avatarGradient(u.name || u.email)}`}
+                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-caption font-semibold text-white ${avatarGradient(u.name || u.email)}`}
                           >
                             {senderInitials(u.name || u.email)}
                           </span>
@@ -704,7 +706,7 @@ function GoogleQuotaCard({
       >
         <div className={`h-full rounded-full ${fill}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-2 text-caption leading-5 text-ink-mid">
+      <p className="mt-2 text-role-caption leading-5 text-ink-mid">
         {quota.consumed} accounts created. Spent over the project lifetime and never reset — CASA
         verification is what removes the ceiling. Approximate: the Cloud console is the authority.
       </p>
@@ -744,18 +746,18 @@ function ProviderConfigCard({ health }: { health: ProviderConfigHealth }) {
                 </span>
               </div>
               {cfg.missing.length > 0 && (
-                <p className="mt-1.5 text-caption leading-5 text-ink-mid">
+                <p className="mt-1.5 text-role-caption leading-5 text-ink-mid">
                   Not set: <span className="font-mono text-ink">{cfg.missing.join(", ")}</span>
                 </p>
               )}
               {keyBroken && (
-                <p className="mt-1.5 text-caption leading-5 text-rose-500">
+                <p className="mt-1.5 text-role-caption leading-5 text-rose-500">
                   Private key does not parse as ES256 — {cfg.privateKey?.detail}. A paste that lost
                   its newlines lands here.
                 </p>
               )}
               {cfg.enabled && cfg.missing.length === 0 && !keyBroken && (
-                <p className="mt-1.5 text-caption leading-5 text-ink-mid">
+                <p className="mt-1.5 text-role-caption leading-5 text-ink-mid">
                   All variables set{cfg.privateKey ? ", signing key parses" : ""}.
                 </p>
               )}
@@ -789,7 +791,7 @@ function RouteStat({
     tone === "error" ? "text-rose-600" : tone === "warn" ? "text-state-warn-ink" : "text-ink-mid";
   return (
     <div>
-      <dt className="text-caption uppercase tracking-wide text-ink-dim">{label}</dt>
+      <dt className="text-role-caption uppercase tracking-wide text-ink-dim">{label}</dt>
       <dd className={`mt-0.5 font-medium tabular-nums ${valueTone}`}>{value}</dd>
     </div>
   );
@@ -810,7 +812,7 @@ function UserCard({
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden="true"
-            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(user.name || user.email)}`}
+            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(user.name || user.email)}`}
           >
             {senderInitials(user.name || user.email)}
           </span>

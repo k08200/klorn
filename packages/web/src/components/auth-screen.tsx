@@ -48,16 +48,16 @@ export default function AuthScreen({ title, description, children, preview }: Au
             className="focus-ring -mx-2 inline-flex min-h-11 items-center gap-2.5 rounded-control px-2"
           >
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-7 w-7" />
-            <span className="text-head text-ink">Klorn</span>
+            <span className="text-role-head text-ink">Klorn</span>
           </Link>
         </header>
 
         <div className="flex flex-1 items-start justify-center py-6 sm:items-center sm:py-8">
           <div className="w-full max-w-sm">
             <div className="rise" style={rise(0)}>
-              <h1 className="text-display text-balance text-ink">{title}</h1>
+              <h1 className="text-role-page text-balance text-ink">{title}</h1>
               {description && (
-                <p className="mt-3 text-body text-pretty text-ink-mid">{description}</p>
+                <p className="mt-3 text-role-body text-pretty text-ink-mid">{description}</p>
               )}
             </div>
             <div className="rise mt-8" style={rise(1)}>
@@ -100,7 +100,7 @@ function AuthFooter() {
   const linkClass =
     "focus-ring inline-flex min-h-11 items-center rounded-control text-ink-mid transition-colors duration-120 ease-fluid hover:text-ink";
   return (
-    <footer className="flex shrink-0 flex-col gap-1 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 text-caption text-ink-mid sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <footer className="flex shrink-0 flex-col gap-1 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 text-role-caption text-ink-mid sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <a
         href={SECURITY_URL}
         target="_blank"

@@ -113,7 +113,7 @@ function ReceiptView() {
                 type="button"
                 onClick={() => requestUndo(item.id)}
                 disabled={isUndoing(item.id)}
-                className="text-caption text-ink-dim transition duration-150 hover:text-accent-deeper disabled:opacity-50 focus-ring min-h-9 min-w-9"
+                className="text-role-caption text-ink-dim transition duration-150 hover:text-accent-deeper disabled:opacity-50 focus-ring min-h-9 min-w-9"
               >
                 {isUndoing(item.id) ? t("receipt.undo.creating") : t("receipt.undo.request")}
               </button>
@@ -205,7 +205,7 @@ function ReceiptSection({
           <h2 className={`text-role-head font-semibold ${labelClass}`}>{title}</h2>
           <p className="text-role-caption text-ink-mid">{description}</p>
         </div>
-        <span className="text-caption tabular-nums text-ink-dim">{items.length}</span>
+        <span className="text-role-caption tabular-nums text-ink-dim">{items.length}</span>
       </div>
       <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
         <ul className="divide-y divide-line-soft">
@@ -224,12 +224,12 @@ function ReceiptSection({
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <SourceBadge source={item.source} type={item.type} />
                       {item.tierReason && (
-                        <span className="text-caption text-ink-mid">{item.tierReason}</span>
+                        <span className="text-role-caption text-ink-mid">{item.tierReason}</span>
                       )}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-caption tabular-nums text-ink-dim">
+                    <span className="text-role-caption tabular-nums text-ink-dim">
                       {formatTime(item.surfacedAt, timeZone)}
                     </span>
                     {renderExtra?.(item)}
@@ -249,7 +249,7 @@ function SummaryMetric({ label, value, color }: { label: string; value: number; 
   return (
     <div className="border-r border-line-soft px-4 py-3 last:border-r-0">
       <p className={`text-role-title font-semibold tabular-nums ${color}`}>{value}</p>
-      <p className="mt-1 text-caption text-ink-dim">{label}</p>
+      <p className="mt-1 text-role-caption text-ink-dim">{label}</p>
     </div>
   );
 }
@@ -258,7 +258,7 @@ function SourceBadge({ source, type }: { source: string; type: string }) {
   const { t } = useT();
   const label = sourceLabel(t, source, type);
   return (
-    <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
@@ -268,14 +268,14 @@ function PushStatusBadge({ status, clickedAt }: { status: string; clickedAt: str
   const { t } = useT();
   if (clickedAt) {
     return (
-      <span className="rounded-chip bg-emerald-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
+      <span className="rounded-chip bg-emerald-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
         {t("receipt.status.opened")}
       </span>
     );
   }
   if (status === "SENT") {
     return (
-      <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+      <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
         {t("receipt.status.sent")}
       </span>
     );

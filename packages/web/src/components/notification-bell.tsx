@@ -475,19 +475,19 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {notificationTitle(n.title)}
           </span>
           {isAgentNotification(n.title) && (
-            <span className="text-caption text-accent-deep bg-accent-light/10 px-1 py-0.5 rounded shrink-0">
+            <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1 py-0.5 rounded shrink-0">
               Klorn
             </span>
           )}
           {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 ml-auto" />}
         </div>
-        <p className="text-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
+        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
           {n.message}
         </p>
         <div className="flex items-center gap-2 mt-1 ml-6">
-          <span className="text-caption text-ink-mid">{formatRelative(n.createdAt)}</span>
+          <span className="text-role-caption text-ink-mid">{formatRelative(n.createdAt)}</span>
           {getNotificationTarget(n) && (
-            <span className="text-caption text-accent-deep">{t("common.open")}</span>
+            <span className="text-role-caption text-accent-deep">{t("common.open")}</span>
           )}
         </div>
       </button>
@@ -497,7 +497,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleApprovePendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-role-label md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-role-label md:text-role-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "approve" ? "..." : t("notif.approve")}
           </button>
@@ -505,7 +505,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleRejectPendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-role-label md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-role-label md:text-role-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "reject" ? "..." : t("notif.reject")}
           </button>
@@ -513,7 +513,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       )}
       {n.pendingActionId && n.pendingActionStatus && n.pendingActionStatus !== "PENDING" && (
         <div className="px-4 pb-2 ml-6">
-          <span className="text-caption text-ink-mid">
+          <span className="text-role-caption text-ink-mid">
             {n.pendingActionStatus === "EXECUTED"
               ? t("notif.status.done")
               : n.pendingActionStatus === "REJECTED"
@@ -545,18 +545,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {label} {group.items.length}
           </span>
           {group.unreadCount > 0 && (
-            <span className="text-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded shrink-0">
               {t("notif.group.new", { count: String(group.unreadCount) })}
             </span>
           )}
-          <span className="text-caption text-ink-dim ml-auto shrink-0">
+          <span className="text-role-caption text-ink-dim ml-auto shrink-0">
             {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
           </span>
         </div>
-        <p className="text-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
+        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
-        <p className="text-caption text-ink-mid mt-1 ml-6">
+        <p className="text-role-caption text-ink-mid mt-1 ml-6">
           {t("notif.group.latest", { time: formatRelative(group.latestItem.createdAt) })}
         </p>
       </button>
@@ -593,7 +593,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-caption font-bold rounded-full w-4 h-4 flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-role-caption font-bold rounded-full w-4 h-4 flex items-center justify-center">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -625,12 +625,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
               <div className="flex items-center gap-2">
                 <span className="text-role-body font-medium">{t("notif.title")}</span>
                 {connected && (
-                  <span className="text-caption text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
+                  <span className="text-role-caption text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
                     {t("mail.live")}
                   </span>
                 )}
                 {unreadCount > 0 && (
-                  <span className="text-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded">
+                  <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded">
                     {unreadCount}
                   </span>
                 )}
@@ -676,7 +676,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
               )}
             </div>
             {tabCount > 1 && (
-              <div className="px-4 py-2 border-t border-line text-caption text-ink-dim">
+              <div className="px-4 py-2 border-t border-line text-role-caption text-ink-dim">
                 {t("notif.tabsConnected", { count: String(tabCount) })}
               </div>
             )}

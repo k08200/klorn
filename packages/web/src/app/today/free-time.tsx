@@ -93,7 +93,7 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
 
   return (
     <div className="flex flex-col gap-2 border-t border-line-soft py-3">
-      <h3 className="text-caption font-medium text-ink-muted">{t("today.freeTime.title")}</h3>
+      <h3 className="text-role-caption font-medium text-ink-muted">{t("today.freeTime.title")}</h3>
       <div className="flex flex-wrap items-center gap-2">
         {teams.length > 1 && (
           <>
@@ -108,7 +108,7 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
                 find.reset();
                 setShown(null);
               }}
-              className="focus-ring h-11 min-w-0 flex-1 rounded-control border border-line bg-surface-panel px-3 text-body text-ink"
+              className="focus-ring h-11 min-w-0 flex-1 rounded-control border border-line bg-surface-panel px-3 text-role-body text-ink"
             >
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
@@ -169,19 +169,19 @@ function FreeTimeResult({
   return (
     <>
       {selfOnly ? (
-        <p className="pt-1 text-caption text-ink-muted [word-break:keep-all]">
+        <p className="pt-1 text-role-caption text-ink-muted [word-break:keep-all]">
           {t("today.freeTime.selfOnly")}
         </p>
       ) : (
         result.unknownMembers.length > 0 && (
-          <p className="pt-1 text-caption text-ink-muted [word-break:keep-all]">
+          <p className="pt-1 text-role-caption text-ink-muted [word-break:keep-all]">
             {t("today.freeTime.unknown", { members: result.unknownMembers.join(", ") })}
           </p>
         )
       )}
       {stale && (
         <div className="flex flex-wrap items-center gap-x-3 pt-1">
-          <p className="min-w-0 flex-1 py-2 text-caption text-ink-muted [word-break:keep-all]">
+          <p className="min-w-0 flex-1 py-2 text-role-caption text-ink-muted [word-break:keep-all]">
             {t("today.freeTime.stale")}
           </p>
           <Button variant="secondary" size="sm" onClick={onRecheck} disabled={rechecking}>
@@ -199,7 +199,7 @@ function FreeTimeResult({
           className="flex flex-col gap-1 pt-1"
         >
           {slots.map((slot) => (
-            <li key={slot.startTime} className="text-body tabular-nums text-ink-strong">
+            <li key={slot.startTime} className="text-role-body tabular-nums text-ink-strong">
               {formatSlot(slot, locale, timeZone)}
             </li>
           ))}

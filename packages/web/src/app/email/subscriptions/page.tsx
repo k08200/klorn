@@ -124,14 +124,14 @@ function SubscriptionsView() {
     <div className="mx-auto w-full max-w-4xl px-4 pb-28 pt-6 md:py-10">
       <Link
         href="/email"
-        className="focus-ring inline-flex min-h-11 items-center rounded-control text-label text-ink-mid hover:text-ink"
+        className="focus-ring inline-flex min-h-11 items-center rounded-control text-role-label text-ink-mid hover:text-ink"
       >
         {t("mailSubscriptions.back")}
       </Link>
       <header className="mb-6 mt-2">
-        <h1 className="text-display text-ink">{t("mailSubscriptions.title")}</h1>
+        <h1 className="text-role-page text-ink">{t("mailSubscriptions.title")}</h1>
         {data && (
-          <p className="mt-2 max-w-2xl text-body text-ink-muted [word-break:keep-all]">
+          <p className="mt-2 max-w-2xl text-role-body text-ink-muted [word-break:keep-all]">
             {t("mailSubscriptions.description", { days: String(data.windowDays) })}
           </p>
         )}
@@ -206,14 +206,14 @@ function SubscriptionRow({
   return (
     <li className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0">
-        <p id={nameId} className="truncate text-head text-ink">
+        <p id={nameId} className="truncate text-role-head text-ink">
           {name}
         </p>
-        <p className="truncate text-caption text-ink-muted">
+        <p className="truncate text-role-caption text-ink-muted">
           {row.displayName ? `${row.sender} · ` : ""}
           {account}
         </p>
-        <p className="mt-1 text-caption text-ink-mid tabular-nums">
+        <p className="mt-1 text-role-caption text-ink-mid tabular-nums">
           {t("mailSubscriptions.stats.count", { count: number.format(row.count) })}
           {" · "}
           {t("mailSubscriptions.stats.readRate", { rate: percent.format(readRate) })}
@@ -259,12 +259,14 @@ function RowOutcome({ state }: { state: RowState | undefined }) {
   if (!state || state.kind === "pending") return null;
   if (state.kind === "error") {
     return (
-      <p className="mt-2 text-label text-state-danger-ink">{t("mailSubscriptions.row.error")}</p>
+      <p className="mt-2 text-role-label text-state-danger-ink">
+        {t("mailSubscriptions.row.error")}
+      </p>
     );
   }
   const archivedNote =
     state.archived > 0 || state.archiveFailed > 0 ? (
-      <span className="block text-caption text-ink-mid">
+      <span className="block text-role-caption text-ink-mid">
         {state.archiveFailed > 0
           ? t("mailSubscriptions.row.archivedSome", {
               count: String(state.archived),
@@ -275,14 +277,14 @@ function RowOutcome({ state }: { state: RowState | undefined }) {
     ) : null;
   if (state.kind === "done") {
     return (
-      <p className="mt-2 text-label text-state-ok-ink">
+      <p className="mt-2 text-role-label text-state-ok-ink">
         {t("mailSubscriptions.row.done")}
         {archivedNote}
       </p>
     );
   }
   return (
-    <div className="mt-2 text-label text-ink">
+    <div className="mt-2 text-role-label text-ink">
       <p>{t("mailSubscriptions.row.linkHint")}</p>
       <a
         href={state.url}

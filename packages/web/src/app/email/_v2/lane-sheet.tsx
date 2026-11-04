@@ -49,7 +49,9 @@ export function LaneSheet({ target, onPick, onClose }: LaneSheetProps) {
                 <span aria-hidden="true" className={`size-2.5 rounded-full ${LANE_DOT[lane]}`} />
                 <span className="flex-1 text-left">{lane}</span>
                 {current && (
-                  <span className="text-caption text-ink-muted">{t("mailV2.swipe.current")}</span>
+                  <span className="text-role-caption text-ink-muted">
+                    {t("mailV2.swipe.current")}
+                  </span>
                 )}
               </Button>
             </li>

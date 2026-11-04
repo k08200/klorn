@@ -99,7 +99,7 @@ export default function BriefingCard() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-role-head text-ink">Today's briefing</h2>
-            <span className={`inline-flex items-center gap-1 text-caption ${push.className}`}>
+            <span className={`inline-flex items-center gap-1 text-role-caption ${push.className}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${push.dotClassName}`} />
               {push.label}
             </span>
@@ -107,7 +107,7 @@ export default function BriefingCard() {
           <p className="mt-1 line-clamp-2 text-role-body text-ink-mid">
             {status.note?.preview || emptyMessage(status)}
           </p>
-          {time && <p className="mt-2 text-caption text-ink-mid">{time}</p>}
+          {time && <p className="mt-2 text-role-caption text-ink-mid">{time}</p>}
           {error && <p className="mt-2 text-role-caption text-state-danger-ink">{error}</p>}
         </div>
 
