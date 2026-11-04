@@ -45,7 +45,7 @@ export default function PlaygroundPage() {
   });
   const [activeSample, setActiveSample] = useState<PlaygroundSample["id"] | null>(first.id);
   const keys = useProviderKey();
-  const [choice, setChoice] = useState(defaultModelFor("openrouter"));
+  const [choice, setChoice] = useState(defaultModelFor("anthropic"));
   const [customModel, setCustomModel] = useState("");
   const { loading, result, error, setError, classify, reset } = useClassify();
   const resultRef = useRef<HTMLElement>(null);

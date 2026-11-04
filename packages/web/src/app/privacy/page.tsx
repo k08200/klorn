@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "October 31, 2026";
+const updatedAt = "November 1, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -45,7 +45,7 @@ function TableOfContents({ sections }: { sections: string[] }) {
   return (
     <nav
       aria-label="On this page"
-      className="mt-10 rounded-xl border border-line bg-surface-raised p-5"
+      className="mt-10 rounded-card border border-line bg-surface-raised p-5"
     >
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-mid">On this page</p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
     <main id="main" className="min-h-screen sky-bg text-ink">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-control bg-[#f5f0e8]">
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>
@@ -245,7 +245,7 @@ export default function PrivacyPage() {
                 needs no account and runs on an AI provider key you supply yourself. That key is
                 stored in your browser&apos;s local storage so you do not have to paste it again.
                 When you run a sample, the key and the text you pasted are sent to the Klorn API,
-                which uses the key in memory to call the AI provider you chose — OpenRouter, Google
+                which uses the key in memory to call the AI provider you chose — Anthropic, Google
                 or OpenAI — so both reach that provider and are covered by its terms. Klorn does not
                 write the key to its database, and strips it from its logs and from its crash
                 reports before either leaves the server. Emptying the key field removes it from your
@@ -391,12 +391,12 @@ export default function PrivacyPage() {
               their models on the data we send.
             </p>
             <p>
-              Klorn&apos;s server-side AI providers are Anthropic (Claude API), Google (Gemini API)
-              and OpenRouter, all used under API terms that exclude training on submitted data.
-              Anthropic deletes API inputs and outputs within 30 days by default, longer only for
-              content its usage-policy enforcement flags. If you bring your own API key or point a
-              self-hosted Klorn at your own OpenAI-compatible endpoint, that provider is used only
-              for your own requests.
+              Klorn&apos;s server-side AI providers are Anthropic (Claude API) and Google (Gemini
+              API), both used under API terms that exclude training on submitted data. Anthropic
+              deletes API inputs and outputs within 30 days by default, longer only for content its
+              usage-policy enforcement flags. If you bring your own API key or point a self-hosted
+              Klorn at your own OpenAI-compatible endpoint, that provider is used only for your own
+              requests.
             </p>
           </Section>
 

@@ -24,9 +24,9 @@ import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 
 const TOGGLE =
-  "ease-strong inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-ink-mid transition duration-150 hover:text-ink motion-reduce:transition-none focus-ring";
+  "ease-strong inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-xs font-medium text-ink-mid transition duration-150 hover:text-ink motion-reduce:transition-none focus-ring";
 const RETRY =
-  "ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink transition duration-150 hover:bg-surface-panel motion-reduce:transition-none focus-ring";
+  "ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink transition duration-150 hover:bg-surface-panel motion-reduce:transition-none focus-ring";
 const STATUS_TEXT = "py-2 text-xs text-ink-mid";
 
 interface ToggleProps {
@@ -141,7 +141,7 @@ export function ApiKeyActivityPanel({ id, keyId }: { id: string; keyId: string }
   const rows = state.status === "ready" ? state.rows : [];
 
   return (
-    <div id={id} className="w-full rounded-xl border border-line bg-surface-raised px-3 py-1">
+    <div id={id} className="w-full rounded-control border border-line bg-surface-raised px-3 py-1">
       {/* One status region for the panel's whole life, so a screen reader hears
           "loading", then the result. Only short messages live in it: announcing
           a 50-row list would be noise. */}

@@ -497,7 +497,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleApprovePendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink font-medium transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "approve" ? "..." : t("notif.approve")}
           </button>
@@ -505,7 +505,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleRejectPendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft font-medium transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "reject" ? "..." : t("notif.reject")}
           </button>
@@ -575,7 +575,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         ref={bellRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`focus-ring relative rounded-md text-ink-mid hover:text-ink transition p-1 ${flash ? "animate-bounce" : ""}`}
+        className={`focus-ring relative rounded-chip text-ink-mid hover:text-ink transition p-1 ${flash ? "animate-bounce" : ""}`}
         aria-label={t("notif.title")}
       >
         <svg
@@ -619,7 +619,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     zIndex: 9999,
                   }
             }
-            className="md:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] md:max-h-[28rem]"
+            className="md:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] md:max-h-[28rem]"
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">

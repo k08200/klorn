@@ -1,23 +1,39 @@
 /**
  * Upstream verification for a BYOK key at SAVE time. Root cause of the
- * 2026-07-16 all-day judge outage: a dead/free provider key sat silently in
- * the user's BYOK slot and poisoned every chain walk. A key must prove it
- * works before we store it — and a definitively-rejected key must never be
- * stored at all.
+ * 2026-07-16 all-day judge outage: a dead provider key sat silently in the
+ * user's BYOK slot and poisoned every chain walk. A key must prove it works
+ * before we store it — and a definitively-rejected key must never be stored
+ * at all.
  *
  * Fail-open on provider noise: a 5xx/timeout from the provider must not block
  * the user's save (the chain handles transient provider failures at call
  * time); only a definitive 401/403 rejects.
+ *
+ * The key travels only in the request header and is never logged.
  */
 
-export type KeyVerification = "valid" | "invalid" | "unreachable";
+export type KeyVerification = "valid" | "invalid" | "malformed" | "unreachable";
 
 const VERIFY_TIMEOUT_MS = 4_000;
+const ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models";
+const ANTHROPIC_VERSION = "2023-06-01";
+/**
+ * Every Anthropic key (API `sk-ant-api…`, personal `sk-ant-usr-…`) is the
+ * prefix plus URL-safe characters. Anything else is rejected before egress:
+ * it cannot be a key, and a header-invalid string would otherwise make fetch
+ * throw locally and read as "unreachable" — stored unverified.
+ */
+const ANTHROPIC_KEY_SHAPE = /^sk-ant-[A-Za-z0-9_-]{16,500}$/;
 
-export async function verifyOpenRouterKey(key: string): Promise<KeyVerification> {
+/**
+ * Verify an Anthropic key with `GET /v1/models`: authenticated, but it runs no
+ * model, so a save spends no tokens on the user's account.
+ */
+export async function verifyAnthropicKey(key: string): Promise<KeyVerification> {
+  if (!ANTHROPIC_KEY_SHAPE.test(key)) return "malformed";
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-      headers: { Authorization: `Bearer ${key}` },
+    const res = await fetch(ANTHROPIC_MODELS_URL, {
+      headers: { "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION },
       signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
     });
     if (res.ok) return "valid";

@@ -34,7 +34,7 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
               value={profile.name}
               onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
               placeholder={t("settings.namePlaceholder")}
-              className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+              className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
             />
           </div>
         )}
@@ -53,7 +53,7 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
                     language: e.target.value as UserProfile["language"],
                   }))
                 }
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition"
               >
                 {/* Language names name themselves — "English"/"한국어" do not
                       change with the picked UI locale. */}
@@ -78,7 +78,7 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
             onClick={() => saveProfile(fields)}
             className={
               profileSaved
-                ? "ease-strong inline-flex min-h-10 items-center justify-center rounded-lg border border-state-ok-line bg-state-ok-bg px-4 text-sm font-medium text-state-ok-ink transition duration-150 active:scale-[0.97]"
+                ? "ease-strong inline-flex min-h-10 items-center justify-center rounded-control border border-state-ok-line bg-state-ok-bg px-4 text-sm font-medium text-state-ok-ink transition duration-150 active:scale-[0.97]"
                 : PRIMARY_BTN
             }
           >

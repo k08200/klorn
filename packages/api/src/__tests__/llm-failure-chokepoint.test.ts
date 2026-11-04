@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type FakeCall = (params: unknown, model: string) => Promise<unknown>;
 
 interface FakeProvider {
-  name: "openrouter" | "gemini";
+  name: "anthropic" | "gemini";
   quotaKey: string;
   defaultModel: string;
   supportsTools: boolean;
@@ -51,12 +51,12 @@ vi.mock("../db.js", () => ({
   db: {},
 }));
 
-function makeProvider(name: "openrouter" | "gemini", call: FakeCall): FakeProvider {
+function makeProvider(name: "anthropic" | "gemini", call: FakeCall): FakeProvider {
   return {
     name,
     quotaKey: `${name}:env`,
     defaultModel: "fake-default",
-    supportsTools: name === "openrouter",
+    supportsTools: name === "anthropic",
     client: null,
     resolveModel: (m: string) => (name === "gemini" ? "gemini-2.5-flash" : m),
     call,
@@ -74,7 +74,7 @@ const COMPLETION = {
 };
 
 const PARAMS: ChatCompletionCreateParamsNonStreaming = {
-  model: "google/gemma-4-31b-it",
+  model: "claude-haiku-5-5",
   messages: [{ role: "user", content: "Dear Bob, the secret plan" }],
 };
 
@@ -122,7 +122,7 @@ describe("createCompletion — failed provider calls are recorded", () => {
 
   it("logs the failed hop of a recovered failover but keeps it out of the top-error tally", async () => {
     chain.push(
-      makeProvider("openrouter", async () => {
+      makeProvider("anthropic", async () => {
         throw httpError(429, "429 Too many requests");
       }),
     );
@@ -145,7 +145,7 @@ describe("createCompletion — failed provider calls are recorded", () => {
   it("does not count a playground visitor's own key failing — not fleet capacity", async () => {
     const boom = httpError(401, "401 User not found");
     chain.push(
-      makeProvider("openrouter", async () => {
+      makeProvider("anthropic", async () => {
         throw boom;
       }),
     );
@@ -161,7 +161,7 @@ describe("createCompletion — failed provider calls are recorded", () => {
 
   it("tallies every failed hop when the whole call fails", async () => {
     chain.push(
-      makeProvider("openrouter", async () => {
+      makeProvider("anthropic", async () => {
         throw httpError(429, "429 Too many requests");
       }),
     );
@@ -178,7 +178,7 @@ describe("createCompletion — failed provider calls are recorded", () => {
     const providers = getLlmFailureCounts()
       .map((c) => c.provider)
       .sort();
-    expect(providers).toEqual(["gemini", "openrouter"]);
+    expect(providers).toEqual(["anthropic", "gemini"]);
   });
 });
 
@@ -189,7 +189,7 @@ describe("createVisionCompletion — failed provider calls are recorded", () => 
         throw httpError(402, "402 Insufficient credits");
       }),
     );
-    chain.push(makeProvider("openrouter", async () => COMPLETION));
+    chain.push(makeProvider("anthropic", async () => COMPLETION));
     const { createVisionCompletion } = await import("../llm/openai.js");
     const { getLlmFailureCounts } = await import("../llm/llm-failure-log.js");
 

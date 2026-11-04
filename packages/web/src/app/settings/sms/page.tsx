@@ -148,7 +148,7 @@ function SmsContent() {
 
         <form
           onSubmit={handleSave}
-          className="panel-elevated space-y-3 rounded-2xl border border-line/70 bg-surface-panel p-4"
+          className="panel-elevated space-y-3 rounded-card border border-line/70 bg-surface-panel p-4"
         >
           <label htmlFor="sms-phone" className="block text-caption font-medium text-ink-mid">
             Phone number
@@ -161,7 +161,7 @@ function SmsContent() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="+821012345678"
-            className="w-full rounded-lg border border-line bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:border-accent-light/50 focus:outline-none"
+            className="w-full rounded-control border border-line bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:border-accent-light/50 focus:outline-none"
           />
           <p className="text-caption text-ink-dim">{E164_HINT}</p>
 
@@ -171,7 +171,7 @@ function SmsContent() {
             <button
               type="submit"
               disabled={saveMutation.isPending}
-              className="glow-primary ease-strong rounded-lg bg-accent-solid px-3 py-1.5 text-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+              className="glow-primary ease-strong rounded-control bg-accent-solid px-3 py-1.5 text-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
             >
               {saveMutation.isPending ? "Saving…" : "Save"}
             </button>
@@ -180,7 +180,7 @@ function SmsContent() {
               type="button"
               disabled={!saved || removeMutation.isPending}
               onClick={() => removeMutation.mutate()}
-              className="ease-strong rounded-lg border border-state-danger-line bg-state-danger-bg px-3 py-1.5 text-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-40"
+              className="ease-strong rounded-control border border-state-danger-line bg-state-danger-bg px-3 py-1.5 text-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-40"
             >
               {removeMutation.isPending ? "Removing…" : "Remove"}
             </button>
@@ -192,7 +192,7 @@ function SmsContent() {
                 setTestResult(null);
                 testMutation.mutate();
               }}
-              className="ease-strong rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-40"
+              className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-40"
             >
               {testMutation.isPending ? "Sending…" : "Send test SMS"}
             </button>
@@ -202,7 +202,7 @@ function SmsContent() {
         </form>
 
         {saved && usage && (
-          <div className="panel-elevated mt-4 rounded-2xl border border-line/70 bg-surface-panel p-4 text-caption text-ink-dim">
+          <div className="panel-elevated mt-4 rounded-card border border-line/70 bg-surface-panel p-4 text-caption text-ink-dim">
             <div>
               <span className="font-medium text-ink-mid">Current:</span> {saved}
             </div>

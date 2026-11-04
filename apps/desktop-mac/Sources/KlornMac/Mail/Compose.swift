@@ -36,7 +36,7 @@ struct ComposePanel: View {
                         .accessibilityLabel(L("compose.bodyPlaceholder"))
                 }
             }
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
 
             if let error = model.composeError {
                 Text(error).font(.caption).foregroundStyle(.orange)
@@ -95,6 +95,6 @@ struct ComposePanel: View {
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
     }
 }

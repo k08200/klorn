@@ -33,7 +33,7 @@ function ErrorPage({
       <button
         type="button"
         onClick={reset}
-        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-accent-solid px-5 text-sm font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
+        className="mt-6 inline-flex min-h-11 items-center rounded-control bg-accent-solid px-5 text-sm font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
       >
         {t("common.tryAgain")}
       </button>

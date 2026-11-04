@@ -105,7 +105,7 @@ export function SecurityPanel() {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder={t("settings.currentPassword")}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
               />
             </div>
             <div>
@@ -119,7 +119,7 @@ export function SecurityPanel() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder={t("settings.newPasswordPlaceholder")}
                 minLength={6}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
               />
             </div>
             <div className="flex justify-end">
@@ -149,7 +149,7 @@ export function SecurityPanel() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder={t("settings.newPasswordPlaceholder")}
                 minLength={6}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
               />
             </div>
             <div className="flex justify-end">

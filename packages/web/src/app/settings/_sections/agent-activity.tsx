@@ -81,7 +81,7 @@ export function AgentActivity() {
             {agentLogs.map((log) => (
               <div
                 key={log.id}
-                className="bg-surface-raised/60 border border-line rounded-lg px-3 py-2 text-sm"
+                className="bg-surface-raised/60 border border-line rounded-control px-3 py-2 text-sm"
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -156,7 +156,7 @@ export function AgentActivity() {
                   return (
                     <div
                       key={i}
-                      className="bg-surface-raised/60 border border-line rounded-lg px-3 py-2 text-sm flex items-start gap-2"
+                      className="bg-surface-raised/60 border border-line rounded-control px-3 py-2 text-sm flex items-start gap-2"
                     >
                       <span
                         className={`shrink-0 rounded border px-1 py-0.5 text-caption font-medium ${typeColor}`}

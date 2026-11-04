@@ -169,7 +169,7 @@ function WaitlistPageInner() {
           </p>
         </header>
 
-        <div className="mb-6 rounded-xl border border-state-warn-line bg-state-warn-bg p-4 text-sm leading-6 text-amber-800">
+        <div className="mb-6 rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-sm leading-6 text-amber-800">
           <p className="font-semibold text-amber-800">
             ⚠️ Do this BEFORE clicking Approve — every time.
           </p>
@@ -207,7 +207,7 @@ function WaitlistPageInner() {
                   setFilter(f.key);
                   setSourceFilter("ALL");
                 }}
-                className={`ease-strong rounded-xl border px-4 py-3 text-left transition duration-150 active:scale-[0.97] ${
+                className={`ease-strong rounded-control border px-4 py-3 text-left transition duration-150 active:scale-[0.97] ${
                   isActive
                     ? "panel-elevated border-accent-muted bg-state-info-bg text-ink"
                     : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
@@ -229,7 +229,7 @@ function WaitlistPageInner() {
               id="source-filter"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-sm text-ink"
+              className="rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-sm text-ink"
             >
               <option value="ALL">All ({entries.length})</option>
               {topSources.map((s) => (
@@ -245,11 +245,11 @@ function WaitlistPageInner() {
         {loading ? (
           <p className="text-sm text-ink-dim">Loading...</p>
         ) : visibleEntries.length === 0 ? (
-          <p className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-sm text-ink-mid">
+          <p className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-sm text-ink-mid">
             No requests in this state.
           </p>
         ) : (
-          <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+          <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
             <ul className="divide-y divide-line-soft">
               {visibleEntries.map((entry) => (
                 <li key={entry.id} className="row-wash p-4 md:p-5">
@@ -301,7 +301,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => updateStatus(entry.id, "APPROVED")}
                           disabled={updating === entry.id}
-                          className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
+                          className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
                         >
                           Approve
                         </button>
@@ -311,7 +311,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => updateStatus(entry.id, "REJECTED")}
                           disabled={updating === entry.id}
-                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-state-danger-line bg-state-danger-bg px-3 text-sm font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-60"
+                          className="ease-strong inline-flex h-9 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-3 text-sm font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-60"
                         >
                           Reject
                         </button>
@@ -321,7 +321,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => updateStatus(entry.id, "PENDING")}
                           disabled={updating === entry.id}
-                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
+                          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
                         >
                           Move to pending
                         </button>
@@ -335,7 +335,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => removeEntry(entry)}
                           disabled={updating === entry.id}
-                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-transparent px-3 text-sm text-ink-dim transition duration-150 hover:border-state-danger-line hover:text-state-danger-ink active:scale-[0.97] disabled:opacity-60"
+                          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-transparent px-3 text-sm text-ink-dim transition duration-150 hover:border-state-danger-line hover:text-state-danger-ink active:scale-[0.97] disabled:opacity-60"
                         >
                           Delete
                         </button>
@@ -361,7 +361,7 @@ function StatusBadge({ status }: { status: WaitlistEntry["status"] }) {
   const s = map[status];
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
+      className={`rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
     >
       {s.label}
     </span>

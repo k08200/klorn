@@ -42,7 +42,7 @@ export default function InAppBrowserNotice() {
   return (
     <div
       role="alert"
-      className="mb-4 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-3 text-xs leading-5 text-rose-100"
+      className="mb-4 rounded-control border border-rose-400/30 bg-rose-500/10 px-3 py-3 text-xs leading-5 text-rose-100"
     >
       <p className="font-semibold text-rose-50">{t("inAppBrowser.title")}</p>
       <p className="mt-1 text-rose-100/90">
@@ -55,7 +55,7 @@ export default function InAppBrowserNotice() {
       <button
         type="button"
         onClick={copyLink}
-        className="mt-2 inline-flex h-9 items-center rounded-md border border-rose-300/40 bg-rose-200/10 px-3 text-xs font-medium text-rose-50 transition hover:bg-rose-200/20"
+        className="mt-2 inline-flex h-9 items-center rounded-control border border-rose-300/40 bg-rose-200/10 px-3 text-xs font-medium text-rose-50 transition hover:bg-rose-200/20"
       >
         {copied ? t("inAppBrowser.copied") : t("inAppBrowser.copy")}
       </button>
