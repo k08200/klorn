@@ -31,8 +31,8 @@ function Stat({
         highlight ? "border-accent-muted bg-state-info-bg" : "border-line/70 bg-surface-panel"
       }`}
     >
-      <div className="text-2xl font-semibold tracking-tight text-ink tabular-nums">{value}</div>
-      <div className="mt-1 text-xs font-medium text-ink-muted">{label}</div>
+      <div className="text-role-title tracking-tight text-ink tabular-nums">{value}</div>
+      <div className="mt-1 text-role-caption font-medium text-ink-muted">{label}</div>
       {hint ? <div className="mt-0.5 text-caption text-ink-dim">{hint}</div> : null}
     </div>
   );
@@ -51,16 +51,16 @@ export default function RetentionDashboard() {
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-ink">Retention (Phase 1)</h2>
+        <h2 className="text-role-head font-medium text-ink">Retention (Phase 1)</h2>
         <span className="text-caption text-ink-dim">
           {data ? `as of ${new Date(data.generatedAt).toLocaleString()}` : ""}
         </span>
       </div>
 
       {error ? (
-        <p className="text-sm text-state-danger-ink">Could not load analytics: {error}</p>
+        <p className="text-role-body text-state-danger-ink">Could not load analytics: {error}</p>
       ) : !data ? (
-        <p className="text-sm text-ink-dim">Loading…</p>
+        <p className="text-role-body text-ink-dim">Loading…</p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

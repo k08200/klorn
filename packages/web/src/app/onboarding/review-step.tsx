@@ -36,26 +36,24 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-ink">
-        {t("onboarding.review.title")}
-      </h1>
-      <p className="mt-4 text-sm leading-6 text-ink-mid">{t("onboarding.review.desc")}</p>
+      <h1 className="text-role-page leading-tight text-ink">{t("onboarding.review.title")}</h1>
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">{t("onboarding.review.desc")}</p>
 
       {loading && items.length === 0 ? (
         <div className="mt-8 flex items-center gap-3 rounded-control border border-line bg-surface-raised px-4 py-3">
           <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent motion-reduce:animate-none" />
-          <p className="text-sm text-ink-mid">{t("onboarding.review.readingInbox")}</p>
+          <p className="text-role-body text-ink-mid">{t("onboarding.review.readingInbox")}</p>
         </div>
       ) : null}
 
       {loadError && items.length === 0 ? (
-        <p className="mt-8 rounded-control border border-line bg-surface-raised px-4 py-3 text-sm text-ink-mid">
+        <p className="mt-8 rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
           {t("onboarding.review.loadError")}
         </p>
       ) : null}
 
       {!loading && !loadError && items.length === 0 ? (
-        <p className="mt-8 rounded-control border border-line bg-surface-raised px-4 py-3 text-sm text-ink-mid">
+        <p className="mt-8 rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
           {t("onboarding.review.emptyState")}
         </p>
       ) : null}
@@ -69,7 +67,7 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
             })}
           >
             <div className="mb-2 flex items-baseline gap-2">
-              <span className={`text-xs font-semibold ${TIER_VISUAL[group.tier].accent}`}>
+              <span className={`text-role-caption font-semibold ${TIER_VISUAL[group.tier].accent}`}>
                 {TIER_VISUAL[group.tier].label}
               </span>
               <span className="text-caption text-ink-dim">
@@ -95,7 +93,7 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
       <button
         type="button"
         onClick={onContinue}
-        className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-muted/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+        className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-muted/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
       >
         {reviewedCount > 0
           ? t("onboarding.review.continueReviewed", { count: String(reviewedCount) })
@@ -129,12 +127,16 @@ function ReviewCard({
 
   return (
     <div className="rounded-control border border-line bg-surface-panel p-3">
-      <p className="truncate text-xs text-ink-mid">{sender}</p>
-      <p className="mt-0.5 truncate text-sm font-medium text-ink">{subject}</p>
-      {snippet ? <p className="mt-1 line-clamp-2 text-xs text-ink-dim">{snippet}</p> : null}
+      <p className="truncate text-role-caption text-ink-mid">{sender}</p>
+      <p className="mt-0.5 truncate text-role-body font-medium text-ink">{subject}</p>
+      {snippet ? (
+        <p className="mt-1 line-clamp-2 text-role-caption text-ink-dim">{snippet}</p>
+      ) : null}
 
       {labelState ? (
-        <p className={`mt-3 text-xs font-semibold ${TIER_VISUAL[labelState.tier].accent}`}>
+        <p
+          className={`mt-3 text-role-caption font-semibold ${TIER_VISUAL[labelState.tier].accent}`}
+        >
           {labelState.kind === "confirmed"
             ? t("onboarding.review.card.keptIn", { tier: labelState.tier })
             : t("onboarding.review.card.movedTo", { tier: labelState.tier })}
@@ -145,7 +147,7 @@ function ReviewCard({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="min-h-11 rounded-control border border-emerald-500/30 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400/60 hover:bg-emerald-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-control border border-emerald-500/30 px-3 py-1.5 text-role-caption font-semibold text-emerald-300 transition hover:border-emerald-400/60 hover:bg-emerald-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("onboarding.review.card.looksRight")}
           </button>
@@ -158,7 +160,7 @@ function ReviewCard({
               type="button"
               onClick={() => onCorrect(target)}
               disabled={busy}
-              className={`min-h-11 rounded-control border border-line px-3 py-1.5 text-xs font-medium text-ink-mid transition hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50 ${TIER_VISUAL[target].accent}`}
+              className={`min-h-11 rounded-control border border-line px-3 py-1.5 text-role-caption font-medium text-ink-mid transition hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50 ${TIER_VISUAL[target].accent}`}
             >
               {target}
             </button>

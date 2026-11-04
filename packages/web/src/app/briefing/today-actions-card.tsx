@@ -38,7 +38,7 @@ export function TodayActionsCard() {
   if (query.isLoading) {
     return (
       <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
-        <p className="text-xs text-ink-dim">{t("todayActions.loading")}</p>
+        <p className="text-role-caption text-ink-dim">{t("todayActions.loading")}</p>
       </section>
     );
   }
@@ -56,10 +56,10 @@ export function TodayActionsCard() {
     return (
       <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
         <header className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">{t("todayActions.title")}</h2>
+          <h2 className="text-role-head text-ink">{t("todayActions.title")}</h2>
           <span className="text-caption text-ink-dim">{t("todayActions.since")}</span>
         </header>
-        <p className="text-xs text-ink-dim">{t("todayActions.idle")}</p>
+        <p className="text-role-caption text-ink-dim">{t("todayActions.idle")}</p>
       </section>
     );
   }
@@ -67,7 +67,7 @@ export function TodayActionsCard() {
   return (
     <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-ink">{t("todayActions.title")}</h2>
+        <h2 className="text-role-head text-ink">{t("todayActions.title")}</h2>
         <span className="text-caption text-ink-dim">{t("todayActions.since")}</span>
       </header>
 
@@ -157,7 +157,7 @@ function TodayStat({
   return (
     <div className={`rounded-control border px-2.5 py-2 ${toneClasses}`}>
       <p className="text-caption uppercase tracking-wider opacity-70">{label}</p>
-      <p className="text-base font-semibold leading-none">{value}</p>
+      <p className="text-role-head leading-none">{value}</p>
     </div>
   );
 }
@@ -193,7 +193,7 @@ function TodayRow({
             </>
           )}
         </p>
-        <p className="mt-0.5 truncate text-xs leading-snug text-ink-mid">{text}</p>
+        <p className="mt-0.5 truncate text-role-caption leading-snug text-ink-mid">{text}</p>
       </div>
     </div>
   );

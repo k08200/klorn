@@ -57,19 +57,17 @@ function ReceiptView() {
       <header className="mb-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-              {t("receipt.title")}
-            </h1>
-            <p className="mt-2 text-sm text-ink-mid">{receipt.summary.narrative}</p>
+            <h1 className="text-role-page text-ink">{t("receipt.title")}</h1>
+            <p className="mt-2 text-role-body text-ink-mid">{receipt.summary.narrative}</p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <p className="hidden text-xs text-ink-dim sm:block">
+            <p className="hidden text-role-caption text-ink-dim sm:block">
               {formatReceiptDate(receipt.date)}
             </p>
             <button
               type="button"
               onClick={() => receiptQuery.refetch()}
-              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
+              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
             >
               {t("receipt.refresh")}
             </button>
@@ -163,8 +161,8 @@ function ReceiptView() {
 
         {receipt.summary.totalSeen === 0 && (
           <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-8 text-center">
-            <p className="text-sm text-ink-mid">{t("receipt.empty.title")}</p>
-            <p className="mt-1 text-xs text-ink-mid">{t("receipt.empty.description")}</p>
+            <p className="text-role-body text-ink-mid">{t("receipt.empty.title")}</p>
+            <p className="mt-1 text-role-caption text-ink-mid">{t("receipt.empty.description")}</p>
           </div>
         )}
       </div>
@@ -172,7 +170,7 @@ function ReceiptView() {
       <div className="mt-8 flex justify-center">
         <Link
           href="/inbox"
-          className="text-sm text-ink-dim transition duration-150 hover:text-ink-muted"
+          className="text-role-body text-ink-dim transition duration-150 hover:text-ink-muted"
         >
           {t("receipt.backToQueue")}
         </Link>
@@ -204,8 +202,8 @@ function ReceiptSection({
     <section aria-label={title}>
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <h2 className={`text-sm font-semibold ${labelClass}`}>{title}</h2>
-          <p className="text-xs text-ink-mid">{description}</p>
+          <h2 className={`text-role-head font-semibold ${labelClass}`}>{title}</h2>
+          <p className="text-role-caption text-ink-mid">{description}</p>
         </div>
         <span className="text-caption tabular-nums text-ink-dim">{items.length}</span>
       </div>
@@ -222,7 +220,7 @@ function ReceiptSection({
               <div className="px-4 py-3 pl-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{item.title}</p>
+                    <p className="truncate text-role-body font-medium text-ink">{item.title}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <SourceBadge source={item.source} type={item.type} />
                       {item.tierReason && (
@@ -250,7 +248,7 @@ function ReceiptSection({
 function SummaryMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="border-r border-line-soft px-4 py-3 last:border-r-0">
-      <p className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</p>
+      <p className={`text-role-title font-semibold tabular-nums ${color}`}>{value}</p>
       <p className="mt-1 text-caption text-ink-dim">{label}</p>
     </div>
   );

@@ -86,7 +86,7 @@ export function PaddleLoader({ onCheckoutCompleted }: { onCheckoutCompleted?: ()
       {blocked && (
         <div
           role="alert"
-          className="fixed inset-x-4 top-4 z-50 mx-auto max-w-xl rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-sm text-amber-900 shadow-lg"
+          className="fixed inset-x-4 top-4 z-50 mx-auto max-w-xl rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-role-body text-amber-900 shadow-lg"
         >
           <p className="font-semibold">{t("paddle.blocked.title")}</p>
           <p className="mt-1">{t("paddle.blocked.body")}</p>

@@ -67,7 +67,7 @@ function Top3Section({ items }: { items: AttentionItem[] }) {
   return (
     <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
-        <h2 className="text-sm font-semibold text-ink">Needs attention now</h2>
+        <h2 className="text-role-head text-ink">Needs attention now</h2>
         <span className="text-caption tabular-nums text-ink-dim">Top {items.length}</span>
       </div>
       <ol className="divide-y divide-line-soft">
@@ -101,7 +101,7 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
           >
             {badge.label}
           </span>
-          <span className="truncate text-sm text-ink">{body.title}</span>
+          <span className="truncate text-role-body text-ink">{body.title}</span>
         </div>
         {body.subtitle && (
           <p className="mt-1 line-clamp-1 text-caption text-ink-mid">{body.subtitle}</p>
@@ -307,7 +307,7 @@ function formatEventSubtitle(
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
     <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
-      <h2 className="mb-3 text-sm font-semibold text-ink">Today at a glance</h2>
+      <h2 className="mb-3 text-role-head text-ink">Today at a glance</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (
           <SubList
@@ -362,7 +362,7 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
         {items.slice(0, 3).map((it) => (
           <li
             key={it.key}
-            className="flex items-center gap-2 text-sm text-ink px-2 py-1 rounded border border-transparent hover:border-line"
+            className="flex items-center gap-2 text-role-body text-ink px-2 py-1 rounded border border-transparent hover:border-line"
           >
             <span className="truncate flex-1">{it.primary}</span>
             {it.secondary && (

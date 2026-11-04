@@ -180,17 +180,17 @@ function ApiOfflineScreen() {
       <p className="text-caption font-semibold uppercase tracking-[0.16em] text-accent-deep">
         {t("authGuard.offline.eyebrow")}
       </p>
-      <h1 className="mt-3 text-2xl font-semibold text-ink">
+      <h1 className="mt-3 text-role-title text-ink">
         {exhausted ? t("authGuard.offline.titleExhausted") : t("authGuard.offline.titleWaking")}
       </h1>
-      <p className="mt-3 text-sm leading-6 text-ink-mid">
+      <p className="mt-3 text-role-body leading-6 text-ink-mid">
         {exhausted
           ? t("authGuard.offline.bodyExhausted")
           : t("authGuard.offline.bodyWaking", { seconds: String(totalSec) })}
       </p>
 
       {!exhausted && (
-        <div className="mt-5 flex items-center gap-3 text-xs text-ink-dim">
+        <div className="mt-5 flex items-center gap-3 text-role-caption text-ink-dim">
           <span
             aria-hidden="true"
             className="h-4 w-4 animate-spin rounded-full border-2 border-accent-muted border-t-transparent"
@@ -209,7 +209,7 @@ function ApiOfflineScreen() {
         <button
           type="button"
           onClick={retryNow}
-          className="mt-6 inline-flex min-h-11 items-center rounded-control bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
+          className="mt-6 inline-flex min-h-11 items-center rounded-control bg-accent-solid px-5 text-role-label font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
         >
           {t("authGuard.offline.retry")}
         </button>

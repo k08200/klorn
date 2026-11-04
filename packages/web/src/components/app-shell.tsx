@@ -136,7 +136,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="relative z-10 md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content">
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-6 w-6" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-none text-ink">Klorn</p>
+            <p className="text-role-body font-semibold leading-none text-ink">Klorn</p>
             {/* The section name is redundant with each screen's large title, so
                 it's visually hidden — kept in the DOM (sr-only) for screen
                 readers and the navigation e2e checks. */}

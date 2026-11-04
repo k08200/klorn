@@ -434,10 +434,10 @@ function DecisionsBody({
         {/* Flat flagship header on the canvas — no boxed hero. */}
         <header className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
+            <h1 className="text-role-page text-ink">
               <Greeting />
             </h1>
-            <p className="mt-2 text-sm text-ink-mid">
+            <p className="mt-2 text-role-body text-ink-mid">
               <span className="text-ink-dim">{formatToday()}</span>
               <span className="mx-1.5 text-slate-300">·</span>
               {pendingCount > 0 ? (
@@ -479,7 +479,7 @@ function DecisionsBody({
             </button>
             <Link
               href="/inbox/receipt"
-              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
             >
               Today's receipt
             </Link>
@@ -530,7 +530,7 @@ function DecisionsBody({
               <div className="panel-elevated mb-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
                 <div className="flex items-center justify-between gap-2 border-b border-line-soft px-4 py-2.5">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-ink">Decisions</h2>
+                    <h2 className="text-role-head text-ink">Decisions</h2>
                     {pendingCount > 0 && (
                       <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
                         {pendingCount} pending
@@ -646,7 +646,7 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
     >
       <div className="border-b border-line-soft px-4 py-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">Commitments</h2>
+          <h2 className="text-role-head text-ink">Commitments</h2>
           <span className="rounded-chip bg-accent-dim px-1.5 py-0.5 text-caption font-bold tabular-nums text-accent-deeper">
             {visible.length}
           </span>
@@ -728,8 +728,8 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-ink">{t("inbox.allClear")}</p>
-        <p className="mt-0.5 truncate text-xs text-ink-dim">
+        <p className="text-role-body font-semibold text-ink">{t("inbox.allClear")}</p>
+        <p className="mt-0.5 truncate text-role-caption text-ink-dim">
           {commitmentCount > 0
             ? `Klorn is watching your mail and calendar — ${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"} tracked in the background.`
             : t("inbox.emptyBody")}
@@ -738,13 +738,13 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
       <div className="flex shrink-0 gap-2">
         <Link
           href="/inbox/firewall"
-          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 px-3.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 px-3.5 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("inboxLegacy.segment.lanes")}
         </Link>
         <Link
           href="/email"
-          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 px-3.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 px-3.5 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("inbox.openMail")}
         </Link>
@@ -800,7 +800,7 @@ function OnboardingHint() {
     <>
       {/* DESKTOP — one-line compact strip; the tour never outweighs the queue. */}
       <div className="mb-4 hidden items-center gap-3 rounded-control border border-line/60 bg-surface-panel/50 px-3 py-1.5 text-caption md:flex">
-        <p className="min-w-0 flex-1 truncate text-xs text-ink-mid">
+        <p className="min-w-0 flex-1 truncate text-role-caption text-ink-mid">
           <span className="font-semibold text-accent-deeper">{t("inbox.tourTitle")}</span>
           <span className="mx-1.5 text-slate-300">·</span>
           {t("inbox.tour.lead")}{" "}
@@ -842,7 +842,7 @@ function OnboardingHint() {
       </div>
 
       {/* MOBILE — collapsed title line, expandable on tap (unchanged behavior). */}
-      <div className="mb-3 text-sm md:hidden">
+      <div className="mb-3 text-role-body md:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
             <p className="text-caption font-medium text-ink-dim">{t("inbox.tourTitle")}</p>
@@ -1017,7 +1017,7 @@ function SignalStrip({
                 {cell.label}
               </span>
             </span>
-            <span className="text-[26px] font-semibold leading-none tabular-nums text-ink">
+            <span className="text-role-title leading-none tabular-nums text-ink">
               {cell.value ?? "—"}
             </span>
           </>
@@ -1070,7 +1070,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
     >
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-ink">Reply Needed</h2>
+          <h2 className="text-role-head text-ink">Reply Needed</h2>
           <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-semibold tabular-nums text-accent-deeper ring-1 ring-inset ring-accent/20">
             {emails.length}
           </span>
@@ -1100,7 +1100,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
                     <span
-                      className={`min-w-0 flex-1 truncate font-medium text-ink ${hero ? "text-label" : "text-xs"}`}
+                      className={`min-w-0 flex-1 truncate font-medium text-ink ${hero ? "text-label" : "text-role-caption"}`}
                     >
                       {email.subject || "(no subject)"}
                     </span>
@@ -1111,7 +1111,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                     )}
                   </span>
                   {hero && email.snippet && (
-                    <span className="mt-0.5 line-clamp-1 block text-xs leading-5 text-ink-dim">
+                    <span className="mt-0.5 line-clamp-1 block text-role-caption leading-5 text-ink-dim">
                       {email.snippet}
                     </span>
                   )}
@@ -1134,7 +1134,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
       <div className="flex justify-end border-t border-line-soft px-4 py-2.5">
         <Link
           href="/email"
-          className="text-xs font-medium text-accent-deep transition duration-150 hover:text-accent-deeper"
+          className="text-role-caption font-medium text-accent-deep transition duration-150 hover:text-accent-deeper"
         >
           Open mail →
         </Link>
@@ -1245,7 +1245,7 @@ function FilterTab({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`ease-strong rounded-chip px-3 py-1.5 text-xs transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`ease-strong rounded-chip px-3 py-1.5 text-role-caption transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         active
           ? "seg-active bg-surface-panel font-semibold text-ink"
           : "text-ink-mid hover:bg-surface-panel/70 hover:text-ink"
@@ -1325,7 +1325,7 @@ function ActionCard({
 
       {/* Hero subject */}
       <div className="px-5 pb-1 pt-3">
-        <h3 className="break-words text-2xl font-semibold leading-tight tracking-tight text-ink">
+        <h3 className="break-words text-role-title leading-tight tracking-tight text-ink">
           {heroSubject}
         </h3>
         {showThreadHint && (
@@ -1337,7 +1337,7 @@ function ActionCard({
 
       {/* Context paragraph */}
       {context && (
-        <p className="px-5 pb-4 pt-2 text-sm leading-relaxed text-ink-mid line-clamp-3">
+        <p className="px-5 pb-4 pt-2 text-role-body leading-relaxed text-ink-mid line-clamp-3">
           {context}
         </p>
       )}
@@ -1351,12 +1351,14 @@ function ActionCard({
             <span className="font-mono text-caption uppercase tracking-[0.14em] text-accent-deep">
               Email to send
             </span>
-            <span className="text-xs text-ink-dim">To: {emailPreview.to}</span>
+            <span className="text-role-caption text-ink-dim">To: {emailPreview.to}</span>
           </div>
           <div className="space-y-2 px-3 py-3">
-            <p className="break-words text-xs text-ink-mid">Subject: {emailPreview.subject}</p>
+            <p className="break-words text-role-caption text-ink-mid">
+              Subject: {emailPreview.subject}
+            </p>
             {emailPreview.body && (
-              <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-mid">
+              <p className="whitespace-pre-wrap text-role-caption leading-relaxed text-ink-mid">
                 {emailPreview.body}
               </p>
             )}
@@ -1371,7 +1373,7 @@ function ActionCard({
             type="button"
             onClick={onApprove}
             disabled={!!loading}
-            className="glow-primary ease-strong inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-control bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="glow-primary ease-strong inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-control bg-accent-solid px-5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading === "approve" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -1383,7 +1385,7 @@ function ActionCard({
             type="button"
             onClick={onReject}
             disabled={!!loading}
-            className="ease-strong inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-4 text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-4 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading === "reject" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-600" />
@@ -1396,7 +1398,7 @@ function ActionCard({
             onClick={onSnooze}
             disabled={!!loading}
             title="Remind me in 1 hour"
-            className="ease-strong inline-flex min-h-11 items-center justify-center gap-1 rounded-control px-3 text-xs text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 items-center justify-center gap-1 rounded-control px-3 text-role-caption text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:opacity-50"
           >
             {loading === "snooze" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />
@@ -1637,10 +1639,8 @@ function MobileDecisionQueue({
     <div>
       <header className="mb-5 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {title}
-          </h1>
-          <p className="mt-1.5 text-sm text-ink-mid">{subtitle}</p>
+          <h1 className="text-role-page text-ink">{title}</h1>
+          <p className="mt-1.5 text-role-body text-ink-mid">{subtitle}</p>
         </div>
         <button
           type="button"
@@ -1757,7 +1757,7 @@ function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
-      <p className="text-base font-medium text-ink">{t("inbox.nothingToDecide")}</p>
+      <p className="text-role-head font-medium text-ink">{t("inbox.nothingToDecide")}</p>
       <p className="mx-auto mt-1.5 max-w-xs text-label font-normal leading-relaxed text-ink-dim">
         {commitmentCount > 0
           ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked in the background.`
@@ -1801,7 +1801,7 @@ function MobileActionCard({
         <span className="text-caption text-ink-dim">{formatRelative(action.createdAt)}</span>
       </div>
       <div className="px-4 pt-2.5">
-        <h3 className="break-words text-[17px] font-semibold leading-snug tracking-tight text-ink">
+        <h3 className="break-words text-role-head leading-snug tracking-tight text-ink">
           {heroSubject}
         </h3>
         {context && (
@@ -1816,9 +1816,11 @@ function MobileActionCard({
               Email to send
             </p>
             <p className="mt-1 break-words text-caption text-ink-dim">To: {emailPreview.to}</p>
-            <p className="mt-1 break-words text-xs text-ink-mid">Subject: {emailPreview.subject}</p>
+            <p className="mt-1 break-words text-role-caption text-ink-mid">
+              Subject: {emailPreview.subject}
+            </p>
             {emailPreview.body && (
-              <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-ink-mid">
+              <p className="mt-1.5 whitespace-pre-wrap text-role-caption leading-relaxed text-ink-mid">
                 {emailPreview.body}
               </p>
             )}
@@ -1831,7 +1833,7 @@ function MobileActionCard({
             type="button"
             onClick={onApprove}
             disabled={!!loading}
-            className="glow-primary ease-strong flex min-h-12 w-full items-center justify-center rounded-control bg-accent-solid text-[15px] font-semibold text-accent-solid-ink transition duration-150 active:scale-[0.97] disabled:opacity-50"
+            className="glow-primary ease-strong flex min-h-12 w-full items-center justify-center rounded-control bg-accent-solid text-role-label font-semibold text-accent-solid-ink transition duration-150 active:scale-[0.97] disabled:opacity-50"
           >
             {loading === "approve" ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -1844,7 +1846,7 @@ function MobileActionCard({
               type="button"
               onClick={onReject}
               disabled={!!loading}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-line text-sm font-medium text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-line text-role-label text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
             >
               {loading === "reject" ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-600" />
@@ -1856,7 +1858,7 @@ function MobileActionCard({
               type="button"
               onClick={onSnooze}
               disabled={!!loading}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-line text-sm text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-line text-role-label text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
             >
               {loading === "snooze" ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />

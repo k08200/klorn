@@ -470,7 +470,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {isAgentNotification(n.title) ? "🤖" : typeIcon[n.type] || "📌"}
           </span>
           <span
-            className={`text-sm truncate ${!n.isRead ? "font-semibold" : "text-ink-mid"} ${isAgentNotification(n.title) ? "text-accent-deep" : ""}`}
+            className={`text-role-body truncate ${!n.isRead ? "font-semibold" : "text-ink-mid"} ${isAgentNotification(n.title) ? "text-accent-deep" : ""}`}
           >
             {notificationTitle(n.title)}
           </span>
@@ -481,7 +481,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           )}
           {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 ml-auto" />}
         </div>
-        <p className="text-label font-normal md:text-xs text-ink-mid mt-1 line-clamp-2 ml-6">
+        <p className="text-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
           {n.message}
         </p>
         <div className="flex items-center gap-2 mt-1 ml-6">
@@ -497,7 +497,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleApprovePendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-role-label md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "approve" ? "..." : t("notif.approve")}
           </button>
@@ -505,7 +505,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleRejectPendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-role-label md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "reject" ? "..." : t("notif.reject")}
           </button>
@@ -540,7 +540,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <div className="flex items-center gap-2">
           <span className="text-sm">{group.isAgent ? "🤖" : typeIcon[group.type] || "📌"}</span>
           <span
-            className={`text-sm ${group.unreadCount > 0 ? "font-semibold" : "text-ink-mid"} ${group.isAgent ? "text-accent-deep" : ""}`}
+            className={`text-role-body ${group.unreadCount > 0 ? "font-semibold" : "text-ink-mid"} ${group.isAgent ? "text-accent-deep" : ""}`}
           >
             {label} {group.items.length}
           </span>
@@ -553,7 +553,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
           </span>
         </div>
-        <p className="text-label font-normal md:text-xs text-ink-mid mt-1 line-clamp-1 ml-6">
+        <p className="text-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
         <p className="text-caption text-ink-mid mt-1 ml-6">
@@ -623,7 +623,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{t("notif.title")}</span>
+                <span className="text-role-body font-medium">{t("notif.title")}</span>
                 {connected && (
                   <span className="text-caption text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
                     {t("mail.live")}
@@ -641,7 +641,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     type="button"
                     onClick={markAllRead}
                     disabled={actionLoading}
-                    className="text-xs text-ink-dim hover:text-accent-deep transition disabled:opacity-40"
+                    className="text-role-caption text-ink-dim hover:text-accent-deep transition disabled:opacity-40"
                   >
                     {actionLoading ? "..." : t("notif.markAllRead")}
                   </button>
@@ -651,7 +651,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     type="button"
                     onClick={clearAll}
                     disabled={actionLoading}
-                    className="text-xs text-ink-dim hover:text-state-danger-ink transition disabled:opacity-40"
+                    className="text-role-caption text-ink-dim hover:text-state-danger-ink transition disabled:opacity-40"
                   >
                     {actionLoading ? "..." : t("common.clear")}
                   </button>
@@ -661,7 +661,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             <div className="flex-1 overflow-y-auto overscroll-contain">
               {approveProGated && <ProFeatureNotice className="m-3" />}
               {notifications.length === 0 ? (
-                <p className="text-center text-ink-dim text-sm py-6">{t("notif.empty")}</p>
+                <p className="text-center text-ink-dim text-role-body py-6">{t("notif.empty")}</p>
               ) : (
                 groups.map((group) => {
                   if (group.items.length === 1) return renderItem(group.items[0]);

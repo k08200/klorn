@@ -98,7 +98,9 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               K
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-none text-ink">{t("nav.assistant")}</p>
+              <p className="text-role-body font-semibold leading-none text-ink">
+                {t("nav.assistant")}
+              </p>
               <p className="mt-1 truncate text-caption text-ink-dim">{t("assistantDock.scope")}</p>
             </div>
             <button
@@ -134,10 +136,10 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
           {/* Thread */}
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3" aria-live="polite">
             {chat.messagesLoading ? (
-              <p className="text-sm text-ink-mid">{t("chat.loadingConversation")}</p>
+              <p className="text-role-body text-ink-mid">{t("chat.loadingConversation")}</p>
             ) : chat.messages.length === 0 && !chat.pendingText ? (
               <div className="space-y-2.5 pt-1">
-                <p className="text-sm text-ink-mid">{t("chat.emptyState")}</p>
+                <p className="text-role-body text-ink-mid">{t("chat.emptyState")}</p>
                 <ul className="space-y-1.5">
                   {SUGGESTION_KEYS.map((key) => (
                     <li key={key}>

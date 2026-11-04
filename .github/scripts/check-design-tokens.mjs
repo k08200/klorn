@@ -23,6 +23,11 @@
  *                        radius role: rounded-chip / control / card / sheet
  *                        (docs/design/design-language-v2.md § Radius).
  *                        `rounded-full` (capsules) is not a radius token.
+ *   raw-type             a raw Tailwind text size (`text-sm`, `md:text-xs`,
+ *                        `text-2xl`, …) outside components/ui — use a type
+ *                        role: text-role-page / title / head / body / label /
+ *                        caption / mono (docs/design/design-language-v2.md
+ *                        § Type roles). Pick by meaning, not nearest pixel.
  *   retired-auto-lane    `tier-auto` — the retired v1 AUTO lane's tokens stay
  *                        only for legacy Record<Tier, …> visuals.
  *   retired-elevation    `shadow-l2` / `shadow-l3` — Design Language v2 keeps
@@ -88,6 +93,12 @@ const RULES = [
     re: /(?<![\w-])rounded-(?:[trblse]{1,2}-)?(?:sm|md|lg|xl|2xl|3xl|\[[^\]\s]+\])(?![\w-])/g,
     applies: (file) => !file.startsWith(`${WEB}/components/ui/`),
     hint: "use a radius role: rounded-chip (6) / control (10) / card (16) / sheet (24)",
+  },
+  {
+    id: "raw-type",
+    re: /(?<![\w-])text-(?:xs|sm|base|lg|xl|[2-9]xl)(?![\w-])/g,
+    applies: (file) => !file.startsWith(`${WEB}/components/ui/`),
+    hint: "use a type role: text-role-page / title / head / body / label / caption / mono",
   },
   {
     id: "retired-text-size",

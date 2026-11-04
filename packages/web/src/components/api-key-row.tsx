@@ -15,8 +15,8 @@ import { permissionChipClasses, permissionLabelKey } from "../lib/api-key-ui";
 import { useT } from "../lib/i18n";
 import { ApiKeyActivityPanel, ApiKeyActivityToggle } from "./api-key-activity";
 
-const NAME_CELL = "min-w-0 flex-1 truncate text-sm text-ink";
-const NAME_CELL_WRAPPING = "min-w-32 flex-1 truncate text-sm text-ink";
+const NAME_CELL = "min-w-0 flex-1 truncate text-role-body text-ink";
+const NAME_CELL_WRAPPING = "min-w-32 flex-1 truncate text-role-body text-ink";
 const REVOKED_CHIP =
   "rounded-full bg-surface-raised px-2 py-0.5 text-caption font-medium text-ink-dim";
 
@@ -30,7 +30,7 @@ function NameCell({ apiKey, className }: { apiKey: ApiKeyWire; className: string
   return (
     <span className={className}>
       {apiKey.name}
-      <span className="ml-2 font-mono text-xs text-ink-dim">{apiKey.prefix}…</span>
+      <span className="ml-2 font-mono text-role-mono text-ink-dim">{apiKey.prefix}…</span>
     </span>
   );
 }
@@ -65,7 +65,7 @@ export function ApiKeyRow({ apiKey, writeTools, onRevoke }: Props) {
     <li className="flex flex-wrap items-center gap-x-2 py-1">
       <NameCell apiKey={apiKey} className={NAME_CELL_WRAPPING} />
       <span
-        className={`rounded-full px-2 py-0.5 text-xs font-medium ${permissionChipClasses(apiKey.permission)}`}
+        className={`rounded-full px-2 py-0.5 text-role-caption font-medium ${permissionChipClasses(apiKey.permission)}`}
       >
         {t(permissionLabelKey(apiKey.permission))}
       </span>

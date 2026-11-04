@@ -285,7 +285,7 @@ function CalendarEventDetail({ id }: { id: string }) {
   if (error || !event) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-12 text-center">
-        <p className="text-sm text-ink-mid">{error ?? t("calendar.eventNotFound")}</p>
+        <p className="text-role-body text-ink-mid">{error ?? t("calendar.eventNotFound")}</p>
         <Link
           href="/calendar"
           className="mt-3 inline-block text-caption text-accent-deep hover:underline"
@@ -325,7 +325,7 @@ function CalendarEventDetail({ id }: { id: string }) {
         <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="break-words text-xl font-semibold text-ink">{event.title}</h1>
+              <h1 className="break-words text-role-title text-ink">{event.title}</h1>
               <p className="mt-1 text-label font-normal text-ink-mid">
                 {formatRange(event.startTime, event.endTime, event.allDay, userTimezone, locale)}
               </p>
