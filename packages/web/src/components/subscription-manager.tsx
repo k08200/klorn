@@ -16,7 +16,7 @@ import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
 
 const BUTTON =
-  "ease-strong min-h-11 rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring disabled:opacity-50";
+  "ease-strong min-h-11 rounded-control border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring disabled:opacity-50";
 
 /**
  * The one-line answer to "what happens next, and when" — renewal date, trial
@@ -167,7 +167,7 @@ export function SubscriptionManager({
           type="button"
           onClick={keepSubscription}
           disabled={busy}
-          className="ease-strong focus-ring min-h-11 rounded-lg bg-accent-solid px-4 py-2 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+          className="ease-strong focus-ring min-h-11 rounded-control bg-accent-solid px-4 py-2 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
         >
           {t("billing.keepSubscription")}
         </button>
@@ -182,7 +182,7 @@ export function SubscriptionManager({
           type="button"
           onClick={cancelSubscription}
           disabled={busy}
-          className="ease-strong focus-ring min-h-11 rounded-lg px-4 py-2 text-sm text-ink-mid underline-offset-4 transition duration-150 hover:text-ink hover:underline disabled:opacity-50"
+          className="ease-strong focus-ring min-h-11 rounded-control px-4 py-2 text-sm text-ink-mid underline-offset-4 transition duration-150 hover:text-ink hover:underline disabled:opacity-50"
         >
           {t("billing.cancelSubscription")}
         </button>

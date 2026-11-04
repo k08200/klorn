@@ -65,7 +65,7 @@ export default function CommandCenterSummary() {
 
 function Top3Section({ items }: { items: AttentionItem[] }) {
   return (
-    <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+    <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <h2 className="text-sm font-semibold text-ink">Needs attention now</h2>
         <span className="text-caption tabular-nums text-ink-dim">Top {items.length}</span>
@@ -97,7 +97,7 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${badge.className}`}
+            className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${badge.className}`}
           >
             {badge.label}
           </span>
@@ -125,25 +125,25 @@ function DecisionTrace({ item }: { item: AttentionItem }) {
   if (!decision.costOfIgnoring && facts.length === 0) return null;
 
   return (
-    <div className="mt-2 grid gap-1.5 rounded-lg border border-line-soft bg-surface-raised/60 p-2">
+    <div className="mt-2 grid gap-1.5 rounded-control border border-line-soft bg-surface-raised/60 p-2">
       {decision.costOfIgnoring && (
         <p className="line-clamp-2 text-caption leading-4 text-ink-mid">
           Cost: {displayText(decision.costOfIgnoring)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-medium text-ink-mid">
+        <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-medium text-ink-mid">
           Confidence {Math.round(decision.confidence * 100)}%
         </span>
         {decision.suggestedAction && (
-          <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-medium text-accent-deep ring-1 ring-inset ring-accent/20">
+          <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-medium text-accent-deep ring-1 ring-inset ring-accent/20">
             {displayText(decision.suggestedAction)}
           </span>
         )}
         {facts.map((fact) => (
           <span
             key={`${fact.label}:${fact.value}`}
-            className="max-w-full truncate rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-medium text-ink-mid"
+            className="max-w-full truncate rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-medium text-ink-mid"
           >
             {displayText(fact.label)}: {displayText(fact.value)}
           </span>
@@ -306,7 +306,7 @@ function formatEventSubtitle(
 
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <h2 className="mb-3 text-sm font-semibold text-ink">Today at a glance</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (

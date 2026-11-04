@@ -39,7 +39,10 @@ export function OAuthErrorBanner() {
     // The data wipe's fence refused the new Google grant; it lifts minutes
     // after the wipe finishes.
     return (
-      <div className="mb-4 rounded-xl border border-line-soft bg-surface-raised p-4" role="status">
+      <div
+        className="mb-4 rounded-control border border-line-soft bg-surface-raised p-4"
+        role="status"
+      >
         <h3 className="text-sm font-semibold text-ink">{t("oauthError.wipeInProgress.title")}</h3>
         <p className="mt-1 text-label font-normal leading-5 text-ink-mid">
           {t("oauthError.wipeInProgress.body")}
@@ -50,7 +53,7 @@ export function OAuthErrorBanner() {
   if (status !== "offline_access_denied") return null;
 
   return (
-    <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+    <div className="mb-4 rounded-control border border-red-500/30 bg-red-500/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-state-danger-ink">{t("oauthError.title")}</h3>
@@ -71,14 +74,14 @@ export function OAuthErrorBanner() {
             <button
               type="button"
               onClick={() => void startGoogleConnect()}
-              className="rounded-lg bg-accent-solid px-3 py-1.5 text-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
+              className="rounded-control bg-accent-solid px-3 py-1.5 text-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
             >
               {t("reconnect.googleAction")}
             </button>
             <button
               type="button"
               onClick={() => setDismissed(true)}
-              className="rounded-lg border border-line px-3 py-1.5 text-caption text-ink-mid transition hover:text-ink"
+              className="rounded-control border border-line px-3 py-1.5 text-caption text-ink-mid transition hover:text-ink"
             >
               {t("common.dismiss")}
             </button>

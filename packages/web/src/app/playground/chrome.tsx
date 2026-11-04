@@ -11,10 +11,10 @@ export const START_URL = "/login";
 
 /** A primary-role link (ui/button has no anchor form). */
 export const PRIMARY_LINK =
-  "focus-ring inline-flex min-h-9 items-center justify-center rounded-lg bg-accent-solid px-3.5 text-label font-semibold text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover pointer-coarse:min-h-11 max-md:min-h-11";
+  "focus-ring inline-flex min-h-9 items-center justify-center rounded-control bg-accent-solid px-3.5 text-label font-semibold text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover pointer-coarse:min-h-11 max-md:min-h-11";
 
 const NAV_LINK =
-  "focus-ring inline-flex min-h-11 items-center rounded-lg px-3 text-label text-ink-mid transition-colors duration-120 ease-fluid hover:text-ink";
+  "focus-ring inline-flex min-h-11 items-center rounded-control px-3 text-label text-ink-mid transition-colors duration-120 ease-fluid hover:text-ink";
 
 function Mark() {
   return (
@@ -32,7 +32,7 @@ export function PlaygroundHeader() {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-3 md:px-12">
       <div className="flex items-center gap-3">
-        <Link href="/" className="focus-ring flex min-h-11 items-center gap-3 rounded-lg">
+        <Link href="/" className="focus-ring flex min-h-11 items-center gap-3 rounded-control">
           <Mark />
           <span className="hidden text-head text-ink md:inline">Klorn</span>
         </Link>

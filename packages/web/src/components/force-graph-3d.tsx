@@ -103,7 +103,7 @@ export function ForceGraph3DView({ nodes, edges }: { nodes: GraphNode[]; edges: 
   return (
     <div
       ref={containerRef}
-      className="overflow-hidden rounded-2xl border border-stone-700/45"
+      className="overflow-hidden rounded-card border border-stone-700/45"
       style={{ minHeight: "60vh" }}
     />
   );

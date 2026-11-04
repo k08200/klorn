@@ -187,7 +187,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
         aria-modal="true"
         aria-label={t("bottomTabs.account")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-2xl border-t border-line bg-surface-panel pb-safe shadow-2xl shadow-slate-900/15 focus:outline-none"
+        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-sheet border-t border-line bg-surface-panel pb-safe shadow-2xl shadow-slate-900/15 focus:outline-none"
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
 
@@ -222,7 +222,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
               onClose();
               logout();
             }}
-            className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-state-danger-ink transition hover:bg-red-500/10"
+            className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2.5 text-left text-sm text-state-danger-ink transition hover:bg-red-500/10"
           >
             <span className="flex h-5 w-5 items-center justify-center" aria-hidden="true">
               <svg
@@ -263,7 +263,7 @@ function SheetLink({
     <Link
       href={href}
       onClick={onNavigate}
-      className="focus-ring flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-ink transition hover:bg-surface-hover"
+      className="focus-ring flex min-h-11 items-center gap-3 rounded-control px-3 py-2.5 text-sm text-ink transition hover:bg-surface-hover"
     >
       <span className="flex h-5 w-5 items-center justify-center text-ink-mid" aria-hidden="true">
         <NavIcon type={icon} size={16} />

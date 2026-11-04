@@ -255,7 +255,7 @@ export default function CommandPalette() {
       />
       <div
         ref={dialogRef}
-        className="relative w-full max-w-md rounded-xl border border-line bg-surface-panel shadow-2xl"
+        className="relative w-full max-w-md rounded-sheet border border-line bg-surface-panel shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={t("palette.label")}

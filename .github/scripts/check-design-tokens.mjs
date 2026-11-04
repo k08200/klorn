@@ -18,6 +18,11 @@
  *                        which carry the light/dark pair and the measured
  *                        contrast. Raw literals are how the dark theme broke.
  *   raw-button           a raw `<button` in app/** pages — use ui/button.
+ *   raw-radius           a raw Tailwind radius (`rounded-md`, `rounded-t-2xl`,
+ *                        `rounded-[4px]`, …) outside components/ui — use a
+ *                        radius role: rounded-chip / control / card / sheet
+ *                        (docs/design/design-language-v2.md § Radius).
+ *                        `rounded-full` (capsules) is not a radius token.
  *   retired-auto-lane    `tier-auto` — the retired v1 AUTO lane's tokens stay
  *                        only for legacy Record<Tier, …> visuals.
  *   retired-elevation    `shadow-l2` / `shadow-l3` — Design Language v2 keeps
@@ -77,6 +82,12 @@ const RULES = [
     re: /<button(?=[\s>])/g,
     applies: (file) => file.startsWith(`${WEB}/app/`),
     hint: "use the Button primitive from @/components/ui/button",
+  },
+  {
+    id: "raw-radius",
+    re: /(?<![\w-])rounded-(?:[trblse]{1,2}-)?(?:sm|md|lg|xl|2xl|3xl|\[[^\]\s]+\])(?![\w-])/g,
+    applies: (file) => !file.startsWith(`${WEB}/components/ui/`),
+    hint: "use a radius role: rounded-chip (6) / control (10) / card (16) / sheet (24)",
   },
   {
     id: "retired-text-size",
