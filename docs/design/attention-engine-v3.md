@@ -327,12 +327,27 @@ It reports:
 - keyword parity on real mail;
 - per-item changes (ids by default).
 
-**Reasons and API contract (for the surface redesign).** These fields are additive and only appear while `JUDGE_V3_POLICY` is on. With the flag off, every response keeps today's shape and order: the new fields are absent, not null.
-- Each item gets `v3: { policyVersion, rank, held, due, threadTurn, reasons }`:
-  - `policyVersion` is "v3.0" when the policy decided, and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane;
-  - `rank` is the 1-based position in the ranked QUEUE, and null outside QUEUE;
-  - `held` is true when the budget held this PUSH (`AttentionItem.heldAt`, while the item is still in QUEUE). Held items take ranks 1..n, by importance and then in the order they were held;
-  - `due` is an ISO 8601 UTC timestamp. Clients format it in the display zone, and null hides the chip.
+**Reasons and API contract (for the surface redesign).** These fields are additive. They appear only for a user under the policy (`isJudgeV3PolicyEnabled`); everyone else keeps today's shape and order, with the new fields absent, not null.
+- **Ranked QUEUE (P3 PR2b).**
+  - Where it applies:
+    - the QUEUE lane page, `GET /api/email?tier=QUEUE`, threads included;
+    - the Reader's previous and next within that view;
+    - the QUEUE lane of `GET /api/inbox/firewall`.
+  - The order: held items first, by importance and then in the order they were held. Then importance × deadline proximity. Ties go to the newer mail, then the id.
+  - The SQL in `judge/email-lanes.ts` and `ranking.ts` `rankQueue` (in memory, for the firewall list) are the same order. A Postgres test pins the two together.
+  - An item v3 never decided ranks with importance 0.2 (the unknown prior) and no deadline.
+  - A thread ranks by its newest message in the view.
+  - The Reader's neighbours are picked by row number in that order. They work even after the open mail has moved out of the view.
+- Each item gets `v3: { policyVersion, rank, held, due, threadTurn, reasons }`, on lane pages, firewall items and the Reader context:
+  - `policyVersion` is "v3.0" when the policy decided, and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane. It is null when v3 never decided the item, for example mail judged before the flip;
+  - `rank` is the 1-based position in the ranked QUEUE: skip + index + 1 on a QUEUE lane page, and the index in the firewall's QUEUE lane. It is null in any other view, All included. A page of All cannot know a mail's QUEUE position without ranking the whole lane;
+  - `held` is true when the budget held this PUSH and the item still shows it. That means `heldAt` is set, the lane is QUEUE, and no human or agent lane is on the item. Held items take ranks 1..n, by importance and then in the order they were held;
+  - `due` is an ISO 8601 UTC timestamp. Clients format it in the display zone, and null hides the chip;
+  - a human override shows `reasons: [manual_override {tier}]`. An agent lane shows no reasons.
+- Stored reasons are re-validated on read:
+  - an unknown code is dropped;
+  - a param that is not a string, number, boolean or null is dropped;
+  - evidence is capped at 300 characters, and `evidenceIn` is located against the subject.
 - Each reason is `{ code, fact, evidence, evidenceIn: "subject" | "body" | null, params }`.
   - `reasons[0]` decides the lane; the rest support it. Reasons contain no prose and no model names; clients localise from `code` and `params`.
   - Codes: pinned, manual_override, sender_pattern, learned_rule, event, risk, ask_due_soon, addressed_to_me, ask, thread_turn_mine, transaction_action, kind, transaction_record, bulk, default_queue, ambiguous, spam_floor, held_budget, relationship.
@@ -346,6 +361,8 @@ It reports:
     - `held_budget` {budget}
     - `relationship`: the known features only. These are counts and dates, never content.
 - Today responses add `interruptBudget: { limit, used, day }` (`limit` is null for no limit; `day` is `YYYY-MM-DD`), plus `queueTotal` and `rankedAt` (ISO). Clients re-apply ranks only on focus or refresh.
+  - The Today responses are `GET /api/email?window=today` and `GET /api/inbox/firewall`. A ranked QUEUE lane page also carries `rankedAt`.
+  - `used` counts the day's slot rows, hidden ones included. `queueTotal` is the QUEUE lane's count for the same inbox scope.
 - Open, and not in v3.0:
   - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event. It shares the per-user push rate limit (3 per 10 minutes) with PUSH. A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
   - Floods that never claim a slot (security review). A PUSH that will not ring (quiet hours, preferences) stays in the PUSH lane and spends nothing. Many urgent-looking stranger mails in quiet hours, or held overflow outside them, all list ahead of ordinary QUEUE. Ranking orders held items by importance, so a trusted sender's held alert stays above a stranger's. P3 PR2b decides how to collapse or cap stranger held items in the Today list.
