@@ -188,7 +188,7 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
 
 ### (5) Policy v3.0: exact rules, budget, ranking (P3)
 
-The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries `policyVersion: "v3.0"`.
+The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries the `policyVersion` that decided it. The live version is **v3.1**, and v3.0 stays in `policy.ts` for replay and for items it already decided. The rules below are v3.0; "Policy v3.1" after them lists what changed.
 
 **Evaluation.** The result is the lane before the budget. The first match wins:
 
@@ -206,6 +206,52 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
 6. **SILENT**: `addressedTo` is bulk, or `kind` is newsletter or promotion.
 7. Otherwise **QUEUE**, the default lane.
 
+**Policy v3.1 (2026-11-07, the live version).** It makes four changes to the rules above, measured on P1's 60 runs (below). `JUDGE_V3_POLICY_VERSION=v3.0` rolls the live judge back to v3.0 while the policy stays on; it is read per call, so the rollback needs no redeploy.
+- **PUSH before MEETING.** Rule 3 is checked before rule 2.
+  - A due-soon ask, or a trusted risk, interrupts even when the mail carries an event. An event with nothing urgent is still MEETING.
+  - This fixes cold-start urgent recall: an urgent invite went to MEETING, which lacks the PUSH reason.
+  - An urgent invite never ends up worse off than in v3.0. If the interrupt budget holds such a PUSH, the mail notifies as the MEETING that v3.0 would have shown, outside the budget, instead of being held silent. Like a hold, that is final (step 6).
+- **Risk-only PUSH also trusts a known correspondent whose From passed DMARC.** A payment/security risk PUSHes for a VIP, or for a sender that meets all of these:
+  - `senderAuthenticated` is true;
+  - the sender has mailed the user at least 3 times, the first at least 30 days before the decision;
+  - the facts are not ambiguous;
+  - the kind is not promotion or newsletter.
+
+  DMARC alone is not trust: it proves the domain sent the mail, not who wrote it. A fresh webmail account, or an attacker's own domain, passes it (security review). The inbound history is what a one-off attacker lacks: it takes a month of mail delivered to the inbox. It is a cost, not proof, since it counts mail received, not replies. Other rules:
+  - A failed verdict is never trusted, VIP or not.
+  - With no verdict (null), only a VIP counts.
+  - The risk reason's `trusted` param says whether the sender was trusted for a risk-only interrupt. It is false whenever phishing is suspected.
+  - The budget and the stranger share still apply.
+  - What remains:
+    - a correspondent who has mailed the user for a month and is then compromised;
+    - an attacker with their own DMARC-passing domain who first gets three mails into the inbox over 30 days;
+    - a genuine brand mail that carries attacker text.
+
+    The model's `phishing_suspect` is the defence there. Before the flip, measure its recall on an adversarial set; the eval sets hold no phishing mail yet.
+- **A notification may interrupt through a due-soon ask**, unless the deterministic automated-sender signal is on (no-reply, notifications@) or its From failed DMARC (a forged brand notification). A person-kind ask could already interrupt in v3.0, so this widens the kinds, not the senders. Newsletter, promotion and receipt never interrupt through an ask.
+- **SILENT is clear marketing only** (the LOCKED narrow-SILENT rule): `kind` promotion. Newsletters and other bulk mail are filed in INFO, still visible. This replaces rule 6, and rule 5 gains newsletter and bulk, checked after a transaction record and the INFO kinds, so their reasons are unchanged.
+- The phishing floor now also covers PUSH. The ask and risk paths already veto it, and the floor keeps the invariant independent of rule order.
+
+Measured on P1's runs: 4 models × 3 runs per set, scored against the labels reconciled on 2026-11-04. The eval mails carry no relationship or DMARC data (cold start), so v3.1's risk trust cannot fire there, and the v3.1 row is what replay measures: `v3-bench-report.ts --policy=p3`.
+
+| | gate PUSH recall | gate PUSH precision | real PUSH precision | gate SILENT precision | real SILENT precision (runs < 90%) | real overall |
+|---|---|---|---|---|---|---|
+| v3.0 | 59.0% (92/156) | 100% | 100% | 91.7% | 86.4% (11/12) | 69.3% |
+| v3.1 | 84.6% (132/156) | 100% | 100% (36/36) | 99.1% | 93.0% (3/12) | 58.0% |
+
+- Most of the gain is PUSH before MEETING (82.1%). The notification ask adds 4 runs. That matches eval-044 "offer expires tomorrow", which P1 found read as a notification in 4 of 12 runs; the per-item attribution is inferred, not traced.
+- Risk trust does not move these numbers, because no eval mail has a known correspondent. The ceiling is eval-046 (a card "verify unusual transaction", labelled PUSH) in all 12 runs, +12, which would give 92.3%. Live, a card issuer the user has heard from for a month qualifies.
+  - A measurement run with risk trust extended to every sender, a scratch variant not in the repo, also PUSHed c8e80651 in 5 of 12 runs. That is a Namecheap "sign-in from an unauthorized device — please verify", labelled QUEUE; the founder files security confirmations under QUEUE (2026-06-30).
+  - Facts v1 carry the same `security_alert` for it as for eval-046, so the policy cannot separate them. Under v3.1 it can PUSH only if Namecheap is a known correspondent with a passing DMARC verdict.
+- Real-set PUSH recall is 36/48 = 75.0% under every variant. The missed real items are outside the 24h window.
+- No run PUSHed or MEETINGed a mail whose facts carried `phishing_suspect`. That holds by construction, because the policy vetoes on the flag. It says nothing about how often the model sets the flag.
+- Narrow SILENT lowers real overall accuracy, because the founder's labels disagree on newsletters.
+  - Some product-update newsletters are labelled QUEUE (Resend, a Namecheap CEO letter, a Reddit digest).
+  - Others are labelled SILENT (TechCrunch, Morning Brew, Indie Hackers). No rule on `kind` matches both.
+  - Every error narrow SILENT adds is SILENT → INFO, the visible direction.
+  - SILENT precision, the over-suppression risk the LOCKED rule exists for, rises.
+- Not changed: an ask due in more than 24h (eval-036 "due Friday") is QUEUE under every variant.
+
 Floors:
 - `ambiguous` never lands in SILENT or INFO. It goes to QUEUE, like v2's low-confidence rule.
 - Mail that Gmail marked as spam never lands in PUSH or MEETING. It goes to QUEUE, like v2's spam floor. `spam` and `automatedSender` are mailbox signals passed next to the facts; they are not facts.
@@ -219,10 +265,10 @@ Floors:
    - it has a 20s deadline.
 
    A re-judge or the backfill sweep reads the stored facts (`AttentionFacts`) and makes no model call.
-3. With LLM facts, policy v3.0 decides. With no LLM facts, the v2 lane stands: it is the better evidence we have. That covers an extractor failure, the deadline, a budget refusal, and no stored row. The exception is when the v2 judge itself fell back to keywords. Then keyword facts merged with the certain pre-facts decide (fallback parity, below).
+3. With LLM facts, the policy decides (the live version, v3.1 unless `JUDGE_V3_POLICY_VERSION` names another). With no LLM facts, the v2 lane stands: it is the better evidence we have. That covers an extractor failure, the deadline, a budget refusal, and no stored row. The exception is when the v2 judge itself fell back to keywords. Then keyword facts merged with the certain pre-facts decide (fallback parity, below).
 4. A PUSH then passes the push gates: the 6h rule, the re-ingest skip and the dedupe. If it is not pinned and would ring, it claims a budget slot **before** the item is written. A held PUSH is written as QUEUE with `heldAt`, so it never shows as PUSH, not even for one sync.
 5. The item stores what ranking and clients read:
-   - `v3PolicyVersion`: "v3.0", or "v2" when the v2 lane stood;
+   - `v3PolicyVersion`: the policy version that decided ("v3.0", "v3.1"), or "v2" when the v2 lane stood;
    - `v3Decision`: `{ basis: "llm" | "keyword" | "v2", reasons, threadTurn }`;
    - `v3Due`;
    - `v3Importance`;
@@ -230,6 +276,7 @@ Floors:
 
    When the policy picks a different lane from v2, `tierReason` becomes the static key `email.v3LaneFromFacts`, because v2's text would not explain the new lane. Otherwise v2's reason stays.
 6. A hold is final for the item. A later re-judge that says PUSH again keeps it in QUEUE, held; it is past the 6h push window by then. A pin keeps precedence over a hold, and a re-judge to any other lane clears it.
+   - The same holds for an invite shown as MEETING (v3.1's fallback). A later pass that says PUSH but cannot ring it (a re-judge, or a push gate such as the dedupe) keeps it MEETING. A PUSH written then would hold no budget slot.
 7. If a human or an agent moved the item while the judge ran, their lane stands. A slot already claimed for it stays spent, and its bell row is hidden.
 8. Failure paths:
    - If planning fails (a database error), the mail is still written, in the v2 lane, with no v3 columns and no PUSH notification. The budget is never bypassed. MEETING still rings, since it is not budgeted.
@@ -291,15 +338,17 @@ A test runs both paths over the cross product of keyword signals (4,368 mails), 
 - (a) nothing v2 shows becomes SILENT, except bulk scheduling mail;
 - (b) every v2 PUSH stays a PUSH candidate, except list mail;
 - (c) machine, marketing and spam mail never become PUSH candidates;
-- (d) nothing becomes a PUSH candidate that v2 did not push. In keyword facts, an urgent word gives the ask a due time only where v2's keyword rule would have pushed (an investor-looking sender). Elsewhere the ask has no due time, so the model-down path never interrupts more, or for more senders, than v2 did.
+- (d) nothing becomes a PUSH candidate that v2 did not notify for (v2 PUSH, or v2 MEETING, which notifies too). In keyword facts, an urgent word gives the ask a due time only where v2's keyword rule would have pushed (an investor-looking sender). Elsewhere the ask has no due time, so the model-down path never interrupts more, or for more senders, than v2 did.
 
 The documented divergences (`parity.ts`), counted on that corpus:
 
 | Class | Change | Why |
 |---|---|---|
-| bulkScheduling | MEETING → QUEUE / INFO / SILENT (449) | MEETING requires "not bulk". v2 let bulk invites into a lane that notifies (#1497). |
+| bulkScheduling | MEETING → QUEUE / INFO (449) | MEETING requires "not bulk". v2 let bulk invites into a lane that notifies (#1497). |
 | machineListFiled | QUEUE → INFO (117) | Machine list mail with nothing asked is filed, and stays visible. |
 | listNeverInterrupts | PUSH → QUEUE (52) | PUSH requires mail addressed to the user. |
+| pushBeforeMeeting | MEETING → PUSH (68) | v3.1: a due-soon ask wins over the event. v2 notified for it as MEETING already, so guarantee (d) counts a v2 MEETING as notified. |
+| narrowSilent | SILENT → INFO (132) | v3.1: SILENT is clear marketing only. Newsletters and other bulk mail are filed, and stay visible. |
 
 These are cross-product counts, not prevalence. The replay reports prevalence on real mail. In prod, 331 of the 2,378 email decisions in the 30 days to 2026-10-31 came from the keyword fallback.
 
@@ -315,7 +364,7 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
   - the legacy sweep stand-down;
   - the claim-row dedupe.
 
-**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--facts=stored|keyword] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls.
+**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--facts=stored|keyword] [--policy-version=v3.0|v3.1] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls.
 - `--facts=stored`, the default, decides each item the way the live path would: stored LLM facts go to the policy, otherwise the v2 lane or the keyword parity rule applies.
 - `--facts=keyword` gives every item keyword facts. That is the model-down estimate.
 - For a v2 PUSH row with no stored relationship, the CLI loads the relationship from the database, as the live path does for the trusted reserve. A human's or an agent's lane is kept, as live keeps it.
@@ -323,7 +372,7 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
 It reports:
 - the lane distribution: v2 shown, v3 before the budget, v3 final;
 - v2 → v3 transitions;
-- budget stats per user-day. Like the live path, pins and manual overrides spend no budget. Quiet hours, preferences and the 6h rule are not modelled, so `held` is an upper bound;
+- budget stats per user-day. Like the live path, pins and manual overrides spend no budget. Quiet hours, preferences and the 6h rule are not modelled, so `held` is an upper bound. Under v3.1 a held invite counts as the MEETING it rings as, as live, and `meetingFallback` counts those;
 - keyword parity on real mail;
 - per-item changes (ids by default).
 
@@ -340,7 +389,7 @@ It reports:
   - The Reader's neighbours are picked by row number in that order. They work even after the open mail has moved out of the view.
   - No index serves the ranked order, so the ranked page and the neighbours sort the whole lane. They run under the lane statement timeout (a retryable 503, like the thread page). The ranked page also shares the thread page's per-user rate limit.
 - Each item gets `v3: { policyVersion, rank, held, due, threadTurn, reasons }`, on lane pages, firewall items and the Reader context:
-  - `policyVersion` is "v3.0" when the policy decided, and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane. It is null when v3 never decided the item, for example mail judged before the flip;
+  - `policyVersion` is the policy version that decided ("v3.0", "v3.1"), and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane. It is null when v3 never decided the item, for example mail judged before the flip;
   - `rank` is the 1-based position in the view as ranked. On a QUEUE lane page it is skip + index + 1 after that page's own filter, search and category. On the firewall it is the index in the QUEUE lane of the list (the 200 most recent OPEN items). So the same mail can carry different ranks on the two surfaces. It is null in any other view, All included. A page of All cannot know a mail's QUEUE position without ranking the whole lane. Ranks are computed at each request (`rankedAt`); clients re-apply them on focus or refresh;
   - `held` is true when the budget held this PUSH and the item still shows it. That means `heldAt` is within the last 24 hours, the lane is QUEUE, the item is OPEN, and no human or agent lane is on it. Held items from known senders take the first ranks, by importance and then in the order they were held. A stranger's held mail reports `held` but ranks by score;
   - `due` is an ISO 8601 UTC timestamp. Clients format it in the display zone, and null hides the chip;

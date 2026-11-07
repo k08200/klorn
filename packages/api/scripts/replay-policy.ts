@@ -18,7 +18,11 @@
  * Usage:
  *   DATABASE_URL=... pnpm --filter @klorn/api replay:policy -- \
  *     [--user=admin@example.com] [--days=30] [--budget=5|unlimited] \
- *     [--facts=stored|keyword] [--out=./replay.json] [--max-changes=40] [--show-subjects]
+ *     [--facts=stored|keyword] [--policy-version=v3.0|v3.1] [--out=./replay.json] \
+ *     [--max-changes=40] [--show-subjects]
+ *
+ * --policy-version re-runs any policy version (judge/v3/policy.ts POLICY_VERSIONS);
+ * the default is the live one.
  *
  * Prints ids only by default. --show-subjects adds each changed mail's subject
  * (truncated) to the terminal output; it is never written to --out.
@@ -30,6 +34,7 @@ import { prisma } from "../src/db.js";
 import { toLiveTier } from "../src/judge/tiers.js";
 import { parseStoredFacts } from "../src/judge/v3/facts-store.js";
 import { resolveInterruptBudget } from "../src/judge/v3/interrupt-budget.js";
+import { POLICY_VERSION, POLICY_VERSIONS, type PolicyVersion } from "../src/judge/v3/policy.js";
 import { loadRelationshipSnapshot } from "../src/judge/v3/relationship-loader.js";
 import {
   LIVE_LANES,
@@ -52,6 +57,7 @@ interface CliArgs {
   days: number;
   budget: number | null;
   facts: ReplayFactsMode;
+  policyVersion: PolicyVersion;
   out?: string;
   maxChanges: number;
   showSubjects: boolean;
@@ -81,11 +87,16 @@ function parseArgs(argv: string[]): CliArgs {
   if (facts !== "stored" && facts !== "keyword") {
     throw new Error("--facts must be 'stored' or 'keyword'");
   }
+  const policyVersion = map.get("policy-version") ?? POLICY_VERSION;
+  if (!(POLICY_VERSIONS as readonly string[]).includes(policyVersion)) {
+    throw new Error(`--policy-version must be one of ${POLICY_VERSIONS.join(", ")}`);
+  }
   return {
     user: map.get("user"),
     days,
     budget,
     facts,
+    policyVersion: policyVersion as PolicyVersion,
     out: map.get("out"),
     maxChanges,
     showSubjects: flags.has("show-subjects"),
@@ -294,7 +305,7 @@ function printReport(report: ReplayReport, args: CliArgs, subjects: Map<string, 
   }
   const b = report.budget;
   console.log(
-    `\nInterrupt budget ${b.limit ?? "unlimited"}/day: candidates ${b.candidates}, admitted ${b.admitted}, held ${b.held}`,
+    `\nInterrupt budget ${b.limit ?? "unlimited"}/day: candidates ${b.candidates}, admitted ${b.admitted}, held ${b.held} (${b.meetingFallback} of them ring as MEETING)`,
   );
   console.log(
     `  user-days with a candidate ${b.userDaysWithCandidates}, max per user-day ${b.maxCandidatesPerUserDay}, user-days over budget ${b.userDaysOverBudget}`,
@@ -328,7 +339,11 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const report = replayPolicy(rows, { budget: args.budget, facts: args.facts });
+  const report = replayPolicy(rows, {
+    budget: args.budget,
+    facts: args.facts,
+    policyVersion: args.policyVersion,
+  });
   printReport(report, args, subjects);
   if (args.out) {
     const path = resolve(args.out);

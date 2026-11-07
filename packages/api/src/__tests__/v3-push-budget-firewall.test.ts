@@ -57,7 +57,8 @@ vi.mock("../mail/gmail-labels.js", () => ({
 
 import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../judge/email-firewall.js";
 import { FACTS_VERSION } from "../judge/v3/facts-schema.js";
-import { V3_LANE_REASON_KEY } from "../judge/v3/live-judge.js";
+import { planV3Write, V3_LANE_REASON_KEY } from "../judge/v3/live-judge.js";
+import { POLICY_VERSION } from "../judge/v3/policy.js";
 import type { FactsV1 } from "../judge/v3/policy-types.js";
 import { HELD_REASON_KEY } from "../judge/v3/push-budget-gate.js";
 import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
@@ -240,6 +241,7 @@ afterEach(() => {
   delete process.env.JUDGE_V3_POLICY;
   delete process.env.JUDGE_V3_SHADOW;
   delete process.env.JUDGE_V3_PUSH_BUDGET;
+  delete process.env.JUDGE_V3_POLICY_VERSION;
 });
 
 describe("flag off (default): the push path is unchanged", () => {
@@ -530,16 +532,16 @@ describe("lanes from facts, for a user under the policy", () => {
 
   it("new mail: live LLM facts decide the lane before the item is written", async () => {
     seed();
-    // v2 said PUSH; the facts say a newsletter to a list. Nothing rings.
+    // v2 said PUSH; the facts say a promotion to a list. Nothing rings.
     judgedAs("PUSH");
     extractFactsForDecision.mockResolvedValueOnce(
-      liveFacts(facts({ kind: "newsletter", addressedTo: "bulk" })),
+      liveFacts(facts({ kind: "promotion", addressedTo: "bulk" })),
     );
     expect(await judge("e1", {}, { liveRaw: raw("e1") })).toBe("SILENT");
     expect(item("e1")).toMatchObject({
       tier: "SILENT",
       tierReason: V3_LANE_REASON_KEY,
-      v3PolicyVersion: "v3.0",
+      v3PolicyVersion: POLICY_VERSION,
       heldAt: null,
     });
     expect(label("e1")).toMatchObject({ shownTier: "SILENT", decidedBy: "llm" });
@@ -559,6 +561,132 @@ describe("lanes from facts, for a user under the policy", () => {
     ];
     expect(mail.emailId).toBe("e1");
     expect(opts).toMatchObject({ v2Tier: "PUSH", deadlineMs: 20_000 });
+  });
+
+  it("an urgent invite past the budget notifies as the MEETING v3.0 would have shown, not held silent", async () => {
+    process.env.JUDGE_V3_PUSH_BUDGET = "1";
+    seed();
+    judgedAs("PUSH");
+    await judge("e1");
+    judgedAs("MEETING");
+    const event = { proposedTimes: [], hasInvite: true, conflict: null };
+    extractFactsForDecision.mockResolvedValueOnce(liveFacts({ ...dueSoon(), event }));
+    expect(await judge("e2", {}, { liveRaw: raw("e2") })).toBe("MEETING");
+    expect(item("e2")).toMatchObject({ tier: "MEETING", heldAt: null });
+    const reasons = (item("e2")?.v3Decision as { reasons: { code: string }[] }).reasons;
+    expect(reasons[0]?.code).toBe("event");
+    // It rang, outside the budget: one slot spent today, two notifications.
+    expect(slotKeys()).toHaveLength(1);
+    expect(sendPushNotification).toHaveBeenCalledTimes(2);
+  });
+
+  describe("the fallback MEETING is final, like a hold", () => {
+    const invite = { proposedTimes: [], hasInvite: true, conflict: null };
+    const urgentInvite = () => ({ ...dueSoon(), event: invite });
+    const storedFacts = (id: string, f: FactsV1) => ({
+      id: `f-${id}`,
+      userId: USER,
+      source: "EMAIL",
+      sourceId: id,
+      factsVersion: FACTS_VERSION,
+      factsSource: "llm",
+      extractedAt: NOW,
+      facts: f,
+      certainFields: [],
+      evidenceCheck: { checked: 0, dropped: [] },
+      relationship: TRUSTED,
+    });
+    const reasonCodes = (id: string) =>
+      (item(id)?.v3Decision as { reasons: { code: string }[] }).reasons.map((r) => r.code);
+
+    async function ringFallback(): Promise<void> {
+      process.env.JUDGE_V3_PUSH_BUDGET = "1";
+      seed();
+      judgedAs("PUSH");
+      await judge("e1");
+      judgedAs("MEETING");
+      extractFactsForDecision.mockResolvedValueOnce(liveFacts(urgentInvite()));
+      expect(await judge("e2", {}, { liveRaw: raw("e2") })).toBe("MEETING");
+      db.tables.attentionFacts = [storedFacts("e2", urgentInvite())];
+      sendPushNotification.mockClear();
+      vi.setSystemTime(new Date(NOW.getTime() + HOUR));
+    }
+
+    it("a re-judge that says PUSH again keeps it MEETING and rings nothing", async () => {
+      await ringFallback();
+      judgedAs("MEETING");
+      expect(await judge("e2", {}, { rejudge: true })).toBe("MEETING");
+      expect(item("e2")).toMatchObject({ tier: "MEETING", heldAt: null });
+      expect(reasonCodes("e2")[0]).toBe("event");
+      expect(slotKeys()).toHaveLength(1);
+      expect(sendPushNotification).not.toHaveBeenCalled();
+    });
+
+    it("backlog repair (no push allowed) keeps it MEETING instead of a PUSH with no slot", async () => {
+      await ringFallback();
+      const plan = await planV3Write({
+        userId: USER,
+        email: {
+          id: "e2",
+          gmailId: "g-e2",
+          from: "Alice <alice@example.com>",
+          subject: "Subject e2",
+          snippet: "Please sign today",
+          labels: ["INBOX"],
+          receivedAt: new Date(NOW.getTime() - 60_000),
+          linkedInboxAccountId: null,
+        },
+        judgement: { tier: "MEETING", source: "llm", reason: "v2" },
+        rejudge: true,
+        allowPush: false,
+      });
+      expect(plan).toMatchObject({ tier: "MEETING", push: { kind: "none" } });
+      expect(plan.v3?.heldAt).toBeNull();
+    });
+
+    it("mail never shown as MEETING is not kept: the quiet PUSH stands", async () => {
+      const queued: Row = {
+        id: "item-e3",
+        userId: USER,
+        source: "EMAIL",
+        sourceId: "e3",
+        type: "REPLY_NEEDED",
+        title: "Subject e3",
+        tier: "QUEUE",
+        tierReason: "x",
+        heldAt: null,
+      };
+      seed({ attentionItem: [queued] });
+      db.tables.attentionFacts = [storedFacts("e3", urgentInvite())];
+      const plan = await planV3Write({
+        userId: USER,
+        email: {
+          id: "e3",
+          gmailId: "g-e3",
+          from: "Alice <alice@example.com>",
+          subject: "Subject e3",
+          snippet: "Please sign today",
+          labels: ["INBOX"],
+          receivedAt: new Date(NOW.getTime() - 60_000),
+          linkedInboxAccountId: null,
+        },
+        judgement: { tier: "QUEUE", source: "llm", reason: "v2" },
+        rejudge: true,
+        allowPush: false,
+      });
+      expect(plan).toMatchObject({ tier: "PUSH", push: { kind: "none" } });
+    });
+  });
+
+  it("JUDGE_V3_POLICY_VERSION=v3.0 rolls the live rules back without a redeploy", async () => {
+    process.env.JUDGE_V3_POLICY_VERSION = "v3.0";
+    seed();
+    judgedAs("MEETING");
+    const event = { proposedTimes: [], hasInvite: true, conflict: null };
+    extractFactsForDecision.mockResolvedValueOnce(liveFacts({ ...dueSoon(), event }));
+    // v3.0 checks MEETING before PUSH.
+    expect(await judge("e1", {}, { liveRaw: raw("e1") })).toBe("MEETING");
+    expect(item("e1")?.v3PolicyVersion).toBe("v3.0");
   });
 
   it("no LLM facts (timeout) keeps the v2 lane, still under the budget", async () => {
@@ -603,7 +731,7 @@ describe("lanes from facts, for a user under the policy", () => {
     expect(await judge("e1")).toBe("INFO");
     expect(extractFactsForDecision).not.toHaveBeenCalled();
     expect(sendPushNotification).not.toHaveBeenCalled();
-    expect(item("e1")).toMatchObject({ tier: "INFO", v3PolicyVersion: "v3.0" });
+    expect(item("e1")).toMatchObject({ tier: "INFO", v3PolicyVersion: POLICY_VERSION });
   });
 });
 

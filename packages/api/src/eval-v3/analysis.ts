@@ -35,7 +35,8 @@ export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
 /**
  * Which lane policy a replay applies to the facts:
  *  - "doc": doc §3(4) read literally (eval-v3/policy.ts), the P1 baseline;
- *  - "p3":  P3's production policy on main (judge/v3/policy.ts, laneFromFactsV3)
+ *  - "p3":  P3's production policy, the live version (judge/v3/policy.ts,
+ *           laneFromFactsV3; "p3-v3.0" pins v3.0 for comparison)
  *           with the inputs replay.ts gives it: no relationship data (the eval
  *           sets carry none, so every sender is unknown: the cold-start case)
  *           and `isAutomatedSender(from)` as the automated-sender signal. The
@@ -45,7 +46,7 @@ export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
  * (`mergeWithPreFacts`: List-Unsubscribe, To/Cc, ICS) — the eval mails have
  * no headers.
  */
-export type ReplayPolicy = "doc" | "p3";
+export type ReplayPolicy = "doc" | "p3" | "p3-v3.0";
 
 function decideLane(
   policy: ReplayPolicy,
@@ -61,8 +62,9 @@ function decideLane(
     spam,
     automatedSender: isAutomatedSender(email.from ?? ""),
     decidedAt: receivedAt,
+    version: policy === "p3-v3.0" ? "v3.0" : undefined,
   });
-  return { lane: d.lane, rule: `v3.0:${d.reasons[0]?.code ?? "default"}` };
+  return { lane: d.lane, rule: `${d.policyVersion}:${d.reasons[0]?.code ?? "default"}` };
 }
 
 /**

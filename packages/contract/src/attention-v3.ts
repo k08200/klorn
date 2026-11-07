@@ -20,7 +20,7 @@ export interface V3Reason {
 }
 
 export interface V3ItemBlock {
-  /** "v3.0" when the policy decided, "v2" when the v2 lane stood, null when v3 never decided. */
+  /** The policy version that decided ("v3.0", "v3.1"); "v2" when the v2 lane stood; null when v3 never decided. */
   policyVersion: string | null;
   /** 1-based position in the ranked QUEUE; null outside a ranked QUEUE view. */
   rank: number | null;

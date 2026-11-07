@@ -1836,8 +1836,8 @@ model AttentionItem {
 
   // Attention engine v3 live decision (docs/design/attention-engine-v3.md
   // §3(5) "Live decision"). Written only for users JUDGE_V3_POLICY covers;
-  // null for everyone else. "v3.0" when the policy decided the lane, "v2"
-  // when the v2 lane stood because LLM facts were missing.
+  // null for everyone else. The policy version that decided the lane ("v3.0",
+  // "v3.1"), or "v2" when the v2 lane stood because LLM facts were missing.
   v3PolicyVersion String?
   // judge/v3/live-item.ts V3DecisionJson: { basis, reasons, threadTurn }.
   // Reason evidence quotes the mail, like title and body.

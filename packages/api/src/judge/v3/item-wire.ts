@@ -8,7 +8,11 @@
 import type { V3ItemBlock } from "@klorn/contract";
 import { toLiveTier } from "../tiers.js";
 import { cleanText, MAX_EVIDENCE_CHARS, THREAD_TURNS, type ThreadTurn } from "./facts-schema.js";
-import { CLIENT_RELATIONSHIP_KEYS, POLICY_VERSION, V2_POLICY_VERSION } from "./policy.js";
+import {
+  CLIENT_RELATIONSHIP_KEYS,
+  POLICY_VERSIONS as POLICY_RULE_VERSIONS,
+  V2_POLICY_VERSION,
+} from "./policy.js";
 import { HELD_WINDOW_MS } from "./ranking.js";
 import {
   type PolicyReason,
@@ -90,7 +94,8 @@ const PARAMS_BY_CODE: Readonly<Partial<Record<ReasonCode, readonly string[]>>> =
   held_budget: ["budget"],
   relationship: CLIENT_RELATIONSHIP_KEYS,
 };
-const POLICY_VERSIONS = new Set<string>([POLICY_VERSION, V2_POLICY_VERSION]);
+/** Every version a stored decision may name: each policy version replay knows, and v2. */
+const KNOWN_VERSIONS = new Set<string>([...POLICY_RULE_VERSIONS, V2_POLICY_VERSION]);
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -119,7 +124,7 @@ export function v3ItemWire(
 ): V3ItemWire {
   const decision = isRecord(row.v3Decision) ? row.v3Decision : null;
   const policyVersion =
-    row.v3PolicyVersion && POLICY_VERSIONS.has(row.v3PolicyVersion) ? row.v3PolicyVersion : null;
+    row.v3PolicyVersion && KNOWN_VERSIONS.has(row.v3PolicyVersion) ? row.v3PolicyVersion : null;
   return {
     policyVersion,
     rank: opts.rank,

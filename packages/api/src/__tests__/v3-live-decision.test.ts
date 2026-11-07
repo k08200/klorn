@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   decideLiveLane,
   type FactsBasis,
@@ -280,6 +280,50 @@ describe("decideLiveLane: sender authentication and stored signals", () => {
   });
 });
 
+describe("decideLiveLane: policy version and the MEETING fallback", () => {
+  it("stamps the version that decided, including one replay names", () => {
+    const newsletter = llm(facts({ kind: "newsletter", addressedTo: "bulk" }));
+    const v30 = decideLiveLane(input({ basis: newsletter, policyVersion: "v3.0" }));
+    expect(v30).toMatchObject({ lane: "SILENT", policyVersion: "v3.0" });
+    const live = decideLiveLane(input({ basis: newsletter }));
+    expect(live).toMatchObject({ lane: "INFO", policyVersion: POLICY_VERSION });
+  });
+
+  it("a DMARC-passing known correspondent's payment risk PUSHes through the live path", () => {
+    const relationship = rel({
+      inboundCount: 10,
+      firstSeenAt: new Date(NOW.getTime() - 90 * 24 * 3_600_000).toISOString(),
+    });
+    const risky = llm(facts({ risk: ["payment_failed"], kind: "notification" }), relationship);
+    expect(decideLiveLane(input({ basis: risky, senderAuthenticated: true })).lane).toBe("PUSH");
+    expect(decideLiveLane(input({ basis: risky, senderAuthenticated: null })).lane).toBe("QUEUE");
+  });
+
+  it("an urgent invite PUSHes with a MEETING fallback; a plain PUSH has none", () => {
+    const due = "2026-11-03T18:00:00+09:00";
+    const ask = { kind: "reply" as const, object: "time", due, evidence: "by 6pm today" };
+    const event = { proposedTimes: [], hasInvite: true, conflict: false };
+    const invite = decideLiveLane(input({ basis: llm(facts({ event, asks: [ask] })) }));
+    expect(invite.lane).toBe("PUSH");
+    expect(invite.meetingFallback?.map((r) => r.code)).toEqual(["event"]);
+    const plain = decideLiveLane(input({ basis: llm(facts({ asks: [ask] })) }));
+    expect(plain.lane).toBe("PUSH");
+    expect(plain.meetingFallback).toBeNull();
+  });
+
+  it("the MEETING fallback keeps the relationship reason v3.0's MEETING carried", () => {
+    const due = "2026-11-03T18:00:00+09:00";
+    const ask = { kind: "reply" as const, object: "time", due, evidence: "by 6pm today" };
+    const event = { proposedTimes: [], hasInvite: true, conflict: false };
+    const relationship: RelationshipSnapshot = { ...UNKNOWN_RELATIONSHIP, sentCount: 3 };
+    const invite = decideLiveLane(
+      input({ basis: llm(facts({ event, asks: [ask] }), relationship) }),
+    );
+    expect(invite.reasons.map((r) => r.code)).toContain("relationship");
+    expect(invite.meetingFallback?.map((r) => r.code)).toEqual(["event", "relationship"]);
+  });
+});
+
 describe("decideLiveLane properties (seeded)", () => {
   const SOURCES = [
     "llm",
@@ -337,6 +381,32 @@ describe("decideLiveLane properties (seeded)", () => {
         }),
       );
       expect(d.budgeted).toBe(!(manualOverride || v2Source === "pinned-rule"));
+    }
+  });
+});
+
+describe("judgeV3LivePolicyVersion", () => {
+  it("is the live default unless JUDGE_V3_POLICY_VERSION names a known version", async () => {
+    const { judgeV3LivePolicyVersion } = await import("../judge/v3/flags.js");
+    expect(judgeV3LivePolicyVersion({})).toBe(POLICY_VERSION);
+    expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: "v3.0" })).toBe("v3.0");
+    expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: " v3.1 " })).toBe("v3.1");
+    for (const bad of ["", "v9", "constructor", "__proto__"]) {
+      expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: bad })).toBe(POLICY_VERSION);
+    }
+  });
+
+  it("logs a mistyped version once, so a failed rollback does not pass unseen", async () => {
+    const { judgeV3LivePolicyVersion } = await import("../judge/v3/flags.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const env = { JUDGE_V3_POLICY_VERSION: "V3.0-typo" };
+      expect(judgeV3LivePolicyVersion(env)).toBe(POLICY_VERSION);
+      expect(judgeV3LivePolicyVersion(env)).toBe(POLICY_VERSION);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("V3.0-typo");
+    } finally {
+      warn.mockRestore();
     }
   });
 });
