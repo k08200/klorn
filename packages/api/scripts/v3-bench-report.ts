@@ -5,14 +5,23 @@
  * facts under the current evidence rules and policy, so a relabel or a policy
  * change needs no new LLM calls.
  *
- *   npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs [--out=/tmp/p1/report.md]
+ *   npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs [--out=/tmp/p1/report.md] [--policy=doc|p3]
+ *
+ * --policy=doc (default) maps facts with doc §3(4) read literally; --policy=p3
+ * replays them through P3's production policy (judge/v3/policy.ts, v3.0).
  *
  * Skipped with a warning: files named *.degraded.*, and any run whose meta or
  * summary records a provider failure or a call served by another model.
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { consistentMisses, rescore, type StoredRun, spreadTable } from "../src/eval-v3/analysis.js";
+import {
+  consistentMisses,
+  type ReplayPolicy,
+  rescore,
+  type StoredRun,
+  spreadTable,
+} from "../src/eval-v3/analysis.js";
 import {
   calibrationTable,
   cellLabel,
@@ -65,7 +74,7 @@ function loadSet(set: string) {
   return { truth, email };
 }
 
-function loadRuns(dir: string, warnings: string[]): StoredRun[] {
+function loadRuns(dir: string, warnings: string[], policy: ReplayPolicy): StoredRun[] {
   const sets = new Map<string, ReturnType<typeof loadSet>>();
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json") && !f.includes(".degraded."))
@@ -78,7 +87,7 @@ function loadRuns(dir: string, warnings: string[]): StoredRun[] {
     .map(({ run }) => {
       const set = sets.get(run.meta.set) ?? loadSet(run.meta.set);
       sets.set(run.meta.set, set);
-      const rescored = rescore(run, set.truth, set.email);
+      const rescored = rescore(run, set.truth, set.email, policy);
       warnings.push(...rescored.warnings);
       return rescored;
     });
@@ -97,10 +106,14 @@ function sharedMissRows(runs: readonly StoredRun[]): string[] {
 function main(): void {
   const dir = arg("dir");
   if (!dir) throw new Error("--dir=<runs dir> is required");
+  const policy = (arg("policy") ?? "doc") as ReplayPolicy;
+  if (policy !== "doc" && policy !== "p3") throw new Error("--policy must be doc or p3");
   const warnings: string[] = [];
-  const runs = loadRuns(dir, warnings);
+  const runs = loadRuns(dir, warnings, policy);
   const cells = groupCells(runs);
   const md = [
+    `v3 rows mapped with: ${policy === "doc" ? "doc §3(4) read literally" : "P3 policy v3.0 (judge/v3/policy.ts), relationship unknown"}`,
+    "",
     "### Per cell (one value per run)",
     "",
     mainTable(cells),
