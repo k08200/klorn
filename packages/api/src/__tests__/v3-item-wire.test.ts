@@ -94,6 +94,12 @@ describe("v3ItemWire", () => {
     expect(w).toMatchObject({ policyVersion: null, reasons: [], due: null, threadTurn: null });
   });
 
+  it("accepts every stored version: each policy version, and v2", () => {
+    for (const v3PolicyVersion of ["v3.0", "v3.1", "v2"]) {
+      expect(wire(row({ v3PolicyVersion })).policyVersion).toBe(v3PolicyVersion);
+    }
+  });
+
   it("shows no reasons for a version this server does not know (a rollback)", () => {
     const w = wire(row({ v3PolicyVersion: "v9.9" }));
     expect(w.policyVersion).toBeNull();

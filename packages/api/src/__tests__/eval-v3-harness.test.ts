@@ -527,15 +527,19 @@ describe("replay under P3's production policy (v3.0)", () => {
     ],
   });
 
-  it("a security risk PUSHes under the doc rule but needs a VIP sender under v3.0", async () => {
+  it("a security risk PUSHes under the doc rule but needs a trusted sender under P3", async () => {
     const { rescore } = await import("../eval-v3/analysis.js");
     const risk = run(facts({ risk: ["security_alert"] }));
     const email = new Map([["a", EMAIL]]);
     const truth = new Map([["a", "PUSH" as const]]);
     expect(rescore(risk, truth, email, "doc").rows[0].predicted).toBe("PUSH");
+    // The eval mails carry no DMARC verdict, so v3.1 trusts a VIP only here, as v3.0 did.
     const p3 = rescore(risk, truth, email, "p3").rows[0];
     expect(p3.predicted).toBe("QUEUE");
-    expect(p3.rule).toBe("v3.0:risk");
+    expect(p3.rule).toBe("v3.1:risk");
+    const v30 = rescore(risk, truth, email, "p3-v3.0").rows[0];
+    expect(v30.predicted).toBe("QUEUE");
+    expect(v30.rule).toBe("v3.0:risk");
   });
 
   it("v3.0 keeps an automated sender's due-today ask out of PUSH, but not a person's", async () => {
