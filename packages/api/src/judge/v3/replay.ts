@@ -34,7 +34,7 @@ import {
   type LiveDecision,
 } from "./live-decision.js";
 import { classifyParityDivergence, parityViolation } from "./parity.js";
-import { laneFromFactsV3, POLICY_VERSION } from "./policy.js";
+import { laneFromFactsV3, POLICY_VERSION, type PolicyVersion } from "./policy.js";
 import type { RelationshipSnapshot } from "./policy-types.js";
 import type { ReasonCode } from "./reasons.js";
 
@@ -123,15 +123,16 @@ interface Decided {
 
 export function replayPolicy(
   rows: readonly ReplayRow[],
-  opts: { budget: number | null; facts?: ReplayFactsMode },
+  opts: { budget: number | null; facts?: ReplayFactsMode; policyVersion?: PolicyVersion },
 ): ReplayReport {
   const factsMode = opts.facts ?? "stored";
-  const decided = rows.map((row) => decideRow(row, factsMode));
+  const version = opts.policyVersion ?? POLICY_VERSION;
+  const decided = rows.map((row) => decideRow(row, factsMode, version));
   const heldIds = simulateBudget(decided, opts.budget);
   const basis = { llm: 0, keyword: 0, v2: 0 };
   for (const d of decided) basis[d.decision.basis]++;
   return {
-    policyVersion: POLICY_VERSION,
+    policyVersion: version,
     items: rows.length,
     users: new Set(rows.map((r) => r.userId)).size,
     factsMode,
@@ -149,7 +150,7 @@ export function replayPolicy(
   };
 }
 
-function decideRow(row: ReplayRow, mode: ReplayFactsMode): Decided {
+function decideRow(row: ReplayRow, mode: ReplayFactsMode, version: PolicyVersion): Decided {
   const relationship = row.stored?.relationship ?? row.relationship ?? null;
   const basis: FactsBasis =
     mode === "keyword"
@@ -165,6 +166,7 @@ function decideRow(row: ReplayRow, mode: ReplayFactsMode): Decided {
     basis,
     // Replay decides each mail as ingest would have, at its arrival.
     decidedAt: row.receivedAt,
+    policyVersion: version,
     senderAuthenticated: typeof auth === "boolean" ? auth : undefined,
   });
   return { row, decision };

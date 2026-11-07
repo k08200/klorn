@@ -8,8 +8,9 @@
  *  (a) nothing v2 shows becomes SILENT, except bulk scheduling mail (#1497);
  *  (b) every v2 PUSH stays a v3 PUSH candidate, except list mail;
  *  (c) machine, marketing and spam mail never become a PUSH candidate;
- *  (d) nothing becomes a PUSH candidate that v2 did not push (the model-down
- *      path never interrupts more, or for more senders, than v2).
+ *  (d) nothing becomes a PUSH candidate that v2 did not notify for: v2 PUSH,
+ *      or v2 MEETING, which notifies too (the model-down path never
+ *      interrupts more, or for more senders, than v2).
  * Every other difference must belong to one of `PARITY_DIVERGENCES`.
  */
 
@@ -34,6 +35,15 @@ export const PARITY_DIVERGENCES = {
     f.kind === "notification" &&
     f.addressedTo === "bulk" &&
     f.asks.length === 0,
+  // v3.1 checks PUSH before MEETING: a due-soon ask wins over the event. v2
+  // notified for it as MEETING already, so no new interrupt.
+  pushBeforeMeeting: (v2, v3, f) => v2 === "MEETING" && v3 === "PUSH" && f.event !== null,
+  // v3.1 keeps SILENT for clear marketing only (the LOCKED narrow-SILENT rule):
+  // newsletters and other bulk mail are filed in INFO, still visible.
+  narrowSilent: (v2, v3, f) =>
+    v2 === "SILENT" &&
+    v3 === "INFO" &&
+    (f.kind === "newsletter" || (f.addressedTo === "bulk" && f.kind !== "promotion")),
 } satisfies Record<string, DivergenceTest>;
 
 export type ParityDivergence = keyof typeof PARITY_DIVERGENCES;
@@ -73,6 +83,6 @@ export function parityViolation(input: {
     return "lostPush";
   }
   if (input.v3PushCandidate && (facts.kind !== "personal" || input.spam)) return "machinePush";
-  if (input.v3PushCandidate && v2 !== "PUSH") return "newPush";
+  if (input.v3PushCandidate && v2 !== "PUSH" && v2 !== "MEETING") return "newPush";
   return null;
 }

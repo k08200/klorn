@@ -103,12 +103,12 @@ describe("keyword facts → policy v3 parity with the v2 keyword fallback", () =
     // Pinned: the doc's divergence table (§3(5) "Fallback parity") must match.
     expect(counts).toEqual({
       "bulkScheduling: MEETING→QUEUE": 218,
-      "bulkScheduling: MEETING→INFO": 102,
-      "bulkScheduling: MEETING→SILENT": 52,
-      "bulkScheduling: QUEUE→INFO": 51,
-      "bulkScheduling: QUEUE→SILENT": 26,
+      "bulkScheduling: MEETING→INFO": 154,
+      "bulkScheduling: QUEUE→INFO": 77,
       "machineListFiled: QUEUE→INFO": 117,
       "listNeverInterrupts: PUSH→QUEUE": 52,
+      "pushBeforeMeeting: MEETING→PUSH": 68,
+      "narrowSilent: SILENT→INFO": 132,
     });
   });
 

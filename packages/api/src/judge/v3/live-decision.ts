@@ -21,7 +21,12 @@ import type { StoredFacts } from "./facts-store.js";
 import { importancePrior } from "./importance.js";
 import { keywordFactsV1 } from "./keyword-facts.js";
 import type { LiveFactsResult } from "./live-facts.js";
-import { laneFromFactsV3, POLICY_VERSION, V2_POLICY_VERSION } from "./policy.js";
+import {
+  laneFromFactsV3,
+  POLICY_VERSION,
+  type PolicyVersion,
+  V2_POLICY_VERSION,
+} from "./policy.js";
 import type { FactsV1, RelationshipSnapshot, ThreadTurn } from "./policy-types.js";
 import type { PreFactSignals } from "./pre-facts.js";
 import { rankDue } from "./ranking.js";
@@ -57,6 +62,8 @@ export interface LiveDecisionInput {
    * ingest). Otherwise the stored signal is used. false = failed.
    */
   senderAuthenticated?: boolean | null;
+  /** Which policy version decides (replay); defaults to the live one. */
+  policyVersion?: PolicyVersion;
 }
 
 export { V2_POLICY_VERSION } from "./policy.js";
@@ -65,7 +72,7 @@ export interface LiveDecision {
   /** The lane before the interrupt budget. */
   lane: LiveTier;
   /** "v3.0" when the policy decided; "v2" when the v2 lane stood for missing facts. */
-  policyVersion: typeof POLICY_VERSION | typeof V2_POLICY_VERSION;
+  policyVersion: PolicyVersion | typeof V2_POLICY_VERSION;
   /** reasons[0] decides the lane; empty for "v2". */
   reasons: PolicyReason[];
   pushCandidate: boolean;
@@ -150,6 +157,7 @@ export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
     automatedSender: flag(signals?.automatedSender) ?? isAutomatedSender(input.email.from || ""),
     senderAuthenticated,
     decidedAt: input.decidedAt,
+    version: input.policyVersion,
   });
   return {
     lane: decision.lane,

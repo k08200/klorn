@@ -32,7 +32,45 @@ import { type Tier, toLiveTier } from "../tiers.js";
 import type { FactsV1, MailKind, RelationshipSnapshot } from "./policy-types.js";
 import { type PolicyReason, type ReasonParamValue, reason } from "./reasons.js";
 
-export const POLICY_VERSION = "v3.0";
+/** Every policy version replay can run. Stored decisions name the one that decided. */
+export const POLICY_VERSIONS = ["v3.0", "v3.1"] as const;
+export type PolicyVersion = (typeof POLICY_VERSIONS)[number];
+/** The version the live judge runs. */
+export const POLICY_VERSION: PolicyVersion = "v3.1";
+
+/**
+ * What changed between versions (docs/design/attention-engine-v3.md §3(5)).
+ * v3.1 (2026-11-07, measured on P1's 60 runs):
+ *  - pushBeforeMeeting: a due-soon ask or a trusted risk interrupts even when
+ *    the mail carries an event (cold-start urgent recall);
+ *  - riskTrustsAuthenticated: a risk-only PUSH also trusts a From that passed
+ *    DMARC, not only a VIP. A failed or missing verdict still needs a VIP;
+ *  - notificationAsks: a notification may interrupt through a due-soon ask; an
+ *    automated sender (no-reply, notifications@) still never does;
+ *  - narrowSilent: SILENT is clear marketing only (the LOCKED rule): a
+ *    promotion. Newsletters and other bulk mail are filed in INFO.
+ */
+interface PolicyRules {
+  pushBeforeMeeting: boolean;
+  riskTrustsAuthenticated: boolean;
+  notificationAsks: boolean;
+  narrowSilent: boolean;
+}
+
+const RULES: Readonly<Record<PolicyVersion, PolicyRules>> = {
+  "v3.0": {
+    pushBeforeMeeting: false,
+    riskTrustsAuthenticated: false,
+    notificationAsks: false,
+    narrowSilent: false,
+  },
+  "v3.1": {
+    pushBeforeMeeting: true,
+    riskTrustsAuthenticated: true,
+    notificationAsks: true,
+    narrowSilent: true,
+  },
+};
 
 /** The version stored when the v2 lane stood for missing LLM facts (live-decision.ts). */
 export const V2_POLICY_VERSION = "v2";
@@ -46,7 +84,10 @@ export const DUE_SOON_MS = 24 * 60 * 60 * 1000;
  */
 export const OVERDUE_GRACE_MS = 24 * 60 * 60 * 1000;
 
-/** Machine-authored kinds interrupt only through `risk`, never through an ask. */
+/**
+ * Machine-authored kinds interrupt only through `risk`, never through an ask.
+ * From v3.1 a notification may, unless the sender is automated (pushMatch).
+ */
 const MACHINE_KINDS: ReadonlySet<MailKind> = new Set([
   "notification",
   "newsletter",
@@ -79,12 +120,14 @@ export interface PolicyInput {
   senderAuthenticated?: boolean | null;
   /** Decision time. Replay passes the mail's arrival time. Defaults to now. */
   decidedAt?: Date;
+  /** Which version's rules decide. Defaults to POLICY_VERSION; replay may pick another. */
+  version?: PolicyVersion;
 }
 
 export interface PolicyDecision {
   lane: LiveTier;
   reasons: PolicyReason[];
-  policyVersion: string;
+  policyVersion: PolicyVersion;
   pushCandidate: boolean;
 }
 
@@ -95,8 +138,9 @@ interface Match {
 }
 
 export function laneFromFactsV3(input: PolicyInput): PolicyDecision {
+  const version = input.version ?? POLICY_VERSION;
   const precedence = precedenceMatch(input);
-  const matched = precedence ?? applyFloors(matchFacts(input), input);
+  const matched = precedence ?? applyFloors(matchFacts(input, RULES[version]), input);
   const flagged = matched.reasons.some((r) => r.params.risk === "phishing_suspect");
   const supporting = [
     phishingSuspected(input.facts) && !flagged ? phishingReason() : null,
@@ -105,7 +149,7 @@ export function laneFromFactsV3(input: PolicyInput): PolicyDecision {
   return {
     lane: matched.lane,
     reasons: [...matched.reasons, ...supporting],
-    policyVersion: POLICY_VERSION,
+    policyVersion: version,
     pushCandidate: matched.pushCandidate,
   };
 }
@@ -131,22 +175,23 @@ function precedenceMatch(input: PolicyInput): Match | null {
   return null;
 }
 
-function matchFacts(input: PolicyInput): Match {
+function matchFacts(input: PolicyInput, rules: PolicyRules): Match {
   const f = input.facts;
   const decidedAt = input.decidedAt ?? new Date();
+  const trusted = trustedSender(input.relationship, input.senderAuthenticated ?? null, rules);
+  const push = pushMatch(f, trusted, decidedAt, input.automatedSender === true, rules);
+  if (rules.pushBeforeMeeting && push) return push;
   if (f.event && f.addressedTo !== "bulk") {
     return only(
       "MEETING",
       reason("event", { fact: "event", params: { conflict: f.event.conflict } }),
     );
   }
-  const trusted = trustedSender(input.relationship, input.senderAuthenticated ?? null);
-  const push = pushMatch(f, trusted, decidedAt, input.automatedSender === true);
   if (push) return push;
   return (
     queueMatch(f, trusted) ??
-    infoMatch(f) ??
-    silentMatch(f) ??
+    infoMatch(f, rules) ??
+    silentMatch(f, rules) ??
     only("QUEUE", reason("default_queue"))
   );
 }
@@ -163,7 +208,9 @@ function matchFacts(input: PolicyInput): Match {
 function trustedSender(
   rel: RelationshipSnapshot | null,
   senderAuthenticated: boolean | null,
+  rules: PolicyRules,
 ): boolean {
+  if (rules.riskTrustsAuthenticated && senderAuthenticated === true) return true;
   return rel?.vip === true && senderAuthenticated !== false;
 }
 
@@ -177,6 +224,7 @@ function pushMatch(
   trusted: boolean,
   decidedAt: Date,
   automatedSender: boolean,
+  rules: PolicyRules,
 ): Match | null {
   if (f.addressedTo !== "me_direct" && f.addressedTo !== "me_cc") return null;
   if (phishingSuspected(f)) return null;
@@ -192,7 +240,10 @@ function pushMatch(
       pushCandidate: true,
     };
   }
-  if (automatedSender || MACHINE_KINDS.has(f.kind)) return null;
+  const machine = rules.notificationAsks
+    ? f.kind !== "notification" && MACHINE_KINDS.has(f.kind)
+    : MACHINE_KINDS.has(f.kind);
+  if (automatedSender || machine) return null;
   const soonest = earliestAskDueWithin(
     f,
     decidedAt.getTime() - OVERDUE_GRACE_MS,
@@ -254,7 +305,11 @@ function queueMatch(f: FactsV1, trusted: boolean): Match | null {
   return null;
 }
 
-function infoMatch(f: FactsV1): Match | null {
+function infoMatch(f: FactsV1, rules: PolicyRules): Match | null {
+  if (rules.narrowSilent && f.kind === "newsletter") return only("INFO", kindReason(f.kind));
+  if (rules.narrowSilent && f.addressedTo === "bulk" && f.kind !== "promotion") {
+    return only("INFO", reason("bulk", { fact: "addressedTo" }));
+  }
   if (f.transaction) {
     return only(
       "INFO",
@@ -267,7 +322,10 @@ function infoMatch(f: FactsV1): Match | null {
   return INFO_KINDS.has(f.kind) ? only("INFO", kindReason(f.kind)) : null;
 }
 
-function silentMatch(f: FactsV1): Match | null {
+function silentMatch(f: FactsV1, rules: PolicyRules): Match | null {
+  if (rules.narrowSilent) {
+    return f.kind === "promotion" ? only("SILENT", kindReason(f.kind)) : null;
+  }
   if (f.addressedTo === "bulk") return only("SILENT", reason("bulk", { fact: "addressedTo" }));
   return SILENT_KINDS.has(f.kind) ? only("SILENT", kindReason(f.kind)) : null;
 }

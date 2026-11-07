@@ -58,6 +58,7 @@ vi.mock("../mail/gmail-labels.js", () => ({
 import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../judge/email-firewall.js";
 import { FACTS_VERSION } from "../judge/v3/facts-schema.js";
 import { V3_LANE_REASON_KEY } from "../judge/v3/live-judge.js";
+import { POLICY_VERSION } from "../judge/v3/policy.js";
 import type { FactsV1 } from "../judge/v3/policy-types.js";
 import { HELD_REASON_KEY } from "../judge/v3/push-budget-gate.js";
 import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
@@ -530,16 +531,16 @@ describe("lanes from facts, for a user under the policy", () => {
 
   it("new mail: live LLM facts decide the lane before the item is written", async () => {
     seed();
-    // v2 said PUSH; the facts say a newsletter to a list. Nothing rings.
+    // v2 said PUSH; the facts say a promotion to a list. Nothing rings.
     judgedAs("PUSH");
     extractFactsForDecision.mockResolvedValueOnce(
-      liveFacts(facts({ kind: "newsletter", addressedTo: "bulk" })),
+      liveFacts(facts({ kind: "promotion", addressedTo: "bulk" })),
     );
     expect(await judge("e1", {}, { liveRaw: raw("e1") })).toBe("SILENT");
     expect(item("e1")).toMatchObject({
       tier: "SILENT",
       tierReason: V3_LANE_REASON_KEY,
-      v3PolicyVersion: "v3.0",
+      v3PolicyVersion: POLICY_VERSION,
       heldAt: null,
     });
     expect(label("e1")).toMatchObject({ shownTier: "SILENT", decidedBy: "llm" });
@@ -603,7 +604,7 @@ describe("lanes from facts, for a user under the policy", () => {
     expect(await judge("e1")).toBe("INFO");
     expect(extractFactsForDecision).not.toHaveBeenCalled();
     expect(sendPushNotification).not.toHaveBeenCalled();
-    expect(item("e1")).toMatchObject({ tier: "INFO", v3PolicyVersion: "v3.0" });
+    expect(item("e1")).toMatchObject({ tier: "INFO", v3PolicyVersion: POLICY_VERSION });
   });
 });
 
