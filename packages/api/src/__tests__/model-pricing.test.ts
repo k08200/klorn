@@ -58,7 +58,7 @@ describe("estimateModelCostUsd — model-aware pricing", () => {
 
   it("gives every code/render.yaml model a positive model-specific price", () => {
     const seen = [
-      "claude-sonnet-5", // CHAT_MODEL (render.yaml) + catalog
+      "claude-sonnet-5", // catalog (a user's own chat pick)
       "claude-haiku-5-5", // in-code default + AGENT/JUDGE/VISION_MODEL (render.yaml) + catalog
       "claude-opus-4-8", // catalog
       "gemini-2.5-flash", // GEMINI_FALLBACK_MODEL default (self-host)

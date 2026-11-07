@@ -59,11 +59,15 @@ services:
       # Privacy (Limited Use / no-train): the Claude API's commercial terms do
       # not train on inputs/outputs by default, which is what lets user mail go
       # there.
-      # Chat/assistant default = Claude Sonnet 5 (founder's pick; users can
-      # choose another model from the curated Claude catalog in Settings — this
-      # is the default for users who never picked).
+      # CHAT_MODEL is MODEL in code: the default for every background summary
+      # surface (thread brief, sender dossier, commitments, drive summaries,
+      # voice profile, attachment text) and the default Settings shows. Haiku
+      # (founder decision 2026-11-07): on Sonnet 5 the same background work
+      # cost ~20x (2026-11-04..07: ~$4 vs ~$0.2). A user can still pick Sonnet
+      # 5 or Opus 4.8 for their own chat in Settings. Pinned by
+      # packages/api/src/__tests__/render-model-pins.test.ts.
       - key: CHAT_MODEL
-        value: "claude-sonnet-5"
+        value: "claude-haiku-5-5"
       - key: AGENT_MODEL
         value: "claude-haiku-5-5"
       # Measured through the native provider: 52–55/56, gate 4/5
