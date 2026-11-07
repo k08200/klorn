@@ -11,6 +11,7 @@
  * declaring and rendering a field only demo mode sent.
  */
 
+import type { V3ItemBlock, V3TodayFields } from "./attention-v3.js";
 import type { LiveTier, TrustWire } from "./firewall.js";
 
 export type EmailPriority = "URGENT" | "NORMAL" | "LOW";
@@ -96,6 +97,8 @@ export interface EmailListItem {
    * Display-only, never a trust signal. null = no stored reason.
    */
   tierReason?: string | null;
+  /** Attention engine v3 decision, for a user under the policy only (attention-v3.ts). */
+  v3?: V3ItemBlock;
   /**
    * Messages of this row's thread inside the requested view. Set only on a
    * thread-grouped page (`threads=1` with a lane), where the row is the
@@ -138,7 +141,7 @@ export interface EmailListItem {
  * thread's newest message in the view, carrying `threadCount` — and `total`
  * counts threads. Without a lane `threads` is ignored.
  */
-export interface EmailListResponse {
+export interface EmailListResponse extends V3TodayFields {
   emails: EmailListItem[];
   /** "gmail" = the real DB-backed inbox (any connected source, IMAP included). */
   source: "gmail" | "demo";
@@ -236,6 +239,8 @@ export interface EmailReaderContextResponse {
   newerId: string | null;
   /** The mail just below this one in that view (older); null at the end. */
   olderId: string | null;
+  /** Attention engine v3 decision, for a user under the policy only (attention-v3.ts). */
+  v3?: V3ItemBlock;
 }
 
 /**

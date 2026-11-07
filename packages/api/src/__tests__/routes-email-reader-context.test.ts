@@ -413,3 +413,70 @@ describe("GET /api/email/:id/reader-context — demo mail", () => {
     expect((await get("/api/email/demo-nope/reader-context")).statusCode).toBe(404);
   });
 });
+
+describe("GET /api/email/:id/reader-context for a user under attention engine v3", () => {
+  beforeEach(() => {
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+  });
+  afterEach(() => {
+    delete process.env.JUDGE_V3_POLICY;
+    delete process.env.JUDGE_V3_SHADOW;
+  });
+
+  it("adds the v3 block, with the reason's evidence located against the subject", async () => {
+    emailFindFirst.mockResolvedValue({ ...MAIL, subject: "Contract — sign by 5pm today" });
+    attentionFindFirst.mockResolvedValue({
+      tier: "PUSH",
+      tierReason: "Signature due today",
+      heldAt: null,
+      isManualOverride: false,
+      agentTierSetAt: null,
+      v3PolicyVersion: "v3.0",
+      v3Decision: {
+        basis: "llm",
+        threadTurn: "theirs",
+        reasons: [
+          {
+            code: "ask_due_soon",
+            fact: "asks",
+            evidence: "sign by 5pm today",
+            params: { askKind: "decide", due: "2026-11-07T08:00:00.000Z" },
+          },
+        ],
+      },
+      v3Due: new Date("2026-11-07T08:00:00.000Z"),
+    });
+    const res = await get("/api/email/e5/reader-context?tier=PUSH");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().v3).toEqual({
+      policyVersion: "v3.0",
+      rank: null,
+      held: false,
+      due: "2026-11-07T08:00:00.000Z",
+      threadTurn: "theirs",
+      reasons: [
+        {
+          code: "ask_due_soon",
+          fact: "asks",
+          evidence: "sign by 5pm today",
+          evidenceIn: "subject",
+          params: { askKind: "decide", due: "2026-11-07T08:00:00.000Z" },
+        },
+      ],
+    });
+  });
+
+  it("walks the ranked QUEUE: neighbours come from row numbers in the ranked order", async () => {
+    queryRaw.mockResolvedValue([
+      { id: "above", offset: -1 },
+      { id: "below", offset: 1 },
+    ]);
+    const res = await get("/api/email/e5/reader-context?tier=QUEUE");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ newerId: "above", olderId: "below" });
+    const [call] = rawCalls();
+    expect(call?.text).toContain("ROW_NUMBER() OVER");
+    expect(call?.values).toContain("user-1");
+  });
+});

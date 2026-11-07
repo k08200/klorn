@@ -21,7 +21,7 @@ import type { StoredFacts } from "./facts-store.js";
 import { importancePrior } from "./importance.js";
 import { keywordFactsV1 } from "./keyword-facts.js";
 import type { LiveFactsResult } from "./live-facts.js";
-import { laneFromFactsV3, POLICY_VERSION } from "./policy.js";
+import { laneFromFactsV3, POLICY_VERSION, V2_POLICY_VERSION } from "./policy.js";
 import type { FactsV1, RelationshipSnapshot, ThreadTurn } from "./policy-types.js";
 import type { PreFactSignals } from "./pre-facts.js";
 import { rankDue } from "./ranking.js";
@@ -59,7 +59,7 @@ export interface LiveDecisionInput {
   senderAuthenticated?: boolean | null;
 }
 
-export const V2_POLICY_VERSION = "v2";
+export { V2_POLICY_VERSION } from "./policy.js";
 
 export interface LiveDecision {
   /** The lane before the interrupt budget. */

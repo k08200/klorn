@@ -22,7 +22,12 @@ import { HIDDEN_CLAIM_TYPE } from "../../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { evaluateNotificationGate } from "../../notify/notification-prefs.js";
-import { claimInterruptSlot, localDayKey, resolveUserInterruptBudget } from "./interrupt-budget.js";
+import {
+  claimInterruptSlot,
+  interruptSlotPrefix,
+  localDayKey,
+  resolveUserInterruptBudget,
+} from "./interrupt-budget.js";
 
 /**
  * Stored in AttentionItem.tierReason for display (tier-reason-strings.ts). The
@@ -137,6 +142,22 @@ export async function budgetDayFor(
     console.warn(`[PUSH-BUDGET] ignoring invalid JUDGE_V3_PUSH_BUDGET="${raw}"; using the default`),
   );
   return { dayKey, limit };
+}
+
+/**
+ * The day's interrupt budget for the Today surfaces: the user's limit, the
+ * slots spent today (hidden rows included: clearing the bell does not hand
+ * budget back) and the local day.
+ */
+export async function interruptBudgetStatus(
+  userId: string,
+  now: Date,
+): Promise<{ limit: number | null; used: number; day: string }> {
+  const { dayKey, limit } = await budgetDayFor(userId, now);
+  const used = await prisma.notification.count({
+    where: { userId, dedupeKey: { startsWith: escapeLikePattern(interruptSlotPrefix(dayKey)) } },
+  });
+  return { limit, used, day: dayKey };
 }
 
 /**

@@ -10,6 +10,7 @@ import type {
   EmailReaderContextResponse,
   LiveTier,
   ReaderSenderLabel,
+  V3ItemBlock,
 } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
@@ -28,6 +29,8 @@ import {
 import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { toLiveTier } from "../judge/tiers.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { V3_ITEM_SELECT, type V3ItemRow, v3ItemWire } from "../judge/v3/item-wire.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { labelableDomain, senderLabelEntriesFor } from "../mail/sender-labels.js";
@@ -97,6 +100,20 @@ function demoReaderContext(
     newerId: view[at - 1]?.id ?? null,
     olderId: view[at + 1]?.id ?? null,
   };
+}
+
+/** The reader's v3 block: no rank (the reader is one mail), undecided mail decides nothing. */
+function readerV3Block(item: Partial<V3ItemRow> | null, subject: string | null): V3ItemBlock {
+  const row: V3ItemRow = {
+    tier: item?.tier ?? null,
+    heldAt: item?.heldAt ?? null,
+    isManualOverride: item?.isManualOverride ?? false,
+    agentTierSetAt: item?.agentTierSetAt ?? null,
+    v3PolicyVersion: item?.v3PolicyVersion ?? null,
+    v3Decision: item?.v3Decision ?? null,
+    v3Due: item?.v3Due ?? null,
+  };
+  return v3ItemWire(row, { rank: null, subject });
 }
 
 interface SenderFacts {
@@ -235,14 +252,26 @@ export function registerEmailLaneRoutes(
       // nothing below runs for it.
       const email = await prisma.emailMessage.findFirst({
         where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-        select: { id: true, from: true, category: true, labels: true, linkedInboxAccountId: true },
+        select: {
+          id: true,
+          from: true,
+          subject: true,
+          category: true,
+          labels: true,
+          linkedInboxAccountId: true,
+        },
       });
       if (!email) return reply.code(404).send({ error: "Email not found" } as never);
 
+      // Attention engine v3, for a user under the policy only: the v3 block, and
+      // previous / next in the ranked QUEUE.
+      const rankedAt = isJudgeV3PolicyEnabled(uid) ? new Date() : undefined;
       const [item, language, facts, scope] = await Promise.all([
         prisma.attentionItem.findFirst({
           where: { userId: uid, source: "EMAIL", sourceId: email.id },
-          select: { tier: true, tierReason: true },
+          select: rankedAt
+            ? { tierReason: true, ...V3_ITEM_SELECT }
+            : { tier: true, tierReason: true },
         }),
         readerLanguageFor(request, reply, uid),
         senderFactsFor(uid, email),
@@ -256,6 +285,7 @@ export function registerEmailLaneRoutes(
         scope,
         filter,
         search: search?.trim() || undefined,
+        rankedAt,
         emailId: email.id,
       });
       return {
@@ -265,6 +295,7 @@ export function registerEmailLaneRoutes(
         linkedInboxAccountId: email.linkedInboxAccountId,
         ...facts,
         ...neighbours,
+        ...(rankedAt ? { v3: readerV3Block(item, email.subject) } : {}),
       };
     },
   );

@@ -9,6 +9,8 @@
  * the server had been sending since PR #468 was invisible to the client.
  */
 
+import type { V3ItemBlock, V3TodayFields } from "./attention-v3.js";
+
 import type { InboxProvider } from "./email.js";
 
 /**
@@ -152,6 +154,8 @@ export interface FirewallItem {
    * renders it yet; the activity-log step (A3) or a later UI step does.
    */
   agentSet?: true;
+  /** Attention engine v3 decision, for a user under the policy only (attention-v3.ts). */
+  v3?: V3ItemBlock;
 }
 
 /**
@@ -167,7 +171,7 @@ export interface TodayPushWindow {
   ids: string[];
 }
 
-export interface FirewallResponse {
+export interface FirewallResponse extends V3TodayFields {
   tiers: Record<Tier, FirewallItem[]>;
   summary: Record<Tier, number> & { total: number };
   /** Absent from servers older than the window. */
