@@ -7,10 +7,16 @@
  * No numeric score is exposed to clients (it would read as an accuracy claim).
  */
 
+import { IMPORTANCE_PRIOR } from "./importance.js";
 import type { FactAsk, FactsV1 } from "./policy-types.js";
 
 /** Proximity rises linearly from 1 (due this far away or more) to 2 (due now or overdue). */
 export const DEADLINE_HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * How long a budget hold ranks first: the day it held the interrupt. After
+ * that the mail ranks by score like any QUEUE mail.
+ */
+export const HELD_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_PROXIMITY_BOOST = 1;
 
 export interface RankableItem {
@@ -60,18 +66,47 @@ export function rankDue(facts: FactsV1, decidedAt: Date): string | null {
 }
 
 export function rankQueue<T extends RankableItem>(items: readonly T[], now: Date): T[] {
-  const scored = items.map((item) => ({ item, score: rankScore(item, now) }));
-  scored.sort((a, b) => compareRanked(a.item, a.score, b.item, b.score));
+  const scored = items.map((item) => ({
+    item,
+    score: rankScore(item, now),
+    held: heldFirst(item, now),
+  }));
+  scored.sort((a, b) => compareRanked(a, b));
   return scored.map((s) => s.item);
 }
 
-function compareRanked(a: RankableItem, aScore: number, b: RankableItem, bScore: number): number {
-  if (a.heldAt && b.heldAt) {
-    return b.importance - a.importance || a.heldAt.getTime() - b.heldAt.getTime() || tieBreak(a, b);
+/**
+ * Held items rank first only from a sender known above the unknown prior, and
+ * only within HELD_WINDOW_MS of the hold: a stranger whose mail spent the
+ * budget ranks by score like any QUEUE mail, so a flood from strangers cannot
+ * take the top of the list (security review, P3 PR2b), and yesterday's holds
+ * do not pin it either. Callers pass heldAt only for an item still shown held
+ * (OPEN, QUEUE, no human or agent lane).
+ */
+const heldFirst = (item: RankableItem, now: Date): Date | null =>
+  item.heldAt &&
+  item.importance > IMPORTANCE_PRIOR.unknown &&
+  item.heldAt.getTime() > now.getTime() - HELD_WINDOW_MS
+    ? item.heldAt
+    : null;
+
+interface Scored {
+  item: RankableItem;
+  score: number;
+  held: Date | null;
+}
+
+function compareRanked(a: Scored, b: Scored): number {
+  if (a.held && b.held) {
+    return (
+      b.item.importance - a.item.importance ||
+      a.held.getTime() - b.held.getTime() ||
+      tieBreak(a.item, b.item)
+    );
   }
-  if (a.heldAt) return -1;
-  if (b.heldAt) return 1;
-  return bScore - aScore || tieBreak(a, b);
+  if (a.held) return -1;
+  if (b.held) return 1;
+  return b.score - a.score || tieBreak(a.item, b.item);
 }
 
 function tieBreak(a: RankableItem, b: RankableItem): number {

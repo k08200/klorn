@@ -124,14 +124,14 @@ describe("rankDue", () => {
 });
 
 describe("rankQueue", () => {
-  it("puts held items first (equal importance: in the order held), then importance × deadline", () => {
+  it("puts held items from known senders first (equal importance: in the order held), then importance × deadline", () => {
     const ranked = rankQueue(
       [
         item({ id: "stranger" }),
         item({ id: "boss", importance: 0.9 }),
-        item({ id: "held-2", heldAt: new Date(NOW.getTime() - HOUR) }),
+        item({ id: "held-2", importance: 0.4, heldAt: new Date(NOW.getTime() - HOUR) }),
         item({ id: "due-soon", importance: 0.5, due: inHours(2) }),
-        item({ id: "held-1", heldAt: new Date(NOW.getTime() - 2 * HOUR) }),
+        item({ id: "held-1", importance: 0.4, heldAt: new Date(NOW.getTime() - 2 * HOUR) }),
       ],
       NOW,
     );
@@ -141,12 +141,26 @@ describe("rankQueue", () => {
   it("orders held items by importance before the order they were held", () => {
     const ranked = rankQueue(
       [
-        item({ id: "stranger-held-first", heldAt: new Date(NOW.getTime() - 3 * HOUR) }),
+        item({
+          id: "weak-held-first",
+          importance: 0.3,
+          heldAt: new Date(NOW.getTime() - 3 * HOUR),
+        }),
         item({ id: "known-held-later", importance: 0.8, heldAt: new Date(NOW.getTime() - HOUR) }),
       ],
       NOW,
     );
-    expect(ranked.map((r) => r.id)).toEqual(["known-held-later", "stranger-held-first"]);
+    expect(ranked.map((r) => r.id)).toEqual(["known-held-later", "weak-held-first"]);
+  });
+
+  it("a stranger's held mail ranks by score: a flood of it cannot take the top (security review)", () => {
+    const flood = Array.from({ length: 5 }, (_, i) =>
+      item({ id: `flood-${i}`, due: inHours(-1), heldAt: new Date(NOW.getTime() - i * HOUR) }),
+    );
+    const ranked = rankQueue([...flood, item({ id: "boss", importance: 0.9 })], NOW);
+    // Strangers' importance is the unknown prior (0.2): even due now (×2) they
+    // score 0.4, under a known sender's 0.9.
+    expect(ranked[0]?.id).toBe("boss");
   });
 
   it("breaks ties by newer mail first, then id", () => {
@@ -181,13 +195,16 @@ describe("rankQueue", () => {
         `run ${run}`,
       ).toEqual(a.map((x) => x.id));
       expect(new Set(a.map((x) => x.id)).size).toBe(items.length);
-      const firstUnheld = a.findIndex((x) => x.heldAt === null);
+      // Held first means held from a sender above the unknown prior.
+      const first = (x: (typeof items)[number]) =>
+        x.heldAt !== null && x.importance > IMPORTANCE_PRIOR.unknown;
+      const firstUnheld = a.findIndex((x) => !first(x));
       if (firstUnheld >= 0)
         expect(
-          a.slice(firstUnheld).every((x) => x.heldAt === null),
+          a.slice(firstUnheld).every((x) => !first(x)),
           `run ${run}`,
         ).toBe(true);
-      const unheld = a.filter((x) => x.heldAt === null);
+      const unheld = a.filter((x) => !first(x));
       for (let k = 1; k < unheld.length; k++) {
         expect(rankScore(unheld[k - 1], NOW), `run ${run}`).toBeGreaterThanOrEqual(
           rankScore(unheld[k], NOW),

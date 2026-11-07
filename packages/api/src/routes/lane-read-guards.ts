@@ -13,6 +13,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId } from "../auth.js";
 import { QueryTimeoutError } from "../db-statement-timeout.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { rateLimitHook } from "./rate-limit-hook.js";
 
 /** Each grouped page is a full-view scan; a busy session pages well under this. */
@@ -32,7 +33,20 @@ export function wantsThreadGroups(query: unknown): boolean {
   return (threads === "1" || threads === "true") && typeof tier === "string" && tier.length > 0;
 }
 
-/** preHandler: the per-user limit, applied only to thread-grouped list requests. */
+/**
+ * True when the list request asks for the ranked QUEUE page: attention engine
+ * v3, for a user under the policy. Ranked order sorts the whole lane, like a
+ * thread page scans it.
+ */
+export function wantsRankedQueue(userId: string, query: unknown): boolean {
+  const { tier } = (query ?? {}) as { tier?: unknown };
+  return tier === "QUEUE" && isJudgeV3PolicyEnabled(userId);
+}
+
+/**
+ * preHandler: the per-user limit, applied only to the full-view list requests:
+ * thread-grouped pages and the ranked QUEUE page (one shared budget).
+ */
 export function laneThreadsUserLimit(app: FastifyInstance) {
   const limit = rateLimitHook(
     app,
@@ -41,7 +55,9 @@ export function laneThreadsUserLimit(app: FastifyInstance) {
     RATE_LIMITED,
   );
   return async function threadsLimited(request: FastifyRequest, reply: FastifyReply) {
-    if (!wantsThreadGroups(request.query)) return;
+    const fullView =
+      wantsThreadGroups(request.query) || wantsRankedQueue(getUserId(request), request.query);
+    if (!fullView) return;
     return limit(request, reply);
   };
 }

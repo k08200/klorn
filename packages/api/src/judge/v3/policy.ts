@@ -34,6 +34,9 @@ import { type PolicyReason, type ReasonParamValue, reason } from "./reasons.js";
 
 export const POLICY_VERSION = "v3.0";
 
+/** The version stored when the v2 lane stood for missing LLM facts (live-decision.ts). */
+export const V2_POLICY_VERSION = "v2";
+
 /** An ask due within this window of the decision time is "due soon" (doc: ≤ 24h). */
 export const DUE_SOON_MS = 24 * 60 * 60 * 1000;
 /**
@@ -300,7 +303,7 @@ const kindReason = (kind: MailKind): PolicyReason =>
  * An allowlist, so a field added to the snapshot later never reaches clients
  * without a decision here.
  */
-const CLIENT_RELATIONSHIP_KEYS = [
+export const CLIENT_RELATIONSHIP_KEYS = [
   "sentCount",
   "lastSentAt",
   "medianReplyLatencyMs",
