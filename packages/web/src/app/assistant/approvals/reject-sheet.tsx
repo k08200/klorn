@@ -61,7 +61,7 @@ export function RejectSheet({ subject, onCancel, onReject }: RejectSheetProps) {
         onChange={(event) => setReason(event.target.value.slice(0, MAX_REASON_LENGTH))}
         placeholder={t("assistantHub.reject.reasonPlaceholder")}
       />
-      <p className="mt-2 text-caption text-ink-muted [word-break:keep-all]">
+      <p className="mt-2 text-role-caption text-ink-muted [word-break:keep-all]">
         {t("assistantHub.reject.undoHint")}
       </p>
     </Sheet>

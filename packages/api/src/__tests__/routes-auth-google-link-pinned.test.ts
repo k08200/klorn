@@ -252,6 +252,9 @@ describe("__link_calendar__ pins", () => {
         refreshToken: "enc:rt",
         expiresAt: new Date(EXPIRY),
         needsReconnect: false,
+        // Co-attendance starts over for the re-linked grant.
+        coAttendanceObservedSince: null,
+        coAttendanceLastPassAt: null,
       },
       create: {
         userId: "u1",
@@ -445,6 +448,8 @@ describe("__oauth_state__ (primary connect) pins", () => {
         accessToken: "enc:at2",
         expiresAt: new Date(EXPIRY),
         googleEmail: null,
+        coAttendanceObservedSince: null,
+        coAttendanceLastPassAt: null,
         sentHistoryImportedAt: null,
       },
     });
@@ -468,6 +473,8 @@ describe("__oauth_state__ (primary connect) pins", () => {
         refreshToken: "enc:rt",
         expiresAt: new Date(EXPIRY),
         googleEmail: null,
+        coAttendanceObservedSince: null,
+        coAttendanceLastPassAt: null,
         sentHistoryImportedAt: null,
       },
     });

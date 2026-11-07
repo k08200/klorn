@@ -47,10 +47,16 @@ describe("resolveModelRateUsdPerMTok — Claude family", () => {
     ["claude-fable-5-1", 10, 50],
     // Review fix: no Mythos row meant the $3/$15 default (3.3x under-billed).
     ["claude-mythos-5-1", 10, 50],
-    // Live OpenRouter chat-catalog models keep their (higher) family price in
-    // this change — re-pricing them moves production caps; separate change.
-    ["anthropic/claude-sonnet-5", 3, 15],
-    ["anthropic/claude-opus-4.8", 15, 75],
+    // Sonnet 5 and Opus 4.5–5 bill at their own list prices on the native
+    // API (they rode their family rows only while served via the proxy lane).
+    ["claude-sonnet-5", 2, 10],
+    ["anthropic/claude-sonnet-5", 2, 10],
+    ["claude-opus-4-8", 5, 25],
+    ["anthropic/claude-opus-4.8", 5, 25],
+    ["claude-opus-4-5-20251101", 5, 25],
+    ["claude-opus-5", 5, 25],
+    // Older Opus (4 / 4.1) keeps the family price.
+    ["claude-opus-4-1", 15, 75],
   ])("%s → $%s in / $%s out per MTok", (model, input, output) => {
     const rate = resolveModelRateUsdPerMTok(model);
     expect(rate.input).toBe(input);

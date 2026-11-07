@@ -102,11 +102,11 @@ export function FeedbackPolicyPanel() {
   }, [load]);
 
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-medium">{t("feedbackPolicy.title")}</h3>
-          <p className="mt-0.5 text-xs text-ink-dim">
+          <p className="mt-0.5 text-role-caption text-ink-dim">
             {since
               ? t("feedbackPolicy.since", { date: new Date(since).toLocaleDateString("en-US") })
               : t("feedbackPolicy.recent")}
@@ -125,13 +125,13 @@ export function FeedbackPolicyPanel() {
 
       {loading ? (
         <div className="mt-4 space-y-2">
-          <div className="h-16 animate-pulse rounded-lg bg-surface-hover" />
-          <div className="h-16 animate-pulse rounded-lg bg-surface-hover" />
+          <div className="h-16 animate-pulse rounded-control bg-surface-hover" />
+          <div className="h-16 animate-pulse rounded-control bg-surface-hover" />
         </div>
       ) : error ? (
         <ErrorAlert className="mt-4">{t("feedbackPolicy.error")}</ErrorAlert>
       ) : candidates.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-line bg-surface-raised px-3 py-3 text-sm text-ink-dim">
+        <div className="mt-4 rounded-control border border-line bg-surface-raised px-3 py-3 text-role-body text-ink-dim">
           {t("feedbackPolicy.empty")}
         </div>
       ) : (
@@ -141,30 +141,30 @@ export function FeedbackPolicyPanel() {
             return (
               <div
                 key={candidate.id}
-                className="rounded-lg border border-line bg-surface-raised px-3 py-3"
+                className="rounded-control border border-line bg-surface-raised px-3 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${copy.dot}`} />
-                      <span className="break-words font-mono text-xs text-ink">
+                      <span className="break-words font-mono text-role-mono text-ink">
                         {candidate.scope.toolName}
                       </span>
                       {candidate.scope.recipient && (
-                        <span className="break-all text-xs text-ink-dim">
+                        <span className="break-all text-role-caption text-ink-dim">
                           {candidate.scope.recipient}
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-ink-dim">{t(copy.summaryKey)}</p>
+                    <p className="mt-1 text-role-caption text-ink-dim">{t(copy.summaryKey)}</p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${copy.tone}`}
+                    className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${copy.tone}`}
                   >
                     {t(copy.labelKey)}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-caption text-ink-dim sm:grid-cols-6">
+                <div className="mt-3 grid grid-cols-3 gap-2 text-role-caption text-ink-dim sm:grid-cols-6">
                   <SignalCount
                     label={t("feedbackPolicy.count.approved")}
                     value={candidate.support.approved}
@@ -195,7 +195,7 @@ export function FeedbackPolicyPanel() {
                     value={candidate.support.dismissed}
                   />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-caption tabular-nums text-ink-mid">
+                <div className="mt-2 flex items-center justify-between text-role-caption tabular-nums text-ink-mid">
                   <span>
                     {t("feedbackPolicy.confidence", {
                       percent: String(Math.round(candidate.confidence * 100)),
@@ -224,10 +224,10 @@ function SignalCount({
   tone?: "default" | "critical";
 }) {
   return (
-    <div className="rounded-md bg-surface-hover px-2 py-1">
+    <div className="rounded-chip bg-surface-hover px-2 py-1">
       <div className={tone === "critical" ? "text-state-danger-ink" : "text-ink-mid"}>{label}</div>
       <div
-        className={`text-xs font-medium tabular-nums ${tone === "critical" ? "text-state-danger-ink" : "text-ink-mid"}`}
+        className={`text-role-caption font-medium tabular-nums ${tone === "critical" ? "text-state-danger-ink" : "text-ink-mid"}`}
       >
         {value}
       </div>

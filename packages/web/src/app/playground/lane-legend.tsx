@@ -11,8 +11,8 @@ export function LaneLegend() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="text-title tracking-tight text-ink">{t("playground.legend.title")}</h2>
-        <p className="mt-2 text-body text-ink-soft">{t("playground.legend.sub")}</p>
+        <h2 className="text-role-title tracking-tight text-ink">{t("playground.legend.title")}</h2>
+        <p className="mt-2 text-role-body text-ink-soft">{t("playground.legend.sub")}</p>
       </div>
       <ul className="flex flex-col gap-3">
         {CORE_TIERS.map((tier) => (
@@ -20,11 +20,11 @@ export function LaneLegend() {
             <span className="w-22 shrink-0 pt-px">
               <LaneChip tier={tier} />
             </span>
-            <span className="text-body text-ink-soft">{t(`playground.legend.${tier}`)}</span>
+            <span className="text-role-body text-ink-soft">{t(`playground.legend.${tier}`)}</span>
           </li>
         ))}
       </ul>
-      <p className="text-caption text-ink-mid">
+      <p className="text-role-caption text-ink-mid">
         {t("playground.legend.scores")}{" "}
         <a href={METHODOLOGY_URL} className="text-accent-deep underline underline-offset-2">
           {t("playground.legend.link")}

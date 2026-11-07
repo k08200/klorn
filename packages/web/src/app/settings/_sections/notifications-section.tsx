@@ -156,8 +156,8 @@ export function NotificationsSection() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="font-medium">{t("settings.morningBriefing.title")}</h3>
-              <p className="text-sm text-ink-mid">{t("settings.morningBriefing.desc")}</p>
-              <p className="mt-1 text-xs text-ink-dim">
+              <p className="text-role-body text-ink-mid">{t("settings.morningBriefing.desc")}</p>
+              <p className="mt-1 text-role-caption text-ink-dim">
                 {t("settings.morningBriefing.timezoneNote", { timezone: displayZone })}
               </p>
             </div>
@@ -170,7 +170,7 @@ export function NotificationsSection() {
             />
           </div>
           <div className="flex items-center gap-3 border-t border-line-soft pt-3">
-            <label htmlFor="briefing-time" className="text-sm font-medium text-ink">
+            <label htmlFor="briefing-time" className="text-role-label text-ink">
               {t("settings.field.deliveryTime")}
             </label>
             <input
@@ -179,15 +179,17 @@ export function NotificationsSection() {
               value={briefingTime}
               disabled={!dailyBriefingEnabled}
               onChange={(e) => updateBriefingTime(e.target.value)}
-              className="min-h-11 rounded border border-line bg-surface-raised px-3 py-2 text-sm text-ink disabled:opacity-50"
+              className="min-h-11 rounded border border-line bg-surface-raised px-3 py-2 text-role-body text-ink disabled:opacity-50"
             />
-            <span className="text-xs text-ink-dim">{t("settings.deliveryTime.defaultNote")}</span>
+            <span className="text-role-caption text-ink-dim">
+              {t("settings.deliveryTime.defaultNote")}
+            </span>
           </div>
         </div>
         <div className="p-5 flex items-center justify-between gap-4">
           <div>
             <h3 className="font-medium">{t("settings.pushNotifications.title")}</h3>
-            <p className="text-sm text-ink-mid">
+            <p className="text-role-body text-ink-mid">
               {pushStatus === "unsupported"
                 ? t("settings.pushNotifications.unsupported")
                 : pushStatus === "granted"
@@ -198,7 +200,7 @@ export function NotificationsSection() {
             </p>
           </div>
           {pushStatus === "unsupported" || pushStatus === "denied" ? (
-            <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-lg border border-line">
+            <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
               {pushStatus === "denied"
                 ? t("settings.pushNotifications.blockedChip")
                 : t("settings.pushNotifications.unsupportedChip")}
@@ -217,7 +219,7 @@ export function NotificationsSection() {
           <fieldset className="space-y-2">
             <legend className="w-full">
               <span className="block font-medium text-ink">{t("settings.notifPrefs.legend")}</span>
-              <span className="mt-0.5 block text-xs text-ink-mid">
+              <span className="mt-0.5 block text-role-caption text-ink-mid">
                 {t("settings.notifPrefs.legendDesc")}
               </span>
             </legend>
@@ -233,11 +235,11 @@ export function NotificationsSection() {
                   !notifPrefs.notifyDailyBriefing &&
                   !notifPrefs.notifyEmailCandidate
                 }
-                className="ease-strong min-h-11 rounded-lg border border-line-strong px-3 py-2 text-sm text-ink-soft transition duration-150 hover:bg-surface-hover active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 aria-pressed:border-accent aria-pressed:text-accent-deep"
+                className="ease-strong min-h-11 rounded-control border border-line-strong px-3 py-2 text-role-body text-ink-soft transition duration-150 hover:bg-surface-hover active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 aria-pressed:border-accent aria-pressed:text-accent-deep"
               >
                 {t("settings.notifPrefs.essentialsOnly")}
               </button>
-              <span className="text-xs text-ink-mid">
+              <span className="text-role-caption text-ink-mid">
                 {t("settings.notifPrefs.essentialsOnlyDesc")}
               </span>
             </div>
@@ -270,7 +272,7 @@ export function NotificationsSection() {
             ].map((row) => (
               <label
                 key={row.key}
-                className="flex items-start gap-3 py-2 cursor-pointer hover:bg-surface-hover rounded-lg px-2 transition"
+                className="flex items-start gap-3 py-2 cursor-pointer hover:bg-surface-hover rounded-control px-2 transition"
               >
                 <input
                   // The pref name doubles as the anchor id: the daily digest
@@ -284,15 +286,17 @@ export function NotificationsSection() {
                   className="mt-0.5 w-4 h-4 rounded border-line-strong bg-surface-raised text-accent-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
                 />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-ink">{row.label}</p>
-                  <p className="text-xs text-ink-mid">{row.desc}</p>
+                  <p className="text-role-body font-medium text-ink">{row.label}</p>
+                  <p className="text-role-caption text-ink-mid">{row.desc}</p>
                 </div>
               </label>
             ))}
           </fieldset>
           <div className="pt-3 border-t border-line-soft">
-            <p className="text-sm font-medium text-ink mb-1">{t("settings.quietHours.title")}</p>
-            <p className="text-xs text-ink-mid mb-3">{t("settings.quietHours.desc")}</p>
+            <p className="text-role-body font-medium text-ink mb-1">
+              {t("settings.quietHours.title")}
+            </p>
+            <p className="text-role-caption text-ink-mid mb-3">{t("settings.quietHours.desc")}</p>
             <div className="flex items-center gap-3">
               <label htmlFor="quiet-hours-start" className="sr-only">
                 {t("settings.quietHours.startSrLabel")}
@@ -303,9 +307,9 @@ export function NotificationsSection() {
                 aria-label={t("settings.quietHours.startAriaLabel")}
                 value={notifPrefs.quietHoursStart || ""}
                 onChange={(e) => updateNotifPref("quietHoursStart", e.target.value || null)}
-                className="min-h-11 rounded border border-line bg-surface-raised px-2 py-1 text-sm text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                className="min-h-11 rounded border border-line bg-surface-raised px-2 py-1 text-role-body text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
               />
-              <span className="text-ink-mid text-sm">{t("settings.quietHours.to")}</span>
+              <span className="text-ink-mid text-role-body">{t("settings.quietHours.to")}</span>
               <label htmlFor="quiet-hours-end" className="sr-only">
                 {t("settings.quietHours.endSrLabel")}
               </label>
@@ -315,17 +319,19 @@ export function NotificationsSection() {
                 aria-label={t("settings.quietHours.endAriaLabel")}
                 value={notifPrefs.quietHoursEnd || ""}
                 onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
-                className="min-h-11 rounded border border-line bg-surface-raised px-2 py-1 text-sm text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                className="min-h-11 rounded border border-line bg-surface-raised px-2 py-1 text-role-body text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
               />
             </div>
           </div>
           <div className="pt-3 border-t border-line-soft">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-ink">
+                <p className="text-role-body font-medium text-ink">
                   {t("settings.phoneEscalation.title")}
                 </p>
-                <p className="text-xs text-ink-dim mt-1">{t("settings.phoneEscalation.desc")}</p>
+                <p className="text-role-caption text-ink-dim mt-1">
+                  {t("settings.phoneEscalation.desc")}
+                </p>
               </div>
               <Switch
                 checked={phoneEscalationEnabled}

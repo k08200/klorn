@@ -233,14 +233,14 @@ describe("alarm delivery and dedupe", () => {
   it("names the top unrecovered provider error, or says the process restarted", async () => {
     const first = await freshInstance();
     first.failures.tallyLlmFailure(
-      { provider: "openrouter", model: "m" },
+      { provider: "anthropic", model: "m" },
       Object.assign(new Error("402"), { status: 402 }),
       DAY0 + HOUR,
     );
     addRows("keyword-fallback", 6, DAY0 + HOUR);
     await first.check.runJudgeFallbackCheck(DAY0 + 2 * HOUR);
     expect(alarmLines()[0]).toContain(
-      "LLM judge failing: 100% fallback in last 24 h (6/6 LLM-eligible judgments), top error: 402 credits exhausted (openrouter)",
+      "LLM judge failing: 100% fallback in last 24 h (6/6 LLM-eligible judgments), top error: 402 credits exhausted (anthropic)",
     );
     expect(String(store.notifications[0].message)).toContain("402 credits exhausted");
 
@@ -381,7 +381,7 @@ describe("read surfaces", () => {
   it("public: the ratio is null below the minimum sample, and no error text ever leaks", async () => {
     const { check, failures } = await freshInstance();
     failures.tallyLlmFailure(
-      { provider: "openrouter", model: "m" },
+      { provider: "anthropic", model: "m" },
       Object.assign(new Error("402"), { status: 402 }),
       DAY0,
     );
@@ -389,7 +389,7 @@ describe("read surfaces", () => {
     await check.runJudgeFallbackCheck(DAY0 + HOUR);
     const pub = check.getPublicJudgeHealth(DAY0 + HOUR);
     expect(pub).toEqual({ status: "ok", fallbackRatio: null });
-    expect(JSON.stringify(pub)).not.toMatch(/credit|402|openrouter/i);
+    expect(JSON.stringify(pub)).not.toMatch(/credit|402|anthropic/i);
   });
 
   it("public: a stale cache refreshes in the background without alarming", async () => {
@@ -406,7 +406,7 @@ describe("read surfaces", () => {
   it("admin: carries the last check and the top error", async () => {
     const { check, failures } = await freshInstance();
     failures.tallyLlmFailure(
-      { provider: "openrouter", model: "m" },
+      { provider: "anthropic", model: "m" },
       Object.assign(new Error("402"), { status: 402 }),
       DAY0 + HOUR,
     );
@@ -414,7 +414,7 @@ describe("read surfaces", () => {
     await check.runJudgeFallbackCheck(DAY0 + 2 * HOUR);
     const admin = check.getJudgeHealth(DAY0 + 2 * HOUR);
     expect(admin.lookbackMs).toBe(24 * HOUR);
-    expect(admin.topError).toBe("402 credits exhausted (openrouter)");
+    expect(admin.topError).toBe("402 credits exhausted (anthropic)");
     expect(admin.lastCheck).toMatchObject({
       eligible: 6,
       fallbacks: 6,

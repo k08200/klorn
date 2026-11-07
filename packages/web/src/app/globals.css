@@ -288,6 +288,14 @@
 }
 
 @theme {
+  /* Device classes (docs/design/design-language-v2.md, "Device classes").
+     Tailwind's defaults stay (md 768 / lg 1024 carry the page layouts); the
+     shell adds one step: from 600px (a Fold opened, a phone on its side, an
+     iPad in split view) the bottom tab bar gives way to the navigation rail.
+     `rail:` / `max-rail:` name that step. The full sidebar replaces the rail
+     at lg (1024). Same unit (rem) as the defaults so the variants sort. */
+  --breakpoint-rail: 37.5rem;
+
   /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
      are stamped on <html> by layout.tsx). Hangul falls through to Pretendard,
      self-hosted from the `pretendard` package (layout.tsx) so Windows, which
@@ -340,37 +348,22 @@
   --color-tier-auto: #34d399; /* emerald-400 */
 
   /* ── Design system (productization plan §2, P1) ──────────────────────
-     Type scale: six roles, each a size + line-height + weight bundle, so one
-     class sets all three: text-display / text-title / text-head / text-body /
-     text-label / text-caption. New code uses these instead of text-xs/sm/…
-     and never an arbitrary text-[Npx] (guarded). 10px text is retired. */
-  --text-display: 28px;
-  --text-display--line-height: 34px;
-  --text-display--font-weight: 600;
-  --text-title: 20px;
-  --text-title--line-height: 28px;
-  --text-title--font-weight: 600;
-  --text-head: 15px;
-  --text-head--line-height: 22px;
-  --text-head--font-weight: 600;
-  --text-body: 14px;
-  --text-body--line-height: 21px;
-  --text-body--font-weight: 400;
-  --text-label: 13px;
-  --text-label--line-height: 18px;
-  --text-label--font-weight: 500;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
-  --text-caption--font-weight: 400;
+     Type: the Design Language v2 roles below (text-role-page … mono). The
+     P1 legacy steps (text-display / title / head / body / label / caption,
+     28/20/15/14/13/12) are retired and removed; `legacy-type` in
+     .github/scripts/check-design-tokens.mjs fails CI if one comes back, since
+     an unknown text-* class would silently render unstyled. Never an
+     arbitrary text-[Npx] (guarded). 10px text is retired. */
+
   /* Text you type on a touch screen: iOS zooms the page into any field under
      16px, so inputs switch to this with `pointer-coarse:text-field` (P10). */
   --text-field: 16px;
   --text-field--line-height: 24px;
   --text-field--font-weight: 400;
 
-  /* Design Language v2 type roles (web column). New names so the legacy
-     scale above keeps every page as-is until its wave; ui primitives use
-     these. mono pairs with `font-mono`. */
+  /* Design Language v2 type roles (web column,
+     docs/design/design-language-v2.md § Type roles). Pick by meaning, not
+     nearest pixel. mono pairs with `font-mono`. */
   --text-role-page: 34px;
   --text-role-page--line-height: 40px;
   --text-role-page--font-weight: 650;
@@ -556,6 +549,80 @@ body {
 .pr-safe {
   padding-right: env(safe-area-inset-right);
 }
+/* Width of the shell's navigation column: nothing on a phone (bottom tabs),
+   the rail from 600px, the sidebar from 1024px. The mail split reads it to
+   put its list/reader seam on a fold's hinge. Keep in step with
+   components/nav-rail.tsx (w-[72px]) and components/sidebar.tsx (w-[260px]). */
+:root {
+  --shell-nav-w: 0px;
+}
+@media (min-width: 37.5rem) {
+  :root {
+    --shell-nav-w: calc(72px + env(safe-area-inset-left));
+  }
+}
+@media (min-width: 64rem) {
+  :root {
+    --shell-nav-w: calc(260px + env(safe-area-inset-left));
+  }
+}
+
+/* A segmented row wider than its column scrolls inside itself
+   (components/ui/segmented-control.tsx); the edge with segments past it
+   fades out, so a lane scrolled out of view still reads as there. */
+.segmented-track[data-more-start] {
+  mask-image: linear-gradient(to right, transparent, black 2rem);
+}
+.segmented-track[data-more-end] {
+  mask-image: linear-gradient(to left, transparent, black 2rem);
+}
+.segmented-track[data-more-start][data-more-end] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent
+  );
+}
+
+/* Mail split (app/email/layout.tsx). The list takes 45% of what the shell
+   leaves, held between 280px and 440px; the reader takes the rest.
+   On a device whose screen is two segments side by side (a book-style
+   foldable, a dual-screen phone; the Viewport Segments API), the seam goes
+   on the hinge instead: the list ends where the left segment ends and the
+   reader starts where the right one begins, so no line of text crosses the
+   fold. Browsers without the API never match the query; the env() fallbacks
+   only matter if a browser matches it without knowing the variables. */
+.mail-split-list {
+  width: clamp(280px, 45%, 440px);
+}
+/* The split runs to the bottom edge of <main>, through the clearance <main>
+   pads its end with (app-shell.tsx, --main-clear: the tab bar and the
+   assistant button), and each pane pads its own scroll end by the same
+   amount instead. Inside the padding, the panes would stop short and leave
+   a strip of <main>'s background under the reader. */
+.mail-split {
+  height: calc(100% + var(--main-clear, 0px));
+  margin-bottom: calc(-1 * var(--main-clear, 0px));
+}
+.mail-split-list,
+.mail-split-reader {
+  padding-bottom: var(--main-clear, 0px);
+  scroll-padding-bottom: var(--main-clear, 0px);
+}
+@media (horizontal-viewport-segments: 2) {
+  .mail-split-list {
+    width: max(240px, calc(env(viewport-segment-right 0 0, 50vw) - var(--shell-nav-w)));
+  }
+  .mail-split-reader {
+    padding-left: max(
+      0px,
+      calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw))
+    );
+  }
+}
+
 /* dvh = dynamic viewport height (iOS 15.4+, all evergreen browsers).
    We already gate the PWA on iOS 16.4+ for Web Push, so no fallback needed. */
 .h-dvh {

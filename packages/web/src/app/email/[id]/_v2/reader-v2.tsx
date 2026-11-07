@@ -88,7 +88,7 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
       <Link
         href="/email"
         title={hint(t("mailV2.reader.back"), "Esc")}
-        className="focus-ring flex h-11 min-w-0 items-center gap-2 rounded-control px-3 text-label text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover hover:text-ink"
+        className="focus-ring flex h-11 min-w-0 items-center gap-2 rounded-control px-3 text-role-label text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover hover:text-ink"
       >
         <BackIcon />
         <span className="truncate">
@@ -126,7 +126,7 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
 
 function PlainBody({ body }: { body: string }) {
   return (
-    <pre className="whitespace-pre-wrap break-keep font-sans text-body leading-6 text-ink-strong [overflow-wrap:anywhere]">
+    <pre className="whitespace-pre-wrap break-keep font-sans text-role-body leading-6 text-ink-strong [overflow-wrap:anywhere]">
       {linkifyText(body)}
     </pre>
   );
@@ -229,7 +229,7 @@ export function ReaderV2(props: ReaderV2Props) {
       {props.error && current && (
         <div
           role="alert"
-          className="mt-2 flex items-center gap-2 rounded-control border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-body text-state-danger-ink"
+          className="mt-2 flex items-center gap-2 rounded-control border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-role-body text-state-danger-ink"
         >
           <p className="min-w-0 flex-1">{props.error}</p>
           <Button variant="ghost" size="sm" onClick={props.onDismissError}>
@@ -291,8 +291,10 @@ export function ReaderV2(props: ReaderV2Props) {
                   </section>
                 ) : current.snippet ? (
                   <section aria-label={t("emailDetail.previewTitle")}>
-                    <p className="text-caption text-ink-muted">{t("emailDetail.previewTitle")}</p>
-                    <p className="mt-1 text-body leading-6 text-ink-mid">
+                    <p className="text-role-caption text-ink-muted">
+                      {t("emailDetail.previewTitle")}
+                    </p>
+                    <p className="mt-1 text-role-body leading-6 text-ink-mid">
                       {linkifyText(current.snippet)}
                     </p>
                   </section>

@@ -71,15 +71,19 @@ export function ReviewStepV2({ onContinue }: { onContinue: () => void }) {
 
   return (
     <section aria-labelledby="onboarding-review-title">
-      <h1 id="onboarding-review-title" tabIndex={-1} className="text-display text-ink outline-none">
+      <h1
+        id="onboarding-review-title"
+        tabIndex={-1}
+        className="text-role-page text-ink outline-none"
+      >
         {t("onboardingV2.review.title")}
       </h1>
-      <p className="mt-2 max-w-xl text-body text-ink-mid">{t("onboardingV2.review.body")}</p>
+      <p className="mt-2 max-w-xl text-role-body text-ink-mid">{t("onboardingV2.review.body")}</p>
 
       {error && (
         <p
           role="alert"
-          className="mt-4 rounded-control border border-state-danger-line bg-state-danger-bg px-4 py-3 text-body text-state-danger-ink"
+          className="mt-4 rounded-control border border-state-danger-line bg-state-danger-bg px-4 py-3 text-role-body text-state-danger-ink"
         >
           {error}
         </p>
@@ -94,7 +98,7 @@ export function ReviewStepV2({ onContinue }: { onContinue: () => void }) {
           <Skeleton variant="block" height="h-28" />
         </SkeletonGroup>
       ) : sample.length === 0 ? (
-        <p className="mt-6 rounded-control border border-line bg-surface-panel px-4 py-3 text-body text-ink-mid">
+        <p className="mt-6 rounded-control border border-line bg-surface-panel px-4 py-3 text-role-body text-ink-mid">
           {t(loadError ? "onboardingV2.review.loadError" : "onboardingV2.review.empty")}
         </p>
       ) : (
@@ -120,7 +124,7 @@ export function ReviewStepV2({ onContinue }: { onContinue: () => void }) {
         </ul>
       )}
 
-      <p className="mt-4 text-caption text-ink-muted">{t("onboardingV2.review.note")}</p>
+      <p className="mt-4 text-role-caption text-ink-muted">{t("onboardingV2.review.note")}</p>
 
       <div className="mt-8 flex justify-end">
         <Button size="lg" className="max-sm:w-full" onClick={onContinue}>
@@ -157,15 +161,15 @@ function ReviewRow(props: ReviewRowProps) {
     <li className="rounded-card border border-line bg-surface-panel p-4">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-caption text-ink-muted">{sender}</p>
-          <p className="truncate text-head text-ink">{subject}</p>
+          <p className="truncate text-role-caption text-ink-muted">{sender}</p>
+          <p className="truncate text-role-head text-ink">{subject}</p>
         </div>
         <LaneChip tier={shown} className="mt-0.5" />
       </div>
 
       {label || moved ? (
         <div className="mt-2 flex min-h-11 flex-wrap items-center gap-x-3">
-          <p role="status" className="text-label font-normal text-ink-soft">
+          <p role="status" className="text-role-label font-normal text-ink-soft">
             {t(moved ? "onboardingV2.review.movedTo" : "onboardingV2.review.keptIn", {
               lane: shown,
             })}
@@ -181,7 +185,7 @@ function ReviewRow(props: ReviewRowProps) {
           <Button variant="secondary" size="sm" disabled={busy} onClick={onConfirm}>
             {t("onboardingV2.review.looksRight")}
           </Button>
-          <span className="px-2 text-caption text-ink-muted">
+          <span className="px-2 text-role-caption text-ink-muted">
             {t("onboardingV2.review.moveTo")}
           </span>
           {/* Lane names are product vocabulary and are not translated. */}

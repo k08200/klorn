@@ -11,9 +11,9 @@ struct BetaChip: View {
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 6).padding(.vertical, 1)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
             .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                RoundedRectangle(cornerRadius: Theme.Radius.chip)
                     .strokeBorder(Theme.line, lineWidth: Theme.hairline))
     }
 }

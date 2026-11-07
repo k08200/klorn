@@ -15,7 +15,7 @@ interface Props {
   onChange: (next: ApiKeyPermissionWire) => void;
 }
 
-const OPTION = "flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink";
+const OPTION = "flex min-h-11 cursor-pointer items-center gap-2 text-role-body text-ink";
 const RADIO = "size-4 shrink-0 accent-accent-solid focus-ring";
 
 export function ApiKeyPermissionPicker({ value, onChange }: Props) {
@@ -25,7 +25,7 @@ export function ApiKeyPermissionPicker({ value, onChange }: Props) {
 
   return (
     <fieldset className="min-w-0">
-      <legend className="text-xs font-medium text-ink-mid">
+      <legend className="text-role-caption font-medium text-ink-mid">
         {t("settings.apiKeys.permission.legend")}
       </legend>
       <div className="flex flex-wrap gap-x-5">
@@ -44,7 +44,7 @@ export function ApiKeyPermissionPicker({ value, onChange }: Props) {
           </label>
         ))}
       </div>
-      <p id={noteId} className="text-xs text-ink-mid">
+      <p id={noteId} className="text-role-caption text-ink-mid">
         {t("settings.apiKeys.permission.readWriteNote")}
       </p>
     </fieldset>

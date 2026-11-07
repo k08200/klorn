@@ -71,12 +71,14 @@ function formatDay(iso: string): string {
 
 function StatTile({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-dim">{label}</p>
-      <p className="mt-2 text-[26px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
+      <p className="text-role-caption font-medium uppercase tracking-[0.18em] text-ink-dim">
+        {label}
+      </p>
+      <p className="mt-2 text-role-title leading-none tracking-[-0.02em] text-ink tabular-nums">
         {value}
       </p>
-      {detail && <p className="mt-2 text-xs text-ink-mid tabular-nums">{detail}</p>}
+      {detail && <p className="mt-2 text-role-caption text-ink-mid tabular-nums">{detail}</p>}
     </div>
   );
 }
@@ -85,14 +87,14 @@ function DailyActivity({ daily }: { daily: DailyUsage[] }) {
   const { t } = useT();
   const maxTokens = Math.max(...daily.map((d) => d.tokens), 1);
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <h2 className="text-sm font-semibold text-ink">{t("usage.dailyActivity.title")}</h2>
-      <p className="mt-1 text-xs text-ink-mid">{t("usage.dailyActivity.subtitle")}</p>
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
+      <h2 className="text-role-head text-ink">{t("usage.dailyActivity.title")}</h2>
+      <p className="mt-1 text-role-caption text-ink-mid">{t("usage.dailyActivity.subtitle")}</p>
       <ul className="mt-4 space-y-1">
         {daily.map((d) => (
           <li
             key={d.date}
-            className="grid grid-cols-[64px_1fr_72px_64px] items-center gap-3 rounded-md px-2 py-1.5 text-xs transition hover:bg-surface-raised"
+            className="grid grid-cols-[64px_1fr_72px_64px] items-center gap-3 rounded-control px-2 py-1.5 text-role-caption transition hover:bg-surface-raised"
           >
             <span className="text-ink-mid">{formatDay(d.date)}</span>
             <span className="h-2 overflow-hidden rounded-full bg-surface-hover">
@@ -113,13 +115,13 @@ function DailyActivity({ daily }: { daily: DailyUsage[] }) {
 function ConversationsTable({ conversations }: { conversations: ConversationUsage[] }) {
   const { t } = useT();
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <h2 className="text-sm font-semibold text-ink">{t("usage.conversations.title")}</h2>
-      <p className="mt-1 text-xs text-ink-mid">{t("usage.conversations.subtitle")}</p>
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
+      <h2 className="text-role-head text-ink">{t("usage.conversations.title")}</h2>
+      <p className="mt-1 text-role-caption text-ink-mid">{t("usage.conversations.subtitle")}</p>
       <ResponsiveTable className="mt-4">
-        <table className="min-w-[520px] w-full text-left text-sm">
+        <table className="min-w-[520px] w-full text-left text-role-body">
           <thead>
-            <tr className="border-b border-line text-xs text-ink-dim">
+            <tr className="border-b border-line text-role-caption text-ink-dim">
               <th scope="col" className="py-2 pr-4 font-medium">
                 {t("usage.conversations.colConversation")}
               </th>
@@ -196,10 +198,8 @@ function UsageView() {
   return (
     <div className={PAGE_SHELL}>
       <header className="mb-6">
-        <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-          {t("usage.title")}
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm text-ink-mid">
+        <h1 className="text-role-page text-ink">{t("usage.title")}</h1>
+        <p className="mt-2 max-w-3xl text-role-body text-ink-mid">
           {t("usage.subtitlePre")}{" "}
           <Link href="/billing" className="focus-ring rounded text-accent-deep hover:underline">
             {t("usage.subtitleLinkLabel")}
@@ -226,7 +226,7 @@ function UsageView() {
       {loading && <LoadingState rows={3} />}
 
       {!loading && !error && summary && !hasActivity && (
-        <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel">
+        <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel">
           <EmptyState title={t("usage.empty.title")} description={t("usage.empty.description")} />
         </div>
       )}

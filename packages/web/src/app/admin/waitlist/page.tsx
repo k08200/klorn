@@ -160,20 +160,18 @@ function WaitlistPageInner() {
     <div className="min-h-dvh px-4 pb-28 pt-6 text-ink sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
         <header className="mb-6">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            Early access waitlist
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">Early access waitlist</h1>
+          <p className="mt-2 max-w-3xl text-role-body text-ink-mid">
             Review new requests, move approved candidates into testing, and keep access status
             clear.
           </p>
         </header>
 
-        <div className="mb-6 rounded-xl border border-state-warn-line bg-state-warn-bg p-4 text-sm leading-6 text-amber-800">
+        <div className="mb-6 rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-role-body leading-6 text-amber-800">
           <p className="font-semibold text-amber-800">
             ⚠️ Do this BEFORE clicking Approve — every time.
           </p>
-          <ol className="mt-2 list-decimal space-y-1 pl-6 text-label font-normal text-state-warn-ink">
+          <ol className="mt-2 list-decimal space-y-1 pl-6 text-role-label font-normal text-state-warn-ink">
             <li>Copy the email from the row below (click the address to copy).</li>
             <li>
               Open{" "}
@@ -207,14 +205,14 @@ function WaitlistPageInner() {
                   setFilter(f.key);
                   setSourceFilter("ALL");
                 }}
-                className={`ease-strong rounded-xl border px-4 py-3 text-left transition duration-150 active:scale-[0.97] ${
+                className={`ease-strong rounded-control border px-4 py-3 text-left transition duration-150 active:scale-[0.97] ${
                   isActive
                     ? "panel-elevated border-accent-muted bg-state-info-bg text-ink"
                     : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
                 }`}
               >
-                <div className="text-xs uppercase tracking-wide">{f.label}</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+                <div className="text-role-caption uppercase tracking-wide">{f.label}</div>
+                <div className="mt-1 text-role-title tabular-nums">{value}</div>
               </button>
             );
           })}
@@ -222,14 +220,14 @@ function WaitlistPageInner() {
 
         {topSources.length > 0 && (
           <section className="mb-6 flex flex-wrap items-center gap-3">
-            <label htmlFor="source-filter" className="text-sm text-ink-mid">
+            <label htmlFor="source-filter" className="text-role-label text-ink-mid">
               Source:
             </label>
             <select
               id="source-filter"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-sm text-ink"
+              className="rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-body text-ink"
             >
               <option value="ALL">All ({entries.length})</option>
               {topSources.map((s) => (
@@ -243,13 +241,13 @@ function WaitlistPageInner() {
         )}
 
         {loading ? (
-          <p className="text-sm text-ink-dim">Loading...</p>
+          <p className="text-role-body text-ink-dim">Loading...</p>
         ) : visibleEntries.length === 0 ? (
-          <p className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-sm text-ink-mid">
+          <p className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-role-body text-ink-mid">
             No requests in this state.
           </p>
         ) : (
-          <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+          <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
             <ul className="divide-y divide-line-soft">
               {visibleEntries.map((entry) => (
                 <li key={entry.id} className="row-wash p-4 md:p-5">
@@ -257,7 +255,7 @@ function WaitlistPageInner() {
                     <div className="flex min-w-0 items-start gap-3">
                       <span
                         aria-hidden="true"
-                        className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(entry.name || entry.email)}`}
+                        className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(entry.name || entry.email)}`}
                       >
                         {senderInitials(entry.name || entry.email)}
                       </span>
@@ -266,31 +264,33 @@ function WaitlistPageInner() {
                           <button
                             type="button"
                             onClick={() => copyEmail(entry)}
-                            className="break-all text-base font-semibold text-ink transition duration-150 hover:text-accent-deep"
+                            className="break-all text-role-head text-ink transition duration-150 hover:text-accent-deep"
                             title="Copy email"
                           >
                             {entry.email}
                           </button>
                           <StatusBadge status={entry.status} />
                           {copiedId === entry.id && (
-                            <span className="text-xs text-accent-deep">Copied</span>
+                            <span className="text-role-caption text-accent-deep">Copied</span>
                           )}
                         </div>
-                        <div className="mt-1 text-xs tabular-nums text-ink-dim">
+                        <div className="mt-1 text-role-caption tabular-nums text-ink-dim">
                           {entry.name ? `${entry.name} · ` : ""}
                           {formatDate(entry.createdAt)}
                           {entry.approvedAt ? ` · approved ${formatDate(entry.approvedAt)}` : ""}
                         </div>
                         {entry.useCase && (
-                          <p className="mt-3 max-w-3xl text-sm leading-6 text-ink-mid">
+                          <p className="mt-3 max-w-3xl text-role-body leading-6 text-ink-mid">
                             {entry.useCase}
                           </p>
                         )}
                         {entry.source && (
-                          <p className="mt-1 text-xs text-ink-dim">via {entry.source}</p>
+                          <p className="mt-1 text-role-caption text-ink-dim">via {entry.source}</p>
                         )}
                         {entry.attribution && (
-                          <p className="mt-0.5 text-xs text-ink-dim">{entry.attribution}</p>
+                          <p className="mt-0.5 text-role-caption text-ink-dim">
+                            {entry.attribution}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -301,7 +301,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => updateStatus(entry.id, "APPROVED")}
                           disabled={updating === entry.id}
-                          className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
+                          className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
                         >
                           Approve
                         </button>
@@ -311,7 +311,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => updateStatus(entry.id, "REJECTED")}
                           disabled={updating === entry.id}
-                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-state-danger-line bg-state-danger-bg px-3 text-sm font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-60"
+                          className="ease-strong inline-flex h-9 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-3 text-role-label text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-60"
                         >
                           Reject
                         </button>
@@ -321,7 +321,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => updateStatus(entry.id, "PENDING")}
                           disabled={updating === entry.id}
-                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
+                          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-label text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
                         >
                           Move to pending
                         </button>
@@ -335,7 +335,7 @@ function WaitlistPageInner() {
                           type="button"
                           onClick={() => removeEntry(entry)}
                           disabled={updating === entry.id}
-                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-transparent px-3 text-sm text-ink-dim transition duration-150 hover:border-state-danger-line hover:text-state-danger-ink active:scale-[0.97] disabled:opacity-60"
+                          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-transparent px-3 text-role-label text-ink-dim transition duration-150 hover:border-state-danger-line hover:text-state-danger-ink active:scale-[0.97] disabled:opacity-60"
                         >
                           Delete
                         </button>
@@ -361,7 +361,7 @@ function StatusBadge({ status }: { status: WaitlistEntry["status"] }) {
   const s = map[status];
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
+      className={`rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
     >
       {s.label}
     </span>

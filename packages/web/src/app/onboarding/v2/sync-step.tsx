@@ -78,10 +78,10 @@ export function SyncStep({ accounts, onContinue, onFixAccount }: SyncStepProps) 
 
   return (
     <section aria-labelledby="onboarding-sync-title">
-      <h1 id="onboarding-sync-title" tabIndex={-1} className="text-display text-ink outline-none">
+      <h1 id="onboarding-sync-title" tabIndex={-1} className="text-role-page text-ink outline-none">
         {t(TITLE_KEY.get(syncHeadline(rows)) ?? "onboardingV2.sync.title")}
       </h1>
-      <p className="mt-2 max-w-xl text-body text-ink-mid">
+      <p className="mt-2 max-w-xl text-role-body text-ink-mid">
         {t(counted ? "onboardingV2.sync.body" : "onboardingV2.sync.bodyNoCounts")}
       </p>
 
@@ -109,7 +109,7 @@ export function SyncStep({ accounts, onContinue, onFixAccount }: SyncStepProps) 
 
       <div className="mt-8 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
         {!settled && !waited && (
-          <p className="text-caption text-ink-muted">{t("onboardingV2.sync.waitHint")}</p>
+          <p className="text-role-caption text-ink-muted">{t("onboardingV2.sync.waitHint")}</p>
         )}
         {(settled || waited) && (
           <Button size="lg" onClick={onContinue}>
@@ -138,12 +138,12 @@ function AccountRow({ entry, format, onRetry }: AccountRowProps) {
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <SourceBadge provider={account.provider} />
-        <span className="min-w-0 truncate text-label text-ink">{name}</span>
+        <span className="min-w-0 truncate text-role-label text-ink">{name}</span>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:justify-end">
         <Counters row={row} format={format} />
         <span
-          className={`flex items-center gap-1.5 text-caption ${STATE_INK.get(row.state) ?? ""}`}
+          className={`flex items-center gap-1.5 text-role-caption ${STATE_INK.get(row.state) ?? ""}`}
         >
           <StateMark state={row.state} />
           {t(STATE_KEY.get(row.state) ?? "")}
@@ -164,7 +164,7 @@ function Counters({ row, format }: { row: SyncRow; format: (value: number) => st
   const { t } = useT();
   if (row.messages === null && row.state !== "reading") return null;
   return (
-    <span className="text-label font-normal tabular-nums text-ink-soft">
+    <span className="text-role-label font-normal tabular-nums text-ink-soft">
       {row.messages === null
         ? t("onboardingV2.sync.counting")
         : t("onboardingV2.sync.messages", { count: format(row.messages) })}
@@ -222,18 +222,18 @@ function LaneTotals({
   const counts = new Map(Object.entries(lanes));
   return (
     <div className="mt-6">
-      <h2 className="text-head text-ink">{t("onboardingV2.sync.lanesTitle")}</h2>
+      <h2 className="text-role-head text-ink">{t("onboardingV2.sync.lanesTitle")}</h2>
       <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
         {CORE_TIERS.map((lane) => (
           <li key={lane} className="flex items-center gap-2">
             <LaneChip tier={lane} />
-            <span className="text-label tabular-nums text-ink">
+            <span className="text-role-label tabular-nums text-ink">
               {format(counts.get(lane) ?? 0)}
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-caption text-ink-muted">{t("onboardingV2.sync.lanesNote")}</p>
+      <p className="mt-3 text-role-caption text-ink-muted">{t("onboardingV2.sync.lanesNote")}</p>
     </div>
   );
 }

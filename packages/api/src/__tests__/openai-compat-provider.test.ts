@@ -52,29 +52,29 @@ describe("provider chain with OPENAI_COMPAT_BASE_URL", () => {
 
   it("is absent when OPENAI_COMPAT_BASE_URL is unset", async () => {
     vi.stubEnv("OPENAI_COMPAT_BASE_URL", "");
-    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     vi.stubEnv("GEMINI_API_KEY", "");
-    expect(await chainNames()).toEqual(["openrouter"]);
+    expect(await chainNames()).toEqual(["anthropic"]);
   });
 
   it("leads the chain by default (local-first privacy)", async () => {
     vi.stubEnv("OPENAI_COMPAT_BASE_URL", "http://localhost:11434/v1");
-    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     vi.stubEnv("GEMINI_API_KEY", "test-key-2");
-    expect(await chainNames()).toEqual(["openai-compat", "openrouter", "gemini"]);
+    expect(await chainNames()).toEqual(["openai-compat", "anthropic", "gemini"]);
   });
 
   it("moves to the end with OPENAI_COMPAT_PRIORITY=last", async () => {
     vi.stubEnv("OPENAI_COMPAT_BASE_URL", "http://localhost:11434/v1");
     vi.stubEnv("OPENAI_COMPAT_PRIORITY", "last");
-    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     vi.stubEnv("GEMINI_API_KEY", "");
-    expect(await chainNames()).toEqual(["openrouter", "openai-compat"]);
+    expect(await chainNames()).toEqual(["anthropic", "openai-compat"]);
   });
 
   it("works as the ONLY provider (fully local self-host)", async () => {
     vi.stubEnv("OPENAI_COMPAT_BASE_URL", "http://localhost:11434/v1");
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
     vi.stubEnv("GEMINI_API_KEY", "");
     expect(await chainNames()).toEqual(["openai-compat"]);
   });
@@ -82,11 +82,11 @@ describe("provider chain with OPENAI_COMPAT_BASE_URL", () => {
   it("always resolves caller models to the operator's local model", async () => {
     vi.stubEnv("OPENAI_COMPAT_BASE_URL", "http://localhost:11434/v1");
     vi.stubEnv("OPENAI_COMPAT_MODEL", "qwen3:8b");
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
     vi.stubEnv("GEMINI_API_KEY", "");
     const { getProviderChain } = await import("../providers/index.js");
     const compat = getProviderChain()[0];
-    expect(compat.resolveModel("google/gemma-4-31b-it:free")).toBe("qwen3:8b");
+    expect(compat.resolveModel("claude-haiku-5-5")).toBe("qwen3:8b");
     expect(compat.resolveModel("gemini-2.5-flash")).toBe("qwen3:8b");
   });
 });
@@ -124,7 +124,7 @@ describe("createCompletion failover when the local endpoint is down", () => {
       getProvider: () => null,
       getProviderChain: () => [
         fakeProvider("openai-compat", compatCall),
-        fakeProvider("openrouter", cloudCall),
+        fakeProvider("anthropic", cloudCall),
       ],
     }));
     vi.doMock("../llm/model-fallback.js", async (importOriginal) => ({
@@ -143,7 +143,7 @@ describe("createCompletion failover when the local endpoint is down", () => {
 
     const { createCompletion } = await import("../llm/openai.js");
     const result = (await createCompletion({
-      model: "google/gemma-4-31b-it:free",
+      model: "claude-haiku-5-5",
       messages: [{ role: "user", content: "hi" }],
     })) as { choices: Array<{ message: { content: string } }> };
 
@@ -163,7 +163,7 @@ describe("createCompletion failover when the local endpoint is down", () => {
     vi.doMock("../providers/index.js", () => ({
       getProvider: () => null,
       getProviderChain: () => [
-        fakeProvider("openrouter", cloudCall),
+        fakeProvider("anthropic", cloudCall),
         fakeProvider("gemini", neverCall),
       ],
     }));
@@ -184,7 +184,7 @@ describe("createCompletion failover when the local endpoint is down", () => {
     const { createCompletion } = await import("../llm/openai.js");
     await expect(
       createCompletion({
-        model: "google/gemma-4-31b-it:free",
+        model: "claude-haiku-5-5",
         messages: [{ role: "user", content: "hi" }],
       }),
     ).rejects.toThrow(/ECONNREFUSED/);

@@ -13,7 +13,7 @@ const FAILING = "anthropic/claude-sonnet-5";
 
 describe("judge model gate guard", () => {
   describe("normalizeModelId", () => {
-    it("strips the OpenRouter variant suffix so :free and :beta cannot slip past", () => {
+    it("strips a proxy-style variant suffix so :free and :beta cannot slip past", () => {
       expect(normalizeModelId("anthropic/claude-sonnet-5:beta")).toBe(FAILING);
       expect(normalizeModelId("anthropic/claude-sonnet-5:free")).toBe(FAILING);
     });

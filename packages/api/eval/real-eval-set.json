@@ -114,6 +114,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-27T14:48:40.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -471,6 +472,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-25T16:18:05.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -591,6 +593,7 @@
       "labels": ["CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-24T12:05:14.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderFacts": {
           "tierHistory": {
@@ -649,6 +652,7 @@
       "labels": ["CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-23T17:13:49.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderFacts": {
           "tierHistory": {
@@ -835,6 +839,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-23T13:18:48.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -935,6 +940,7 @@
       "labels": ["CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-23T04:42:16.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderFacts": {
           "tierHistory": {
@@ -962,6 +968,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-23T03:39:09.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -1086,6 +1093,7 @@
       "labels": ["CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-22T09:46:36.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderFacts": {
           "tierHistory": {
@@ -1113,6 +1121,7 @@
       "labels": ["CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-22T08:59:13.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderFacts": {
           "tierHistory": {
@@ -1150,6 +1159,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-21T12:31:00.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderFacts": {
           "tierHistory": {
@@ -1433,6 +1443,7 @@
       "labels": ["CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-18T16:07:03.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",

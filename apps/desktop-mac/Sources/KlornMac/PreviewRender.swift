@@ -266,8 +266,8 @@ enum PreviewRender {
                 AutomationPreferences()
             }
             .padding(22)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+            .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
             .padding(14)
         }
         // The main window's sections (M4b), on their own model so the

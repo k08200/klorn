@@ -24,6 +24,7 @@
 import { prisma } from "../db.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { listGmailMailbox, type MailboxItemWire } from "./gmail-mailbox.js";
+import { UNKNOWN_DATE } from "./mailbox-dates.js";
 import { reportSentError } from "./sent-errors.js";
 import { clampSentField } from "./sent-fields.js";
 import { classifySentRows } from "./sent-origin-classifier.js";
@@ -125,7 +126,8 @@ type ScannedRow = Omit<SentMessageInput, "origin" | "inferredOrigin">;
 
 function toScannedRow(item: MailboxItemWire): ScannedRow | null {
   const sentAt = new Date(item.receivedAt);
-  if (Number.isNaN(sentAt.getTime())) return null;
+  // NaN, or the mailbox's "date unknown" epoch: never record a made-up sentAt.
+  if (Number.isNaN(sentAt.getTime()) || sentAt.getTime() === UNKNOWN_DATE.getTime()) return null;
   return {
     gmailId: item.gmailId,
     threadId: item.threadId,

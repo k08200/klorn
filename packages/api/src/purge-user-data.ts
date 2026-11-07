@@ -84,11 +84,15 @@ export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<voi
       githubTokenCipher: null,
       githubConnectedAt: null,
       githubLastPolledAt: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
       telegramChatId: null,
       telegramLinkCode: null,
       telegramLinkCodeExpiresAt: null,
+      // The co-attendance watermark goes with the counts and markers it describes
+      // (purgeUserData): left behind, a reconnect would start counting at the day
+      // after it and never recount the wiped days.
+      coAttendanceCountedThrough: null,
     },
   });
 }
@@ -142,6 +146,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.notification.deleteMany(scope);
   await tx.agentLog.deleteMany(scope);
   await tx.calendarEvent.deleteMany(scope);
+  // Per-contact co-attendance counts, and the markers of the meetings counted.
+  await tx.contactCoAttendance.deleteMany(scope);
+  await tx.coAttendanceMeeting.deleteMany(scope);
   // DriveFileSummary: model summaries of the user's files (D4); DriveSummaryUsage:
   // their daily count. Both cascade with DriveFile and User; deleted by name so
   // this list stays the complete record.

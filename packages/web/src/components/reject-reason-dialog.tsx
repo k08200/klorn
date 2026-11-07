@@ -76,15 +76,12 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
         role="dialog"
         aria-modal="true"
         aria-labelledby="reject-reason-title"
-        className="panel-elevated w-full max-w-sm origin-center rounded-2xl border border-line/70 bg-surface-panel p-6 transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
+        className="panel-elevated w-full max-w-sm origin-center rounded-sheet border border-line/70 bg-surface-panel p-6 transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
       >
-        <h3
-          id="reject-reason-title"
-          className="mb-2 text-base font-semibold tracking-[-0.01em] text-ink"
-        >
+        <h3 id="reject-reason-title" className="mb-2 text-role-title tracking-[-0.01em] text-ink">
           {t("rejectDialog.title")}
         </h3>
-        <label htmlFor="reject-reason" className="mb-2 block text-sm text-ink-mid">
+        <label htmlFor="reject-reason" className="mb-2 block text-role-label text-ink-mid">
           {t("rejectDialog.reasonLabel")}
         </label>
         <textarea
@@ -95,30 +92,30 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           maxLength={MAX_REJECT_REASON_LENGTH}
           rows={3}
           placeholder={t("rejectDialog.placeholder")}
-          className="w-full resize-none rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm text-ink placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+          className="w-full resize-none rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body text-ink placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
         />
-        <p className="mt-1 text-right text-caption tabular-nums text-ink-dim">
+        <p className="mt-1 text-right text-role-caption tabular-nums text-ink-dim">
           {reason.length}/{MAX_REJECT_REASON_LENGTH}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97]"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control px-3 py-2 text-role-label text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97]"
           >
             {t("common.cancel")}
           </button>
           <button
             type="button"
             onClick={() => onReject(null)}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-3 py-2 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-role-label text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           >
             {t("rejectDialog.skipAndReject")}
           </button>
           <button
             type="button"
             onClick={() => onReject(trimmed || null)}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg bg-danger-solid px-4 py-2 text-sm font-medium text-danger-solid-ink shadow-[0_1px_2px_rgba(127,29,29,0.3),0_8px_18px_-8px_rgba(220,38,38,0.5)] transition duration-150 hover:from-red-500 hover:to-red-700 active:scale-[0.97]"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control bg-danger-solid px-4 py-2 text-role-label text-danger-solid-ink shadow-[0_1px_2px_rgba(127,29,29,0.3),0_8px_18px_-8px_rgba(220,38,38,0.5)] transition duration-150 hover:from-red-500 hover:to-red-700 active:scale-[0.97]"
           >
             {t("notif.reject")}
           </button>

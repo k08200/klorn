@@ -53,7 +53,7 @@ export function ReturnNotice({
           : "border-state-danger-line bg-state-danger-bg text-state-danger-ink"
       }`}
     >
-      <p className="min-w-0 flex-1 py-2.5 text-body">
+      <p className="min-w-0 flex-1 py-2.5 text-role-body">
         <span className="font-semibold">
           {t(ok ? "onboardingV2.return.okTitle" : "onboardingV2.return.failTitle", { provider })}
         </span>{" "}

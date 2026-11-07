@@ -66,11 +66,11 @@ export function DriveToolbar(props: DriveToolbarProps) {
           id="files-drive-heading"
           ref={headingRef}
           tabIndex={-1}
-          className={`text-body font-semibold text-ink ${FOCUSED_HEADING}`}
+          className={`text-role-body font-semibold text-ink ${FOCUSED_HEADING}`}
         >
           {t("files.drive.title")}
         </h2>
-        <p className="text-caption text-ink-muted">
+        <p className="text-role-caption text-ink-muted">
           {usage.quota === null
             ? t("files.drive.error.notConfigured")
             : t("files.drive.usage", { used: usage.used, quota: usage.quota })}
@@ -78,7 +78,7 @@ export function DriveToolbar(props: DriveToolbarProps) {
       </div>
       <p
         id={destinationId}
-        className="text-body text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
+        className="text-role-body text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
       >
         {folder
           ? t("files.drive.destination.folder", { folder: folder.name })
@@ -173,7 +173,7 @@ function UploadPanel({
   return (
     <div className={batch ? "flex flex-col gap-1 border-t border-line-soft pt-3" : "sr-only"}>
       <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
-        <p role="status" className="text-body text-ink">
+        <p role="status" className="text-role-body text-ink">
           {summaryText(batch, t)}
         </p>
         {batch && !finished && (
@@ -197,7 +197,7 @@ function UploadPanel({
       {batch && (
         <p
           id={destinationId}
-          className="text-caption text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
+          className="text-role-caption text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
         >
           {destination
             ? t("files.drive.upload.destination.folder", { folder: destination.name })
@@ -205,7 +205,7 @@ function UploadPanel({
         </p>
       )}
       {tooLarge.length > 0 && (
-        <p role="alert" className="text-caption text-state-danger-ink [word-break:keep-all]">
+        <p role="alert" className="text-role-caption text-state-danger-ink [word-break:keep-all]">
           {t("files.drive.upload.tooLargeSummary", {
             count: String(tooLarge.length),
             limit,
@@ -220,7 +220,7 @@ function UploadPanel({
         >
           {batch.items.map((item) => (
             <li key={item.key} className="flex flex-col py-2">
-              <span className="truncate text-body text-ink">{item.name}</span>
+              <span className="truncate text-role-body text-ink">{item.name}</span>
               <ItemStatus item={item} limit={limit} />
             </li>
           ))}
@@ -240,12 +240,12 @@ const STATUS_KEYS = {
 function ItemStatus({ item, limit }: { item: UploadItem; limit: string }) {
   const { t } = useT();
   if (item.status !== "failed") {
-    return <span className="text-caption text-ink-muted">{t(STATUS_KEYS[item.status])}</span>;
+    return <span className="text-role-caption text-ink-muted">{t(STATUS_KEYS[item.status])}</span>;
   }
   const reason = t(item.errorKey ?? "files.drive.error.generic", { limit });
   const shown = item.cause === "skipped" ? t("files.drive.upload.skipped", { reason }) : reason;
   return (
-    <p className="text-caption text-state-danger-ink [word-break:keep-all]">
+    <p className="text-role-caption text-state-danger-ink [word-break:keep-all]">
       {item.cause === "sent" ? (
         <>
           <span aria-hidden="true">{shown}</span>

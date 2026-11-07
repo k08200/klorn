@@ -108,10 +108,11 @@ Phones follow the OS text size (Dynamic Type / font scale) up to 200%.
 | type | `text-role-page` … `text-role-mono` |
 
 The legacy type steps (`text-display` / `text-title` / `text-head` /
-`text-body`, 28/20/15/14) and the legacy ink steps (`ink-strong` …
-`ink-dim`) remain for page call sites until their wave. The ui primitives
-(button, input, menu, sheet, toast, segmented control, listbox, lane chip)
-already use the role utilities.
+`text-body` / `text-label` / `text-caption`, 28/20/15/14/13/12) are retired:
+every web call site uses the role utilities, the tokens are gone from
+`globals.css`, and the `legacy-type` rule in
+`.github/scripts/check-design-tokens.mjs` keeps them out. The legacy ink
+steps (`ink-strong` … `ink-dim`) remain for page call sites until their wave.
 
 ### Phone — `apps/mobile/src/styles/tokens.css`
 
@@ -137,8 +138,9 @@ already use the role utilities.
 | motion | `Theme.Motion.state` / `.move` / `.sheet`, `Theme.Motion.fluid(_:)` |
 | type | `Theme.TypeSize.*` (pure) → `Theme.Typo.page` / `title` / `head` / `body` / `label` / `caption` / `mono` |
 
-Known gap: Mac buttons and fields still use `Radius.sm` (6). v2 says control
-= 10. They move with the Mac screen wave.
+Every Mac call site names a role (buttons and fields are `.control`); the
+rungs and raw numbers stay in Theme.swift, held there by the self-check's
+radius guard.
 
 ## Device classes
 

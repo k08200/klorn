@@ -1,34 +1,30 @@
 /**
  * Provider Registry — multi-provider LLM routing with automatic failover.
  *
- * Providers (in priority order):
- *   1. OpenRouter (primary)   — OpenAI-compatible proxy with :free models
- *   2. Gemini     (secondary) — Google AI Studio key. Hosted prod uses a PAID
- *      Tier 1 (billing-linked) project: the free tier lets Google train on
- *      request data, which would break the privacy policy's Limited Use
- *      no-train commitment. Self-hosters may use a free-tier key — their call.
+ * Env providers (default order; LLM_PROVIDER_ORDER reorders them):
+ *   1. Anthropic (primary) — ANTHROPIC_API_KEY, the official SDK behind a
+ *      native adapter (anthropic-native.ts). Hosted Klorn runs on the Claude
+ *      API alone (founder decision 2026-11-01). Commercial API terms —
+ *      inputs/outputs are not used for training by default — which is what
+ *      lets user mail go there under Limited Use.
+ *   2. Gemini (optional) — Google AI Studio key, called via a native adapter
+ *      (URL-param auth; newer `AQ.`-prefix keys are rejected by the
+ *      OpenAI-compat endpoint's Bearer path). A free-tier key lets Google train
+ *      on request data, which would break the privacy policy's Limited Use
+ *      no-train commitment on a hosted deploy; self-hosters may choose it.
  *
- * Failover happens in createCompletion() when OpenRouter returns a 403/429
- * "Key limit exceeded" — the limit is per-KEY (daily, resets at UTC 00:00),
- * so switching to another :free model on the same OpenRouter key does not
- * help. Gemini uses a completely separate key + quota, so it recovers.
+ * Plus the self-host local provider (OPENAI_COMPAT_BASE_URL — Ollama, LM
+ * Studio, vLLM…), which keeps its own OPENAI_COMPAT_PRIORITY edge, and the
+ * per-request user keys (BYOK Anthropic key from Settings; Anthropic / OpenAI /
+ * Gemini visitor keys in the playground), which always lead.
  *
- * OpenRouter goes through the OpenAI SDK (Bearer-auth). Gemini is called via
- * a native adapter (URL-param auth) — newer `AQ.`-prefix Google keys are
- * rejected by the OpenAI-compat endpoint's Bearer auth path.
- *
- *   3. Anthropic (optional) — ANTHROPIC_API_KEY, the official SDK behind a
- *      native adapter (anthropic-native.ts). OFF until the key is set, and
- *      even then only a failover lane at the END of the env chain until
- *      LLM_PROVIDER_ORDER puts it first: becoming primary is its own decision.
- *      Commercial API terms — inputs/outputs are not used for training by
- *      default — which is what lets user mail go there under Limited Use.
+ * Failover happens in createCompletion() on a key limit (403/429), credit
+ * exhaustion (402) or overload (529): the next configured provider has its own
+ * key and quota, so it recovers.
  *
  * LLM_PROVIDER_ORDER (e.g. "anthropic,gemini") orders the ENV providers.
  * Configured providers it does not list keep their default relative order
  * after the listed ones, so a typo can reorder the chain but never empty it.
- * User (BYOK) keys always lead; the local provider keeps its own
- * OPENAI_COMPAT_PRIORITY edge.
  */
 
 import crypto from "node:crypto";
@@ -53,10 +49,10 @@ import {
   createCompletionStreaming as geminiStreaming,
 } from "./gemini-native.js";
 
-export type ProviderName = "openai-compat" | "openrouter" | "gemini" | "openai" | "anthropic";
+export type ProviderName = "openai-compat" | "gemini" | "openai" | "anthropic";
 
 /** Server-key providers whose order LLM_PROVIDER_ORDER controls. */
-const ENV_PROVIDER_NAMES = ["openrouter", "gemini", "anthropic"] as const;
+const ENV_PROVIDER_NAMES = ["anthropic", "gemini"] as const;
 export type EnvProviderName = (typeof ENV_PROVIDER_NAMES)[number];
 
 function isEnvProviderName(value: string): value is EnvProviderName {
@@ -115,16 +111,19 @@ export interface Provider {
 }
 
 export interface ProviderCredentials {
-  openRouterApiKey?: string | null;
+  /**
+   * Direct Anthropic key (sk-ant-…) → api.anthropic.com. The Settings BYOK
+   * slot (getUserLlmCredentials) and a playground visitor key.
+   */
+  anthropicApiKey?: string | null;
+  /** Legacy Settings BYOK slot (clear-only) and a playground visitor key. */
   geminiApiKey?: string | null;
   /** Direct OpenAI key (sk-…/sk-proj-…) → api.openai.com. Playground BYOK. */
   openAiApiKey?: string | null;
-  /** Direct Anthropic key (sk-ant-…) → api.anthropic.com. Playground BYOK only. */
-  anthropicApiKey?: string | null;
   quotaScope?: string | null;
   /**
    * When true, the provider chain contains ONLY the explicitly supplied
-   * visitor keys — never the server's env-level OpenRouter/Gemini/compat
+   * visitor keys — never the server's env-level Anthropic/Gemini/compat
    * providers. This is the billing-theft guard for the public playground: a
    * visitor with a bad or exhausted key must fail closed, not silently fall
    * through to the server's own quota.
@@ -139,39 +138,11 @@ export interface ProviderCredentials {
   userModel?: string;
 }
 
-function buildOpenRouter(
-  apiKey = process.env.OPENROUTER_API_KEY,
-  scope = "env",
-  maxRetries?: number,
-): Provider | null {
-  if (!apiKey) return null;
-  const client = new OpenAISDK({
-    apiKey,
-    baseURL: "https://openrouter.ai/api/v1",
-    timeout: llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
-    ...(maxRetries !== undefined ? { maxRetries } : {}),
-  });
-  return {
-    name: "openrouter",
-    quotaKey: `openrouter:${scope}`,
-    client,
-    defaultModel: process.env.FALLBACK_MODEL || "google/gemma-4-31b-it:free",
-    supportsTools: true,
-    resolveModel: (m) => m,
-    call: async (params, model) => {
-      const create = client.chat.completions.create.bind(client.chat.completions) as (
-        ...args: unknown[]
-      ) => Promise<ChatResult>;
-      return await create({ ...params, model });
-    },
-  };
-}
-
 /**
  * Direct OpenAI provider — a visitor's own OpenAI key (sk-… / sk-proj-…)
  * against api.openai.com. Used only by the playground BYOK path; there is no
- * env-level OpenAI provider (the server routes through OpenRouter). Strips an
- * "openai/" prefix so an OpenRouter-style id (openai/gpt-4o-mini) still works.
+ * env-level OpenAI provider. Strips an "openai/" prefix so a vendor-prefixed
+ * id (openai/gpt-4o-mini) still works.
  */
 function buildOpenAI(apiKey: string, scope: string, maxRetries?: number): Provider | null {
   if (!apiKey) return null;
@@ -229,8 +200,8 @@ function buildOpenAICompat(): Provider | null {
     // Small local models' function-calling is unreliable; opt in explicitly
     // when the chosen model/server handles tools well.
     supportsTools: process.env.OPENAI_COMPAT_SUPPORTS_TOOLS === "true",
-    // Caller model IDs are OpenRouter/Gemini-namespaced and meaningless to a
-    // local server — the operator picked ONE local model, always use it.
+    // Caller model IDs are Claude/Gemini-namespaced and meaningless to a local
+    // server — the operator picked ONE local model, always use it.
     resolveModel: () => defaultModel,
     call: async (params, model) => {
       const create = client.chat.completions.create.bind(client.chat.completions) as (
@@ -292,8 +263,8 @@ interface AnthropicBuildOptions {
  * header (ANTHROPIC_WORKSPACE_ID names Klorn's workspace, never a visitor's)
  * and no SDK retries. Non-Claude pins are served by ANTHROPIC_MODEL (default
  * claude-haiku-5-5), the way Gemini serves a non-Gemini pin with
- * GEMINI_FALLBACK_MODEL; Claude pins, native or OpenRouter-spelled, are
- * honoured.
+ * GEMINI_FALLBACK_MODEL; Claude pins, native or vendor-prefixed
+ * (`anthropic/claude-…`), are honoured.
  */
 function buildAnthropic(
   apiKey = process.env.ANTHROPIC_API_KEY,
@@ -337,12 +308,11 @@ function buildAnthropic(
 
 const providers: Record<ProviderName, Provider | null> = {
   "openai-compat": buildOpenAICompat(),
-  openrouter: buildOpenRouter(process.env.OPENROUTER_API_KEY),
-  gemini: buildGemini(process.env.GEMINI_API_KEY),
-  // No env-level direct OpenAI provider — the server routes through OpenRouter.
-  // Direct OpenAI is a playground BYOK-only path (per-request key).
-  openai: null,
   anthropic: buildAnthropic(),
+  gemini: buildGemini(process.env.GEMINI_API_KEY),
+  // No env-level direct OpenAI provider. Direct OpenAI is a playground
+  // BYOK-only path (per-request key).
+  openai: null,
 };
 
 const configuredEnvProviders = resolveEnvProviderOrder(process.env.LLM_PROVIDER_ORDER).filter(
@@ -351,7 +321,7 @@ const configuredEnvProviders = resolveEnvProviderOrder(process.env.LLM_PROVIDER_
 
 if (configuredEnvProviders.length === 0 && !providers["openai-compat"]) {
   console.error(
-    "[providers] No LLM provider configured — every chat request will fail. Set OPENROUTER_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM) in your env.",
+    "[providers] No LLM provider configured — every chat request will fail. Set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM) in your env.",
   );
 } else {
   const ignored = unknownEnvProviderNames(process.env.LLM_PROVIDER_ORDER);
@@ -382,53 +352,40 @@ if (configuredEnvProviders.length === 0 && !providers["openai-compat"]) {
       `[providers] Local/OpenAI-compatible provider active at ${host} (model ${providers["openai-compat"].defaultModel}) — tried FIRST; cloud providers are failover only`,
     );
   }
-  if (!providers.openrouter) {
-    console.warn("[providers] OPENROUTER_API_KEY not set — OpenRouter lane disabled");
+  if (!providers.anthropic) {
+    console.warn("[providers] ANTHROPIC_API_KEY not set — Claude lane disabled");
   }
   if (configuredEnvProviders.length === 1 && !providers["openai-compat"]) {
-    // A single key can be a deliberate shape (hosted Klorn ran one OpenRouter
-    // key from 2026-08-02), so don't phrase it as a missing key. State the
-    // consequence instead: with a single provider there is nothing to fail
-    // over to, so a 402/403/429 on that key degrades every judge call to the
-    // keyword fallback (which caps confidence at 0.55 and cannot reach the
-    // PUSH floor of 0.7).
+    // A single key is a deliberate shape (hosted Klorn runs on the Claude API
+    // alone), so don't phrase it as a missing key. State the consequence
+    // instead: with a single provider there is nothing to fail over to, so a
+    // 402/403/429 on that key degrades every judge call to the keyword
+    // fallback (which caps confidence at 0.55 and cannot reach the PUSH floor
+    // of 0.7).
     console.warn(
-      `[providers] Single provider configured (${configuredEnvProviders[0]} only) — no failover: a 402/403/429 on this key degrades every LLM surface until it clears. Add a second provider key (GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY) or OPENAI_COMPAT_BASE_URL for a second lane.`,
+      `[providers] Single provider configured (${configuredEnvProviders[0]} only) — no failover: a 402/403/429 on this key degrades every LLM surface until it clears. A second lane needs another provider (${configuredEnvProviders[0] === "anthropic" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"} or OPENAI_COMPAT_BASE_URL).`,
     );
   }
   if (providers.gemini) {
     console.log("[providers] Gemini provider active");
   }
-  // Cost guardrail — OpenRouter bills any `<vendor>/<model>` ID without a
-  // `:free` suffix. A deploy that drops the suffix silently routes to the
-  // paid catalog (the 2026-06-02 incident). Loudly warn at startup so the
-  // founder doesn't discover it on the invoice.
-  if (providers.openrouter) {
-    warnIfPaidModel("CHAT_MODEL", process.env.CHAT_MODEL);
-    warnIfPaidModel("AGENT_MODEL", process.env.AGENT_MODEL);
-    warnIfPaidModel("VISION_MODEL", process.env.VISION_MODEL);
-  }
-}
-
-export function isLikelyPaidOpenRouterModel(value: string): boolean {
-  if (!value) return false;
-  if (value.includes(":free")) return false;
-  // Only flag vendor-prefixed IDs — bare `gemini-2.5-flash` is a Gemini-
-  // direct route (free) and shouldn't trigger the OpenRouter warning.
-  return /^[a-z0-9-]+\//i.test(value);
-}
-
-function warnIfPaidModel(envName: string, value: string | undefined): void {
-  if (!value || !isLikelyPaidOpenRouterModel(value)) return;
-  console.warn(
-    `[providers] ${envName}="${value}" routes to OpenRouter's PAID catalog. ` +
-      `Append ":free" (e.g. ${value}:free) or unset to use the in-code free default.`,
-  );
 }
 
 /** Get a provider by name, or null if not configured */
 export function getProvider(name: ProviderName): Provider | null {
   return providers[name];
+}
+
+/**
+ * Is ANY server-side LLM configured (an env provider or the local compat
+ * endpoint)? The answer to "should this LLM feature run at all?" for surfaces
+ * that otherwise degrade to a non-LLM path (auto-reply templates, the
+ * autonomous agent). It must follow the real chain: the old guard checked one
+ * provider's key, and a deploy on a different provider silently lost those
+ * features with no error.
+ */
+export function hasLlmProvider(): boolean {
+  return getProviderChain().length > 0;
 }
 
 /**
@@ -451,13 +408,6 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
   // Tagged ownedByUser so the cost ledgers can tell a call served on the
   // user's OWN key (Klorn spends $0) from an env-key fallthrough (Klorn pays).
   const visitorProviders = [
-    credentials.openRouterApiKey
-      ? buildOpenRouter(credentials.openRouterApiKey, userScope, visitorRetries)
-      : null,
-    credentials.geminiApiKey ? buildGemini(credentials.geminiApiKey, userScope) : null,
-    credentials.openAiApiKey
-      ? buildOpenAI(credentials.openAiApiKey, userScope, visitorRetries)
-      : null,
     credentials.anthropicApiKey
       ? buildAnthropic(credentials.anthropicApiKey, {
           scope: userScope,
@@ -465,12 +415,16 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
           maxRetries: visitorRetries,
         })
       : null,
+    credentials.geminiApiKey ? buildGemini(credentials.geminiApiKey, userScope) : null,
+    credentials.openAiApiKey
+      ? buildOpenAI(credentials.openAiApiKey, userScope, visitorRetries)
+      : null,
   ].map((p): Provider | null => (p ? { ...p, ownedByUser: true } : null));
 
   // playgroundOnly fails closed: a public visitor's request must NEVER reach
   // the server's env keys or local compat model. Without this guard a bad
-  // visitor key falls through to providers.openrouter (env) and spends Klorn's
-  // money — a zero-auth billing-theft vector.
+  // visitor key falls through to the env providers and spends Klorn's money —
+  // a zero-auth billing-theft vector.
   if (credentials.playgroundOnly) {
     return visitorProviders.filter((p): p is Provider => p !== null);
   }

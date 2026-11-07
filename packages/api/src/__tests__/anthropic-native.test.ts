@@ -70,7 +70,7 @@ describe("toAnthropicModelId", () => {
     );
   });
 
-  it("translates OpenRouter-namespaced Claude ids to native ids", () => {
+  it("translates vendor-prefixed (anthropic/…) Claude ids to native ids", () => {
     expect(toAnthropicModelId("anthropic/claude-haiku-4.5", "fallback")).toBe("claude-haiku-4-5");
     expect(toAnthropicModelId("anthropic/claude-sonnet-5", "fallback")).toBe("claude-sonnet-5");
     expect(toAnthropicModelId("anthropic/claude-sonnet-5.5:beta", "fallback")).toBe(

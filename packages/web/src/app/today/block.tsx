@@ -21,7 +21,7 @@ import { useT } from "../../lib/i18n";
 
 /** The card surface: 12px radius, a hairline ring and a contact shadow. */
 export const CARD_CLASS =
-  "overflow-hidden rounded-xl bg-surface-panel shadow-[0_1px_2px_rgb(10_14_20/0.04)] ring-1 ring-line";
+  "overflow-hidden rounded-card bg-surface-panel shadow-[0_1px_2px_rgb(10_14_20/0.04)] ring-1 ring-line";
 
 interface TodayBlockProps {
   /** Id of the heading; the region is named by it. */
@@ -49,11 +49,11 @@ export function TodayBlock(props: TodayBlockProps) {
         <div className="flex min-h-6 items-center gap-2">
           <h2
             id={headingId}
-            className="flex min-w-0 items-center gap-2 text-body font-semibold text-ink"
+            className="flex min-w-0 items-center gap-2 text-role-body font-semibold text-ink"
           >
             {title}
           </h2>
-          {hint && <p className="min-w-0 truncate text-caption text-ink-muted">{hint}</p>}
+          {hint && <p className="min-w-0 truncate text-role-caption text-ink-muted">{hint}</p>}
           <span className="flex-1" />
           {action}
         </div>
@@ -64,10 +64,15 @@ export function TodayBlock(props: TodayBlockProps) {
   return (
     <section aria-labelledby={headingId} className={`flex min-w-0 flex-col gap-2.5 ${className}`}>
       <div className="flex min-h-6 items-center gap-2.5">
-        <h2 id={headingId} className="flex min-w-0 shrink-0 items-center gap-2 text-head text-ink">
+        <h2
+          id={headingId}
+          className="flex min-w-0 shrink-0 items-center gap-2 text-role-head text-ink"
+        >
           {title}
         </h2>
-        {hint && <p className="min-w-0 truncate text-label font-normal text-ink-muted">{hint}</p>}
+        {hint && (
+          <p className="min-w-0 truncate text-role-label font-normal text-ink-muted">{hint}</p>
+        )}
         <span className="flex-1" />
         {action}
       </div>
@@ -82,7 +87,7 @@ export function RailOpenLink({ href, label }: { href: string; label?: string }) 
   return (
     <Link
       href={href}
-      className="focus-ring -my-1.5 inline-flex min-h-8 items-center rounded-chip px-1 text-caption font-medium text-accent-deep hover:underline pointer-coarse:min-h-11"
+      className="focus-ring -my-1.5 inline-flex min-h-8 items-center justify-center rounded-chip px-1 text-role-caption font-medium text-accent-deep hover:underline pointer-coarse:min-h-11 pointer-coarse:min-w-11"
     >
       {label ?? t("today.rail.open")}
     </Link>
@@ -104,7 +109,7 @@ export function LaneMoreLink({
     <Link
       href={href}
       onClick={onClick}
-      className="focus-ring flex h-10 items-center justify-between border-t border-line-soft px-[18px] text-caption text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-raised focus-visible:-outline-offset-2 pointer-coarse:h-11"
+      className="focus-ring flex h-10 items-center justify-between border-t border-line-soft px-[18px] text-role-caption text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-raised focus-visible:-outline-offset-2 pointer-coarse:h-11"
     >
       {children}
       <span aria-hidden="true" className="text-ink-muted">
@@ -115,7 +120,7 @@ export function LaneMoreLink({
 }
 
 const LINK_CLASS =
-  "focus-ring inline-flex min-h-11 items-center gap-1 rounded-control text-label text-accent-deep hover:underline";
+  "focus-ring inline-flex min-h-11 items-center gap-1 rounded-control text-role-label text-accent-deep hover:underline";
 
 /** A text link with a 44px target, for "Open calendar" and "N more in Mail". */
 export function BlockLink({
@@ -157,7 +162,9 @@ export function Chevron() {
 /** One quiet line for a block that has nothing in it. Not an error. */
 export function BlockNote({ children, inset = false }: { children: ReactNode; inset?: boolean }) {
   return (
-    <p className={`py-3 text-body text-ink-muted [word-break:keep-all] ${inset ? "px-4" : ""}`}>
+    <p
+      className={`py-3 text-role-body text-ink-muted [word-break:keep-all] ${inset ? "px-4" : ""}`}
+    >
       {children}
     </p>
   );
@@ -176,7 +183,7 @@ export function BlockError({
   const { t } = useT();
   return (
     <div role="alert" className={`flex flex-wrap items-center gap-x-3 py-1 ${inset ? "px-4" : ""}`}>
-      <p className="min-w-0 flex-1 py-2 text-body text-state-danger-ink [word-break:keep-all]">
+      <p className="min-w-0 flex-1 py-2 text-role-body text-state-danger-ink [word-break:keep-all]">
         {message}
       </p>
       <Button variant="secondary" size="sm" onClick={onRetry}>

@@ -251,7 +251,7 @@ function AdminDashboard() {
     <div className="h-full overflow-y-auto px-4 pb-28 pt-6 sm:px-6 md:py-10">
       <div className="mx-auto max-w-6xl space-y-6">
         {errors.length > 0 && (
-          <div className="space-y-1 rounded-xl border border-state-warn-line bg-state-warn-bg p-3 text-xs">
+          <div className="space-y-1 rounded-control border border-state-warn-line bg-state-warn-bg p-3 text-role-caption">
             <p className="font-medium text-state-warn-ink">Some sections could not load</p>
             {errors.map((e) => (
               <p key={e.endpoint} className="font-mono text-amber-600/80">
@@ -262,25 +262,23 @@ function AdminDashboard() {
         )}
         <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-              Operations console
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-ink-mid">
+            <h1 className="text-role-page text-ink">Operations console</h1>
+            <p className="mt-2 max-w-2xl text-role-body text-ink-mid">
               Monitor execution quality, approval flow, user state, and cost from one compact view.
             </p>
           </div>
-          <div className="flex w-full shrink-0 gap-1 rounded-lg bg-surface-hover p-1 md:w-auto">
+          <div className="flex w-full shrink-0 gap-1 rounded-control bg-surface-hover p-1 md:w-auto">
             <button
               type="button"
               onClick={() => setTab("ops")}
-              className={`ease-strong flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "ops" ? "seg-active bg-surface-panel text-ink" : "text-ink-mid hover:text-ink"}`}
+              className={`ease-strong flex-1 rounded-chip px-3 py-1.5 text-role-caption font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "ops" ? "seg-active bg-surface-panel text-ink" : "text-ink-mid hover:text-ink"}`}
             >
               Ops
             </button>
             <button
               type="button"
               onClick={() => setTab("users")}
-              className={`ease-strong flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "users" ? "seg-active bg-surface-panel text-ink" : "text-ink-mid hover:text-ink"}`}
+              className={`ease-strong flex-1 rounded-chip px-3 py-1.5 text-role-caption font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "users" ? "seg-active bg-surface-panel text-ink" : "text-ink-mid hover:text-ink"}`}
             >
               Users
             </button>
@@ -291,11 +289,11 @@ function AdminDashboard() {
         <RetentionDashboard />
 
         {/* Agent Eval Harness */}
-        <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+        <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-medium text-ink">Decision agent eval</h2>
-              <p className="mt-0.5 text-xs text-ink-dim">
+              <h2 className="text-role-head font-medium text-ink">Decision agent eval</h2>
+              <p className="mt-0.5 text-role-caption text-ink-dim">
                 Check tool risk, dedupe, and plan-gate regressions.
               </p>
             </div>
@@ -303,14 +301,14 @@ function AdminDashboard() {
               type="button"
               onClick={runEval}
               disabled={evalLoading}
-              className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-xs font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-caption font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {evalLoading ? "Running..." : "Run eval"}
             </button>
           </div>
           {evalData && (
             <div className="space-y-2">
-              <div className="flex items-center gap-4 text-xs tabular-nums">
+              <div className="flex items-center gap-4 text-role-caption tabular-nums">
                 <span className="text-ink-mid">
                   {evalData.summary.passed}/{evalData.summary.total} passed
                 </span>
@@ -327,7 +325,7 @@ function AdminDashboard() {
                 {evalData.results.map((r) => (
                   <div
                     key={r.id}
-                    className={`flex items-start gap-2 text-xs p-2 rounded-md ${
+                    className={`flex items-start gap-2 text-role-caption p-2 rounded-control ${
                       r.passed
                         ? "bg-surface-raised"
                         : "border border-state-danger-line bg-state-danger-bg"
@@ -347,7 +345,9 @@ function AdminDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-ink-dim">{r.id}</span>
                         <span className="text-ink-mid">{r.name}</span>
-                        <span className="text-caption uppercase text-ink-mid">[{r.severity}]</span>
+                        <span className="text-role-caption uppercase text-ink-mid">
+                          [{r.severity}]
+                        </span>
                       </div>
                       {!r.passed && r.message && (
                         <p className="text-state-danger-ink mt-0.5">{r.message}</p>
@@ -382,7 +382,7 @@ function AdminDashboard() {
         {tab === "ops" && ops && (
           <div className="space-y-6">
             <section>
-              <h2 className="mb-3 text-sm font-medium text-ink-mid">Tool execution (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">Tool execution (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Success rate"
@@ -395,7 +395,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-ink-mid">Approval flow (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">Approval flow (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <StatCard
                   label="Approval rate"
@@ -409,7 +409,9 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-ink-mid">Daily trust loop (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">
+                Daily trust loop (7d)
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Top-3 useful rate"
@@ -425,7 +427,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-ink-mid">
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">
                 Active users and notifications
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -440,7 +442,9 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-ink-mid">Model cost ledger (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">
+                Model cost ledger (7d)
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard label="Est. cost" value={`$${ops.tokens.estimatedCostUsd.toFixed(2)}`} />
                 <StatCard label="Prompt tokens" value={ops.tokens.promptTokens.toLocaleString()} />
@@ -454,7 +458,7 @@ function AdminDashboard() {
 
             {perf && perf.routes.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-medium text-ink-mid">
+                <h2 className="mb-3 text-role-head font-medium text-ink-mid">
                   Route latency (since last restart)
                 </h2>
                 {/* Mobile: stacked cards; the 7-column table is unreadable when it
@@ -463,7 +467,7 @@ function AdminDashboard() {
                   {perf.routes.slice(0, 20).map((r) => (
                     <div
                       key={r.route}
-                      className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-3 text-xs"
+                      className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-role-caption"
                     >
                       <p className="font-mono text-ink-mid break-all">{r.route}</p>
                       <dl className="mt-2 grid grid-cols-3 gap-2">
@@ -493,8 +497,8 @@ function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-                <div className="panel-elevated hidden overflow-x-auto rounded-2xl border border-line/70 bg-surface-panel sm:block">
-                  <table className="w-full text-xs">
+                <div className="panel-elevated hidden overflow-x-auto rounded-card border border-line/70 bg-surface-panel sm:block">
+                  <table className="w-full text-role-caption">
                     <thead>
                       <tr className="border-b border-line-soft text-left text-ink-mid">
                         <th className="p-3">Route</th>
@@ -542,12 +546,12 @@ function AdminDashboard() {
 
             {ops.recentErrors.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-medium text-ink-mid">Recent errors</h2>
-                <div className="panel-elevated divide-y divide-line-soft rounded-2xl border border-line/70 bg-surface-panel">
+                <h2 className="mb-3 text-role-head font-medium text-ink-mid">Recent errors</h2>
+                <div className="panel-elevated divide-y divide-line-soft rounded-card border border-line/70 bg-surface-panel">
                   {ops.recentErrors.map((e) => (
                     <div
                       key={`${e.createdAt}-${e.userId}-${e.summary}`}
-                      className="row-wash p-3 text-xs"
+                      className="row-wash p-3 text-role-caption"
                     >
                       <div className="flex justify-between mb-1">
                         <span className="text-rose-600 font-mono">
@@ -578,8 +582,8 @@ function AdminDashboard() {
             </div>
 
             {/* Desktop: full table, still wrapped for horizontal scroll safety. */}
-            <div className="panel-elevated hidden overflow-x-auto rounded-2xl border border-line/70 bg-surface-panel sm:block">
-              <table className="w-full text-sm">
+            <div className="panel-elevated hidden overflow-x-auto rounded-card border border-line/70 bg-surface-panel sm:block">
+              <table className="w-full text-role-body">
                 <thead>
                   <tr className="border-b border-line-soft text-left text-ink-mid">
                     <th className="p-3 pr-4">Email</th>
@@ -599,7 +603,7 @@ function AdminDashboard() {
                         <span className="flex items-center gap-2.5">
                           <span
                             aria-hidden="true"
-                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-caption font-semibold text-white ${avatarGradient(u.name || u.email)}`}
+                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-caption font-semibold text-white ${avatarGradient(u.name || u.email)}`}
                           >
                             {senderInitials(u.name || u.email)}
                           </span>
@@ -612,7 +616,7 @@ function AdminDashboard() {
                           aria-label={`Role for ${u.email}`}
                           value={u.role}
                           onChange={(e) => updateUser(u.id, { role: e.target.value })}
-                          className="min-h-11 rounded border border-line bg-surface-panel px-2 py-1 text-xs text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                          className="min-h-11 rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                         >
                           <option value="USER">USER</option>
                           <option value="ADMIN">ADMIN</option>
@@ -623,7 +627,7 @@ function AdminDashboard() {
                           aria-label={`Plan for ${u.email}`}
                           value={u.plan}
                           onChange={(e) => updateUser(u.id, { plan: e.target.value })}
-                          className="min-h-11 rounded border border-line bg-surface-panel px-2 py-1 text-xs text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                          className="min-h-11 rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                         >
                           <option value="FREE">FREE</option>
                           <option value="PRO">PRO</option>
@@ -634,7 +638,7 @@ function AdminDashboard() {
                       <td className="p-3 pr-4 tabular-nums text-ink-mid">
                         {u._count.conversations}
                       </td>
-                      <td className="p-3 pr-4 text-xs tabular-nums text-ink-mid">
+                      <td className="p-3 pr-4 text-role-caption tabular-nums text-ink-mid">
                         {new Date(u.createdAt).toLocaleDateString("en-US")}
                       </td>
                       <td className="p-3">
@@ -642,7 +646,7 @@ function AdminDashboard() {
                           <button
                             type="button"
                             onClick={() => deleteUser(u.id, u.email)}
-                            className="ease-strong inline-flex min-h-11 items-center rounded-md border border-state-danger-line bg-state-danger-bg px-2.5 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                            className="ease-strong inline-flex min-h-11 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-2.5 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                           >
                             Delete
                           </button>
@@ -680,11 +684,13 @@ function GoogleQuotaCard({
   const fill = critical ? "bg-rose-500" : caution ? "bg-amber-500" : "bg-accent-solid";
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-xs text-ink-mid">Google unverified-app slots</p>
-        <p className="text-xs tabular-nums text-ink-mid">
-          <span className={`text-lg font-semibold ${critical ? "text-rose-500" : "text-ink"}`}>
+        <p className="text-role-caption text-ink-mid">Google unverified-app slots</p>
+        <p className="text-role-caption tabular-nums text-ink-mid">
+          <span
+            className={`text-role-head font-semibold ${critical ? "text-rose-500" : "text-ink"}`}
+          >
             {quota.remaining}
           </span>{" "}
           left of {quota.cap}
@@ -700,7 +706,7 @@ function GoogleQuotaCard({
       >
         <div className={`h-full rounded-full ${fill}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-2 text-caption leading-5 text-ink-mid">
+      <p className="mt-2 text-role-caption leading-5 text-ink-mid">
         {quota.consumed} accounts created. Spent over the project lifetime and never reset — CASA
         verification is what removes the ceiling. Approximate: the Cloud console is the authority.
       </p>
@@ -721,18 +727,18 @@ function ProviderConfigCard({ health }: { health: ProviderConfigHealth }) {
   ] as const;
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
-      <p className="text-xs text-ink-mid">Social login configuration</p>
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="text-role-caption text-ink-mid">Social login configuration</p>
       <div className="mt-3 space-y-3">
         {rows.map(([label, cfg]) => {
           const keyBroken = cfg.privateKey?.present && !cfg.privateKey.parses;
           const broken = cfg.enabled && (cfg.missing.length > 0 || keyBroken);
           return (
-            <div key={label} className="rounded-xl border border-line/70 p-3">
+            <div key={label} className="rounded-control border border-line/70 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-sm font-medium text-ink">{label}</span>
+                <span className="text-role-body font-medium text-ink">{label}</span>
                 <span
-                  className={`text-xs font-medium ${
+                  className={`text-role-caption font-medium ${
                     broken ? "text-rose-500" : cfg.enabled ? "text-ink-mid" : "text-ink-dim"
                   }`}
                 >
@@ -740,18 +746,18 @@ function ProviderConfigCard({ health }: { health: ProviderConfigHealth }) {
                 </span>
               </div>
               {cfg.missing.length > 0 && (
-                <p className="mt-1.5 text-caption leading-5 text-ink-mid">
+                <p className="mt-1.5 text-role-caption leading-5 text-ink-mid">
                   Not set: <span className="font-mono text-ink">{cfg.missing.join(", ")}</span>
                 </p>
               )}
               {keyBroken && (
-                <p className="mt-1.5 text-caption leading-5 text-rose-500">
+                <p className="mt-1.5 text-role-caption leading-5 text-rose-500">
                   Private key does not parse as ES256 — {cfg.privateKey?.detail}. A paste that lost
                   its newlines lands here.
                 </p>
               )}
               {cfg.enabled && cfg.missing.length === 0 && !keyBroken && (
-                <p className="mt-1.5 text-caption leading-5 text-ink-mid">
+                <p className="mt-1.5 text-role-caption leading-5 text-ink-mid">
                   All variables set{cfg.privateKey ? ", signing key parses" : ""}.
                 </p>
               )}
@@ -765,9 +771,9 @@ function ProviderConfigCard({ health }: { health: ProviderConfigHealth }) {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
-      <p className="text-xs text-ink-mid">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-ink">{value}</p>
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="text-role-caption text-ink-mid">{label}</p>
+      <p className="mt-1 text-role-head tabular-nums text-ink">{value}</p>
     </div>
   );
 }
@@ -785,7 +791,7 @@ function RouteStat({
     tone === "error" ? "text-rose-600" : tone === "warn" ? "text-state-warn-ink" : "text-ink-mid";
   return (
     <div>
-      <dt className="text-caption uppercase tracking-wide text-ink-dim">{label}</dt>
+      <dt className="text-role-caption uppercase tracking-wide text-ink-dim">{label}</dt>
       <dd className={`mt-0.5 font-medium tabular-nums ${valueTone}`}>{value}</dd>
     </div>
   );
@@ -801,50 +807,50 @@ function UserCard({
   onDelete: (id: string, email: string) => void;
 }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4 text-sm">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4 text-role-body">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden="true"
-            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(user.name || user.email)}`}
+            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(user.name || user.email)}`}
           >
             {senderInitials(user.name || user.email)}
           </span>
           <div className="min-w-0">
             <p className="truncate text-ink">{user.email}</p>
-            <p className="text-xs text-ink-mid">{user.name || "-"}</p>
+            <p className="text-role-caption text-ink-mid">{user.name || "-"}</p>
           </div>
         </div>
         {user.role !== "ADMIN" && (
           <button
             type="button"
             onClick={() => onDelete(user.id, user.email)}
-            className="ease-strong inline-flex min-h-11 shrink-0 items-center rounded-md border border-state-danger-line bg-state-danger-bg px-2.5 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="ease-strong inline-flex min-h-11 shrink-0 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-2.5 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
           >
             Delete
           </button>
         )}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-xs text-ink-mid">
+        <label className="text-role-caption text-ink-mid">
           Role
           <select
             aria-label={`Role for ${user.email}`}
             value={user.role}
             onChange={(e) => onUpdate(user.id, { role: e.target.value })}
-            className="mt-1 block min-h-11 w-full rounded border border-line bg-surface-panel px-2 py-1 text-xs text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+            className="mt-1 block min-h-11 w-full rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
           >
             <option value="USER">USER</option>
             <option value="ADMIN">ADMIN</option>
           </select>
         </label>
-        <label className="text-xs text-ink-mid">
+        <label className="text-role-caption text-ink-mid">
           Plan
           <select
             aria-label={`Plan for ${user.email}`}
             value={user.plan}
             onChange={(e) => onUpdate(user.id, { plan: e.target.value })}
-            className="mt-1 block min-h-11 w-full rounded border border-line bg-surface-panel px-2 py-1 text-xs text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+            className="mt-1 block min-h-11 w-full rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
           >
             <option value="FREE">FREE</option>
             <option value="PRO">PRO</option>
@@ -852,7 +858,7 @@ function UserCard({
           </select>
         </label>
       </div>
-      <div className="mt-3 flex gap-4 text-xs tabular-nums text-ink-mid">
+      <div className="mt-3 flex gap-4 text-role-caption tabular-nums text-ink-mid">
         <span>Turns: {user.messageCount}</span>
         <span>Threads: {user._count.conversations}</span>
         <span>Joined {new Date(user.createdAt).toLocaleDateString("en-US")}</span>

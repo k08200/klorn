@@ -72,7 +72,7 @@ export function AgentActivity() {
         <button
           type="button"
           onClick={loadAgentLogs}
-          className="inline-flex min-h-11 items-center text-sm text-accent-deep transition hover:text-accent-deeper"
+          className="inline-flex min-h-11 items-center text-role-body text-accent-deep transition hover:text-accent-deeper"
         >
           {agentLogsLoading ? t("common.loading") : t("settings.viewRecentActivity")}
         </button>
@@ -81,7 +81,7 @@ export function AgentActivity() {
             {agentLogs.map((log) => (
               <div
                 key={log.id}
-                className="bg-surface-raised/60 border border-line rounded-lg px-3 py-2 text-sm"
+                className="bg-surface-raised/60 border border-line rounded-control px-3 py-2 text-role-body"
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -98,7 +98,7 @@ export function AgentActivity() {
                     }`}
                   />
                   <span className="text-ink-mid flex-1 truncate">{log.summary}</span>
-                  <span className="text-ink-mid text-xs shrink-0">
+                  <span className="text-ink-mid text-role-caption shrink-0">
                     {new Date(log.createdAt).toLocaleString(locale, {
                       month: "short",
                       day: "numeric",
@@ -108,7 +108,7 @@ export function AgentActivity() {
                   </span>
                 </div>
                 {log.tool && (
-                  <span className="text-xs text-ink-dim ml-3.5">
+                  <span className="text-role-caption text-ink-dim ml-3.5">
                     {t("settings.agentLog.toolPrefix", { tool: log.tool })}
                   </span>
                 )}
@@ -124,7 +124,7 @@ export function AgentActivity() {
           type="button"
           onClick={loadLearnedPatterns}
           disabled={patternsLoading}
-          className="inline-flex min-h-11 items-center text-sm text-accent-deep transition hover:text-accent-deeper disabled:opacity-50"
+          className="inline-flex min-h-11 items-center text-role-body text-accent-deep transition hover:text-accent-deeper disabled:opacity-50"
         >
           {patternsLoading
             ? t("settings.state.analyzing")
@@ -135,7 +135,7 @@ export function AgentActivity() {
         {patternsLoaded && (
           <div className="mt-3">
             {learnedPatterns.length === 0 ? (
-              <p className="text-xs text-ink-dim">{t("settings.patterns.notEnough")}</p>
+              <p className="text-role-caption text-ink-dim">{t("settings.patterns.notEnough")}</p>
             ) : (
               <div className="space-y-2">
                 {learnedPatterns.slice(0, 8).map((p, i) => {
@@ -156,15 +156,15 @@ export function AgentActivity() {
                   return (
                     <div
                       key={i}
-                      className="bg-surface-raised/60 border border-line rounded-lg px-3 py-2 text-sm flex items-start gap-2"
+                      className="bg-surface-raised/60 border border-line rounded-control px-3 py-2 text-role-body flex items-start gap-2"
                     >
                       <span
-                        className={`shrink-0 rounded border px-1 py-0.5 text-caption font-medium ${typeColor}`}
+                        className={`shrink-0 rounded border px-1 py-0.5 text-role-caption font-medium ${typeColor}`}
                       >
                         {confidenceLabel}
                       </span>
                       <span className="text-ink-mid flex-1">{p.description}</span>
-                      <span className="shrink-0 text-caption text-ink-dim">{p.evidence}×</span>
+                      <span className="shrink-0 text-role-caption text-ink-dim">{p.evidence}×</span>
                     </div>
                   );
                 })}

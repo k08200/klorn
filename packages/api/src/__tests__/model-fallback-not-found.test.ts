@@ -16,10 +16,8 @@ describe("isModelUnavailableError — provider returned 404 / model retired", ()
     expect(isModelUnavailableError(new Error("404 No endpoints found"))).toBe(true);
   });
 
-  it("matches OpenRouter's 'No endpoints found for ...' phrasing", () => {
-    expect(
-      isModelUnavailableError(new Error("No endpoints found for google/gemini-2.5-flash:free.")),
-    ).toBe(true);
+  it("matches a proxy-style 'No endpoints found for ...' phrasing (openai-compat gateways)", () => {
+    expect(isModelUnavailableError(new Error("No endpoints found for qwen3:8b."))).toBe(true);
   });
 
   it("matches generic 'model not found' and 'no allowed providers' messages", () => {

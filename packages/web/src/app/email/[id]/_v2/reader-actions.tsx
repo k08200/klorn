@@ -145,7 +145,7 @@ function KeyHint({ k, onAccent = false }: { k: string; onAccent?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`rounded-[4px] border px-1 font-sans text-caption leading-4 ${
+      className={`rounded-chip border px-1 font-sans text-role-caption leading-4 ${
         onAccent ? "border-accent-solid-ink/40" : "border-line-strong text-ink-muted"
       }`}
     >
@@ -167,7 +167,7 @@ export function ReaderActionsRow(props: ReaderActionsProps) {
     <div
       role="toolbar"
       aria-label={t("mailV2.reader.actions")}
-      className="flex flex-wrap items-center gap-2 max-md:hidden"
+      className="flex flex-wrap items-center gap-2 max-rail:hidden"
     >
       <Button variant="primary" title={hint(t("keys.reply"), "R")} onClick={props.onReply}>
         {t("keys.reply")}
@@ -208,7 +208,7 @@ export function ReaderActionsRow(props: ReaderActionsProps) {
 }
 
 /**
- * Below 768px: Reply and Archive stay in reach above the tab bar; the lane,
+ * Below 600px (the bottom tab bar's range): Reply and Archive stay in reach above the tab bar; the lane,
  * the reminder and the rest open upward from More. 44px targets throughout.
  * The bar sits 74px plus the home-indicator inset above the bottom, clear of
  * the tab bar on an iPhone, and stops 80px short of the right edge so it never
@@ -223,7 +223,7 @@ export function ReaderBottomBar(props: ReaderActionsProps) {
     <div
       role="toolbar"
       aria-label={t("mailV2.reader.actions")}
-      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-4 right-20 z-30 flex items-center gap-1 rounded-control border border-line bg-surface-elevated p-1 shadow-menu md:hidden"
+      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-4 right-20 z-30 flex items-center gap-1 rounded-control border border-line bg-surface-elevated p-1 shadow-menu rail:hidden"
     >
       <Button
         variant="primary"
