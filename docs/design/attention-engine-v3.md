@@ -188,7 +188,7 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
 
 ### (5) Policy v3.0: exact rules, budget, ranking (P3)
 
-The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries `policyVersion: "v3.0"`.
+The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries the `policyVersion` that decided it. The live version is **v3.1**, and v3.0 stays in `policy.ts` for replay and for items it already decided. The rules below are v3.0; "Policy v3.1" after them lists what changed.
 
 **Evaluation.** The result is the lane before the budget. The first match wins:
 
@@ -205,6 +205,34 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
 5. **INFO**: `transaction` is present, or `kind` is notification or receipt.
 6. **SILENT**: `addressedTo` is bulk, or `kind` is newsletter or promotion.
 7. Otherwise **QUEUE**, the default lane.
+
+**Policy v3.1 (2026-11-07, the live version).** It makes four changes to the rules above, measured on P1's 60 runs (below):
+- **PUSH before MEETING.** Rule 3 is checked before rule 2. A due-soon ask, or a trusted risk, interrupts even when the mail carries an event; an event with nothing urgent is still MEETING. This fixes cold-start urgent recall: an urgent invite went to MEETING, which notifies outside the budget and lacks the PUSH reason.
+- **Risk-only PUSH trusts an authenticated sender.** A payment/security risk PUSHes for a VIP, or for any sender whose From passed DMARC (`senderAuthenticated` true).
+  - A failed verdict is never trusted.
+  - With no verdict (null), only a VIP counts. Spoofing a domain fails DMARC.
+  - What remains is a lookalike domain that passes its own DMARC, and the model's `phishing_suspect` is the defence there.
+  - The budget and the stranger share still apply.
+- **A notification may interrupt through a due-soon ask**, unless the deterministic automated-sender signal is on (no-reply, notifications@). Newsletter, promotion and receipt still never do.
+- **SILENT is clear marketing only** (the LOCKED narrow-SILENT rule): `kind` promotion. Newsletters and other bulk mail are filed in INFO, still visible. This replaces rule 6, and rule 5 gains newsletter and bulk.
+
+Measured on P1's runs: 4 models × 3 runs per set, scored against the labels reconciled on 2026-11-04, with no relationship data (cold start).
+
+| | gate PUSH recall | gate PUSH precision | real PUSH precision | gate SILENT precision | real SILENT precision (runs < 90%) | real overall |
+|---|---|---|---|---|---|---|
+| v3.0 | 59.0% (92/156) | 100% | 100% | 91.7% | 86.4% (11/12) | 69.3% |
+| v3.1 | 84.6%–92.3% | 100% | 87.8%–100% | 99.1% | 93.0% (3/12) | 57.2%–58.0% |
+
+- The ranges are bounded by the DMARC rule. The eval sets carry no authentication data, so "VIP only" (84.6%, no false PUSH) and "any sender" (92.3%) are its bounds. Live, a sender that passes DMARC sits at the upper bound.
+- Real-set PUSH recall is 36/48 = 75.0% under every variant. The missed real items are outside the 24h window.
+- No variant PUSHed or MEETINGed a mail whose facts carried `phishing_suspect`.
+- The only false PUSH at the upper bound is one item in 5 of 12 runs: c8e80651, a Namecheap "sign-in from an unauthorized device — please verify". It is labelled QUEUE (the founder files security confirmations under QUEUE, 2026-06-30). In the other 7 runs the model also flagged `phishing_suspect`, which vetoes PUSH. Facts v1 carry the same `security_alert` for it as for eval-046 (a card "verify unusual transaction", labelled PUSH), so the policy cannot separate them.
+- Narrow SILENT lowers real overall accuracy, because the founder's labels disagree on newsletters.
+  - Some product-update newsletters are labelled QUEUE (Resend, a Namecheap CEO letter, a Reddit digest).
+  - Others are labelled SILENT (TechCrunch, Morning Brew, Indie Hackers). No rule on `kind` matches both.
+  - Every error narrow SILENT adds is SILENT → INFO, the visible direction.
+  - SILENT precision, the over-suppression risk the LOCKED rule exists for, rises.
+- Not changed: an ask due in more than 24h (eval-036 "due Friday") is QUEUE under every variant.
 
 Floors:
 - `ambiguous` never lands in SILENT or INFO. It goes to QUEUE, like v2's low-confidence rule.
@@ -291,15 +319,17 @@ A test runs both paths over the cross product of keyword signals (4,368 mails), 
 - (a) nothing v2 shows becomes SILENT, except bulk scheduling mail;
 - (b) every v2 PUSH stays a PUSH candidate, except list mail;
 - (c) machine, marketing and spam mail never become PUSH candidates;
-- (d) nothing becomes a PUSH candidate that v2 did not push. In keyword facts, an urgent word gives the ask a due time only where v2's keyword rule would have pushed (an investor-looking sender). Elsewhere the ask has no due time, so the model-down path never interrupts more, or for more senders, than v2 did.
+- (d) nothing becomes a PUSH candidate that v2 did not notify for (v2 PUSH, or v2 MEETING, which notifies too). In keyword facts, an urgent word gives the ask a due time only where v2's keyword rule would have pushed (an investor-looking sender). Elsewhere the ask has no due time, so the model-down path never interrupts more, or for more senders, than v2 did.
 
 The documented divergences (`parity.ts`), counted on that corpus:
 
 | Class | Change | Why |
 |---|---|---|
-| bulkScheduling | MEETING → QUEUE / INFO / SILENT (449) | MEETING requires "not bulk". v2 let bulk invites into a lane that notifies (#1497). |
+| bulkScheduling | MEETING → QUEUE / INFO (449) | MEETING requires "not bulk". v2 let bulk invites into a lane that notifies (#1497). |
 | machineListFiled | QUEUE → INFO (117) | Machine list mail with nothing asked is filed, and stays visible. |
 | listNeverInterrupts | PUSH → QUEUE (52) | PUSH requires mail addressed to the user. |
+| pushBeforeMeeting | MEETING → PUSH (68) | v3.1: a due-soon ask wins over the event. v2 notified for it as MEETING already, so guarantee (d) counts a v2 MEETING as notified. |
+| narrowSilent | SILENT → INFO (132) | v3.1: SILENT is clear marketing only. Newsletters and other bulk mail are filed, and stay visible. |
 
 These are cross-product counts, not prevalence. The replay reports prevalence on real mail. In prod, 331 of the 2,378 email decisions in the 30 days to 2026-10-31 came from the keyword fallback.
 
@@ -315,7 +345,7 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
   - the legacy sweep stand-down;
   - the claim-row dedupe.
 
-**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--facts=stored|keyword] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls.
+**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--facts=stored|keyword] [--policy-version=v3.0|v3.1] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls.
 - `--facts=stored`, the default, decides each item the way the live path would: stored LLM facts go to the policy, otherwise the v2 lane or the keyword parity rule applies.
 - `--facts=keyword` gives every item keyword facts. That is the model-down estimate.
 - For a v2 PUSH row with no stored relationship, the CLI loads the relationship from the database, as the live path does for the trusted reserve. A human's or an agent's lane is kept, as live keeps it.
