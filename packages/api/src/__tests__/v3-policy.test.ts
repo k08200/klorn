@@ -7,10 +7,22 @@
 
 import { describe, expect, it } from "vitest";
 import { toLiveTier } from "../judge/tiers.js";
-import { laneFromFactsV3, POLICY_VERSION } from "../judge/v3/policy.js";
-import type { FactsV1 } from "../judge/v3/policy-types.js";
+import {
+  laneFromFactsV3,
+  POLICY_VERSION,
+  POLICY_VERSIONS,
+  RISK_TRUST_MIN_HISTORY_MS,
+  RISK_TRUST_MIN_INBOUND,
+} from "../judge/v3/policy.js";
+import type { FactsV1, RelationshipSnapshot } from "../judge/v3/policy-types.js";
 import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
-import { genFacts, genRelationship, genTierOrNull, mulberry32 } from "./helpers/v3-facts-gen.js";
+import {
+  genFacts,
+  genRelationship,
+  genTierOrNull,
+  mulberry32,
+  pick,
+} from "./helpers/v3-facts-gen.js";
 
 const NOW = new Date("2026-10-31T09:00:00.000Z");
 const HOUR = 3_600_000;
@@ -207,21 +219,86 @@ describe("laneFromFactsV3 — rules", () => {
     }
   });
 
-  it("v3.1: a risk-only PUSH also trusts a From that passed DMARC, never one that failed", () => {
+  // A sender that has mailed the user often, for a while (v3.1 risk trust).
+  const known = (over: Partial<RelationshipSnapshot> = {}): RelationshipSnapshot => ({
+    ...noRelationship,
+    inboundCount: RISK_TRUST_MIN_INBOUND,
+    firstSeenAt: new Date(NOW.getTime() - RISK_TRUST_MIN_HISTORY_MS - HOUR).toISOString(),
+    ...over,
+  });
+
+  it("v3.1: a risk-only PUSH trusts a known correspondent whose From passed DMARC", () => {
     const risky = facts({ risk: ["payment_failed"], kind: "notification" });
-    expect(decide(risky, { senderAuthenticated: true }).lane).toBe("PUSH");
-    expect(decide(risky, { senderAuthenticated: true }).reasons[0]).toMatchObject({
+    const ok = decide(risky, { senderAuthenticated: true, relationship: known() });
+    expect(ok.lane).toBe("PUSH");
+    expect(ok.reasons[0]).toMatchObject({
       code: "risk",
       params: { risk: "payment_failed", trusted: true },
     });
-    for (const senderAuthenticated of [false, null, undefined]) {
-      expect(decide(risky, { senderAuthenticated }).lane).toBe("QUEUE");
-    }
     // v3.0 trusted a VIP only.
-    expect(decide(risky, { senderAuthenticated: true, version: "v3.0" }).lane).toBe("QUEUE");
-    // Phishing still vetoes it.
+    expect(
+      decide(risky, { senderAuthenticated: true, relationship: known(), version: "v3.0" }).lane,
+    ).toBe("QUEUE");
+  });
+
+  it("v3.1: DMARC alone is not trust: a fresh webmail account or an attacker's own domain passes it", () => {
+    const risky = facts({ risk: ["security_alert"], kind: "notification" });
+    const cases: Array<[string, Partial<Parameters<typeof decide>[1]>]> = [
+      ["no relationship", { senderAuthenticated: true, relationship: null }],
+      ["too few mails", { senderAuthenticated: true, relationship: known({ inboundCount: 2 }) }],
+      [
+        "too recent",
+        {
+          senderAuthenticated: true,
+          relationship: known({
+            firstSeenAt: new Date(NOW.getTime() - 2 * 24 * HOUR).toISOString(),
+          }),
+        },
+      ],
+      [
+        "no first-seen date",
+        { senderAuthenticated: true, relationship: known({ firstSeenAt: null }) },
+      ],
+      ["DMARC failed", { senderAuthenticated: false, relationship: known() }],
+      ["no verdict", { senderAuthenticated: null, relationship: known() }],
+    ];
+    for (const [name, extra] of cases) {
+      const d = decide(risky, extra);
+      expect(d.lane, name).toBe("QUEUE");
+      expect(d.reasons[0]?.params.trusted, name).toBe(false);
+    }
+  });
+
+  it("v3.1: never risk trust for an ambiguous fact set, a promotion or a newsletter", () => {
+    for (const f of [
+      facts({ risk: ["payment_failed"], kind: "notification", ambiguous: true }),
+      facts({ risk: ["payment_failed"], kind: "promotion" }),
+      facts({ risk: ["payment_failed"], kind: "newsletter" }),
+    ]) {
+      expect(decide(f, { senderAuthenticated: true, relationship: known() }).lane).toBe("QUEUE");
+    }
+  });
+
+  it("a risk under a phishing suspicion is QUEUE and never reads as trusted", () => {
     const phish = facts({ risk: ["payment_failed", "phishing_suspect"], kind: "notification" });
-    expect(decide(phish, { senderAuthenticated: true }).lane).toBe("QUEUE");
+    for (const relationship of [known(), { ...noRelationship, vip: true }]) {
+      const d = decide(phish, { senderAuthenticated: true, relationship });
+      expect(d.lane).toBe("QUEUE");
+      expect(d.reasons[0]).toMatchObject({ code: "risk", params: { trusted: false } });
+    }
+  });
+
+  it("v3.1: a notification ask whose From failed DMARC never interrupts", () => {
+    const ask = facts({ kind: "notification", asks: [replyAsk(inHours(1))] });
+    expect(decide(ask, { senderAuthenticated: false }).lane).toBe("QUEUE");
+    expect(decide(ask, { senderAuthenticated: null }).lane).toBe("PUSH");
+  });
+
+  it("v3.1: spam keeps an urgent invite out of PUSH and MEETING", () => {
+    const event = { proposedTimes: [inHours(3)], hasInvite: true, conflict: null };
+    const d = decide(facts({ event, asks: [replyAsk(inHours(1))] }), { spam: true });
+    expect(d.lane).toBe("QUEUE");
+    expect(d.reasons[0]?.code).toBe("spam_floor");
   });
 
   it("PUSH needs addressedTo me_direct or me_cc", () => {
@@ -398,6 +475,7 @@ describe("laneFromFactsV3 — rules", () => {
 const ITERATIONS = 5000;
 const LIVE = new Set(["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"]);
 
+/** Seeded inputs over every policy version, DMARC verdict and automated-sender signal. */
 function* cases(seed: number) {
   const rng = mulberry32(seed);
   for (let i = 0; i < ITERATIONS; i++) {
@@ -409,10 +487,30 @@ function* cases(seed: number) {
         pinnedTier: genTierOrNull(rng, 0.08),
         manualOverrideTier: genTierOrNull(rng, 0.08),
         spam: rng() < 0.1,
+        automatedSender: rng() < 0.2,
+        senderAuthenticated: pick(rng, [true, false, null] as const),
+        version: pick(rng, POLICY_VERSIONS),
         decidedAt: NOW,
       },
     };
   }
+}
+
+/** The risk trust the policy applies, restated from the doc for the property. */
+function riskTrusted(
+  input: ReturnType<typeof cases> extends Generator<infer C> ? C["input"] : never,
+) {
+  const { facts: f, relationship: rel, senderAuthenticated: auth } = input;
+  if (auth === false) return false;
+  if (rel?.vip === true) return true;
+  if (input.version !== "v3.1" || auth !== true) return false;
+  if (f.ambiguous || f.kind === "promotion" || f.kind === "newsletter") return false;
+  const firstSeen = rel?.firstSeenAt ? Date.parse(rel.firstSeenAt) : Number.NaN;
+  return (
+    (rel?.inboundCount ?? 0) >= RISK_TRUST_MIN_INBOUND &&
+    Number.isFinite(firstSeen) &&
+    NOW.getTime() - firstSeen >= RISK_TRUST_MIN_HISTORY_MS
+  );
 }
 
 const dueWithin24h = (f: FactsV1) =>
@@ -427,7 +525,7 @@ describe("laneFromFactsV3 — properties", () => {
       const d = laneFromFactsV3(input);
       expect(LIVE.has(d.lane), `case ${i}`).toBe(true);
       expect(d.reasons.length, `case ${i}`).toBeGreaterThan(0);
-      expect(d.policyVersion).toBe(POLICY_VERSION);
+      expect(d.policyVersion).toBe(input.version);
     }
   });
 
@@ -450,8 +548,7 @@ describe("laneFromFactsV3 — properties", () => {
       if (!d.pushCandidate) continue;
       const f = input.facts;
       const risky = f.risk.includes("payment_failed") || f.risk.includes("security_alert");
-      const trusted = input.relationship?.vip === true;
-      expect((risky && trusted) || dueWithin24h(f), `case ${i}`).toBe(true);
+      expect((risky && riskTrusted(input)) || dueWithin24h(f), `case ${i}`).toBe(true);
       expect(f.risk.includes("phishing_suspect"), `case ${i}`).toBe(false);
       expect(["me_direct", "me_cc"], `case ${i}`).toContain(f.addressedTo);
       expect(input.spam, `case ${i}`).toBe(false);

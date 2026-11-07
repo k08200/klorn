@@ -7,7 +7,7 @@
  *  1. A manual override (replay only: live, the upsert preserves it) or a pin
  *     keeps its lane. The other v2 precedence sources (marketing fast-path,
  *     sender prior, learned rule) keep the v2 lane with their reason.
- *  2. LLM facts → policy v3.0.
+ *  2. LLM facts → the policy (the live version, or the one replay names).
  *  3. No LLM facts → the v2 lane, unless the v2 judge itself fell back to
  *     keywords: then keyword facts merged with the certain pre-facts.
  */
@@ -71,7 +71,7 @@ export { V2_POLICY_VERSION } from "./policy.js";
 export interface LiveDecision {
   /** The lane before the interrupt budget. */
   lane: LiveTier;
-  /** "v3.0" when the policy decided; "v2" when the v2 lane stood for missing facts. */
+  /** The policy version that decided ("v3.0", "v3.1"); "v2" when the v2 lane stood for missing facts. */
   policyVersion: PolicyVersion | typeof V2_POLICY_VERSION;
   /** reasons[0] decides the lane; empty for "v2". */
   reasons: PolicyReason[];
@@ -87,6 +87,13 @@ export interface LiveDecision {
   importance: number;
   /** Trusted for the slot reserve: a VIP, or someone the user wrote to. */
   trusted: boolean;
+  /**
+   * The MEETING reasons, when this PUSH carries an event that v3.0 would have
+   * shown as MEETING (v3.1 checks PUSH first). If the interrupt budget holds
+   * the PUSH, the mail notifies as that MEETING instead, outside the budget,
+   * exactly as v3.0 did: an urgent invite is never worse off than before.
+   */
+  meetingFallback: PolicyReason[] | null;
 }
 
 /** v2 sources that short-circuit before facts, with their reason code. */
@@ -147,6 +154,7 @@ export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
       basis: "v2",
       due: null,
       threadTurn: null,
+      meetingFallback: null,
       ...common,
     };
   }
@@ -161,7 +169,7 @@ export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
   });
   return {
     lane: decision.lane,
-    policyVersion: POLICY_VERSION,
+    policyVersion: decision.policyVersion,
     reasons: decision.reasons,
     pushCandidate: decision.pushCandidate,
     budgeted: true,
@@ -169,8 +177,16 @@ export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
     basis: input.basis.kind === "llm" ? "llm" : "keyword",
     due: rankDue(facts, input.decidedAt),
     threadTurn: facts.threadTurn,
+    meetingFallback: decision.lane === "PUSH" ? meetingFallbackOf(facts) : null,
     ...common,
   };
+}
+
+/** The MEETING a v3.0 ordering would have given this mail: an event, not bulk, no phishing. */
+function meetingFallbackOf(facts: FactsV1): PolicyReason[] | null {
+  if (!facts.event || facts.addressedTo === "bulk") return null;
+  if (facts.risk.includes("phishing_suspect")) return null;
+  return [reason("event", { fact: "event", params: { conflict: facts.event.conflict } })];
 }
 
 type PrecedenceDecision = Omit<LiveDecision, "importance" | "trusted">;
@@ -185,7 +201,7 @@ function precedenceDecision(input: LiveDecisionInput): PrecedenceDecision | null
   if (!code) return null;
   return {
     lane: input.v2Tier,
-    policyVersion: POLICY_VERSION,
+    policyVersion: input.policyVersion ?? POLICY_VERSION,
     reasons: [reason(code, { params: { tier: input.v2Tier } })],
     pushCandidate: false,
     budgeted: !unbudgeted,
@@ -194,6 +210,7 @@ function precedenceDecision(input: LiveDecisionInput): PrecedenceDecision | null
     basis: "v2",
     due: null,
     threadTurn: null,
+    meetingFallback: null,
   };
 }
 

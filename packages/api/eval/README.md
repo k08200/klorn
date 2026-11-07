@@ -730,17 +730,15 @@ The trade-off is a founder decision: interrupt recall on a cold account vs. the 
 
 ### P3 policy v3.1 on the same facts (2026-11-07)
 
-P3 shipped v3.1 in response to the two findings above: cold-start urgent recall, and SILENT precision under the LOCKED narrow-SILENT rule. The rules and the full table are in docs/design/attention-engine-v3.md §3(5) "Policy v3.1". `--policy=p3` now replays v3.1, and `--policy=p3-v3.0` pins v3.0. Summed over the 12 runs per set:
+P3 shipped v3.1 in response to the two findings above: cold-start urgent recall, and SILENT precision under the LOCKED narrow-SILENT rule. The rules are in docs/design/attention-engine-v3.md §3(5) "Policy v3.1". `--policy=p3` now replays v3.1, and `--policy=p3-v3.0` pins v3.0. Summed over the 12 runs per set:
 
 | | gate PUSH recall | real PUSH precision | gate / real SILENT precision | real overall |
 |---|---|---|---|---|
 | v3.0 | 92/156 (59.0%) | 36/36 | 91.7% / 86.4% | 69.3% |
-| v3.1, risk trust = VIP only (lower bound) | 132/156 (84.6%) | 36/36 | 99.1% / 93.0% | 58.0% |
-| v3.1, risk trust = any sender (upper bound) | 144/156 (92.3%) | 36/41 | 99.1% / 93.0% | 57.2% |
+| v3.1 | 132/156 (84.6%) | 36/36 | 99.1% / 93.0% | 58.0% |
 
-- Live, v3.1 trusts a risk from a VIP or from a From that passed DMARC. The eval mails carry no authentication data, hence the two bounds.
-- The 5 false PUSH at the upper bound are all c8e80651 (a Namecheap sign-in confirmation, labelled QUEUE).
-- No run PUSHed or MEETINGed a `phishing_suspect` mail.
+- v3.1 also trusts a risk-only PUSH from a known correspondent (3+ mails over 30+ days) whose From passed DMARC. The eval mails carry no relationship or DMARC data, so that rule cannot fire here. Its ceiling on the gate set is eval-046 in all 12 runs (92.3%).
+- No run PUSHed or MEETINGed a `phishing_suspect` mail (by construction: the policy vetoes on the flag). The eval sets hold no adversarial phishing mail yet, so the flag's recall is unmeasured.
 
 ### Reproduce
 

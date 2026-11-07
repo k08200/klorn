@@ -506,7 +506,7 @@ describe("replay re-parses stored facts with the production parser", () => {
   });
 });
 
-describe("replay under P3's production policy (v3.0)", () => {
+describe("replay under P3's production policy (live v3.1, and v3.0 pinned)", () => {
   const facts = (over: Record<string, unknown>) => ({
     asks: [],
     addressedTo: "me_direct" as const,
@@ -527,6 +527,21 @@ describe("replay under P3's production policy (v3.0)", () => {
     ],
   });
 
+  it("p3 runs the live version and p3-v3.0 pins v3.0: a bulk newsletter is INFO vs SILENT", async () => {
+    const { rescore } = await import("../eval-v3/analysis.js");
+    const news = run(facts({ kind: "newsletter", addressedTo: "bulk" }));
+    const email = new Map([["a", EMAIL]]);
+    const truth = new Map([["a", "SILENT" as const]]);
+    expect(rescore(news, truth, email, "p3").rows[0]).toMatchObject({
+      predicted: "INFO",
+      rule: "v3.1:kind",
+    });
+    expect(rescore(news, truth, email, "p3-v3.0").rows[0]).toMatchObject({
+      predicted: "SILENT",
+      rule: "v3.0:bulk",
+    });
+  });
+
   it("a security risk PUSHes under the doc rule but needs a trusted sender under P3", async () => {
     const { rescore } = await import("../eval-v3/analysis.js");
     const risk = run(facts({ risk: ["security_alert"] }));
@@ -542,7 +557,7 @@ describe("replay under P3's production policy (v3.0)", () => {
     expect(v30.rule).toBe("v3.0:risk");
   });
 
-  it("v3.0 keeps an automated sender's due-today ask out of PUSH, but not a person's", async () => {
+  it("P3 keeps an automated sender's due-today ask out of PUSH, but not a person's", async () => {
     const { rescore } = await import("../eval-v3/analysis.js");
     const ask = {
       kind: "review",

@@ -83,6 +83,11 @@ export function parityViolation(input: {
     return "lostPush";
   }
   if (input.v3PushCandidate && (facts.kind !== "personal" || input.spam)) return "machinePush";
-  if (input.v3PushCandidate && v2 !== "PUSH" && v2 !== "MEETING") return "newPush";
+  // A v2 MEETING notified already: a v3.1 PUSH over it is no new interrupt, but
+  // only when it is the documented case (an event the due-soon ask won over).
+  const notified =
+    v2 === "PUSH" ||
+    (v2 === "MEETING" && PARITY_DIVERGENCES.pushBeforeMeeting(v2, input.v3, facts));
+  if (input.v3PushCandidate && !notified) return "newPush";
   return null;
 }

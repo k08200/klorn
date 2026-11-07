@@ -241,6 +241,7 @@ afterEach(() => {
   delete process.env.JUDGE_V3_POLICY;
   delete process.env.JUDGE_V3_SHADOW;
   delete process.env.JUDGE_V3_PUSH_BUDGET;
+  delete process.env.JUDGE_V3_POLICY_VERSION;
 });
 
 describe("flag off (default): the push path is unchanged", () => {
@@ -560,6 +561,34 @@ describe("lanes from facts, for a user under the policy", () => {
     ];
     expect(mail.emailId).toBe("e1");
     expect(opts).toMatchObject({ v2Tier: "PUSH", deadlineMs: 20_000 });
+  });
+
+  it("an urgent invite past the budget notifies as the MEETING v3.0 would have shown, not held silent", async () => {
+    process.env.JUDGE_V3_PUSH_BUDGET = "1";
+    seed();
+    judgedAs("PUSH");
+    await judge("e1");
+    judgedAs("MEETING");
+    const event = { proposedTimes: [], hasInvite: true, conflict: null };
+    extractFactsForDecision.mockResolvedValueOnce(liveFacts({ ...dueSoon(), event }));
+    expect(await judge("e2", {}, { liveRaw: raw("e2") })).toBe("MEETING");
+    expect(item("e2")).toMatchObject({ tier: "MEETING", heldAt: null });
+    const reasons = (item("e2")?.v3Decision as { reasons: { code: string }[] }).reasons;
+    expect(reasons[0]?.code).toBe("event");
+    // It rang, outside the budget: one slot spent today, two notifications.
+    expect(slotKeys()).toHaveLength(1);
+    expect(sendPushNotification).toHaveBeenCalledTimes(2);
+  });
+
+  it("JUDGE_V3_POLICY_VERSION=v3.0 rolls the live rules back without a redeploy", async () => {
+    process.env.JUDGE_V3_POLICY_VERSION = "v3.0";
+    seed();
+    judgedAs("MEETING");
+    const event = { proposedTimes: [], hasInvite: true, conflict: null };
+    extractFactsForDecision.mockResolvedValueOnce(liveFacts({ ...dueSoon(), event }));
+    // v3.0 checks MEETING before PUSH.
+    expect(await judge("e1", {}, { liveRaw: raw("e1") })).toBe("MEETING");
+    expect(item("e1")?.v3PolicyVersion).toBe("v3.0");
   });
 
   it("no LLM facts (timeout) keeps the v2 lane, still under the budget", async () => {

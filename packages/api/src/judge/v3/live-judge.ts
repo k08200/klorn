@@ -20,6 +20,7 @@ import { firewallBellRow, firewallPushGatesPass } from "../firewall-push.js";
 import type { StaticTierReasonKey } from "../tier-reason-strings.js";
 import { toLiveTier } from "../tiers.js";
 import { findAttentionFacts } from "./facts-store.js";
+import { judgeV3LivePolicyVersion } from "./flags.js";
 import { importancePrior } from "./importance.js";
 import {
   basisFromLive,
@@ -90,6 +91,7 @@ export async function planV3Write(input: V3PlanInput): Promise<V3WritePlan> {
     basis,
     decidedAt: now,
     senderAuthenticated,
+    policyVersion: judgeV3LivePolicyVersion(),
   });
   const decision = await withSenderTrust(input, decided, basis, senderAuthenticated, now);
   const plan = await planLane(
@@ -173,6 +175,17 @@ async function planPush(
   });
   if (admission.status !== "held") {
     return { ...quiet, push: { kind: "deliver", notification: admission.notification } };
+  }
+  // An urgent invite (v3.1 checks PUSH before MEETING) notifies as the MEETING
+  // v3.0 would have shown, outside the budget, rather than being held silent.
+  if (decision.meetingFallback) {
+    const meeting = { ...decision, lane: "MEETING" as const, reasons: decision.meetingFallback };
+    return {
+      tier: "MEETING",
+      reason: laneReason(meeting, toLiveTier(input.judgement.tier), input.judgement.reason),
+      v3: v3ItemFields(meeting, null),
+      push: { kind: "meeting" },
+    };
   }
   // Ids only: an IMAP gmailId embeds the mailbox address.
   console.log(

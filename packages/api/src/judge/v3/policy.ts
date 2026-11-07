@@ -1,6 +1,6 @@
 /**
- * Policy v3: lanes from facts (docs/design/attention-engine-v3.md §3(4),
- * "Policy v3.0: exact evaluation").
+ * Policy v3: lanes from facts (docs/design/attention-engine-v3.md §3(5)). The
+ * rules below are v3.0; RULES lists what v3.1, the live version, changes.
  *
  * Pure and deterministic. It never reads a calibrated probability: the lane
  * follows from facts, relationship and the user's own pins/overrides. The
@@ -23,8 +23,8 @@
  *   4. INFO     transaction record, notification/receipt
  *   5. SILENT   bulk, newsletter/promotion
  *   6. QUEUE    default
- * Floors: ambiguous never SILENT/INFO; spam never PUSH/MEETING.
- * phishing_suspect never lands PUSH or MEETING and is surfaced as a reason.
+ * Floors: ambiguous never SILENT/INFO; spam never PUSH/MEETING;
+ * phishing_suspect never PUSH/MEETING (and is surfaced as a reason).
  */
 
 import type { LiveTier } from "@klorn/contract";
@@ -43,10 +43,16 @@ export const POLICY_VERSION: PolicyVersion = "v3.1";
  * v3.1 (2026-11-07, measured on P1's 60 runs):
  *  - pushBeforeMeeting: a due-soon ask or a trusted risk interrupts even when
  *    the mail carries an event (cold-start urgent recall);
- *  - riskTrustsAuthenticated: a risk-only PUSH also trusts a From that passed
- *    DMARC, not only a VIP. A failed or missing verdict still needs a VIP;
- *  - notificationAsks: a notification may interrupt through a due-soon ask; an
- *    automated sender (no-reply, notifications@) still never does;
+ *  - riskTrustsAuthenticated: a risk-only PUSH also trusts a known
+ *    correspondent whose From passed DMARC: one that has mailed the user at
+ *    least RISK_TRUST_MIN_INBOUND times, the first at least
+ *    RISK_TRUST_MIN_HISTORY_MS before. DMARC alone is not enough: a fresh
+ *    webmail account or an attacker's own domain passes it. Never for an
+ *    ambiguous fact set or a promotion/newsletter. A failed or missing
+ *    verdict still needs a VIP;
+ *  - notificationAsks: a notification may interrupt through a due-soon ask,
+ *    unless the sender is automated (no-reply, notifications@) or its From
+ *    failed DMARC;
  *  - narrowSilent: SILENT is clear marketing only (the LOCKED rule): a
  *    promotion. Newsletters and other bulk mail are filed in INFO.
  */
@@ -56,6 +62,10 @@ interface PolicyRules {
   notificationAsks: boolean;
   narrowSilent: boolean;
 }
+
+/** riskTrustsAuthenticated: how much history makes an authenticated sender known. */
+export const RISK_TRUST_MIN_INBOUND = 3;
+export const RISK_TRUST_MIN_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
 
 const RULES: Readonly<Record<PolicyVersion, PolicyRules>> = {
   "v3.0": {
@@ -138,7 +148,9 @@ interface Match {
 }
 
 export function laneFromFactsV3(input: PolicyInput): PolicyDecision {
-  const version = input.version ?? POLICY_VERSION;
+  // An unknown version (never from a typed caller) runs the live rules.
+  const version: PolicyVersion =
+    input.version && Object.hasOwn(RULES, input.version) ? input.version : POLICY_VERSION;
   const precedence = precedenceMatch(input);
   const matched = precedence ?? applyFloors(matchFacts(input, RULES[version]), input);
   const flagged = matched.reasons.some((r) => r.params.risk === "phishing_suspect");
@@ -178,8 +190,9 @@ function precedenceMatch(input: PolicyInput): Match | null {
 function matchFacts(input: PolicyInput, rules: PolicyRules): Match {
   const f = input.facts;
   const decidedAt = input.decidedAt ?? new Date();
-  const trusted = trustedSender(input.relationship, input.senderAuthenticated ?? null, rules);
-  const push = pushMatch(f, trusted, decidedAt, input.automatedSender === true, rules);
+  const auth = input.senderAuthenticated ?? null;
+  const trusted = trustedSender(f, input.relationship, auth, decidedAt, rules);
+  const push = pushMatch(f, { trusted, auth }, decidedAt, input.automatedSender === true, rules);
   if (rules.pushBeforeMeeting && push) return push;
   if (f.event && f.addressedTo !== "bulk") {
     return only(
@@ -197,21 +210,34 @@ function matchFacts(input: PolicyInput, rules: PolicyRules): Match {
 }
 
 /**
- * Relationship trust for a risk with no evidence quote: VIP only (an
+ * Relationship trust for a risk with no evidence quote. v3.0: VIP only (an
  * investor/customer label or a sender pinned to PUSH). Not "the user wrote to
  * them": sent-mail history also holds Klorn's unattended auto-replies, so an
- * attacker could earn it. SentMessage.origin (#1591) marks new Klorn sends, but
- * legacy rows stay null and read as the user's; widening is a later policyVersion.
- * A From that failed DMARC is never trusted: VIP labels match by address or
- * domain, which a forger can copy.
+ * attacker could earn it. A From that failed DMARC is never trusted: VIP labels
+ * match by address or domain, which a forger can copy.
+ *
+ * v3.1 (riskTrustsAuthenticated) adds a known correspondent whose From passed
+ * DMARC: DMARC proves the domain sent the mail, the inbound history that the
+ * sender is one the user has heard from for a while. Neither alone is enough.
  */
 function trustedSender(
+  f: FactsV1,
   rel: RelationshipSnapshot | null,
-  senderAuthenticated: boolean | null,
+  auth: boolean | null,
+  decidedAt: Date,
   rules: PolicyRules,
 ): boolean {
-  if (rules.riskTrustsAuthenticated && senderAuthenticated === true) return true;
-  return rel?.vip === true && senderAuthenticated !== false;
+  if (auth === false) return false;
+  if (rel?.vip === true) return true;
+  if (!rules.riskTrustsAuthenticated || auth !== true) return false;
+  if (f.ambiguous || f.kind === "promotion" || f.kind === "newsletter") return false;
+  return knownCorrespondent(rel, decidedAt);
+}
+
+function knownCorrespondent(rel: RelationshipSnapshot | null, decidedAt: Date): boolean {
+  if ((rel?.inboundCount ?? 0) < RISK_TRUST_MIN_INBOUND || !rel?.firstSeenAt) return false;
+  const firstSeen = Date.parse(rel.firstSeenAt);
+  return Number.isFinite(firstSeen) && decidedAt.getTime() - firstSeen >= RISK_TRUST_MIN_HISTORY_MS;
 }
 
 const pushRiskOf = (f: FactsV1) => PUSH_RISKS.find((r) => f.risk.includes(r));
@@ -221,7 +247,7 @@ const phishingSuspected = (f: FactsV1) => f.risk.includes("phishing_suspect");
 
 function pushMatch(
   f: FactsV1,
-  trusted: boolean,
+  sender: { trusted: boolean; auth: boolean | null },
   decidedAt: Date,
   automatedSender: boolean,
   rules: PolicyRules,
@@ -233,16 +259,18 @@ function pushMatch(
     params: { addressedTo: f.addressedTo },
   });
   const risk = pushRiskOf(f);
-  if (risk && trusted) {
+  if (risk && sender.trusted) {
     return {
       lane: "PUSH",
       reasons: [reason("risk", { fact: "risk", params: { risk, trusted: true } }), addressed],
       pushCandidate: true,
     };
   }
-  const machine = rules.notificationAsks
-    ? f.kind !== "notification" && MACHINE_KINDS.has(f.kind)
-    : MACHINE_KINDS.has(f.kind);
+  // v3.1: a notification may interrupt through an ask, but not one whose From
+  // failed DMARC (a forged brand notification).
+  const notificationMay =
+    rules.notificationAsks && f.kind === "notification" && sender.auth !== false;
+  const machine = MACHINE_KINDS.has(f.kind) && !notificationMay;
   if (automatedSender || machine) return null;
   const soonest = earliestAskDueWithin(
     f,
@@ -275,9 +303,12 @@ function earliestAskDueWithin(f: FactsV1, fromMs: number, toMs: number): number 
 function queueMatch(f: FactsV1, trusted: boolean): Match | null {
   // A payment/security risk that did not interrupt is never filed or hidden,
   // even under a phishing suspicion (a false positive must stay visible).
+  // `trusted` says whether the sender was trusted for a risk-only interrupt;
+  // never under a phishing suspicion.
   const risk = pushRiskOf(f);
   if (risk) {
-    return only("QUEUE", reason("risk", { fact: "risk", params: { risk, trusted } }));
+    const shown = trusted && !phishingSuspected(f);
+    return only("QUEUE", reason("risk", { fact: "risk", params: { risk, trusted: shown } }));
   }
   if (f.asks.length > 0) {
     const ask = f.asks[0];
@@ -306,10 +337,6 @@ function queueMatch(f: FactsV1, trusted: boolean): Match | null {
 }
 
 function infoMatch(f: FactsV1, rules: PolicyRules): Match | null {
-  if (rules.narrowSilent && f.kind === "newsletter") return only("INFO", kindReason(f.kind));
-  if (rules.narrowSilent && f.addressedTo === "bulk" && f.kind !== "promotion") {
-    return only("INFO", reason("bulk", { fact: "addressedTo" }));
-  }
   if (f.transaction) {
     return only(
       "INFO",
@@ -319,7 +346,13 @@ function infoMatch(f: FactsV1, rules: PolicyRules): Match | null {
       }),
     );
   }
-  return INFO_KINDS.has(f.kind) ? only("INFO", kindReason(f.kind)) : null;
+  if (INFO_KINDS.has(f.kind)) return only("INFO", kindReason(f.kind));
+  // v3.1 narrow SILENT: newsletters and other bulk mail are filed here.
+  if (rules.narrowSilent && f.kind === "newsletter") return only("INFO", kindReason(f.kind));
+  if (rules.narrowSilent && f.addressedTo === "bulk" && f.kind !== "promotion") {
+    return only("INFO", reason("bulk", { fact: "addressedTo" }));
+  }
+  return null;
 }
 
 function silentMatch(f: FactsV1, rules: PolicyRules): Match | null {
@@ -338,7 +371,8 @@ function applyFloors(m: Match, input: PolicyInput): Match {
       pushCandidate: false,
     };
   }
-  if (phishingSuspected(input.facts) && m.lane === "MEETING") {
+  // pushMatch already vetoes it; the floor keeps the invariant independent of rule order.
+  if (phishingSuspected(input.facts) && (m.lane === "PUSH" || m.lane === "MEETING")) {
     return { lane: "QUEUE", reasons: [phishingReason(), ...m.reasons], pushCandidate: false };
   }
   if (input.spam && (m.lane === "PUSH" || m.lane === "MEETING")) {

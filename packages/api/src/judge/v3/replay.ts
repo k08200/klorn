@@ -145,7 +145,7 @@ export function replayPolicy(
     lanes: laneTotals(decided, heldIds),
     transitions: transitionsOf(decided, heldIds),
     budget: budgetSummary(decided, heldIds, opts.budget),
-    parity: parityOf(rows),
+    parity: parityOf(rows, version),
     changes: changesOf(decided, heldIds),
   };
 }
@@ -241,7 +241,7 @@ function budgetSummary(
   };
 }
 
-function parityOf(rows: readonly ReplayRow[]): ReplayReport["parity"] {
+function parityOf(rows: readonly ReplayRow[], version: PolicyVersion): ReplayReport["parity"] {
   const parity: ReplayReport["parity"] = {
     compared: 0,
     v2Keyword: emptyCounts(),
@@ -255,7 +255,13 @@ function parityOf(rows: readonly ReplayRow[]): ReplayReport["parity"] {
     const v2 = isClearMarketing(row.email)
       ? "SILENT"
       : toLiveTier(keywordFallbackJudgement(row.email).tier);
-    const v3 = laneFromFactsV3({ facts, relationship: null, spam, decidedAt: row.receivedAt });
+    const v3 = laneFromFactsV3({
+      facts,
+      relationship: null,
+      spam,
+      decidedAt: row.receivedAt,
+      version,
+    });
     parity.compared++;
     bump(parity.v2Keyword, v2);
     bump(parity.v3Keyword, v3.lane);

@@ -12,7 +12,8 @@
 import type { LiveTier } from "@klorn/contract";
 import { toLiveTier } from "../tiers.js";
 import { type FactsV1, parseFactsV1 } from "./facts-schema.js";
-import { laneFromFactsV3, POLICY_VERSION } from "./policy.js";
+import { judgeV3LivePolicyVersion } from "./flags.js";
+import { laneFromFactsV3 } from "./policy.js";
 import { parseRelationshipSnapshot, type RelationshipSnapshot } from "./relationship.js";
 
 const MAX_SAMPLES = 20;
@@ -37,6 +38,7 @@ interface Signals {
   spam?: boolean;
   automatedSender?: boolean;
   autoSubmitted?: boolean;
+  senderAuthenticated?: boolean | null;
 }
 
 /** Pre-budget v3 lane for a stored row, or null when a pin decides the lane. */
@@ -52,7 +54,11 @@ export function laneForRow(
     relationship: rel,
     spam: Boolean(signals.spam),
     automatedSender: Boolean(signals.automatedSender || signals.autoSubmitted),
+    // The DMARC verdict feeds v3.1's risk trust, as on the live path.
+    senderAuthenticated:
+      typeof signals.senderAuthenticated === "boolean" ? signals.senderAuthenticated : null,
     decidedAt: at,
+    version: judgeV3LivePolicyVersion(),
   }).lane;
 }
 
@@ -132,7 +138,7 @@ export function summarizeShadow(rows: readonly ShadowRow[]) {
     cost: { totalUsd, perDayUsd: costPerDay },
     models,
     lanes: {
-      policy: POLICY_VERSION,
+      policy: judgeV3LivePolicyVersion(),
       compared,
       excludedPinned: pinned,
       agreement: compared ? agreed / compared : null,

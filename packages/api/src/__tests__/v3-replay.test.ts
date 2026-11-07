@@ -89,6 +89,30 @@ describe("replayPolicy", () => {
     ]);
   });
 
+  it("re-runs a named policy version, the parity block included", () => {
+    const newsletter = {
+      from: "Digest <digest@news.example>",
+      subject: "Our newsletter is here",
+      snippet: "",
+      labels: [],
+    };
+    const stored: StoredFacts = {
+      factsSource: "llm",
+      facts: { ...urgentFacts(at(2)), asks: [], kind: "newsletter", addressedTo: "bulk" },
+      pre: null,
+      signals: null,
+      relationship: null,
+    };
+    const rows = [row("n", { v2Tier: "SILENT", email: newsletter, stored })];
+    const v30 = replayPolicy(rows, { budget: 5, policyVersion: "v3.0" });
+    expect(v30.policyVersion).toBe("v3.0");
+    expect(v30.lanes.v3PreBudget.SILENT).toBe(1);
+    expect(v30.parity.divergences).not.toHaveProperty(["narrowSilent: SILENT→INFO"]);
+    const v31 = replayPolicy(rows, { budget: 5 });
+    expect(v31.policyVersion).toBe("v3.1");
+    expect(v31.lanes.v3PreBudget.INFO).toBe(1);
+  });
+
   it("keyword mode gives every row keyword facts (the model-down estimate)", () => {
     const report = replayPolicy([row("a", { stored: llmRow(urgentFacts(at(2))) }), row("b")], {
       budget: 5,

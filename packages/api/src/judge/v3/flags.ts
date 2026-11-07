@@ -8,6 +8,7 @@
 
 import { type FlagMode, featureOpenTo, flagMode } from "../../config.js";
 import { judgeV3PolicyEnabled } from "../../ops/feature-flags.js";
+import { POLICY_VERSION, POLICY_VERSIONS, type PolicyVersion } from "./policy.js";
 
 export const JUDGE_V3_SHADOW_FLAG = "JUDGE_V3_SHADOW";
 
@@ -26,4 +27,19 @@ export function isJudgeV3ShadowEnabled(userId: string): boolean {
  */
 export function isJudgeV3PolicyEnabled(userId: string): boolean {
   return judgeV3PolicyEnabled() && isJudgeV3ShadowEnabled(userId);
+}
+
+export const JUDGE_V3_POLICY_VERSION_ENV = "JUDGE_V3_POLICY_VERSION";
+
+/**
+ * The policy version the live judge runs (JUDGE_V3_POLICY_VERSION, read per
+ * call, so it needs no redeploy). Unset: POLICY_VERSION. "v3.0" rolls the v3.1
+ * rule changes back while the policy stays on. An unknown value runs the
+ * default.
+ */
+export function judgeV3LivePolicyVersion(env: NodeJS.ProcessEnv = process.env): PolicyVersion {
+  const raw = env[JUDGE_V3_POLICY_VERSION_ENV]?.trim();
+  return raw && (POLICY_VERSIONS as readonly string[]).includes(raw)
+    ? (raw as PolicyVersion)
+    : POLICY_VERSION;
 }
