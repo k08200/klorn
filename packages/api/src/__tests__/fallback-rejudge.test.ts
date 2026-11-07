@@ -24,7 +24,7 @@ const dbMock = vi.hoisted(() => ({
   decisionLabel: { findMany: vi.fn() },
   attentionItem: { findMany: vi.fn(), updateMany: vi.fn() },
   emailMessage: { findUnique: vi.fn() },
-  attentionFacts: { findUnique: vi.fn() },
+  attentionFacts: { findMany: vi.fn() },
 }));
 const judgeEmailMock = vi.hoisted(() => vi.fn());
 const buildContextMock = vi.hoisted(() => vi.fn());
@@ -86,7 +86,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   flagState.sweep = false;
   policyEnabled.mockReturnValue(false);
-  dbMock.attentionFacts.findUnique.mockResolvedValue(null);
+  dbMock.attentionFacts.findMany.mockResolvedValue([]);
 });
 
 describe("rejudgeFallbackItems", () => {
@@ -153,31 +153,37 @@ describe("rejudgeFallbackItems", () => {
     );
   });
 
-  it("for a user under policy v3, skips a row whose lane LLM facts decided (no v2 call)", async () => {
-    wire();
+  it("for a user under policy v3, leaves out rows LLM facts decided before the batch is cut", async () => {
+    // Six fallback rows, batch of 5: the first five have LLM facts. Cutting the
+    // batch first would spend every tick on them and never reach m5.
+    wire({ tiers: ["QUEUE", "QUEUE", "QUEUE", "QUEUE", "QUEUE", "QUEUE"] });
     policyEnabled.mockReturnValue(true);
-    dbMock.attentionFacts.findUnique.mockResolvedValue({
-      factsVersion: 1,
-      factsSource: "llm",
-      facts: {
-        asks: [],
-        addressedTo: "me_direct",
-        threadTurn: "none",
-        event: null,
-        transaction: null,
-        risk: [],
-        kind: "personal",
-        ambiguous: false,
+    dbMock.attentionFacts.findMany.mockResolvedValue(
+      ["m0", "m1", "m2", "m3", "m4"].map((sourceId) => ({ sourceId })),
+    );
+    planV3Write.mockResolvedValue({
+      tier: "QUEUE",
+      reason: "r",
+      autoEligible: false,
+      v3: {
+        v3PolicyVersion: "v2",
+        v3Decision: { basis: "v2", reasons: [], threadTurn: null },
+        v3Due: null,
+        v3Importance: 0.2,
+        heldAt: null,
       },
-      certainFields: [],
-      signals: null,
-      relationship: null,
+      push: { kind: "none" },
     });
-    const summary = await rejudgeFallbackItems("u1", { apply: true, delayMs: 0 });
-    expect(summary).toEqual({ changed: 0, unchanged: 1, skippedFallback: 0 });
-    expect(judgeEmailMock).not.toHaveBeenCalled();
-    expect(planV3Write).not.toHaveBeenCalled();
-    expect(dbMock.attentionItem.updateMany).not.toHaveBeenCalled();
+    await rejudgeFallbackItems("u1", { apply: true, delayMs: 0, limit: 5 });
+    expect(judgeEmailMock).toHaveBeenCalledTimes(1);
+    expect(dbMock.emailMessage.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "m5" } }),
+    );
+    expect(dbMock.attentionFacts.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ factsSource: "llm", userId: "u1" }),
+      }),
+    );
   });
 
   it("never targets an item whose lane an MCP agent set (step A2b) — in the read or in the guarded write", async () => {

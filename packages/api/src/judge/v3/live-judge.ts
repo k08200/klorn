@@ -98,7 +98,7 @@ export async function planV3Write(input: V3PlanInput): Promise<V3WritePlan> {
     laneReason(decision, v2Tier, input.judgement.reason),
     now,
   );
-  return { ...plan, autoEligible: keepsAutoEligible(input, decision, plan.tier, v2Tier) };
+  return { ...plan, autoEligible: keepsAutoEligible(input, decision, v2Tier) };
 }
 
 type LanePlan = Omit<V3WritePlan, "autoEligible">;
@@ -119,13 +119,9 @@ async function planLane(
   return { tier: decision.lane, reason, v3: v3ItemFields(decision, null), push };
 }
 
-function keepsAutoEligible(
-  input: V3PlanInput,
-  decision: LiveDecision,
-  tier: LiveTier,
-  v2Tier: LiveTier,
-): boolean {
-  if (input.judgement.autoEligible !== true || tier !== v2Tier) return false;
+function keepsAutoEligible(input: V3PlanInput, decision: LiveDecision, v2Tier: LiveTier): boolean {
+  // decision.lane, not the written tier: a hold must not mask a lane change.
+  if (input.judgement.autoEligible !== true || decision.lane !== v2Tier) return false;
   return !decision.reasons.some((r) => r.code === "risk");
 }
 

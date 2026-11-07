@@ -34,7 +34,7 @@ import type { JudgeableEmailRow } from "./email-firewall.js";
 import { buildJudgeContext } from "./judge-context.js";
 import type { PocTier } from "./poc-judge.js";
 import { judgeEmail } from "./poc-judge.js";
-import { findAttentionFacts } from "./v3/facts-store.js";
+import { FACTS_VERSION } from "./v3/facts-schema.js";
 import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
 import { v3Columns } from "./v3/live-item.js";
 
@@ -114,7 +114,19 @@ export async function rejudgeFallbackItems(
     select: { id: true, sourceId: true, tier: true },
   })) as Array<{ id: string; sourceId: string; tier: string | null }>;
   const itemBySource = new Map(items.map((i) => [i.sourceId, i]));
-  const targets = fallbackRows.filter((r) => itemBySource.has(r.sourceId)).slice(0, limit);
+  // Under policy v3, LLM facts decided some of these lanes, not the v2 fallback
+  // the ledger records: re-judging them with v2 would spend a call and change
+  // nothing. They are left out BEFORE the batch is cut, or they would fill
+  // every batch (the ledger keeps them eligible) and starve the rest.
+  const llmDecided = isJudgeV3PolicyEnabled(userId)
+    ? await llmFactsSourceIds(
+        userId,
+        fallbackRows.map((r) => r.sourceId),
+      )
+    : new Set<string>();
+  const targets = fallbackRows
+    .filter((r) => itemBySource.has(r.sourceId) && !llmDecided.has(r.sourceId))
+    .slice(0, limit);
 
   for (const row of targets) {
     const item = itemBySource.get(row.sourceId);
@@ -134,12 +146,6 @@ export async function rejudgeFallbackItems(
         },
       });
       if (!email) continue;
-      // Under policy v3, LLM facts decided this lane, not the v2 fallback the
-      // ledger records: re-judging with v2 would spend a call and change nothing.
-      if (isJudgeV3PolicyEnabled(userId) && (await hasLlmFacts(userId, email.id))) {
-        summary.unchanged++;
-        continue;
-      }
 
       const context = await buildJudgeContext(userId, {
         from: email.from,
@@ -222,9 +228,19 @@ export async function rejudgeFallbackItems(
   return summary;
 }
 
-async function hasLlmFacts(userId: string, emailId: string): Promise<boolean> {
-  const stored = await findAttentionFacts(userId, "EMAIL", emailId);
-  return stored?.factsSource === "llm" && stored.facts !== null;
+/** Mail whose stored facts are LLM facts at the current facts version. */
+async function llmFactsSourceIds(userId: string, sourceIds: string[]): Promise<Set<string>> {
+  const rows = await prisma.attentionFacts.findMany({
+    where: {
+      userId,
+      source: "EMAIL",
+      sourceId: { in: sourceIds },
+      factsSource: "llm",
+      factsVersion: FACTS_VERSION,
+    },
+    select: { sourceId: true },
+  });
+  return new Set(rows.map((r) => r.sourceId));
 }
 
 /** The v3 live rule for a repaired item: stored facts only, no push, a hold stays. */

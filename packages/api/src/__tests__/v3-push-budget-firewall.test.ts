@@ -691,6 +691,27 @@ describe("ordering and failure paths, for a user under the policy", () => {
     expect(item("e2")).toMatchObject({ tier: "QUEUE", autoEligible: false });
   });
 
+  it("a hold does not mask a lane change: v3 said PUSH, so autoEligible drops though QUEUE is written", async () => {
+    process.env.JUDGE_V3_PUSH_BUDGET = "1";
+    seed();
+    judgedAs("PUSH");
+    await judge("e1");
+    judgeEmail.mockResolvedValueOnce({
+      tier: "QUEUE",
+      reason: "Reply when you can",
+      features: { confidence: 0.9, senderTrust: 0.8, reversibility: 0.5, urgency: 0.3 },
+      source: "llm",
+      autoEligible: true,
+    });
+    extractFactsForDecision.mockResolvedValueOnce(liveFacts(dueSoon()));
+    expect(await judge("e2", {}, { liveRaw: raw("e2") })).toBe("QUEUE");
+    expect(item("e2")).toMatchObject({
+      tier: "QUEUE",
+      tierReason: HELD_REASON_KEY,
+      autoEligible: false,
+    });
+  });
+
   it("the backfill sweep leaves mail younger than five minutes to the inline judge", async () => {
     seed();
     for (const row of db.tables.emailMessage ?? []) {

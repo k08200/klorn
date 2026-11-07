@@ -24,7 +24,7 @@
  * (truncated) to the terminal output; it is never written to --out.
  */
 
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "../src/db.js";
 import { toLiveTier } from "../src/judge/tiers.js";
@@ -334,6 +334,8 @@ async function main() {
     const path = resolve(args.out);
     // Ids and lane changes for every user: owner-only.
     writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+    // `mode` applies only when the file is created; an existing file keeps its own.
+    chmodSync(path, 0o600);
     console.log(`\nWrote ${path}`);
   }
 }
