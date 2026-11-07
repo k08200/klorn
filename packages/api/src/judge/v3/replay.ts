@@ -94,8 +94,11 @@ export interface ReplayReport {
     limit: number | null;
     candidates: number;
     admitted: number;
+    /** PUSH candidates that got no slot: held in QUEUE, or rung as the fallback MEETING. */
     held: number;
-    /** Ids held by the budget (also the ones whose v2 lane was already QUEUE). */
+    /** Of `held`, the invites that ring as MEETING instead (v3.1, as live). */
+    meetingFallback: number;
+    /** Ids held in QUEUE by the budget (also the ones whose v2 lane was already QUEUE). */
     heldIds: string[];
     userDaysWithCandidates: number;
     maxCandidatesPerUserDay: number;
@@ -197,8 +200,22 @@ function simulateBudget(decided: readonly Decided[], limit: number | null): Set<
   return held;
 }
 
-const finalLane = (d: Decided, held: Set<string>): LiveTier =>
-  held.has(d.row.id) ? "QUEUE" : d.decision.lane;
+/** No slot: held in QUEUE, unless an invite rings as the fallback MEETING (as live). */
+const ringsAsMeeting = (d: Decided, held: Set<string>): boolean =>
+  held.has(d.row.id) && d.decision.meetingFallback !== null;
+const heldInQueue = (d: Decided, held: Set<string>): boolean =>
+  held.has(d.row.id) && d.decision.meetingFallback === null;
+
+const finalLane = (d: Decided, held: Set<string>): LiveTier => {
+  if (heldInQueue(d, held)) return "QUEUE";
+  return ringsAsMeeting(d, held) ? "MEETING" : d.decision.lane;
+};
+
+function finalReasonCodes(d: Decided, held: Set<string>): ReasonCode[] {
+  if (heldInQueue(d, held)) return ["held_budget", ...d.decision.reasons.map((r) => r.code)];
+  const reasons = ringsAsMeeting(d, held) ? d.decision.meetingFallback : null;
+  return (reasons ?? d.decision.reasons).map((r) => r.code);
+}
 
 function laneTotals(decided: readonly Decided[], held: Set<string>): ReplayReport["lanes"] {
   const lanes = { v2: emptyCounts(), v3PreBudget: emptyCounts(), v3: emptyCounts() };
@@ -234,7 +251,8 @@ function budgetSummary(
     candidates,
     admitted: candidates - held.size,
     held: held.size,
-    heldIds: decided.filter((d) => held.has(d.row.id)).map((d) => d.row.id),
+    meetingFallback: decided.filter((d) => ringsAsMeeting(d, held)).length,
+    heldIds: decided.filter((d) => heldInQueue(d, held)).map((d) => d.row.id),
     userDaysWithCandidates: counts.length,
     maxCandidatesPerUserDay: counts.length ? Math.max(...counts) : 0,
     userDaysOverBudget: limit === null ? 0 : counts.filter((n) => n > limit).length,
@@ -288,10 +306,8 @@ function changesOf(decided: readonly Decided[], held: Set<string>): ReplayChange
       receivedAt: d.row.receivedAt.toISOString(),
       v2: d.row.v2Tier,
       v3: finalLane(d, held),
-      held: held.has(d.row.id),
-      reasonCodes: held.has(d.row.id)
-        ? ["held_budget", ...d.decision.reasons.map((r) => r.code)]
-        : d.decision.reasons.map((r) => r.code),
+      held: heldInQueue(d, held),
+      reasonCodes: finalReasonCodes(d, held),
       basis: d.decision.basis,
     }));
 }

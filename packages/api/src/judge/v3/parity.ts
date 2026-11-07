@@ -9,8 +9,9 @@
  *  (b) every v2 PUSH stays a v3 PUSH candidate, except list mail;
  *  (c) machine, marketing and spam mail never become a PUSH candidate;
  *  (d) nothing becomes a PUSH candidate that v2 did not notify for: v2 PUSH,
- *      or v2 MEETING, which notifies too (the model-down path never
- *      interrupts more, or for more senders, than v2).
+ *      or a v2 MEETING that v3.1's PUSH-before-MEETING turned into a PUSH (it
+ *      notified already). The model-down path never interrupts more, or for
+ *      more senders, than v2.
  * Every other difference must belong to one of `PARITY_DIVERGENCES`.
  */
 

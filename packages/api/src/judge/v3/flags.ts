@@ -35,11 +35,20 @@ export const JUDGE_V3_POLICY_VERSION_ENV = "JUDGE_V3_POLICY_VERSION";
  * The policy version the live judge runs (JUDGE_V3_POLICY_VERSION, read per
  * call, so it needs no redeploy). Unset: POLICY_VERSION. "v3.0" rolls the v3.1
  * rule changes back while the policy stays on. An unknown value runs the
- * default.
+ * default and is logged once, so a mistyped rollback does not pass unseen.
  */
 export function judgeV3LivePolicyVersion(env: NodeJS.ProcessEnv = process.env): PolicyVersion {
   const raw = env[JUDGE_V3_POLICY_VERSION_ENV]?.trim();
-  return raw && (POLICY_VERSIONS as readonly string[]).includes(raw)
-    ? (raw as PolicyVersion)
-    : POLICY_VERSION;
+  if (!raw) return POLICY_VERSION;
+  if ((POLICY_VERSIONS as readonly string[]).includes(raw)) return raw as PolicyVersion;
+  if (!warnedPolicyVersions.has(raw)) {
+    warnedPolicyVersions.add(raw);
+    console.warn(
+      `[JUDGE-V3] Unknown ${JUDGE_V3_POLICY_VERSION_ENV} ${JSON.stringify(raw.slice(0, 32))}; ` +
+        `running ${POLICY_VERSION}. Known: ${POLICY_VERSIONS.join(", ")}`,
+    );
+  }
+  return POLICY_VERSION;
 }
+
+const warnedPolicyVersions = new Set<string>();

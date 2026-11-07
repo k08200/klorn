@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   decideLiveLane,
   type FactsBasis,
@@ -310,6 +310,18 @@ describe("decideLiveLane: policy version and the MEETING fallback", () => {
     expect(plain.lane).toBe("PUSH");
     expect(plain.meetingFallback).toBeNull();
   });
+
+  it("the MEETING fallback keeps the relationship reason v3.0's MEETING carried", () => {
+    const due = "2026-11-03T18:00:00+09:00";
+    const ask = { kind: "reply" as const, object: "time", due, evidence: "by 6pm today" };
+    const event = { proposedTimes: [], hasInvite: true, conflict: false };
+    const relationship: RelationshipSnapshot = { ...UNKNOWN_RELATIONSHIP, sentCount: 3 };
+    const invite = decideLiveLane(
+      input({ basis: llm(facts({ event, asks: [ask] }), relationship) }),
+    );
+    expect(invite.reasons.map((r) => r.code)).toContain("relationship");
+    expect(invite.meetingFallback?.map((r) => r.code)).toEqual(["event", "relationship"]);
+  });
 });
 
 describe("decideLiveLane properties (seeded)", () => {
@@ -381,6 +393,20 @@ describe("judgeV3LivePolicyVersion", () => {
     expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: " v3.1 " })).toBe("v3.1");
     for (const bad of ["", "v9", "constructor", "__proto__"]) {
       expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: bad })).toBe(POLICY_VERSION);
+    }
+  });
+
+  it("logs a mistyped version once, so a failed rollback does not pass unseen", async () => {
+    const { judgeV3LivePolicyVersion } = await import("../judge/v3/flags.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const env = { JUDGE_V3_POLICY_VERSION: "V3.0-typo" };
+      expect(judgeV3LivePolicyVersion(env)).toBe(POLICY_VERSION);
+      expect(judgeV3LivePolicyVersion(env)).toBe(POLICY_VERSION);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("V3.0-typo");
+    } finally {
+      warn.mockRestore();
     }
   });
 });

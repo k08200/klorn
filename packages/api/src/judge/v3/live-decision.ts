@@ -177,16 +177,25 @@ export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
     basis: input.basis.kind === "llm" ? "llm" : "keyword",
     due: rankDue(facts, input.decidedAt),
     threadTurn: facts.threadTurn,
-    meetingFallback: decision.lane === "PUSH" ? meetingFallbackOf(facts) : null,
+    meetingFallback: decision.lane === "PUSH" ? meetingFallbackOf(facts, decision.reasons) : null,
     ...common,
   };
 }
 
-/** The MEETING a v3.0 ordering would have given this mail: an event, not bulk, no phishing. */
-function meetingFallbackOf(facts: FactsV1): PolicyReason[] | null {
+/**
+ * The MEETING a v3.0 ordering would have given this mail (an event, not bulk,
+ * no phishing), with the same supporting relationship reason.
+ */
+function meetingFallbackOf(
+  facts: FactsV1,
+  reasons: readonly PolicyReason[],
+): PolicyReason[] | null {
   if (!facts.event || facts.addressedTo === "bulk") return null;
   if (facts.risk.includes("phishing_suspect")) return null;
-  return [reason("event", { fact: "event", params: { conflict: facts.event.conflict } })];
+  return [
+    reason("event", { fact: "event", params: { conflict: facts.event.conflict } }),
+    ...reasons.filter((r) => r.code === "relationship"),
+  ];
 }
 
 type PrecedenceDecision = Omit<LiveDecision, "importance" | "trusted">;

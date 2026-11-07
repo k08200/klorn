@@ -305,7 +305,7 @@ function printReport(report: ReplayReport, args: CliArgs, subjects: Map<string, 
   }
   const b = report.budget;
   console.log(
-    `\nInterrupt budget ${b.limit ?? "unlimited"}/day: candidates ${b.candidates}, admitted ${b.admitted}, held ${b.held}`,
+    `\nInterrupt budget ${b.limit ?? "unlimited"}/day: candidates ${b.candidates}, admitted ${b.admitted}, held ${b.held} (${b.meetingFallback} of them ring as MEETING)`,
   );
   console.log(
     `  user-days with a candidate ${b.userDaysWithCandidates}, max per user-day ${b.maxCandidatesPerUserDay}, user-days over budget ${b.userDaysOverBudget}`,

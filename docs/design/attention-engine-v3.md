@@ -210,19 +210,24 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
 - **PUSH before MEETING.** Rule 3 is checked before rule 2.
   - A due-soon ask, or a trusted risk, interrupts even when the mail carries an event. An event with nothing urgent is still MEETING.
   - This fixes cold-start urgent recall: an urgent invite went to MEETING, which lacks the PUSH reason.
-  - An urgent invite never ends up worse off than in v3.0. If the interrupt budget holds such a PUSH, the mail notifies as the MEETING that v3.0 would have shown, outside the budget, instead of being held silent.
+  - An urgent invite never ends up worse off than in v3.0. If the interrupt budget holds such a PUSH, the mail notifies as the MEETING that v3.0 would have shown, outside the budget, instead of being held silent. Like a hold, that is final (step 6).
 - **Risk-only PUSH also trusts a known correspondent whose From passed DMARC.** A payment/security risk PUSHes for a VIP, or for a sender that meets all of these:
   - `senderAuthenticated` is true;
   - the sender has mailed the user at least 3 times, the first at least 30 days before the decision;
   - the facts are not ambiguous;
   - the kind is not promotion or newsletter.
 
-  DMARC alone is not trust: it proves the domain sent the mail, not who wrote it. A fresh webmail account, or an attacker's own domain, passes it (security review). The inbound history is what a new attacker cannot fake. Other rules:
+  DMARC alone is not trust: it proves the domain sent the mail, not who wrote it. A fresh webmail account, or an attacker's own domain, passes it (security review). The inbound history is what a one-off attacker lacks: it takes a month of mail delivered to the inbox. It is a cost, not proof, since it counts mail received, not replies. Other rules:
   - A failed verdict is never trusted, VIP or not.
   - With no verdict (null), only a VIP counts.
   - The risk reason's `trusted` param says whether the sender was trusted for a risk-only interrupt. It is false whenever phishing is suspected.
   - The budget and the stranger share still apply.
-  - What remains: a correspondent who has mailed the user for a month and is then compromised, or a genuine brand mail that carries attacker text. The model's `phishing_suspect` is the defence there. Before the flip, measure its recall on an adversarial set; the eval sets hold no phishing mail yet.
+  - What remains:
+    - a correspondent who has mailed the user for a month and is then compromised;
+    - an attacker with their own DMARC-passing domain who first gets three mails into the inbox over 30 days;
+    - a genuine brand mail that carries attacker text.
+
+    The model's `phishing_suspect` is the defence there. Before the flip, measure its recall on an adversarial set; the eval sets hold no phishing mail yet.
 - **A notification may interrupt through a due-soon ask**, unless the deterministic automated-sender signal is on (no-reply, notifications@) or its From failed DMARC (a forged brand notification). A person-kind ask could already interrupt in v3.0, so this widens the kinds, not the senders. Newsletter, promotion and receipt never interrupt through an ask.
 - **SILENT is clear marketing only** (the LOCKED narrow-SILENT rule): `kind` promotion. Newsletters and other bulk mail are filed in INFO, still visible. This replaces rule 6, and rule 5 gains newsletter and bulk, checked after a transaction record and the INFO kinds, so their reasons are unchanged.
 - The phishing floor now also covers PUSH. The ask and risk paths already veto it, and the floor keeps the invariant independent of rule order.
@@ -271,6 +276,7 @@ Floors:
 
    When the policy picks a different lane from v2, `tierReason` becomes the static key `email.v3LaneFromFacts`, because v2's text would not explain the new lane. Otherwise v2's reason stays.
 6. A hold is final for the item. A later re-judge that says PUSH again keeps it in QUEUE, held; it is past the 6h push window by then. A pin keeps precedence over a hold, and a re-judge to any other lane clears it.
+   - The same holds for an invite shown as MEETING (v3.1's fallback). A later pass that says PUSH but cannot ring it (a re-judge, or a push gate such as the dedupe) keeps it MEETING. A PUSH written then would hold no budget slot.
 7. If a human or an agent moved the item while the judge ran, their lane stands. A slot already claimed for it stays spent, and its bell row is hidden.
 8. Failure paths:
    - If planning fails (a database error), the mail is still written, in the v2 lane, with no v3 columns and no PUSH notification. The budget is never bypassed. MEETING still rings, since it is not budgeted.
@@ -366,7 +372,7 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
 It reports:
 - the lane distribution: v2 shown, v3 before the budget, v3 final;
 - v2 → v3 transitions;
-- budget stats per user-day. Like the live path, pins and manual overrides spend no budget. Quiet hours, preferences and the 6h rule are not modelled, so `held` is an upper bound;
+- budget stats per user-day. Like the live path, pins and manual overrides spend no budget. Quiet hours, preferences and the 6h rule are not modelled, so `held` is an upper bound. Under v3.1 a held invite counts as the MEETING it rings as, as live, and `meetingFallback` counts those;
 - keyword parity on real mail;
 - per-item changes (ids by default).
 

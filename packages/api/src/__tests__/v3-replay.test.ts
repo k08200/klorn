@@ -111,6 +111,7 @@ describe("replayPolicy", () => {
     const v31 = replayPolicy(rows, { budget: 5 });
     expect(v31.policyVersion).toBe("v3.1");
     expect(v31.lanes.v3PreBudget.INFO).toBe(1);
+    expect(v31.parity.divergences).toHaveProperty(["narrowSilent: SILENT→INFO"], 1);
   });
 
   it("keyword mode gives every row keyword facts (the model-down estimate)", () => {
@@ -190,6 +191,32 @@ describe("replayPolicy", () => {
     const heldChange = report.changes.find((c) => c.id === "d1-low");
     expect(heldChange).toMatchObject({ v2: "PUSH", v3: "QUEUE", held: true });
     expect(heldChange?.reasonCodes.slice(0, 2)).toEqual(["held_budget", "ask_due_soon"]);
+  });
+
+  it("counts a held invite as the MEETING it rings as under v3.1, as live", () => {
+    const known = { ...UNKNOWN_RELATIONSHIP, sentCount: 5 };
+    const invite = { proposedTimes: [], hasInvite: true, conflict: null };
+    const rows = [
+      row("first", {
+        v2Tier: "PUSH",
+        receivedAt: at(0),
+        stored: llmRow(urgentFacts(at(1)), known),
+      }),
+      row("invite", {
+        v2Tier: "MEETING",
+        receivedAt: at(1),
+        stored: llmRow({ ...urgentFacts(at(2)), event: invite }, known),
+      }),
+    ];
+    const v31 = replayPolicy(rows, { budget: 1 });
+    expect(v31.budget).toMatchObject({ candidates: 2, admitted: 1, held: 1, meetingFallback: 1 });
+    expect(v31.budget.heldIds).toEqual([]);
+    expect(v31.lanes.v3).toMatchObject({ PUSH: 1, MEETING: 1, QUEUE: 0 });
+    expect(v31.changes.map((c) => c.id)).not.toContain("invite");
+
+    const v30 = replayPolicy(rows, { budget: 1, policyVersion: "v3.0" });
+    expect(v30.budget).toMatchObject({ candidates: 1, held: 0, meetingFallback: 0 });
+    expect(v30.lanes.v3).toMatchObject({ PUSH: 1, MEETING: 1 });
   });
 
   it("does not budget pinned senders or manual overrides, as on the live push path", () => {

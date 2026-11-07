@@ -166,8 +166,10 @@ async function planPush(
     v3: v3ItemFields(decision, null),
     push: { kind: "none" },
   };
-  if (!input.allowPush) return quiet;
-  if (!(await firewallPushGatesPass(input.userId, input.email, true))) return quiet;
+  if (!input.allowPush) return (await keptFallbackMeeting(input, decision)) ?? quiet;
+  if (!(await firewallPushGatesPass(input.userId, input.email, true))) {
+    return (await keptFallbackMeeting(input, decision)) ?? quiet;
+  }
   const admission = await admitPushNotification(input.userId, firewallBellRow(input.email), {
     pinned: !decision.budgeted,
     trusted: decision.trusted,
@@ -179,13 +181,7 @@ async function planPush(
   // An urgent invite (v3.1 checks PUSH before MEETING) notifies as the MEETING
   // v3.0 would have shown, outside the budget, rather than being held silent.
   if (decision.meetingFallback) {
-    const meeting = { ...decision, lane: "MEETING" as const, reasons: decision.meetingFallback };
-    return {
-      tier: "MEETING",
-      reason: laneReason(meeting, toLiveTier(input.judgement.tier), input.judgement.reason),
-      v3: v3ItemFields(meeting, null),
-      push: { kind: "meeting" },
-    };
+    return fallbackMeetingPlan(input, decision, decision.meetingFallback, { kind: "meeting" });
   }
   // Ids only: an IMAP gmailId embeds the mailbox address.
   console.log(
@@ -193,6 +189,41 @@ async function planPush(
       `spent, for email ${input.email.id} user ${input.userId}`,
   );
   return heldPlan(decision, { heldAt: now, budget: admission.limit });
+}
+
+function fallbackMeetingPlan(
+  input: V3PlanInput,
+  decision: LiveDecision,
+  reasons: LiveDecision["reasons"],
+  push: V3PushPlan,
+): LanePlan {
+  const meeting = { ...decision, lane: "MEETING" as const, reasons };
+  return {
+    tier: "MEETING",
+    reason: laneReason(meeting, toLiveTier(input.judgement.tier), input.judgement.reason),
+    v3: v3ItemFields(meeting, null),
+    push,
+  };
+}
+
+/**
+ * An invite already shown as MEETING stays MEETING when this pass cannot ring
+ * its PUSH (a re-judge, or a push gate such as the dedupe). Like a hold, the
+ * fallback is final: a PUSH written here would hold no budget slot.
+ */
+async function keptFallbackMeeting(
+  input: V3PlanInput,
+  decision: LiveDecision,
+): Promise<LanePlan | null> {
+  if (!decision.meetingFallback || !decision.budgeted) return null;
+  const item = await prisma.attentionItem.findUnique({
+    where: {
+      userId_source_sourceId: { userId: input.userId, source: "EMAIL", sourceId: input.email.id },
+    },
+    select: { tier: true },
+  });
+  if (item?.tier !== "MEETING") return null;
+  return fallbackMeetingPlan(input, decision, decision.meetingFallback, { kind: "none" });
 }
 
 /**

@@ -55,6 +55,10 @@ describe("laneFromFactsV3 — rules", () => {
     expect(decide(base).policyVersion).toBe(POLICY_VERSION);
     expect(POLICY_VERSION).toBe("v3.1");
     expect(decide(base, { version: "v3.0" }).policyVersion).toBe("v3.0");
+    // Untyped input (a stored or env string): an unknown name runs the live rules.
+    for (const bad of ["v9", "constructor", "__proto__", "toString"]) {
+      expect(decide(base, { version: bad as never }).policyVersion).toBe(POLICY_VERSION);
+    }
   });
 
   it("PUSH: an ask due within 24h, addressed to me, from a person", () => {
