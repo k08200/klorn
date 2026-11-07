@@ -698,7 +698,8 @@ Effect:
 P3's production policy (`judge/v3/policy.ts`, `laneFromFactsV3`, v3.0 on main since #1596) has no stored production facts to replay yet. The P1 runs are the only fact corpus, so the same 60 runs were re-scored through it (`v3-bench-report.ts --policy=p3`; no LLM calls).
 - Same inputs: P2's parser and evidence rules, the shared front, and the labels reconciled on 2026-11-04.
 - Relationship data: none (the eval sets carry none). Every sender is unknown, which is the cold-start case.
-- The automated-sender signal is `isAutomatedSender`.
+- The automated-sender signal is `isAutomatedSender`, the same inputs `replay.ts` uses.
+- Not replayable: production runs the extractor's facts through `enforceDateWindow` and the header-based `mergeWithPreFacts` (List-Unsubscribe, To/Cc, ICS, Auto-Submitted) before the policy. The eval mails carry no headers, so those corrections are absent here.
 
 | set | `claude-fable-5-1` | `claude-haiku-5-5` | `claude-opus-5-5` | `claude-sonnet-5-5` |
 |---|---|---|---|---|
@@ -711,14 +712,14 @@ What did not move:
 - MEETING recall stays 4/4, INFO recall stays 12–13/13, PUSH→SILENT stays 0.
 - Real-set PUSH stays 3/4. Three of those four urgent items are decided by the front.
 
-**Cold-start urgent recall falls from 12/13 to 7–8/13, below the 90% floor.** Every cause is a deliberate v3.0 rule, not an extraction error:
+**Cold-start urgent recall falls from 12/13 to 7–8/13, below the 90% floor.** The five items missed in every run come from deliberate v3.0 rules. The sixth, missed in 4 of 12 runs, is run-to-run variance in the model's `kind` meeting v3.0's kind gate:
 
 | item | v3.0 lane [reason] | rule that decided it |
 |---|---|---|
 | eval-037 "Quick call today?", eval-038 "confirm your interview slot within 24 hours", eval-041 "Demo moved to 3pm TODAY" | MEETING [event] | **MEETING is checked before PUSH.** All models extract an event from these mails. MEETING still notifies, so 10–11 of 13 urgent items notify in some form, but outside the interrupt budget. |
 | eval-046 Shinhan Card "Action required: verify unusual transaction" | QUEUE [risk] | **A risk PUSHes only from a VIP sender.** Facts v1 carry no evidence for `risk`, so v3.0 refuses to interrupt on it from an unknown sender. This closes the spoofing gap found in the P1 security review. |
-| eval-036 Growth Fund "DD docs due Friday" | QUEUE [ask] | the ≤ 24h deadline window, as under the doc rule |
-| eval-044 TalentCo "offer expires tomorrow" (Opus only) | QUEUE [ask] | Opus reads the mail as a machine `kind`, and v3.0 lets only non-machine kinds interrupt through an ask |
+| eval-036 Growth Fund "DD docs due Friday" | QUEUE [ask] | outside both rules' deadline window: the doc rule needs a due ≤ 24h ahead, v3.0 a due within ±24h |
+| eval-044 TalentCo "offer expires tomorrow" (4 of 12 runs: Fable ×2, Haiku ×1, Opus ×1) | QUEUE [ask] | in those runs the model reads the mail as `kind: notification`, and v3.0 lets only non-machine kinds interrupt through an ask. That makes this PUSH depend on a judgment that varies between runs |
 
 On the real set v3.0 is 1.8–1.9pt above the doc rule, and the whole difference is one mail: the Namecheap confirmation code ("Sign-in from unauthorized device detected — please verify").
 - The doc rule PUSHes it on `security_alert`.

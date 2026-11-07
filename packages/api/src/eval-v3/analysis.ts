@@ -33,18 +33,17 @@ export interface StoredRun extends BenchFile {
 export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
 
 /**
- * Re-derive a v3 lane from stored raw facts under the CURRENT production
- * contract: P2's `parseFactsV1` (text cleaning, empty-object drops, strict ISO
- * dates), P2's evidence rules, then the policy. A stored answer the production
- * parser rejects becomes "v3-unparsed" → QUEUE, as it would in production.
- */
-/**
  * Which lane policy a replay applies to the facts:
  *  - "doc": doc §3(4) read literally (eval-v3/policy.ts), the P1 baseline;
  *  - "p3":  P3's production policy on main (judge/v3/policy.ts, laneFromFactsV3)
- *           with no relationship data (the eval sets carry none, so every
- *           sender is unknown: the cold-start case) and the deterministic
- *           automated-sender signal the extractor's pre-facts supply.
+ *           with the inputs replay.ts gives it: no relationship data (the eval
+ *           sets carry none, so every sender is unknown: the cold-start case)
+ *           and `isAutomatedSender(from)` as the automated-sender signal. The
+ *           shadow report also ORs an Auto-Submitted header, which the eval
+ *           mails do not carry.
+ * Neither path can apply production's header-based pre-fact merge
+ * (`mergeWithPreFacts`: List-Unsubscribe, To/Cc, ICS) — the eval mails have
+ * no headers.
  */
 export type ReplayPolicy = "doc" | "p3";
 
@@ -66,6 +65,12 @@ function decideLane(
   return { lane: d.lane, rule: `v3.0:${d.reasons[0]?.code ?? "default"}` };
 }
 
+/**
+ * Re-derive a v3 lane from stored raw facts under the CURRENT production
+ * contract: P2's `parseFactsV1` (text cleaning, empty-object drops, strict ISO
+ * dates), P2's evidence rules, then the policy. A stored answer the production
+ * parser rejects becomes "v3-unparsed" → QUEUE, as it would in production.
+ */
 function replayV3(
   row: StoredRow,
   email: EvalEmail | undefined,

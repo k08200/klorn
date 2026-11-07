@@ -518,41 +518,45 @@ describe("replay under P3's production policy (v3.0)", () => {
     ambiguous: false,
     ...over,
   });
-  const run = (rawFacts: unknown, from: string) => ({
+  const run = (rawFacts: unknown) => ({
     meta: { set: "gate", model: "m", prompt: "v3" as const, run: 1, ranAt: "", includeBody: true },
     summary: summarizeRun([], []),
     calls: [],
     rows: [
       { id: "a", truth: "PUSH" as const, predicted: "QUEUE" as const, source: "v3", rawFacts },
     ],
-    _from: from,
   });
 
   it("a security risk PUSHes under the doc rule but needs a VIP sender under v3.0", async () => {
     const { rescore } = await import("../eval-v3/analysis.js");
-    const risk = run(facts({ risk: ["security_alert"] }), EMAIL.from);
+    const risk = run(facts({ risk: ["security_alert"] }));
     const email = new Map([["a", EMAIL]]);
     const truth = new Map([["a", "PUSH" as const]]);
     expect(rescore(risk, truth, email, "doc").rows[0].predicted).toBe("PUSH");
     const p3 = rescore(risk, truth, email, "p3").rows[0];
     expect(p3.predicted).toBe("QUEUE");
-    expect(p3.rule).toMatch(/^v3\.0:/);
+    expect(p3.rule).toBe("v3.0:risk");
   });
 
-  it("an automated sender's due-today ask never PUSHes under v3.0", async () => {
+  it("v3.0 keeps an automated sender's due-today ask out of PUSH, but not a person's", async () => {
     const { rescore } = await import("../eval-v3/analysis.js");
-    const bot = { ...EMAIL, from: "Vercel <noreply@vercel.com>", snippet: "Please fix this today" };
     const ask = {
       kind: "review",
       object: "fix",
       due: "2026-06-01T23:59:00Z",
       evidence: "Please fix this today",
     };
-    const r = run(facts({ asks: [ask], kind: "notification" }), bot.from);
-    const out = (policy: "doc" | "p3") =>
-      rescore(r, new Map([["a", "QUEUE" as const]]), new Map([["a", bot]]), policy).rows[0]
-        .predicted;
-    expect(out("doc")).toBe("PUSH");
-    expect(out("p3")).toBe("QUEUE");
+    // A human kind, so only the automated-sender signal can stop the PUSH.
+    const r = run(facts({ asks: [ask], kind: "work_thread" }));
+    const lane = (from: string, policy: "doc" | "p3") =>
+      rescore(
+        r,
+        new Map([["a", "PUSH" as const]]),
+        new Map([["a", { ...EMAIL, from, snippet: "Please fix this today" }]]),
+        policy,
+      ).rows[0].predicted;
+    expect(lane("Vercel <noreply@vercel.com>", "doc")).toBe("PUSH");
+    expect(lane("Vercel <noreply@vercel.com>", "p3")).toBe("QUEUE");
+    expect(lane("Kelly Moon <kelly@bigcustomer.example>", "p3")).toBe("PUSH");
   });
 });
