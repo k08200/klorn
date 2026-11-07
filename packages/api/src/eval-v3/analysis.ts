@@ -4,10 +4,12 @@
  * change, doc principle 6) re-scores the whole matrix offline.
  */
 import type { ClassifiableEmail } from "../judge/email-classifier.js";
+import { isAutomatedSender } from "../judge/keyword-policy.js";
 import { hasSpamLabel } from "../judge/poc-judge.js";
 import type { TierFeatures } from "../judge/tier-policy.js";
 import type { Tier } from "../judge/tiers.js";
 import { type FactsV1, parseFactsV1 } from "../judge/v3/facts-schema.js";
+import { laneFromFactsV3 } from "../judge/v3/policy.js";
 import { CONFIDENCE_VARIANTS, counterfactual, urgentCalibration } from "./calibration.js";
 import type { CallRecord } from "./call-tap.js";
 import { applyEvidenceCheck } from "./evidence.js";
@@ -31,12 +33,50 @@ export interface StoredRun extends BenchFile {
 export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
 
 /**
+ * Which lane policy a replay applies to the facts:
+ *  - "doc": doc §3(4) read literally (eval-v3/policy.ts), the P1 baseline;
+ *  - "p3":  P3's production policy on main (judge/v3/policy.ts, laneFromFactsV3)
+ *           with the inputs replay.ts gives it: no relationship data (the eval
+ *           sets carry none, so every sender is unknown: the cold-start case)
+ *           and `isAutomatedSender(from)` as the automated-sender signal. The
+ *           shadow report also ORs an Auto-Submitted header, which the eval
+ *           mails do not carry.
+ * Neither path can apply production's header-based pre-fact merge
+ * (`mergeWithPreFacts`: List-Unsubscribe, To/Cc, ICS) — the eval mails have
+ * no headers.
+ */
+export type ReplayPolicy = "doc" | "p3";
+
+function decideLane(
+  policy: ReplayPolicy,
+  facts: FactsV1,
+  email: EvalEmail & { receivedAt: string },
+): { lane: Tier; rule: string } {
+  const receivedAt = new Date(email.receivedAt);
+  const spam = hasSpamLabel(email.labels);
+  if (policy === "doc") return laneFromFacts(facts, { receivedAt, spam });
+  const d = laneFromFactsV3({
+    facts,
+    relationship: null,
+    spam,
+    automatedSender: isAutomatedSender(email.from ?? ""),
+    decidedAt: receivedAt,
+  });
+  return { lane: d.lane, rule: `v3.0:${d.reasons[0]?.code ?? "default"}` };
+}
+
+/**
  * Re-derive a v3 lane from stored raw facts under the CURRENT production
  * contract: P2's `parseFactsV1` (text cleaning, empty-object drops, strict ISO
  * dates), P2's evidence rules, then the policy. A stored answer the production
  * parser rejects becomes "v3-unparsed" → QUEUE, as it would in production.
  */
-function replayV3(row: StoredRow, email: EvalEmail | undefined, includeBody: boolean): StoredRow {
+function replayV3(
+  row: StoredRow,
+  email: EvalEmail | undefined,
+  includeBody: boolean,
+  policy: ReplayPolicy,
+): StoredRow {
   if (row.source !== "v3" || !row.rawFacts || !email?.receivedAt) return row;
   const parsed = parseFactsV1(row.rawFacts);
   if (!parsed.facts) {
@@ -52,10 +92,7 @@ function replayV3(row: StoredRow, email: EvalEmail | undefined, includeBody: boo
   }
   const { fields } = buildFactsUserPrompt({ ...email, receivedAt: email.receivedAt }, includeBody);
   const checked = applyEvidenceCheck(parsed.facts, fields);
-  const decision = laneFromFacts(checked.facts, {
-    receivedAt: new Date(email.receivedAt),
-    spam: hasSpamLabel(email.labels),
-  });
+  const decision = decideLane(policy, checked.facts, { ...email, receivedAt: email.receivedAt });
   return {
     ...row,
     predicted: decision.lane,
@@ -74,6 +111,7 @@ export function rescore(
   run: StoredRun,
   truthById: ReadonlyMap<string, Tier>,
   emailById: ReadonlyMap<string, EvalEmail>,
+  policy: ReplayPolicy = "doc",
 ): StoredRun & { warnings: string[] } {
   const includeBody = run.meta.includeBody ?? true;
   const labelled = run.rows.filter((r) => truthById.has(r.id));
@@ -82,7 +120,12 @@ export function rescore(
     (r) => r.source === "v3" && (!r.rawFacts || !emailById.get(r.id)?.receivedAt),
   ).length;
   const rows = labelled.map((r) =>
-    replayV3({ ...r, truth: truthById.get(r.id) as Tier }, emailById.get(r.id), includeBody),
+    replayV3(
+      { ...r, truth: truthById.get(r.id) as Tier },
+      emailById.get(r.id),
+      includeBody,
+      policy,
+    ),
   );
   const name = `${run.meta.set}/${run.meta.model}/${run.meta.prompt}/${run.meta.run}`;
   const warnings = [
