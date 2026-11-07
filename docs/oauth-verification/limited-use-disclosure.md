@@ -17,8 +17,11 @@
 >    summarizing messages and generating daily briefings, reflecting the
 >    user's triage decisions back into Gmail (labels, read state, archive,
 >    reversible trash), sending user-approved replies, and providing
->    calendar-aware context (conflict detection, event capture). No other
->    use is made of this data.
+>    calendar-aware context (conflict detection, event capture, and
+>    per-contact counts of the user's meetings from the past 30 days, read
+>    from their invitee lists, that inform how messages are classified; the
+>    invitee lists themselves are not stored). No other use is made of this
+>    data.
 > 2. **No advertising.** Klorn does not use Google user data for serving
 >    advertisements, including retargeting, personalized, or
 >    interest-based advertising, and never will.

@@ -151,6 +151,16 @@ export default function PrivacyPage() {
                 description.
               </li>
               <li>
+                Counts from your past calendar meetings (timed meetings with no more than 50 people
+                on the guest list): for each person invited to a meeting you organised or had
+                accepted (even tentatively) by the time that meeting&apos;s day is counted, shortly
+                after the day ends (UTC), and who did not decline, Klorn keeps their email address
+                with how many such meetings there were, how many had five or fewer people, and the
+                UTC day on which the first and the last ended. To count each meeting only once, Klorn also keeps a one-way fingerprint of it
+                for about a month while counting runs; it is deleted with your data. These counts
+                store no attendee lists and no meeting times.
+              </li>
+              <li>
                 Product data you create in Klorn, including tasks, reminders, notes, commitments,
                 approved actions, feedback, notifications, and chat messages.
               </li>
@@ -337,14 +347,16 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <code className="text-ink">calendar.events</code> — read upcoming events to surface
-                meetings, link commitment due dates, and prepare meeting context. Edits require user
-                approval.
+                meetings, link commitment due dates, and prepare meeting context, and read the
+                invitee lists of your meetings from the past 30 days to count how often you met each
+                person. Edits require user approval.
               </li>
               <li>
                 <code className="text-ink">calendar.readonly</code> — check availability across all
-                your calendars to detect scheduling conflicts. When you link a secondary Google
-                account for calendar visibility, this read-only scope is the only calendar access
-                requested for it.
+                your calendars to detect scheduling conflicts, and read the invitee lists of a
+                linked Google calendar&apos;s meetings from the past 30 days to count how often you
+                met each person. When you link a secondary Google account for calendar visibility,
+                this read-only scope is the only calendar access requested for it.
               </li>
               <li>
                 <code className="text-ink">openid</code>,{" "}
