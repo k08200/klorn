@@ -25,6 +25,7 @@ const card = (id: string, tier: FirewallItem["tier"], subject = id): FirewallIte
 
 const row = (over: Partial<FirewallV3Row>): FirewallV3Row => ({
   tier: "QUEUE",
+  status: "OPEN",
   heldAt: null,
   isManualOverride: false,
   agentTierSetAt: null,
@@ -48,7 +49,7 @@ describe("withV3Lanes", () => {
   const rows = new Map<string, FirewallV3Row>([
     ["newest-plain", row({})],
     ["due-soon", row({ v3Importance: 0.5, v3Due: new Date(NOW.getTime() + HOUR) })],
-    ["held", row({ v3Importance: 0.2, heldAt: new Date(NOW.getTime() - HOUR) })],
+    ["held", row({ v3Importance: 0.4, heldAt: new Date(NOW.getTime() - HOUR) })],
     ["vip", row({ v3Importance: 1 })],
     ["urgent", row({ tier: "PUSH", v3Importance: 1 })],
   ]);

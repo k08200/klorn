@@ -8,7 +8,12 @@
 export interface V3Reason {
   code: string;
   fact: string | null;
-  /** A quote from the mail (attacker-authored text: render it inert). */
+  /**
+   * A verbatim quote from the mail, so its author is whoever sent the mail
+   * (possibly an attacker). Render it as a literal quote attributed to the mail:
+   * no markdown or HTML, no link or data detection, never a regex built from it
+   * to highlight the body, never phrased as Klorn's own statement.
+   */
   evidence: string | null;
   evidenceIn: "subject" | "body" | null;
   params: Record<string, string | number | boolean | null>;

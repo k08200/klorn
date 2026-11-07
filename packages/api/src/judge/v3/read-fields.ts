@@ -6,20 +6,10 @@
  */
 
 import type { V3ItemBlock, V3TodayFields } from "@klorn/contract";
-import { type InboxScope, listV3RowsByEmail, pageEmailIdsInLane } from "../email-lanes.js";
-import { type V3ItemRow, v3ItemWire } from "./item-wire.js";
+import { captureError } from "../../sentry.js";
+import { listV3RowsByEmail, pageEmailIdsInLane, resolveInboxScope } from "../email-lanes.js";
+import { UNDECIDED_V3_ROW, v3ItemWire } from "./item-wire.js";
 import { interruptBudgetStatus } from "./push-budget-gate.js";
-
-/** A mail the judge has not reached yet: no decision, nothing held. */
-const UNDECIDED: V3ItemRow = {
-  tier: null,
-  heldAt: null,
-  isManualOverride: false,
-  agentTierSetAt: null,
-  v3PolicyVersion: null,
-  v3Decision: null,
-  v3Due: null,
-};
 
 /**
  * The `v3` block per mail, in list order. `rankFrom` is the 1-based rank of
@@ -29,6 +19,7 @@ export async function v3BlocksFor(
   userId: string,
   mails: ReadonlyArray<{ id: string; subject: string | null }>,
   rankFrom: number | null,
+  now: Date,
 ): Promise<Map<string, V3ItemBlock>> {
   const rows = await listV3RowsByEmail(
     userId,
@@ -37,9 +28,10 @@ export async function v3BlocksFor(
   return new Map(
     mails.map((mail, index) => [
       mail.id,
-      v3ItemWire(rows.get(mail.id) ?? UNDECIDED, {
+      v3ItemWire(rows.get(mail.id) ?? UNDECIDED_V3_ROW, {
         rank: rankFrom === null ? null : rankFrom + index,
         subject: mail.subject,
+        now,
       }),
     ]),
   );
@@ -47,17 +39,24 @@ export async function v3BlocksFor(
 
 /**
  * Today's fields: the day's interrupt budget, how much is in the QUEUE lane
- * (the same count the lane page shows, for the same inbox scope) and when the
- * ranks were computed.
+ * (the same count the lane page shows, for the `inbox` scope) and when the
+ * ranks were computed. Fail-soft: on a failed read the fields are left out and
+ * the response stands, as with the chip lookup.
  */
 export async function v3TodayFields(
   userId: string,
-  scope: InboxScope,
+  inbox: string | undefined,
   rankedAt: Date,
-): Promise<Required<V3TodayFields>> {
-  const [interruptBudget, queue] = await Promise.all([
-    interruptBudgetStatus(userId, rankedAt),
-    pageEmailIdsInLane({ userId, lane: "QUEUE", scope, skip: 0, take: 0 }),
-  ]);
-  return { interruptBudget, queueTotal: queue.total, rankedAt: rankedAt.toISOString() };
+): Promise<V3TodayFields> {
+  try {
+    const scope = await resolveInboxScope(userId, inbox);
+    const [interruptBudget, queue] = await Promise.all([
+      interruptBudgetStatus(userId, rankedAt),
+      pageEmailIdsInLane({ userId, lane: "QUEUE", scope, skip: 0, take: 0 }),
+    ]);
+    return { interruptBudget, queueTotal: queue.total, rankedAt: rankedAt.toISOString() };
+  } catch (err) {
+    captureError(err, { tags: { scope: "judge-v3-today-fields" }, extra: { userId } });
+    return {};
+  }
 }

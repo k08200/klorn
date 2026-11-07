@@ -30,7 +30,7 @@ import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { toLiveTier } from "../judge/tiers.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
-import { V3_ITEM_SELECT, type V3ItemRow, v3ItemWire } from "../judge/v3/item-wire.js";
+import { toV3ItemRow, V3_ITEM_SELECT, type V3ItemRow, v3ItemWire } from "../judge/v3/item-wire.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { labelableDomain, senderLabelEntriesFor } from "../mail/sender-labels.js";
@@ -103,17 +103,12 @@ function demoReaderContext(
 }
 
 /** The reader's v3 block: no rank (the reader is one mail), undecided mail decides nothing. */
-function readerV3Block(item: Partial<V3ItemRow> | null, subject: string | null): V3ItemBlock {
-  const row: V3ItemRow = {
-    tier: item?.tier ?? null,
-    heldAt: item?.heldAt ?? null,
-    isManualOverride: item?.isManualOverride ?? false,
-    agentTierSetAt: item?.agentTierSetAt ?? null,
-    v3PolicyVersion: item?.v3PolicyVersion ?? null,
-    v3Decision: item?.v3Decision ?? null,
-    v3Due: item?.v3Due ?? null,
-  };
-  return v3ItemWire(row, { rank: null, subject });
+function readerV3Block(
+  item: Partial<V3ItemRow> | null,
+  subject: string | null,
+  now: Date,
+): V3ItemBlock {
+  return v3ItemWire(toV3ItemRow(item), { rank: null, subject, now });
 }
 
 interface SenderFacts {
@@ -279,15 +274,23 @@ export function registerEmailLaneRoutes(
         // caller's has no neighbours.
         resolveInboxScope(uid, inbox),
       ]);
-      const neighbours = await neighbourEmailIdsInLane({
-        userId: uid,
-        lane,
-        scope,
-        filter,
-        search: search?.trim() || undefined,
-        rankedAt,
-        emailId: email.id,
-      });
+      let neighbours: Awaited<ReturnType<typeof neighbourEmailIdsInLane>>;
+      try {
+        neighbours = await neighbourEmailIdsInLane({
+          userId: uid,
+          lane,
+          scope,
+          filter,
+          search: search?.trim() || undefined,
+          rankedAt,
+          emailId: email.id,
+        });
+      } catch (err) {
+        // Only the ranked QUEUE (attention engine v3) runs under the statement
+        // timeout; a slow sort is a retryable 503, not a 500.
+        if (replyIfQueryTimedOut(err, reply)) return reply as never;
+        throw err;
+      }
       return {
         // No AttentionItem yet: the mail is shown, but no lane is claimed.
         tier: item ? toLiveTier(item.tier) : null,
@@ -295,7 +298,7 @@ export function registerEmailLaneRoutes(
         linkedInboxAccountId: email.linkedInboxAccountId,
         ...facts,
         ...neighbours,
-        ...(rankedAt ? { v3: readerV3Block(item, email.subject) } : {}),
+        ...(rankedAt ? { v3: readerV3Block(item, email.subject, rankedAt) } : {}),
       };
     },
   );

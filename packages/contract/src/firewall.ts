@@ -154,7 +154,10 @@ export interface FirewallItem {
    * renders it yet; the activity-log step (A3) or a later UI step does.
    */
   agentSet?: true;
-  /** Attention engine v3 decision, for a user under the policy only (attention-v3.ts). */
+  /**
+   * Attention engine v3 decision, for a user under the policy only (attention-v3.ts).
+   * Its reasons carry evidence quoted from the mail: render it inert (V3Reason.evidence).
+   */
   v3?: V3ItemBlock;
 }
 

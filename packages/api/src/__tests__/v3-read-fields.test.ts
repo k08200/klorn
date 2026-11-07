@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const listV3RowsByEmail = vi.hoisted(() => vi.fn());
 const pageEmailIdsInLane = vi.hoisted(() => vi.fn());
 const interruptBudgetStatus = vi.hoisted(() => vi.fn());
-vi.mock("../judge/email-lanes.js", () => ({ listV3RowsByEmail, pageEmailIdsInLane }));
+const resolveInboxScope = vi.hoisted(() => vi.fn(async () => ({ kind: "primary" })));
+vi.mock("../judge/email-lanes.js", () => ({
+  listV3RowsByEmail,
+  pageEmailIdsInLane,
+  resolveInboxScope,
+}));
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../judge/v3/push-budget-gate.js", () => ({ interruptBudgetStatus }));
 
 import { v3BlocksFor, v3TodayFields } from "../judge/v3/read-fields.js";
@@ -29,6 +35,7 @@ describe("v3BlocksFor", () => {
           "m1",
           {
             tier: "QUEUE",
+            status: "OPEN",
             heldAt: NOW,
             isManualOverride: false,
             agentTierSetAt: null,
@@ -46,6 +53,7 @@ describe("v3BlocksFor", () => {
         { id: "m2", subject: "b" },
       ],
       21,
+      NOW,
     );
     expect(blocks.get("m1")).toMatchObject({ rank: 21, held: true, policyVersion: "v3.0" });
     // Mail the judge has not reached: no decision, nothing held, still ranked.
@@ -61,7 +69,7 @@ describe("v3BlocksFor", () => {
 
   it("gives no rank outside a ranked QUEUE page", async () => {
     listV3RowsByEmail.mockResolvedValue(new Map());
-    const blocks = await v3BlocksFor("u1", [{ id: "m1", subject: "a" }], null);
+    const blocks = await v3BlocksFor("u1", [{ id: "m1", subject: "a" }], null, NOW);
     expect(blocks.get("m1")?.rank).toBeNull();
   });
 });
@@ -71,7 +79,7 @@ describe("v3TodayFields", () => {
     interruptBudgetStatus.mockResolvedValue({ limit: 5, used: 2, day: "2026-11-07" });
     pageEmailIdsInLane.mockResolvedValue({ ids: [], total: 37 });
     const scope = { kind: "primary" as const };
-    expect(await v3TodayFields("u1", scope, NOW)).toEqual({
+    expect(await v3TodayFields("u1", "primary", NOW)).toEqual({
       interruptBudget: { limit: 5, used: 2, day: "2026-11-07" },
       queueTotal: 37,
       rankedAt: NOW.toISOString(),
@@ -79,5 +87,11 @@ describe("v3TodayFields", () => {
     expect(pageEmailIdsInLane).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "u1", lane: "QUEUE", scope, take: 0 }),
     );
+    expect(resolveInboxScope).toHaveBeenCalledWith("u1", "primary");
+  });
+
+  it("is fail-soft: a failed read leaves the fields out instead of failing the response", async () => {
+    resolveInboxScope.mockRejectedValueOnce(new Error("database unavailable"));
+    expect(await v3TodayFields("u1", "primary", NOW)).toEqual({});
   });
 });

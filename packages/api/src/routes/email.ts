@@ -450,12 +450,6 @@ function normalizeEmailQueue(value: unknown): EmailQueueKey {
 }
 
 /**
- * GET / for a user with no connected mail source. `source: "demo"` is kept
- * as the wire marker clients already read as "not connected" (actions
- * disabled, connect prompt), but no rows: nobody is shown an inbox that is not
- * theirs. `needsConnection` says why it is empty.
- */
-/**
  * The v3 fields for a list page (attention-engine-v3.md §3(5)): a block per
  * mail, ranks on a ranked QUEUE page, and Today's fields on Today's request (a
  * ranked QUEUE page carries rankedAt alone).
@@ -467,15 +461,20 @@ async function v3ListFields(
   opts: { rankedAt: Date; rankFrom: number | null; today: boolean },
 ): Promise<{ blocks: Map<string, V3ItemBlock>; response: V3TodayFields }> {
   const { v3BlocksFor, v3TodayFields } = await import("../judge/v3/read-fields.js");
-  const blocks = await v3BlocksFor(userId, rows, opts.rankFrom);
+  const blocks = await v3BlocksFor(userId, rows, opts.rankFrom, opts.rankedAt);
   if (opts.today) {
-    const scope = await resolveInboxScope(userId, inbox);
-    return { blocks, response: await v3TodayFields(userId, scope, opts.rankedAt) };
+    return { blocks, response: await v3TodayFields(userId, inbox, opts.rankedAt) };
   }
   const response = opts.rankFrom === null ? {} : { rankedAt: opts.rankedAt.toISOString() };
   return { blocks, response };
 }
 
+/**
+ * GET / for a user with no connected mail source. `source: "demo"` is kept
+ * as the wire marker clients already read as "not connected" (actions
+ * disabled, connect prompt), but no rows: nobody is shown an inbox that is not
+ * theirs. `needsConnection` says why it is empty.
+ */
 function noMailSourceList(): EmailListResponse {
   return { emails: [], source: "demo", needsConnection: true, total: 0, unread: 0, page: 1 };
 }
@@ -1072,7 +1071,8 @@ export async function emailRoutes(app: FastifyInstance) {
         };
       });
 
-      if (!rankedAt) {
+      // v3 blocks ride lane pages only (the contract); the plain list is unchanged.
+      if (!rankedAt || !lane) {
         return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
       }
       const v3 = await v3ListFields(uid, inbox, mapped, {

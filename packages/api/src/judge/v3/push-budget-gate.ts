@@ -122,6 +122,18 @@ async function claimSlotWithRow(
   return { status: "admitted", notification: written.row };
 }
 
+/**
+ * A bad setting is logged once per process, not on every read: the Today
+ * surfaces read the budget on every list and poll.
+ */
+const warned = new Set<string>();
+const MAX_WARNED_KEYS = 1000;
+function warnOnce(key: string, message: string): void {
+  if (warned.has(key) || warned.size >= MAX_WARNED_KEYS) return;
+  warned.add(key);
+  console.warn(message);
+}
+
 /** The user's budget day (their local date) and daily limit. */
 export async function budgetDayFor(
   userId: string,
@@ -134,12 +146,16 @@ export async function budgetDayFor(
   const wanted = config?.timezone ?? DEFAULT_TIME_ZONE;
   const { dayKey, zone } = localDayKey(now, wanted);
   if (zone !== wanted) {
-    console.warn(
+    warnOnce(
+      `tz:${userId}`,
       `[PUSH-BUDGET] invalid timezone "${wanted}" for user ${userId}; counting the day in ${zone}`,
     );
   }
   const limit = resolveUserInterruptBudget(config?.interruptBudget ?? null, process.env, (raw) =>
-    console.warn(`[PUSH-BUDGET] ignoring invalid JUDGE_V3_PUSH_BUDGET="${raw}"; using the default`),
+    warnOnce(
+      "budget-env",
+      `[PUSH-BUDGET] ignoring invalid JUDGE_V3_PUSH_BUDGET="${raw}"; using the default`,
+    ),
   );
   return { dayKey, limit };
 }

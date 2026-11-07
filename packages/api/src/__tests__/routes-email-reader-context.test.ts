@@ -33,13 +33,16 @@ vi.mock("../db.js", () => {
     linkedInboxAccount: { findFirst: linkedInboxFindFirst },
     automationConfig: { findUnique: vi.fn(async () => null) },
     $queryRaw: queryRaw,
+    $executeRaw: vi.fn(async () => 0),
     user: { findUnique: userFindUnique },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
-  };
+  } as Record<string, unknown>;
+  // Ranked neighbours (attention engine v3) run inside withStatementTimeout's transaction.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
   return { prisma, db: prisma };
 });
 vi.mock("../sentry.js", async (original) => ({

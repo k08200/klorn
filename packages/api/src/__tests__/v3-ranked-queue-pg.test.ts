@@ -40,6 +40,7 @@ interface Seed {
     v3Importance?: number | null;
     v3Due?: Date | null;
     heldAt?: Date | null;
+    status?: "OPEN" | "DISMISSED" | "SNOOZED";
     isManualOverride?: boolean;
     agentTierSetAt?: Date | null;
   } | null;
@@ -52,14 +53,31 @@ const SEEDS: Seed[] = [
     item: { tier: "QUEUE", v3Importance: 0.9, heldAt: at(-4) },
   },
   {
-    key: "held-weak-early",
+    key: "held-known-early",
     receivedAt: at(-6),
-    item: { tier: "QUEUE", v3Importance: 0.2, heldAt: at(-6) },
+    item: { tier: "QUEUE", v3Importance: 0.4, heldAt: at(-6) },
   },
   {
-    key: "held-weak-late",
+    key: "held-known-late",
     receivedAt: at(-7),
-    item: { tier: "QUEUE", v3Importance: 0.2, heldAt: at(-3) },
+    item: { tier: "QUEUE", v3Importance: 0.4, heldAt: at(-3) },
+  },
+  // A known sender's hold from 30h ago, and one the user marked Done: by score.
+  {
+    key: "held-expired",
+    receivedAt: at(-31),
+    item: { tier: "QUEUE", v3Importance: 0.9, heldAt: at(-30) },
+  },
+  {
+    key: "held-done",
+    receivedAt: at(-2.5),
+    item: { tier: "QUEUE", v3Importance: 0.9, heldAt: at(-2.5), status: "DISMISSED" },
+  },
+  // A stranger's held mail (the unknown prior) ranks by score, not first.
+  {
+    key: "held-stranger",
+    receivedAt: at(-6.5),
+    item: { tier: "QUEUE", v3Importance: 0.2, heldAt: at(-6.5), v3Due: at(-1) },
   },
   { key: "due-now", receivedAt: at(-9), item: { tier: "QUEUE", v3Importance: 0.5, v3Due: at(-1) } },
   { key: "due-3d", receivedAt: at(-2), item: { tier: "QUEUE", v3Importance: 0.5, v3Due: at(72) } },
@@ -131,6 +149,7 @@ beforeAll(async () => {
         v3Importance: seed.item.v3Importance ?? null,
         v3Due: seed.item.v3Due ?? null,
         heldAt: seed.item.heldAt ?? null,
+        status: seed.item.status ?? "OPEN",
         isManualOverride: seed.item.isManualOverride ?? false,
         agentTierSetAt: seed.item.agentTierSetAt ?? null,
       },
@@ -161,15 +180,19 @@ function expectedOrder(keys: string[]): string[] {
     const item = seed?.item;
     const held =
       item &&
-      isShownHeld({
-        tier: item.tier,
-        heldAt: item.heldAt ?? null,
-        isManualOverride: item.isManualOverride ?? false,
-        agentTierSetAt: item.agentTierSetAt ?? null,
-        v3PolicyVersion: null,
-        v3Decision: null,
-        v3Due: null,
-      });
+      isShownHeld(
+        {
+          tier: item.tier,
+          status: item.status ?? "OPEN",
+          heldAt: item.heldAt ?? null,
+          isManualOverride: item.isManualOverride ?? false,
+          agentTierSetAt: item.agentTierSetAt ?? null,
+          v3PolicyVersion: null,
+          v3Decision: null,
+          v3Due: null,
+        },
+        NOW,
+      );
     return {
       id: idOf.get(key) as string,
       receivedAt: seed?.receivedAt as Date,
@@ -190,7 +213,9 @@ describePg("ranked QUEUE: SQL and rankQueue agree", () => {
     expect(got).toEqual(expectedOrder(QUEUE_KEYS));
     expect(page.total).toBe(QUEUE_KEYS.length);
     // Spot checks of the contract, independent of rankQueue.
-    expect(got.slice(0, 3)).toEqual(["held-strong", "held-weak-early", "held-weak-late"]);
+    expect(got.slice(0, 3)).toEqual(["held-strong", "held-known-early", "held-known-late"]);
+    expect(got.indexOf("held-stranger")).toBeGreaterThan(got.indexOf("vip-no-due"));
+    for (const key of ["held-expired", "held-done"]) expect(got.slice(0, 3)).not.toContain(key);
     expect(got).not.toContain("push");
   });
 

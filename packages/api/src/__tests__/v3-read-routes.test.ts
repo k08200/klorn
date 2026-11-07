@@ -26,13 +26,16 @@ vi.mock("../db.js", () => {
     notification: { count: notificationCount },
     automationConfig: { findUnique: vi.fn(async () => ({ timezone: "UTC", interruptBudget: 3 })) },
     $queryRaw: queryRaw,
+    $executeRaw: vi.fn(async () => 0),
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
-  };
+  } as Record<string, unknown>;
+  // The ranked page runs inside withStatementTimeout's interactive transaction.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
   return { prisma, db: prisma };
 });
 vi.mock("../mail/email-attachments.js", () => ({
@@ -112,7 +115,9 @@ const pageSql = () =>
 const V3_ROW = {
   sourceId: "e1",
   tier: "QUEUE",
-  heldAt: new Date("2026-11-07T01:00:00.000Z"),
+  status: "OPEN",
+  // Relative to the real clock: a hold shows for 24 hours.
+  heldAt: new Date(Date.now() - 60 * 60_000),
   isManualOverride: false,
   agentTierSetAt: null,
   v3PolicyVersion: "v3.0",

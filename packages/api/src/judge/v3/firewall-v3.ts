@@ -8,12 +8,38 @@
 
 import type { FirewallItem, Tier } from "@klorn/contract";
 import { IMPORTANCE_PRIOR } from "./importance.js";
-import { isShownHeld, type V3ItemRow, v3ItemWire } from "./item-wire.js";
+import { isShownHeld, toV3ItemRow, type V3ItemRow, v3ItemWire } from "./item-wire.js";
 import { rankQueue } from "./ranking.js";
 
 /** The stored columns per item the ranking and the block read. */
 export interface FirewallV3Row extends V3ItemRow {
   v3Importance: number | null;
+}
+
+/** The v3 decision columns the firewall list selects, for a user under policy v3 only. */
+export const FIREWALL_V3_SELECT = {
+  heldAt: true,
+  v3PolicyVersion: true,
+  v3Decision: true,
+  v3Due: true,
+  v3Importance: true,
+} as const;
+
+/**
+ * A firewall row (the list's own columns plus FIREWALL_V3_SELECT) as the
+ * ranking reads it. The list holds OPEN items only.
+ */
+export function firewallV3Row(
+  row:
+    | (Partial<Omit<FirewallV3Row, "status">> & {
+        tier: string | null;
+        isManualOverride: boolean;
+        agentTierSetAt: Date | null;
+      })
+    | undefined,
+): FirewallV3Row | undefined {
+  if (!row) return undefined;
+  return { ...toV3ItemRow({ ...row, status: "OPEN" }), v3Importance: row.v3Importance ?? null };
 }
 
 export interface FirewallV3Input {
@@ -32,21 +58,23 @@ export function withV3Lanes(
     tiers.QUEUE.map((item) => {
       const row = input.rowOf(item.id);
       return {
-        id: item.id,
+        // The mail id breaks ties, as the lane page SQL does.
+        id: item.sourceId,
         item,
         receivedAt: input.receivedAtOf(item.id),
         importance: row?.v3Importance ?? IMPORTANCE_PRIOR.unknown,
         due: row?.v3Due ? row.v3Due.toISOString() : null,
-        heldAt: row && isShownHeld(row) ? row.heldAt : null,
+        heldAt: row && isShownHeld(row, input.now) ? row.heldAt : null,
       };
     }),
     input.now,
   ).map((ranked) => ranked.item);
   const block = (item: FirewallItem, rank: number | null): FirewallItem => ({
     ...item,
-    v3: v3ItemWire(input.rowOf(item.id) ?? undecided(item.tier), {
+    v3: v3ItemWire(input.rowOf(item.id) ?? toV3ItemRow({ tier: item.tier }), {
       rank,
       subject: item.email?.subject ?? null,
+      now: input.now,
     }),
   });
   const lanes = Object.fromEntries(
@@ -58,16 +86,4 @@ export function withV3Lanes(
     ]),
   );
   return lanes as Record<Tier, FirewallItem[]>;
-}
-
-function undecided(tier: string): V3ItemRow {
-  return {
-    tier,
-    heldAt: null,
-    isManualOverride: false,
-    agentTierSetAt: null,
-    v3PolicyVersion: null,
-    v3Decision: null,
-    v3Due: null,
-  };
 }

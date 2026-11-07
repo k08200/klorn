@@ -303,7 +303,7 @@ const kindReason = (kind: MailKind): PolicyReason =>
  * An allowlist, so a field added to the snapshot later never reaches clients
  * without a decision here.
  */
-const CLIENT_RELATIONSHIP_KEYS = [
+export const CLIENT_RELATIONSHIP_KEYS = [
   "sentCount",
   "lastSentAt",
   "medianReplyLatencyMs",

@@ -55,7 +55,6 @@ import {
 } from "../judge/attention-override.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
-import { resolveInboxScope } from "../judge/email-lanes.js";
 import {
   collapseEmailThreads,
   countEmailThreads,
@@ -69,7 +68,7 @@ import {
   TODAY_PUSH_WINDOW_HOURS,
   todayPushCutoff,
 } from "../judge/today-push-window.js";
-import { type FirewallV3Row, withV3Lanes } from "../judge/v3/firewall-v3.js";
+import { FIREWALL_V3_SELECT, firewallV3Row, withV3Lanes } from "../judge/v3/firewall-v3.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { v3TodayFields } from "../judge/v3/read-fields.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
@@ -369,43 +368,6 @@ const firewallListQuerySchema = {
   },
 } as const;
 
-/** The v3 decision columns, selected only for a user under policy v3. */
-const V3_EXTRA_SELECT = {
-  heldAt: true,
-  v3PolicyVersion: true,
-  v3Decision: true,
-  v3Due: true,
-  v3Importance: true,
-} as const;
-
-/** An item row as firewall-v3.ts reads it (the columns above, plus lane and provenance). */
-function v3RowOf(
-  row:
-    | {
-        tier: string | null;
-        isManualOverride: boolean;
-        agentTierSetAt: Date | null;
-        heldAt?: Date | null;
-        v3PolicyVersion?: string | null;
-        v3Decision?: unknown;
-        v3Due?: Date | null;
-        v3Importance?: number | null;
-      }
-    | undefined,
-): FirewallV3Row | undefined {
-  if (!row) return undefined;
-  return {
-    tier: row.tier,
-    isManualOverride: row.isManualOverride,
-    agentTierSetAt: row.agentTierSetAt,
-    heldAt: row.heldAt ?? null,
-    v3PolicyVersion: row.v3PolicyVersion ?? null,
-    v3Decision: row.v3Decision ?? null,
-    v3Due: row.v3Due ?? null,
-    v3Importance: row.v3Importance ?? null,
-  };
-}
-
 export async function firewallRoutes(app: FastifyInstance) {
   const laneWriteLimit = laneWriteLimiter(app);
   app.addHook("preHandler", requireAuth);
@@ -645,7 +607,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               inputHash: string | null;
               agentTierSetAt: Date | null;
               isManualOverride: boolean;
-              // Selected only for a user under policy v3 (V3_EXTRA_SELECT).
+              // Selected only for a user under policy v3 (FIREWALL_V3_SELECT).
               heldAt?: Date | null;
               v3PolicyVersion?: string | null;
               v3Decision?: unknown;
@@ -657,7 +619,7 @@ export async function firewallRoutes(app: FastifyInstance) {
       ).findMany({
         where: { userId, status: "OPEN" },
         select: {
-          ...(policyUser ? V3_EXTRA_SELECT : {}),
+          ...(policyUser ? FIREWALL_V3_SELECT : {}),
           id: true,
           source: true,
           sourceId: true,
@@ -1087,7 +1049,7 @@ export async function firewallRoutes(app: FastifyInstance) {
 
       const lanes = policyUser
         ? withV3Lanes(tiers, {
-            rowOf: (itemId) => v3RowOf(rowById.get(itemId)),
+            rowOf: (itemId) => firewallV3Row(rowById.get(itemId)),
             receivedAtOf: (itemId) => {
               const row = rowById.get(itemId);
               return (row && emailById.get(row.sourceId)?.receivedAt) ?? row?.createdAt ?? now;
@@ -1095,9 +1057,7 @@ export async function firewallRoutes(app: FastifyInstance) {
             now,
           })
         : tiers;
-      const today = policyUser
-        ? await v3TodayFields(userId, await resolveInboxScope(userId, inbox), now)
-        : {};
+      const today = policyUser ? await v3TodayFields(userId, inbox, now) : {};
       return {
         tiers: lanes,
         ...today,

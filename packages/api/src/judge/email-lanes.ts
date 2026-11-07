@@ -269,18 +269,41 @@ export async function pageEmailIdsInLane(
   if (query.scope.kind === "unknown") return { ids: [], total: 0 };
   const from = laneFromSql(query);
   const rankedAt = rankedTime(query);
-  const order = rankedAt ? rankedOrderSql(rankedAt) : Prisma.sql`e."receivedAt" DESC, e."id" DESC`;
+  if (rankedAt) return rankedLanePage(query, from, rankedAt);
   const [rows, totals] = await Promise.all([
     prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT e."id" AS id
       ${from}
-      ORDER BY ${order}
+      ORDER BY e."receivedAt" DESC, e."id" DESC
       LIMIT ${query.take} OFFSET ${query.skip}`),
     prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
       SELECT COUNT(*)::int AS total
       ${from}`),
   ]);
   return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+}
+
+/**
+ * The ranked QUEUE page. No index serves the ranked order, so it sorts the
+ * whole lane: like the thread page it runs under the statement timeout, and a
+ * slow sort throws QueryTimeoutError (the route answers a retryable 503).
+ */
+async function rankedLanePage(
+  query: LanePageQuery,
+  from: Prisma.Sql,
+  rankedAt: Date,
+): Promise<{ ids: string[]; total: number }> {
+  return withStatementTimeout(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      ORDER BY ${rankedOrderSql(rankedAt)}
+      LIMIT ${query.take} OFFSET ${query.skip}`);
+    const totals = await tx.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS total
+      ${from}`);
+    return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+  });
 }
 
 /**
@@ -420,7 +443,8 @@ function rankedTime(query: Pick<LaneViewQuery, "lane" | "rankedAt">): Date | und
 /**
  * The reader's previous / next in the ranked QUEUE. Ranked order has no
  * keyset, so rows are numbered in that order and the anchor's neighbours are
- * the rows numbered one above and one below. The anchor joins the numbering
+ * the rows numbered one above and one below. It runs under the statement
+ * timeout (QueryTimeoutError → a retryable 503). The anchor joins the numbering
  * even when it is no longer in the view (it may just have been moved out), so
  * walking on still works. Read by id AND owner, like the time-ordered path.
  */
@@ -428,7 +452,9 @@ async function rankedNeighbours(
   query: LaneNeighbourQuery,
   rankedAt: Date,
 ): Promise<{ newerId: string | null; olderId: string | null }> {
-  const rows = await prisma.$queryRaw<Array<{ id: string; offset: number }>>(Prisma.sql`
+  // Numbering sorts the whole lane: bounded like the ranked page.
+  const rows = await withStatementTimeout((tx) =>
+    tx.$queryRaw<Array<{ id: string; offset: number }>>(Prisma.sql`
     WITH candidates AS (
       SELECT e."id" AS id ${laneFromSql(query)}
       UNION
@@ -438,13 +464,14 @@ async function rankedNeighbours(
     numbered AS (
       SELECT e."id" AS id, ROW_NUMBER() OVER (ORDER BY ${rankedOrderSql(rankedAt)}) AS rn
       FROM candidates
-      JOIN "EmailMessage" e ON e."id" = candidates.id
+      JOIN "EmailMessage" e ON e."id" = candidates.id AND e."userId" = ${query.userId}
       LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}
     ),
     anchor AS (SELECT rn FROM numbered WHERE id = ${query.emailId})
     SELECT n.id AS id, (n.rn - anchor.rn)::int AS "offset"
     FROM numbered n, anchor
-    WHERE n.rn IN (anchor.rn - 1, anchor.rn + 1)`);
+    WHERE n.rn IN (anchor.rn - 1, anchor.rn + 1)`),
+  );
   return {
     newerId: rows.find((r) => Number(r.offset) === -1)?.id ?? null,
     olderId: rows.find((r) => Number(r.offset) === 1)?.id ?? null,

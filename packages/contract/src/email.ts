@@ -97,7 +97,10 @@ export interface EmailListItem {
    * Display-only, never a trust signal. null = no stored reason.
    */
   tierReason?: string | null;
-  /** Attention engine v3 decision, for a user under the policy only (attention-v3.ts). */
+  /**
+   * Attention engine v3 decision, for a user under the policy only (attention-v3.ts).
+   * Its reasons carry evidence quoted from the mail: render it inert (V3Reason.evidence).
+   */
   v3?: V3ItemBlock;
   /**
    * Messages of this row's thread inside the requested view. Set only on a
@@ -239,7 +242,10 @@ export interface EmailReaderContextResponse {
   newerId: string | null;
   /** The mail just below this one in that view (older); null at the end. */
   olderId: string | null;
-  /** Attention engine v3 decision, for a user under the policy only (attention-v3.ts). */
+  /**
+   * Attention engine v3 decision, for a user under the policy only (attention-v3.ts).
+   * Its reasons carry evidence quoted from the mail: render it inert (V3Reason.evidence).
+   */
   v3?: V3ItemBlock;
 }
 

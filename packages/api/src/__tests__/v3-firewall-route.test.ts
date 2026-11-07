@@ -40,7 +40,7 @@ const attentionRows = [
   // Newest first by surfacedAt: the order the lanes use without the policy.
   row("plain", "QUEUE", { surfacedAt: ago(0.5) }),
   row("vip", "QUEUE", { surfacedAt: ago(2), v3Importance: 1 }),
-  row("held", "QUEUE", { surfacedAt: ago(3), v3Importance: 0.2, heldAt: ago(3) }),
+  row("held", "QUEUE", { surfacedAt: ago(3), v3Importance: 0.4, heldAt: ago(3) }),
   row("urgent", "PUSH", { surfacedAt: ago(0.25), v3Importance: 1 }),
 ];
 const emailRows = attentionRows.map((r) => ({
