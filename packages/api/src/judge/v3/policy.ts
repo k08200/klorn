@@ -68,6 +68,12 @@ export interface PolicyInput {
    * through an ask, whatever kind the model reported (v2 floor #794).
    */
   automatedSender?: boolean;
+  /**
+   * DMARC verdict for the From domain (pre-fact signal): false when it failed,
+   * null when there is no verdict. A sender whose From failed authentication
+   * is never trusted, so a forged VIP address earns nothing.
+   */
+  senderAuthenticated?: boolean | null;
   /** Decision time. Replay passes the mail's arrival time. Defaults to now. */
   decidedAt?: Date;
 }
@@ -131,10 +137,11 @@ function matchFacts(input: PolicyInput): Match {
       reason("event", { fact: "event", params: { conflict: f.event.conflict } }),
     );
   }
-  const push = pushMatch(f, input.relationship, decidedAt, input.automatedSender === true);
+  const trusted = trustedSender(input.relationship, input.senderAuthenticated ?? null);
+  const push = pushMatch(f, trusted, decidedAt, input.automatedSender === true);
   if (push) return push;
   return (
-    queueMatch(f, input.relationship) ??
+    queueMatch(f, trusted) ??
     infoMatch(f) ??
     silentMatch(f) ??
     only("QUEUE", reason("default_queue"))
@@ -147,9 +154,14 @@ function matchFacts(input: PolicyInput): Match {
  * them": sent-mail history also holds Klorn's unattended auto-replies, so an
  * attacker could earn it. SentMessage.origin (#1591) marks new Klorn sends, but
  * legacy rows stay null and read as the user's; widening is a later policyVersion.
+ * A From that failed DMARC is never trusted: VIP labels match by address or
+ * domain, which a forger can copy.
  */
-function trustedSender(rel: RelationshipSnapshot | null): boolean {
-  return rel?.vip === true;
+function trustedSender(
+  rel: RelationshipSnapshot | null,
+  senderAuthenticated: boolean | null,
+): boolean {
+  return rel?.vip === true && senderAuthenticated !== false;
 }
 
 const pushRiskOf = (f: FactsV1) => PUSH_RISKS.find((r) => f.risk.includes(r));
@@ -159,7 +171,7 @@ const phishingSuspected = (f: FactsV1) => f.risk.includes("phishing_suspect");
 
 function pushMatch(
   f: FactsV1,
-  rel: RelationshipSnapshot | null,
+  trusted: boolean,
   decidedAt: Date,
   automatedSender: boolean,
 ): Match | null {
@@ -170,7 +182,7 @@ function pushMatch(
     params: { addressedTo: f.addressedTo },
   });
   const risk = pushRiskOf(f);
-  if (risk && trustedSender(rel)) {
+  if (risk && trusted) {
     return {
       lane: "PUSH",
       reasons: [reason("risk", { fact: "risk", params: { risk, trusted: true } }), addressed],
@@ -206,15 +218,12 @@ function earliestAskDueWithin(f: FactsV1, fromMs: number, toMs: number): number 
   return bestIndex;
 }
 
-function queueMatch(f: FactsV1, rel: RelationshipSnapshot | null): Match | null {
+function queueMatch(f: FactsV1, trusted: boolean): Match | null {
   // A payment/security risk that did not interrupt is never filed or hidden,
   // even under a phishing suspicion (a false positive must stay visible).
   const risk = pushRiskOf(f);
   if (risk) {
-    return only(
-      "QUEUE",
-      reason("risk", { fact: "risk", params: { risk, trusted: trustedSender(rel) } }),
-    );
+    return only("QUEUE", reason("risk", { fact: "risk", params: { risk, trusted } }));
   }
   if (f.asks.length > 0) {
     const ask = f.asks[0];

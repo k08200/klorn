@@ -146,9 +146,9 @@ export const STATIC_TIER_REASONS = {
     fr: "Engagement suivi — ajouté à la file de revue",
     de: "Verfolgte Zusage – zur Prüfliste hinzugefügt",
   },
-  // Policy v3 interrupt budget (attention-engine-v3.md §3(4)): a PUSH
-  // candidate after the day's notifications are spent. Read back as the
-  // "held" marker, so the key must not change.
+  // Policy v3 interrupt budget (attention-engine-v3.md §3(5)): a PUSH
+  // candidate after the day's notifications are spent. Stored items carry the
+  // key, so it must not change. The held marker itself is AttentionItem.heldAt.
   "email.heldByInterruptBudget": {
     en: "Held: daily interrupt budget reached — no notification sent",
     ko: "보류: 오늘 알림 한도에 도달해 알림을 보내지 않았어요",
@@ -157,6 +157,18 @@ export const STATIC_TIER_REASONS = {
     es: "En espera: se alcanzó el límite diario de avisos, no se envió notificación",
     fr: "En attente : limite quotidienne d'alertes atteinte, aucune notification envoyée",
     de: "Zurückgestellt: Tageslimit für Benachrichtigungen erreicht – keine Benachrichtigung",
+  },
+  // Attention engine v3 (JUDGE_V3_POLICY): the policy picked a different lane
+  // from the v2 judge, so v2's reason text no longer explains it. Clients
+  // under the flag show the structured v3 reasons instead.
+  "email.v3LaneFromFacts": {
+    en: "Sorted by what this mail asks of you",
+    ko: "메일이 요청하는 내용을 보고 분류했어요",
+    ja: "メールの依頼内容をもとに分類しました",
+    zh: "根据邮件对你的请求进行分类",
+    es: "Clasificado según lo que este correo te pide",
+    fr: "Classé selon ce que ce message vous demande",
+    de: "Eingeordnet nach dem, worum diese Mail dich bittet",
   },
 } as const satisfies Record<string, Record<NotificationLanguage, string>>;
 // `satisfies`, not an annotation: it checks language completeness at the TABLE

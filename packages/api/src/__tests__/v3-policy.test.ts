@@ -103,6 +103,16 @@ describe("laneFromFactsV3 — rules", () => {
     }
   });
 
+  it("a VIP address whose From failed DMARC is not trusted: a forged VIP never interrupts", () => {
+    const f = facts({ risk: ["payment_failed"], kind: "notification" });
+    const forged = decide(f, { relationship: vipSender, senderAuthenticated: false });
+    expect(forged.lane).toBe("QUEUE");
+    expect(forged.reasons[0]).toMatchObject({ params: { risk: "payment_failed", trusted: false } });
+    // No verdict (some providers report none) is not a failure.
+    expect(decide(f, { relationship: vipSender, senderAuthenticated: null }).lane).toBe("PUSH");
+    expect(decide(f, { relationship: vipSender, senderAuthenticated: true }).lane).toBe("PUSH");
+  });
+
   it("risk carries no evidence: from anyone but a VIP it queues instead", () => {
     // Past sends are not trust: Klorn's own auto-replies land in sent mail too.
     for (const relationship of [

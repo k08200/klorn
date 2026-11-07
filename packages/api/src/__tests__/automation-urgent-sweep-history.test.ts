@@ -313,13 +313,15 @@ describe.each(IMAP_CASES)("$label: the urgent sweep after an IMAP repair", (imap
   });
 });
 
-describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down", () => {
+describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down for users under the policy", () => {
   afterEach(() => {
     delete process.env.JUDGE_V3_POLICY;
+    delete process.env.JUDGE_V3_SHADOW;
   });
 
   it("rings for nothing, so the policy's PUSH lane under the daily budget is the only email interrupt", async () => {
     process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
     arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
 
     await runOneTick();
@@ -327,6 +329,15 @@ describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down", () => {
     expect(createdNotifications().filter((d) => d.title === "Urgent email")).toEqual([]);
     expect(m.sendPushNotification).not.toHaveBeenCalled();
     expect(m.sendSms).not.toHaveBeenCalled();
+  });
+
+  it("still rings for a user the shadow flag does not cover (no policy for them)", async () => {
+    process.env.JUDGE_V3_POLICY = "true";
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
   });
 
   it("still rings with the flag off (the control)", async () => {

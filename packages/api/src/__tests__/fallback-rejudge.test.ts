@@ -24,11 +24,14 @@ const dbMock = vi.hoisted(() => ({
   decisionLabel: { findMany: vi.fn() },
   attentionItem: { findMany: vi.fn(), updateMany: vi.fn() },
   emailMessage: { findUnique: vi.fn() },
+  attentionFacts: { findMany: vi.fn() },
 }));
 const judgeEmailMock = vi.hoisted(() => vi.fn());
 const buildContextMock = vi.hoisted(() => vi.fn());
 const recordDecisionMock = vi.hoisted(() => vi.fn());
 const flagState = vi.hoisted(() => ({ sweep: false }));
+const policyEnabled = vi.hoisted(() => vi.fn(() => false));
+const planV3Write = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({ prisma: dbMock, db: dbMock }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
@@ -38,6 +41,8 @@ vi.mock("../judge/poc-judge.js", async (importOriginal) => {
 });
 vi.mock("../judge/judge-context.js", () => ({ buildJudgeContext: buildContextMock }));
 vi.mock("../judge/decision-label.js", () => ({ recordEmailDecision: recordDecisionMock }));
+vi.mock("../judge/v3/flags.js", () => ({ isJudgeV3PolicyEnabled: policyEnabled }));
+vi.mock("../judge/v3/live-judge.js", () => ({ planV3Write }));
 vi.mock("../config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config.js")>();
   return {
@@ -80,6 +85,8 @@ function wire({ tiers = ["QUEUE"] }: { tiers?: string[] } = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   flagState.sweep = false;
+  policyEnabled.mockReturnValue(false);
+  dbMock.attentionFacts.findMany.mockResolvedValue([]);
 });
 
 describe("rejudgeFallbackItems", () => {
@@ -106,6 +113,75 @@ describe("rejudgeFallbackItems", () => {
         sourceId: "m0",
         shownTier: "PUSH",
         decidedBy: "llm",
+      }),
+    );
+  });
+
+  it("for a user under policy v3, writes the v3 rule's lane and columns, with no push", async () => {
+    wire();
+    policyEnabled.mockReturnValue(true);
+    const due = new Date("2026-11-03T12:00:00Z");
+    planV3Write.mockResolvedValue({
+      tier: "INFO",
+      reason: "email.v3LaneFromFacts",
+      v3: {
+        v3PolicyVersion: "v3.0",
+        v3Decision: { basis: "llm", reasons: [], threadTurn: "none" },
+        v3Due: due,
+        v3Importance: 0.4,
+        heldAt: null,
+      },
+      push: { kind: "none" },
+    });
+    const summary = await rejudgeFallbackItems("u1", { apply: true, delayMs: 0 });
+    expect(summary.changed).toBe(1);
+    expect(planV3Write).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u1", rejudge: true, allowPush: false }),
+    );
+    expect(dbMock.attentionItem.updateMany).toHaveBeenCalledWith({
+      where: { id: "a0", status: "OPEN", isManualOverride: false, agentTierSetAt: null },
+      data: expect.objectContaining({
+        tier: "INFO",
+        tierReason: "email.v3LaneFromFacts",
+        v3PolicyVersion: "v3.0",
+        v3Due: due,
+        heldAt: null,
+      }),
+    });
+    expect(recordDecisionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ shownTier: "INFO", decidedBy: "llm" }),
+    );
+  });
+
+  it("for a user under policy v3, leaves out rows LLM facts decided before the batch is cut", async () => {
+    // Six fallback rows, batch of 5: the first five have LLM facts. Cutting the
+    // batch first would spend every tick on them and never reach m5.
+    wire({ tiers: ["QUEUE", "QUEUE", "QUEUE", "QUEUE", "QUEUE", "QUEUE"] });
+    policyEnabled.mockReturnValue(true);
+    dbMock.attentionFacts.findMany.mockResolvedValue(
+      ["m0", "m1", "m2", "m3", "m4"].map((sourceId) => ({ sourceId })),
+    );
+    planV3Write.mockResolvedValue({
+      tier: "QUEUE",
+      reason: "r",
+      autoEligible: false,
+      v3: {
+        v3PolicyVersion: "v2",
+        v3Decision: { basis: "v2", reasons: [], threadTurn: null },
+        v3Due: null,
+        v3Importance: 0.2,
+        heldAt: null,
+      },
+      push: { kind: "none" },
+    });
+    await rejudgeFallbackItems("u1", { apply: true, delayMs: 0, limit: 5 });
+    expect(judgeEmailMock).toHaveBeenCalledTimes(1);
+    expect(dbMock.emailMessage.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "m5" } }),
+    );
+    expect(dbMock.attentionFacts.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ factsSource: "llm", userId: "u1" }),
       }),
     );
   });

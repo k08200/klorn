@@ -196,6 +196,7 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
 2. **MEETING**: `event` is present and `addressedTo` is not bulk. This is checked before PUSH, as in v2. A meeting notifies through its own lane and spends no interrupt budget.
 3. **PUSH candidate**: `addressedTo` is me_direct or me_cc, there is no `phishing_suspect`, and one of these holds:
    - `risk` contains payment_failed or security_alert, and the sender is a **VIP** (an investor/customer label, or a sender pinned to PUSH). Risk has no evidence quote in facts v1, so on its own it needs relationship trust.
+     - A VIP whose From failed DMARC (`senderAuthenticated` false) is not trusted. VIP labels match by address or domain, which a forger can copy. No verdict (null) is not a failure: some providers report none.
      - The same organisation is not enough: that is how CEO-fraud spoofing looks.
      - "The user wrote to them" is not enough either. `SentMessage.origin` (#1591) now marks Klorn's own sends, but rows recorded before it stay null and still read as the user's (§3(2)). A past unattended auto-reply to an attacker could therefore still lend trust.
      - v2 never pushed machine mail, so this is never worse than today. A user who wants a bank's alerts to interrupt pins the sender to PUSH.
@@ -210,7 +211,33 @@ Floors:
 - Mail that Gmail marked as spam never lands in PUSH or MEETING. It goes to QUEUE, like v2's spam floor. `spam` and `automatedSender` are mailbox signals passed next to the facts; they are not facts.
 - `phishing_suspect` never lands in PUSH or MEETING (a suspected fake invite goes to QUEUE) and shows up as a reason on any lane.
 
-**Interrupt budget.** The founder's default is 5 per day (§8). `JUDGE_V3_PUSH_BUDGET` sets the system default and accepts a positive integer or `unlimited`. The per-user setting arrives with the settings UI.
+**Live decision (P3 PR2).** For a user under the policy (see Flags), the judge decides the lane, including a budget hold, before it writes the item:
+1. The v2 judge runs as today. A precedence source (manual override, sender pin, marketing fast-path, sender prior, learned rule) keeps its v2 lane, and the item records the matching reason.
+2. Otherwise, new mail gets facts from the live extractor (`v3/live-facts.ts`, P2). This is the judge's own call, not the sampled shadow:
+   - it waits for a model slot;
+   - it uses the user's own key when one is set;
+   - it has a 20s deadline.
+
+   A re-judge or the backfill sweep reads the stored facts (`AttentionFacts`) and makes no model call.
+3. With LLM facts, policy v3.0 decides. With no LLM facts, the v2 lane stands: it is the better evidence we have. That covers an extractor failure, the deadline, a budget refusal, and no stored row. The exception is when the v2 judge itself fell back to keywords. Then keyword facts merged with the certain pre-facts decide (fallback parity, below).
+4. A PUSH then passes the push gates: the 6h rule, the re-ingest skip and the dedupe. If it is not pinned and would ring, it claims a budget slot **before** the item is written. A held PUSH is written as QUEUE with `heldAt`, so it never shows as PUSH, not even for one sync.
+5. The item stores what ranking and clients read:
+   - `v3PolicyVersion`: "v3.0", or "v2" when the v2 lane stood;
+   - `v3Decision`: `{ basis: "llm" | "keyword" | "v2", reasons, threadTurn }`;
+   - `v3Due`;
+   - `v3Importance`;
+   - `heldAt`.
+
+   When the policy picks a different lane from v2, `tierReason` becomes the static key `email.v3LaneFromFacts`, because v2's text would not explain the new lane. Otherwise v2's reason stays.
+6. A hold is final for the item. A later re-judge that says PUSH again keeps it in QUEUE, held; it is past the 6h push window by then. A pin keeps precedence over a hold, and a re-judge to any other lane clears it.
+7. If a human or an agent moved the item while the judge ran, their lane stands. A slot already claimed for it stays spent, and its bell row is hidden.
+8. Failure paths:
+   - If planning fails (a database error), the mail is still written, in the v2 lane, with no v3 columns and no PUSH notification. The budget is never bypassed. MEETING still rings, since it is not budgeted.
+   - If writing the item fails after a slot was claimed, the claim is released. Nothing rang, so the backfill sweep's retry can claim and ring again.
+   - The backfill sweep leaves a policy user's mail younger than five minutes to the inline judge, so the two never claim slots for the same mail at once.
+9. v2's `autoEligible` (unattended auto mode) survives only where v3 kept v2's lane and saw no payment, security or phishing risk.
+
+**Interrupt budget.** The founder's default is 5 per day (§8). `JUDGE_V3_PUSH_BUDGET` sets the system default and accepts a positive integer or `unlimited`. `AutomationConfig.interruptBudget` (1–50, via `PATCH /api/automations`) overrides it per user. Null means the system default. Any other value is a 400. For a user under the policy, the automations response adds `interruptBudget`, `interruptBudgetDefault` (null for no limit) and `interruptBudgetMax`.
 - The budget is counted per user per local day (`AutomationConfig.timezone`). Only PUSH notifications spend it. MEETING does not.
 - These spend nothing:
   - the existing gates, which run first: the 6h recency rule, the IMAP re-ingest skip and the 7-day dedupe (`email-firewall.ts`);
@@ -222,15 +249,20 @@ Floors:
   - `tierReason` = `email.heldByInterruptBudget` ("Held: daily interrupt budget reached", 7 languages);
   - no notification;
   - `DecisionLabel.shownTier` = QUEUE. `decidedBy` keeps the judge path, because the fallback repair sweep selects on it.
-  - The judge drops a model reason that equals a static reason key, so only the hold path writes the held key. P3 PR2 adds a dedicated held column as the marker the ranking trusts.
+  - The judge drops a model reason that equals a static reason key, so only the hold path writes the held key. Ranking trusts `AttentionItem.heldAt`, not the reason text.
   - If a human or an agent moved the item between the judgement and the hold, nothing is sent and their lane stands.
-- While `JUDGE_V3_POLICY` is on, the legacy keyword urgent sweep (`automation-scheduler.ts`) stops sending its own pushes. The policy's PUSH lane, under the budget, is the only email interrupt.
+- **Slots reserved for trusted senders.** 40% of the day's slots, rounded down, are reserved for trusted senders, with at least 1 from a limit of 2 up (5 → 2, 3 → 1, 2 → 1, 1 → 0).
+  - A trusted sender is a VIP, or someone the user has written to at least twice (`sentCount` ≥ 2). One reply, such as "who is this?", is not a relationship.
+  - A sender whose From failed DMARC is never trusted.
+  - Slots are numbered 1..limit. Strangers claim only slots above the reserve, so five urgent-looking mails from strangers can spend 3 slots at most.
+  - Trusted senders claim the lowest free slot, and may also use the slots above the reserve. The reserve only limits strangers; it is not a cap on trusted senders.
+  - The day's used slots are counted first, so a limit lowered mid-day still holds.
+  - A budgeted PUSH decided without a relationship gets one loaded from the database, with no model call. That covers a v2 lane standing for missing facts, a sender prior and a learned rule. A failed load leaves the sender a stranger.
+  - `sentCount` still counts legacy null-origin sends (§3(2)). An attacker who got two Klorn auto-replies therefore counts as trusted, and can take any free slot, not only the reserved ones. That is bounded by the limit, and it does not change the lane. With no limit there is no reserve.
+- For a user under the policy, the legacy keyword urgent sweep (`automation-scheduler.ts`) stops sending its own pushes. The policy's PUSH lane, under the budget, is then the only budgeted email interrupt. MEETING still notifies outside the budget, as in v2.
   - Prod, last 30 days to 2026-10-31: 43 of the 48 "Urgent email" notifications were for mail whose firewall lane is now QUEUE or SILENT, or which has no item. That is the sweep.
   - **This is part of the founder's flip decision.**
-- Live admission is first come, first served within the day. "Importance within the day's top-k" applies inside a batch (replay), and gets stricter once P5 importance exists.
-- Known gaps until the lane decision moves before persistence, with a held column (P3 PR2):
-  - The item is written as PUSH and then held, so the Mac's local banner can see it for one sync.
-  - A re-judge after the 6h window can write a held item back to PUSH. It sends no notification and spends no budget, but it shows in the PUSH lane.
+- Live admission is first come, first served within the day, apart from the trusted reserve. "Importance within the day's top-k" applies inside a batch (replay), and gets stricter once P5 importance exists.
 - A set but invalid `JUDGE_V3_PUSH_BUDGET` falls back to 5 with a warning in the log.
 
 **Importance before P5** (`importance.ts`). A relationship prior in [0, 1]:
@@ -251,7 +283,9 @@ Unknown (null) features add nothing. A pin adds nothing either: it sets the lane
 - Ties go to the newer mail.
 - No numeric score is sent to clients.
 
-**Fallback parity (principle 9).** With no LLM facts, `keywordFactsV1` derives facts from the same detectors as the v2 keyword fallback. The P2 extractor writes `factsSource: "none"` rows when the LLM fails. The policy treats those rows as having no LLM facts and uses keyword facts merged with the certain pre-facts.
+**Fallback parity (principle 9).** With no LLM facts, `keywordFactsV1` derives facts from the same detectors as the v2 keyword fallback. The P2 extractor writes `factsSource: "none"` rows when the LLM fails.
+- If the v2 judge also fell back to keywords, the policy uses keyword facts merged with the certain pre-facts.
+- If the v2 judge had a model answer, its lane stands (live decision, step 3). A keyword lane would be worse evidence than the model lane the user gets today.
 
 A test runs both paths over the cross product of keyword signals (4,368 mails), against the real v2 code path. It asserts:
 - (a) nothing v2 shows becomes SILENT, except bulk scheduling mail;
@@ -270,12 +304,23 @@ The documented divergences (`parity.ts`), counted on that corpus:
 These are cross-product counts, not prevalence. The replay reports prevalence on real mail. In prod, 331 of the 2,378 email decisions in the 30 days to 2026-10-31 came from the keyword fallback.
 
 **Flags.**
-- `JUDGE_V3_POLICY` (default OFF) **requires `JUDGE_V3_SHADOW`**. Facts exist only while the extractor runs, and a POLICY flip must never add LLM cost on its own.
-- Per item, missing facts mean the v2 lane.
-- While POLICY is on, the budget applies to every PUSH notification.
-- P3 PR1 ships the budget. P3 PR2 wires lanes from stored facts, after the P2 store lands.
+- `JUDGE_V3_POLICY` (default OFF) applies to the users `JUDGE_V3_SHADOW` covers: `true` means everyone, `cohort` means the cohort. Other users keep v2 exactly, with no budget. This allows a cohort rollout: POLICY=true with SHADOW=cohort.
+- **Cost.** For a user under the policy, the facts call is part of the judge (live decision, step 2). That is one more model call per new mail, and it replaces the sampled shadow for that user. Prod volume for scale: 2,378 email decisions in the 30 days to 2026-10-31, about 80 a day across all users.
+  - The facts call draws on the judge's reserved slice of the daily cost cap (`JUDGE_BUDGET_RESERVE_CENTS`). It therefore competes with the v2 judge call for the same reserve.
+  - v2 keeps being computed per mail until v3 has been the default for two weeks (§7). Until then, one new mail spends two reserved calls.
+  - Before a POLICY flip, check the reserve against that double draw and raise it if needed.
+- Per item, missing LLM facts mean the v2 lane (live decision, step 3).
+- These apply per user, only to users under the policy:
+  - the budget;
+  - the legacy sweep stand-down;
+  - the claim-row dedupe.
 
-**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls. It reports:
+**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--facts=stored|keyword] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls.
+- `--facts=stored`, the default, decides each item the way the live path would: stored LLM facts go to the policy, otherwise the v2 lane or the keyword parity rule applies.
+- `--facts=keyword` gives every item keyword facts. That is the model-down estimate.
+- For a v2 PUSH row with no stored relationship, the CLI loads the relationship from the database, as the live path does for the trusted reserve. A human's or an agent's lane is kept, as live keeps it.
+
+It reports:
 - the lane distribution: v2 shown, v3 before the budget, v3 final;
 - v2 → v3 transitions;
 - budget stats per user-day. Like the live path, pins and manual overrides spend no budget. Quiet hours, preferences and the 6h rule are not modelled, so `held` is an upper bound;
@@ -284,8 +329,9 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
 
 **Reasons and API contract (for the surface redesign).** These fields are additive and only appear while `JUDGE_V3_POLICY` is on. With the flag off, every response keeps today's shape and order: the new fields are absent, not null.
 - Each item gets `v3: { policyVersion, rank, held, due, threadTurn, reasons }`:
+  - `policyVersion` is "v3.0" when the policy decided, and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane;
   - `rank` is the 1-based position in the ranked QUEUE, and null outside QUEUE;
-  - `held` is true when the budget held this PUSH (read from the held column that P3 PR2 adds). Held items take ranks 1..n, by importance and then in the order they were held;
+  - `held` is true when the budget held this PUSH (`AttentionItem.heldAt`, while the item is still in QUEUE). Held items take ranks 1..n, by importance and then in the order they were held;
   - `due` is an ISO 8601 UTC timestamp. Clients format it in the display zone, and null hides the chip.
 - Each reason is `{ code, fact, evidence, evidenceIn: "subject" | "body" | null, params }`.
   - `reasons[0]` decides the lane; the rest support it. Reasons contain no prose and no model names; clients localise from `code` and `params`.
@@ -301,7 +347,9 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
     - `relationship`: the known features only. These are counts and dates, never content.
 - Today responses add `interruptBudget: { limit, used, day }` (`limit` is null for no limit; `day` is `YYYY-MM-DD`), plus `queueTotal` and `rankedAt` (ISO). Clients re-apply ranks only on focus or refresh.
 - Open, and not in v3.0:
-  - Budget exhaustion by strangers (security review). Five PUSH candidates from people the user never wrote to can spend the day's budget. The held alert still tops the Today list, and v2 had no budget at all. The fix is a share of slots reserved for trusted senders, in P3 PR2, which has relationship data on the push path.
+  - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event. It shares the per-user push rate limit (3 per 10 minutes) with PUSH. A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
+  - Floods that never claim a slot (security review). A PUSH that will not ring (quiet hours, preferences) stays in the PUSH lane and spends nothing. Many urgent-looking stranger mails in quiet hours, or held overflow outside them, all list ahead of ordinary QUEUE. Ranking orders held items by importance, so a trusted sender's held alert stays above a stranger's. P3 PR2b decides how to collapse or cap stranger held items in the Today list.
+  - In ranking, "held" means `heldAt` is set, the lane is still QUEUE, and no human or agent lane is on the item. A manual override or an agent `set_tier` leaves `heldAt` in place, so readers must check all three.
   - Widening risk-only PUSH trust beyond VIP. Now that `SentMessage.origin` exists (#1591), "the user wrote to them" can become a signal: user-origin sends only, once legacy null rows have aged out or been classified. This would be a new `policyVersion`, decided on replay data.
   - Calendar conflict title and time. `event.conflict` stays null until P2 reads the calendar.
   - "Always interrupt for payment/security past the budget". This is a design proposal and a founder decision, OFF until decided. The params `{risk, overBudget: true}` are reserved for it.

@@ -49,7 +49,22 @@ vi.mock("../resolve-user-email.js", () => ({
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 const shadowEnabled = vi.hoisted(() => vi.fn(() => false));
 const runFactsShadow = vi.hoisted(() => vi.fn(() => Promise.resolve("stored")));
-vi.mock("../judge/v3/flags.js", () => ({ isJudgeV3ShadowEnabled: shadowEnabled }));
+const policyEnabled = vi.hoisted(() => vi.fn(() => false));
+const planV3Write = vi.hoisted(() =>
+  vi.fn(async () => ({ tier: "QUEUE", reason: "", v3: {}, push: { kind: "none" } })),
+);
+vi.mock("../judge/v3/flags.js", () => ({
+  isJudgeV3ShadowEnabled: shadowEnabled,
+  isJudgeV3PolicyEnabled: policyEnabled,
+}));
+vi.mock("../judge/v3/live-judge.js", () => ({
+  planV3Write,
+  judgementUnderPlan: (judgement: object, plan: { tier: string; reason: string }) => ({
+    ...judgement,
+    tier: plan.tier,
+    reason: plan.reason,
+  }),
+}));
 vi.mock("../judge/v3/shadow.js", () => ({
   runFactsShadow,
   shadowMailFromRaw: (emailId: string) => ({ emailId }),
@@ -80,6 +95,7 @@ function rawEmail(overrides: Partial<GmailRawEmail> = {}): GmailRawEmail {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  policyEnabled.mockReturnValue(false);
   findUnique.mockResolvedValue(null);
   create.mockResolvedValue({ id: "e-new" });
   update.mockResolvedValue({ id: "e-existing" });
@@ -106,6 +122,18 @@ describe("persistGmailEmail — v3 facts shadow hook", () => {
     expect(mail.emailId).toBe("e-new");
     // The v2 lane is handed over to be frozen with the facts.
     expect(tier).toBe(judgedTier);
+  });
+
+  it("is skipped for a user under policy v3: the judge's live facts replace it", async () => {
+    shadowEnabled.mockReturnValue(true);
+    policyEnabled.mockReturnValue(true);
+    const raw = rawEmail();
+    await persistGmailEmail("u1", raw);
+    await vi.waitFor(() => expect(planV3Write).toHaveBeenCalledTimes(1));
+    // The freshly ingested message feeds the live facts call.
+    expect(planV3Write).toHaveBeenCalledWith(expect.objectContaining({ liveRaw: raw }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(runFactsShadow).not.toHaveBeenCalled();
   });
 
   it("never runs on a re-sync of an existing row", async () => {

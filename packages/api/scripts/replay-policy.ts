@@ -6,30 +6,39 @@
  * is what the founder reads before flipping JUDGE_V3_POLICY.
  *
  * Read-only. No LLM call, no write, no notification. Safe against prod.
- * Facts: rows with stored facts (AttentionFacts, written by the P2 extractor
- * under JUDGE_V3_SHADOW) use them; every other row uses keyword facts
- * (v3/keyword-facts.ts), the model-down path. The report says how many of each.
+ * Facts (--facts):
+ *  - stored (default): each row is decided as the live path would decide it
+ *    (v3/live-decision.ts). Stored LLM facts (AttentionFacts) go to the
+ *    policy; otherwise the v2 lane stands, or keyword facts when v2 itself fell
+ *    back to keywords;
+ *  - keyword: every row gets keyword facts (v3/keyword-facts.ts), the
+ *    model-down estimate.
+ * The report says what decided each row.
  *
  * Usage:
  *   DATABASE_URL=... pnpm --filter @klorn/api replay:policy -- \
  *     [--user=admin@example.com] [--days=30] [--budget=5|unlimited] \
- *     [--out=./replay.json] [--max-changes=40] [--show-subjects]
+ *     [--facts=stored|keyword] [--out=./replay.json] [--max-changes=40] [--show-subjects]
  *
  * Prints ids only by default. --show-subjects adds each changed mail's subject
  * (truncated) to the terminal output; it is never written to --out.
  */
 
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "../src/db.js";
 import { toLiveTier } from "../src/judge/tiers.js";
+import { parseStoredFacts } from "../src/judge/v3/facts-store.js";
 import { resolveInterruptBudget } from "../src/judge/v3/interrupt-budget.js";
+import { loadRelationshipSnapshot } from "../src/judge/v3/relationship-loader.js";
 import {
   LIVE_LANES,
+  type ReplayFactsMode,
   type ReplayReport,
   type ReplayRow,
   replayPolicy,
 } from "../src/judge/v3/replay.js";
+import { prismaShadowDeps } from "../src/judge/v3/shadow.js";
 
 const PAGE = 500;
 const BODY_SCAN_CHARS = 4000; // detectSchedulingIntent reads at most this much body
@@ -42,6 +51,7 @@ interface CliArgs {
   user?: string;
   days: number;
   budget: number | null;
+  facts: ReplayFactsMode;
   out?: string;
   maxChanges: number;
   showSubjects: boolean;
@@ -67,10 +77,15 @@ function parseArgs(argv: string[]): CliArgs {
   if (budgetRaw && budgetRaw !== "unlimited" && budget !== Number(budgetRaw)) {
     throw new Error("--budget must be a positive integer or 'unlimited'");
   }
+  const facts = map.get("facts") ?? "stored";
+  if (facts !== "stored" && facts !== "keyword") {
+    throw new Error("--facts must be 'stored' or 'keyword'");
+  }
   return {
     user: map.get("user"),
     days,
     budget,
+    facts,
     out: map.get("out"),
     maxChanges,
     showSubjects: flags.has("show-subjects"),
@@ -111,34 +126,58 @@ async function loadRows(
     });
     if (emails.length === 0) break;
     const ids = emails.map((e) => e.id);
-    const [items, labels] = await Promise.all([
+    const [items, labels, facts] = await Promise.all([
       prisma.attentionItem.findMany({
         where: { source: "EMAIL", sourceId: { in: ids } },
-        select: { userId: true, sourceId: true, tier: true, isManualOverride: true },
+        select: {
+          userId: true,
+          sourceId: true,
+          tier: true,
+          isManualOverride: true,
+          agentTierSetAt: true,
+          v3PolicyVersion: true,
+          heldAt: true,
+        },
       }),
       prisma.decisionLabel.findMany({
         where: { source: "EMAIL", sourceId: { in: ids } },
         select: { userId: true, sourceId: true, decidedBy: true },
       }),
+      prisma.attentionFacts.findMany({
+        where: { source: "EMAIL", sourceId: { in: ids } },
+        select: {
+          userId: true,
+          sourceId: true,
+          factsVersion: true,
+          factsSource: true,
+          facts: true,
+          certainFields: true,
+          signals: true,
+          relationship: true,
+          v2Tier: true,
+        },
+      }),
     ]);
     const itemBy = new Map(items.map((i) => [`${i.userId}|${i.sourceId}`, i]));
     const labelBy = new Map(labels.map((l) => [`${l.userId}|${l.sourceId}`, l]));
+    const factsBy = new Map(facts.map((f) => [`${f.userId}|${f.sourceId}`, f]));
     await loadZones(
       emails.map((e) => e.userId),
       zones,
     );
     for (const e of emails) {
       const item = itemBy.get(`${e.userId}|${e.id}`);
+      const stored = factsBy.get(`${e.userId}|${e.id}`);
       subjects.set(e.id, printableSubject(e.subject));
       rows.push({
         id: e.id,
         userId: e.userId,
         receivedAt: e.receivedAt,
         timeZone: zones.get(e.userId) ?? DEFAULT_TIME_ZONE,
-        // No item yet reads as QUEUE, exactly as the lane queries treat it.
-        v2Tier: toLiveTier(item?.tier ?? "QUEUE"),
+        v2Tier: toLiveTier(v2LaneOf(item, stored?.v2Tier ?? null)),
         v2Source: labelBy.get(`${e.userId}|${e.id}`)?.decidedBy ?? null,
-        manualOverride: item?.isManualOverride ?? false,
+        // An agent's lane is preserved on a re-judge like a human's.
+        manualOverride: (item?.isManualOverride ?? false) || item?.agentTierSetAt != null,
         email: {
           from: e.from,
           subject: e.subject,
@@ -147,11 +186,62 @@ async function loadRows(
           labels: e.labels,
           hasListUnsubscribe: e.listUnsubscribeMailto != null || e.listUnsubscribeUrl != null,
         },
-        stored: null,
+        stored: stored ? parseStoredFacts(stored) : null,
       });
     }
   }
   return { rows, subjects };
+}
+
+interface ItemLane {
+  tier: string | null;
+  isManualOverride: boolean;
+  agentTierSetAt: Date | null;
+  v3PolicyVersion: string | null;
+  heldAt: Date | null;
+}
+
+/**
+ * The lane v2 decided. No item yet reads as QUEUE, exactly as the lane queries
+ * treat it. A human's or an agent's lane is kept as is. For an item v3 decided
+ * live, AttentionItem.tier is v3's lane:
+ *  - with a facts row, the v2 lane frozen on it is used;
+ *  - without one (a precedence source, or no facts), v3 kept v2's lane and
+ *    only a budget hold changed it, so a held item was v2 PUSH.
+ */
+function v2LaneOf(item: ItemLane | undefined, frozenV2: string | null): string {
+  if (!item) return "QUEUE";
+  const kept = item.isManualOverride || item.agentTierSetAt !== null;
+  if (kept || !item.v3PolicyVersion) return item.tier ?? "QUEUE";
+  if (frozenV2) return frozenV2;
+  return item.heldAt ? "PUSH" : (item.tier ?? "QUEUE");
+}
+
+/**
+ * Trust for the slot reserve, as live loads it for a budgeted PUSH with no
+ * relationship: only v2 PUSH rows can become one without facts. Read-only.
+ */
+async function attachRelationships(rows: ReplayRow[]): Promise<ReplayRow[]> {
+  const contexts = new Map<string, string[]>();
+  const out: ReplayRow[] = [];
+  for (const row of rows) {
+    if (row.v2Tier !== "PUSH" || row.stored?.relationship) {
+      out.push(row);
+      continue;
+    }
+    if (!contexts.has(row.userId)) {
+      contexts.set(row.userId, (await prismaShadowDeps.userContext(row.userId)).userAddresses);
+    }
+    const relationship = await loadRelationshipSnapshot({
+      userId: row.userId,
+      senderAddress: row.email.from,
+      userAddresses: contexts.get(row.userId) ?? [],
+      senderAuthenticated: null,
+      excludeEmailId: row.id,
+    });
+    out.push({ ...row, relationship });
+  }
+  return out;
 }
 
 /**
@@ -159,8 +249,14 @@ async function loadRows(
  * sequences included) before it reaches the operator's terminal, then cap it.
  */
 function printableSubject(subject: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
-  return subject.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").slice(0, SUBJECT_PREVIEW);
+  // Unicode format characters too (bidi overrides, zero-width): they can
+  // reorder what the terminal shows.
+  return (
+    subject
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
+      .replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, " ")
+      .slice(0, SUBJECT_PREVIEW)
+  );
 }
 
 async function loadZones(userIds: string[], zones: Map<string, string>): Promise<void> {
@@ -179,7 +275,10 @@ function printReport(report: ReplayReport, args: CliArgs, subjects: Map<string, 
   const total = report.items;
   console.log(`\nPolicy ${report.policyVersion} replay — last ${args.days} days`);
   console.log(
-    `  items ${total}, users ${report.users}, facts stored ${report.factsSource.stored} / keyword ${report.factsSource.keyword}, precedence kept ${report.precedenceKept}`,
+    `  items ${total}, users ${report.users}, facts mode ${report.factsMode}, stored rows ${report.storedFacts.rows} (LLM ${report.storedFacts.llm}), precedence kept ${report.precedenceKept}`,
+  );
+  console.log(
+    `  decided by: LLM facts ${report.basis.llm}, keyword facts ${report.basis.keyword}, v2 lane ${report.basis.v2}`,
   );
   console.log(`\nLane            v2 shown         v3 pre-budget    v3 final`);
   for (const lane of LIVE_LANES) {
@@ -212,7 +311,7 @@ function printReport(report: ReplayReport, args: CliArgs, subjects: Map<string, 
   for (const c of report.changes.slice(0, args.maxChanges)) {
     const subject = args.showSubjects ? `  "${subjects.get(c.id) ?? ""}"` : "";
     console.log(
-      `  ${c.receivedAt.slice(0, 16)} ${c.id} ${c.v2}→${c.v3}${c.held ? " (held)" : ""} [${c.reasonCodes.join(",")}] ${c.factsSource}${subject}`,
+      `  ${c.receivedAt.slice(0, 16)} ${c.id} ${c.v2}→${c.v3}${c.held ? " (held)" : ""} [${c.reasonCodes.join(",")}] ${c.basis}${subject}`,
     );
   }
 }
@@ -221,17 +320,22 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const userId = args.user ? await resolveUserId(args.user) : undefined;
   const since = new Date(Date.now() - args.days * 24 * 60 * 60 * 1000);
-  const { rows, subjects } = await loadRows(userId, since);
+  const loaded = await loadRows(userId, since);
+  const rows = await attachRelationships(loaded.rows);
+  const { subjects } = loaded;
   if (rows.length === 0) {
     console.error(`No mail in the last ${args.days} days${args.user ? ` for ${args.user}` : ""}.`);
     process.exitCode = 1;
     return;
   }
-  const report = replayPolicy(rows, { budget: args.budget });
+  const report = replayPolicy(rows, { budget: args.budget, facts: args.facts });
   printReport(report, args, subjects);
   if (args.out) {
     const path = resolve(args.out);
-    writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);
+    // Ids and lane changes for every user: owner-only.
+    writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+    // `mode` applies only when the file is created; an existing file keeps its own.
+    chmodSync(path, 0o600);
     console.log(`\nWrote ${path}`);
   }
 }

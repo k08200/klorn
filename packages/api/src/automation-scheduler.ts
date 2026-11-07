@@ -48,6 +48,7 @@ import {
   sweepOverrideUndoSnapshots,
 } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
+import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
 import {
   effectiveAutoReplyGuideline,
   normalizeAttentionMode,
@@ -83,7 +84,7 @@ import {
   unnotifiedEmails,
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
-import { autoModeSendEnabled, judgeV3PolicyEnabled, tierV2Enabled } from "./ops/feature-flags.js";
+import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -1779,11 +1780,11 @@ async function runUserCycle(
 
         // Check for urgent unread emails — notify only for NEW urgent emails
         // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-        // With JUDGE_V3_POLICY on, the judge's PUSH lane under the daily
-        // interrupt budget is the only email interrupt (attention-engine-v3.md
-        // §3(4)); this keyword sweep would ring outside the budget, so it
-        // stands down.
-        const urgentEmails = judgeV3PolicyEnabled()
+        // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
+        // under the daily interrupt budget is the only email interrupt
+        // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
+        // the budget, so it stands down for that user.
+        const urgentEmails = isJudgeV3PolicyEnabled(config.userId)
           ? []
           : await prisma.emailMessage.findMany({
               where: {

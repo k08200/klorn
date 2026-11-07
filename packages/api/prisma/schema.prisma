@@ -1076,6 +1076,9 @@ model AutomationConfig {
   focusWindowEnabled     Boolean  @default(false)
   briefingTime           String   @default("06:00")
   timezone               String   @default("Asia/Seoul")
+  // Daily PUSH interrupt budget for this user (attention engine v3, 1–50).
+  // Null = the system default (JUDGE_V3_PUSH_BUDGET, else 5).
+  interruptBudget        Int?
   /// null = Automatic (no saved choice): the client follows the device zone and
   /// keeps `timezone` synced to it. "MANUAL" = the user pinned `timezone` in
   /// Settings. `timezone` always holds the zone server-side features use.
@@ -1830,6 +1833,23 @@ model AttentionItem {
   // doctrine in attention-input-hash.ts).
   inputHash   String? // sha256 hex, 64 chars
   inputHashAt DateTime? // when the hash was computed
+
+  // Attention engine v3 live decision (docs/design/attention-engine-v3.md
+  // §3(5) "Live decision"). Written only for users JUDGE_V3_POLICY covers;
+  // null for everyone else. "v3.0" when the policy decided the lane, "v2"
+  // when the v2 lane stood because LLM facts were missing.
+  v3PolicyVersion String?
+  // judge/v3/live-item.ts V3DecisionJson: { basis, reasons, threadTurn }.
+  // Reason evidence quotes the mail, like title and body.
+  v3Decision      Json?
+  // QUEUE ranking inputs at decision time: the earliest ask due (or the
+  // decision time for an unpushed payment/security risk), and the
+  // relationship importance prior.
+  v3Due           DateTime?
+  v3Importance    Float?
+  // The daily interrupt budget held this PUSH in QUEUE. A hold is final for
+  // the item. Ranking trusts this column, not tierReason.
+  heldAt          DateTime?
 
   surfacedAt      DateTime  @default(now())
   resolvedAt      DateTime?
