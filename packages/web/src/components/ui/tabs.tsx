@@ -21,7 +21,7 @@ export default function Tabs({ tabs, active, onChange, ariaLabel = "View" }: Tab
     <div
       role="group"
       aria-label={ariaLabel}
-      className="flex gap-1 p-1 bg-surface-hover border border-line rounded-lg w-fit"
+      className="flex gap-1 p-1 bg-surface-hover border border-line rounded-control w-fit"
     >
       {tabs.map((tab) => (
         <button
@@ -31,7 +31,7 @@ export default function Tabs({ tabs, active, onChange, ariaLabel = "View" }: Tab
           onClick={() => onChange(tab.id)}
           className={`inline-flex min-h-11 items-center px-3 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
             active === tab.id
-              ? "bg-surface-panel text-ink shadow-sm"
+              ? "bg-surface-panel text-ink"
               : "text-ink-mid hover:text-ink hover:bg-surface-inset"
           }`}
         >

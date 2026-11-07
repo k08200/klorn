@@ -10,6 +10,7 @@
  * cycle. Must NOT import email-sync.ts (the sync orchestrator imports THIS).
  */
 
+import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { scheduleAgentForActionableEmail } from "../agentcore/email-action-trigger.js";
 import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
@@ -31,6 +32,7 @@ import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { reserveAutoUnsubscribe } from "../mail/unsubscribe-quota.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
+import { judgeV3PolicyEnabled } from "../ops/feature-flags.js";
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
@@ -41,6 +43,8 @@ import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
 import { reconcileLabelCorrection } from "./label-correction.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
+import { isJudgeV3ShadowEnabled } from "./v3/flags.js";
+import { admitPushNotification, holdEmailForInterruptBudget } from "./v3/push-budget-gate.js";
 
 /**
  * Normalized sender address for the `fromAddress` column — the SINGLE source of
@@ -254,6 +258,11 @@ export async function persistGmailEmail(
       // user sees a draft proposal without waiting for the cron. Debounced
       // inside the trigger to bound LLM cost.
       scheduleAgentForActionableEmail(userId, tier);
+      // Attention engine v3 facts shadow (JUDGE_V3_SHADOW, OFF by default):
+      // after the v2 lane is decided, never changing it. Fire-and-forget.
+      if (isJudgeV3ShadowEnabled(userId)) {
+        void startFactsShadow(userId, createdEmail.id, email, tier);
+      }
       // Promotional / marketing mail (the judge's fast-path SILENT bucket) is
       // noise the user never needs to open — mark it read in Gmail so it
       // doesn't sit unread. Promotional-ONLY by product decision: QUEUE/PUSH/
@@ -398,6 +407,25 @@ interface JudgeableEmailRow {
 }
 
 /**
+ * Run the v3 facts shadow for a new mail. The module graph loads only when
+ * the flag is on, so a flag-off install pays nothing. runFactsShadow never
+ * throws; the catch covers a failed module load.
+ */
+async function startFactsShadow(
+  userId: string,
+  emailId: string,
+  email: GmailRawEmail,
+  tier: PocTier,
+): Promise<void> {
+  try {
+    const { runFactsShadow, shadowMailFromRaw } = await import("./v3/shadow.js");
+    await runFactsShadow(userId, shadowMailFromRaw(emailId, email), tier);
+  } catch (err) {
+    captureError(err, { tags: { scope: "judge-v3-shadow-load" }, extra: { userId, emailId } });
+  }
+}
+
+/**
  * Classify one stored email into a tier and mirror it to an AttentionItem.
  * Shared by the inline sync path and the backfill sweep. buildJudgeContext
  * never throws and judgeEmail falls back to keyword features when the LLM is
@@ -482,32 +510,37 @@ export async function judgeAndMirrorEmail(
   // MEETING (v2 only — v1 never emits it) notifies like PUSH: the founder's
   // 기본 모드 contract is "important mail + calendar/scheduling interrupt,
   // everything else is silent" (docs/design/tier-ontology-v2.md).
+  // With JUDGE_V3_POLICY on, a PUSH past the day's interrupt budget is held in
+  // QUEUE instead of notifying; the lane below follows what the item now shows.
+  let shownTier: PocTier = judgement.tier;
   if (judgement.tier === "PUSH" || judgement.tier === "MEETING") {
-    await pushForFirewallEmail(userId, email).catch((err) =>
+    const push = { tier: judgement.tier, pinned: judgement.source === "pinned-rule" };
+    const pushed = await pushForFirewallEmail(userId, email, push).catch((err) => {
       captureError(err, {
         tags: { scope: "firewall-push" },
         extra: { userId, emailId: email.id },
-      }),
-    );
+      });
+      return "skipped" as const;
+    });
+    if (pushed === "held") {
+      shownTier = "QUEUE";
+      notifyConversationsUpdated(userId);
+    }
   }
 
   // Label mode: mirror the decided lane back into Gmail so the classification
   // is visible in whatever client the user already reads mail in. Best-effort
   // and flag-gated — applyLaneLabel never throws, and returns "skipped" when
   // the flag is off, the account is IMAP, or the tier is the retired AUTO.
-  void applyLaneLabel(
-    userId,
-    email.gmailId,
-    judgement.tier,
-    email.linkedInboxAccountId ?? null,
-  ).catch((err) =>
-    captureError(err, {
-      tags: { scope: "firewall-label-mode" },
-      extra: { userId, emailId: email.id },
-    }),
+  void applyLaneLabel(userId, email.gmailId, shownTier, email.linkedInboxAccountId ?? null).catch(
+    (err) =>
+      captureError(err, {
+        tags: { scope: "firewall-label-mode" },
+        extra: { userId, emailId: email.id },
+      }),
   );
 
-  return judgement.tier;
+  return shownTier;
 }
 
 // A push for a PUSH-tier email only fires for genuinely recent mail. The
@@ -551,8 +584,16 @@ async function pushDedupeFloor(email: JudgeableEmailRow): Promise<Date> {
  * backfilled old mail) and deduped (shared marker with the urgent-priority
  * sweep so an email never gets two pushes). sendPushNotification applies the
  * quiet-hours / rate-limit / Telegram gates, so we don't re-check them here.
+ *
+ * With JUDGE_V3_POLICY on, a PUSH (not a MEETING) also needs a free slot in
+ * the day's interrupt budget, claimed only after the gates above pass; with
+ * none left the item is held in QUEUE and nothing is sent ("held").
  */
-async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): Promise<void> {
+async function pushForFirewallEmail(
+  userId: string,
+  email: JudgeableEmailRow,
+  push: { tier: "PUSH" | "MEETING"; pinned: boolean },
+): Promise<"sent" | "held" | "skipped"> {
   const ageMs = Date.now() - email.receivedAt.getTime();
   if (ageMs > FIREWALL_PUSH_RECENCY_MS) {
     // Suppressing a stale PUSH is intentional (dyno slept, or a late manual sync
@@ -563,7 +604,7 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
       `[PUSH] Firewall PUSH suppressed (stale: ${Math.round(ageMs / 3_600_000)}h old) ` +
         `for email ${email.gmailId} user ${userId}`,
     );
-    return;
+    return "skipped";
   }
 
   // Step B2b: mail a UIDVALIDITY repair re-ingested is history the user was already
@@ -574,7 +615,7 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
       `[PUSH] Firewall PUSH suppressed (re-ingested after an IMAP UIDVALIDITY repair) ` +
         `for email ${email.gmailId} user ${userId}`,
     );
-    return;
+    return "skipped";
   }
 
   const id = email.gmailId;
@@ -582,7 +623,10 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
   const already = await prisma.notification.findFirst({
     where: {
       userId,
-      type: "email",
+      // With JUDGE_V3_POLICY on, a cleared bell hides interrupt-budget slot
+      // rows (type "claim") instead of deleting them; they still mark the mail
+      // as already pushed. Flag off: the query stays exactly as it was.
+      type: judgeV3PolicyEnabled() ? { in: ["email", HIDDEN_CLAIM_TYPE] } : "email",
       title: FIREWALL_PUSH_TITLE,
       // Match the gmailId as a COMPLETE token inside a `[id1,id2,…]` marker
       // (a firewall single push or an urgent-sweep batch share this title),
@@ -606,7 +650,7 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
       `[PUSH] Firewall PUSH deduped (already notified within ${PUSH_DEDUP_WINDOW_MS / 86_400_000}d) ` +
         `for email ${email.gmailId} user ${userId}`,
     );
-    return;
+    return "skipped";
   }
 
   const sender = senderDisplayName(email.from);
@@ -614,14 +658,14 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
 
   // Bell row carries the [gmailId] dedup marker (read back by both this path
   // and the urgent-priority sweep).
-  const notification = await prisma.notification.create({
-    data: {
-      userId,
-      type: "email",
-      title: FIREWALL_PUSH_TITLE,
-      message: `${body} [${email.gmailId}]`,
-    },
-  });
+  const bellRow = {
+    type: "email",
+    title: FIREWALL_PUSH_TITLE,
+    message: `${body} [${email.gmailId}]`,
+  };
+  const written = await writeFirewallBellRow(userId, email, push, bellRow);
+  if (written.kind !== "written") return written.kind;
+  const { notification } = written;
 
   const [
     { pushNotification },
@@ -660,6 +704,40 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     },
     "email_urgent",
   );
+  return "sent";
+}
+
+/**
+ * Write the bell row for a firewall push. While JUDGE_V3_POLICY is on, a PUSH
+ * row spends a slot of the day's interrupt budget (push-budget-gate.ts); with
+ * none left the item is held in QUEUE and nothing is written ("held"). If the
+ * item changed meanwhile (a human or agent moved it), nothing is sent and its
+ * lane stands ("skipped"). MEETING rows and the flag-off path write exactly as
+ * before.
+ */
+async function writeFirewallBellRow(
+  userId: string,
+  email: JudgeableEmailRow,
+  push: { tier: "PUSH" | "MEETING"; pinned: boolean },
+  row: { type: string; title: string; message: string },
+): Promise<
+  { kind: "written"; notification: { id: string; createdAt: Date } } | { kind: "held" | "skipped" }
+> {
+  if (push.tier !== "PUSH" || !judgeV3PolicyEnabled()) {
+    const notification = await prisma.notification.create({
+      data: { userId, ...row },
+      select: { id: true, createdAt: true },
+    });
+    return { kind: "written", notification };
+  }
+  const admission = await admitPushNotification(userId, row, { pinned: push.pinned });
+  if (admission.status !== "held") return { kind: "written", notification: admission.notification };
+  const held = await holdEmailForInterruptBudget(userId, email.id);
+  console.log(
+    `[PUSH-BUDGET] Firewall PUSH ${held ? "held in QUEUE" : "not sent (item changed meanwhile)"}: ` +
+      `daily interrupt budget ${admission.limit} spent, for email ${email.gmailId} user ${userId}`,
+  );
+  return { kind: held ? "held" : "skipped" };
 }
 
 const BACKFILL_LOOKBACK_DAYS = 14;

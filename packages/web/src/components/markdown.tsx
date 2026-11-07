@@ -10,17 +10,17 @@ export function Markdown({ content }: { content: string }) {
   const blocks = parseBlocks(content);
 
   return (
-    <div className="text-sm leading-relaxed space-y-2">
+    <div className="text-role-body leading-relaxed space-y-2">
       {blocks.map((block, i) => {
         if (block.type === "code") {
           return (
             <div key={i} className="relative group">
               {block.lang && (
-                <span className="text-caption text-ink-dim absolute top-2 right-2">
+                <span className="text-role-caption text-ink-dim absolute top-2 right-2">
                   {block.lang}
                 </span>
               )}
-              <pre className="bg-surface-raised border border-line rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono">
+              <pre className="bg-surface-raised border border-line rounded-control px-4 py-3 overflow-x-auto text-role-mono font-mono">
                 <code>{block.text}</code>
               </pre>
             </div>
@@ -99,7 +99,7 @@ function renderInline(text: string): (string | React.ReactNode)[] {
       parts.push(
         <code
           key={key++}
-          className="bg-surface-hover text-ink-strong px-1.5 py-0.5 rounded text-xs font-mono"
+          className="bg-surface-hover text-ink-strong px-1.5 py-0.5 rounded text-role-mono font-mono"
         >
           {match[4]}
         </code>,

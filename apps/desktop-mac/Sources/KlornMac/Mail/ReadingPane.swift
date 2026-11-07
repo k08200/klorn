@@ -104,7 +104,7 @@ struct ReadingPane: View {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(detail.subject.isEmpty
                     ? L("mailbox.noSubject") : detail.subject))
-                    .font(Theme.Typo.display)
+                    .font(Theme.Typo.title)
                     .foregroundStyle(Theme.text).lineLimit(2)
                 HStack {
                     let from = senderDisplayName(decodeHTMLEntities(detail.from))
@@ -149,7 +149,7 @@ struct ReadingPane: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(email.subject ?? L("mail.noSubjectParen")))
-                    .font(Theme.Typo.display)
+                    .font(Theme.Typo.title)
                     .foregroundStyle(Theme.text)
                     .lineLimit(ReaderActionRules.subjectLines)
                     .fixedSize(horizontal: false, vertical: true)
@@ -167,42 +167,11 @@ struct ReadingPane: View {
                 if let item {
                     // One button system (audit M1): the primary is
                     // .borderedProminent in accentSolid, every other action
-                    // .bordered, all at the same control size.
-                    HStack(spacing: Theme.s2) {
-                        primaryButton(
-                            email.preparedDraft == nil ? L("reading.replyWithAI") : L("reading.openDraft")
-                        ) { startReply(item) }
-                        // menuIndicator(.hidden) + a chevron inside ONE Text: a
-                        // separate Image gets reordered to the leading edge by
-                        // the menu button's label styling (0.4.80007).
-                        if Theme.isRenderingOffscreen {
-                            OffscreenMenuLabel(title: L("mail.snoozePrefix").trimmingCharacters(in: .whitespaces))
-                            OffscreenMenuLabel(title: ReaderActionRules.moveLabel)
-                        } else {
-                            SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
-                                // The catalogue string carries its own trailing space.
-                                Text(L("mail.snoozePrefix")) + Text(Image(systemName: "chevron.down"))
-                            }
-                            .menuStyle(.button).buttonStyle(.bordered)
-                            .controlSize(ReaderActionRules.controlSize)
-                            .menuIndicator(.hidden).fixedSize()
-                            TierMenu(
-                                item: item, onSetTier: actions.onSetTier,
-                                onPinSender: actions.onPinSender, onUnpinSender: actions.onUnpinSender
-                            ) {
-                                // Never names the current lane: the menu moves
-                                // AWAY from it ("Move to Push" on a Push mail
-                                // read as a no-op).
-                                Text(ReaderActionRules.moveLabel) + Text(verbatim: " ")
-                                    + Text(Image(systemName: "chevron.down"))
-                            }
-                            .menuStyle(.button).buttonStyle(.bordered)
-                            .controlSize(ReaderActionRules.controlSize)
-                            .menuIndicator(.hidden).fixedSize()
-                        }
-                        Button(L("mail.dismiss")) { actions.onDismiss(item) }
-                            .buttonStyle(.bordered).controlSize(ReaderActionRules.controlSize)
-                    }
+                    // .bordered, all at the same control size. Steps down to
+                    // icon-only when the pane is narrow (window floor 880).
+                    ReaderActionBar(
+                        item: item, hasDraft: email.preparedDraft != nil, actions: actions
+                    ) { startReply(item) }
                     .padding(.top, 2)
                 }
             }
@@ -724,6 +693,13 @@ enum ReaderActionRules {
     /// can prove it never depends on the current lane).
     static func moveLabel(current tier: Tier) -> String { moveLabel }
     static let controlSize: ControlSize = .regular
+    /// Widest first: the row takes the first that fits the pane.
+    static let densities: [ReaderActionDensity] = [.full, .primaryLabel, .icons]
+    static let replyIcon = "sparkles"
+    static let draftIcon = "doc.text"
+    static let snoozeIcon = "clock"
+    static let moveIcon = "arrow.left.arrow.right"
+    static let dismissIcon = "xmark"
     static let subjectLines = 2
     static let summaryLines = 3
 }

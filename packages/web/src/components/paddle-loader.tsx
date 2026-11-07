@@ -86,14 +86,14 @@ export function PaddleLoader({ onCheckoutCompleted }: { onCheckoutCompleted?: ()
       {blocked && (
         <div
           role="alert"
-          className="fixed inset-x-4 top-4 z-50 mx-auto max-w-xl rounded-xl border border-state-warn-line bg-state-warn-bg p-4 text-sm text-amber-900 shadow-lg"
+          className="fixed inset-x-4 top-4 z-50 mx-auto max-w-xl rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-role-body text-amber-900 shadow-lg"
         >
           <p className="font-semibold">{t("paddle.blocked.title")}</p>
           <p className="mt-1">{t("paddle.blocked.body")}</p>
           <button
             type="button"
             onClick={() => setBlocked(false)}
-            className="mt-2 rounded-lg border border-state-warn-line px-3 py-1.5 font-medium hover:bg-amber-100"
+            className="mt-2 rounded-control border border-state-warn-line px-3 py-1.5 font-medium hover:bg-amber-100"
           >
             {t("common.dismiss")}
           </button>

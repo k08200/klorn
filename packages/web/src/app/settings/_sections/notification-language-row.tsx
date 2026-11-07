@@ -38,13 +38,15 @@ export function NotificationLanguageRow({ config }: { config: AutomationConfig |
         <label htmlFor="notification-language" className="font-medium block">
           {t("settings.field.notificationLanguage")}
         </label>
-        <p className="text-sm text-ink-mid">{t("settings.field.notificationLanguageDesc")}</p>
+        <p className="text-role-body text-ink-mid">
+          {t("settings.field.notificationLanguageDesc")}
+        </p>
       </div>
       <select
         id="notification-language"
         value={notificationLanguage}
         onChange={(e) => updateNotificationLanguage(e.target.value)}
-        className="min-h-11 w-full rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+        className="min-h-11 w-full rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-role-body text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
       >
         {/* Language names name themselves, unaffected by UI locale. */}
         <option value="en">English</option>

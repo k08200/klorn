@@ -1,30 +1,11 @@
 {
   "arbitrary-font-size": {
-    "packages/web/src/app/admin/ontology/page.tsx": 1,
-    "packages/web/src/app/admin/page.tsx": 1,
-    "packages/web/src/app/admin/waitlist/page.tsx": 1,
-    "packages/web/src/app/billing/page.tsx": 1,
-    "packages/web/src/app/briefing/page.tsx": 2,
-    "packages/web/src/app/calendar/page.tsx": 2,
-    "packages/web/src/app/chat/chat-view.tsx": 1,
-    "packages/web/src/app/email/[id]/page.tsx": 4,
-    "packages/web/src/app/email/candidates/[emailId]/page.tsx": 2,
-    "packages/web/src/app/email/candidates/page.tsx": 1,
-    "packages/web/src/app/email/page.tsx": 3,
-    "packages/web/src/app/inbox/page.tsx": 5,
-    "packages/web/src/app/inbox/receipt/page.tsx": 1,
-    "packages/web/src/app/onboarding/page.tsx": 3,
-    "packages/web/src/app/settings/sms/page.tsx": 1,
-    "packages/web/src/app/usage/page.tsx": 2,
     "packages/web/src/components/assistant-dock.tsx": 1,
-    "packages/web/src/components/firewall-board.tsx": 1,
-    "packages/web/src/components/paywall-screen.tsx": 4,
     "packages/web/src/components/sidebar.tsx": 1
   },
   "raw-palette": {
     "packages/web/src/app/admin/page.tsx": 25,
     "packages/web/src/app/admin/waitlist/page.tsx": 21,
-    "packages/web/src/app/billing/page.tsx": 3,
     "packages/web/src/app/briefing/page.tsx": 1,
     "packages/web/src/app/briefing/today-actions-card.tsx": 11,
     "packages/web/src/app/calendar/[id]/page.tsx": 21,
@@ -40,7 +21,6 @@
     "packages/web/src/app/inbox/receipt/page.tsx": 10,
     "packages/web/src/app/onboarding/page.tsx": 1,
     "packages/web/src/app/onboarding/review-step.tsx": 6,
-    "packages/web/src/app/playground/page.tsx": 13,
     "packages/web/src/app/settings/_sections/agent-activity.tsx": 6,
     "packages/web/src/app/settings/agent-mode-helpers.ts": 11,
     "packages/web/src/components/assistant-dock.tsx": 4,
@@ -89,7 +69,6 @@
     "packages/web/src/app/inbox/receipt/page.tsx": 2,
     "packages/web/src/app/onboarding/page.tsx": 3,
     "packages/web/src/app/onboarding/review-step.tsx": 3,
-    "packages/web/src/app/playground/page.tsx": 4,
     "packages/web/src/app/settings/_sections/accounts-section.tsx": 1,
     "packages/web/src/app/settings/_sections/agent-activity.tsx": 2,
     "packages/web/src/app/settings/_sections/agent-panel.tsx": 4,
@@ -97,6 +76,17 @@
     "packages/web/src/app/settings/_sections/profile-panel.tsx": 1,
     "packages/web/src/app/settings/_sections/replies-panel.tsx": 3,
     "packages/web/src/app/settings/sms/page.tsx": 3
+  },
+  "raw-radius": {
+    "packages/web/src/app/graph/page.tsx": 2
+  },
+  "raw-type": {
+    "packages/web/src/app/onboarding/page.tsx": 2,
+    "packages/web/src/app/privacy/page.tsx": 1,
+    "packages/web/src/app/refund/page.tsx": 1,
+    "packages/web/src/app/terms/page.tsx": 1,
+    "packages/web/src/components/notification-bell.tsx": 2,
+    "packages/web/src/components/push-onboarding-banner.tsx": 2
   },
   "retired-auto-lane": {
     "packages/web/src/components/firewall-board.tsx": 8

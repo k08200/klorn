@@ -10,164 +10,178 @@ datasource db {
 }
 
 model User {
-  id                        String                     @id @default(uuid())
-  email                     String                     @unique
+  id                         String                     @id @default(uuid())
+  email                      String                     @unique
   // Purpose of the PRIMARY inbox (the account the user signed in with) —
   // same vocabulary as LinkedInboxAccount.purpose. Null = never asked.
-  primaryInboxPurpose       String?
-  companyDomains            String[]                   @default([])
-  triagePriorities          String?
+  primaryInboxPurpose        String?
+  companyDomains             String[]                   @default([])
+  triagePriorities           String?
   /// Proactive reply drafts: today's slot counter (mail/proactive-drafts.ts).
   /// proactiveDraftDay is the UTC day ("YYYY-MM-DD") the count belongs to;
   /// both are only ever changed by conditional updates, which is what makes
   /// PROACTIVE_DRAFT_DAILY_CAP a hard bound.
-  proactiveDraftDay         String?
-  proactiveDraftCount       Int                        @default(0)
+  proactiveDraftDay          String?
+  proactiveDraftCount        Int                        @default(0)
   /// Automatic one-click unsubscribes: today's per-user slot counter
   /// (mail/unsubscribe-quota.ts). Same conditional-update pattern as
   /// proactiveDraftDay/Count — AUTO_UNSUBSCRIBE_USER_DAILY_CAP is a hard bound.
-  autoUnsubscribeDay        String?
-  autoUnsubscribeCount      Int                        @default(0)
-  passwordHash              String?
-  name                      String?
-  role                      UserRole                   @default(USER)
-  plan                      Plan                       @default(FREE)
-  chatModel                 String                     @default("google/gemma-4-31b-it:free")
-  agentModel                String?
-  openRouterApiKey          String?
-  geminiApiKey              String?
+  autoUnsubscribeDay         String?
+  autoUnsubscribeCount       Int                        @default(0)
+  passwordHash               String?
+  name                       String?
+  role                       UserRole                   @default(USER)
+  plan                       Plan                       @default(FREE)
+  /// The user's chat/assistant model pick (a CURATED_MODELS id). "" — or any
+  /// id no longer in the catalog — means unset: the surface default applies.
+  /// Stays NOT NULL: an instance still running the previous client mid-deploy
+  /// reads it as a required string.
+  chatModel                  String                     @default("")
+  agentModel                 String?
+  /// BYOK Anthropic key, encrypted (crypto-tokens). Paid plans only.
+  anthropicApiKey            String?
+  /// Legacy BYOK slot, encrypted: clear-only, no new writes.
+  geminiApiKey               String?
   // Naver IMAP connection (Korean ICP support).
   // OAuth is intentionally skipped — Naver issues a separate "외부 메일
   // 가져오기 비밀번호" the user generates in their Naver settings; we
   // store the encrypted form so a DB leak doesn't expose the live IMAP
   // password. Host defaults to imap.naver.com:993 (SSL) but is
   // overridable for other IMAP providers in the future.
-  naverImapEmail            String?
-  naverImapPasswordCipher   String?
-  naverImapHost             String?
-  naverImapConnectedAt      DateTime?
+  naverImapEmail             String?
+  naverImapPasswordCipher    String?
+  naverImapHost              String?
+  naverImapConnectedAt       DateTime?
   // GitHub as a second attention source (BYO personal access token, like
   // the Naver app-password above — OAuth/App registration intentionally
   // skipped so self-hosters need no approval). The cipher is the encrypted
   // PAT; lastPolledAt is the Notifications API `since` cursor.
-  githubTokenCipher         String?
-  githubConnectedAt         DateTime?
-  githubLastPolledAt        DateTime?
+  githubTokenCipher          String?
+  githubConnectedAt          DateTime?
+  githubLastPolledAt         DateTime?
   // Telegram delivery (self-hoster BYO bot via BotFather).
   // telegramChatId is the bound chat for outbound PUSH-tier interrupts —
   // unique so a chat can only ever belong to one account. telegramLinkCode
   // is a one-time crypto-random code minted by POST /api/telegram/link and
   // consumed by the bot webhook's `/start <code>` handler within 10 minutes.
-  telegramChatId            String?                    @unique
-  telegramLinkCode          String?                    @unique
-  telegramLinkCodeExpiresAt DateTime?
-  stripeId                  String?                    @unique
+  telegramChatId             String?                    @unique
+  telegramLinkCode           String?                    @unique
+  telegramLinkCodeExpiresAt  DateTime?
+  stripeId                   String?                    @unique
   // Paddle Billing customer (ctm_…). Set by the paddle webhook on the first
   // subscription event; used for the customer portal and as the fallback
   // mapping for events that arrive without custom_data.userId.
-  paddleCustomerId          String?                    @unique
+  paddleCustomerId           String?                    @unique
   // Paddle subscription (sub_…) currently attached to this account, so the
   // in-app cancel route can call the Paddle API without a lookup. Cleared when
   // the subscription reaches its terminal `canceled` status.
-  paddleSubscriptionId      String?                    @unique
+  paddleSubscriptionId       String?                    @unique
   // Live provider subscription status (active/trialing/past_due/paused/
   // canceled) as last reported by webhook. Entitlement still lives in `plan` —
   // this is display/guard state, never an entitlement source.
-  subscriptionStatus        String?
+  subscriptionStatus         String?
   // Next automatic charge (Paddle next_billed_at). Null when a cancel is
   // scheduled or there is no live subscription.
-  subscriptionRenewsAt      DateTime?
+  subscriptionRenewsAt       DateTime?
   // When a cancellation is scheduled (in-app or portal), the date access ends
   // (scheduled_change.effective_at). Null = no pending cancel.
-  subscriptionCancelAt      DateTime?
+  subscriptionCancelAt       DateTime?
   // occurred_at of the newest provider event whose detail we applied. Paddle
   // does not guarantee delivery order, so a late retry carrying an older
   // scheduled_change must not resurrect a cancellation the user already undid.
-  subscriptionEventAt       DateTime?
-  emailVerified             Boolean                    @default(false)
+  subscriptionEventAt        DateTime?
+  emailVerified              Boolean                    @default(false)
+  // Calendar co-attendance watermark (pim/coattendance/): a UTC day such that
+  // every finished UTC day up to and including it has been evaluated for every
+  // included Google calendar source. A day at or before it is never evaluated
+  // again. Null until the first pass; a data wipe resets it.
+  coAttendanceCountedThrough DateTime?
   // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
   // token is never stored, same standard as Device.tokenHash.
-  verifyToken               String?
-  verifyTokenExp            DateTime?
-  resetToken                String?
-  resetTokenExp             DateTime?
+  verifyToken                String?
+  verifyTokenExp             DateTime?
+  resetToken                 String?
+  resetTokenExp              DateTime?
   // Global session-revocation epoch. Stamped on password reset; any JWT whose
   // `iat` predates this instant is rejected at the auth gate, independently of
   // the Device table. Closes the reset bypass where wiping all devices dropped
   // the user to zero devices and the "no devices = legacy, allow" branch
   // resurrected every still-unexpired stolen token.
-  sessionsInvalidatedAt     DateTime?
-  betaProGrantedAt          DateTime?
+  sessionsInvalidatedAt      DateTime?
+  betaProGrantedAt           DateTime?
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in
   // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
-  welcomeEmailSentAt        DateTime?
-  conversations             Conversation[]
-  tokens                    UserToken[]
-  identities                UserIdentity[]
-  linkedCalendarAccounts    LinkedCalendarAccount[]
-  linkedInboxAccounts       LinkedInboxAccount[]
-  linkedDriveAccounts       LinkedDriveAccount[]
-  tasks                     Task[]
-  notes                     Note[]
-  reminders                 Reminder[]
-  contacts                  Contact[]
-  calendarEvents            CalendarEvent[]
-  driveFiles                DriveFile[]
-  driveFileSummaries        DriveFileSummary[]
-  driveSummaryUsage         DriveSummaryUsage[]
-  automationConfig          AutomationConfig?
-  dataWipe                  DataWipe?
-  klornAddress              KlornAddress?
-  agentLogs                 AgentLog[]
-  notifications             Notification[]
-  pushSubscriptions         PushSubscription[]
-  devicePushTokens          DevicePushToken[]
-  pushDeliveryLogs          PushDeliveryLog[]
-  pushRingEvents            PushRingEvent[]
-  phoneEscalations          PhoneEscalation[]
-  actionOutbox              ActionOutbox[]
-  calibrationSnapshots      CalibrationSnapshot[]
-  memories                  Memory[]
-  skills                    Skill[]
-  tokenUsages               TokenUsage[]
-  devices                   Device[]
-  emailMessages             EmailMessage[]
-  emailAttachments          EmailAttachment[]
-  candidateIntakes          CandidateIntake[]
-  emailRules                EmailRule[]
-  screenerDecisions         ScreenerDecision[]
-  pmfResponse               PmfResponse?
-  attentionItems            AttentionItem[]
-  contactDossiers           ContactDossier[]
-  threadBriefs              ThreadBrief[]
-  teams                     Team[]
-  commitments               Commitment[]
-  feedbackEvents            FeedbackEvent[]
-  decisionLabels            DecisionLabel[]
-  emailLabelFeedback        EmailLabelFeedback[]
-  playbookActivations       ActivatedPlaybook[]
-  workContextSnapshots      WorkContextSnapshot[]
-  feedbackPolicyPreferences FeedbackPolicyPreference[]
+  welcomeEmailSentAt         DateTime?
+  conversations              Conversation[]
+  tokens                     UserToken[]
+  identities                 UserIdentity[]
+  linkedCalendarAccounts     LinkedCalendarAccount[]
+  linkedInboxAccounts        LinkedInboxAccount[]
+  linkedDriveAccounts        LinkedDriveAccount[]
+  tasks                      Task[]
+  notes                      Note[]
+  reminders                  Reminder[]
+  contacts                   Contact[]
+  calendarEvents             CalendarEvent[]
+  coAttendanceMeetings       CoAttendanceMeeting[]
+  driveFiles                 DriveFile[]
+  driveFileSummaries         DriveFileSummary[]
+  driveSummaryUsage          DriveSummaryUsage[]
+  automationConfig           AutomationConfig?
+  dataWipe                   DataWipe?
+  klornAddress               KlornAddress?
+  agentLogs                  AgentLog[]
+  notifications              Notification[]
+  pushSubscriptions          PushSubscription[]
+  devicePushTokens           DevicePushToken[]
+  pushDeliveryLogs           PushDeliveryLog[]
+  pushRingEvents             PushRingEvent[]
+  phoneEscalations           PhoneEscalation[]
+  actionOutbox               ActionOutbox[]
+  calibrationSnapshots       CalibrationSnapshot[]
+  memories                   Memory[]
+  skills                     Skill[]
+  tokenUsages                TokenUsage[]
+  devices                    Device[]
+  emailMessages              EmailMessage[]
+  emailAttachments           EmailAttachment[]
+  candidateIntakes           CandidateIntake[]
+  emailRules                 EmailRule[]
+  screenerDecisions          ScreenerDecision[]
+  pmfResponse                PmfResponse?
+  attentionItems             AttentionItem[]
+  contactDossiers            ContactDossier[]
+  threadBriefs               ThreadBrief[]
+  teams                      Team[]
+  commitments                Commitment[]
+  feedbackEvents             FeedbackEvent[]
+  decisionLabels             DecisionLabel[]
+  attentionFacts             AttentionFacts[]
+  emailLabelFeedback         EmailLabelFeedback[]
+  playbookActivations        ActivatedPlaybook[]
+  workContextSnapshots       WorkContextSnapshot[]
+  feedbackPolicyPreferences  FeedbackPolicyPreference[]
   /// First-touch inflow attribution (utm_* / ref / lp), captured on the login
   /// surface and carried through signup. No PII — params and hostnames only.
-  attribution               String?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  emailProcessingLogs       EmailProcessingLog[]
-  contactTrustScores        ContactTrustScore[]
-  contactEngagementScores   ContactEngagementScore[]
-  llmCostLedger             LlmCostLedger[]
-  llmUsageLogs              LlmUsageLog[]
-  analyticsEvents           AnalyticsEvent[]
-  senderTraits              SenderTrait[]
-  senderLabels              SenderLabel[]
-  sentMessages              SentMessage[]
-  sendReceipts              SendReceipt[]
-  learnedRules              LearnedRule[]
-  apiKeys                   ApiKey[]
-  mcpWriteAudits            McpWriteAudit[]
-  imapMovedMessages         ImapMovedMessage[]
+  attribution                String?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  emailProcessingLogs        EmailProcessingLog[]
+  contactTrustScores         ContactTrustScore[]
+  contactEngagementScores    ContactEngagementScore[]
+  contactCoAttendances       ContactCoAttendance[]
+  llmCostLedger              LlmCostLedger[]
+  llmUsageLogs               LlmUsageLog[]
+  analyticsEvents            AnalyticsEvent[]
+  senderTraits               SenderTrait[]
+  senderLabels               SenderLabel[]
+  sentMessages               SentMessage[]
+  sendReceipts               SendReceipt[]
+  learnedRules               LearnedRule[]
+  apiKeys                    ApiKey[]
+  mcpWriteAudits             McpWriteAudit[]
+  imapMovedMessages          ImapMovedMessage[]
 }
 
 enum UserRole {
@@ -339,30 +353,41 @@ enum Role {
 }
 
 model UserToken {
-  id                   String    @id @default(uuid())
-  userId               String
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider             String // "google"
-  accessToken          String
-  refreshToken         String?
-  expiresAt            DateTime?
+  id                        String    @id @default(uuid())
+  userId                    String
+  user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  String // "google"
+  accessToken               String
+  refreshToken              String?
+  expiresAt                 DateTime?
   // Gmail push watch (users.watch) expires ~7 days after registration.
   // Null means the user has not enabled real-time push.
-  gmailWatchExpiresAt  DateTime?
+  gmailWatchExpiresAt       DateTime?
   // Last-synced Gmail historyId watermark for incremental (History API) sync.
   // Null = never baselined; the next sync snapshots then records the current id.
-  historyId            String?
+  historyId                 String?
   // The Google account this grant belongs to, lowercased (Gmail's profile
   // address). Google revokes a grant for the whole account, so a revoke must
   // first know whether another Klorn account holds a grant for the same one
   // (auth/google-grant-revoke.ts). Null until read: set at connect, or the
   // first time a revoke needs it.
-  googleEmail          String?
+  googleEmail               String?
   // When the address was last looked up (the lookup order, least recent
   // first). An empty googleEmail is a grant Google already refuses.
-  googleEmailCheckedAt DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  googleEmailCheckedAt      DateTime?
+  // Calendar co-attendance (pim/coattendance/) for this primary Google calendar:
+  // the first full UTC day it was covered by an advance of the user's watermark
+  // (cleared when it is left out of an advance, or after a coverage gap), and the
+  // last pass in which its own listing succeeded in full (never a failed or cut
+  // listing). Cleared when the grant is reconnected.
+  coAttendanceObservedSince DateTime?
+  coAttendanceLastPassAt    DateTime?
+  // When the one-time Sent-history import (mail/sent-history-import.ts,
+  // SENT_HISTORY_BACKFILL_ENABLED) finished for this account. Null = not yet.
+  // It lives on the grant, so a new grant is imported again.
+  sentHistoryImportedAt     DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   @@unique([userId, provider])
   // The revoke's shared-grant check looks other users' grants up by address.
@@ -417,42 +442,46 @@ enum CalendarProvider {
 // LinkedInboxAccount: OAuth providers use accessToken/refreshToken, CalDAV
 // providers the caldav* columns.
 model LinkedCalendarAccount {
-  id                   String           @id @default(uuid())
-  userId               String
-  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider             CalendarProvider @default(GOOGLE)
-  email                String // the linked account address — label + dedup key
+  id                        String           @id @default(uuid())
+  userId                    String
+  user                      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  CalendarProvider @default(GOOGLE)
+  email                     String // the linked account address — label + dedup key
   // OAuth providers (GOOGLE, OUTLOOK): encrypted token pair. Nullable because
   // CalDAV rows never have one; readers already guard `row.accessToken ?`.
-  accessToken          String?
-  refreshToken         String?
-  expiresAt            DateTime?
+  accessToken               String?
+  refreshToken              String?
+  expiresAt                 DateTime?
   // CalDAV providers (ICLOUD, NAVER): server URL + AES-256-GCM password cipher
   // (an app-specific password), same crypto-tokens helper as the OAuth ciphers.
   // Unused until C3; covered by the key-rotation sweep from day one. caldavUrl is
   // user-supplied and fetched server-side, so C3 must validate it against SSRF
   // (resolve-then-pin, reject private ranges) before the first request.
-  caldavUrl            String?
-  caldavPasswordCipher String?
+  caldavUrl                 String?
+  caldavPasswordCipher      String?
   // Set true when this linked calendar's token is found revoked/undecryptable so
   // the UI can prompt a re-link instead of the account silently dropping out of
   // free/busy; cleared on a successful token refresh or re-link. Mirrors
   // LinkedInboxAccount.needsReconnect.
-  needsReconnect       Boolean          @default(false)
+  needsReconnect            Boolean          @default(false)
+  // Calendar co-attendance (pim/coattendance/), GOOGLE rows only: as on UserToken.
+  // Cleared on a re-link; an unlink deletes the row.
+  coAttendanceObservedSince DateTime?
+  coAttendanceLastPassAt    DateTime?
   // C6: a DEVICE source is one calendar a desktop app uploads (opt-in per
   // calendar, decision P4). Its `email` is `device:<key>`, the device's hash of
   // the calendar identifier plus the device id (never the raw identifier), and
   // this is the calendar's title on the device, shown as the row's source label.
   // NULL for every other provider, which label their rows with `email`.
-  displayName          String?
+  displayName               String?
   // C6: the device's own time of the last snapshot applied to a DEVICE source; an
   // older one arriving later is ignored (a retry or a slow request must not
   // overwrite a newer view). NULL for every other provider.
-  deviceSnapshotAt     DateTime?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  deviceSnapshotAt          DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
   // Events synced from this account (C2); deleted with it.
-  events               CalendarEvent[]
+  events                    CalendarEvent[]
 
   // provider participates so the same address can exist on two services (an
   // iCloud address linked into Google) without colliding. Mirrors
@@ -539,6 +568,8 @@ model LinkedInboxAccount {
   // same co-opt precedent as gmailId holding provider message ids).
   historyId                 String?
   lastSyncedAt              DateTime?
+  // Same as UserToken.sentHistoryImportedAt, for this linked GOOGLE inbox.
+  sentHistoryImportedAt     DateTime?
   // Set true when this linked inbox's token is found revoked/undecryptable so the
   // UI can prompt a re-link instead of the inbox silently rotting; cleared on a
   // successful token refresh or re-link. Durable so a revoked inbox stays flagged
@@ -1821,6 +1852,66 @@ model AttentionItem {
   @@index([status, surfacedAt])
 }
 
+// Attention Engine v3 facts per item (docs/design/attention-engine-v3.md §3,
+// phase P2). Written only by the JUDGE_V3_SHADOW extractor, after the v2 judge
+// on new mail; never read by the lane users see. Additive: no v2 data is
+// rewritten. Same natural key as AttentionItem / DecisionLabel, so policy
+// replay (P3) joins on (userId, source, sourceId).
+model AttentionFacts {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source   AttentionSource
+  sourceId String
+
+  // judge/v3/facts-schema.ts FACTS_VERSION; facts is FactsV1 at that version.
+  factsVersion     Int
+  // "llm" | "none" (no usable model answer)
+  factsSource      String
+  // Model and provider that actually served (createCompletion onServed); null
+  // for "none".
+  model            String?
+  provider         String?
+  extractedAt      DateTime
+  // "llm": FactsV1 after evidence check, date window and the deterministic
+  // merge. "none": only the certain pre-facts (Partial<FactsV1>), so
+  // parseFactsV1 rejects it by design and policy uses its keyword fallback.
+  facts            Json
+  // Fact fields fixed by deterministic pre-facts.
+  certainFields    String[]
+  // judge/v3/pre-facts.ts PreFactSignals: header-derived booleans and counts
+  // (list mail, automated sender, spam, Gmail category, calendar file,
+  // recipients). No mail text.
+  signals          Json?
+  // judge/v3/relationship.ts RelationshipSnapshot at extraction time.
+  relationship     Json?
+  // { checked, dropped: [{ path, evidence }] }
+  evidenceCheck    Json
+  // Validator / date-window issues and LLM failure notes (bounded strings).
+  issues           String[]
+  // Doc §4 escalation candidates: evidence_failed | ambiguous | parse_issues | llm_failed.
+  escalate         Boolean  @default(false)
+  escalateReasons  String[]
+  // The v2 lane shown when the shadow ran. DecisionLabel.shownTier is rewritten
+  // on re-judge, so the disagreement report needs its own frozen copy.
+  v2Tier           String?
+  // Usage of the served call, for the shadow's cost-per-day metric (LlmUsageLog
+  // has no purpose tag). costUsd is 0 when the user's own key served; all null
+  // when no call succeeded.
+  promptTokens     Int?
+  completionTokens Int?
+  costUsd          Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, source, sourceId])
+  @@index([userId, extractedAt])
+  // The cross-user disagreement report filters on extractedAt alone.
+  @@index([extractedAt])
+}
+
 // Decision ledger: the tier the firewall SHOWED the user for each classified
 // item (one row per source item), plus the user's eventual outcome.
 //
@@ -2023,6 +2114,14 @@ model SentMessage {
   subject  String
   sentAt   DateTime
   inbox    String // "primary" | LinkedInboxAccount id — where a live read must go
+  /// Who sent it (2026-10-31): "user" (a manual send through Klorn),
+  /// "approved" (agent-drafted, the user approved the exact bytes),
+  /// "auto_reply" (an autonomous reply), "unsubscribe" (a mailto unsubscribe).
+  /// Null = seen only by the Sent-folder scan, with no proof that Klorn sent it
+  /// (counted as the user's own mail). Legacy rows were labelled from send-time records by
+  /// migration 20261101000000_sent_message_origin_backfill. See SentOrigin in
+  /// sent-messages.ts.
+  origin   String?
 
   createdAt DateTime @default(now())
 
@@ -2399,6 +2498,46 @@ model ContactEngagementScore {
   @@index([userId])
 }
 
+/// Per-contact co-attendance from ended calendar meetings: a relationship signal
+/// for attention engine v3 (docs/design/attention-engine-v3.md §3(2)). Founder
+/// decision 2026-11-01: counts and dates only, never an attendee list; attendee
+/// addresses are read in memory during the sync and only the counted contact's own
+/// address is kept, as its row key. Written by pim/coattendance/ behind
+/// CALENDAR_COATTENDANCE_ENABLED. No row means never counted (flag off, no calendar
+/// connected, or no shared meeting): unknown to readers, never 0.
+model ContactCoAttendance {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEmail      String // trimmed and lowercased (a CHECK enforces it)
+  meetingCount      Int      @default(0) // ended meetings the user took part in, the contact invited and not declining
+  smallMeetingCount Int      @default(0) // of those, with at most 5 such people (rooms, decliners excluded)
+  firstMetAt        DateTime // UTC end-day (midnight) of the earliest counted meeting
+  lastMetAt         DateTime // UTC end-day (midnight) of the latest counted meeting
+  // No createdAt/updatedAt: rows written in one transaction would share a time
+  // and line up into one meeting's guest list.
+
+  @@unique([userId, contactEmail])
+}
+
+/// A meeting already counted into ContactCoAttendance, so a meeting the sync lists
+/// again is never counted twice. eventKey is the SHA-256 (hex) of the meeting's
+/// identity across calendars (Google: iCalUID plus the instance's original start),
+/// so one meeting in two of the user's calendars is one key; a CHECK keeps it a
+/// hash. endedAt only prunes the marker once the meeting is older than the counting
+/// window. No title, attendee or start is stored.
+model CoAttendanceMeeting {
+  id       String           @id @default(uuid())
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider CalendarProvider
+  eventKey String
+  endedAt  DateTime // UTC day (midnight) the meeting ended; no write time is kept
+
+  @@unique([userId, provider, eventKey])
+  @@index([userId, endedAt])
+}
+
 /// A named group of people (team mode P1: "AX팀", "PM팀") whose combined
 /// availability the assistant can check. Per-user; members are bare emails.
 model Team {
@@ -2567,7 +2706,7 @@ model LlmUsageLog {
   id                 String   @id @default(uuid())
   userId             String? // null = system-initiated call (no user accounting)
   user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  provider           String // "openrouter" | "gemini"
+  provider           String // ProviderName that served the call: "anthropic" | "gemini" | "openai-compat" | "openai" (rows before 2026-11-01 may also say "openrouter")
   model              String // model that actually served the call (post-failover)
   promptTokens       Int      @default(0)
   // Prompt tokens served from the provider's prompt cache (OpenAI

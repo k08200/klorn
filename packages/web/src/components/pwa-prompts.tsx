@@ -18,7 +18,7 @@ const LEGACY_INSTALL_DISMISSED_KEY = `${LEGACY_KEY_PREFIX}-install-dismissed`;
 // Floating cards sit above the phone tab bar (62px + home indicator) and at
 // the corner on desktop, so they never sit on top of the bar's targets.
 const FLOATING =
-  "fixed left-1/2 z-[100] flex w-[min(92vw,28rem)] -translate-x-1/2 items-center gap-3 rounded-card border border-line bg-surface-panel px-4 py-3 shadow-l3 animate-slide-up motion-reduce:animate-none bottom-[calc(62px+env(safe-area-inset-bottom)+12px)] md:bottom-6";
+  "fixed left-1/2 z-[100] flex w-[min(92vw,28rem)] -translate-x-1/2 items-center gap-3 rounded-control border border-line bg-surface-panel px-4 py-3 shadow-sheet animate-slide-up motion-reduce:animate-none bottom-[calc(62px+env(safe-area-inset-bottom)+12px)] rail:bottom-6";
 
 /**
  * App-wide PWA chrome: offline notice, "new version" refresh, and the
@@ -109,7 +109,7 @@ export default function PwaPrompts() {
     <>
       {offline && (
         <div
-          className="fixed inset-x-0 top-0 z-[100] border-b border-state-warn-line bg-state-warn-bg px-4 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.375rem)] text-center text-label text-state-warn-ink"
+          className="fixed inset-x-0 top-0 z-[100] border-b border-state-warn-line bg-state-warn-bg px-4 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.375rem)] text-center text-role-label text-state-warn-ink"
           role="status"
           aria-live="polite"
         >
@@ -119,7 +119,7 @@ export default function PwaPrompts() {
 
       {updateAvailable && (
         <section className={FLOATING} aria-label={t("pwa.update.region")}>
-          <p className="min-w-0 flex-1 text-body text-ink">{t("pwa.update.ready")}</p>
+          <p className="min-w-0 flex-1 text-role-body text-ink">{t("pwa.update.ready")}</p>
           <Button size="sm" onClick={handleUpdate}>
             {t("pwa.update.refresh")}
           </Button>
@@ -133,8 +133,8 @@ export default function PwaPrompts() {
         <section className={FLOATING} aria-label={t("pwa.install.title")}>
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-label text-ink">{t("pwa.install.title")}</p>
-            <p className="text-caption text-ink-mid">{t("pwa.install.body")}</p>
+            <p className="text-role-label text-ink">{t("pwa.install.title")}</p>
+            <p className="text-role-caption text-ink-mid">{t("pwa.install.body")}</p>
           </div>
           <Button size="sm" onClick={handleInstall}>
             {t("pwa.install.action")}

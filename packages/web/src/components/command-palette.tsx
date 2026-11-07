@@ -255,7 +255,7 @@ export default function CommandPalette() {
       />
       <div
         ref={dialogRef}
-        className="relative w-full max-w-md rounded-xl border border-line bg-surface-panel shadow-2xl"
+        className="relative w-full max-w-md rounded-sheet border border-line bg-surface-panel shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={t("palette.label")}
@@ -268,7 +268,7 @@ export default function CommandPalette() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("palette.placeholder")}
             aria-label={t("palette.search")}
-            className="w-full bg-transparent text-sm focus:outline-none placeholder-ink-dim"
+            className="w-full bg-transparent text-role-body focus:outline-none placeholder-ink-dim"
             role="combobox"
             aria-expanded="true"
             aria-controls={listboxId}
@@ -290,7 +290,9 @@ export default function CommandPalette() {
         </div>
         <div id={listboxId} className="max-h-64 overflow-y-auto py-1" role="listbox">
           {filtered.length === 0 ? (
-            <p className="text-sm text-ink-dim px-4 py-3">{t("palette.noMatchesSentence")}</p>
+            <p className="text-role-body text-ink-dim px-4 py-3">
+              {t("palette.noMatchesSentence")}
+            </p>
           ) : (
             filtered.map((cmd, i) => (
               <button
@@ -304,19 +306,21 @@ export default function CommandPalette() {
                   setOpen(false);
                 }}
                 onMouseEnter={() => setSelected(i)}
-                className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-sm transition ${
+                className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-role-body transition ${
                   i === selected
                     ? "bg-surface-hover text-ink"
                     : "text-ink-mid hover:bg-surface-hover"
                 }`}
               >
                 <span>{cmd.label}</span>
-                {cmd.sublabel && <span className="text-xs text-ink-mid">{cmd.sublabel}</span>}
+                {cmd.sublabel && (
+                  <span className="text-role-caption text-ink-mid">{cmd.sublabel}</span>
+                )}
               </button>
             ))
           )}
         </div>
-        <div className="border-t border-line px-4 py-2 flex items-center justify-between text-caption text-ink-mid">
+        <div className="border-t border-line px-4 py-2 flex items-center justify-between text-role-caption text-ink-mid">
           <span>{t("palette.hintMove")}</span>
           <span>{t("palette.hintClose")}</span>
         </div>

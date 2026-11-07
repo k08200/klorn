@@ -245,7 +245,7 @@ describe("calibration-snapshot", () => {
 });
 
 describe("correction-eval", () => {
-  beforeEach(() => vi.stubEnv("OPENROUTER_API_KEY", "test-key"));
+  beforeEach(() => vi.stubEnv("ANTHROPIC_API_KEY", "test-key"));
 
   it("has nothing to evaluate when the only moves are the agent's, and never calls the judge", async () => {
     world(una(["QUEUE", "QUEUE"]));

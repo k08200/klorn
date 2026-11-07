@@ -242,7 +242,7 @@ function LoginForm() {
   return (
     <AuthScreen title={<BrandHeadline />} description={t("auth.subline")} preview={<LanePreview />}>
       {nextPath !== "/inbox" && (
-        <p className="mb-6 rounded-card border border-notice-border bg-notice-bg px-3.5 py-2.5 text-label text-notice-ink">
+        <p className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-2.5 text-role-label text-notice-ink">
           {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
         </p>
       )}
@@ -255,7 +255,7 @@ function LoginForm() {
         <div className="mb-6 space-y-3">
           <div
             data-testid="access-notice"
-            className="rounded-card border border-notice-border bg-notice-bg px-3.5 py-3 text-label text-notice-ink"
+            className="rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-role-label text-notice-ink"
           >
             <span className="font-semibold text-notice-ink-strong">
               {t("auth.inviteOnlyTitle")}
@@ -265,18 +265,20 @@ function LoginForm() {
 
           <Link
             href="/early-access"
-            className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
+            className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
           >
             {t("auth.requestEarlyAccess")}
           </Link>
 
-          <p className="text-center text-caption text-ink-mid">{t("auth.alreadyApproved")}</p>
+          <p className="text-center text-role-caption text-ink-mid">{t("auth.alreadyApproved")}</p>
         </div>
       )}
 
-      <h2 className="mb-4 text-head text-ink">
+      <h2 className="mb-4 text-role-head text-ink">
         {mode === "login" ? t("auth.formTitleLogin") : t("auth.formTitleRegister")}
       </h2>
+
+      <LegalConsent />
 
       <section aria-label={t("auth.providerLaneLabel")}>
         <ProviderButtons
@@ -285,7 +287,7 @@ function LoginForm() {
           onGoogleClick={handleGoogleClick}
         />
         {pairingCode && (
-          <p role="status" className="mt-3 text-label text-ink-mid">
+          <p role="status" className="mt-3 text-role-label text-ink-mid">
             {t("auth.desktopPairingCode", { code: pairingCode })}
           </p>
         )}
@@ -293,7 +295,7 @@ function LoginForm() {
 
       <div className="my-5 flex items-center gap-3" aria-hidden="true">
         <div className="h-px flex-1 bg-line" />
-        <span className="text-caption text-ink-mid">
+        <span className="text-role-caption text-ink-mid">
           {signupOpen ? t("auth.orContinueEmail") : t("auth.orSignInEmail")}
         </span>
         <div className="h-px flex-1 bg-line" />
@@ -331,13 +333,13 @@ function LoginForm() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <label htmlFor="password" className="block text-xs font-medium text-ink-mid">
+            <label htmlFor="password" className="block text-role-caption font-medium text-ink-mid">
               {t("auth.password")}
             </label>
             {mode === "login" && (
               <Link
                 href="/reset-password"
-                className="focus-ring -my-3 inline-flex min-h-11 items-center rounded-control text-caption text-ink-mid transition-colors duration-120 ease-fluid hover:text-accent-deep"
+                className="focus-ring -my-3 inline-flex min-h-11 items-center rounded-control text-role-caption text-ink-mid transition-colors duration-120 ease-fluid hover:text-accent-deep"
               >
                 {t("auth.resetPassword")}
               </Link>
@@ -377,7 +379,7 @@ function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-label text-ink-mid">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-role-label text-ink-mid">
         {signupOpen ? (
           <>
             <span>{mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}</span>
@@ -404,6 +406,74 @@ function LoginForm() {
         )}
       </p>
     </AuthScreen>
+  );
+}
+
+/**
+ * The consent line, above both sign-in actions it refers to.
+ *
+ * AuthScreen's footer already links /privacy and /terms, but a pair of nav
+ * links at the bottom of the chrome is not the same thing as telling someone
+ * what they are agreeing to at the moment they agree to it — which is what
+ * both sign-in paths here (Google and email) actually do.
+ *
+ * Above the provider lane rather than under the email form, because the
+ * provider buttons are the first action on the page: a line below the form
+ * would sit after the control a Google signer has already clicked, and that
+ * path leaves the page immediately.
+ *
+ * One template with two placeholders rather than three concatenated fragments:
+ * the clause order differs across the seven languages Klorn ships, and
+ * splitting on the tokens lets each locale put the links where its own grammar
+ * wants them. The order is resolved from the string instead of assumed, so a
+ * locale that names the privacy policy first still renders correctly.
+ */
+function LegalConsent() {
+  const { t } = useT();
+  const linkClass =
+    "focus-ring rounded-chip text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-120 ease-fluid hover:text-accent-deep";
+  // Split on the first occurrence of each token only, keeping ALL the text
+  // around them. A plain `split` would silently drop everything after a
+  // repeated token, and the i18n parity guard counts keys, not the
+  // placeholders inside them, so a hand-edited translation can produce any of
+  // these shapes. Order is read from the string rather than assumed, and a
+  // token that never appeared leaves its slot empty instead of printing
+  // "{privacy}" verbatim.
+  const template = t("auth.legalConsent");
+  const termsAt = template.indexOf("{terms}");
+  const privacyAt = template.indexOf("{privacy}");
+  const termsFirst = termsAt <= privacyAt;
+  const first = termsFirst ? "{terms}" : "{privacy}";
+  const second = termsFirst ? "{privacy}" : "{terms}";
+  const firstAt = template.indexOf(first);
+  const rest = firstAt < 0 ? "" : template.slice(firstAt + first.length);
+  const secondAt = rest.indexOf(second);
+  const lead = firstAt < 0 ? template : template.slice(0, firstAt);
+  const middle = secondAt < 0 ? rest : rest.slice(0, secondAt);
+  const tail = secondAt < 0 ? "" : rest.slice(secondAt + second.length);
+  // Any token that survived (a duplicate, or the pair being absent) is stripped
+  // so no brace ever reaches the user.
+  const text = (part: string) => part.replace(/\{(?:terms|privacy)\}/g, "");
+
+  const termsLink = (
+    <Link href="/terms" className={linkClass}>
+      {t("auth.legalConsentTerms")}
+    </Link>
+  );
+  const privacyLink = (
+    <Link href="/privacy" className={linkClass}>
+      {t("auth.legalConsentPrivacy")}
+    </Link>
+  );
+
+  return (
+    <p className="mb-4 text-center text-role-caption text-ink-mid">
+      {text(lead)}
+      {termsFirst ? termsLink : privacyLink}
+      {text(middle)}
+      {termsFirst ? privacyLink : termsLink}
+      {text(tail)}
+    </p>
   );
 }
 

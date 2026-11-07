@@ -78,7 +78,7 @@ export function OnboardingV2() {
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-2xl flex-col px-4 py-8 md:py-14">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <p className="text-label font-semibold tracking-wide text-ink">Klorn</p>
+        <p className="text-role-label font-semibold tracking-wide text-ink">Klorn</p>
         <StepTrail step={step} />
       </header>
 
@@ -125,11 +125,11 @@ function StepTrail({ step }: { step: Step }) {
           <li
             key={name}
             aria-current={active ? "step" : undefined}
-            className={`flex items-center gap-1.5 text-caption ${active ? "text-ink" : "text-ink-muted"}`}
+            className={`flex items-center gap-1.5 text-role-caption ${active ? "text-ink" : "text-ink-muted"}`}
           >
             <span
               aria-hidden="true"
-              className={`flex size-5 items-center justify-center rounded-full border text-caption tabular-nums ${
+              className={`flex size-5 items-center justify-center rounded-full border text-role-caption tabular-nums ${
                 active
                   ? "border-accent-solid bg-accent-solid text-accent-solid-ink"
                   : done

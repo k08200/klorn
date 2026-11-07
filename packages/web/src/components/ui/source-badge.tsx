@@ -30,7 +30,7 @@ export function SourceBadge({ provider, nickname, className = "" }: SourceBadgeP
       role="img"
       aria-label={sourceLabel(provider, nick)}
       title={sourceLabel(provider, nick)}
-      className={`inline-flex max-w-40 shrink-0 items-center gap-1 rounded-full border border-line bg-surface-raised px-1.5 py-px text-caption text-ink-muted ${className}`}
+      className={`inline-flex max-w-40 shrink-0 items-center gap-1 rounded-full border border-line bg-surface-raised px-1.5 py-px text-role-caption text-ink-muted ${className}`}
     >
       <span aria-hidden="true" className="font-semibold tracking-tight text-ink-soft">
         {glyph}

@@ -16,6 +16,8 @@
 import { google } from "googleapis";
 import { Semaphore } from "../semaphore.js";
 import { getAuthedClient, getAuthedInboxClient, getLinkedInboxClients } from "./gmail.js";
+import { UNKNOWN_DATE } from "./mailbox-dates.js";
+import { sentAtOf } from "./sent-history-fetch.js";
 
 type OAuth2 = InstanceType<typeof google.auth.OAuth2>;
 
@@ -30,7 +32,8 @@ export interface MailboxItemWire {
   from: string;
   to: string;
   snippet: string;
-  /** ISO. Gmail's internalDate (epoch ms) is the arrival authority. */
+  /** ISO. Gmail's internalDate (epoch ms) is the arrival authority; the Date
+   *  header only when it is missing (sentAtOf). */
   receivedAt: string;
   isRead: boolean;
   /**
@@ -215,7 +218,11 @@ async function listAccountPage(
           metadataHeaders: ["From", "To", "Subject", "Date"],
         });
         const headers = detail.data.payload?.headers ?? [];
-        const internal = Number(detail.data.internalDate);
+        // internalDate, else the Date header (sentAtOf, same rule as the
+        // Sent-history import). With neither, the row stays listed at the epoch,
+        // which means "date unknown": a folder view never hides mail, and the
+        // Sent scan skips epoch rows (sent-messages.ts toScannedRow).
+        const date = sentAtOf(detail.data) ?? UNKNOWN_DATE;
         return {
           gmailId: detail.data.id ?? id,
           threadId: detail.data.threadId ?? null,
@@ -223,9 +230,7 @@ async function listAccountPage(
           from: header(headers, "From"),
           to: header(headers, "To"),
           snippet: detail.data.snippet ?? "",
-          receivedAt: Number.isFinite(internal)
-            ? new Date(internal).toISOString()
-            : new Date(0).toISOString(),
+          receivedAt: date.toISOString(),
           isRead: !(detail.data.labelIds ?? []).includes("UNREAD"),
           inbox: account.key,
         };

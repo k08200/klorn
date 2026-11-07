@@ -45,7 +45,7 @@ export default function ShellSkeleton({ label }: { label: string }) {
           {CARDS.map((key) => (
             <div key={key} className="flex flex-col gap-2.5">
               <div className={`${SHAPE} h-5.5 w-20 rounded-control`} />
-              <div className="divide-y divide-line-soft overflow-hidden rounded-xl bg-surface-panel ring-1 ring-line">
+              <div className="divide-y divide-line-soft overflow-hidden rounded-card bg-surface-panel ring-1 ring-line">
                 <MailRowSkeleton />
                 <MailRowSkeleton />
               </div>

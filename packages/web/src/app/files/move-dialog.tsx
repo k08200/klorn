@@ -132,13 +132,13 @@ export function MoveDialog({
             id={placeId}
             ref={placeRef}
             tabIndex={-1}
-            className={`min-w-0 truncate text-body font-semibold text-ink ${FOCUSED_HEADING}`}
+            className={`min-w-0 truncate text-role-body font-semibold text-ink ${FOCUSED_HEADING}`}
           >
             {trail.at(-1)?.name ?? t("files.drive.title")}
           </h3>
         </div>
         {item && !allowed && (
-          <p id={alreadyId} className="text-caption text-ink-muted [word-break:keep-all]">
+          <p id={alreadyId} className="text-role-caption text-ink-muted [word-break:keep-all]">
             {t("files.drive.move.already")}
           </p>
         )}
@@ -154,7 +154,7 @@ export function MoveDialog({
           <p
             key={action.failure.attempt}
             role="alert"
-            className="text-body text-state-danger-ink [word-break:keep-all]"
+            className="text-role-body text-state-danger-ink [word-break:keep-all]"
           >
             {t(action.failure.key)}
           </p>
@@ -202,7 +202,7 @@ function FolderLevel({
   return (
     <div ref={listRef} className="flex flex-col gap-3">
       {choices.length === 0 && !level.hasMore && (
-        <p className="text-body text-ink-muted">{t("files.drive.move.noFolders")}</p>
+        <p className="text-role-body text-ink-muted">{t("files.drive.move.noFolders")}</p>
       )}
       {choices.length > 0 && (
         <ul className="flex flex-col divide-y divide-line-soft">
@@ -240,14 +240,14 @@ function FolderChoice({
       <span className="text-ink-muted">
         <FileGlyph folder />
       </span>
-      <span className="min-w-0 flex-1 truncate text-left text-body">{folder.name}</span>
+      <span className="min-w-0 flex-1 truncate text-left text-role-body">{folder.name}</span>
     </>
   );
   if (!choice.enterable) {
     return (
       <div className="flex min-h-11 items-center gap-3 py-1 text-ink-muted">
         {body}
-        <span className="shrink-0 text-caption">{t("files.drive.move.self")}</span>
+        <span className="shrink-0 text-role-caption">{t("files.drive.move.self")}</span>
       </div>
     );
   }
@@ -256,7 +256,7 @@ function FolderChoice({
       variant="ghost"
       aria-label={t("files.openFolder", { name: folder.name })}
       onClick={() => onEnter(folder)}
-      className="-mx-3 min-h-11 w-[calc(100%+1.5rem)] justify-start gap-3 rounded-card text-ink"
+      className="-mx-3 min-h-11 w-[calc(100%+1.5rem)] justify-start gap-3 rounded-control text-ink"
     >
       {body}
       <ChevronGlyph />

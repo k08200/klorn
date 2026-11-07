@@ -30,7 +30,7 @@ export default function GoogleReconnectBanner() {
     <div
       data-testid="google-reconnect-banner"
       role="status"
-      className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-notice-border bg-notice-bg px-4 py-2 text-xs leading-5 text-notice-ink"
+      className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-notice-border bg-notice-bg px-4 py-2 text-role-caption leading-5 text-notice-ink"
     >
       <span>{t("reconnect.googleExpired")}</span>
       <Link

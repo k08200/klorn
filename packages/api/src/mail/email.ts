@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { captureError } from "../sentry.js";
+import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
 import { parseAddress } from "./email-address.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -340,26 +341,72 @@ export async function sendWelcomeEmail(
  * here that a layout would make clearer, and an address rendered as unescaped
  * HTML is an injection waiting to happen.
  *
+ * This is the one sender in this module that recurs on a schedule, so it is the
+ * one that carries an opt-out: in the plain-text part (which had none at all —
+ * a text-only client saw no way out), in the HTML part, and in the
+ * `List-Unsubscribe` header that Gmail weights when it decides whether Klorn's
+ * mail is wanted. The transactional senders above (reset, verify, invite)
+ * deliberately carry none: an unsubscribe control on a password reset offers to
+ * stop a mail that is only ever sent because the user just asked for it.
+ *
+ * No `List-Unsubscribe-Post`: that header promises RFC 8058 one-click, which
+ * requires an endpoint that unsubscribes on an unauthenticated POST. This link
+ * goes to the user's own settings instead, so advertising one-click would be a
+ * header that lies about what the URL does.
+ *
+ * `webUrl` is the caller's, not this module's: pim/daily-digest.ts already owns
+ * "where the digest points" for the links inside the body, and reading the env
+ * var separately here let the two disagree — an unset WEB_URL pointed the body
+ * at the deployed app and the opt-out at localhost.
+ *
+ * If no usable opt-out URL can be built, the mail is NOT sent. A recurring mail
+ * with no way out is the exact thing this function exists to prevent, so a
+ * misconfigured WEB_URL has to cost a skipped digest rather than silently
+ * produce the non-compliant mail the old code would have sent. The digest is a
+ * safety net, and the sweep already tolerates a false return per user.
+ *
  * Returns false rather than throwing: the digest sweep runs over every user,
  * and one bad address must not end it.
  */
-export async function sendDigestEmail(to: string, subject: string, text: string): Promise<boolean> {
+export async function sendDigestEmail(
+  to: string,
+  subject: string,
+  text: string,
+  opts: { language?: string; webUrl?: string } = {},
+): Promise<boolean> {
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", maskEmail(to));
     return false;
   }
+  const unsubscribeUrl = digestUnsubscribeUrl(opts.webUrl ?? WEB_URL);
+  if (!unsubscribeUrl) {
+    console.error(
+      "[EMAIL] digest NOT sent to",
+      maskEmail(to),
+      "— WEB_URL yields no usable unsubscribe target; refusing to send a recurring mail with no opt-out",
+    );
+    captureError(new Error("digest unsubscribe URL unavailable"), {
+      tags: { scope: "digest-email" },
+    });
+    return false;
+  }
+  const label = digestUnsubscribeLabel(opts.language ?? "en");
   try {
     await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
-      text,
+      // The opt-out is part of the text payload, not a decoration on the HTML
+      // part: a client that shows only text/plain must still see a way out.
+      text: `${text}\n\n—\n${label}: ${unsubscribeUrl}`,
       html:
         `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;` +
         `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
         `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
         `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
-        `<a href="${WEB_URL}/settings/notifications" style="color:#6b7280">Turn digests off</a></p></div>`,
+        `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>` +
+        `</div>`,
+      headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
     });
     return true;
   } catch (err) {

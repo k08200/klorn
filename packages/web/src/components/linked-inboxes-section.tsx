@@ -130,27 +130,27 @@ export function LinkedInboxesSection() {
   });
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <h2 className="text-base font-semibold text-ink">{t("linkedInboxes.title")}</h2>
-      <p className="mt-1 text-xs text-ink-mid">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
+      <h2 className="text-role-head text-ink">{t("linkedInboxes.title")}</h2>
+      <p className="mt-1 text-role-body text-ink-mid">
         {t("linkedInboxes.body", { count: String(TIER_COUNT) })}
       </p>
 
       {accounts.length > 0 && (
-        <ul className="mt-3 divide-y divide-line-soft rounded-xl border border-line-soft bg-surface-raised/70">
+        <ul className="mt-3 divide-y divide-line-soft rounded-control border border-line-soft bg-surface-raised/70">
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+              className="flex items-center justify-between gap-3 px-3 py-2.5 text-role-body"
             >
               <div className="min-w-0">
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect ? (
-                  <span className="block truncate text-caption text-state-warn-ink">
+                  <span className="block truncate text-role-caption text-state-warn-ink">
                     {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 ) : (
-                  <span className="block truncate text-caption text-ink-dim">
+                  <span className="block truncate text-role-caption text-ink-dim">
                     {formatLastSynced(account.lastSyncedAt)}
                   </span>
                 )}
@@ -161,7 +161,7 @@ export function LinkedInboxesSection() {
                     type="button"
                     onClick={() => connect.mutate()}
                     disabled={connect.isPending}
-                    className="ease-strong rounded-md border border-state-warn-line bg-state-warn-bg px-2 py-1 text-xs font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
+                    className="ease-strong rounded-chip border border-state-warn-line bg-state-warn-bg px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
                     {t("common.reconnect")}
                   </button>
@@ -170,7 +170,7 @@ export function LinkedInboxesSection() {
                   type="button"
                   onClick={() => disconnect.mutate(account.id)}
                   disabled={disconnect.isPending}
-                  className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
+                  className="ease-strong rounded-chip border border-state-danger-line bg-state-danger-bg px-2 py-1 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
                   {t("settings.disconnect")}
                 </button>
@@ -185,7 +185,7 @@ export function LinkedInboxesSection() {
           type="button"
           onClick={() => connect.mutate()}
           disabled={connect.isPending}
-          className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+          className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-control bg-accent-solid px-4 py-2 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
         >
           {t("linkedInboxes.connect")}
         </button>

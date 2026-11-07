@@ -73,8 +73,8 @@ interface MailPane {
 }
 
 /**
- * `pane`: the list half of the ≥1280px split view (email/layout.tsx) — a 440px
- * column with its own scroll, the open mail marked, and the list's hotkeys
+ * `pane`: the list half of the ≥700px split view (email/layout.tsx) — a
+ * 280–440px column with its own scroll, the open mail marked, and the list's hotkeys
  * standing down while the reader beside it is open.
  */
 export function MailV2({ pane }: { pane?: MailPane } = {}) {
@@ -290,11 +290,11 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
         />
 
         {isDemo && (
-          <p className="flex flex-wrap items-center gap-x-2 rounded-card border border-state-info-line bg-state-info-bg px-3 py-2 text-body text-state-info-ink">
+          <p className="flex flex-wrap items-center gap-x-2 rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 text-role-body text-state-info-ink">
             {needsConnection ? t("mailV2.noSource") : t("mailV2.demo")}
             <Link
               href="/settings/accounts"
-              className="focus-ring rounded-control font-medium underline"
+              className="focus-ring rounded-chip font-medium underline"
             >
               {t("mailV2.demo.connect")}
             </Link>
@@ -304,7 +304,7 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
         {actions.error && (
           <div
             role="alert"
-            className="flex items-center gap-2 rounded-card border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-body text-state-danger-ink"
+            className="flex items-center gap-2 rounded-control border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-role-body text-state-danger-ink"
           >
             <p className="min-w-0 flex-1">{actions.error}</p>
             <Button variant="ghost" size="sm" onClick={() => actions.setError(null)}>

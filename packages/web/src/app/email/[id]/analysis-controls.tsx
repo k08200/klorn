@@ -148,7 +148,7 @@ export function ActionItemsPanel({
       {/* On touch each row is 44px tall, so the chips' padded 44px hit areas
           never overlap the row above or below. */}
       <div className="mb-1 flex items-center justify-between gap-2 pointer-coarse:min-h-11">
-        <p className="text-caption text-ink-muted">{t("emailDetail.actionItems.title")}</p>
+        <p className="text-role-caption text-ink-muted">{t("emailDetail.actionItems.title")}</p>
         {!allCreated && (
           <Button
             variant="chip"
@@ -168,7 +168,7 @@ export function ActionItemsPanel({
             // biome-ignore lint/suspicious/noArrayIndexKey: the index is the item's identity here
             <li
               key={i}
-              className="flex min-h-8 items-center gap-2 text-body pointer-coarse:min-h-11"
+              className="flex min-h-8 items-center gap-2 text-role-body pointer-coarse:min-h-11"
             >
               <span aria-hidden="true" className={done ? "text-state-ok-ink" : "text-ink-muted"}>
                 {done ? "✓" : "□"}
@@ -249,7 +249,7 @@ export function LabelFeedbackControl({
 
   if (feedback) {
     return (
-      <span className="inline-flex items-center gap-1 text-caption text-ink-soft">
+      <span className="inline-flex items-center gap-1 text-role-caption text-ink-soft">
         <span aria-hidden="true" className="size-1.5 rounded-full bg-accent-solid" />
         {t("emailDetail.feedback.reported", {
           original: priorityLabel(t, feedback.originalPriority),
@@ -278,7 +278,7 @@ export function LabelFeedbackControl({
         {t("emailDetail.feedback.wrongLabel")}
       </Menu>
       {error && (
-        <span role="alert" className="text-caption text-state-danger-ink">
+        <span role="alert" className="text-role-caption text-state-danger-ink">
           {error}
         </span>
       )}
@@ -368,7 +368,7 @@ export function ReplyNeededFeedbackControl({
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
-      <span className="text-caption text-ink-muted">
+      <span className="text-role-caption text-ink-muted">
         {t("emailDetail.replyNeeded.judgmentLabel")}
       </span>
       <Menu
@@ -385,7 +385,7 @@ export function ReplyNeededFeedbackControl({
         {currentLabel ?? t("emailDetail.replyNeeded.menu")}
       </Menu>
       {error && (
-        <span role="alert" className="text-caption text-state-danger-ink">
+        <span role="alert" className="text-role-caption text-state-danger-ink">
           {error}
         </span>
       )}

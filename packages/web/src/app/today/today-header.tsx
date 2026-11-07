@@ -64,8 +64,8 @@ export function TodayHeader({ time, accounts, showAccounts }: TodayHeaderProps) 
     <header className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <div className="flex flex-wrap items-baseline gap-x-3">
-          <h1 className="text-display text-ink">{t("nav.v2.today")}</h1>
-          <p className="text-body text-ink-muted">
+          <h1 className="text-role-page text-ink">{t("nav.v2.today")}</h1>
+          <p className="text-role-body text-ink-muted">
             <time dateTime={time.now.toISOString().slice(0, 10)}>{longDate(time)}</time>
           </p>
         </div>
@@ -103,7 +103,7 @@ function DayStrip() {
   return (
     <ul
       aria-label={t("today.strip.label")}
-      className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-caption tabular-nums text-ink-muted"
+      className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-role-caption tabular-nums text-ink-muted"
     >
       {needs.map(({ lane, count }) => (
         <li key={lane} className="flex items-center gap-1.5 text-ink-soft">
@@ -117,7 +117,7 @@ function DayStrip() {
           <Link
             href={MAIL_HREF}
             onClick={() => preselectMailLane("QUEUE")}
-            className="focus-ring rounded-control text-ink-muted underline-offset-2 transition-colors duration-120 ease-fluid hover:text-ink-soft hover:underline"
+            className="focus-ring relative rounded-chip text-ink-muted underline-offset-2 transition-colors duration-120 ease-fluid hover:text-ink-soft hover:underline pointer-coarse:after:absolute pointer-coarse:after:-inset-y-3.5 pointer-coarse:after:inset-x-0 pointer-coarse:after:content-['']"
           >
             {t(todayWaitingKey(waiting), { count: String(waiting) })}
           </Link>
@@ -128,7 +128,8 @@ function DayStrip() {
 }
 
 /**
- * Phone only (the sidebar is hidden below md): the accounts that need
+ * Below 1024px (the sidebar, and its Accounts list, is hidden there — the
+ * rail and the tab bar carry no accounts): the accounts that need
  * attention, or the retry when the list failed. Nothing while loading or when
  * every account is synced — the sidebar states health on wider screens.
  */
@@ -136,8 +137,10 @@ function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   const { t } = useT();
   if (accounts.failed) {
     return (
-      <div role="alert" className="flex items-center gap-2 md:hidden">
-        <p className="text-label font-normal text-state-danger-ink">{t("today.accounts.error")}</p>
+      <div role="alert" className="flex items-center gap-2 lg:hidden">
+        <p className="text-role-label font-normal text-state-danger-ink">
+          {t("today.accounts.error")}
+        </p>
         <Button variant="secondary" size="sm" onClick={accounts.retry}>
           {t("today.retry")}
         </Button>
@@ -149,7 +152,7 @@ function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   return (
     <nav
       aria-label={t("today.accounts.label")}
-      className="relative -mx-4 flex items-center overflow-x-auto px-2 md:hidden"
+      className="relative -mx-4 flex items-center overflow-x-auto px-2 lg:hidden"
     >
       <ul className="flex items-center gap-1">
         {attention.map((account) => (
@@ -171,9 +174,9 @@ function AccountChip({ account }: { account: ConnectedAccount }) {
       className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-control px-2 transition-colors duration-120 ease-fluid hover:bg-surface-hover"
     >
       <SourceBadge provider={account.provider} />
-      <span className="max-w-44 truncate text-label font-normal text-ink-soft">{name}</span>
+      <span className="max-w-44 truncate text-role-label font-normal text-ink-soft">{name}</span>
       <span
-        className={`inline-flex items-center gap-1.5 text-caption ${HEALTH_TEXT[account.health]}`}
+        className={`inline-flex items-center gap-1.5 text-role-caption ${HEALTH_TEXT[account.health]}`}
       >
         <span
           aria-hidden="true"

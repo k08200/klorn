@@ -12,9 +12,9 @@
 /** Single fact row in the candidate-profile card. */
 export function ProfileFact({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="rounded-lg border border-line bg-surface-raised px-3 py-2">
-      <p className="text-caption font-medium uppercase tracking-wider text-ink-mid">{label}</p>
-      <p className="mt-1 truncate text-xs text-ink-mid">{value || "-"}</p>
+    <div className="rounded-control border border-line bg-surface-raised px-3 py-2">
+      <p className="text-role-caption font-medium uppercase tracking-wider text-ink-mid">{label}</p>
+      <p className="mt-1 truncate text-role-caption text-ink-mid">{value || "-"}</p>
     </div>
   );
 }
@@ -22,9 +22,11 @@ export function ProfileFact({ label, value }: { label: string; value: string | n
 /** Stat tile shown above the email body (e.g. word count, attachment size). */
 export function DetailStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-surface-raised px-3 py-2">
-      <p className="text-caption font-semibold uppercase tracking-[0.14em] text-ink-mid">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-ink">{value}</p>
+    <div className="rounded-control border border-line bg-surface-raised px-3 py-2">
+      <p className="text-role-caption font-semibold uppercase tracking-[0.14em] text-ink-mid">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-role-body font-semibold text-ink">{value}</p>
     </div>
   );
 }
@@ -51,7 +53,7 @@ export function EmailActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`focus-ring h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
+      className={`focus-ring h-8 rounded-chip border px-2.5 text-role-caption font-medium transition disabled:opacity-50 ${
         danger
           ? "border-state-danger-line bg-state-danger-bg text-state-danger-ink hover:bg-state-danger-bg"
           : "border-line bg-surface-panel text-ink-mid hover:border-line hover:bg-surface-hover"

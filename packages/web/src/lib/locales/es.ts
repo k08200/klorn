@@ -357,6 +357,9 @@ const es: Record<string, string> = {
     "Verificación OAuth de Google completada (oct. 2026) · Evaluación independiente (CASA Tier 2)",
   "auth.privacy": "Privacidad",
   "auth.terms": "Términos",
+  "auth.legalConsent": "Al continuar, aceptas los {terms} y confirmas haber leído la {privacy}.",
+  "auth.legalConsentTerms": "Términos del Servicio",
+  "auth.legalConsentPrivacy": "Política de Privacidad",
   "auth.preview.label": "Ejemplo de Klorn clasificando el correo en cinco carriles",
   "auth.preview.demo": "Datos de demostración",
   "auth.preview.caption":
@@ -2143,17 +2146,17 @@ const es: Record<string, string> = {
   "byok.activeModel": "Modelo activo:",
   "byok.usingYourKey": "Usando tu clave",
   "byok.stored": "•••••••• guardada",
-  "byok.openRouterLabel": "Clave de API de OpenRouter",
-  "byok.openRouterHelp":
-    "Una sola clave cubre todos los modelos que usa Klorn: OpenRouter los enruta todos. La clave se verifica con el proveedor antes de guardarla. Consíguela en",
+  "byok.anthropicLabel": "Clave de API de Anthropic",
+  "byok.anthropicHelp":
+    "Klorn funciona con Claude, así que una sola clave de Anthropic cubre todos los modelos que usa. La clave se verifica con Anthropic antes de guardarla. Consíguela en",
   "byok.legacy": "heredada",
   "byok.geminiRetired":
-    "Las claves directas de Gemini están retiradas: una clave gratuita aquí deja sin recursos la clasificación sin avisar cuando se agota su cuota diaria. Quítala y usa una clave de OpenRouter.",
+    "Las claves directas de Gemini están retiradas: una clave gratuita aquí deja sin recursos la clasificación sin avisar cuando se agota su cuota diaria. Quítala y usa una clave de Anthropic.",
   "byok.assistantModel": "Modelo del asistente",
   "byok.assistantModelHelp":
-    "Solo modelos de vanguardia: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA; añade tu propia clave arriba para usar tu cuota. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
+    "Solo modelos Claude: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA; añade tu propia clave arriba para usar tu cuota. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
   "byok.assistantModelHelpFree":
-    "Solo modelos de vanguardia: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
+    "Solo modelos Claude: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
   "byok.error.status": "No se pudo cargar el estado de tu clave de LLM.",
   "byok.error.update": "No se pudo actualizar la clave.",
   "byok.error.model": "No se pudo cambiar el modelo.",
@@ -2647,7 +2650,7 @@ const es: Record<string, string> = {
     "Se omitió la notificación porque el horario de silencio estaba activo cuando se envió el resumen.",
   "briefingPage.guidance.quietHoursAction": "Ajustar horario de silencio",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — recomendado",
+  "byok.modelNote.balanced": "{provider} — equilibrado",
   "byok.modelNote.fastest": "{provider} — el más rápido",
   "byok.modelNote.mostCapable": "{provider} — el más capaz, más caro",
   "statusChip.connected": "Conectado",
@@ -2655,6 +2658,128 @@ const es: Record<string, string> = {
   "statusChip.pending": "Pendiente",
   // web app design pass, 2026-10-21: English that reached localized screens.
   "imap.beta": "Beta",
+  // Public playground (redesign 2026-10-30). Model ids and prices stay untranslated.
+  "playground.brand.section": "Laboratorio",
+  "playground.nav.methodology": "Cómo se puntúa",
+  "playground.nav.pricing": "Precios",
+  "playground.nav.login": "Iniciar sesión",
+  "playground.nav.startFree": "Empezar gratis",
+  "playground.title": "Mira cómo Klorn clasifica un correo.",
+  "playground.lead":
+    "Pega un mensaje, elige un modelo y usa tu propia clave. El juez real de Klorn lo coloca en uno de cinco carriles y muestra las cuatro puntuaciones detrás.",
+  "playground.leadShort": "Tu modelo, tu clave, el juez real de Klorn.",
+  "playground.form.label": "Correo y modelo",
+  "playground.samples.heading": "Prueba un ejemplo",
+  "playground.samples.investor": "Inversor",
+  "playground.samples.newsletter": "Boletín",
+  "playground.samples.receipt": "Recibo",
+  "playground.samples.teammate": "Compañero",
+  "playground.samples.meeting": "Solicitud de reunión",
+  "playground.field.from": "De",
+  "playground.field.fromPlaceholder": "nombre@empresa.com",
+  "playground.field.subject": "Asunto",
+  "playground.field.subjectPlaceholder": "Línea de asunto",
+  "playground.field.body": "Cuerpo",
+  "playground.field.bodyPlaceholder": "Pega el correo o elige un ejemplo arriba.",
+  "playground.email.edit": "Editar correo",
+  "playground.email.collapse": "Terminar edición",
+  "playground.email.empty": "Aún no hay correo: elige un ejemplo o pega uno.",
+  "playground.provider.label": "Proveedor",
+  "playground.model.label": "Modelo",
+  "playground.model.klorn": "Lo usa Klorn",
+  "playground.model.measured": "{low}–{high}/{total} en la prueba de Klorn ({runs} ejecuciones)",
+  "playground.model.other": "Otro ID de modelo…",
+  "playground.model.otherLabel": "ID del modelo",
+  "playground.model.otherPlaceholder": "proveedor/nombre-modelo",
+  "playground.model.otherInvalid":
+    "Usa un ID de modelo como proveedor/nombre-modelo: letras, dígitos, puntos y guiones.",
+  "playground.model.klornNote":
+    "El modelo que usa el propio Klorn, puntuado en la prueba de 56 correos de Klorn.",
+  "playground.model.listedNote":
+    "Se muestra tal cual. Solo el modelo que usa Klorn se puntúa en su prueba.",
+  "playground.model.priceNote":
+    "Precio de lista por 1M de tokens, entrada / salida, registrado el {date}.",
+  "playground.key.label": "Clave de API de {provider}",
+  "playground.key.show": "Mostrar",
+  "playground.key.hide": "Ocultar",
+  "playground.key.remember": "Recordar esta clave en este dispositivo",
+  "playground.key.trust":
+    "Tu clave va desde este navegador, a través del servidor de Klorn, hasta el proveedor solo para esta solicitud. Klorn no la guarda.",
+  "playground.key.none": "¿Aún sin clave?",
+  "playground.key.create": "Crea una en {provider}",
+  "playground.key.billing": "Cada clasificación se factura a tu propia cuenta de {provider}.",
+  "playground.submit": "Clasificar este correo",
+  "playground.submitting": "Clasificando…",
+  "playground.result.label": "Resultado",
+  "playground.legend.title": "Cada correo cae en uno de cinco carriles.",
+  "playground.legend.sub": "Tu resultado aparece aquí, con las puntuaciones que lo respaldan.",
+  "playground.legend.PUSH": "Te necesita ahora. Encabeza Hoy y llega como banner.",
+  "playground.legend.MEETING":
+    "Una hora para aceptar, mover o rechazar, comprobada con tu calendario.",
+  "playground.legend.QUEUE": "Merece respuesta, pero no ahora. Es el carril por defecto.",
+  "playground.legend.INFO": "Recibos, alertas, confirmaciones. Se conservan y no piden respuesta.",
+  "playground.legend.SILENT": "Promociones y ruido, archivados sin hacer ruido.",
+  "playground.legend.scores":
+    "Cuatro puntuaciones alimentan el carril: urgencia, confianza en el remitente, reversibilidad y confianza del modelo.",
+  "playground.legend.link": "Cómo se miden",
+  "playground.headline.PUSH": "Esto te necesita ahora.",
+  "playground.headline.MEETING": "Una hora para aceptar, mover o rechazar.",
+  "playground.headline.QUEUE": "Merece respuesta, pero no ahora.",
+  "playground.headline.INFO": "Un registro que conservar. No requiere respuesta.",
+  "playground.headline.SILENT": "Ruido, archivado sin hacer ruido.",
+  "playground.why.heading": "Por qué {lane}",
+  "playground.why.decided": "· decidió el carril",
+  "playground.why.scheduling":
+    "Pide una franja horaria: las solicitudes de reunión van a su propio carril antes de ponderar las puntuaciones.",
+  "playground.why.lowConfidence":
+    "El modelo no estaba seguro, así que Klorn lo deja visible en Queue en lugar de ocultarlo.",
+  "playground.why.transactional":
+    "Parece un aviso automático y tranquilo: los registros así van a Info.",
+  "playground.why.default":
+    "No se activó ninguna regla más fuerte, así que espera en Queue, el carril por defecto.",
+  "playground.why.marketing":
+    "Es claramente marketing, así que se archivó antes de ponderar las puntuaciones.",
+  "playground.why.automated":
+    "Una regla de seguridad para correo automático lo puso aquí, así queda fuera de tus interrupciones.",
+  "playground.feature.urgency": "Urgencia",
+  "playground.feature.urgency.low": "Puede esperar",
+  "playground.feature.urgency.high": "Hoy",
+  "playground.feature.senderTrust": "Confianza en el remitente",
+  "playground.feature.senderTrust.low": "Desconocido",
+  "playground.feature.senderTrust.high": "Persona conocida",
+  "playground.feature.reversibility": "Reversibilidad",
+  "playground.feature.reversibility.low": "Difícil de deshacer si se pierde",
+  "playground.feature.reversibility.high": "Fácil de deshacer",
+  "playground.feature.confidence": "Confianza del modelo",
+  "playground.feature.confidence.low": "Dudoso",
+  "playground.feature.confidence.high": "Seguro",
+  "playground.inKlorn.heading": "En Klorn",
+  "playground.inKlorn.PUSH":
+    "El correo Push encabeza Hoy y llega como banner en la app de Klorn para Mac y Windows.",
+  "playground.inKlorn.MEETING": "Aparece bajo Meeting en Hoy.",
+  "playground.inKlorn.QUEUE": "Espera en Correo hasta que tengas tiempo.",
+  "playground.inKlorn.INFO": "Se conserva en Correo como registro. No requiere respuesta.",
+  "playground.inKlorn.SILENT": "Archivado sin hacer ruido, fuera de tu camino.",
+  "playground.wrong.prompt": "¿Carril equivocado? Dinos dónde debería ir.",
+  "playground.wrong.short": "¿Carril equivocado?",
+  "playground.wrong.thanks": "Gracias: anotado como {lane}.",
+  "playground.wrong.error": "No se pudo enviar. Inténtalo de nuevo.",
+  "playground.cta.text": "Clasifica toda tu bandeja de entrada igual.",
+  "playground.meta": "{model} · {seconds} seg",
+  "playground.error.title": "No se pudo clasificar este correo",
+  "playground.error.noKey": "Añade primero tu clave de API de {provider}.",
+  "playground.error.noEmail": "Añade primero un remitente y un asunto.",
+  "playground.error.rateLimited": "Demasiados intentos: espera un minuto y vuelve a clasificar.",
+  "playground.error.timeout":
+    "El modelo tardó más de {seconds} segundos. Inténtalo de nuevo o elige un modelo más rápido.",
+  "playground.error.network":
+    "No se pudo conectar con Klorn. Revisa tu conexión e inténtalo de nuevo.",
+  "playground.error.failed":
+    "El modelo no se ejecutó. Normalmente la clave es incorrecta, el modelo no está disponible o la cuenta no tiene crédito.",
+  "playground.error.invalid":
+    "No se aceptó la solicitud. Revisa el ID del modelo y los campos del correo.",
+  "playground.error.upstream": "El proveedor dijo: {detail}",
+  "playground.footer.privacy": "Privacidad",
 };
 
 export default es;

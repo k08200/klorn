@@ -360,6 +360,10 @@ const fr: Record<string, string> = {
     "Vérification OAuth de Google terminée (oct. 2026) · Évaluation indépendante (CASA Tier 2)",
   "auth.privacy": "Confidentialité",
   "auth.terms": "Conditions",
+  "auth.legalConsent":
+    "En continuant, vous acceptez les {terms} et confirmez avoir lu la {privacy}.",
+  "auth.legalConsentTerms": "Conditions d’utilisation",
+  "auth.legalConsentPrivacy": "Politique de confidentialité",
   "auth.preview.label": "Exemple : Klorn range les e-mails dans cinq voies",
   "auth.preview.demo": "Données de démo",
   "auth.preview.caption":
@@ -2161,17 +2165,17 @@ const fr: Record<string, string> = {
   "byok.activeModel": "Modèle actif :",
   "byok.usingYourKey": "Votre clé est utilisée",
   "byok.stored": "•••••••• enregistrée",
-  "byok.openRouterLabel": "Clé API OpenRouter",
-  "byok.openRouterHelp":
-    "Une seule clé couvre tous les modèles utilisés par Klorn — OpenRouter les achemine tous. La clé est vérifiée auprès du fournisseur avant d'être enregistrée. Obtenez-en une sur",
+  "byok.anthropicLabel": "Clé API Anthropic",
+  "byok.anthropicHelp":
+    "Klorn fonctionne avec Claude : une seule clé Anthropic couvre tous les modèles qu'il utilise. La clé est vérifiée auprès d'Anthropic avant d'être enregistrée. Obtenez-en une sur",
   "byok.legacy": "ancienne",
   "byok.geminiRetired":
-    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé OpenRouter.",
+    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé Anthropic.",
   "byok.assistantModel": "Modèle de l'assistant",
   "byok.assistantModelHelp":
-    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+    "Modèles Claude uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.assistantModelHelpFree":
-    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+    "Modèles Claude uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.error.status": "Impossible de charger l'état de votre clé LLM.",
   "byok.error.update": "Impossible de mettre à jour la clé.",
   "byok.error.model": "Impossible de changer de modèle.",
@@ -2667,7 +2671,7 @@ const fr: Record<string, string> = {
     "La notification a été ignorée car les heures calmes étaient actives à l'envoi du briefing.",
   "briefingPage.guidance.quietHoursAction": "Ajuster les heures calmes",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — recommandé",
+  "byok.modelNote.balanced": "{provider} — équilibré",
   "byok.modelNote.fastest": "{provider} — le plus rapide",
   "byok.modelNote.mostCapable": "{provider} — le plus performant, plus cher",
   "statusChip.connected": "Connecté",
@@ -2675,6 +2679,127 @@ const fr: Record<string, string> = {
   "statusChip.pending": "En attente",
   // web app design pass, 2026-10-21: English that reached localized screens.
   "imap.beta": "Bêta",
+  // Public playground (redesign 2026-10-30). Model ids and prices stay untranslated.
+  "playground.brand.section": "Bac à sable",
+  "playground.nav.methodology": "Comment c'est noté",
+  "playground.nav.pricing": "Tarifs",
+  "playground.nav.login": "Se connecter",
+  "playground.nav.startFree": "Commencer gratuitement",
+  "playground.title": "Voyez comment Klorn trie un e-mail.",
+  "playground.lead":
+    "Collez un message, choisissez un modèle et utilisez votre clé. Le vrai juge de Klorn le place dans l'une des cinq voies et affiche les quatre scores derrière ce choix.",
+  "playground.leadShort": "Votre modèle, votre clé, le vrai juge de Klorn.",
+  "playground.form.label": "E-mail et modèle",
+  "playground.samples.heading": "Essayer un exemple",
+  "playground.samples.investor": "Investisseur",
+  "playground.samples.newsletter": "Lettre d'info",
+  "playground.samples.receipt": "Reçu",
+  "playground.samples.teammate": "Collègue",
+  "playground.samples.meeting": "Demande de réunion",
+  "playground.field.from": "De",
+  "playground.field.fromPlaceholder": "nom@entreprise.com",
+  "playground.field.subject": "Objet",
+  "playground.field.subjectPlaceholder": "Objet du message",
+  "playground.field.body": "Corps",
+  "playground.field.bodyPlaceholder": "Collez l'e-mail ou choisissez un exemple ci-dessus.",
+  "playground.email.edit": "Modifier l'e-mail",
+  "playground.email.collapse": "Terminer la modification",
+  "playground.email.empty": "Pas encore d'e-mail : choisissez un exemple ou collez-en un.",
+  "playground.provider.label": "Fournisseur",
+  "playground.model.label": "Modèle",
+  "playground.model.klorn": "Utilisé par Klorn",
+  "playground.model.measured": "{low}–{high}/{total} au test de Klorn ({runs} exécutions)",
+  "playground.model.other": "Autre identifiant de modèle…",
+  "playground.model.otherLabel": "Identifiant du modèle",
+  "playground.model.otherPlaceholder": "fournisseur/nom-du-modèle",
+  "playground.model.otherInvalid":
+    "Utilisez un identifiant comme fournisseur/nom-du-modèle : lettres, chiffres, points et tirets.",
+  "playground.model.klornNote":
+    "Le modèle qu'utilise Klorn lui-même, noté sur le test de 56 e-mails de Klorn.",
+  "playground.model.listedNote":
+    "Affiché tel quel. Seul le modèle utilisé par Klorn est noté sur son test.",
+  "playground.model.priceNote":
+    "Prix catalogue par million de tokens, entrée / sortie, relevé le {date}.",
+  "playground.key.label": "Clé API {provider}",
+  "playground.key.show": "Afficher",
+  "playground.key.hide": "Masquer",
+  "playground.key.remember": "Mémoriser cette clé sur cet appareil",
+  "playground.key.trust":
+    "Votre clé va de ce navigateur au fournisseur via le serveur de Klorn, pour cette seule requête. Klorn ne la stocke pas.",
+  "playground.key.none": "Pas encore de clé ?",
+  "playground.key.create": "En créer une chez {provider}",
+  "playground.key.billing": "Chaque tri est facturé sur votre propre compte {provider}.",
+  "playground.submit": "Trier cet e-mail",
+  "playground.submitting": "Tri en cours…",
+  "playground.result.label": "Résultat",
+  "playground.legend.title": "Chaque e-mail tombe dans l'une des cinq voies.",
+  "playground.legend.sub": "Votre résultat s'affiche ici, avec les scores qui l'expliquent.",
+  "playground.legend.PUSH": "Il vous faut maintenant. En tête d'Aujourd'hui, avec une bannière.",
+  "playground.legend.MEETING":
+    "Un créneau à accepter, déplacer ou refuser, vérifié avec votre agenda.",
+  "playground.legend.QUEUE": "Mérite une réponse, mais pas tout de suite. La voie par défaut.",
+  "playground.legend.INFO": "Reçus, alertes, confirmations. Conservés, sans réponse à donner.",
+  "playground.legend.SILENT": "Promotions et bruit, rangés discrètement.",
+  "playground.legend.scores":
+    "Quatre scores alimentent la voie : urgence, confiance dans l'expéditeur, réversibilité et certitude.",
+  "playground.legend.link": "Comment ils sont mesurés",
+  "playground.headline.PUSH": "Il vous faut maintenant.",
+  "playground.headline.MEETING": "Un créneau à accepter, déplacer ou refuser.",
+  "playground.headline.QUEUE": "Mérite une réponse, mais pas tout de suite.",
+  "playground.headline.INFO": "Une trace à garder. Aucune réponse nécessaire.",
+  "playground.headline.SILENT": "Du bruit, rangé discrètement.",
+  "playground.why.heading": "Pourquoi {lane}",
+  "playground.why.decided": "· a décidé de la voie",
+  "playground.why.scheduling":
+    "Il demande un créneau : les demandes de réunion vont dans leur propre voie avant la pondération des scores.",
+  "playground.why.lowConfidence":
+    "Le modèle n'était pas sûr, donc Klorn le laisse visible dans Queue plutôt que de le masquer.",
+  "playground.why.transactional":
+    "On dirait une notification automatique calme : ce type de trace va dans Info.",
+  "playground.why.default":
+    "Aucune règle plus forte ne s'est appliquée, donc il attend dans Queue, la voie par défaut.",
+  "playground.why.marketing":
+    "C'est clairement du marketing, donc il a été rangé avant la pondération des scores.",
+  "playground.why.automated":
+    "Une règle de sécurité pour le courrier automatique l'a placé ici, il reste donc hors de vos interruptions.",
+  "playground.feature.urgency": "Urgence",
+  "playground.feature.urgency.low": "Peut attendre",
+  "playground.feature.urgency.high": "Aujourd'hui",
+  "playground.feature.senderTrust": "Confiance dans l'expéditeur",
+  "playground.feature.senderTrust.low": "Inconnu",
+  "playground.feature.senderTrust.high": "Personne connue",
+  "playground.feature.reversibility": "Réversibilité",
+  "playground.feature.reversibility.low": "Difficile à annuler si raté",
+  "playground.feature.reversibility.high": "Facile à annuler",
+  "playground.feature.confidence": "Certitude",
+  "playground.feature.confidence.low": "Incertain",
+  "playground.feature.confidence.high": "Certain",
+  "playground.inKlorn.heading": "Dans Klorn",
+  "playground.inKlorn.PUSH":
+    "Un e-mail Push passe en tête d'Aujourd'hui et arrive en bannière dans l'app Klorn sur Mac et Windows.",
+  "playground.inKlorn.MEETING": "S'affiche sous Meeting dans Aujourd'hui.",
+  "playground.inKlorn.QUEUE": "Attend dans Courrier jusqu'à ce que vous ayez le temps.",
+  "playground.inKlorn.INFO": "Conservé dans Courrier comme trace. Aucune réponse nécessaire.",
+  "playground.inKlorn.SILENT": "Rangé discrètement, sans vous gêner.",
+  "playground.wrong.prompt": "Mauvaise voie ? Dites-nous où il doit aller.",
+  "playground.wrong.short": "Mauvaise voie ?",
+  "playground.wrong.thanks": "Merci, noté comme {lane}.",
+  "playground.wrong.error": "Envoi impossible. Réessayez.",
+  "playground.cta.text": "Triez toute votre boîte de réception de la même façon.",
+  "playground.meta": "{model} · {seconds} sec",
+  "playground.error.title": "Impossible de trier cet e-mail",
+  "playground.error.noKey": "Ajoutez d'abord votre clé API {provider}.",
+  "playground.error.noEmail": "Ajoutez d'abord un expéditeur et un objet.",
+  "playground.error.rateLimited": "Trop d'essais : attendez une minute, puis relancez le tri.",
+  "playground.error.timeout":
+    "Le modèle a mis plus de {seconds} secondes. Réessayez ou choisissez un modèle plus rapide.",
+  "playground.error.network": "Impossible de joindre Klorn. Vérifiez votre connexion et réessayez.",
+  "playground.error.failed":
+    "Le modèle ne s'est pas exécuté. En général, la clé est incorrecte, le modèle est indisponible ou le compte n'a plus de crédit.",
+  "playground.error.invalid":
+    "Cette requête n'a pas été acceptée. Vérifiez l'identifiant du modèle et les champs de l'e-mail.",
+  "playground.error.upstream": "Le fournisseur a répondu : {detail}",
+  "playground.footer.privacy": "Confidentialité",
 };
 
 export default fr;

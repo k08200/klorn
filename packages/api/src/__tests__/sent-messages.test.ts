@@ -9,18 +9,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   upserts: [] as unknown[],
   upsertFails: false,
+  upsertError: null as unknown,
+  upsertConflictsLeft: 0,
   sentRows: [] as unknown[],
   replyRows: [] as unknown[],
   listCalls: 0,
   listResult: null as null | { items: unknown[]; nextPageToken: null },
   captured: [] as unknown[],
+  labels: new Map<string, string>(),
+  classifyCalls: [] as unknown[][],
+  classifyFails: false,
 }));
 
 vi.mock("../db.js", () => ({
   prisma: {
     sentMessage: {
       upsert: vi.fn(async (args: unknown) => {
+        if (state.upsertError) throw state.upsertError;
         if (state.upsertFails) throw new Error("db down");
+        if (state.upsertConflictsLeft > 0) {
+          state.upsertConflictsLeft -= 1;
+          throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        }
         state.upserts.push(args);
         return {};
       }),
@@ -34,6 +44,19 @@ vi.mock("../db.js", () => ({
 vi.mock("../sentry.js", () => ({
   captureError: vi.fn((err: unknown) => {
     state.captured.push(err);
+  }),
+}));
+
+vi.mock("../mail/sent-origin-classifier.js", () => ({
+  classifySentRows: vi.fn(async (_userId: string, rows: unknown[]) => {
+    state.classifyCalls.push(rows);
+    if (state.classifyFails) {
+      throw Object.assign(new Error("db down near unsub@list.com"), {
+        name: "PrismaClientKnownRequestError",
+        code: "P1001",
+      });
+    }
+    return state.labels;
   }),
 }));
 
@@ -51,6 +74,7 @@ import {
   syncSentMessages,
   waitingOnThreads,
 } from "../mail/sent-messages.js";
+import { captureError } from "../sentry.js";
 
 const NOW = new Date("2026-09-18T09:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000);
@@ -127,6 +151,18 @@ describe("computeWaitingOn", () => {
     expect(computeWaitingOn([sent({ threadId: null })], [], opts)).toEqual([]);
   });
 
+  it("an unsubscribe request is never waiting on a reply", () => {
+    const out = computeWaitingOn(
+      [
+        sent({ gmailId: "u1", threadId: "tu", to: "unsub@lists.x.com", origin: "unsubscribe" }),
+        sent(),
+      ],
+      [],
+      opts,
+    );
+    expect(out.map((i) => i.threadId)).toEqual(["t1"]);
+  });
+
   it("minDays is a floor: a 1-day-old message is not waiting at minDays=2, is at 0", () => {
     const row = sent({ sentAt: daysAgo(1) });
     expect(computeWaitingOn([row], [], opts)).toEqual([]);
@@ -141,7 +177,13 @@ describe("recordSentMessage / syncSentMessages", () => {
     state.upserts.length = 0;
     state.captured.length = 0;
     state.upsertFails = false;
+    state.upsertError = null;
+    state.upsertConflictsLeft = 0;
     state.listCalls = 0;
+    state.sentRows = [];
+    state.labels = new Map();
+    state.classifyCalls = [];
+    state.classifyFails = false;
     state.listResult = {
       items: [
         {
@@ -165,7 +207,7 @@ describe("recordSentMessage / syncSentMessages", () => {
       where: { userId_gmailId: { userId: "u1", gmailId: "s1" } },
     });
     state.upsertFails = true;
-    await expect(recordSentMessage("u1", sent())).resolves.toBeUndefined();
+    await expect(recordSentMessage("u1", sent())).resolves.toBe(false);
     expect(state.captured).toHaveLength(1);
   });
 
@@ -181,6 +223,198 @@ describe("recordSentMessage / syncSentMessages", () => {
     expect(await syncSentMessages("u1", NOW.getTime() + 31 * 60_000)).toBe(1);
     expect(await syncSentMessages("u2", NOW.getTime())).toBe(1);
     expect(state.listCalls).toBe(3);
+  });
+
+  it("a Klorn send records its origin on create and on update", async () => {
+    await recordSentMessage("u1", { ...sent(), origin: "auto_reply" });
+    expect(state.upserts[0]).toMatchObject({
+      create: { origin: "auto_reply" },
+      update: { origin: "auto_reply" },
+    });
+  });
+
+  it("retries once when the Sent scan inserted the same row first, so the origin still lands", async () => {
+    state.upsertConflictsLeft = 1;
+    await recordSentMessage("u1", { ...sent(), origin: "approved" });
+    expect(state.upserts).toHaveLength(1);
+    expect(state.upserts[0]).toMatchObject({ update: { origin: "approved" } });
+    expect(state.captured).toEqual([]);
+  });
+
+  it("gives up after one retry and reports, never throwing", async () => {
+    state.upsertConflictsLeft = 2;
+    await expect(recordSentMessage("u1", { ...sent(), origin: "approved" })).resolves.toBe(false);
+    expect(state.upserts).toHaveLength(0);
+    expect(state.captured).toHaveLength(1);
+  });
+
+  it("a record without an origin never writes one, so the Sent scan cannot erase a Klorn origin", async () => {
+    await recordSentMessage("u1", sent());
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.create).not.toHaveProperty("origin");
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("rows from the Sent-folder scan carry no origin", async () => {
+    await syncSentMessages("u1", NOW.getTime());
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.create).not.toHaveProperty("origin");
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("an inferred origin is written on create only, so it never overwrites a send-time label", async () => {
+    await recordSentMessage("u1", { ...sent(), inferredOrigin: "unsubscribe" });
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.create).toMatchObject({ origin: "unsubscribe" });
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("a send-time origin wins over an inferred one", async () => {
+    await recordSentMessage("u1", { ...sent(), origin: "user", inferredOrigin: "auto_reply" });
+    expect(state.upserts[0]).toMatchObject({
+      create: { origin: "user" },
+      update: { origin: "user" },
+    });
+  });
+
+  it("on a P2002 retry the update carries no inferred origin, so a send-time label that won the race stays", async () => {
+    state.upsertConflictsLeft = 1;
+    await recordSentMessage("u1", { ...sent(), inferredOrigin: "auto_reply" });
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("sync classifies only the rows it is about to create and labels them on create", async () => {
+    state.listResult = {
+      items: [
+        {
+          gmailId: "known",
+          threadId: "t0",
+          to: "a@b.com",
+          subject: "Old",
+          receivedAt: "2026-09-09T00:00:00.000Z",
+          inbox: "primary",
+        },
+        {
+          gmailId: "g1",
+          threadId: "t1",
+          to: "unsub@list.com",
+          subject: "unsubscribe",
+          receivedAt: "2026-09-10T00:00:00.000Z",
+          inbox: "primary",
+        },
+      ],
+      nextPageToken: null,
+    };
+    state.sentRows = [{ gmailId: "known" }];
+    state.labels = new Map([["g1", "unsubscribe"]]);
+    expect(await syncSentMessages("u1", NOW.getTime())).toBe(2);
+    expect(state.classifyCalls).toEqual([
+      [
+        {
+          gmailId: "g1",
+          to: "unsub@list.com",
+          subject: "unsubscribe",
+          sentAt: new Date("2026-09-10T00:00:00.000Z"),
+          inbox: "primary",
+        },
+      ],
+    ]);
+    const [known, created] = state.upserts as { create: object; update: object }[];
+    expect(known?.create).not.toHaveProperty("origin");
+    expect(created?.create).toMatchObject({ gmailId: "g1", origin: "unsubscribe" });
+    expect(created?.update).not.toHaveProperty("origin");
+  });
+
+  it("sync makes no classifier call when every row already exists", async () => {
+    state.sentRows = [{ gmailId: "g1" }];
+    await syncSentMessages("u1", NOW.getTime());
+    expect(state.classifyCalls).toEqual([]);
+    expect(state.upserts).toHaveLength(1);
+  });
+
+  it("when classification fails it still records the rows it had, and skips only the new ones", async () => {
+    state.listResult = {
+      items: [
+        {
+          gmailId: "known",
+          threadId: "t0",
+          to: "a@b.com",
+          subject: "Old",
+          receivedAt: "2026-09-09T00:00:00.000Z",
+          inbox: "primary",
+        },
+        {
+          gmailId: "new",
+          threadId: "t1",
+          to: "unsub@list.com",
+          subject: "unsubscribe",
+          receivedAt: "2026-09-10T00:00:00.000Z",
+          inbox: "primary",
+        },
+      ],
+      nextPageToken: null,
+    };
+    state.sentRows = [{ gmailId: "known" }];
+    state.classifyFails = true;
+    expect(await syncSentMessages("u1", NOW.getTime())).toBe(1);
+    expect(state.upserts).toHaveLength(1);
+    expect(state.upserts[0]).toMatchObject({ create: { gmailId: "known" } });
+    // One Sentry event, carrying the error's name and code only: a Prisma
+    // message can quote the query's values (addresses).
+    expect(state.captured).toHaveLength(1);
+    const reported = state.captured[0] as Error;
+    expect(reported.name).toBe("PrismaClientKnownRequestError");
+    expect(reported.message).not.toContain("unsub@list.com");
+    expect(vi.mocked(captureError).mock.calls.at(-1)?.[1]).toMatchObject({
+      extra: { code: "P1001" },
+    });
+  });
+
+  it("record stores at most 1,024 characters of to and subject, never half a surrogate pair", async () => {
+    const to = `${"a".repeat(1_023)}\u{1F600}tail`;
+    await recordSentMessage("u1", { ...sent(), to, subject: "s".repeat(5_000) });
+    const args = state.upserts[0] as {
+      create: { to: string; subject: string };
+      update: { to: string; subject: string };
+    };
+    expect(args.create.subject).toHaveLength(1_024);
+    expect(args.update.subject).toHaveLength(1_024);
+    expect(args.create.to).toBe("a".repeat(1_023));
+  });
+
+  it("a write the data-wipe fence rejected is logged, never sent to Sentry (LOW-1)", async () => {
+    const { DataWipeFenceError } = await import("../privacy/data-wipe-fence.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.upsertError = new DataWipeFenceError();
+    expect(await recordSentMessage("u1", sent())).toBe(false);
+    expect(state.captured).toEqual([]);
+    expect(warn.mock.calls.flat().join(" ")).toContain("DataWipeFenceError");
+    warn.mockRestore();
+  });
+
+  it("record reports whether the row was written", async () => {
+    expect(await recordSentMessage("u1", sent())).toBe(true);
+    state.upsertFails = true;
+    expect(await recordSentMessage("u1", sent())).toBe(false);
+  });
+
+  it("sync skips a row whose date is not a date", async () => {
+    state.listResult = {
+      items: [
+        {
+          gmailId: "bad",
+          threadId: "t1",
+          to: "a@b.com",
+          subject: "x",
+          receivedAt: "not a date",
+          inbox: "primary",
+        },
+      ],
+      nextPageToken: null,
+    };
+    expect(await syncSentMessages("u1", NOW.getTime())).toBe(0);
+    expect(state.upserts).toEqual([]);
   });
 
   it("not connected (null page) records nothing and is not an error", async () => {
@@ -200,6 +434,16 @@ describe("waitingOnThreads", () => {
   it("joins sent rows with the mirror's replies and applies the rule", async () => {
     const out = await waitingOnThreads("u1", { now: NOW, minDays: 2 });
     expect(out.map((i) => i.threadId)).toEqual(["t1"]);
+  });
+
+  it("reads each row's origin so the rule can drop unsubscribe requests", async () => {
+    const { prisma } = await import("../db.js");
+    state.sentRows = [sent({ origin: "unsubscribe" })];
+    expect(await waitingOnThreads("u1", { now: NOW, minDays: 2 })).toEqual([]);
+    const call = vi.mocked(prisma.sentMessage.findMany).mock.calls.at(-1)?.[0] as {
+      select: Record<string, boolean>;
+    };
+    expect(call.select.origin).toBe(true);
   });
 
   it("no sent rows → no reply query, empty result", async () => {

@@ -138,7 +138,7 @@ function failureOf(err: unknown): Extract<DriveSummaryResult, { ok: false }> {
     // again, so it spends the failure budget and ends FAILED.
     return { ok: false, code: "llm-rejected" };
   }
-  // An outage: every provider failing (#1319: no OpenRouter credits), 5xx, no
+  // An outage: every provider failing (#1319: no provider credits), 5xx, no
   // provider at all, a network error. The run keeps the row PENDING with a
   // backoff capped at a day; it never turns into FAILED.
   return { ok: false, code: "llm-unavailable" };
