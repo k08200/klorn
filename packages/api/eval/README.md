@@ -693,6 +693,40 @@ Effect:
   - The founder's "accuracy first" decision allows Fable. These sets cannot separate the two, so P4 should decide on the fact eval of the founder's own mail.
   - Escalation triggers fired on 0–6% of mail here. Under §4, PUSH candidates will be the main escalation volume.
 
+### P3 policy v3.0 on the same facts (2026-11-07)
+
+P3's production policy (`judge/v3/policy.ts`, `laneFromFactsV3`, v3.0 on main since #1596) has no stored production facts to replay yet. The P1 runs are the only fact corpus, so the same 60 runs were re-scored through it (`v3-bench-report.ts --policy=p3`; no LLM calls).
+- Same inputs: P2's parser and evidence rules, the shared front, and the labels reconciled on 2026-11-04.
+- Relationship data: none (the eval sets carry none). Every sender is unknown, which is the cold-start case.
+- The automated-sender signal is `isAutomatedSender`.
+
+| set | `claude-fable-5-1` | `claude-haiku-5-5` | `claude-opus-5-5` | `claude-sonnet-5-5` |
+|---|---|---|---|---|
+| gate overall, doc §3(4) → v3.0 (mean %) | 89.3 → 81.0 | 91.1 → 83.3 | 91.1 → 83.3 | 90.5 → 83.3 |
+| gate PUSH recall, doc → v3.0 (runs /13) | 12·12·12 → 7·7·8 | 12·12·12 → 8·7·8 | 12·12·12 → 7·8·8 | 12·12·12 → 8·8·8 |
+| real overall, doc → v3.0 (mean %) | 67.3 → 69.2 | 70.4 → 72.3 | 64.2 → 66.0 | 67.9 → 69.8 |
+
+What did not move:
+- PUSH precision stays 100% on gate.
+- MEETING recall stays 4/4, INFO recall stays 12–13/13, PUSH→SILENT stays 0.
+- Real-set PUSH stays 3/4. Three of those four urgent items are decided by the front.
+
+**Cold-start urgent recall falls from 12/13 to 7–8/13, below the 90% floor.** Every cause is a deliberate v3.0 rule, not an extraction error:
+
+| item | v3.0 lane [reason] | rule that decided it |
+|---|---|---|
+| eval-037 "Quick call today?", eval-038 "confirm your interview slot within 24 hours", eval-041 "Demo moved to 3pm TODAY" | MEETING [event] | **MEETING is checked before PUSH.** All models extract an event from these mails. MEETING still notifies, so 10–11 of 13 urgent items notify in some form, but outside the interrupt budget. |
+| eval-046 Shinhan Card "Action required: verify unusual transaction" | QUEUE [risk] | **A risk PUSHes only from a VIP sender.** Facts v1 carry no evidence for `risk`, so v3.0 refuses to interrupt on it from an unknown sender. This closes the spoofing gap found in the P1 security review. |
+| eval-036 Growth Fund "DD docs due Friday" | QUEUE [ask] | the ≤ 24h deadline window, as under the doc rule |
+| eval-044 TalentCo "offer expires tomorrow" (Opus only) | QUEUE [ask] | Opus reads the mail as a machine `kind`, and v3.0 lets only non-machine kinds interrupt through an ask |
+
+On the real set v3.0 is 1.8–1.9pt above the doc rule, and the whole difference is one mail: the Namecheap confirmation code ("Sign-in from unauthorized device detected — please verify").
+- The doc rule PUSHes it on `security_alert`.
+- v3.0 holds it in QUEUE because the sender is not a VIP, which matches its label.
+- This was the only lane change on real across all 12 v3 runs.
+
+The trade-off is a founder decision: interrupt recall on a cold account vs. the MEETING-first and VIP-only-risk safeguards. The doc's interrupt budget (default 5/day) already caps volume. P3 owns the code, and #1609 (open) edits the same file, so P1 changes nothing in `policy.ts`.
+
 ### Reproduce
 
 From `packages/api`:
@@ -721,6 +755,7 @@ for model in claude-haiku-5-5 claude-sonnet-5-5 claude-opus-5-5 claude-fable-5-1
   done
 done
 npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --out=/tmp/p1/report.md
+npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --policy=p3 --out=/tmp/p1/report.p3.md   # P3 policy v3.0
 ```
 
 Exit 3 means instrument degraded: a provider failure, or a call served by another model. The file is still written, the report skips it, and you retry the run. The report re-scores every stored run against the labels in the eval file and replays v3 from the stored raw facts. A relabel or a policy change therefore costs no LLM calls.

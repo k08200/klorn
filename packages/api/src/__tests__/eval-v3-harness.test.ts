@@ -505,3 +505,54 @@ describe("replay re-parses stored facts with the production parser", () => {
     expect(out.rows[0]).toMatchObject({ predicted: "INFO", rule: "info", evidenceTotal: 0 });
   });
 });
+
+describe("replay under P3's production policy (v3.0)", () => {
+  const facts = (over: Record<string, unknown>) => ({
+    asks: [],
+    addressedTo: "me_direct" as const,
+    threadTurn: "none" as const,
+    event: null,
+    transaction: null,
+    risk: [],
+    kind: "notification" as const,
+    ambiguous: false,
+    ...over,
+  });
+  const run = (rawFacts: unknown, from: string) => ({
+    meta: { set: "gate", model: "m", prompt: "v3" as const, run: 1, ranAt: "", includeBody: true },
+    summary: summarizeRun([], []),
+    calls: [],
+    rows: [
+      { id: "a", truth: "PUSH" as const, predicted: "QUEUE" as const, source: "v3", rawFacts },
+    ],
+    _from: from,
+  });
+
+  it("a security risk PUSHes under the doc rule but needs a VIP sender under v3.0", async () => {
+    const { rescore } = await import("../eval-v3/analysis.js");
+    const risk = run(facts({ risk: ["security_alert"] }), EMAIL.from);
+    const email = new Map([["a", EMAIL]]);
+    const truth = new Map([["a", "PUSH" as const]]);
+    expect(rescore(risk, truth, email, "doc").rows[0].predicted).toBe("PUSH");
+    const p3 = rescore(risk, truth, email, "p3").rows[0];
+    expect(p3.predicted).toBe("QUEUE");
+    expect(p3.rule).toMatch(/^v3\.0:/);
+  });
+
+  it("an automated sender's due-today ask never PUSHes under v3.0", async () => {
+    const { rescore } = await import("../eval-v3/analysis.js");
+    const bot = { ...EMAIL, from: "Vercel <noreply@vercel.com>", snippet: "Please fix this today" };
+    const ask = {
+      kind: "review",
+      object: "fix",
+      due: "2026-06-01T23:59:00Z",
+      evidence: "Please fix this today",
+    };
+    const r = run(facts({ asks: [ask], kind: "notification" }), bot.from);
+    const out = (policy: "doc" | "p3") =>
+      rescore(r, new Map([["a", "QUEUE" as const]]), new Map([["a", bot]]), policy).rows[0]
+        .predicted;
+    expect(out("doc")).toBe("PUSH");
+    expect(out("p3")).toBe("QUEUE");
+  });
+});
