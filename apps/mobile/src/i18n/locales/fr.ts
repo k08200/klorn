@@ -387,6 +387,10 @@ export const fr: Messages = {
   "settings.quiet.hint": "Aucune notification sur cette plage",
   "settings.quiet.from": "De",
   "settings.quiet.to": "À",
+  "settings.budget.title": "Interruptions par jour",
+  "settings.budget.hint":
+    "Au-delà, le courrier urgent attend dans Queue sans sonner. Les expéditeurs épinglés sur Push et les réunions ne comptent pas.",
+  "settings.budget.none": "Sans limite",
   "settings.notifyLanguage.title": "Langue des notifications",
   "settings.notifyLanguage.label": "Écrire les notifications en",
   "settings.notifyLanguage.hint":

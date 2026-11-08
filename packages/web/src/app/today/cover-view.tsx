@@ -9,29 +9,23 @@
  * the foot opens the whole inbox. At 360px and up nothing here renders
  * (today-view.tsx, COVER_QUERY).
  *
+ * Below the list, the "Held back" group (held-back.tsx) when the budget held
+ * anything today.
+ *
  * The interruption meter draws only from the budget the Today read already
  * carries (attention engine v3, behind its flag); without it there is no
  * meter at all — never a made-up count.
  */
 
-import type { EmailListItem } from "@klorn/contract";
 import Link from "next/link";
-import { useState } from "react";
-import { useToast } from "../../components/toast";
-import Button from "../../components/ui/button";
 import { useT } from "../../lib/i18n";
-import { captureClientError } from "../../lib/sentry";
-import { formatRowTime, senderName } from "../email/_v2/model";
-import { postReminder } from "../email/_v2/post-reminder";
-import { REMINDER_LABEL_KEYS, type ReminderKey } from "../email/_v2/reminders";
 import { BlockError, MailRowsSkeleton } from "./block";
+import { HeldBackGroup } from "./held-back";
 import type { TimeContext } from "./mail-column";
 import { MAIL_HREF } from "./mail-link";
 import { type CoverMeter, coverMeter } from "./model";
+import { ReplyLaterCard } from "./reply-later-card";
 import { useLaneMail } from "./use-today-data";
-
-/** Later on the cover screen is one tap: the reader's first choice, later today. */
-const COVER_LATER: ReminderKey = "later-today";
 
 export function CoverToday({ time }: { time: TimeContext }) {
   const { t } = useT();
@@ -55,11 +49,12 @@ export function CoverToday({ time }: { time: TimeContext }) {
         <ul className="flex flex-col gap-3">
           {mail.emails.map((email) => (
             <li key={email.id}>
-              <CoverCard email={email} time={time} isDemo={mail.isDemo} />
+              <ReplyLaterCard email={email} time={time} isDemo={mail.isDemo} idPrefix="cover" />
             </li>
           ))}
         </ul>
       )}
+      <HeldBackGroup time={time} idPrefix="cover-held" />
       <Link
         href={MAIL_HREF}
         className="focus-ring flex min-h-11 w-full items-center justify-center rounded-control border border-line-strong bg-surface-panel px-4 text-role-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-hover"
@@ -88,78 +83,5 @@ function InterruptMeter({ meter }: { meter: CoverMeter }) {
         />
       </div>
     </div>
-  );
-}
-
-function CoverCard({
-  email,
-  time,
-  isDemo,
-}: {
-  email: EmailListItem;
-  time: TimeContext;
-  isDemo: boolean;
-}) {
-  const { t } = useT();
-  const { toast } = useToast();
-  const [busy, setBusy] = useState(false);
-  const subjectId = `cover-subject-${email.id}`;
-  const subject = email.subject || t("today.mail.noSubject");
-  const reason = email.tierReason?.trim() || null;
-
-  const later = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await postReminder(email, COVER_LATER, t);
-      toast(t("mailV2.list.remind.set", { when: t(REMINDER_LABEL_KEYS[COVER_LATER]) }), "success");
-    } catch (err) {
-      captureClientError(err, { scope: "today.cover.later" });
-      toast(t("mailV2.list.remind.failed"), "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <article
-      aria-labelledby={subjectId}
-      className="flex flex-col gap-1 rounded-card bg-surface-panel p-4 ring-1 ring-line"
-    >
-      <div className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-role-label font-semibold text-ink">
-          {senderName(email.from)}
-        </span>
-        <time
-          dateTime={email.date}
-          className="shrink-0 text-role-caption tabular-nums text-ink-muted"
-        >
-          {formatRowTime(email.date, time.now, time.locale, time.timeZone)}
-        </time>
-      </div>
-      <h2 id={subjectId} className="line-clamp-2 text-role-body text-ink">
-        {subject}
-      </h2>
-      {reason && <p className="truncate text-role-caption text-tier-push-chip-ink">{reason}</p>}
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <Link
-          href={`/email/${encodeURIComponent(email.id)}?markRead=false&queue=all&focus=reply`}
-          className="focus-ring flex min-h-11 items-center justify-center rounded-control bg-accent-solid px-3 text-role-label font-semibold text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
-        >
-          {t("keys.reply")}
-        </Link>
-        <Button
-          variant="secondary"
-          size="lg"
-          className="min-h-11 w-full px-3"
-          disabled={isDemo}
-          title={isDemo ? t("keys.reason.demo") : undefined}
-          loading={busy}
-          onClick={() => void later()}
-        >
-          {t("mailV2.reader.later")}
-        </Button>
-      </div>
-    </article>
   );
 }

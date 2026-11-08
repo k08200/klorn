@@ -120,6 +120,36 @@ export function coverMeter(budget: InterruptBudgetStatus | null | undefined): Co
   return { used, limit, ratio: Math.min(used / limit, 1) };
 }
 
+/**
+ * Today's "Held back" group (founder design N2, 2026-11-08): PUSH-worthy mail
+ * the daily interrupt budget held today, so it did not ring. Read through the
+ * QUEUE lane page (`window=held`, users under the v3 policy only), so only
+ * asked for once the PUSH read carries the budget. Like the meter, it never
+ * guesses: no budget, no read yet, or nothing held draws nothing.
+ */
+export function todayHeldQuery(): string {
+  return "&threads=1&window=held";
+}
+
+export interface HeldBack<Row> {
+  /** Held threads today: the server's total, never fewer than the rows shown. */
+  count: number;
+  shown: Row[];
+  more: number;
+}
+
+export function heldBack<Row>(
+  budget: InterruptBudgetStatus | null | undefined,
+  rows: readonly Row[] | null,
+  total: number | null,
+): HeldBack<Row> | null {
+  if (!budget || rows === null || total === null) return null;
+  const count = Math.max(total, rows.length);
+  if (count <= 0) return null;
+  const { shown, more } = laneBlock(rows, count, EXPANDED_LANE_ROWS);
+  return { count, shown, more };
+}
+
 // ── Calendar ────────────────────────────────────────────────────────────────
 
 /** The fields of GET /api/calendar's rows that Today reads. */

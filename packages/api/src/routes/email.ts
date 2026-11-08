@@ -45,6 +45,8 @@ import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { isTier } from "../judge/tiers.js";
 import { TODAY_WINDOW, todayPushCutoff } from "../judge/today-push-window.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { HELD_WINDOW, heldTodayCutoff } from "../judge/v3/held-today.js";
+import { budgetDayFor } from "../judge/v3/push-budget-gate.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
   getTrustScore,
@@ -673,7 +675,9 @@ const listEmailsQuerySchema = {
     threads: { type: "string", enum: ["0", "1", "false", "true"] },
     // Opt-in, lane views only: Today's PUSH block window (today-push-window.ts).
     // Only Today sends it; Mail's lane lists never do.
-    window: { type: "string", enum: [TODAY_WINDOW] },
+    // "held" (QUEUE only, users under the v3 policy): Today's "Held back"
+    // group, mail the daily interrupt budget held today (v3/held-today.ts).
+    window: { type: "string", enum: [TODAY_WINDOW, HELD_WINDOW] },
   },
 } as const;
 
@@ -778,7 +782,8 @@ export async function emailRoutes(app: FastifyInstance) {
           threads?: string;
           // OPT-IN ("today"), lane views only: mail received inside Today's
           // PUSH window. Narrows rows and `total` alike, so Today's header
-          // count and block agree. Absent = every lane view as before.
+          // count and block agree. "held": Today's "Held back" group (QUEUE,
+          // v3 policy only). Absent = every lane view as before.
           window?: string;
         };
       const uid = getUserId(request);
@@ -803,6 +808,18 @@ export async function emailRoutes(app: FastifyInstance) {
       // ranked order, a v3 block per mail, and Today's fields. Everyone else gets
       // today's order and shape.
       const rankedAt = isJudgeV3PolicyEnabled(uid) ? new Date() : undefined;
+      // Today's "Held back" group: a hold is only written as QUEUE and only
+      // under the policy, so anything else is refused rather than answered
+      // with the whole lane.
+      if (window === HELD_WINDOW && (laneOnly !== "QUEUE" || !rankedAt)) {
+        return reply
+          .code(400)
+          .send({ error: "window=held needs tier=QUEUE and the attention policy." } as never);
+      }
+      const heldSince =
+        window === HELD_WINDOW && rankedAt
+          ? heldTodayCutoff(rankedAt, (await budgetDayFor(uid, rankedAt)).zone)
+          : undefined;
       const groupByThread = Boolean(lane) && (threads === "1" || threads === "true");
       // Grouping pages through the SQL lane view (ALL included), so it takes the
       // filters that view can apply — candidates is refused, not silently dropped.
@@ -922,6 +939,7 @@ export async function emailRoutes(app: FastifyInstance) {
           search,
           hideHandled: hideHandledRows,
           receivedSince,
+          heldSince,
           rankedAt,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
@@ -946,6 +964,7 @@ export async function emailRoutes(app: FastifyInstance) {
           search,
           hideHandled: hideHandledRows,
           receivedSince,
+          heldSince,
           rankedAt,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,

@@ -382,6 +382,10 @@ export const es: Messages = {
   "settings.quiet.hint": "Sin notificaciones en esta franja",
   "settings.quiet.from": "Desde",
   "settings.quiet.to": "Hasta",
+  "settings.budget.title": "Interrupciones por día",
+  "settings.budget.hint":
+    "El correo urgente por encima de esta cifra espera en Queue sin sonar. Los remitentes que fijas en Push y las reuniones no cuentan.",
+  "settings.budget.none": "Sin límite",
   "settings.notifyLanguage.title": "Idioma de las notificaciones",
   "settings.notifyLanguage.label": "Escribir notificaciones en",
   "settings.notifyLanguage.hint":
