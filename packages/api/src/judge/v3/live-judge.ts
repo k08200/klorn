@@ -13,6 +13,7 @@
 import type { LiveTier } from "@klorn/contract";
 import { prisma } from "../../db.js";
 import type { GmailRawEmail } from "../../mail/gmail-fetch.js";
+import { getUserNotificationLanguage } from "../../notify/notification-strings.js";
 import type { ProviderCredentials } from "../../providers/index.js";
 import { captureError } from "../../sentry.js";
 import type { JudgeableEmailRow } from "../email-firewall.js";
@@ -170,11 +171,16 @@ async function planPush(
   if (!(await firewallPushGatesPass(input.userId, input.email, true))) {
     return (await keptFallbackMeeting(input, decision)) ?? quiet;
   }
-  const admission = await admitPushNotification(input.userId, firewallBellRow(input.email), {
-    pinned: !decision.budgeted,
-    trusted: decision.trusted,
-    now,
-  });
+  const language = await getUserNotificationLanguage(input.userId);
+  const admission = await admitPushNotification(
+    input.userId,
+    firewallBellRow(input.email, language),
+    {
+      pinned: !decision.budgeted,
+      trusted: decision.trusted,
+      now,
+    },
+  );
   if (admission.status !== "held") {
     return { ...quiet, push: { kind: "deliver", notification: admission.notification } };
   }

@@ -13,6 +13,7 @@ import {
   NOTIFICATION_LANGUAGES,
   notificationCopy,
   resolveNotificationLanguage,
+  URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
 
 describe("shipped languages", () => {
@@ -50,6 +51,29 @@ describe("shipped languages", () => {
         en.urgentDigest(3, "Alice", "Subject"),
       );
     }
+  });
+
+  it("translates the urgent-mail title and the no-subject stand-in into every language", () => {
+    const en = notificationCopy("en");
+    expect(en.urgentMailTitle).toBe("Urgent email");
+    expect(en.noSubject).toBe("(no subject)");
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      if (lang === "en") continue;
+      const copy = notificationCopy(lang);
+      expect(copy.urgentMailTitle.trim(), lang).not.toBe("");
+      expect(copy.urgentMailTitle, lang).not.toBe(en.urgentMailTitle);
+      expect(copy.noSubject, lang).not.toBe(en.noSubject);
+    }
+  });
+
+  it("dedupes urgent mail by every title it was ever written under", () => {
+    // The legacy titles keep rows written before localization counting.
+    expect(URGENT_EMAIL_TITLES).toContain("Urgent email");
+    expect(URGENT_EMAIL_TITLES).toContain("긴급 이메일");
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      expect(URGENT_EMAIL_TITLES).toContain(notificationCopy(lang).urgentMailTitle);
+    }
+    expect(new Set(URGENT_EMAIL_TITLES).size).toBe(URGENT_EMAIL_TITLES.length);
   });
 
   it("translates every static tier reason into every language", () => {

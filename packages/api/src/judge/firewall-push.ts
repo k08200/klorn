@@ -14,6 +14,12 @@ import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
 import { findReingestedHistory } from "../mail/imap-history.js";
 import { isImapMessageId } from "../mail/imap-message-id.js";
+import {
+  getUserNotificationLanguage,
+  type NotificationLanguage,
+  notificationCopy,
+  URGENT_EMAIL_TITLES,
+} from "../notify/notification-strings.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
 import type { BellRow } from "./v3/push-budget-gate.js";
 
@@ -23,11 +29,13 @@ import type { BellRow } from "./v3/push-budget-gate.js";
 // for it is not.
 const FIREWALL_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
 const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-// Shared notification title with the urgent-priority sweep
+// The bell row shares its title (notificationCopy().urgentMailTitle, in the
+// user's notification language) with the urgent-priority sweep
 // (automation-scheduler.ts) so the two dedup against each other: whichever
-// fires first writes "Urgent email" + "[gmailId]", and the other skips. An
-// email that is both keyword-URGENT and judge-PUSH gets exactly one push.
-const FIREWALL_PUSH_TITLE = "Urgent email";
+// fires first writes the title + "[gmailId]", and the other skips. An email
+// that is both keyword-URGENT and judge-PUSH gets exactly one push. The dedupe
+// reads match URGENT_EMAIL_TITLES (every language plus the legacy English
+// title), so a language switch or this change's deploy never re-rings a mail.
 
 function senderDisplayName(from: string): string {
   const angle = from.indexOf("<");
@@ -95,7 +103,7 @@ export async function firewallPushGatesPass(
     where: {
       userId,
       type: policyUser ? { in: ["email", HIDDEN_CLAIM_TYPE] } : "email",
-      title: FIREWALL_PUSH_TITLE,
+      title: { in: [...URGENT_EMAIL_TITLES] },
       // Match the gmailId as a COMPLETE token inside a `[id1,id2,…]` marker
       // (a firewall single push or an urgent-sweep batch share this title),
       // bounded by the bracket/comma delimiters. A bare `contains` substring-
@@ -123,20 +131,26 @@ export async function firewallPushGatesPass(
   return true;
 }
 
-function pushBody(email: JudgeableEmailRow): { sender: string; body: string } {
+/** Sender and subject stay as the mail wrote them; only Klorn's stand-in is translated. */
+function pushBody(
+  email: JudgeableEmailRow,
+  language: NotificationLanguage,
+): { sender: string; subject: string; body: string } {
   const sender = senderDisplayName(email.from);
-  return { sender, body: `${sender}: ${email.subject || "(no subject)"}`.slice(0, 200) };
+  const subject = email.subject || notificationCopy(language).noSubject;
+  return { sender, subject, body: `${sender}: ${subject}`.slice(0, 200) };
 }
 
 /**
- * The bell row. It carries the [gmailId] dedup marker, read back by both this
- * path and the urgent-priority sweep.
+ * The bell row, titled in the user's notification language. It carries the
+ * [gmailId] dedup marker, read back by both this path and the urgent-priority
+ * sweep.
  */
-export function firewallBellRow(email: JudgeableEmailRow): BellRow {
+export function firewallBellRow(email: JudgeableEmailRow, language: NotificationLanguage): BellRow {
   return {
     type: "email",
-    title: FIREWALL_PUSH_TITLE,
-    message: `${pushBody(email).body} [${email.gmailId}]`,
+    title: notificationCopy(language).urgentMailTitle,
+    message: `${pushBody(email, language).body} [${email.gmailId}]`,
   };
 }
 
@@ -145,8 +159,10 @@ export async function deliverFirewallPush(
   userId: string,
   email: JudgeableEmailRow,
   notification: { id: string; createdAt: Date },
+  language?: NotificationLanguage,
 ): Promise<void> {
-  const { sender, body } = pushBody(email);
+  const lang = language ?? (await getUserNotificationLanguage(userId));
+  const { sender, subject, body } = pushBody(email, lang);
   const [
     { pushNotification },
     { sendPushNotification },
@@ -162,7 +178,7 @@ export async function deliverFirewallPush(
   pushNotification(userId, {
     id: notification.id,
     type: "email",
-    title: FIREWALL_PUSH_TITLE,
+    title: notificationCopy(lang).urgentMailTitle,
     message: body,
     createdAt: notification.createdAt.toISOString(),
     // PUSH lane → OS banner in the desktop shell, under the Web Push gate.
@@ -174,7 +190,7 @@ export async function deliverFirewallPush(
     userId,
     {
       title: `Klorn — ${sender}`,
-      body: email.subject || "(no subject)",
+      body: subject,
       url: "/inbox/firewall",
       attentionItemId: attentionItemId ?? undefined,
       // Native deep link (push.ts hands it to FCM / APNs only). No
@@ -198,10 +214,11 @@ export async function pushForFirewallEmail(
   policyUser: boolean,
 ): Promise<"sent" | "skipped"> {
   if (!(await firewallPushGatesPass(userId, email, policyUser))) return "skipped";
+  const language = await getUserNotificationLanguage(userId);
   const notification = await prisma.notification.create({
-    data: { userId, ...firewallBellRow(email) },
+    data: { userId, ...firewallBellRow(email, language) },
     select: { id: true, createdAt: true },
   });
-  await deliverFirewallPush(userId, email, notification);
+  await deliverFirewallPush(userId, email, notification, language);
   return "sent";
 }
