@@ -13,6 +13,7 @@ import { likeContainsPattern } from "../db-like.js";
 import { withStatementTimeout } from "../db-statement-timeout.js";
 import { captureError } from "../sentry.js";
 import { toLiveTier } from "./tiers.js";
+import { heldTodaySql } from "./v3/held-today.js";
 import { V3_ITEM_SELECT, type V3ItemRow } from "./v3/item-wire.js";
 import { RANKED_GROUPED_ORDER, rankedOrderSql, rankKeyColumnsSql } from "./v3/ranked-sql.js";
 
@@ -244,6 +245,13 @@ export interface LanePageQuery {
    */
   receivedSince?: Date;
   /**
+   * Opt-in (`GET /api/email?tier=QUEUE&window=held`, Today's "Held back"
+   * group, users under the v3 policy only): QUEUE mail the interrupt budget
+   * held at or after this time and that still shows the hold
+   * (v3/held-today.ts). Absent = no held bound.
+   */
+  heldSince?: Date;
+  /**
    * Attention engine v3, for a user under the policy: the QUEUE lane in ranked
    * order as of this time (v3/ranked-sql.ts). Ignored for every other lane.
    * Absent = newest first, as today.
@@ -376,6 +384,7 @@ type LaneViewQuery = Pick<
   | "search"
   | "hideHandled"
   | "receivedSince"
+  | "heldSince"
   | "rankedAt"
 > & {
   /** One live lane, or ALL for every lane (no join at all). */
@@ -394,7 +403,8 @@ function laneFromSql(query: LaneViewQuery): Prisma.Sql {
       ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
       ${searchSql(query.search)}
       ${query.hideHandled ? HANDLED_EXCLUSION : Prisma.empty}
-      ${query.receivedSince ? Prisma.sql`AND e."receivedAt" >= ${query.receivedSince}` : Prisma.empty}`;
+      ${query.receivedSince ? Prisma.sql`AND e."receivedAt" >= ${query.receivedSince}` : Prisma.empty}
+      ${query.heldSince ? heldTodaySql(query.heldSince) : Prisma.empty}`;
 }
 
 export interface LaneNeighbourQuery extends LaneViewQuery {

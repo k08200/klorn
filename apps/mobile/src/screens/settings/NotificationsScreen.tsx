@@ -18,6 +18,7 @@ import { PushPriming } from "../../push/PushLayer";
 import { ProblemState, SkeletonRows } from "../../ui/StateView";
 import { notify } from "../../ui/StatusNote";
 import { Switch } from "../../ui/Switch";
+import { InterruptBudgetGroup } from "./InterruptBudgetGroup";
 import { SettingsBack } from "./parts";
 
 type Toggle = keyof Pick<
@@ -177,6 +178,8 @@ export function NotificationsScreen() {
               ) : null}
             </ul>
           </section>
+
+          <InterruptBudgetGroup data={data} save={save} />
 
           <section className="set-group" aria-labelledby="set-lang">
             <h2 id="set-lang" className="set-group__title">

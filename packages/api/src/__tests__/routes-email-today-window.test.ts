@@ -221,3 +221,85 @@ describe("GET /api/email?window=today", () => {
     await app.close();
   });
 });
+
+/**
+ * GET /api/email?tier=QUEUE&window=held — Today's "Held back" group (founder
+ * design N2, 2026-11-08): QUEUE mail the daily interrupt budget held since the
+ * start of the user's day, still shown held. Users under the v3 policy only.
+ */
+describe("GET /api/email?tier=QUEUE&window=held", () => {
+  // 2026-11-08 09:30 in Seoul; the day began at 2026-11-07T15:00Z.
+  const HELD_NOW = new Date("2026-11-08T00:30:00.000Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(HELD_NOW);
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+    automationConfigFindUnique.mockResolvedValue({ timezone: "Asia/Seoul", interruptBudget: null });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.JUDGE_V3_POLICY;
+    delete process.env.JUDGE_V3_SHADOW;
+  });
+
+  it("narrows the thread-grouped QUEUE page to today's shown holds, from local midnight", async () => {
+    threadPage([{ id: "e1", threadCount: 1 }], 1);
+    emailFindMany.mockResolvedValue([dbRow("e1")]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1&window=held",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().total).toBe(1);
+    const [page] = rawCalls().filter((call) => call.text.includes("FROM grouped"));
+    expect(page.text).toContain(`a."heldAt" >= (?::timestamptz AT TIME ZONE 'UTC')`);
+    expect(page.text).toContain(`a."status" = 'OPEN'`);
+    // Held is not Today's PUSH window: no received-time bound.
+    expect(page.text).not.toContain(`"receivedAt" >=`);
+    const dates = page.values.filter((value) => value instanceof Date) as Date[];
+    expect(dates.map((d) => d.toISOString())).toContain("2026-11-07T15:00:00.000Z");
+    await app.close();
+  });
+
+  it("is refused on any lane but QUEUE (a hold is only written as QUEUE)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=PUSH&threads=1&window=held",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("is refused for a user outside the policy (no budget, nothing held)", async () => {
+    delete process.env.JUDGE_V3_POLICY;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1&window=held",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("leaves the plain QUEUE lane page without the held predicate", async () => {
+    threadPage([], 0);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    for (const call of rawCalls()) expect(call.text).not.toContain(`a."heldAt" >=`);
+    await app.close();
+  });
+});

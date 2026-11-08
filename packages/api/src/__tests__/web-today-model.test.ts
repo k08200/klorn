@@ -16,11 +16,13 @@ import {
   eventPhase,
   eventSourceProvider,
   findConflicts,
+  heldBack,
   laneBlock,
   nowMarkerIndex,
   olderOutsideWindow,
   orderEvents,
   todayHeaderSummary,
+  todayHeldQuery,
   todayLaneCount,
   todayLaneQuery,
   todayWaitingKey,
@@ -527,5 +529,40 @@ describe("cover screen interruption meter (Fold cover, < 360px)", () => {
       limit: 5,
       ratio: 1,
     });
+  });
+});
+
+describe("Held back group (founder design N2, 2026-11-08)", () => {
+  // Under the v3 policy only: the PUSH read carries the budget, and the held
+  // read lists what the budget held today. Anything else draws nothing.
+  const BUDGET = { limit: 5, used: 5, day: "2026-11-08" };
+  const rows = ["a", "b", "c"];
+
+  it("asks the QUEUE lane page for today's holds, one row per thread", () => {
+    expect(todayHeldQuery()).toBe("&threads=1&window=held");
+  });
+
+  it("is nothing without the budget (flag off: no capability, no read)", () => {
+    expect(heldBack(undefined, rows, 3)).toBeNull();
+    expect(heldBack(null, rows, 3)).toBeNull();
+  });
+
+  it("is nothing when nothing was held or the read has not landed", () => {
+    expect(heldBack(BUDGET, [], 0)).toBeNull();
+    expect(heldBack(BUDGET, null, null)).toBeNull();
+  });
+
+  it("counts the server's thread total and cuts the shown cards", () => {
+    expect(heldBack(BUDGET, rows, 3)).toEqual({ count: 3, shown: rows, more: 0 });
+    const many = Array.from({ length: 12 }, (_, i) => `m${i}`);
+    expect(heldBack(BUDGET, many, 12)).toEqual({
+      count: 12,
+      shown: many.slice(0, 8),
+      more: 4,
+    });
+  });
+
+  it("never counts fewer than the rows it shows", () => {
+    expect(heldBack(BUDGET, rows, 1)).toEqual({ count: 3, shown: rows, more: 0 });
   });
 });

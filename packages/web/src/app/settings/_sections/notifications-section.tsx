@@ -8,6 +8,7 @@ import { apiFetch } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { track } from "../../../lib/track";
 import { useDisplayTimeZone } from "../../../lib/use-time-zone";
+import { InterruptBudgetRow } from "./interrupt-budget-row";
 import { NotificationLanguageRow } from "./notification-language-row";
 import { PANEL, SECTION_TITLE } from "./shared";
 import { useAutomationConfig } from "./use-automation-config";
@@ -343,6 +344,7 @@ export function NotificationsSection() {
             </div>
           </div>
         </div>
+        <InterruptBudgetRow config={config} />
         <NotificationLanguageRow config={config} />
       </div>
     </section>
