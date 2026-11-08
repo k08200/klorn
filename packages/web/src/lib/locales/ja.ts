@@ -394,11 +394,11 @@ const ja: Record<string, string> = {
   "pwa.install.body": "ホーム画面からKlornを開けます。",
   "pwa.install.action": "インストール",
   "pwa.install.dismiss": "インストールの案内を閉じる",
-  "desktop.autostart.prompt.title": "サインイン時にKlornを起動しますか？",
+  "desktop.autostart.prompt.title": "Klornをバックグラウンドで実行し続けますか？",
   "desktop.autostart.prompt.body":
-    "サインイン時にKlornを起動すると、緊急メールの通知を受け取り続けられます。",
-  "desktop.autostart.prompt.accept": "サインイン時に起動",
-  "desktop.autostart.prompt.decline": "使用しない",
+    "Klornは起動中のときだけ緊急メールをお知らせできます。ログイン時に開くようにすれば、再起動後も見逃しません。",
+  "desktop.autostart.prompt.accept": "ログイン時に開く",
+  "desktop.autostart.prompt.decline": "今はしない",
   "desktop.autostart.prompt.enabling": "オンにしています...",
   "desktop.autostart.failed":
     "サインイン時の起動をオンにできませんでした。設定から再度お試しください。",

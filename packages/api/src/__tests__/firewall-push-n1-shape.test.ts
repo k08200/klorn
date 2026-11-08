@@ -158,4 +158,19 @@ describe("firewall device push — decision N1 shape", () => {
     expect(wsPayload().title).toBe("Urgent email");
     expect(wsPayload().message).toBe("Alice: Contract");
   });
+
+  it("names the mail on the bell row and carries the N1 toast on the live frame (Windows shell)", async () => {
+    seed("en");
+
+    await judge("Contract");
+
+    // The desktop catch-up reads the mail id back (decision N6).
+    expect(written()[0].sourceEmailId).toBe("email-1");
+    // The Windows toast: same title/body as the device push, opens the mail.
+    expect((wsPayload() as unknown as { mail: unknown }).mail).toEqual({
+      emailId: "email-1",
+      title: "Alice",
+      body: "Contract\nSignature needed today",
+    });
+  });
 });

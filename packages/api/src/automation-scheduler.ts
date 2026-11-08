@@ -9,6 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
+import type { DesktopMailToast } from "@klorn/contract";
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
@@ -74,6 +75,7 @@ import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
@@ -855,6 +857,9 @@ export async function ensureUrgentEmailNotification(
   dbMessage: string,
   userBody: string,
   language?: string | null,
+  /** A batch of ONE mail: its N1 toast for the desktop shell, and the mail id
+   *  on the row for the desktop catch-up (decision N6). */
+  mail?: DesktopMailToast,
 ): Promise<{ id: string; createdAt: Date } | null> {
   const title = notificationCopy(language).urgentMailTitle;
   let notification: { id: string; createdAt: Date };
@@ -866,6 +871,7 @@ export async function ensureUrgentEmailNotification(
         dedupeKey: urgentDedupeKey(lead),
         title,
         message: dbMessage,
+        ...(mail ? { sourceEmailId: mail.emailId } : {}),
       },
       select: { id: true, createdAt: true },
     });
@@ -883,6 +889,7 @@ export async function ensureUrgentEmailNotification(
     // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
     // OS banner in the desktop shell, under the Web Push gate.
     ...(await desktopAlertTag(userId, "push")),
+    ...(mail ? { mail } : {}),
   });
   return notification;
 }
@@ -1896,6 +1903,16 @@ async function runUserCycle(
               dbMessage,
               userBody,
               notificationLanguage,
+              newUrgent.length === 1
+                ? {
+                    emailId: newUrgent[0].id,
+                    ...mailPushContent({
+                      from: newUrgent[0].from ?? "",
+                      subject: newUrgent[0].subject,
+                      language: notificationLanguage ?? "en",
+                    }),
+                  }
+                : undefined,
             );
 
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT

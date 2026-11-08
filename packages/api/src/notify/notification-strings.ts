@@ -46,6 +46,11 @@ interface NotificationCopy {
   noSubject: string;
   /** Multi-mail summary, e.g. "3 urgent emails. Latest: Alice - Subject". */
   urgentDigest: (count: number, who: string, what: string) => string;
+  /**
+   * Title of the Windows desktop shell's catch-up summary toast (decision N6):
+   * two or more urgent mails arrived while Klorn was closed. Always 2+.
+   */
+  missedWhileClosed: (count: number | string) => string;
   actionComplete: { title: string; body: (action: string) => string };
   tools: Record<
     string,
@@ -62,6 +67,7 @@ const EN: NotificationCopy = {
   urgentMailTitle: "Urgent email",
   noSubject: "(no subject)",
   urgentDigest: (count, who, what) => `${count} urgent emails. Latest: ${who} - ${what}`,
+  missedWhileClosed: (count) => `${count} urgent emails while Klorn was closed`,
   actionComplete: { title: "Action complete", body: (action) => `${action} finished.` },
   tools: {
     send_email: { title: "Email sent", body: (v) => `Sent "${v.subject}" to ${v.to}.` },
@@ -106,6 +112,7 @@ const KO: NotificationCopy = {
   urgentMailTitle: "긴급 메일",
   noSubject: "(제목 없음)",
   urgentDigest: (count, who, what) => `긴급 메일 ${count}건. 최신: ${who} - ${what}`,
+  missedWhileClosed: (count) => `Klorn이 꺼져 있는 동안 긴급 메일 ${count}건`,
   actionComplete: { title: "작업 완료", body: (action) => `${action} 작업을 마쳤습니다.` },
   tools: {
     send_email: { title: "메일 보냄", body: (v) => `"${v.subject}"을(를) ${v.to}에게 보냈습니다.` },
@@ -145,6 +152,7 @@ const JA: NotificationCopy = {
   urgentMailTitle: "緊急メール",
   noSubject: "(件名なし)",
   urgentDigest: (count, who, what) => `緊急メール${count}件。最新: ${who} - ${what}`,
+  missedWhileClosed: (count) => `Klornが閉じている間に緊急メール${count}件`,
   actionComplete: { title: "処理完了", body: (action) => `${action} が完了しました。` },
   tools: {
     send_email: {
@@ -190,6 +198,7 @@ const ZH: NotificationCopy = {
   urgentMailTitle: "紧急邮件",
   noSubject: "（无主题）",
   urgentDigest: (count, who, what) => `${count} 封紧急邮件。最新：${who} - ${what}`,
+  missedWhileClosed: (count) => `Klorn 关闭期间有 ${count} 封紧急邮件`,
   actionComplete: { title: "操作完成", body: (action) => `${action} 已完成。` },
   tools: {
     send_email: { title: "邮件已发送", body: (v) => `已将“${v.subject}”发送给 ${v.to}。` },
@@ -228,6 +237,7 @@ const ES: NotificationCopy = {
   urgentMailTitle: "Correo urgente",
   noSubject: "(sin asunto)",
   urgentDigest: (count, who, what) => `${count} correos urgentes. Último: ${who} - ${what}`,
+  missedWhileClosed: (count) => `${count} correos urgentes mientras Klorn estaba cerrado`,
   actionComplete: { title: "Acción completada", body: (action) => `${action} ha terminado.` },
   tools: {
     send_email: { title: "Correo enviado", body: (v) => `Se envió "${v.subject}" a ${v.to}.` },
@@ -273,6 +283,7 @@ const FR: NotificationCopy = {
   urgentMailTitle: "E-mail urgent",
   noSubject: "(sans objet)",
   urgentDigest: (count, who, what) => `${count} e-mails urgents. Dernier : ${who} - ${what}`,
+  missedWhileClosed: (count) => `${count} e-mails urgents pendant que Klorn était fermé`,
   actionComplete: { title: "Action terminée", body: (action) => `${action} est terminé.` },
   tools: {
     send_email: { title: "E-mail envoyé", body: (v) => `« ${v.subject} » envoyé à ${v.to}.` },
@@ -321,6 +332,7 @@ const DE: NotificationCopy = {
   urgentMailTitle: "Dringende Mail",
   noSubject: "(kein Betreff)",
   urgentDigest: (count, who, what) => `${count} dringende E-Mails. Zuletzt: ${who} - ${what}`,
+  missedWhileClosed: (count) => `${count} dringende E-Mails, während Klorn geschlossen war`,
   actionComplete: { title: "Aktion abgeschlossen", body: (action) => `${action} ist fertig.` },
   tools: {
     send_email: { title: "E-Mail gesendet", body: (v) => `„${v.subject}" an ${v.to} gesendet.` },

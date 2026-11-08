@@ -11,6 +11,7 @@ import { prisma } from "../db.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
 import { parseClientPlatform } from "../notify/alert-endpoints.js";
+import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
@@ -25,6 +26,14 @@ const listNotificationsQuerySchema = {
   properties: {
     unread: { type: "string", maxLength: 500 },
     limit: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const desktopCatchUpQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    ids: { type: "string", maxLength: 2000 },
   },
 } as const;
 
@@ -152,6 +161,23 @@ export async function notificationRoutes(app: FastifyInstance) {
       unread: notifs.filter((n) => !n.isRead).length,
     };
   });
+
+  // GET /api/notifications/desktop-catchup?ids=a,b — Windows desktop shell:
+  // of these bell rows, the urgent mails missed while it was closed that still
+  // deserve a toast (decision N6, notify/desktop-catchup.ts).
+  app.get(
+    "/desktop-catchup",
+    {
+      schema: { querystring: desktopCatchUpQuerySchema },
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const ids = parseCatchUpIds((request.query as { ids?: unknown }).ids ?? "");
+      if (!ids) return reply.code(400).send({ error: "Invalid ids" });
+      return desktopCatchUp(userId, ids);
+    },
+  );
 
   // PATCH /api/notifications/:id/read — Mark single notification as read
   app.patch("/:id/read", async (request, reply) => {

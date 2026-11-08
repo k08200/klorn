@@ -43,6 +43,9 @@ export interface BellRow {
   type: string;
   title: string;
   message: string;
+  /** EmailMessage.id of a one-mail interrupt: the desktop catch-up reads it
+   *  back (GET /api/notifications/desktop-catchup). */
+  sourceEmailId?: string;
 }
 
 type WrittenRow = { id: string; createdAt: Date };

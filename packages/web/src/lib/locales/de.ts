@@ -410,11 +410,11 @@ const de: Record<string, string> = {
   "pwa.install.body": "Öffne Klorn direkt vom Startbildschirm.",
   "pwa.install.action": "Installieren",
   "pwa.install.dismiss": "Installationshinweis schließen",
-  "desktop.autostart.prompt.title": "Klorn bei der Anmeldung starten?",
+  "desktop.autostart.prompt.title": "Klorn im Hintergrund weiterlaufen lassen?",
   "desktop.autostart.prompt.body":
-    "Klorn kann bei der Anmeldung starten, damit Sie weiterhin Benachrichtigungen zu dringenden E-Mails erhalten.",
-  "desktop.autostart.prompt.accept": "Bei Anmeldung starten",
-  "desktop.autostart.prompt.decline": "Nein, danke",
+    "Klorn kann Sie nur über dringende E-Mails informieren, während es läuft. Öffnen Sie es bei der Anmeldung, damit Sie nach einem Neustart nichts verpassen.",
+  "desktop.autostart.prompt.accept": "Bei Anmeldung öffnen",
+  "desktop.autostart.prompt.decline": "Jetzt nicht",
   "desktop.autostart.prompt.enabling": "Wird aktiviert...",
   "desktop.autostart.failed":
     "Der Start bei der Anmeldung konnte nicht aktiviert werden. Sie können es in den Einstellungen erneut versuchen.",

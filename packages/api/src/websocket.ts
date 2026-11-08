@@ -9,7 +9,7 @@
  */
 
 import type { Server } from "node:http";
-import type { DesktopAlertKind } from "@klorn/contract";
+import type { DesktopAlertKind, DesktopMailToast } from "@klorn/contract";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   isDemoAccessEnabled,
@@ -282,6 +282,8 @@ export function pushNotification(
     link?: string;
     /** OS-banner tag for the desktop shell — see notify/desktop-alert.ts. */
     alert?: DesktopAlertKind;
+    /** The desktop shell's toast for a one-mail interrupt (decision N1). */
+    mail?: DesktopMailToast;
   },
 ) {
   broadcastToUser(userId, {

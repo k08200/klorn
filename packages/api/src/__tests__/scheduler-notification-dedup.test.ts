@@ -154,6 +154,45 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     );
   });
 
+  it("a batch of one mail names it on the row and carries its N1 toast on the frame", async () => {
+    const { prisma } = await import("../db.js");
+    const { pushNotification } = await import("../websocket.js");
+    vi.mocked(prisma.notification.create).mockClear();
+    vi.mocked(pushNotification).mockClear();
+    const mail = { emailId: "email-1", title: "Kim", body: "Invoice overdue" };
+    await ensureUrgentEmailNotification(
+      USER,
+      { id: "email-1", gmailId: GMAIL_ID },
+      `body [${GMAIL_ID}]`,
+      "body",
+      "en",
+      mail,
+    );
+    expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ sourceEmailId: "email-1" }) }),
+    );
+    expect(vi.mocked(pushNotification)).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ message: "body", mail }),
+    );
+  });
+
+  it("a batch of several mails names none of them", async () => {
+    const { prisma } = await import("../db.js");
+    const { pushNotification } = await import("../websocket.js");
+    vi.mocked(prisma.notification.create).mockClear();
+    vi.mocked(pushNotification).mockClear();
+    await ensureUrgentEmailNotification(
+      USER,
+      { id: "email-1", gmailId: GMAIL_ID },
+      `body [${GMAIL_ID},gm-2]`,
+      "2 urgent emails",
+    );
+    const data = (vi.mocked(prisma.notification.create).mock.calls[0][0] as { data: object }).data;
+    expect(data).not.toHaveProperty("sourceEmailId");
+    expect(vi.mocked(pushNotification).mock.calls[0][1]).not.toHaveProperty("mail");
+  });
+
   it("IMAP lead (B2b): the key names the row, so a new message reusing a re-keyed id is not a loser", async () => {
     const { prisma } = await import("../db.js");
     const imapId = "naver-imap:me@naver.com:101";

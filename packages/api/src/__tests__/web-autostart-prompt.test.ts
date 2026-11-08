@@ -22,6 +22,7 @@ import {
   type AutostartPromptState,
   answerToPersist,
   autostartPromptReducer,
+  escapeEvent,
   IDLE,
   parseAutostartAnswer,
   promptVisible,
@@ -134,6 +135,29 @@ describe("parseAutostartAnswer — storage is untrusted", () => {
   });
 });
 
+describe("Esc means Not now (decision N5)", () => {
+  const offered: AutostartPromptState = { phase: "offered" };
+
+  it("declines while the question is open, and that answer is stored", () => {
+    const event = escapeEvent(offered);
+    expect(event).toEqual({ type: "decline" });
+    const next = autostartPromptReducer(offered, event as AutostartPromptEvent);
+    expect(next).toEqual({ phase: "done", answer: "declined" });
+    expect(answerToPersist(offered, next)).toBe("declined");
+  });
+
+  it("does nothing once the user chose Open at login, or when nothing is shown", () => {
+    expect(escapeEvent({ phase: "enabling" })).toBeNull();
+    expect(escapeEvent(IDLE)).toBeNull();
+    expect(escapeEvent({ phase: "done", answer: "accepted" })).toBeNull();
+  });
+
+  it("never turns start-at-sign-in on", () => {
+    const next = autostartPromptReducer(offered, escapeEvent(offered) as AutostartPromptEvent);
+    expect(next.phase).not.toBe("enabling");
+  });
+});
+
 describe("prompt and setting copy", () => {
   const KEYS = [
     "desktop.autostart.prompt.title",
@@ -146,10 +170,21 @@ describe("prompt and setting copy", () => {
     "settings.launchAtLogin.desc",
   ];
 
-  it("is the agreed English explanation", () => {
+  it("is the founder-approved English copy (decision N5)", () => {
+    expect(en["desktop.autostart.prompt.title"]).toBe("Keep Klorn running in the background?");
     expect(en["desktop.autostart.prompt.body"]).toBe(
-      "Klorn can start when you sign in so you keep getting urgent-mail notifications.",
+      "Klorn can only alert you about urgent mail while it's running. Open it when you log in so you don't miss anything after a restart.",
     );
+    expect(en["desktop.autostart.prompt.decline"]).toBe("Not now");
+    expect(en["desktop.autostart.prompt.accept"]).toBe("Open at login");
+  });
+
+  it("every locale's buttons say different things, so the choice is never ambiguous", () => {
+    for (const table of [en, ko, ja, zh, es, fr, de]) {
+      expect(table["desktop.autostart.prompt.accept"]).not.toBe(
+        table["desktop.autostart.prompt.decline"],
+      );
+    }
   });
 
   it("exists in every shipped locale, non-empty, and is translated in Korean", () => {

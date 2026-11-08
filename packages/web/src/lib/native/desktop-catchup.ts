@@ -3,38 +3,34 @@
 // Live banners come from real-time frames the server tags `alert` (see
 // ./desktop-alerts.ts). A frame sent while the app was quit, the machine
 // slept, or the socket was down is simply lost — the API keeps no replay
-// (packages/api/src/websocket.ts broadcastToUser) — and the bell's refetch
-// used to record those ids as seen without a banner. So a PUSH mail that
-// arrived while the user was away never became an OS notification.
+// (packages/api/src/websocket.ts broadcastToUser).
+//
+// This module holds the per-account ledger both paths share and the meeting
+// catch-up. Urgent mail is caught up by ./desktop-push-catchup.ts (decision
+// N6: one toast for one missed mail, one summary for several, only PUSH mail
+// from the last 72h that is still open, held during quiet hours), which asks
+// the server about the bell's PUSH rows.
 //
 // Rules, mirroring the Mac app's PushLedger
 // (apps/desktop-mac/Sources/KlornMac/Notifications.swift):
 // - the first pass for an account is a silent baseline;
 // - an id is bannered at most once, and the record survives restarts (the
 //   ledger lives in localStorage, shared with the live path);
-// - at most CATCHUP_MAX banners per pass, newest first; the rest are recorded;
-// plus a freshness cutoff the Mac does not need (its lane only holds live
-// mail): PUSH rows older than 24h, meeting reminders older than 2 minutes, and
-// rows the user already read elsewhere are recorded without a banner.
+// - at most CATCHUP_MAX meeting banners per pass, newest first; the rest are
+//   recorded;
+// plus a freshness cutoff: meeting reminders older than 2 minutes, and rows
+// the user already read elsewhere, are recorded without a banner.
 //
-// Source: the bell's own notification rows (GET /api/notifications), not the
-// PUSH/MEETING lanes. A PUSH bell row ("Urgent email") is written only when the
-// server decided to interrupt for that mail — PUSH-lane or MEETING-lane, after
-// its recency, dedupe and interrupt-budget gates (api judge/firewall-push.ts,
-// automation-scheduler.ts urgent sweep) — and its id is the id the live frame
-// carries, so live and catch-up share one ledger and can never banner the same
-// mail twice. A lane also holds mail the server deliberately never pushed.
+// Source: the bell's own notification rows (GET /api/notifications). A
+// meeting bell row's id is the id its live frame carries, so live and
+// catch-up share one ledger and never banner the same reminder twice.
 //
 // Preference gate: rows do not record whether the server's gate (category
-// opt-out + quiet hours + focus window, notify/notification-prefs.ts) allowed
-// a banner. Until the API exposes that, catch-up (a) records every interrupt
-// frame that arrived live — tagged or not — so a frame the gate held back is
-// never bannered later from the refetch, (b) leaves rows younger than
-// SETTLE_MS to their live frame, and (c) honours the category opt-outs
-// (allowedKindsFromConfig). Quiet hours and focus windows are NOT re-evaluated
-// here: a row missed while away can banner on return even if it arrived
-// inside quiet hours, or banner during them if Klorn starts then. Documented
-// in apps/desktop-win/README.md.
+// opt-out + quiet hours, notify/notification-prefs.ts) allowed a banner. So
+// catch-up (a) records every interrupt frame that arrived live — tagged or
+// not — so a frame the gate held back is never bannered later from the
+// refetch, (b) leaves rows younger than SETTLE_MS to their live frame, and
+// (c) honours the category opt-outs (allowedKindsFromConfig).
 //
 // Pure functions over plain inputs, unit-tested without a browser
 // (packages/api/src/__tests__/web-desktop-catchup.test.ts).
@@ -44,18 +40,18 @@ import {
   type DesktopAlert,
   MESSAGE_SCAN_MAX,
   parseDesktopAlert,
+  parseMailToast,
   planDesktopAlert,
   SEEN_CAP,
   stripTrailingMarker,
 } from "./desktop-alerts";
 
-/** Title of the PUSH bell row, shared by the firewall push and the urgent
- *  sweep so they dedupe against each other (api judge/firewall-push.ts). */
+/** English title of the PUSH bell row, shared by the firewall push and the
+ *  urgent sweep (api judge/firewall-push.ts). Live frames since decision N1
+ *  also carry `mail`, which identifies them in every language. */
 export const PUSH_BELL_TITLE = "Urgent email";
-/** Banners one pass may post (Mac: PushLedger.maxBannersPerSync). */
+/** Meeting banners one pass may post (Mac: PushLedger.maxBannersPerSync). */
 export const CATCHUP_MAX = 5;
-/** PUSH mail older than this is recorded, not bannered. */
-export const PUSH_CATCHUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** A meeting reminder ("Meeting in N min") is written 1-5 minutes before the
  *  start (api background.ts). Only a short delay keeps that text roughly true;
  *  later, the meeting may already be under way and the banner is noise. */
@@ -66,11 +62,6 @@ export const SETTLE_MS = 30 * 1000;
 export const ALL_ALERT_KINDS: ReadonlySet<DesktopAlertKind> = new Set(["push", "meeting"]);
 
 const OWNER_MAX = 200;
-
-const WINDOW_MS: Record<DesktopAlertKind, number> = {
-  push: PUSH_CATCHUP_WINDOW_MS,
-  meeting: MEETING_CATCHUP_WINDOW_MS,
-};
 
 /** What has been announced, for one account, across launches. */
 export interface AlertLedger {
@@ -111,7 +102,7 @@ export function parseLedger(raw: string | null): AlertLedger | null {
   };
 }
 
-function recording(ledger: AlertLedger, ids: readonly string[]): AlertLedger {
+export function recording(ledger: AlertLedger, ids: readonly string[]): AlertLedger {
   return { ...ledger, notified: [...ledger.notified, ...ids].slice(-SEEN_CAP) };
 }
 
@@ -125,7 +116,9 @@ export interface InterruptRow {
 
 function interruptKind(row: Record<string, unknown>): DesktopAlertKind | null {
   if (row.type === "meeting") return "meeting";
-  if (row.type === "email" && row.title === PUSH_BELL_TITLE) return "push";
+  if (row.type === "email" && (row.title === PUSH_BELL_TITLE || parseMailToast(row.mail))) {
+    return "push";
+  }
   return null;
 }
 
@@ -140,7 +133,13 @@ export function interruptFromRow(row: unknown): InterruptRow | null {
     typeof record.message === "string"
       ? stripTrailingMarker(record.message.slice(0, MESSAGE_SCAN_MAX))
       : "";
-  const alert = parseDesktopAlert({ id: record.id, title: record.title, message, alert: kind });
+  const alert = parseDesktopAlert({
+    id: record.id,
+    title: record.title,
+    message,
+    mail: record.mail,
+    alert: kind,
+  });
   if (!alert) return null;
   const createdAtMs = typeof record.createdAt === "string" ? Date.parse(record.createdAt) : NaN;
   return { alert, createdAtMs, isRead: record.isRead === true };
@@ -180,17 +179,20 @@ export interface CatchUpPlan {
 
 function isFresh(row: InterruptRow, nowMs: number): boolean {
   const age = nowMs - row.createdAtMs;
-  return Number.isFinite(age) && age <= WINDOW_MS[row.alert.kind];
+  return Number.isFinite(age) && age <= MEETING_CATCHUP_WINDOW_MS;
 }
 
-/** Plan the banners for the bell as it is now. Pure; the input is never
- *  mutated. */
+/** Plan the meeting banners for the bell as it is now. PUSH rows are left to
+ *  ./desktop-push-catchup.ts (never recorded here). Establishes the baseline.
+ *  Pure; the input is never mutated. */
 export function planCatchUp({ ledger, rows, nowMs, allowed }: CatchUpInput): CatchUpPlan {
   const known = new Set(ledger.notified);
   const unseen: InterruptRow[] = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     const interrupt = interruptFromRow(row);
-    if (!interrupt || known.has(interrupt.alert.id)) continue;
+    if (!interrupt || interrupt.alert.kind !== "meeting" || known.has(interrupt.alert.id)) {
+      continue;
+    }
     // Too new to judge: its live frame (or the next pass) decides.
     if (nowMs - interrupt.createdAtMs < SETTLE_MS) continue;
     known.add(interrupt.alert.id);
