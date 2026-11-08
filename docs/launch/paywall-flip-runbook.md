@@ -21,7 +21,9 @@ no-ops while the paywall is off, but `planHasFeature` reads `user.plan`
 directly: a FREE account gets the pre-launch FREE set (`FREE_FEATURES` in
 `billing/stripe.ts`), so auto-reply, agent AUTO mode and the agent's write
 tools (send, calendar write, web search, integrations) stay off for it even
-with `PAYWALL_ENABLED=false`.
+with `PAYWALL_ENABLED=false`. The signed-in device limit is plan-based too and
+not paywall-gated: Free and Pro both keep 3 sessions (founder decision
+2026-11-07; `PLANS.*.deviceLimit` in `billing/stripe.ts`).
 
 The Paddle web pipeline is wired and was verified live 2026-08-22 (at the old
 price). The other active billing mechanism is the per-user daily LLM cost cap.
