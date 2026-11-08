@@ -263,8 +263,13 @@ Against v2 on the same runs, recomputed on 2026-11-07 with `v3-bench-report.ts -
 
 - Gate PUSH precision is 100% and real PUSH recall 75.0% in every row.
 - v3.1 does not yet meet the replay part of the P3 bar (§5):
-  - Gate PUSH recall is below v2. Half of v3.1's 24 misses are eval-046, which only risk trust can PUSH and the cold-start eval cannot show. If it were PUSHed, v3.1 would reach 92.3% on both rows: above v2 pooled, level with v2 on Haiku.
-  - Real SILENT precision on Haiku is 82.4% against 100%: 6 SILENT calls in 3 runs that the founder labelled otherwise. They are not traced to items here.
+  - Gate PUSH recall is below v2. All 24 of v3.1's misses are two mails, each missed in all 12 runs (traced 2026-11-08):
+    - eval-046, a card "verify unusual transaction" alert. Only risk trust can PUSH it, and the cold-start eval has no sender history. v2 PUSHes it in every run because v2 has no sender trust, which would also let it PUSH a phishing alert.
+    - eval-036, "due diligence docs due Friday". The ask is outside the ±24h window (rule 3), so it stays in QUEUE.
+    - v2's 19 misses: eval-036 in 9 runs, eval-039 in 6, eval-044 in 3, eval-037 in 1.
+    - If eval-046's sender were known, as a card issuer the user has heard from for a month is live, v3.1 would reach 144/156 pooled (v2 137/156) and 36/39 on Haiku (v2 36/39).
+  - Real SILENT precision on Haiku is 82.4% against 100%. All 6 errors are two Namecheap mails the founder labelled QUEUE, "Welcome to Namecheap" and a CEO letter. Haiku extracts `kind: promotion` for both in every run; Fable does the same for the CEO letter.
+    - This is an extraction error, not a rule. The tempting rule fix, SILENT only for promotion addressed in bulk, would move 84 correct SILENT calls to INFO on the real set and 96 on the gate set, because the eval mails carry no list headers.
   - PUSH precision is at or above v2 on both sets.
 
 Floors:
@@ -489,7 +494,7 @@ It reports:
   - `EmailMessage.isRead` has no time, and in the same 30 days 88% of mail shown as SILENT reads as read, so "opened later" cannot be derived from it.
 - **P3 bar (changed 2026-11-07).** The outcome metrics move to the Review phase. P3 is done when:
   1. **Replay:** on the eval sets, v3 ≥ v2 on PUSH recall, PUSH precision and SILENT precision, pooled over models and for the production model on its own. Overall accuracy and QUEUE/INFO swaps are reported, not gated, because the founder's labels disagree on newsletters (§3(5)).
-  2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The report lists up to 20 disagreements per run; narrow `--days` or `--user` to see the rest. The counts go in the flip PR.
+  2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The shadow report lists only the newest 20 disagreements. For the full list, run `replay:policy --facts=stored --max-changes=<n>`: one line per changed mail with its id, v2 → v3 lanes and reason codes. `--show-subjects` adds subjects to the terminal output only. The counts go in the flip PR.
   3. The adversarial phishing measurement that §3(5) requires before the flip is done.
 
   Status on 2026-11-07: replay not met (§3(5), "Against v2"); shadow not started (0 AttentionFacts rows).
