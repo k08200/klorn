@@ -41,7 +41,7 @@ and **sensitive** scopes (`gmail.send`, `calendar.events`,
       the flag on. Five of the six tables are deleted by that sweep alone:
       `pruneOldPushDeliveryLogs` is reachable only from
       `scripts/prune-push-logs.ts`, and the one flag-free prune
-      (`push-rate-limit.ts:73`) covers PushRingEvent on a 60-minute window for
+      (`push-rate-limit.ts:94`) covers PushRingEvent on a 60-minute window for
       active users. If the flag is ever turned off, the policy sentence stops
       being true the same day — change the sentence, not just the flag.
 
