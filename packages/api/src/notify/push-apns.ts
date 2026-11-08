@@ -139,6 +139,13 @@ function sendOne(
 /** iOS notification categories the app registers lock-screen actions under. */
 export const APNS_MAIL_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MAIL";
 export const APNS_MAIL_DRAFT_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MAIL_DRAFT";
+export const APNS_MEETING_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MEETING";
+
+/** The action set: a reply draft wins, then a MEETING mail, else the mail set. */
+function apnsCategoryOf(mail: { pendingActionId?: string; lane?: string }): ApnsMailCategory {
+  if (mail.pendingActionId) return APNS_MAIL_DRAFT_CATEGORY;
+  return mail.lane === "MEETING" ? APNS_MEETING_CATEGORY : APNS_MAIL_CATEGORY;
+}
 
 /**
  * The APNs JSON body. The keys a push always carried come first and unchanged
@@ -157,7 +164,7 @@ export function buildApnsBody(payload: DevicePushPayload, category: NotifCategor
     sound: "default",
     ...(mail
       ? {
-          category: mail.pendingActionId ? APNS_MAIL_DRAFT_CATEGORY : APNS_MAIL_CATEGORY,
+          category: apnsCategoryOf(mail),
           "mutable-content": 1,
         }
       : {}),
@@ -179,6 +186,8 @@ export async function sendApnsPush(
   userId: string,
   payload: DevicePushPayload,
   category: NotifCategory = "system",
+  // "Send test" on one settings row rings that token only (routes/alert-endpoints.ts).
+  opts: { tokenId?: string } = {},
 ): Promise<DevicePushSummary> {
   if (!isApnsConfigured()) {
     console.log(`[PUSH-APNS] Skipped — APNs not configured (user ${userId})`);
@@ -186,7 +195,7 @@ export async function sendApnsPush(
   }
 
   const rows = await prisma.devicePushToken.findMany({
-    where: { userId, platform: "ios" },
+    where: { userId, platform: "ios", ...(opts.tokenId ? { id: opts.tokenId } : {}) },
     select: { token: true },
   });
   if (rows.length === 0) return skipped("no_device_tokens");

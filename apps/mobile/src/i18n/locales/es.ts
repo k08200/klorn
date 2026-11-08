@@ -382,6 +382,10 @@ export const es: Messages = {
   "settings.quiet.hint": "Sin notificaciones en esta franja",
   "settings.quiet.from": "Desde",
   "settings.quiet.to": "Hasta",
+  "settings.budget.title": "Interrupciones por día",
+  "settings.budget.hint":
+    "El correo urgente por encima de esta cifra espera en Queue sin sonar. Los remitentes que fijas en Push y las reuniones no cuentan.",
+  "settings.budget.none": "Sin límite",
   "settings.notifyLanguage.title": "Idioma de las notificaciones",
   "settings.notifyLanguage.label": "Escribir notificaciones en",
   "settings.notifyLanguage.hint":
@@ -753,13 +757,14 @@ export const es: Messages = {
   "push.denied":
     "Las notificaciones están desactivadas. Puedes activarlas en los ajustes del dispositivo.",
   "push.snoozed": "Pospuesto una hora.",
+  "push.snoozedToday": "Pospuesto hasta más tarde hoy.",
   "push.done": "Marcado como hecho.",
-  "push.action.later": "En 1 hora",
+  "push.notUrgent": "Movido a QUEUE.",
+  "push.action.later": "Más tarde",
+  "push.action.notUrgent": "No urgente",
   "push.action.done": "Hecho",
-  "push.action.review": "Revisar",
   "push.channel.push": "Correo PUSH",
-  "push.channel.pushBody":
-    "Solo el correo que te necesita ahora, con En 1 hora y Hecho en la notificación.",
+  "push.channel.pushBody": "Solo el correo que te necesita ahora, con Más tarde, No urgente y Hecho en la notificación.",
   "push.channel.other": "Otras notificaciones",
   "push.cover.draftReady": "borrador de respuesta listo",
   "push.cover.snoozeFailed": "No se pudo posponer. Vuelve a estar en la lista.",

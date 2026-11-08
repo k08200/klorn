@@ -64,16 +64,27 @@ export function routeFromPush(data: PushData | null | undefined): Route {
 /**
  * The notification action buttons: iOS UNNotificationCategory actions
  * (AppDelegate.swift) and the Android local-notification action types
- * (push/android.ts) share these ids.
+ * (push/android.ts) share these ids. Decision N1 (2026-11-08): Reply (or Send
+ * draft) · Later · Not urgent · Done. There is no Silent action.
  */
 export const PUSH_ACTIONS = {
   /** iOS "Send draft" — opens the approval card; it never sends. */
   send: "KLORN_SEND",
-  /** Android "Review" — opens the approval card / the mail. */
+  /** iOS "Reply" — opens the mail in the app. Sending stays manual. */
+  reply: "KLORN_REPLY",
+  /**
+   * Android "Review" (before N1) — opens the approval card / the mail. No
+   * longer offered; still honoured for a notification already in the tray.
+   */
   review: "KLORN_REVIEW",
   later: "KLORN_LATER",
+  /** Moves the mail to QUEUE (a judge learning signal, like any lane move). */
+  notUrgent: "KLORN_NOT_URGENT",
   done: "KLORN_DONE",
 } as const;
+
+/** "Later" = later today, the web reader's reminder offset (web _v2/reminders.ts). */
+export const LATER_MS = 4 * 3_600_000;
 
 /**
  * The button behind a tap. A notification the app's native Android service
@@ -87,6 +98,7 @@ export function actionFromTap(actionId: string, data: PushData | null | undefine
   const named = data?.klornAction;
   return named === PUSH_ACTIONS.later ||
     named === PUSH_ACTIONS.done ||
+    named === PUSH_ACTIONS.notUrgent ||
     named === PUSH_ACTIONS.review
     ? named
     : actionId;
@@ -104,13 +116,27 @@ export type PushIntent =
   /** "Send draft" / "Review" never send: they open the approval card, where the user taps Send. */
   | { kind: "review"; route: Route }
   | { kind: "snooze"; target: TriageTarget; fallback: Route }
-  | { kind: "done"; target: TriageTarget; fallback: Route };
+  | { kind: "done"; target: TriageTarget; fallback: Route }
+  /** "Not urgent": move the mail to QUEUE. */
+  | { kind: "notUrgent"; target: TriageTarget; fallback: Route };
 
 export function triageTargetOf(data: PushData | null | undefined): TriageTarget | null {
   const emailId = idOf(data?.emailId);
   if (emailId) return { emailId };
   const attentionItemId = idOf(data?.attentionItemId);
   return attentionItemId ? { attentionItemId } : null;
+}
+
+/**
+ * What Not urgent moves: the attention item first (routes/firewall.ts POST
+ * /:id, always on), else the mail by its email id (POST /email/:emailId, live
+ * only while KEYBOARD_TRIAGE is on).
+ */
+function laneTargetOf(data: PushData | null | undefined): TriageTarget | null {
+  const attentionItemId = idOf(data?.attentionItemId);
+  if (attentionItemId) return { attentionItemId };
+  const emailId = idOf(data?.emailId);
+  return emailId ? { emailId } : null;
 }
 
 export function intentOf(actionId: string, data: PushData | null | undefined): PushIntent {
@@ -128,8 +154,17 @@ export function intentOf(actionId: string, data: PushData | null | undefined): P
           : route,
       };
     }
+    case PUSH_ACTIONS.reply:
+      // The mail in the reader, where Reply is one tap. Nothing is sent.
+      return { kind: "open", route };
     case PUSH_ACTIONS.later:
       return target ? { kind: "snooze", target, fallback: route } : { kind: "open", route };
+    case PUSH_ACTIONS.notUrgent: {
+      const laneTarget = laneTargetOf(data);
+      return laneTarget
+        ? { kind: "notUrgent", target: laneTarget, fallback: route }
+        : { kind: "open", route };
+    }
     case PUSH_ACTIONS.done:
       return target ? { kind: "done", target, fallback: route } : { kind: "open", route };
     default:

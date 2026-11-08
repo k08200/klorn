@@ -1225,6 +1225,13 @@ model PushSubscription {
   // — the duplicate "Daily Briefing" bug. Mirrors DevicePushToken's
   // prune-on-register. Nullable for rows created before this column existed.
   deviceId  String?
+  // Browser family and OS of the agent that registered this subscription, read
+  // from its User-Agent at /push/subscribe (notify/alert-endpoints.ts
+  // parseClientPlatform). Labels "Where you get alerts" and tells a phone from
+  // a desktop. Only the derived values are kept, never the raw User-Agent.
+  // Nullable: rows from before this column, and agents we cannot name.
+  browser   String?
+  os        String?
   createdAt DateTime @default(now())
 
   // Budgeted-retry eviction: consecutive ambiguous (non-410/404) delivery

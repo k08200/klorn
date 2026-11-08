@@ -103,6 +103,8 @@ const written = (): Row[] =>
   notifications().filter((n) => String(n.id).startsWith("prior-") === false);
 const pushPayload = () =>
   (sendPushNotification.mock.calls[0] as unknown as [string, { title: string; body: string }])[1];
+/** Line 1 of the device push body (decision N1: line 2 is the judge's reason). */
+const subjectLine = () => pushPayload().body.split("\n")[0];
 const wsPayload = () =>
   (pushNotification.mock.calls[0] as unknown as [string, { title: string; message: string }])[1];
 
@@ -132,8 +134,8 @@ describe("the PUSH notification follows the user's notification language", () =>
     expect(row.message).toBe(`Alice: (제목 없음) [${GMAIL_ID}]`);
     expect(wsPayload().title).toBe("긴급 메일");
     expect(wsPayload().message).toBe("Alice: (제목 없음)");
-    expect(pushPayload().body).toBe("(제목 없음)");
-    expect(pushPayload().title).toBe("Klorn — Alice");
+    expect(subjectLine()).toBe("(제목 없음)");
+    expect(pushPayload().title).toBe("Alice");
   });
 
   it.each(NOTIFICATION_LANGUAGES)("%s: every surface uses that language's copy", async (lang) => {
@@ -146,7 +148,7 @@ describe("the PUSH notification follows the user's notification language", () =>
     expect(row.title).toBe(copy.urgentMailTitle);
     expect(row.message).toBe(`Alice: ${copy.noSubject} [${GMAIL_ID}]`);
     expect(wsPayload().title).toBe(copy.urgentMailTitle);
-    expect(pushPayload().body).toBe(copy.noSubject);
+    expect(subjectLine()).toBe(copy.noSubject);
   });
 
   it("keeps the subject as written: only Klorn's own words are translated", async () => {
@@ -155,7 +157,7 @@ describe("the PUSH notification follows the user's notification language", () =>
     await judge("Q4 contract — please sign");
 
     expect(written()[0].message).toBe(`Alice: Q4 contract — please sign [${GMAIL_ID}]`);
-    expect(pushPayload().body).toBe("Q4 contract — please sign");
+    expect(subjectLine()).toBe("Q4 contract — please sign");
   });
 
   it.each([
@@ -167,7 +169,7 @@ describe("the PUSH notification follows the user's notification language", () =>
     await judge("");
 
     expect(written()[0].title).toBe("Urgent email");
-    expect(pushPayload().body).toBe("(no subject)");
+    expect(subjectLine()).toBe("(no subject)");
   });
 
   it("folds a regional tag onto the shipped base language", async () => {

@@ -164,6 +164,17 @@
   margin: 4px 16px 0;
 }
 
+/* Interruptions per day: four equal segments across the row. */
+.set-budget {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.set-budget__choices {
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .set-quiet {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -392,6 +392,10 @@ export const de: Messages = {
   "settings.quiet.hint": "In diesem Zeitraum keine Benachrichtigungen",
   "settings.quiet.from": "Von",
   "settings.quiet.to": "Bis",
+  "settings.budget.title": "Unterbrechungen pro Tag",
+  "settings.budget.hint":
+    "Dringende Mails darüber hinaus warten ohne Benachrichtigung in Queue. An Push angeheftete Absender und Meetings zählen nicht.",
+  "settings.budget.none": "Kein Limit",
   "settings.notifyLanguage.title": "Sprache der Benachrichtigungen",
   "settings.notifyLanguage.label": "Benachrichtigungen schreiben auf",
   "settings.notifyLanguage.hint":
@@ -769,13 +773,14 @@ export const de: Messages = {
   "push.denied":
     "Benachrichtigungen sind aus. Du kannst sie in den Geräteeinstellungen einschalten.",
   "push.snoozed": "Um eine Stunde verschoben.",
+  "push.snoozedToday": "Auf später heute verschoben.",
   "push.done": "Als erledigt markiert.",
-  "push.action.later": "In 1 Stunde",
+  "push.notUrgent": "In QUEUE verschoben.",
+  "push.action.later": "Später",
+  "push.action.notUrgent": "Nicht dringend",
   "push.action.done": "Erledigt",
-  "push.action.review": "Prüfen",
   "push.channel.push": "PUSH-Mails",
-  "push.channel.pushBody":
-    "Nur Mails, die dich jetzt brauchen – mit „In 1 Stunde“ und „Erledigt“ direkt in der Benachrichtigung.",
+  "push.channel.pushBody": "Nur Mails, die dich jetzt brauchen – mit „Später“, „Nicht dringend“ und „Erledigt“ direkt in der Benachrichtigung.",
   "push.channel.other": "Weitere Benachrichtigungen",
   "push.cover.draftReady": "Antwortentwurf bereit",
   "push.cover.snoozeFailed": "Verschieben hat nicht geklappt. Es steht wieder in der Liste.",
