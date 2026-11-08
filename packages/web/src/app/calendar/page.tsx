@@ -5,6 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { CompactMonth } from "../../components/calendar/compact-month";
+import {
+  addMonths,
+  buildMonthCells,
+  type CalendarEvent,
+  dayKeyForInZone,
+  firstOfMonth,
+  formatTime,
+  type MonthCell,
+  monthGridRange,
+  monthIndexInZone,
+  weekdayNames,
+} from "../../components/calendar/month-utils";
 import { LinkedCalendars } from "../../components/linked-calendars";
 import { type NewEventInitial, NewEventModal } from "../../components/new-event-modal";
 import { PAGE_SHELL } from "../../components/page-shell";
@@ -15,21 +28,6 @@ import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  description: string | null;
-  startTime: string;
-  endTime: string;
-  location: string | null;
-  meetingLink: string | null;
-  allDay: boolean;
-  /** Present (true) on a linked calendar's event: a read-only mirror (step C7). */
-  readOnly?: boolean;
-  /** The linked account's email, on a linked event only. */
-  sourceLabel?: string;
-}
 
 export default function CalendarPage() {
   return (
@@ -422,12 +420,16 @@ function CalendarView() {
         </div>
       )}
 
-      {/* A 6×7 month grid is unreadable at ~56px/column on a phone (event times
-          clip to "00:3"). Desktop keeps the grid; mobile gets a forward-looking
-          agenda list grouped by day, which matches the hero's "next 14 days". */}
+      {/* The desktop month grid puts ~20px event links in each cell — too small
+          for touch (44px rule), and 44px links would overflow the cells. On a
+          coarse pointer, or when the calendar is under 600px wide, the compact
+          month takes over: 44px day buttons with dots, and the selected day's
+          events listed below (founder decision, option A). A fine pointer on
+          a wide screen keeps the grid unchanged. Pure CSS switching, so there
+          is no layout flash on load. */}
       {!loading && (
-        <>
-          <div className="hidden md:block">
+        <div className="@container">
+          <div className="block @max-[600px]:hidden pointer-coarse:hidden">
             <MonthGrid
               viewMonth={viewMonth}
               monthLabel={monthLabel}
@@ -439,12 +441,19 @@ function CalendarView() {
               timeZone={userTimezone}
             />
           </div>
-          {events.length > 0 && (
-            <div className="md:hidden">
-              <AgendaList events={events} todayKey={todayKey} timeZone={userTimezone} />
-            </div>
-          )}
-        </>
+          <div className="hidden @max-[600px]:block pointer-coarse:block">
+            <CompactMonth
+              viewMonth={viewMonth}
+              monthLabel={monthLabel}
+              onPrev={goPrevMonth}
+              onNext={goNextMonth}
+              onToday={goToday}
+              eventsByDay={eventsByDay}
+              todayKey={todayKey}
+              timeZone={userTimezone}
+            />
+          </div>
+        </div>
       )}
 
       <NewEventModal
@@ -465,107 +474,6 @@ function CalendarView() {
           {t("calendar.voiceParsing")}
         </output>
       )}
-    </div>
-  );
-}
-
-function AgendaList({
-  events,
-  todayKey,
-  timeZone,
-}: {
-  events: CalendarEvent[];
-  todayKey: string;
-  timeZone: string;
-}) {
-  const { t, locale } = useT();
-  // Group upcoming events (today onward) by local day, ascending. Past days are
-  // dropped — an agenda is forward-looking, unlike the month grid.
-  const byDay = new Map<string, CalendarEvent[]>();
-  for (const ev of events) {
-    const key = dayKeyForInZone(new Date(ev.startTime), timeZone);
-    if (key < todayKey) continue;
-    const list = byDay.get(key);
-    if (list) list.push(ev);
-    else byDay.set(key, [ev]);
-  }
-  const days = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  for (const [, list] of days) {
-    list.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  }
-
-  if (days.length === 0) {
-    return (
-      <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel px-4 py-6 text-center text-role-body text-ink-dim">
-        {t("calendar.nothingThisMonth")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {days.map(([key, list]) => (
-        <div key={key}>
-          <div className="mb-1.5 flex items-center gap-2 px-0.5">
-            <h3 className="text-role-caption font-semibold uppercase tracking-[0.12em] text-ink-mid">
-              {new Date(list[0].startTime).toLocaleDateString(locale, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                timeZone,
-              })}
-            </h3>
-            {key === todayKey && (
-              <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
-                {t("nav.v2.today")}
-              </span>
-            )}
-          </div>
-          <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
-            <ul className="divide-y divide-line-soft">
-              {list.map((ev) => (
-                <li key={ev.id} className="row-wash relative">
-                  {key === todayKey && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute left-0 top-0 h-full w-[3px] bg-accent-light"
-                    />
-                  )}
-                  <Link
-                    href={`/calendar/${ev.id}`}
-                    className="flex items-start gap-3 px-4 py-3 transition duration-150"
-                  >
-                    <span className="w-14 shrink-0 pt-0.5 text-right text-role-caption tabular-nums text-ink-mid">
-                      {ev.allDay
-                        ? t("calendar.allDay")
-                        : formatTime(new Date(ev.startTime), timeZone, locale)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-role-body font-medium text-ink">
-                        {ev.title || t("common.untitled")}
-                      </span>
-                      {ev.location && (
-                        <span className="mt-0.5 block truncate text-role-caption text-ink-dim">
-                          {ev.location}
-                        </span>
-                      )}
-                      {ev.readOnly && (
-                        <span
-                          className="mt-0.5 block truncate text-role-caption text-ink-dim"
-                          title={t("calendar.readOnlyHint")}
-                        >
-                          {ev.sourceLabel?.trim() || t("calendar.linkedSource")} ·{" "}
-                          {t("calendar.readOnly")}
-                        </span>
-                      )}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -765,145 +673,4 @@ function EventChip({
       <span className="truncate">{event.title || t("common.untitled")}</span>
     </Link>
   );
-}
-
-/** Short weekday names Sun..Sat in `locale`. 2026-01-04 (UTC noon) is a Sunday. */
-function weekdayNames(locale: string): string[] {
-  const format = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
-  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2026, 0, 4 + i, 12))));
-}
-
-// 24-hour format keeps "13:00" unambiguous (the AM/PM split has been a
-// dogfood pain point — "04:00 AM" in the calendar looked like 4 in the
-// morning when the underlying event was 13:00 KST). The timezone arg is
-// the user's stored IANA zone, NOT the browser default.
-function formatTime(d: Date, timeZone: string, locale: string): string {
-  return d.toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone,
-  });
-}
-
-// Day grouping must also respect the user's timezone — otherwise an event
-// at 23:30 KST stored as 14:30 UTC ends up grouped under the wrong local
-// day (the browser would call it "today" while the user calls it "tomorrow").
-function dayKeyForInZone(d: Date, timeZone: string): string {
-  // en-CA returns YYYY-MM-DD, which is exactly the key shape we want and is
-  // stable across locales.
-  return d.toLocaleDateString("en-CA", { timeZone });
-}
-
-// ─── Month grid helpers ──────────────────────────────────────────────────
-//
-// All date math respects the user's IANA timezone so cell boundaries match
-// what the user calls "Monday" — not what the browser calls "Monday" based
-// on its locale guess.
-
-interface MonthCell {
-  /** YYYY-MM-DD in the user's timezone — used as map key for events. */
-  key: string;
-  /** 1..31 — day number to display. */
-  dayNumber: number;
-  /** 0=Jan..11=Dec — index of the month this cell belongs to. */
-  monthIndex: number;
-}
-
-/** Pinned first-of-month at 00:00 in the given timezone. */
-function firstOfMonth(d: Date, timeZone: string): Date {
-  // Use ISO date-parts in the user's timezone, then construct a UTC moment
-  // that represents 00:00 of that local day. This is the only safe way to
-  // round-trip "month start" without lying about offsets.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const year = Number(parts.find((p) => p.type === "year")?.value);
-  const month = Number(parts.find((p) => p.type === "month")?.value);
-  // Construct YYYY-MM-01 at noon UTC — noon avoids DST edges that 00:00
-  // can land on for some zones.
-  return new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-}
-
-/** Add N months (can be negative). Day pinned to 1. */
-function addMonths(d: Date, n: number, timeZone: string): Date {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(d);
-  const year = Number(parts.find((p) => p.type === "year")?.value);
-  const month = Number(parts.find((p) => p.type === "month")?.value);
-  const totalMonths = (year - 1970) * 12 + (month - 1) + n;
-  const newYear = 1970 + Math.floor(totalMonths / 12);
-  const newMonth = totalMonths - (newYear - 1970) * 12;
-  return new Date(Date.UTC(newYear, newMonth, 1, 12, 0, 0));
-}
-
-/** Month index 0..11 in the given timezone for a date. */
-function monthIndexInZone(d: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    month: "2-digit",
-  }).formatToParts(d);
-  return Number(parts.find((p) => p.type === "month")?.value) - 1;
-}
-
-/** Sunday-first weekday index 0..6 in the given timezone for a date. */
-function weekdayInZone(d: Date, timeZone: string): number {
-  // Resolve the calendar date in the user's zone, then read its weekday from
-  // the UTC clock — no locale week names to translate (and no hardcoded
-  // English abbreviations).
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const year = Number(parts.find((p) => p.type === "year")?.value);
-  const month = Number(parts.find((p) => p.type === "month")?.value);
-  const day = Number(parts.find((p) => p.type === "day")?.value);
-  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
-}
-
-/** Build the 42-cell month grid (6 rows × 7 days) including leading/trailing
- * padding from the adjacent months — same behavior as Google Calendar. */
-function buildMonthCells(viewMonth: Date, timeZone: string): MonthCell[] {
-  const monthStart = firstOfMonth(viewMonth, timeZone);
-  const firstWeekday = weekdayInZone(monthStart, timeZone);
-  // Anchor 12:00 UTC keeps DST jumps from skipping a day.
-  const anchor = new Date(monthStart.getTime() - firstWeekday * 86400000);
-  const cells: MonthCell[] = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(anchor.getTime() + i * 86400000);
-    cells.push({
-      key: dayKeyForInZone(d, timeZone),
-      dayNumber: Number(new Intl.DateTimeFormat("en-CA", { timeZone, day: "2-digit" }).format(d)),
-      monthIndex: monthIndexInZone(d, timeZone),
-    });
-  }
-  return cells;
-}
-
-/** Range to fetch — first and last cell of the visible grid, expanded by
- * one day on each side so events overlapping the boundary aren't dropped. */
-function monthGridRange(viewMonth: Date, timeZone: string): { start: Date; end: Date } {
-  const cells = buildMonthCells(viewMonth, timeZone);
-  // Cells are sorted; take ends and pad by 24h.
-  const firstKey = cells[0].key;
-  const lastKey = cells[cells.length - 1].key;
-  // `key` is YYYY-MM-DD in user TZ — parse back via Date for the API range.
-  // Use noon UTC so the range covers a full local day on both ends regardless
-  // of DST.
-  const start = new Date(`${firstKey}T00:00:00Z`);
-  const end = new Date(`${lastKey}T23:59:59Z`);
-  start.setUTCHours(start.getUTCHours() - 12);
-  end.setUTCHours(end.getUTCHours() + 12);
-  // Suppress no-unused-vars on timeZone — used by the helpers above; keeping
-  // it in the signature so future callers don't need to import zone state.
-  void timeZone;
-  return { start, end };
 }
