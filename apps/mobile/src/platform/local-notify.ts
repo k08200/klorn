@@ -75,8 +75,8 @@ export async function setupAndroidNotifications(labels: ChannelLabels): Promise<
       NATIVE_LABELS_KEY,
       JSON.stringify({
         later: labels.later,
+        notUrgent: labels.notUrgent,
         done: labels.done,
-        review: labels.review,
         pushChannel: labels.pushChannel,
         otherChannel: labels.otherChannel,
       }),

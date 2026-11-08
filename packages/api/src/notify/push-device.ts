@@ -53,6 +53,8 @@ export interface DevicePushPayload {
   emailId?: string;
   attentionItemId?: string;
   pendingActionId?: string;
+  /** The mail's firewall lane (decision N1); only travels with `emailId`. */
+  lane?: "PUSH" | "MEETING";
 }
 
 /** Opaque ids and an in-app route — nothing the notification text does not already show. */
@@ -69,6 +71,7 @@ export function mailPushTarget(payload: DevicePushPayload): MailPushTarget | nul
     ...(payload.attentionItemId ? { attentionItemId: payload.attentionItemId } : {}),
     ...(payload.pendingActionId ? { pendingActionId: payload.pendingActionId } : {}),
     route: `/mail/${encodeURIComponent(payload.emailId)}`,
+    ...(payload.lane ? { lane: payload.lane } : {}),
   };
 }
 

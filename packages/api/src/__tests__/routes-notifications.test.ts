@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { mintTierOverrideToken } from "../billing/tier-override-token.js";
+import { mintPushLaterToken } from "../notify/push-later-token.js";
 
 // Set before importing push-origin-allowlist (loaded transitively via routes).
 process.env.PUSH_ALLOWED_ORIGINS = "https://app.klorn.ai,http://localhost:8001";
@@ -43,6 +44,14 @@ vi.mock("../notify/push-device.js", () => ({
     failed: 0,
   })),
 }));
+const remindLaterFromPush = vi.hoisted(() =>
+  vi.fn(async (grant: { userId: string; emailId: string }) =>
+    grant.userId === "user-1" && grant.emailId === "email-1"
+      ? { ok: true as const, created: true }
+      : { ok: false as const },
+  ),
+);
+vi.mock("../notify/push-later.js", () => ({ remindLaterFromPush }));
 vi.mock("../notify/push-delivery.js", () => ({
   recordPushReceipt: vi.fn(async () => true),
   getPushDeliveryStats: vi.fn(async () => ({
@@ -519,6 +528,64 @@ describe("notification routes", () => {
       method: "POST",
       url: "/api/notifications/push/tier-override",
       payload: { token: mintTierOverrideToken("user-1", "missing-item"), tier: "SILENT" },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  // ── "Later" from a web push action (public capability endpoint) ─────────
+  it("sets the Later reminder from a valid capability token WITHOUT a session", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: mintPushLaterToken("user-1", "email-1") },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(remindLaterFromPush).toHaveBeenLastCalledWith({ userId: "user-1", emailId: "email-1" });
+    await app.close();
+  });
+
+  it("rejects a garbage, missing or wrong-kind Later token with 400/401 and writes nothing", async () => {
+    const app = await buildApp();
+    remindLaterFromPush.mockClear();
+    const bad = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: "not-a-real-token" },
+    });
+    expect(bad.statusCode).toBe(401);
+    // A tier-override token is a different capability: refused here.
+    const wrongKind = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: mintTierOverrideToken("user-1", "item-1") },
+    });
+    expect(wrongKind.statusCode).toBe(401);
+    // A session JWT is not a Later capability either.
+    const session = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: TOKEN },
+    });
+    expect(session.statusCode).toBe(401);
+    const missing = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: {},
+    });
+    expect(missing.statusCode).toBe(400);
+    expect(remindLaterFromPush).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 404 when the token's mail is not the token user's", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: mintPushLaterToken("user-1", "email-2") },
     });
     expect(res.statusCode).toBe(404);
     await app.close();

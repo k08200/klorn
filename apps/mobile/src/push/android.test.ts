@@ -35,13 +35,23 @@ describe("Android data-only pushes", () => {
     expect(ACTION_CATEGORIES).toEqual({
       withDraft: "KLORN_PUSH_MAIL_DRAFT",
       plain: "KLORN_PUSH_MAIL",
+      meeting: "KLORN_PUSH_MEETING",
     });
     const swift = readFileSync("ios/App/App/AppDelegate.swift", "utf8");
     expect(swift).toContain(`static let pushWithDraft = "${ACTION_CATEGORIES.withDraft}"`);
     expect(swift).toContain(`static let push = "${ACTION_CATEGORIES.plain}"`);
-    for (const action of [PUSH_ACTIONS.send, PUSH_ACTIONS.later, PUSH_ACTIONS.done]) {
+    expect(swift).toContain(`static let meeting = "${ACTION_CATEGORIES.meeting}"`);
+    for (const action of [
+      PUSH_ACTIONS.send,
+      PUSH_ACTIONS.reply,
+      PUSH_ACTIONS.later,
+      PUSH_ACTIONS.notUrgent,
+      PUSH_ACTIONS.done,
+    ]) {
       expect(swift).toContain(`identifier: "${action}"`);
     }
+    // Decision N1: Silent / Mute is never a notification action.
+    expect(swift).not.toMatch(/identifier: "KLORN_(SILENT|MUTE)/);
   });
 
   it("posts a data-only Klorn message with the draft actions on the PUSH channel", () => {
@@ -115,16 +125,23 @@ describe("Android data-only pushes", () => {
     expect(id).toBeLessThanOrEqual(2 ** 31 - 1);
   });
 
-  it("shows 1시간 뒤에 · 처리 완료 · 검토하기, and Review never sends", () => {
+  it("shows 나중에 · 급하지 않음 · 처리 완료 on a mail, 나중에 on a meeting, and never sends", () => {
     const types = androidActionTypes({
-      later: "1시간 뒤에",
+      later: "나중에",
+      notUrgent: "급하지 않음",
       done: "처리 완료",
-      review: "검토하기",
     });
-    for (const type of types) {
-      expect(type.actions.map((a) => a.title)).toEqual(["1시간 뒤에", "처리 완료", "검토하기"]);
-      expect(type.actions.map((a) => a.id)).not.toContain(PUSH_ACTIONS.send);
+    const byId = Object.fromEntries(types.map((type) => [type.id, type.actions]));
+    for (const id of [ACTION_CATEGORIES.withDraft, ACTION_CATEGORIES.plain]) {
+      expect(byId[id]?.map((a) => a.title)).toEqual(["나중에", "급하지 않음", "처리 완료"]);
+      expect(byId[id]?.map((a) => a.id)).toEqual([
+        PUSH_ACTIONS.later,
+        PUSH_ACTIONS.notUrgent,
+        PUSH_ACTIONS.done,
+      ]);
     }
+    expect(byId[ACTION_CATEGORIES.meeting]?.map((a) => a.id)).toEqual([PUSH_ACTIONS.later]);
+    for (const type of types) expect(type.actions.map((a) => a.id)).not.toContain(PUSH_ACTIONS.send);
     const data = parseDataPush({ data: full }, NOW)?.data;
     expect(intentOf(PUSH_ACTIONS.review, data)).toEqual({
       kind: "review",
@@ -144,6 +161,25 @@ describe("Android data-only pushes", () => {
       kind: "review",
       route: { name: "mail", id: "e1" },
     });
+  });
+});
+
+describe("decision N1: the lane picks the Android action set", () => {
+  it("a MEETING mail takes the meeting set and keeps its lane; a draft still wins", () => {
+    const { pendingActionId: _p, ...mail } = full;
+    const meeting = parseDataPush({ data: { ...mail, lane: "MEETING" } }, NOW);
+    expect(meeting?.category).toBe(ACTION_CATEGORIES.meeting);
+    expect(meeting?.data.lane).toBe("MEETING");
+    expect(parseDataPush({ data: { ...full, lane: "MEETING" } }, NOW)?.category).toBe(
+      ACTION_CATEGORIES.withDraft,
+    );
+    expect(parseDataPush({ data: { ...mail, lane: "PUSH" } }, NOW)?.category).toBe(
+      ACTION_CATEGORIES.plain,
+    );
+    // An unknown lane is dropped, never trusted.
+    const odd = parseDataPush({ data: { ...mail, lane: "SILENT" } }, NOW);
+    expect(odd?.category).toBe(ACTION_CATEGORIES.plain);
+    expect(odd?.data).not.toHaveProperty("lane");
   });
 });
 

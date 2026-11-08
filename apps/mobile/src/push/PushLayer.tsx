@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { getServices } from "../app/services";
 import { MOCK_API } from "../config";
+import type { MessageKey } from "../i18n";
 import { useI18n } from "../i18n/I18nProvider";
 import {
   appIsActive,
@@ -30,10 +31,41 @@ import { useRouter } from "../router/Router";
 import { Icon } from "../ui/Icon";
 import { notify } from "../ui/StatusNote";
 import { parseDataPush } from "./android";
-import { intentOf, routeFromPush } from "./route";
+import { intentOf, LATER_MS, type PushIntent, routeFromPush } from "./route";
 import "./push.css";
 
 const BANNER_MS = 6000;
+
+type TriageIntent = Extract<PushIntent, { kind: "snooze" | "done" | "notUrgent" }>;
+
+const TRIAGE_TOAST: Record<TriageIntent["kind"], MessageKey> = {
+  snooze: "push.snoozed",
+  done: "push.done",
+  notUrgent: "push.notUrgent",
+};
+
+/** The one request behind Later / Done / Not urgent, by email id when the push has one. */
+function triageRun(intent: TriageIntent): Promise<unknown> {
+  const { ep } = getServices();
+  const { target } = intent;
+  const byEmail = "emailId" in target;
+  switch (intent.kind) {
+    case "snooze": {
+      const until = new Date(Date.now() + LATER_MS);
+      return byEmail
+        ? ep.triage.snoozeByEmail(target.emailId, until)
+        : ep.triage.snooze(target.attentionItemId, until);
+    }
+    case "done":
+      return byEmail ? ep.triage.doneByEmail(target.emailId) : ep.triage.done(target.attentionItemId);
+    case "notUrgent":
+      // QUEUE, through the same lane override as a move in the app (a judge
+      // learning signal). By item first (route.ts laneTargetOf).
+      return byEmail
+        ? ep.triage.moveLane(target.emailId, "QUEUE")
+        : ep.triage.moveLaneByItem(target.attentionItemId, "QUEUE");
+  }
+}
 
 /** FCM message ids already handled (the plugin can deliver its last message again on launch). */
 const delivered = new Set<string>();
@@ -199,8 +231,8 @@ export function PushLayer() {
   useEffect(() => {
     void setupAndroidNotifications({
       later: t("push.action.later"),
+      notUrgent: t("push.action.notUrgent"),
       done: t("push.action.done"),
-      review: t("push.action.review"),
       pushChannel: t("push.channel.push"),
       pushChannelBody: t("push.channel.pushBody"),
       otherChannel: t("push.channel.other"),
@@ -211,23 +243,12 @@ export function PushLayer() {
     // One handler for iOS actions, Android local-notification actions and taps.
     const onAction = (actionId: string, push: IncomingPush) => {
       const intent = intentOf(actionId, push.data);
-      const { ep } = getServices();
       if (intent.kind === "open" || intent.kind === "review") {
         navigate(intent.route);
         return;
       }
-      const { target } = intent;
-      const until = new Date(Date.now() + 3_600_000);
-      const run: Promise<unknown> =
-        "emailId" in target
-          ? intent.kind === "snooze"
-            ? ep.triage.snoozeByEmail(target.emailId, until)
-            : ep.triage.doneByEmail(target.emailId)
-          : intent.kind === "snooze"
-            ? ep.triage.snooze(target.attentionItemId, until)
-            : ep.triage.done(target.attentionItemId);
-      void run
-        .then(() => notify(t(intent.kind === "snooze" ? "push.snoozed" : "push.done")))
+      void triageRun(intent)
+        .then(() => notify(t(TRIAGE_TOAST[intent.kind])))
         .catch(() => navigate(intent.fallback));
     };
     const onForeground = (push: IncomingPush) => {

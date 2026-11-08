@@ -139,6 +139,13 @@ function sendOne(
 /** iOS notification categories the app registers lock-screen actions under. */
 export const APNS_MAIL_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MAIL";
 export const APNS_MAIL_DRAFT_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MAIL_DRAFT";
+export const APNS_MEETING_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MEETING";
+
+/** The action set: a reply draft wins, then a MEETING mail, else the mail set. */
+function apnsCategoryOf(mail: { pendingActionId?: string; lane?: string }): ApnsMailCategory {
+  if (mail.pendingActionId) return APNS_MAIL_DRAFT_CATEGORY;
+  return mail.lane === "MEETING" ? APNS_MEETING_CATEGORY : APNS_MAIL_CATEGORY;
+}
 
 /**
  * The APNs JSON body. The keys a push always carried come first and unchanged
@@ -157,7 +164,7 @@ export function buildApnsBody(payload: DevicePushPayload, category: NotifCategor
     sound: "default",
     ...(mail
       ? {
-          category: mail.pendingActionId ? APNS_MAIL_DRAFT_CATEGORY : APNS_MAIL_CATEGORY,
+          category: apnsCategoryOf(mail),
           "mutable-content": 1,
         }
       : {}),

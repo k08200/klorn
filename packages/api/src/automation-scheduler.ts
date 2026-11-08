@@ -892,7 +892,9 @@ export async function ensureUrgentEmailNotification(
  * ensureUrgentEmailNotification). Native deep link only when the push is about
  * ONE mail; a batch keeps opening the briefing. No pendingActionId here (no
  * draft lookup on the sweep's hot path). `bellNotificationId` names the row,
- * so the web push's OS tag matches the one an open tab uses for it.
+ * so the web push's OS tag matches the one an open tab uses for it. A push
+ * about one mail also names its lane (PUSH) and the user's language, so it
+ * offers the same action buttons as the firewall ring (decision N1).
  */
 export function urgentMailPushPayload(input: {
   notificationId: string;
@@ -900,15 +902,18 @@ export function urgentMailPushPayload(input: {
   body: string;
   leads: ReadonlyArray<{ id: string }>;
   attentionItemId: string | null;
+  language: string | null | undefined;
 }) {
-  const { notificationId, title, body, leads, attentionItemId } = input;
+  const { notificationId, title, body, leads, attentionItemId, language } = input;
   return {
     title,
     body,
     url: "/briefing",
     attentionItemId: attentionItemId ?? undefined,
     bellNotificationId: notificationId,
-    ...(leads.length === 1 ? { emailId: leads[0].id } : {}),
+    ...(leads.length === 1
+      ? { emailId: leads[0].id, lane: "PUSH" as const, ...(language ? { language } : {}) }
+      : {}),
   };
 }
 
@@ -1913,6 +1918,7 @@ async function runUserCycle(
                   body: userBody,
                   leads: newUrgent,
                   attentionItemId,
+                  language: notificationLanguage,
                 }),
                 "email_urgent",
                 // Unawaited (don't block the tick) but guarded: an

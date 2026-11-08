@@ -14,6 +14,8 @@ import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
 import { sendDevicePush } from "../notify/push-device.js";
+import { remindLaterFromPush } from "../notify/push-later.js";
+import { verifyPushLaterToken } from "../notify/push-later-token.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
 
 const listNotificationsQuerySchema = {
@@ -56,8 +58,9 @@ export async function notificationRoutes(app: FastifyInstance) {
   );
 
   // POST /api/notifications/push/tier-override — public, capability-authenticated
-  // one-tap retier from a push notification action button ("Later" → QUEUE,
-  // "Mute" → SILENT). The signed token (NOT a session cookie — the service
+  // one-tap retier. Web pushes carried it as "Later" → QUEUE / "Mute" → SILENT
+  // until decision N1 (2026-11-08) replaced those buttons with Reply / Later
+  // (POST /push/later); it stays for tokens already delivered (7-day TTL). The signed token (NOT a session cookie — the service
   // worker has none) is the authorization; it is scoped to exactly one
   // (userId, itemId). Only the safe, reversible tiers are accepted here, so a
   // capability can never escalate an item to PUSH/AUTO.
@@ -86,6 +89,30 @@ export async function notificationRoutes(app: FastifyInstance) {
     },
   );
 
+  // POST /api/notifications/push/later — public, capability-authenticated
+  // "Later" from a web push action (decision N1): the mail's later-today
+  // reminder. The signed token names exactly one (user, email); the service
+  // checks the mail is that user's own, and a repeat sets no second reminder.
+  app.post(
+    "/push/later",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { token } = (request.body || {}) as { token?: unknown };
+      if (typeof token !== "string" || token.length === 0) {
+        return reply.code(400).send({ error: "Invalid later request" });
+      }
+      const grant = verifyPushLaterToken(token);
+      if (!grant) {
+        return reply.code(401).send({ error: "Invalid or expired token" });
+      }
+      const result = await remindLaterFromPush(grant);
+      if (!result.ok) {
+        return reply.code(404).send({ error: "Email not found" });
+      }
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
   app.addHook("preHandler", async (request, reply) => {
     const path = request.url.split("?")[0] ?? "";
     if (
@@ -95,6 +122,10 @@ export async function notificationRoutes(app: FastifyInstance) {
       // signed capability token in the body, not a session (the SW has none).
       path.startsWith("/push/tier-override") ||
       path.startsWith("/api/notifications/push/tier-override") ||
+      // "Later" from a notification action: the signed push-later token in the
+      // body is the credential, as for the tier override.
+      path === "/push/later" ||
+      path === "/api/notifications/push/later" ||
       // The SW's pushsubscriptionchange handler has no auth token; the
       // rotate route authenticates by matching the OLD endpoint (a
       // high-entropy capability URL) against an existing row instead.
