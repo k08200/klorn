@@ -253,6 +253,8 @@ async function checkUpcomingMeetings() {
                   url: meeting.meetingLink || "/briefing",
                 },
                 "meeting",
+                // A meeting starting: an interrupt caller (push-bucket.ts).
+                { bucket: "interrupt" },
               );
             } catch (err) {
               console.warn("[BACKGROUND] meeting push failed", err);

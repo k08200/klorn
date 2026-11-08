@@ -240,6 +240,10 @@ Do NOT notify the user. Do NOT ask for immediate attention. Do NOT call notify_u
   );
 }
 
+/**
+ * The notify_user category → NotifCategory. It drives preferences, quiet hours
+ * and the label only; the push rings ambient whatever this returns.
+ */
 function categoryForAgentNotification(category: unknown): NotifCategory {
   switch (category) {
     case "email":
@@ -802,6 +806,8 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                     ...proposalMail,
                   },
                   "agent_proposal",
+                  // Agent-originated: always ambient (push-bucket.ts).
+                  { bucket: "ambient" },
                 ).catch((err) => console.warn("[AGENT] proposal push failed", err));
               }
 
@@ -932,6 +938,10 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   url: notifyLink,
                 },
                 categoryForAgentNotification(args.category),
+                // The model chose to ring: ambient whatever the category, so
+                // it cannot use up the interrupt room the firewall's PUSH
+                // mail, meeting alerts and reminders need (push-bucket.ts).
+                { bucket: "ambient" },
               ).catch((err) => console.warn("[AGENT] notify push failed", err));
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
@@ -1104,6 +1114,8 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   ...riskMail,
                 },
                 "agent_proposal",
+                // Agent-originated: always ambient (push-bucket.ts).
+                { bucket: "ambient" },
               ).catch((err) => console.warn("[AGENT] risk push failed", err));
 
               // Notify sidebar to refresh

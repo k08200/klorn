@@ -20,7 +20,7 @@ import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
 import { evaluateNotificationGate, type NotifCategory } from "./notification-prefs.js";
 import { sendApnsPush } from "./push-apns.js";
-import { pushBucketFor } from "./push-bucket.js";
+import { type PushBucket, resolvePushBucket } from "./push-bucket.js";
 import {
   createPushDeliveryAttempt,
   createSkippedPushDelivery,
@@ -104,6 +104,16 @@ interface PushSubscriptionRow {
   failureCount: number;
 }
 
+export interface PushSendOptions {
+  /**
+   * The rate bucket this push rings against. Omitted means ambient. Only the
+   * callers pinned in __tests__/push-interrupt-callers-guard.test.ts may ask
+   * for "interrupt"; agent-originated pushes pass "ambient" explicitly. Pass it
+   * as a literal object so that guard can read it (push-bucket.ts).
+   */
+  bucket?: PushBucket;
+}
+
 export interface PushSendSummary {
   status: "sent" | "skipped";
   reason?: string;
@@ -161,6 +171,7 @@ export async function sendPushNotification(
     pendingActionId?: string;
   },
   category: NotifCategory = "system",
+  options: PushSendOptions = {},
 ): Promise<PushSendSummary> {
   const { emailId, pendingActionId, ...channelPayload } = payload;
   const nativePayload = {
@@ -216,13 +227,15 @@ export async function sendPushNotification(
     }
   }
 
-  // Per-user rate limit (Postgres-backed, survives deploys) in two buckets:
-  // urgent mail and meeting alerts ring against an interrupt bucket that
-  // briefings, proposals and reminders can never use up (push-bucket.ts).
+  // Per-user rate limit (Postgres-backed, survives deploys) in two buckets.
+  // The caller picks the bucket, not the category: the firewall's PUSH and
+  // MEETING mail, the urgent sweep, meeting alerts and reminders ask for an
+  // interrupt bucket that briefings, proposals and every agent-originated push
+  // ring ambient beside and can never use up (push-bucket.ts).
   // Blocks the phone ring only; the DB notification is already persisted
   // upstream so the bell still surfaces this event. The skipReason names the
   // bucket that refused.
-  const bucket = pushBucketFor(category);
+  const bucket = resolvePushBucket(options.bucket);
   const rate = await recordPushAttempt(userId, bucket);
   if (!rate.allowed) {
     console.log(`[PUSH] Rate-limited (${bucket}) for ${userId} (${category}): ${rate.reason}`);

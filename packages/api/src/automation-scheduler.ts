@@ -1893,6 +1893,8 @@ async function runUserCycle(
                   ...(newUrgent.length === 1 ? { emailId: newUrgent[0].id } : {}),
                 },
                 "email_urgent",
+                // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
+                { bucket: "interrupt" },
                 // Unawaited (don't block the tick) but guarded: an
                 // unhandled rejection from the push internals would
                 // otherwise crash the single dyno. Matches the candidate

@@ -36,12 +36,13 @@ function floatEnv(name: string, fallback: number): number {
 // independent buckets (notify/push-bucket.ts) that share the two windows.
 export const PUSH_WINDOW_10MIN_MS = intEnv("PUSH_WINDOW_10MIN_MS", 10 * 60 * 1000);
 export const PUSH_WINDOW_60MIN_MS = intEnv("PUSH_WINDOW_60MIN_MS", 60 * 60 * 1000);
-// Ambient (briefings, proposals, reminders, system): the caps tuned 2026-04-21
-// after the notification-flood incident. The env names predate the split and
-// are kept so an existing override still applies.
+// Ambient (briefings, proposals, every agent-originated push, system): the caps
+// tuned 2026-04-21 after the notification-flood incident. The env names predate
+// the split and are kept so an existing override still applies.
 export const PUSH_AMBIENT_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
 export const PUSH_AMBIENT_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
-// Interrupt (urgent mail, meeting alerts): its own caps, so ambient traffic can
+// Interrupt (firewall PUSH/MEETING mail, urgent sweep, meeting alerts, user-set
+// reminders; the caller asks for it): its own caps, so ambient traffic can
 // never use them up. Room for a real burst (a meeting alert plus a few urgent
 // mails in one sweep), but still a cap: a classifier flood (2026-10-19, 28 of
 // 30 LinkedIn invites tiered MEETING) must not ring the phone 30 times.

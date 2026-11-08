@@ -76,13 +76,21 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     createdAt: notification.createdAt.toISOString(),
   });
 
-  // Send browser push notification
-  sendPushNotification(reminder.userId, {
-    title: reminder.title,
-    body: msg,
-    url: "/chat",
-    notificationId: notification.id,
-  }).catch((err) => {
+  // Send browser push notification. A reminder is one the user set for a time,
+  // so it rings against the interrupt bucket (push-bucket.ts): briefings and
+  // agent proposals in the ambient bucket must not crowd it out. The category
+  // stays "system" (preferences, quiet hours, label).
+  sendPushNotification(
+    reminder.userId,
+    {
+      title: reminder.title,
+      body: msg,
+      url: "/chat",
+      notificationId: notification.id,
+    },
+    "system",
+    { bucket: "interrupt" },
+  ).catch((err) => {
     console.error(`[REMINDER] Push delivery failed for ${reminder.id}:`, err);
     captureError(err, {
       tags: { scope: "reminder.push", userId: reminder.userId },
