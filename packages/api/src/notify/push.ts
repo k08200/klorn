@@ -173,11 +173,23 @@ export async function sendPushNotification(
     // to Telegram, and never serialized into the web payload as such.
     lane?: MailPushLane;
     language?: string;
+    // A reminder the user set themselves (the mail "Later",
+    // pim/reminder-scheduler.ts): its title quotes a mail subject the user
+    // chose to be reminded of, so the inbound-mail noise heuristic must not
+    // veto it. Every other gate still applies. Never sent to a channel.
+    userSet?: boolean;
   },
   category: NotifCategory = "system",
 ): Promise<PushSendSummary> {
-  const { emailId, pendingActionId, bellNotificationId, lane, language, ...channelPayload } =
-    payload;
+  const {
+    emailId,
+    pendingActionId,
+    bellNotificationId,
+    lane,
+    language,
+    userSet,
+    ...channelPayload
+  } = payload;
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),
@@ -204,7 +216,7 @@ export async function sendPushNotification(
     // category is a routing/preference dimension; we co-opt it as the
     // adjudicated-surface hint so content the system already decided to
     // interrupt on bypasses the inbound-mail noise heuristic.
-    notificationType: authoredSurface(category),
+    notificationType: userSet ? "reminder" : authoredSurface(category),
   });
   if (suppression) {
     // Log the category, never payload.title — the title is "Klorn — {sender}"
