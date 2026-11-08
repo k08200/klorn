@@ -5,7 +5,7 @@
  * it (packages/api/src/__tests__/web-today-model.test.ts).
  */
 
-import type { InboxProvider, LiveTier } from "@klorn/contract";
+import type { InboxProvider, InterruptBudgetStatus, LiveTier } from "@klorn/contract";
 
 /** Rows shown in an expanded lane (PUSH, MEETING) before "N more in Mail". */
 export const EXPANDED_LANE_ROWS = 8;
@@ -97,6 +97,27 @@ export function todayHeaderSummary(counts: TodayHeaderCounts): TodayHeaderSummar
 /** The waiting phrase's key, singular for exactly one (the `.one` / `.many` pattern). */
 export function todayWaitingKey(count: number): string {
   return count === 1 ? "today.strip.waiting.one" : "today.strip.waiting.many";
+}
+
+/**
+ * The cover screen's "N of M interruptions today" (Fold cover, < 360px). Only
+ * from the budget the Today read already carries (attention engine v3, behind
+ * its flag): no budget, no limit, or a value that makes no sense draws
+ * nothing — the meter never guesses. The bar fills to `ratio`, capped at 1;
+ * the text keeps the server's own count.
+ */
+export interface CoverMeter {
+  used: number;
+  limit: number;
+  ratio: number;
+}
+
+export function coverMeter(budget: InterruptBudgetStatus | null | undefined): CoverMeter | null {
+  if (!budget) return null;
+  const { limit, used } = budget;
+  if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) return null;
+  if (!Number.isFinite(used) || used < 0) return null;
+  return { used, limit, ratio: Math.min(used / limit, 1) };
 }
 
 // ── Calendar ────────────────────────────────────────────────────────────────

@@ -226,6 +226,8 @@ const ko: Record<string, string> = {
   "today.lane.push.hint": "지금 확인 필요",
   "today.lane.push.empty": "지금 확인할 메일이 없습니다.",
   "today.lane.push.older": "이전 {lane} 메일 보기",
+  "today.cover.openInbox": "전체 받은편지함 열기",
+  "today.cover.meter": "오늘 알림 {used}/{limit}회",
   "today.lane.meeting.hint": "일정 조율",
   "today.lane.meeting.empty": "일정 조율 메일이 없습니다.",
   "today.lane.queue.hint": "오늘 읽을 만한 메일",

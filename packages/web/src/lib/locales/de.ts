@@ -241,6 +241,8 @@ const de: Record<string, string> = {
   "today.lane.push.hint": "Braucht dich jetzt",
   "today.lane.push.empty": "Gerade braucht dich nichts.",
   "today.lane.push.older": "Ältere {lane}-Mails ansehen",
+  "today.cover.openInbox": "Gesamten Posteingang öffnen",
+  "today.cover.meter": "{used} von {limit} Unterbrechungen heute",
   "today.lane.meeting.hint": "Terminabstimmung",
   "today.lane.meeting.empty": "Keine Mails zur Terminabstimmung.",
   "today.lane.queue.hint": "Heute lesenswert",
