@@ -403,6 +403,14 @@ const fr: Record<string, string> = {
   "pwa.install.body": "Ouvrez Klorn depuis votre écran d'accueil.",
   "pwa.install.action": "Installer",
   "pwa.install.dismiss": "Fermer l'invitation à installer",
+  "desktop.autostart.prompt.title": "Lancer Klorn à l'ouverture de session ?",
+  "desktop.autostart.prompt.body":
+    "Klorn peut se lancer à l'ouverture de votre session pour que vous continuiez à recevoir les notifications de courrier urgent.",
+  "desktop.autostart.prompt.accept": "Lancer à l'ouverture de session",
+  "desktop.autostart.prompt.decline": "Non merci",
+  "desktop.autostart.prompt.enabling": "Activation...",
+  "desktop.autostart.failed":
+    "Impossible d'activer le lancement à l'ouverture de session. Vous pouvez réessayer dans les Réglages.",
   "pwa.ios.region": "Installer Klorn sur iPhone",
   "pwa.ios.title": "Recevoir les notifications Klorn sur iPhone",
   "pwa.ios.body": "L'iPhone n'envoie des notifications qu'aux apps de l'écran d'accueil.",
@@ -543,6 +551,9 @@ const fr: Record<string, string> = {
   "settings.pushNotifications.off": "Recevez rappels, briefs et alertes de courrier important.",
   "settings.pushNotifications.blockedChip": "Bloquées",
   "settings.pushNotifications.unsupportedChip": "Non prises en charge",
+  "settings.launchAtLogin.title": "Lancer à l'ouverture de session",
+  "settings.launchAtLogin.desc":
+    "Klorn s'ouvre dans la zone de notification à l'ouverture de session Windows, pour que les notifications de courrier urgent continuent d'arriver.",
   "settings.turnOff": "Désactiver",
   "settings.turnOn": "Activer",
   "settings.toast.pushUnsupported": "Ce navigateur ne prend pas en charge les notifications.",

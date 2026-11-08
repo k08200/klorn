@@ -9,6 +9,7 @@ import { useT } from "../../../lib/i18n";
 import { track } from "../../../lib/track";
 import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import { InterruptBudgetRow } from "./interrupt-budget-row";
+import { LaunchAtLoginRow } from "./launch-at-login-row";
 import { NotificationLanguageRow } from "./notification-language-row";
 import { PANEL, SECTION_TITLE } from "./shared";
 import { useAutomationConfig } from "./use-automation-config";
@@ -214,6 +215,7 @@ export function NotificationsSection() {
             <Button onClick={enablePush}>{t("settings.turnOn")}</Button>
           )}
         </div>
+        <LaunchAtLoginRow />
 
         {/* Granular Notification Preferences */}
         <div className="p-5 space-y-3">

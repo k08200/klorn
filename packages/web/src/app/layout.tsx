@@ -7,6 +7,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 // /_next/static/media, so the strict CSP (font-src 'self') is unchanged.
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import AppShell from "../components/app-shell";
+import AutostartPrompt from "../components/autostart-prompt";
 import CommandPalette from "../components/command-palette";
 import GoogleReconnectBanner from "../components/google-reconnect-banner";
 import KeyboardShortcuts from "../components/keyboard-shortcuts";
@@ -101,6 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <GoogleReconnectBanner />
           <PushOnboardingBanner />
           <PwaPrompts />
+          <AutostartPrompt />
         </Providers>
       </body>
     </html>

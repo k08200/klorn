@@ -391,6 +391,13 @@ const en: Record<string, string> = {
   "pwa.install.body": "Open Klorn from your home screen.",
   "pwa.install.action": "Install",
   "pwa.install.dismiss": "Dismiss install prompt",
+  "desktop.autostart.prompt.title": "Start Klorn when you sign in?",
+  "desktop.autostart.prompt.body":
+    "Klorn can start when you sign in so you keep getting urgent-mail notifications.",
+  "desktop.autostart.prompt.accept": "Start at sign-in",
+  "desktop.autostart.prompt.decline": "No thanks",
+  "desktop.autostart.prompt.enabling": "Turning on...",
+  "desktop.autostart.failed": "Couldn't turn on start at sign-in. You can try again in Settings.",
   "pwa.ios.region": "Install Klorn on iPhone",
   "pwa.ios.title": "Get Klorn notifications on iPhone",
   "pwa.ios.body": "iPhone delivers notifications only to apps on the Home Screen.",
@@ -527,6 +534,9 @@ const en: Record<string, string> = {
   "settings.pushNotifications.off": "Receive reminders, briefings, and important mail alerts.",
   "settings.pushNotifications.blockedChip": "Blocked",
   "settings.pushNotifications.unsupportedChip": "Unsupported",
+  "settings.launchAtLogin.title": "Start at sign-in",
+  "settings.launchAtLogin.desc":
+    "Klorn opens in the tray when you sign in to Windows, so urgent-mail notifications keep arriving.",
   "settings.turnOff": "Turn off",
   "settings.turnOn": "Turn on",
   "settings.toast.pushUnsupported": "This browser does not support notifications.",
