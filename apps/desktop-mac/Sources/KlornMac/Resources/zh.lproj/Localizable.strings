@@ -124,11 +124,12 @@
 "prefs.section.about" = "关于";
 
 "prefs.banners" = "在这台 Mac 上显示 macOS 横幅通知";
-"prefs.banners.detail" = "每封新的 PUSH 邮件都会显示一条横幅，仅包含发件人和主题。这是本机的总开关：关闭后无论上方分类如何，这里的横幅都会静音；主窗口中的 PUSH 数量仍会更新。";
+"prefs.banners.detail" = "每封新的 PUSH 或 MEETING 邮件都会显示一条横幅，仅包含发件人和主题。这是本机的总开关：关闭后无论上方分类如何，这里的横幅都会静音；主窗口中的 PUSH 数量仍会更新。";
 "prefs.banners.denied" = "macOS 正在阻止 Klorn 的通知。请在“系统设置 ▸ 通知”中允许。";
 "prefs.banners.openSystemSettings" = "打开系统设置";
 "prefs.section.support" = "应用与支持";
 "push.announce" = "新的 PUSH 邮件：%d 封";
+"push.announce.meeting" = "新的 MEETING 邮件：%d 封";
 "prefs.launchAtLogin" = "登录时启动 Klorn";
 "prefs.launchAtLogin.unavailable.label" = "登录时启动";
 "prefs.launchAtLogin.unavailable.value" = "仅打包版可用";
@@ -188,7 +189,7 @@
 "auto.preset.detail" = "只要紧要的：需要回复的邮件，以及日历上的事。其余留在栏里，不弹横幅。";
 
 "auto.notify.emailUrgent" = "紧急邮件";
-"auto.notify.emailUrgent.detail" = "Klorn 判定为 PUSH 的邮件 — 有人在等你。";
+"auto.notify.emailUrgent.detail" = "Klorn 判定为 PUSH 或 MEETING 的邮件 — 有人在等你。";
 "auto.notify.meeting" = "会议";
 "auto.notify.meeting.detail" = "即将开始的日程。";
 "auto.notify.taskDue" = "到期事项";
