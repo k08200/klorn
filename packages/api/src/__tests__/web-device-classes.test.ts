@@ -148,3 +148,101 @@ describe("touch targets on the tablet widths", () => {
     expect(read("components/notification-bell.tsx")).toContain("pointer-coarse:size-11");
   });
 });
+
+describe("Fold cover screen (< 360px): Today is the Push-only 'Needs you now' view", () => {
+  const TODAY = read("app/today/today-view.tsx");
+  const COVER = read("app/today/cover-view.tsx");
+
+  it("switches below 360px only, so 360px and up keep the phone home", () => {
+    expect(TODAY).toContain('COVER_QUERY = "(max-width: 359.98px)"');
+    expect(TODAY).toMatch(/useMediaQuery\(COVER_QUERY\)/);
+    expect(TODAY).toMatch(/<CoverToday\b/);
+  });
+
+  it("lists PUSH through Today's locked 72h window — the same lane read as the PUSH block", () => {
+    expect(COVER).toMatch(/useLaneMail\("PUSH", true\)/);
+    expect(COVER).not.toMatch(/useLaneMail\("(MEETING|QUEUE|INFO|SILENT)"/);
+  });
+
+  it("gives each card Reply and Later as 44px targets wired to the existing actions", () => {
+    expect(COVER).toContain('t("keys.reply")');
+    expect(COVER).toContain('t("mailV2.reader.later")');
+    expect(COVER.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(COVER).toContain("focus=reply");
+    expect(COVER).toMatch(/postReminder\(/);
+  });
+
+  it("draws the interruption meter only from the server's budget, else nothing", () => {
+    expect(COVER).toMatch(/coverMeter\(mail\.interruptBudget\)/);
+    expect(COVER).toMatch(/meter && <InterruptMeter/);
+    expect(COVER).not.toMatch(/of 5|\b5\b interruptions/);
+  });
+
+  it("ends with a full-width link to the whole inbox, never 'unfold'", () => {
+    expect(COVER).toContain('t("today.cover.openInbox")');
+    expect(COVER).not.toMatch(/unfold/i);
+  });
+
+  it("the reader honours ?focus=reply from any entry, not only the keyboard path", () => {
+    const READER_PAGE = read("app/email/[id]/page.tsx");
+    expect(READER_PAGE).toMatch(
+      /const focusReplyOnOpen = searchParams\?\.get\("focus"\) === "reply";/,
+    );
+  });
+});
+
+describe("phone landscape (landscape, < 500px tall, from 600px wide): compact rail and mail header", () => {
+  const LANDSCAPE = "(orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem)";
+  const HEADER = read("app/email/_v2/mail-header.tsx");
+
+  // The variant's own copy of the query sits in @custom-variant; the plain
+  // CSS rules are the occurrences after it.
+  const variant = block(CSS, "@custom-variant phone-landscape {");
+  const afterVariant = CSS.indexOf(variant) + variant.length;
+  const ruleAt = (from: number) => CSS.indexOf(`@media ${LANDSCAPE} {`, from);
+
+  it("names the class once, as a Tailwind variant and matching CSS blocks", () => {
+    expect(variant).toMatch(
+      new RegExp(`@media ${LANDSCAPE.replace(/[().]/g, "\\$&")} {\\s*@slot;`),
+    );
+    const railAt = ruleAt(afterVariant);
+    const rail = block(CSS.slice(railAt), `@media ${LANDSCAPE} {`);
+    expect(rail).toMatch(/--shell-nav-w:\s*calc\(56px \+ env\(safe-area-inset-left\)\)/);
+    const list = block(CSS.slice(ruleAt(railAt + 1)), `@media ${LANDSCAPE} {`);
+    expect(list).toMatch(/\.mail-split-list\s*{\s*width:\s*min\(360px, 50%\);/);
+  });
+
+  it("orders the rules so the sidebar, the base list width and a hinge still win where they apply", () => {
+    // Same specificity, so source order decides: the rail width yields to the
+    // sidebar step; the list width overrides the base clamp and yields to a hinge.
+    const first = ruleAt(afterVariant);
+    const second = ruleAt(first + 1);
+    expect(first).toBeGreaterThan(0);
+    expect(first).toBeLessThan(CSS.indexOf("@media (min-width: 64rem)"));
+    expect(second).toBeGreaterThan(CSS.indexOf(".mail-split-list {"));
+    expect(second).toBeLessThan(CSS.indexOf("@media (horizontal-viewport-segments: 2)"));
+  });
+
+  it("narrows the rail to 56px with 44px icon targets and visually hidden labels", () => {
+    expect(RAIL).toContain("phone-landscape:w-[calc(56px+env(safe-area-inset-left))]");
+    expect(RAIL).toContain("phone-landscape:min-h-11");
+    expect(RAIL).toContain("phone-landscape:sr-only");
+    expect(RAIL).toContain("phone-landscape:overflow-y-auto");
+  });
+
+  it("folds the mail header into one 52px row: title, lane select with counts, search button", () => {
+    expect(HEADER).toContain("phone-landscape:h-13");
+    expect(HEADER).toMatch(/<select[\s\S]*?hidden[^"]*phone-landscape:block/);
+    expect(HEADER).toMatch(
+      /aria-label=\{t\("mailV2\.lanes\.label"\)\}[\s\S]*?<select|<select[\s\S]*?aria-label=\{t\("mailV2\.lanes\.label"\)\}/,
+    );
+    expect(HEADER).toMatch(/aria-expanded=\{searchOpen\}/);
+    // The segmented row and the tally give way to the select.
+    expect(HEADER.match(/phone-landscape:hidden/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the account, filter and sync controls reachable from More in landscape", () => {
+    expect(HEADER).toContain("useMediaQuery(PHONE_LANDSCAPE_QUERY)");
+    expect(HEADER).toContain(`PHONE_LANDSCAPE_QUERY =\n  "${LANDSCAPE}"`);
+  });
+});

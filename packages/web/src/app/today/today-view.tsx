@@ -21,13 +21,21 @@ import { useAuth } from "../../lib/auth";
 import { filesEnabled } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { useConnectedAccounts } from "../../lib/use-connected-accounts";
+import { useMediaQuery } from "../../lib/use-media-query";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { AssistantColumn } from "./assistant-column";
 import { CalendarColumn } from "./calendar-column";
+import { CoverToday } from "./cover-view";
 import { RecentFilesBlock } from "./files-block";
 import { MailColumn, type TimeContext } from "./mail-column";
 import { ACCOUNTS_HREF, TodayHeader } from "./today-header";
 import { useRefreshOnNewMail } from "./use-today-data";
+
+/**
+ * A cover screen (a Fold's outer display, 344dp): below 360px home is the
+ * Push-only "Needs you now" view (cover-view.tsx); 360px and up keep this one.
+ */
+const COVER_QUERY = "(max-width: 359.98px)";
 
 /** How often the clock moves: the "now" marker and the row times follow it. */
 const CLOCK_TICK_MS = 60_000;
@@ -53,6 +61,9 @@ export function TodayView() {
   const noSource = hasMailSource === false;
   const accounts = useConnectedAccounts(!noSource);
   useRefreshOnNewMail();
+  const cover = useMediaQuery(COVER_QUERY);
+
+  if (cover && !noSource) return <CoverToday time={time} />;
 
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>

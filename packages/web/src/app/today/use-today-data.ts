@@ -77,6 +77,8 @@ export function useLaneMail(lane: LiveTier, enabled: boolean) {
     emails: query.data?.emails ?? [],
     total: query.data?.total ?? 0,
     isDemo: query.data?.source === "demo",
+    /** The v3 interrupt budget, on PUSH's windowed read only and only under its flag. */
+    interruptBudget: query.data?.interruptBudget,
     loading: enabled && query.isLoading,
     failed: query.isError && !query.data,
     retry: () => void query.refetch(),

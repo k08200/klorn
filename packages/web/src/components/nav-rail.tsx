@@ -17,7 +17,10 @@ import NotificationBell from "./notification-bell";
  * tab bar, stacked down the left edge so the content keeps the full height;
  * the account button opens the tab bar's account sheet beside the rail.
  * 72px wide plus the left safe-area inset (a phone on its side puts the
- * notch here); every target is at least 44px.
+ * notch here); every target is at least 44px. A phone on its side (under
+ * 500px tall, the phone-landscape variant in globals.css) gets a 56px rail:
+ * 44px icon targets, the labels kept for screen readers only, and the column
+ * scrolls if the destinations ever outgrow the height.
  */
 export default function NavRail() {
   const pathname = usePathname();
@@ -33,8 +36,8 @@ export default function NavRail() {
 
   return (
     <>
-      <aside className="hidden h-dvh w-[calc(72px+env(safe-area-inset-left))] shrink-0 flex-col items-center border-r border-line/70 bg-surface-panel/55 pb-safe pl-safe pt-safe backdrop-blur-xl rail:flex lg:hidden">
-        <div className="flex flex-col items-center gap-1 py-3">
+      <aside className="hidden h-dvh w-[calc(72px+env(safe-area-inset-left))] shrink-0 flex-col items-center phone-landscape:w-[calc(56px+env(safe-area-inset-left))] phone-landscape:overflow-y-auto border-r border-line/70 bg-surface-panel/55 pb-safe pl-safe pt-safe backdrop-blur-xl rail:flex lg:hidden">
+        <div className="flex flex-col items-center gap-1 py-3 phone-landscape:gap-0 phone-landscape:py-1">
           <Link
             href={unified ? TODAY_HOME : "/inbox"}
             aria-label={unified ? t("nav.v2.openToday") : t("nav.v2.openApprovals")}
@@ -45,8 +48,8 @@ export default function NavRail() {
           {user && <NotificationBell userId={user.id} />}
         </div>
 
-        <nav aria-label={t("bottomTabs.nav")} className="w-full px-1.5">
-          <ul className="flex flex-col gap-1">
+        <nav aria-label={t("bottomTabs.nav")} className="w-full px-1.5 phone-landscape:px-1">
+          <ul className="flex flex-col gap-1 phone-landscape:gap-0.5">
             {tabs.map((tab) => {
               const active = isTabActive(pathname, tab);
               return (
@@ -54,19 +57,21 @@ export default function NavRail() {
                   <Link
                     href={tab.href}
                     aria-current={active ? "page" : undefined}
-                    className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-control py-1.5 text-center text-role-caption leading-tight transition ${
+                    className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-control py-1.5 text-center text-role-caption leading-tight transition phone-landscape:min-h-11 phone-landscape:py-0 ${
                       active ? "text-accent-deep" : "text-ink-mid hover:text-ink"
                     }`}
                   >
                     <span
                       aria-hidden="true"
-                      className={`flex h-7 w-12 items-center justify-center rounded-chip transition ${
+                      className={`flex h-7 w-12 items-center justify-center rounded-chip transition phone-landscape:h-9 phone-landscape:w-10 ${
                         active ? "bg-state-info-bg" : ""
                       }`}
                     >
                       <NavIcon type={tab.icon} size={20} strokeWidth={active ? 2 : 1.6} />
                     </span>
-                    <span className={`max-w-full break-words ${active ? "font-medium" : ""}`}>
+                    <span
+                      className={`max-w-full break-words phone-landscape:sr-only ${active ? "font-medium" : ""}`}
+                    >
                       {t(tab.labelKey)}
                     </span>
                   </Link>
@@ -78,13 +83,13 @@ export default function NavRail() {
 
         <div aria-hidden="true" className="flex-1" />
 
-        <div className="w-full px-1.5 pb-3">
+        <div className="w-full px-1.5 pb-3 phone-landscape:px-1 phone-landscape:pb-1">
           <button
             type="button"
             onClick={() => setAccountOpen(true)}
             aria-haspopup="dialog"
             aria-expanded={accountOpen}
-            className={`focus-ring flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-control py-1.5 text-role-caption leading-tight transition ${
+            className={`focus-ring flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-control py-1.5 text-role-caption leading-tight transition phone-landscape:min-h-11 phone-landscape:py-0 ${
               accountActive ? "text-accent-deep" : "text-ink-mid hover:text-ink"
             }`}
           >
@@ -96,7 +101,9 @@ export default function NavRail() {
             >
               {initials || "?"}
             </span>
-            <span className={accountActive ? "font-medium" : ""}>{t("tabs.account")}</span>
+            <span className={`phone-landscape:sr-only ${accountActive ? "font-medium" : ""}`}>
+              {t("tabs.account")}
+            </span>
           </button>
         </div>
       </aside>
