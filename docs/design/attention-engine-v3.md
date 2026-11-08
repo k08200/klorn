@@ -252,6 +252,21 @@ Measured on P1's runs: 4 models × 3 runs per set, scored against the labels rec
   - SILENT precision, the over-suppression risk the LOCKED rule exists for, rises.
 - Not changed: an ask due in more than 24h (eval-036 "due Friday") is QUEUE under every variant.
 
+Against v2 on the same runs, recomputed on 2026-11-07 with `v3-bench-report.ts --policy=p3`. On the real set the v2 rows are the context-matched control (`v2 (front ctx)` in `packages/api/eval/README.md`). Haiku 5.5 is the production judge model.
+
+| | gate PUSH recall | gate SILENT precision | gate overall | real PUSH precision | real SILENT precision | real overall |
+|---|---|---|---|---|---|---|
+| v2, 4 models | 87.8% (137/156) | 100% (141/141) | 89.4% | 92.3% (36/39) | 92.8% (219/236) | 73.9% |
+| v3.1, 4 models | 84.6% (132/156) | 99.1% (108/109) | 83.3% | 100% (36/36) | 93.0% (119/128) | 58.0% |
+| v2, Haiku 5.5 | 92.3% (36/39) | 100% (33/33) | 91.1% | 100% (9/9) | 100% (39/39) | 66.0% |
+| v3.1, Haiku 5.5 | 84.6% (33/39) | 100% (27/27) | 83.9% | 100% (9/9) | 82.4% (28/34) | 61.0% |
+
+- Gate PUSH precision is 100% and real PUSH recall 75.0% in every row.
+- v3.1 does not yet meet the replay part of the P3 bar (§5):
+  - Gate PUSH recall is below v2. Half of v3.1's 24 misses are eval-046, which only risk trust can PUSH and the cold-start eval cannot show. If it were PUSHed, v3.1 would reach 92.3% on both rows: above v2 pooled, level with v2 on Haiku.
+  - Real SILENT precision on Haiku is 82.4% against 100%: 6 SILENT calls in 3 runs that the founder labelled otherwise. They are not traced to items here.
+  - PUSH precision is at or above v2 on both sets.
+
 Floors:
 - `ambiguous` never lands in SILENT or INFO. It goes to QUEUE, like v2's low-confidence rule.
 - Mail that Gmail marked as spam never lands in PUSH or MEETING. It goes to QUEUE, like v2's spam floor. `spam` and `automatedSender` are mailbox signals passed next to the facts; they are not facts.
@@ -467,6 +482,17 @@ It reports:
   - keyword-fallback rate;
   - escalation rate;
   - cost per day.
+
+  These cannot gate a phase yet. Production on 2026-11-07, aggregates only:
+  - 0 of 5,908 email decisions in 90 days carry an outcome. `stampDecisionOutcome` still has no callers (P0).
+  - In 30 days, 10 of 1,700 decisions (those joined to their mail) were followed by the user's reply in the thread, none of them shown as PUSH or SILENT.
+  - `EmailMessage.isRead` has no time, and in the same 30 days 88% of mail shown as SILENT reads as read, so "opened later" cannot be derived from it.
+- **P3 bar (changed 2026-11-07).** The outcome metrics move to the Review phase. P3 is done when:
+  1. **Replay:** on the eval sets, v3 ≥ v2 on PUSH recall, PUSH precision and SILENT precision, pooled over models and for the production model on its own. Overall accuracy and QUEUE/INFO swaps are reported, not gated, because the founder's labels disagree on newsletters (§3(5)).
+  2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The report lists up to 20 disagreements per run; narrow `--days` or `--user` to see the rest. The counts go in the flip PR.
+  3. The adversarial phishing measurement that §3(5) requires before the flip is done.
+
+  Status on 2026-11-07: replay not met (§3(5), "Against v2"); shadow not started (0 AttentionFacts rows).
 - **Model upgrade procedure:** run the fact eval on the candidate, compare, flip the provider order. No threshold work.
 
 ## 6. Phases
@@ -475,13 +501,13 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 
 | Phase | Scope | Done when | Flag |
 |---|---|---|---|
-| P0 | Outcome stamping (in progress) and exposing the relationship features from existing tables | per-lane open/reply data accumulates; relationship snapshot available to the judge | none (measurement) |
+| P0 | Outcome stamping (not wired yet: `stampDecisionOutcome` has no callers on 2026-11-07) and exposing the relationship features from existing tables | per-lane open/reply data accumulates; relationship snapshot available to the judge | none (measurement) |
 | P1 | Re-benchmark **current** models (Haiku/Sonnet/Opus 5.5, Fable 5.1, current Gemini/GPT available to us) × {v2 score prompt, v3 fact prompt} on the gate set + real set | numbers answer whether v2 is calibration-coupled and whether v3 narrows the spread between models | none (eval only, synthetic/consented data) |
 | P2 | Fact extractor (schema v1) + evidence verification + persistence, run in **shadow** | fact eval ≥ the agreed bar; shadow running on prod with a disagreement report | `JUDGE_V3_SHADOW` |
-| P3 | Policy v3 (lanes from facts) + QUEUE ranking + PUSH interrupt budget | replay and shadow show v3 ≥ v2 on outcome metrics | `JUDGE_V3_POLICY` (founder flip) |
+| P3 | Policy v3 (lanes from facts) + QUEUE ranking + PUSH interrupt budget | replay shows v3 ≥ v2 on PUSH and SILENT, and the founder has reviewed the shadow disagreements (§5, "P3 bar") | `JUDGE_V3_POLICY` (founder flip) |
 | P4 | Escalation to frontier for hard/high-stakes items + batch backfills | escalation measurably raises accuracy on the fact eval; cost per day reported (no cap for now) | `JUDGE_V3_ESCALATION` |
 | P5 | Per-user importance model + embedding first pass | enough outcomes per user; first pass agrees with LLM facts on bulk/transactional | `JUDGE_V3_IMPORTANCE` |
-| Review | Lane set review with 2–4 weeks of P3 data (e.g. MEETING/INFO as chips?) | founder decision (lanes are LOCKED) | — |
+| Review | Lane set review with 2–4 weeks of P3 data (e.g. MEETING/INFO as chips?), and the prod outcome metrics (§5) once P0 records outcomes | founder decision (lanes are LOCKED) | — |
 
 ## 7. Kill switches and rollback
 
