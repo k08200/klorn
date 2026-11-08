@@ -13,14 +13,14 @@
 import crypto from "node:crypto";
 import webPush from "web-push";
 import { recordEvent } from "../analytics.js";
-import { mintTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { Semaphore } from "../semaphore.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
+import { type MailPushLane, mailPushReplyPath, mailPushWebActions } from "./mail-push-content.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
 import { evaluateNotificationGate, type NotifCategory } from "./notification-prefs.js";
 import { sendApnsPush } from "./push-apns.js";
-import { pushBucketFor } from "./push-bucket.js";
+import { type PushBucket, resolvePushBucket } from "./push-bucket.js";
 import {
   createPushDeliveryAttempt,
   createSkippedPushDelivery,
@@ -28,6 +28,7 @@ import {
   markPushFailed,
 } from "./push-delivery.js";
 import { sendDevicePush } from "./push-device.js";
+import { mintPushLaterToken } from "./push-later-token.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 import { ssrfSafeHttpsAgent } from "./ssrf-safe-agent.js";
@@ -104,6 +105,16 @@ interface PushSubscriptionRow {
   failureCount: number;
 }
 
+export interface PushSendOptions {
+  /**
+   * The rate bucket this push rings against. Omitted means ambient. Only the
+   * callers pinned in __tests__/push-interrupt-callers-guard.test.ts may ask
+   * for "interrupt"; agent-originated pushes pass "ambient" explicitly. Pass it
+   * as a literal object so that guard can read it (push-bucket.ts).
+   */
+  bucket?: PushBucket;
+}
+
 export interface PushSendSummary {
   status: "sent" | "skipped";
   reason?: string;
@@ -165,18 +176,41 @@ export async function sendPushNotification(
     // stack. Not `notificationId`: that one is also written to the delivery
     // log, where phone escalation keys on it.
     bellNotificationId?: string;
+    // Decision N1: the lane of a notification about ONE mail (with `emailId`),
+    // and the user's notification language for the action titles. Picks the
+    // action set: web push gets Reply + Later (PUSH) or Later (MEETING); the
+    // native channels get the lane (APNs category, Android data). Never sent
+    // to Telegram, and never serialized into the web payload as such.
+    lane?: MailPushLane;
+    language?: string;
+    // A reminder the user set themselves (the mail "Later",
+    // pim/reminder-scheduler.ts): its title quotes a mail subject the user
+    // chose to be reminded of, so the inbound-mail noise heuristic must not
+    // veto it. Every other gate still applies. Never sent to a channel.
+    userSet?: boolean;
   },
   category: NotifCategory = "system",
+  options: PushSendOptions = {},
 ): Promise<PushSendSummary> {
-  const { emailId, pendingActionId, bellNotificationId, ...channelPayload } = payload;
+  const {
+    emailId,
+    pendingActionId,
+    bellNotificationId,
+    lane,
+    language,
+    userSet,
+    ...channelPayload
+  } = payload;
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),
     ...(pendingActionId ? { pendingActionId } : {}),
+    ...(emailId && lane ? { lane } : {}),
   };
   const webPayload = {
     ...channelPayload,
     ...(bellNotificationId ? { bellNotificationId } : {}),
+    ...webMailActionFields(userId, emailId, lane, language),
   };
   // First line of defense: drop housekeeping + noise pushes BEFORE any
   // other check. Six other modules call this function (briefing,
@@ -193,7 +227,7 @@ export async function sendPushNotification(
     // category is a routing/preference dimension; we co-opt it as the
     // adjudicated-surface hint so content the system already decided to
     // interrupt on bypasses the inbound-mail noise heuristic.
-    notificationType: authoredSurface(category),
+    notificationType: userSet ? "reminder" : authoredSurface(category),
   });
   if (suppression) {
     // Log the category, never payload.title — the title is "Klorn — {sender}"
@@ -226,13 +260,15 @@ export async function sendPushNotification(
     }
   }
 
-  // Per-user rate limit (Postgres-backed, survives deploys) in two buckets:
-  // urgent mail and meeting alerts ring against an interrupt bucket that
-  // briefings, proposals and reminders can never use up (push-bucket.ts).
+  // Per-user rate limit (Postgres-backed, survives deploys) in two buckets.
+  // The caller picks the bucket, not the category: the firewall's PUSH and
+  // MEETING mail, the urgent sweep, meeting alerts and reminders ask for an
+  // interrupt bucket that briefings, proposals and every agent-originated push
+  // ring ambient beside and can never use up (push-bucket.ts).
   // Blocks the phone ring only; the DB notification is already persisted
   // upstream so the bell still surfaces this event. The skipReason names the
   // bucket that refused.
-  const bucket = pushBucketFor(category);
+  const bucket = resolvePushBucket(options.bucket);
   const rate = await recordPushAttempt(userId, bucket);
   if (!rate.allowed) {
     console.log(`[PUSH] Rate-limited (${bucket}) for ${userId} (${category}): ${rate.reason}`);
@@ -356,7 +392,7 @@ async function deliverToSubscription(
     notificationId?: string;
     attentionItemId?: string;
     bellNotificationId?: string;
-  },
+  } & WebMailActionFields,
   category: NotifCategory,
 ): Promise<{ attempted: boolean; delivered: boolean }> {
   if (!isSafePushEndpoint(sub.endpoint)) {
@@ -395,7 +431,6 @@ async function deliverToSubscription(
         },
         JSON.stringify({
           ...payload,
-          ...tierOverrideFields(userId, payload.attentionItemId),
           deliveryId,
           receiptUrl: pushReceiptUrl(deliveryId),
         }),
@@ -470,6 +505,49 @@ async function deliverToSubscription(
   return { attempted: true, delivered: false };
 }
 
+export type TestPushResult =
+  | { status: "not_found" }
+  | { status: "skipped"; reason: string; delivered: false }
+  | { status: "sent"; delivered: boolean };
+
+/**
+ * "Send test" on one row of settings → Where you get alerts (N8): one push to
+ * one of the caller's subscriptions.
+ *
+ * Deliberately NOT routed through sendPushNotification's gates: the noise
+ * policy, category preferences, quiet hours, the agent-proposal cooldown and
+ * the per-user ambient/interrupt rate buckets all exist to keep Klorn from
+ * interrupting unasked — and this push IS the ask (the user pressed the
+ * button, and a test muted by their own quiet hours would wrongly read as
+ * "this device is broken"). It also never fans out to Telegram or native
+ * devices. What still applies: the route's per-user rate limit
+ * (routes/alert-endpoints.ts), ownership (userId-scoped lookup), the origin
+ * allowlist, the SSRF endpoint check and the delivery log + eviction of
+ * deliverToSubscription, so a dead endpoint found by a test is cleaned up
+ * exactly as a real push would.
+ */
+export async function sendTestPushToSubscription(
+  userId: string,
+  subscriptionId: string,
+  payload: { title: string; body: string; url: string },
+): Promise<TestPushResult> {
+  const sub = (await prisma.pushSubscription.findFirst({
+    where: { id: subscriptionId, userId },
+  })) as PushSubscriptionRow | null;
+  if (!sub) return { status: "not_found" };
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    return { status: "skipped", reason: "missing_vapid_keys", delivered: false };
+  }
+  if (!isAllowedPushOrigin(sub.origin)) {
+    return { status: "skipped", reason: "origin_not_allowed", delivered: false };
+  }
+  const result = await deliverToSubscription(userId, sub, payload, "system");
+  if (!result.attempted) {
+    return { status: "skipped", reason: "unsafe_endpoint", delivered: false };
+  }
+  return { status: "sent", delivered: result.delivered };
+}
+
 /** Get the public VAPID key for client-side subscription */
 export function getVapidPublicKey(): string {
   return VAPID_PUBLIC_KEY;
@@ -493,36 +571,42 @@ function pushReceiptUrl(deliveryId: string): string | null {
   return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/receipts/${deliveryId}`;
 }
 
-// One-tap notification action buttons for a firewall interrupt: "Later" defers
-// to QUEUE, "Mute" silences (SILENT). Both are reversible — a notification can
-// never escalate to PUSH/AUTO. The service worker reads these from the payload.
-const TIER_OVERRIDE_ACTIONS = [
-  { action: "queue", title: "Later" },
-  { action: "silent", title: "Mute" },
-] as const;
-
-function tierOverrideUrl(): string | null {
+function laterUrl(): string | null {
   if (!PUSH_RECEIPT_BASE_URL) return null;
-  return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/tier-override`;
+  return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/later`;
+}
+
+interface WebMailActionFields {
+  actions?: ReturnType<typeof mailPushWebActions>;
+  replyUrl?: string;
+  laterUrl?: string;
+  laterToken?: string;
 }
 
 /**
- * One-tap retier fields for a firewall push: notification action buttons, a
- * capability token scoped to this (user, item), and the endpoint to POST it to.
- * Returns {} when the push is not a 1:1 firewall item (no attentionItemId) or
- * the base URL is unset — so a non-firewall push's payload is byte-identical to
- * before and never carries override buttons.
+ * The web push action buttons of a notification about one mail (decision N1).
+ * Reply opens the reader with the composer focused (a same-origin path; the
+ * service worker refuses anything else). Later posts the push-later token, a
+ * capability for exactly this (user, email), to the API. Without a base URL
+ * Later cannot be wired, so only Reply is offered. A push without a lane or an
+ * email id gets {}: no buttons, exactly as a non-mail push always had.
  */
-function tierOverrideFields(
+function webMailActionFields(
   userId: string,
-  attentionItemId: string | undefined,
-): Record<string, unknown> {
-  const url = tierOverrideUrl();
-  if (!attentionItemId || !url) return {};
+  emailId: string | undefined,
+  lane: MailPushLane | undefined,
+  language: string | undefined,
+): WebMailActionFields {
+  if (!emailId || !lane) return {};
+  const url = laterUrl();
+  const actions = mailPushWebActions(lane, language ?? "en").filter(
+    (a) => a.action !== "later" || url !== null,
+  );
+  if (actions.length === 0) return {};
   return {
-    actions: TIER_OVERRIDE_ACTIONS,
-    overrideUrl: url,
-    overrideToken: mintTierOverrideToken(userId, attentionItemId),
+    actions,
+    ...(actions.some((a) => a.action === "reply") ? { replyUrl: mailPushReplyPath(emailId) } : {}),
+    ...(url ? { laterUrl: url, laterToken: mintPushLaterToken(userId, emailId) } : {}),
   };
 }
 

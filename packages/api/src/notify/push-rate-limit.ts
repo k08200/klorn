@@ -7,11 +7,11 @@
  * process restarts (every deploy used to reset the old in-memory window)
  * and hold across horizontal instances.
  *
- * Two independent buckets (push-bucket.ts): urgent mail and meeting alerts
- * count only "interrupt" rows, everything else only "ambient" rows, each
- * against its own caps over the same two windows. Briefings and proposals can
- * therefore never use up the room an urgent mail needs, and an interrupt
- * burst never silences the briefing.
+ * Two independent buckets (push-bucket.ts; the caller picks one per push):
+ * interrupt pushes count only "interrupt" rows, everything else only "ambient"
+ * rows, each against its own caps over the same two windows. Briefings and
+ * agent pushes can never use up the room an urgent mail needs, and an
+ * interrupt burst never silences the briefing.
  *
  * DB `Notification` rows are still created by upstream callers, so blocked
  * pushes remain visible via the bell; only the phone ding is suppressed.

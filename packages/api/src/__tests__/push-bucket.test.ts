@@ -1,24 +1,25 @@
 import { describe, expect, it } from "vitest";
-import type { NotifCategory } from "../notify/notification-prefs.js";
-import { pushBucketFor } from "../notify/push-bucket.js";
+import { type PushBucket, resolvePushBucket } from "../notify/push-bucket.js";
 
-// Urgent mail and meeting alerts are the interrupts the user must always get:
-// they ring against their own bucket, which nothing else can use up.
-describe("pushBucketFor", () => {
-  it.each<NotifCategory>([
-    "email_urgent",
-    "meeting",
-  ])("%s rings against the interrupt bucket", (c) => {
-    expect(pushBucketFor(c)).toBe("interrupt");
+// The caller picks the bucket per call; the category no longer does. Interrupt
+// is opt-in: a push that does not ask for it rings ambient, whatever its
+// category, so an agent that sends email_urgent or meeting cannot use up the
+// room real urgent mail, meeting alerts and reminders need.
+describe("resolvePushBucket", () => {
+  it("rings interrupt only when the caller asks for it", () => {
+    expect(resolvePushBucket("interrupt")).toBe("interrupt");
   });
 
-  it.each<NotifCategory>([
-    "email_candidate",
-    "task_due",
-    "agent_proposal",
-    "daily_briefing",
-    "system",
-  ])("%s rings against the ambient bucket", (c) => {
-    expect(pushBucketFor(c)).toBe("ambient");
+  it("rings ambient when the caller asks for ambient", () => {
+    expect(resolvePushBucket("ambient")).toBe("ambient");
+  });
+
+  it("defaults to ambient when the caller does not say", () => {
+    expect(resolvePushBucket(undefined)).toBe("ambient");
+  });
+
+  it("fails closed to ambient for a value that is not a bucket", () => {
+    expect(resolvePushBucket("INTERRUPT" as PushBucket)).toBe("ambient");
+    expect(resolvePushBucket("" as PushBucket)).toBe("ambient");
   });
 });
