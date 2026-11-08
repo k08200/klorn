@@ -200,7 +200,16 @@ describe("judgeAndMirrorEmail — PUSH tier drives a real push", () => {
       url: "/inbox/firewall",
       attentionItemId: "item-1",
       emailId: "hn",
+      bellNotificationId: "n1",
     });
+  });
+
+  it("names the bell row it rings for, so the tab and the service worker share one OS tag", async () => {
+    pushTier();
+    await judgeAndMirrorEmail("u1", recent("hn", 5));
+    const frame = pushNotification.mock.calls[0][1] as { id: string };
+    expect(frame.id).toBe("n1");
+    expect(sendPushNotification.mock.calls[0][1]).toMatchObject({ bellNotificationId: frame.id });
   });
 
   it("a MEETING-tier mail push carries the same deep link", async () => {

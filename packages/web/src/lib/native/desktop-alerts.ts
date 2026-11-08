@@ -10,6 +10,8 @@
 // only when the user's notification preferences and quiet hours allow it
 // (packages/api notify/desktop-alert.ts — the same gate Web Push uses). Here we
 // validate that tag, shape the banner text, and dedupe by notification id.
+// A normal browser tab reuses parseDesktopAlert for its own OS notification
+// (../in-page-alerts.ts).
 //
 // Pure functions over plain inputs, so the rules are unit-tested without a
 // browser (packages/api/src/__tests__/web-desktop-alerts.test.ts).

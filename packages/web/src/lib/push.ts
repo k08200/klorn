@@ -21,6 +21,23 @@ export async function getSwRegistration(): Promise<ServiceWorkerRegistration> {
   return reg;
 }
 
+/** True when this browser holds a push subscription on the /sw.js
+ *  registration: the service worker then shows each Web Push itself. Never
+ *  registers or subscribes. A failed lookup reads as false, so the tab shows
+ *  the interrupt rather than risk showing nothing; it carries the same OS tag
+ *  as the service worker's notification for that row. */
+export async function hasPushSubscription(): Promise<boolean> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/");
+    if (!reg?.pushManager) return false;
+    return (await reg.pushManager.getSubscription()) !== null;
+  } catch (err) {
+    console.warn("[PUSH] subscription lookup failed:", err);
+    return false;
+  }
+}
+
 export async function fetchVapidKey(): Promise<string | null> {
   const res = await fetch(`${API_BASE}/api/notifications/vapid-key`, { headers: authHeaders() });
   if (!res.ok) return null;
