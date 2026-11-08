@@ -5,7 +5,7 @@
  * and feeds ONLY the liveness pulse below (#742): "has this dyno judged
  * anything recently?". It no longer keeps a fallback-rate window or raises
  * the fallback alarm — at ~3 emails/hour an in-memory window never reached a
- * useful sample, and every deploy wiped it (#1319). The fallback alarm is
+ * useful sample, and every deploy wiped it (#1572). The fallback alarm is
  * DB-backed and lives in judge-fallback-check.ts, which reads the same source
  * from the "Judged by" fact attention-mirror stores on each AttentionItem.
  *

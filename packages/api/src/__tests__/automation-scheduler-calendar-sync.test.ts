@@ -64,7 +64,7 @@ vi.mock("../judge/calibration-snapshot.js", () => ({
 vi.mock("../learning/ontology-proposals-store.js", () => ({
   recomputeOntologyProposalsSafe: vi.fn(async () => {}),
 }));
-// The hourly judge fallback alarm (#1319) reads the DB with $queryRaw; this
+// The hourly judge fallback alarm (#1572) reads the DB with $queryRaw; this
 // file's prisma mock has no such method, so it is replaced by a spy.
 vi.mock("../judge/judge-fallback-check.js", () => ({
   runJudgeFallbackCheck: m.runJudgeFallbackCheck,
