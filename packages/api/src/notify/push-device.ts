@@ -185,6 +185,8 @@ export async function sendDevicePush(
   userId: string,
   payload: DevicePushPayload,
   category: NotifCategory = "system",
+  // "Send test" on one settings row rings that token only (routes/alert-endpoints.ts).
+  opts: { tokenId?: string } = {},
 ): Promise<DevicePushSummary> {
   const app = getFirebaseApp();
   if (!app) {
@@ -193,7 +195,7 @@ export async function sendDevicePush(
   }
 
   const rows = await prisma.devicePushToken.findMany({
-    where: { userId, platform: "android" },
+    where: { userId, platform: "android", ...(opts.tokenId ? { id: opts.tokenId } : {}) },
     select: { token: true, dataMessages: true },
   });
   if (rows.length === 0) {

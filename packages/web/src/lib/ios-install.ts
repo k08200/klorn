@@ -9,8 +9,8 @@
 
 export const IOS_INSTALL_DISMISSED_KEY = "klorn-ios-install-dismissed";
 
-/** A dismissal keeps the hint away for a week. */
-export const IOS_INSTALL_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+/** "Not now" keeps the card away for 14 days. */
+export const IOS_INSTALL_SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 
 const IOS_DEVICE = /iPad|iPhone|iPod/;
 
