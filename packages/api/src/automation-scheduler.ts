@@ -75,6 +75,7 @@ import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
+import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendSms } from "./notify/sms.js";
@@ -845,13 +846,17 @@ export async function ensureAutoModeReplyNotification(
  * recorded for the next tick's read-back — the accumulation logic is preserved.
  * The winner returns its notification so the CALLER runs the follow-on web-push /
  * SMS side-effects; a P2002 loser returns null and the caller skips them.
+ * The title follows the user's notification language; the dedupe reads match
+ * every language's title (URGENT_EMAIL_TITLES).
  */
 export async function ensureUrgentEmailNotification(
   userId: string,
   lead: { id: string; gmailId: string },
   dbMessage: string,
   userBody: string,
+  language?: string | null,
 ): Promise<{ id: string; createdAt: Date } | null> {
+  const title = notificationCopy(language).urgentMailTitle;
   let notification: { id: string; createdAt: Date };
   try {
     notification = await prisma.notification.create({
@@ -859,7 +864,7 @@ export async function ensureUrgentEmailNotification(
         userId,
         type: "email",
         dedupeKey: urgentDedupeKey(lead),
-        title: "Urgent email",
+        title,
         message: dbMessage,
       },
       select: { id: true, createdAt: true },
@@ -872,7 +877,7 @@ export async function ensureUrgentEmailNotification(
   pushNotification(userId, {
     id: notification.id,
     type: "email",
-    title: "Urgent email",
+    title,
     message: userBody,
     createdAt: notification.createdAt.toISOString(),
     // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
@@ -1822,7 +1827,10 @@ async function runUserCycle(
             where: {
               userId: config.userId,
               type: "email",
-              OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+              // Every language's title plus the legacy ones: a row written
+              // before a language switch (or before the title was localized)
+              // still marks its mails as notified.
+              title: { in: [...URGENT_EMAIL_TITLES] },
               createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
             },
             select: { message: true, createdAt: true },
@@ -1839,10 +1847,9 @@ async function runUserCycle(
             // (not just the first) and they aren't re-notified next tick.
             // Klorn's own copy follows the user's notification language;
             // the email subject/summary inside it stays as written.
-            const userBody = formatUrgentEmailBody(
-              newUrgent,
-              (config as { notificationLanguage?: string | null }).notificationLanguage,
-            );
+            const notificationLanguage = (config as { notificationLanguage?: string | null })
+              .notificationLanguage;
+            const userBody = formatUrgentEmailBody(newUrgent, notificationLanguage);
             const dbMessage = buildUrgentDedupMessage(
               userBody,
               newUrgent.map((e) => e.gmailId),
@@ -1858,6 +1865,7 @@ async function runUserCycle(
               newUrgent[0],
               dbMessage,
               userBody,
+              notificationLanguage,
             );
 
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
@@ -1875,7 +1883,7 @@ async function runUserCycle(
               sendPushNotification(
                 config.userId,
                 {
-                  title: "Urgent mail",
+                  title: notificationCopy(notificationLanguage).urgentMailTitle,
                   body: userBody,
                   url: "/briefing",
                   attentionItemId: attentionItemId ?? undefined,
