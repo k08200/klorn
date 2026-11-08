@@ -243,6 +243,15 @@ const de: Record<string, string> = {
   "today.lane.push.older": "Ältere {lane}-Mails ansehen",
   "today.cover.openInbox": "Gesamten Posteingang öffnen",
   "today.cover.meter": "{used} von {limit} Unterbrechungen heute",
+  "today.held.title": "Zurückgehalten · {count}",
+  "today.held.caption":
+    "Dringend, aber das heutige Limit war erreicht, daher kam keine Benachrichtigung.",
+  "today.held.show": "Anzeigen",
+  "today.held.hide": "Ausblenden",
+  "settings.interruptBudget.title": "Unterbrechungen pro Tag",
+  "settings.interruptBudget.desc":
+    "Dringende Mails darüber hinaus warten ohne Benachrichtigung in Queue. An Push angeheftete Absender und Meetings zählen nicht.",
+  "settings.interruptBudget.none": "Kein Limit",
   "today.lane.meeting.hint": "Terminabstimmung",
   "today.lane.meeting.empty": "Keine Mails zur Terminabstimmung.",
   "today.lane.queue.hint": "Heute lesenswert",

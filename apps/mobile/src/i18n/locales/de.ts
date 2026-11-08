@@ -392,6 +392,10 @@ export const de: Messages = {
   "settings.quiet.hint": "In diesem Zeitraum keine Benachrichtigungen",
   "settings.quiet.from": "Von",
   "settings.quiet.to": "Bis",
+  "settings.budget.title": "Unterbrechungen pro Tag",
+  "settings.budget.hint":
+    "Dringende Mails darüber hinaus warten ohne Benachrichtigung in Queue. An Push angeheftete Absender und Meetings zählen nicht.",
+  "settings.budget.none": "Kein Limit",
   "settings.notifyLanguage.title": "Sprache der Benachrichtigungen",
   "settings.notifyLanguage.label": "Benachrichtigungen schreiben auf",
   "settings.notifyLanguage.hint":

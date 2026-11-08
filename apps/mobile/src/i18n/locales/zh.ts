@@ -369,6 +369,10 @@ export const zh: Messages = {
   "settings.quiet.hint": "这段时间内不发送通知",
   "settings.quiet.from": "开始",
   "settings.quiet.to": "结束",
+  "settings.budget.title": "每天提醒次数",
+  "settings.budget.hint":
+    "超出此次数的紧急邮件会在 Queue 中等待，不会提醒。固定到 Push 的发件人和会议不计入。",
+  "settings.budget.none": "不限",
   "settings.notifyLanguage.title": "通知语言",
   "settings.notifyLanguage.label": "通知使用的语言",
   "settings.notifyLanguage.hint":

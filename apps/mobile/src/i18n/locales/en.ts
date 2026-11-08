@@ -389,6 +389,10 @@ export const en = {
   "settings.quiet.hint": "No notifications in this window",
   "settings.quiet.from": "From",
   "settings.quiet.to": "To",
+  "settings.budget.title": "Interruptions per day",
+  "settings.budget.hint":
+    "Urgent mail beyond this waits in Queue without ringing. Senders you pin to Push and meetings don't count.",
+  "settings.budget.none": "No limit",
   "settings.notifyLanguage.title": "Notification language",
   "settings.notifyLanguage.label": "Write notifications in",
   "settings.notifyLanguage.hint":

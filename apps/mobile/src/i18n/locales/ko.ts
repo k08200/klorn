@@ -376,6 +376,10 @@ export const ko: Messages = {
   "settings.quiet.hint": "이 시간에는 알리지 않아요",
   "settings.quiet.from": "시작",
   "settings.quiet.to": "끝",
+  "settings.budget.title": "하루 알림 횟수",
+  "settings.budget.hint":
+    "이 횟수를 넘는 급한 메일은 알림 없이 Queue에서 기다려요. Push로 고정한 발신자와 회의는 세지 않아요.",
+  "settings.budget.none": "제한 없음",
   "settings.notifyLanguage.title": "알림 언어",
   "settings.notifyLanguage.label": "알림을 쓰는 언어",
   "settings.notifyLanguage.hint":

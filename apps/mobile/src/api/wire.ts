@@ -261,6 +261,13 @@ export interface NotificationSettingsWire {
   notificationLanguage: string;
   notificationLanguages: string[];
   timezone: string;
+  /**
+   * Attention engine v3 daily interrupt budget — present only for a user under
+   * the policy (routes/automations.ts interruptBudgetFields). null = default.
+   */
+  interruptBudget?: number | null;
+  interruptBudgetDefault?: number | null;
+  interruptBudgetMax?: number;
 }
 
 /** GET /api/billing/status (routes/billing.ts) — the fields Plans reads. */

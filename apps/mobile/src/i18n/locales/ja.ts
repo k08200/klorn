@@ -379,6 +379,10 @@ export const ja: Messages = {
   "settings.quiet.hint": "この時間帯は通知しません",
   "settings.quiet.from": "開始",
   "settings.quiet.to": "終了",
+  "settings.budget.title": "1日の通知回数",
+  "settings.budget.hint":
+    "これを超える緊急メールは通知せずに Queue で待機します。Push に固定した送信者と会議は数えません。",
+  "settings.budget.none": "上限なし",
   "settings.notifyLanguage.title": "通知の言語",
   "settings.notifyLanguage.label": "通知に使う言語",
   "settings.notifyLanguage.hint":
