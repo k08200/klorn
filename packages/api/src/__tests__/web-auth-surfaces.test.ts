@@ -62,7 +62,8 @@ describe("shouldOfferIosInstall", () => {
     expect(shouldOfferIosInstall({ ...base, userAgent })).toBe(false);
   });
 
-  it("stays quiet for a week after a dismissal, then may ask again", () => {
+  it("stays quiet for 14 days after 'Not now', then may ask again", () => {
+    expect(IOS_INSTALL_SNOOZE_MS).toBe(14 * 24 * 60 * 60 * 1000);
     expect(shouldOfferIosInstall({ ...base, dismissedAt: NOW - 60_000 })).toBe(false);
     expect(shouldOfferIosInstall({ ...base, dismissedAt: NOW - IOS_INSTALL_SNOOZE_MS - 1 })).toBe(
       true,
@@ -118,7 +119,7 @@ describe("sign-in surface vocabulary", () => {
       "auth.preview.caption",
       "pwa.ios.title",
       "pwa.ios.body",
-      "pwa.ios.dismiss",
+      "pwa.ios.notNow",
       "pwa.offline",
       "pwa.install.title",
     ];

@@ -179,6 +179,8 @@ export async function sendApnsPush(
   userId: string,
   payload: DevicePushPayload,
   category: NotifCategory = "system",
+  // "Send test" on one settings row rings that token only (routes/alert-endpoints.ts).
+  opts: { tokenId?: string } = {},
 ): Promise<DevicePushSummary> {
   if (!isApnsConfigured()) {
     console.log(`[PUSH-APNS] Skipped — APNs not configured (user ${userId})`);
@@ -186,7 +188,7 @@ export async function sendApnsPush(
   }
 
   const rows = await prisma.devicePushToken.findMany({
-    where: { userId, platform: "ios" },
+    where: { userId, platform: "ios", ...(opts.tokenId ? { id: opts.tokenId } : {}) },
     select: { token: true },
   });
   if (rows.length === 0) return skipped("no_device_tokens");
