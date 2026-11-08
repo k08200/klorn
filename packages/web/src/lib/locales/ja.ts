@@ -386,6 +386,14 @@ const ja: Record<string, string> = {
   "pwa.install.body": "ホーム画面からKlornを開けます。",
   "pwa.install.action": "インストール",
   "pwa.install.dismiss": "インストールの案内を閉じる",
+  "desktop.autostart.prompt.title": "サインイン時にKlornを起動しますか？",
+  "desktop.autostart.prompt.body":
+    "サインイン時にKlornを起動すると、緊急メールの通知を受け取り続けられます。",
+  "desktop.autostart.prompt.accept": "サインイン時に起動",
+  "desktop.autostart.prompt.decline": "使用しない",
+  "desktop.autostart.prompt.enabling": "オンにしています...",
+  "desktop.autostart.failed":
+    "サインイン時の起動をオンにできませんでした。設定から再度お試しください。",
   "pwa.ios.region": "iPhoneにKlornをインストール",
   "pwa.ios.title": "このiPhoneで緊急メールの通知を受け取る",
   "pwa.ios.body": "iPhoneはホーム画面に追加したアプリにだけ通知を届けます。",
@@ -567,6 +575,9 @@ const ja: Record<string, string> = {
     "リマインダー、ブリーフィング、重要メールの通知を受け取ります。",
   "settings.pushNotifications.blockedChip": "ブロック中",
   "settings.pushNotifications.unsupportedChip": "非対応",
+  "settings.launchAtLogin.title": "サインイン時に起動",
+  "settings.launchAtLogin.desc":
+    "WindowsにサインインするとKlornがトレイで起動し、緊急メールの通知を受け取り続けられます。",
   "settings.turnOff": "オフにする",
   "settings.turnOn": "オンにする",
   "settings.toast.pushUnsupported": "このブラウザは通知に対応していません。",

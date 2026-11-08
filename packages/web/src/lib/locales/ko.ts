@@ -380,6 +380,13 @@ const ko: Record<string, string> = {
   "pwa.install.body": "홈 화면에서 바로 Klorn을 여세요.",
   "pwa.install.action": "설치",
   "pwa.install.dismiss": "설치 안내 닫기",
+  "desktop.autostart.prompt.title": "로그인할 때 Klorn을 시작할까요?",
+  "desktop.autostart.prompt.body":
+    "로그인할 때 Klorn이 시작되도록 하면 긴급 메일 알림을 계속 받을 수 있습니다.",
+  "desktop.autostart.prompt.accept": "로그인 시 시작",
+  "desktop.autostart.prompt.decline": "사용 안 함",
+  "desktop.autostart.prompt.enabling": "켜는 중...",
+  "desktop.autostart.failed": "로그인 시 시작을 켜지 못했습니다. 설정에서 다시 시도할 수 있습니다.",
   "pwa.ios.region": "iPhone에 Klorn 설치",
   "pwa.ios.title": "이 iPhone에서 긴급 메일 알림 받기",
   "pwa.ios.body": "iPhone은 홈 화면에 추가한 앱에만 알림을 보냅니다.",
@@ -557,6 +564,9 @@ const ko: Record<string, string> = {
   "settings.pushNotifications.off": "리마인더, 브리핑, 중요 메일 알림을 받습니다.",
   "settings.pushNotifications.blockedChip": "차단됨",
   "settings.pushNotifications.unsupportedChip": "지원 안 됨",
+  "settings.launchAtLogin.title": "로그인 시 시작",
+  "settings.launchAtLogin.desc":
+    "Windows에 로그인하면 Klorn이 트레이에서 시작되어 긴급 메일 알림을 계속 받을 수 있습니다.",
   "settings.turnOff": "끄기",
   "settings.turnOn": "켜기",
   "settings.toast.pushUnsupported": "이 브라우저는 알림을 지원하지 않습니다.",

@@ -17,7 +17,8 @@ const LEGACY_INSTALL_DISMISSED_KEY = `${LEGACY_KEY_PREFIX}-install-dismissed`;
 
 // Floating cards sit above the phone tab bar (62px + home indicator) and at
 // the corner on desktop, so they never sit on top of the bar's targets.
-const FLOATING =
+// Shared with the Windows shell's start-at-sign-in prompt (autostart-prompt.tsx).
+export const FLOATING =
   "fixed left-1/2 z-[100] flex w-[min(92vw,28rem)] -translate-x-1/2 items-center gap-3 rounded-control border border-line bg-surface-panel px-4 py-3 shadow-sheet animate-slide-up motion-reduce:animate-none bottom-[calc(62px+env(safe-area-inset-bottom)+12px)] rail:bottom-6";
 
 /**

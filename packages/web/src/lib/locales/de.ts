@@ -401,6 +401,14 @@ const de: Record<string, string> = {
   "pwa.install.body": "Öffne Klorn direkt vom Startbildschirm.",
   "pwa.install.action": "Installieren",
   "pwa.install.dismiss": "Installationshinweis schließen",
+  "desktop.autostart.prompt.title": "Klorn bei der Anmeldung starten?",
+  "desktop.autostart.prompt.body":
+    "Klorn kann bei der Anmeldung starten, damit Sie weiterhin Benachrichtigungen zu dringenden E-Mails erhalten.",
+  "desktop.autostart.prompt.accept": "Bei Anmeldung starten",
+  "desktop.autostart.prompt.decline": "Nein, danke",
+  "desktop.autostart.prompt.enabling": "Wird aktiviert...",
+  "desktop.autostart.failed":
+    "Der Start bei der Anmeldung konnte nicht aktiviert werden. Sie können es in den Einstellungen erneut versuchen.",
   "pwa.ios.region": "Klorn auf dem iPhone installieren",
   "pwa.ios.title": "Dringende Mails auf diesem iPhone melden",
   "pwa.ios.body": "Das iPhone stellt Mitteilungen nur Apps auf dem Home-Bildschirm zu.",
@@ -591,6 +599,9 @@ const de: Record<string, string> = {
     "Erhalte Erinnerungen, Briefings und Hinweise auf wichtige Mail.",
   "settings.pushNotifications.blockedChip": "Blockiert",
   "settings.pushNotifications.unsupportedChip": "Nicht unterstützt",
+  "settings.launchAtLogin.title": "Bei Anmeldung starten",
+  "settings.launchAtLogin.desc":
+    "Klorn startet bei der Windows-Anmeldung im Infobereich, damit Benachrichtigungen zu dringenden E-Mails weiter ankommen.",
   "settings.turnOff": "Ausschalten",
   "settings.turnOn": "Einschalten",
   "settings.toast.pushUnsupported": "Dieser Browser unterstützt keine Mitteilungen.",
