@@ -269,23 +269,29 @@ on the device; anything unknown lands on Today.
 ```jsonc
 {
   "aps": {
-    "alert": { "title": "…", "body": "…" }, "sound": "default",
-    "category": "KLORN_PUSH_MAIL",        // KLORN_PUSH_MAIL_DRAFT when pendingActionId is set
+    "alert": { "title": "<sender>", "body": "<subject>\n<reason>" }, "sound": "default",
+    "category": "KLORN_PUSH_MAIL",        // _DRAFT with pendingActionId, KLORN_PUSH_MEETING for lane MEETING
     "mutable-content": 1
   },
-  "url": "/inbox/firewall", "category": "email_urgent",   // as on every push
+  "url": "/email/<emailId>", "category": "email_urgent",  // as on every push
   "emailId": "<EmailMessage.id>", "route": "/mail/<emailId>",
   "attentionItemId": "<AttentionItem.id>",               // when one is open
-  "pendingActionId": "<PendingAction.id>"                // when a draft / approval exists
+  "pendingActionId": "<PendingAction.id>",               // when a draft / approval exists
+  "lane": "PUSH"                                          // or "MEETING" (firewall ring, one-mail sweep)
 }
 ```
 
-`AppDelegate.swift` registers exactly those two identifiers (pinned by
-`src/push/android.test.ts`): `KLORN_PUSH_MAIL_DRAFT` (Send draft · In 1 hour ·
-Done) and `KLORN_PUSH_MAIL` (In 1 hour · Done). "Send draft" is
-`.authenticationRequired + .foreground` and opens the approval card; In 1 hour /
-Done call `POST /api/inbox/firewall/email/:emailId/{snooze,dismiss}` (by
-`attentionItemId` only when no `emailId` came).
+`AppDelegate.swift` registers exactly these identifiers (pinned by
+`src/push/android.test.ts`; decision N1, 2026-11-08): `KLORN_PUSH_MAIL_DRAFT`
+(Send draft · Later · Not urgent · Done), `KLORN_PUSH_MAIL` (Reply · Later ·
+Not urgent · Done) and `KLORN_PUSH_MEETING` (Later; the server sends it with
+`lane: "MEETING"`). "Send draft" is `.authenticationRequired + .foreground`
+and opens the approval card; Reply opens the mail. Later / Done call
+`POST /api/inbox/firewall/email/:emailId/{snooze,dismiss}` (by
+`attentionItemId` only when no `emailId` came); Later snoozes until later
+today (4 h). Not urgent moves the item to QUEUE (`POST
+/api/inbox/firewall/:id`, by `emailId` only when no `attentionItemId` came).
+There is no Silent action.
 
 **Android (FCM)** — two message shapes, chosen per device by the server
 (`notify/push-device.ts` `buildFcmMessage`):
@@ -334,8 +340,8 @@ test files pin the same vectors):
   channel and `ic_stat_klorn` its default status-bar icon, so notification
   messages ring and look the same way.
 
-The notification shows **1시간 뒤에 · 처리 완료 · 검토하기** (In 1 hour · Done ·
-Review) in the app language: the app saves the labels under
+The notification shows **나중에 · 급하지 않음 · 처리 완료** (Later · Not urgent ·
+Done; Later only for a `lane: "MEETING"` mail) in the app language: the app saves the labels under
 `klorn-android-push-labels` in Capacitor Preferences, and the native service
 falls back to the device language. Every button is an activity intent: it
 **opens the app** (unlocking first on a secure lock screen), where iOS runs
@@ -343,9 +349,9 @@ Later / Done in the background. The intent carries the plugin's own tap
 contract (`google.message_id`), so it arrives in JS as
 `pushNotificationActionPerformed` ("tap") on a cold start too, with
 `klornAction` naming the button (`src/push/route.ts` `actionFromTap`).
-`MainActivity` cancels the notification on arrival. Review opens the approval
-card (or the mail); Later / Done call the same by-email routes as iOS. Nothing
-is ever sent from a notification, on Android either.
+`MainActivity` cancels the notification on arrival. Later / Not urgent / Done
+call the same routes as iOS; a tap opens the mail (or the draft's approval
+card). Nothing is ever sent from a notification, on Android either.
 
 **What works when (Android, precisely):**
 

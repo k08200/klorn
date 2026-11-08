@@ -330,6 +330,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "judge/email-firewall.ts",
     "judge/email-lanes.ts",
     "judge/fallback-rejudge.ts",
+    "judge/firewall-push.ts", // one mail's open EMAIL item: id, lane and reason (N1 push body)
     "judge/judge-context.ts",
     "judge/label-correction.ts",
     "judge/rejudge-open-items.ts",

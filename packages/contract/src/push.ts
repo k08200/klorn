@@ -28,10 +28,22 @@ export interface NativePushMailFields {
   pendingActionId?: string;
   /** In-app route: `/mail/<emailId>` (URI-encoded). */
   route: string;
+  /**
+   * The firewall lane of the mail (decision N1). Set by the firewall PUSH /
+   * MEETING ring and the one-mail urgent sweep. A MEETING mail takes the
+   * meeting action set (Later); absent = the mail action set, as before.
+   */
+  lane?: "PUSH" | "MEETING";
 }
 
-/** APNs `aps.category` of a mail push: lock-screen action sets the app registers. */
-export type ApnsMailCategory = "KLORN_PUSH_MAIL" | "KLORN_PUSH_MAIL_DRAFT";
+/**
+ * APNs `aps.category` of a mail push: lock-screen action sets the app
+ * registers (apps/mobile AppDelegate.swift). Decision N1 order:
+ *   KLORN_PUSH_MAIL_DRAFT — Send draft · Later · Not urgent · Done
+ *   KLORN_PUSH_MAIL       — Reply · Later · Not urgent · Done
+ *   KLORN_PUSH_MEETING    — Later (Join needs a verified meeting link; a mail has none)
+ */
+export type ApnsMailCategory = "KLORN_PUSH_MAIL" | "KLORN_PUSH_MAIL_DRAFT" | "KLORN_PUSH_MEETING";
 
 /**
  * The `alert` tag on a real-time websocket `notification` frame. Set by

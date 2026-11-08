@@ -13,10 +13,10 @@
 import crypto from "node:crypto";
 import webPush from "web-push";
 import { recordEvent } from "../analytics.js";
-import { mintTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { Semaphore } from "../semaphore.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
+import { type MailPushLane, mailPushReplyPath, mailPushWebActions } from "./mail-push-content.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
 import { evaluateNotificationGate, type NotifCategory } from "./notification-prefs.js";
 import { sendApnsPush } from "./push-apns.js";
@@ -28,6 +28,7 @@ import {
   markPushFailed,
 } from "./push-delivery.js";
 import { sendDevicePush } from "./push-device.js";
+import { mintPushLaterToken } from "./push-later-token.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 import { ssrfSafeHttpsAgent } from "./ssrf-safe-agent.js";
@@ -165,18 +166,28 @@ export async function sendPushNotification(
     // stack. Not `notificationId`: that one is also written to the delivery
     // log, where phone escalation keys on it.
     bellNotificationId?: string;
+    // Decision N1: the lane of a notification about ONE mail (with `emailId`),
+    // and the user's notification language for the action titles. Picks the
+    // action set: web push gets Reply + Later (PUSH) or Later (MEETING); the
+    // native channels get the lane (APNs category, Android data). Never sent
+    // to Telegram, and never serialized into the web payload as such.
+    lane?: MailPushLane;
+    language?: string;
   },
   category: NotifCategory = "system",
 ): Promise<PushSendSummary> {
-  const { emailId, pendingActionId, bellNotificationId, ...channelPayload } = payload;
+  const { emailId, pendingActionId, bellNotificationId, lane, language, ...channelPayload } =
+    payload;
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),
     ...(pendingActionId ? { pendingActionId } : {}),
+    ...(emailId && lane ? { lane } : {}),
   };
   const webPayload = {
     ...channelPayload,
     ...(bellNotificationId ? { bellNotificationId } : {}),
+    ...webMailActionFields(userId, emailId, lane, language),
   };
   // First line of defense: drop housekeeping + noise pushes BEFORE any
   // other check. Six other modules call this function (briefing,
@@ -356,7 +367,7 @@ async function deliverToSubscription(
     notificationId?: string;
     attentionItemId?: string;
     bellNotificationId?: string;
-  },
+  } & WebMailActionFields,
   category: NotifCategory,
 ): Promise<{ attempted: boolean; delivered: boolean }> {
   if (!isSafePushEndpoint(sub.endpoint)) {
@@ -395,7 +406,6 @@ async function deliverToSubscription(
         },
         JSON.stringify({
           ...payload,
-          ...tierOverrideFields(userId, payload.attentionItemId),
           deliveryId,
           receiptUrl: pushReceiptUrl(deliveryId),
         }),
@@ -536,36 +546,42 @@ function pushReceiptUrl(deliveryId: string): string | null {
   return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/receipts/${deliveryId}`;
 }
 
-// One-tap notification action buttons for a firewall interrupt: "Later" defers
-// to QUEUE, "Mute" silences (SILENT). Both are reversible — a notification can
-// never escalate to PUSH/AUTO. The service worker reads these from the payload.
-const TIER_OVERRIDE_ACTIONS = [
-  { action: "queue", title: "Later" },
-  { action: "silent", title: "Mute" },
-] as const;
-
-function tierOverrideUrl(): string | null {
+function laterUrl(): string | null {
   if (!PUSH_RECEIPT_BASE_URL) return null;
-  return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/tier-override`;
+  return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/later`;
+}
+
+interface WebMailActionFields {
+  actions?: ReturnType<typeof mailPushWebActions>;
+  replyUrl?: string;
+  laterUrl?: string;
+  laterToken?: string;
 }
 
 /**
- * One-tap retier fields for a firewall push: notification action buttons, a
- * capability token scoped to this (user, item), and the endpoint to POST it to.
- * Returns {} when the push is not a 1:1 firewall item (no attentionItemId) or
- * the base URL is unset — so a non-firewall push's payload is byte-identical to
- * before and never carries override buttons.
+ * The web push action buttons of a notification about one mail (decision N1).
+ * Reply opens the reader with the composer focused (a same-origin path; the
+ * service worker refuses anything else). Later posts the push-later token, a
+ * capability for exactly this (user, email), to the API. Without a base URL
+ * Later cannot be wired, so only Reply is offered. A push without a lane or an
+ * email id gets {}: no buttons, exactly as a non-mail push always had.
  */
-function tierOverrideFields(
+function webMailActionFields(
   userId: string,
-  attentionItemId: string | undefined,
-): Record<string, unknown> {
-  const url = tierOverrideUrl();
-  if (!attentionItemId || !url) return {};
+  emailId: string | undefined,
+  lane: MailPushLane | undefined,
+  language: string | undefined,
+): WebMailActionFields {
+  if (!emailId || !lane) return {};
+  const url = laterUrl();
+  const actions = mailPushWebActions(lane, language ?? "en").filter(
+    (a) => a.action !== "later" || url !== null,
+  );
+  if (actions.length === 0) return {};
   return {
-    actions: TIER_OVERRIDE_ACTIONS,
-    overrideUrl: url,
-    overrideToken: mintTierOverrideToken(userId, attentionItemId),
+    actions,
+    ...(actions.some((a) => a.action === "reply") ? { replyUrl: mailPushReplyPath(emailId) } : {}),
+    ...(url ? { laterUrl: url, laterToken: mintPushLaterToken(userId, emailId) } : {}),
   };
 }
 

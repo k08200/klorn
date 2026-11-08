@@ -189,6 +189,7 @@ describe("urgentMailPushPayload — the device push for the urgent bell row", ()
       body: "Kim: Q4 budget",
       leads: [{ id: "email-1" }],
       attentionItemId: "item-1",
+      language: "ko",
     });
     expect(payload).toEqual({
       title: "긴급 메일",
@@ -197,6 +198,9 @@ describe("urgentMailPushPayload — the device push for the urgent bell row", ()
       attentionItemId: "item-1",
       bellNotificationId: "notif-new",
       emailId: "email-1",
+      // Decision N1: one mail → the same action buttons as the firewall ring.
+      lane: "PUSH",
+      language: "ko",
     });
   });
 
@@ -207,6 +211,7 @@ describe("urgentMailPushPayload — the device push for the urgent bell row", ()
       body: "2 urgent",
       leads: [{ id: "e1" }, { id: "e2" }],
       attentionItemId: null,
+      language: "en",
     });
     expect(payload).toEqual({
       title: "Urgent mail",
