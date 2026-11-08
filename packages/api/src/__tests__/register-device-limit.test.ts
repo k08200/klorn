@@ -8,8 +8,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * OLDEST session is the one removed.
  */
 
-const state: { plan: string; sessions: string[]; created: number } = {
+const state: { plan: string; role: string; sessions: string[]; created: number } = {
   plan: "FREE",
+  role: "USER",
   sessions: [],
   created: 0,
 };
@@ -28,7 +29,7 @@ vi.mock("../db.js", () => {
       return { count: where.id.in.length };
     }),
   };
-  const user = { findUnique: vi.fn(async () => ({ plan: state.plan, role: "USER" })) };
+  const user = { findUnique: vi.fn(async () => ({ plan: state.plan, role: state.role })) };
   const prisma = { device, user };
   return { prisma, db: prisma };
 });
@@ -57,6 +58,25 @@ describe("registerDevice — signed-in device limit", () => {
     state.plan = "FREE";
     await login(4);
     expect(state.sessions).toEqual(["d4", "d3", "d2"]);
+  });
+
+  it("evicts by creation time, newest kept (orderBy createdAt desc)", async () => {
+    state.plan = "FREE";
+    const { db } = await import("../db.js");
+    const findMany = vi.mocked(db.device.findMany);
+    findMany.mockClear();
+    await login(4);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "u-1" }, orderBy: { createdAt: "desc" } }),
+    );
+  });
+
+  it("never evicts an admin's sessions", async () => {
+    state.plan = "FREE";
+    state.role = "ADMIN";
+    await login(5);
+    expect(state.sessions).toHaveLength(5);
+    state.role = "USER";
   });
 
   it("gives Pro the same 3 sessions", async () => {
