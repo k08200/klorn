@@ -79,17 +79,21 @@ export function _resetSmsClientForTests(): void {
 }
 
 /**
- * Admin gate. A user is admin if they have role=ADMIN OR their email matches
- * ADMIN_EMAILS. Failures (DB unreachable, etc.) fail closed — non-admin.
+ * Admin gate. A user is admin if they have role=ADMIN OR a VERIFIED email that
+ * matches ADMIN_EMAILS — the same rule as requireAdmin and the /me promotion
+ * (register hands out a session before verification, so an unverified row on
+ * an unclaimed admin address must not count). Failures (DB unreachable, etc.)
+ * fail closed — non-admin.
  */
 async function isAdminUser(userId: string): Promise<boolean> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, email: true },
+      select: { role: true, email: true, emailVerified: true },
     });
     if (!user) return false;
     if (user.role === "ADMIN") return true;
+    if (user.emailVerified !== true) return false;
     const adminEmails = (process.env.ADMIN_EMAILS || "")
       .split(",")
       .map((value) => value.trim().toLowerCase())
