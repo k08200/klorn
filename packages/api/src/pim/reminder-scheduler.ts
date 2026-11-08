@@ -14,6 +14,7 @@ import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.j
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 import { newWork } from "../work-context.js";
+import { mailReminderEmailId } from "./mail-reminder.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -30,6 +31,10 @@ type ReminderRecord = {
 
 async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
   const msg = reminder.description || `Reminder: ${reminder.title}`;
+  // A mail's "Later" (pim/mail-reminder.ts) opens that mail: the bell row's
+  // link, the push's url and the native deep link all point at it.
+  const emailId = mailReminderEmailId(reminder.description);
+  const mailPath = emailId ? `/email/${emailId}` : null;
 
   const updated = await prisma.reminder.updateMany({
     where: {
@@ -53,6 +58,7 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
         type: "reminder",
         title: reminder.title,
         message: msg,
+        ...(emailId ? { link: mailPath, sourceEmailId: emailId } : {}),
       },
     });
   } catch (err) {
@@ -76,13 +82,21 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     createdAt: notification.createdAt.toISOString(),
   });
 
-  // Send browser push notification
-  sendPushNotification(reminder.userId, {
-    title: reminder.title,
-    body: msg,
-    url: "/chat",
-    notificationId: notification.id,
-  }).catch((err) => {
+  // Send the push: "system" — no category opt-out, the ambient rate bucket,
+  // quiet hours apply (push.ts). userSet: the user asked for this one, so the
+  // inbound-mail noise heuristic does not veto a subject it quotes.
+  sendPushNotification(
+    reminder.userId,
+    {
+      title: reminder.title,
+      body: msg,
+      url: mailPath ?? "/chat",
+      notificationId: notification.id,
+      ...(emailId ? { emailId } : {}),
+      userSet: true,
+    },
+    "system",
+  ).catch((err) => {
     console.error(`[REMINDER] Push delivery failed for ${reminder.id}:`, err);
     captureError(err, {
       tags: { scope: "reminder.push", userId: reminder.userId },

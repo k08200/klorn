@@ -46,6 +46,7 @@ import { serverErrorMessage } from "../../lib/server-error";
 import { formatRelative } from "../../lib/text";
 import { useKeyboardTriage } from "../../lib/use-hotkeys";
 import { MailV2 } from "./_v2/mail-v2";
+import { postReminder } from "./_v2/post-reminder";
 import { UNDO_NOTICE_SECONDS, useLaneMove } from "./use-lane-move";
 import { TRIAGE_ROW_ATTR, useListTriage } from "./use-list-triage";
 
@@ -95,22 +96,6 @@ const EMAIL_REMINDER_OPTIONS: EmailReminderOption[] = [
   { key: "tomorrow", labelKey: "mailV2.list.remind.tomorrow" },
   { key: "next-week", labelKey: "mailV2.list.remind.nextWeek" },
 ];
-
-function getReminderDate(option: EmailReminderKey): Date {
-  const date = new Date();
-  if (option === "later-today") {
-    date.setHours(date.getHours() + 4);
-    return date;
-  }
-  if (option === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-    date.setHours(9, 0, 0, 0);
-    return date;
-  }
-  date.setDate(date.getDate() + 7);
-  date.setHours(9, 0, 0, 0);
-  return date;
-}
 
 function parseUndoNotice(searchParams: ReturnType<typeof useSearchParams>): UndoNotice | null {
   const action = searchParams?.get("undoAction");
@@ -662,15 +647,7 @@ function EmailView() {
     setRowReminderBusy(busyKey);
     setError(null);
     try {
-      const remindAt = getReminderDate(option.key);
-      await apiFetch("/api/reminders", {
-        method: "POST",
-        body: JSON.stringify({
-          title: `${email.needsReply ? "Reply to" : "Review"}: ${email.subject || "No subject"}`,
-          remindAt: remindAt.toISOString(),
-          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
-        }),
-      });
+      await postReminder(email.id, option.key);
       toast(t("mailV2.list.remind.set", { when: t(option.labelKey) }), "success");
     } catch (err) {
       captureClientError(err, {
