@@ -297,8 +297,8 @@ describe.each(IMAP_CASES)("$label: the urgent sweep after an IMAP repair", (imap
   it("Gmail only: no account lookup, the same key, and an older marker still silences", async () => {
     arrange([urgent("g1", "18abc", BEFORE_RESET, null), urgent("g2", "18def", BEFORE_RESET, null)]);
     override("notification.findMany", (arg) => {
-      const where = (arg as { where?: { OR?: unknown[] } }).where;
-      return where?.OR
+      const where = (arg as { where?: { title?: unknown } }).where;
+      return where?.title
         ? [{ message: "Kim: older [18def]", createdAt: new Date(NOW.getTime() - 3_600_000) }]
         : [];
     });
@@ -433,5 +433,78 @@ describe.each(IMAP_CASES)("$label: a failing reset lookup", (imapCase) => {
     );
     expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
     expect(syncFailed()).toEqual([]);
+  });
+});
+
+describe("the urgent sweep speaks the user's notification language", () => {
+  const koConfig = (arg: unknown) => {
+    void arg;
+    return [
+      {
+        userId: USER,
+        dailyBriefing: false,
+        emailAutoClassify: true,
+        autonomousAgent: false,
+        proactiveActions: false,
+        phoneEscalationEnabled: false,
+        focusWindowEnabled: false,
+        attentionMode: "SUGGEST",
+        timezone: "Asia/Seoul",
+        notificationLanguage: "ko",
+      },
+    ];
+  };
+  /** The dedupe read, evaluated like the database would: by title, then the marker. */
+  const markerRows = (rows: Array<{ title: string; message: string }>) => (arg: unknown) => {
+    const title = (arg as { where?: { title?: { in?: string[] } } }).where?.title;
+    if (!title?.in) return [];
+    return rows
+      .filter((r) => title.in?.includes(r.title))
+      .map((r) => ({ message: r.message, createdAt: new Date(NOW.getTime() - 3_600_000) }));
+  };
+
+  it("titles the bell row and the device push in Korean for a ko user", async () => {
+    override("automationConfig.findMany", koConfig);
+    arrange([urgent("g1", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    const created = createdNotifications().filter((d) => d.dedupeKey === "urgent:18abc");
+    expect(created).toHaveLength(1);
+    expect(created[0].title).toBe("긴급 메일");
+    expect(m.sendPushNotification).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ title: "긴급 메일" }),
+      "email_urgent",
+    );
+  });
+
+  it("an English row written before the title was localized still silences that mail", async () => {
+    override("automationConfig.findMany", koConfig);
+    arrange([urgent("g1", "18abc", BEFORE_RESET, null), urgent("g2", "18def", BEFORE_RESET, null)]);
+    override(
+      "notification.findMany",
+      markerRows([{ title: "Urgent email", message: "Kim: older [18def]" }]),
+    );
+
+    await runOneTick();
+
+    const created = createdNotifications().filter((d) => d.title === "긴급 메일");
+    expect(created).toHaveLength(1);
+    expect(String(created[0].message)).toMatch(/\[18abc\]$/);
+  });
+
+  it("a row the firewall titled in another language still silences that mail", async () => {
+    override("automationConfig.findMany", koConfig);
+    arrange([urgent("g1", "18abc", BEFORE_RESET, null)]);
+    override(
+      "notification.findMany",
+      markerRows([{ title: "Dringende Mail", message: "Kim: older [18abc]" }]),
+    );
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "긴급 메일")).toEqual([]);
+    expect(m.sendPushNotification).not.toHaveBeenCalled();
   });
 });

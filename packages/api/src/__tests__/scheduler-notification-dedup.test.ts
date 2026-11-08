@@ -134,6 +134,25 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     );
   });
 
+  it("titles the bell row and the live frame in the user's notification language", async () => {
+    const { prisma } = await import("../db.js");
+    const { pushNotification } = await import("../websocket.js");
+    await ensureUrgentEmailNotification(
+      USER,
+      { id: "email-1", gmailId: GMAIL_ID },
+      `body [${GMAIL_ID}]`,
+      "body",
+      "ko",
+    );
+    expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ title: "긴급 메일" }) }),
+    );
+    expect(vi.mocked(pushNotification)).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ title: "긴급 메일", message: "body" }),
+    );
+  });
+
   it("IMAP lead (B2b): the key names the row, so a new message reusing a re-keyed id is not a loser", async () => {
     const { prisma } = await import("../db.js");
     const imapId = "naver-imap:me@naver.com:101";
