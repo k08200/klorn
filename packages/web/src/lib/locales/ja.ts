@@ -235,6 +235,8 @@ const ja: Record<string, string> = {
   "today.lane.push.hint": "今すぐ確認",
   "today.lane.push.empty": "今すぐ確認が必要なメールはありません。",
   "today.lane.push.older": "以前の{lane}メールを見る",
+  "today.cover.openInbox": "受信トレイをすべて開く",
+  "today.cover.meter": "今日の通知 {used}/{limit} 件",
   "today.lane.meeting.hint": "日程調整",
   "today.lane.meeting.empty": "日程調整のメールはありません。",
   "today.lane.queue.hint": "今日読んでおきたいメール",

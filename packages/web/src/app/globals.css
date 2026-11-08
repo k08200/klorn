@@ -4,6 +4,18 @@
    inline script in layout.tsx (system preference or the stored override). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Phone landscape (docs/design/design-language-v2.md, "Device classes"): a
+   phone on its side is wide enough for the rail and the mail split but under
+   500px tall, so the rail narrows to 56px and the mail header folds into one
+   row. Keep the query in step with the CSS block below and with
+   app/email/_v2/mail-header.tsx (PHONE_LANDSCAPE_QUERY). Portrait and tall
+   screens never match. */
+@custom-variant phone-landscape {
+  @media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
+    @slot;
+  }
+}
+
 /* ── Theme palettes ─────────────────────────────────────────────────
    Semantic tokens carry the theme: light values here are byte-identical to
    what the app hardcoded before dark mode, so the light theme cannot drift.
@@ -567,6 +579,13 @@ body {
     --shell-nav-w: calc(72px + env(safe-area-inset-left));
   }
 }
+/* Phone landscape: the 56px rail (components/nav-rail.tsx). Before the
+   sidebar step, so a short wide window keeps the 260px sidebar. */
+@media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
+  :root {
+    --shell-nav-w: calc(56px + env(safe-area-inset-left));
+  }
+}
 @media (min-width: 64rem) {
   :root {
     --shell-nav-w: calc(260px + env(safe-area-inset-left));
@@ -616,6 +635,13 @@ body {
 .mail-split-reader {
   padding-bottom: var(--main-clear, 0px);
   scroll-padding-bottom: var(--main-clear, 0px);
+}
+/* Phone landscape: a ~360px list beside the reader (half the space at most).
+   After the base width, before the hinge rule, so a hinge keeps its seam. */
+@media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
+  .mail-split-list {
+    width: min(360px, 50%);
+  }
 }
 @media (horizontal-viewport-segments: 2) {
   .mail-split-list {

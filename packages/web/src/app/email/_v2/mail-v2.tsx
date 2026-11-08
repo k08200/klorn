@@ -267,8 +267,8 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
         ref={rootRef}
         className={
           pane
-            ? "flex flex-col gap-3 pb-6 pt-[18px] [&>*:not(section)]:mx-4"
-            : `${PAGE_SHELL} flex flex-col gap-3`
+            ? "flex flex-col gap-3 pb-6 pt-[18px] phone-landscape:gap-2 phone-landscape:pt-0 [&>*:not(section)]:mx-4"
+            : `${PAGE_SHELL} flex flex-col gap-3 phone-landscape:gap-2 phone-landscape:pt-0`
         }
       >
         <MailHeader

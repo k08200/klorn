@@ -229,6 +229,8 @@ const en: Record<string, string> = {
   "today.lane.push.hint": "Needs you now",
   "today.lane.push.empty": "Nothing needs you right now.",
   "today.lane.push.older": "See older {lane} mail",
+  "today.cover.openInbox": "Open full inbox",
+  "today.cover.meter": "{used} of {limit} interruptions today",
   "today.lane.meeting.hint": "Scheduling",
   "today.lane.meeting.empty": "No scheduling mail.",
   "today.lane.queue.hint": "Worth reading today",

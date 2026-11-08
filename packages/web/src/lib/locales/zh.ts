@@ -217,6 +217,8 @@ const zh: Record<string, string> = {
   "today.lane.push.hint": "现在需要你处理",
   "today.lane.push.empty": "现在没有需要你处理的邮件。",
   "today.lane.push.older": "查看更早的{lane}邮件",
+  "today.cover.openInbox": "打开完整收件箱",
+  "today.cover.meter": "今天已提醒 {used}/{limit} 次",
   "today.lane.meeting.hint": "日程安排",
   "today.lane.meeting.empty": "没有日程安排邮件。",
   "today.lane.queue.hint": "今天值得一读",
