@@ -391,6 +391,14 @@ const es: Record<string, string> = {
   "pwa.install.body": "Abre Klorn desde tu pantalla de inicio.",
   "pwa.install.action": "Instalar",
   "pwa.install.dismiss": "Cerrar aviso de instalación",
+  "desktop.autostart.prompt.title": "¿Iniciar Klorn al iniciar sesión?",
+  "desktop.autostart.prompt.body":
+    "Klorn puede iniciarse cuando inicias sesión para que sigas recibiendo notificaciones de correo urgente.",
+  "desktop.autostart.prompt.accept": "Iniciar al iniciar sesión",
+  "desktop.autostart.prompt.decline": "No, gracias",
+  "desktop.autostart.prompt.enabling": "Activando...",
+  "desktop.autostart.failed":
+    "No se pudo activar el inicio al iniciar sesión. Puedes volver a intentarlo en Ajustes.",
   "pwa.ios.region": "Instalar Klorn en el iPhone",
   "pwa.ios.title": "Recibe avisos de Klorn en el iPhone",
   "pwa.ios.body": "El iPhone solo envía notificaciones a las apps de la pantalla de inicio.",
@@ -530,6 +538,9 @@ const es: Record<string, string> = {
     "Recibe recordatorios, resúmenes y avisos de correo importante.",
   "settings.pushNotifications.blockedChip": "Bloqueadas",
   "settings.pushNotifications.unsupportedChip": "No admitidas",
+  "settings.launchAtLogin.title": "Iniciar al iniciar sesión",
+  "settings.launchAtLogin.desc":
+    "Klorn se abre en la bandeja del sistema al iniciar sesión en Windows, para que sigan llegando las notificaciones de correo urgente.",
   "settings.turnOff": "Desactivar",
   "settings.turnOn": "Activar",
   "settings.toast.pushUnsupported": "Este navegador no admite notificaciones.",
