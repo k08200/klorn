@@ -20,6 +20,7 @@ import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
 import { evaluateNotificationGate, type NotifCategory } from "./notification-prefs.js";
 import { sendApnsPush } from "./push-apns.js";
+import { pushBucketFor } from "./push-bucket.js";
 import {
   createPushDeliveryAttempt,
   createSkippedPushDelivery,
@@ -225,17 +226,21 @@ export async function sendPushNotification(
     }
   }
 
-  // Global per-user rate limit (Postgres-backed, survives deploys) — blocks
-  // phone ring; DB notification is already persisted upstream so the bell
-  // still surfaces this event.
-  const rate = await recordPushAttempt(userId);
+  // Per-user rate limit (Postgres-backed, survives deploys) in two buckets:
+  // urgent mail and meeting alerts ring against an interrupt bucket that
+  // briefings, proposals and reminders can never use up (push-bucket.ts).
+  // Blocks the phone ring only; the DB notification is already persisted
+  // upstream so the bell still surfaces this event. The skipReason names the
+  // bucket that refused.
+  const bucket = pushBucketFor(category);
+  const rate = await recordPushAttempt(userId, bucket);
   if (!rate.allowed) {
-    console.log(`[PUSH] Rate-limited for ${userId} (${category}): ${rate.reason}`);
+    console.log(`[PUSH] Rate-limited (${bucket}) for ${userId} (${category}): ${rate.reason}`);
     await recordSkipped(
       userId,
       payload.title,
       category,
-      `rate_limited:${rate.reason ?? "unknown"}`,
+      `rate_limited_${bucket}:${rate.reason ?? "unknown"}`,
     );
     return skipped("rate_limited");
   }

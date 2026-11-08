@@ -32,12 +32,21 @@ function floatEnv(name: string, fallback: number): number {
 }
 
 // ── Push notifications ────────────────────────────────────────────────
-// Caps how often a single user's phone can ring across a sliding window.
-// Originally tuned 2026-04-21 after the notification-flood incident.
+// Caps how often a single user's phone can ring across a sliding window, in two
+// independent buckets (notify/push-bucket.ts) that share the two windows.
 export const PUSH_WINDOW_10MIN_MS = intEnv("PUSH_WINDOW_10MIN_MS", 10 * 60 * 1000);
 export const PUSH_WINDOW_60MIN_MS = intEnv("PUSH_WINDOW_60MIN_MS", 60 * 60 * 1000);
-export const PUSH_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
-export const PUSH_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
+// Ambient (briefings, proposals, reminders, system): the caps tuned 2026-04-21
+// after the notification-flood incident. The env names predate the split and
+// are kept so an existing override still applies.
+export const PUSH_AMBIENT_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
+export const PUSH_AMBIENT_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
+// Interrupt (urgent mail, meeting alerts): its own caps, so ambient traffic can
+// never use them up. Room for a real burst (a meeting alert plus a few urgent
+// mails in one sweep), but still a cap: a classifier flood (2026-10-19, 28 of
+// 30 LinkedIn invites tiered MEETING) must not ring the phone 30 times.
+export const PUSH_INTERRUPT_CAP_10MIN = intEnv("PUSH_INTERRUPT_CAP_10MIN", 6);
+export const PUSH_INTERRUPT_CAP_60MIN = intEnv("PUSH_INTERRUPT_CAP_60MIN", 20);
 
 // ── Proactive actions (rule-based, no LLM) ────────────────────────────
 export const UNANSWERED_THRESHOLD_HOURS = intEnv("PROACTIVE_UNANSWERED_HOURS", 48);
