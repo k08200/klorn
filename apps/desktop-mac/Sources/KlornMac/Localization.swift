@@ -121,6 +121,15 @@ extension L10n {
         return Set(dict.keys)
     }
 
+    /// One key's text in one shipped language, whatever the UI shows now; nil
+    /// when that catalogue lacks the key.
+    static func value(_ key: String, language code: String) -> String? {
+        guard let path = Bundle.module.path(forResource: code, ofType: "lproj"),
+              let bundle = Bundle(path: path) else { return nil }
+        let text = bundle.localizedString(forKey: key, value: key, table: "Localizable")
+        return text == key ? nil : text
+    }
+
     /// Languages Klorn ships. The picker and the drift check read this, so
     /// adding a translation is one .lproj folder plus one case.
     static let shipped = ["en", "ko", "ja", "zh", "es", "fr", "de"]

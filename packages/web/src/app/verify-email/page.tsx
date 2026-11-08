@@ -81,7 +81,7 @@ function VerifyEmailContent() {
             : t("verifyEmail.description.error")
       }
     >
-      <p className="rounded-card border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
+      <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
         {status === "sent"
           ? t("verifyEmail.nextStepBody.sent")
           : status === "pending"
@@ -97,7 +97,7 @@ function VerifyEmailContent() {
           <p className="mt-6 text-center">
             <Link
               href="/login"
-              className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-label text-accent-deep underline-offset-2 hover:underline"
+              className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-role-label text-accent-deep underline-offset-2 hover:underline"
             >
               {t("auth.backToLogin")}
             </Link>
@@ -106,7 +106,7 @@ function VerifyEmailContent() {
       ) : (
         <Link
           href="/login"
-          className="focus-ring mt-6 flex h-11 w-full items-center justify-center rounded-control border border-line bg-surface-panel text-label text-ink transition-colors duration-120 ease-fluid hover:border-line-strong hover:bg-surface-hover"
+          className="focus-ring mt-6 flex h-11 w-full items-center justify-center rounded-control border border-line bg-surface-panel text-role-label text-ink transition-colors duration-120 ease-fluid hover:border-line-strong hover:bg-surface-hover"
         >
           {t("auth.backToLogin")}
         </Link>

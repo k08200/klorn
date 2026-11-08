@@ -62,7 +62,7 @@ interface MailHeaderProps {
   onCompose: () => void;
   onSync: () => void;
   onReanalyze: () => void;
-  /** The 440px list column of the split view: smaller title, stacked controls. */
+  /** The list column of the split view (280–440px): smaller title, stacked controls. */
   compact?: boolean;
 }
 
@@ -195,7 +195,7 @@ export function MailHeader(props: MailHeaderProps) {
   return (
     <header className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-        <h1 className={`mr-auto text-ink ${compact ? "text-title" : "text-display"}`}>
+        <h1 className={`mr-auto text-ink ${compact ? "text-role-title" : "text-role-page"}`}>
           {t("nav.mail")}
         </h1>
         {/* biome-ignore lint/a11y/useSemanticElements: <search> is not yet in the JSX types this repo targets; role="search" names the same landmark */}
@@ -216,7 +216,7 @@ export function MailHeader(props: MailHeaderProps) {
             onKeyDown={onSearchKeyDown}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="focus-ring h-9 w-full rounded-lg border border-line-strong bg-surface-panel pl-9 pr-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
+            className="focus-ring h-9 w-full rounded-control border border-line-strong bg-surface-panel pl-9 pr-3 text-role-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
           />
         </form>
         {!compact && (
@@ -266,7 +266,7 @@ export function MailHeader(props: MailHeaderProps) {
           value={threads ? null : view.lane}
           onChange={(lane) => onChange({ lane })}
           disabled={threads}
-          className="flex-1 max-md:-mx-4 max-md:px-4"
+          className="flex-1 max-md:-mx-4 max-md:scroll-px-4 max-md:px-4"
         />
         <div className={`flex items-center gap-2 ${compact ? "justify-end" : ""}`}>
           {accounts.length > 1 && (
@@ -290,9 +290,9 @@ export function MailHeader(props: MailHeaderProps) {
           </Menu>
         </div>
       </div>
-      {threads && <p className="text-caption text-ink-muted">{t("mailV2.threads.note")}</p>}
+      {threads && <p className="text-role-caption text-ink-muted">{t("mailV2.threads.note")}</p>}
       {!threads && props.tally && (
-        <p className="px-1 text-caption tabular-nums text-ink-muted">
+        <p className="px-1 text-role-caption tabular-nums text-ink-muted">
           <span className="font-medium text-ink-soft">
             {view.lane === "ALL" ? t("mailV2.lane.all") : laneName(view.lane)}
           </span>

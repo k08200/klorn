@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the auth module so requireAuth passes through and getUserId returns a
 // deterministic id — the target of this test is the route's input validation,
@@ -14,6 +14,14 @@ vi.mock("../auth.js", () => ({
 // openai/googleapis/etc.
 vi.mock("../agentcore/autonomous-agent.js", () => ({
   runAgentForUser: vi.fn(),
+}));
+
+// Only createCompletion is replaced (the guideline-advice LLM call); the rest
+// of llm/openai.js stays real.
+const createCompletion = vi.hoisted(() => vi.fn());
+vi.mock("../llm/openai.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../llm/openai.js")>()),
+  createCompletion,
 }));
 
 // In-memory prisma stub capturing upsert payloads.
@@ -519,6 +527,93 @@ describe("PATCH /api/automations timezone validation", () => {
     const call = upsertSpy.mock.calls[0][0];
     expect(call.update.timezoneMode).toBeNull();
     expect(res.json().timezoneMode).toBe("AUTO");
+    await app.close();
+  });
+});
+
+describe("PATCH /api/automations interruptBudget (attention engine v3)", () => {
+  beforeEach(() => {
+    upsertSpy.mockReset();
+    upsertSpy.mockImplementation(async (args: { update: Record<string, unknown> }) => ({
+      userId: "test-user-id",
+      briefingTime: "06:00",
+      timezone: "Asia/Seoul",
+      agentMode: "SUGGEST",
+      alwaysAllowedTools: [],
+      interruptBudget: (args.update.interruptBudget as number | null | undefined) ?? null,
+    }));
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+  });
+  afterEach(() => {
+    delete process.env.JUDGE_V3_POLICY;
+    delete process.env.JUDGE_V3_SHADOW;
+  });
+
+  const patch = async (payload: Record<string, unknown>) => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/automations", payload });
+    await app.close();
+    return res;
+  };
+
+  it("stores an integer 1–50 and null (the system default)", async () => {
+    expect((await patch({ interruptBudget: 3 })).statusCode).toBe(200);
+    expect(upsertSpy.mock.calls[0][0].update.interruptBudget).toBe(3);
+    expect((await patch({ interruptBudget: null })).statusCode).toBe(200);
+    expect(upsertSpy.mock.calls[1][0].update.interruptBudget).toBeNull();
+  });
+
+  it.each([0, 51, 2.5, -1, "5", true])("rejects %j with 400 and writes nothing", async (value) => {
+    const res = await patch({ interruptBudget: value });
+    expect(res.statusCode).toBe(400);
+    expect(upsertSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns the setting with its default and maximum", async () => {
+    const res = await patch({ interruptBudget: 4 });
+    expect(res.json()).toMatchObject({
+      interruptBudget: 4,
+      interruptBudgetDefault: 5,
+      interruptBudgetMax: 50,
+    });
+  });
+
+  it("for a user outside the policy, ignores the key like any unknown one (today's behaviour)", async () => {
+    delete process.env.JUDGE_V3_SHADOW;
+    const res = await patch({ interruptBudget: 999 });
+    expect(res.statusCode).toBe(200);
+    expect(upsertSpy.mock.calls[0][0].update).not.toHaveProperty("interruptBudget");
+    expect(res.json()).not.toHaveProperty("interruptBudget");
+  });
+});
+
+describe("POST /api/automations/guideline-advice", () => {
+  it("answers the daily cost cap with 429 + its code, not a 'failed' 502", async () => {
+    createCompletion.mockRejectedValueOnce(
+      Object.assign(new Error("Quota used for today."), { name: "DailyCostCapExceededError" }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/automations/guideline-advice",
+      payload: { guideline: "Reply politely." },
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({ error: "Quota used for today.", code: "DAILY_COST_CAP" });
+    await app.close();
+  });
+
+  it("still answers 502 for an ordinary provider failure", async () => {
+    createCompletion.mockRejectedValueOnce(new Error("provider down"));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/automations/guideline-advice",
+      payload: { guideline: "Reply politely." },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: "Advice generation failed" });
     await app.close();
   });
 });

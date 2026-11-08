@@ -176,6 +176,7 @@ describe("POST /api/email/:id/reply-draft", () => {
     });
     expect(res.statusCode).toBe(429);
     expect(res.json().error).toMatch(/budget/i);
+    expect(res.json().code).toBe("DAILY_COST_CAP");
     expect(captureError).not.toHaveBeenCalled();
     await app.close();
   });

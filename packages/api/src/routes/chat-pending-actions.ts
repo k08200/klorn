@@ -14,7 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../agentcore/action-outbox.js";
 import { resolveActionTarget } from "../agentcore/action-target.js";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { db, INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -104,8 +104,11 @@ export async function chatRoutes(app: FastifyInstance) {
   // plugin so revoked/kicked tokens are rejected — bare getUserId() skips the
   // device-kick + password-reset epoch checks that requireAuth enforces.
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Paywall (no-op pre-launch): the approvals LIST and the no-effect triage
+  // (reject, snooze) are open to the free tier — Today, Approvals and the
+  // sidebar badge read them. Approving EXECUTES the action, so that route
+  // carries its own requireEntitled.
+  app.addHook("preHandler", requireAppAccess);
 
   // GET /api/chat/pending-actions — All pending actions for the current user across conversations.
   // Powers the mobile inbox so users can see & act on every "needs your attention" item in one place.
@@ -221,7 +224,7 @@ export async function chatRoutes(app: FastifyInstance) {
   // POST /api/chat/pending-actions/:actionId/approve — Approve and execute a pending action
   app.post(
     "/pending-actions/:actionId/approve",
-    { schema: { params: actionIdParamSchema } },
+    { schema: { params: actionIdParamSchema }, preHandler: requireEntitled },
     async (request, reply) => {
       const userId = getUserId(request);
       const { actionId } = request.params as { actionId: string };

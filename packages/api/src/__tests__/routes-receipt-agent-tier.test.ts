@@ -21,7 +21,10 @@ vi.mock("../auth.js", () => ({
   requireAuth: vi.fn(async () => {}),
   getUserId: vi.fn(() => "user-1"),
 }));
-vi.mock("../billing/entitlement-guard.js", () => ({ requireEntitled: vi.fn(async () => {}) }));
+vi.mock("../billing/entitlement-guard.js", () => ({
+  requireAppAccess: vi.fn(async () => {}),
+  requireEntitled: vi.fn(async () => {}),
+}));
 
 import { receiptRoutes } from "../routes/receipt.js";
 

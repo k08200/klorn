@@ -96,7 +96,7 @@ export function SecurityPanel() {
         {hasPassword ? (
           <>
             <div>
-              <label htmlFor="current-pw" className="block text-sm text-ink-mid mb-1">
+              <label htmlFor="current-pw" className="block text-role-label text-ink-mid mb-1">
                 {t("settings.currentPassword")}
               </label>
               <input
@@ -105,11 +105,11 @@ export function SecurityPanel() {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder={t("settings.currentPassword")}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-role-body focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
               />
             </div>
             <div>
-              <label htmlFor="new-pw" className="block text-sm text-ink-mid mb-1">
+              <label htmlFor="new-pw" className="block text-role-label text-ink-mid mb-1">
                 {t("settings.newPassword")}
               </label>
               <input
@@ -119,7 +119,7 @@ export function SecurityPanel() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder={t("settings.newPasswordPlaceholder")}
                 minLength={6}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-role-body focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
               />
             </div>
             <div className="flex justify-end">
@@ -133,13 +133,13 @@ export function SecurityPanel() {
           </>
         ) : (
           <>
-            <p className="text-sm text-ink-mid">
+            <p className="text-role-body text-ink-mid">
               {t("settings.oauthNoPassword.line1")}
               <br />
               <span className="text-ink-dim">{t("settings.oauthNoPassword.line2")}</span>
             </p>
             <div>
-              <label htmlFor="set-pw" className="block text-sm text-ink-mid mb-1">
+              <label htmlFor="set-pw" className="block text-role-label text-ink-mid mb-1">
                 {t("settings.newPassword")}
               </label>
               <input
@@ -149,7 +149,7 @@ export function SecurityPanel() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder={t("settings.newPasswordPlaceholder")}
                 minLength={6}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-role-body focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
               />
             </div>
             <div className="flex justify-end">

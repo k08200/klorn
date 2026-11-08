@@ -26,7 +26,7 @@ enum Theme {
     /// The canvas as raw sRGB components — pure, so the self-check can do
     /// contrast math without resolving an NSColor (see `laneComponents`).
     static let bgLight: RGBA = (0.980, 0.980, 0.980, 1)
-    static let bgDark: RGBA = (0.039, 0.039, 0.045, 1)
+    static let bgDark: RGBA = hex(0x0A0A0B)  // v2 dark canvas
     /// The one interaction accent — CTAs, focus, selection, links, the
     /// floating button. Everything "choose me / chosen" speaks in this; the
     /// brand marks themselves are B&W. Since the design detail pass
@@ -62,7 +62,9 @@ enum Theme {
     }
     /// Near-black / near-white, hue-free (the slate ramp carried the navy cast
     /// into every glyph).
-    static let text = dyn(light: (0.060, 0.060, 0.070, 1), dark: (0.957, 0.957, 0.965, 1))
+    static let text = dyn(light: textLight, dark: (0.957, 0.957, 0.965, 1))
+    /// v2 ink #0B0D12.
+    static let textLight: RGBA = hex(0x0B0D12)
     /// Secondary text, neutral gray. Contrast re-measured after the
     /// neutralization: light #52525C on the raised-over-white stack ≈ 6.9:1,
     /// dark #A2A2AD on the raised-over-panel stack ≈ 6.8:1 — both clear the
@@ -199,40 +201,66 @@ enum Theme {
     // mac sizes sit a notch under the web px. Every step is a deliberate
     // contrast jump so a glance separates statement (head) from metadata
     // (label/caption).
+    /// Design Language v2 type roles, Mac column (docs/design/
+    /// design-language-v2.md): page 28 · title 22 · head 15 · body 13 ·
+    /// label 12 · caption 11 · mono 12. Pure sizes so the self-check can pin
+    /// them; `Typo` builds the fonts from these.
+    enum TypeSize {
+        static let page: CGFloat = 28
+        static let title: CGFloat = 22
+        static let head: CGFloat = 15
+        static let body: CGFloat = 13
+        static let label: CGFloat = 12
+        static let caption: CGFloat = 11
+        static let mono: CGFloat = 12
+    }
+
     enum Typo {
-        /// Screen titles (Preferences, Teams, reading-pane subject). 22pt.
-        static let display = Font.system(size: 22, weight: .semibold)
-        /// Section/pane titles one step under display. 17pt.
-        static let title = Font.system(size: 17, weight: .semibold)
+        /// Page titles (a whole screen's name, onboarding). 28pt. New in v2.
+        static let page = Font.system(size: TypeSize.page, weight: .semibold)
+        /// Screen and pane titles (Preferences, Teams, reading-pane subject,
+        /// the mail and calendar list headers). 22pt.
+        static let title = Font.system(size: TypeSize.title, weight: .semibold)
         /// The statement a list is scanned for: subjects, section heads. 15pt.
-        static let head = Font.system(size: 15, weight: .semibold)
+        static let head = Font.system(size: TypeSize.head, weight: .semibold)
         /// Running text. 13pt.
-        static let body = Font.system(size: 13)
+        static let body = Font.system(size: TypeSize.body)
         /// Identity + controls: senders, buttons, chips. 12pt.
-        static let label = Font.system(size: 12, weight: .medium)
+        static let label = Font.system(size: TypeSize.label, weight: .medium)
         /// Metadata: reasons, timestamps, helper lines. 11pt.
-        static let caption = Font.system(size: 11)
+        static let caption = Font.system(size: TypeSize.caption)
+        /// Code, ids, keys — SF Mono. 12pt.
+        static let mono = Font.system(size: TypeSize.mono, design: .monospaced)
         /// DEPRECATED — the plan retires 10pt text; new code uses `caption`
         /// (11pt). The main window is free of it (self-check guard); the
         /// bar's surfaces keep it until they are deleted in M8.
         static let micro = Font.system(size: 10, weight: .semibold)
         /// Counts — monospaced digits so columns of numbers never shimmy.
-        static let numeric = Font.system(size: 13).monospacedDigit()
+        static let numeric = Font.system(size: TypeSize.body).monospacedDigit()
         /// Row/nav icons — one size, one weight, everywhere.
         static let icon = Font.system(size: 12, weight: .medium)
     }
 
     // MARK: Radius (productization plan §2)
-    // 6 controls, 10 rows/cards/popovers, 16 sheets/windows. Pills and
-    // the lane chip use the Capsule SHAPE, not a radius token. Call sites migrate
-    // in M7 — new code picks a rung instead of a raw cornerRadius literal.
+    // Design Language v2: 6 chip · 10 control · 16 card · 24 sheet. The
+    // rungs keep their numbers (sm/md/lg/xl = 6/10/16/24) and live only in
+    // this file: call sites pick a role by meaning (the self-check holds
+    // every other file to the role names).
     enum Radius {
-        /// Controls: buttons, fields, small toggles.
+        /// Chips, badges, tags, skeleton bars, a segment inside a track.
         static let sm: CGFloat = 6
-        /// Rows, cards, popovers.
+        /// Buttons, fields, segmented tracks, row highlights, inline notices.
         static let md: CGFloat = 10
-        /// Sheets and windows.
+        /// Bordered or raised cards and panels.
         static let lg: CGFloat = 16
+        /// Sheets (top corners of a sheet).
+        static let xl: CGFloat = 24
+
+        // v2 role names — every call site picks one of these.
+        static let chip = sm
+        static let control = md
+        static let card = lg
+        static let sheet = xl
     }
 
     // MARK: Spacing (4pt grid)
@@ -300,9 +328,9 @@ struct FirstSyncState: View {
                 HStack(spacing: Theme.s3) {
                     Circle().fill(Theme.surfaceHover).frame(width: 8, height: 8)
                     VStack(alignment: .leading, spacing: Theme.s1) {
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: 90, height: 8)
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: row.isMultiple(of: 2) ? 260 : 200, height: 11)
                     }
                     Spacer()

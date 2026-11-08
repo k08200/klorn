@@ -366,6 +366,10 @@ const de: Record<string, string> = {
     "Google-OAuth-Prüfung abgeschlossen (Okt. 2026) · Unabhängig bewertet (CASA Tier 2)",
   "auth.privacy": "Datenschutz",
   "auth.terms": "AGB",
+  "auth.legalConsent":
+    "Wenn du fortfährst, stimmst du den {terms} zu und bestätigst, die {privacy} gelesen zu haben.",
+  "auth.legalConsentTerms": "Nutzungsbedingungen",
+  "auth.legalConsentPrivacy": "Datenschutzerklärung",
   "auth.preview.label": "Beispiel: Klorn sortiert E-Mails in fünf Spuren",
   "auth.preview.demo": "Demodaten",
   "auth.preview.caption":
@@ -789,10 +793,9 @@ const de: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Entscheidungen zeigen",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "liest nur",
-  "onboarding.welcome.permissions.mid":
-    "Gmail und Kalender. Mail senden oder Termine anlegen wartet immer auf",
+  "onboarding.welcome.permissions.mid": "Gmail und Kalender. Mail, die Klorn sendet, wartet auf",
   "onboarding.welcome.permissions.emphasis2": "deine Freigabe",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": " – außer du schaltest automatische Antworten ein.",
   "onboarding.syncing.title": "Dein Arbeitsbereich wird eingerichtet...",
   "onboarding.syncing.titleDone": "Synchronisierung abgeschlossen.",
   "onboarding.syncing.desc":
@@ -1022,7 +1025,6 @@ const de: Record<string, string> = {
   "billing.error.checkoutFailed": "Die Bezahlsitzung konnte nicht erstellt werden.",
   "billing.error.portalFailed": "Das Abrechnungsportal konnte nicht geöffnet werden.",
   "billing.cancelSubscription": "Abo kündigen",
-  "billing.unlimitedOnPlan": "In diesem Tarif unbegrenzt",
   "billing.noWebSubscription":
     "Dieser Tarif wird nicht über das Web abgerechnet, hier gibt es also nichts zu kündigen. Wenn du in der mobilen App abonniert hast, verwalte es dort.",
   "billing.enterpriseBilling":
@@ -1048,28 +1050,25 @@ const de: Record<string, string> = {
   "billing.toast.resumed": "Abo fortgesetzt — die Abrechnung läuft weiter wie zuvor.",
   "billing.error.resumeFailed": "Das Abo konnte nicht fortgesetzt werden. Bitte erneut versuchen.",
   "billing.plan.free.name": "Free",
-  "billing.plan.free.limit": "50 Entscheidungen/Monat · 500K Tokens",
+  "billing.plan.free.limit": "Tägliches KI-Kontingent (Reset um 00:00 UTC)",
+  "billing.plan.free.feature.oneAccount": "Erstes E-Mail-Konto bei jedem Anbieter",
+  "billing.plan.free.feature.briefings": "Tägliche Briefings und Mail-Triage",
   "billing.plan.free.feature.mailCalendar": "Mail und Kalender lesen",
   "billing.plan.free.feature.tasksMemory": "Aufgaben und Gedächtnis",
-  "billing.plan.free.feature.freeModels": "Kostenlose OpenRouter-Modelle",
   "billing.plan.pro.name": "Pro",
   "billing.plan.pro.period": "/Monat",
   "billing.plan.pro.trialNote": "7 Tage kostenlos testen · vor Ende kündigen und nichts zahlen",
-  "billing.plan.pro.limit": "2K Entscheidungen/Monat · 10M Tokens",
-  "billing.plan.pro.feature.everythingFree": "Alles aus Free",
-  "billing.plan.pro.feature.sendMail": "Mail senden und Kalendertermine anlegen",
-  "billing.plan.pro.feature.decisionLoop":
-    "Entscheidungsschleife: Vorschlag + Ausführung im Rahmen",
-  "billing.plan.pro.feature.briefings": "Tägliche Briefings und Mail-Triage",
-  "billing.plan.pro.feature.replyDrafts": "Antwortentwürfe und Musterlernen",
+  "billing.plan.pro.limit": "Höheres tägliches KI-Kontingent (Reset um 00:00 UTC)",
+  "billing.plan.pro.feature.everythingFree": "Alles aus Free, plus:",
+  "billing.plan.pro.feature.sendMail": "Mails senden und beantworten, mit Antwortentwürfen",
+  "billing.plan.pro.feature.calendarWrites": "Kalendertermine anlegen und bearbeiten",
+  "billing.plan.pro.feature.moreAccounts": "Weitere E-Mail-Konten und Kalender",
+  "billing.plan.pro.feature.autoReply": "Automatische Antworten im automatischen Modus",
+  "billing.plan.pro.feature.byok": "Eigener Modellschlüssel",
   "billing.plan.pro.feature.integrations": "Slack- und Notion-Integrationen (demnächst)",
-  "billing.plan.pro.feature.webResearch": "Webrecherche und Dokumententwürfe",
-  "billing.plan.pro.feature.sonnet": "Auswahl des Claude-Sonnet-Modells",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Individuell",
-  "billing.plan.enterprise.limit": "Unbegrenzt",
   "billing.plan.enterprise.feature.everythingPro": "Alles aus Pro",
-  "billing.plan.enterprise.feature.opus": "Auswahl von Claude Opus",
   "billing.plan.enterprise.feature.onPrem": "On-Premise-Optionen",
   "billing.plan.enterprise.feature.sla": "Support mit SLA",
   "billing.plan.enterprise.feature.customIntegrations": "Individuelle Integrationen",
@@ -1078,10 +1077,10 @@ const de: Record<string, string> = {
     'Pro zu starten kostet heute 0 und schaltet sofort alles in Pro frei. Die erste Abbuchung von {price} erfolgt, wenn die 7 Testtage enden. Kündige vorher über „Abo verwalten" und du zahlst nichts.',
   "billing.faq.freeVsPro.q": "Was ist der Unterschied zwischen Free und Pro?",
   "billing.faq.freeVsPro.a":
-    "Free liest und ordnet: Klorn beobachtet Mail und Kalender und macht daraus Entscheidungskarten — mit 50 Entscheidungen und 500K Tokens pro Monat auf kostenlosen Modellen. Pro führt aus: Mail senden, Kalendertermine anlegen, Antwortentwürfe, tägliche Briefings und die Vorschlag-plus-Ausführung der Entscheidungsschleife — mit 2K Entscheidungen und 10M Tokens pro Monat und der Auswahl des Claude-Sonnet-Modells.",
+    "Free liest und ordnet: Klorn sortiert die Mail Ihres ersten E-Mail-Kontos bei jedem Anbieter, schreibt das tägliche Briefing, liest Ihren Kalender und antwortet im Assistenten – innerhalb eines täglichen KI-Kontingents, das um 00:00 UTC zurückgesetzt wird. Pro führt aus: Mails senden und beantworten mit Antwortentwürfen, Kalendertermine anlegen und bearbeiten, weitere E-Mail-Konten und Kalender, automatische Antworten im automatischen Modus, Slack- und Notion-Integrationen, sobald sie verfügbar sind, ein eigener Modellschlüssel und ein höheres tägliches KI-Kontingent.",
   "billing.faq.enterprise.q": "Was bietet Enterprise zusätzlich?",
   "billing.faq.enterprise.a":
-    "Individuelle Grenzen statt fester Kontingente, Auswahl des Claude-Opus-Modells, On-Premise-Optionen, Support mit SLA und individuelle Integrationen. Der Preis hängt vom Umfang ab — sprich mit dem Vertrieb.",
+    "On-Premise-Optionen, Support mit SLA und individuelle Integrationen. Der Preis hängt vom Umfang ab — sprich mit dem Vertrieb.",
   "billing.faq.manage.q": "Wie kündige oder verwalte ich mein Abo?",
   "billing.faq.manage.a":
     '„Abo kündigen" auf dieser Seite beendet das Abo zum Ende des bereits bezahlten Zeitraums — bis dahin läuft Pro weiter, es wird nichts mehr abgebucht und nichts gelöscht. Bis es wirksam wird, kannst du es mit „Abo behalten" rückgängig machen. „Abo verwalten" öffnet das Abrechnungsportal von Paddle, unserem Händler, für Zahlungsmethoden und Rechnungen.',
@@ -1536,6 +1535,10 @@ const de: Record<string, string> = {
     "Anhang konnte nicht analysiert werden — versuch es mit deinem eigenen Schlüssel",
   "candidates.qualityIssues.manyFailed":
     "Anhänge konnten nicht analysiert werden — versuch es mit deinem eigenen Schlüssel",
+  "candidates.qualityIssues.oneFailedFree":
+    "Anhang konnte nicht analysiert werden — ein eigener Modellschlüssel ist mit Pro verfügbar",
+  "candidates.qualityIssues.manyFailedFree":
+    "Anhänge konnten nicht analysiert werden — ein eigener Modellschlüssel ist mit Pro verfügbar",
   "candidates.qualityIssues.hide": "Ausblenden",
   "candidates.qualityIssues.details": "Details",
   "candidates.filterStatusLabel": "Status",
@@ -1759,6 +1762,14 @@ const de: Record<string, string> = {
   "mailAccount.proGate.body":
     "Free umfasst ein E-Mail-Konto (Gmail, iCloud Mail oder Naver Mail). Mit einem Upgrade läuft die Firewall über mehr als eines.",
   "mailAccount.proGate.upgrade": "Upgraden",
+  "proFeature.title": "Das ist eine Pro-Funktion.",
+  "proFeature.upgrade": "Upgraden",
+  "proFeature.byok": "Ein eigener Modellschlüssel ist mit Pro verfügbar.",
+  "proFeature.drive": "Google Drive zu verbinden ist eine Pro-Funktion.",
+  "dailyCap.free":
+    "Das kostenlose KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.",
+  "dailyCap.paid":
+    "Das KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt – oder hinterlegen Sie in den Einstellungen einen eigenen Modellschlüssel.",
   "imapConnect.firstSync.started":
     "Deine Mails werden jetzt abgerufen und erscheinen gleich in Mail.",
   "imapConnect.firstSync.delayed": "Die erste Mail dieses Kontos kann bis zu ~5 Minuten dauern.",
@@ -2170,18 +2181,22 @@ const de: Record<string, string> = {
   "byok.title": "Eigenen LLM-Schlüssel verwenden",
   "byok.body":
     "Standardmäßig wird Ihre Post mit dem gemeinsamen Schlüssel von Klorn sortiert. Fügen Sie Ihren eigenen Anbieterschlüssel hinzu, und Klorn nutzt für Ihre Post Ihren Schlüssel und Ihr Kontingent – praktisch, wenn das gemeinsame Budget ausgelastet ist. Schlüssel werden verschlüsselt gespeichert (AES-GCM); den Klartext protokollieren wir nie.",
+  "byok.bodyFree":
+    "Ihre Post wird mit dem gemeinsamen Schlüssel von Klorn sortiert, innerhalb Ihres täglichen KI-Kontingents.",
   "byok.activeModel": "Aktives Modell:",
   "byok.usingYourKey": "Ihr Schlüssel wird verwendet",
   "byok.stored": "•••••••• gespeichert",
-  "byok.openRouterLabel": "OpenRouter-API-Schlüssel",
-  "byok.openRouterHelp":
-    "Ein Schlüssel deckt alle Modelle ab, die Klorn nutzt – OpenRouter leitet sie alle weiter. Der Schlüssel wird vor dem Speichern beim Anbieter geprüft. Erhältlich unter",
+  "byok.anthropicLabel": "Anthropic-API-Schlüssel",
+  "byok.anthropicHelp":
+    "Klorn läuft auf Claude, daher deckt ein Anthropic-Schlüssel alle Modelle ab, die Klorn nutzt. Der Schlüssel wird vor dem Speichern bei Anthropic geprüft. Erhältlich unter",
   "byok.legacy": "veraltet",
   "byok.geminiRetired":
-    "Direkte Gemini-Schlüssel werden nicht mehr unterstützt – ein kostenloser Schlüssel hier legt die Sortierung stillschweigend lahm, sobald sein Tageskontingent aufgebraucht ist. Entfernen Sie ihn und verwenden Sie stattdessen einen OpenRouter-Schlüssel.",
+    "Direkte Gemini-Schlüssel werden nicht mehr unterstützt – ein kostenloser Schlüssel hier legt die Sortierung stillschweigend lahm, sobald sein Tageskontingent aufgebraucht ist. Entfernen Sie ihn und verwenden Sie stattdessen einen Anthropic-Schlüssel.",
   "byok.assistantModel": "Assistentenmodell",
   "byok.assistantModelHelp":
-    "Nur Spitzenmodelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents; fügen Sie oben Ihren eigenen Schlüssel hinzu, um Ihr eigenes Kontingent zu nutzen. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
+    "Nur Claude-Modelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents; fügen Sie oben Ihren eigenen Schlüssel hinzu, um Ihr eigenes Kontingent zu nutzen. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
+  "byok.assistantModelHelpFree":
+    "Nur Claude-Modelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
   "byok.error.status": "Status Ihres LLM-Schlüssels konnte nicht geladen werden.",
   "byok.error.update": "Schlüssel konnte nicht aktualisiert werden.",
   "byok.error.model": "Modell konnte nicht geändert werden.",
@@ -2203,13 +2218,10 @@ const de: Record<string, string> = {
   "subscription.toast.purchaseFailed":
     "Kauf konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
   "subscription.toast.noPurchase": "Kein früherer Kauf gefunden.",
-  "paywall.foundingPrice": "Gründerpreis",
   "paywall.title": "Starten Sie Ihre 7-tägige kostenlose Testphase",
   "paywall.body":
-    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht, und nichts geht ohne Ihre Zustimmung hinaus.",
+    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht. Mail, die Klorn sendet, wartet auf Ihre Zustimmung, außer Sie schalten automatische Antworten ein.",
   "paywall.startTrial": "Kostenlos testen",
-  "paywall.trialTerms":
-    "7 Tage kostenlos, danach {price}/Monat – für frühe Mitglieder fest. Jederzeit kündbar.",
   "paywall.refunds": "Erstattungen",
   "paywall.valueProp.interrupt": "Nur von E-Mails unterbrochen werden, die wirklich zählen",
   "paywall.valueProp.noise":
@@ -2355,6 +2367,7 @@ const de: Record<string, string> = {
     "Google ist verbunden. Ein leerer Kalender bleibt auch im Briefing leer.",
   "calendar.error.load": "Kalendertermine konnten nicht geladen werden.",
   "calendar.error.sync": "Google Kalender konnte nicht synchronisiert werden.",
+  "calendar.error.delete": "Termin konnte nicht gelöscht werden.",
   "calendar.sync.imported": "{count} Termine aus Google Kalender importiert.",
   "calendar.sync.empty":
     "Google Kalender ist synchronisiert. Keine Termine in den nächsten 14 Tagen.",
@@ -2690,7 +2703,7 @@ const de: Record<string, string> = {
     "Die Benachrichtigung wurde übersprungen, weil beim Versand des Briefings Ruhezeiten aktiv waren.",
   "briefingPage.guidance.quietHoursAction": "Ruhezeiten anpassen",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — empfohlen",
+  "byok.modelNote.balanced": "{provider} — ausgewogen",
   "byok.modelNote.fastest": "{provider} — am schnellsten",
   "byok.modelNote.mostCapable": "{provider} — am leistungsfähigsten, teurer",
   "statusChip.connected": "Verbunden",
@@ -2698,6 +2711,128 @@ const de: Record<string, string> = {
   "statusChip.pending": "Ausstehend",
   // web app design pass, 2026-10-21: English that reached localized screens.
   "imap.beta": "Beta",
+  // Public playground (redesign 2026-10-30). Model ids and prices stay untranslated.
+  "playground.brand.section": "Testumgebung",
+  "playground.nav.methodology": "So wird bewertet",
+  "playground.nav.pricing": "Preise",
+  "playground.nav.login": "Anmelden",
+  "playground.nav.startFree": "Kostenlos starten",
+  "playground.title": "So sortiert Klorn eine E-Mail.",
+  "playground.lead":
+    "Nachricht einfügen, Modell wählen, eigenen Schlüssel mitbringen. Klorns echter Judge ordnet sie einer von fünf Lanes zu und zeigt die vier Scores dahinter.",
+  "playground.leadShort": "Dein Modell, dein Schlüssel, Klorns echter Judge.",
+  "playground.form.label": "E-Mail und Modell",
+  "playground.samples.heading": "Beispiel ausprobieren",
+  "playground.samples.investor": "Geldgeber",
+  "playground.samples.newsletter": "Rundbrief",
+  "playground.samples.receipt": "Beleg",
+  "playground.samples.teammate": "Kollege",
+  "playground.samples.meeting": "Terminanfrage",
+  "playground.field.from": "Von",
+  "playground.field.fromPlaceholder": "name@firma.de",
+  "playground.field.subject": "Betreff",
+  "playground.field.subjectPlaceholder": "Betreffzeile",
+  "playground.field.body": "Text",
+  "playground.field.bodyPlaceholder": "E-Mail einfügen oder oben ein Beispiel wählen.",
+  "playground.email.edit": "E-Mail bearbeiten",
+  "playground.email.collapse": "Bearbeiten beenden",
+  "playground.email.empty": "Noch keine E-Mail. Wähle ein Beispiel oder füge eine ein.",
+  "playground.provider.label": "Anbieter",
+  "playground.model.label": "Modell",
+  "playground.model.klorn": "Von Klorn genutzt",
+  "playground.model.measured": "{low}–{high}/{total} im Klorn-Test ({runs} Läufe)",
+  "playground.model.other": "Andere Modell-ID…",
+  "playground.model.otherLabel": "Modell-ID",
+  "playground.model.otherPlaceholder": "anbieter/modellname",
+  "playground.model.otherInvalid":
+    "Nutze eine Modell-ID wie anbieter/modellname: Buchstaben, Ziffern, Punkte und Bindestriche.",
+  "playground.model.klornNote":
+    "Das Modell, das Klorn selbst nutzt, bewertet im 56-E-Mail-Test von Klorn.",
+  "playground.model.listedNote":
+    "Wird wie gelistet angezeigt. Nur das von Klorn genutzte Modell wird im Klorn-Test bewertet.",
+  "playground.model.priceNote": "Listenpreis pro 1 Mio. Token, Eingabe / Ausgabe, Stand {date}.",
+  "playground.key.label": "{provider}-API-Schlüssel",
+  "playground.key.show": "Anzeigen",
+  "playground.key.hide": "Verbergen",
+  "playground.key.remember": "Schlüssel auf diesem Gerät merken",
+  "playground.key.trust":
+    "Dein Schlüssel geht nur für diese eine Anfrage von diesem Browser über Klorns Server an den Anbieter. Klorn speichert ihn nicht.",
+  "playground.key.none": "Noch kein Schlüssel?",
+  "playground.key.create": "Bei {provider} erstellen",
+  "playground.key.billing": "Jede Sortierung wird deinem eigenen {provider}-Konto berechnet.",
+  "playground.submit": "E-Mail sortieren",
+  "playground.submitting": "Sortiere…",
+  "playground.result.label": "Ergebnis",
+  "playground.legend.title": "Jede E-Mail landet in einer von fünf Lanes.",
+  "playground.legend.sub": "Dein Ergebnis erscheint hier, mit den Scores dahinter.",
+  "playground.legend.PUSH": "Braucht dich jetzt. Steht ganz oben in Heute und kommt als Banner.",
+  "playground.legend.MEETING":
+    "Ein Termin zum Annehmen, Verschieben oder Ablehnen, mit deinem Kalender abgeglichen.",
+  "playground.legend.QUEUE": "Eine Antwort wert, aber nicht jetzt. Die Standard-Lane.",
+  "playground.legend.INFO":
+    "Belege, Warnungen, Bestätigungen. Wird aufbewahrt, braucht keine Antwort.",
+  "playground.legend.SILENT": "Werbung und Rauschen, leise abgelegt.",
+  "playground.legend.scores":
+    "Vier Scores fließen in die Lane ein: Dringlichkeit, Absendervertrauen, Umkehrbarkeit und Sicherheit.",
+  "playground.legend.link": "So wird gemessen",
+  "playground.headline.PUSH": "Das braucht dich jetzt.",
+  "playground.headline.MEETING": "Ein Termin zum Annehmen, Verschieben oder Ablehnen.",
+  "playground.headline.QUEUE": "Eine Antwort wert, aber nicht jetzt.",
+  "playground.headline.INFO": "Ein Beleg zum Aufbewahren. Keine Antwort nötig.",
+  "playground.headline.SILENT": "Rauschen, leise abgelegt.",
+  "playground.why.heading": "Warum {lane}",
+  "playground.why.decided": "· hat die Lane entschieden",
+  "playground.why.scheduling":
+    "Die E-Mail fragt nach einem Zeitfenster. Terminanfragen kommen in eine eigene Lane, bevor Scores gewichtet werden.",
+  "playground.why.lowConfidence":
+    "Das Modell war unsicher, deshalb lässt Klorn sie in Queue sichtbar, statt sie zu verstecken.",
+  "playground.why.transactional":
+    "Sie wirkt wie eine ruhige automatische Benachrichtigung. Solche Belege landen in Info.",
+  "playground.why.default":
+    "Keine stärkere Regel hat gegriffen, also wartet sie in Queue, der Standard-Lane.",
+  "playground.why.marketing":
+    "Das ist eindeutig Werbung, deshalb wurde sie abgelegt, bevor Scores gewichtet wurden.",
+  "playground.why.automated":
+    "Eine Sicherheitsregel für automatische Mails hat sie hier eingeordnet, damit sie außerhalb deiner Unterbrechungen bleibt.",
+  "playground.feature.urgency": "Dringlichkeit",
+  "playground.feature.urgency.low": "Kann warten",
+  "playground.feature.urgency.high": "Heute",
+  "playground.feature.senderTrust": "Absendervertrauen",
+  "playground.feature.senderTrust.low": "Unbekannt",
+  "playground.feature.senderTrust.high": "Bekannte Person",
+  "playground.feature.reversibility": "Umkehrbarkeit",
+  "playground.feature.reversibility.low": "Schwer rückgängig zu machen",
+  "playground.feature.reversibility.high": "Leicht rückgängig zu machen",
+  "playground.feature.confidence": "Sicherheit",
+  "playground.feature.confidence.low": "Unsicher",
+  "playground.feature.confidence.high": "Sicher",
+  "playground.inKlorn.heading": "Was Klorn daraus macht",
+  "playground.inKlorn.PUSH":
+    "Push-Mails stehen ganz oben in Heute und kommen als Banner in der Klorn-App auf Mac und Windows an.",
+  "playground.inKlorn.MEETING": "Erscheint in Heute unter Meeting.",
+  "playground.inKlorn.QUEUE": "Wartet in Mail, bis du Zeit dafür hast.",
+  "playground.inKlorn.INFO": "Wird in Mail als Beleg aufbewahrt. Keine Antwort nötig.",
+  "playground.inKlorn.SILENT": "Leise abgelegt, aus dem Weg.",
+  "playground.wrong.prompt": "Falsche Lane? Sag uns, wohin sie gehört.",
+  "playground.wrong.short": "Falsche Lane?",
+  "playground.wrong.thanks": "Danke, als {lane} vermerkt.",
+  "playground.wrong.error": "Das konnte nicht gesendet werden. Versuch es noch einmal.",
+  "playground.cta.text": "Sortiere deinen ganzen Posteingang genauso.",
+  "playground.meta": "{model} · {seconds} Sek.",
+  "playground.error.title": "Diese E-Mail konnte nicht sortiert werden",
+  "playground.error.noKey": "Gib zuerst deinen {provider}-API-Schlüssel ein.",
+  "playground.error.noEmail": "Gib zuerst Absender und Betreff ein.",
+  "playground.error.rateLimited": "Zu viele Versuche. Warte eine Minute und sortiere dann erneut.",
+  "playground.error.timeout":
+    "Das Modell hat länger als {seconds} Sekunden gebraucht. Versuch es erneut oder wähle ein schnelleres Modell.",
+  "playground.error.network":
+    "Klorn war nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.",
+  "playground.error.failed":
+    "Das Modell wurde nicht ausgeführt. Meist stimmt der Schlüssel nicht, das Modell ist nicht verfügbar oder das Konto hat kein Guthaben.",
+  "playground.error.invalid":
+    "Die Anfrage wurde nicht akzeptiert. Prüfe die Modell-ID und die E-Mail-Felder.",
+  "playground.error.upstream": "Anbieter meldet: {detail}",
+  "playground.footer.privacy": "Datenschutz",
 };
 
 export default de;

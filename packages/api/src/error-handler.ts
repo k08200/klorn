@@ -1,4 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "./llm/cost-cap-refusal.js";
 import { DataWipeFenceError, isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
 import { captureError } from "./sentry.js";
 
@@ -15,7 +16,9 @@ import { captureError } from "./sentry.js";
  *   - logs SERVER (5xx) errors in full (+ Sentry) but replaces the response
  *     body with a generic message;
  *   - answers a write the data-wipe fence rejected with 409
- *     DATA_WIPE_IN_PROGRESS.
+ *     DATA_WIPE_IN_PROGRESS;
+ *   - answers an LLM call the daily cost cap refused with 429 and the cap's
+ *     own message + code — expected back-pressure, so no Sentry alert.
  */
 export function handleError(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
   // The data-wipe fence rejected a write (the app check or the database
@@ -28,6 +31,15 @@ export function handleError(error: FastifyError, request: FastifyRequest, reply:
       error: "Your data was just wiped. Try again in a few minutes.",
       code: fence.code,
     });
+  }
+
+  // The daily cost cap stopped an LLM call no route caught. It cannot succeed
+  // until the cap resets, so a 500 ("something broke, retry") is the wrong
+  // signal — answer the same 429 the routes that catch it answer.
+  const capped = costCapRefusal(error);
+  if (capped) {
+    request.log.warn({ code: capped.code }, "LLM call refused by the daily cost cap");
+    return reply.code(COST_CAP_HTTP_STATUS).send(capped);
   }
 
   const status = error.statusCode ?? 500;

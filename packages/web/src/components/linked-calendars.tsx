@@ -2,11 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, startLinkCalendar } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 import Button from "./ui/button";
 
@@ -32,20 +34,25 @@ export function LinkedCalendars() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const { data: accounts = [] } = useQuery({
+  const { data: listing } = useQuery({
     queryKey: queryKeys.calendar.linkedAccounts(),
-    queryFn: async () => {
+    queryFn: async (): Promise<{ accounts: LinkedAccount[]; proGated: boolean }> => {
       try {
         const res = await apiFetch<{ accounts: LinkedAccount[] }>(
           "/api/auth/google/linked-calendars",
         );
-        return res.accounts ?? [];
-      } catch {
-        // 403 (not entitled) or not connected — show the connect prompt, no list.
-        return [] as LinkedAccount[];
+        return { accounts: res.accounts ?? [], proGated: false };
+      } catch (err) {
+        // 403 ENTITLEMENT_REQUIRED: linked calendars are Pro — say so with the
+        // upgrade link. Anything else (not connected, transient): the connect prompt.
+        return { accounts: [], proGated: isEntitlementRefusal(err) };
       }
     },
   });
+  const accounts = listing?.accounts ?? [];
+  // The connect itself refused (e.g. `entitled` changed since the list loaded).
+  const [connectRefused, setConnectRefused] = useState(false);
+  const proGated = (listing?.proGated ?? false) || connectRefused;
 
   // Toast the OAuth redirect result (?linked=success|failed|unverified) once,
   // then strip the param so a refresh doesn't re-toast.
@@ -81,27 +88,31 @@ export function LinkedCalendars() {
   const connect = useMutation({
     mutationFn: () => startLinkCalendar(),
     onError: (err) => {
+      if (isEntitlementRefusal(err)) {
+        setConnectRefused(true);
+        return;
+      }
       captureClientError(err, { scope: "calendar.linked.connect" });
-      toast(t("linkedCalendars.toast.needsPro"), "error");
+      toast(t("linkedCalendars.toast.connectFailed"), "error");
     },
   });
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4 text-ink-muted">
-      <h3 className="text-sm font-medium text-ink">{t("linkedCalendars.title")}</h3>
-      <p className="mt-1 text-xs text-ink-mid">{t("linkedCalendars.body")}</p>
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4 text-ink-muted">
+      <h3 className="text-role-head font-medium text-ink">{t("linkedCalendars.title")}</h3>
+      <p className="mt-1 text-role-body text-ink-mid">{t("linkedCalendars.body")}</p>
 
       {accounts.length > 0 && (
-        <ul className="mt-3 divide-y divide-line-soft rounded-xl border border-line-soft bg-surface-raised/70">
+        <ul className="mt-3 divide-y divide-line-soft rounded-control border border-line-soft bg-surface-raised/70">
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+              className="flex items-center justify-between gap-3 px-3 py-2.5 text-role-body"
             >
               <div className="min-w-0">
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect && (
-                  <span className="block truncate text-caption text-state-warn-ink">
+                  <span className="block truncate text-role-caption text-state-warn-ink">
                     {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 )}
@@ -112,7 +123,7 @@ export function LinkedCalendars() {
                     type="button"
                     onClick={() => connect.mutate()}
                     disabled={connect.isPending}
-                    className="ease-strong rounded-md border border-state-warn-line bg-state-warn-bg px-2 py-1 text-xs font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
+                    className="ease-strong rounded-chip border border-state-warn-line bg-state-warn-bg px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
                     {t("common.reconnect")}
                   </button>
@@ -121,7 +132,7 @@ export function LinkedCalendars() {
                   type="button"
                   onClick={() => disconnect.mutate(account.id)}
                   disabled={disconnect.isPending}
-                  className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
+                  className="ease-strong rounded-chip border border-state-danger-line bg-state-danger-bg px-2 py-1 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
                   {t("settings.disconnect")}
                 </button>
@@ -131,15 +142,19 @@ export function LinkedCalendars() {
         </ul>
       )}
 
-      {/* Outlined (W8): "New event" is the page's one filled primary. */}
-      <Button
-        variant="secondary"
-        onClick={() => connect.mutate()}
-        loading={connect.isPending}
-        className="mt-3"
-      >
-        {t("linkedCalendars.connect")}
-      </Button>
+      {proGated ? (
+        <ProFeatureNotice messageKey="linkedCalendars.toast.needsPro" className="mt-3" />
+      ) : (
+        // Outlined (W8): "New event" is the page's one filled primary.
+        <Button
+          variant="secondary"
+          onClick={() => connect.mutate()}
+          loading={connect.isPending}
+          className="mt-3"
+        >
+          {t("linkedCalendars.connect")}
+        </Button>
+      )}
     </section>
   );
 }

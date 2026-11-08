@@ -22,6 +22,7 @@ import { DeleteAccountScreen } from "./DeleteAccountScreen";
 import { NotificationsScreen } from "./NotificationsScreen";
 import { PlansScreen } from "./PlansScreen";
 import { PRIVACY_URL, SettingsBack, SettingsRow, TERMS_URL } from "./parts";
+import { planLabel } from "./plans-model";
 import "./settings.css";
 
 function SettingsHome() {
@@ -142,7 +143,7 @@ function SettingsHome() {
           <SettingsRow
             icon="card"
             label={t("plans.title")}
-            value={billing.data?.planName ?? user?.plan}
+            value={planLabel(t, billing.data?.planName ?? user?.plan)}
             to={{ name: "settings", section: "plans" }}
           />
         </ul>

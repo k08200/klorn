@@ -166,10 +166,74 @@ export const KEYWORD_SCORES = {
   confidence: { patternMatched: 0.7, default: 0.55 },
 } as const;
 
+/** The keyword scorer's marketing signal on from + subject (newsletter, digest,
+ * promo, 광고, 수신거부). Narrower than {@link isClearMarketing}'s subject markers
+ * plus Gmail category; both stay, they feed different decisions. */
+export function isKeywordMarketing(email: {
+  from?: string | null;
+  subject?: string | null;
+}): boolean {
+  return MARKETING_RE.test(
+    `${(email.from || "").toLowerCase()} ${(email.subject || "").toLowerCase()}`,
+  );
+}
+
 /** Cheap content check: does this email carry any time-pressure signal? */
 export function looksUrgent(email: ClassifiableEmail): boolean {
   const hay = `${email.subject || ""} ${email.snippet || ""}`;
   return URGENT_WORDS_RE.test(hay);
+}
+
+/**
+ * The keyword fallback's content signals. Single source for the v2 feature
+ * scorer below and for policy v3's keyword facts (v3/keyword-facts.ts), so the
+ * two fallbacks read exactly the same vocabulary.
+ */
+export interface KeywordSignals {
+  marketing: boolean;
+  systemNotification: boolean;
+  investor: boolean;
+  urgentWord: boolean;
+  meetingWord: boolean;
+  question: boolean;
+  /** The urgent word as written in the subject or snippet (verbatim), if any. */
+  urgentEvidence: string | null;
+  /** The meeting word as written in the subject or snippet (verbatim), if any. */
+  meetingEvidence: string | null;
+}
+
+const MEETING_RE_ANY_CASE = new RegExp(MEETING_RE.source, "i");
+
+/**
+ * First match in the subject, else in the snippet, so the quote is verbatim
+ * from one field. Last resort: the joined text the detectors scan, for a
+ * phrase that only matches across the subject/snippet seam.
+ */
+function firstMatch(re: RegExp, email: ClassifiableEmail): string | null {
+  const subject = email.subject || "";
+  const snippet = email.snippet || "";
+  return (
+    re.exec(subject)?.[0] ?? re.exec(snippet)?.[0] ?? re.exec(`${subject} ${snippet}`)?.[0] ?? null
+  );
+}
+
+export function keywordSignals(email: ClassifiableEmail): KeywordSignals {
+  const from = (email.from || "").toLowerCase();
+  const subject = (email.subject || "").toLowerCase();
+  const snippet = (email.snippet || "").toLowerCase();
+  const hay = `${subject} ${snippet}`;
+  const urgentWord = URGENT_WORDS_RE.test(hay);
+  const meetingWord = MEETING_RE.test(hay);
+  return {
+    marketing: isKeywordMarketing(email),
+    systemNotification: SYSTEM_NOTIFICATION_RE.test(from),
+    investor: INVESTOR_RE.test(from),
+    urgentWord,
+    meetingWord,
+    question: QUESTION_RE.test(hay),
+    urgentEvidence: urgentWord ? firstMatch(URGENT_WORDS_RE, email) : null,
+    meetingEvidence: meetingWord ? firstMatch(MEETING_RE_ANY_CASE, email) : null,
+  };
 }
 
 /**
@@ -181,18 +245,13 @@ export function looksUrgent(email: ClassifiableEmail): boolean {
  * The old `isAutomated` mashed both together and forced everything to SILENT.
  */
 export function keywordFeatures(email: ClassifiableEmail): TierFeatures {
-  const from = (email.from || "").toLowerCase();
-  const subject = (email.subject || "").toLowerCase();
-  const snippet = (email.snippet || "").toLowerCase();
-  const hay = `${subject} ${snippet}`;
-  const fromAndSubject = `${from} ${subject}`;
-
-  const isMarketing = MARKETING_RE.test(fromAndSubject);
-  const isSystemNotification = SYSTEM_NOTIFICATION_RE.test(from);
-  const isInvestor = INVESTOR_RE.test(from);
-  const isUrgentWord = URGENT_WORDS_RE.test(hay);
-  const isMeeting = MEETING_RE.test(hay);
-  const isQuestion = QUESTION_RE.test(hay);
+  const signals = keywordSignals(email);
+  const isMarketing = signals.marketing;
+  const isSystemNotification = signals.systemNotification;
+  const isInvestor = signals.investor;
+  const isUrgentWord = signals.urgentWord;
+  const isMeeting = signals.meetingWord;
+  const isQuestion = signals.question;
 
   const s = KEYWORD_SCORES;
 
@@ -259,6 +318,11 @@ const BULK_CATEGORY_LABELS = new Set(["CATEGORY_SOCIAL", "CATEGORY_PROMOTIONS"])
 /// isAutomatedSender, which also drives the PUSH floor and stays as is.
 const INVITE_SYSTEM_SENDER_RE = /(?:^|[<\s])(?:notify|invitations?)@/i;
 
+/** A calendar system's invitation subject ("Invitation: … @ …"), any sender. */
+export function isCalendarInviteSubject(subject: string | null | undefined): boolean {
+  return CALENDAR_INVITE_SUBJECT_RE.test((subject || "").trim());
+}
+
 /** True when invite wording is most likely not a meeting ask:
  *  bulk mail, a social/promotions tab, or a system account. In prod
  *  (2026-10-05..18) 28 of 30 MEETING items were LinkedIn connection
@@ -285,7 +349,7 @@ export function detectSchedulingIntent(email: {
   labels?: string[] | null;
   hasListUnsubscribe?: boolean | null;
 }): boolean {
-  if (CALENDAR_INVITE_SUBJECT_RE.test((email.subject || "").trim())) return true;
+  if (isCalendarInviteSubject(email.subject)) return true;
   const head = `${email.subject || ""} ${email.snippet || ""}`.toLowerCase();
   if (SCHEDULING_RE.test(head)) return true;
   if (INVITE_RE.test(head) && !isNonPersonalInvite(email)) return true;

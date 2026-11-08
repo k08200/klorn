@@ -53,17 +53,17 @@ export default function ScreenerCard() {
     <section
       data-testid="screener-card"
       aria-labelledby="screener-heading"
-      className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-5"
+      className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-5"
     >
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 id="screener-heading" className="text-base font-semibold text-ink">
+        <h2 id="screener-heading" className="text-role-head text-ink">
           {t("screener.title")}
         </h2>
-        <span className="text-xs text-ink-dim">
+        <span className="text-role-caption text-ink-dim">
           {t("screener.count", { count: String(pending.length) })}
         </span>
       </header>
-      <p className="mt-1.5 text-label font-normal leading-5 text-ink-mid">
+      <p className="mt-1.5 text-role-label font-normal leading-5 text-ink-mid">
         {t("screener.subtitle")}
       </p>
 
@@ -73,13 +73,13 @@ export default function ScreenerCard() {
           return (
             <li
               key={row.sender}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-surface-raised px-3 py-2"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-control border border-line bg-surface-raised px-3 py-2"
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-ink" title={row.sender}>
+                <p className="truncate text-role-body font-medium text-ink" title={row.sender}>
                   {row.sender}
                 </p>
-                <p className="mt-0.5 text-caption text-ink-dim">
+                <p className="mt-0.5 text-role-caption text-ink-dim">
                   {row.lastReceivedAt
                     ? t("screener.meta", {
                         count: String(row.messageCount),
@@ -93,7 +93,7 @@ export default function ScreenerCard() {
                   type="button"
                   disabled={Boolean(busy)}
                   onClick={() => decide(row.sender, "ALLOW")}
-                  className="focus-ring inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-xs font-semibold text-ink transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                  className="focus-ring inline-flex min-h-11 items-center rounded-control border border-line px-3 text-role-caption font-semibold text-ink transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy === "ALLOW" ? t("screener.working") : t("screener.allow")}
                 </button>
@@ -101,7 +101,7 @@ export default function ScreenerCard() {
                   type="button"
                   disabled={Boolean(busy)}
                   onClick={() => decide(row.sender, "BLOCK")}
-                  className="focus-ring inline-flex min-h-11 items-center rounded-lg border border-state-danger-line px-3 text-xs font-semibold text-state-danger-ink transition hover:bg-state-danger-bg disabled:cursor-not-allowed disabled:opacity-60"
+                  className="focus-ring inline-flex min-h-11 items-center rounded-control border border-state-danger-line px-3 text-role-caption font-semibold text-state-danger-ink transition hover:bg-state-danger-bg disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy === "BLOCK" ? t("screener.working") : t("screener.block")}
                 </button>
@@ -115,13 +115,13 @@ export default function ScreenerCard() {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="focus-ring mt-3 inline-flex min-h-11 items-center text-xs font-semibold text-accent-deep hover:underline"
+          className="focus-ring mt-3 inline-flex min-h-11 items-center text-role-caption font-semibold text-accent-deep hover:underline"
         >
           {t("screener.showAll", { count: String(hidden) })}
         </button>
       )}
 
-      <p className="mt-3 text-caption leading-4 text-ink-dim">{t("screener.noHold")}</p>
+      <p className="mt-3 text-role-caption leading-4 text-ink-dim">{t("screener.noHold")}</p>
     </section>
   );
 }

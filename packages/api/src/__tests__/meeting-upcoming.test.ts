@@ -164,6 +164,10 @@ describe("getUpcomingMeetings", () => {
       ["a username on a Zoom link", "Join https://evil@zoom.us/j/1"],
       ["a password on a Zoom link", "https://u:p@us02web.zoom.us/j/851?pwd=abc"],
       ["a link over 2048 characters", `https://meet.google.com/${"a".repeat(2048)}`],
+      // The Zoom host must BE zoom.us (or a subdomain) — an invite can't smuggle any
+      // https page into the meeting notification by mentioning zoom.us in a path.
+      ["zoom.us only in another host's path", "Join https://evil.example/p?x=zoom.us/j/1"],
+      ["a host merely ending in 'zoom.us'", "https://evilzoom.us/j/1"],
     ])("drops %s lifted from the description", async (_label, description) => {
       expect(await linksOf({ description })).toEqual([]);
     });

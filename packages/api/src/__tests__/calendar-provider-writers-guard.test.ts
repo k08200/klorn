@@ -188,11 +188,15 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
   // secrets, whatever the provider. So does the dispatcher: it reads a row's
   // provider to choose the implementation.
   // The source label reads an account's email by id, for a row that already
-  // names it: provider-agnostic on purpose, it only labels.
+  // names it: provider-agnostic on purpose, it only labels. The co-attendance
+  // store reads every linked account's address so none of the user's own
+  // addresses is ever counted as a contact (a DEVICE row's `device:` key is not
+  // an address and is dropped).
   const ALL_PROVIDER_READERS = [
     "scripts/reencrypt-tokens.ts",
     "pim/calendar-providers/dispatch.ts",
     "pim/calendar-source-label.ts",
+    "pim/coattendance/coattendance-store.ts",
   ];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
@@ -201,9 +205,14 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       // Reads GOOGLE rows' tokens to revoke them at Google, and counts GOOGLE
       // rows of an address for the shared-grant check.
       "auth/google-grant-revoke.ts",
+      // The co-attendance reader's gate: does the user have any non-GOOGLE
+      // calendar the store does not count (doc §3(2), condition 5).
+      "judge/v3/relationship-coattendance.ts",
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",
+      "pim/coattendance/coattendance-sources.ts", // GOOGLE rows' co-attendance markers
+      "pim/coattendance/coattendance-store.ts",
       "pim/device-calendar/device-ingest.ts",
       "pim/device-calendar/device-sources.ts",
       "pim/linked-calendar-unlink.ts",
@@ -387,7 +396,9 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     const LLM_ADJACENT: Array<[string, string[], string]> = [
       [
         "routes/calendar.ts",
-        ["../event-parse.js"], // dynamic import in POST /parse-event
+        // event-parse: dynamic import in POST /parse-event. cost-cap-refusal:
+        // maps a cap-refused call's error to its 429 body — no prompt.
+        ["../event-parse.js", "../llm/cost-cap-refusal.js"],
         "event-parse sends the user's own spoken or typed utterance to the model, never a row",
       ],
       [

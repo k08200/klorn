@@ -104,21 +104,21 @@ export default function PushOnboardingBanner() {
     <div
       role="dialog"
       aria-label={t("pushBanner.label")}
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-2xl shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-control shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
     >
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
+      <div className="w-10 h-10 rounded-control bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">{t("pushBanner.title")}</p>
-        <p className="text-xs text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
-        {error && <p className="text-xs text-state-danger-ink mt-1.5">{error}</p>}
+        <p className="text-role-body font-medium text-ink">{t("pushBanner.title")}</p>
+        <p className="text-role-caption text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
+        {error && <p className="text-role-caption text-state-danger-ink mt-1.5">{error}</p>}
         <div className="flex gap-2 mt-2.5">
           <button
             type="button"
             onClick={enable}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-lg transition"
+            className="px-3 py-1.5 text-role-caption font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-control transition"
           >
             {submitting ? t("pushBanner.enabling") : t("pushBanner.enable")}
           </button>
@@ -126,7 +126,7 @@ export default function PushOnboardingBanner() {
             type="button"
             onClick={dismiss}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium text-ink-mid hover:text-ink transition"
+            className="px-3 py-1.5 text-role-caption font-medium text-ink-mid hover:text-ink transition"
           >
             {t("pwa.update.later")}
           </button>

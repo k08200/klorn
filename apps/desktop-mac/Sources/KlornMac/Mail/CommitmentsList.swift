@@ -9,20 +9,38 @@ struct CommitmentsList: View {
             HStack(spacing: 8) {
                 Image(systemName: "checklist").font(.body).foregroundStyle(Theme.accent)
                     .accessibilityHidden(true)
-                Text(L("section.commitments")).font(Theme.Typo.display).foregroundStyle(Theme.text)
+                Text(L("section.commitments")).font(Theme.Typo.title).foregroundStyle(Theme.text)
                 Text("\(model.commitments?.count ?? 0)")
                     .font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
             }
             .padding(.horizontal, 24).padding(.vertical, 18)
             Divider().overlay(Theme.line)
 
+            if model.commitmentUpdateNeedsPro {
+                HStack(spacing: Theme.s2) {
+                    Text(L("error.needsPro")).font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    UpgradeToProLink()
+                }
+                .padding(.horizontal, 24).padding(.top, 10)
+            }
+
             if model.commitments == nil {
                 Spacer()
-                if model.commitmentsFailed {
+                switch model.commitmentsFailure {
+                case .needsPro?:
+                    VStack(spacing: Theme.s2) {
+                        Text(L("commitments.needsPro"))
+                            .font(.callout).foregroundStyle(Theme.textDim)
+                            .multilineTextAlignment(.center)
+                        UpgradeToProLink()
+                    }
+                    .frame(maxWidth: .infinity)
+                case .failed?:
                     Text(L("commitments.loadFailed"))
                         .font(.callout).foregroundStyle(Theme.textDim)
                         .frame(maxWidth: .infinity).multilineTextAlignment(.center)
-                } else {
+                case nil:
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity)
                 }
                 Spacer()

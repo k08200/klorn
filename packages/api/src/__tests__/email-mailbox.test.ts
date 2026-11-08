@@ -7,7 +7,7 @@
  * route's demo/no-token fallback.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildMailboxQuery, MAILBOXES } from "../mail/gmail-mailbox.js";
 
 const state = vi.hoisted(() => ({
@@ -25,7 +25,10 @@ const state = vi.hoisted(() => ({
   // by its LinkedInboxAccount id, each with its own page of ids + cursor.
   linked: {} as Record<string, { ids: string[]; nextPageToken: string | null }>,
   // internalDate per message id so a merged page can be checked for order.
-  internalDates: {} as Record<string, string>,
+  // A present key wins even when null — Gmail can hand back null or "".
+  internalDates: {} as Record<string, string | null>,
+  // Date header per message id: a string replaces the default, null drops it.
+  dateHeaders: {} as Record<string, string | null>,
   // Live inline images: the MIME tree a format:"full" get returns, and the
   // attachment bodies by id.
   fullPayload: null as Record<string, unknown> | null,
@@ -72,19 +75,22 @@ vi.mock("googleapis", () => ({
               return { data: { id: params.id, payload: state.fullPayload } };
             }
             state.metaCalls.push({ ...params, account: auth.key });
+            const id = params.id as string;
+            const dateHeader =
+              id in state.dateHeaders ? state.dateHeaders[id] : "Tue, 26 Aug 2026 09:00:00 +0900";
             return {
               data: {
                 id: params.id,
                 threadId: `t-${params.id}`,
                 snippet: `snippet ${params.id}`,
                 labelIds: ["SENT"],
-                internalDate: state.internalDates[params.id as string] ?? "1756100000000",
+                internalDate: id in state.internalDates ? state.internalDates[id] : "1756100000000",
                 payload: {
                   headers: [
                     { name: "From", value: "me@klorn.ai" },
                     { name: "To", value: "you@example.com" },
                     { name: "Subject", value: `Subject ${params.id}` },
-                    { name: "Date", value: "Tue, 26 Aug 2026 09:00:00 +0900" },
+                    ...(dateHeader === null ? [] : [{ name: "Date", value: dateHeader }]),
                   ],
                 },
               },
@@ -184,6 +190,83 @@ describe("listGmailMailbox", () => {
     const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
     const page = await listGmailMailbox("user-1", "sent");
     expect(page?.items.map((r) => r.inbox)).toEqual(["primary", "primary"]);
+  });
+});
+
+// Number(null) and Number("") are both 0, so a missing internalDate used to
+// become 1970-01-01 here — and syncSentMessages recorded that as the sentAt.
+// Same rule as the Sent-history import (#1600): internalDate, else the Date
+// header. A message with neither stays listed (a folder view must never hide
+// mail) at the epoch, which only means "date unknown"; the Sent scan skips it.
+describe("listGmailMailbox — a message with no internalDate", () => {
+  const HEADER = "Tue, 26 Aug 2026 09:00:00 +0900";
+  const EPOCH = new Date(0).toISOString();
+
+  beforeEach(() => {
+    state.listCalls.length = 0;
+    state.metaCalls.length = 0;
+    state.listIds = ["m1"];
+    state.hasToken = true;
+    state.nextPageToken = null;
+    state.internalDates = {};
+    state.dateHeaders = {};
+  });
+
+  afterEach(() => {
+    state.internalDates = {};
+    state.dateHeaders = {};
+  });
+
+  async function listSent() {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    return (await listGmailMailbox("user-1", "sent"))?.items ?? [];
+  }
+
+  it.each([
+    ["null", null],
+    ['""', ""],
+  ])("internalDate %s with a valid Date header takes the header's time", async (_label, missing) => {
+    state.internalDates = { m1: missing };
+    const items = await listSent();
+    expect(items).toHaveLength(1);
+    expect(items[0].receivedAt).toBe(new Date(Date.parse(HEADER)).toISOString());
+    expect(items[0].receivedAt).not.toBe(EPOCH);
+  });
+
+  it.each([
+    ["null", null],
+    ['""', ""],
+  ])("internalDate %s with no Date header stays listed, dated unknown (epoch)", async (_label, missing) => {
+    state.internalDates = { m1: missing };
+    state.dateHeaders = { m1: null };
+    const items = await listSent();
+    expect(items.map((r) => [r.gmailId, r.receivedAt])).toEqual([["m1", EPOCH]]);
+  });
+
+  it.each([
+    ["null", null],
+    ['""', ""],
+  ])("internalDate %s with an unparseable Date header stays listed, dated unknown (epoch)", async (_label, missing) => {
+    state.internalDates = { m1: missing };
+    state.dateHeaders = { m1: "not a date" };
+    const items = await listSent();
+    expect(items.map((r) => [r.gmailId, r.receivedAt])).toEqual([["m1", EPOCH]]);
+  });
+
+  it("a valid internalDate still wins over the Date header", async () => {
+    state.internalDates = { m1: "1756100000000" };
+    state.dateHeaders = { m1: "Mon, 01 Jan 2024 00:00:00 +0000" };
+    const items = await listSent();
+    expect(items).toHaveLength(1);
+    expect(items[0].receivedAt).toBe(new Date(1756100000000).toISOString());
+  });
+
+  it("an undated row never hides its neighbours, and is not hidden itself", async () => {
+    state.listIds = ["m1", "m2"];
+    state.internalDates = { m1: null };
+    state.dateHeaders = { m1: null };
+    const items = await listSent();
+    expect(items.map((r) => r.gmailId).sort()).toEqual(["m1", "m2"]);
   });
 });
 

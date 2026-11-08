@@ -16,11 +16,12 @@ import { getServices } from "../../app/services";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useSpeechInput } from "../../platform/speech";
 import { Icon } from "../../ui/Icon";
+import { PlansLink } from "../../ui/PlansLink";
 import { ProblemState, SkeletonRows } from "../../ui/StateView";
 import { EventDraftCard } from "../calendar/EventDraftCard";
 import { isKnownZone } from "../today/model";
 import { onAssistantRequest, takeAssistantRequest } from "./handoff";
-import { visibleMessages } from "./model";
+import { type ChatCapNotice, capNoticeOf, chatCapNotice, visibleMessages } from "./model";
 
 const CHIPS = ["assistant.chip.urgent", "assistant.chip.receipts", "assistant.chip.week"] as const;
 
@@ -32,7 +33,18 @@ function SparkAvatar() {
   );
 }
 
-function Message({ message, zone }: { message: ChatMessageWire; zone: string }) {
+function Message({
+  message,
+  zone,
+  cap,
+  onNavigate,
+}: {
+  message: ChatMessageWire;
+  zone: string;
+  /** This reply is the server's allowance-reached text: say it in the app's language. */
+  cap: ChatCapNotice | null;
+  onNavigate?: () => void;
+}) {
   const { t } = useI18n();
   if (message.role === "USER") {
     return <p className="chat-bubble selectable">{message.content}</p>;
@@ -42,9 +54,21 @@ function Message({ message, zone }: { message: ChatMessageWire; zone: string }) 
     <div className="chat-reply">
       <SparkAvatar />
       <div className="chat-reply__body">
-        <p className="chat-reply__text selectable">{message.content}</p>
-        {draft ? <EventDraftCard draft={draft} zone={zone} /> : null}
-        {message.metadata?.turnError ? (
+        {cap ? (
+          <p className="chat-reply__text selectable">
+            {t(cap.key)}
+            {cap.plans ? (
+              <>
+                {" "}
+                <PlansLink onNavigate={onNavigate} />
+              </>
+            ) : null}
+          </p>
+        ) : (
+          <p className="chat-reply__text selectable">{message.content}</p>
+        )}
+        {draft ? <EventDraftCard draft={draft} zone={zone} onNavigate={onNavigate} /> : null}
+        {message.metadata?.turnError && !cap ? (
           <p className="chat-reply__error">{t("assistant.chat.turnError")}</p>
         ) : null}
       </div>
@@ -55,10 +79,13 @@ function Message({ message, zone }: { message: ChatMessageWire; zone: string }) 
 export function ChatThread({
   variant = "page",
   newChat = false,
+  onNavigate,
 }: {
   variant?: "page" | "sheet";
   /** Start a new conversation instead of resuming the latest one. */
   newChat?: boolean;
+  /** Runs when a link in the thread (See plans) is followed; the side sheet closes itself with it. */
+  onNavigate?: () => void;
 }) {
   const { t, intlTag } = useI18n();
   const queryClient = useQueryClient();
@@ -74,6 +101,9 @@ export function ChatThread({
   const [contextEmailId, setContextEmailId] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // Replies that stopped at the daily allowance in this session, by the server's
+  // reply text: the fallback for a server that stores no code on the message.
+  const [capped, setCapped] = useState<ReadonlyMap<string, ChatCapNotice>>(new Map());
   const scroll = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
 
@@ -115,7 +145,9 @@ export function ChatThread({
         id = created.id;
         setChosen(id);
       }
-      await ep.assistant.send(id, text, contextEmailId);
+      const turn = await ep.assistant.send(id, text, contextEmailId);
+      const notice = chatCapNotice(turn.errorCode);
+      if (notice) setCapped((prev) => new Map(prev).set(turn.reply, notice));
       setContextEmailId(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: hk.messages(id) }),
@@ -166,7 +198,15 @@ export function ChatThread({
             </div>
           </div>
         ) : (
-          shown.map((m) => <Message key={m.id} message={m} zone={zone} />)
+          shown.map((m) => (
+            <Message
+              key={m.id}
+              message={m}
+              zone={zone}
+              cap={capNoticeOf(m, capped)}
+              onNavigate={onNavigate}
+            />
+          ))
         )}
         {pending ? (
           <>

@@ -16,6 +16,8 @@ import type {
   InboxPurpose,
   LiveTier,
   TrustWire,
+  V3ItemBlock,
+  V3TodayFields,
 } from "@klorn/contract";
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -42,12 +44,14 @@ import {
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { isTier } from "../judge/tiers.js";
 import { TODAY_WINDOW, todayPushCutoff } from "../judge/today-push-window.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
   getTrustScore,
   getTrustScoresBulk,
   type TrustScoreResult,
 } from "../learning/trust-score.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
 import { extractEmailAddress } from "../mail/email-address.js";
@@ -446,6 +450,26 @@ function normalizeEmailQueue(value: unknown): EmailQueueKey {
 }
 
 /**
+ * The v3 fields for a list page (attention-engine-v3.md §3(5)): a block per
+ * mail, ranks on a ranked QUEUE page, and Today's fields on Today's request (a
+ * ranked QUEUE page carries rankedAt alone).
+ */
+async function v3ListFields(
+  userId: string,
+  inbox: string | undefined,
+  rows: ReadonlyArray<{ id: string; subject: string | null }>,
+  opts: { rankedAt: Date; rankFrom: number | null; today: boolean },
+): Promise<{ blocks: Map<string, V3ItemBlock>; response: V3TodayFields }> {
+  const { v3BlocksFor, v3TodayFields } = await import("../judge/v3/read-fields.js");
+  const blocks = await v3BlocksFor(userId, rows, opts.rankFrom, opts.rankedAt);
+  if (opts.today) {
+    return { blocks, response: await v3TodayFields(userId, inbox, opts.rankedAt) };
+  }
+  const response = opts.rankFrom === null ? {} : { rankedAt: opts.rankedAt.toISOString() };
+  return { blocks, response };
+}
+
+/**
  * GET / for a user with no connected mail source. `source: "demo"` is kept
  * as the wire marker clients already read as "not connected" (actions
  * disabled, connect prompt), but no rows: nobody is shown an inbox that is not
@@ -775,6 +799,10 @@ export async function emailRoutes(app: FastifyInstance) {
       }
       const receivedSince = window === TODAY_WINDOW ? todayPushCutoff(new Date()) : undefined;
       const laneOnly = lane && lane !== "ALL" ? lane : null;
+      // Attention engine v3, for a user under the policy only: the QUEUE lane in
+      // ranked order, a v3 block per mail, and Today's fields. Everyone else gets
+      // today's order and shape.
+      const rankedAt = isJudgeV3PolicyEnabled(uid) ? new Date() : undefined;
       const groupByThread = Boolean(lane) && (threads === "1" || threads === "true");
       // Grouping pages through the SQL lane view (ALL included), so it takes the
       // filters that view can apply — candidates is refused, not silently dropped.
@@ -894,6 +922,7 @@ export async function emailRoutes(app: FastifyInstance) {
           search,
           hideHandled: hideHandledRows,
           receivedSince,
+          rankedAt,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
         });
@@ -917,6 +946,7 @@ export async function emailRoutes(app: FastifyInstance) {
           search,
           hideHandled: hideHandledRows,
           receivedSince,
+          rankedAt,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
         });
@@ -1041,7 +1071,23 @@ export async function emailRoutes(app: FastifyInstance) {
         };
       });
 
-      return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
+      // v3 blocks ride lane pages only (the contract); the plain list is unchanged.
+      if (!rankedAt || !lane) {
+        return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
+      }
+      const v3 = await v3ListFields(uid, inbox, mapped, {
+        rankedAt,
+        rankFrom: laneOnly === "QUEUE" ? (pageNum - 1) * pageSize + 1 : null,
+        today: window === TODAY_WINDOW,
+      });
+      return {
+        emails: mapped.map((row) => ({ ...row, v3: v3.blocks.get(row.id) })),
+        source: "gmail",
+        total,
+        unread: unreadCount,
+        page: pageNum,
+        ...v3.response,
+      };
     },
   );
 
@@ -1918,9 +1964,8 @@ export async function emailRoutes(app: FastifyInstance) {
         }
         return dossier;
       } catch (err) {
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "UserRateLimitedError") {
           const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
@@ -1972,9 +2017,8 @@ export async function emailRoutes(app: FastifyInstance) {
         // Same failure taxonomy as /reply-draft: the cap and the per-user
         // throttle are user-visible facts, everything else is a transient 503
         // with the failure class named — never a bare 500.
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "UserRateLimitedError") {
           const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));

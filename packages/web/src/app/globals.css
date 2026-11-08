@@ -22,7 +22,16 @@
   --surface-translucent: rgba(255, 255, 255, 0.85);
   --surface-raised: #f8fafc; /* slate-50 wells */
   --surface-hover: #f1f5f9; /* slate-100 */
-  --ink: #0f172a; /* slate-900 — primary text */
+  --ink: #0b0d12; /* v2 ink — primary text */
+  /* Design Language v2 ink ramp (docs/design/design-language-v2.md). The
+     legacy steps below (ink-strong … ink-dim) stay until pages migrate;
+     ui primitives use ink / ink-2 / ink-3. Pinned by api
+     web-design-tokens-v2.test.ts (AA on every neutral surface). */
+  --ink-2: #3b4250;
+  --ink-3: #5b6270;
+  /* v2 depth: flat hairline (1px) and the control border. */
+  --hairline: rgba(10, 14, 20, 0.08);
+  --hairline-control: rgba(10, 14, 20, 0.14);
   --ink-strong: #1e293b; /* slate-800 */
   --ink-soft: #334155; /* slate-700 */
   /* NOT the slate-500/400 pair they used to be. Measured 2026-08-23 against
@@ -119,11 +128,14 @@
 
   /* Motion (productization plan §2). Durations as variables so CSS and
      inline styles share them; in classNames use Tailwind's native
-     `duration-120` / `duration-200` / `duration-160` with `ease-fluid`.
+     `duration-120` / `duration-200` / `duration-320` with `ease-fluid`.
      Reduced-motion is handled globally at the bottom of this file. */
   --motion-state: 120ms; /* hover, press, toggle */
-  --motion-enter: 200ms; /* sheets, popovers, toasts appearing */
-  --motion-exit: 160ms; /* the same leaving — exits are quicker */
+  --motion-move: 200ms; /* popovers, toasts, anything that moves */
+  --motion-sheet: 320ms; /* sheets and drawers */
+  /* Legacy (pre-v2) names — kept for page call sites until they migrate. */
+  --motion-enter: 200ms;
+  --motion-exit: 160ms;
 }
 
 /* Dark: a neutral, hue-free ramp (design detail pass X2) — the same #0a0a0b
@@ -134,12 +146,16 @@
 .dark {
   --surface-app: #0a0a0b;
   --surface-canvas: #141416;
-  --surface-elevated: #1b1b1e;
+  --surface-elevated: #1c1c1f; /* v2 raised */
   --surface-panel: #141416;
   --surface-translucent: rgba(20, 20, 22, 0.85);
-  --surface-raised: #1b1b1e;
+  --surface-raised: #1c1c1f; /* v2 raised */
   --surface-hover: #222226;
   --ink: #f4f4f6; /* 14.4:1 */
+  --ink-2: #a2a2ad; /* v2 */
+  --ink-3: #8e8e9a; /* v2 leaves dark ink-3 open; = ink-dim, AA pinned by test */
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-control: rgba(255, 255, 255, 0.14);
   --ink-strong: #e4e4e8; /* 12.5:1 */
   --ink-soft: #c9c9d1; /* 9.6:1 */
   --ink-mid: #9d9da8; /* 5.9:1 */
@@ -209,6 +225,14 @@
   --color-surface-raised: var(--surface-raised);
   --color-surface-hover: var(--surface-hover);
   --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-hairline: var(--hairline);
+  --color-hairline-control: var(--hairline-control);
+  /* v2 surface names → the existing surface tokens (one value each). */
+  --color-canvas: var(--surface-app);
+  --color-surface: var(--surface-canvas);
+  --color-raised: var(--surface-elevated);
   --color-ink-strong: var(--ink-strong);
   --color-ink-soft: var(--ink-soft);
   --color-ink-mid: var(--ink-mid);
@@ -264,6 +288,14 @@
 }
 
 @theme {
+  /* Device classes (docs/design/design-language-v2.md, "Device classes").
+     Tailwind's defaults stay (md 768 / lg 1024 carry the page layouts); the
+     shell adds one step: from 600px (a Fold opened, a phone on its side, an
+     iPad in split view) the bottom tab bar gives way to the navigation rail.
+     `rail:` / `max-rail:` name that step. The full sidebar replaces the rail
+     at lg (1024). Same unit (rem) as the defaults so the variants sort. */
+  --breakpoint-rail: 37.5rem;
+
   /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
      are stamped on <html> by layout.tsx). Hangul falls through to Pretendard,
      self-hosted from the `pretendard` package (layout.tsx) so Windows, which
@@ -316,33 +348,44 @@
   --color-tier-auto: #34d399; /* emerald-400 */
 
   /* ── Design system (productization plan §2, P1) ──────────────────────
-     Type scale: six roles, each a size + line-height + weight bundle, so one
-     class sets all three: text-display / text-title / text-head / text-body /
-     text-label / text-caption. New code uses these instead of text-xs/sm/…
-     and never an arbitrary text-[Npx] (guarded). 10px text is retired. */
-  --text-display: 28px;
-  --text-display--line-height: 34px;
-  --text-display--font-weight: 600;
-  --text-title: 20px;
-  --text-title--line-height: 28px;
-  --text-title--font-weight: 600;
-  --text-head: 15px;
-  --text-head--line-height: 22px;
-  --text-head--font-weight: 600;
-  --text-body: 14px;
-  --text-body--line-height: 21px;
-  --text-body--font-weight: 400;
-  --text-label: 13px;
-  --text-label--line-height: 18px;
-  --text-label--font-weight: 500;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
-  --text-caption--font-weight: 400;
+     Type: the Design Language v2 roles below (text-role-page … mono). The
+     P1 legacy steps (text-display / title / head / body / label / caption,
+     28/20/15/14/13/12) are retired and removed; `legacy-type` in
+     .github/scripts/check-design-tokens.mjs fails CI if one comes back, since
+     an unknown text-* class would silently render unstyled. Never an
+     arbitrary text-[Npx] (guarded). 10px text is retired. */
+
   /* Text you type on a touch screen: iOS zooms the page into any field under
      16px, so inputs switch to this with `pointer-coarse:text-field` (P10). */
   --text-field: 16px;
   --text-field--line-height: 24px;
   --text-field--font-weight: 400;
+
+  /* Design Language v2 type roles (web column,
+     docs/design/design-language-v2.md § Type roles). Pick by meaning, not
+     nearest pixel. mono pairs with `font-mono`. */
+  --text-role-page: 34px;
+  --text-role-page--line-height: 40px;
+  --text-role-page--font-weight: 650;
+  --text-role-page--letter-spacing: -0.025em;
+  --text-role-title: 22px;
+  --text-role-title--line-height: 28px;
+  --text-role-title--font-weight: 650;
+  --text-role-head: 17px;
+  --text-role-head--line-height: 24px;
+  --text-role-head--font-weight: 600;
+  --text-role-body: 15px;
+  --text-role-body--line-height: 22px;
+  --text-role-body--font-weight: 400;
+  --text-role-label: 13px;
+  --text-role-label--line-height: 18px;
+  --text-role-label--font-weight: 500;
+  --text-role-caption: 12px;
+  --text-role-caption--line-height: 16px;
+  --text-role-caption--font-weight: 400;
+  --text-role-mono: 13px;
+  --text-role-mono--line-height: 20px;
+  --text-role-mono--font-weight: 400;
 
   /* Spacing: 4/8/12/16/24/32/48 — Tailwind's default 4px scale already is
      this (1/2/3/4/6/8/12), so no tokens are added. Stay on those steps. */
@@ -351,14 +394,20 @@
      windows. Named by role, NOT by overriding rounded-sm/md/lg (that would
      silently restyle every existing call site; `rounded-r-*` is taken by the
      right-side utilities). Capsule stays `rounded-full`, pills/LaneChip only. */
-  --radius-control: 6px; /* r-sm */
-  --radius-card: 10px; /* r-md */
-  --radius-sheet: 16px; /* r-lg */
+  /* Design Language v2 (2026-10-31): 6 chip · 10 control · 16 card · 24 sheet,
+     the same set on web, phone and Mac. Popovers and list rows take
+     `control` (10); `card` is a bordered card. */
+  --radius-chip: 6px;
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-sheet: 24px;
 
-  /* Elevation: L0 canvas and L1 hairline (border-line) need no shadow token.
-     L2 floating cards/popovers, L3 sheets/palette (pair L3 with a 40% scrim). */
-  --shadow-l2: 0 8px 24px rgb(0 0 0 / 0.12);
-  --shadow-l3: 0 24px 48px rgb(0 0 0 / 0.18);
+  /* Depth (v2, hairline first): flat = a 1px hairline border, no shadow.
+     menu = popovers, menus, listboxes, toasts. sheet = sheets, dialogs, the
+     palette (pair with a scrim). No other shadows — guarded by api
+     web-design-tokens-v2.test.ts. */
+  --shadow-menu: 0 1px 2px rgba(10, 14, 20, 0.06), 0 4px 12px -4px rgba(10, 14, 20, 0.1);
+  --shadow-sheet: 0 12px 32px -8px rgba(10, 14, 20, 0.18);
 }
 
 body {
@@ -500,6 +549,80 @@ body {
 .pr-safe {
   padding-right: env(safe-area-inset-right);
 }
+/* Width of the shell's navigation column: nothing on a phone (bottom tabs),
+   the rail from 600px, the sidebar from 1024px. The mail split reads it to
+   put its list/reader seam on a fold's hinge. Keep in step with
+   components/nav-rail.tsx (w-[72px]) and components/sidebar.tsx (w-[260px]). */
+:root {
+  --shell-nav-w: 0px;
+}
+@media (min-width: 37.5rem) {
+  :root {
+    --shell-nav-w: calc(72px + env(safe-area-inset-left));
+  }
+}
+@media (min-width: 64rem) {
+  :root {
+    --shell-nav-w: calc(260px + env(safe-area-inset-left));
+  }
+}
+
+/* A segmented row wider than its column scrolls inside itself
+   (components/ui/segmented-control.tsx); the edge with segments past it
+   fades out, so a lane scrolled out of view still reads as there. */
+.segmented-track[data-more-start] {
+  mask-image: linear-gradient(to right, transparent, black 2rem);
+}
+.segmented-track[data-more-end] {
+  mask-image: linear-gradient(to left, transparent, black 2rem);
+}
+.segmented-track[data-more-start][data-more-end] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent
+  );
+}
+
+/* Mail split (app/email/layout.tsx). The list takes 45% of what the shell
+   leaves, held between 280px and 440px; the reader takes the rest.
+   On a device whose screen is two segments side by side (a book-style
+   foldable, a dual-screen phone; the Viewport Segments API), the seam goes
+   on the hinge instead: the list ends where the left segment ends and the
+   reader starts where the right one begins, so no line of text crosses the
+   fold. Browsers without the API never match the query; the env() fallbacks
+   only matter if a browser matches it without knowing the variables. */
+.mail-split-list {
+  width: clamp(280px, 45%, 440px);
+}
+/* The split runs to the bottom edge of <main>, through the clearance <main>
+   pads its end with (app-shell.tsx, --main-clear: the tab bar and the
+   assistant button), and each pane pads its own scroll end by the same
+   amount instead. Inside the padding, the panes would stop short and leave
+   a strip of <main>'s background under the reader. */
+.mail-split {
+  height: calc(100% + var(--main-clear, 0px));
+  margin-bottom: calc(-1 * var(--main-clear, 0px));
+}
+.mail-split-list,
+.mail-split-reader {
+  padding-bottom: var(--main-clear, 0px);
+  scroll-padding-bottom: var(--main-clear, 0px);
+}
+@media (horizontal-viewport-segments: 2) {
+  .mail-split-list {
+    width: max(240px, calc(env(viewport-segment-right 0 0, 50vw) - var(--shell-nav-w)));
+  }
+  .mail-split-reader {
+    padding-left: max(
+      0px,
+      calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw))
+    );
+  }
+}
+
 /* dvh = dynamic viewport height (iOS 15.4+, all evergreen browsers).
    We already gate the PWA on iOS 16.4+ for Web Push, so no fallback needed. */
 .h-dvh {
@@ -586,7 +709,7 @@ body {
 }
 
 .animate-slide-up {
-  animation: slide-up 0.2s ease-out;
+  animation: slide-up var(--motion-move) var(--ease-fluid);
 }
 
 .animate-fade-in {

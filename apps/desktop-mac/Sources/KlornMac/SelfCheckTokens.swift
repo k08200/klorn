@@ -164,8 +164,10 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
 
     // The scale itself.
     results.append((
-        "three radii (6 / 10 / 16) and the spacing grid (4 … 48)",
-        [Theme.Radius.sm, Theme.Radius.md, Theme.Radius.lg] == [6, 10, 16]
+        "v2 radii (chip 6 / control 10 / card 16 / sheet 24) and the spacing grid (4 … 48)",
+        [Theme.Radius.sm, Theme.Radius.md, Theme.Radius.lg, Theme.Radius.xl] == [6, 10, 16, 24]
+            && [Theme.Radius.chip, Theme.Radius.control, Theme.Radius.card, Theme.Radius.sheet]
+                == [6, 10, 16, 24]
             && [Theme.s1, Theme.s2, Theme.s3, Theme.s4, Theme.s6, Theme.s8, Theme.s12]
                 == [4, 8, 12, 16, 24, 32, 48]
             && Theme.rowHeight == 52))
@@ -178,11 +180,22 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && Theme.mailRowHeight.truncatingRemainder(dividingBy: Theme.s2) == 0
             && Theme.mailRowHeight >= WindowLaneChip.height + 2 * Theme.s1 + 18 + 15 + 2 * Theme.s2))
     results.append((
-        "elevation and motion carry the plan's numbers",
-        Theme.Elevation.l2.opacity == 0.12 && Theme.Elevation.l2.y == 8
-            && Theme.Elevation.l3.opacity == 0.18 && Theme.Elevation.l3.y == 24
-            && Theme.Motion.state == 0.12 && Theme.Motion.enter == 0.20
-            && Theme.Motion.exit == 0.16))
+        "v2 depth (menu, sheet) and motion (120 / 200 / 320 on 0.32,0.72,0,1)",
+        Theme.Elevation.menu.layers == [.init(opacity: 0.06, radius: 1, y: 1), .init(opacity: 0.10, radius: 6, y: 4)]
+            && Theme.Elevation.sheet.layers == [.init(opacity: 0.18, radius: 16, y: 12)]
+            && Theme.shadowInk == Theme.hex(0x0A0E14) && Theme.hairlineOpacity == 0.08
+            && Theme.Motion.state == 0.12 && Theme.Motion.move == 0.20
+            && Theme.Motion.sheet == 0.32 && Theme.Motion.curve == (0.32, 0.72, 0.0, 1.0)))
+    results.append((
+        "v2 type roles, Mac column: page 28 / title 22 / head 15 / body 13 / label 12 / caption 11 / mono 12",
+        [Theme.TypeSize.page, Theme.TypeSize.title, Theme.TypeSize.head, Theme.TypeSize.body,
+         Theme.TypeSize.label, Theme.TypeSize.caption, Theme.TypeSize.mono]
+            == [28, 22, 15, 13, 12, 11, 12]))
+    results.append((
+        "v2 dark canvas #0A0A0B, ink #0B0D12 and the accent pair is #0369A1 / #38BDF8",
+        Theme.bgDark == Theme.hex(0x0A0A0B) && Theme.textLight == Theme.hex(0x0B0D12)
+            && Theme.accentSolidLight == Theme.hex(0x0369A1)
+            && Theme.accentSolidDark == Theme.hex(0x38BDF8)))
 
     // The guard's own rules, then the files.
     let bad = [
@@ -206,6 +219,36 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     for offense in scan.offenses { print("      \(offense)") }
     results.append(("the guard reads the main window's files", scan.files >= 14))
     results.append(("the main window's files hold zero raw style literals", scan.offenses.isEmpty))
+
+    // v2 radius roles (2026-11-04): every corner names a role, app-wide.
+    let radius = RadiusGuard.offenders(sourceDir: sourceDir)
+    print("    radius guard: \(radius.files) files, \(radius.offenses.count) offenses")
+    for offense in radius.offenses { print("      \(offense)") }
+    results.append((
+        "the radius guard flags literals and rungs and passes the roles",
+        RadiusGuard.badSamples.allSatisfy { !RadiusGuard.offenses(in: $0).isEmpty }
+            && RadiusGuard.goodSamples.allSatisfy { RadiusGuard.offenses(in: $0).isEmpty }))
+    results.append(("the radius guard reads the whole app", radius.files >= 100))
+    results.append((
+        "no corner outside Theme.swift uses a raw number or a sm/md/lg/xl rung",
+        radius.offenses.isEmpty))
+    let solid = text("Shared/SurfaceState.swift")
+    let provider = text("Shared/ProviderButtons.swift")
+    let segmented = text("Shared/SegmentedBar.swift")
+    results.append((
+        "buttons, fields and segmented tracks wear the control role (10)",
+        Theme.Radius.control == 10
+            && solid.contains("in: RoundedRectangle(cornerRadius: Theme.Radius.control))")
+            && !provider.contains("Radius.chip")
+            && provider.components(separatedBy: "Theme.Radius.control").count - 1 == 5
+            && segmented.contains(
+                "selected ? Theme.surfaceHover : hovering ? Theme.surfaceRaised : .clear,\n"
+                    + "                in: RoundedRectangle(cornerRadius: Theme.Radius.control))")
+            && text("Mail/MailListMetrics.swift").contains("fieldRadius: Theme.Radius.control")
+            && text("Mail/ReadingPaneMetrics.swift").contains("editorRadius: Theme.Radius.control")
+            && text("Calendar/CalendarMetrics.swift").contains("scopeRadius: Theme.Radius.control")
+            && text("Shared/Controls.swift").contains(
+                ".background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.control))")))
 
     // One-badge rule.
     let row = text("Mail/WindowMailRow.swift")
@@ -265,7 +308,7 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     results.append((
         "the sender-label correction menu has a main-window call site: the reader header",
         correctionHosts == ["WindowLaneChip.swift"]
-            && readerMeta.contains("SenderLabelCorrectionMenu(\n                from: item.email?.from")
+            && readerMeta.contains("SenderLabelCorrectionMenu(\n            from: item.email?.from")
             && readerMeta.contains("Menu {\n                    SenderLabelMenuItems(address: address, byUser: byUser)")
             && readerMeta.contains(".accessibilityLabel(\n                    signalWord.map { L(\"label.correct.a11y\", $0) } ?? L(\"label.correct\"))")
             && readerMeta.components(separatedBy: ".accessibilityElement(children: .combine)").count == 2
@@ -478,4 +521,60 @@ private func threeLineRowChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
                  WindowRowRules.a11yLabel($0, lead: "x").contains(L("mail.threadCount", 3))
              } ?? false),
     ]
+}
+
+/// App-wide radius rule (Design Language v2): a corner names a role —
+/// `Theme.Radius.chip / control / card / sheet` — or derives from one
+/// (`m.fieldRadius`). Raw numbers and the sm/md/lg/xl rungs stay in
+/// Theme.swift, the token file. Capsules are a shape, not a radius.
+enum RadiusGuard {
+    /// Files allowed raw radii: the token file itself, and the self-checks
+    /// that quote bad samples.
+    static func exempt(_ relativePath: String) -> Bool {
+        relativePath == "Theme.swift" || relativePath.hasPrefix("SelfCheck")
+    }
+
+    static let badSamples = [
+        "RoundedRectangle(cornerRadius: 8)", "RoundedRectangle(cornerRadius: 1.5)",
+        ".background(x, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))",
+        "static let radius: CGFloat = Theme.Radius.md", "RoundedRectangle(cornerRadius:12)",
+    ]
+    static let goodSamples = [
+        "RoundedRectangle(cornerRadius: Theme.Radius.control)",
+        "RoundedRectangle(cornerRadius: m.fieldRadius).strokeBorder(Theme.line)",
+        "static let radius: CGFloat = Theme.Radius.chip", "Capsule().fill(Theme.accent)",
+        "// RoundedRectangle(cornerRadius: 8) in a comment",
+    ]
+
+    static func offenses(in rawLine: String) -> [String] {
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("//") { return [] }
+        let line = rawLine.components(separatedBy: " //").first ?? rawLine
+        var found: [String] = []
+        if line.range(of: "cornerRadius:\\s*[0-9]", options: .regularExpression) != nil {
+            found.append("raw cornerRadius number")
+        }
+        if line.range(of: "Radius\\.(sm|md|lg|xl)\\b", options: .regularExpression) != nil {
+            found.append("radius rung instead of a role")
+        }
+        return found
+    }
+
+    static func offenders(sourceDir: URL) -> (files: Int, offenses: [String]) {
+        var files = 0
+        var offenses: [String] = []
+        for url in swiftSources(under: sourceDir) {
+            let path = String(url.path.dropFirst(sourceDir.path.count + 1))
+            guard !exempt(path), let text = try? String(contentsOf: url, encoding: .utf8) else {
+                continue
+            }
+            files += 1
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                for offense in Self.offenses(in: line) {
+                    offenses.append("\(path):\(index + 1): \(offense)")
+                }
+            }
+        }
+        return (files, offenses.sorted())
+    }
 }

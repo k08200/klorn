@@ -8,15 +8,15 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
-import { isApiError } from "../../api/client";
+import { isApiError, isEntitlementRefusal } from "../../api/client";
 import type { ImapKind } from "../../api/endpoints";
 import type { LinkStartResponse } from "../../api/wire";
 import { getServices } from "../../app/services";
 import type { MessageKey } from "../../i18n";
 import { useI18n } from "../../i18n/I18nProvider";
 import { openExternal } from "../../platform/external";
-import { useLinkProps } from "../../router/Router";
 import { Icon } from "../../ui/Icon";
+import { PlansLink } from "../../ui/PlansLink";
 import { Sheet } from "../../ui/Sheet";
 import { SourceBadge } from "../../ui/SourceBadge";
 import { notify } from "../../ui/StatusNote";
@@ -73,7 +73,6 @@ export function AddAccountSheet({
 }: AddAccountSheetProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const plans = useLinkProps({ name: "settings", section: "plans" });
   const [flow, setFlow] = useState<Flow | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -108,7 +107,7 @@ export function AddAccountSheet({
       setFlow(which);
       setWaiting(true);
     } catch (err) {
-      if (isApiError(err) && (err.status === 402 || err.status === 403)) setNeedsPro(true);
+      if (isEntitlementRefusal(err)) setNeedsPro(true);
       else setProblem(t("accounts.add.startFailed"));
     } finally {
       setBusy(false);
@@ -155,7 +154,7 @@ export function AddAccountSheet({
       ]);
       onClose();
     } catch (err) {
-      if (isApiError(err) && err.status === 403) setNeedsPro(true);
+      if (isEntitlementRefusal(err)) setNeedsPro(true);
       else if (isApiError(err) && err.status === 429) setProblem(t("accounts.imap.tooMany"));
       else if (isApiError(err) && err.serverMessage) setProblem(err.serverMessage);
       else setProblem(t("accounts.imap.failed"));
@@ -166,7 +165,7 @@ export function AddAccountSheet({
 
   const proNote = needsPro ? (
     <p className="form-note" role="status">
-      {t("accounts.add.needsPro")} <a {...plans}>{t("calendar.draft.seePlans")}</a>
+      {t("accounts.add.needsPro")} <PlansLink />
     </p>
   ) : null;
   const errorNote = problem ? (

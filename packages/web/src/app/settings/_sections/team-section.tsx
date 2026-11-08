@@ -12,7 +12,7 @@ export function TeamSection() {
   // The nav only offers this section to accounts with team mode; a direct
   // visit without it gets a plain statement instead of an empty page.
   if (available === false) {
-    return <p className="text-body text-ink-mid">{t("settings.team.unavailable")}</p>;
+    return <p className="text-role-body text-ink-mid">{t("settings.team.unavailable")}</p>;
   }
 
   return (

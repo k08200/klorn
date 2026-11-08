@@ -46,14 +46,14 @@ export const metadata: Metadata = {
     siteName: "Klorn",
     url: "https://app.klorn.ai/",
     type: "website",
-    images: [{ url: "/brand/og-image.png?v=k2", width: 1200, height: 630 }],
+    images: [{ url: "/brand/og-image.png?v=k3", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Klorn — The clear signal worth acting on",
     description:
       "All your mail and calendars in one calm place — every message sorted, with the reason shown.",
-    images: ["/brand/og-image.png?v=k2"],
+    images: ["/brand/og-image.png?v=k3"],
   },
   appleWebApp: {
     capable: true,

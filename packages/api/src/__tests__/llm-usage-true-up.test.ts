@@ -25,8 +25,12 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { estimatePrebillCents, trueUpCostLedgers } from "../billing/llm-usage.js";
 
-const PAID_MODEL = "anthropic/claude-sonnet-4-6";
-const FREE_MODEL = "google/gemma-4-31b-it:free";
+const PAID_MODEL = "claude-sonnet-4-6";
+// A `:free`-suffixed id (e.g. a stale User.chatModel from the retired proxy
+// lane). No provider serves free SKUs any more, so the suffix must not zero
+// the cost — it prices by its family like any other id.
+const FREE_SUFFIX_MODEL = "google/gemma-4-31b-it:free";
+const FREE_SUFFIX_FAMILY_MODEL = "google/gemma-4-31b-it";
 
 beforeEach(() => {
   recordCostUsage.mockReset();
@@ -38,8 +42,10 @@ describe("estimatePrebillCents", () => {
     expect(estimatePrebillCents(PAID_MODEL)).toBeGreaterThanOrEqual(1);
   });
 
-  it("stays 0 for :free models", () => {
-    expect(estimatePrebillCents(FREE_MODEL)).toBe(0);
+  it("prices a :free-suffixed id by its family — the suffix is no 0¢ escape hatch", () => {
+    const prebill = estimatePrebillCents(FREE_SUFFIX_MODEL);
+    expect(prebill).toBeGreaterThan(0);
+    expect(prebill).toBe(estimatePrebillCents(FREE_SUFFIX_FAMILY_MODEL));
   });
 });
 
@@ -93,15 +99,20 @@ describe("trueUpCostLedgers", () => {
     expect(recordGlobalCostUsage).not.toHaveBeenCalled();
   });
 
-  it("does nothing for free models even with huge usage", async () => {
+  it("charges a :free-suffixed id like its family when Klorn's key served it", async () => {
+    // Only BYOK (servedByUserKey, below) settles at $0 now; a model id alone
+    // can no longer keep huge env usage off the ledgers.
     await trueUpCostLedgers({
       userId: "u1",
-      model: FREE_MODEL,
+      model: FREE_SUFFIX_MODEL,
       prebilledCents: 0,
       usage: { prompt_tokens: 5_000_000, completion_tokens: 100_000 },
     });
-    expect(recordCostUsage).not.toHaveBeenCalled();
-    expect(recordGlobalCostUsage).not.toHaveBeenCalled();
+    expect(recordCostUsage).toHaveBeenCalledTimes(1);
+    const [, charged, model] = recordCostUsage.mock.calls[0];
+    expect(charged).toBeGreaterThan(0);
+    expect(model).toBe(FREE_SUFFIX_MODEL);
+    expect(recordGlobalCostUsage).toHaveBeenCalledWith(charged);
   });
 
   it("charges NOTHING when the call was served on the user's own (BYOK) key", async () => {

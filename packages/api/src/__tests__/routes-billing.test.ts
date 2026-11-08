@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { decryptToken } from "../crypto-tokens.js";
 
 vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock("../mail/gmail.js", () => ({
 
 vi.mock("../billing/verify-provider-key.js", () => ({
   // Default "valid" so key-set tests pass; individual tests override per call.
-  verifyOpenRouterKey: vi.fn(async () => "valid"),
+  verifyAnthropicKey: vi.fn(async () => "valid"),
 }));
 
 vi.mock("../billing/stripe.js", () => ({
@@ -128,10 +129,36 @@ describe("billing routes", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body).toHaveProperty("activeModel");
-    expect(body).toHaveProperty("hasOpenRouterApiKey");
-    expect(body).toHaveProperty("hasGeminiApiKey");
+    // Default mock user stores no key.
+    expect(body.hasAnthropicApiKey).toBe(false);
+    expect(body.hasGeminiApiKey).toBe(false);
+    // The retired proxy key's flag is gone from the contract.
+    expect(body).not.toHaveProperty("hasOpenRouterApiKey");
     expect(body).not.toHaveProperty("chatModels");
     expect(body).not.toHaveProperty("agentModels");
+    await app.close();
+  });
+
+  it("GET /models reports a stored Anthropic or Gemini key by presence only", async () => {
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: null,
+      anthropicApiKey: "v1:stored-anthropic-ciphertext",
+      geminiApiKey: "v1:stored-gemini-ciphertext",
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/billing/models", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().hasAnthropicApiKey).toBe(true);
+    expect(res.json().hasGeminiApiKey).toBe(true);
+    expect(res.body).not.toContain("stored-anthropic-ciphertext");
     await app.close();
   });
 
@@ -166,9 +193,11 @@ describe("billing routes", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(Array.isArray(body.availableModels)).toBe(true);
-    expect(body.availableModels.map((m: { id: string }) => m.id)).toContain(
-      "anthropic/claude-sonnet-5",
-    );
+    expect(body.availableModels.map((m: { id: string }) => m.id)).toEqual([
+      "claude-haiku-5-5",
+      "claude-sonnet-5",
+      "claude-opus-4-8",
+    ]);
     // Default mock user's stored model is a legacy id → treated as unset.
     expect(body.selectedModel).toBeNull();
     await app.close();
@@ -188,7 +217,7 @@ describe("billing routes", () => {
       role: "USER",
       stripeId: null,
       chatModel: "google/gemini-2.5-flash",
-      openRouterApiKey: "enc:sk-or-v1-xxx",
+      anthropicApiKey: "v1:stored-anthropic-ciphertext",
       geminiApiKey: null,
     });
     const app = await buildApp();
@@ -196,18 +225,27 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { chatModel: "anthropic/claude-sonnet-5" },
+      payload: { chatModel: "claude-sonnet-5" },
     });
     expect(res.statusCode).toBe(200);
+    // A model change leaves the stored key alone and still reports it.
+    expect(res.json()).toEqual({ success: true, hasAnthropicApiKey: true, hasGeminiApiKey: false });
     expect(
       (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.some(
-        (call) => call[0]?.data?.chatModel === "anthropic/claude-sonnet-5",
+        (call) =>
+          call[0]?.data?.chatModel === "claude-sonnet-5" &&
+          !("anthropicApiKey" in (call[0]?.data ?? {})),
       ),
     ).toBe(true);
     await app.close();
   });
 
-  it("PATCH /models with an unknown chatModel returns 400 and does not persist", async () => {
+  it.each([
+    "some/unknown-model",
+    // Retired catalog ids from the proxy era: no longer selectable.
+    "openai/gpt-5.4",
+    "anthropic/claude-sonnet-5",
+  ])("PATCH /models with a non-curated chatModel %s returns 400 and does not persist", async (chatModel) => {
     const { prisma } = await import("../db.js");
     const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
     updateMock.mockClear();
@@ -216,9 +254,10 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { chatModel: "some/unknown-model" },
+      payload: { chatModel },
     });
     expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("Unsupported model");
     expect(updateMock).not.toHaveBeenCalled();
     await app.close();
   });
@@ -227,19 +266,17 @@ describe("billing routes", () => {
     const { prisma } = await import("../db.js");
     const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
     updateMock.mockClear();
-    // Default mock user has no keys (openRouterApiKey/geminiApiKey absent = falsy)
+    // Default mock user has no keys (anthropicApiKey/geminiApiKey absent = falsy)
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { chatModel: "anthropic/claude-sonnet-5" },
+      payload: { chatModel: "claude-opus-4-8" },
     });
     expect(res.statusCode).toBe(200);
     expect(
-      updateMock.mock.calls.some(
-        (call) => call[0]?.data?.chatModel === "anthropic/claude-sonnet-5",
-      ),
+      updateMock.mock.calls.some((call) => call[0]?.data?.chatModel === "claude-opus-4-8"),
     ).toBe(true);
     await app.close();
   });
@@ -256,7 +293,7 @@ describe("billing routes", () => {
       role: "USER",
       stripeId: null,
       chatModel: "google/gemma-4-31b-it:free",
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
     });
     const app = await buildApp();
@@ -265,7 +302,15 @@ describe("billing routes", () => {
     expect(res.json().selectedModel).toBeNull();
     await app.close();
   });
-  it("PATCH /models rejects a NEW geminiApiKey — single-key policy (#today's outage)", async () => {
+  it.each([
+    // Single-key policy (2026-07-16 outage): no new Gemini keys.
+    ["geminiApiKey", { geminiApiKey: "AIza-legacy-key" }],
+    // The retired proxy key field is not part of the body schema any more.
+    ["openRouterApiKey", { openRouterApiKey: "sk-or-v1-retired" }],
+    ["clearOpenRouterApiKey", { clearOpenRouterApiKey: true }],
+  ])("PATCH /models rejects a %s write at the schema (additionalProperties: false)", async (_field, payload) => {
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockClear();
     const { prisma } = await import("../db.js");
     const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
     updateMock.mockClear();
@@ -274,9 +319,10 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { geminiApiKey: "AIza-legacy-key" },
+      payload,
     });
     expect(res.statusCode).toBe(400);
+    expect(verifyAnthropicKey).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
     await app.close();
   });
@@ -294,12 +340,151 @@ describe("billing routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(updateMock.mock.calls.some((call) => call[0]?.data?.geminiApiKey === null)).toBe(true);
+    expect(res.json().hasGeminiApiKey).toBe(false);
     await app.close();
   });
 
-  it("a dead OpenRouter key is rejected upstream-verified, never stored silently", async () => {
-    const { verifyOpenRouterKey } = await import("../billing/verify-provider-key.js");
-    (verifyOpenRouterKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("invalid");
+  it("clearAnthropicApiKey nulls the stored Anthropic key without a verify call", async () => {
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockClear();
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: null,
+      anthropicApiKey: "v1:stored-anthropic-ciphertext",
+      geminiApiKey: null,
+    });
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { clearAnthropicApiKey: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      success: true,
+      hasAnthropicApiKey: false,
+      hasGeminiApiKey: false,
+    });
+    expect(updateMock.mock.calls.some((call) => call[0]?.data?.anthropicApiKey === null)).toBe(
+      true,
+    );
+    expect(verifyAnthropicKey).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects a string that cannot be an Anthropic key with 400 and stores nothing", async () => {
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("malformed");
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: "",
+      anthropicApiKey: null,
+      geminiApiKey: null,
+    });
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { anthropicApiKey: "not-a-key" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/sk-ant-/);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("stores a verified Anthropic key encrypted, never as plaintext", async () => {
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    const verifyMock = verifyAnthropicKey as ReturnType<typeof vi.fn>;
+    verifyMock.mockClear();
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: null,
+      anthropicApiKey: null,
+      geminiApiKey: null,
+    });
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const plaintext = "sk-ant-api03-user-owned-key-0123456789";
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { anthropicApiKey: `  ${plaintext}  ` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, hasAnthropicApiKey: true, hasGeminiApiKey: false });
+    // Verified upstream with the trimmed key before anything is written.
+    expect(verifyMock).toHaveBeenCalledWith(plaintext);
+    expect(verifyMock.mock.invocationCallOrder[0]).toBeLessThan(
+      updateMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    const stored = updateMock.mock.calls[0]?.[0]?.data?.anthropicApiKey;
+    expect(typeof stored).toBe("string");
+    expect(stored).not.toContain(plaintext);
+    expect(decryptToken(stored)).toBe(plaintext);
+    expect(updateMock.mock.calls[0]?.[0]?.where).toEqual({ id: "user-1" });
+    await app.close();
+  });
+
+  it("refuses a BYOK key for a non-entitled user with the ENTITLEMENT_REQUIRED code", async () => {
+    // Clients detect an entitlement refusal by `code`, not by the error text —
+    // without it the BYOK refusal read as a generic failure (paywall on, FREE).
+    const { isEntitled } = await import("../billing/stripe.js");
+    (isEntitled as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockClear();
+    const { prisma } = await import("../db.js");
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { anthropicApiKey: "sk-ant-api03-test" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({
+      error: "BYOK requires an active subscription",
+      code: "ENTITLEMENT_REQUIRED",
+    });
+    // Refused before the key ever leaves Klorn for verification.
+    expect(verifyAnthropicKey).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("a dead Anthropic key is rejected upstream-verified, never stored silently", async () => {
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("invalid");
     const { prisma } = await import("../db.js");
     const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
     findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null });
@@ -310,7 +495,7 @@ describe("billing routes", () => {
       role: "USER",
       stripeId: null,
       chatModel: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
     });
     const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
@@ -320,10 +505,14 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { openRouterApiKey: "sk-or-v1-dead" },
+      payload: { anthropicApiKey: "sk-ant-api03-dead" },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/rejected|invalid/i);
+    expect(res.json().error).toBe(
+      "That Anthropic key was rejected by the provider — check it at platform.claude.com/settings/keys and try again.",
+    );
+    // The key itself is never echoed back.
+    expect(res.body).not.toContain("sk-ant-api03-dead");
     expect(updateMock).not.toHaveBeenCalled();
     await app.close();
   });
@@ -509,8 +698,8 @@ describe("billing routes", () => {
   });
 
   it("provider unreachable → fail-open: the key stores (never block a save on provider noise)", async () => {
-    const { verifyOpenRouterKey } = await import("../billing/verify-provider-key.js");
-    (verifyOpenRouterKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("unreachable");
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("unreachable");
     const { prisma } = await import("../db.js");
     const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
     findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null });
@@ -521,7 +710,7 @@ describe("billing routes", () => {
       role: "USER",
       stripeId: null,
       chatModel: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
     });
     const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
@@ -531,12 +720,13 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { openRouterApiKey: "sk-or-v1-fine" },
+      payload: { anthropicApiKey: "sk-ant-api03-fine" },
     });
     expect(res.statusCode).toBe(200);
-    expect(
-      updateMock.mock.calls.some((call) => typeof call[0]?.data?.openRouterApiKey === "string"),
-    ).toBe(true);
+    expect(res.json().hasAnthropicApiKey).toBe(true);
+    const stored = updateMock.mock.calls[0]?.[0]?.data?.anthropicApiKey;
+    expect(typeof stored).toBe("string");
+    expect(decryptToken(stored)).toBe("sk-ant-api03-fine");
     await app.close();
   });
 });

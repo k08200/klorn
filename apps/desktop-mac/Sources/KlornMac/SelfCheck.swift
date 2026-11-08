@@ -284,10 +284,15 @@ func runSelfChecks() async -> Bool {
     // A new NSWorkspace.open on a Klorn URL would quietly reintroduce the
     // "finish this on the web" round trip the app exists to remove, so the rule
     // is checked against the sources rather than trusted to review.
+    // The one exception is buying Pro: checkout lives on the web and the app has
+    // no billing screen (2026-10-24), so PlanUpgrade.swift opens <web>/billing
+    // and nothing else (pinned in SelfCheckPlanUpgrade.swift).
     let sourceDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     let swiftFiles = swiftSources(under: sourceDir)
     check("sources are readable", !swiftFiles.isEmpty)
-    let allowedWebBaseUsers: Set<String> = ["AuthFlow.swift", "Config.swift", "SelfCheck.swift"]
+    let allowedWebBaseUsers: Set<String> = [
+        "AuthFlow.swift", "Config.swift", "SelfCheck.swift", "PlanUpgrade.swift", "SelfCheckPlanUpgrade.swift",
+    ]
     let offenders = swiftFiles.filter { url in
         guard !allowedWebBaseUsers.contains(url.lastPathComponent),
               let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
@@ -1571,6 +1576,9 @@ func runSelfChecks() async -> Bool {
 
     print("Session scope:")
     for (name, ok) in await sessionSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
+    print("FREE plan refusals:")
+    for (name, ok) in await planUpgradeSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     // Design tokens and the one-badge row rule in the main window (M7).
     for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }

@@ -360,7 +360,7 @@ export function endpoints(api: ApiClient) {
         api.get<CalendarEventWire>(`/api/calendar/${encodeURIComponent(id)}`, o),
       /**
        * routes/calendar.ts POST / — the ONLY calendar write the app makes, sent
-       * after the user confirms the draft card (Pro-gated: 402/403 → Plans).
+       * after the user confirms the draft card (Pro-gated: 403 ENTITLEMENT_REQUIRED → Plans).
        */
       create: (draft: EventDraftWire) => api.post<CalendarEventWire>("/api/calendar", draft),
       /** routes/calendar.ts POST /parse-event — free text → a draft; writes nothing. */

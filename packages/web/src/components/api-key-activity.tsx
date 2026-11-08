@@ -24,10 +24,10 @@ import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 
 const TOGGLE =
-  "ease-strong inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-ink-mid transition duration-150 hover:text-ink motion-reduce:transition-none focus-ring";
+  "ease-strong inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-role-caption font-medium text-ink-mid transition duration-150 hover:text-ink motion-reduce:transition-none focus-ring";
 const RETRY =
-  "ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink transition duration-150 hover:bg-surface-panel motion-reduce:transition-none focus-ring";
-const STATUS_TEXT = "py-2 text-xs text-ink-mid";
+  "ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink transition duration-150 hover:bg-surface-panel motion-reduce:transition-none focus-ring";
+const STATUS_TEXT = "py-2 text-role-caption text-ink-mid";
 
 interface ToggleProps {
   keyName: string;
@@ -116,13 +116,13 @@ function ActivityRow({
   const { t } = useT();
   const reasonKey = reasonLabelKey(row.reason);
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-role-caption">
       <time dateTime={row.createdAt} className="tabular-nums text-ink-mid">
         {formatActivityTime(row.createdAt, formatter)}
       </time>
       <span className="text-ink">{t(toolLabelKey(row.tool))}</span>
       <span
-        className={`rounded-full px-2 py-0.5 text-xs font-medium ${outcomeChipClasses(row.outcome)}`}
+        className={`rounded-full px-2 py-0.5 text-role-caption font-medium ${outcomeChipClasses(row.outcome)}`}
       >
         {t(outcomeLabelKey(row.outcome))}
       </span>
@@ -141,7 +141,7 @@ export function ApiKeyActivityPanel({ id, keyId }: { id: string; keyId: string }
   const rows = state.status === "ready" ? state.rows : [];
 
   return (
-    <div id={id} className="w-full rounded-xl border border-line bg-surface-raised px-3 py-1">
+    <div id={id} className="w-full rounded-control border border-line bg-surface-raised px-3 py-1">
       {/* One status region for the panel's whole life, so a screen reader hears
           "loading", then the result. Only short messages live in it: announcing
           a 50-row list would be noise. */}
@@ -155,7 +155,9 @@ export function ApiKeyActivityPanel({ id, keyId }: { id: string; keyId: string }
       </div>
       {state.status === "error" && (
         <div role="alert" className="flex flex-wrap items-center gap-x-3 py-1">
-          <p className="text-xs text-ink-mid">{t("settings.apiKeys.activity.loadFailed")}</p>
+          <p className="text-role-caption text-ink-mid">
+            {t("settings.apiKeys.activity.loadFailed")}
+          </p>
           <button type="button" onClick={retry} className={RETRY}>
             {t("settings.apiKeys.activity.retry")}
           </button>

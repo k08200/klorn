@@ -23,6 +23,31 @@ const BY_PACKAGE: Record<string, SubscriptionLength> = {
   ANNUAL: { unit: "year", count: 1 },
 };
 
+const PLAN_NAME_KEYS: ReadonlyMap<string, MessageKey> = new Map([
+  ["free", "plans.name.free"],
+  ["pro", "plans.name.pro"],
+  ["team", "plans.name.team"],
+  ["enterprise", "plans.name.enterprise"],
+]);
+
+/**
+ * The message key for a plan, from either the server's code ("FREE") or its
+ * display name ("Free"); null for a plan the app has no name for, which the
+ * screen then shows as the server sent it.
+ */
+export function planNameKey(plan: string | null | undefined): MessageKey | null {
+  return PLAN_NAME_KEYS.get((plan ?? "").toLowerCase()) ?? null;
+}
+
+/** The plan as the reader's language names it; an unknown plan keeps the server's text. */
+export function planLabel(
+  t: (key: MessageKey) => string,
+  plan: string | null | undefined,
+): string | undefined {
+  const key = planNameKey(plan);
+  return key ? t(key) : plan || undefined;
+}
+
 /** P1W / P1M / P3M / P1Y (P7D = a week, P12M = a year); null for anything else. */
 export function parseIsoPeriod(iso: string | null | undefined): SubscriptionLength | null {
   const m = /^P(\d{1,2})([DWMY])$/.exec(iso ?? "");

@@ -81,8 +81,8 @@ function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
   }
   if (!context.tier) {
     return (
-      <p className="flex flex-wrap items-center gap-2 text-body text-ink-mid">
-        <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-caption text-ink-muted">
+      <p className="flex flex-wrap items-center gap-2 text-role-body text-ink-mid">
+        <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-role-caption text-ink-muted">
           {t("mailV2.row.sorting")}
         </span>
         {t("mailV2.reader.unsorted")}
@@ -95,7 +95,7 @@ function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
       {context.tierReason && (
         // One line until opened: the summary is the reason itself.
         <details className="group min-w-0 flex-1">
-          <summary className="focus-ring cursor-pointer list-none truncate rounded-control py-0.5 text-label font-normal text-ink-soft group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
+          <summary className="focus-ring cursor-pointer list-none truncate rounded-chip py-0.5 text-role-label font-normal text-ink-soft group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
             {t("mailV2.reader.why", { reason: context.tierReason })}
           </summary>
         </details>
@@ -142,15 +142,15 @@ export function ReaderHeader(props: ReaderHeaderProps) {
   const name = senderName(email.from);
   return (
     <header className="flex flex-col gap-3.5">
-      <h1 className="line-clamp-2 max-w-[640px] break-keep text-title text-ink [overflow-wrap:anywhere]">
+      <h1 className="line-clamp-2 max-w-[640px] break-keep text-role-title text-ink [overflow-wrap:anywhere]">
         {email.subject || t("mailV2.noSubject")}
       </h1>
 
       <div className="flex flex-col gap-1">
-        <div className="flex min-w-0 items-center gap-2.5 text-label font-normal text-ink-soft">
+        <div className="flex min-w-0 items-center gap-2.5 text-role-label font-normal text-ink-soft">
           <span
             aria-hidden="true"
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-caption font-semibold text-ink-soft"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-role-caption font-semibold text-ink-soft"
           >
             {initials(name)}
           </span>
@@ -175,7 +175,10 @@ export function ReaderHeader(props: ReaderHeaderProps) {
           </time>
         </div>
         {recipients && (
-          <p title={recipients} className="min-w-0 truncate pl-[38px] text-caption text-ink-muted">
+          <p
+            title={recipients}
+            className="min-w-0 truncate pl-[38px] text-role-caption text-ink-muted"
+          >
             {recipients}
           </p>
         )}
@@ -184,7 +187,7 @@ export function ReaderHeader(props: ReaderHeaderProps) {
       <LaneLine {...props} />
 
       {factLabels.length > 0 && (
-        <ul className="flex flex-wrap gap-x-2 gap-y-1 text-caption text-ink-muted">
+        <ul className="flex flex-wrap gap-x-2 gap-y-1 text-role-caption text-ink-muted">
           {factLabels.map((label, index) => (
             <li key={label} className="flex items-center gap-2">
               {index > 0 && <span aria-hidden="true">·</span>}

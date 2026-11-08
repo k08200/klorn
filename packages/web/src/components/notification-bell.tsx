@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
-import { shellKind } from "../lib/native/shell";
+import { openExternal, shellKind } from "../lib/native/shell";
 import { deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
   getTypeLabel,
@@ -13,7 +14,9 @@ import {
   type NotificationGroup,
   unreadGroupCount,
 } from "../lib/notification-grouping";
+import { type NotificationLinkTarget, notificationLinkTarget } from "../lib/notification-target";
 import { formatRelative } from "../lib/text";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { RejectReasonDialog } from "./reject-reason-dialog";
 import { useToast } from "./toast";
 import { useWebSocket } from "./use-websocket";
@@ -110,7 +113,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
   });
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const update = () => setIsMobile(window.innerWidth < 768);
+    // The bell lives in the rail (600px+) and the sidebar; below 600px is
+    // the full-width fallback (globals.css, --breakpoint-rail).
+    const update = () => setIsMobile(window.innerWidth < 600);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -292,11 +297,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [pendingActionLoading, setPendingActionLoading] = useState<
     Record<string, "approve" | "reject" | null>
   >({});
+  // Approving executes the action, which is Pro: a FREE user's 403 shows the notice.
+  const [approveProGated, setApproveProGated] = useState(false);
 
   const handleApprovePendingAction = async (notif: Notification, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
     setPendingActionLoading((prev) => ({ ...prev, [notif.id]: "approve" }));
+    setApproveProGated(false);
     try {
       await apiFetch(`/api/chat/pending-actions/${notif.pendingActionId}/approve`, {
         method: "POST",
@@ -309,6 +317,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
       );
       apiFetch(`/api/notifications/${notif.id}/read`, { method: "PATCH" }).catch(() => {});
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setApproveProGated(true);
+        return;
+      }
       console.error("[notification-bell] approve failed", err);
       // Let the user retry — don't silently swallow
       toast(t("notif.toast.approveFailed"), "error");
@@ -350,12 +362,17 @@ export default function NotificationBell({ userId }: { userId: string }) {
   // Determine where clicking a notification should navigate.
   // Week 1 removed /calendar, /tasks, /email, /notes — every fallback now
   // points at a surviving surface so taps never 404.
-  const getNotificationTarget = (n: Notification): string | null => {
-    if (n.link) return n.link;
+  const getNotificationTarget = (n: Notification): NotificationLinkTarget => {
+    // A stored link is untrusted (a meeting link can come from anyone's
+    // invite): only a same-origin path or a plain https URL is followed; any
+    // other link falls through to the type's own surface.
+    const linked = notificationLinkTarget(n.link);
+    if (linked) return linked;
+    const internal = (path: string): NotificationLinkTarget => ({ kind: "internal", path });
     // A pending action the user still needs to approve/reject — Inbox is
     // the one place that shows every unresolved item with action buttons.
-    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return "/inbox";
-    if (n.conversationId) return "/inbox";
+    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return internal("/inbox");
+    if (n.conversationId) return internal("/inbox");
     const typeRoutes: Record<string, string> = {
       briefing: "/briefing",
       meeting: "/briefing",
@@ -365,7 +382,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       reminder: "/inbox",
       insight: "/inbox",
     };
-    return typeRoutes[n.type] || "/inbox";
+    return internal(typeRoutes[n.type] || "/inbox");
   };
 
   const handleNotificationClick = (n: Notification) => {
@@ -377,11 +394,22 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
     // Navigate first, then close dropdown
     const target = getNotificationTarget(n);
-    if (target) {
-      router.push(target);
-      // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
-      setTimeout(() => setOpen(false), 0);
+    if (target.kind === "external") {
+      // Never the app tab: an https link (e.g. a meeting) opens on its own —
+      // in the system browser inside the desktop/mobile wrappers, where a
+      // plain window.open may stay in the WebView or do nothing.
+      if (shellKind() !== null) {
+        openExternal(target.url).catch((err) =>
+          console.error("[notifications] could not open external link:", err),
+        );
+      } else {
+        window.open(target.url, "_blank", "noopener,noreferrer");
+      }
+    } else {
+      router.push(target.path);
     }
+    // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
+    setTimeout(() => setOpen(false), 0);
   };
 
   const markAllRead = async () => {
@@ -444,24 +472,24 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {isAgentNotification(n.title) ? "🤖" : typeIcon[n.type] || "📌"}
           </span>
           <span
-            className={`text-sm truncate ${!n.isRead ? "font-semibold" : "text-ink-mid"} ${isAgentNotification(n.title) ? "text-accent-deep" : ""}`}
+            className={`text-role-body truncate ${!n.isRead ? "font-semibold" : "text-ink-mid"} ${isAgentNotification(n.title) ? "text-accent-deep" : ""}`}
           >
             {notificationTitle(n.title)}
           </span>
           {isAgentNotification(n.title) && (
-            <span className="text-caption text-accent-deep bg-accent-light/10 px-1 py-0.5 rounded shrink-0">
+            <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1 py-0.5 rounded shrink-0">
               Klorn
             </span>
           )}
           {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 ml-auto" />}
         </div>
-        <p className="text-label font-normal md:text-xs text-ink-mid mt-1 line-clamp-2 ml-6">
+        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
           {n.message}
         </p>
         <div className="flex items-center gap-2 mt-1 ml-6">
-          <span className="text-caption text-ink-mid">{formatRelative(n.createdAt)}</span>
+          <span className="text-role-caption text-ink-mid">{formatRelative(n.createdAt)}</span>
           {getNotificationTarget(n) && (
-            <span className="text-caption text-accent-deep">{t("common.open")}</span>
+            <span className="text-role-caption text-accent-deep">{t("common.open")}</span>
           )}
         </div>
       </button>
@@ -471,7 +499,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleApprovePendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-role-label md:text-role-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "approve" ? "..." : t("notif.approve")}
           </button>
@@ -479,7 +507,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleRejectPendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-sm md:text-caption px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-role-label md:text-role-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "reject" ? "..." : t("notif.reject")}
           </button>
@@ -487,7 +515,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       )}
       {n.pendingActionId && n.pendingActionStatus && n.pendingActionStatus !== "PENDING" && (
         <div className="px-4 pb-2 ml-6">
-          <span className="text-caption text-ink-mid">
+          <span className="text-role-caption text-ink-mid">
             {n.pendingActionStatus === "EXECUTED"
               ? t("notif.status.done")
               : n.pendingActionStatus === "REJECTED"
@@ -514,23 +542,23 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <div className="flex items-center gap-2">
           <span className="text-sm">{group.isAgent ? "🤖" : typeIcon[group.type] || "📌"}</span>
           <span
-            className={`text-sm ${group.unreadCount > 0 ? "font-semibold" : "text-ink-mid"} ${group.isAgent ? "text-accent-deep" : ""}`}
+            className={`text-role-body ${group.unreadCount > 0 ? "font-semibold" : "text-ink-mid"} ${group.isAgent ? "text-accent-deep" : ""}`}
           >
             {label} {group.items.length}
           </span>
           {group.unreadCount > 0 && (
-            <span className="text-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded shrink-0">
               {t("notif.group.new", { count: String(group.unreadCount) })}
             </span>
           )}
-          <span className="text-caption text-ink-dim ml-auto shrink-0">
+          <span className="text-role-caption text-ink-dim ml-auto shrink-0">
             {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
           </span>
         </div>
-        <p className="text-label font-normal md:text-xs text-ink-mid mt-1 line-clamp-1 ml-6">
+        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
-        <p className="text-caption text-ink-mid mt-1 ml-6">
+        <p className="text-role-caption text-ink-mid mt-1 ml-6">
           {t("notif.group.latest", { time: formatRelative(group.latestItem.createdAt) })}
         </p>
       </button>
@@ -549,7 +577,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         ref={bellRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`focus-ring relative rounded-md text-ink-mid hover:text-ink transition p-1 ${flash ? "animate-bounce" : ""}`}
+        className={`focus-ring relative inline-flex items-center justify-center rounded-chip text-ink-mid hover:text-ink transition p-1 pointer-coarse:size-11 ${flash ? "animate-bounce" : ""}`}
         aria-label={t("notif.title")}
       >
         <svg
@@ -567,7 +595,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-caption font-bold rounded-full w-4 h-4 flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-role-caption font-bold rounded-full w-4 h-4 flex items-center justify-center">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -593,18 +621,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     zIndex: 9999,
                   }
             }
-            className="md:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] md:max-h-[28rem]"
+            className="rail:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] rail:max-h-[28rem]"
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{t("notif.title")}</span>
+                <span className="text-role-body font-medium">{t("notif.title")}</span>
                 {connected && (
-                  <span className="text-caption text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
+                  <span className="text-role-caption text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
                     {t("mail.live")}
                   </span>
                 )}
                 {unreadCount > 0 && (
-                  <span className="text-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded">
+                  <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded">
                     {unreadCount}
                   </span>
                 )}
@@ -615,7 +643,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     type="button"
                     onClick={markAllRead}
                     disabled={actionLoading}
-                    className="text-xs text-ink-dim hover:text-accent-deep transition disabled:opacity-40"
+                    className="text-role-caption text-ink-dim hover:text-accent-deep transition disabled:opacity-40"
                   >
                     {actionLoading ? "..." : t("notif.markAllRead")}
                   </button>
@@ -625,7 +653,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     type="button"
                     onClick={clearAll}
                     disabled={actionLoading}
-                    className="text-xs text-ink-dim hover:text-state-danger-ink transition disabled:opacity-40"
+                    className="text-role-caption text-ink-dim hover:text-state-danger-ink transition disabled:opacity-40"
                   >
                     {actionLoading ? "..." : t("common.clear")}
                   </button>
@@ -633,8 +661,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain">
+              {approveProGated && <ProFeatureNotice className="m-3" />}
               {notifications.length === 0 ? (
-                <p className="text-center text-ink-dim text-sm py-6">{t("notif.empty")}</p>
+                <p className="text-center text-ink-dim text-role-body py-6">{t("notif.empty")}</p>
               ) : (
                 groups.map((group) => {
                   if (group.items.length === 1) return renderItem(group.items[0]);
@@ -649,7 +678,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
               )}
             </div>
             {tabCount > 1 && (
-              <div className="px-4 py-2 border-t border-line text-caption text-ink-dim">
+              <div className="px-4 py-2 border-t border-line text-role-caption text-ink-dim">
                 {t("notif.tabsConnected", { count: String(tabCount) })}
               </div>
             )}

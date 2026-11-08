@@ -11,21 +11,23 @@
 import type { CompileRulesResponse, TierPinInput, TierPinsListResponse } from "@klorn/contract";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { CORE_TIERS } from "../lib/tiers";
 import { useConfirm } from "./confirm-dialog";
 import { LaneChip } from "./lane-chip";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 
 const RULE_TEXT_MAX = 500;
 
 const FIELD =
-  "w-full rounded-xl border border-line bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
+  "w-full rounded-control border border-line bg-surface-raised px-3 py-2 text-role-body text-ink placeholder:text-ink-dim focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
 const BUTTON =
-  "ease-strong inline-flex min-h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink transition duration-150 hover:bg-surface-panel disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
+  "ease-strong inline-flex min-h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink transition duration-150 hover:bg-surface-panel disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
 const BUTTON_PRIMARY =
-  "ease-strong inline-flex min-h-9 items-center rounded-lg bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
+  "ease-strong inline-flex min-h-9 items-center rounded-control bg-accent-solid px-3 text-role-caption font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
 
 function pinLabel(pin: { scope: string; value: string }): string {
   return pin.scope === "domain" ? `@${pin.value}` : pin.value;
@@ -39,6 +41,8 @@ export function RulesSection() {
   const [pins, setPins] = useState<TierPinsListResponse["pins"]>([]);
   const [text, setText] = useState("");
   const [compiling, setCompiling] = useState(false);
+  // Compiling is Pro (one LLM call): a FREE user's 403 shows the upgrade notice.
+  const [proGated, setProGated] = useState(false);
   const [proposals, setProposals] = useState<TierPinInput[] | null>(null);
   const [unsupported, setUnsupported] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
@@ -55,6 +59,7 @@ export function RulesSection() {
 
   const compile = async () => {
     setCompiling(true);
+    setProGated(false);
     try {
       const res = await apiFetch<CompileRulesResponse>("/api/email/rules/compile", {
         method: "POST",
@@ -63,6 +68,10 @@ export function RulesSection() {
       setProposals(res.pins);
       setUnsupported(res.unsupported);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "settings.rules-compile" });
       toast(t("settings.rules.compileFailed"), "error");
     } finally {
@@ -110,7 +119,7 @@ export function RulesSection() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-mid">{t("settings.rules.intro")}</p>
+      <p className="text-role-body text-ink-mid">{t("settings.rules.intro")}</p>
 
       <div className="space-y-2">
         <textarea
@@ -129,19 +138,22 @@ export function RulesSection() {
         >
           {compiling ? t("settings.rules.compiling") : t("settings.rules.compile")}
         </button>
+        {proGated && <ProFeatureNotice />}
       </div>
 
       {proposals && (
-        <div className="space-y-2 rounded-xl border border-line bg-surface-raised p-3">
-          <p className="text-xs font-medium text-ink-mid">{t("settings.rules.review")}</p>
+        <div className="space-y-2 rounded-control border border-line bg-surface-raised p-3">
+          <p className="text-role-caption font-medium text-ink-mid">{t("settings.rules.review")}</p>
           {proposals.length === 0 && unsupported.length === 0 && (
-            <p className="text-sm text-ink-dim">{t("settings.rules.empty")}</p>
+            <p className="text-role-body text-ink-dim">{t("settings.rules.empty")}</p>
           )}
           <ul className="space-y-1.5">
             {proposals.map((pin, i) => (
               <li key={`${pin.scope}:${pin.value}`} className="flex items-center gap-2">
                 <LaneChip tier={pin.tier} />
-                <span className="min-w-0 flex-1 truncate text-sm text-ink">{pinLabel(pin)}</span>
+                <span className="min-w-0 flex-1 truncate text-role-body text-ink">
+                  {pinLabel(pin)}
+                </span>
                 <select
                   value={pin.tier}
                   onChange={(e) =>
@@ -154,7 +166,7 @@ export function RulesSection() {
                     )
                   }
                   aria-label={pinLabel(pin)}
-                  className="rounded-lg border border-line bg-surface-panel px-2 py-1 text-xs text-ink"
+                  className="rounded-chip border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink"
                 >
                   {CORE_TIERS.map((lane) => (
                     <option key={lane} value={lane}>
@@ -176,7 +188,7 @@ export function RulesSection() {
             ))}
           </ul>
           {unsupported.length > 0 && (
-            <div className="text-xs text-ink-dim">
+            <div className="text-role-caption text-ink-dim">
               <p className="font-medium">{t("settings.rules.unsupported")}</p>
               <ul className="mt-1 list-inside list-disc">
                 {unsupported.map((clause) => (
@@ -211,18 +223,20 @@ export function RulesSection() {
       )}
 
       {pins.length === 0 ? (
-        <p className="text-sm text-ink-dim">{t("settings.rules.empty")}</p>
+        <p className="text-role-body text-ink-dim">{t("settings.rules.empty")}</p>
       ) : (
         <ul className="divide-y divide-line-soft">
           {pins.map((pin) => (
             <li key={pin.id} className="flex items-center gap-2 py-2">
               <LaneChip tier={pin.tier} />
-              <span className="min-w-0 flex-1 truncate text-sm text-ink">{pinLabel(pin)}</span>
+              <span className="min-w-0 flex-1 truncate text-role-body text-ink">
+                {pinLabel(pin)}
+              </span>
               <button
                 type="button"
                 aria-label={`${t("settings.rules.deleteConfirm.message", { pin: pinLabel(pin) })}`}
                 onClick={() => deletePin(pin)}
-                className="text-xs text-ink-dim hover:text-state-danger-ink"
+                className="text-role-caption text-ink-dim hover:text-state-danger-ink"
               >
                 ✕
               </button>

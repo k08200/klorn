@@ -780,3 +780,13 @@
 "tool.label.execute_skill" = "Exécuter la compétence";
 "tool.label.classify_emails" = "Classer les e-mails par voie";
 "tool.label.unknown" = "Action";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "Passer à Pro";
+"plan.upgrade.a11yHint" = "Ouvre la page de facturation dans votre navigateur.";
+"proposals.needsPro" = "Approuver ou refuser nécessite Klorn Pro.";
+"chat.cap.free" = "Vous avez utilisé votre quota d'IA gratuit du jour. Il est réinitialisé à 00:00 UTC.";
+"chat.cap.daily" = "Vous avez utilisé votre quota d'IA du jour. Il est réinitialisé à 00:00 UTC.";
+"chat.send.failed" = "Impossible de joindre Klorn — %@";
+"chat.event.failed" = "Impossible de créer l'événement — %@";
+"commitments.needsPro" = "Les engagements nécessitent Klorn Pro.";

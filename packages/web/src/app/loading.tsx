@@ -21,7 +21,7 @@ export default function Loading() {
       </div>
       <div
         aria-hidden="true"
-        className="mt-10 overflow-hidden rounded-xl bg-surface-panel ring-1 ring-line"
+        className="mt-10 overflow-hidden rounded-card bg-surface-panel ring-1 ring-line"
       >
         <MailRowSkeleton />
       </div>

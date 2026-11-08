@@ -10,6 +10,7 @@ import type {
   EmailReaderContextResponse,
   LiveTier,
   ReaderSenderLabel,
+  V3ItemBlock,
 } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
@@ -28,6 +29,8 @@ import {
 import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { toLiveTier } from "../judge/tiers.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { toV3ItemRow, V3_ITEM_SELECT, type V3ItemRow, v3ItemWire } from "../judge/v3/item-wire.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { labelableDomain, senderLabelEntriesFor } from "../mail/sender-labels.js";
@@ -97,6 +100,15 @@ function demoReaderContext(
     newerId: view[at - 1]?.id ?? null,
     olderId: view[at + 1]?.id ?? null,
   };
+}
+
+/** The reader's v3 block: no rank (the reader is one mail), undecided mail decides nothing. */
+function readerV3Block(
+  item: Partial<V3ItemRow> | null,
+  subject: string | null,
+  now: Date,
+): V3ItemBlock {
+  return v3ItemWire(toV3ItemRow(item), { rank: null, subject, now });
 }
 
 interface SenderFacts {
@@ -235,14 +247,26 @@ export function registerEmailLaneRoutes(
       // nothing below runs for it.
       const email = await prisma.emailMessage.findFirst({
         where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-        select: { id: true, from: true, category: true, labels: true, linkedInboxAccountId: true },
+        select: {
+          id: true,
+          from: true,
+          subject: true,
+          category: true,
+          labels: true,
+          linkedInboxAccountId: true,
+        },
       });
       if (!email) return reply.code(404).send({ error: "Email not found" } as never);
 
+      // Attention engine v3, for a user under the policy only: the v3 block, and
+      // previous / next in the ranked QUEUE.
+      const rankedAt = isJudgeV3PolicyEnabled(uid) ? new Date() : undefined;
       const [item, language, facts, scope] = await Promise.all([
         prisma.attentionItem.findFirst({
           where: { userId: uid, source: "EMAIL", sourceId: email.id },
-          select: { tier: true, tierReason: true },
+          select: rankedAt
+            ? { tierReason: true, ...V3_ITEM_SELECT }
+            : { tier: true, tierReason: true },
         }),
         readerLanguageFor(request, reply, uid),
         senderFactsFor(uid, email),
@@ -250,14 +274,23 @@ export function registerEmailLaneRoutes(
         // caller's has no neighbours.
         resolveInboxScope(uid, inbox),
       ]);
-      const neighbours = await neighbourEmailIdsInLane({
-        userId: uid,
-        lane,
-        scope,
-        filter,
-        search: search?.trim() || undefined,
-        emailId: email.id,
-      });
+      let neighbours: Awaited<ReturnType<typeof neighbourEmailIdsInLane>>;
+      try {
+        neighbours = await neighbourEmailIdsInLane({
+          userId: uid,
+          lane,
+          scope,
+          filter,
+          search: search?.trim() || undefined,
+          rankedAt,
+          emailId: email.id,
+        });
+      } catch (err) {
+        // Only the ranked QUEUE (attention engine v3) runs under the statement
+        // timeout; a slow sort is a retryable 503, not a 500.
+        if (replyIfQueryTimedOut(err, reply)) return reply as never;
+        throw err;
+      }
       return {
         // No AttentionItem yet: the mail is shown, but no lane is claimed.
         tier: item ? toLiveTier(item.tier) : null,
@@ -265,6 +298,7 @@ export function registerEmailLaneRoutes(
         linkedInboxAccountId: email.linkedInboxAccountId,
         ...facts,
         ...neighbours,
+        ...(rankedAt ? { v3: readerV3Block(item, email.subject, rankedAt) } : {}),
       };
     },
   );

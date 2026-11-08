@@ -32,6 +32,9 @@ struct ProposalsList: View {
                 Text(error).font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 20).padding(.bottom, 8)
+                if PlanUpgrade.offersUpgrade(for: error) {
+                    UpgradeToProLink().padding(.horizontal, 20).padding(.bottom, 8)
+                }
             }
 
             if model.pendingActions.isEmpty {
@@ -100,8 +103,8 @@ private struct ProposalRow: View {
         }
         .padding(Theme.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
         .opacity(busy ? 0.6 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L("proposals.row.a11y", action.title, action.targetLabel ?? ""))

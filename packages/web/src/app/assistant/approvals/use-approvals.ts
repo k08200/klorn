@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommitmentItem } from "../../../components/commitment-card";
 import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
+import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
@@ -49,6 +50,9 @@ export function useApprovals() {
   const [approving, setApproving] = useState<string | null>(null);
   const [held, setHeld] = useState<HeldReject | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Approving executes the action, which is Pro: a FREE user's 403 shows the
+  // upgrade notice; the card is still valid, so nothing is re-read.
+  const [proGated, setProGated] = useState(false);
   // Decided here and on its way to, or already accepted by, the server. A list
   // read that started before the server knew (the 15s poll, a focus refetch)
   // can still carry the card; it stays hidden rather than flashing back.
@@ -111,6 +115,7 @@ export function useApprovals() {
       if (approvingRef.current) return false;
       approvingRef.current = true;
       setApproving(id);
+      setProGated(false);
       try {
         await apiFetch(`/api/chat/pending-actions/${encodeURIComponent(id)}/approve`, {
           method: "POST",
@@ -123,6 +128,10 @@ export function useApprovals() {
         );
         return true;
       } catch (err) {
+        if (isEntitlementRefusal(err)) {
+          setProGated(true);
+          return false;
+        }
         captureClientError(err, { scope: "assistant.approvals.approve", actionId: id });
         toast(t("assistantHub.approvals.approveFailed"), "error");
         // The usual cause is a card that expired or was handled elsewhere:
@@ -240,6 +249,7 @@ export function useApprovals() {
     refresh,
     approving,
     approve,
+    proGated,
     held,
     reject,
     settleReject: settle,

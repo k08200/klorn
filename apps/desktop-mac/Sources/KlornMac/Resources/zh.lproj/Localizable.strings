@@ -780,3 +780,13 @@
 "tool.label.execute_skill" = "运行技能";
 "tool.label.classify_emails" = "将邮件分类到通道";
 "tool.label.unknown" = "操作";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "升级到 Pro";
+"plan.upgrade.a11yHint" = "在浏览器中打开账单页面。";
+"proposals.needsPro" = "批准和拒绝需要 Klorn Pro。";
+"chat.cap.free" = "今天的免费 AI 额度已用完。将于 00:00 UTC 重置。";
+"chat.cap.daily" = "今天的 AI 额度已用完。将于 00:00 UTC 重置。";
+"chat.send.failed" = "无法连接到 Klorn — %@";
+"chat.event.failed" = "无法创建日程 — %@";
+"commitments.needsPro" = "承诺跟踪需要 Klorn Pro。";

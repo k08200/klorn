@@ -93,3 +93,43 @@ describe("handleError — the data-wipe fence", () => {
     await app.close();
   });
 });
+
+describe("handleError — the daily cost cap", () => {
+  async function appThrowing(err: unknown) {
+    const app = Fastify();
+    app.setErrorHandler(handleError);
+    app.post("/llm", async () => {
+      throw err;
+    });
+    return app;
+  }
+
+  it("answers 429 with the cap's own message and code — not a 500, not Sentry", async () => {
+    const { DailyCostCapExceededError } = await import("../llm/openai.js");
+    const { captureError } = await import("../sentry.js");
+    vi.mocked(captureError).mockClear();
+    const app = await appThrowing(
+      new DailyCostCapExceededError("Free quota used for today.", "DAILY_COST_CAP_FREE"),
+    );
+    const res = await app.inject({ method: "POST", url: "/llm" });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({
+      error: "Free quota used for today.",
+      code: "DAILY_COST_CAP_FREE",
+    });
+    // Expected back-pressure, not a bug: no alert.
+    expect(captureError).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("maps a name-only cap error (a test double of llm/openai.js) to DAILY_COST_CAP", async () => {
+    const err = Object.assign(new Error("Quota used for today."), {
+      name: "DailyCostCapExceededError",
+    });
+    const app = await appThrowing(err);
+    const res = await app.inject({ method: "POST", url: "/llm" });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({ error: "Quota used for today.", code: "DAILY_COST_CAP" });
+    await app.close();
+  });
+});

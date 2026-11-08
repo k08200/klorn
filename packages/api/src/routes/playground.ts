@@ -6,7 +6,7 @@
  * Why this exists: every real onboarding path (OAuth, Workspace admin policy)
  * gates a visitor out before they ever see the classifier. The playground
  * removes that wall for the *experience* step — paste an email, bring your own
- * OpenRouter/Gemini key, see the tier the real `judgeEmail` would assign. It
+ * Anthropic/OpenAI/Gemini key, see the tier the real `judgeEmail` would assign. It
  * is a top-of-funnel demo, NOT a measurement of per-user recall (the visitor
  * self-selects the input, so it cannot test what the firewall would miss).
  *
@@ -24,12 +24,39 @@ import { DEMO_DAILY_BUDGET_CENTS, PLAYGROUND_NO_KEY_DEMO_ENABLED } from "../conf
 import { judgeEmail } from "../judge/poc-judge.js";
 import { TIERS } from "../judge/tiers.js";
 import type { ProviderCredentials } from "../providers/index.js";
+import { redactCredentials } from "../security/credential-redaction.js";
 
 // Strip CR/LF/control chars from any user-supplied value before it reaches a
 // log line, so a crafted model/source field can't forge or split log entries.
 function sanitizeForLog(value: string): string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control chars is the point
   return value.replace(/[\x00-\x1F\x7F]/g, " ").slice(0, 200);
+}
+
+/**
+ * Model ids are echoed into logs and forwarded to a provider, so they are
+ * shape-checked, not just length-capped: vendor/model[:variant] with dots and
+ * dashes (`claude-haiku-5-5`, `gpt-5-mini`, `gemini-2.5-flash`). No spaces,
+ * no query strings, no `..` anywhere, and a letter or digit first.
+ */
+export const PLAYGROUND_MODEL_ID_PATTERN =
+  "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9._-]+)?(:[A-Za-z0-9._-]+)?$";
+
+const PLAYGROUND_PROVIDERS = ["anthropic", "openai", "gemini"] as const;
+
+/**
+ * The native Anthropic and Gemini adapters answer a pin from another vendor
+ * with their own default model (toAnthropicModelId / buildGemini), so the
+ * visitor would be shown a model that never ran. Those two providers only
+ * accept their own family; the web client applies the same rule.
+ */
+function modelFitsProvider(
+  provider: (typeof PLAYGROUND_PROVIDERS)[number],
+  model: string,
+): boolean {
+  if (provider === "anthropic") return /^(anthropic\/)?claude-/i.test(model);
+  if (provider === "gemini") return /^(google\/)?gemini/i.test(model);
+  return true;
 }
 
 const classifyBodySchema = {
@@ -43,12 +70,12 @@ const classifyBodySchema = {
     from: { type: "string", minLength: 1, maxLength: 320 },
     subject: { type: "string", minLength: 1, maxLength: 998 },
     snippet: { type: "string", maxLength: 4000 },
-    provider: { type: "string", enum: ["openrouter", "gemini", "openai"] },
+    provider: { type: "string", enum: [...PLAYGROUND_PROVIDERS] },
     apiKey: { type: "string", minLength: 8, maxLength: 400 },
-    // No `:free` enforcement: the visitor uses their own key and pays for
-    // whatever model they pick. `playgroundOnly` walls this off from the
-    // server's keys, so a paid model never costs Klorn anything.
-    model: { type: "string", minLength: 1, maxLength: 120 },
+    // The visitor uses their own key and pays for whatever model they pick.
+    // `playgroundOnly` walls this off from the server's keys, so a visitor's
+    // model choice never costs Klorn anything.
+    model: { type: "string", minLength: 1, maxLength: 120, pattern: PLAYGROUND_MODEL_ID_PATTERN },
   },
 } as const;
 
@@ -66,17 +93,17 @@ const feedbackBodySchema = {
   },
 } as const;
 
-// Defense-in-depth: redact anything shaped like an OpenRouter (sk-or-…) or
-// Google (AIza…) key before it reaches a log line, in case a provider SDK
-// echoes the credential inside an error message.
+// Defense-in-depth: redact anything shaped like a provider key before it
+// reaches a log line or the visitor's screen, in case a provider SDK echoes the
+// credential inside an error message. The patterns are shared now
+// (security/credential-redaction.ts) — the local copy here could not match
+// OpenAI's `sk-proj-…` keys at all, because its [A-Za-z0-9] class stopped at
+// the hyphen after the prefix.
 function scrubKeys(text: string): string {
-  return text.replace(
-    /(?:sk-or-[A-Za-z0-9_-]{6,}|sk-[A-Za-z0-9]{16,}|AIza[A-Za-z0-9_-]{16,})/g,
-    "[REDACTED]",
-  );
+  return redactCredentials(text);
 }
 
-type PlaygroundProvider = "openrouter" | "gemini" | "openai";
+type PlaygroundProvider = (typeof PLAYGROUND_PROVIDERS)[number];
 
 interface ClassifyBody {
   from: string;
@@ -110,9 +137,13 @@ interface FeedbackBody {
 
 const DEMO_IP_PER_MINUTE = 3;
 const DEMO_IP_PER_DAY = 10;
-// Measured real cost of one gemini-flash classification (~0.19¢). Pre-charged
-// against the daily budget BEFORE the provider call so the budget fails closed.
-const DEMO_CLASSIFY_EST_USD = 0.0019;
+// One Claude Haiku 5.5 classification (the judge pin): eval/README.md measured
+// ~1,340 input + ~153 output tokens ≈ $0.0002 at the $0.10/$0.50 per-MTok list
+// rate; the playground's 4,000-char snippet cap (~1,000 more input tokens)
+// adds ≤ $0.0001. Rounded up to $0.0004 — over-estimating only makes the
+// budget stricter. Pre-charged against the daily budget BEFORE the provider
+// call so the budget fails closed.
+const DEMO_CLASSIFY_EST_USD = 0.0004;
 const DEMO_CLASSIFY_COST_FRACTIONAL_CENTS = usdToFractionalCents(DEMO_CLASSIFY_EST_USD);
 // Bound the per-IP map so a botnet of unique IPs can't grow it forever; stale
 // (previous-day) entries are evicted once the map crosses this size.
@@ -218,6 +249,7 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
       reason: result.reason,
       features: result.features,
       source: result.source,
+      decidedBy: result.decidedBy,
     });
   } catch (err) {
     const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));
@@ -242,8 +274,10 @@ export function playgroundRoutes(app: FastifyInstance) {
         // Key-free → server-paid demo path (or 401 key_required while dark).
         return handleNoKeyDemo(request, reply, body);
       }
-      const provider: PlaygroundProvider =
-        body.provider === "gemini" || body.provider === "openai" ? body.provider : "openrouter";
+      const provider: PlaygroundProvider = body.provider ?? "anthropic";
+      if (body.model && !modelFitsProvider(provider, body.model)) {
+        return reply.code(400).send({ error: "model_provider_mismatch" });
+      }
 
       // Build credentials from the request body and pass straight through to
       // the classifier. No userId → the per-user cost ledger is bypassed; the
@@ -252,16 +286,16 @@ export function playgroundRoutes(app: FastifyInstance) {
       // never participates in cooldown bucketing, so there is nothing to key on
       // the credential (and nothing to hash).
       const credentials: ProviderCredentials = {
-        openRouterApiKey: provider === "openrouter" ? body.apiKey : null,
-        geminiApiKey: provider === "gemini" ? body.apiKey : null,
+        anthropicApiKey: provider === "anthropic" ? body.apiKey : null,
         openAiApiKey: provider === "openai" ? body.apiKey : null,
+        geminiApiKey: provider === "gemini" ? body.apiKey : null,
         quotaScope: "playground",
         // Fail closed: never fall through to the server's env keys.
         playgroundOnly: true,
       };
 
-      // Capture the real upstream failure reason (e.g. OpenRouter "401 User
-      // not found", "model not found") so the visitor sees what to fix instead
+      // Capture the real upstream failure reason (e.g. "401 invalid x-api-key",
+      // "model not found") so the visitor sees what to fix instead
       // of a generic message. Keys are scrubbed before it leaves the server.
       let llmError: string | undefined;
 
@@ -303,6 +337,10 @@ export function playgroundRoutes(app: FastifyInstance) {
           reason: result.reason,
           features: result.features,
           source: result.source,
+          // Which rule placed it — the result card marks that score as
+          // "decided the lane" from this, so the explanation can't drift
+          // from tier-policy.ts.
+          decidedBy: result.decidedBy,
         });
       } catch (err) {
         // Log WHY (message only) but NEVER the body or the key. captureError

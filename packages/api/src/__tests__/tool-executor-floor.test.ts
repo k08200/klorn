@@ -34,6 +34,12 @@ vi.mock("../mail/gmail.js", () => ({
   markAsRead: vi.fn(),
   classifyEmails: vi.fn(),
 }));
+// The sent-mail ledger: an agent send must be recorded with its origin so the
+// relationship layer can tell it from mail the user wrote.
+const recordSentMock = vi.fn(async (..._args: unknown[]) => {});
+vi.mock("../mail/sent-messages.js", () => ({
+  recordSentMessage: (...args: unknown[]) => recordSentMock(...args),
+}));
 vi.mock("../db.js", () => ({
   prisma: {
     emailMessage: { findFirst: (...args: unknown[]) => findFirstMock(...args) },
@@ -187,6 +193,79 @@ describe("executeToolCall — floor enforcement for send_email", () => {
     );
     expect(sendEmailMock).toHaveBeenCalledWith(userId, args.to, args.subject, args.body, [], {
       linkedInboxAccountId: undefined,
+    });
+  });
+
+  describe("sent-mail origin", () => {
+    const receiptFor = () =>
+      mintReceipt({
+        action: "send_email",
+        inputHash: "",
+        payloadHash: sendEmailPayloadHash(args),
+        target: args.to,
+        approvedAt: new Date("2026-06-04T09:00:00Z"),
+        approvedBy: userId,
+      });
+
+    it("records an approved send as origin approved, keyed by the provider message id", async () => {
+      recordSentMock.mockClear();
+      sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-9", threadId: "th-9" });
+      await executeToolCall(userId, "send_email", args, receiptFor());
+      expect(recordSentMock).toHaveBeenCalledOnce();
+      expect(recordSentMock).toHaveBeenCalledWith(userId, {
+        gmailId: "msg-9",
+        threadId: "th-9",
+        to: args.to,
+        subject: args.subject,
+        sentAt: expect.any(Date),
+        inbox: "primary",
+        origin: "approved",
+      });
+    });
+
+    it("records the linked inbox the agent sent from", async () => {
+      recordSentMock.mockClear();
+      findFirstMock.mockResolvedValueOnce({ linkedInboxAccountId: "linked-abc" });
+      sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-10", threadId: null });
+      await executeToolCall(
+        userId,
+        "send_email",
+        { ...args, in_reply_to_email_id: "email-42" },
+        receiptFor(),
+      );
+      expect(recordSentMock).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ gmailId: "msg-10", inbox: "linked-abc", origin: "approved" }),
+      );
+    });
+
+    it("records the origin the trusted caller passes, never one from tool args", async () => {
+      recordSentMock.mockClear();
+      sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-11", threadId: null });
+      await executeToolCall(userId, "send_email", { ...args, origin: "user" }, receiptFor(), {
+        sentOrigin: "auto_reply",
+      });
+      expect(recordSentMock).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ gmailId: "msg-11", origin: "auto_reply" }),
+      );
+    });
+
+    it("a failed record never turns a sent mail into a send error (no retry, no double send)", async () => {
+      recordSentMock.mockClear();
+      recordSentMock.mockRejectedValueOnce(new Error("db down"));
+      sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-12", threadId: null });
+      const result = await executeToolCall(userId, "send_email", args, receiptFor());
+      expect(JSON.parse(result)).toMatchObject({ success: true, messageId: "msg-12" });
+    });
+
+    it("records nothing when the send failed or returned no message id", async () => {
+      recordSentMock.mockClear();
+      sendEmailMock.mockResolvedValueOnce({ error: "Gmail not connected." });
+      await executeToolCall(userId, "send_email", args, receiptFor());
+      sendEmailMock.mockResolvedValueOnce({ success: true });
+      await executeToolCall(userId, "send_email", args, receiptFor());
+      expect(recordSentMock).not.toHaveBeenCalled();
     });
   });
 

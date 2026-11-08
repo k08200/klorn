@@ -57,8 +57,8 @@ struct AssistantThread: View {
                 .accessibilityLabel(L("assistant.send.a11y"))
             }
             .padding(.horizontal, Theme.s3).padding(.vertical, 10)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12)
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control)
                 .strokeBorder(composerFocused ? Theme.accent.opacity(0.5) : Theme.field))
             .padding(.horizontal, Theme.s4).padding(.vertical, Theme.s3)
         }
@@ -146,13 +146,16 @@ private struct ChatBubble: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(
                         message.role == .user ? Theme.surfaceSelected : Theme.surfaceRaised,
-                        in: RoundedRectangle(cornerRadius: 10))
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.control))
                 if message.role != .user { Spacer(minLength: 40) }
             }
             .accessibilityLabel(
                 message.role == .user ? L("assistant.message.user.a11y", message.text)
                     : message.role == .failure ? L("assistant.message.failure.a11y", message.text)
                     : L("assistant.message.reply.a11y", message.text))
+
+            // A plan refusal (Pro-only action, the free daily AI allowance).
+            if message.offersUpgrade { UpgradeToProLink() }
 
             // Agent-drafted event: nothing is written until the user clicks.
             if let draft = message.eventDraft {
@@ -179,8 +182,8 @@ private struct ChatBubble: View {
                     }
                 }
                 .padding(10)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(L("calendar.proposed.a11y", eventDraftLabel(draft)))
             }

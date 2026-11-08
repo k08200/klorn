@@ -17,18 +17,13 @@ import { isNativePlatform } from "../../lib/native/capacitor";
 import { PRO_PRICE_WEB } from "../../lib/pricing";
 import { toSubscriptionState } from "../../lib/subscription";
 
-/** Server-side Infinity arrives as null through JSON — treat both as "unlimited". */
-function isFiniteLimit(value: number | null): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 interface BillingStatus {
   plan: string;
   planName: string;
-  /** null = unlimited (Infinity does not survive JSON serialization). */
-  messageLimit: number | null;
+  // The API also sends messageLimit / tokenLimit. Nothing enforces them (the
+  // real bound is the daily AI allowance, api billing/cost-guard.ts), so the
+  // page shows what was used and no limit.
   messageCount: number;
-  tokenLimit: number | null;
   tokenUsage: number;
   estimatedCost: number;
   stripeId: string | null;
@@ -54,50 +49,6 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-/** A plan is metered when at least one of its two limits is a real number. */
-function isMetered(status: BillingStatus): boolean {
-  return isFiniteLimit(status.messageLimit) || isFiniteLimit(status.tokenLimit);
-}
-
-/**
- * One usage row: label, used/limit, and a bar. The two metrics used to be the
- * same thirty lines written twice.
- */
-function UsageMeter({
-  label,
-  used,
-  limit,
-  format,
-}: {
-  label: string;
-  used: number;
-  limit: number | null;
-  format: (n: number) => string;
-}) {
-  const metered = isFiniteLimit(limit) && limit > 0;
-  const ratio = metered ? used / limit : 0;
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-sm">
-        <span className="text-ink-mid">{label}</span>
-        <span className="text-ink-mid tabular-nums">
-          {format(used)} / {isFiniteLimit(limit) ? format(limit) : "\u221e"}
-        </span>
-      </div>
-      {metered && (
-        <div className="h-2 w-full rounded-full bg-surface-hover">
-          <div
-            className={`h-2 rounded-full transition-[width] duration-500 ${
-              ratio > 0.9 ? "bg-red-500" : ratio > 0.7 ? "bg-amber-400" : "bg-emerald-400"
-            }`}
-            style={{ width: `${Math.min(ratio * 100, 100)}%` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Round to cents; sub-cent spend reads "< $0.01" instead of a noisy $0.0001. */
 function formatUsd(amount: number): string {
   if (amount > 0 && amount < 0.01) return "< $0.01";
@@ -111,7 +62,8 @@ interface PlanDef {
   price: string | null;
   priceKey: string | null;
   periodKey: string | null;
-  limitKey: string;
+  /** null = no limit line (Enterprise: the daily AI allowance applies there too). */
+  limitKey: string | null;
   trialNoteKey: string | null;
   featureKeys: string[];
 }
@@ -127,10 +79,12 @@ const PLANS: PlanDef[] = [
     periodKey: null,
     limitKey: "billing.plan.free.limit",
     trialNoteKey: null,
+    // What FREE keeps with the paywall on (api billing/stripe.ts FREE_TASTER).
     featureKeys: [
+      "billing.plan.free.feature.oneAccount",
+      "billing.plan.free.feature.briefings",
       "billing.plan.free.feature.mailCalendar",
       "billing.plan.free.feature.tasksMemory",
-      "billing.plan.free.feature.freeModels",
     ],
   },
   {
@@ -144,15 +98,17 @@ const PLANS: PlanDef[] = [
     // 2026-08-13) — keep this line in sync with the Paddle dashboard.
     trialNoteKey: "billing.plan.pro.trialNote",
     limitKey: "billing.plan.pro.limit",
+    // Only what Pro adds over FREE (api billing/stripe.ts PLAN_FEATURES.PRO
+    // minus FREE_TASTER; BYOK is isEntitled-gated). The higher daily AI
+    // allowance is the limit line above.
     featureKeys: [
       "billing.plan.pro.feature.everythingFree",
       "billing.plan.pro.feature.sendMail",
-      "billing.plan.pro.feature.decisionLoop",
-      "billing.plan.pro.feature.briefings",
-      "billing.plan.pro.feature.replyDrafts",
+      "billing.plan.pro.feature.calendarWrites",
+      "billing.plan.pro.feature.moreAccounts",
+      "billing.plan.pro.feature.autoReply",
       "billing.plan.pro.feature.integrations",
-      "billing.plan.pro.feature.webResearch",
-      "billing.plan.pro.feature.sonnet",
+      "billing.plan.pro.feature.byok",
     ],
   },
   {
@@ -161,11 +117,11 @@ const PLANS: PlanDef[] = [
     price: null,
     priceKey: "billing.plan.enterprise.price",
     periodKey: null,
-    limitKey: "billing.plan.enterprise.limit",
+    limitKey: null,
     trialNoteKey: null,
+    // Model choice (Opus included) is open to every plan (api routes/billing.ts).
     featureKeys: [
       "billing.plan.enterprise.feature.everythingPro",
-      "billing.plan.enterprise.feature.opus",
       "billing.plan.enterprise.feature.onPrem",
       "billing.plan.enterprise.feature.sla",
       "billing.plan.enterprise.feature.customIntegrations",
@@ -241,19 +197,17 @@ function BillingContent() {
   return (
     <div className={PAGE_SHELL}>
       <header className="mb-8">
-        <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-          {t("billing.title")}
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm text-ink-mid">{t("billing.subtitle")}</p>
+        <h1 className="text-role-page text-ink">{t("billing.title")}</h1>
+        <p className="mt-2 max-w-3xl text-role-body text-ink-mid">{t("billing.subtitle")}</p>
       </header>
 
       {success && (
-        <div className="mb-6 rounded-xl border border-state-ok-line bg-state-ok-bg p-4 text-sm text-state-ok-ink">
+        <div className="mb-6 rounded-control border border-state-ok-line bg-state-ok-bg p-4 text-role-body text-state-ok-ink">
           {t("billing.subscriptionActive")}
         </div>
       )}
       {canceled && (
-        <div className="mb-6 rounded-xl border border-state-warn-line bg-state-warn-bg p-4 text-sm text-state-warn-ink">
+        <div className="mb-6 rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-role-body text-state-warn-ink">
           {t("billing.checkoutCanceled")}
         </div>
       )}
@@ -267,7 +221,7 @@ function BillingContent() {
       )}
 
       {!loading && status && (
-        <div className="panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5">
+        <div className="panel-elevated mb-8 rounded-card border border-line/70 bg-surface-panel p-5">
           {/* Identity on the left, actions on the right. The renewal line
               sits under the plan name because it is a fact ABOUT the plan,
               not a caption for the buttons — floated up next to them it read
@@ -275,10 +229,10 @@ function BillingContent() {
               grid, where the other spend numbers live. */}
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-mid">
+              <p className="text-role-caption font-medium uppercase tracking-[0.18em] text-ink-mid">
                 {t("billing.currentPlan")}
               </p>
-              <p className="mt-1 text-xl font-semibold text-ink">{status.planName}</p>
+              <p className="mt-1 text-role-title text-ink">{status.planName}</p>
               <SubscriptionStatusLine state={toSubscriptionState(status)} />
             </div>
             {/* Portal + in-app cancel. Renders nothing inside the native app
@@ -287,69 +241,35 @@ function BillingContent() {
             <SubscriptionManager state={toSubscriptionState(status)} onChanged={loadStatus} />
           </div>
 
-          {isMetered(status) ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <UsageMeter
-                label={t("billing.decisions")}
-                used={status.messageCount}
-                limit={status.messageLimit}
-                format={(n) => n.toLocaleString()}
-              />
-              <UsageMeter
-                label={t("billing.tokens")}
-                used={status.tokenUsage}
-                limit={status.tokenLimit}
-                format={formatTokens}
-              />
-            </div>
-          ) : (
-            // Unlimited plan: no bar to draw, and the metered layout flung
-            // each label to the opposite end of a half-width grid cell, then
-            // stacked cost and the usage link under it — five rows of mostly
-            // air. Everything that is left collapses into one dense line.
-            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-ink-mid">
-              <span>
-                {t("billing.decisions")}{" "}
-                <span className="font-medium text-ink tabular-nums">
-                  {status.messageCount.toLocaleString()}
-                </span>
+          {/* Usage so far this month, with no limit: the plan's monthly
+              decision/token figures were never enforced. What does bound AI
+              use is the daily allowance (api billing/cost-guard.ts), which no
+              endpoint reports yet. */}
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-role-body text-ink-mid">
+            <span>
+              {t("billing.decisions")}{" "}
+              <span className="font-medium text-ink tabular-nums">
+                {status.messageCount.toLocaleString()}
               </span>
-              <span>
-                {t("billing.tokens")}{" "}
-                <span className="font-medium text-ink tabular-nums">
-                  {formatTokens(status.tokenUsage)}
-                </span>
+            </span>
+            <span>
+              {t("billing.tokens")}{" "}
+              <span className="font-medium text-ink tabular-nums">
+                {formatTokens(status.tokenUsage)}
               </span>
-              <span>{t("billing.unlimitedOnPlan")}</span>
-              {status.estimatedCost > 0 && (
-                <span className="tabular-nums">
-                  {t("billing.aboutCostThisMonth", { amount: formatUsd(status.estimatedCost) })}
-                </span>
-              )}
-              <Link
-                href="/usage"
-                className="focus-ring rounded font-medium text-accent-deeper hover:underline"
-              >
-                {t("billing.viewDetailedUsage")}
-              </Link>
-            </div>
-          )}
-
-          {isMetered(status) && (
-            <>
-              {status.estimatedCost > 0 && (
-                <p className="mt-2 text-xs text-ink-mid tabular-nums">
-                  {t("billing.aboutCostThisMonth", { amount: formatUsd(status.estimatedCost) })}
-                </p>
-              )}
-              <Link
-                href="/usage"
-                className="focus-ring mt-3 inline-flex min-h-11 items-center rounded text-sm font-medium text-accent-deeper hover:underline"
-              >
-                {t("billing.viewDetailedUsage")}
-              </Link>
-            </>
-          )}
+            </span>
+            {status.estimatedCost > 0 && (
+              <span className="tabular-nums">
+                {t("billing.aboutCostThisMonth", { amount: formatUsd(status.estimatedCost) })}
+              </span>
+            )}
+            <Link
+              href="/usage"
+              className="focus-ring inline-flex min-h-11 items-center rounded font-medium text-accent-deeper hover:underline"
+            >
+              {t("billing.viewDetailedUsage")}
+            </Link>
+          </div>
         </div>
       )}
 
@@ -359,7 +279,7 @@ function BillingContent() {
           return (
             <div
               key={plan.key}
-              className={`panel-elevated flex flex-col rounded-2xl border bg-surface-panel p-6 ${
+              className={`panel-elevated flex flex-col rounded-card border bg-surface-panel p-6 ${
                 isCurrent
                   ? "border-accent-muted/70"
                   : plan.key === "PRO"
@@ -368,27 +288,31 @@ function BillingContent() {
               }`}
             >
               {plan.key === "PRO" && (
-                <span className="mb-2 self-start rounded-full bg-accent-solid px-2 py-0.5 text-caption font-semibold uppercase text-accent-solid-ink">
+                <span className="mb-2 self-start rounded-full bg-accent-solid px-2 py-0.5 text-role-caption font-semibold uppercase text-accent-solid-ink">
                   {t("billing.recommended")}
                 </span>
               )}
-              <p className="mb-1 text-lg font-semibold text-ink">{t(plan.nameKey)}</p>
-              <p className="mb-1 text-2xl font-semibold text-ink tabular-nums">
+              <p className="mb-1 text-role-head text-ink">{t(plan.nameKey)}</p>
+              <p className="mb-1 text-role-title text-ink tabular-nums">
                 {plan.priceKey ? t(plan.priceKey) : plan.price}
-                <span className="text-sm font-normal text-ink-mid">
+                <span className="text-role-body text-ink-mid">
                   {plan.periodKey ? t(plan.periodKey) : ""}
                 </span>
               </p>
-              <p className="mb-1 text-sm text-ink-mid">{t(plan.limitKey)}</p>
+              {plan.limitKey && (
+                <p className="mb-1 text-role-body text-ink-mid">{t(plan.limitKey)}</p>
+              )}
               {plan.trialNoteKey ? (
-                <p className="mb-4 text-xs font-medium text-state-ok-ink">{t(plan.trialNoteKey)}</p>
+                <p className="mb-4 text-role-caption font-medium text-state-ok-ink">
+                  {t(plan.trialNoteKey)}
+                </p>
               ) : (
                 <div className="mb-4" />
               )}
 
               <ul className="mb-6 flex-1 space-y-2">
                 {plan.featureKeys.map((fKey) => (
-                  <li key={fKey} className="flex items-start gap-2 text-sm text-ink-mid">
+                  <li key={fKey} className="flex items-start gap-2 text-role-body text-ink-mid">
                     <span aria-hidden="true" className="mt-0.5 text-state-ok-ink">
                       ✓
                     </span>
@@ -398,19 +322,19 @@ function BillingContent() {
               </ul>
 
               {isCurrent ? (
-                <div className="rounded-lg border border-accent-muted/45 bg-accent/8 py-2 text-center text-sm font-medium text-accent-deeper">
+                <div className="rounded-control border border-accent-muted/45 bg-accent/8 py-2 text-center text-role-body font-medium text-accent-deeper">
                   {t("billing.currentPlan")}
                 </div>
               ) : plan.key === "FREE" ? (
                 // Non-current FREE card: render a neutral pill (not an empty div)
                 // so every plan card keeps the same footer height and alignment.
-                <div className="rounded-lg border border-line bg-surface-raised py-2 text-center text-sm font-medium text-ink-mid">
+                <div className="rounded-control border border-line bg-surface-raised py-2 text-center text-role-body font-medium text-ink-mid">
                   {t("billing.includedWithEveryPlan")}
                 </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a
                   href="mailto:k0820086@gmail.com"
-                  className="ease-strong block rounded-lg border border-line bg-surface-panel/70 py-2.5 text-center text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
+                  className="ease-strong block rounded-control border border-line bg-surface-panel/70 py-2.5 text-center text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
                 >
                   {t("billing.contactSales")}
                 </a>
@@ -424,7 +348,7 @@ function BillingContent() {
                 <button
                   type="button"
                   disabled
-                  className="rounded-lg border border-line bg-surface-hover py-2.5 text-sm font-semibold text-ink-dim min-h-11"
+                  className="rounded-control border border-line bg-surface-hover py-2.5 text-role-label font-semibold text-ink-dim min-h-11"
                 >
                   {t("billing.subscriptionComingSoon")}
                 </button>
@@ -432,7 +356,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={() => handleUpgrade(plan.key as "PRO")}
-                  className="glow-primary ease-strong focus-ring min-h-11 rounded-lg bg-accent-solid py-2.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+                  className="glow-primary ease-strong focus-ring min-h-11 rounded-control bg-accent-solid py-2.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
                 >
                   {t("billing.startTrial")}
                 </button>
@@ -465,17 +389,17 @@ function PlanDetails() {
   const { t } = useT();
   return (
     <section className="mt-10" aria-labelledby="plan-details-heading">
-      <h2 id="plan-details-heading" className="mb-4 text-lg font-semibold text-ink">
+      <h2 id="plan-details-heading" className="mb-4 text-role-head text-ink">
         {t("billing.planDetailsHeading")}
       </h2>
       <dl className="space-y-4">
         {PLAN_FAQ.map((item) => (
           <div
             key={item.qKey}
-            className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5"
+            className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5"
           >
-            <dt className="text-sm font-semibold text-ink">{t(item.qKey)}</dt>
-            <dd className="mt-1.5 text-sm leading-relaxed text-ink-mid">
+            <dt className="text-role-body font-semibold text-ink">{t(item.qKey)}</dt>
+            <dd className="mt-1.5 text-role-body leading-relaxed text-ink-mid">
               {t(item.aKey, { price: PRO_PRICE_WEB })}
             </dd>
           </div>

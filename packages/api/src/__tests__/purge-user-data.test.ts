@@ -59,6 +59,9 @@ describe("purgeUserData", () => {
       "learnedRule",
       "contactEngagementScore",
       "contactTrustScore",
+      // Per-contact co-attendance counts, and the markers of the meetings counted.
+      "contactCoAttendance",
+      "coAttendanceMeeting",
       "conversationSummary",
       "message",
       "conversation",
@@ -129,7 +132,7 @@ describe("revokeUserAccess (what lets a sync, a job or an agent act for the user
     expect(updates[1]?.arg.data).toMatchObject({
       naverImapPasswordCipher: null,
       githubTokenCipher: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
       telegramChatId: null,
     });
@@ -193,11 +196,20 @@ describe("purgeUserData — what the account row and the cost ledger keep", () =
       naverImapEmail: null,
       naverImapPasswordCipher: null,
       githubTokenCipher: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
       telegramChatId: null,
       telegramLinkCode: null,
     });
+  });
+
+  it("resets the co-attendance watermark, so a reconnect counts the whole window again", async () => {
+    // The counts and markers are deleted below; a watermark left behind would let
+    // the next pass start at the day after it and never recount the wiped days.
+    const { tx, updates } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u1");
+    const userUpdate = updates.find((u) => u.model === "user");
+    expect(userUpdate?.arg.data).toMatchObject({ coAttendanceCountedThrough: null });
   });
 
   it("keeps today's cost-ledger row, so a wipe cannot reset the daily spend cap", async () => {

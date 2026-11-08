@@ -70,6 +70,7 @@ export const FENCED_MODELS = [
   "SendReceipt",
   "AttentionItem",
   "DecisionLabel",
+  "AttentionFacts",
   "LearnedRule",
   "SenderTrait",
   "SenderLabel",
@@ -83,6 +84,8 @@ export const FENCED_MODELS = [
   "WorkContextSnapshot",
   // Calendar and files.
   "CalendarEvent",
+  "ContactCoAttendance",
+  "CoAttendanceMeeting",
   "DriveFile",
   "DriveFileSummary",
   "DriveSummaryUsage",

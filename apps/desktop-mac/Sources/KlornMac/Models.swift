@@ -695,10 +695,29 @@ struct ChatConversationList: Decodable, Sendable {
 /// empty contents, are not part of the visible thread.
 struct ChatHistory: Decodable, Sendable {
     struct Item: Decodable, Sendable {
+        /// The stored turn's `metadata`. Only the cap code is read: a turn the
+        /// daily cost cap stopped was stored with the server's English reply.
+        struct Metadata: Decodable, Sendable { let turnErrorCode: String? }
+
         let role: String
         let content: String?
+        let metadata: Metadata?
+
+        private enum CodingKeys: String, CodingKey { case role, content, metadata }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            role = try container.decode(String.self, forKey: .role)
+            content = try container.decodeIfPresent(String.self, forKey: .content)
+            // Free-form JSON server-side: a shape this app does not expect must
+            // not cost the whole thread.
+            metadata = try? container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        }
 
         var bubble: ChatMessage? {
+            if role.uppercased() == "ASSISTANT", let cap = ChatCapNotice(errorCode: metadata?.turnErrorCode) {
+                return ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)
+            }
             guard let text = content?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !text.isEmpty else { return nil }
             // The server's enum is USER / ASSISTANT / SYSTEM.
@@ -737,6 +756,9 @@ struct ChatTurnResponse: Codable, Sendable {
     let reply: String
     let error: String?
     let eventDraft: EventDraft?
+    /// "DAILY_COST_CAP_FREE" / "DAILY_COST_CAP" when the daily AI cost cap
+    /// stopped the turn (`ChatCapNotice`). Absent from older servers.
+    let errorCode: String?
 }
 
 /// One bubble in the desktop's in-memory thread. An assistant bubble may carry
@@ -747,12 +769,27 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     let role: Role
     let text: String
     var eventDraft: EventDraft?
+    /// A plan refusal: the bubble carries the upgrade link-out.
+    let offersUpgrade: Bool
 
-    init(role: Role, text: String, eventDraft: EventDraft? = nil) {
+    init(role: Role, text: String, eventDraft: EventDraft? = nil, offersUpgrade: Bool = false) {
         self.role = role
         self.text = text
         self.eventDraft = eventDraft
+        self.offersUpgrade = offersUpgrade
     }
+}
+
+/// The bubbles one agent turn adds. At the daily cost cap that is a single
+/// localized line (the server's reply and error are English and say the same
+/// thing twice); otherwise the reply, plus the server's error when it sent one.
+func chatTurnBubbles(_ turn: ChatTurnResponse) -> [ChatMessage] {
+    if let cap = ChatCapNotice(errorCode: turn.errorCode) {
+        return [ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)]
+    }
+    let reply = ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft)
+    guard let error = turn.error else { return [reply] }
+    return [reply, ChatMessage(role: .failure, text: error)]
 }
 
 /// "Title · 15:00–16:00 · Location" — one-line confirm-card label. Time falls

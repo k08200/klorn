@@ -115,16 +115,17 @@ for (const page of pages) {
   //    `td.us` is a general "Klorn's side" class, also used on /self-host/,
   //    /security/ and in blog tables — scoping to the whole cell would fail
   //    the build the first time one of those mentions "a $5 VPS". Only the
-  //    price row is read, in the four languages that label it.
+  //    price row is read, in the labels all seven languages use for it.
   const priceRows = [
     ...html.matchAll(
-      /<tr><th>(?:Price|Published price|공개 가격|가격)<\/th>([\s\S]*?)<\/tr>/g,
+      /<tr><th>(?:Price|Published price|공개 가격|가격|公開価格|価格|公开价格|价格|Precio publicado|Precio|Prix public|Prix|Öffentlicher Preis|Preis)<\/th>([\s\S]*?)<\/tr>/g,
     ),
   ].map((m) => m[1]);
 
   const ours = [
     ...html.matchAll(/<div class="amt[^"]*">([\s\S]*?)<\/div>/g),
-    ...html.matchAll(/<a href="\/pricing\/">([^<]*)</g),
+    // Translated pages link their own locale's pricing page (/ja/pricing/).
+    ...html.matchAll(/<a href="\/(?:[a-z]{2}\/)?pricing\/">([^<]*)</g),
     // Inside a price row, only OUR column. The other cell is the competitor's
     // published price and is none of this guard's business.
     ...priceRows.flatMap((row) => [

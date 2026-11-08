@@ -360,6 +360,10 @@ const fr: Record<string, string> = {
     "Vérification OAuth de Google terminée (oct. 2026) · Évaluation indépendante (CASA Tier 2)",
   "auth.privacy": "Confidentialité",
   "auth.terms": "Conditions",
+  "auth.legalConsent":
+    "En continuant, vous acceptez les {terms} et confirmez avoir lu la {privacy}.",
+  "auth.legalConsentTerms": "Conditions d’utilisation",
+  "auth.legalConsentPrivacy": "Politique de confidentialité",
   "auth.preview.label": "Exemple : Klorn range les e-mails dans cinq voies",
   "auth.preview.demo": "Données de démo",
   "auth.preview.caption":
@@ -776,10 +780,9 @@ const fr: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Faire remonter les décisions",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "lit seulement",
-  "onboarding.welcome.permissions.mid":
-    "Gmail et l'Agenda. Envoyer du courrier ou créer des événements attend toujours",
+  "onboarding.welcome.permissions.mid": "Gmail et l'Agenda. Le courrier envoyé par Klorn attend",
   "onboarding.welcome.permissions.emphasis2": "votre approbation",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": ", sauf si vous activez les réponses automatiques.",
   "onboarding.syncing.title": "Préparation de votre espace...",
   "onboarding.syncing.titleDone": "Synchronisation terminée.",
   "onboarding.syncing.desc":
@@ -1009,7 +1012,6 @@ const fr: Record<string, string> = {
   "billing.error.checkoutFailed": "Impossible de créer la session de paiement.",
   "billing.error.portalFailed": "Impossible d'ouvrir le portail de facturation.",
   "billing.cancelSubscription": "Annuler l'abonnement",
-  "billing.unlimitedOnPlan": "Illimité sur ce forfait",
   "billing.noWebSubscription":
     "Ce forfait n'est pas facturé sur le web, il n'y a donc rien à annuler ici. Si vous vous êtes abonné dans l'app mobile, gérez-le là-bas.",
   "billing.enterpriseBilling":
@@ -1035,28 +1037,27 @@ const fr: Record<string, string> = {
   "billing.toast.resumed": "Abonnement repris — la facturation continue comme avant.",
   "billing.error.resumeFailed": "Impossible de reprendre l'abonnement. Réessayez.",
   "billing.plan.free.name": "Free",
-  "billing.plan.free.limit": "50 décisions/mois · 500K jetons",
+  "billing.plan.free.limit": "Un quota IA quotidien (réinitialisé à 00:00 UTC)",
+  "billing.plan.free.feature.oneAccount":
+    "Premier compte de messagerie, quel que soit le fournisseur",
+  "billing.plan.free.feature.briefings": "Briefs quotidiens et tri du courrier",
   "billing.plan.free.feature.mailCalendar": "Lecture du courrier et de l'agenda",
   "billing.plan.free.feature.tasksMemory": "Tâches et mémoire",
-  "billing.plan.free.feature.freeModels": "Modèles OpenRouter gratuits",
   "billing.plan.pro.name": "Pro",
   "billing.plan.pro.period": "/mois",
   "billing.plan.pro.trialNote": "Essai gratuit de 7 jours · annulez avant la fin et ne payez rien",
-  "billing.plan.pro.limit": "2K décisions/mois · 10M jetons",
-  "billing.plan.pro.feature.everythingFree": "Tout ce qu'il y a dans Free",
-  "billing.plan.pro.feature.sendMail": "Envoyer du courrier et créer des événements",
-  "billing.plan.pro.feature.decisionLoop":
-    "Mode boucle de décision : proposition + exécution encadrée",
-  "billing.plan.pro.feature.briefings": "Briefs quotidiens et tri du courrier",
-  "billing.plan.pro.feature.replyDrafts": "Brouillons de réponse et apprentissage des habitudes",
+  "billing.plan.pro.limit": "Un quota IA quotidien plus élevé (réinitialisé à 00:00 UTC)",
+  "billing.plan.pro.feature.everythingFree": "Tout ce qu'il y a dans Free, plus :",
+  "billing.plan.pro.feature.sendMail":
+    "Envoyer du courrier et y répondre, avec brouillons de réponse",
+  "billing.plan.pro.feature.calendarWrites": "Créer et modifier des événements",
+  "billing.plan.pro.feature.moreAccounts": "Plus de comptes de messagerie et d'agendas",
+  "billing.plan.pro.feature.autoReply": "Réponses automatiques en mode Automatique",
+  "billing.plan.pro.feature.byok": "Votre propre clé de modèle",
   "billing.plan.pro.feature.integrations": "Intégrations Slack et Notion (bientôt)",
-  "billing.plan.pro.feature.webResearch": "Recherche web et brouillons de documents",
-  "billing.plan.pro.feature.sonnet": "Choix du modèle Claude Sonnet",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Sur mesure",
-  "billing.plan.enterprise.limit": "Illimité",
   "billing.plan.enterprise.feature.everythingPro": "Tout ce qu'il y a dans Pro",
-  "billing.plan.enterprise.feature.opus": "Choix de Claude Opus",
   "billing.plan.enterprise.feature.onPrem": "Options on-premise",
   "billing.plan.enterprise.feature.sla": "Support avec SLA",
   "billing.plan.enterprise.feature.customIntegrations": "Intégrations sur mesure",
@@ -1065,10 +1066,10 @@ const fr: Record<string, string> = {
     "Démarrer Pro coûte 0 aujourd'hui et débloque tout Pro immédiatement. Le premier prélèvement de {price} a lieu à la fin des 7 jours d'essai. Annulez avant depuis « Gérer l'abonnement » et vous ne payez rien.",
   "billing.faq.freeVsPro.q": "Quelle est la différence entre Free et Pro ?",
   "billing.faq.freeVsPro.a":
-    "Free lit et organise : Klorn surveille le courrier et l'agenda et les transforme en cartes de décision, dans la limite de 50 décisions et 500K jetons par mois sur des modèles gratuits. Pro exécute : envoi de courrier, création d'événements, brouillons de réponse, briefs quotidiens et la proposition + exécution encadrée de la boucle de décision — avec 2K décisions et 10M jetons par mois et le choix du modèle Claude Sonnet.",
+    "Free lit et organise : Klorn trie le courrier de votre premier compte de messagerie, quel que soit le fournisseur, rédige le brief quotidien, lit votre agenda et répond dans l'assistant, dans la limite d'un quota IA quotidien réinitialisé à 00:00 UTC. Pro exécute : envoi de courrier et réponses avec brouillons, création et modification d'événements, plus de comptes de messagerie et d'agendas, réponses automatiques en mode Automatique, intégrations Slack et Notion à mesure qu'elles arrivent, votre propre clé de modèle et un quota IA quotidien plus élevé.",
   "billing.faq.enterprise.q": "Qu'apporte Enterprise ?",
   "billing.faq.enterprise.a":
-    "Des limites sur mesure au lieu de quotas fixes, le choix du modèle Claude Opus, des options de déploiement on-premise, un support avec SLA et des intégrations sur mesure. Le prix dépend du périmètre — contactez le service commercial.",
+    "Des options de déploiement on-premise, un support avec SLA et des intégrations sur mesure. Le prix dépend du périmètre — contactez le service commercial.",
   "billing.faq.manage.q": "Comment annuler ou gérer mon abonnement ?",
   "billing.faq.manage.a":
     "« Annuler l'abonnement » sur cette page met fin à l'abonnement à la fin de la période déjà payée — Pro continue de fonctionner jusqu'à cette date, vous n'êtes plus prélevé et rien n'est supprimé. Tant que ce n'est pas effectif, vous pouvez revenir en arrière avec « Conserver l'abonnement ». « Gérer l'abonnement » ouvre le portail de facturation de Paddle, notre revendeur officiel, pour changer de moyen de paiement et télécharger les factures.",
@@ -1521,6 +1522,10 @@ const fr: Record<string, string> = {
     "pièce jointe n'a pas pu être analysée — essayez avec votre propre clé",
   "candidates.qualityIssues.manyFailed":
     "pièces jointes n'ont pas pu être analysées — essayez avec votre propre clé",
+  "candidates.qualityIssues.oneFailedFree":
+    "pièce jointe n'a pas pu être analysée — votre propre clé de modèle est disponible avec Pro",
+  "candidates.qualityIssues.manyFailedFree":
+    "pièces jointes n'ont pas pu être analysées — votre propre clé de modèle est disponible avec Pro",
   "candidates.qualityIssues.hide": "Masquer",
   "candidates.qualityIssues.details": "Détails",
   "candidates.filterStatusLabel": "État",
@@ -1742,6 +1747,14 @@ const fr: Record<string, string> = {
   "mailAccount.proGate.body":
     "Free inclut un compte de messagerie (Gmail, iCloud Mail ou Naver Mail). Passez à Pro pour étendre le pare-feu à plusieurs comptes.",
   "mailAccount.proGate.upgrade": "Passer à Pro",
+  "proFeature.title": "C'est une fonctionnalité Pro.",
+  "proFeature.upgrade": "Passer à Pro",
+  "proFeature.byok": "Votre propre clé de modèle est disponible avec Pro.",
+  "proFeature.drive": "Connecter Google Drive est une fonctionnalité Pro.",
+  "dailyCap.free":
+    "Vous avez utilisé votre quota IA gratuit du jour. Il se réinitialise à 00:00 UTC.",
+  "dailyCap.paid":
+    "Vous avez utilisé votre quota IA du jour. Il se réinitialise à 00:00 UTC, ou vous pouvez ajouter votre propre clé de modèle dans les Réglages.",
   "imapConnect.firstSync.started":
     "Récupération de vos e-mails en cours. Ils apparaîtront bientôt dans Mail.",
   "imapConnect.firstSync.delayed":
@@ -2147,18 +2160,22 @@ const fr: Record<string, string> = {
   "byok.title": "Utilisez votre propre clé LLM",
   "byok.body":
     "Par défaut, votre courrier est classé avec la clé partagée de Klorn. Ajoutez votre propre clé de fournisseur et Klorn utilisera votre clé et votre quota pour votre courrier — pratique si le budget partagé est saturé. Les clés sont stockées chiffrées (AES-GCM) ; nous ne journalisons jamais le texte en clair.",
+  "byok.bodyFree":
+    "Votre courrier est classé avec la clé partagée de Klorn, dans la limite de votre quota IA quotidien.",
   "byok.activeModel": "Modèle actif :",
   "byok.usingYourKey": "Votre clé est utilisée",
   "byok.stored": "•••••••• enregistrée",
-  "byok.openRouterLabel": "Clé API OpenRouter",
-  "byok.openRouterHelp":
-    "Une seule clé couvre tous les modèles utilisés par Klorn — OpenRouter les achemine tous. La clé est vérifiée auprès du fournisseur avant d'être enregistrée. Obtenez-en une sur",
+  "byok.anthropicLabel": "Clé API Anthropic",
+  "byok.anthropicHelp":
+    "Klorn fonctionne avec Claude : une seule clé Anthropic couvre tous les modèles qu'il utilise. La clé est vérifiée auprès d'Anthropic avant d'être enregistrée. Obtenez-en une sur",
   "byok.legacy": "ancienne",
   "byok.geminiRetired":
-    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé OpenRouter.",
+    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé Anthropic.",
   "byok.assistantModel": "Modèle de l'assistant",
   "byok.assistantModelHelp":
-    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+    "Modèles Claude uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+  "byok.assistantModelHelpFree":
+    "Modèles Claude uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.error.status": "Impossible de charger l'état de votre clé LLM.",
   "byok.error.update": "Impossible de mettre à jour la clé.",
   "byok.error.model": "Impossible de changer de modèle.",
@@ -2178,13 +2195,10 @@ const fr: Record<string, string> = {
   "subscription.toast.unavailable": "Les abonnements ne sont pas disponibles pour le moment.",
   "subscription.toast.purchaseFailed": "Impossible de finaliser l'achat. Veuillez réessayer.",
   "subscription.toast.noPurchase": "Aucun achat précédent trouvé.",
-  "paywall.foundingPrice": "Prix fondateur",
   "paywall.title": "Commencez votre essai gratuit de 7 jours",
   "paywall.body":
-    "Klorn Pro est votre pare-feu e-mail IA — il trie ce qui vous parvient, et rien ne part sans votre accord.",
+    "Klorn Pro est votre pare-feu e-mail IA — il trie ce qui vous parvient. Le courrier envoyé par Klorn attend votre accord, sauf si vous activez les réponses automatiques.",
   "paywall.startTrial": "Commencer l'essai gratuit",
-  "paywall.trialTerms":
-    "7 jours gratuits, puis {price}/mois — tarif garanti pour les premiers membres. Résiliable à tout moment.",
   "paywall.refunds": "Remboursements",
   "paywall.valueProp.interrupt": "N'être interrompu que par le courrier qui compte vraiment",
   "paywall.valueProp.noise":
@@ -2330,6 +2344,7 @@ const fr: Record<string, string> = {
     "Google est connecté. Un agenda vide reste vide dans le point du jour.",
   "calendar.error.load": "Impossible de charger les événements de l'agenda.",
   "calendar.error.sync": "Impossible de synchroniser Google Agenda.",
+  "calendar.error.delete": "Impossible de supprimer l'événement.",
   "calendar.sync.imported": "{count} événements importés depuis Google Agenda.",
   "calendar.sync.empty":
     "Google Agenda est synchronisé. Aucun événement dans les 14 prochains jours.",
@@ -2656,7 +2671,7 @@ const fr: Record<string, string> = {
     "La notification a été ignorée car les heures calmes étaient actives à l'envoi du briefing.",
   "briefingPage.guidance.quietHoursAction": "Ajuster les heures calmes",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — recommandé",
+  "byok.modelNote.balanced": "{provider} — équilibré",
   "byok.modelNote.fastest": "{provider} — le plus rapide",
   "byok.modelNote.mostCapable": "{provider} — le plus performant, plus cher",
   "statusChip.connected": "Connecté",
@@ -2664,6 +2679,127 @@ const fr: Record<string, string> = {
   "statusChip.pending": "En attente",
   // web app design pass, 2026-10-21: English that reached localized screens.
   "imap.beta": "Bêta",
+  // Public playground (redesign 2026-10-30). Model ids and prices stay untranslated.
+  "playground.brand.section": "Bac à sable",
+  "playground.nav.methodology": "Comment c'est noté",
+  "playground.nav.pricing": "Tarifs",
+  "playground.nav.login": "Se connecter",
+  "playground.nav.startFree": "Commencer gratuitement",
+  "playground.title": "Voyez comment Klorn trie un e-mail.",
+  "playground.lead":
+    "Collez un message, choisissez un modèle et utilisez votre clé. Le vrai juge de Klorn le place dans l'une des cinq voies et affiche les quatre scores derrière ce choix.",
+  "playground.leadShort": "Votre modèle, votre clé, le vrai juge de Klorn.",
+  "playground.form.label": "E-mail et modèle",
+  "playground.samples.heading": "Essayer un exemple",
+  "playground.samples.investor": "Investisseur",
+  "playground.samples.newsletter": "Lettre d'info",
+  "playground.samples.receipt": "Reçu",
+  "playground.samples.teammate": "Collègue",
+  "playground.samples.meeting": "Demande de réunion",
+  "playground.field.from": "De",
+  "playground.field.fromPlaceholder": "nom@entreprise.com",
+  "playground.field.subject": "Objet",
+  "playground.field.subjectPlaceholder": "Objet du message",
+  "playground.field.body": "Corps",
+  "playground.field.bodyPlaceholder": "Collez l'e-mail ou choisissez un exemple ci-dessus.",
+  "playground.email.edit": "Modifier l'e-mail",
+  "playground.email.collapse": "Terminer la modification",
+  "playground.email.empty": "Pas encore d'e-mail : choisissez un exemple ou collez-en un.",
+  "playground.provider.label": "Fournisseur",
+  "playground.model.label": "Modèle",
+  "playground.model.klorn": "Utilisé par Klorn",
+  "playground.model.measured": "{low}–{high}/{total} au test de Klorn ({runs} exécutions)",
+  "playground.model.other": "Autre identifiant de modèle…",
+  "playground.model.otherLabel": "Identifiant du modèle",
+  "playground.model.otherPlaceholder": "fournisseur/nom-du-modèle",
+  "playground.model.otherInvalid":
+    "Utilisez un identifiant comme fournisseur/nom-du-modèle : lettres, chiffres, points et tirets.",
+  "playground.model.klornNote":
+    "Le modèle qu'utilise Klorn lui-même, noté sur le test de 56 e-mails de Klorn.",
+  "playground.model.listedNote":
+    "Affiché tel quel. Seul le modèle utilisé par Klorn est noté sur son test.",
+  "playground.model.priceNote":
+    "Prix catalogue par million de tokens, entrée / sortie, relevé le {date}.",
+  "playground.key.label": "Clé API {provider}",
+  "playground.key.show": "Afficher",
+  "playground.key.hide": "Masquer",
+  "playground.key.remember": "Mémoriser cette clé sur cet appareil",
+  "playground.key.trust":
+    "Votre clé va de ce navigateur au fournisseur via le serveur de Klorn, pour cette seule requête. Klorn ne la stocke pas.",
+  "playground.key.none": "Pas encore de clé ?",
+  "playground.key.create": "En créer une chez {provider}",
+  "playground.key.billing": "Chaque tri est facturé sur votre propre compte {provider}.",
+  "playground.submit": "Trier cet e-mail",
+  "playground.submitting": "Tri en cours…",
+  "playground.result.label": "Résultat",
+  "playground.legend.title": "Chaque e-mail tombe dans l'une des cinq voies.",
+  "playground.legend.sub": "Votre résultat s'affiche ici, avec les scores qui l'expliquent.",
+  "playground.legend.PUSH": "Il vous faut maintenant. En tête d'Aujourd'hui, avec une bannière.",
+  "playground.legend.MEETING":
+    "Un créneau à accepter, déplacer ou refuser, vérifié avec votre agenda.",
+  "playground.legend.QUEUE": "Mérite une réponse, mais pas tout de suite. La voie par défaut.",
+  "playground.legend.INFO": "Reçus, alertes, confirmations. Conservés, sans réponse à donner.",
+  "playground.legend.SILENT": "Promotions et bruit, rangés discrètement.",
+  "playground.legend.scores":
+    "Quatre scores alimentent la voie : urgence, confiance dans l'expéditeur, réversibilité et certitude.",
+  "playground.legend.link": "Comment ils sont mesurés",
+  "playground.headline.PUSH": "Il vous faut maintenant.",
+  "playground.headline.MEETING": "Un créneau à accepter, déplacer ou refuser.",
+  "playground.headline.QUEUE": "Mérite une réponse, mais pas tout de suite.",
+  "playground.headline.INFO": "Une trace à garder. Aucune réponse nécessaire.",
+  "playground.headline.SILENT": "Du bruit, rangé discrètement.",
+  "playground.why.heading": "Pourquoi {lane}",
+  "playground.why.decided": "· a décidé de la voie",
+  "playground.why.scheduling":
+    "Il demande un créneau : les demandes de réunion vont dans leur propre voie avant la pondération des scores.",
+  "playground.why.lowConfidence":
+    "Le modèle n'était pas sûr, donc Klorn le laisse visible dans Queue plutôt que de le masquer.",
+  "playground.why.transactional":
+    "On dirait une notification automatique calme : ce type de trace va dans Info.",
+  "playground.why.default":
+    "Aucune règle plus forte ne s'est appliquée, donc il attend dans Queue, la voie par défaut.",
+  "playground.why.marketing":
+    "C'est clairement du marketing, donc il a été rangé avant la pondération des scores.",
+  "playground.why.automated":
+    "Une règle de sécurité pour le courrier automatique l'a placé ici, il reste donc hors de vos interruptions.",
+  "playground.feature.urgency": "Urgence",
+  "playground.feature.urgency.low": "Peut attendre",
+  "playground.feature.urgency.high": "Aujourd'hui",
+  "playground.feature.senderTrust": "Confiance dans l'expéditeur",
+  "playground.feature.senderTrust.low": "Inconnu",
+  "playground.feature.senderTrust.high": "Personne connue",
+  "playground.feature.reversibility": "Réversibilité",
+  "playground.feature.reversibility.low": "Difficile à annuler si raté",
+  "playground.feature.reversibility.high": "Facile à annuler",
+  "playground.feature.confidence": "Certitude",
+  "playground.feature.confidence.low": "Incertain",
+  "playground.feature.confidence.high": "Certain",
+  "playground.inKlorn.heading": "Dans Klorn",
+  "playground.inKlorn.PUSH":
+    "Un e-mail Push passe en tête d'Aujourd'hui et arrive en bannière dans l'app Klorn sur Mac et Windows.",
+  "playground.inKlorn.MEETING": "S'affiche sous Meeting dans Aujourd'hui.",
+  "playground.inKlorn.QUEUE": "Attend dans Courrier jusqu'à ce que vous ayez le temps.",
+  "playground.inKlorn.INFO": "Conservé dans Courrier comme trace. Aucune réponse nécessaire.",
+  "playground.inKlorn.SILENT": "Rangé discrètement, sans vous gêner.",
+  "playground.wrong.prompt": "Mauvaise voie ? Dites-nous où il doit aller.",
+  "playground.wrong.short": "Mauvaise voie ?",
+  "playground.wrong.thanks": "Merci, noté comme {lane}.",
+  "playground.wrong.error": "Envoi impossible. Réessayez.",
+  "playground.cta.text": "Triez toute votre boîte de réception de la même façon.",
+  "playground.meta": "{model} · {seconds} sec",
+  "playground.error.title": "Impossible de trier cet e-mail",
+  "playground.error.noKey": "Ajoutez d'abord votre clé API {provider}.",
+  "playground.error.noEmail": "Ajoutez d'abord un expéditeur et un objet.",
+  "playground.error.rateLimited": "Trop d'essais : attendez une minute, puis relancez le tri.",
+  "playground.error.timeout":
+    "Le modèle a mis plus de {seconds} secondes. Réessayez ou choisissez un modèle plus rapide.",
+  "playground.error.network": "Impossible de joindre Klorn. Vérifiez votre connexion et réessayez.",
+  "playground.error.failed":
+    "Le modèle ne s'est pas exécuté. En général, la clé est incorrecte, le modèle est indisponible ou le compte n'a plus de crédit.",
+  "playground.error.invalid":
+    "Cette requête n'a pas été acceptée. Vérifiez l'identifiant du modèle et les champs de l'e-mail.",
+  "playground.error.upstream": "Le fournisseur a répondu : {detail}",
+  "playground.footer.privacy": "Confidentialité",
 };
 
 export default fr;

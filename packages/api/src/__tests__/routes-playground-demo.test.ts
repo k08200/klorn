@@ -1,13 +1,13 @@
 /**
  * POST /api/playground/classify — key-free demo mode (server-paid).
  *
- * The BYOK playground is a wall for ordinary visitors (no OpenRouter key = no
+ * The BYOK playground is a wall for ordinary visitors (no provider key = no
  * demo). Behind the OFF-by-default PLAYGROUND_NO_KEY_DEMO_ENABLED flag, a
  * request WITHOUT an apiKey runs on the server's own keys with triple defense:
  *   1. Per-IP rate limit: 3/minute AND 10/day (in-memory).
  *   2. Global daily demo budget in fractional cents (DEMO_DAILY_BUDGET_CENTS,
- *      default 50 = $0.50/day), pre-charged per call at the measured ~0.19¢
- *      flash-classify cost. Exhausted → 429 demo_budget_exhausted + a
+ *      default 50 = $0.50/day), pre-charged per call at 0.04¢ (a Claude Haiku
+ *      5.5 classification, rounded up — routes/playground.ts). Exhausted → 429 demo_budget_exhausted + a
  *      byokAvailable hint so the landing falls back to the key UI.
  *   3. Model pinned to the server default (JUDGE_MODEL): a visitor-supplied
  *      model/provider is ignored on the no-key path.
@@ -101,8 +101,8 @@ describe("no-key demo — server-paid call shape", () => {
     await inject(app, {
       ...DEMO_PAYLOAD,
       // A visitor-picked provider/model must NOT steer the server-paid call.
-      provider: "openrouter",
-      model: "openai/gpt-5-pro",
+      provider: "openai",
+      model: "gpt-5-pro",
     });
     expect(judgeEmail).toHaveBeenCalledTimes(1);
     const call = judgeEmail.mock.calls[0];
@@ -171,9 +171,9 @@ describe("no-key demo — defense 1: per-IP rate limit", () => {
 });
 
 describe("no-key demo — defense 2: global daily budget", () => {
-  it("accumulates ~0.19¢ per call and 429s once the next call would exceed the budget", async () => {
-    // Budget 0.5¢: call 1 → 0.19¢, call 2 → 0.38¢, call 3 would reach 0.57¢.
-    configState.demoBudgetCents = 0.5;
+  it("accumulates 0.04¢ per call and 429s once the next call would exceed the budget", async () => {
+    // Budget 0.1¢: call 1 → 0.04¢, call 2 → 0.08¢, call 3 would reach 0.12¢.
+    configState.demoBudgetCents = 0.1;
     const app = await buildApp();
     expect((await inject(app, DEMO_PAYLOAD)).statusCode).toBe(200);
     expect((await inject(app, DEMO_PAYLOAD)).statusCode).toBe(200);
@@ -186,7 +186,7 @@ describe("no-key demo — defense 2: global daily budget", () => {
 
   it("resets the budget on UTC day rollover", async () => {
     vi.useFakeTimers({ now: new Date("2026-07-23T12:00:00Z"), toFake: ["Date"] });
-    configState.demoBudgetCents = 0.19;
+    configState.demoBudgetCents = 0.04; // room for exactly one demo call
     const app = await buildApp();
     expect((await inject(app, DEMO_PAYLOAD)).statusCode).toBe(200);
     expect((await inject(app, DEMO_PAYLOAD)).statusCode).toBe(429);
@@ -199,9 +199,9 @@ describe("no-key demo — defense 2: global daily budget", () => {
 describe("no-key demo — BYOK path is untouched", () => {
   const BYOK_PAYLOAD = {
     ...DEMO_PAYLOAD,
-    provider: "openrouter",
-    apiKey: "sk-or-v1-visitor-key-1234567890",
-    model: "qwen/qwen3-next-80b-a3b-instruct:free",
+    provider: "anthropic",
+    apiKey: "sk-ant-api03-visitor-key-1234567890",
+    model: "claude-sonnet-5-5",
   };
 
   it("still threads visitor credentials (playgroundOnly) when a key is supplied, flag ON", async () => {
@@ -209,14 +209,14 @@ describe("no-key demo — BYOK path is untouched", () => {
     const res = await inject(app, BYOK_PAYLOAD);
     expect(res.statusCode).toBe(200);
     const credentials = judgeEmail.mock.calls[0][3];
-    expect(credentials.openRouterApiKey).toBe(BYOK_PAYLOAD.apiKey);
+    expect(credentials.anthropicApiKey).toBe(BYOK_PAYLOAD.apiKey);
     expect(credentials.playgroundOnly).toBe(true);
     expect(judgeEmail.mock.calls[0][4]).toBe(BYOK_PAYLOAD.model);
     await app.close();
   });
 
   it("does not spend the demo IP or budget counters on BYOK calls", async () => {
-    configState.demoBudgetCents = 0.19; // room for exactly one demo call
+    configState.demoBudgetCents = 0.04; // room for exactly one demo call
     const app = await buildApp();
     // Several BYOK calls burn neither the 3/min IP slots nor the budget…
     for (let i = 0; i < 3; i++) {

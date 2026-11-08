@@ -18,7 +18,7 @@ const focusOf = (tall: boolean) => (tall ? STRONG_FOCUS : LEGACY_FOCUS);
 const minHeightOf = (tall: boolean) => (tall ? TARGET_MIN_HEIGHT : LEGACY_MIN_HEIGHT);
 
 const FIELD_BASE =
-  "w-full rounded-xl border border-line bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-dim";
+  "w-full rounded-control border border-line bg-surface-raised px-3 py-2 text-role-body text-ink placeholder:text-ink-dim";
 
 /** The key-name input. The legacy field has no min height of its own. */
 export function fieldClasses(tall: boolean): string {
@@ -28,14 +28,14 @@ export function fieldClasses(tall: boolean): string {
 }
 
 export function buttonClasses(tall: boolean): string {
-  return `ease-strong inline-flex ${minHeightOf(tall)} items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink transition duration-150 hover:bg-surface-panel disabled:opacity-50 ${focusOf(tall)}`;
+  return `ease-strong inline-flex ${minHeightOf(tall)} items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink transition duration-150 hover:bg-surface-panel disabled:opacity-50 ${focusOf(tall)}`;
 }
 
 export function primaryButtonClasses(tall: boolean): string {
-  return `ease-strong inline-flex ${minHeightOf(tall)} items-center rounded-lg bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover disabled:opacity-50 ${focusOf(tall)}`;
+  return `ease-strong inline-flex ${minHeightOf(tall)} items-center rounded-control bg-accent-solid px-3 text-role-caption font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover disabled:opacity-50 ${focusOf(tall)}`;
 }
 
-const REVOKE_BASE = "text-xs text-ink-dim hover:text-state-danger-ink";
+const REVOKE_BASE = "text-role-caption text-ink-dim hover:text-state-danger-ink";
 
 /** Revoke is a text button. Tall, it is 44px in both dimensions even for a two-character label. */
 export function revokeClasses(tall: boolean): string {

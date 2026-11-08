@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
 import MailHtmlBody from "../../../components/mail-html-body";
+import { ProFeatureNotice } from "../../../components/pro-feature-notice";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
 import Button from "../../../components/ui/button";
@@ -14,6 +15,7 @@ import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
+import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
 import { queryKeys } from "../../../lib/query-keys";
@@ -186,7 +188,7 @@ const EMPTY_READER_SLOTS = {
 
 function LegacyPlainBody({ body }: { body: string }) {
   return (
-    <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-7 text-ink-strong">
+    <pre className="whitespace-pre-wrap break-words font-sans text-role-body leading-7 text-ink-strong">
       {linkifyText(body)}
     </pre>
   );
@@ -223,6 +225,9 @@ function EmailDetailView() {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which paid action a FREE user just tried (403 ENTITLEMENT_REQUIRED): the
+  // upgrade notice renders next to it instead of the server's English refusal.
+  const [proGate, setProGate] = useState<"reply" | "summary" | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [ocring, setOcring] = useState(false);
   const [draft, setDraft] = useState<ReplyDraft | null>(null);
@@ -299,6 +304,7 @@ function EmailDetailView() {
   const summarize = useCallback(async () => {
     if (!id || summarizing) return;
     setSummarizing(true);
+    setProGate(null);
     try {
       await apiFetch(`/api/email/${id}/summarize`, {
         method: "POST",
@@ -306,6 +312,10 @@ function EmailDetailView() {
       });
       await load();
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("summary");
+        return;
+      }
       captureClientError(err, { scope: "email.summarize", id });
     } finally {
       setSummarizing(false);
@@ -450,6 +460,7 @@ function EmailDetailView() {
     if (!id || drafting) return;
     setDrafting(true);
     setError(null);
+    setProGate(null);
     try {
       const data = await apiFetch<ReplyDraft>(`/api/email/${id}/reply-draft`, {
         method: "POST",
@@ -458,6 +469,10 @@ function EmailDetailView() {
       setDraft(data);
       setGmailDraftUrl(null);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft", id });
       setError(serverErrorMessage(err, t("emailDetail.error.replyDraft")));
     } finally {
@@ -469,6 +484,7 @@ function EmailDetailView() {
     if (!draft || sendingDraft) return;
     setSendingDraft(true);
     setError(null);
+    setProGate(null);
     try {
       await apiFetch("/api/email/send", {
         method: "POST",
@@ -476,6 +492,10 @@ function EmailDetailView() {
       });
       setDraft(null);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft.send", id });
       setError(serverErrorMessage(err, t("emailDetail.error.sendReply")));
     } finally {
@@ -487,6 +507,7 @@ function EmailDetailView() {
     if (!id || !draft || savingGmailDraft) return;
     setSavingGmailDraft(true);
     setError(null);
+    setProGate(null);
     try {
       const data = await apiFetch<{
         success: boolean;
@@ -513,6 +534,10 @@ function EmailDetailView() {
           : prev,
       );
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft.gmail-draft", id });
       setError(serverErrorMessage(err, t("emailDetail.error.gmailDraft")));
     } finally {
@@ -823,26 +848,29 @@ function EmailDetailView() {
                     <ThreadContextPanel currentEmailId={email.id} thread={thread} />
                   ) : null,
                 reply: (
-                  <ReplyDraftBox
-                    presets="collapsed"
-                    draft={draft}
-                    intent={draftIntent}
-                    drafting={drafting}
-                    sending={sendingDraft}
-                    savingGmailDraft={savingGmailDraft}
-                    gmailDraftUrl={gmailDraftUrl}
-                    attachments={email.attachments ?? []}
-                    candidateProfile={email.candidateProfile ?? null}
-                    selectedAttachmentIds={selectedDraftAttachmentIds}
-                    includeBriefAttachment={includeBriefAttachment}
-                    onSelectedAttachmentIdsChange={setSelectedDraftAttachmentIds}
-                    onIncludeBriefAttachmentChange={setIncludeBriefAttachment}
-                    onIntentChange={setDraftIntent}
-                    onGenerate={generateReplyDraft}
-                    onDraftChange={setDraft}
-                    onSaveGmailDraft={saveGmailDraft}
-                    onSend={sendReplyDraft}
-                  />
+                  <>
+                    {proGate === "reply" && <ProFeatureNotice className="mb-3" />}
+                    <ReplyDraftBox
+                      presets="collapsed"
+                      draft={draft}
+                      intent={draftIntent}
+                      drafting={drafting}
+                      sending={sendingDraft}
+                      savingGmailDraft={savingGmailDraft}
+                      gmailDraftUrl={gmailDraftUrl}
+                      attachments={email.attachments ?? []}
+                      candidateProfile={email.candidateProfile ?? null}
+                      selectedAttachmentIds={selectedDraftAttachmentIds}
+                      includeBriefAttachment={includeBriefAttachment}
+                      onSelectedAttachmentIdsChange={setSelectedDraftAttachmentIds}
+                      onIncludeBriefAttachmentChange={setIncludeBriefAttachment}
+                      onIntentChange={setDraftIntent}
+                      onGenerate={generateReplyDraft}
+                      onDraftChange={setDraft}
+                      onSaveGmailDraft={saveGmailDraft}
+                      onSend={sendReplyDraft}
+                    />
+                  </>
                 ),
                 candidate: email.candidateProfile ? (
                   <CandidateProfileCard
@@ -866,16 +894,19 @@ function EmailDetailView() {
                     />
                   ) : null,
                 analysis: (
-                  <KlornAnalysis
-                    quiet
-                    email={email}
-                    onReplyStateChange={doneFeedback.onReplyStateChange}
-                    onPriorityChange={(priority) =>
-                      setEmail((prev) => (prev ? { ...prev, priority } : prev))
-                    }
-                    onSummarize={summarize}
-                    summarizing={summarizing}
-                  />
+                  <>
+                    {proGate === "summary" && <ProFeatureNotice className="mb-3" />}
+                    <KlornAnalysis
+                      quiet
+                      email={email}
+                      onReplyStateChange={doneFeedback.onReplyStateChange}
+                      onPriorityChange={(priority) =>
+                        setEmail((prev) => (prev ? { ...prev, priority } : prev))
+                      }
+                      onSummarize={summarize}
+                      summarizing={summarizing}
+                    />
+                  </>
                 ),
                 context: (
                   <>
@@ -894,7 +925,7 @@ function EmailDetailView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         <svg
           aria-hidden="true"
@@ -953,15 +984,15 @@ function EmailDetailView() {
             <div className="flex items-start gap-3.5">
               <span
                 aria-hidden="true"
-                className={`avatar-ring mt-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-sm font-semibold text-white sm:flex ${avatarGradient(senderName(email.from))}`}
+                className={`avatar-ring mt-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-body font-semibold text-white sm:flex ${avatarGradient(senderName(email.from))}`}
               >
                 {senderInitials(senderName(email.from))}
               </span>
               <div className="min-w-0 flex-1">
-                <h1 className="break-words text-[24px] font-semibold leading-tight tracking-[-0.02em] text-ink md:text-[28px]">
+                <h1 className="break-words text-role-title leading-tight tracking-[-0.02em] text-ink">
                   {email.subject || t("common.noSubject")}
                 </h1>
-                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-mid">
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-role-body text-ink-mid">
                   <span className="max-w-full truncate font-medium text-ink-soft">
                     {senderName(email.from)}
                   </span>
@@ -981,7 +1012,7 @@ function EmailDetailView() {
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
+                    className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                       email.priority === "URGENT"
                         ? "bg-rose-500/10 text-rose-600 ring-rose-500/20"
                         : "bg-surface-hover text-ink-mid ring-transparent"
@@ -990,12 +1021,12 @@ function EmailDetailView() {
                     {priorityLabel(t, email.priority)}
                   </span>
                   {email.needsReply && (
-                    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+                    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
                       {t("mail.filterReplyNeeded")}
                     </span>
                   )}
                   {email.category && (
-                    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+                    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
                       {categoryLabel(t, email.category)}
                     </span>
                   )}
@@ -1026,6 +1057,7 @@ function EmailDetailView() {
             <ThreadContextPanel currentEmailId={email.id} thread={thread} />
           )}
 
+          {proGate === "reply" && <ProFeatureNotice className="mt-5" />}
           <ReplyDraftBox
             draft={draft}
             intent={draftIntent}
@@ -1073,8 +1105,8 @@ function EmailDetailView() {
               beside it as supporting context. */}
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
             {email.renderHtml || email.body ? (
-              <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
-                <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+              <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
+                <h2 className="mb-4 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.messageTitle")}
                 </h2>
                 {email.renderHtml ? (
@@ -1089,14 +1121,17 @@ function EmailDetailView() {
                 )}
               </section>
             ) : email.snippet ? (
-              <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
-                <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+              <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
+                <h2 className="mb-4 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.previewTitle")}
                 </h2>
-                <p className="text-[15px] leading-7 text-ink-muted">{linkifyText(email.snippet)}</p>
+                <p className="text-role-body leading-7 text-ink-muted">
+                  {linkifyText(email.snippet)}
+                </p>
               </section>
             ) : null}
 
+            {proGate === "summary" && <ProFeatureNotice />}
             <KlornAnalysis
               email={email}
               onPriorityChange={(priority) =>
@@ -1129,27 +1164,27 @@ function CandidateProfileCard({
   const status = intake?.status ?? candidatePipelineToIntakeStatus(profile.pipelineStatus);
   const candidateStatusOptions = buildCandidateStatusOptions(t);
   return (
-    <section className="panel-elevated relative mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated relative mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <span
         aria-hidden="true"
         className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-accent-muted to-accent"
       />
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-caption font-semibold uppercase tracking-wider text-accent-deep">
+        <h2 className="text-role-caption font-semibold uppercase tracking-wider text-accent-deep">
           {t("emailDetail.candidateCard.title")}
         </h2>
-        <span className="text-caption tabular-nums text-ink-dim">
+        <span className="text-role-caption tabular-nums text-ink-dim">
           {t("candidates.confidence", { percent: String(Math.round(profile.confidence * 100)) })}
         </span>
       </div>
-      <div className="mb-3 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
-        <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">
+      <div className="mb-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+        <p className="text-role-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("emailDetail.candidateCard.pipeline")}
         </p>
-        <p className="mt-1 text-xs font-semibold text-accent-deeper">
+        <p className="mt-1 text-role-caption font-semibold text-accent-deeper">
           {candidatePipelineLabel(t, profile.pipelineStatus)}
         </p>
-        <p className="mt-1 text-caption leading-5 text-ink-mid">{profile.nextAction}</p>
+        <p className="mt-1 text-role-caption leading-5 text-ink-mid">{profile.nextAction}</p>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {candidateStatusOptions.map((option) => (
@@ -1158,7 +1193,7 @@ function CandidateProfileCard({
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`ease-strong rounded-lg border px-2 py-1 text-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
+            className={`ease-strong rounded-chip border px-2 py-1 text-role-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
               status === option.status
                 ? "border-accent-muted bg-accent/10 text-accent-deeper"
                 : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
@@ -1168,8 +1203,8 @@ function CandidateProfileCard({
           </button>
         ))}
       </div>
-      <p className="text-sm font-medium leading-relaxed text-ink">{profile.summary}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
+      <p className="text-role-body font-medium leading-relaxed text-ink">{profile.summary}</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-role-caption md:grid-cols-3">
         <ProfileFact label={t("emailDetail.candidateCard.fact.name")} value={profile.name} />
         <ProfileFact label={t("emailDetail.candidateCard.fact.role")} value={profile.role} />
         <ProfileFact label={t("emailDetail.candidateCard.fact.contact")} value={profile.contact} />
@@ -1185,7 +1220,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-caption text-ink-muted"
+              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-role-caption text-ink-muted"
             >
               {skill}
             </span>
@@ -1195,14 +1230,14 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-caption text-accent-deep">
+            <p key={link} className="break-all text-role-caption text-accent-deep">
               {link}
             </p>
           ))}
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-caption text-accent-deeper">
+        <p className="mt-3 text-role-caption text-accent-deeper">
           {t("emailDetail.candidateCard.needsFollowUp", {
             fields: profile.missingFields
               .map((field) => candidateMissingLabel(t, field))
@@ -1211,13 +1246,16 @@ function CandidateProfileCard({
         </p>
       )}
       {profile.manualReviewFiles.length > 0 && (
-        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
-          <p className="text-caption font-semibold text-rose-700">
+        <div className="mt-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2">
+          <p className="text-role-caption font-semibold text-rose-700">
             {t("emailDetail.candidateCard.sourceReviewNeeded")}
           </p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
-              <li key={`${file.filename}-${file.reason}`} className="text-caption text-rose-600/90">
+              <li
+                key={`${file.filename}-${file.reason}`}
+                className="text-role-caption text-rose-600/90"
+              >
                 {file.filename}: {file.reason}
               </li>
             ))}
@@ -1225,14 +1263,14 @@ function CandidateProfileCard({
         </div>
       )}
       <label className="mt-3 block">
-        <span className="mb-1 block text-caption font-medium uppercase tracking-wider text-ink-mid">
+        <span className="mb-1 block text-role-caption font-medium uppercase tracking-wider text-ink-mid">
           {t("emailDetail.candidateCard.reviewNoteLabel")}
         </span>
         <textarea
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+          className="w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-caption leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
           placeholder={t("emailDetail.candidateCard.reviewNoteLabel")}
         />
       </label>
@@ -1274,10 +1312,10 @@ function ThreadContextPanel({
 }) {
   const { t, locale } = useT();
   return (
-    <section className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+    <section className="panel-elevated mb-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       <div className="border-b border-line-soft px-4 py-3">
-        <h2 className="text-sm font-semibold text-ink">{t("emailDetail.thread.title")}</h2>
-        <p className="mt-0.5 text-xs text-ink-dim">
+        <h2 className="text-role-head text-ink">{t("emailDetail.thread.title")}</h2>
+        <p className="mt-0.5 text-role-caption text-ink-dim">
           {t("emailDetail.thread.subtitle", { count: String(thread.messageCount) })}
         </p>
       </div>
@@ -1296,21 +1334,21 @@ function ThreadContextPanel({
                 />
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-xs font-medium text-ink">
+                <p className="min-w-0 truncate text-role-caption font-medium text-ink">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-caption tabular-nums text-ink-dim">
+                <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
                   {formatFull(message.date, locale)}
                 </time>
               </div>
-              <p className="mt-1 truncate text-caption text-ink-mid">
+              <p className="mt-1 truncate text-role-caption text-ink-mid">
                 {message.summary ||
                   message.snippet ||
                   message.subject ||
                   t("emailDetail.thread.noSummary")}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-caption font-medium text-accent-deep">
+                <p className="mt-1 text-role-caption font-medium text-accent-deep">
                   {t("emailDetail.thread.taskCount", { count: String(message.actionItems.length) })}
                 </p>
               )}
@@ -1568,7 +1606,7 @@ function ReplyDraftBox({
             key={option.value}
             type="button"
             onClick={() => setMode(option.value)}
-            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+            className={`ease-strong inline-flex h-8 pointer-coarse:h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
               mode === option.value
                 ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                 : "text-ink-mid hover:bg-surface-raised hover:text-ink"
@@ -1588,7 +1626,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 text-caption text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
+              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 pointer-coarse:min-h-11 text-role-caption text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
             >
               {item.label}
             </button>
@@ -1599,13 +1637,15 @@ function ReplyDraftBox({
   );
 
   return (
-    <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-mid">
+          <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-mid">
             {t("emailDetail.replyDraft.title")}
           </h2>
-          <p className="mt-1 text-xs text-ink-dim">{t("emailDetail.replyDraft.subtitle")}</p>
+          <p className="mt-1 text-role-caption text-ink-dim">
+            {t("emailDetail.replyDraft.subtitle")}
+          </p>
         </div>
         <Button variant="secondary" size="sm" onClick={onGenerate} disabled={drafting}>
           {drafting
@@ -1620,7 +1660,7 @@ function ReplyDraftBox({
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
-        className={`mb-3 w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+        className={`mb-3 w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 pointer-coarse:min-h-11 text-role-caption text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
       />
       {presets === "collapsed" ? (
         <details
@@ -1628,7 +1668,7 @@ function ReplyDraftBox({
           onToggle={(event) => setPresetsOpen(event.currentTarget.open)}
           className="group mb-3"
         >
-          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control text-label text-ink-mid hover:text-ink [&::-webkit-details-marker]:hidden">
+          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control text-role-label text-ink-mid hover:text-ink [&::-webkit-details-marker]:hidden">
             {t("mailV2.reader.tone")}
             <svg
               aria-hidden="true"
@@ -1650,25 +1690,25 @@ function ReplyDraftBox({
       )}
       {draft && (
         <div className="space-y-2">
-          <div className="grid gap-2 text-xs sm:grid-cols-2">
+          <div className="grid gap-2 text-role-caption sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
+              <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
                 {t("emailDetail.replyDraft.toLabel")}
               </span>
               <input
                 value={draft.to}
                 onChange={(e) => onDraftChange({ ...draft, to: e.target.value })}
-                className="w-full rounded-lg border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+                className="w-full rounded-control border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
+              <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
                 {t("emailDetail.replyDraft.subjectLabel")}
               </span>
               <input
                 value={draft.subject}
                 onChange={(e) => onDraftChange({ ...draft, subject: e.target.value })}
-                className={`w-full rounded-lg border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+                className={`w-full rounded-control border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
               />
             </label>
           </div>
@@ -1676,11 +1716,11 @@ function ReplyDraftBox({
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className={`w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+            className={`w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
           />
           {attachments.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
-              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-state-info-line bg-state-info-bg px-2 py-1.5">
+            <div className="space-y-2 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+              <label className="flex cursor-pointer items-start gap-2 rounded-control border border-state-info-line bg-state-info-bg px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={includeBriefAttachment}
@@ -1688,16 +1728,16 @@ function ReplyDraftBox({
                   className="mt-0.5 h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                 />
                 <span>
-                  <span className="block text-caption font-medium text-accent-deeper">
+                  <span className="block text-role-caption font-medium text-accent-deeper">
                     {t("emailDetail.replyDraft.attachBriefLabel")}
                   </span>
-                  <span className="mt-0.5 block text-caption leading-4 text-ink-dim">
+                  <span className="mt-0.5 block text-role-caption leading-4 text-ink-dim">
                     {t("emailDetail.replyDraft.attachBriefDescription")}
                   </span>
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-caption font-medium uppercase tracking-wider text-ink-mid">
+                <span className="text-role-caption font-medium uppercase tracking-wider text-ink-mid">
                   {t("emailDetail.replyDraft.saveOriginalAttachments")}
                 </span>
                 <button
@@ -1709,7 +1749,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-caption font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
+                  className="text-role-caption font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
                 >
                   {selectedCount === attachments.length
                     ? t("emailDetail.replyDraft.clearAll")
@@ -1720,7 +1760,7 @@ function ReplyDraftBox({
                 {attachments.map((attachment) => (
                   <label
                     key={attachment.id}
-                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-panel px-2 py-1.5 transition duration-150 ease-out hover:border-state-info-line"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-panel px-2 py-1.5 transition duration-150 ease-out hover:border-state-info-line"
                   >
                     <input
                       type="checkbox"
@@ -1728,10 +1768,10 @@ function ReplyDraftBox({
                       onChange={() => toggleAttachment(attachment.id)}
                       className="h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                     />
-                    <span className="min-w-0 flex-1 truncate text-caption text-ink-muted">
+                    <span className="min-w-0 flex-1 truncate text-role-caption text-ink-muted">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-caption text-ink-dim">
+                    <span className="shrink-0 text-role-caption text-ink-dim">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>
@@ -1746,7 +1786,7 @@ function ReplyDraftBox({
                   href={gmailDraftUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="ease-strong inline-flex h-9 items-center rounded-lg border border-state-info-line bg-state-info-bg px-3 text-xs font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring"
+                  className="ease-strong inline-flex h-9 items-center rounded-control border border-state-info-line bg-state-info-bg px-3 text-role-caption font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring"
                 >
                   {t("emailDetail.replyDraft.openGmailDraft")}
                 </a>
@@ -1755,7 +1795,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
+                className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
               >
                 {savingGmailDraft
                   ? t("emailDetail.replyDraft.saving")
@@ -1769,7 +1809,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSend}
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
-                className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
+                className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
               >
                 {sending
                   ? t("emailDetail.replyDraft.sending")
@@ -1832,20 +1872,20 @@ function ThreadBriefCard({ emailId }: { emailId: string }) {
 
   if (!brief) return null;
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
-      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="mb-2 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.threadBrief.title")}
       </p>
-      <p className="text-sm leading-relaxed text-ink">{brief.whyNow}</p>
+      <p className="text-role-body leading-relaxed text-ink">{brief.whyNow}</p>
       {brief.weOwe && (
-        <p className="mt-1.5 text-xs font-medium text-state-warn-ink dark:text-amber-400">
+        <p className="mt-1.5 text-role-caption font-medium text-state-warn-ink dark:text-amber-400">
           {t("emailDetail.threadBrief.weOwe")}: {brief.weOwe}
         </p>
       )}
       {brief.asks.length > 0 && (
         <ul className="mt-2 space-y-1">
           {brief.asks.map((ask) => (
-            <li key={ask} className="text-xs text-ink-mid">
+            <li key={ask} className="text-role-caption text-ink-mid">
               · {ask}
             </li>
           ))}
@@ -1883,18 +1923,18 @@ function SenderContextCard({ emailId }: { emailId: string }) {
 
   if (!dossier) return null;
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
-      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="mb-2 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.senderContext.title")}
       </p>
-      <p className="text-sm leading-relaxed text-ink">{dossier.summary}</p>
+      <p className="text-role-body leading-relaxed text-ink">{dossier.summary}</p>
       {dossier.openThreads.length > 0 && (
-        <p className="mt-1.5 text-xs text-ink-mid">
+        <p className="mt-1.5 text-role-caption text-ink-mid">
           {t("emailDetail.senderContext.inFlight")}: {dossier.openThreads.join(" · ")}
         </p>
       )}
       {dossier.lastPromise && (
-        <p className="mt-1 text-xs text-ink-mid">
+        <p className="mt-1 text-role-caption text-ink-mid">
           {t("emailDetail.senderContext.promise")}: {dossier.lastPromise}
         </p>
       )}
@@ -1931,20 +1971,20 @@ function KlornAnalysis({
     return (
       <section className="rounded-card border border-line bg-surface-panel p-4">
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="text-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
+          <h2 className="text-role-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
           {/* No "Wrong label" here: the header's label menu and "Move to lane"
               correct the mail in v2. */}
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
-        {email.summary && <p className="text-body text-ink">{email.summary}</p>}
+        {email.summary && <p className="text-role-body text-ink">{email.summary}</p>}
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1 text-caption text-ink-muted">
+            <p className="mb-1 text-role-caption text-ink-muted">
               {t("emailDetail.analysis.keyPoints")}
             </p>
             <ul className="flex flex-col gap-1">
               {email.keyPoints.map((point) => (
-                <li key={point} className="flex gap-2 text-body text-ink-mid">
+                <li key={point} className="flex gap-2 text-role-body text-ink-mid">
                   <span aria-hidden="true" className="text-ink-muted">
                     •
                   </span>
@@ -1970,9 +2010,9 @@ function KlornAnalysis({
 
   if (!hasAnything) {
     return (
-      <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+      <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
         <div className="flex items-center">
-          <p className="text-xs text-ink-dim">{t("emailDetail.analysis.notAnalyzed")}</p>
+          <p className="text-role-caption text-ink-dim">{t("emailDetail.analysis.notAnalyzed")}</p>
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
       </section>
@@ -1980,11 +2020,11 @@ function KlornAnalysis({
   }
 
   return (
-    <section className="panel-elevated relative overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated relative overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-accent-muted to-accent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-caption font-semibold uppercase tracking-wider text-accent-deep">
+          <span className="text-role-caption font-semibold uppercase tracking-wider text-accent-deep">
             {t("emailDetail.analysis.title")}
           </span>
           <div className="flex items-center gap-1.5">
@@ -2000,16 +2040,18 @@ function KlornAnalysis({
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
 
-        {email.summary && <p className="text-sm leading-relaxed text-ink">{email.summary}</p>}
+        {email.summary && (
+          <p className="text-role-body leading-relaxed text-ink">{email.summary}</p>
+        )}
 
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1.5 text-caption font-medium uppercase tracking-wider text-ink-dim">
+            <p className="mb-1.5 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
               {t("emailDetail.analysis.keyPoints")}
             </p>
             <ul className="space-y-1">
               {email.keyPoints.map((k, i) => (
-                <li key={i} className="flex gap-1.5 text-xs text-ink-mid">
+                <li key={i} className="flex gap-1.5 text-role-caption text-ink-mid">
                   <span className="text-accent-deep">•</span>
                   <span>{k}</span>
                 </li>
@@ -2031,7 +2073,7 @@ function KlornAnalysis({
 function ReplyNeededPill() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
   );
@@ -2046,7 +2088,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   };
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
     >
       {priorityLabel(t, priority as "URGENT" | "LOW")}
     </span>
@@ -2057,7 +2099,7 @@ function CategoryPill({ category }: { category: string }) {
   const { t } = useT();
   const label = categoryLabel(t, category);
   return (
-    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );

@@ -58,12 +58,6 @@ vi.mock("../billing/stripe.js", async (importOriginal) => ({
 // would reach the network.
 vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: vi.fn(async () => {}) }));
 vi.mock("../pim/weekly-report.js", () => ({ sendWeeklySignalReports: vi.fn(async () => {}) }));
-vi.mock("../llm/openrouter-catalog-check.js", () => ({
-  runOpenRouterCatalogCheck: vi.fn(async () => {}),
-}));
-vi.mock("../llm/openrouter-key-health.js", () => ({
-  runOpenRouterKeyCheck: vi.fn(async () => {}),
-}));
 vi.mock("../judge/calibration-snapshot.js", () => ({
   runDailyCalibrationSnapshots: vi.fn(async () => {}),
 }));
