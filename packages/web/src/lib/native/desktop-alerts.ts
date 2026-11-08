@@ -30,8 +30,9 @@ export interface DesktopAlert {
  *  through the IPC bridge. */
 export const TITLE_MAX = 120;
 export const BODY_MAX = 240;
-/** Notification ids remembered per session. Far above any realistic number of
- *  PUSH/meeting banners in one session; trimming only drops the oldest. */
+/** Notification ids remembered (per account, across restarts — see
+ *  ./desktop-catchup.ts). Far above the bell's 30-row window and any realistic
+ *  number of PUSH/meeting interrupts a day; trimming only drops the oldest. */
 export const SEEN_CAP = 500;
 const ID_MAX = 200;
 const FALLBACK_TITLE = "Klorn";
@@ -44,12 +45,13 @@ function isKind(value: unknown): value is DesktopAlertKind {
 
 /** Longest message read before shaping, so the marker strip below never
  *  scans an unbounded string. */
-const MESSAGE_SCAN_MAX = 1000;
+export const MESSAGE_SCAN_MAX = 1000;
 
 /** Meeting frames end in a ` [eventId]` dedupe marker (background.ts). It is
  *  bookkeeping, not copy. PUSH frames carry none, so a subject that really
- *  ends in "[URGENT]" is left alone. */
-function stripMeetingMarker(text: string): string {
+ *  ends in "[URGENT]" is left alone. (Stored PUSH bell rows DO end in a
+ *  `[gmailId,…]` marker — desktop-catchup.ts strips it with this too.) */
+export function stripTrailingMarker(text: string): string {
   const trimmed = text.trimEnd();
   if (!trimmed.endsWith("]")) return trimmed;
   const open = trimmed.lastIndexOf("[");
@@ -67,7 +69,7 @@ export function parseDesktopAlert(payload: unknown): DesktopAlert | null {
   if (title !== undefined && typeof title !== "string") return null;
   const cleanTitle = (title ?? "").trim() || FALLBACK_TITLE;
   const raw = typeof message === "string" ? message.slice(0, MESSAGE_SCAN_MAX) : "";
-  const body = frame.alert === "meeting" ? stripMeetingMarker(raw) : raw.trim();
+  const body = frame.alert === "meeting" ? stripTrailingMarker(raw) : raw.trim();
   return {
     id,
     kind: frame.alert,
@@ -81,24 +83,11 @@ export interface DesktopAlertPlan {
   seen: string[];
 }
 
-/** Decide whether this frame banners, given the ids already bannered this
- *  session. Returns a new seen list; the input is never mutated. */
+/** Decide whether this frame banners, given the ids already bannered (the
+ *  persisted ledger, ./desktop-catchup.ts). Returns a new seen list; the input
+ *  is never mutated. */
 export function planDesktopAlert(seen: readonly string[], payload: unknown): DesktopAlertPlan {
   const alert = parseDesktopAlert(payload);
   if (!alert || seen.includes(alert.id)) return { alert: null, seen: [...seen] };
   return { alert, seen: [...seen, alert.id].slice(-SEEN_CAP) };
-}
-
-/** Read the stored seen list. Session storage is untrusted input: anything
- *  that is not a JSON array of strings reads as empty. */
-export function parseSeenIds(raw: string | null): string[] {
-  if (!raw) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter((v): v is string => typeof v === "string").slice(-SEEN_CAP);
 }

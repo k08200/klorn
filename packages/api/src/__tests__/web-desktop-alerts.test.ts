@@ -15,7 +15,6 @@ import { describe, expect, it } from "vitest";
 import {
   BODY_MAX,
   parseDesktopAlert,
-  parseSeenIds,
   planDesktopAlert,
   SEEN_CAP,
   TITLE_MAX,
@@ -156,25 +155,5 @@ describe("planDesktopAlert — one banner per notification id", () => {
     expect(plan.seen).toHaveLength(SEEN_CAP);
     expect(plan.seen[0]).toBe("old-1");
     expect(plan.seen.at(-1)).toBe("notif-1");
-  });
-});
-
-describe("parseSeenIds — session storage is untrusted", () => {
-  it("reads a stored JSON array of ids", () => {
-    expect(parseSeenIds(JSON.stringify(["a", "b"]))).toEqual(["a", "b"]);
-  });
-
-  it("returns an empty list for missing, corrupt or wrong-shaped values", () => {
-    expect(parseSeenIds(null)).toEqual([]);
-    expect(parseSeenIds("{not json")).toEqual([]);
-    expect(parseSeenIds(JSON.stringify({ a: 1 }))).toEqual([]);
-  });
-
-  it("drops non-string entries and trims to SEEN_CAP", () => {
-    expect(parseSeenIds(JSON.stringify(["a", 1, null, "b"]))).toEqual(["a", "b"]);
-    const many = Array.from({ length: SEEN_CAP + 10 }, (_, i) => `id-${i}`);
-    const parsed = parseSeenIds(JSON.stringify(many));
-    expect(parsed).toHaveLength(SEEN_CAP);
-    expect(parsed[0]).toBe("id-10");
   });
 });
