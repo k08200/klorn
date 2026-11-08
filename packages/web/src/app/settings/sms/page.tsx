@@ -138,7 +138,7 @@ function SmsContent() {
       <div className="mx-auto max-w-xl px-6 py-8">
         <div className="mb-8">
           <h1 className="text-role-page text-ink">SMS alerts (admin)</h1>
-          <p className="mt-2 text-role-label font-normal text-ink-mid">
+          <p className="mt-2 text-role-meta text-ink-mid">
             Klorn will text you for URGENT email + meeting alerts on top of the existing web push.
             Admin-only while we dogfood. Hard cap of {usage?.cap ?? 10} messages per day.
           </p>

@@ -44,7 +44,7 @@ export function OAuthErrorBanner() {
         role="status"
       >
         <h3 className="text-role-head text-ink">{t("oauthError.wipeInProgress.title")}</h3>
-        <p className="mt-1 text-role-label font-normal leading-5 text-ink-mid">
+        <p className="mt-1 text-role-meta leading-5 text-ink-mid">
           {t("oauthError.wipeInProgress.body")}
         </p>
       </div>
@@ -57,10 +57,8 @@ export function OAuthErrorBanner() {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-role-head text-state-danger-ink">{t("oauthError.title")}</h3>
-          <p className="mt-1 text-role-label font-normal leading-5 text-ink-mid">
-            {t("oauthError.body")}
-          </p>
-          <ul className="mt-2 space-y-1 text-role-label font-normal leading-5 text-ink-mid">
+          <p className="mt-1 text-role-meta leading-5 text-ink-mid">{t("oauthError.body")}</p>
+          <ul className="mt-2 space-y-1 text-role-meta leading-5 text-ink-mid">
             <li>
               <span className="text-ink">{t("oauthError.policy.title")}</span>{" "}
               {t("oauthError.policy.body")}

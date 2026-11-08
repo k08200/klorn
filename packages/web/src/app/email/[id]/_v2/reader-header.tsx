@@ -95,7 +95,7 @@ function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
       {context.tierReason && (
         // One line until opened: the summary is the reason itself.
         <details className="group min-w-0 flex-1">
-          <summary className="focus-ring cursor-pointer list-none truncate rounded-chip py-0.5 text-role-label font-normal text-ink-soft group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
+          <summary className="focus-ring cursor-pointer list-none truncate rounded-chip py-0.5 text-role-meta text-ink-soft group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
             {t("mailV2.reader.why", { reason: context.tierReason })}
           </summary>
         </details>
@@ -147,7 +147,7 @@ export function ReaderHeader(props: ReaderHeaderProps) {
       </h1>
 
       <div className="flex flex-col gap-1">
-        <div className="flex min-w-0 items-center gap-2.5 text-role-label font-normal text-ink-soft">
+        <div className="flex min-w-0 items-center gap-2.5 text-role-meta text-ink-soft">
           <span
             aria-hidden="true"
             className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-role-caption font-semibold text-ink-soft"

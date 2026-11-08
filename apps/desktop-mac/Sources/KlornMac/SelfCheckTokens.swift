@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 // Self-check for the main window's design tokens and the one-badge row rule
 // (productization plan §1–§2, macOS M7), run by `KlornMac --self-check`.
@@ -67,6 +68,9 @@ enum TokenGuard {
             found.append("font outside Theme.Typo")
         }
         if line.contains("Typo.micro") { found.append("the retired 10pt micro step") }
+        if line.contains("Typo.label.weight(.regular)") {
+            found.append("label at regular weight — use Theme.Typo.meta")
+        }
         // Radius: 6 / 10 / 16 by name; pills are a Capsule shape.
         for match in matches("cornerRadius:\\s*([^,)\\s]+)", in: line)
         where !match[1].hasPrefix("Theme.Radius.") {
@@ -192,6 +196,10 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
          Theme.TypeSize.label, Theme.TypeSize.caption, Theme.TypeSize.mono]
             == [28, 22, 15, 13, 12, 11, 12]))
     results.append((
+        "v2 meta role is the label size at regular weight",
+        Theme.Typo.meta == Font.system(size: Theme.TypeSize.label)
+            && Theme.Typo.meta != Theme.Typo.label))
+    results.append((
         "v2 dark canvas #0A0A0B, ink #0B0D12 and the accent pair is #0369A1 / #38BDF8",
         Theme.bgDark == Theme.hex(0x0A0A0B) && Theme.textLight == Theme.hex(0x0B0D12)
             && Theme.accentSolidLight == Theme.hex(0x0369A1)
@@ -200,12 +208,14 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     // The guard's own rules, then the files.
     let bad = [
         ".font(.caption)", ".font(.system(size: 10))", ".font(Theme.Typo.micro)",
+        ".font(Theme.Typo.label.weight(.regular))",
         "RoundedRectangle(cornerRadius: 8)", ".foregroundStyle(.orange)", "Color.white",
         "x ? .red : .green", "Color(red: 1, green: 0, blue: 0)", ".padding(22)",
         ".padding(.horizontal, 10)", ".padding(.top, Theme.s6 * 2)",
     ]
     let good = [
         ".font(Theme.Typo.caption.monospacedDigit())", ".padding(.horizontal, Theme.s3)",
+        ".font(Theme.Typo.meta)",
         "RoundedRectangle(cornerRadius: Theme.Radius.md)", ".padding(compact ? 0 : Theme.s6)",
         "// .font(.caption) in a comment", ".foregroundStyle(hovering ? Theme.text : .clear)",
         ".frame(maxWidth: .infinity, alignment: .top)", ".padding(.top, Theme.s12)",

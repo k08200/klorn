@@ -164,7 +164,7 @@ function Counters({ row, format }: { row: SyncRow; format: (value: number) => st
   const { t } = useT();
   if (row.messages === null && row.state !== "reading") return null;
   return (
-    <span className="text-role-label font-normal tabular-nums text-ink-soft">
+    <span className="text-role-meta tabular-nums text-ink-soft">
       {row.messages === null
         ? t("onboardingV2.sync.counting")
         : t("onboardingV2.sync.messages", { count: format(row.messages) })}

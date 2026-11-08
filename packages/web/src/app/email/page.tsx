@@ -919,7 +919,7 @@ function EmailView() {
             <p className="text-role-head font-medium text-ink">
               {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
-            <p className="mx-auto mt-1.5 max-w-xs text-role-label font-normal leading-relaxed text-ink-dim">
+            <p className="mx-auto mt-1.5 max-w-xs text-role-meta leading-relaxed text-ink-dim">
               {source === "demo" ? t("mail.emptyDemoBody") : t("mail.emptyBody")}
             </p>
             <button
@@ -1969,8 +1969,10 @@ function EmailRowItem({
               </span>
             </span>
             <span
-              className={`mt-1 block truncate text-role-label ${
-                unread ? "font-medium text-ink-strong" : "font-normal text-ink-muted"
+              className={`mt-1 block truncate ${
+                unread
+                  ? "text-role-label font-medium text-ink-strong"
+                  : "text-role-meta text-ink-muted"
               }`}
             >
               {email.subject || t("common.noSubject")}
@@ -2207,7 +2209,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
             </time>
           </span>
           <span
-            className={`mt-1 block truncate text-role-label ${thread.hasUnread ? "font-medium text-ink-strong" : "font-normal text-ink-muted"}`}
+            className={`mt-1 block truncate ${thread.hasUnread ? "text-role-label font-medium text-ink-strong" : "text-role-meta text-ink-muted"}`}
           >
             {thread.subject || t("common.noSubject")}
           </span>
@@ -2432,7 +2434,7 @@ function MobileEmailRow({
             </time>
           </span>
           <span
-            className={`mt-0.5 block truncate text-role-label font-normal ${unread ? "text-ink" : "text-ink-mid"}`}
+            className={`mt-0.5 block truncate text-role-meta ${unread ? "text-ink" : "text-ink-mid"}`}
           >
             {email.subject || t("common.noSubject")}
           </span>

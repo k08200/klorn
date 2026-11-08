@@ -483,7 +483,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           )}
           {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 ml-auto" />}
         </div>
-        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
+        <p className="text-role-meta md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
           {n.message}
         </p>
         <div className="flex items-center gap-2 mt-1 ml-6">
@@ -555,7 +555,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
           </span>
         </div>
-        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
+        <p className="text-role-meta md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
         <p className="text-role-caption text-ink-mid mt-1 ml-6">

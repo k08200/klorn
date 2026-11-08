@@ -148,7 +148,7 @@ function AskBox() {
         maxLength={ASK_MAX_LENGTH}
         placeholder={t("today.ask.placeholder")}
         autoComplete="off"
-        className="focus-ring h-10 min-w-0 flex-1 rounded-control border border-line-strong bg-surface-app px-3 text-role-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
+        className="focus-ring h-10 min-w-0 flex-1 rounded-control border border-line-strong bg-surface-app px-3 text-role-meta text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
       />
       <Button type="submit" variant="secondary" disabled={!text.trim()}>
         {t("today.ask.submit")}

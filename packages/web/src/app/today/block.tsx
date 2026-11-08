@@ -70,9 +70,7 @@ export function TodayBlock(props: TodayBlockProps) {
         >
           {title}
         </h2>
-        {hint && (
-          <p className="min-w-0 truncate text-role-label font-normal text-ink-muted">{hint}</p>
-        )}
+        {hint && <p className="min-w-0 truncate text-role-meta text-ink-muted">{hint}</p>}
         <span className="flex-1" />
         {action}
       </div>

@@ -227,6 +227,10 @@ enum Theme {
         static let body = Font.system(size: TypeSize.body)
         /// Identity + controls: senders, buttons, chips. 12pt.
         static let label = Font.system(size: TypeSize.label, weight: .medium)
+        /// Secondary metadata: the label size at regular weight (snippets,
+        /// sender · time rows, one-line reasons). Replaces
+        /// `label.weight(.regular)`. 12pt.
+        static let meta = Font.system(size: TypeSize.label)
         /// Metadata: reasons, timestamps, helper lines. 11pt.
         static let caption = Font.system(size: TypeSize.caption)
         /// Code, ids, keys — SF Mono. 12pt.

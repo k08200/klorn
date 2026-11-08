@@ -169,7 +169,7 @@ function ReviewRow(props: ReviewRowProps) {
 
       {label || moved ? (
         <div className="mt-2 flex min-h-11 flex-wrap items-center gap-x-3">
-          <p role="status" className="text-role-label font-normal text-ink-soft">
+          <p role="status" className="text-role-meta text-ink-soft">
             {t(moved ? "onboardingV2.review.movedTo" : "onboardingV2.review.keptIn", {
               lane: shown,
             })}

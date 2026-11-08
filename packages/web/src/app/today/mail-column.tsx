@@ -201,7 +201,7 @@ function InfoRow() {
         <h2 id={headingId} className="flex shrink-0 items-center gap-2 text-role-head text-ink">
           <LaneChip tier="INFO" />
         </h2>
-        <span className="min-w-0 truncate text-role-label font-normal text-ink-muted">
+        <span className="min-w-0 truncate text-role-meta text-ink-muted">
           {t("today.lane.info.hint")}
         </span>
         <span className="flex-1" />

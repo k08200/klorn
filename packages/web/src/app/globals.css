@@ -380,6 +380,12 @@
   --text-role-label: 13px;
   --text-role-label--line-height: 18px;
   --text-role-label--font-weight: 500;
+  /* Secondary metadata (sender · time rows, one-line reasons): role-label's
+     size and leading at regular weight. Replaces `text-role-label
+     font-normal` (guarded: label-as-meta). */
+  --text-role-meta: 13px;
+  --text-role-meta--line-height: 18px;
+  --text-role-meta--font-weight: 400;
   --text-role-caption: 12px;
   --text-role-caption--line-height: 16px;
   --text-role-caption--font-weight: 400;
