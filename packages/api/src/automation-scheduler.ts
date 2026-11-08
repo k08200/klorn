@@ -1938,6 +1938,8 @@ async function runUserCycle(
                   language: notificationLanguage,
                 }),
                 "email_urgent",
+                // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
+                { bucket: "interrupt" },
                 // Unawaited (don't block the tick) but guarded: an
                 // unhandled rejection from the push internals would
                 // otherwise crash the single dyno. Matches the candidate

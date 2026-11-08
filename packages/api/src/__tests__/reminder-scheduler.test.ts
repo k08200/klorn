@@ -126,6 +126,21 @@ describe("reminder scheduler delivery", () => {
     );
   });
 
+  it("rings a reminder the user set against the interrupt bucket, still labelled system", async () => {
+    // A reminder is one the user asked for at a time: briefings and agent
+    // proposals in the ambient bucket must not be able to crowd it out.
+    const reminder = seedReminder();
+
+    await deliverDueReminderById(reminder.id);
+
+    expect(sendPushNotification).toHaveBeenCalledWith(
+      reminder.userId,
+      expect.objectContaining({ title: reminder.title }),
+      "system",
+      { bucket: "interrupt" },
+    );
+  });
+
   it("surfaces a push delivery failure instead of swallowing it (F6)", async () => {
     vi.mocked(sendPushNotification).mockRejectedValueOnce(new Error("push boom"));
     const reminder = seedReminder();
