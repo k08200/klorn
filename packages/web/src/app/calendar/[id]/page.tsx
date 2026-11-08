@@ -326,7 +326,7 @@ function CalendarEventDetail({ id }: { id: string }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <h1 className="break-words text-role-title text-ink">{event.title}</h1>
-              <p className="mt-1 text-role-label font-normal text-ink-mid">
+              <p className="mt-1 text-role-meta text-ink-mid">
                 {formatRange(event.startTime, event.endTime, event.allDay, userTimezone, locale)}
               </p>
               {event.location && (
@@ -396,7 +396,7 @@ function CalendarEventDetail({ id }: { id: string }) {
           )}
 
           {event.description && (
-            <p className="mt-4 whitespace-pre-wrap rounded-control border border-line bg-surface-raised p-3 text-role-label font-normal leading-6 text-ink-mid">
+            <p className="mt-4 whitespace-pre-wrap rounded-control border border-line bg-surface-raised p-3 text-role-meta leading-6 text-ink-mid">
               {event.description}
             </p>
           )}

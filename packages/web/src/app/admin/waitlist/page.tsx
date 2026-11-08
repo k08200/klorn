@@ -171,7 +171,7 @@ function WaitlistPageInner() {
           <p className="font-semibold text-amber-800">
             ⚠️ Do this BEFORE clicking Approve — every time.
           </p>
-          <ol className="mt-2 list-decimal space-y-1 pl-6 text-role-label font-normal text-state-warn-ink">
+          <ol className="mt-2 list-decimal space-y-1 pl-6 text-role-meta text-state-warn-ink">
             <li>Copy the email from the row below (click the address to copy).</li>
             <li>
               Open{" "}

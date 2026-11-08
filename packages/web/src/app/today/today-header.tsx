@@ -138,9 +138,7 @@ function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   if (accounts.failed) {
     return (
       <div role="alert" className="flex items-center gap-2 lg:hidden">
-        <p className="text-role-label font-normal text-state-danger-ink">
-          {t("today.accounts.error")}
-        </p>
+        <p className="text-role-meta text-state-danger-ink">{t("today.accounts.error")}</p>
         <Button variant="secondary" size="sm" onClick={accounts.retry}>
           {t("today.retry")}
         </Button>
@@ -174,7 +172,7 @@ function AccountChip({ account }: { account: ConnectedAccount }) {
       className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-control px-2 transition-colors duration-120 ease-fluid hover:bg-surface-hover"
     >
       <SourceBadge provider={account.provider} />
-      <span className="max-w-44 truncate text-role-label font-normal text-ink-soft">{name}</span>
+      <span className="max-w-44 truncate text-role-meta text-ink-soft">{name}</span>
       <span
         className={`inline-flex items-center gap-1.5 text-role-caption ${HEALTH_TEXT[account.health]}`}
       >

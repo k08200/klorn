@@ -109,9 +109,7 @@ export default function PmfCard() {
       <h2 id="pmf-heading" className="text-role-head text-ink">
         {t("pmf.title")}
       </h2>
-      <p className="mt-1.5 text-role-label font-normal leading-5 text-ink-mid">
-        {t("pmf.subtitle")}
-      </p>
+      <p className="mt-1.5 text-role-meta leading-5 text-ink-mid">{t("pmf.subtitle")}</p>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {options.map((opt) => (
