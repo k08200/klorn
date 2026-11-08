@@ -182,13 +182,15 @@ async function findOpenMailItem(
 /**
  * The bell row, titled in the user's notification language. It carries the
  * [gmailId] dedup marker, read back by both this path and the urgent-priority
- * sweep.
+ * sweep, and the mail's id, read back by the Windows desktop catch-up
+ * (decision N6).
  */
 export function firewallBellRow(email: JudgeableEmailRow, language: NotificationLanguage): BellRow {
   return {
     type: "email",
     title: notificationCopy(language).urgentMailTitle,
     message: `${pushBody(email, language).body} [${email.gmailId}]`,
+    sourceEmailId: email.id,
   };
 }
 
@@ -207,28 +209,32 @@ export async function deliverFirewallPush(
     import("../notify/desktop-alert.js"),
   ]);
 
+  // Decision N1: sender-only title, subject + the judge's reason, opens the
+  // mail, and the lane + language pick the action set on every channel.
+  const item = await findOpenMailItem(userId, email.id, lang);
+  const content = mailPushContent({
+    from: email.from,
+    subject: email.subject,
+    reason: item?.reason,
+    language: lang,
+  });
+
   pushNotification(userId, {
     id: notification.id,
     type: "email",
     title: notificationCopy(lang).urgentMailTitle,
     message: body,
     createdAt: notification.createdAt.toISOString(),
-    // PUSH lane → OS banner in the desktop shell, under the Web Push gate.
+    // PUSH lane → OS banner in the desktop shell, under the Web Push gate,
+    // with the same N1 content and a click that opens the mail.
     ...(await desktopAlertTag(userId, "push")),
+    mail: { emailId: email.id, ...content },
   });
 
-  // Decision N1: sender-only title, subject + the judge's reason, opens the
-  // mail, and the lane + language pick the action set on every channel.
-  const item = await findOpenMailItem(userId, email.id, lang);
   await sendPushNotification(
     userId,
     {
-      ...mailPushContent({
-        from: email.from,
-        subject: email.subject,
-        reason: item?.reason,
-        language: lang,
-      }),
+      ...content,
       url: `/email/${encodeURIComponent(email.id)}`,
       attentionItemId: item?.id,
       lane: item?.lane ?? "PUSH",

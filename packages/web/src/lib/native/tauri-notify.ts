@@ -1,14 +1,15 @@
 // Posts the Windows desktop shell's OS banners. Which frames and bell rows
 // banner, and the once-per-id ledger, are decided by the pure rules in
-// ./desktop-alerts.ts and ./desktop-catchup.ts; this file is only the
-// side-effecting edge: local storage, the preference fetch and the IPC call.
+// ./desktop-alerts.ts, ./desktop-catchup.ts and ./desktop-push-catchup.ts;
+// this file is only the side-effecting edge: local storage, the API reads and
+// the IPC call.
 //
-// The shell exposes exactly one command for this, `show_banner` (title + body,
-// clamped and posted from Rust, permission handled there) — none of the
+// The shell exposes exactly one command for this, `show_banner` (title + body
+// + the page a click opens, all checked and posted from Rust) — none of the
 // notification plugin's commands are granted to app.klorn.ai. See
 // apps/desktop-win/src-tauri/src/banner.rs and capabilities/default.json.
 
-import type { DesktopAlertKind } from "@klorn/contract";
+import type { DesktopAlertKind, DesktopCatchUpResponse } from "@klorn/contract";
 import { apiFetch } from "../api";
 import { captureClientError } from "../sentry";
 import type { DesktopAlert } from "./desktop-alerts";
@@ -21,6 +22,11 @@ import {
   planLiveAlert,
   resolveLedger,
 } from "./desktop-catchup";
+import {
+  parseCatchUpResponse,
+  planPushCatchUp,
+  pushCatchUpCandidates,
+} from "./desktop-push-catchup";
 import { shellKind, tauriInvoke } from "./shell";
 
 /** localStorage, not sessionStorage: the ledger must survive a restart so a
@@ -60,7 +66,7 @@ function writeLedger(ledger: AlertLedger): void {
 
 async function postBanner(alert: DesktopAlert, context: string): Promise<void> {
   try {
-    await tauriInvoke("show_banner", { title: alert.title, body: alert.body });
+    await tauriInvoke("show_banner", { title: alert.title, body: alert.body, open: alert.open });
   } catch (err) {
     console.error("[DESKTOP-ALERT] banner failed:", err);
     captureClientError(err, { context, kind: alert.kind });
@@ -90,12 +96,63 @@ async function fetchAllowedKinds(): Promise<Set<DesktopAlertKind> | null> {
   }
 }
 
-/** Banner the PUSH / meeting bell rows that arrived while the app was quit,
- *  asleep or disconnected. Call with every fresh bell list. No-op outside
- *  Tauri. Each read-plan-write runs synchronously, so two bells (rail +
- *  sidebar) refetching at once cannot banner the same id twice. */
-export async function catchUpDesktopAlerts(owner: string, rows: readonly unknown[]): Promise<void> {
-  if (shellKind() !== "tauri") return;
+/** After the server says "quiet hours", wait this long before asking again
+ *  (the bell refetches every minute, from two places). */
+const HELD_RETRY_MS = 5 * 60 * 1000;
+let askAgainAtMs = 0;
+
+interface MissedMailAnswer {
+  response: DesktopCatchUpResponse | null;
+  /** The ids the question named (empty when not asked). */
+  sent: string[];
+}
+
+const NOT_ASKED: MissedMailAnswer = { response: null, sent: [] };
+
+/** Ask the server which unseen PUSH rows still deserve a toast. No response
+ *  when there is nothing to ask, the first run's baseline is still pending,
+ *  quiet hours were reported recently, or the request failed. */
+async function fetchMissedMail(owner: string, rows: readonly unknown[]): Promise<MissedMailAnswer> {
+  const ledger = readLedger(owner);
+  if (!ledger.baselineEstablished || Date.now() < askAgainAtMs) return NOT_ASKED;
+  const { ask } = pushCatchUpCandidates(ledger, rows, Date.now());
+  if (ask.length === 0) return NOT_ASKED;
+  try {
+    const raw = await apiFetch<unknown>(
+      `/api/notifications/desktop-catchup?ids=${ask.map(encodeURIComponent).join(",")}`,
+    );
+    const response = parseCatchUpResponse(raw);
+    if (!response) {
+      console.warn("[DESKTOP-ALERT] malformed catch-up response");
+      return NOT_ASKED;
+    }
+    if (response.held) askAgainAtMs = Date.now() + HELD_RETRY_MS;
+    return { response, sent: ask };
+  } catch (err) {
+    console.warn("[DESKTOP-ALERT] could not read missed urgent mail:", err);
+    return NOT_ASKED;
+  }
+}
+
+/** Urgent mail missed while the app was away: one toast, or one summary
+ *  (decision N6, ./desktop-push-catchup.ts). */
+async function catchUpUrgentMail(owner: string, rows: readonly unknown[]): Promise<void> {
+  const { response, sent } = await fetchMissedMail(owner, rows);
+  // Plan on the ledger as it is after the await: the other bell may have
+  // recorded these ids meanwhile.
+  const plan = planPushCatchUp({
+    ledger: readLedger(owner),
+    rows,
+    nowMs: Date.now(),
+    response,
+    sent,
+  });
+  writeLedger(plan.next);
+  if (plan.toast) await postBanner(plan.toast, "tauri-notify.catchUpUrgentMail");
+}
+
+/** Meeting reminders missed while the app was away. Establishes the baseline. */
+async function catchUpMeetings(owner: string, rows: readonly unknown[]): Promise<void> {
   // Most refetches find nothing new: settle those without a preference fetch.
   // The recorded ids do not depend on `allowed`, and a subset of kinds can
   // only banner fewer rows, so an empty plan here is the final answer.
@@ -116,4 +173,15 @@ export async function catchUpDesktopAlerts(owner: string, rows: readonly unknown
   for (const alert of plan.toBanner) {
     await postBanner(alert, "tauri-notify.catchUpDesktopAlerts");
   }
+}
+
+/** Banner what arrived while the app was quit, asleep or disconnected. Call
+ *  with every fresh bell list. No-op outside Tauri. Each read-plan-write runs
+ *  synchronously, so two bells (rail + sidebar) refetching at once cannot
+ *  banner the same id twice. Urgent mail first: on the first run it records
+ *  the bell silently before the meeting pass establishes the baseline. */
+export async function catchUpDesktopAlerts(owner: string, rows: readonly unknown[]): Promise<void> {
+  if (shellKind() !== "tauri") return;
+  await catchUpUrgentMail(owner, rows);
+  await catchUpMeetings(owner, rows);
 }

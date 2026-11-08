@@ -403,11 +403,11 @@ const fr: Record<string, string> = {
   "pwa.install.body": "Ouvrez Klorn depuis votre écran d'accueil.",
   "pwa.install.action": "Installer",
   "pwa.install.dismiss": "Fermer l'invitation à installer",
-  "desktop.autostart.prompt.title": "Lancer Klorn à l'ouverture de session ?",
+  "desktop.autostart.prompt.title": "Garder Klorn ouvert en arrière-plan ?",
   "desktop.autostart.prompt.body":
-    "Klorn peut se lancer à l'ouverture de votre session pour que vous continuiez à recevoir les notifications de courrier urgent.",
-  "desktop.autostart.prompt.accept": "Lancer à l'ouverture de session",
-  "desktop.autostart.prompt.decline": "Non merci",
+    "Klorn ne peut vous signaler les e-mails urgents que lorsqu'il est ouvert. Ouvrez-le à l'ouverture de session pour ne rien manquer après un redémarrage.",
+  "desktop.autostart.prompt.accept": "Ouvrir à l'ouverture de session",
+  "desktop.autostart.prompt.decline": "Pas maintenant",
   "desktop.autostart.prompt.enabling": "Activation...",
   "desktop.autostart.failed":
     "Impossible d'activer le lancement à l'ouverture de session. Vous pouvez réessayer dans les Réglages.",

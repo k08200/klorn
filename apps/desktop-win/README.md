@@ -46,10 +46,28 @@ The plugin replaces `window.Notification` in the webview, so the bell's
 generic browser-notification path is skipped inside Tauri — otherwise every
 frame would become a toast.
 
-Clicking a banner: the plugin has no click callback on Windows. For the
-installed app the toast carries its AppUserModelID, and Windows activates the
-app on click, which lands in the single-instance handler and shows the window.
-That path is expected, not yet verified on a Windows machine.
+**Toast content (decision N1).** A frame about one mail carries `mail`
+(`{ emailId, title, body }`, the same shape as the device push): the toast's
+title is the sender, its body the subject plus the judge's reason on a second
+line. Other frames keep their own title and message.
+
+**Clicking a banner (decision N1).** `show_banner` also takes `open`, the
+in-app page a click opens — accepted only as `/today` or `/email/<id>` (uuid /
+cuid characters), checked again in Rust. tauri-plugin-notification 2.7 reports
+a click on desktop (`on_action`, action `tap`); `banner::on_action` then shows,
+un-minimizes and focuses the window and opens the page through the web app's
+router (`components/desktop-toast-router.tsx`, `window.__klornOpenToast`), or
+a plain navigation when the router is not mounted yet. Limits, from the
+plugin's source: a click is only reported **while the toast is on screen**,
+not once it moved to the Action Center. A click in the Action Center falls back
+to Windows activating the app by its AppUserModelID (installed app only),
+which lands in the single-instance handler and shows the window without
+routing. Neither path is verified on a Windows machine yet.
+
+**No Reply / Later buttons.** The plugin can add buttons on Windows, but they
+share the click's limit: from the Action Center they would silently do
+nothing, and Later would then never set its reminder. Reply / Later stay on
+the phone, Web Push and in-app.
 
 Real-time banners only arrive while Klorn is running (window open or in the
 tray) and its websocket is connected; there is no server push to a quit app,
@@ -58,38 +76,48 @@ and the API keeps no replay of frames sent while the socket was down.
 ### Catch-up after quit, restart or sleep
 
 Every bell refetch — on start, on socket reconnect, on focus / network return,
-and the 60 s poll — also runs a catch-up pass
-(`packages/web/src/lib/native/desktop-catchup.ts`, mirroring the Mac app's
-`PushLedger`):
+and the 60 s poll — also runs a catch-up pass. Common rules (mirroring the Mac
+app's `PushLedger`):
 
-- **source: the bell's own rows**, not the PUSH/MEETING lanes. The
-  `"Urgent email"` row is written only when the server decided to interrupt
-  for a PUSH- or MEETING-lane mail (after its recency, dedupe and interrupt
-  budget gates), and its id is the id the live frame carries — one ledger, so
-  live and catch-up never banner the same mail twice. A lane also holds mail
-  the server deliberately never pushed. `type: "meeting"` rows are the
-  meeting-starting-soon reminders.
+- **source: the bell's own rows**, not the PUSH/MEETING lanes. The urgent-mail
+  row is written only when the server decided to interrupt for a mail (after
+  its recency, dedupe and interrupt-budget gates), and its id is the id the
+  live frame carries — one ledger, so live and catch-up never banner the same
+  mail twice. `type: "meeting"` rows are the meeting-starting-soon reminders.
 - **silent baseline** on the first pass for an account, so a first launch
   (or a new account signing in) never dumps old mail; each account keeps its
   own ledger;
-- **each id once**, across restarts;
-- **at most 5 banners per pass, newest first** — the rest are recorded
-  silently;
-- **fresh only**: PUSH rows older than 24 h, meeting reminders older than
-  2 minutes (they are written 1–5 minutes before the start, so later the
-  meeting may be under way), and rows already read on another device are
-  recorded without a banner; rows younger than 30 s are left to their live
-  frame.
+- **each id once**, across restarts; rows younger than 30 s are left to their
+  live frame.
 
-**Preference-gate gap.** Bell rows do not record whether the server's gate
-allowed a banner, and the API has no alert-state endpoint yet. Catch-up
-honours the category opt-outs (`notifyEmailUrgent` / `notifyMeeting` from
-`GET /api/automations`, fetched only when a pass has something to banner) but
-does **not** re-evaluate quiet hours or focus windows — that logic stays on the
-server. So a PUSH mail missed while Klorn was quit can banner on return even
-if it arrived inside quiet hours, or banner during quiet hours if Klorn starts
-then. Mail that arrives while Klorn is running is unaffected: its frame is
-gated live. When the server exposes its gate decision, catch-up should use it.
+**Urgent mail (decision N6,
+`packages/web/src/lib/native/desktop-push-catchup.ts`).** For unseen,
+unread urgent-mail rows from the last 72 h that name one mail
+(`sourceEmailId`, written by the firewall push and by a one-mail urgent
+sweep), the shell asks `GET /api/notifications/desktop-catchup?ids=…`
+(`packages/api/src/notify/desktop-catchup.ts`). The server keeps only mails
+that are still an OPEN PUSH item, shapes each like every mail notification
+(N1, in the user's notification language) and applies the live frame's gate:
+
+- **exactly one** missed mail → that mail's normal toast, opening it;
+- **two or more** → one summary toast, "N urgent emails while Klorn was
+  closed", body "Sender1, Sender2, Sender3 +k", opening Today;
+- **quiet hours** → `held`: nothing is shown or recorded, and the shell asks
+  again at most every 5 minutes, so the toast comes after quiet hours end;
+- urgent-mail alerts turned off → nothing.
+
+Not caught up: rows written before this change and urgent-sweep rows that
+batch several mails (neither names one mail). Quiet hours while Klorn is
+**running** follow the live gate instead: the frame arrives untagged, is
+recorded, and never toasts later — the same as Web Push, which drops (does not
+defer) an alert during quiet hours. Only mail missed while Klorn was closed or
+asleep is held until quiet hours end.
+
+**Meetings (`desktop-catchup.ts`).** At most 5 banners per pass, newest
+first; reminders older than 2 minutes (they are written 1–5 minutes before the
+start, so later the meeting may be under way) and rows already read on another
+device are recorded without a banner. Category opt-outs come from
+`GET /api/automations`; quiet hours are not re-evaluated for meetings.
 
 ## Start at sign-in
 
@@ -100,8 +128,10 @@ Opt-in, like the Mac's login item; the shell never enables it on its own.
   default *Dynamic* mode: per-user (`HKCU`) when Klorn runs unelevated, as the
   per-user NSIS install does; it would write the machine-wide (`HKLM`) entry
   only if Klorn itself ran as administrator.
-- One-time prompt (`packages/web/src/components/autostart-prompt.tsx`, rules
-  in `lib/native/autostart-prompt.ts`): shown once after sign-in, only inside
+- One-time prompt (decision N5, `packages/web/src/components/autostart-prompt.tsx`,
+  rules in `lib/native/autostart-prompt.ts`): a modal "Keep Klorn running in
+  the background?" with *Not now* and *Open at login* (the primary, initially
+  focused button; Esc = *Not now*), shown once after sign-in, only inside
   this shell, only while start-at-sign-in is off. The answer is kept in
   `localStorage` (`klorn.desktopAutostart.promptAnswer`) and never asked again;
   a failed enable shows an error toast instead of re-asking.
@@ -127,7 +157,7 @@ least privilege:
 | Permission | Why |
 |---|---|
 | `opener:allow-open-url` scoped to `https://**`, `mailto:*` | OAuth in the system browser |
-| `allow-show-banner` (the app's own command, `src/banner.rs`) | post a banner: title + body only, control characters removed, clamped to 120 / 240 characters in Rust; permission checked in Rust |
+| `allow-show-banner` (the app's own command, `src/banner.rs`) | post a banner: title + body (control characters removed except one line break in the body, clamped to 120 / 240 characters in Rust) and the page a click opens (`/today` or `/email/<id>` only, checked in Rust); permission checked in Rust |
 | `autostart:allow-enable`, `allow-disable`, `allow-is-enabled` | start at sign-in. No command takes an argument: the `Run` entry's program path and `--autostart` are fixed in `src/autostart.rs` |
 | `core:app/event/path/webview/window:default` | `core:default` spelled out minus `core:tray`, `core:menu`, `core:image`, `core:resources` |
 
@@ -139,21 +169,23 @@ None of that is needed by the web app, so it is not granted.
 No notification-plugin command is granted. Its `notify` takes the whole
 NotificationData — icon path, attachments, schedule, sound — and on Windows an
 icon becomes a `file:///` toast image source, so a compromised page could
-point it at a UNC path. `show_banner` fixes everything but the text.
+point it at a UNC path. `show_banner` fixes everything but the text and the
+in-app page a click opens.
 
 No shell, fs, http, process or window-mutating permission is granted. A
 compromised page (XSS on app.klorn.ai) could at worst open a browser tab,
 post a toast, or switch Klorn's own start-at-sign-in on or off — it cannot
-choose what Windows runs. The only custom IPC input is `show_banner`'s two
+choose what Windows runs. The only custom IPC input is `show_banner`'s
 strings, sanitized in Rust (and already validated and capped by
-`desktop-alerts.ts` on the web side).
+`desktop-alerts.ts` on the web side); `open` can only name Today or one mail
+on app.klorn.ai.
 
 ## Build
 
 ```
 cd apps/desktop-win/src-tauri
 cargo check          # compiles on any OS
-cargo test           # banner sanitizing, tray labels, theme colour, sign-in launch flag
+cargo test           # banner sanitizing and click routes, tray labels, theme colour, sign-in launch flag
 cargo tauri build    # NSIS installer, Windows only
 ```
 
@@ -165,7 +197,5 @@ cargo tauri build    # NSIS installer, Windows only
 - ~~Windows release workflow~~ → `.github/workflows/desktop-win-release.yml`, tag `desktop-win-v*`
 - Code signing (separate founder decision; SmartScreen warns until then).
 - In-app updater (the web content is live; only shell changes need a reinstall).
-- Quiet hours / focus windows for catch-up banners — needs the server to expose
-  its gate decision (see *Preference-gate gap* above).
 - The landing's Windows card still points at the web app until an installer
   exists — flip `data-win-href` only after the first release is live.

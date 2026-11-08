@@ -117,6 +117,7 @@ describe("Tauri shell — unchanged", () => {
       kind: "push",
       title: "Urgent email",
       body: "Kim: Q4 budget",
+      open: null,
     });
     expect(planDesktopAlert(first.seen, pushFrame).alert).toBeNull();
     expect(planDesktopAlert([], { ...pushFrame, alert: undefined }).alert).toBeNull();

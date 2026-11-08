@@ -68,6 +68,18 @@ vi.mock("../notify/push-delivery.js", () => ({
   })),
 }));
 
+const desktopCatchUp = vi.hoisted(() =>
+  vi.fn(async (_userId: string, ids: string[]) => ({
+    held: false,
+    summaryTitle: "{count} urgent emails while Klorn was closed",
+    items: ids.map((id) => ({ id, emailId: "email-1", title: "Kim", body: "s", createdAt: "x" })),
+  })),
+);
+vi.mock("../notify/desktop-catchup.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../notify/desktop-catchup.js")>()),
+  desktopCatchUp,
+}));
+
 vi.mock("../db.js", () => {
   const prisma = {
     notification: {
@@ -123,6 +135,45 @@ async function buildApp() {
   await app.register(notificationRoutes, { prefix: "/api/notifications" });
   return app;
 }
+
+describe("GET /api/notifications/desktop-catchup (decision N6)", () => {
+  it("needs a session", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/notifications/desktop-catchup?ids=a",
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("asks about the signed-in user's ids only", async () => {
+    desktopCatchUp.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/notifications/desktop-catchup?ids=n1,n2",
+      headers: auth(OTHER),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(desktopCatchUp).toHaveBeenCalledWith("user-2", ["n1", "n2"]);
+    expect(res.json().items.map((i: { id: string }) => i.id)).toEqual(["n1", "n2"]);
+    await app.close();
+  });
+
+  it("rejects a malformed id list with 400 and reads nothing", async () => {
+    desktopCatchUp.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/notifications/desktop-catchup?ids=a%3Bb",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(desktopCatchUp).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
 
 describe("notification routes", () => {
   it("rejects unauthenticated with 401", async () => {

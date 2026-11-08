@@ -399,11 +399,11 @@ const es: Record<string, string> = {
   "pwa.install.body": "Abre Klorn desde tu pantalla de inicio.",
   "pwa.install.action": "Instalar",
   "pwa.install.dismiss": "Cerrar aviso de instalación",
-  "desktop.autostart.prompt.title": "¿Iniciar Klorn al iniciar sesión?",
+  "desktop.autostart.prompt.title": "¿Mantener Klorn en segundo plano?",
   "desktop.autostart.prompt.body":
-    "Klorn puede iniciarse cuando inicias sesión para que sigas recibiendo notificaciones de correo urgente.",
-  "desktop.autostart.prompt.accept": "Iniciar al iniciar sesión",
-  "desktop.autostart.prompt.decline": "No, gracias",
+    "Klorn solo puede avisarte del correo urgente mientras está abierto. Ábrelo al iniciar sesión para no perderte nada después de reiniciar.",
+  "desktop.autostart.prompt.accept": "Abrir al iniciar sesión",
+  "desktop.autostart.prompt.decline": "Ahora no",
   "desktop.autostart.prompt.enabling": "Activando...",
   "desktop.autostart.failed":
     "No se pudo activar el inicio al iniciar sesión. Puedes volver a intentarlo en Ajustes.",

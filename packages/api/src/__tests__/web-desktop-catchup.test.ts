@@ -5,8 +5,9 @@
  * Live banners come from real-time `notification` frames the server tags
  * `alert: "push" | "meeting"`. A frame sent while the app was quit, the
  * machine slept, or the socket was down is lost (websocket.ts keeps no
- * replay), so on start and on every bell refetch the shell banners the PUSH /
- * meeting bell rows it has not announced yet — mirroring the Mac app's
+ * replay), so on start and on every bell refetch the shell banners the
+ * meeting bell rows it has not announced yet (urgent mail: decision N6,
+ * web-desktop-push-catchup.test.ts) — mirroring the Mac app's
  * PushLedger (apps/desktop-mac/Sources/KlornMac/Notifications.swift):
  * silent baseline on first run, each id at most once across restarts, at most
  * five banners per pass, newest first — plus a freshness cutoff so a long
@@ -27,7 +28,6 @@ import {
   interruptFromRow,
   MEETING_CATCHUP_WINDOW_MS,
   PUSH_BELL_TITLE,
-  PUSH_CATCHUP_WINDOW_MS,
   parseLedger,
   planCatchUp,
   planLiveAlert,
@@ -39,7 +39,6 @@ import { buildUrgentDedupMessage } from "../notify/urgent-dedup.js";
 
 const NOW = Date.parse("2026-11-07T12:00:00.000Z");
 const MIN = 60_000;
-const HOUR = 60 * MIN;
 
 function pushRow(id: string, ageMs: number, message = `Kim: Q4 budget [gm-${id}]`) {
   return {
@@ -96,6 +95,7 @@ describe("interruptFromRow — which bell rows are interrupts", () => {
       kind: "push",
       title: PUSH_BELL_TITLE,
       body: "Kim: Q4 budget",
+      open: null,
     });
     expect(row?.createdAtMs).toBe(NOW - 10 * MIN);
   });
@@ -111,6 +111,7 @@ describe("interruptFromRow — which bell rows are interrupts", () => {
       kind: "meeting",
       title: "Meeting in 5 min: Standup",
       body: "Standup starts soon",
+      open: null,
     });
   });
 
@@ -158,13 +159,13 @@ describe("the bell rows the server actually writes are recognised", () => {
 });
 
 describe("planCatchUp — first run is a silent baseline", () => {
-  it("records every interrupt row and banners none", () => {
-    const result = plan(freshLedger("user-1"), [pushRow("n1", 10 * MIN), meetingRow("m1", MIN)]);
+  it("records every meeting row and banners none", () => {
+    const result = plan(freshLedger("user-1"), [meetingRow("m1", MIN), meetingRow("m2", MIN)]);
     expect(result.toBanner).toEqual([]);
     expect(result.next).toEqual({
       owner: "user-1",
       baselineEstablished: true,
-      notified: ["n1", "m1"],
+      notified: ["m1", "m2"],
     });
   });
 
@@ -175,42 +176,46 @@ describe("planCatchUp — first run is a silent baseline", () => {
   });
 });
 
-describe("planCatchUp — after the baseline", () => {
-  it("banners an interrupt that arrived while the app was away", () => {
-    const result = plan(established(["old"]), [pushRow("n1", 30 * MIN)]);
-    expect(result.toBanner.map((a) => a.id)).toEqual(["n1"]);
-    expect(result.next.notified).toEqual(["old", "n1"]);
+describe("planCatchUp — PUSH rows belong to the urgent-mail catch-up (decision N6)", () => {
+  it("neither banners nor records a PUSH row, on the first run or after", () => {
+    const first = plan(freshLedger("user-1"), [pushRow("n1", 10 * MIN)]);
+    expect(first.toBanner).toEqual([]);
+    expect(first.next.notified).toEqual([]);
+    const later = plan(established(), [pushRow("n1", 10 * MIN)]);
+    expect(later.toBanner).toEqual([]);
+    expect(later.next.notified).toEqual([]);
+  });
+});
+
+describe("planCatchUp — meetings after the baseline", () => {
+  const SEC = 1_000;
+
+  it("banners a reminder that arrived while the app was away", () => {
+    const result = plan(established(["old"]), [meetingRow("m1", MIN)]);
+    expect(result.toBanner.map((a) => a.id)).toEqual(["m1"]);
+    expect(result.next.notified).toEqual(["old", "m1"]);
   });
 
   it("never repeats an id already announced, live or by an earlier catch-up", () => {
-    const result = plan(established(["n1"]), [pushRow("n1", 30 * MIN)]);
+    const result = plan(established(["m1"]), [meetingRow("m1", MIN)]);
     expect(result.toBanner).toEqual([]);
-    expect(result.next.notified).toEqual(["n1"]);
+    expect(result.next.notified).toEqual(["m1"]);
   });
 
   it("caps one pass at five banners, newest first, and records the rest silently", () => {
-    const rows = [7, 3, 6, 1, 5, 2, 4].map((n) => pushRow(`n${n}`, n * MIN));
+    const rows = [7, 3, 6, 1, 5, 2, 4].map((n) => meetingRow(`m${n}`, 30 * SEC + n * 10 * SEC));
     const result = plan(established(), rows);
     expect(CATCHUP_MAX).toBe(5);
-    expect(result.toBanner.map((a) => a.id)).toEqual(["n1", "n2", "n3", "n4", "n5"]);
+    expect(result.toBanner.map((a) => a.id)).toEqual(["m1", "m2", "m3", "m4", "m5"]);
     expect(new Set(result.next.notified)).toEqual(new Set(rows.map((r) => r.id)));
     // The two left over are not offered again on the next pass.
     expect(plan(result.next, rows).toBanner).toEqual([]);
   });
 
   it("dedupes an id the server returned twice", () => {
-    const result = plan(established(), [pushRow("n1", 2 * MIN), pushRow("n1", 2 * MIN)]);
-    expect(result.toBanner.map((a) => a.id)).toEqual(["n1"]);
-    expect(result.next.notified).toEqual(["n1"]);
-  });
-
-  it("does not banner PUSH mail older than 24 hours — records it instead", () => {
-    const stale = pushRow("stale", PUSH_CATCHUP_WINDOW_MS + MIN);
-    const fresh = pushRow("fresh", PUSH_CATCHUP_WINDOW_MS - MIN);
-    const result = plan(established(), [stale, fresh]);
-    expect(PUSH_CATCHUP_WINDOW_MS).toBe(24 * HOUR);
-    expect(result.toBanner.map((a) => a.id)).toEqual(["fresh"]);
-    expect(result.next.notified).toContain("stale");
+    const result = plan(established(), [meetingRow("m1", MIN), meetingRow("m1", MIN)]);
+    expect(result.toBanner.map((a) => a.id)).toEqual(["m1"]);
+    expect(result.next.notified).toEqual(["m1"]);
   });
 
   it("does not banner a meeting reminder that may describe a meeting already under way", () => {
@@ -225,13 +230,13 @@ describe("planCatchUp — after the baseline", () => {
   });
 
   it("a row already read elsewhere (phone, web) is recorded, never bannered", () => {
-    const result = plan(established(), [{ ...pushRow("read", 2 * MIN), isRead: true }]);
+    const result = plan(established(), [{ ...meetingRow("read", MIN), isRead: true }]);
     expect(result.toBanner).toEqual([]);
     expect(result.next.notified).toEqual(["read"]);
   });
 
   it("an unparseable timestamp is recorded, never bannered", () => {
-    const result = plan(established(), [{ ...pushRow("odd", MIN), createdAt: "nope" }]);
+    const result = plan(established(), [{ ...meetingRow("odd", MIN), createdAt: "nope" }]);
     expect(result.toBanner).toEqual([]);
     expect(result.next.notified).toEqual(["odd"]);
   });
@@ -240,12 +245,12 @@ describe("planCatchUp — after the baseline", () => {
     // The server writes the bell row, then evaluates the preference/quiet-hours
     // gate, then sends the tagged frame. A refetch landing in between must not
     // banner (or swallow) the row before the server's gate has spoken.
-    const result = plan(established(), [pushRow("new", SETTLE_MS - 1_000)]);
+    const result = plan(established(), [meetingRow("new", SETTLE_MS - 1_000)]);
     expect(result.toBanner).toEqual([]);
     expect(result.next.notified).toEqual([]);
     const later = planCatchUp({
       ledger: result.next,
-      rows: [pushRow("new", SETTLE_MS - 1_000)],
+      rows: [meetingRow("new", SETTLE_MS - 1_000)],
       nowMs: NOW + SETTLE_MS,
       allowed: ALL_ALERT_KINDS,
     });
@@ -253,13 +258,9 @@ describe("planCatchUp — after the baseline", () => {
   });
 
   it("a category the user turned off is recorded silently, never bannered", () => {
-    const result = plan(
-      established(),
-      [pushRow("n1", 2 * MIN), meetingRow("m1", 2 * MIN)],
-      new Set(["meeting"]),
-    );
-    expect(result.toBanner.map((a) => a.id)).toEqual(["m1"]);
-    expect(result.next.notified).toEqual(expect.arrayContaining(["n1", "m1"]));
+    const result = plan(established(), [meetingRow("m1", MIN)], new Set(["push"]));
+    expect(result.toBanner).toEqual([]);
+    expect(result.next.notified).toEqual(["m1"]);
   });
 
   it("ignores rows that are not interrupts", () => {
@@ -270,16 +271,16 @@ describe("planCatchUp — after the baseline", () => {
 
   it("caps the remembered ids, dropping the oldest", () => {
     const full = established(Array.from({ length: SEEN_CAP }, (_, i) => `old-${i}`));
-    const result = plan(full, [pushRow("n1", 2 * MIN)]);
+    const result = plan(full, [meetingRow("m1", MIN)]);
     expect(result.next.notified).toHaveLength(SEEN_CAP);
-    expect(result.next.notified.at(-1)).toBe("n1");
+    expect(result.next.notified.at(-1)).toBe("m1");
     expect(result.next.notified[0]).toBe("old-1");
   });
 
   it("never mutates its input ledger", () => {
     const ledger = established(["a"]);
     const snapshot = structuredClone(ledger);
-    plan(ledger, [pushRow("n1", 2 * MIN)]);
+    plan(ledger, [meetingRow("m1", MIN)]);
     expect(ledger).toEqual(snapshot);
   });
 
