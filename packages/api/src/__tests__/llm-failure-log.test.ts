@@ -1,5 +1,5 @@
 /**
- * Failed LLM provider calls must be visible (#1319). LlmUsageLog only records
+ * Failed LLM provider calls must be visible (#1572). LlmUsageLog only records
  * SUCCESSFUL calls, so the 2026-09-05 provider credit outage left no trace:
  * every judge call failed for four weeks and nothing said why. This module is
  * the failure-side record — a structured, rate-limited, content-free log line

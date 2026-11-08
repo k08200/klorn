@@ -273,7 +273,7 @@ async function enforceCostGates(
 }
 
 /**
- * Failure-side ledger (#1319): LlmUsageLog only sees successful calls, so a
+ * Failure-side ledger (#1572): LlmUsageLog only sees successful calls, so a
  * failed dispatch is noted here (logged now, content-free and rate-limited)
  * before the original error is rethrown unchanged. The entry point tallies the
  * noted attempts only if the whole call then fails — a hop a fallback provider

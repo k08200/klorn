@@ -197,7 +197,7 @@ let lastOverrideUndoSweepAt = 0;
 // Own constant on purpose: piggybacking WATCH_RENEWAL_INTERVAL_MS would let
 // a Gmail-quota retune silently change the aging cadence too.
 const ATTENTION_AGING_INTERVAL_MS = 60 * 60 * 1000;
-// Judge fallback alarm (#1319): DB-backed, so the cadence only bounds how fast
+// Judge fallback alarm (#1572): DB-backed, so the cadence only bounds how fast
 // an outage is noticed. Own constant; mirrors JUDGE_FALLBACK_CHECK_INTERVAL_MS
 // in judge-fallback-check.ts (lazy-imported, so not importable here).
 const JUDGE_FALLBACK_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -1017,7 +1017,7 @@ async function runAutomations() {
         });
     }
 
-    // --- Hourly: judge fallback alarm (#1319) ---
+    // --- Hourly: judge fallback alarm (#1572) ---
     // Reads the last 24 h of judged-by sources from AttentionItem (one
     // aggregate query) and raises a deduped ops Notification when the LLM
     // judge has been falling back to keywords. Runs under the scheduler lock;

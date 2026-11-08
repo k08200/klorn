@@ -3952,7 +3952,7 @@ both.
     runs overshoot); giving back keeps an outage from spending a user's day
     (before the review, about 17 failing files did). Money stays bounded by the
     LLM layer's cost cap, which pre-bills every call, failed or not.
-- Degrading (#1319, the LLM failing in production). An outage is never a
+- Degrading (#1572, the LLM failing in production). An outage is never a
   content failure: every provider failing (402, 429, 5xx), no provider
   configured, a network error or the 90 s timeout leaves the summary PENDING
   `llm-unavailable` with the attempt given back and a backoff from 10 minutes
@@ -4066,7 +4066,7 @@ both.
   - When the app role drops BYPASSRLS, the store moves to `withTenant` and the
     job's two system queries to `withSystem`, like the other drive modules.
 - Before the flip (in this order): D3's flip conditions (the files must exist);
-  the LLM working in production (#1319: credits on the OpenRouter key, or the
+  the LLM working in production (#1572: credits on the OpenRouter key, or the
   founder's decision to rely on BYOK only); FA-5 covering that file contents are
   sent to the model provider for summaries; the UI step with its vocabulary
   row; then `DRIVE_SUMMARIES_ENABLED` on, founder account first (L23: `cohort`
