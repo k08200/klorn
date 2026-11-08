@@ -102,6 +102,7 @@ import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
 import { registerEmailFeedbackRoutes } from "./email-feedback.js";
 import { registerEmailLaneRoutes } from "./email-lanes.js";
+import { registerEmailLaterRoutes } from "./email-later.js";
 import { registerEmailMailboxRoutes } from "./email-mailbox.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
@@ -741,6 +742,7 @@ export async function emailRoutes(app: FastifyInstance) {
   registerEmailMailboxRoutes(app);
   registerEmailSenderLabelRoutes(app);
   registerEmailWaitingRoutes(app);
+  registerEmailLaterRoutes(app);
   await registerEmailBulkRoutes(app);
   registerEmailLaneRoutes(app, { demoRows: () => DEMO_EMAILS });
   // A child plugin (not a register* call) so its dark-route gate wraps only

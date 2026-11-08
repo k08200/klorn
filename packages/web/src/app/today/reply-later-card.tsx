@@ -46,7 +46,7 @@ export function ReplyLaterCard({
     if (busy) return;
     setBusy(true);
     try {
-      await postReminder(email, CARD_LATER, t);
+      await postReminder(email.id, CARD_LATER);
       toast(t("mailV2.list.remind.set", { when: t(REMINDER_LABEL_KEYS[CARD_LATER]) }), "success");
     } catch (err) {
       captureClientError(err, { scope: `today.${idPrefix}.later` });

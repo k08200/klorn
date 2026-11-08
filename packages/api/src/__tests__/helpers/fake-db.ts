@@ -151,7 +151,8 @@ const same = (a: unknown, b: unknown): boolean => cmp(a) === cmp(b);
 /**
  * A LIKE pattern as a RegExp, as Postgres reads it: `_` is any one character,
  * `%` any run, and a backslash makes the next character literal. Prisma sends
- * `startsWith` and `contains` as LIKE '<value>%' and LIKE '%<value>%' WITHOUT
+ * `startsWith`, `contains` and `endsWith` as LIKE '<value>%', '%<value>%' and
+ * '%<value>' WITHOUT
  * escaping the value (verified on Postgres 16 with Prisma 6.19, steps B2b and D2),
  * so a caller that wants a literal `%` or `_` must escape it. A value ending in
  * a lone backslash is an error in Postgres, and here. One dialect for both
@@ -206,6 +207,11 @@ function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: 
           typeof actual === "string" &&
           likePattern(expected as string, false, insensitive).test(actual)
         );
+      case "endsWith": {
+        if (typeof actual !== "string") return false;
+        const pattern = likePattern(expected as string, false, insensitive);
+        return new RegExp(`(?:${pattern.source})$`, pattern.flags).test(actual);
+      }
       case "gte":
         return cmp(actual) >= cmp(expected);
       case "gt":
