@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
 import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
+import { deliverInPageAlert } from "../lib/in-page-notify";
 import { openExternal, shellKind } from "../lib/native/shell";
 import { deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
@@ -196,25 +197,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
         triggerFlash();
 
-        // Not inside the Tauri shell: its notification plugin replaces
-        // window.Notification, so this generic path would toast EVERY frame
-        // (agent notes, briefings, QUEUE) there. The shell banners above.
-        if (
-          shellKind() !== "tauri" &&
-          typeof window !== "undefined" &&
-          "Notification" in window &&
-          window.Notification.permission === "granted"
-        ) {
-          try {
-            new window.Notification(notif.title, {
-              body: notif.message,
-              icon: "/icon-192.png",
-              requireInteraction: true,
-            });
-          } catch {
-            // Notification constructor failed — ignore
-          }
-        }
+        // Browser tab: an OS notification only for server-tagged PUSH /
+        // meeting frames (the user's notification gate already passed), and
+        // only when the service worker will not show it from Web Push
+        // (lib/in-page-alerts.ts). Every other frame only updates the bell.
+        // No-op inside the Tauri shell, which banners above.
+        void deliverInPageAlert(payload);
       }
     });
     return unsub;

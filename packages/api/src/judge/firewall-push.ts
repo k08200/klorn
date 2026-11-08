@@ -197,6 +197,8 @@ export async function deliverFirewallPush(
       // pendingActionId: a reply draft for this mail, if any, is proposed after
       // the judge, so none exists yet at this point.
       emailId: email.id,
+      // Web push tags its OS notification with the bell row, as the tab does.
+      bellNotificationId: notification.id,
     },
     "email_urgent",
   );

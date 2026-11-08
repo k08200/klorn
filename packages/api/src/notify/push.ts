@@ -159,14 +159,24 @@ export async function sendPushNotification(
     // Telegram, so their payloads are exactly what they were.
     emailId?: string;
     pendingActionId?: string;
+    // The bell row (Notification id) this push rings for, sent to WEB push
+    // only: the service worker tags its OS notification with it, the same tag
+    // an open tab gives its own notification for that row, so the two never
+    // stack. Not `notificationId`: that one is also written to the delivery
+    // log, where phone escalation keys on it.
+    bellNotificationId?: string;
   },
   category: NotifCategory = "system",
 ): Promise<PushSendSummary> {
-  const { emailId, pendingActionId, ...channelPayload } = payload;
+  const { emailId, pendingActionId, bellNotificationId, ...channelPayload } = payload;
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),
     ...(pendingActionId ? { pendingActionId } : {}),
+  };
+  const webPayload = {
+    ...channelPayload,
+    ...(bellNotificationId ? { bellNotificationId } : {}),
   };
   // First line of defense: drop housekeeping + noise pushes BEFORE any
   // other check. Six other modules call this function (briefing,
@@ -308,7 +318,7 @@ export async function sendPushNotification(
   // serial loop's `continue`.
   const sem = new Semaphore(PUSH_FANOUT_CONCURRENCY);
   const results = await sem.all(
-    subscriptions.map((sub) => () => deliverToSubscription(userId, sub, channelPayload, category)),
+    subscriptions.map((sub) => () => deliverToSubscription(userId, sub, webPayload, category)),
   );
   const attempted = results.filter((r) => r.attempted).length;
   const accepted = results.filter((r) => r.delivered).length;
@@ -345,6 +355,7 @@ async function deliverToSubscription(
     url?: string;
     notificationId?: string;
     attentionItemId?: string;
+    bellNotificationId?: string;
   },
   category: NotifCategory,
 ): Promise<{ attempted: boolean; delivered: boolean }> {

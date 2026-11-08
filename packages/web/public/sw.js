@@ -91,6 +91,21 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+// OS tag for one bell notification. An open tab tags its own notification for
+// the same row identically (src/lib/in-page-alerts.ts notificationTag); the tab
+// stays quiet while this browser holds a push subscription, and the shared tag
+// lets the browser collapse a same-row duplicate. A push without the id (older
+// server, or no bell row) stays untagged, exactly as before.
+const NOTIFICATION_TAG_PREFIX = "klorn-notification:";
+const NOTIFICATION_ID_MAX = 200;
+
+function notificationTag(id) {
+  if (typeof id !== "string" || id.length === 0 || id.length > NOTIFICATION_ID_MAX) {
+    return undefined;
+  }
+  return NOTIFICATION_TAG_PREFIX + id;
+}
+
 // Push notifications
 self.addEventListener("push", (event) => {
   console.log("[SW] Push event received!", event.data ? "has data" : "no data");
@@ -129,6 +144,7 @@ self.addEventListener("push", (event) => {
       // One-tap "Later"/"Mute" buttons for firewall interrupts (server only
       // sends these when the push maps 1:1 to an attention item).
       actions: Array.isArray(data.actions) ? data.actions : undefined,
+      tag: notificationTag(data.bellNotificationId),
       data: {
         url: data.url || "/chat",
         deliveryId: data.deliveryId || null,
