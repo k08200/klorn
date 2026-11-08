@@ -333,6 +333,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "judge/judge-context.ts",
     "judge/label-correction.ts",
     "judge/rejudge-open-items.ts",
+    "judge/user-outcome.ts", // one item by id: source and sourceId to stamp, never shown
     "learning/learned-rule-store.ts",
     "mail/proactive-drafts.ts", // OPEN PUSH email items, ids only
     "mcp/set-tier.ts",

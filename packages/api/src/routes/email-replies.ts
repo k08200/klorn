@@ -14,6 +14,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import type { CallPriority } from "../billing/quota-limiter.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
 import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
@@ -718,6 +719,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       await recordContactEngagement(uid, to, "outbound");
       // The row's reply chip flips to "replied" — a recorded fact.
       await markEmailReplied(uid, dbEmail.id);
+      noteEmailOutcome(uid, dbEmail.id, "REPLIED");
       // And the thread joins "waiting on" until they answer (sent-messages.ts).
       if (result.messageId) {
         await recordSentMessage(uid, {

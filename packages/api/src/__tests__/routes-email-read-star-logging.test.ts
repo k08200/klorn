@@ -32,6 +32,8 @@ vi.mock("../db.js", () => {
       update: db.emailUpdate,
       updateMany: db.emailUpdateMany,
     },
+    // mark-read and star stamp the decision ledger (judge/user-outcome.ts).
+    decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
     user: {
       findUnique: vi.fn(async () => ({
         id: "user-1",

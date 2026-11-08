@@ -68,6 +68,7 @@ import {
   TODAY_PUSH_WINDOW_HOURS,
   todayPushCutoff,
 } from "../judge/today-push-window.js";
+import { noteAttentionItemOutcome, noteEmailOutcome } from "../judge/user-outcome.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
@@ -1227,6 +1228,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         return { ok: false, message: "Attention item not found." };
       }
 
+      noteAttentionItemOutcome(userId, id, "SNOOZED");
       return { ok: true, snoozedUntil: snoozeDate.toISOString() };
     },
   );
@@ -1256,6 +1258,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         return { ok: false, message: "Attention item not found." };
       }
 
+      noteAttentionItemOutcome(userId, id, "DISMISSED");
       return { ok: true };
     },
   );
@@ -1276,11 +1279,15 @@ export async function firewallRoutes(app: FastifyInstance) {
       request,
       reply,
     ): Promise<AttentionByEmailDismissResponse | AttentionByEmailErrorResponse> => {
-      const result = await dismissEmailAttention(getUserId(request), request.params.emailId);
+      const userId = getUserId(request);
+      const result = await dismissEmailAttention(userId, request.params.emailId);
       if (!result.ok) {
         reply.code(404);
         return { ok: false, code: "not_found", message: EMAIL_NOT_FOUND_MESSAGE };
       }
+      // ok means the mail is the caller's own row (resolved by id), so the
+      // param is its EmailMessage id. alreadyClear changed nothing: no stamp.
+      if (!result.alreadyClear) noteEmailOutcome(userId, request.params.emailId, "DISMISSED");
       return { ok: true, itemId: result.itemId, alreadyClear: result.alreadyClear };
     },
   );
@@ -1301,15 +1308,13 @@ export async function firewallRoutes(app: FastifyInstance) {
           message: "snoozeUntil must be a future ISO datetime.",
         };
       }
-      const result = await snoozeEmailAttention(
-        getUserId(request),
-        request.params.emailId,
-        snoozeDate,
-      );
+      const userId = getUserId(request);
+      const result = await snoozeEmailAttention(userId, request.params.emailId, snoozeDate);
       if (!result.ok) {
         reply.code(404);
         return { ok: false, code: "not_found", message: EMAIL_NOT_FOUND_MESSAGE };
       }
+      if (!result.alreadyClear) noteEmailOutcome(userId, request.params.emailId, "SNOOZED");
       return result.alreadyClear
         ? { ok: true, itemId: result.itemId, alreadyClear: true }
         : {

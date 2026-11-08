@@ -23,6 +23,7 @@ import {
   sendEmailPayloadHash,
 } from "../judge/attention-floor.js";
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
+import { noteReplyIfSent } from "../judge/user-outcome.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 
 /**
@@ -322,12 +323,23 @@ export async function chatRoutes(app: FastifyInstance) {
         // Should never happen — just enqueued in the committed txn.
         return { success: true, queued: true, autoAllowed: !!autoAllow };
       }
+      const runStartedAt = new Date();
       const outcome = await claimAndRunOutboxRow({
         ...outboxRow,
         conversationId: action.conversationId,
       });
 
       if (outcome.kind === "completed") {
+        // An approved reply is the user answering that mail. "completed" can
+        // still carry a provider refusal, so noteReplyIfSent only stamps when
+        // the send set repliedAt during this run. A send left queued for the
+        // worker is not stamped.
+        if (action.toolName === "send_email") {
+          // A legacy string row can parse to null; never throw after the send.
+          const inReplyTo = (toolArgs as { in_reply_to_email_id?: unknown } | null)
+            ?.in_reply_to_email_id;
+          if (typeof inReplyTo === "string") noteReplyIfSent(userId, inReplyTo, runStartedAt);
+        }
         return { success: true, result: outcome.result, autoAllowed: !!autoAllow };
       }
       if (outcome.kind === "dead") {

@@ -13,6 +13,7 @@ import { recordEvent } from "../analytics.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
@@ -437,6 +438,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       where: { id: email.id },
       data: { isRead: readVal },
     });
+    // The Mac reader marks every mail it shows; mobile marks an unread one on
+    // open. Mark-unread is not an open.
+    if (readVal) noteEmailOutcome(uid, email.id, "OPENED");
     return { success: true };
   });
 
@@ -470,6 +474,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       where: { id: email.id },
       data: { isStarred: starVal },
     });
+    if (starVal) noteEmailOutcome(uid, email.id, "STARRED");
     return { success: true };
   });
 
@@ -502,6 +507,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         // Gmail not connected — just remove from DB
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
+        noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
@@ -510,7 +516,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: `Gmail delete failed: ${gErr.message || "unknown"}` });
     }
 
-    // Gmail succeeded — DB already cleaned by trashEmail()
+    // Gmail succeeded — DB already cleaned by trashEmail(). The ledger keys on
+    // the id string, not the row, so it still takes the stamp. Trash counts as
+    // ARCHIVED: either way the mail left the inbox.
+    noteEmailOutcome(uid, email.id, "ARCHIVED");
     return { success: true };
   });
 
@@ -565,6 +574,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
         void recordEvent(uid, "queue_action", { action: "archive" });
+        noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
@@ -575,6 +585,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
 
     // Retention analytics: archiving is the core "I handled this card" signal.
     void recordEvent(uid, "queue_action", { action: "archive" });
+    noteEmailOutcome(uid, email.id, "ARCHIVED");
     return { success: true };
   });
 
