@@ -2,11 +2,13 @@
  * The `alert` tag on a real-time `notification` frame.
  *
  * The Windows desktop shell (apps/desktop-win) cannot rely on Web Push inside
- * WebView2, so it turns real-time frames into OS banners — but only frames the
- * server tags here: PUSH-lane mail ("push") and a meeting starting soon
- * ("meeting"). The tag follows the same gate Web Push uses (category opt-out +
- * quiet hours, notification-prefs.ts), so a desktop banner never fires where a
- * web push would have been suppressed. The bell row itself is unaffected.
+ * WebView2, so it turns real-time frames into OS banners — but only frames
+ * the server tags here: PUSH-lane mail ("push") and a meeting starting soon
+ * ("meeting"). An open browser tab without a Web Push subscription does the
+ * same (packages/web lib/in-page-alerts.ts). The tag follows the same gate Web
+ * Push uses (category opt-out + quiet hours, notification-prefs.ts), so a
+ * desktop banner never fires where a web push would have been suppressed. The
+ * bell row itself is unaffected.
  */
 
 import type { DesktopAlertKind } from "@klorn/contract";

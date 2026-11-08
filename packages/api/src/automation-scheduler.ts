@@ -887,6 +887,31 @@ export async function ensureUrgentEmailNotification(
   return notification;
 }
 
+/**
+ * The device push for an urgent-mail bell row (the winner of
+ * ensureUrgentEmailNotification). Native deep link only when the push is about
+ * ONE mail; a batch keeps opening the briefing. No pendingActionId here (no
+ * draft lookup on the sweep's hot path). `bellNotificationId` names the row,
+ * so the web push's OS tag matches the one an open tab uses for it.
+ */
+export function urgentMailPushPayload(input: {
+  notificationId: string;
+  title: string;
+  body: string;
+  leads: ReadonlyArray<{ id: string }>;
+  attentionItemId: string | null;
+}) {
+  const { notificationId, title, body, leads, attentionItemId } = input;
+  return {
+    title,
+    body,
+    url: "/briefing",
+    attentionItemId: attentionItemId ?? undefined,
+    bellNotificationId: notificationId,
+    ...(leads.length === 1 ? { emailId: leads[0].id } : {}),
+  };
+}
+
 async function runAutomations() {
   recordSchedulerTick("automation");
   // Skip if this process is still running the previous tick (see schedulerInFlight).
@@ -1882,16 +1907,13 @@ async function runUserCycle(
 
               sendPushNotification(
                 config.userId,
-                {
+                urgentMailPushPayload({
+                  notificationId: notification.id,
                   title: notificationCopy(notificationLanguage).urgentMailTitle,
                   body: userBody,
-                  url: "/briefing",
-                  attentionItemId: attentionItemId ?? undefined,
-                  // Native deep link only when the push is about ONE mail; a
-                  // batch keeps opening the briefing. No pendingActionId at
-                  // this call site (no draft lookup on the sweep's hot path).
-                  ...(newUrgent.length === 1 ? { emailId: newUrgent[0].id } : {}),
-                },
+                  leads: newUrgent,
+                  attentionItemId,
+                }),
                 "email_urgent",
                 // Unawaited (don't block the tick) but guarded: an
                 // unhandled rejection from the push internals would

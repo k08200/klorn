@@ -44,7 +44,7 @@ async function addNotification(
     link?: string;
     alert?: DesktopAlertKind;
   },
-) {
+): Promise<{ id: string }> {
   // Persist to DB
   const data: Record<string, unknown> = {
     userId,
@@ -70,6 +70,7 @@ async function addNotification(
     createdAt: entry.createdAt.toISOString(),
     ...(notif.alert ? { alert: notif.alert } : {}),
   });
+  return { id: entry.id };
 }
 
 export interface NotificationDTO {
@@ -227,7 +228,7 @@ async function checkUpcomingMeetings() {
               ? `Join link: ${meeting.meetingLink} [${meeting.id}]`
               : `${meeting.summary} starts soon [${meeting.id}]`;
 
-            await addNotification(userId, {
+            const bellRow = await addNotification(userId, {
               type: "meeting",
               title: `Meeting in ${Math.ceil(minutesUntil)} min: ${meeting.summary}`,
               message: msg,
@@ -251,6 +252,9 @@ async function checkUpcomingMeetings() {
                   title: `Meeting in ${Math.ceil(minutesUntil)} min`,
                   body: meeting.summary,
                   url: meeting.meetingLink || "/briefing",
+                  // Web push tags its OS notification with the bell row, as
+                  // an open tab does, so the meeting shows once.
+                  bellNotificationId: bellRow.id,
                 },
                 "meeting",
               );
