@@ -10,6 +10,7 @@ import type { InboxOption } from "@klorn/contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CalendarEventWire,
+  coverMeter,
   dayRangeInZone,
   eventBarColor,
   eventPhase,
@@ -491,5 +492,40 @@ describe("Today's calm header (founder decision 2026-10-24)", () => {
     expect(todayWaitingKey(1)).toBe("today.strip.waiting.one");
     expect(todayWaitingKey(2)).toBe("today.strip.waiting.many");
     expect(todayWaitingKey(920)).toBe("today.strip.waiting.many");
+  });
+});
+
+describe("cover screen interruption meter (Fold cover, < 360px)", () => {
+  // Shown only when the Today read already carries the v3 budget (flag OFF
+  // today): an absent field or "no limit" renders nothing — never a guess.
+  it("is nothing when the read carries no budget", () => {
+    expect(coverMeter(undefined)).toBeNull();
+    expect(coverMeter(null)).toBeNull();
+  });
+
+  it("is nothing when the budget has no limit", () => {
+    expect(coverMeter({ limit: null, used: 3, day: "2026-11-07" })).toBeNull();
+  });
+
+  it("is nothing for a malformed budget", () => {
+    expect(coverMeter({ limit: 0, used: 0, day: "2026-11-07" })).toBeNull();
+    expect(coverMeter({ limit: 5, used: -1, day: "2026-11-07" })).toBeNull();
+    expect(coverMeter({ limit: Number.NaN, used: 1, day: "2026-11-07" })).toBeNull();
+  });
+
+  it("reports the server's own used and limit", () => {
+    expect(coverMeter({ limit: 5, used: 2, day: "2026-11-07" })).toEqual({
+      used: 2,
+      limit: 5,
+      ratio: 0.4,
+    });
+  });
+
+  it("caps the bar at full when the day ran over, but keeps the real count", () => {
+    expect(coverMeter({ limit: 5, used: 7, day: "2026-11-07" })).toEqual({
+      used: 7,
+      limit: 5,
+      ratio: 1,
+    });
   });
 });

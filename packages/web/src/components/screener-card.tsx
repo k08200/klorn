@@ -63,9 +63,7 @@ export default function ScreenerCard() {
           {t("screener.count", { count: String(pending.length) })}
         </span>
       </header>
-      <p className="mt-1.5 text-role-label font-normal leading-5 text-ink-mid">
-        {t("screener.subtitle")}
-      </p>
+      <p className="mt-1.5 text-role-meta leading-5 text-ink-mid">{t("screener.subtitle")}</p>
 
       <ul className="mt-4 space-y-1.5">
         {rows.map((row) => {

@@ -801,8 +801,9 @@ function EmailDetailView() {
     undoLastAction: undoNotice ? () => void undoLastAction() : null,
   });
 
-  // `r` on the list opens the mail with ?focus=reply: land on the reply entry.
-  const focusReplyOnOpen = keyboardTriage && searchParams?.get("focus") === "reply";
+  // ?focus=reply lands on the reply entry: `r` on the list (KEYBOARD_TRIAGE)
+  // and Reply on Today's cover screen both open the mail this way.
+  const focusReplyOnOpen = searchParams?.get("focus") === "reply";
   const emailLoaded = email !== null;
   useEffect(() => {
     if (focusReplyOnOpen && emailLoaded) focusReplyEntry();

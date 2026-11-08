@@ -197,7 +197,7 @@ struct WindowRowBody: View {
             }
         } else {
             Text(content.snippet ?? " ")
-                .font(Theme.Typo.label.weight(.regular))
+                .font(Theme.Typo.meta)
                 .foregroundStyle(Theme.textDim).lineLimit(1)
         }
     }
