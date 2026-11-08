@@ -110,6 +110,14 @@ jobs:
       - name: Sitemap coverage
         run: node .github/scripts/check-sitemap.mjs
 
+      # Blog posts exist only in English, but the localized blog listings put
+      # translated titles into their BlogPosting JSON-LD — declaring a French
+      # or Korean headline for an English document. Visible titles stay
+      # localized; structured data carries the post's English headline and
+      # inLanguage "en", on every listing and on the post pages themselves.
+      - name: Blog JSON-LD language
+        run: node .github/scripts/check-blog-jsonld.mjs
+
       # P1 of the productization plan added the design tokens; P2 migrates onto
       # them. This ratchet keeps the gap from widening meanwhile: no new
       # text-[Npx], raw palette colours, raw <button> in app pages, or retired
