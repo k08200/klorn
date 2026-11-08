@@ -124,11 +124,12 @@
 "prefs.section.about" = "정보";
 
 "prefs.banners" = "이 Mac에서 macOS 배너 표시";
-"prefs.banners.detail" = "새 PUSH 메일마다 보낸 사람과 제목만 담은 배너를 띄웁니다. 이 Mac에만 적용되는 마스터 스위치로, 끄면 위 항목 설정과 무관하게 배너가 모두 사라지며 메인 창의 PUSH 개수는 계속 갱신됩니다.";
+"prefs.banners.detail" = "새 PUSH·MEETING 메일마다 보낸 사람과 제목만 담은 배너를 띄웁니다. 이 Mac에만 적용되는 마스터 스위치로, 끄면 위 항목 설정과 무관하게 배너가 모두 사라지며 메인 창의 PUSH 개수는 계속 갱신됩니다.";
 "prefs.banners.denied" = "macOS가 Klorn 알림을 막고 있습니다. 시스템 설정 ▸ 알림에서 허용하세요.";
 "prefs.banners.openSystemSettings" = "시스템 설정 열기";
 "prefs.section.support" = "앱 및 지원";
 "push.announce" = "새 PUSH 메일 %d건";
+"push.announce.meeting" = "새 MEETING 메일 %d건";
 "prefs.launchAtLogin" = "로그인할 때 Klorn 시작";
 "prefs.launchAtLogin.unavailable.label" = "로그인 시 시작";
 "prefs.launchAtLogin.unavailable.value" = "패키지 앱에서만 가능";
@@ -188,7 +189,7 @@
 "auto.preset.detail" = "중요한 것만: 답장이 필요한 메일과 캘린더 일정만 알립니다. 나머지는 배너 없이 바에만 쌓입니다.";
 
 "auto.notify.emailUrgent" = "급한 메일";
-"auto.notify.emailUrgent.detail" = "Klorn이 PUSH로 분류한 메일 — 상대가 답을 기다리고 있습니다.";
+"auto.notify.emailUrgent.detail" = "Klorn이 PUSH나 MEETING으로 분류한 메일 — 상대가 답을 기다리고 있습니다.";
 "auto.notify.meeting" = "회의";
 "auto.notify.meeting.detail" = "곧 시작하는 캘린더 일정.";
 "auto.notify.taskDue" = "마감 임박";

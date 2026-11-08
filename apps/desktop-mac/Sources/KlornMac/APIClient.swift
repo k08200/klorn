@@ -33,8 +33,11 @@ struct APIClient: Sendable {
     }
 
     /// Decode a GET response. `authed` attaches the Bearer token when present.
-    func get<T: Decodable>(_ path: String, authed: Bool = true, as _: T.Type = T.self) async throws -> T {
-        let data = try await data(path, authed: authed)
+    /// `timeout` (seconds) overrides URLSession's 60 s default for one request.
+    func get<T: Decodable>(
+        _ path: String, authed: Bool = true, timeout: TimeInterval? = nil, as _: T.Type = T.self
+    ) async throws -> T {
+        let data = try await data(path, authed: authed, timeout: timeout)
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
@@ -247,10 +250,12 @@ struct APIClient: Sendable {
         body: Data? = nil,
         contentType: String? = nil,
         authed: Bool = true,
-        headers: [String: String]? = nil
+        headers: [String: String]? = nil,
+        timeout: TimeInterval? = nil
     ) async throws -> Data {
         var req = URLRequest(url: try url(path))
         req.httpMethod = method
+        if let timeout { req.timeoutInterval = timeout }
         if let body { req.httpBody = body }
         if let contentType { req.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         if let headers {
