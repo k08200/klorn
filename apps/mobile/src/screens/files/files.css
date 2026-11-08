@@ -273,7 +273,7 @@
 .file-tile--large {
   width: 56px;
   height: 68px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   font-size: calc(12 * var(--u));
   padding-bottom: 10px;
 }

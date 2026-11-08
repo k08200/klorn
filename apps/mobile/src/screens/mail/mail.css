@@ -599,7 +599,7 @@
   right: 6px;
   width: var(--touch);
   height: var(--touch);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -725,7 +725,7 @@ html[data-large-text] .mail-row__top {
   z-index: 15;
   width: 56px;
   height: 56px;
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: var(--accent);
   color: var(--accent-ink);
   box-shadow: var(--fab-shadow);

@@ -5,7 +5,7 @@
  *   Sidebar (expanded ≥1024) — 248px, lanes + accounts, TabletLandscape artboard
  */
 import type { LiveTier } from "@klorn/contract";
-import { lazy, type MouseEvent, Suspense, useState } from "react";
+import { lazy, type MouseEvent, Suspense, useEffect, useState } from "react";
 import { useInboxes, useLaneCounts, usePendingApprovals } from "../api/queries";
 import { useI18n } from "../i18n/I18nProvider";
 import { useRouter } from "../router/Router";
@@ -184,6 +184,10 @@ export function AssistantFab() {
   const { route } = useRouter();
   const [open, setOpen] = useState(false);
   const [used, setUsed] = useState(false);
+  // A link inside the thread (See plans) navigates: the sheet must not stay over the new screen.
+  const here = formatRoute(route);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close on every route change
+  useEffect(() => setOpen(false), [here]);
   if (route.name === "assistant") return null;
   return (
     <>

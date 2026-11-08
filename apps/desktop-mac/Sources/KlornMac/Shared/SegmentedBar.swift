@@ -65,7 +65,7 @@ private struct SegmentButton<Value: Hashable>: View {
             .frame(height: 28)
             .background(
                 selected ? Theme.surfaceHover : hovering ? Theme.surfaceRaised : .clear,
-                in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                in: RoundedRectangle(cornerRadius: Theme.Radius.control))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -89,8 +89,8 @@ struct SourceBadge: View {
             .font(glyph.count > 2 || compact ? Theme.Typo.monogramTight : Theme.Typo.monogram)
             .foregroundStyle(Theme.textDim)
             .frame(width: side, height: side)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.line))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip).strokeBorder(Theme.line))
             .accessibilityHidden(true)
     }
 }

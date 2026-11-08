@@ -19,7 +19,7 @@ import { formatFileSize } from "./model";
 import { fileOpenAction, folderHref } from "./open";
 import { useFileDownload } from "./use-download";
 
-const ROW_CLASS = "-mx-3 flex min-h-13 items-center gap-3 rounded-card px-3 py-2";
+const ROW_CLASS = "-mx-3 flex min-h-13 items-center gap-3 rounded-control px-3 py-2";
 const LINK_ROW_CLASS = `focus-ring ${ROW_CLASS} transition-colors duration-120 ease-fluid hover:bg-surface-hover`;
 // The same 12px bleed as the link and plain rows (-mx-3 px-3), so every
 // row's hover fill and focus ring reach equally far. The Button primitive
@@ -28,7 +28,7 @@ const LINK_ROW_CLASS = `focus-ring ${ROW_CLASS} transition-colors duration-120 e
 // Button is inline-flex, and on the baseline its line box would add a pixel
 // or two below it. The link rows' height and padding go on the body: the
 // Button's own min-height is its frame's, so setting one on it would race it.
-const BUTTON_ROW_CLASS = "-mx-3 w-[calc(100%+1.5rem)] rounded-card align-top";
+const BUTTON_ROW_CLASS = "-mx-3 w-[calc(100%+1.5rem)] rounded-control align-top";
 const BUTTON_ROW_BODY =
   "-mx-0.5 flex min-h-13 w-[calc(100%+0.25rem)] min-w-0 items-center gap-3 py-2 text-left";
 
@@ -64,9 +64,9 @@ export function FileRow({ file, timeZone, onOpenFolder }: FileRowProps) {
         <FileGlyph folder={file.isFolder} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body text-ink">{file.name}</span>
+        <span className="truncate text-role-body text-ink">{file.name}</span>
         {(status ?? meta) && (
-          <span id={metaId} className="text-caption text-ink-muted">
+          <span id={metaId} className="text-role-caption text-ink-muted">
             {status ?? meta}
           </span>
         )}
@@ -160,7 +160,7 @@ function DownloadRow({
         <p
           id={errorId}
           role="alert"
-          className="pb-2 text-caption text-state-danger-ink [word-break:keep-all]"
+          className="pb-2 text-role-caption text-state-danger-ink [word-break:keep-all]"
         >
           {t(download.errorKey, { name: file.name })}
         </p>

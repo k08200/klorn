@@ -15,7 +15,7 @@
  * SILENT precision) or leaking low-trust QUEUE mail into AUTO.
  *
  * Usage:
- *   OPENROUTER_API_KEY=... JUDGE_MODEL=google/gemini-2.5-flash \
+ *   ANTHROPIC_API_KEY=... JUDGE_MODEL=claude-haiku-5-5 \
  *   DATABASE_URL=postgresql://eval:eval@localhost/eval \
  *   npx tsx scripts/threshold-sweep.ts [--extract] [--concurrency=2] [--delay=500]
  *

@@ -1,5 +1,6 @@
 import type { FirewallResponse, InboxOption } from "@klorn/contract";
 import { describe, expect, it } from "vitest";
+import { ApiError } from "../../api/client";
 import { MOCK_INBOXES, mockFirewall } from "../../api/mock/fixtures";
 import { canSubmit, initialLane, SHEET_LANES, senderLabel, submitPlan } from "./lane-sheet-model";
 import {
@@ -8,8 +9,10 @@ import {
   allLanesTotal,
   attentionByEmail,
   avatarTone,
+  draftErrorKey,
   flattenPages,
   groupByDay,
+  mailWriteBlocked,
   monogram,
   neighbours,
   parseRecipients,
@@ -19,6 +22,7 @@ import {
   replySubject,
   sendAccountId,
   sendableAccounts,
+  sendFailure,
   sendPayloadCanonical,
   sendPayloadHash,
   splitSender,
@@ -260,5 +264,77 @@ describe("subscriptions", () => {
       mail: 20,
       readPercent: 50,
     });
+  });
+});
+
+describe("write refusals: only the entitlement refusal says Pro", () => {
+  const http = (status: number, serverCode: string | null = null) =>
+    new ApiError("http", status, `HTTP ${status}`, null, serverCode);
+  const proRefusal = http(403, "ENTITLEMENT_REQUIRED");
+  const offline = new ApiError("network", 0, "offline", null);
+
+  it("a draft refusal that carries ENTITLEMENT_REQUIRED needs Pro", () => {
+    expect(draftErrorKey(proRefusal)).toBe("reader.draft.notEntitled");
+  });
+
+  it("any other 403 is the generic draft error, not a Pro prompt", () => {
+    expect(draftErrorKey(http(403))).toBe("reader.draft.unavailable");
+    expect(draftErrorKey(http(403, "OTHER"))).toBe("reader.draft.unavailable");
+    expect(draftErrorKey(http(402))).toBe("reader.draft.unavailable");
+  });
+
+  it("keeps offline, rate limit and unknown failures apart", () => {
+    expect(draftErrorKey(offline)).toBe("reader.draft.offline");
+    expect(draftErrorKey(http(429))).toBe("reader.draft.rateLimited");
+    expect(draftErrorKey(new Error("boom"))).toBe("reader.draft.unavailable");
+  });
+
+  it("a send refused for the plan says Pro; nothing about it is 'unknown'", () => {
+    expect(sendFailure(proRefusal, { kind: "reply", accountId: null })).toEqual({
+      unknown: false,
+      message: "reader.draft.notEntitled",
+    });
+  });
+
+  it("any other 403 on send is the plain failure", () => {
+    expect(sendFailure(http(403), { kind: "new", accountId: null })).toEqual({
+      unknown: false,
+      message: "reader.send.failed",
+    });
+  });
+
+  it("keeps the send-specific outcomes", () => {
+    expect(sendFailure(http(502), { kind: "reply", accountId: null })).toEqual({
+      unknown: true,
+      message: "reader.send.unknown",
+    });
+    expect(sendFailure(offline, { kind: "new", accountId: null }).message).toBe(
+      "reader.send.offline",
+    );
+    expect(sendFailure(http(501), { kind: "new", accountId: null }).message).toBe(
+      "reader.send.unsupportedAccount",
+    );
+    expect(sendFailure(http(501), { kind: "reply", accountId: null }).message).toBe(
+      "reader.send.failed",
+    );
+    expect(sendFailure(http(404), { kind: "new", accountId: "acc1" }).message).toBe(
+      "reader.send.accountGone",
+    );
+    expect(sendFailure(http(404), { kind: "new", accountId: null }).message).toBe(
+      "reader.send.failed",
+    );
+  });
+});
+
+describe("mailWriteBlocked (no editor for a mail that could not be sent)", () => {
+  it("is true only when the server says this account is not entitled", () => {
+    expect(mailWriteBlocked({ entitled: false })).toBe(true);
+  });
+
+  it("is false for a paid account, and while the answer is unknown or absent", () => {
+    expect(mailWriteBlocked({ entitled: true })).toBe(false);
+    expect(mailWriteBlocked({})).toBe(false); // an older server, or the paywall off
+    expect(mailWriteBlocked(undefined)).toBe(false); // /me still loading
+    expect(mailWriteBlocked(null)).toBe(false);
   });
 });

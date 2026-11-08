@@ -11,7 +11,7 @@
  * Two invariants pinned here:
  *   1. the upstream message survives into the operator log and the error chain,
  *      with key-shaped tokens redacted and the user-facing message unchanged;
- *   2. a deployment with no failover provider (single OpenRouter key) never
+ *   2. a deployment with no failover provider (single Anthropic key) never
  *      locks its ONLY provider out for an hour on an unspecified 429 — that
  *      turns a transient upstream blip into a fleet-wide outage of our own
  *      making (judge degrades to the keyword fallback, which structurally
@@ -47,9 +47,9 @@ describe("redactProviderMessage", () => {
   });
 
   it("redacts key-shaped tokens so an operator log never becomes a secret leak", () => {
-    expect(redactProviderMessage(new Error("bad key sk-or-v1-abc123def456ghi789 rejected"))).toBe(
-      "bad key sk-*** rejected",
-    );
+    expect(
+      redactProviderMessage(new Error("bad key sk-ant-api03-abc123def456ghi789 rejected")),
+    ).toBe("bad key sk-*** rejected");
     expect(redactProviderMessage(new Error("Authorization: Bearer abc123def456ghi789jkl"))).toBe(
       "Authorization: Bearer ***",
     );
@@ -75,15 +75,18 @@ describe("markKeyLimited — upstream reason survives into the operator log", ()
 
   it("logs the upstream provider message alongside the classification", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    markKeyLimited("openrouter:env", new Error("429 Rate limit exceeded: free-models-per-day"));
+    markKeyLimited(
+      "anthropic:env",
+      new Error("429 rate_limit_error: This request would exceed your rate limit"),
+    );
     const line = warn.mock.calls.map((c) => String(c[0])).join("\n");
     expect(line).toContain("[MODEL-FALLBACK]");
-    expect(line).toContain("429 Rate limit exceeded: free-models-per-day");
+    expect(line).toContain("429 rate_limit_error: This request would exceed your rate limit");
   });
 
   it("still logs when the caller passed no error at all", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    markKeyLimited("openrouter:env");
+    markKeyLimited("anthropic:env");
     expect(warn.mock.calls.length).toBeGreaterThan(0);
   });
 });
@@ -109,18 +112,18 @@ describe("markKeyLimited — cooldown when the chain has no failover", () => {
   };
 
   it("keeps the 1-hour ambiguous cooldown when a failover provider exists", () => {
-    markKeyLimited("openrouter:env", new Error("429 Too Many Requests"), { hasFailover: true });
-    expect(cooldownMs("openrouter:env")).toBeGreaterThan(50 * 60_000);
+    markKeyLimited("anthropic:env", new Error("429 Too Many Requests"), { hasFailover: true });
+    expect(cooldownMs("anthropic:env")).toBeGreaterThan(50 * 60_000);
   });
 
   it("defaults to the failover-present behaviour when the option is omitted", () => {
-    markKeyLimited("openrouter:env", new Error("429 Too Many Requests"));
-    expect(cooldownMs("openrouter:env")).toBeGreaterThan(50 * 60_000);
+    markKeyLimited("anthropic:env", new Error("429 Too Many Requests"));
+    expect(cooldownMs("anthropic:env")).toBeGreaterThan(50 * 60_000);
   });
 
   it("shortens the ambiguous cooldown to 5 minutes when this is the only provider", () => {
-    markKeyLimited("openrouter:env", new Error("429 Too Many Requests"), { hasFailover: false });
-    const ms = cooldownMs("openrouter:env");
+    markKeyLimited("anthropic:env", new Error("429 Too Many Requests"), { hasFailover: false });
+    const ms = cooldownMs("anthropic:env");
     expect(ms).toBeGreaterThan(4 * 60_000);
     expect(ms).toBeLessThanOrEqual(5 * 60_000 + 1);
   });
@@ -128,19 +131,19 @@ describe("markKeyLimited — cooldown when the chain has no failover", () => {
   it("still honours an EXPLICIT per-day quota signal with no failover", () => {
     // The provider said "per day" — retrying before the UTC reset only burns
     // failed calls. Only the *ambiguous* default is shortened.
-    markKeyLimited("openrouter:env", new Error("429 rate limit exceeded per day"), {
+    markKeyLimited("anthropic:env", new Error("429 rate limit exceeded per day"), {
       hasFailover: false,
     });
-    const until = getProviderCooldownInfo("openrouter:env").keyLimitedUntil;
+    const until = getProviderCooldownInfo("anthropic:env").keyLimitedUntil;
     expect(until?.getUTCDate()).toBe(3);
     expect(until?.getUTCHours()).toBe(0);
   });
 
   it("leaves the per-minute RPM cooldown at 5 minutes either way", () => {
-    markKeyLimited("openrouter:env", new Error("429 rate limit exceeded per minute"), {
+    markKeyLimited("anthropic:env", new Error("429 rate limit exceeded per minute"), {
       hasFailover: false,
     });
-    expect(cooldownMs("openrouter:env")).toBeLessThanOrEqual(5 * 60_000 + 1);
+    expect(cooldownMs("anthropic:env")).toBeLessThanOrEqual(5 * 60_000 + 1);
   });
 });
 
@@ -159,21 +162,21 @@ describe("hasFailoverProvider — an already cooled-down peer is not a failover"
 
   it("reports a failover when a healthy peer is in the chain", async () => {
     const { hasFailoverProviderForTest } = await import("../llm/openai.js");
-    const chain = [provider("openrouter:env"), provider("gemini:env")];
-    expect(hasFailoverProviderForTest(chain, provider("openrouter:env"))).toBe(true);
+    const chain = [provider("anthropic:env"), provider("gemini:env")];
+    expect(hasFailoverProviderForTest(chain, provider("anthropic:env"))).toBe(true);
   });
 
   it("reports none when the only peer is already cooled down", async () => {
     const { hasFailoverProviderForTest } = await import("../llm/openai.js");
     markKeyLimited("gemini:env", new Error("429 Too Many Requests"));
-    const chain = [provider("openrouter:env"), provider("gemini:env")];
-    expect(hasFailoverProviderForTest(chain, provider("openrouter:env"))).toBe(false);
+    const chain = [provider("anthropic:env"), provider("gemini:env")];
+    expect(hasFailoverProviderForTest(chain, provider("anthropic:env"))).toBe(false);
   });
 
   it("reports none for a single-provider chain (the hosted single-key setup)", async () => {
     const { hasFailoverProviderForTest } = await import("../llm/openai.js");
-    const chain = [provider("openrouter:env")];
-    expect(hasFailoverProviderForTest(chain, provider("openrouter:env"))).toBe(false);
+    const chain = [provider("anthropic:env")];
+    expect(hasFailoverProviderForTest(chain, provider("anthropic:env"))).toBe(false);
   });
 });
 
@@ -191,7 +194,9 @@ describe("describeErrorChain — what a caller logs when it catches the wrapper"
   });
 
   it("redacts key material anywhere in the chain", () => {
-    const wrapper = new Error("wrapped", { cause: new Error("key sk-or-v1-abcdef123456 denied") });
+    const wrapper = new Error("wrapped", {
+      cause: new Error("key sk-ant-api03-abcdef123456 denied"),
+    });
     expect(describeErrorChain(wrapper)).toBe("wrapped (cause: key sk-*** denied)");
   });
 
@@ -210,7 +215,9 @@ describe("buildExhaustedError — user message stays clean, cause is preserved",
 
   it("attaches the upstream error as `cause` without leaking it to the user", async () => {
     const { buildExhaustedError } = await import("../llm/openai.js");
-    const upstream = new Error("429 Rate limit exceeded: 20 per 1m for key sk-or-v1-secret123456");
+    const upstream = new Error(
+      "429 Rate limit exceeded: 20 per 1m for key sk-ant-api03-secret123456",
+    );
     const err = buildExhaustedError([], upstream);
 
     expect(err.name).toBe("AllProvidersExhaustedError");
@@ -219,7 +226,7 @@ describe("buildExhaustedError — user message stays clean, cause is preserved",
     expect(err.cause).toBe(upstream);
     // User-facing: no provider body, no key material.
     expect(err.message).toContain("All AI providers are unavailable");
-    expect(err.message).not.toContain("sk-or-v1");
+    expect(err.message).not.toContain("sk-ant");
     expect(err.message).not.toContain("20 per 1m");
   });
 });

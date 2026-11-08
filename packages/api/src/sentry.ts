@@ -10,10 +10,20 @@
  * - Agent cycle failures
  * - Gmail/Calendar sync failures
  * - LLM API errors
+ *
+ * Every outbound payload goes through security/sentry-scrub.ts first. That is
+ * four hooks, not one: a BYOK provider key travelling in a request URL reaches
+ * Sentry on breadcrumbs and spans, which `beforeSend` cannot see.
  */
 
 import * as Sentry from "@sentry/node";
 import { isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
+import {
+  scrubSentryBreadcrumb,
+  scrubSentryErrorEvent,
+  scrubSentrySpan,
+  scrubSentryTransaction,
+} from "./security/sentry-scrub.js";
 
 const DSN = process.env.SENTRY_DSN || "";
 const ENV = process.env.NODE_ENV || "development";
@@ -27,38 +37,14 @@ export function initSentry(): void {
     dsn: DSN,
     environment: ENV,
     tracesSampleRate: ENV === "production" ? 0.1 : 1.0,
-    beforeSend(event) {
-      // Strip sensitive data from events
-      if (event.request?.headers) {
-        delete event.request.headers.authorization;
-        delete event.request.headers.cookie;
-      }
-      // Scrub the URL query string — the OAuth callback's ?code=…&state=…
-      // (live Google authorization code + signed state JWT) would otherwise
-      // ship to Sentry when the callback throws (security audit 2026-07-20).
-      if (event.request?.url) {
-        event.request.url = event.request.url.split("?")[0];
-      }
-      if (event.request?.query_string) {
-        event.request.query_string = undefined;
-      }
-      // Scrub request bodies — a captured error during a POST can otherwise
-      // ship submitted credentials (playground apiKey, login password, OAuth
-      // token) to Sentry. Redact known fields; drop a raw-string body whole.
-      if (event.request?.data) {
-        const data = event.request.data;
-        if (typeof data === "object" && data !== null) {
-          for (const field of ["apiKey", "password", "token", "openRouterApiKey", "geminiApiKey"]) {
-            if (field in (data as Record<string, unknown>)) {
-              (data as Record<string, unknown>)[field] = "[REDACTED]";
-            }
-          }
-        } else {
-          event.request.data = undefined;
-        }
-      }
-      return event;
-    },
+    // All four hooks, because a credential reaches Sentry by four routes and
+    // scrubbing one of them is what let a BYOK Gemini key ride out on a
+    // breadcrumb and a span while `beforeSend` looked clean. The logic lives
+    // in security/sentry-scrub.ts so it can be tested without a DSN.
+    beforeSend: (event) => scrubSentryErrorEvent(event),
+    beforeBreadcrumb: (breadcrumb) => scrubSentryBreadcrumb(breadcrumb),
+    beforeSendSpan: (span) => scrubSentrySpan(span),
+    beforeSendTransaction: (event) => scrubSentryTransaction(event),
   });
 
   initialized = true;

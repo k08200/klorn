@@ -265,7 +265,7 @@ export function SwipeRow(props: SwipeRowProps) {
   return (
     <div
       ref={rootRef}
-      className={`relative rounded-card ${dragging ? "overflow-hidden" : ""} ${className}`}
+      className={`relative rounded-control ${dragging ? "overflow-hidden" : ""} ${className}`}
       // Vertical scroll and pinch-zoom stay the browser's (WCAG 1.4.4); sideways is ours.
       style={{ touchAction: "pan-y pinch-zoom" }}
       onPointerDown={onPointerDown}
@@ -279,7 +279,7 @@ export function SwipeRow(props: SwipeRowProps) {
           aria-hidden="true"
           data-swipe-reveal={reveal.direction}
           data-swipe-armed={reveal.armed && !blocked ? "true" : "false"}
-          className={`pointer-events-none absolute inset-0 flex items-center gap-2 px-4 text-label ${
+          className={`pointer-events-none absolute inset-0 flex items-center gap-2 px-4 text-role-label ${
             reveal.direction === "right" ? "justify-start" : "justify-end"
           } ${revealTone} ${reduced.current ? "z-20" : "z-0"}`}
         >

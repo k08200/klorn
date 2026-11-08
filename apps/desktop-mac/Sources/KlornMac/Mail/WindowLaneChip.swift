@@ -24,14 +24,14 @@ struct WindowLaneChip: View {
         .frame(height: Self.height)
         .background(
             Theme.chipInk(tier).opacity(Theme.chipWashOpacity),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+            in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tier.label)
     }
 
     nonisolated static let height: CGFloat = 22
     nonisolated static let horizontalPadding: CGFloat = 8
-    nonisolated static let radius: CGFloat = Theme.Radius.sm
+    nonisolated static let radius: CGFloat = Theme.Radius.chip
     nonisolated static let dot: CGFloat = 6
     nonisolated static let gap: CGFloat = 6
     nonisolated static let fontSize: CGFloat = 12
@@ -82,25 +82,52 @@ struct ReaderMetaLine: View {
             signal: item.email?.signal, replyState: item.email?.replyState,
             draftReady: item.email?.draftReady ?? false)
         let source = WindowRowRules.showsAccounts(model.inboxes) ? item.email?.source : nil
-        HStack(spacing: Theme.s2) {
-            facts(parts: parts, source: source)
-            SenderLabelCorrectionMenu(
-                from: item.email?.from, signalWord: ReaderMetaRules.signalWord(item.email?.signal),
-                byUser: item.email?.signalByUser ?? false)
+        // A narrow reader (window floor 880) drops the account's words
+        // first (the badge keeps them as tooltip and spoken label), then
+        // moves the correction menu under the facts — never a squeezed
+        // address.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Theme.s2) {
+                facts(parts: parts, source: source, showsSourceLabel: true)
+                correction
+            }
+            // Chosen only when its ideal width fits, so render at it: a
+            // compressed pick drops the category word to nothing.
+            .fixedSize(horizontal: true, vertical: false)
+            HStack(spacing: Theme.s2) {
+                facts(parts: parts, source: source, showsSourceLabel: false)
+                correction
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: Theme.s1) {
+                facts(parts: parts, source: source, showsSourceLabel: false)
+                correction
+            }
         }
     }
 
+    private var correction: some View {
+        SenderLabelCorrectionMenu(
+            from: item.email?.from, signalWord: ReaderMetaRules.signalWord(item.email?.signal),
+            byUser: item.email?.signalByUser ?? false)
+    }
+
     /// Read as one element; the correction menu stays its own control.
-    private func facts(parts: [String], source: MailSource?) -> some View {
+    private func facts(
+        parts: [String], source: MailSource?, showsSourceLabel: Bool
+    ) -> some View {
         HStack(spacing: Theme.s2) {
             WindowLaneChip(tier: item.tier)
             if let source {
                 HStack(spacing: Theme.s1) {
                     SourceBadge(provider: source.provider, compact: true)
-                    Text(source.label)
-                        .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
-                        .lineLimit(1).truncationMode(.middle)
+                    if showsSourceLabel {
+                        Text(source.label)
+                            .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+                            .lineLimit(1)
+                    }
                 }
+                .help(source.label)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
                     sourceA11yLabel(provider: source.provider, label: source.label))

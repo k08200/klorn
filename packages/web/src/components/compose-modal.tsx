@@ -2,9 +2,11 @@
 
 import { type ChangeEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { API_BASE, getStoredAuthToken } from "../lib/api";
+import { isEntitlementResponse } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 import ErrorAlert from "./ui/error-alert";
 
@@ -25,7 +27,7 @@ function formatBytes(bytes: number): string {
 }
 
 const fieldClass =
-  "w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm text-ink outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
+  "w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 pointer-coarse:min-h-11 text-role-body text-ink outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
 
 export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const { toast } = useToast();
@@ -37,6 +39,8 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sending is Pro: a FREE user's 403 ENTITLEMENT_REQUIRED shows the upgrade notice.
+  const [proGated, setProGated] = useState(false);
   const toInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -49,6 +53,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
     setBody("");
     setFiles([]);
     setError(null);
+    setProGated(false);
     setSending(false);
   }, []);
 
@@ -160,6 +165,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
     setSending(true);
     setError(null);
+    setProGated(false);
     try {
       const form = new FormData();
       form.append("to", to.trim());
@@ -178,6 +184,12 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        // Expected for a FREE user, not a fault: no Sentry event.
+        if (isEntitlementResponse(res.status, payload)) {
+          setProGated(true);
+          setSending(false);
+          return;
+        }
         const message =
           (payload && typeof payload.error === "string" && payload.error) ||
           t("compose.error.sendFailed", { status: String(res.status) });
@@ -216,10 +228,10 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="panel-elevated flex max-h-[88vh] w-full max-w-xl origin-center flex-col overflow-hidden rounded-2xl border border-line/70 bg-surface-panel transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
+        className="panel-elevated flex max-h-[88vh] w-full max-w-xl origin-center flex-col overflow-hidden rounded-sheet border border-line/70 bg-surface-panel transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
       >
         <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
-          <h2 id={titleId} className="text-base font-semibold tracking-[-0.01em] text-ink">
+          <h2 id={titleId} className="text-role-title tracking-[-0.01em] text-ink">
             {t("compose.title")}
           </h2>
           <button
@@ -227,7 +239,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             onClick={close}
             disabled={sending}
             aria-label={t("common.close")}
-            className="ease-strong flex h-9 w-9 items-center justify-center rounded-lg text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink-soft active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink-soft active:scale-[0.97] disabled:opacity-50"
           >
             ✕
           </button>
@@ -285,7 +297,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${file.size}`}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-control border border-line bg-surface-raised px-3 py-2 text-role-caption"
                 >
                   <span className="min-w-0 flex-1 truncate text-ink" title={file.name}>
                     📎 {file.name}
@@ -306,12 +318,12 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
           )}
 
           {tooMany && (
-            <p className="text-xs text-state-danger-ink">
+            <p className="text-role-caption text-state-danger-ink">
               {t("compose.tooMany", { count: String(MAX_ATTACHMENTS) })}
             </p>
           )}
           {overSize && (
-            <p className="text-xs text-state-danger-ink">
+            <p className="text-role-caption text-state-danger-ink">
               {t("compose.overSize", {
                 size: formatBytes(totalBytes),
                 limit: formatBytes(MAX_TOTAL_BYTES),
@@ -319,6 +331,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             </p>
           )}
           {error && <ErrorAlert>{error}</ErrorAlert>}
+          {proGated && <ProFeatureNotice />}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-line-soft px-5 py-4">
@@ -327,7 +340,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
           >
             📎 {t("compose.attach")}
           </button>
@@ -336,7 +349,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               type="button"
               onClick={close}
               disabled={sending}
-              className="ease-strong inline-flex min-h-11 items-center rounded-lg px-4 text-sm text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong inline-flex min-h-11 items-center rounded-control px-4 text-role-label text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               {t("common.cancel")}
             </button>
@@ -344,7 +357,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               type="button"
               onClick={send}
               disabled={!canSend}
-              className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-lg bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? t("compose.sending") : t("chat.send")}
             </button>

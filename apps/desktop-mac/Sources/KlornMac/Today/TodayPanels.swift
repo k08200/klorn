@@ -146,9 +146,9 @@ struct TodayAssistantPanel: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Theme.s3)
                     .frame(height: 32)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
                     .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.field))
+                        RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

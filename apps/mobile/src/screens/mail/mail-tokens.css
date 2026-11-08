@@ -27,7 +27,7 @@
   --tab-chip-bg: #ffffff;
   --tab-chip-line: rgba(15, 23, 42, 0.1);
   --tab-chip-count: #5f6e84;
-  --tab-chip-on-bg: #0f172a;
+  --tab-chip-on-bg: #0b0d12;
   --tab-chip-on-ink: #ffffff;
   --tab-chip-on-count: #cbd5e1;
   --swipe-done-bg: #047857;
@@ -70,11 +70,11 @@
     --avatar-3-ink: #fcd34d;
     --avatar-4-bg: rgba(244, 114, 182, 0.16);
     --avatar-4-ink: #f9a8d4;
-    --tab-chip-bg: #111a2e;
+    --tab-chip-bg: #141416;
     --tab-chip-line: rgba(255, 255, 255, 0.12);
     --tab-chip-count: #94a3b8;
     --tab-chip-on-bg: #f1f5f9;
-    --tab-chip-on-ink: #0b1120;
+    --tab-chip-on-ink: #0a0a0b;
     --tab-chip-on-count: #475569;
     --swipe-done-bg: #047857;
     --swipe-lane-bg: #57534e;
@@ -116,11 +116,11 @@
   --avatar-3-ink: #fcd34d;
   --avatar-4-bg: rgba(244, 114, 182, 0.16);
   --avatar-4-ink: #f9a8d4;
-  --tab-chip-bg: #111a2e;
+  --tab-chip-bg: #141416;
   --tab-chip-line: rgba(255, 255, 255, 0.12);
   --tab-chip-count: #94a3b8;
   --tab-chip-on-bg: #f1f5f9;
-  --tab-chip-on-ink: #0b1120;
+  --tab-chip-on-ink: #0a0a0b;
   --tab-chip-on-count: #475569;
   --swipe-done-bg: #047857;
   --swipe-lane-bg: #57534e;

@@ -36,7 +36,7 @@ struct UpcomingEventRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
         .accessibilityLabel(
@@ -79,7 +79,7 @@ struct WeekEventChip: View {
             .padding(.horizontal, 5).padding(.vertical, 3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.accent.opacity(event.allDay ? 0.24 : 0.14),
-                        in: RoundedRectangle(cornerRadius: 4))
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -99,7 +99,7 @@ private struct EventDetailPopover: View {
     /// Delete is two clicks inside the popover (no system dialog over a
     /// floating panel): 삭제 → 정말 삭제.
     @State private var confirmDelete = false
-    @State private var deleteFailed = false
+    @State private var deleteFailure: ActionFailure?
 
     private var timeLabel: String {
         eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
@@ -153,7 +153,7 @@ private struct EventDetailPopover: View {
                         .buttonStyle(.bordered).controlSize(.small)
                     if confirmDelete {
                         Button(L("cal.delete.confirm")) {
-                            Task { deleteFailed = !(await model.deleteEvent(event)) }
+                            Task { deleteFailure = await model.deleteEvent(event) }
                         }
                         .buttonStyle(.bordered).controlSize(.small).tint(Theme.tint(.push))
                     } else {
@@ -162,8 +162,15 @@ private struct EventDetailPopover: View {
                     }
                 }
             }
-            if deleteFailed {
+            switch deleteFailure {
+            case .needsPro?:
+                Text(L("error.needsPro")).font(.caption2).foregroundStyle(Theme.tint(.push))
+                    .fixedSize(horizontal: false, vertical: true)
+                UpgradeToProLink()
+            case .failed?:
                 Text(L("cal.delete.failed")).font(.caption2).foregroundStyle(Theme.tint(.push))
+            case nil:
+                EmptyView()
             }
         }
         .padding(Theme.s4)

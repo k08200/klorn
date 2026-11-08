@@ -5,7 +5,8 @@
 
 import { prisma } from "../db.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
-import { createCompletion, DRAFT_MODEL, openai } from "../llm/openai.js";
+import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
+import { hasLlmProvider } from "../providers/index.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { isPlainAddress, parseAddress } from "./email-address.js";
 
@@ -131,7 +132,7 @@ export async function generateSmartReply(
   email: { from: string; subject: string; body: string },
   userId?: string,
 ): Promise<string> {
-  if (!openai) return template;
+  if (!hasLlmProvider()) return template;
 
   // The reviewed /reply-draft path honours the user's chosen register; an
   // auto-sent reply is the one nobody proofreads, so it must not be the surface
@@ -182,7 +183,7 @@ export async function generateGuidelineReply(
   userId: string,
   guideline: string,
 ): Promise<string | null> {
-  if (!openai) return null;
+  if (!hasLlmProvider()) return null;
   const toneHint = await buildReplyToneHint(userId);
 
   const response = await createCompletion(

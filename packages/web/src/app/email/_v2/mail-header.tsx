@@ -4,10 +4,16 @@
  * Mail v2 header (productization plan §1, P5): the lane control is the primary
  * filter; the account facet, the legacy filters and "Show silenced" are
  * secondary menus. Presentation only — the view state lives in mail-v2.tsx.
+ *
+ * A phone on its side (under 500px tall, from 600px wide; the phone-landscape
+ * variant in globals.css) gets one 52px row instead: the title, the lane as a
+ * select with its counts, and a search button that opens the field in the
+ * row. The account and filter menus and Sync move into More there, so
+ * nothing the taller header offers is lost.
  */
 
 import type { EmailLaneCounts, LiveTier } from "@klorn/contract";
-import type { FormEvent, KeyboardEvent, RefObject } from "react";
+import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useState } from "react";
 import Button from "../../../components/ui/button";
 import { LANE_INK_CLASS, useLaneName } from "../../../components/ui/lane-chip";
 import { Menu, type MenuSection } from "../../../components/ui/menu";
@@ -16,6 +22,7 @@ import { SourceBadge } from "../../../components/ui/source-badge";
 import { useT } from "../../../lib/i18n";
 import { sourceGlyph } from "../../../lib/source-provider";
 import { useMailSubscriptionsAvailable } from "../../../lib/use-mail-subscriptions";
+import { useMediaQuery } from "../../../lib/use-media-query";
 import { ComposeIcon, MoreIcon, SearchIcon, SyncIcon } from "./icons";
 import {
   type AccountOption,
@@ -36,6 +43,10 @@ export const LANE_DOT: Record<LiveTier, string> = {
   INFO: "bg-tier-info-ink",
   SILENT: "bg-tier-silent-ink",
 };
+
+/** Same query as the phone-landscape variant in globals.css. */
+export const PHONE_LANDSCAPE_QUERY =
+  "(orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem)";
 
 const FILTER_LABEL_KEYS: Record<SecondaryFilter, string> = {
   none: "mailV2.filter.none",
@@ -62,7 +73,7 @@ interface MailHeaderProps {
   onCompose: () => void;
   onSync: () => void;
   onReanalyze: () => void;
-  /** The 440px list column of the split view: smaller title, stacked controls. */
+  /** The list column of the split view (280–440px): smaller title, stacked controls. */
   compact?: boolean;
 }
 
@@ -74,6 +85,13 @@ export function MailHeader(props: MailHeaderProps) {
   const threads = view.filter === "threads";
   const subscriptionsAvailable = useMailSubscriptionsAvailable();
   const number = new Intl.NumberFormat(locale);
+  const landscape = useMediaQuery(PHONE_LANDSCAPE_QUERY);
+  // Phone landscape only: the search field opens in the header row.
+  const [searchOpen, setSearchOpen] = useState(() => view.search !== "");
+  const { searchRef } = props;
+  useEffect(() => {
+    if (searchOpen && landscape) searchRef.current?.focus();
+  }, [searchOpen, landscape, searchRef]);
 
   const segments = laneSegments(view.lane).map((lane): Segment<LaneView> => {
     if (lane === "ALL") return { id: lane, label: t("mailV2.lane.all") };
@@ -138,8 +156,37 @@ export function MailHeader(props: MailHeaderProps) {
     },
   ];
 
+  // Phone landscape: the header's second row is gone, so More carries the
+  // account and filter choices and Sync.
+  const landscapeSections: MenuSection[] = landscape
+    ? [
+        ...(accounts.length > 1
+          ? [
+              {
+                ...accountSections[0],
+                id: "landscape-accounts",
+                heading: t("mailV2.accounts.label"),
+              },
+            ]
+          : []),
+        { ...filterSections[0], id: "landscape-filter", heading: t("mailV2.filter.label") },
+        {
+          id: "landscape-sync",
+          items: [
+            {
+              id: "sync",
+              label: props.syncing ? t("common.syncing") : t("common.syncNow"),
+              disabled: props.syncing || isDemo,
+              onSelect: props.onSync,
+            },
+          ],
+        },
+      ]
+    : [];
+
   const silenced = view.lane === "SILENT";
   const moreSections: MenuSection[] = [
+    ...landscapeSections,
     {
       id: "lanes",
       items: [
@@ -189,20 +236,60 @@ export function MailHeader(props: MailHeaderProps) {
     event.preventDefault();
     props.onSearchDraft("");
     onChange({ search: "" });
+    setSearchOpen(false);
     event.currentTarget.blur();
   };
+  const laneOptionLabel = (segment: Segment<LaneView>) =>
+    segment.count === undefined
+      ? segment.label
+      : `${segment.label} · ${number.format(segment.count)}`;
 
   return (
     <header className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-        <h1 className={`mr-auto text-ink ${compact ? "text-title" : "text-display"}`}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-3 phone-landscape:h-13 phone-landscape:flex-nowrap">
+        <h1
+          className={`mr-auto shrink-0 text-ink phone-landscape:mr-0 phone-landscape:text-role-title ${
+            compact ? "text-role-title" : "text-role-page"
+          } ${searchOpen ? "phone-landscape:hidden" : ""}`}
+        >
           {t("nav.mail")}
         </h1>
+        {!searchOpen && (
+          <select
+            aria-label={t("mailV2.lanes.label")}
+            value={view.lane}
+            onChange={(event) => onChange({ lane: event.target.value as LaneView })}
+            disabled={threads}
+            className="focus-ring mr-auto hidden h-11 min-w-0 max-w-48 truncate rounded-control border border-line-strong bg-surface-panel px-3 text-role-label text-ink disabled:opacity-50 phone-landscape:block"
+          >
+            {segments.map((segment) => (
+              <option key={segment.id} value={segment.id}>
+                {laneOptionLabel(segment)}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="hidden phone-landscape:contents">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("mail.searchMail")}
+            aria-expanded={searchOpen}
+            onClick={() => setSearchOpen((open) => !open)}
+            className="size-11"
+          >
+            <SearchIcon />
+          </Button>
+        </span>
         {/* biome-ignore lint/a11y/useSemanticElements: <search> is not yet in the JSX types this repo targets; role="search" names the same landmark */}
         <form
           role="search"
           onSubmit={submitSearch}
-          className={`relative max-md:order-last max-md:basis-full ${compact ? "order-last basis-full" : "md:w-72"}`}
+          className={`relative max-md:order-last max-md:basis-full ${compact ? "order-last basis-full" : "md:w-72"} ${
+            searchOpen
+              ? "phone-landscape:order-none! phone-landscape:min-w-0 phone-landscape:flex-1 phone-landscape:basis-auto!"
+              : "phone-landscape:hidden"
+          }`}
         >
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input
@@ -216,7 +303,7 @@ export function MailHeader(props: MailHeaderProps) {
             onKeyDown={onSearchKeyDown}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="focus-ring h-9 w-full rounded-lg border border-line-strong bg-surface-panel pl-9 pr-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
+            className="focus-ring h-9 w-full rounded-control border border-line-strong bg-surface-panel pl-9 pr-3 text-role-meta text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
           />
         </form>
         {!compact && (
@@ -248,16 +335,23 @@ export function MailHeader(props: MailHeaderProps) {
           title={t("common.syncNow")}
           onClick={props.onSync}
           disabled={props.syncing || isDemo}
+          className="phone-landscape:hidden"
         >
           <SyncIcon spinning={props.syncing} />
         </Button>
-        <Menu label={t("mailV2.more.label")} variant="icon" align="end" sections={moreSections}>
+        <Menu
+          label={t("mailV2.more.label")}
+          variant="icon"
+          align="end"
+          scroll={landscape}
+          sections={moreSections}
+        >
           <MoreIcon />
         </Menu>
       </div>
 
       <div
-        className={`flex items-center gap-2 max-md:flex-col max-md:items-stretch max-md:gap-0 ${compact ? "flex-col items-stretch" : ""}`}
+        className={`flex items-center gap-2 max-md:flex-col max-md:items-stretch max-md:gap-0 phone-landscape:hidden ${compact ? "flex-col items-stretch" : ""}`}
       >
         <SegmentedControl
           ariaLabel={t("mailV2.lanes.label")}
@@ -266,7 +360,7 @@ export function MailHeader(props: MailHeaderProps) {
           value={threads ? null : view.lane}
           onChange={(lane) => onChange({ lane })}
           disabled={threads}
-          className="flex-1 max-md:-mx-4 max-md:px-4"
+          className="flex-1 max-md:-mx-4 max-md:scroll-px-4 max-md:px-4"
         />
         <div className={`flex items-center gap-2 ${compact ? "justify-end" : ""}`}>
           {accounts.length > 1 && (
@@ -290,9 +384,9 @@ export function MailHeader(props: MailHeaderProps) {
           </Menu>
         </div>
       </div>
-      {threads && <p className="text-caption text-ink-muted">{t("mailV2.threads.note")}</p>}
+      {threads && <p className="text-role-caption text-ink-muted">{t("mailV2.threads.note")}</p>}
       {!threads && props.tally && (
-        <p className="px-1 text-caption tabular-nums text-ink-muted">
+        <p className="px-1 text-role-caption tabular-nums text-ink-muted phone-landscape:hidden">
           <span className="font-medium text-ink-soft">
             {view.lane === "ALL" ? t("mailV2.lane.all") : laneName(view.lane)}
           </span>

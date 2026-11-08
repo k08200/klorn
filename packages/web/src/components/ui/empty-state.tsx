@@ -1,6 +1,6 @@
 /**
  * EmptyState (productization plan §2, P2) — what a surface shows when there
- * is nothing in it yet. Icon slot, a `text-title` heading, one line of body,
+ * is nothing in it yet. Icon slot, a `text-role-title` heading, one line of body,
  * and at most one primary action. Write the copy for day one: say what will
  * appear here and, when there is one, the single next step ("Connect an
  * account"), not that something is missing.
@@ -50,13 +50,15 @@ export default function EmptyState({
       {icon && (
         <div
           aria-hidden="true"
-          className="mb-4 flex size-12 items-center justify-center rounded-card border border-line bg-surface-raised text-ink-muted"
+          className="mb-4 flex size-12 items-center justify-center rounded-control border border-line bg-surface-raised text-ink-muted"
         >
           {icon}
         </div>
       )}
-      <Heading className="text-title text-ink [word-break:keep-all]">{title}</Heading>
-      <p className="mt-1 max-w-sm text-body text-ink-muted [word-break:keep-all]">{description}</p>
+      <Heading className="text-role-title text-ink [word-break:keep-all]">{title}</Heading>
+      <p className="mt-1 max-w-sm text-role-body text-ink-muted [word-break:keep-all]">
+        {description}
+      </p>
       {(primaryAction || action) && (
         <div className="mt-6 flex flex-col items-center gap-2">
           {primaryAction && (

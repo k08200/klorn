@@ -10,7 +10,7 @@ import type { EventDraftWire } from "../../api/wire";
 import { getServices } from "../../app/services";
 import type { MessageKey } from "../../i18n";
 import { useI18n } from "../../i18n/I18nProvider";
-import { useLinkProps } from "../../router/Router";
+import { PlansLink } from "../../ui/PlansLink";
 import { Sheet } from "../../ui/Sheet";
 import { notify } from "../../ui/StatusNote";
 import { Switch } from "../../ui/Switch";
@@ -50,7 +50,6 @@ export function NewEventSheet({
   const [quick, setQuick] = useState("");
   const [parsing, setParsing] = useState(false);
   const create = useCreateEvent();
-  const plans = useLinkProps({ name: "settings", section: "plans" });
 
   // A fresh sheet each time it opens.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset only on open
@@ -146,7 +145,7 @@ export function NewEventSheet({
         </p>
         {create.state === "paywalled" ? (
           <p className="form-note" role="status">
-            {t("calendar.draft.paywall")} <a {...plans}>{t("calendar.draft.seePlans")}</a>
+            {t("calendar.draft.paywall")} <PlansLink />
           </p>
         ) : null}
         {create.state === "error" ? (

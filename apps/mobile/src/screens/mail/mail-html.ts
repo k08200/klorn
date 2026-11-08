@@ -363,7 +363,7 @@ const LIGHT_CSS =
   ":root{color-scheme:light}html,body{background:#ffffff;color:#1e293b}a{color:#0369a1}";
 /** Dark reader surface (tokens.css dark --surface-card / --ink-strong / --accent). */
 const DARK_CSS =
-  ":root{color-scheme:dark}html,body{background:#111a2e;color:#e2e8f0}a{color:#38bdf8}";
+  ":root{color-scheme:dark}html,body{background:#141416;color:#e2e8f0}a{color:#38bdf8}";
 
 /**
  * The full srcdoc. The CSP meta is the first thing in <head> so it governs

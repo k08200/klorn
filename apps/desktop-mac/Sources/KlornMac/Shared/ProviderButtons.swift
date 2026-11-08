@@ -123,11 +123,11 @@ struct GoogleProviderButtonStyle: ButtonStyle {
         .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: ProviderButtonSpec.height)
         .background(
             Theme.dyn(light: ProviderButtonSpec.googleFillLight, dark: ProviderButtonSpec.googleFillDark),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            in: RoundedRectangle(cornerRadius: Theme.Radius.control))
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.dyn(
+            RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.dyn(
                 light: ProviderButtonSpec.googleStrokeLight, dark: ProviderButtonSpec.googleStrokeDark)))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control))
         .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
     }
 }
@@ -150,8 +150,8 @@ struct AppleProviderButtonStyle: ButtonStyle {
         .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: ProviderButtonSpec.height)
         .background(
             Theme.dyn(light: ProviderButtonSpec.appleFillLight, dark: ProviderButtonSpec.appleFillDark),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control))
         .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
     }
 }

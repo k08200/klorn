@@ -109,16 +109,16 @@ export function TelegramSection() {
   };
 
   return (
-    <div className="panel-elevated mt-3 rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <div className="panel-elevated mt-3 rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="font-medium text-ink">Telegram</h3>
-          <p className="text-sm text-ink-mid">
+          <p className="text-role-body text-ink-mid">
             {linked ? t("telegram.body.connected") : t("telegram.body.idle")}
           </p>
         </div>
         {loading ? (
-          <span className="text-sm text-ink-mid">{t("common.loading")}</span>
+          <span className="text-role-body text-ink-mid">{t("common.loading")}</span>
         ) : linked ? (
           <div className="flex shrink-0 items-center gap-3">
             <StatusChip status="connected" />
@@ -147,9 +147,9 @@ export function TelegramSection() {
       </div>
 
       {!linked && !loading && linkCode && (
-        <div className="mt-3 space-y-2 rounded-xl border border-line-soft bg-surface-raised/70 p-3">
+        <div className="mt-3 space-y-2 rounded-control border border-line-soft bg-surface-raised/70 p-3">
           {linkCode.deepLink ? (
-            <p className="text-sm text-ink-mid">
+            <p className="text-role-body text-ink-mid">
               {t("telegram.deepLink.before")}{" "}
               <a
                 href={linkCode.deepLink}
@@ -164,13 +164,13 @@ export function TelegramSection() {
               {t("telegram.deepLink.after")}
             </p>
           ) : (
-            <p className="text-sm text-ink-mid">
+            <p className="text-role-body text-ink-mid">
               {t("telegram.manual.before")}{" "}
               <span className="font-mono text-ink">/start {linkCode.code}</span>{" "}
               {t("telegram.manual.after")}
             </p>
           )}
-          <p className="text-xs text-ink-dim">
+          <p className="text-role-caption text-ink-dim">
             {t("telegram.codeLabel")}{" "}
             <span className="font-mono text-ink-mid">{linkCode.code}</span>{" "}
             {t("telegram.expiresAt", {
@@ -200,7 +200,7 @@ export function TelegramSection() {
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-xs text-state-danger-ink">
+        <p role="alert" className="mt-2 text-role-caption text-state-danger-ink">
           {error}
         </p>
       )}

@@ -249,7 +249,7 @@ struct MailboxRow: View {
         .onHover { hovering = $0 }
         .overlay {
             if focused {
-                RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2)
+                RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.accent, lineWidth: 2)
             }
         }
     }

@@ -83,7 +83,7 @@ describe("recordLlmUsage — disabled by flag", () => {
     const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: null,
-      provider: "openrouter",
+      provider: "anthropic",
       model: "test-model",
       source: "background",
       estimatedCostCents: 1,
@@ -99,8 +99,8 @@ describe("recordLlmUsage — happy path", () => {
     const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
-      provider: "openrouter",
-      model: "google/gemma-4-31b-it:free",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
       source: "background",
       estimatedCostCents: 3,
       usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150 },
@@ -109,8 +109,8 @@ describe("recordLlmUsage — happy path", () => {
     expect(created).toHaveLength(1);
     expect(created[0]).toMatchObject({
       userId: "user-1",
-      provider: "openrouter",
-      model: "google/gemma-4-31b-it:free",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
       source: "background",
       estimatedCostCents: 3,
       promptTokens: 120,
@@ -140,8 +140,8 @@ describe("recordLlmUsage — happy path", () => {
     const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
-      provider: "openrouter",
-      model: "openai/gpt-4o-mini",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
       source: "background",
       estimatedCostCents: 1,
       usage: {
@@ -163,8 +163,8 @@ describe("recordLlmUsage — happy path", () => {
     const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
-      provider: "openrouter",
-      model: "google/gemma-4-31b-it:free",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
       source: "background",
       estimatedCostCents: 0,
       usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150 },
@@ -177,7 +177,7 @@ describe("recordLlmUsage — happy path", () => {
     const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
-      provider: "openrouter",
+      provider: "anthropic",
       model: "m",
       source: "foreground",
       estimatedCostCents: 0,
@@ -198,7 +198,7 @@ describe("recordLlmUsage — missing usage (defensive path)", () => {
     const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
-      provider: "openrouter",
+      provider: "anthropic",
       model: "m",
       source: "foreground",
       estimatedCostCents: 1,
@@ -238,7 +238,7 @@ describe("recordLlmUsage — ledger failure never propagates", () => {
     await expect(
       recordLlmUsage({
         userId: "user-1",
-        provider: "openrouter",
+        provider: "anthropic",
         model: "m",
         source: "foreground",
         estimatedCostCents: 0,
@@ -252,11 +252,6 @@ describe("recordLlmUsage — ledger failure never propagates", () => {
 });
 
 describe("estimatePrebillCents", () => {
-  it("matches the cost-gate pre-bill (free model → 0¢)", async () => {
-    const { estimatePrebillCents } = await import("../billing/llm-usage.js");
-    expect(estimatePrebillCents("google/gemma-4-31b-it:free")).toBe(0);
-  });
-
   it("charges a non-zero nominal-token floor for paid models (0\u00a2 pre-bill regression)", async () => {
     const { estimatePrebillCents } = await import("../billing/llm-usage.js");
     const model = "anthropic/claude-sonnet-4";
@@ -278,15 +273,15 @@ describe("getUsageSummary — aggregation", () => {
     };
     groupByResult = [
       {
-        provider: "openrouter",
-        model: "google/gemma-4-31b-it:free",
+        provider: "anthropic",
+        model: "claude-haiku-5-5",
         _count: { _all: 10 },
         _sum: {
           promptTokens: 900,
           cachedPromptTokens: 0,
           completionTokens: 150,
           totalTokens: 1050,
-          estimatedCostCents: 0,
+          estimatedCostCents: 4,
         },
       },
       {
@@ -298,7 +293,7 @@ describe("getUsageSummary — aggregation", () => {
           cachedPromptTokens: 400,
           completionTokens: 50,
           totalTokens: 150,
-          estimatedCostCents: 5,
+          estimatedCostCents: 1,
         },
       },
     ];
@@ -321,14 +316,14 @@ describe("getUsageSummary — aggregation", () => {
     });
     expect(summary.byModel).toEqual([
       {
-        provider: "openrouter",
-        model: "google/gemma-4-31b-it:free",
+        provider: "anthropic",
+        model: "claude-haiku-5-5",
         calls: 10,
         promptTokens: 900,
         cachedPromptTokens: 0,
         completionTokens: 150,
         totalTokens: 1050,
-        estimatedCostCents: 0,
+        estimatedCostCents: 4,
       },
       {
         provider: "gemini",
@@ -338,7 +333,7 @@ describe("getUsageSummary — aggregation", () => {
         cachedPromptTokens: 400,
         completionTokens: 50,
         totalTokens: 150,
-        estimatedCostCents: 5,
+        estimatedCostCents: 1,
       },
     ]);
 

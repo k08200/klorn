@@ -21,7 +21,7 @@ keep their existing homes.
 | `learning/` | ~26 | ~5.2K | pattern-learner, learned-rule*, sender-trait*, sender-policy, contact-engagement, interaction-graph, ontology*, feedback*, trust-score, memory |
 | `billing/` | ~9 | ~1.3K | stripe, paddle, quota-limiter, cost-guard, cents, token-usage, llm-usage, tier-override-token |
 | `pim/` | ~22 | ~6.4K | commitments*, tasks, notes, reminders, calendar, briefing*, contacts, work-graph, operating-plan, meeting-*, inbox-summary |
-| `llm/` | ~10 | ~2.1K | openai, model-fallback, openrouter-*, llm-coerce/json, parse helpers |
+| `llm/` | ~10 | ~2.1K | openai, model-fallback, llm-coerce/json, parse helpers |
 | `infra/` | ~20 | ~3.7K | db*, config, auth, crypto-tokens, sentry, websocket, semaphore, with-timeout, timing-safe-equal, untrusted, perf-monitor, timezone helpers |
 
 Boundary calls made from the graph (not names): `tiers.ts`/`tier-policy.ts`

@@ -186,7 +186,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-medium">{t("settings.executionBoundary.title")}</h3>
-            <p className="text-sm text-ink-mid">{t("settings.executionBoundary.desc")}</p>
+            <p className="text-role-body text-ink-mid">{t("settings.executionBoundary.desc")}</p>
           </div>
           <Switch
             checked={agentEnabled}
@@ -201,33 +201,35 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
           <div className="space-y-4">
             {/* Agent Mode */}
             <div>
-              <div className="text-sm text-ink-mid mb-2">{t("settings.field.agentMode")}</div>
+              <div className="text-role-body text-ink-mid mb-2">
+                {t("settings.field.agentMode")}
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 {agentModeOptions.map((option) => (
                   <button
                     key={option.mode}
                     type="button"
                     onClick={() => toggleAgentMode(option.mode)}
-                    className={`ease-strong min-h-16 min-w-0 rounded-lg border px-3 py-2.5 text-sm transition duration-150 active:scale-[0.97] ${agentModeLightClasses(
+                    className={`ease-strong min-h-16 min-w-0 rounded-control border px-3 py-2.5 text-role-label transition duration-150 active:scale-[0.97] ${agentModeLightClasses(
                       option.mode,
                       agentMode === option.mode,
                     )}`}
                     aria-pressed={agentMode === option.mode}
                   >
                     <div className="font-medium truncate">{agentModeLabel(option)}</div>
-                    <div className="text-caption mt-0.5 opacity-70 truncate">
+                    <div className="text-role-caption mt-0.5 opacity-70 truncate">
                       {agentModeDescription(option)}
                     </div>
                   </button>
                 ))}
               </div>
               {agentMode === "SHADOW" && (
-                <p className="text-caption text-ink-mid mt-2">
+                <p className="text-role-caption text-ink-mid mt-2">
                   {t("settings.agentMode.shadowNote")}
                 </p>
               )}
               {agentMode === "AUTO" && (
-                <p className="text-caption text-state-ok-ink mt-2">
+                <p className="text-role-caption text-state-ok-ink mt-2">
                   {t("settings.agentMode.autoNote")}
                 </p>
               )}
@@ -236,7 +238,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
             {/* Pre-approved tools — skip approval for specific MEDIUM-risk tools */}
             {agentMode === "AUTO" && preApprovableTools.length > 0 && (
               <div>
-                <label className="block text-sm text-ink-mid mb-2">
+                <label className="block text-role-label text-ink-mid mb-2">
                   {t("settings.field.alwaysAllowedTools")}
                 </label>
                 <div className="space-y-2">
@@ -247,15 +249,15 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                         key={tool}
                         type="button"
                         onClick={() => toggleAlwaysAllowedTool(tool)}
-                        className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
+                        className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-control border px-3 py-2 text-role-body transition duration-150 active:scale-[0.97] ${
                           enabled
                             ? "bg-state-info-bg border-state-info-line text-accent-deeper"
                             : "bg-surface-panel/70 border-line text-ink-mid hover:border-line-strong"
                         }`}
                         aria-pressed={enabled}
                       >
-                        <span className="text-xs">{t(toolLabelKey(tool))}</span>
-                        <span className="text-caption opacity-80">
+                        <span className="text-role-caption">{t(toolLabelKey(tool))}</span>
+                        <span className="text-role-caption opacity-80">
                           {enabled
                             ? t("settings.tool.runWithinPolicy")
                             : t("settings.tool.reviewFirst")}
@@ -264,7 +266,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                     );
                   })}
                 </div>
-                <p className="text-caption text-ink-dim mt-2">
+                <p className="text-role-caption text-ink-dim mt-2">
                   {t("settings.alwaysAllowedTools.note")}
                 </p>
               </div>
@@ -272,14 +274,14 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
 
             {/* Check Interval */}
             <div>
-              <label htmlFor="agent-interval" className="block text-sm text-ink-mid mb-1">
+              <label htmlFor="agent-interval" className="block text-role-label text-ink-mid mb-1">
                 {t("settings.field.checkInterval")}
               </label>
               <select
                 id="agent-interval"
                 value={agentInterval}
                 onChange={(e) => updateAgentInterval(Number(e.target.value))}
-                className="min-h-11 rounded-lg border border-line bg-surface-raised px-4 py-2 text-sm transition focus:border-accent-muted focus:outline-none"
+                className="min-h-11 rounded-control border border-line bg-surface-raised px-4 py-2 text-role-body transition focus:border-accent-muted focus:outline-none"
               >
                 <option value={3}>{t("settings.checkInterval.3min")}</option>
                 <option value={5}>{t("settings.checkInterval.5min")}</option>
@@ -294,7 +296,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
               <button
                 type="button"
                 onClick={() => updateAutoMarkRead(!autoMarkReadEnabled)}
-                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
+                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-control border px-3 py-2 text-role-body transition duration-150 active:scale-[0.97] ${
                   autoMarkReadEnabled
                     ? "bg-state-ok-bg border-state-ok-line text-state-ok-ink"
                     : "bg-surface-panel/70 border-line text-ink-mid hover:border-line-strong"
@@ -302,11 +304,13 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                 aria-pressed={autoMarkReadEnabled}
               >
                 <span>{t("settings.autoMarkRead.label")}</span>
-                <span className="text-caption opacity-80">
+                <span className="text-role-caption opacity-80">
                   {autoMarkReadEnabled ? t("settings.state.on") : t("settings.state.off")}
                 </span>
               </button>
-              <p className="text-caption text-ink-dim mt-1">{t("settings.autoMarkRead.desc")}</p>
+              <p className="text-role-caption text-ink-dim mt-1">
+                {t("settings.autoMarkRead.desc")}
+              </p>
             </div>
 
             {/* Proactive actions toggle */}
@@ -330,7 +334,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                     toast(t("settings.toast.settingSaveFailed"), "error");
                   }
                 }}
-                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
+                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-control border px-3 py-2 text-role-body transition duration-150 active:scale-[0.97] ${
                   proactiveActionsEnabled
                     ? "bg-state-info-bg border-state-info-line text-accent-deeper"
                     : "bg-surface-panel/70 border-line text-ink-mid hover:border-line-strong"
@@ -338,11 +342,13 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                 aria-pressed={proactiveActionsEnabled}
               >
                 <span>{t("settings.proactiveAlerts.label")}</span>
-                <span className="text-caption opacity-80">
+                <span className="text-role-caption opacity-80">
                   {proactiveActionsEnabled ? t("settings.state.on") : t("settings.state.off")}
                 </span>
               </button>
-              <p className="text-caption text-ink-dim mt-1">{t("settings.proactiveAlerts.desc")}</p>
+              <p className="text-role-caption text-ink-dim mt-1">
+                {t("settings.proactiveAlerts.desc")}
+              </p>
             </div>
 
             <FeedbackPolicyPanel />
@@ -352,7 +358,9 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
               <Button onClick={runAgentNow} disabled={runningAgent}>
                 {runningAgent ? t("settings.state.running") : t("settings.runAgentNow")}
               </Button>
-              <p className="text-caption text-ink-dim mt-1">{t("settings.runAgentNow.desc")}</p>
+              <p className="text-role-caption text-ink-dim mt-1">
+                {t("settings.runAgentNow.desc")}
+              </p>
             </div>
           </div>
         )}

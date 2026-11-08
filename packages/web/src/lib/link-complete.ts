@@ -1,14 +1,11 @@
 // The pure half of /link/complete: reading the parked-link handle from the
-// fragment, and deciding what the completion response means. Import-free so
-// packages/api can test it (the web package has no unit-test runner).
+// fragment, and deciding what the completion response means. Free of React and
+// Next imports so packages/api can test it (the web package has no unit-test
+// runner).
+
+import { safeRelativePath } from "./safe-path";
 
 const HANDLE_FRAGMENT = /^#h=([0-9a-f]{64})$/;
-
-// One leading slash not followed by another ("//" is a protocol-relative URL),
-// then only URL path/query characters. The allowlist leaves out the backslash
-// (a URL parser reads "/\" as "//") and every whitespace or control character
-// (the parser strips tabs and newlines, which can rebuild "//").
-const SAFE_RELATIVE_PATH = /^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@%/?]*$/;
 
 /** The handle in a `#h=<64 hex>` fragment, or null for anything else. */
 export function readLinkHandle(hash: string): string | null {
@@ -21,7 +18,7 @@ export function readLinkHandle(hash: string): string | null {
  * says otherwise from becoming an open redirect.
  */
 export function safeNextPath(next: unknown): string | null {
-  return typeof next === "string" && SAFE_RELATIVE_PATH.test(next) ? next : null;
+  return safeRelativePath(next);
 }
 
 export type LinkCompleteOutcome =

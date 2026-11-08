@@ -113,3 +113,27 @@ describe("judgeEmail — reason language", () => {
     expect(createCompletionMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("judgeEmail — a model reason that is a static key", () => {
+  it("is dropped, so mail cannot borrow Klorn's own reason copy", async () => {
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              confidence: 0.9,
+              senderTrust: 0.8,
+              reversibility: 0.5,
+              urgency: 0.2,
+              reason: "email.heldByInterruptBudget",
+            }),
+          },
+        },
+      ],
+    });
+    const judgement = await judgeEmail(EMAIL, "u1", EMPTY_CONTEXT);
+    expect(judgement.source).toBe("llm");
+    expect(judgement.reason).not.toBe("email.heldByInterruptBudget");
+    expect(judgement.reason.length).toBeGreaterThan(0);
+  });
+});

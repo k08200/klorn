@@ -202,7 +202,8 @@
       "snippet": "Your card was charged $14.00 for the starter plan.",
       "labels": [],
       "receivedAt": "2026-06-01T11:25:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-019",
@@ -338,7 +339,8 @@
       "snippet": "Your monthly statement is ready to view in the app.",
       "labels": [],
       "receivedAt": "2026-06-01T13:00:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-032",
@@ -507,7 +509,7 @@
       "receivedAt": "2026-06-01T16:00:00.000Z",
       "label": "AUTO",
       "note": "trivially reversible to archive — AUTO is classify-only",
-      "labelV2": "QUEUE"
+      "labelV2": "INFO"
     },
     {
       "id": "eval-048",

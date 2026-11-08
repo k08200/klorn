@@ -2,6 +2,7 @@
 // Capacitor-only test answers "no" inside the Tauri wrapper. capacitor.ts is
 // deliberately NOT imported here so that mistake cannot be made in this file.
 import { isNativeShell, openExternal } from "./native/shell";
+import { safeHttpsUrl } from "./safe-path";
 import { activeUiLocale } from "./ui-locale";
 
 // Keep SSR and client in sync: both must resolve to the same string so React
@@ -121,12 +122,17 @@ export function authHeaders(extra?: Record<string, string>): Record<string, stri
 // OAuth flow must stay a same-tab navigation so the redirect back lands in the
 // app rather than in a popup a blocker may have eaten.
 async function openOAuthUrl(url: string): Promise<void> {
+  // The consent URL comes from our API, but a provider page is always https:
+  // anything else (javascript:, data:, http:, a relative path) is refused
+  // rather than navigated to. Callers' catch blocks report it.
+  const safeUrl = safeHttpsUrl(url);
+  if (safeUrl === null) throw new Error("Refusing to open a non-https OAuth URL");
   if (isNativeShell()) {
-    await openExternal(url);
+    await openExternal(safeUrl);
     return;
   }
   if (typeof window !== "undefined") {
-    window.location.href = url;
+    window.location.href = safeUrl;
   }
 }
 

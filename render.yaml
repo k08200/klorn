@@ -31,60 +31,63 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      # SINGLE PROVIDER (founder decision, 2026-08-02): hosted prod runs on one
-      # OpenRouter key. The Gemini secondary was retired, so this key has NO
-      # failover — see the privacy note below for why the :free net is off too.
-      # Operational consequence: keep the balance funded (OpenRouter Auto Top-Up)
-      # and watch the judge-health alarm; a 402/403/429 here degrades every LLM
-      # surface at once.
-      - key: OPENROUTER_API_KEY
+      # SINGLE PROVIDER (founder decision, 2026-11-01): hosted prod runs on the
+      # Claude API only — one Anthropic key, no failover lane. Operational
+      # consequence: keep the Anthropic prepaid balance funded (auto-reload) and
+      # the workspace spend limit above the global cap below, and watch the
+      # judge-health alarm; a 402/403/429 here degrades every LLM surface at
+      # once (the judge drops to the keyword fallback, which caps confidence at
+      # 0.55 and cannot emit PUSH).
+      - key: ANTHROPIC_API_KEY
         sync: false
+      - key: LLM_PROVIDER_ORDER
+        value: "anthropic"
       # Required for the observability tripwires to reach anyone: judge-health
-      # (fleet-wide keyword-fallback rate) and the key-headroom probe both
+      # (fleet-wide keyword-fallback rate) and the judge-model gate both
       # report via captureError, which is a NO-OP when SENTRY_DSN is unset
       # (sentry.ts initSentry). Declared here so an empty value is visible in
       # the dashboard instead of silently disabling every alarm.
       - key: SENTRY_DSN
         sync: false
       # LLM model pins — make prod explicit instead of relying on the in-code
-      # defaults (which intentionally stay :free for self-hosters without paid
-      # credit). Prod runs on a funded OpenRouter key, so every user-facing
-      # surface is unified on the reliable paid flash model; per-user load is
-      # billed to each user's own key when set (BYOK), and the per-user cost cap
-      # (DAILY_COST_CAP_CENTS) backstops the shared key. Model names are public,
-      # not secrets — pinned in-repo.
+      # defaults (which are also claude-haiku-5-5). Native Anthropic ids.
+      # Per-user load is billed to each user's own Anthropic key when set
+      # (BYOK, paid plans), and the per-user cost cap (DAILY_COST_CAP_CENTS)
+      # backstops the shared key. Model names are public, not secrets — pinned
+      # in-repo.
       #
-      # Privacy (Limited Use / no-train): hosted prod NEVER degrades onto :free
-      # OpenRouter endpoints — their hosts may train on request data (verified
-      # 2026-07-03: gemma-4-31b-it:free routes via Google AI Studio free tier +
-      # OpenInference). The account-level OpenRouter toggle "Free endpoints that
-      # may train on request data" must ALSO stay off. With the Gemini secondary
-      # retired there is nothing left to fail over to, so on 402 the request
-      # fails outright and the judge drops to the keyword fallback (which caps
-      # confidence at 0.55 and cannot emit PUSH) — that is the accepted trade
-      # for the no-train commitment, not an oversight. Self-host keeps the :free
-      # net by default (operator's own data-policy choice).
-      # Chat/assistant default = frontier (user-selectable in Settings from the
-      # curated catalog; this is the default for users who never picked).
+      # Privacy (Limited Use / no-train): the Claude API's commercial terms do
+      # not train on inputs/outputs by default, which is what lets user mail go
+      # there.
+      # CHAT_MODEL is MODEL in code: the default for every background summary
+      # surface (thread brief, sender dossier, commitments, drive summaries,
+      # voice profile, attachment text) and the default Settings shows. Haiku
+      # (founder decision 2026-11-07): on Sonnet 5 the same background work
+      # cost ~20x (2026-11-04..07: ~$4 vs ~$0.2). A user can still pick Sonnet
+      # 5 or Opus 4.8 for their own chat in Settings. Pinned by
+      # packages/api/src/__tests__/render-model-pins.test.ts.
       - key: CHAT_MODEL
-        value: "anthropic/claude-sonnet-5"
+        value: "claude-haiku-5-5"
       - key: AGENT_MODEL
-        value: "google/gemini-2.5-flash"
+        value: "claude-haiku-5-5"
+      # Measured through the native provider: 52–55/56, gate 4/5
+      # (packages/api/eval/README.md, 2026-10-30).
       - key: JUDGE_MODEL
-        value: "google/gemini-2.5-flash"
+        value: "claude-haiku-5-5"
       - key: VISION_MODEL
-        value: "google/gemini-2.5-flash"
+        value: "claude-haiku-5-5"
       # Global daily LLM ceiling, in cents. Sized for ~100 active users; raise
       # it deliberately as the number grows, don't discover it as an outage.
       #
-      # Measured 2026-08-04 from the OpenRouter key's own ledger: $10.005 spent
-      # over ~3.5 months (created 2026-04-17), i.e. ~$2.9/month for one dogfood
-      # account — and of the visible window, 85% went to CHAT_MODEL
+      # Measured 2026-08-04 from the then-provider key's own ledger: $10.005
+      # spent over ~3.5 months (created 2026-04-17), i.e. ~$2.9/month for one
+      # dogfood account — and of the visible window, 85% went to CHAT_MODEL
       # (claude-sonnet-5, $2.71) against 15% for the whole triage pipeline
-      # (gemini-2.5-flash, $0.49). Triage is cheap; conversation is not.
+      # ($0.49). Triage is cheap; conversation is not. On claude-haiku-5-5 a
+      # judge call measures ~$0.0002 (eval/README.md, 2026-10-30).
       #
       # 100 users × ~50 classified emails/day is a few dollars a day on the
-      # flash model; chat is the variable. 3000¢ = $30/day leaves room for that
+      # triage model; chat is the variable. 3000¢ = $30/day leaves room for that
       # mix while still capping a runaway loop at a survivable number. The
       # per-user gate ($1/day, DAILY_COST_CAP_CENTS) bounds any single account,
       # and the key's own monthly budget is the final hard stop below both.
@@ -95,8 +98,6 @@ services:
       # instead, disabling every scheduler with it.
       - key: GLOBAL_DAILY_COST_CAP_CENTS
         value: "3000"
-      - key: DISABLE_FREE_MODEL_FALLBACK
-        value: "true"
       # #653/#655: flipped by founder decision (2026-07-09) ahead of the formal
       # body-bearing eval harness (#648/#650) — the synthetic eval set carries no
       # body so this stays inert under CI either way (poc-judge.ts

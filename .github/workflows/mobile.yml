@@ -29,7 +29,9 @@ defaults:
 jobs:
   app:
     name: App — typecheck, test, build, screenshots
-    runs-on: ubuntu-latest
+    # Pinned: Playwright ships no Chromium for ubuntu-latest's 26.04 image yet
+    # ("Playwright does not support chromium on ubuntu26.04-x64").
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4

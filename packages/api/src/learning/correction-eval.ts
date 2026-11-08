@@ -93,7 +93,7 @@ export function summarizeCorrectionEval(pairs: EvalPair[], now: Date): Correctio
 }
 
 function hasLlmProviderKey(): boolean {
-  return ["OPENROUTER_API_KEY", "GEMINI_API_KEY", "OPENAI_COMPAT_BASE_URL"].some((key) =>
+  return ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_COMPAT_BASE_URL"].some((key) =>
     Boolean(process.env[key]?.trim()),
   );
 }

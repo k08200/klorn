@@ -126,7 +126,7 @@ function ToastItem({
       onMouseLeave={onResume}
       onFocus={onPause}
       onBlur={onResume}
-      className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg text-sm font-medium shadow-lg animate-slide-up ${
+      className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-control text-role-label shadow-menu animate-slide-up ${
         toast.type === "success"
           ? "bg-green-700 text-white"
           : toast.type === "error"
@@ -139,7 +139,7 @@ function ToastItem({
         type="button"
         onClick={onDismiss}
         aria-label={t("toast.dismiss")}
-        className="focus-ring -my-1.5 -mr-2 flex size-8 shrink-0 items-center justify-center rounded-control opacity-70 transition hover:opacity-100"
+        className="focus-ring -my-1.5 -mr-2 flex size-8 shrink-0 items-center justify-center rounded-chip opacity-70 transition hover:opacity-100"
       >
         <svg
           aria-hidden="true"

@@ -5,6 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { CompactMonth } from "../../components/calendar/compact-month";
+import {
+  addMonths,
+  buildMonthCells,
+  type CalendarEvent,
+  dayKeyForInZone,
+  firstOfMonth,
+  formatTime,
+  type MonthCell,
+  monthGridRange,
+  monthIndexInZone,
+  weekdayNames,
+} from "../../components/calendar/month-utils";
 import { LinkedCalendars } from "../../components/linked-calendars";
 import { type NewEventInitial, NewEventModal } from "../../components/new-event-modal";
 import { PAGE_SHELL } from "../../components/page-shell";
@@ -15,21 +28,6 @@ import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  description: string | null;
-  startTime: string;
-  endTime: string;
-  location: string | null;
-  meetingLink: string | null;
-  allDay: boolean;
-  /** Present (true) on a linked calendar's event: a read-only mirror (step C7). */
-  readOnly?: boolean;
-  /** The linked account's email, on a linked event only. */
-  sourceLabel?: string;
-}
 
 export default function CalendarPage() {
   return (
@@ -221,10 +219,8 @@ function CalendarView() {
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {t("nav.calendar")}
-          </h1>
-          <p className="mt-1.5 truncate text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">{t("nav.calendar")}</h1>
+          <p className="mt-1.5 truncate text-role-body text-ink-mid">
             {nextEvent
               ? t("calendar.nextLabel", { title: nextEvent.title || t("common.untitled") })
               : t("calendar.next14Days")}
@@ -233,7 +229,7 @@ function CalendarView() {
         <div className="flex shrink-0 items-center gap-2">
           <VoiceButton
             onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-line"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-line"
           />
           <button
             type="button"
@@ -243,7 +239,7 @@ function CalendarView() {
               setNewEventOpen(true);
             }}
             aria-label={t("calendar.newEvent")}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
           >
             <svg
               aria-hidden="true"
@@ -264,7 +260,7 @@ function CalendarView() {
             onClick={syncNow}
             disabled={syncing}
             aria-label={t("calendar.sync")}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -290,10 +286,8 @@ function CalendarView() {
           icon buttons and the subtitle carries the honest counts. */}
       <header className="mb-6 hidden items-start justify-between gap-4 md:flex">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {t("nav.calendar")}
-          </h1>
-          <p className="mt-2 truncate text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">{t("nav.calendar")}</h1>
+          <p className="mt-2 truncate text-role-body text-ink-mid">
             {nextEvent ? (
               <>
                 {t("calendar.next")}{" "}
@@ -301,7 +295,7 @@ function CalendarView() {
                   {nextEvent.title || t("common.untitled")}
                 </span>{" "}
                 <span className="mx-0.5 text-slate-300">·</span>{" "}
-                {formatTime(new Date(nextEvent.startTime), userTimezone)}
+                {formatTime(new Date(nextEvent.startTime), userTimezone, locale)}
               </>
             ) : (
               t("calendar.nothingComingUp")
@@ -323,7 +317,7 @@ function CalendarView() {
               setVoiceInitial(null);
               setNewEventOpen(true);
             }}
-            className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+            className="glow-primary ease-strong inline-flex h-9 pointer-coarse:h-11 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
           >
             <svg
               aria-hidden="true"
@@ -342,7 +336,7 @@ function CalendarView() {
           </button>
           <VoiceButton
             onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+            className="ease-strong inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           />
           <button
             type="button"
@@ -350,7 +344,7 @@ function CalendarView() {
             disabled={syncing}
             aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
             title={t("common.syncNow")}
-            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -378,7 +372,7 @@ function CalendarView() {
       </div>
 
       {loading && (
-        <div className="rounded-lg border border-line bg-surface-panel px-4 py-5 text-center text-sm text-ink-dim">
+        <div className="rounded-card border border-line bg-surface-panel px-4 py-5 text-center text-role-body text-ink-dim">
           {t("calendar.gathering")}
         </div>
       )}
@@ -386,19 +380,19 @@ function CalendarView() {
       {error && <ErrorAlert className="mb-4">{error}</ErrorAlert>}
 
       {syncMessage && !error && (
-        <div className="mb-4 rounded-lg border border-state-ok-line bg-state-ok-bg px-4 py-3 text-sm text-state-ok-ink">
+        <div className="mb-4 rounded-control border border-state-ok-line bg-state-ok-bg px-4 py-3 text-role-body text-state-ok-ink">
           {syncMessage}
         </div>
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-center">
-          <p className="mb-1 text-sm text-ink-mid">
+        <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-center">
+          <p className="mb-1 text-role-body text-ink-mid">
             {googleConnected === false
               ? t("calendar.empty.notConnected")
               : t("calendar.empty.noEvents")}
           </p>
-          <p className="mb-4 text-xs text-ink-dim">
+          <p className="mb-4 text-role-caption text-ink-dim">
             {googleConnected === false
               ? t("calendar.empty.notConnectedBody")
               : t("calendar.empty.noEventsBody")}
@@ -409,7 +403,7 @@ function CalendarView() {
               onClick={() => {
                 void startGoogleConnect();
               }}
-              className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+              className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-4 py-2 text-role-label text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
             >
               {t("mail.connectGoogle")}
             </button>
@@ -418,7 +412,7 @@ function CalendarView() {
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="ease-strong min-h-11 rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong min-h-11 rounded-control border border-line bg-surface-panel/70 px-4 py-2 text-role-label text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               {syncing ? t("common.syncing") : t("calendar.syncAgain")}
             </button>
@@ -426,12 +420,16 @@ function CalendarView() {
         </div>
       )}
 
-      {/* A 6×7 month grid is unreadable at ~56px/column on a phone (event times
-          clip to "00:3"). Desktop keeps the grid; mobile gets a forward-looking
-          agenda list grouped by day, which matches the hero's "next 14 days". */}
+      {/* The desktop month grid puts ~20px event links in each cell — too small
+          for touch (44px rule), and 44px links would overflow the cells. On a
+          coarse pointer, or when the calendar is under 600px wide, the compact
+          month takes over: 44px day buttons with dots, and the selected day's
+          events listed below (founder decision, option A). A fine pointer on
+          a wide screen keeps the grid unchanged. Pure CSS switching, so there
+          is no layout flash on load. */}
       {!loading && (
-        <>
-          <div className="hidden md:block">
+        <div className="@container">
+          <div className="block @max-[600px]:hidden pointer-coarse:hidden">
             <MonthGrid
               viewMonth={viewMonth}
               monthLabel={monthLabel}
@@ -443,12 +441,19 @@ function CalendarView() {
               timeZone={userTimezone}
             />
           </div>
-          {events.length > 0 && (
-            <div className="md:hidden">
-              <AgendaList events={events} todayKey={todayKey} timeZone={userTimezone} />
-            </div>
-          )}
-        </>
+          <div className="hidden @max-[600px]:block pointer-coarse:block">
+            <CompactMonth
+              viewMonth={viewMonth}
+              monthLabel={monthLabel}
+              onPrev={goPrevMonth}
+              onNext={goNextMonth}
+              onToday={goToday}
+              eventsByDay={eventsByDay}
+              todayKey={todayKey}
+              timeZone={userTimezone}
+            />
+          </div>
+        </div>
       )}
 
       <NewEventModal
@@ -465,111 +470,10 @@ function CalendarView() {
         }}
       />
       {voiceParsing && (
-        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-line bg-surface-raised px-4 py-2 text-xs text-ink shadow-lg md:bottom-8">
+        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-line bg-surface-raised px-4 py-2 text-role-caption text-ink shadow-lg rail:bottom-8">
           {t("calendar.voiceParsing")}
         </output>
       )}
-    </div>
-  );
-}
-
-function AgendaList({
-  events,
-  todayKey,
-  timeZone,
-}: {
-  events: CalendarEvent[];
-  todayKey: string;
-  timeZone: string;
-}) {
-  const { t, locale } = useT();
-  // Group upcoming events (today onward) by local day, ascending. Past days are
-  // dropped — an agenda is forward-looking, unlike the month grid.
-  const byDay = new Map<string, CalendarEvent[]>();
-  for (const ev of events) {
-    const key = dayKeyForInZone(new Date(ev.startTime), timeZone);
-    if (key < todayKey) continue;
-    const list = byDay.get(key);
-    if (list) list.push(ev);
-    else byDay.set(key, [ev]);
-  }
-  const days = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  for (const [, list] of days) {
-    list.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  }
-
-  if (days.length === 0) {
-    return (
-      <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel px-4 py-6 text-center text-sm text-ink-dim">
-        {t("calendar.nothingThisMonth")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {days.map(([key, list]) => (
-        <div key={key}>
-          <div className="mb-1.5 flex items-center gap-2 px-0.5">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-mid">
-              {new Date(list[0].startTime).toLocaleDateString(locale, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                timeZone,
-              })}
-            </h3>
-            {key === todayKey && (
-              <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
-                {t("nav.v2.today")}
-              </span>
-            )}
-          </div>
-          <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
-            <ul className="divide-y divide-line-soft">
-              {list.map((ev) => (
-                <li key={ev.id} className="row-wash relative">
-                  {key === todayKey && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute left-0 top-0 h-full w-[3px] bg-accent-light"
-                    />
-                  )}
-                  <Link
-                    href={`/calendar/${ev.id}`}
-                    className="flex items-start gap-3 px-4 py-3 transition duration-150"
-                  >
-                    <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-ink-mid">
-                      {ev.allDay
-                        ? t("calendar.allDay")
-                        : formatTime(new Date(ev.startTime), timeZone)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-ink">
-                        {ev.title || t("common.untitled")}
-                      </span>
-                      {ev.location && (
-                        <span className="mt-0.5 block truncate text-caption text-ink-dim">
-                          {ev.location}
-                        </span>
-                      )}
-                      {ev.readOnly && (
-                        <span
-                          className="mt-0.5 block truncate text-caption text-ink-dim"
-                          title={t("calendar.readOnlyHint")}
-                        >
-                          {ev.sourceLabel?.trim() || t("calendar.linkedSource")} ·{" "}
-                          {t("calendar.readOnly")}
-                        </span>
-                      )}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -601,14 +505,14 @@ function MonthGrid({
   const viewMonthIdx = monthIndexInZone(viewMonth, timeZone);
 
   return (
-    <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+    <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       <div className="flex items-center justify-between gap-3 border-b border-line-soft px-4 py-2.5">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
             aria-label={t("calendar.prevMonth")}
-            className="ease-strong flex h-11 w-11 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+            className="ease-strong flex h-11 w-11 items-center justify-center rounded-control text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ‹
           </button>
@@ -616,16 +520,16 @@ function MonthGrid({
             type="button"
             onClick={onNext}
             aria-label={t("calendar.nextMonth")}
-            className="ease-strong flex h-11 w-11 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+            className="ease-strong flex h-11 w-11 items-center justify-center rounded-control text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ›
           </button>
-          <h2 className="ml-1 text-base font-semibold tracking-[-0.01em] text-ink">{monthLabel}</h2>
+          <h2 className="ml-1 text-role-head tracking-[-0.01em] text-ink">{monthLabel}</h2>
         </div>
         <button
           type="button"
           onClick={onToday}
-          className="ease-strong rounded-lg border border-line bg-surface-panel/70 px-3 py-1 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1 pointer-coarse:min-h-11 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("nav.v2.today")}
         </button>
@@ -634,7 +538,7 @@ function MonthGrid({
         {weekdayLabels.map((d) => (
           <div
             key={d}
-            className="px-2 py-1.5 text-center text-caption font-medium uppercase tracking-[0.12em] text-ink-dim"
+            className="px-2 py-1.5 text-center text-role-caption font-medium uppercase tracking-[0.12em] text-ink-dim"
           >
             {d}
           </div>
@@ -697,7 +601,7 @@ function DayCell({
   const openDay = () => {
     if (events.length > 0) router.push(`/calendar/${events[0].id}`);
   };
-  const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-caption font-medium tabular-nums transition ${
+  const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-role-caption font-medium tabular-nums transition ${
     isToday ? "bg-accent-solid text-accent-solid-ink" : inMonth ? "text-ink-muted" : "text-ink-dim"
   }`;
 
@@ -713,7 +617,8 @@ function DayCell({
             type="button"
             onClick={openDay}
             aria-label={`${dayLabel} — ${events.length} event${events.length === 1 ? "" : "s"}`}
-            className={`${dayNumberClass} hover:ring-1 hover:ring-accent-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+            // On touch the 24px number keeps its look but takes a 44px hit area.
+            className={`${dayNumberClass} relative hover:ring-1 hover:ring-accent-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']`}
           >
             {cell.dayNumber}
           </button>
@@ -728,7 +633,7 @@ function DayCell({
         {hidden > 0 && (
           <Link
             href={`/calendar/${events[MAX_VISIBLE].id}`}
-            className="block truncate px-1 text-caption text-ink-dim hover:text-accent-deep"
+            className="block truncate px-1 text-role-caption text-ink-dim hover:text-accent-deep"
           >
             {t("calendar.more", { count: String(hidden) })}
           </Link>
@@ -747,14 +652,14 @@ function EventChip({
   timeZone: string;
   dimmed: boolean;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const start = new Date(event.startTime);
-  const timeLabel = event.allDay ? "" : formatTime(start, timeZone);
+  const timeLabel = event.allDay ? "" : formatTime(start, timeZone, locale);
   return (
     <Link
       href={`/calendar/${event.id}`}
       title={`${timeLabel ? `${timeLabel} · ` : ""}${event.title || "Untitled"}`}
-      className={`flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-caption transition duration-150 ${
+      className={`flex items-center gap-1 truncate rounded-chip px-1 py-0.5 text-role-caption transition duration-150 ${
         dimmed
           ? "text-ink-dim hover:bg-surface-hover hover:text-ink-mid"
           : "text-ink hover:bg-accent/10 hover:text-accent-deeper"
@@ -768,144 +673,4 @@ function EventChip({
       <span className="truncate">{event.title || t("common.untitled")}</span>
     </Link>
   );
-}
-
-/** Short weekday names Sun..Sat in `locale`. 2026-01-04 (UTC noon) is a Sunday. */
-function weekdayNames(locale: string): string[] {
-  const format = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
-  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2026, 0, 4 + i, 12))));
-}
-
-// 24-hour format keeps "13:00" unambiguous (the AM/PM split has been a
-// dogfood pain point — "04:00 AM" in the calendar looked like 4 in the
-// morning when the underlying event was 13:00 KST). The timezone arg is
-// the user's stored IANA zone, NOT the browser default.
-function formatTime(d: Date, timeZone: string): string {
-  return d.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone,
-  });
-}
-
-// Day grouping must also respect the user's timezone — otherwise an event
-// at 23:30 KST stored as 14:30 UTC ends up grouped under the wrong local
-// day (the browser would call it "today" while the user calls it "tomorrow").
-function dayKeyForInZone(d: Date, timeZone: string): string {
-  // en-CA returns YYYY-MM-DD, which is exactly the key shape we want and is
-  // stable across locales.
-  return d.toLocaleDateString("en-CA", { timeZone });
-}
-
-// ─── Month grid helpers ──────────────────────────────────────────────────
-//
-// All date math respects the user's IANA timezone so cell boundaries match
-// what the user calls "Monday" — not what the browser calls "Monday" based
-// on its locale guess.
-
-interface MonthCell {
-  /** YYYY-MM-DD in the user's timezone — used as map key for events. */
-  key: string;
-  /** 1..31 — day number to display. */
-  dayNumber: number;
-  /** 0=Jan..11=Dec — index of the month this cell belongs to. */
-  monthIndex: number;
-}
-
-/** Pinned first-of-month at 00:00 in the given timezone. */
-function firstOfMonth(d: Date, timeZone: string): Date {
-  // Use ISO date-parts in the user's timezone, then construct a UTC moment
-  // that represents 00:00 of that local day. This is the only safe way to
-  // round-trip "month start" without lying about offsets.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const year = Number(parts.find((p) => p.type === "year")?.value);
-  const month = Number(parts.find((p) => p.type === "month")?.value);
-  // Construct YYYY-MM-01 at noon UTC — noon avoids DST edges that 00:00
-  // can land on for some zones.
-  return new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-}
-
-/** Add N months (can be negative). Day pinned to 1. */
-function addMonths(d: Date, n: number, timeZone: string): Date {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(d);
-  const year = Number(parts.find((p) => p.type === "year")?.value);
-  const month = Number(parts.find((p) => p.type === "month")?.value);
-  const totalMonths = (year - 1970) * 12 + (month - 1) + n;
-  const newYear = 1970 + Math.floor(totalMonths / 12);
-  const newMonth = totalMonths - (newYear - 1970) * 12;
-  return new Date(Date.UTC(newYear, newMonth, 1, 12, 0, 0));
-}
-
-/** Month index 0..11 in the given timezone for a date. */
-function monthIndexInZone(d: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    month: "2-digit",
-  }).formatToParts(d);
-  return Number(parts.find((p) => p.type === "month")?.value) - 1;
-}
-
-/** Sunday-first weekday index 0..6 in the given timezone for a date. */
-function weekdayInZone(d: Date, timeZone: string): number {
-  // Intl gives short names; map Sun..Sat to 0..6.
-  const wd = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(d);
-  const map: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  return map[wd] ?? 0;
-}
-
-/** Build the 42-cell month grid (6 rows × 7 days) including leading/trailing
- * padding from the adjacent months — same behavior as Google Calendar. */
-function buildMonthCells(viewMonth: Date, timeZone: string): MonthCell[] {
-  const monthStart = firstOfMonth(viewMonth, timeZone);
-  const firstWeekday = weekdayInZone(monthStart, timeZone);
-  // Anchor 12:00 UTC keeps DST jumps from skipping a day.
-  const anchor = new Date(monthStart.getTime() - firstWeekday * 86400000);
-  const cells: MonthCell[] = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(anchor.getTime() + i * 86400000);
-    cells.push({
-      key: dayKeyForInZone(d, timeZone),
-      dayNumber: Number(new Intl.DateTimeFormat("en-CA", { timeZone, day: "2-digit" }).format(d)),
-      monthIndex: monthIndexInZone(d, timeZone),
-    });
-  }
-  return cells;
-}
-
-/** Range to fetch — first and last cell of the visible grid, expanded by
- * one day on each side so events overlapping the boundary aren't dropped. */
-function monthGridRange(viewMonth: Date, timeZone: string): { start: Date; end: Date } {
-  const cells = buildMonthCells(viewMonth, timeZone);
-  // Cells are sorted; take ends and pad by 24h.
-  const firstKey = cells[0].key;
-  const lastKey = cells[cells.length - 1].key;
-  // `key` is YYYY-MM-DD in user TZ — parse back via Date for the API range.
-  // Use noon UTC so the range covers a full local day on both ends regardless
-  // of DST.
-  const start = new Date(`${firstKey}T00:00:00Z`);
-  const end = new Date(`${lastKey}T23:59:59Z`);
-  start.setUTCHours(start.getUTCHours() - 12);
-  end.setUTCHours(end.getUTCHours() + 12);
-  // Suppress no-unused-vars on timeZone — used by the helpers above; keeping
-  // it in the signature so future callers don't need to import zone state.
-  void timeZone;
-  return { start, end };
 }

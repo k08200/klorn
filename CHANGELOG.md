@@ -12,6 +12,39 @@ calendar time.
 
 ## [Unreleased]
 
+### Removed — OpenRouter; Klorn runs on the Claude API only (2026-11-01)
+- **OpenRouter is no longer a provider.** Founder decision 2026-11-01. The
+  hosted service has served every model call through Anthropic
+  (`claude-haiku-5-5`) since 2026-10-30. The OpenRouter provider, the
+  `llm/openrouter-*` modules and the dispatch-only `model-canary.yml` workflow
+  are removed, and model pins default to `claude-haiku-5-5`.
+- **BYOK takes an Anthropic key** instead of an OpenRouter key.
+- **The public playground drops its OpenRouter tab.** Visitors can still run
+  it with their own Anthropic, OpenAI or Google Gemini key.
+- **Self-host providers are Anthropic, Gemini and any OpenAI-compatible
+  endpoint** (Ollama, LM Studio, vLLM, llama.cpp). `.env.example`,
+  `.env.selfhost.example`, both compose files and `docs/self-hosting.md` now
+  use `ANTHROPIC_API_KEY`; the env examples and the guide document
+  `LLM_PROVIDER_ORDER`.
+- **Legal pages updated.** The privacy policy and the DPA subprocessor table
+  (all 7 locales) no longer name OpenRouter; the server-side AI providers are
+  Anthropic (Claude API) and Google (Gemini API).
+
+## [0.4.0] — 2026-10-28
+
+Cuts a release line for everything that piled up behind `[Unreleased]` since
+0.3.0: the ontology write side and its approval gate, the deterministic core
+extraction, the model dial, the desktop shell, the public playground, the
+calibration measurement work, and the security hardening that came with them.
+`@klorn/api` and `@klorn/web` move to `0.4.0` together.
+
+Two notes for anyone reading the tag list and wondering whether this project
+stalled in June. The tags published between 0.3.0 and here are desktop builds
+(`desktop-v0.4.8xxxx`) that ship the macOS and Windows apps; they do not carry
+the server version, which is why 136 of them exist against one changelog entry.
+And `@klorn/core`, named in the 0.3.0 lockstep note, no longer exists — its
+surface is now `@klorn/contract`, which versions on its own.
+
 ### Fixed — Outbox drain crashed: missing OutboxStatus enum type
 - **The transactional action outbox never drained.** `ActionOutbox.status` was
   declared as the `OutboxStatus` enum in the schema, but the original

@@ -17,7 +17,7 @@
  *     [--user=admin@example.com] [--source=EMAIL] [--out=./lane-quality.json]
  *
  * --since wins over --days (default 7); --until defaults to now. Engagement
- * stamping started with migration 20261024000000, so start the window after
+ * stamping started with migration 20261107120000, so start the window after
  * that deploy. Exits 2 when the window holds no judged rows.
  */
 

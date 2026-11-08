@@ -22,6 +22,7 @@ import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmai
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { markEmailReplied } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
+import { recordSentMessage, type SentOrigin } from "../mail/sent-messages.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,
@@ -231,13 +232,27 @@ export class FloorReceiptRequiredError extends Error {
   }
 }
 
+/**
+ * Server-side context for a call. Never derived from tool args, so a model
+ * cannot set it.
+ */
+export interface ExecuteToolCallOptions {
+  /**
+   * How a successful send_email is labelled in SentMessage. Defaults to
+   * "approved" (the user approved these exact bytes); the auto-reply path
+   * passes "auto_reply".
+   */
+  sentOrigin?: Extract<SentOrigin, "approved" | "auto_reply">;
+}
+
 export async function executeToolCall(
   userId: string,
   functionName: string,
   args: Record<string, unknown>,
   receipt?: ActionReceipt | null,
+  opts: ExecuteToolCallOptions = {},
 ): Promise<string> {
-  const raw = await executeToolCallInternal(userId, functionName, args, receipt ?? null);
+  const raw = await executeToolCallInternal(userId, functionName, args, receipt ?? null, opts);
   return capToolResult(raw);
 }
 
@@ -246,6 +261,7 @@ async function executeToolCallInternal(
   functionName: string,
   args: Record<string, unknown>,
   receipt: ActionReceipt | null,
+  opts: ExecuteToolCallOptions,
 ): Promise<string> {
   try {
     // Central floor guard — fail closed for every FLOOR_ACTION before the
@@ -327,6 +343,25 @@ async function executeToolCallInternal(
         // an answer.
         if (inReplyToId && !("error" in sent) && !("unsupported" in sent)) {
           await markEmailReplied(userId, inReplyToId);
+        }
+        // Label the send in one write, so the Sent-folder scan never records
+        // an auto reply as mail the user wrote. The mail has already left:
+        // a bookkeeping failure must never surface as a send error, or the
+        // caller would retry and send it twice.
+        if ("success" in sent && sent.success && sent.messageId) {
+          try {
+            await recordSentMessage(userId, {
+              gmailId: sent.messageId,
+              threadId: sent.threadId ?? null,
+              to,
+              subject,
+              sentAt: new Date(),
+              inbox: linkedInboxAccountId ?? "primary",
+              origin: opts.sentOrigin ?? "approved",
+            });
+          } catch (err) {
+            captureError(err, { tags: { scope: "tool-executor.sent-record" }, extra: { userId } });
+          }
         }
         return JSON.stringify(sent);
       }

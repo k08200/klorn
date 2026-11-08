@@ -5,6 +5,7 @@
  * (model.test.ts pins it).
  */
 import type { InboxPurpose } from "@klorn/contract";
+import { isEntitlementRefusal } from "../../api/client";
 import type { CalendarEventWire, EventDraftWire } from "../../api/wire";
 
 /** "2026-10-16" — a calendar day in the user's zone. */
@@ -439,4 +440,12 @@ export function formFromDraft(
     attendees: draft.attendees?.join(", ") ?? fallback.attendees,
     allDay: draft.allDay ?? fallback.allDay,
   };
+}
+
+/**
+ * What a failed event save shows: the plans prompt for the plan refusal
+ * (403 ENTITLEMENT_REQUIRED) only; any other failure is the plain error.
+ */
+export function saveStateAfterFailure(err: unknown): "paywalled" | "error" {
+  return isEntitlementRefusal(err) ? "paywalled" : "error";
 }

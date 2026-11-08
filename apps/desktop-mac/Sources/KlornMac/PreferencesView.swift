@@ -286,6 +286,7 @@ struct PreferencesView: View {
                 if let error = model.linkAccountError {
                     Text(error).font(.caption).foregroundStyle(Theme.textDim)
                         .fixedSize(horizontal: false, vertical: true)
+                    if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
                 }
                 // Edited in the bar's full sidebar until M8 deleted it; the
                 // purpose prompt asks once, this is where they change later.

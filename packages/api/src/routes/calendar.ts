@@ -11,6 +11,7 @@ import {
   deleteAttentionForCalendarEvents,
   upsertAttentionForCalendarEvent,
 } from "../judge/attention-mirror.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import {
   createEvent as googleCreateEvent,
@@ -165,6 +166,10 @@ export async function calendarRoutes(app: FastifyInstance) {
         const event = await parseEventText(userId, text);
         return { event };
       } catch (err) {
+        // The daily cost cap is not a transient failure: answer it like every
+        // other LLM surface (429 + code), with no alert.
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         console.error(`[CALENDAR] parse-event failed for user ${userId}:`, err);
         captureError(err, { tags: { scope: "calendar.parse_event", userId } });
         return reply.code(502).send({ error: "Could not parse the text right now" });

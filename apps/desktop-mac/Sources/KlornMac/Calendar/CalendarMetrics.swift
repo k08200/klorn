@@ -13,7 +13,7 @@ struct CalendarMetrics {
 
     static let window = CalendarMetrics(
         title: Theme.Typo.title, weekday: Theme.Typo.caption.weight(.medium),
-        chip: Theme.Typo.caption, chipRadius: Theme.Radius.sm, scopeRadius: Theme.Radius.sm,
+        chip: Theme.Typo.caption, chipRadius: Theme.Radius.chip, scopeRadius: Theme.Radius.control,
         headerInset: Theme.s6, headerVertical: Theme.s3)
 
     /// A month row is never shorter than this: the day number and two events.

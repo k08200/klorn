@@ -71,8 +71,8 @@ export default function IosInstallHint() {
       <div className="flex items-start gap-3">
         <img src="/brand/mark.svg?v=matte2" alt="" className="mt-0.5 h-8 w-8 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-label text-ink">{t("pwa.ios.title")}</p>
-          <p className="mt-0.5 text-caption text-ink-mid">{t("pwa.ios.body")}</p>
+          <p className="text-role-label text-ink">{t("pwa.ios.title")}</p>
+          <p className="mt-0.5 text-role-caption text-ink-mid">{t("pwa.ios.body")}</p>
         </div>
         <Button
           variant="ghost"
@@ -88,7 +88,7 @@ export default function IosInstallHint() {
       <ol
         id={stepsId}
         hidden={!expanded}
-        className="mt-2 space-y-1.5 pl-11 text-caption text-ink-soft"
+        className="mt-2 space-y-1.5 pl-11 text-role-caption text-ink-soft"
       >
         <li className="flex items-center gap-1.5">
           <span>1. {t("pwa.ios.step1")}</span>

@@ -115,7 +115,7 @@ export default function PrimitivesPreview() {
   return (
     <main className="mx-auto max-w-3xl space-y-10 px-4 py-8 text-ink">
       <header className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-display">UI primitives</h1>
+        <h1 className="mr-auto text-role-page">UI primitives</h1>
         <Button variant="secondary" size="sm" onClick={() => setTheme(false)}>
           Light
         </Button>
@@ -125,7 +125,7 @@ export default function PrimitivesPreview() {
       </header>
 
       <section aria-labelledby="sec-lane" className="space-y-3">
-        <h2 id="sec-lane" className="text-title">
+        <h2 id="sec-lane" className="text-role-title">
           LaneChip
         </h2>
         <div className="flex flex-wrap gap-2" data-testid="lane-chips">
@@ -137,7 +137,7 @@ export default function PrimitivesPreview() {
       </section>
 
       <section aria-labelledby="sec-source" className="space-y-3">
-        <h2 id="sec-source" className="text-title">
+        <h2 id="sec-source" className="text-role-title">
           SourceBadge
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -149,7 +149,7 @@ export default function PrimitivesPreview() {
       </section>
 
       <section aria-labelledby="sec-rows" className="space-y-3">
-        <h2 id="sec-rows" className="text-title">
+        <h2 id="sec-rows" className="text-role-title">
           MailRow
         </h2>
         <div className="rounded-card border border-line bg-surface-panel p-1">
@@ -177,7 +177,7 @@ export default function PrimitivesPreview() {
       </section>
 
       <section aria-labelledby="sec-skeleton" className="space-y-3">
-        <h2 id="sec-skeleton" className="text-title">
+        <h2 id="sec-skeleton" className="text-role-title">
           Skeleton
         </h2>
         <SkeletonGroup label="Loading mail" className="space-y-2">
@@ -189,7 +189,7 @@ export default function PrimitivesPreview() {
       </section>
 
       <section aria-labelledby="sec-empty" className="space-y-3">
-        <h2 id="sec-empty" className="text-title">
+        <h2 id="sec-empty" className="text-role-title">
           EmptyState
         </h2>
         <div className="rounded-card border border-line bg-surface-panel">
@@ -203,7 +203,7 @@ export default function PrimitivesPreview() {
       </section>
 
       <section aria-labelledby="sec-sheet" className="space-y-3">
-        <h2 id="sec-sheet" className="text-title">
+        <h2 id="sec-sheet" className="text-role-title">
           Sheet and Button
         </h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -233,10 +233,10 @@ export default function PrimitivesPreview() {
           }
         >
           <label className="block space-y-1">
-            <span className="text-label text-ink-soft">Account nickname</span>
+            <span className="text-role-label text-ink-soft">Account nickname</span>
             <input
               ref={nameRef}
-              className="focus-ring block min-h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-body"
+              className="focus-ring block min-h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-role-body"
             />
           </label>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -259,7 +259,7 @@ export default function PrimitivesPreview() {
               Open nested sheet
             </Button>
           </div>
-          <p data-testid="confirm-result" className="mt-2 text-caption text-ink-muted">
+          <p data-testid="confirm-result" className="mt-2 text-role-caption text-ink-muted">
             {confirmResult}
           </p>
         </Sheet>

@@ -1,6 +1,6 @@
 /**
  * D4 against the production failure of #1319: every LLM provider refuses (402,
- * no OpenRouter credits). This runs the REAL LLM layer (createCompletion, its
+ * no credits left). This runs the REAL LLM layer (createCompletion, its
  * failover and failure ledger) with a provider chain that always fails, behind
  * the real drive routes and the real summary job.
  *
@@ -31,7 +31,7 @@ vi.mock("../providers/index.js", () => {
     providerCalls.count += 1;
     throw Object.assign(new Error("Insufficient credits"), { status: 402 });
   };
-  const provider = (name: "openrouter" | "gemini") => ({
+  const provider = (name: "anthropic" | "gemini") => ({
     name,
     quotaKey: `${name}:env`,
     defaultModel: "fake-default",
@@ -42,7 +42,7 @@ vi.mock("../providers/index.js", () => {
   });
   return {
     getProvider: vi.fn(() => null),
-    getProviderChain: vi.fn(() => [provider("openrouter"), provider("gemini")]),
+    getProviderChain: vi.fn(() => [provider("anthropic"), provider("gemini")]),
   };
 });
 // The cost gates and the usage ledger write to tables this fake does not hold.

@@ -31,6 +31,7 @@ struct CalendarEventEditor: View {
             if let error = model.eventEditorError {
                 Text(error).font(.caption).foregroundStyle(Theme.tint(.push))
                     .fixedSize(horizontal: false, vertical: true)
+                if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
             }
             HStack(spacing: Theme.s2) {
                 Button(L("cal.save")) {

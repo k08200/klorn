@@ -22,7 +22,7 @@
 
 .priming__art {
   padding: 22px 14px;
-  border-radius: 28px;
+  border-radius: var(--radius-sheet);
   background: #1e293b;
   display: flex;
   flex-direction: column;
@@ -35,7 +35,7 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  color: #0f172a;
+  color: #0b0d12;
   font-size: var(--type-body);
   line-height: calc(20 * var(--u));
 }
@@ -65,7 +65,7 @@
   width: 36px;
   height: 36px;
   border-radius: 9px;
-  background: #0f172a;
+  background: #0b0d12;
   color: #7dd3fc;
   font-size: calc(17 * var(--u));
   font-weight: 700;
@@ -92,7 +92,7 @@
 
 .priming__note-head strong,
 .push-banner__head strong {
-  color: #0f172a;
+  color: #0b0d12;
   font-weight: 600;
   min-width: 0;
   overflow: hidden;

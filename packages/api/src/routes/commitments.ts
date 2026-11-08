@@ -7,7 +7,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { recordFeedback } from "../learning/feedback.js";
 import { getTrustScoresBulk, updateTrustScore } from "../learning/trust-score.js";
@@ -35,10 +35,30 @@ const listCommitmentsQuerySchema = {
   },
 } as const;
 
+// The ledger is open to the free tier, so its inputs are bounded: a list page
+// never exceeds MAX_LIST_LIMIT rows, and a PATCH can't stuff an oversized title
+// or description (both are mirrored into the attention feed).
+const MAX_LIST_LIMIT = 200;
+const MAX_TITLE_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 5000;
+
+const patchCommitmentBodySchema = {
+  type: "object",
+  properties: {
+    title: { type: "string", minLength: 1, maxLength: MAX_TITLE_LENGTH },
+    description: { type: ["string", "null"], maxLength: MAX_DESCRIPTION_LENGTH },
+    status: { type: "string", maxLength: 50 },
+    dueAt: { type: ["string", "null"], maxLength: 100 },
+  },
+} as const;
+
 export async function commitmentRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Paywall (no-op pre-launch): reading the ledger and triaging the user's own
+  // rows (status / title / due, delete) are open to the free tier. The
+  // fulfillment-path routes spend LLM money (build / rebuild) or create tasks
+  // (materialize), so each carries its own requireEntitled.
+  app.addHook("preHandler", requireAppAccess);
 
   // GET /api/commitments — list, optionally filtered by status
   app.get("/", { schema: { querystring: listCommitmentsQuerySchema } }, async (request) => {
@@ -51,7 +71,10 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
     const commitments = await listCommitments(userId, {
       status: filterStatus,
-      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      limit:
+        parsedLimit !== undefined && Number.isFinite(parsedLimit)
+          ? Math.min(Math.max(parsedLimit, 1), MAX_LIST_LIMIT)
+          : undefined,
     });
 
     // Enrich COUNTERPARTY commitments with trust badges
@@ -103,7 +126,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
   });
 
   // PATCH /api/commitments/:id — status / title / due updates
-  app.patch("/:id", async (request, reply) => {
+  app.patch("/:id", { schema: { body: patchCommitmentBodySchema } }, async (request, reply) => {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);
@@ -191,7 +214,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
   // ─── Commitment Fulfillment Paths ─────────────────────────────────────────
 
   // GET /api/commitments/:id/path — get or build the fulfillment plan
-  app.get("/:id/path", async (request, reply) => {
+  app.get("/:id/path", { preHandler: requireEntitled }, async (request, reply) => {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);
@@ -204,7 +227,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
   // POST /api/commitments/:id/path/rebuild — force a fresh plan from LLM
   app.post(
     "/:id/path/rebuild",
-    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    { preHandler: requireEntitled, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const userId = getUserId(request);
       const { id } = request.params as { id: string };
@@ -217,21 +240,25 @@ export async function commitmentRoutes(app: FastifyInstance) {
   );
 
   // POST /api/commitments/:id/path/steps/:index/materialize — create task for one step
-  app.post("/:id/path/steps/:index/materialize", async (request, reply) => {
-    const userId = getUserId(request);
-    const { id, index } = request.params as { id: string; index: string };
-    const existing = await getCommitment(id);
-    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
-    const stepIndex = Number.parseInt(index, 10);
-    if (!Number.isFinite(stepIndex) || stepIndex < 0)
-      return reply.code(400).send({ error: "Invalid step index" });
-    const result = await materializeStepAsTask(userId, id, stepIndex);
-    return { success: true, ...result };
-  });
+  app.post(
+    "/:id/path/steps/:index/materialize",
+    { preHandler: requireEntitled },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { id, index } = request.params as { id: string; index: string };
+      const existing = await getCommitment(id);
+      if (!existing) return reply.code(404).send({ error: "Commitment not found" });
+      if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      const stepIndex = Number.parseInt(index, 10);
+      if (!Number.isFinite(stepIndex) || stepIndex < 0)
+        return reply.code(400).send({ error: "Invalid step index" });
+      const result = await materializeStepAsTask(userId, id, stepIndex);
+      return { success: true, ...result };
+    },
+  );
 
   // POST /api/commitments/:id/path/materialize-all — create tasks for all steps
-  app.post("/:id/path/materialize-all", async (request, reply) => {
+  app.post("/:id/path/materialize-all", { preHandler: requireEntitled }, async (request, reply) => {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);

@@ -68,11 +68,14 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/auth/google/callback}
 
       # ── LLM provider (set at least one; local-first is supported) ────
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-}
       OPENAI_COMPAT_MODEL: ${OPENAI_COMPAT_MODEL:-}
       OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+      # Order of the cloud providers when more than one key is set.
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-}
 
       # ── URLs the API must know about ─────────────────────────────────
       # Where the browser reaches the web app (OAuth redirects land here).

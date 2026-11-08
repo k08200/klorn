@@ -48,9 +48,9 @@ struct BriefingCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8).padding(.leading, 6)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
             .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 1).fill(Theme.accent.opacity(0.7))
+                Capsule().fill(Theme.accent.opacity(0.7))
                     .frame(width: 2).padding(.vertical, 6)
             }
         }

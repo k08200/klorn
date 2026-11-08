@@ -154,7 +154,7 @@ export function MailHtmlBody({ emailId, html, plain }: MailHtmlBodyProps) {
         <div className="flex flex-wrap items-center gap-2">
           {imagesBlocked && (
             <>
-              <p className="min-w-0 flex-1 text-caption text-ink-mid">
+              <p className="min-w-0 flex-1 text-role-caption text-ink-mid">
                 {t("mailHtml.imagesBlocked")}
               </p>
               <Button variant="secondary" size="sm" onClick={() => setAllowRemoteImages(true)}>
@@ -188,7 +188,7 @@ export function MailHtmlBody({ emailId, html, plain }: MailHtmlBodyProps) {
             <Skeleton variant="block" height="h-60" />
           )}
           {inline.missing > 0 && (
-            <p className="text-caption text-ink-mid">{t("mailHtml.inlineMissing")}</p>
+            <p className="text-role-caption text-ink-mid">{t("mailHtml.inlineMissing")}</p>
           )}
         </>
       )}

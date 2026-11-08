@@ -780,3 +780,13 @@
 "tool.label.execute_skill" = "Run skill";
 "tool.label.classify_emails" = "Sort mail into lanes";
 "tool.label.unknown" = "Action";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "Upgrade to Pro";
+"plan.upgrade.a11yHint" = "Opens the billing page in your browser.";
+"proposals.needsPro" = "Approving or declining needs Klorn Pro.";
+"chat.cap.free" = "You've used today's free AI allowance. It resets at 00:00 UTC.";
+"chat.cap.daily" = "You've used today's AI allowance. It resets at 00:00 UTC.";
+"chat.send.failed" = "Couldn't reach Klorn — %@";
+"chat.event.failed" = "Couldn't create the event — %@";
+"commitments.needsPro" = "Commitments need Klorn Pro.";

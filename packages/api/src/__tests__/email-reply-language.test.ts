@@ -23,8 +23,9 @@ vi.mock("../db.js", () => {
 vi.mock("../llm/openai.js", () => ({
   createCompletion,
   DRAFT_MODEL: "test-draft-model",
-  openai: {},
 }));
+// An LLM is configured: the guard follows the real provider chain.
+vi.mock("../providers/index.js", () => ({ hasLlmProvider: () => true }));
 
 import { generateSmartReply } from "../mail/email-reply.js";
 

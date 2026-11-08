@@ -10,7 +10,7 @@ export function BetaChip({ className = "" }: { className?: string }) {
   const { t } = useT();
   return (
     <span
-      className={`inline-flex h-5.5 shrink-0 items-center rounded-control border border-line bg-surface-raised px-2 text-caption font-semibold text-ink-mid ${className}`}
+      className={`inline-flex h-5.5 shrink-0 items-center rounded-chip border border-line bg-surface-raised px-2 text-role-caption font-semibold text-ink-mid ${className}`}
     >
       {t("imap.beta")}
     </span>

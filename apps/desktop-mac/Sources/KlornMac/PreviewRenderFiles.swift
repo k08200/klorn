@@ -54,7 +54,7 @@ extension PreviewRender {
     static func renderFiles(
         dir: URL, dark: Bool, base: () -> AppModel, actions: ShellActions
     ) -> Bool {
-        let size = CGSize(width: 1280, height: 800)
+        let size = mainWindowSize
         let date = ISO8601DateFormatter().date(from: "2026-07-29T08:30:00Z") ?? Date()
         let files = (try? JSONDecoder().decode([DriveFileWire].self, from: Data(filesJSON.utf8))) ?? []
         func availability(_ json: String) -> TeamAvailabilityWire? {

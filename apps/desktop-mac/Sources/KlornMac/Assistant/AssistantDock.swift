@@ -46,8 +46,8 @@ struct AssistantDock: View {
                     AssistantThread(showsStarters: false)
                 }
                 .frame(width: 380, height: 460)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
                 .shadow(color: Theme.panelShadow, radius: 22, y: 8)
                 .transition(
                     reduceMotion

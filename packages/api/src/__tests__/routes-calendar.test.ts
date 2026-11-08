@@ -494,4 +494,28 @@ describe("POST /api/calendar/parse-event", () => {
     expect(res.statusCode).toBe(502);
     await app.close();
   });
+
+  it("answers the daily cost cap with 429 + its code, not a 'try again' 502", async () => {
+    // Free-tier reachable: a FREE user past the free cap must see the cap
+    // (and that upgrading helps), not "Could not parse the text right now".
+    parseEventText.mockRejectedValueOnce(
+      Object.assign(new Error("Free quota used for today."), {
+        name: "DailyCostCapExceededError",
+        code: "DAILY_COST_CAP_FREE",
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar/parse-event",
+      headers: auth(),
+      payload: { text: "내일 미팅" },
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({
+      error: "Free quota used for today.",
+      code: "DAILY_COST_CAP_FREE",
+    });
+    await app.close();
+  });
 });

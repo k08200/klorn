@@ -25,18 +25,19 @@ import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/cont
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { localDayUtcRange } from "../time-zone.js";
 import { getUserTimeZone } from "../user-timezone.js";
 
 export async function receiptRoutes(app: FastifyInstance) {
   // Plugin-level auth + paywall gate (the per-route requireAuth below is kept
-  // and idempotent). requireEntitled runs after requireAuth so request.userId
-  // is set; it's a no-op pre-launch. Refuses non-entitled users at the paid
-  // firewall-receipt surface.
+  // and idempotent). Both guards run after requireAuth so request.userId is
+  // set; both are no-ops pre-launch. Reading the daily receipt is open to the
+  // free tier (requireAppAccess); /undo proposes reversing an executed action,
+  // so it carries its own requireEntitled.
   app.addHook("preHandler", requireAuth);
-  app.addHook("preHandler", requireEntitled);
+  app.addHook("preHandler", requireAppAccess);
 
   app.get("/today", { preHandler: requireAuth }, async (request): Promise<DailyReceipt> => {
     const userId = getUserId(request);
@@ -190,7 +191,7 @@ export async function receiptRoutes(app: FastifyInstance) {
   // Mark an auto-handled item for undo (surfaces a new PendingAction to reverse it)
   app.post(
     "/undo/:pendingActionId",
-    { preHandler: requireAuth },
+    { preHandler: [requireAuth, requireEntitled] },
     async (request): Promise<ReceiptUndoResponse> => {
       const userId = getUserId(request);
       const { pendingActionId } = request.params as { pendingActionId: string };

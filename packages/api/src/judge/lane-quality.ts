@@ -12,7 +12,7 @@
  * so the database itself refuses a write. Safe against prod.
  *
  * Caveats the numbers carry:
- *  - Engagement stamping started with migration 20261024000000. Rows judged
+ *  - Engagement stamping started with migration 20261107120000. Rows judged
  *    before it have no signals, so pass a window that starts after deploy.
  *  - "Replied within 24h" counts only rows judged at least 24h before
  *    min(`until`, now) (the denominator is `matured`), so a fresh row isn't

@@ -56,7 +56,7 @@
 .reader-nav__step {
   width: var(--touch);
   height: var(--touch);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -421,7 +421,7 @@
   flex: none;
   width: var(--touch);
   height: var(--touch);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--accent);
   display: flex;
   align-items: center;
@@ -870,7 +870,7 @@
   flex: none;
   min-height: var(--touch);
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   display: flex;
   align-items: center;
   gap: 6px;

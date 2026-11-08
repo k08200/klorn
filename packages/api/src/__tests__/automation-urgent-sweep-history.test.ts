@@ -72,12 +72,6 @@ vi.mock("../billing/stripe.js", async (importOriginal) => ({
 }));
 vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: vi.fn(async () => {}) }));
 vi.mock("../pim/weekly-report.js", () => ({ sendWeeklySignalReports: vi.fn(async () => {}) }));
-vi.mock("../llm/openrouter-catalog-check.js", () => ({
-  runOpenRouterCatalogCheck: vi.fn(async () => {}),
-}));
-vi.mock("../llm/openrouter-key-health.js", () => ({
-  runOpenRouterKeyCheck: vi.fn(async () => {}),
-}));
 vi.mock("../judge/calibration-snapshot.js", () => ({
   runDailyCalibrationSnapshots: vi.fn(async () => {}),
 }));
@@ -316,6 +310,42 @@ describe.each(IMAP_CASES)("$label: the urgent sweep after an IMAP repair", (imap
     expect(created[0].dedupeKey).toBe("urgent:18abc");
     expect(String(created[0].message)).toMatch(/\[18abc\]$/);
     expect(resetLookups()).toEqual([]);
+  });
+});
+
+describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down for users under the policy", () => {
+  afterEach(() => {
+    delete process.env.JUDGE_V3_POLICY;
+    delete process.env.JUDGE_V3_SHADOW;
+  });
+
+  it("rings for nothing, so the policy's PUSH lane under the daily budget is the only email interrupt", async () => {
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "Urgent email")).toEqual([]);
+    expect(m.sendPushNotification).not.toHaveBeenCalled();
+    expect(m.sendSms).not.toHaveBeenCalled();
+  });
+
+  it("still rings for a user the shadow flag does not cover (no policy for them)", async () => {
+    process.env.JUDGE_V3_POLICY = "true";
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
+  });
+
+  it("still rings with the flag off (the control)", async () => {
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
   });
 });
 

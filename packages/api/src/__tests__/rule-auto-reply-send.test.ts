@@ -608,6 +608,25 @@ describe("clearNotifications keeps reply claims (they are at-most-once locks, no
     expect(await getNotifications(USER)).toHaveLength(0);
   });
 
+  it("keeps interrupt-budget slots hidden, so clearing never hands the day's budget back", async () => {
+    store.rows.push({
+      id: "slot",
+      userId: USER,
+      type: "email",
+      dedupeKey: "interrupt:2026-10-31:1",
+      title: "Urgent email",
+      message: "Jane: Contract [g-5]",
+      isRead: false,
+      createdAt: new Date(),
+    });
+
+    await clearNotifications(USER);
+
+    expect(store.rows.map((r) => r.id)).toEqual(["slot"]);
+    expect(store.rows[0]).toMatchObject({ type: "claim", isRead: true });
+    expect(await getNotifications(USER)).toHaveLength(0);
+  });
+
   it("a second clear is idempotent", async () => {
     await ensureAutoModeReplyNotification(USER, "g-1", "jane@example.com");
     await clearNotifications(USER);

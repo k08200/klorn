@@ -1,7 +1,7 @@
 /**
  * Judge fallback alarm — DB-backed (#1319).
  *
- * From 2026-09-05 every judge LLM call failed (OpenRouter credits, most likely)
+ * From 2026-09-05 every judge LLM call failed (provider credits, most likely)
  * and PUSH went from ~54/month to 0 for four weeks with no alert. An in-memory
  * window cannot catch that at prod volume (~3 emails/hour) and is wiped by
  * every deploy, so this check reads what the judge already persists: the
@@ -32,8 +32,8 @@
  * urgency >= 0.7 AND confidence >= 0.7 (tier-policy.ts). Classification keeps
  * running; accuracy does not.
  * Check, in order:
- *   1. The alarm's "top error". `402 credits exhausted (openrouter)` → top up
- *      OpenRouter credits / raise the key's credit limit. `401 auth rejected`
+ *   1. The alarm's "top error". `402 credits exhausted (anthropic)` → top up
+ *      the Anthropic prepaid balance / raise the spend limit. `401 auth rejected`
  *      → the env key was revoked or rotated. `429 rate limited` → key limit.
  *      "unknown (restarted since)" → this process has not seen a failed call
  *      since boot (or a different instance served the judge); go to step 2.

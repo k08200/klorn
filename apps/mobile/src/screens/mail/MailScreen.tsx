@@ -30,7 +30,9 @@ import {
   ComposerSheet,
   ConfirmSendSheet,
   type OutgoingMail,
+  ProGateSheet,
   ReplyForm,
+  WriteError,
 } from "./compose";
 import { MailProvider, type MailTarget, targetOf, useMail } from "./controller";
 import { inLane, mailKeys, useMailFeed, useSubscriptions } from "./data";
@@ -39,6 +41,8 @@ import { blockState, MailList } from "./MailList";
 import {
   attentionByEmail,
   flattenPages,
+  mailWriteBlocked,
+  PRO_REFUSAL_KEY,
   sendableAccounts,
   senderLabel,
   visibleRows,
@@ -135,6 +139,13 @@ function MailScreenBody({
   } | null>(null);
 
   const me = useMe();
+  // An account that may not send gets the reason + plans link, not an editor.
+  const writeBlocked = mailWriteBlocked(me.data);
+  const [proGate, setProGate] = useState(false);
+  const openComposer = (mode: ComposerMode) =>
+    writeBlocked ? setProGate(true) : setComposer(mode);
+  const openOutgoing = (mail: OutgoingMail) =>
+    writeBlocked ? setProGate(true) : setOutgoing(mail);
   const inboxesQuery = useInboxes();
   const inboxes = useMemo(() => inboxesQuery.data?.inboxes ?? [], [inboxesQuery.data]);
   // A filter on an account that is no longer connected falls back to all.
@@ -271,7 +282,7 @@ function MailScreenBody({
       onRetry={() => void feed.refetch()}
       onOpenAccounts={() => setAccountsOpen(true)}
       onOpenMenu={() => setMenuOpen(true)}
-      onCompose={() => setComposer({ kind: "new", to: "", from: primary })}
+      onCompose={() => openComposer({ kind: "new", to: "", from: primary })}
       onDone={(email) => doDone([targetOf(email)])}
       onLane={(email, origin) => setLaneRequest({ targets: [targetOf(email)], origin })}
       onRowActions={setRowActions}
@@ -295,9 +306,9 @@ function MailScreenBody({
     onDone: (m: MailTarget) => doDone([m]),
     onLane: (m: MailTarget) => setLaneRequest({ targets: [m], origin: "menu" }),
     onLater: (m: MailTarget) => setSnoozeTarget(m),
-    onReply: (r: ReplyDraft) => setComposer({ kind: "reply", ...r }),
-    onReview: (r: ReplyDraft) => setOutgoing({ kind: "reply", ...r }),
-    onMailto: (address: string) => setComposer({ kind: "new", to: address, from: primary }),
+    onReply: (r: ReplyDraft) => openComposer({ kind: "reply", ...r }),
+    onReview: (r: ReplyDraft) => openOutgoing({ kind: "reply", ...r }),
+    onMailto: (address: string) => openComposer({ kind: "new", to: address, from: primary }),
   };
 
   const detail =
@@ -327,25 +338,31 @@ function MailScreenBody({
         </div>
         <section className="pane pane--compose" aria-label={t("reader.draft.panelTitle")}>
           <div className="tabletop-compose">
-            <ReplyForm
-              key={`${id}:${target ? "draft" : "none"}`}
-              emailId={id}
-              layout="panel"
-              initial={target?.body ?? ""}
-              replyTo={target?.to ?? ""}
-              subject={target?.subject ?? ""}
-              onReview={(body) =>
-                target &&
-                setOutgoing({
-                  kind: "reply",
-                  emailId: id,
-                  to: target.to,
-                  subject: target.subject,
-                  body,
-                  from: null,
-                })
-              }
-            />
+            {writeBlocked ? (
+              <p className="form-note" role="status">
+                <WriteError messageKey={PRO_REFUSAL_KEY} />
+              </p>
+            ) : (
+              <ReplyForm
+                key={`${id}:${target ? "draft" : "none"}`}
+                emailId={id}
+                layout="panel"
+                initial={target?.body ?? ""}
+                replyTo={target?.to ?? ""}
+                subject={target?.subject ?? ""}
+                onReview={(body) =>
+                  target &&
+                  setOutgoing({
+                    kind: "reply",
+                    emailId: id,
+                    to: target.to,
+                    subject: target.subject,
+                    body,
+                    from: null,
+                  })
+                }
+              />
+            )}
           </div>
         </section>
       </div>
@@ -492,6 +509,7 @@ function MailScreenBody({
           setOutgoing(m);
         }}
       />
+      <ProGateSheet open={proGate} onClose={() => setProGate(false)} />
       <ConfirmSendSheet
         mail={outgoing}
         onClose={() => setOutgoing(null)}

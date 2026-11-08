@@ -123,7 +123,7 @@ export function ActivityView() {
             className="-mx-1"
           />
           {shown.length === 0 && (
-            <p className="py-6 text-body text-ink-muted [word-break:keep-all]">
+            <p className="py-6 text-role-body text-ink-muted [word-break:keep-all]">
               {t("assistantHub.activity.noneOfKind")}
             </p>
           )}
@@ -133,7 +133,7 @@ export function ActivityView() {
               <section key={headingId} aria-labelledby={headingId} className="mt-4">
                 <h2
                   id={headingId}
-                  className="flex min-h-11 items-center border-b border-line text-head text-ink"
+                  className="flex min-h-11 items-center border-b border-line text-role-head text-ink"
                 >
                   {t(PART_KEYS.get(group.part) ?? "")}
                 </h2>
@@ -151,11 +151,11 @@ export function ActivityView() {
               </section>
             );
           })}
-          <p className="pt-4 text-caption text-ink-muted [word-break:keep-all]">
+          <p className="pt-4 text-role-caption text-ink-muted [word-break:keep-all]">
             {t("assistantHub.activity.undo.hint")}{" "}
             <Link
               href={ASSISTANT_APPROVALS}
-              className="focus-ring rounded-control text-accent-deep underline"
+              className="focus-ring rounded-chip text-accent-deep underline"
             >
               {t("nav.v2.openApprovals")}
             </Link>
@@ -191,12 +191,12 @@ function ActivityRow({ entry, timeZone, undoing, onUndo }: ActivityRowProps) {
     <li className="flex items-start gap-3 border-b border-line-soft py-3 last:border-b-0">
       <time
         dateTime={item.surfacedAt}
-        className="w-14 shrink-0 pt-px text-caption tabular-nums text-ink-muted"
+        className="w-14 shrink-0 pt-px text-role-caption tabular-nums text-ink-muted"
       >
         {formatTime(item.surfacedAt, locale, timeZone)}
       </time>
       <div className="min-w-0 flex-1">
-        <p className="break-words text-body text-ink">
+        <p className="break-words text-role-body text-ink">
           <span
             className={`font-medium ${kind === "handled" ? "text-state-ok-ink" : "text-ink-soft"}`}
           >
@@ -210,7 +210,7 @@ function ActivityRow({ entry, timeZone, undoing, onUndo }: ActivityRowProps) {
           {titleText || t("today.mail.noSubject")}
         </p>
         {meta.length > 0 && (
-          <p className="mt-0.5 break-words text-caption text-ink-muted">{meta.join(" · ")}</p>
+          <p className="mt-0.5 break-words text-role-caption text-ink-muted">{meta.join(" · ")}</p>
         )}
       </div>
       {kind === "handled" && (

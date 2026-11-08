@@ -491,6 +491,14 @@ export interface FakeModel {
   groupBy(args: Args): Promise<Array<Row & { _count?: { _all: number }; _min?: Row }>>;
   aggregate(args: Args): Promise<{ _sum: Row }>;
   create(args: { data: Row; select?: Select }): Promise<Row>;
+  /** `skipDuplicates` skips a row that clashes on a unique key, like ON CONFLICT DO NOTHING. */
+  createMany(args: { data: Row | Row[]; skipDuplicates?: boolean }): Promise<{ count: number }>;
+  /** createMany answering the rows it inserted (only those, under skipDuplicates). */
+  createManyAndReturn(args: {
+    data: Row | Row[];
+    skipDuplicates?: boolean;
+    select?: Select;
+  }): Promise<Row[]>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
   updateMany(args: { where?: Where; data: Row }): Promise<{ count: number }>;
   deleteMany(args?: { where?: Where }): Promise<{ count: number }>;
@@ -552,12 +560,21 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       const from = args.skip ?? 0;
       return args.take === undefined ? sorted.slice(from) : sorted.slice(from, from + args.take);
     };
-    const assertUnique = (candidate: Row, ignore?: Row) => {
-      for (const set of info.uniqueSets) {
-        const clash = rowsOf().some(
+    const clashingSet = (candidate: Row, ignore?: Row): string[] | undefined =>
+      info.uniqueSets.find((set) =>
+        rowsOf().some(
           (r) => r !== ignore && set.every((c) => candidate[c] != null && same(r[c], candidate[c])),
+        ),
+      );
+    const assertUnique = (candidate: Row, ignore?: Row) => {
+      const set = clashingSet(candidate, ignore);
+      // Thrown the way Prisma reports it (P2002), so create-catch-P2002 code
+      // paths behave here as they do against Postgres.
+      if (set) {
+        throw new Prisma.PrismaClientKnownRequestError(
+          `fake-db: unique constraint on ${name}(${set.join(", ")})`,
+          { code: "P2002", clientVersion: "fake-db", meta: { target: set } },
         );
-        if (clash) throw new Error(`fake-db: unique constraint on ${name}(${set.join(", ")})`);
       }
     };
     const insert = (data: Row, select?: Select): Row => {
@@ -565,6 +582,19 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       assertUnique(row);
       tables[name] = [...rowsOf(), row];
       return project(info, row, select);
+    };
+    /** Inserts each row in order; under skipDuplicates a clashing row is skipped. */
+    const insertMany = (op: string, data: Row | Row[], skipDuplicates?: boolean): Row[] => {
+      const inserted: Row[] = [];
+      for (const one of Array.isArray(data) ? data : [data]) {
+        log(name, { op, data: one });
+        const row = completeRow(info, checkedData(info, one, "create"), true);
+        if (skipDuplicates === true && clashingSet(row)) continue;
+        assertUnique(row);
+        tables[name] = [...rowsOf(), row];
+        inserted.push(row);
+      }
+      return inserted;
     };
     const apply = (target: Row, data: Row): void => {
       const clean = checkedData(info, resolveIncrements(info, target, data), "update");
@@ -647,6 +677,15 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
         log(name, { op: "create", data: args.data });
         return insert(args.data, args.select);
       },
+      async createMany(args) {
+        assertArgs(name, "createMany", args, ["data", "skipDuplicates"]);
+        return { count: insertMany("createMany", args.data, args.skipDuplicates).length };
+      },
+      async createManyAndReturn(args) {
+        assertArgs(name, "createManyAndReturn", args, ["data", "skipDuplicates", "select"]);
+        const inserted = insertMany("createManyAndReturn", args.data, args.skipDuplicates);
+        return inserted.map((row) => project(info, row, args.select));
+      },
       async update(args) {
         assertArgs(name, "update", args, ["where", "data", "select"]);
         assertUniqueSelector(info, args.where, "update");
@@ -723,10 +762,20 @@ const REKEY_SQL =
 
 const normalisedSql = (text: string): string => text.replace(/\s+/g, " ").trim();
 
+/**
+ * The co-attendance store's per-user lock (pim/coattendance/coattendance-store.ts).
+ * The fake runs one operation at a time, so taking it is a no-op; its text is
+ * pinned the same way, so a changed statement fails here instead of passing.
+ */
+const COATTENDANCE_LOCK_SQL = "SELECT pg_advisory_xact_lock($1::int, hashtext($2))";
+
 /** Applies the re-key with the semantics the SQL has, one unique key checked first. */
 async function executeRaw(db: FakeDb, hooks: FakeDbHooks, statement: unknown): Promise<number> {
   hooks.beforeExecuteRaw?.();
   const given = statement as { text?: string; values?: unknown[] };
+  if (typeof given.text === "string" && normalisedSql(given.text) === COATTENDANCE_LOCK_SQL) {
+    return 1;
+  }
   if (
     typeof given.text !== "string" ||
     normalisedSql(given.text) !== REKEY_SQL ||

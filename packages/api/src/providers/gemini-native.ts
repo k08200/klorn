@@ -4,9 +4,9 @@
  * Google's OpenAI-compatible endpoint requires `Authorization: Bearer` auth,
  * which rejects Google's newer `AQ.`-prefix keys ("Multiple authentication
  * credentials received"). The native generativelanguage.googleapis.com API
- * accepts those keys via `?key=` URL param, so we call it directly and
- * translate the response into the subset of the OpenAI chat.completions
- * shape that createCompletion + chat.ts consume.
+ * accepts those keys via its own `x-goog-api-key` header, so we call it
+ * directly and translate the response into the subset of the OpenAI
+ * chat.completions shape that createCompletion + chat.ts consume.
  *
  * Scope is intentionally narrow — only what Eve's chat/briefing paths call:
  *   - non-streaming responses with a string content
@@ -122,12 +122,22 @@ function dataUrlToInlineData(url: string): GeminiPart["inlineData"] | null {
   return { mimeType: match[1], data: match[2] };
 }
 
-function buildUrl(model: string, apiKey: string, streaming: boolean): string {
+/**
+ * The request URL — deliberately credential-free.
+ *
+ * This used to carry `?key=<apiKey>`, which leaks by default: Sentry's fetch
+ * breadcrumb stores the raw query string in `data["http.query"]` and the fetch
+ * span records both `url.full` and `url.query`, so a BYOK key rode out on any
+ * captured error from this path. The key now travels in `x-goog-api-key` —
+ * Google's documented header for this API, and unlike the OpenAI-compatible
+ * endpoint's `Authorization: Bearer` it accepts the `AQ.`-prefix keys this
+ * adapter exists for. security/sentry-scrub.ts scrubs the Sentry side too;
+ * this is the half that keeps the key out of logs we do not control.
+ */
+function buildUrl(model: string, streaming: boolean): string {
   const method = streaming ? "streamGenerateContent" : "generateContent";
   const base = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:${method}`;
-  const query = new URLSearchParams({ key: apiKey });
-  if (streaming) query.set("alt", "sse");
-  return `${base}?${query.toString()}`;
+  return streaming ? `${base}?alt=sse` : base;
 }
 
 async function callGemini(
@@ -152,9 +162,9 @@ async function callGemini(
   );
   let res: Response;
   try {
-    res = await fetch(buildUrl(params.model, apiKey, streaming), {
+    res = await fetch(buildUrl(params.model, streaming), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

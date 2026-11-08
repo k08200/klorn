@@ -238,6 +238,7 @@ export const fr: Messages = {
   "reader.draft.offline": "Vous êtes hors ligne : la rédaction nécessite une connexion.",
   "reader.draft.rateLimited": "Trop de brouillons d'affilée. Réessayez dans une minute.",
   "reader.draft.notEntitled": "Rédiger et envoyer des e-mails nécessite l'offre Pro.",
+  "reader.draft.discardsOnLeave": "Ouvrir les offres supprime cet e-mail non envoyé.",
   "reader.draft.panelTitle": "Brouillon de réponse",
   "reader.draft.voice": "Votre ton · dans la langue de l'e-mail",
   "reader.draft.bodyLabel": "Texte de la réponse",
@@ -520,6 +521,9 @@ export const fr: Messages = {
   "assistant.chat.sendFailed":
     "Envoi impossible. Votre message est revenu dans le champ : réessayez.",
   "assistant.chat.turnError": "L'assistant n'a pas pu terminer cette réponse.",
+  "assistant.chat.cap": "Vous avez utilisé le quota d'IA du jour. Il se réinitialise à 00:00 UTC.",
+  "assistant.chat.capFree":
+    "Vous avez utilisé le quota d'IA gratuit du jour. Il se réinitialise à 00:00 UTC.",
   "assistant.chat.aboutMail": "À propos de l'e-mail que vous lisiez",
   "assistant.chip.urgent": "E-mails urgents sans réponse",
   "assistant.chip.receipts": "Rassemble les reçus de la semaine",
@@ -769,9 +773,14 @@ export const fr: Messages = {
 
   "plans.title": "Offre",
   "plans.current": "Offre actuelle",
+  "plans.name.free": "Gratuit",
+  "plans.name.pro": "Pro",
+  "plans.name.team": "Équipe",
+  "plans.name.enterprise": "Entreprise",
   "plans.renewsOn": "Renouvelée le {date}",
   "plans.endsOn": "Se termine le {date}",
   "plans.pro.title": "Pro comprend",
+  "plans.pro.send": "Répondre aux e-mails et les envoyer depuis Klorn",
   "plans.pro.accounts": "Plus de comptes e-mail connectés",
   "plans.pro.calendar": "Créer évènements et invitations depuis Klorn",
   "plans.pro.assistant": "Plus d'assistant chaque jour",

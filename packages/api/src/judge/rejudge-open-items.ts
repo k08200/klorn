@@ -25,8 +25,9 @@ import { engagementKindOf } from "../learning/sender-policy.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { buildJudgeContext } from "./judge-context.js";
-import { judgeEmail } from "./poc-judge.js";
+import { judgeEmail, type PocJudgement } from "./poc-judge.js";
 import { normalizeTier } from "./tiers.js";
+import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
 
 export interface RejudgeRunOptions {
   /** Write the refreshed tiers (default is a dry run that writes nothing). */
@@ -115,6 +116,12 @@ interface RunContext {
   log: (line: string) => void;
 }
 
+async function planStoredV3(userId: string, email: JudgeableEmailRow, judgement: PocJudgement) {
+  const { judgementUnderPlan, planV3Write } = await import("./v3/live-judge.js");
+  const plan = await planV3Write({ userId, email, judgement, rejudge: true, allowPush: false });
+  return { written: judgementUnderPlan(judgement, plan), v3: plan.v3 };
+}
+
 /** Judge one unprotected item and fold its outcome into the tally. */
 async function rejudgeOne(
   run: RunContext,
@@ -145,22 +152,29 @@ async function rejudgeOne(
     { backlog: true },
   );
 
+  // A user under policy v3 gets the v3 rule from stored facts (no model call,
+  // no push), and its columns are rewritten with the lane.
+  const v3 = isJudgeV3PolicyEnabled(run.userId)
+    ? await planStoredV3(run.userId, email, judgement)
+    : null;
+  const written = v3?.written ?? judgement;
+
   if (run.confirm) {
     // NO push: a re-judge refreshes the tier through the guarded re-judge write and
     // must never re-notify. (judgeAndMirrorEmail's push path is intentionally NOT
     // called here.) "preserved" means a decision landed while the judge ran.
     const outcome = await upsertAttentionForEmailJudgement(
       { userId: run.userId, ...email },
-      judgement,
+      written,
       engagementKindOf(ctx.senderFacts),
-      { rejudge: true },
+      { rejudge: true, v3: v3?.v3 },
     );
     if (outcome === "preserved") return keptOne(tally);
   }
 
   const oldTier = normalizeTier(item.tier);
-  if (oldTier === judgement.tier) return tally;
-  const key = `${oldTier}→${judgement.tier}`;
+  if (oldTier === written.tier) return tally;
+  const key = `${oldTier}→${written.tier}`;
   run.log(`  ${key}  ${email.from} :: ${email.subject.slice(0, 60)}`);
   return changedOne(tally, key);
 }

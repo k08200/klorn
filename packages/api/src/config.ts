@@ -515,6 +515,19 @@ export function calendarHideDeclinedEnabled(): boolean {
     (process.env.CALENDAR_HIDE_DECLINED_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Per-contact calendar co-attendance (pim/coattendance/, attention engine v3
+// §3(2)). OFF by default (repo doctrine). While unset/false the sync lists no past
+// events and writes nothing to ContactCoAttendance or CoAttendanceMeeting. When on,
+// the scheduler queues a background job that, for each Google calendar source
+// (primary and linked) at most once per 6 hours, lists the last 30 days and counts
+// each ended meeting once per contact: counts and UTC days only, never an attendee
+// list (founder decision 2026-11-01).
+// Read at sync time with the same lenient truthy parse.
+export function calendarCoattendanceEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_COATTENDANCE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
 // of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
 // independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,
@@ -725,8 +738,9 @@ export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);
 
 // ── Autonomous agent ──────────────────────────────────────────────────
 // Scheduler tick. Used to be 1 min, which meant 24 dogfood users × 5–10 LLM
-// calls/cycle = 7k–14k calls/hour, blowing through the free OpenRouter daily
-// cap of 50 within minutes. 10 min is a 10× reduction at the scheduler level.
+// calls/cycle = 7k–14k calls/hour, blowing through the then-provider's free
+// daily cap of 50 within minutes. 10 min is a 10× reduction at the scheduler
+// level.
 export const AGENT_CHECK_INTERVAL_MS = intEnv("AGENT_CHECK_INTERVAL_MS", 10 * 60_000);
 // Hard cap on tool calls per cycle. Used to be 10 which let one cycle fire
 // 10 follow-up completions; 3 is enough for "read inbox → classify → propose"
@@ -832,9 +846,9 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
   30 * 60 * 1000,
 );
 // LLM per-user rate limit (token bucket). Protects against runaway loops and
-// avoids tripping upstream provider RPM caps. Numbers chosen for OpenRouter
-// free tier (20 RPM upstream) — we cap each user well below so background
-// agents can still progress under load.
+// avoids tripping upstream provider RPM caps. Numbers were chosen for a 20 RPM
+// upstream free tier — we cap each user well below so background agents can
+// still progress under load.
 export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
 
 // Of the shared RPM window, this many slots are reserved for foreground chat —

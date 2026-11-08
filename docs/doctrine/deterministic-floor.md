@@ -70,7 +70,7 @@ one click, you have three things to do:
    ("Gmail API has no reversal endpoint for this operation" is the
    shape of an acceptable answer; "it would be annoying to undo" is not.)
 2. Add a matching `*PayloadHash` function in
-   [`packages/api/src/attention-floor.ts`](../../packages/api/src/attention-floor.ts)
+   [`packages/api/src/judge/attention-floor.ts`](../../packages/api/src/judge/attention-floor.ts)
    whose canonical body covers every field the action will send to Gmail.
 3. Wire the new action into `tool-executor.ts` to refuse execution
    without a verified `ActionReceipt`.
@@ -94,8 +94,8 @@ one click, you have three things to do:
 
 ## Related code
 
-- [`packages/api/src/attention-floor.ts`](../../packages/api/src/attention-floor.ts) — types, payload hashes, mint, verify.
-- [`packages/api/src/attention-input-hash.ts`](../../packages/api/src/attention-input-hash.ts) — input-hash binding from PR #468 (the input side of this same property).
+- [`packages/api/src/judge/attention-floor.ts`](../../packages/api/src/judge/attention-floor.ts) — types, payload hashes, mint, verify.
+- [`packages/api/src/judge/attention-input-hash.ts`](../../packages/api/src/judge/attention-input-hash.ts) — input-hash binding from PR #468 (the input side of this same property).
 - [`packages/api/src/__tests__/attention-floor.test.ts`](../../packages/api/src/__tests__/attention-floor.test.ts) — stability + sensitivity + cross-action refusal tests.
 
 ## User-initiated sends (2026-10-16)

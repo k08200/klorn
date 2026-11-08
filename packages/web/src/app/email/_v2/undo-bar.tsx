@@ -26,7 +26,7 @@ export function UndoBar(props: UndoBarProps) {
   const { t } = useT();
   return (
     <div
-      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 max-md:pr-20 md:bottom-6 ${
+      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 max-rail:pr-20 rail:bottom-6 ${
         raised
           ? "bottom-[calc(158px+env(safe-area-inset-bottom))]"
           : "bottom-[calc(74px+env(safe-area-inset-bottom))]"
@@ -34,9 +34,9 @@ export function UndoBar(props: UndoBarProps) {
     >
       <div
         role="status"
-        className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-card border border-line bg-surface-elevated py-1 pl-4 pr-1 shadow-l2"
+        className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-control border border-line bg-surface-elevated py-1 pl-4 pr-1 shadow-menu"
       >
-        <p className="min-w-0 flex-1 truncate text-body text-ink">
+        <p className="min-w-0 flex-1 truncate text-role-body text-ink">
           <span className="font-medium">{title}</span>
           {detail && <span className="text-ink-muted"> · {detail}</span>}
         </p>

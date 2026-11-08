@@ -49,6 +49,10 @@ describe("getOutlookAuthUrl", () => {
     expect(scope).toContain("https://graph.microsoft.com/Mail.Read");
     expect(scope).toContain("https://graph.microsoft.com/Mail.ReadWrite");
     expect(scope).toContain("https://graph.microsoft.com/Mail.Send");
+    // Finishing the link names the account with Graph GET /me, which needs
+    // User.Read (least privileged, work/school and personal). Without it the
+    // founder's first real link failed on 2026-10-29 ("Couldn't connect that inbox").
+    expect(scope).toContain("https://graph.microsoft.com/User.Read");
     // Never the elevated scope — Klorn doesn't edit delivered mail.
     expect(scope).not.toContain("Mail-Advanced");
   });

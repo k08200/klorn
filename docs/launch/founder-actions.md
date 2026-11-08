@@ -39,8 +39,9 @@ is merged and dark. It needs one registration:
 1. Azure Portal → App registrations → New. **Supported account types must
    include personal Microsoft accounts** — outlook.com users are the point.
 2. Redirect URI (Web): `https://klorn-api.onrender.com/api/auth/outlook/callback`
-3. API permissions → Microsoft Graph → **delegated**: `Mail.Read`,
-   `Mail.ReadWrite`, `Mail.Send`, `offline_access`. (The 2026-12-31 change
+3. API permissions → Microsoft Graph → **delegated**: `User.Read` (the link
+   names the account with Graph `/me`), `Mail.Read`, `Mail.ReadWrite`,
+   `Mail.Send`, `offline_access`. (The 2026-12-31 change
    requiring `Mail-Advanced.ReadWrite` covers editing subject/body/recipients on
    delivered mail — Klorn never does that. Re-verified 2026-08-06.)
 4. Certificates & secrets → new client secret.

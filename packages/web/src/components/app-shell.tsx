@@ -8,6 +8,7 @@ import { useT } from "../lib/i18n";
 import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
 import IosInstallHint from "./ios-install-hint";
+import NavRail from "./nav-rail";
 import ShellSkeleton from "./shell-skeleton";
 import Sidebar from "./sidebar";
 
@@ -45,25 +46,28 @@ const DOCKLESS_ROUTES = ["/chat", "/assistant"];
  * Bottom padding for <main>, the one scroll container every app page lives in
  * (design detail pass W7). With the assistant button showing, the last row
  * must scroll clear of it: 72px (48px button + its offset + a gap) plus the
- * home-indicator inset — on a phone on top of the 62px tab bar. The phone
+ * home-indicator inset — below 600px on top of the 62px tab bar. The phone
  * floor of 152px covers the flag-off button, which sits at a fixed 96px
- * (96 + 48 + 8). Pages that scroll an inner pane (graph, admin, the mail
- * split) sit inside this padding, so they clear the button too.
+ * (96 + 48 + 8). The clearance is published as `--main-clear` so a page that
+ * scrolls its own panes (the mail split) can run them to the bottom edge and
+ * put the clearance inside each pane instead — otherwise the padding shows
+ * as a strip of <main>'s background under the panes (globals.css,
+ * .mail-split).
  */
 const DOCK_CLEARANCE =
-  "pb-[max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] md:pb-[calc(72px+env(safe-area-inset-bottom))]";
+  "[--main-clear:max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] rail:[--main-clear:calc(72px+env(safe-area-inset-bottom))] pb-(--main-clear)";
 const DOCKLESS_CLEARANCE =
-  "pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)]";
+  "[--main-clear:calc(62px+env(safe-area-inset-bottom))] rail:[--main-clear:env(safe-area-inset-bottom)] pb-(--main-clear)";
 
 /**
  * The same clearances as scroll padding, so a control scrolled into view on
  * focus is not left under what covers the end of <main> (WCAG 2.4.11): the
- * bottom tab bar below 768px, and the assistant button (bottom right, where
+ * bottom tab bar below 600px, and the assistant button (bottom right, where
  * a row's "More actions" button sits) wherever it shows.
  */
 const DOCK_SCROLL_PADDING =
-  "scroll-pb-[max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] md:scroll-pb-[calc(72px+env(safe-area-inset-bottom))]";
-const DOCKLESS_SCROLL_PADDING = "max-md:scroll-pb-[calc(62px+env(safe-area-inset-bottom))]";
+  "scroll-pb-[max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] rail:scroll-pb-[calc(72px+env(safe-area-inset-bottom))]";
+const DOCKLESS_SCROLL_PADDING = "max-rail:scroll-pb-[calc(62px+env(safe-area-inset-bottom))]";
 
 function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -129,14 +133,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-dvh overflow-hidden bg-surface-panel text-ink">
       {/* The skip link is rendered once for every route by the root layout
           (components/skip-link.tsx); it jumps past the sidebar to #main. */}
+      {/* Device classes: bottom tabs below 600px, the rail from 600px, the
+          sidebar from 1024px (globals.css, --breakpoint-rail). */}
+      <NavRail />
       <Sidebar />
-      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile header — pt-safe respects iPhone notch in PWA. The hamburger
-            is gone: the bottom tab bar + account sheet are the whole mobile nav. */}
-        <div className="relative z-10 md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content">
+      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden pr-safe">
+        {/* Phone header (below 600px) — pt-safe respects iPhone notch in PWA.
+            The bottom tab bar + account sheet are the whole phone nav. */}
+        <div className="relative z-10 rail:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content">
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-6 w-6" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-none text-ink">Klorn</p>
+            <p className="text-role-body font-semibold leading-none text-ink">Klorn</p>
             {/* The section name is redundant with each screen's large title, so
                 it's visually hidden — kept in the DOM (sr-only) for screen
                 readers and the navigation e2e checks. */}
