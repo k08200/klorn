@@ -2,13 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getEffectivePlan, PLANS, planHasFeature } from "../billing/stripe.js";
 
 describe("plan device limits", () => {
-  it("gives free accounts a single device (no free tier — locked at launch)", () => {
-    expect(PLANS.FREE.deviceLimit).toBe(1);
+  // Founder decision 2026-11-07: Free keeps 3 signed-in devices like Pro (web +
+  // Mac + phone). With 1, signing in on a second surface — including the web
+  // /billing page the Mac upgrade link opens — logged the other one out.
+  it("gives free accounts three devices, the same as Pro", () => {
+    expect(PLANS.FREE.deviceLimit).toBe(3);
   });
 
-  it("gives Pro a small multi-device allowance above Free", () => {
+  it("never gives a paid plan fewer devices than Free", () => {
     expect(PLANS.PRO.deviceLimit).toBe(3);
-    expect(PLANS.PRO.deviceLimit).toBeGreaterThan(PLANS.FREE.deviceLimit);
+    expect(PLANS.PRO.deviceLimit).toBeGreaterThanOrEqual(PLANS.FREE.deviceLimit);
     expect(PLANS.TEAM.deviceLimit).toBeGreaterThanOrEqual(PLANS.PRO.deviceLimit);
   });
 
