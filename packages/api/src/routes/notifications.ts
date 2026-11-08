@@ -11,6 +11,7 @@ import { prisma } from "../db.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
 import { parseClientPlatform } from "../notify/alert-endpoints.js";
+import { desktopAlertState } from "../notify/desktop-alert.js";
 import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
@@ -19,6 +20,7 @@ import { sendDevicePush } from "../notify/push-device.js";
 import { remindLaterFromPush } from "../notify/push-later.js";
 import { verifyPushLaterToken } from "../notify/push-later-token.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
+import { captureError } from "../sentry.js";
 
 const listNotificationsQuerySchema = {
   type: "object",
@@ -202,6 +204,24 @@ export async function notificationRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     await clearNotifications(userId);
     return reply.code(204).send();
+  });
+
+  // GET /api/notifications/alert-state — may a desktop banner interrupt now?
+  // The native Mac app polls for mail and meetings, so it never sees the
+  // `alert` tag the Windows shell reads off real-time frames. It asks here
+  // before posting a banner and gets the same gate (category opt-outs, quiet
+  // hours in the user's zone, focus rule): { alerts: { push, meeting } }, each
+  // { allowed: true } or { allowed: false, reason }. The client falls open on
+  // any failure, so a 503 here never silences an urgent mail.
+  app.get("/alert-state", async (request, reply) => {
+    const userId = getUserId(request);
+    try {
+      return { alerts: await desktopAlertState(userId) };
+    } catch (err) {
+      console.error(`[NOTIFY] alert-state gate failed for user ${userId}:`, err);
+      captureError(err, { tags: { scope: "notify.alert-state" }, extra: { userId } });
+      return reply.code(503).send({ error: "Alert state unavailable" });
+    }
   });
 
   // GET /api/notifications/vapid-key — Get public VAPID key for push subscription
