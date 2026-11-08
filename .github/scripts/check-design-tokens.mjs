@@ -44,6 +44,11 @@
  *                        replaced (caption 12, label 13). Zero allowance: this
  *                        rule takes no baseline, so a retired size can never
  *                        come back, even in a file that once had one.
+ *   label-as-meta        `text-role-label` + `font-normal` in one class
+ *                        expression (one string, or one cn()/clsx() call) —
+ *                        secondary metadata (sender · time, one-line reasons)
+ *                        is `text-role-meta` (13/400), not the button-label
+ *                        role with its weight overridden. Zero allowance.
  *
  * Baseline: .github/scripts/design-tokens-baseline.json holds the per-file
  * count of each rule at the time it was taken. A file may never exceed its
@@ -81,7 +86,7 @@ const RULES = [
     id: "arbitrary-font-size",
     re: /(?<![\w-])text-\[\d+(?:\.\d+)?px\]/g,
     applies: () => true,
-    hint: "use a type role: text-role-page / title / head / body / label / caption / mono",
+    hint: "use a type role: text-role-page / title / head / body / label / meta / caption / mono",
   },
   {
     id: "raw-palette",
@@ -105,7 +110,7 @@ const RULES = [
     id: "raw-type",
     re: /(?<![\w-])text-(?:xs|sm|base|lg|xl|[2-9]xl)(?![\w-])/g,
     applies: (file) => !file.startsWith(`${WEB}/components/ui/`),
-    hint: "use a type role: text-role-page / title / head / body / label / caption / mono",
+    hint: "use a type role: text-role-page / title / head / body / label / meta / caption / mono",
   },
   {
     id: "legacy-type",
@@ -129,6 +134,13 @@ const RULES = [
     hint: "use shadow-menu (popovers, menus, toasts) or shadow-sheet (sheets, dialogs)",
   },
   {
+    id: "label-as-meta",
+    find: findLabelAsMeta,
+    applies: () => true,
+    zeroAllowance: true,
+    hint: "secondary metadata is text-role-meta (13/400) — not text-role-label + font-normal",
+  },
+  {
     id: "retired-auto-lane",
     re: /tier-auto\b/g,
     applies: () => true,
@@ -148,6 +160,46 @@ function stripComments(src) {
   );
 }
 
+/**
+ * `text-role-label` and `font-normal` in one class expression: the button
+ * label role borrowed for metadata with its weight overridden. One hit per
+ * class expression — a cn()/clsx()/cva()/twMerge() call (all its arguments,
+ * across lines) or, outside those, one string literal (a template literal
+ * includes its ${…} branches). Both classes unprefixed: `md:font-normal` is a
+ * responsive change, not the meta role.
+ */
+const LABEL_CLASS = /(?<![\w:-])text-role-label(?![\w-])/;
+const NORMAL_CLASS = /(?<![\w:-])font-normal(?![\w-])/;
+const CLASS_CALL = /(?<![\w.$])(?:cn|clsx|cva|twMerge)\(/g;
+const STRING_LITERAL = /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`/g;
+
+function callEnd(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "(") depth++;
+    else if (src[i] === ")" && --depth === 0) return i + 1;
+  }
+  return src.length;
+}
+
+function findLabelAsMeta(src) {
+  const spans = [...src.matchAll(CLASS_CALL)].map((m) => {
+    const open = m.index + m[0].length - 1;
+    return { index: m.index, end: callEnd(src, open) };
+  });
+  const inCall = (i) => spans.some((s) => i >= s.index && i < s.end);
+  const literals = [...src.matchAll(STRING_LITERAL)]
+    .filter((m) => !inCall(m.index))
+    .map((m) => ({ index: m.index, end: m.index + m[0].length }));
+  return [...spans, ...literals]
+    .filter(({ index, end }) => {
+      const text = src.slice(index, end);
+      return LABEL_CLASS.test(text) && NORMAL_CLASS.test(text);
+    })
+    .sort((a, b) => a.index - b.index)
+    .map(({ index }) => ({ index, 0: "text-role-label … font-normal" }));
+}
+
 function sources(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     // Normalise to forward slashes so baseline keys match on every OS.
@@ -165,7 +217,7 @@ function countAll() {
     const src = stripComments(readFileSync(file, "utf8"));
     for (const rule of RULES) {
       if (!rule.applies(file)) continue;
-      const hits = [...src.matchAll(rule.re)];
+      const hits = rule.find ? rule.find(src) : [...src.matchAll(rule.re)];
       if (!hits.length) continue;
       counts[rule.id][file] = hits.length;
       const line = src.slice(0, hits[hits.length - 1].index).split("\n").length;
