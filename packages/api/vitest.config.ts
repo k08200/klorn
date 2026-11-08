@@ -3,6 +3,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     testTimeout: 60_000,
+    // Setup hooks get the same room as tests: a beforeEach that builds an app
+    // imports most of the api, and vitest's 10 s default failed two such hooks
+    // (buildKlornDriveApp) at load average ~26 while their tests passed.
+    hookTimeout: 60_000,
     // One process per test file (vitest's default, pinned): the linear-scan
     // guards time runs with process.cpuUsage, which a threads pool would share
     // across files. See src/__tests__/helpers/linear-timing.ts.
