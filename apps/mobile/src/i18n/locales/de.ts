@@ -768,7 +768,8 @@ export const de: Messages = {
   "push.priming.quietSample": "47 Mails heute, lautlos sortiert",
   "push.denied":
     "Benachrichtigungen sind aus. Du kannst sie in den Geräteeinstellungen einschalten.",
-  "push.snoozed": "Auf später heute verschoben.",
+  "push.snoozed": "Um eine Stunde verschoben.",
+  "push.snoozedToday": "Auf später heute verschoben.",
   "push.done": "Als erledigt markiert.",
   "push.notUrgent": "In QUEUE verschoben.",
   "push.action.later": "Später",

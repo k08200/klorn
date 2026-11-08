@@ -39,7 +39,7 @@ const BANNER_MS = 6000;
 type TriageIntent = Extract<PushIntent, { kind: "snooze" | "done" | "notUrgent" }>;
 
 const TRIAGE_TOAST: Record<TriageIntent["kind"], MessageKey> = {
-  snooze: "push.snoozed",
+  snooze: "push.snoozedToday",
   done: "push.done",
   notUrgent: "push.notUrgent",
 };

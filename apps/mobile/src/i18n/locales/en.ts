@@ -749,7 +749,8 @@ export const en = {
   "push.priming.sampleBody": "Contract due today at 6 PM — reply draft ready.",
   "push.priming.quietSample": "47 emails today, sorted without a sound",
   "push.denied": "Notifications are off. You can turn them on in the device's settings.",
-  "push.snoozed": "Snoozed until later today.",
+  "push.snoozed": "Snoozed for an hour.",
+  "push.snoozedToday": "Snoozed until later today.",
   "push.done": "Marked done.",
   "push.notUrgent": "Moved to QUEUE.",
   // Android notification actions and channels (src/push/android.ts).

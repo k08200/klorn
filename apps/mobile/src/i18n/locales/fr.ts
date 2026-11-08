@@ -759,7 +759,8 @@ export const fr: Messages = {
   "push.priming.quietSample": "47 e-mails aujourd'hui, triés sans un bruit",
   "push.denied":
     "Les notifications sont désactivées. Vous pouvez les activer dans les réglages de l'appareil.",
-  "push.snoozed": "Reporté à plus tard aujourd'hui.",
+  "push.snoozed": "Reporté d'une heure.",
+  "push.snoozedToday": "Reporté à plus tard aujourd'hui.",
   "push.done": "Marqué comme traité.",
   "push.notUrgent": "Déplacé dans QUEUE.",
   "push.action.later": "Plus tard",
