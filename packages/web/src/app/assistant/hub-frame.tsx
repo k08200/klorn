@@ -71,8 +71,10 @@ function HubTabs({ pathname }: { pathname: string }) {
               <Link
                 href={page.href}
                 aria-current={current ? "page" : undefined}
-                className={`focus-ring relative flex min-h-11 items-center gap-1.5 rounded-control px-3 text-role-label transition-colors duration-120 ease-fluid ${
-                  current ? "text-ink" : "font-normal text-ink-mid hover:text-ink"
+                className={`focus-ring relative flex min-h-11 items-center gap-1.5 rounded-control px-3 transition-colors duration-120 ease-fluid ${
+                  current
+                    ? "text-role-label text-ink"
+                    : "text-role-meta text-ink-mid hover:text-ink"
                 }`}
               >
                 {t(page.labelKey)}

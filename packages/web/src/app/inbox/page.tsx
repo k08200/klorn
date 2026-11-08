@@ -851,7 +851,7 @@ function OnboardingHint() {
           <div className="min-w-0 space-y-1.5">
             <p className="text-role-caption font-medium text-ink-dim">{t("inbox.tourTitle")}</p>
             <ol
-              className={`${expanded ? "block" : "hidden"} list-inside list-decimal space-y-1 text-role-label font-normal leading-5 text-ink-mid`}
+              className={`${expanded ? "block" : "hidden"} list-inside list-decimal space-y-1 text-role-meta leading-5 text-ink-mid`}
             >
               <li>
                 <span className="text-ink">{t("inbox.tour.queueLabel")}</span> —{" "}
@@ -1762,7 +1762,7 @@ function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
         </svg>
       </div>
       <p className="text-role-head font-medium text-ink">{t("inbox.nothingToDecide")}</p>
-      <p className="mx-auto mt-1.5 max-w-xs text-role-label font-normal leading-relaxed text-ink-dim">
+      <p className="mx-auto mt-1.5 max-w-xs text-role-meta leading-relaxed text-ink-dim">
         {commitmentCount > 0
           ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked in the background.`
           : t("inbox.emptyBodyMobile")}
@@ -1809,7 +1809,7 @@ function MobileActionCard({
           {heroSubject}
         </h3>
         {context && (
-          <p className="mt-1.5 line-clamp-3 text-role-label font-normal leading-relaxed text-ink-mid">
+          <p className="mt-1.5 line-clamp-3 text-role-meta leading-relaxed text-ink-mid">
             {context}
           </p>
         )}

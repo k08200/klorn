@@ -115,6 +115,7 @@ describe("v2 type roles (web column)", () => {
     head: 17,
     body: 15,
     label: 13,
+    meta: 13,
     caption: 12,
     mono: 13,
   } as const;
@@ -124,6 +125,18 @@ describe("v2 type roles (web column)", () => {
       expect(value(THEME, `text-role-${role}--line-height`)).toMatch(/^\d+px$/);
     });
   }
+
+  // role-meta is role-label at regular weight — it replaced
+  // `text-role-label font-normal`, so it must render exactly that.
+  it("text-role-meta is text-role-label at weight 400", () => {
+    expect(value(THEME, "text-role-meta")).toBe(value(THEME, "text-role-label"));
+    expect(value(THEME, "text-role-meta--line-height")).toBe(
+      value(THEME, "text-role-label--line-height"),
+    );
+    expect(value(THEME, "text-role-meta--font-weight")).toBe("400");
+    expect(value(THEME, "text-role-label--font-weight")).toBe("500");
+    expect(THEME).not.toMatch(/--text-role-(?:label|meta)--letter-spacing/);
+  });
 });
 
 describe("ui primitives sit on the v2 system", () => {
