@@ -231,6 +231,88 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         unwired.signOut()
         ended.signOut()
     }
+    // MARK: overlap, sign-out, the local switch and a hung read (review 2026-11-08)
+    do {
+        let racing = S.model([S.firewall: .init(body: lanes(push: ["p1"]))], hold: [alertState])
+        var announced: [[String]] = []
+        racing.onNewPush = { announced.append($0.map(\.id)) }
+        await racing.loadQueue()
+        Stub.set(S.firewall, .init(body: lanes(push: ["p1", "p2"])))
+        let first = Task { await racing.loadQueue() }
+        let waiting = await S.waitUntil { Stub.parked(alertState) == 1 }
+        await racing.loadQueue()  // a retry while the first sync waits on the gate
+        let secondAskedNothing = Stub.calls(alertState).count == 1
+        Stub.release(alertState)
+        await first.value
+        check("overlapping syncs announce a new mail once (the ledger is saved before the gate read)",
+              waiting && secondAskedNothing && announced == [["p2"]])
+        racing.signOut()
+    }
+    do {
+        let leaving = S.model([S.firewall: .init(body: lanes(push: ["p1"]))], hold: [alertState])
+        var announced: [[String]] = []
+        leaving.onNewPush = { announced.append($0.map(\.id)) }
+        await leaving.loadQueue()
+        Stub.set(S.firewall, .init(body: lanes(push: ["p1", "p2"])))
+        let pending = Task { await leaving.loadQueue() }
+        let waiting = await S.waitUntil { Stub.parked(alertState) == 1 }
+        leaving.signOut()
+        Stub.release(alertState)
+        await pending.value
+        check("a sign-out during the gate read posts nothing and leaves no ledger behind",
+              waiting && announced.isEmpty && leaving.pushLedgerStore.load() == nil)
+    }
+    do {
+        let automations: Set<String> = ["GET /api/automations", "PATCH /api/automations"]
+        let muted = S.model([S.firewall: .init(body: lanes(push: ["p1"]))], hold: automations)
+        var announced: [[String]] = []
+        muted.onNewPush = { announced.append($0.map(\.id)) }
+        await muted.loadQueue()
+        muted.updateAutomation { $0.notifyEmailUrgent = false }
+        Stub.set(S.firewall, .init(body: lanes(push: ["p1"], meeting: ["m1"])))
+        await muted.loadQueue()
+        check("with Urgent email off on this Mac: no gate read, no banner, and the mail is still recorded",
+              announced.isEmpty && Stub.calls(alertState).isEmpty
+              && muted.pushLedgerStore.load()?.notified.contains("m1") == true)
+        automations.forEach(Stub.release)
+        muted.signOut()
+    }
+    do {
+        let twice = S.model([:], hold: [alertState])
+        var shown: [String] = []
+        twice.onMeetingSoon = { shown.append($0.id); return true }
+        let session = twice.sessionGeneration
+        let a = Task { await twice.announceMeetingSoon(upcoming: [standup], now: soonNow, session: session) }
+        let b = Task { await twice.announceMeetingSoon(upcoming: [standup], now: soonNow, session: session) }
+        let bothWaiting = await S.waitUntil { Stub.parked(alertState) == 2 }
+        Stub.release(alertState)
+        await a.value
+        await b.value
+        check("two ticks on the same meeting post one banner", bothWaiting && shown == ["ev-1"])
+        twice.signOut()
+    }
+    do {
+        let hung = S.model([S.firewall: .init(body: lanes(push: ["p1"]))], hold: [alertState])
+        hung.alertStateTimeout = 0.3
+        var announced: [[String]] = []
+        hung.onNewPush = { announced.append($0.map(\.id)) }
+        await hung.loadQueue()
+        Stub.set(S.firewall, .init(body: lanes(push: ["p1", "p2"])))
+        let started = Date()
+        let sync = Task { await hung.loadQueue() }
+        let posted = await S.waitUntil { !announced.isEmpty }
+        let elapsed = Date().timeIntervalSince(started)
+        Stub.release(alertState)
+        await sync.value
+        check("a hung gate read times out and posts (fail-open), not after URLSession's 60 s",
+              posted && announced == [["p2"]] && elapsed < 5
+              && ServerAlertGate.timeoutSeconds <= 5 && hung.alertStateTimeout == 0.3)
+        hung.signOut()
+    }
+    check("held-reason logging is bounded to the known values",
+          ServerAlertGate.heldReason(.emailUrgent, state: wire(#"{"alerts":{"push":{"allowed":false,"reason":"quiet_hours"}}}"#)) == "quiet_hours"
+          && ServerAlertGate.heldReason(.emailUrgent, state: wire(#"{"alerts":{"push":{"allowed":false,"reason":"zzz"}}}"#)) == "other"
+          && ServerAlertGate.heldReason(.emailUrgent, state: wire("{}")) == nil)
     check("the Today refresh routes the meeting-soon banner through that gate",
           bannerSourceText(sourceDir, "AppModel.swift").contains(
               "await announceMeetingSoon(upcoming: today?.upcoming, now: Date(), session: session)"))

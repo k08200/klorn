@@ -2531,6 +2531,9 @@ final class AppModel {
     /// false return means "not handled — offer it again on the next tick".
     var onMeetingSoon: ((CalendarEventWire) -> Bool)?
     static let meetingLeadMinutes = 10
+    /// How long a banner waits on the server's alert gate (a seam: the
+    /// self-check shortens it to prove a hung read still posts).
+    @ObservationIgnored var alertStateTimeout = ServerAlertGate.timeoutSeconds
     /// Which meetings have been announced, per account, across launches —
     /// the same ledger shape as PUSH (`PushLedger`), its own key.
     @ObservationIgnored let meetingAlertStore: any PushLedgerStoring
@@ -2656,7 +2659,8 @@ final class AppModel {
         // Re-read: another tick may have handled this meeting during the wait.
         let announced = PushLedger.resolve(stored: meetingAlertStore.load(), owner: owner)
         guard !announced.notified.contains(due.id) else { return }
-        if let reason = ServerAlertGate.heldReason(.meeting, state: state) {
+        guard ServerAlertGate.allows(.meeting, state: state) else {
+            let reason = ServerAlertGate.heldReason(.meeting, state: state) ?? "other"
             Log.app.info("meeting banner held by the server: \(reason, privacy: .public)")
             meetingAlertStore.save(announced.recording(due.id))
             return
@@ -2667,11 +2671,12 @@ final class AppModel {
     }
 
     /// The server's "may Klorn interrupt now" verdict (`AlertStateWire`), read
-    /// right before a banner posts. nil when it could not be read — the gate
-    /// then posts (fail-open).
+    /// right before a banner posts. nil when it could not be read within
+    /// `alertStateTimeout` — the gate then posts (fail-open).
     private func serverAlertState() async -> AlertStateWire? {
         do {
-            return try await api.get(AlertStateWire.path, as: AlertStateWire.self)
+            return try await api.get(
+                AlertStateWire.path, timeout: alertStateTimeout, as: AlertStateWire.self)
         } catch {
             Log.app.debug("alert-state read failed, posting anyway: \(String(describing: error), privacy: .private)")
             return nil
@@ -2870,11 +2875,14 @@ final class AppModel {
     /// Routed to `onNewPush`, which the AppDelegate wires to `PushAlerter`.
     ///
     /// The ledger is saved BEFORE the server's gate is read, so a concurrent
-    /// tick (poll and WS wake) never announces the same mail twice, and a
-    /// banner the gate holds is dropped rather than posted when quiet hours end
-    /// — as Web Push drops it. Server-side, MEETING mail rings under the same
-    /// "email_urgent" category as PUSH (judge/firewall-push.ts), so both follow
-    /// "Urgent email" here too.
+    /// tick (poll and a retry or WS wake) never announces the same mail twice,
+    /// and a banner the gate holds is dropped rather than posted when quiet
+    /// hours end — as Web Push drops it. A held sync also skips the VoiceOver
+    /// announcement: in quiet hours that is an interrupt too, the same as with
+    /// the category off. Mail recorded by a session that ended during the wait
+    /// is not announced (sign-out clears the ledger anyway). Server-side,
+    /// MEETING mail rings under the same "email_urgent" category as PUSH
+    /// (judge/firewall-push.ts), so both follow "Urgent email" here too.
     private func reconcileBanners(_ mail: BannerMail, session: Int) async {
         let owner = SessionIdentity.userId(fromToken: tokenStore.load())
         let ledger = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
@@ -2886,7 +2894,8 @@ final class AppModel {
         guard !plan.toNotify.isEmpty, automation.allowsInterrupt(for: .emailUrgent) else { return }
         let state = await serverAlertState()
         guard isCurrent(session) else { return }
-        if let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) {
+        guard ServerAlertGate.allows(.emailUrgent, state: state) else {
+            let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) ?? "other"
             Log.app.info("mail banners held by the server: \(reason, privacy: .public)")
             return
         }
