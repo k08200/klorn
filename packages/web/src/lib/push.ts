@@ -65,7 +65,7 @@ export async function getOrCreatePushSubscription(
  * cleared. Returns undefined when storage is unavailable (private mode); the
  * server then falls back to legacy, no-prune behavior.
  */
-function getPushDeviceId(): string | undefined {
+export function getPushDeviceId(): string | undefined {
   try {
     const KEY = "klorn_push_device_id";
     let id = localStorage.getItem(KEY);

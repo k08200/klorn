@@ -43,6 +43,9 @@ export interface BellRow {
   type: string;
   title: string;
   message: string;
+  /** EmailMessage.id of a one-mail interrupt: the desktop catch-up reads it
+   *  back (GET /api/notifications/desktop-catchup). */
+  sourceEmailId?: string;
 }
 
 type WrittenRow = { id: string; createdAt: Date };
@@ -134,11 +137,11 @@ function warnOnce(key: string, message: string): void {
   console.warn(message);
 }
 
-/** The user's budget day (their local date) and daily limit. */
+/** The user's budget day (their local date), the zone it was counted in, and the daily limit. */
 export async function budgetDayFor(
   userId: string,
   now: Date,
-): Promise<{ dayKey: string; limit: number | null }> {
+): Promise<{ dayKey: string; zone: string; limit: number | null }> {
   const config = await prisma.automationConfig.findUnique({
     where: { userId },
     select: { timezone: true, interruptBudget: true },
@@ -157,7 +160,7 @@ export async function budgetDayFor(
       `[PUSH-BUDGET] ignoring invalid JUDGE_V3_PUSH_BUDGET="${raw}"; using the default`,
     ),
   );
-  return { dayKey, limit };
+  return { dayKey, zone, limit };
 }
 
 /**

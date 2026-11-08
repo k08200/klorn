@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAuthToken } from "../lib/api";
+import { shellKind } from "../lib/native/shell";
 
 // Match the API default in lib/api.ts so WS and HTTP point at the same host
 // in local dev (Klorn API runs on :3001 via docker-compose).
@@ -53,9 +54,13 @@ export function useWebSocket(userId: string) {
     // "klorn-ws-v1", matched server-side) instead of a ?token= query param —
     // a query param leaks the long-lived credential into proxy/LB access logs.
     const token = getStoredAuthToken();
+    // Inside the Windows desktop wrapper (Tauri) the socket says so, which is
+    // how settings → Where you get alerts shows "Klorn for Windows · Running"
+    // (api notify/desktop-presence.ts). Every other host is a web tab.
+    const clientQuery = shellKind() === "tauri" ? "type=desktop&app=windows" : "type=web";
     const ws = token
-      ? new WebSocket(`${WS_URL}/ws?type=web`, ["klorn-ws-v1", token])
-      : new WebSocket(`${WS_URL}/ws?userId=${encodeURIComponent(userId)}&type=web`);
+      ? new WebSocket(`${WS_URL}/ws?${clientQuery}`, ["klorn-ws-v1", token])
+      : new WebSocket(`${WS_URL}/ws?userId=${encodeURIComponent(userId)}&${clientQuery}`);
 
     ws.onopen = () => {
       if (!mountedRef.current) {

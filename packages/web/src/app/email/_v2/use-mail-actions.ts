@@ -150,7 +150,7 @@ export function useMailActions(list: MailList) {
     setBusy("remind");
     setError(null);
     try {
-      await postReminder(email, key, t);
+      await postReminder(email.id, key);
       toast(t("mailV2.list.remind.set", { when: t(REMINDER_LABEL_KEYS[key]) }), "success");
     } catch (err) {
       captureClientError(err, { scope: "email.v2.remind", option: key });

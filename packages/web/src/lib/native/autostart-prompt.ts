@@ -1,5 +1,7 @@
-// The one-time "start Klorn when you sign in?" prompt in the Windows desktop
-// shell (apps/desktop-win, tauri-plugin-autostart).
+// The one-time "Keep Klorn running in the background?" prompt in the Windows
+// desktop shell (apps/desktop-win, tauri-plugin-autostart) — decision N5:
+// "Not now" / "Open at login", the latter the primary, initially focused
+// button; Esc means "Not now".
 //
 // Start-at-sign-in is opt-in, like the Mac's login item: OFF until the user
 // says yes, and never enabled silently. The prompt asks once — only inside
@@ -64,6 +66,12 @@ export function autostartPromptReducer(
     case "done":
       return state;
   }
+}
+
+/** Esc answers "Not now" while the question is open. While enabling, the
+ *  answer is already given: Esc does nothing. */
+export function escapeEvent(state: AutostartPromptState): AutostartPromptEvent | null {
+  return state.phase === "offered" ? { type: "decline" } : null;
 }
 
 export function promptVisible(state: AutostartPromptState): boolean {

@@ -15,12 +15,18 @@ import { escapeLikePattern } from "../db-like.js";
 import { findReingestedHistory } from "../mail/imap-history.js";
 import { isImapMessageId } from "../mail/imap-message-id.js";
 import {
+  type MailPushLane,
+  mailPushContent,
+  senderDisplayName,
+} from "../notify/mail-push-content.js";
+import {
   getUserNotificationLanguage,
   type NotificationLanguage,
   notificationCopy,
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
+import { resolveTierReason } from "./tier-reason-strings.js";
 import type { BellRow } from "./v3/push-budget-gate.js";
 
 // A push for a PUSH-tier email only fires for genuinely recent mail. The
@@ -36,12 +42,6 @@ const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 // that is both keyword-URGENT and judge-PUSH gets exactly one push. The dedupe
 // reads match URGENT_EMAIL_TITLES (every language plus the legacy English
 // title), so a language switch or this change's deploy never re-rings a mail.
-
-function senderDisplayName(from: string): string {
-  const angle = from.indexOf("<");
-  const name = angle > 0 ? from.slice(0, angle).trim().replace(/^"|"$/g, "") : from.trim();
-  return name || from;
-}
 
 /**
  * The earliest notification that may count as "already pushed" for this email. The
@@ -131,26 +131,66 @@ export async function firewallPushGatesPass(
   return true;
 }
 
-/** Sender and subject stay as the mail wrote them; only Klorn's stand-in is translated. */
-function pushBody(
-  email: JudgeableEmailRow,
-  language: NotificationLanguage,
-): { sender: string; subject: string; body: string } {
+/**
+ * The bell row / live frame message. Sender and subject stay as the mail wrote
+ * them; only Klorn's stand-in is translated. Unchanged by decision N1: the bell
+ * row message carries the dedupe marker.
+ */
+function pushBody(email: JudgeableEmailRow, language: NotificationLanguage): { body: string } {
   const sender = senderDisplayName(email.from);
   const subject = email.subject || notificationCopy(language).noSubject;
-  return { sender, subject, body: `${sender}: ${subject}`.slice(0, 200) };
+  return { body: `${sender}: ${subject}`.slice(0, 200) };
+}
+
+interface OpenMailItem {
+  id: string;
+  lane: MailPushLane;
+  reason: string | null;
+}
+
+/**
+ * The mail's open firewall item: its id (native deep link, Telegram buttons),
+ * its lane (MEETING picks the meeting action set; anything else rings as PUSH)
+ * and the judge's reason as the app shows it (a stored key resolved in the
+ * user's language). Null when no open item exists: the push still rings.
+ */
+async function findOpenMailItem(
+  userId: string,
+  emailDbId: string,
+  language: NotificationLanguage,
+): Promise<OpenMailItem | null> {
+  try {
+    const row = await prisma.attentionItem.findFirst({
+      where: { userId, source: "EMAIL", sourceId: emailDbId, status: "OPEN" },
+      select: { id: true, tier: true, tierReason: true },
+    });
+    if (!row) return null;
+    return {
+      id: row.id,
+      lane: row.tier === "MEETING" ? "MEETING" : "PUSH",
+      reason: resolveTierReason(row.tierReason, language),
+    };
+  } catch (err) {
+    console.warn(
+      "[PUSH] open firewall item lookup failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
 }
 
 /**
  * The bell row, titled in the user's notification language. It carries the
  * [gmailId] dedup marker, read back by both this path and the urgent-priority
- * sweep.
+ * sweep, and the mail's id, read back by the Windows desktop catch-up
+ * (decision N6).
  */
 export function firewallBellRow(email: JudgeableEmailRow, language: NotificationLanguage): BellRow {
   return {
     type: "email",
     title: notificationCopy(language).urgentMailTitle,
     message: `${pushBody(email, language).body} [${email.gmailId}]`,
+    sourceEmailId: email.id,
   };
 }
 
@@ -162,18 +202,22 @@ export async function deliverFirewallPush(
   language?: NotificationLanguage,
 ): Promise<void> {
   const lang = language ?? (await getUserNotificationLanguage(userId));
-  const { sender, subject, body } = pushBody(email, lang);
-  const [
-    { pushNotification },
-    { sendPushNotification },
-    { findOpenEmailAttentionItemId },
-    { desktopAlertTag },
-  ] = await Promise.all([
+  const { body } = pushBody(email, lang);
+  const [{ pushNotification }, { sendPushNotification }, { desktopAlertTag }] = await Promise.all([
     import("../websocket.js"),
     import("../notify/push.js"),
-    import("./attention-override.js"),
     import("../notify/desktop-alert.js"),
   ]);
+
+  // Decision N1: sender-only title, subject + the judge's reason, opens the
+  // mail, and the lane + language pick the action set on every channel.
+  const item = await findOpenMailItem(userId, email.id, lang);
+  const content = mailPushContent({
+    from: email.from,
+    subject: email.subject,
+    reason: item?.reason,
+    language: lang,
+  });
 
   pushNotification(userId, {
     id: notification.id,
@@ -181,18 +225,20 @@ export async function deliverFirewallPush(
     title: notificationCopy(lang).urgentMailTitle,
     message: body,
     createdAt: notification.createdAt.toISOString(),
-    // PUSH lane → OS banner in the desktop shell, under the Web Push gate.
+    // PUSH lane → OS banner in the desktop shell, under the Web Push gate,
+    // with the same N1 content and a click that opens the mail.
     ...(await desktopAlertTag(userId, "push")),
+    mail: { emailId: email.id, ...content },
   });
 
-  const attentionItemId = await findOpenEmailAttentionItemId(userId, email.id);
   await sendPushNotification(
     userId,
     {
-      title: `Klorn — ${sender}`,
-      body: subject,
-      url: "/inbox/firewall",
-      attentionItemId: attentionItemId ?? undefined,
+      ...content,
+      url: `/email/${encodeURIComponent(email.id)}`,
+      attentionItemId: item?.id,
+      lane: item?.lane ?? "PUSH",
+      language: lang,
       // Native deep link (push.ts hands it to FCM / APNs only). No
       // pendingActionId: a reply draft for this mail, if any, is proposed after
       // the judge, so none exists yet at this point.

@@ -9,6 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
+import type { DesktopMailToast } from "@klorn/contract";
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
@@ -74,6 +75,7 @@ import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
@@ -855,6 +857,9 @@ export async function ensureUrgentEmailNotification(
   dbMessage: string,
   userBody: string,
   language?: string | null,
+  /** A batch of ONE mail: its N1 toast for the desktop shell, and the mail id
+   *  on the row for the desktop catch-up (decision N6). */
+  mail?: DesktopMailToast,
 ): Promise<{ id: string; createdAt: Date } | null> {
   const title = notificationCopy(language).urgentMailTitle;
   let notification: { id: string; createdAt: Date };
@@ -866,6 +871,7 @@ export async function ensureUrgentEmailNotification(
         dedupeKey: urgentDedupeKey(lead),
         title,
         message: dbMessage,
+        ...(mail ? { sourceEmailId: mail.emailId } : {}),
       },
       select: { id: true, createdAt: true },
     });
@@ -883,6 +889,7 @@ export async function ensureUrgentEmailNotification(
     // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
     // OS banner in the desktop shell, under the Web Push gate.
     ...(await desktopAlertTag(userId, "push")),
+    ...(mail ? { mail } : {}),
   });
   return notification;
 }
@@ -892,7 +899,9 @@ export async function ensureUrgentEmailNotification(
  * ensureUrgentEmailNotification). Native deep link only when the push is about
  * ONE mail; a batch keeps opening the briefing. No pendingActionId here (no
  * draft lookup on the sweep's hot path). `bellNotificationId` names the row,
- * so the web push's OS tag matches the one an open tab uses for it.
+ * so the web push's OS tag matches the one an open tab uses for it. A push
+ * about one mail also names its lane (PUSH) and the user's language, so it
+ * offers the same action buttons as the firewall ring (decision N1).
  */
 export function urgentMailPushPayload(input: {
   notificationId: string;
@@ -900,15 +909,18 @@ export function urgentMailPushPayload(input: {
   body: string;
   leads: ReadonlyArray<{ id: string }>;
   attentionItemId: string | null;
+  language: string | null | undefined;
 }) {
-  const { notificationId, title, body, leads, attentionItemId } = input;
+  const { notificationId, title, body, leads, attentionItemId, language } = input;
   return {
     title,
     body,
     url: "/briefing",
     attentionItemId: attentionItemId ?? undefined,
     bellNotificationId: notificationId,
-    ...(leads.length === 1 ? { emailId: leads[0].id } : {}),
+    ...(leads.length === 1
+      ? { emailId: leads[0].id, lane: "PUSH" as const, ...(language ? { language } : {}) }
+      : {}),
   };
 }
 
@@ -1891,6 +1903,16 @@ async function runUserCycle(
               dbMessage,
               userBody,
               notificationLanguage,
+              newUrgent.length === 1
+                ? {
+                    emailId: newUrgent[0].id,
+                    ...mailPushContent({
+                      from: newUrgent[0].from ?? "",
+                      subject: newUrgent[0].subject,
+                      language: notificationLanguage ?? "en",
+                    }),
+                  }
+                : undefined,
             );
 
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
@@ -1913,6 +1935,7 @@ async function runUserCycle(
                   body: userBody,
                   leads: newUrgent,
                   attentionItemId,
+                  language: notificationLanguage,
                 }),
                 "email_urgent",
                 // Unawaited (don't block the tick) but guarded: an

@@ -9,6 +9,7 @@ import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import AppShell from "../components/app-shell";
 import AutostartPrompt from "../components/autostart-prompt";
 import CommandPalette from "../components/command-palette";
+import DesktopToastRouter from "../components/desktop-toast-router";
 import GoogleReconnectBanner from "../components/google-reconnect-banner";
 import KeyboardShortcuts from "../components/keyboard-shortcuts";
 import Providers from "../components/providers";
@@ -103,6 +104,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PushOnboardingBanner />
           <PwaPrompts />
           <AutostartPrompt />
+          <DesktopToastRouter />
         </Providers>
       </body>
     </html>

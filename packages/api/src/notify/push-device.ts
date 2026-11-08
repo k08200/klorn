@@ -53,6 +53,8 @@ export interface DevicePushPayload {
   emailId?: string;
   attentionItemId?: string;
   pendingActionId?: string;
+  /** The mail's firewall lane (decision N1); only travels with `emailId`. */
+  lane?: "PUSH" | "MEETING";
 }
 
 /** Opaque ids and an in-app route — nothing the notification text does not already show. */
@@ -69,6 +71,7 @@ export function mailPushTarget(payload: DevicePushPayload): MailPushTarget | nul
     ...(payload.attentionItemId ? { attentionItemId: payload.attentionItemId } : {}),
     ...(payload.pendingActionId ? { pendingActionId: payload.pendingActionId } : {}),
     route: `/mail/${encodeURIComponent(payload.emailId)}`,
+    ...(payload.lane ? { lane: payload.lane } : {}),
   };
 }
 
@@ -185,6 +188,8 @@ export async function sendDevicePush(
   userId: string,
   payload: DevicePushPayload,
   category: NotifCategory = "system",
+  // "Send test" on one settings row rings that token only (routes/alert-endpoints.ts).
+  opts: { tokenId?: string } = {},
 ): Promise<DevicePushSummary> {
   const app = getFirebaseApp();
   if (!app) {
@@ -193,7 +198,7 @@ export async function sendDevicePush(
   }
 
   const rows = await prisma.devicePushToken.findMany({
-    where: { userId, platform: "android" },
+    where: { userId, platform: "android", ...(opts.tokenId ? { id: opts.tokenId } : {}) },
     select: { token: true, dataMessages: true },
   });
   if (rows.length === 0) {
