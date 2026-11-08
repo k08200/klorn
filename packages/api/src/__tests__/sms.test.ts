@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 interface UserRow {
   role: string;
   email: string | null;
+  emailVerified?: boolean;
 }
 
 const users = new Map<string, UserRow>();
@@ -89,13 +90,22 @@ describe("sendSms — admin gate", () => {
     expect(createCalls).toHaveLength(0);
   });
 
-  it("allows users in ADMIN_EMAILS even without role=ADMIN", async () => {
-    users.set("u-env-admin", { role: "USER", email: "admin@klorn.ai" });
+  it("allows a VERIFIED user in ADMIN_EMAILS even without role=ADMIN", async () => {
+    users.set("u-env-admin", { role: "USER", email: "admin@klorn.ai", emailVerified: true });
     phones.set("u-env-admin", "+821012345678");
     const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u-env-admin", "hello");
     expect(result).toEqual({ sent: true });
     expect(createCalls).toHaveLength(1);
+  });
+
+  it("refuses an UNVERIFIED account on an ADMIN_EMAILS address (same rule as requireAdmin)", async () => {
+    users.set("u-unverified", { role: "USER", email: "admin@klorn.ai", emailVerified: false });
+    phones.set("u-unverified", "+821012345678");
+    const { sendSms } = await import("../notify/sms.js");
+    const result = await sendSms("u-unverified", "hello");
+    expect(result).toEqual({ sent: false, reason: "not_admin" });
+    expect(createCalls).toHaveLength(0);
   });
 
   it("allows users with role=ADMIN regardless of email", async () => {

@@ -82,7 +82,9 @@ Google token.
 - [ ] Create the RevenueCat (mobile) price objects; verify webhook plan sync
       end-to-end. The Paddle (web) side is done.
 - [ ] PAYWALL flip per docs/launch/paywall-flip-runbook.md (trial stays 7d
-      card-required). Flip AFTER beta cohort feedback, not with it.
+      card-required). Since 2026-10-24 every signup starts on FREE, and the
+      beta cohort was settled on 2026-10-28 (runbook §3a), so the flip no
+      longer waits on cohort feedback; its timing is the founder's call.
 
 ## P2b — Unit economics at 100 users (measured 2026-08-10)
 

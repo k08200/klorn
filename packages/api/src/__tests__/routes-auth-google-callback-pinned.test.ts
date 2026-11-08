@@ -8,7 +8,7 @@
  */
 
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const google = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -241,6 +241,45 @@ describe("the login's attr and appScheme sub-branches", () => {
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain("This sign-in expired");
     expect(res.body).not.toContain('name="confirm"');
+  });
+});
+
+describe("a new Google account starts on FREE whatever the BETA_* flags say", () => {
+  // Founder decision 2026-10-24: Pro is paid. Web and desktop sign-ups share
+  // this create branch, so one assertion covers both doors.
+  const BETA_KEYS = ["BETA_GATE_ENABLED", "BETA_AUTO_PRO_ENABLED", "BETA_AUTO_PRO_LIMIT"];
+  afterEach(() => {
+    for (const key of BETA_KEYS) delete process.env[key];
+  });
+
+  function createdData(): Record<string, unknown> {
+    expect(db.user.create).toHaveBeenCalledTimes(1);
+    return (db.user.create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+  }
+
+  it("auto-pro on: the new row carries no plan and no betaProGrantedAt", async () => {
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    process.env.BETA_AUTO_PRO_LIMIT = "50";
+    db.user.findUnique.mockResolvedValue(null);
+    db.user.create.mockResolvedValue({ ...USER, plan: "FREE", id: "new-1" });
+    const res = await callback(withLoginState("__google_login__", {}));
+    expect(res.headers.location).toMatch(new RegExp(`^${WEB}/auth/callback\\?code=`));
+    const data = createdData();
+    expect(data).not.toHaveProperty("plan");
+    expect(data).not.toHaveProperty("betaProGrantedAt");
+  });
+
+  it("gate on with an APPROVED entry: still no plan on the new row", async () => {
+    process.env.BETA_GATE_ENABLED = "true";
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    db.waitlist.findUnique.mockResolvedValueOnce({ status: "APPROVED" } as never);
+    db.user.findUnique.mockResolvedValue(null);
+    db.user.create.mockResolvedValue({ ...USER, plan: "FREE", id: "new-1" });
+    const res = await callback(withLoginState("__google_login__", {}));
+    expect(res.headers.location).toMatch(new RegExp(`^${WEB}/auth/callback\\?code=`));
+    const data = createdData();
+    expect(data).not.toHaveProperty("plan");
+    expect(data).not.toHaveProperty("betaProGrantedAt");
   });
 });
 
