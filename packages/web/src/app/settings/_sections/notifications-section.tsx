@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertDevicesPanel } from "../../../components/alert-devices/alert-devices-panel";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import Switch from "../../../components/ui/switch";
@@ -8,6 +9,7 @@ import { apiFetch } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { track } from "../../../lib/track";
 import { useDisplayTimeZone } from "../../../lib/use-time-zone";
+import { LaunchAtLoginRow } from "./launch-at-login-row";
 import { NotificationLanguageRow } from "./notification-language-row";
 import { PANEL, SECTION_TITLE } from "./shared";
 import { useAutomationConfig } from "./use-automation-config";
@@ -150,6 +152,7 @@ export function NotificationsSection() {
 
   return (
     <section className="mb-8">
+      <AlertDevicesPanel />
       <h2 className={SECTION_TITLE}>{t("settings.section.signalRhythm")}</h2>
       <div className={`${PANEL} divide-y divide-line-soft`}>
         <div className="p-5 space-y-4">
@@ -213,6 +216,7 @@ export function NotificationsSection() {
             <Button onClick={enablePush}>{t("settings.turnOn")}</Button>
           )}
         </div>
+        <LaunchAtLoginRow />
 
         {/* Granular Notification Preferences */}
         <div className="p-5 space-y-3">

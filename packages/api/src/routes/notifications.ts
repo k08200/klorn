@@ -10,6 +10,7 @@ import { verifyTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
+import { parseClientPlatform } from "../notify/alert-endpoints.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
@@ -254,6 +255,9 @@ export async function notificationRoutes(app: FastifyInstance) {
       });
     }
 
+    // Label for settings → "Where you get alerts": derived browser/OS only.
+    const { browser, os } = parseClientPlatform(request.headers["user-agent"]);
+
     await prisma.pushSubscription.upsert({
       where: { endpoint },
       create: {
@@ -263,6 +267,8 @@ export async function notificationRoutes(app: FastifyInstance) {
         auth: keys.auth,
         origin: normalizedOrigin,
         deviceId,
+        browser,
+        os,
       },
       update: {
         userId,
@@ -270,6 +276,8 @@ export async function notificationRoutes(app: FastifyInstance) {
         auth: keys.auth,
         origin: normalizedOrigin,
         deviceId,
+        browser,
+        os,
       },
     });
     console.log(`[PUSH-SUB] Successfully registered push subscription for user ${userId}`);

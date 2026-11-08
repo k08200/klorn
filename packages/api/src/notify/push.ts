@@ -480,6 +480,49 @@ async function deliverToSubscription(
   return { attempted: true, delivered: false };
 }
 
+export type TestPushResult =
+  | { status: "not_found" }
+  | { status: "skipped"; reason: string; delivered: false }
+  | { status: "sent"; delivered: boolean };
+
+/**
+ * "Send test" on one row of settings → Where you get alerts (N8): one push to
+ * one of the caller's subscriptions.
+ *
+ * Deliberately NOT routed through sendPushNotification's gates: the noise
+ * policy, category preferences, quiet hours, the agent-proposal cooldown and
+ * the per-user ambient/interrupt rate buckets all exist to keep Klorn from
+ * interrupting unasked — and this push IS the ask (the user pressed the
+ * button, and a test muted by their own quiet hours would wrongly read as
+ * "this device is broken"). It also never fans out to Telegram or native
+ * devices. What still applies: the route's per-user rate limit
+ * (routes/alert-endpoints.ts), ownership (userId-scoped lookup), the origin
+ * allowlist, the SSRF endpoint check and the delivery log + eviction of
+ * deliverToSubscription, so a dead endpoint found by a test is cleaned up
+ * exactly as a real push would.
+ */
+export async function sendTestPushToSubscription(
+  userId: string,
+  subscriptionId: string,
+  payload: { title: string; body: string; url: string },
+): Promise<TestPushResult> {
+  const sub = (await prisma.pushSubscription.findFirst({
+    where: { id: subscriptionId, userId },
+  })) as PushSubscriptionRow | null;
+  if (!sub) return { status: "not_found" };
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    return { status: "skipped", reason: "missing_vapid_keys", delivered: false };
+  }
+  if (!isAllowedPushOrigin(sub.origin)) {
+    return { status: "skipped", reason: "origin_not_allowed", delivered: false };
+  }
+  const result = await deliverToSubscription(userId, sub, payload, "system");
+  if (!result.attempted) {
+    return { status: "skipped", reason: "unsafe_endpoint", delivered: false };
+  }
+  return { status: "sent", delivered: result.delivered };
+}
+
 /** Get the public VAPID key for client-side subscription */
 export function getVapidPublicKey(): string {
   return VAPID_PUBLIC_KEY;

@@ -230,6 +230,30 @@ describe("notification routes", () => {
     await app.close();
   });
 
+  it("stores the subscribing browser and OS (derived, never the raw user agent)", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.pushSubscription.upsert).mockClear();
+    const app = await buildApp();
+    const ua =
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36";
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscribe",
+      headers: { ...auth(), "user-agent": ua },
+      payload: {
+        endpoint: "https://fcm.googleapis.com/fcm/send/android-1",
+        keys: { p256dh: "key1", auth: "key2" },
+        origin: "https://app.klorn.ai",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const arg = vi.mocked(prisma.pushSubscription.upsert).mock.calls[0][0];
+    expect(arg.create).toMatchObject({ browser: "chrome", os: "android" });
+    expect(arg.update).toMatchObject({ browser: "chrome", os: "android" });
+    expect(JSON.stringify(arg)).not.toContain("Pixel 8");
+    await app.close();
+  });
+
   it("prunes this browser's prior + legacy rows when subscribing with a deviceId", async () => {
     const { prisma } = await import("../db.js");
     vi.mocked(prisma.pushSubscription.deleteMany).mockClear();
