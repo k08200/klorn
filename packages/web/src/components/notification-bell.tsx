@@ -8,7 +8,7 @@ import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { deliverInPageAlert } from "../lib/in-page-notify";
 import { openExternal, shellKind } from "../lib/native/shell";
-import { deliverDesktopAlert } from "../lib/native/tauri-notify";
+import { catchUpDesktopAlerts, deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
   getTypeLabel,
   groupNotifications,
@@ -181,10 +181,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
       if (notif.id) {
         // Windows desktop shell: banner server-tagged PUSH / meeting frames
-        // (lib/native/desktop-alerts.ts — its own once-per-id dedupe). Runs
-        // before the seen check below: a list refetch can record this id
-        // before the frame arrives, and that must not swallow the banner.
-        if (shellKind() === "tauri") void deliverDesktopAlert(payload);
+        // (lib/native/desktop-catchup.ts — a per-account ledger shared with
+        // catch-up). Runs before the seen check below: a list refetch can
+        // record this id before the frame arrives, and that must not swallow
+        // the banner.
+        if (shellKind() === "tauri") void deliverDesktopAlert(userId, payload);
 
         // Track seen notification IDs to prevent duplicate desktop notifications
         if (seenIdsRef.current.has(notif.id)) return;
@@ -206,7 +207,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       }
     });
     return unsub;
-  }, [on, triggerFlash]);
+  }, [on, triggerFlash, userId]);
 
   // Pull the authoritative notification list from the server (source of truth).
   // WebSocket delivery is best-effort and lives only in server memory, so any
@@ -227,6 +228,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
           // Seed seen IDs so fetched notifications don't re-trigger desktop alerts
           for (const n of notifs) seenIdsRef.current.add(n.id);
           setNotifications(notifs);
+          // Windows desktop shell: frames sent while the app was quit, asleep
+          // or disconnected are gone (the socket has no replay), so banner the
+          // PUSH / meeting rows not announced yet — capped, fresh only, silent
+          // on the first run (lib/native/desktop-catchup.ts).
+          if (shellKind() === "tauri") void catchUpDesktopAlerts(userId, notifs);
           if (opts?.flashOnNew && initializedRef.current && hasNew) {
             triggerFlash();
           }
@@ -234,7 +240,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         })
         .catch(() => {});
     },
-    [triggerFlash],
+    [triggerFlash, userId],
   );
 
   // Re-sync with the server whenever the tab is reactivated, the network

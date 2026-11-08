@@ -24,3 +24,6 @@ tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 # Tray menu language (en/ko) without pulling the web app's i18n into Rust.
 sys-locale = "0.3"
+# Start at sign-in, opt-in (src/autostart.rs). Only its enable / disable /
+# is_enabled commands are granted to the remote origin; none takes an argument.
+tauri-plugin-autostart = "2"
