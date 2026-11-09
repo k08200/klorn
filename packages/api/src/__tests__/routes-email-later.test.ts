@@ -16,6 +16,7 @@ vi.mock("../pim/mail-reminder.js", async (importOriginal) => ({
 }));
 
 const emailFindFirst = vi.hoisted(() => vi.fn());
+const labelUpdateMany = vi.hoisted(() => vi.fn(async (_args: unknown) => ({ count: 1 })));
 const dbTransaction = vi.hoisted(() => vi.fn(async (ops: unknown[]) => Promise.all(ops)));
 
 vi.mock("../mail/email.js", () => ({
@@ -65,6 +66,8 @@ vi.mock("../db.js", () => {
       update: vi.fn(async () => ({})),
     },
     $transaction: dbTransaction,
+    // Later stamps SNOOZED on the decision ledger (judge/user-outcome.ts).
+    decisionLabel: { updateMany: labelUpdateMany },
     linkedInboxAccount: { findMany: vi.fn(async () => []) },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
@@ -240,6 +243,56 @@ describe("POST /api/email/:id/later", () => {
     expect(limited[0]?.json()).toMatchObject({ code: "rate-limited" });
     // Another user behind the same address still has a budget.
     expect((await later(app, {}, { userId: "user-2" })).statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe("POST /api/email/:id/later — decision ledger", () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  beforeEach(() => {
+    labelUpdateMany.mockReset();
+    labelUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("stamps SNOOZED once on the user's mail when the reminder is set", async () => {
+    const app = await buildApp();
+    const res = await later(app, {});
+    await flush();
+
+    expect(res.statusCode).toBe(200);
+    expect(labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "user-1", source: "EMAIL", sourceId: "email-1", snoozedAt: null },
+        data: { snoozedAt: expect.any(Date) },
+      },
+    ]);
+    await app.close();
+  });
+
+  it("stamps nothing for a refused time or a mail that isn't the user's", async () => {
+    const app = await buildApp();
+    const past = await later(app, { remindAt: new Date(NOW.getTime() - HOUR).toISOString() });
+    setMailReminder.mockResolvedValueOnce({ ok: false });
+    const missing = await later(app, {}, { id: "not-mine" });
+    await flush();
+
+    expect([past.statusCode, missing.statusCode]).toEqual([400, 404]);
+    expect(labelUpdateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("answers exactly the same when the ledger write fails, and while it hangs", async () => {
+    const app = await buildApp();
+    const ok = await later(app, {});
+    labelUpdateMany.mockRejectedValueOnce(new Error("ledger down"));
+    const failed = await later(app, {});
+    labelUpdateMany.mockReturnValueOnce(new Promise(() => {}) as never);
+    const hanging = await later(app, {});
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
+    expect(hanging.body).toBe(ok.body);
     await app.close();
   });
 });
