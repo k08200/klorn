@@ -9,6 +9,10 @@
  *   LLM_PROVIDER_ORDER=anthropic GLOBAL_DAILY_COST_CAP_CENTS=0 LLM_USAGE_LOG_DISABLED=true \
  *   DATABASE_URL=postgresql://eval:eval@localhost:5432/eval \
  *   npx tsx scripts/v3-phishing-eval.ts [--model=claude-haiku-5-5] [--runs=3] [--out=report.json]
+ *
+ * Exit codes: 0 ok; 1 failed; 3 instrument degraded: an item got no facts, or
+ * (with --model) an answer was served by another model after a silent failover.
+ * Cost is a lower bound: an answer that fails to parse reports no usage.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -16,7 +20,18 @@ import { resolve } from "node:path";
 import type { LiveTier } from "@klorn/contract";
 import { assertEvalEnv } from "../src/eval-v3/bench-io.js";
 import { extractFacts } from "../src/judge/v3/facts-extractor.js";
-import { type PhishingItemResult, summarizePhishingEval } from "../src/judge/v3/phishing-eval.js";
+import {
+  type PhishingItemResult,
+  servedByOther,
+  summarizePhishingEval,
+} from "../src/judge/v3/phishing-eval.js";
+
+type RunResult = PhishingItemResult & {
+  costUsd: number;
+  issues: string[];
+  servedModel: string | null;
+  servedProvider: string | null;
+};
 
 interface Item {
   id: string;
@@ -51,7 +66,7 @@ async function run(
   userEmail: string,
   runNo: number,
   model: string | undefined,
-): Promise<PhishingItemResult & { costUsd: number; issues: string[] }> {
+): Promise<RunResult> {
   const receivedAt = new Date(item.receivedAt);
   const x = await extractFacts(
     {
@@ -88,6 +103,8 @@ async function run(
     costUsd: x.usage?.costUsd ?? 0,
     // Validator issues and failure notes (no mail text): why an item had no facts.
     issues: x.issues,
+    servedModel: x.model,
+    servedProvider: x.provider,
   };
 }
 
@@ -99,7 +116,7 @@ async function main(): Promise<number> {
   };
   const model = arg("model");
   const runs = runsArg();
-  const results: (PhishingItemResult & { costUsd: number; issues: string[] })[] = [];
+  const results: RunResult[] = [];
   for (let runNo = 1; runNo <= runs; runNo++) {
     for (const item of doc.items) {
       results.push(await run(item, doc.metadata.userEmail, runNo, model));
@@ -107,15 +124,40 @@ async function main(): Promise<number> {
   }
   const perRun = Array.from({ length: runs }, (_, i) => {
     const s = summarizePhishingEval(results.filter((r) => r.run === i + 1));
-    return { run: i + 1, recall: s.phishing.recall, falsePositiveRate: s.benign.falsePositiveRate };
+    return {
+      run: i + 1,
+      recall: s.phishing.recall,
+      falsePositiveRate: s.benign.falsePositiveRate,
+      noFacts: s.noFacts,
+    };
   });
+  const served: Record<string, number> = {};
+  for (const r of results) {
+    const key = r.servedModel ? `${r.servedProvider ?? "?"}/${r.servedModel}` : "(no answer)";
+    served[key] = (served[key] ?? 0) + 1;
+  }
+  const otherModel = model
+    ? servedByOther(
+        results.map((r) => r.servedModel),
+        model,
+      )
+    : 0;
   const report = {
     model: model ?? "(JUDGE_V3_FACTS_MODEL / JUDGE_MODEL)",
+    served,
+    servedByOther: model ? otherModel : null,
     runs,
     costUsd: results.reduce((s, r) => s + r.costUsd, 0),
     perRun,
     pooled: summarizePhishingEval(results),
-    facts: results.map((r) => ({ id: r.id, run: r.run, facts: r.facts, issues: r.issues })),
+    facts: results.map((r) => ({
+      id: r.id,
+      run: r.run,
+      model: r.servedModel,
+      provider: r.servedProvider,
+      facts: r.facts,
+      issues: r.issues,
+    })),
   };
   const json = JSON.stringify(report, null, 2);
   const out = arg("out");
@@ -124,10 +166,15 @@ async function main(): Promise<number> {
   const p = report.pooled;
   console.error(
     `[v3-phishing-eval] recall ${p.phishing.flagged}/${p.phishing.total}, ` +
-      `benign FP ${p.benign.flagged}/${p.benign.total}, noFacts ${p.noFacts}, ` +
-      `cost $${report.costUsd.toFixed(4)}`,
+      `benign FP ${p.benign.flagged}/${p.benign.total}, noFacts ${p.noFacts.total}, ` +
+      `served ${JSON.stringify(served)}, cost $${report.costUsd.toFixed(4)}`,
   );
-  return p.noFacts > 0 ? 3 : 0;
+  if (otherModel > 0) {
+    console.error(
+      `[v3-phishing-eval] ${otherModel} answer(s) were served by a model other than ${model}`,
+    );
+  }
+  return p.noFacts.total > 0 || otherModel > 0 ? 3 : 0;
 }
 
 main().then(

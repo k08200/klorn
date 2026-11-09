@@ -12,6 +12,7 @@ import type { LiveTier } from "@klorn/contract";
 import type { FactsV1 } from "./facts-schema.js";
 import {
   laneFromFactsV3,
+  POLICY_VERSION,
   type PolicyVersion,
   RISK_TRUST_MIN_HISTORY_MS,
   RISK_TRUST_MIN_INBOUND,
@@ -34,8 +35,9 @@ export interface PhishingScenario {
  * known_correspondent_dmarc_pass: the residual cases the doc lists for v3.1's
  *   risk trust: a compromised correspondent, or an attacker who first got
  *   RISK_TRUST_MIN_INBOUND mails into the inbox over the history window.
- * Every scenario passes automatedSender false: an attacker picks a From that
- * avoids no-reply@/notifications@.
+ * Each item carries the automated-sender signal production computes for its
+ * From, as live does. An attacker picks a From that avoids no-reply@ and
+ * notifications@, so every phishing item has it off; some genuine ones have it on.
  */
 export const PHISHING_SCENARIOS: readonly PhishingScenario[] = [
   { name: "cold_start", senderAuthenticated: null, relationship: () => null },
@@ -72,13 +74,14 @@ export function laneUnder(
   facts: FactsV1,
   scenario: PhishingScenario,
   decidedAt: Date,
-  version: PolicyVersion = "v3.1",
+  version: PolicyVersion = POLICY_VERSION,
+  automatedSender = false,
 ): ScenarioLane {
   const d = laneFromFactsV3({
     facts,
     relationship: scenario.relationship(decidedAt),
     senderAuthenticated: scenario.senderAuthenticated,
-    automatedSender: false,
+    automatedSender,
     spam: false,
     decidedAt,
     version,
@@ -107,6 +110,11 @@ export interface Interrupt {
   automatedSenderSignal: boolean;
 }
 
+/**
+ * `laneAccuracy` and `benignLaneMisses` compare against the set's labels,
+ * which are cold-start lanes. Outside cold_start a genuine alert can rightly
+ * PUSH through trusted risk and still show here as a miss.
+ */
 export interface ScenarioSummary {
   laneAccuracy: { correct: number; total: number; accuracy: number | null };
   /** Phishing mail the policy would interrupt with (PUSH) or notify as MEETING. */
@@ -137,7 +145,13 @@ function scenarioSummary(
   const phishingInterrupts: Interrupt[] = [];
   const benignLaneMisses: ScenarioSummary["benignLaneMisses"] = [];
   for (const r of scored) {
-    const { lane, deciding } = laneUnder(r.facts, scenario, r.receivedAt, version);
+    const { lane, deciding } = laneUnder(
+      r.facts,
+      scenario,
+      r.receivedAt,
+      version,
+      r.automatedSenderSignal,
+    );
     if (lane === r.expectedLane) correct++;
     if (r.phishing && INTERRUPT_LANES.has(lane)) {
       phishingInterrupts.push({
@@ -162,18 +176,33 @@ function scenarioSummary(
 }
 
 /**
+ * How many answers a model other than the one asked served. The provider chain
+ * fails over silently, so a run can be scored under the wrong model's name.
+ * Matching is the bench's (`countServedByOther`): the served id contains the
+ * asked one, provider prefix stripped. No answer (null) is not counted.
+ */
+export function servedByOther(served: readonly (string | null)[], asked: string): number {
+  const want = asked.replace(/^[^/]+\//, "");
+  return served.filter((m) => m !== null && !m.includes(want)).length;
+}
+
+/**
  * phishing_suspect recall on phishing items, false-positive rate on benign
- * ones, and per-scenario lanes. Items without facts (the live judge would fall
- * back to v2) are counted in noFacts and left out of every rate.
+ * ones, and per-scenario lanes. Items without facts are counted in noFacts and
+ * left out of every rate except `recallWorstCase`, which counts a no-facts
+ * phishing mail as missed: live, it falls back to the v2 lane, which has no
+ * phishing check.
  */
 export function summarizePhishingEval(
   results: readonly PhishingItemResult[],
   scenarios: readonly PhishingScenario[] = PHISHING_SCENARIOS,
-  version: PolicyVersion = "v3.1",
+  version: PolicyVersion = POLICY_VERSION,
 ) {
   const scored = results.filter((r): r is PhishingItemResult & { facts: FactsV1 } => !!r.facts);
   const phish = scored.filter((r) => r.phishing);
   const benign = scored.filter((r) => !r.phishing);
+  const noFactsPhishing = results.filter((r) => !r.facts && r.phishing).length;
+  const noFactsBenign = results.filter((r) => !r.facts && !r.phishing).length;
   const tag = (r: PhishingItemResult) => `${r.id}#${r.run}`;
   const checked = results.reduce((s, r) => s + r.asksChecked, 0);
   const dropped = results.reduce((s, r) => s + r.asksDropped, 0);
@@ -181,12 +210,17 @@ export function summarizePhishingEval(
   const falseFlags = benign.filter((r) => flagged(r.facts));
   return {
     items: results.length,
-    noFacts: results.length - scored.length,
+    noFacts: {
+      total: noFactsPhishing + noFactsBenign,
+      phishing: noFactsPhishing,
+      benign: noFactsBenign,
+    },
     policyVersion: version,
     phishing: {
       total: phish.length,
       flagged: caught,
       recall: ratio(caught, phish.length),
+      recallWorstCase: ratio(caught, phish.length + noFactsPhishing),
       missed: phish.filter((r) => !flagged(r.facts)).map(tag),
     },
     benign: {

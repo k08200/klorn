@@ -6,6 +6,7 @@ import {
   laneUnder,
   PHISHING_SCENARIOS,
   type PhishingItemResult,
+  servedByOther,
   summarizePhishingEval,
 } from "../judge/v3/phishing-eval.js";
 
@@ -69,6 +70,12 @@ describe("laneUnder (policy v3.1)", () => {
       "QUEUE",
       "QUEUE",
     ]);
+  });
+
+  it("passes the automated-sender signal: a no-reply notification ask does not PUSH", () => {
+    const noticeAsk = facts({ kind: "notification", threadTurn: "none", asks: [payToday] });
+    expect(laneUnder(noticeAsk, scenario("cold_start"), at).lane).toBe("PUSH");
+    expect(laneUnder(noticeAsk, scenario("cold_start"), at, undefined, true).lane).toBe("QUEUE");
   });
 
   it("an unflagged invite is MEETING; a flagged one is QUEUE", () => {
@@ -135,8 +142,15 @@ describe("summarizePhishingEval", () => {
   const s = summarizePhishingEval(results);
 
   it("reports recall on phishing and false positives on benign, without the no-facts items", () => {
-    expect(s.noFacts).toBe(1);
-    expect(s.phishing).toEqual({ total: 2, flagged: 1, recall: 0.5, missed: ["p2#1"] });
+    expect(s.noFacts).toEqual({ total: 1, phishing: 1, benign: 0 });
+    // Worst case counts the no-facts phishing mail as missed: live falls back to v2.
+    expect(s.phishing).toEqual({
+      total: 2,
+      flagged: 1,
+      recall: 0.5,
+      recallWorstCase: 1 / 3,
+      missed: ["p2#1"],
+    });
     expect(s.benign).toEqual({
       total: 2,
       flagged: 1,
@@ -157,6 +171,30 @@ describe("summarizePhishingEval", () => {
     expect(cold.laneAccuracy).toEqual({ correct: 2, total: 4, accuracy: 0.5 });
     expect(Object.keys(s.scenarios)).toEqual(PHISHING_SCENARIOS.map((x) => x.name));
   });
+
+  it("scores a benign automated sender as live would (its notification ask does not PUSH)", () => {
+    const notice: PhishingItemResult = {
+      ...base,
+      id: "b3",
+      run: 1,
+      phishing: false,
+      expectedLane: "QUEUE",
+      automatedSenderSignal: true,
+      facts: facts({ kind: "notification", threadTurn: "none", asks: [payToday] }),
+    };
+    expect(summarizePhishingEval([notice]).scenarios.cold_start.benignLaneMisses).toEqual([]);
+  });
+});
+
+describe("servedByOther", () => {
+  it("counts answers served by a model other than the one asked, ignoring no answer", () => {
+    expect(
+      servedByOther(["claude-haiku-5-5", "claude-haiku-5-5-20261001", null], "claude-haiku-5-5"),
+    ).toBe(0);
+    expect(
+      servedByOther(["claude-haiku-5-5", "gemini-2.5-flash"], "anthropic/claude-haiku-5-5"),
+    ).toBe(1);
+  });
 });
 
 describe("phishing eval set file", () => {
@@ -170,6 +208,7 @@ describe("phishing eval set file", () => {
     subject: string;
     snippet: string;
     body: string;
+    labels?: string[];
     receivedAt: string;
     phishing: boolean;
     label: string;
@@ -193,6 +232,13 @@ describe("phishing eval set file", () => {
       expect(i.label, i.id).toBe(i.labelV2);
       if (i.phishing) expect(i.labelV2, i.id).toBe("QUEUE");
       expect(Number.isNaN(Date.parse(i.receivedAt)), i.id).toBe(false);
+    }
+  });
+
+  it("addresses every item To the set's user and carries no spam label (the scorer passes spam false)", () => {
+    for (const i of items) {
+      expect(i.to.toLowerCase(), i.id).toContain(String(doc.metadata.userEmail).toLowerCase());
+      expect(i.labels ?? [], i.id).not.toContain("SPAM");
     }
   });
 
