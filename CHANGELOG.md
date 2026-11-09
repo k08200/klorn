@@ -12,6 +12,23 @@ calendar time.
 
 ## [Unreleased]
 
+### Security
+
+- **Client address derivation hardened.** One helper
+  (`packages/api/src/security/client-address.ts`) now supplies the client
+  address for every per-address rate limit, the `RATE_LIMIT_ALLOW_IPS`
+  exemption, the device-session address and the request log. A forwarding
+  header is trusted only when the new `CLIENT_IP_SOURCE` names it
+  (`socket`, `x-forwarded-for` with `TRUSTED_PROXY_HOPS`, or
+  `cf-connecting-ip`). The default is the TCP peer, or `cf-connecting-ip` on
+  Render. The playground demo cap and the device-session address no longer
+  read `X-Forwarded-For` directly. **Self-hosters behind a proxy:** set
+  `CLIENT_IP_SOURCE=x-forwarded-for`, or keep a proxy that sets
+  `CF-Connecting-IP` (the earlier Caddy/nginx examples) and set
+  `CLIENT_IP_SOURCE=cf-connecting-ip`. Without either, all clients share the
+  proxy's bucket, and the API logs a one-time warning. See
+  docs/self-hosting.md ("Client address").
+
 ## [0.4.0] — 2026-11-08
 
 First server release since 0.3.0 (2026-06-09). It covers every PR merged since
