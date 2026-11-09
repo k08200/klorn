@@ -140,7 +140,7 @@ describe("buildSchedulerHealthReport", () => {
   });
 });
 
-describe("buildSchedulerHealthReport — judge fallback surface (#1319)", () => {
+describe("buildSchedulerHealthReport — judge fallback surface (#1572)", () => {
   beforeEach(() => {
     resetSchedulerHeartbeats();
   });

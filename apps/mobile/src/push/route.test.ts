@@ -104,4 +104,35 @@ describe("actionFromTap (Android native notifications)", () => {
       target: { emailId: "e1" },
     });
   });
+
+  // Decision N1 (2026-11-08): Reply (or Send draft) · Later · Not urgent · Done.
+  it("Reply opens the mail in the reader and never sends", () => {
+    const data = { emailId: "e1", route: "/mail/e1", attentionItemId: "att-1" };
+    expect(intentOf(PUSH_ACTIONS.reply, data)).toEqual({
+      kind: "open",
+      route: { name: "mail", id: "e1" },
+    });
+  });
+
+  it("Not urgent moves the attention item, else the mail by its email id", () => {
+    expect(
+      intentOf(PUSH_ACTIONS.notUrgent, { emailId: "e1", attentionItemId: "att-1", route: "/mail/e1" }),
+    ).toMatchObject({ kind: "notUrgent", target: { attentionItemId: "att-1" } });
+    expect(intentOf(PUSH_ACTIONS.notUrgent, { emailId: "e1", route: "/mail/e1" })).toMatchObject({
+      kind: "notUrgent",
+      target: { emailId: "e1" },
+    });
+    expect(intentOf(PUSH_ACTIONS.notUrgent, {})).toEqual({ kind: "open", route: { name: "today" } });
+  });
+
+  it("reads Not urgent from klornAction on an Android tap", () => {
+    expect(actionFromTap("tap", { klornAction: "KLORN_NOT_URGENT" })).toBe(PUSH_ACTIONS.notUrgent);
+  });
+
+  it("a MEETING mail push still routes its tap to the mail", () => {
+    expect(routeFromPush({ emailId: "e1", route: "/mail/e1", lane: "MEETING" })).toEqual({
+      name: "mail",
+      id: "e1",
+    });
+  });
 });

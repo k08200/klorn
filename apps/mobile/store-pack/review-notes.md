@@ -113,7 +113,7 @@ Edit the notes to match the build before pasting:
   `VITE_REVENUECAT_IOS_KEY`; Plans then says in-app subscription is not ready
   yet and offers nothing to buy.
 - **Notification actions**: a mail push now carries the email id and the
-  `KLORN_PUSH_MAIL` category, so long-press In 1 hour / Done work on iOS. They
+  `KLORN_PUSH_MAIL` category, so long-press Reply / Later / Not urgent / Done work on iOS. They
   are still not mentioned: Send draft needs a `pendingActionId` the server
   does not set at push time yet (README "Gaps"), and a reviewer cannot
   trigger a PUSH-lane mail on demand.

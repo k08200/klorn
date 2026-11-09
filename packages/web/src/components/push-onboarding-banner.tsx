@@ -13,8 +13,9 @@
  *   2. Web Push is usable on this platform. Desktop and Android browsers deliver
  *      Web Push from a normal tab (no install required), so we offer it there.
  *      iOS is the exception: it delivers Web Push only from an installed PWA and
- *      pushManager.subscribe() throws in a Safari tab, so iOS browser users are
- *      routed to PwaPrompts' Add-to-Home-Screen card instead of this banner.
+ *      pushManager.subscribe() throws in a Safari tab, so iOS Safari users get
+ *      IosInstallHint's Add-to-Home-Screen card, and this banner once they open
+ *      the installed app (lib/alert-devices.ts shouldOfferPushBanner).
  *   3. Browser supports Notification + PushManager.
  *   4. Notification.permission === "default" (not granted, not denied).
  *   5. The browser has no existing pushManager subscription.
@@ -23,6 +24,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { shouldOfferPushBanner } from "../lib/alert-devices";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { isNativePlatform } from "../lib/native/capacitor";
@@ -150,19 +152,21 @@ async function isEligible(): Promise<boolean> {
   if (!("Notification" in window) || !("PushManager" in window)) return false;
   if (!("serviceWorker" in navigator)) return false;
 
-  // Native shell delivers push via FCM/APNs (registerNativePush), not Web Push.
-  if (isNativePlatform()) return false;
-
-  // Web Push works in a plain browser tab on desktop and Android, so offer it
-  // there. iOS is the exception: it delivers Web Push only from an installed
-  // PWA and pushManager.subscribe() throws in a Safari tab, so iOS browser
-  // users are handled by PwaPrompts' Add-to-Home-Screen card instead.
-  const inPwa =
-    window.matchMedia?.("(display-mode: standalone)").matches ||
+  // Native shell delivers push via FCM/APNs; an iPhone Safari tab cannot
+  // subscribe and gets the home-screen card (IosInstallHint) instead; the
+  // installed iPhone app, Android and desktop browsers get this banner.
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)").matches === true ||
     (navigator as { standalone?: boolean }).standalone === true;
-  const isIos =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as { MSStream?: unknown }).MSStream;
-  if (isIos && !inPwa) return false;
+  if (
+    !shouldOfferPushBanner({
+      userAgent: navigator.userAgent,
+      standalone,
+      native: isNativePlatform(),
+    })
+  ) {
+    return false;
+  }
 
   if (Notification.permission !== "default") return false;
 

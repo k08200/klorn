@@ -10,6 +10,8 @@
 // only when the user's notification preferences and quiet hours allow it
 // (packages/api notify/desktop-alert.ts — the same gate Web Push uses). Here we
 // validate that tag, shape the banner text, and dedupe by notification id.
+// A normal browser tab reuses parseDesktopAlert for its own OS notification
+// (../in-page-alerts.ts).
 //
 // Pure functions over plain inputs, so the rules are unit-tested without a
 // browser (packages/api/src/__tests__/web-desktop-alerts.test.ts).
@@ -23,6 +25,9 @@ export interface DesktopAlert {
   kind: DesktopAlertKind;
   title: string;
   body: string;
+  /** In-app path a click on the toast opens (openPathIsSafe), or null to
+   *  just bring the window back. */
+  open: string | null;
 }
 
 /** Longest title / body handed to the OS toast. Windows truncates long toast
@@ -30,8 +35,9 @@ export interface DesktopAlert {
  *  through the IPC bridge. */
 export const TITLE_MAX = 120;
 export const BODY_MAX = 240;
-/** Notification ids remembered per session. Far above any realistic number of
- *  PUSH/meeting banners in one session; trimming only drops the oldest. */
+/** Notification ids remembered (per account, across restarts — see
+ *  ./desktop-catchup.ts). Far above the bell's 30-row window and any realistic
+ *  number of PUSH/meeting interrupts a day; trimming only drops the oldest. */
 export const SEEN_CAP = 500;
 const ID_MAX = 200;
 const FALLBACK_TITLE = "Klorn";
@@ -44,20 +50,59 @@ function isKind(value: unknown): value is DesktopAlertKind {
 
 /** Longest message read before shaping, so the marker strip below never
  *  scans an unbounded string. */
-const MESSAGE_SCAN_MAX = 1000;
+export const MESSAGE_SCAN_MAX = 1000;
 
 /** Meeting frames end in a ` [eventId]` dedupe marker (background.ts). It is
  *  bookkeeping, not copy. PUSH frames carry none, so a subject that really
- *  ends in "[URGENT]" is left alone. */
-function stripMeetingMarker(text: string): string {
+ *  ends in "[URGENT]" is left alone. (Stored PUSH bell rows DO end in a
+ *  `[gmailId,…]` marker — desktop-catchup.ts strips it with this too.) */
+export function stripTrailingMarker(text: string): string {
   const trimmed = text.trimEnd();
   if (!trimmed.endsWith("]")) return trimmed;
   const open = trimmed.lastIndexOf("[");
   return open === -1 ? trimmed : trimmed.slice(0, open).trimEnd();
 }
 
+/** Mail ids are uuids / cuids. Anything else is not routed: the path ends up
+ *  in a navigation the shell performs (apps/desktop-win banner.rs checks the
+ *  same shape). */
+const MAIL_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+/** Where the catch-up summary toast leads (decision N6). */
+export const TODAY_PATH = "/today";
+
+/** The reader for one mail, or null for an id that is not safe to route. */
+export function mailOpenPath(emailId: unknown): string | null {
+  return typeof emailId === "string" && MAIL_ID_PATTERN.test(emailId) ? `/email/${emailId}` : null;
+}
+
+/** Whether a toast may navigate the app to `path`: Today or one mail. */
+export function openPathIsSafe(path: unknown): path is string {
+  if (path === TODAY_PATH) return true;
+  if (typeof path !== "string" || !path.startsWith("/email/")) return false;
+  return mailOpenPath(path.slice("/email/".length)) === path;
+}
+
+/** The N1 toast a frame carries for one mail (`mail`, decision N1), or null. */
+export function parseMailToast(
+  value: unknown,
+): { title: string; body: string; open: string } | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const { emailId, title, body } = value as Record<string, unknown>;
+  const open = mailOpenPath(emailId);
+  if (!open || typeof title !== "string" || typeof body !== "string") return null;
+  const cleanTitle = title.trim();
+  if (!cleanTitle) return null;
+  return {
+    title: cleanTitle.slice(0, TITLE_MAX),
+    body: body.slice(0, MESSAGE_SCAN_MAX).trim().slice(0, BODY_MAX),
+    open,
+  };
+}
+
 /** The banner for one real-time frame, or null when it is not an interrupt
- *  the server tagged for an OS banner. Never throws on malformed input. */
+ *  the server tagged for an OS banner. A frame about one mail carries its N1
+ *  toast (`mail`): sender as the title, subject + reason as the body, a click
+ *  opens the mail. Never throws on malformed input. */
 export function parseDesktopAlert(payload: unknown): DesktopAlert | null {
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
   const frame = payload as Record<string, unknown>;
@@ -65,14 +110,17 @@ export function parseDesktopAlert(payload: unknown): DesktopAlert | null {
   const { id, title, message } = frame;
   if (typeof id !== "string" || id.length === 0 || id.length > ID_MAX) return null;
   if (title !== undefined && typeof title !== "string") return null;
+  const mail = frame.alert === "push" ? parseMailToast(frame.mail) : null;
+  if (mail) return { id, kind: frame.alert, ...mail };
   const cleanTitle = (title ?? "").trim() || FALLBACK_TITLE;
   const raw = typeof message === "string" ? message.slice(0, MESSAGE_SCAN_MAX) : "";
-  const body = frame.alert === "meeting" ? stripMeetingMarker(raw) : raw.trim();
+  const body = frame.alert === "meeting" ? stripTrailingMarker(raw) : raw.trim();
   return {
     id,
     kind: frame.alert,
     title: cleanTitle.slice(0, TITLE_MAX),
     body: body.slice(0, BODY_MAX),
+    open: null,
   };
 }
 
@@ -81,24 +129,11 @@ export interface DesktopAlertPlan {
   seen: string[];
 }
 
-/** Decide whether this frame banners, given the ids already bannered this
- *  session. Returns a new seen list; the input is never mutated. */
+/** Decide whether this frame banners, given the ids already bannered (the
+ *  persisted ledger, ./desktop-catchup.ts). Returns a new seen list; the input
+ *  is never mutated. */
 export function planDesktopAlert(seen: readonly string[], payload: unknown): DesktopAlertPlan {
   const alert = parseDesktopAlert(payload);
   if (!alert || seen.includes(alert.id)) return { alert: null, seen: [...seen] };
   return { alert, seen: [...seen, alert.id].slice(-SEEN_CAP) };
-}
-
-/** Read the stored seen list. Session storage is untrusted input: anything
- *  that is not a JSON array of strings reads as empty. */
-export function parseSeenIds(raw: string | null): string[] {
-  if (!raw) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter((v): v is string => typeof v === "string").slice(-SEEN_CAP);
 }

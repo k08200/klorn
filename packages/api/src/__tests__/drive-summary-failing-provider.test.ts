@@ -1,5 +1,5 @@
 /**
- * D4 against the production failure of #1319: every LLM provider refuses (402,
+ * D4 against the production failure of #1572: every LLM provider refuses (402,
  * no credits left). This runs the REAL LLM layer (createCompletion, its
  * failover and failure ledger) with a provider chain that always fails, behind
  * the real drive routes and the real summary job.
@@ -84,7 +84,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-describe("every provider refuses (#1319)", () => {
+describe("every provider refuses (#1572)", () => {
   it("uploads and listings work; the summary waits PENDING with a code, never FAILED", async () => {
     const res = await upload(t, t.me, {
       filename: "plan.txt",

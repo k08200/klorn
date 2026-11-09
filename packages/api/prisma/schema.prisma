@@ -108,6 +108,9 @@ model User {
   // the user to zero devices and the "no devices = legacy, allow" branch
   // resurrected every still-unexpired stolen token.
   sessionsInvalidatedAt      DateTime?
+  // Historical marker only: stamped on the signups that got free beta PRO
+  // before 2026-10-24. Nothing writes it now (every signup starts on FREE);
+  // kept so those accounts stay identifiable.
   betaProGrantedAt           DateTime?
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in
@@ -1222,6 +1225,13 @@ model PushSubscription {
   // — the duplicate "Daily Briefing" bug. Mirrors DevicePushToken's
   // prune-on-register. Nullable for rows created before this column existed.
   deviceId  String?
+  // Browser family and OS of the agent that registered this subscription, read
+  // from its User-Agent at /push/subscribe (notify/alert-endpoints.ts
+  // parseClientPlatform). Labels "Where you get alerts" and tells a phone from
+  // a desktop. Only the derived values are kept, never the raw User-Agent.
+  // Nullable: rows from before this column, and agents we cannot name.
+  browser   String?
+  os        String?
   createdAt DateTime @default(now())
 
   // Budgeted-retry eviction: consecutive ambiguous (non-410/404) delivery
@@ -1289,6 +1299,10 @@ model PushRingEvent {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Which cap the ring counted against: "interrupt" (urgent mail, meeting
+  // alerts, reminders; the caller asks) | "ambient" (everything else,
+  // agent-originated pushes included). notify/push-bucket.ts.
+  bucket    String   @default("ambient")
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

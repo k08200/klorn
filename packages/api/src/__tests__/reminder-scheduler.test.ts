@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendPushNotification } from "../notify/push.js";
 import {
@@ -22,6 +23,8 @@ type NotificationRow = {
   type: string;
   title: string;
   message: string;
+  link?: string | null;
+  sourceEmailId?: string | null;
   createdAt: Date;
 };
 
@@ -30,6 +33,8 @@ type PushPayload = {
   body: string;
   url?: string;
   notificationId?: string;
+  emailId?: string;
+  userSet?: boolean;
 };
 
 const state = vi.hoisted(() => ({
@@ -121,6 +126,21 @@ describe("reminder scheduler delivery", () => {
     );
   });
 
+  it("rings a reminder the user set against the interrupt bucket, still labelled system", async () => {
+    // A reminder is one the user asked for at a time: briefings and agent
+    // proposals in the ambient bucket must not be able to crowd it out.
+    const reminder = seedReminder();
+
+    await deliverDueReminderById(reminder.id);
+
+    expect(sendPushNotification).toHaveBeenCalledWith(
+      reminder.userId,
+      expect.objectContaining({ title: reminder.title }),
+      "system",
+      { bucket: "interrupt" },
+    );
+  });
+
   it("surfaces a push delivery failure instead of swallowing it (F6)", async () => {
     vi.mocked(sendPushNotification).mockRejectedValueOnce(new Error("push boom"));
     const reminder = seedReminder();
@@ -143,5 +163,53 @@ describe("reminder scheduler delivery", () => {
 
     expect(reminder.status).toBe("SENT");
     expect(state.notifications).toHaveLength(1);
+  });
+
+  it("a mail reminder opens its mail: bell row link, push url, native deep link", async () => {
+    const reminder = seedReminder({
+      title: "Follow up: Contract",
+      description: "From: Alice <a@x.io>\nOpen: /email/email-1",
+    });
+
+    await expect(deliverDueReminderById(reminder.id)).resolves.toBe(true);
+
+    expect(state.notifications[0]).toMatchObject({
+      type: "reminder",
+      title: "Follow up: Contract",
+      link: "/email/email-1",
+      sourceEmailId: "email-1",
+    });
+    const [userId, payload, category] = vi.mocked(sendPushNotification).mock.calls[0] ?? [];
+    expect(userId).toBe("user-1");
+    expect(payload).toMatchObject({
+      title: "Follow up: Contract",
+      url: "/email/email-1",
+      emailId: "email-1",
+      notificationId: "notification-1",
+      userSet: true,
+    });
+    // The user's own reminder: "system" — no category opt-out, ambient rate bucket,
+    // quiet hours still apply (push.ts).
+    expect(category).toBe("system");
+  });
+
+  it("a reminder that names no mail keeps its old target and no link", async () => {
+    const reminder = seedReminder({ description: "Call the bank" });
+    await deliverDueReminderById(reminder.id);
+    expect(state.notifications[0]?.link ?? null).toBeNull();
+    expect(state.notifications[0]?.sourceEmailId ?? null).toBeNull();
+    const payload = vi.mocked(sendPushNotification).mock.calls[0]?.[1] as PushPayload;
+    expect(payload.url).toBe("/chat");
+    expect(payload.emailId).toBeUndefined();
+  });
+});
+
+describe("reminder scheduler bootstrap", () => {
+  it("the server starts the scheduler unless background work is switched off", () => {
+    const index = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+    const block = index.match(
+      /if \(!BG_DISABLED\) \{\s*import\("\.\/pim\/reminder-scheduler\.js"\)\s*\.then\(\(\{ startReminderScheduler \}\) => \{\s*startReminderScheduler\(\);/,
+    );
+    expect(block).not.toBeNull();
   });
 });

@@ -7,9 +7,13 @@
 //     the SYSTEM browser (Google rejects OAuth inside embedded webviews)
 //   • OS banners for PUSH mail and meetings starting soon — the web app
 //     (lib/native/tauri-notify.ts) calls our `show_banner` command (banner.rs,
-//     title + body only); the plugin's own commands are NOT exposed to it
+//     title + body + the page a click opens: Today or one mail); the plugin's
+//     own commands are NOT exposed to it. A click brings the window back and
+//     opens that page (banner::on_action)
 //   • close-to-tray (tray.rs) — closing hides the window so banners keep
 //     arriving; the tray's Quit really quits
+//   • start at sign-in (autostart.rs) — opt-in, OFF until the user says yes
+//     in the web app; a login launch starts in the tray
 //   • a window background matched to the OS theme (theme.rs) — no white flash
 // The web app detects this shell via the injected IPC global
 // (window.__TAURI_INTERNALS__) and takes its PKCE poll login flow; the deep
@@ -17,28 +21,41 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod banner;
 mod theme;
 mod tray;
 
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_notification::NotificationExt;
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            tray::show_main(app);
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A sign-in launch while Klorn already runs stays in the tray.
+            if !autostart::launched_at_login(&args) {
+                tray::show_main(app);
+            }
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(autostart::plugin())
         .invoke_handler(tauri::generate_handler![banner::show_banner])
         .setup(|app| {
             // Fatal on purpose: close-to-tray below hides the window, so
             // without a tray there would be no way back to it.
             tray::install(app.handle())?;
+            // A click on a banner opens its page in the main window.
+            let handle = app.handle().clone();
+            app.notification()
+                .on_action(move |performed| banner::on_action(&handle, performed))?;
             if let Some(win) = app.get_webview_window("main") {
-                // Declared hidden in tauri.conf.json: paint first, then show.
+                // Declared hidden in tauri.conf.json: paint first, then show —
+                // unless Windows started us at sign-in: then the tray only.
                 theme::paint(&win, win.theme().unwrap_or(tauri::Theme::Light));
-                win.show()?;
+                if !autostart::launched_at_login(std::env::args()) {
+                    win.show()?;
+                }
             }
             Ok(())
         })

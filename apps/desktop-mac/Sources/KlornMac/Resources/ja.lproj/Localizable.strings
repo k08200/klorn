@@ -124,11 +124,12 @@
 "prefs.section.about" = "情報";
 
 "prefs.banners" = "このMacでmacOS通知バナーを表示";
-"prefs.banners.detail" = "新しいPUSHメールごとに、差出人と件名だけを表示するバナーを出します。ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。メインウィンドウのPUSH件数は更新され続けます。";
+"prefs.banners.detail" = "新しいPUSH・MEETINGメールごとに、差出人と件名だけを表示するバナーを出します。ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。メインウィンドウのPUSH件数は更新され続けます。";
 "prefs.banners.denied" = "macOSがKlornの通知をブロックしています。システム設定 ▸ 通知で許可してください。";
 "prefs.banners.openSystemSettings" = "システム設定を開く";
 "prefs.section.support" = "アプリとサポート";
 "push.announce" = "新しいPUSHメール：%d件";
+"push.announce.meeting" = "新しいMEETINGメール：%d件";
 "prefs.launchAtLogin" = "ログイン時にKlornを起動";
 "prefs.launchAtLogin.unavailable.label" = "ログイン時に起動";
 "prefs.launchAtLogin.unavailable.value" = "パッケージ版のみ";
@@ -188,7 +189,7 @@
 "auto.preset.detail" = "重要なものだけ: 返信が必要なメールと、カレンダーの予定。それ以外はバナーなしでバーに残ります。";
 
 "auto.notify.emailUrgent" = "緊急メール";
-"auto.notify.emailUrgent.detail" = "KlornがPUSHと判定したメール — 相手が待っています。";
+"auto.notify.emailUrgent.detail" = "KlornがPUSHまたはMEETINGと判定したメール — 相手が待っています。";
 "auto.notify.meeting" = "会議";
 "auto.notify.meeting.detail" = "まもなく始まる予定。";
 "auto.notify.taskDue" = "期限の近い項目";

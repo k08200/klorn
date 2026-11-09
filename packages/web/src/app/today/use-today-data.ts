@@ -25,7 +25,7 @@ import { apiFetch } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { ALL_ACCOUNTS, listRequestPath } from "../email/_v2/model";
-import { type CalendarEventWire, dayRangeInZone, todayLaneQuery } from "./model";
+import { type CalendarEventWire, dayRangeInZone, todayHeldQuery, todayLaneQuery } from "./model";
 
 const MAIL_STALE_MS = 30_000;
 /** Safety net behind the WebSocket: refetch while the tab is visible. */
@@ -43,6 +43,7 @@ const APPROVALS_POLL_MS = 60_000;
  */
 const todayKeys = {
   lane: (lane: LiveTier) => [...queryKeys.email.all, "today", "lane", lane] as const,
+  held: () => [...queryKeys.email.all, "today", "held"] as const,
   laneCounts: () => [...queryKeys.email.all, "v2", "lane-counts", ALL_ACCOUNTS] as const,
 };
 
@@ -82,6 +83,40 @@ export function useLaneMail(lane: LiveTier, enabled: boolean) {
     loading: enabled && query.isLoading,
     failed: query.isError && !query.data,
     retry: () => void query.refetch(),
+  };
+}
+
+/**
+ * Today's "Held back" group: QUEUE mail the interrupt budget held today
+ * (model.ts todayHeldQuery). Asked for only when `enabled` — the PUSH read
+ * carried the budget, which it does only under the attention policy — so no
+ * one else sends this request.
+ */
+export function useHeldMail(enabled: boolean) {
+  const query = useQuery({
+    queryKey: todayKeys.held(),
+    queryFn: async () => {
+      const view = {
+        lane: "QUEUE" as const,
+        account: ALL_ACCOUNTS,
+        filter: "none" as const,
+        search: "",
+      };
+      try {
+        return await apiFetch<EmailListResponse>(`${listRequestPath(view, 1)}${todayHeldQuery()}`);
+      } catch (err) {
+        captureClientError(err, { scope: "today.held" });
+        throw err;
+      }
+    },
+    staleTime: MAIL_STALE_MS,
+    refetchInterval: MAIL_POLL_MS,
+    enabled,
+  });
+  return {
+    emails: query.data ? query.data.emails : null,
+    total: query.data ? query.data.total : null,
+    isDemo: query.data?.source === "demo",
   };
 }
 

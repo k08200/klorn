@@ -1,6 +1,6 @@
 /**
  * createCompletion / createVisionCompletion must record every failed provider
- * dispatch (#1319) — without changing what the caller sees: the same error
+ * dispatch (#1572) — without changing what the caller sees: the same error
  * object still propagates, failover still happens, and no LlmUsageLog row is
  * written for a call that never succeeded.
  */

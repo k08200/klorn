@@ -861,3 +861,40 @@ describe("ordering and failure paths, for a user under the policy", () => {
     expect((db.tables.attentionItem ?? []).map((r) => r.sourceId)).toEqual(["e1"]);
   });
 });
+
+// The firewall's PUSH and MEETING decisions are what the interrupt bucket is
+// for: each push asks for it explicitly (push-bucket.ts), keeps its
+// email_urgent category, and is pinned by push-interrupt-callers-guard.test.ts.
+describe("every firewall push rings against the interrupt bucket", () => {
+  function bucketsAsked(): unknown[] {
+    return sendPushNotification.mock.calls.map((call) => (call as unknown[])[3]);
+  }
+  function categories(): unknown[] {
+    return sendPushNotification.mock.calls.map((call) => (call as unknown[])[2]);
+  }
+
+  it("v2 path (flag off): a PUSH", async () => {
+    seed();
+    judgedAs("PUSH");
+    await judge("e1");
+    expect(categories()).toEqual(["email_urgent"]);
+    expect(bucketsAsked()).toEqual([{ bucket: "interrupt" }]);
+  });
+
+  describe("v3 policy on", () => {
+    beforeEach(() => {
+      process.env.JUDGE_V3_POLICY = "true";
+      process.env.JUDGE_V3_SHADOW = "true";
+    });
+
+    it("a budgeted PUSH and a MEETING", async () => {
+      seed();
+      judgedAs("PUSH");
+      expect(await judge("e1")).toBe("PUSH");
+      judgedAs("MEETING");
+      expect(await judge("e2")).toBe("MEETING");
+      expect(categories()).toEqual(["email_urgent", "email_urgent"]);
+      expect(bucketsAsked()).toEqual([{ bucket: "interrupt" }, { bucket: "interrupt" }]);
+    });
+  });
+});

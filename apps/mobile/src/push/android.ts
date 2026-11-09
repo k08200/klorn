@@ -3,9 +3,10 @@
  * cannot put action buttons on an FCM *notification* message, so for a
  * data-only FCM message carrying Klorn's payload the app posts the
  * notification itself through `@capacitor/local-notifications`
- * (platform/local-notify.ts) with three actions — 1시간 뒤에 · 처리 완료 ·
- * 검토하기 (In 1 hour · Done · Review). Review only opens the approval card
- * or the mail: nothing is ever sent from a notification, on Android either.
+ * (platform/local-notify.ts) with the decision-N1 actions (2026-11-08) —
+ * 나중에 · 급하지 않음 · 처리 완료 (Later · Not urgent · Done), Later only
+ * for a MEETING mail. Nothing is ever sent from a notification, on Android
+ * either; a tap opens the mail.
  *
  * The keys are the ones the server already puts in FCM `data`
  * (packages/api notify/push-device.ts buildFcmMessage; contract/src/push.ts),
@@ -17,13 +18,14 @@
  *               "url", "notificationId",             // as on every push
  *               "emailId", "route",                  // a mail push
  *               "attentionItemId", "pendingActionId",// when they exist
+ *               "lane",                              // "PUSH" | "MEETING" (N1)
  *               "sentAt" },                          // optional, epoch ms
  *     "android": { "priority": "high" } }            // and NO "notification" key
  *
  * The action set follows the ids, as the server picks the APNs category:
- * a `pendingActionId` → the draft set, else a mail (`emailId`, or an
- * `attentionItemId` alone) → the plain set, else no buttons (a tap still
- * routes). `category: "email_urgent"` (a PUSH-lane mail) rings on the
+ * a `pendingActionId` → the draft set, else a MEETING mail → the meeting set,
+ * else a mail (`emailId`, or an `attentionItemId` alone) → the plain set, else
+ * no buttons (a tap still routes). `category: "email_urgent"` (a PUSH-lane mail) rings on the
  * high-importance channel. See README "Push payload" for what works in which
  * app state (a data-only message reaches the app only while its process is
  * alive). The server sends notification messages today, which the OS shows
@@ -50,6 +52,7 @@ export type AndroidChannelId = (typeof ANDROID_CHANNELS)[keyof typeof ANDROID_CH
 export const ACTION_CATEGORIES = {
   withDraft: "KLORN_PUSH_MAIL_DRAFT",
   plain: "KLORN_PUSH_MAIL",
+  meeting: "KLORN_PUSH_MEETING",
 } as const satisfies Record<string, ApnsMailCategory>;
 
 export type ActionCategory = (typeof ACTION_CATEGORIES)[keyof typeof ACTION_CATEGORIES];
@@ -121,12 +124,16 @@ export function parseDataPush(message: IncomingMessage, now: number): DataPush |
   const emailId = id(data.emailId);
   const attentionItemId = id(data.attentionItemId);
   const pendingActionId = id(data.pendingActionId);
-  // Derived from the ids, never from `category` (that is the NotifCategory).
+  const lane = data.lane === "MEETING" || data.lane === "PUSH" ? data.lane : null;
+  const isMail = Boolean(emailId || attentionItemId);
+  // Derived from the ids and the lane, never from `category` (that is the NotifCategory).
   const category: ActionCategory | null = pendingActionId
     ? ACTION_CATEGORIES.withDraft
-    : emailId || attentionItemId
-      ? ACTION_CATEGORIES.plain
-      : null;
+    : isMail && lane === "MEETING"
+      ? ACTION_CATEGORIES.meeting
+      : isMail
+        ? ACTION_CATEGORIES.plain
+        : null;
   const isPush = data.category === URGENT_MAIL_CATEGORY;
 
   const kept: PushData = {};
@@ -135,6 +142,7 @@ export function parseDataPush(message: IncomingMessage, now: number): DataPush |
   if (pendingActionId) kept.pendingActionId = pendingActionId;
   if (typeof data.route === "string") kept.route = data.route;
   if (typeof data.url === "string") kept.url = data.url;
+  if (lane) kept.lane = lane;
 
   return {
     notificationId: notificationIdOf(
@@ -150,21 +158,23 @@ export function parseDataPush(message: IncomingMessage, now: number): DataPush |
 
 export interface ActionLabels {
   later: string;
+  notUrgent: string;
   done: string;
-  review: string;
 }
 
 /**
- * The action types to register, in the order Android shows the buttons:
- * 1시간 뒤에 · 처리 완료 · 검토하기. Review is the "Send draft" of iOS without
- * the send: it opens the approval card (or the mail) in the app.
+ * The action types to register, in the order Android shows the buttons
+ * (decision N1): Later · Not urgent · Done; a MEETING mail gets Later only.
+ * There is no Send and no Silent; a tap opens the mail (or the draft's
+ * approval card).
  */
 export function androidActionTypes(labels: ActionLabels) {
   const later = { id: PUSH_ACTIONS.later, title: labels.later };
+  const notUrgent = { id: PUSH_ACTIONS.notUrgent, title: labels.notUrgent };
   const done = { id: PUSH_ACTIONS.done, title: labels.done };
-  const review = { id: PUSH_ACTIONS.review, title: labels.review };
   return [
-    { id: ACTION_CATEGORIES.withDraft, actions: [later, done, review] },
-    { id: ACTION_CATEGORIES.plain, actions: [later, done, review] },
+    { id: ACTION_CATEGORIES.withDraft, actions: [later, notUrgent, done] },
+    { id: ACTION_CATEGORIES.plain, actions: [later, notUrgent, done] },
+    { id: ACTION_CATEGORIES.meeting, actions: [later] },
   ];
 }
