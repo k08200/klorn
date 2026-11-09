@@ -18,6 +18,7 @@ import type { SocialIdentity, SocialProviderId } from "../auth/social-identity.j
 import { completeSocialLogin } from "../auth/social-login.js";
 import { signToken, verifyToken } from "../auth.js";
 import { appleLoginEnabled, naverLoginEnabled } from "../config.js";
+import { clientAddress } from "../security/client-address.js";
 import { desktopHandoffPage, desktopLoginTokens, isAllowedNativeScheme } from "./auth.js";
 
 export interface SocialAuthProvider {
@@ -232,8 +233,7 @@ export function socialAuthRoutes(
         return reply.redirect(`${webUrl}/login?error=session_expired`);
       }
 
-      const ip =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+      const ip = clientAddress(request);
       const userAgent = (request.headers["user-agent"] as string) || "";
       // One net for the whole tail — resolveIdentity (Apple's client-secret
       // signing throws if the key env is broken) AND the DB writes inside

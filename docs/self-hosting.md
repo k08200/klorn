@@ -125,6 +125,8 @@ Useful optional vars (full tuning catalog with defaults:
 | `DAILY_COST_CAP_CENTS` | Per-user daily LLM spend cap (default 100 = $1/day) |
 | `KEEPALIVE_URL` | Free-dyno keepalive ping target (Render free tier sleeps) |
 | `RATE_LIMIT_ALLOW_IPS` | Rate-limit exemption, unset by default. See [Rate-limit exemption](#rate-limit-exemption-rate_limit_allow_ips) |
+| `CLIENT_IP_SOURCE` | Where the client address for rate limits comes from: `socket` (default; `cf-connecting-ip` on Render), `x-forwarded-for` or `cf-connecting-ip`. See [Client address](#client-address) |
+| `TRUSTED_PROXY_HOPS` | With `CLIENT_IP_SOURCE=x-forwarded-for`: how many proxies you run in front of the API (default `1`). See [Client address](#client-address) |
 
 #### Rate-limit exemption (`RATE_LIMIT_ALLOW_IPS`)
 
@@ -147,10 +149,10 @@ Read in `packages/api/src/index.ts`, parsed by
 - **Ignored entries:** prefixes wider than `/8`, IPv6 entries and entries
   whose address or prefix does not parse are dropped, never widened. Nothing
   is logged for a dropped entry.
-- **Address checked:** the `CF-Connecting-IP` header when present, otherwise
-  the TCP peer address (never `X-Forwarded-For`). This is the same address the
-  rate limiter keys on, so the exemption is only as reliable as that address:
-  see [Client address](#client-address).
+- **Address checked:** the client address chosen by `CLIENT_IP_SOURCE`, the
+  same address the rate limiter keys on. By default that is the TCP peer, so a
+  header a client sends cannot claim a listed address. The exemption is only
+  as reliable as that address: see [Client address](#client-address).
 - **Lifecycle:** read once at boot, so a change needs a restart. When at least
   one entry is valid, the API logs
   `[security] rate-limit exemption ACTIVE for N range(s)` at startup.
@@ -299,36 +301,52 @@ same-origin means no CORS preflight at all.
 
 ### Client address
 
-The API's rate limiter takes the client address from the `CF-Connecting-IP`
-header when it is present, otherwise from the TCP peer address. It never reads
-`X-Forwarded-For`. Two things make that address dependable:
+The API's per-address rate limits, the scan exemption and the address shown
+on a signed-in device all use one client address. `CLIENT_IP_SOURCE` says
+where it comes from. A forwarding header says whatever the sender wants unless
+your own ingress writes it, so the API trusts a header only when you name it:
+
+| `CLIENT_IP_SOURCE` | Address used | Use when |
+|---|---|---|
+| unset or `socket` | The TCP peer | No proxy: clients connect to the API directly. Behind a proxy this is the proxy, so all clients share one rate-limit bucket |
+| `x-forwarded-for` | The `X-Forwarded-For` entry `TRUSTED_PROXY_HOPS` positions from the right (default `1`) | Behind Caddy, nginx or Traefik. Each puts the address it saw last in `X-Forwarded-For`, so with one proxy the rightmost entry is the client and anything to its left came from the client |
+| `cf-connecting-ip` | The `CF-Connecting-IP` header | Behind Cloudflare, with the origin reachable only through Cloudflare (a Cloudflare Tunnel, or a firewall that admits only [Cloudflare's ranges](https://www.cloudflare.com/ips/)). Cloudflare sets this header to the connecting client. This is the default on Render, whose edge is Cloudflare |
+
+If the chosen header is missing or malformed, the API falls back to the TCP
+peer. An `X-Forwarded-For` entry with a port or brackets (`192.0.2.1:443`,
+`[2001:db8::1]`) counts as malformed. An unknown `CLIENT_IP_SOURCE` or an out-of-range `TRUSTED_PROXY_HOPS`
+(1–10) stops the API at boot. The API logs the active choice at startup as
+`[security] client address source=… trustedProxyHops=…`.
+
+Two rules keep a header-based address dependable:
 
 - **The API is reachable only through your proxy (or Cloudflare).** The stock
   compose file publishes `3001` on every interface. Behind a proxy, publish it
-  on loopback instead (`"127.0.0.1:3001:3001"`) or firewall it, so that every
-  request reaches the API through the proxy.
-- **The proxy sets the header.** Cloudflare sets `CF-Connecting-IP` itself and
-  replaces any value the client sent; with Cloudflare in front of your proxy,
-  leave the header alone. Without Cloudflare, set it at the proxy from the
-  connecting address, as the Caddy and nginx examples below do. A proxy that
-  sets nothing gives every request the proxy's own address, so all clients
-  share one rate-limit bucket. Traefik cannot set a header from the client
-  address without a plugin; with Traefik, expect the shared bucket or put Caddy
-  or nginx in front.
+  on loopback instead (`"127.0.0.1:3001:3001"`) or firewall it. A client that
+  reaches the API directly can write any `X-Forwarded-For` or
+  `CF-Connecting-IP` it likes.
+- **Count only proxies you run.** If your proxy sits behind a load balancer
+  that also appends to `X-Forwarded-For`, set `TRUSTED_PROXY_HOPS=2`. nginx
+  appends whatever arrives; Caddy and Traefik replace the header from a peer
+  they do not trust, so list the load balancer in Caddy's `trusted_proxies` or
+  Traefik's `forwardedHeaders.trustedIPs` first, or the chain stays one entry
+  long and every client shares the load balancer's bucket. With Cloudflare in
+  front of your proxy, use `cf-connecting-ip` instead.
 
-If your proxy itself sits behind another proxy or load balancer, the
-connecting address is that hop's. Use Caddy's `{client_ip}` with
-`trusted_proxies`, or nginx's `realip` module, instead.
+Upgrading from a setup that had the proxy set `CF-Connecting-IP` (the earlier
+Caddy and nginx examples did): either keep that line and set
+`CLIENT_IP_SOURCE=cf-connecting-ip`, or drop it and set
+`CLIENT_IP_SOURCE=x-forwarded-for`. Without either, every client shares the
+proxy's bucket, which is safe but strict.
 
 ### Caddy
 
 ```caddyfile
 klorn.example.com {
 	@api path /api/* /ws
-	reverse_proxy @api api:3001 {
-		# Client address for the rate limiter (drop with Cloudflare in front).
-		header_up CF-Connecting-IP {remote_host}
-	}
+	# Caddy puts the client last in X-Forwarded-For: set
+	# CLIENT_IP_SOURCE=x-forwarded-for on the api service.
+	reverse_proxy @api api:3001
 	reverse_proxy web:3000
 }
 ```
@@ -351,8 +369,8 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        # Client address for the rate limiter (drop with Cloudflare in front).
-        proxy_set_header CF-Connecting-IP  $remote_addr;
+        # $proxy_add_x_forwarded_for appends the client address: set
+        # CLIENT_IP_SOURCE=x-forwarded-for on the api service.
     }
 
     # The WebSocket. Without Upgrade/Connection here the app still loads and
@@ -364,7 +382,7 @@ server {
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host       $host;
-        proxy_set_header CF-Connecting-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 3600s;
     }
 
@@ -403,8 +421,10 @@ services:
       - "traefik.http.services.klorn-web.loadbalancer.server.port=3000"
 ```
 
-Traefik passes WebSocket upgrades through by default, so `/ws` needs nothing
-beyond being matched by the api router above. The api router's rule is more
+Set `CLIENT_IP_SOURCE=x-forwarded-for` on the api service: Traefik puts the
+client last in `X-Forwarded-For`, so each client gets its own rate-limit
+bucket. Traefik passes WebSocket upgrades through by default, so `/ws` needs
+nothing beyond being matched by the api router above. The api router's rule is more
 specific than web's, so Traefik prefers it — no priority needed.
 
 Traefik must share a network with the stack; add its network to both services

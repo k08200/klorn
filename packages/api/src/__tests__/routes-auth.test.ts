@@ -754,6 +754,31 @@ describe("POST /api/auth/login", () => {
     await app.close();
   });
 
+  it("records the device session's address from the trusted source, not a client-sent X-Forwarded-For", async () => {
+    // trustProxy as in index.ts, so request.ip is the forgeable value it is in prod.
+    const { authRoutes } = await import("../routes/auth.js");
+    const app = Fastify({ trustProxy: true });
+    await app.register(authRoutes, { prefix: "/api/auth" });
+    await registerUser(app, "dave@example.com", "correcthorsebattery");
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.device.create).mockClear();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "dave@example.com", password: "correcthorsebattery" },
+      headers: { "x-forwarded-for": "198.51.100.66" },
+      remoteAddress: "192.0.2.20",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const created = vi.mocked(prisma.device.create).mock.calls.at(-1)?.[0] as {
+      data: { ipAddress: string | null };
+    };
+    expect(created.data.ipAddress).toBe("192.0.2.20");
+    await app.close();
+  });
+
   it("rejects the wrong password with 401 and a generic message", async () => {
     const app = await buildApp();
     await registerUser(app, "carol@example.com", "correctpassword");

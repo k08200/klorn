@@ -229,7 +229,16 @@ describe("mcpRateLimitKey", () => {
     expect(none).toBe(g1);
   });
 
-  it("ignores X-Forwarded-For; prefers cf-connecting-ip over the socket", async () => {
+  it("by default ignores both X-Forwarded-For and a client-sent cf-connecting-ip", async () => {
+    const { mcpRateLimitKey } = await import("../routes/mcp.js");
+    const spoofed = mcpRateLimitKey(req({ "x-forwarded-for": "1.2.3.4" }));
+    expect(spoofed).toBe("mcp:invalid:203.0.113.9");
+    const cf = mcpRateLimitKey(req({ "cf-connecting-ip": "198.51.100.7" }));
+    expect(cf).toBe("mcp:invalid:203.0.113.9");
+  });
+
+  it("behind Cloudflare prefers cf-connecting-ip over the socket, still never X-Forwarded-For", async () => {
+    vi.stubEnv("CLIENT_IP_SOURCE", "cf-connecting-ip");
     const { mcpRateLimitKey } = await import("../routes/mcp.js");
     const spoofed = mcpRateLimitKey(req({ "x-forwarded-for": "1.2.3.4" }));
     expect(spoofed).toBe("mcp:invalid:203.0.113.9");
