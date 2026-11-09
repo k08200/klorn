@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 type Row = {
   id: string;
@@ -135,10 +136,12 @@ describe("dedupeCalendarEvents", () => {
   it("stays linear on 10k rows", () => {
     const rows: Row[] = [];
     for (let i = 0; i < 5000; i++) rows.push(linked(`l${i}`, `g-${i}`), primary(`p${i}`, `g-${i}`));
-    const started = performance.now();
-    const out = dedupeCalendarEvents(rows);
+    let out: Row[] = [];
+    const ms = fastestCpuMs(() => {
+      out = dedupeCalendarEvents(rows);
+    });
     expect(out).toHaveLength(5000);
     expect(ids(out).every((id) => id.startsWith("p"))).toBe(true);
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(ms).toBeLessThan(500);
   });
 });

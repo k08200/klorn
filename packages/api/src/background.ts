@@ -257,6 +257,8 @@ async function checkUpcomingMeetings() {
                   bellNotificationId: bellRow.id,
                 },
                 "meeting",
+                // A meeting starting: an interrupt caller (push-bucket.ts).
+                { bucket: "interrupt" },
               );
             } catch (err) {
               console.warn("[BACKGROUND] meeting push failed", err);

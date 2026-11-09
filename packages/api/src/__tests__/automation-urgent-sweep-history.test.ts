@@ -476,7 +476,21 @@ describe("the urgent sweep speaks the user's notification language", () => {
       USER,
       expect.objectContaining({ title: "긴급 메일" }),
       "email_urgent",
+      { bucket: "interrupt" },
     );
+  });
+
+  it("rings the urgent-mail push against the interrupt bucket", async () => {
+    // The keyword sweep is one of the four callers allowed to ask for the
+    // interrupt bucket (push-interrupt-callers-guard.test.ts).
+    arrange([urgent("g1", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(m.sendPushNotification).toHaveBeenCalledTimes(1);
+    const call = m.sendPushNotification.mock.calls[0] as unknown[];
+    expect(call[2]).toBe("email_urgent");
+    expect(call[3]).toEqual({ bucket: "interrupt" });
   });
 
   it("an English row written before the title was localized still silences that mail", async () => {

@@ -1,37 +1,32 @@
 /**
- * Which per-user push rate-limit bucket a notification category rings against.
+ * Which per-user push rate-limit bucket a push rings against. The CALLER picks
+ * it per call (sendPushNotification's `options.bucket`); the category does not.
  *
  * Two independent buckets (caps in config.ts, enforced by push-rate-limit.ts):
  *
- * - interrupt: "this needs you now". Urgent mail (the PUSH lane, and MEETING
- *   mail, which firewall-push.ts sends as email_urgent) and meeting alerts
- *   ("Meeting in N min", background.ts). These are the same two kinds the
- *   desktop shell raises OS banners for (desktop-alert.ts).
- * - ambient: everything else. Briefings and the weekly report, agent proposals,
- *   reminders and task nudges, candidate-mail notices, reconnect prompts, test
- *   pushes. Useful, but none is lost by arriving later, and the bell row keeps
- *   each one either way.
+ * - interrupt: "this needs you now". Asked for by exactly four callers, pinned
+ *   by __tests__/push-interrupt-callers-guard.test.ts:
+ *   - judge/firewall-push.ts: the firewall's PUSH and MEETING mail;
+ *   - automation-scheduler.ts: the urgent keyword sweep;
+ *   - background.ts: "Meeting in N min";
+ *   - pim/reminder-scheduler.ts: reminders the user set for a time.
+ * - ambient: everything else, and the default. Briefings and the weekly report,
+ *   agent proposals, candidate-mail notices, reconnect prompts, test pushes,
+ *   and every agent-originated push (autonomous-agent.ts notify_user,
+ *   proactive-actions.ts) whatever its category. An LLM or a heuristic chose to
+ *   ring those, so they must not use up the room the four above need. None is
+ *   lost by arriving later, and the bell row keeps each one either way.
  *
- * A record, not a set, so a new NotifCategory fails typecheck until someone
- * decides which bucket it belongs in.
+ * The category still drives preferences, quiet hours and the UI label; it no
+ * longer picks the bucket, because the agent sends email_urgent and meeting
+ * too. Interrupt is opt-in rather than derived from the category so that every
+ * way into it is written at a call site the guard can see: a category default
+ * would let any new caller that passes email_urgent reach it unnamed.
  */
-
-import type { NotifCategory } from "./notification-prefs.js";
 
 export type PushBucket = "interrupt" | "ambient";
 
-const BUCKET_BY_CATEGORY: Record<NotifCategory, PushBucket> = {
-  email_urgent: "interrupt",
-  meeting: "interrupt",
-  // Candidate materials: a firewall-decided notice (push.ts authoredSurface),
-  // but one per inbound attachment batch and not time-boxed. Ambient.
-  email_candidate: "ambient",
-  task_due: "ambient",
-  agent_proposal: "ambient",
-  daily_briefing: "ambient",
-  system: "ambient",
-};
-
-export function pushBucketFor(category: NotifCategory): PushBucket {
-  return BUCKET_BY_CATEGORY[category];
+/** The bucket a push rings against: interrupt only when the caller asks for it. */
+export function resolvePushBucket(requested: PushBucket | undefined): PushBucket {
+  return requested === "interrupt" ? "interrupt" : "ambient";
 }

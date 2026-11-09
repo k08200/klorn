@@ -1,5 +1,5 @@
 /**
- * Failed LLM provider calls, made visible (#1319).
+ * Failed LLM provider calls, made visible (#1572).
  *
  * LlmUsageLog is written only after a provider call SUCCEEDS (the `call`
  * closure in openai.ts), while the cost pre-bill lands in GlobalCostLedger

@@ -1300,7 +1300,8 @@ model PushRingEvent {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Which cap the ring counted against: "interrupt" (urgent mail, meeting
-  // alerts) | "ambient" (everything else). notify/push-bucket.ts.
+  // alerts, reminders; the caller asks) | "ambient" (everything else,
+  // agent-originated pushes included). notify/push-bucket.ts.
   bucket    String   @default("ambient")
   createdAt DateTime @default(now())
 

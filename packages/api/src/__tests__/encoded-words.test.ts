@@ -6,6 +6,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { decodeEncodedWords, MAX_DECODED_WORDS } from "../mail/encoded-words.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 const b64 = (text: string, encoding: BufferEncoding = "utf8") =>
   Buffer.from(text, encoding).toString("base64");
@@ -108,20 +109,23 @@ describe("decodeEncodedWords", () => {
   it("stays well within a generous time backstop on thousands of words", () => {
     const unknown = Array.from({ length: 2_000 }, () => "=?z?B??=").join(" ");
     const known = Array.from({ length: 2_000 }, () => `=?UTF-8?B?${b64("가")}?=`).join(" ");
-    const started = performance.now();
-    for (let i = 0; i < 20; i++) {
-      decodeEncodedWords(unknown);
-      decodeEncodedWords(known);
-    }
+    const ms = fastestCpuMs(() => {
+      for (let i = 0; i < 20; i++) {
+        decodeEncodedWords(unknown);
+        decodeEncodedWords(known);
+      }
+    });
     // ~120 ms per header before the allowlist and the cache: 40 headers took ~5 s.
-    expect(performance.now() - started).toBeLessThan(1_500);
+    expect(ms).toBeLessThan(1_500);
   });
 
   it("is linear on hostile input (a generous backstop)", () => {
     const hostile = `${"=?".repeat(50_000)}${"?=".repeat(50_000)}`;
-    const started = performance.now();
-    decodeEncodedWords(hostile);
-    decodeEncodedWords(`=?UTF-8?Q?${"=".repeat(100_000)}?=`);
-    expect(performance.now() - started).toBeLessThan(1_500);
+    const qFlood = `=?UTF-8?Q?${"=".repeat(100_000)}?=`;
+    const ms = fastestCpuMs(() => {
+      decodeEncodedWords(hostile);
+      decodeEncodedWords(qFlood);
+    });
+    expect(ms).toBeLessThan(1_500);
   });
 });

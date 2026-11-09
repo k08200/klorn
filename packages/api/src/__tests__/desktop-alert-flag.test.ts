@@ -11,7 +11,7 @@ vi.mock("../notify/notification-prefs.js", () => ({
   evaluateNotificationGate: gate,
 }));
 
-import { desktopAlertTag } from "../notify/desktop-alert.js";
+import { desktopAlertState, desktopAlertTag } from "../notify/desktop-alert.js";
 
 describe("desktopAlertTag", () => {
   beforeEach(() => {
@@ -46,5 +46,31 @@ describe("desktopAlertTag", () => {
     await expect(desktopAlertTag("u1", "push")).resolves.toEqual({});
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+// The Mac polls instead of reading frames, so it asks for the same verdict
+// directly (GET /api/notifications/alert-state). Same kinds, same categories.
+describe("desktopAlertState", () => {
+  beforeEach(() => {
+    gate.mockReset();
+  });
+
+  it("asks the gate for every kind with the category its tag uses, at one instant", async () => {
+    const now = new Date("2026-11-07T12:00:00Z");
+    gate.mockImplementation(async (_user: string, category: string) =>
+      category === "meeting" ? { allowed: false, reason: "quiet_hours" } : { allowed: true },
+    );
+    await expect(desktopAlertState("u1", now)).resolves.toEqual({
+      push: { allowed: true },
+      meeting: { allowed: false, reason: "quiet_hours" },
+    });
+    expect(gate).toHaveBeenCalledWith("u1", "email_urgent", now);
+    expect(gate).toHaveBeenCalledWith("u1", "meeting", now);
+  });
+
+  it("lets a gate failure propagate: the caller, not this helper, picks the fallback", async () => {
+    gate.mockRejectedValue(new Error("db down"));
+    await expect(desktopAlertState("u1")).rejects.toThrow("db down");
   });
 });

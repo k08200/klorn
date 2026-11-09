@@ -247,6 +247,9 @@ export async function deliverFirewallPush(
       bellNotificationId: notification.id,
     },
     "email_urgent",
+    // The firewall's PUSH / MEETING decision: one of the four interrupt
+    // callers (push-bucket.ts, push-interrupt-callers-guard.test.ts).
+    { bucket: "interrupt" },
   );
 }
 

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // sendPushNotification through the REAL rate limiter (push-rate-limit.ts) and
-// the real category → bucket map. Only the PushRingEvent table is faked: an
-// in-memory store that honours the userId / bucket / createdAt filters the
-// limiter sends. Everything after the limiter is mocked, and VAPID is unset in
+// the real per-call bucket choice (push-bucket.ts). Only the PushRingEvent
+// table is faked: an in-memory store that honours the userId / bucket /
+// createdAt filters the limiter sends. Everything after the limiter is mocked, and VAPID is unset in
 // tests, so a push the limiter lets through ends at "missing_vapid_keys" and a
 // push it blocks ends at "rate_limited".
 
@@ -80,19 +80,21 @@ vi.mock("web-push", () => ({
 }));
 
 import type { NotifCategory } from "../notify/notification-prefs.js";
-import { sendPushNotification } from "../notify/push.js";
+import { type PushSendOptions, sendPushNotification } from "../notify/push.js";
 import { createSkippedPushDelivery } from "../notify/push-delivery.js";
 import { sendTelegramForPush } from "../notify/telegram-notify.js";
 
 const USER = "user-1";
 
-function push(category: NotifCategory) {
-  return sendPushNotification(USER, { title: "T", body: "B", url: "/briefing" }, category);
+const INTERRUPT: PushSendOptions = { bucket: "interrupt" };
+
+function push(category: NotifCategory, options?: PushSendOptions) {
+  return sendPushNotification(USER, { title: "T", body: "B", url: "/briefing" }, category, options);
 }
 
-async function pushTimes(category: NotifCategory, n: number) {
+async function pushTimes(category: NotifCategory, n: number, options?: PushSendOptions) {
   const results = [];
-  for (let i = 0; i < n; i++) results.push(await push(category));
+  for (let i = 0; i < n; i++) results.push(await push(category, options));
   return results;
 }
 
@@ -115,7 +117,7 @@ describe("sendPushNotification — interrupt and ambient rate buckets", () => {
     const briefings = await pushTimes("daily_briefing", 10);
     expect(briefings.filter((r) => r.reason === "rate_limited")).toHaveLength(7);
 
-    const urgent = await push("email_urgent");
+    const urgent = await push("email_urgent", INTERRUPT);
 
     expect(urgent.reason).toBe("missing_vapid_keys"); // passed the limiter
     expect(sendTelegramForPush).toHaveBeenLastCalledWith(
@@ -129,29 +131,29 @@ describe("sendPushNotification — interrupt and ambient rate buckets", () => {
     await pushTimes("agent_proposal", 5);
     await pushTimes("system", 5);
 
-    const meeting = await push("meeting");
+    const meeting = await push("meeting", INTERRUPT);
 
     expect(meeting.reason).toBe("missing_vapid_keys");
   });
 
   it("the interrupt bucket still has a cap: the 7th urgent push in 10 minutes is dropped", async () => {
-    const urgent = await pushTimes("email_urgent", 7);
+    const urgent = await pushTimes("email_urgent", 7, INTERRUPT);
 
     expect(urgent.slice(0, 6).map((r) => r.reason)).toEqual(Array(6).fill("missing_vapid_keys"));
     expect(urgent[6]?.reason).toBe("rate_limited");
   });
 
   it("meetings and urgent mail share the interrupt cap", async () => {
-    await pushTimes("email_urgent", 3);
-    await pushTimes("meeting", 3);
+    await pushTimes("email_urgent", 3, INTERRUPT);
+    await pushTimes("meeting", 3, INTERRUPT);
 
-    const seventh = await push("meeting");
+    const seventh = await push("meeting", INTERRUPT);
 
     expect(seventh.reason).toBe("rate_limited");
   });
 
   it("interrupt traffic never uses up the ambient bucket", async () => {
-    await pushTimes("email_urgent", 6);
+    await pushTimes("email_urgent", 6, INTERRUPT);
 
     const briefing = await push("daily_briefing");
 
@@ -160,7 +162,7 @@ describe("sendPushNotification — interrupt and ambient rate buckets", () => {
 
   it("records which bucket made the rate-limit decision", async () => {
     await pushTimes("daily_briefing", 4);
-    await pushTimes("meeting", 7);
+    await pushTimes("meeting", 7, INTERRUPT);
 
     expect(rateLimitSkipReasons()).toEqual([
       "rate_limited_ambient:10min cap 3/3",
@@ -174,7 +176,7 @@ describe("sendPushNotification — interrupt and ambient rate buckets", () => {
       rings.push({ userId: USER, bucket: "interrupt", createdAt: twentyMinAgo });
     }
 
-    const urgent = await push("email_urgent");
+    const urgent = await push("email_urgent", INTERRUPT);
 
     expect(urgent.reason).toBe("rate_limited");
     expect(rateLimitSkipReasons()).toEqual(["rate_limited_interrupt:60min cap 20/20"]);
@@ -186,18 +188,68 @@ describe("sendPushNotification — interrupt and ambient rate buckets", () => {
       rings.push({ userId: "user-2", bucket: "ambient", createdAt: new Date() });
     }
 
-    expect((await push("email_urgent")).reason).toBe("missing_vapid_keys");
+    expect((await push("email_urgent", INTERRUPT)).reason).toBe("missing_vapid_keys");
     expect((await push("daily_briefing")).reason).toBe("missing_vapid_keys");
   });
 
   it("fails open: a limiter DB error lets the push through", async () => {
     ringStore.countError = new Error("connection refused");
 
-    const urgent = await push("email_urgent");
+    const urgent = await push("email_urgent", INTERRUPT);
     const briefing = await push("daily_briefing");
 
     expect(urgent.reason).toBe("missing_vapid_keys");
     expect(briefing.reason).toBe("missing_vapid_keys");
     expect(rateLimitSkipReasons()).toEqual([]);
+  });
+});
+
+// The bucket is the caller's, not the category's (#1636 review). The category
+// still drives preferences, quiet hours and the label; only the ring changes.
+describe("sendPushNotification — the caller picks the bucket", () => {
+  it("an agent email_urgent push rings ambient and is refused at the ambient cap", async () => {
+    await pushTimes("daily_briefing", 3);
+
+    const agentUrgent = await push("email_urgent", { bucket: "ambient" });
+
+    expect(agentUrgent.reason).toBe("rate_limited");
+    expect(rateLimitSkipReasons()).toEqual(["rate_limited_ambient:10min cap 3/3"]);
+    expect(createSkippedPushDelivery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: "email_urgent" }),
+    );
+  });
+
+  it("agent email_urgent and meeting pushes never use up the interrupt bucket", async () => {
+    // Six agent pushes in the two interrupt-looking categories: three ring,
+    // three hit the ambient cap. The interrupt bucket is untouched.
+    await pushTimes("email_urgent", 3, { bucket: "ambient" });
+    await pushTimes("meeting", 3, { bucket: "ambient" });
+
+    const firewallPush = await push("email_urgent", INTERRUPT);
+
+    expect(firewallPush.reason).toBe("missing_vapid_keys");
+    expect(rings.filter((r) => r.bucket === "interrupt")).toHaveLength(1);
+  });
+
+  it("a push that does not ask for a bucket rings ambient, whatever its category", async () => {
+    await push("email_urgent");
+    await push("meeting");
+
+    expect(rings.map((r) => r.bucket)).toEqual(["ambient", "ambient"]);
+  });
+
+  it("a reminder (category system) asks for interrupt and rings past a full ambient bucket", async () => {
+    await pushTimes("daily_briefing", 3);
+    await pushTimes("agent_proposal", 3);
+
+    const reminder = await push("system", INTERRUPT);
+
+    expect(reminder.reason).toBe("missing_vapid_keys");
+    expect(sendTelegramForPush).toHaveBeenLastCalledWith(
+      USER,
+      expect.objectContaining({ title: "T" }),
+      "system",
+    );
+    expect(rings.at(-1)?.bucket).toBe("interrupt");
   });
 });

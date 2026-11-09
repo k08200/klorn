@@ -82,9 +82,12 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     createdAt: notification.createdAt.toISOString(),
   });
 
-  // Send the push: "system" — no category opt-out, the ambient rate bucket,
-  // quiet hours apply (push.ts). userSet: the user asked for this one, so the
-  // inbound-mail noise heuristic does not veto a subject it quotes.
+  // Send the push: "system" — no category opt-out, quiet hours apply
+  // (push.ts). userSet: the user asked for this one, so the inbound-mail noise
+  // heuristic does not veto a subject it quotes. For the same reason it rings
+  // against the interrupt bucket (push-bucket.ts): briefings and agent
+  // proposals in the ambient bucket must not crowd out a reminder the user set
+  // for a time.
   sendPushNotification(
     reminder.userId,
     {
@@ -96,6 +99,7 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
       userSet: true,
     },
     "system",
+    { bucket: "interrupt" },
   ).catch((err) => {
     console.error(`[REMINDER] Push delivery failed for ${reminder.id}:`, err);
     captureError(err, {

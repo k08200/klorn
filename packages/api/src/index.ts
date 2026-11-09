@@ -434,7 +434,7 @@ app.get("/api/health/ready", async (_request, reply) => {
 // the failure mode where the dyno slept or an import failed and briefings
 // just stopped (see routes/cron.ts). Public like /api/health: exposes only
 // scheduler names and tick times, no user data — plus the LLM judge's coarse
-// fallback status + ratio (#1319), never error text.
+// fallback status + ratio (#1572), never error text.
 app.get("/api/health/schedulers", async (_request, reply) => {
   // The judge read is a cached in-memory value, but it must never turn the
   // liveness endpoint into a 500: on any throw the field is simply omitted.
@@ -608,7 +608,7 @@ reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
 // GEMINI_FALLBACK_MODEL), which the pin check above never sees — including the
 // failover lanes, which serve the judge exactly when the lead is down.
 reportJudgeServing(JUDGE_MODEL, getProviderChain());
-// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
+// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1572): say so once.
 warnRetiredJudgeHealthEnv();
 
 // What Paddle actually bills lives outside this repo, on a price object any
