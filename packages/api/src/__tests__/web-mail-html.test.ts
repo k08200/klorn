@@ -11,6 +11,7 @@ import {
   MAIL_FRAME_MIN_HEIGHT,
   neutralizeMailHtml,
 } from "../../../web/src/lib/mail-html";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 const body = (doc: string) => doc.slice(doc.indexOf("<body>"));
 
@@ -137,11 +138,12 @@ describe("neutralizeMailHtml — linear on hostile input", () => {
     ["url( without close", "<p style='url(url(url("],
   ])("handles %s repeated to 200k chars quickly", (_label, unit) => {
     const input = unit.repeat(Math.ceil(SIZE / unit.length));
-    const started = performance.now();
-    buildMailSrcdoc(input, { allowRemoteImages: false });
-    countRemoteImages(input);
-    estimateMailFrameHeight(input);
-    expect(performance.now() - started).toBeLessThan(BUDGET_MS);
+    const ms = fastestCpuMs(() => {
+      buildMailSrcdoc(input, { allowRemoteImages: false });
+      countRemoteImages(input);
+      estimateMailFrameHeight(input);
+    });
+    expect(ms).toBeLessThan(BUDGET_MS);
   });
 });
 
