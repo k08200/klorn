@@ -162,15 +162,16 @@ describe("mutation routes stamp the decision ledger", () => {
     await vi.waitFor(() => expect(captureError).toHaveBeenCalled());
   });
 
-  it.each(STAMPING)(
-    "$name answers while the ledger write is still hanging",
-    async ({ method, url, body }) => {
-      db.labelUpdateMany.mockReturnValue(new Promise(() => {}));
-      const app = await buildApp();
-      const res = await app.inject({ method, url, headers, ...(body ? { payload: body } : {}) });
-      expect(res.statusCode).toBe(200);
-    },
-  );
+  it.each(STAMPING)("$name answers while the ledger write is still hanging", async ({
+    method,
+    url,
+    body,
+  }) => {
+    db.labelUpdateMany.mockReturnValue(new Promise(() => {}));
+    const app = await buildApp();
+    const res = await app.inject({ method, url, headers, ...(body ? { payload: body } : {}) });
+    expect(res.statusCode).toBe(200);
+  });
 
   it("stamps ARCHIVED on the local-only archive fallback too", async () => {
     gmail.archiveEmail.mockResolvedValueOnce({ error: "Gmail not connected." } as never);
