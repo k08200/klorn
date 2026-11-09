@@ -333,11 +333,8 @@ describe("every AttentionItem reader is accounted for", () => {
     "judge/judge-context.ts",
     "judge/label-correction.ts",
     "judge/rejudge-open-items.ts",
-<<<<<<< HEAD
     "judge/user-outcome.ts", // one item by id: source and sourceId to stamp, never shown
-=======
     "judge/v3/live-judge.ts", // one mail's EMAIL item: its budget hold only
->>>>>>> origin/main
     "learning/learned-rule-store.ts",
     "mail/proactive-drafts.ts", // OPEN PUSH email items, ids only
     "mcp/set-tier.ts",
