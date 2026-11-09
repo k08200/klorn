@@ -24,6 +24,7 @@ import { DEMO_DAILY_BUDGET_CENTS, PLAYGROUND_NO_KEY_DEMO_ENABLED } from "../conf
 import { judgeEmail } from "../judge/poc-judge.js";
 import { TIERS } from "../judge/tiers.js";
 import type { ProviderCredentials } from "../providers/index.js";
+import { clientAddress } from "../security/client-address.js";
 import { redactCredentials } from "../security/credential-redaction.js";
 
 // Strip CR/LF/control chars from any user-supplied value before it reaches a
@@ -209,7 +210,7 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
     // Feature dark (the default): behave as the old key-required playground.
     return reply.code(401).send({ error: "key_required" });
   }
-  if (!takeDemoIpSlot(request.ip)) {
+  if (!takeDemoIpSlot(clientAddress(request))) {
     return reply.code(429).send({ error: "demo_rate_limited", byokAvailable: true });
   }
   if (!takeDemoBudget()) {

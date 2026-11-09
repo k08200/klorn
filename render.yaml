@@ -27,6 +27,12 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      # Client address for rate limits (security/client-address.ts). Render's
+      # edge is Cloudflare, which sets CF-Connecting-IP; a request that already
+      # carries one is answered 403 at the edge (measured 2026-11-09). Also the
+      # default when RENDER=true.
+      - key: CLIENT_IP_SOURCE
+        value: cf-connecting-ip
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
