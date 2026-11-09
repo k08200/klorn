@@ -39,6 +39,7 @@ import {
 } from "./analysis-controls";
 import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
+import { replyDraftSendRequest } from "./reply-draft-send";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
 // Domain types and the reminder option list live in ./types.ts so
 // sibling components (atoms.tsx, toolbar.tsx, future
@@ -466,14 +467,16 @@ function EmailDetailView() {
   };
 
   const sendReplyDraft = async () => {
-    if (!draft || sendingDraft) return;
+    if (!email || !draft || sendingDraft) return;
     setSendingDraft(true);
     setError(null);
     setProGate(null);
     try {
-      await apiFetch("/api/email/send", {
+      // Names the mail it answers, so the API records the reply (reply-draft-send.ts).
+      const request = replyDraftSendRequest(email.id, draft);
+      await apiFetch(request.path, {
         method: "POST",
-        body: JSON.stringify(draft),
+        body: JSON.stringify(request.body),
       });
       setDraft(null);
     } catch (err) {

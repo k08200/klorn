@@ -2196,7 +2196,7 @@ model SendReceipt {
   payloadHash       String // sha256 hex, = receipt.payloadHash
   receipt           Json // the full ActionReceipt (v, action, inputHash, payloadHash, target, approvedAt, approvedBy)
   inbox             String // "primary" | LinkedInboxAccount id — the account the mail left from
-  emailId           String? // reply: the EmailMessage answered (no FK: the receipt outlives the row)
+  emailId           String? // the EmailMessage answered: reply, or send with inReplyToEmailId (no FK: the receipt outlives the row)
   status            String    @default("PENDING") // PENDING | SENT | REFUSED | UNKNOWN
   providerMessageId String?
   createdAt         DateTime  @default(now())
