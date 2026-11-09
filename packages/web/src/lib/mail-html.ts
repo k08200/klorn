@@ -12,8 +12,11 @@
  *
  * Remote images are blocked by default (tracking pixels, CSS url() beacons):
  * their srcs are removed here AND the CSP refuses them, so either wall alone
- * holds. Pure string functions with no imports: tested from the api suite.
+ * holds. Pure string functions (the one import is the sibling char-ref.ts):
+ * tested from the api suite.
  */
+
+import { charFromCodePoint } from "./char-ref";
 
 export const MAIL_FRAME_MIN_HEIGHT = 240;
 export const MAIL_FRAME_MAX_HEIGHT = 720;
@@ -75,20 +78,10 @@ interface Attr {
   value: string;
 }
 
-const MAX_CODE_POINT = 0x10ffff;
-const REPLACEMENT_CHAR = "\ufffd";
-
-/** A numeric entity's character; out-of-range values become U+FFFD, never a throw. */
-function codePointChar(code: number): string {
-  return Number.isInteger(code) && code >= 0 && code <= MAX_CODE_POINT
-    ? String.fromCodePoint(code)
-    : REPLACEMENT_CHAR;
-}
-
 function decodeEntities(value: string): string {
   return value
-    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => codePointChar(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);?/g, (_, dec: string) => codePointChar(Number.parseInt(dec, 10)))
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => charFromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec: string) => charFromCodePoint(Number.parseInt(dec, 10)))
     .replace(/&quot;/g, '"')
     .replace(/&apos;|&#39;/g, "'")
     .replace(/&lt;/g, "<")

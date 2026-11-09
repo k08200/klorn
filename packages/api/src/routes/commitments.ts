@@ -146,14 +146,14 @@ export async function commitmentRoutes(app: FastifyInstance) {
       if (Number.isFinite(parsed.getTime())) patch.dueAt = parsed;
     }
 
-    const updated = await updateCommitment(id, patch);
+    const updated = await updateCommitment(id, userId, patch);
 
     // When a commitment is dismissed, write a FeedbackEvent so the feedback-adaptor
     // can learn to suppress similar attention items. Fire-and-forget.
     if (patch.status === "DISMISSED" && existing.status !== "DISMISSED") {
       prisma.attentionItem
         .findFirst({
-          where: { source: "COMMITMENT", sourceId: id },
+          where: { userId, source: "COMMITMENT", sourceId: id },
           select: { id: true },
         })
         .then((ai) => {

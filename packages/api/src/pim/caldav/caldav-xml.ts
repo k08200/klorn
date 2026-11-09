@@ -40,6 +40,8 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   apos: "'",
 };
 const MAX_CODE_POINT = 0x10ffff;
+const SURROGATE_MIN = 0xd800;
+const SURROGATE_MAX = 0xdfff;
 const TAG =
   /^<(\/?)([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/;
 const ATTRIBUTE = /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
@@ -61,7 +63,10 @@ export function decodeXmlText(text: string): string {
       const digits = entity.slice(hex ? 2 : 1);
       if (!(hex ? /^[0-9a-fA-F]{1,6}$/ : /^\d{1,7}$/).test(digits)) return badXml();
       const code = Number.parseInt(digits, hex ? 16 : 10);
-      return code <= MAX_CODE_POINT ? String.fromCodePoint(code) : badXml();
+      // Zero and surrogates are not characters; past U+10FFFF is out of range.
+      const valid =
+        code > 0 && code <= MAX_CODE_POINT && (code < SURROGATE_MIN || code > SURROGATE_MAX);
+      return valid ? String.fromCodePoint(code) : badXml();
     }
     // Own keys only: `&constructor;` must not find the object prototype's.
     return Object.hasOwn(NAMED_ENTITIES, entity) ? (NAMED_ENTITIES[entity] as string) : badXml();
