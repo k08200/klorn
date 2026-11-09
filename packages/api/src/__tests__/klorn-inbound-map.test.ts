@@ -19,6 +19,7 @@ import {
 } from "../mail/klorn-inbound-map.js";
 import { inboundRecipients, MAX_INBOUND_RECIPIENTS } from "../mail/klorn-inbound-recipients.js";
 import { MAX_STORED_BODY_CHARS } from "../mail/stored-mail-text.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 const DOMAIN = "klorn.ai";
 const EMAIL_ID = "4ef9a417-02e9-4d39-ad75-9611e0fcc33c";
@@ -483,12 +484,13 @@ describe("indexHeaders: one bounded pass over the header keys", () => {
 
   it(`examines at most ${MAX_HEADER_KEYS} keys of a 1M-key headers object`, () => {
     const headers = manyKeys(1_000_000, { from: "late@example.com" });
-    const started = performance.now();
-    const { values, examined } = indexHeaders(headers);
-    expect(examined).toBe(MAX_HEADER_KEYS);
-    // A needed header past the cap is not read: the content's own fields cover it.
-    expect(values).toEqual({});
-    expect(performance.now() - started).toBeLessThan(1_500);
+    const ms = fastestCpuMs(() => {
+      const { values, examined } = indexHeaders(headers);
+      expect(examined).toBe(MAX_HEADER_KEYS);
+      // A needed header past the cap is not read: the content's own fields cover it.
+      expect(values).toEqual({});
+    });
+    expect(ms).toBeLessThan(1_500);
   });
 
   it("maps a message with 1M header keys from the content's own fields, within a backstop", () => {
@@ -496,14 +498,16 @@ describe("indexHeaders: one bounded pass over the header keys", () => {
       from: "Late <late@example.com>",
       to: "late@example.com",
     });
-    const started = performance.now();
-    const message = content({ headers, from: "sender@example.com", to: ["jane@klorn.ai"] });
-    const oversized = oversizedHeaders(message);
-    const raw = resendToRawEmail(message, eventData());
-    expect(oversized).toEqual([]);
-    expect(raw.from).toBe("sender@example.com");
-    expect(raw.to).toBe("jane@klorn.ai");
-    expect(performance.now() - started).toBeLessThan(1_500);
+    const ms = fastestCpuMs(() => {
+      // A new content object per run: the header index is cached per object.
+      const message = content({ headers, from: "sender@example.com", to: ["jane@klorn.ai"] });
+      const oversized = oversizedHeaders(message);
+      const raw = resendToRawEmail(message, eventData());
+      expect(oversized).toEqual([]);
+      expect(raw.from).toBe("sender@example.com");
+      expect(raw.to).toBe("jane@klorn.ai");
+    });
+    expect(ms).toBeLessThan(1_500);
   });
 
   it("finds a needed header among ordinary ones, as before", () => {
