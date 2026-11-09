@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Real-Postgres proof of the engagement columns (migration
-// 20261107120000_decision_label_engagement) and the lane-quality SQL. A mock
+// 20261108120000_decision_label_engagement) and the lane-quality SQL. A mock
 // can't show that each kind's first stamp survives a second one, that an open
 // leaves `outcome` null for the override/confirm stamps and fallback-rejudge,
 // or that the report's FILTER clauses and READ ONLY transaction actually run.

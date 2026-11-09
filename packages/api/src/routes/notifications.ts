@@ -10,6 +10,7 @@ import { verifyTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { parseClientPlatform } from "../notify/alert-endpoints.js";
 import { desktopAlertState } from "../notify/desktop-alert.js";
 import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
@@ -121,6 +122,8 @@ export async function notificationRoutes(app: FastifyInstance) {
       if (!result.ok) {
         return reply.code(404).send({ error: "Email not found" });
       }
+      // The user tapped Later on the notification: same signal as in-app Later.
+      noteEmailOutcome(grant.userId, grant.emailId, "SNOOZED");
       return reply.code(200).send({ ok: true });
     },
   );
