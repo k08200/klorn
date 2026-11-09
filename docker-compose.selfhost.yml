@@ -87,6 +87,8 @@ services:
       # ── Optional: real-time Gmail push (polling fallback otherwise) ──
       GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-}
       GMAIL_PUSH_OIDC_EMAIL: ${GMAIL_PUSH_OIDC_EMAIL:-}
+      # Required with GMAIL_PUSH_OIDC_EMAIL: the push subscription's Audience.
+      GMAIL_PUSH_OIDC_AUDIENCE: ${GMAIL_PUSH_OIDC_AUDIENCE:-}
       GMAIL_PUSH_TOKEN: ${GMAIL_PUSH_TOKEN:-}
 
       # ── Optional: notifications ──────────────────────────────────────

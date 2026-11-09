@@ -116,6 +116,7 @@ Useful optional vars (full tuning catalog with defaults:
 | --- | --- |
 | `GMAIL_PUBSUB_TOPIC` | Real-time Gmail push (see below). Unset = polling fallback |
 | `GMAIL_PUSH_OIDC_EMAIL` or `GMAIL_PUSH_TOKEN` | Auth for the Pub/Sub push endpoint (OIDC preferred) |
+| `GMAIL_PUSH_OIDC_AUDIENCE` | Required with `GMAIL_PUSH_OIDC_EMAIL`: the push subscription's Audience. Without it every push is refused |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | Web Push notifications |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` / `TELEGRAM_WEBHOOK_SECRET` | PUSH-tier delivery to Telegram |
 | `ADMIN_EMAILS` | Comma-separated operator emails with admin access |
@@ -123,6 +124,40 @@ Useful optional vars (full tuning catalog with defaults:
 | `JUDGE_MODEL` / `CHAT_MODEL` / `AGENT_MODEL` | Model pins (default `claude-haiku-5-5`) |
 | `DAILY_COST_CAP_CENTS` | Per-user daily LLM spend cap (default 100 = $1/day) |
 | `KEEPALIVE_URL` | Free-dyno keepalive ping target (Render free tier sleeps) |
+| `RATE_LIMIT_ALLOW_IPS` | Rate-limit exemption, unset by default. See [Rate-limit exemption](#rate-limit-exemption-rate_limit_allow_ips) |
+
+#### Rate-limit exemption (`RATE_LIMIT_ALLOW_IPS`)
+
+Read in `packages/api/src/index.ts`, parsed by
+`packages/api/src/security/scanner-allowlist.ts`.
+
+- **Format:** comma-separated IPv4 addresses or CIDR ranges, e.g.
+  `203.0.113.7,198.51.100.0/24`. A bare address means `/32`.
+- **Default:** unset, so no address is exempt.
+- **Effect:** requests from a listed address skip the API's per-address HTTP
+  rate limits: the global 100 requests per minute and the stricter per-route
+  limits (sign-in, registration, password reset and others). Throttles that
+  are not per-address HTTP limits still apply, for example the per-account
+  lockout after repeated failed sign-ins.
+- **Intended use:** a time-boxed, authorized security scan that would
+  otherwise be throttled. Unset it when the scan ends.
+- **Risk:** every address inside a listed range is exempt. An over-broad range
+  turns rate limiting off for all of those addresses, so list the narrowest
+  ranges that cover the scanner.
+- **Ignored entries:** prefixes wider than `/8`, IPv6 entries and entries
+  whose address or prefix does not parse are dropped, never widened. Nothing
+  is logged for a dropped entry.
+- **Address checked:** the `CF-Connecting-IP` header when present, otherwise
+  the TCP peer address (never `X-Forwarded-For`). This is the same address the
+  rate limiter keys on, so the exemption is only as reliable as that address:
+  see [Client address](#client-address).
+- **Lifecycle:** read once at boot, so a change needs a restart. When at least
+  one entry is valid, the API logs
+  `[security] rate-limit exemption ACTIVE for N range(s)` at startup.
+
+`docker-compose.selfhost.yml` does not pass it through. To use it, add
+`RATE_LIMIT_ALLOW_IPS: ${RATE_LIMIT_ALLOW_IPS:-}` to the api service's
+`environment:` block.
 
 ## Path 2 — Docker Compose (one box, everything included)
 
@@ -148,6 +183,18 @@ Notes:
 
 - **Schema is automatic.** The API entrypoint runs `prisma migrate deploy`
   (with retry) before serving; `prisma generate` happens at image build.
+- **Containers run as a non-root user.** Both images run as `klorn`, uid and
+  gid `10001`, not as root. The compose file mounts no volume into `api` or
+  `web` (Postgres keeps its own named volume and its own user), so a stock
+  setup needs no change. If you add a bind mount, make the host path writable
+  by that uid, for example `sudo chown -R 10001:10001 ./klorn-data`. A named
+  volume that an older (root) image already wrote to needs the same, for
+  example `docker run --rm -v <volume>:/d alpine chown -R 10001:10001 /d`.
+  The paths the processes write are:
+  - api: `/app/packages/api/data` (file-conversion results; move it with
+    `EVE_CONVERSION_STORAGE_DIR`), `/tmp`, and `/home/klorn` (npm cache)
+  - web: `/app/packages/web/.next/cache` (Next.js runtime cache), and
+    `/home/klorn`
 - **Serving beyond localhost?** This is the one case that still needs a
   source build, because `NEXT_PUBLIC_API_URL` is baked into the web bundle.
   See [Reverse proxy](#reverse-proxy) for the four values that change together
@@ -250,12 +297,38 @@ client's authorised list, or sign-in fails after consent.
 WebSocket at `/ws`. Everything else is web. So one hostname is enough, and
 same-origin means no CORS preflight at all.
 
+### Client address
+
+The API's rate limiter takes the client address from the `CF-Connecting-IP`
+header when it is present, otherwise from the TCP peer address. It never reads
+`X-Forwarded-For`. Two things make that address dependable:
+
+- **The API is reachable only through your proxy (or Cloudflare).** The stock
+  compose file publishes `3001` on every interface. Behind a proxy, publish it
+  on loopback instead (`"127.0.0.1:3001:3001"`) or firewall it, so that every
+  request reaches the API through the proxy.
+- **The proxy sets the header.** Cloudflare sets `CF-Connecting-IP` itself and
+  replaces any value the client sent; with Cloudflare in front of your proxy,
+  leave the header alone. Without Cloudflare, set it at the proxy from the
+  connecting address, as the Caddy and nginx examples below do. A proxy that
+  sets nothing gives every request the proxy's own address, so all clients
+  share one rate-limit bucket. Traefik cannot set a header from the client
+  address without a plugin; with Traefik, expect the shared bucket or put Caddy
+  or nginx in front.
+
+If your proxy itself sits behind another proxy or load balancer, the
+connecting address is that hop's. Use Caddy's `{client_ip}` with
+`trusted_proxies`, or nginx's `realip` module, instead.
+
 ### Caddy
 
 ```caddyfile
 klorn.example.com {
 	@api path /api/* /ws
-	reverse_proxy @api api:3001
+	reverse_proxy @api api:3001 {
+		# Client address for the rate limiter (drop with Cloudflare in front).
+		header_up CF-Connecting-IP {remote_host}
+	}
 	reverse_proxy web:3000
 }
 ```
@@ -278,6 +351,8 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Client address for the rate limiter (drop with Cloudflare in front).
+        proxy_set_header CF-Connecting-IP  $remote_addr;
     }
 
     # The WebSocket. Without Upgrade/Connection here the app still loads and
@@ -289,6 +364,7 @@ server {
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host       $host;
+        proxy_set_header CF-Connecting-IP $remote_addr;
         proxy_read_timeout 3600s;
     }
 
@@ -391,8 +467,11 @@ delivery, configure Google Pub/Sub push:
 2. Create a **push subscription** targeting
    `https://<your-api>/api/gmail/push`, with authentication enabled
    (service-account OIDC) — set `GMAIL_PUSH_OIDC_EMAIL` to that service
-   account. (Fallback: a shared secret via `GMAIL_PUSH_TOKEN`, sent as
-   `Authorization: Bearer`.)
+   account. Give the subscription an explicit **Audience** (for example the
+   push URL itself) and set `GMAIL_PUSH_OIDC_AUDIENCE` to the same value: the
+   API refuses every OIDC push while the audience is unset
+   (`packages/api/src/routes/gmail-push.ts`). (Fallback: a shared secret via
+   `GMAIL_PUSH_TOKEN`, sent as `Authorization: Bearer`.)
 3. Set `GMAIL_PUBSUB_TOPIC=projects/<project>/topics/<topic>` on the API.
    Watch registration and renewal are automatic
    (`packages/api/src/mail/gmail.ts`).
