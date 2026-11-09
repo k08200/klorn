@@ -150,6 +150,8 @@ type SendInbox =
  * value must be the id of a LinkedInboxAccount the CALLER owns: the row is read
  * by id AND userId, so another user's id is not_found — never a silent fall back
  * to the primary inbox, which would send from an account the user did not pick.
+ * On a reply that names no account, the value is the answered mail's own inbox
+ * (sendAccountValue), checked the same way.
  */
 async function resolveSendInbox(userId: string, value: unknown): Promise<SendInbox> {
   if (value === undefined || value === null || value === "primary") return { kind: "primary" };
@@ -199,6 +201,23 @@ async function resolveAnsweredEmail(userId: string, value: unknown): Promise<Ans
   return email ? { kind: "found", email } : { kind: "not_found" };
 }
 
+/**
+ * The account value a POST /send resolves (resolveSendInbox). An account the
+ * caller names — a linked inbox id or "primary" — is their choice and wins. None
+ * named (absent or null) on a reply: the inbox the answered mail arrived in, the
+ * account POST /:id/reply sends from, so the reply leaves from the address it was
+ * written to (the web AI-draft panel names none). That id then passes the same
+ * caller-scoped check as a named one: a tag for an inbox the caller no longer
+ * owns (unlinked; the tag has no FK) is not_found, never a silent primary send.
+ * Neither a reply nor an account named: the primary inbox, as before.
+ */
+function sendAccountValue(named: unknown, original: AnsweredEmail | null): unknown {
+  return named ?? original?.linkedInboxAccountId ?? null;
+}
+
+/** The 404 when the account was derived from the answered mail and is gone. */
+const ANSWERED_INBOX_UNLINKED_MESSAGE = "The inbox this email arrived in is no longer connected.";
+
 export async function registerEmailMutationsRoutes(app: FastifyInstance) {
   // Multipart parser for the compose route's file uploads. Scoped to this
   // plugin's encapsulation context, so JSON routes elsewhere are untouched.
@@ -232,8 +251,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         subject: string;
         body: string;
         // Optional: the LinkedInboxAccount to send from (multi-inbox rule —
-        // every mail action threads the account id end to end). Absent / null /
-        // "primary" = the primary inbox, as before.
+        // every mail action threads the account id end to end). "primary" = the
+        // primary inbox. Absent / null = the primary inbox, as before — or, on a
+        // reply (inReplyToEmailId), the inbox the answered mail arrived in.
         linkedInboxAccountId?: unknown;
         // Optional: the caller's own EmailMessage this message answers (the web
         // AI-draft reply). Absent / null = a new message, as before.
@@ -244,15 +264,6 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Missing required fields: to, subject, body" });
       }
 
-      const inbox = await resolveSendInbox(uid, linkedInboxAccountId);
-      if (inbox.kind === "invalid") {
-        return reply.code(400).send({ error: "linkedInboxAccountId must be a linked inbox id." });
-      }
-      if (inbox.kind === "not_found") {
-        return reply.code(404).send({ error: "Linked inbox not found" });
-      }
-      const linkedId = inbox.kind === "linked" ? inbox.id : null;
-
       const answered = await resolveAnsweredEmail(uid, inReplyToEmailId);
       if (answered.kind === "invalid") {
         return reply.code(400).send({ error: "inReplyToEmailId must be an email id." });
@@ -261,6 +272,22 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: "Email not found" });
       }
       const original = answered.kind === "found" ? answered.email : null;
+
+      // The caller's named account, or on a reply that names none, the answered
+      // mail's own inbox (sendAccountValue) — checked as the caller's either way.
+      const accountValue = sendAccountValue(linkedInboxAccountId, original);
+      const inbox = await resolveSendInbox(uid, accountValue);
+      if (inbox.kind === "invalid") {
+        return reply.code(400).send({ error: "linkedInboxAccountId must be a linked inbox id." });
+      }
+      if (inbox.kind === "not_found") {
+        // A derived account is not_found only when the mail's inbox was unlinked.
+        const derived = accountValue !== linkedInboxAccountId;
+        return reply
+          .code(404)
+          .send({ error: derived ? ANSWERED_INBOX_UNLINKED_MESSAGE : "Linked inbox not found" });
+      }
+      const linkedId = inbox.kind === "linked" ? inbox.id : null;
 
       // A soft error from sendEmail (bad address, no-reply, Gmail not connected)
       // must be a 4xx, not a 200 with an { error } body — otherwise callers that
@@ -274,9 +301,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
 
       // A reply threads into the original as POST /:id/reply does — but only when
       // the original lives on the account this message leaves from: its thread id
-      // and headers belong to that account, and the sending account stays the
-      // caller's choice (never switched here). Recipient, subject and body are the
-      // confirmed bytes either way.
+      // and headers belong to that account. With no account named that is always
+      // so; an account the caller named is never switched here. Recipient, subject
+      // and body are the confirmed bytes either way.
       const threading: ReplyThreading | null =
         original && (original.linkedInboxAccountId ?? null) === linkedId
           ? await resolveReplyThreading(actions, uid, original)

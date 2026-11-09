@@ -12,6 +12,12 @@
  *     In-Reply-To, References, as /:id/reply does) when the original lives on the
  *     account the mail leaves from; then the chip, REPLIED and SentMessage
  *     (origin "user", the original's thread) are recorded;
+ *   - no account named (the web panel names none): the reply leaves from the
+ *     inbox the answered mail arrived in, as /:id/reply does — a mail in a linked
+ *     inbox is answered from that linked address, not the primary one; that
+ *     account passes the same ownership check as a named one;
+ *   - an account named (an id or "primary"): the caller's choice wins; a linked
+ *     inbox that is not the caller's is 404 before anything is sent;
  *   - an id that is not the caller's: 404 before anything is sent or stamped;
  *   - a value that is not an id: 400, no lookup;
  *   - absent: the exact /send it always was, nothing stamped;
@@ -35,6 +41,30 @@ const ROWS: EmailRow[] = [
   { id: "e1", userId: "user-1", gmailId: "g1", threadId: "t1", linkedInboxAccountId: null },
   { id: "e-li", userId: "user-1", gmailId: "g-li", threadId: "t-li", linkedInboxAccountId: "li-1" },
   { id: "e2", userId: "user-2", gmailId: "g2", threadId: "t2", linkedInboxAccountId: null },
+  // Tagged with a linked inbox the user has since unlinked (the tag has no FK).
+  {
+    id: "e-stale",
+    userId: "user-1",
+    gmailId: "g-stale",
+    threadId: "t-stale",
+    linkedInboxAccountId: "li-gone",
+  },
+  // In a linked mailbox whose provider cannot send from Klorn.
+  {
+    id: "e-naver",
+    userId: "user-1",
+    gmailId: "g-naver",
+    threadId: "t-naver",
+    linkedInboxAccountId: "li-naver",
+  },
+];
+
+/** Linked inboxes: user-1 owns li-1 and li-2; li-x is user-2's. */
+const LINKED = [
+  { id: "li-1", userId: "user-1", provider: "GOOGLE" },
+  { id: "li-2", userId: "user-1", provider: "GOOGLE" },
+  { id: "li-x", userId: "user-2", provider: "GOOGLE" },
+  { id: "li-naver", userId: "user-1", provider: "NAVER" },
 ];
 
 interface EmailWhere {
@@ -139,11 +169,10 @@ beforeEach(() => {
   db.emailFindFirst.mockImplementation(
     async (args: { where: EmailWhere }) => ROWS.find((row) => matches(row, args.where)) ?? null,
   );
-  db.linkedFindFirst.mockImplementation(async (args: { where: { id: string; userId: string } }) =>
-    args.where.id === "li-1" && args.where.userId === "user-1"
-      ? { id: "li-1", provider: "GOOGLE" }
-      : null,
-  );
+  db.linkedFindFirst.mockImplementation(async (args: { where: { id: string; userId: string } }) => {
+    const row = LINKED.find((l) => l.id === args.where.id && l.userId === args.where.userId);
+    return row ? { id: row.id, provider: row.provider } : null;
+  });
   gmail.sendEmail.mockResolvedValue({ success: true, messageId: "sent-1", threadId: "t-new" });
   gmail.getReplyHeaders.mockResolvedValue({
     messageId: "<orig@corp.com>",
@@ -229,9 +258,90 @@ describe("an AI-draft send that names the caller's own mail", () => {
     ]);
   });
 
-  it("a reply leaving from another account than the original's is not re-routed or threaded, but is recorded", async () => {
-    // The original is in linked inbox li-1; the client sends from the primary inbox.
-    const res = await send({ ...DRAFT, inReplyToEmailId: "e-li" });
+  it("a primary-inbox mail with no account named leaves from the primary inbox, as before", async () => {
+    const res = await send({ ...DRAFT, inReplyToEmailId: "e1" });
+    expect(res.statusCode).toBe(200);
+    // No linked inbox is looked up or named: the exact primary send, threaded.
+    expect(db.linkedFindFirst).not.toHaveBeenCalled();
+    expect(gmail.sendEmail.mock.calls[0][5]).not.toHaveProperty("linkedInboxAccountId");
+    expect(db.sentUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ threadId: "t-new", inbox: "primary", origin: "user" }),
+      }),
+    );
+  });
+});
+
+describe("a reply to mail in a linked inbox that names no account (the web AI draft)", () => {
+  it.each([
+    ["absent", {}],
+    ["null", { linkedInboxAccountId: null }],
+  ])("account %s → leaves from the inbox the mail arrived in, threaded there", async (_label, extra) => {
+    const res = await send({ ...DRAFT, ...extra, inReplyToEmailId: "e-li" });
+    expect(res.statusCode).toBe(200);
+    // The derived account passes the same ownership check a named one does.
+    expect(db.linkedFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "li-1", userId: "user-1" } }),
+    );
+    expect(gmail.getReplyHeaders).toHaveBeenCalledWith("user-1", "g-li", "li-1");
+    // The confirmed bytes, from the linked account, threaded into the original.
+    expect(gmail.sendEmail).toHaveBeenCalledTimes(1);
+    expect(gmail.sendEmail.mock.calls[0]).toEqual([
+      "user-1",
+      "Carol <carol@example.com>",
+      "Different subject",
+      "Sure, 3pm.",
+      [],
+      {
+        threadId: "t-li",
+        inReplyTo: "<orig@corp.com>",
+        references: "<a@corp.com> <orig@corp.com>",
+        linkedInboxAccountId: "li-1",
+      },
+    ]);
+    expect(db.labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      { ...STAMP_E1, where: { ...STAMP_E1.where, sourceId: "e-li" } },
+    ]);
+    expect(db.sentUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ threadId: "t-new", inbox: "li-1", origin: "user" }),
+      }),
+    );
+  });
+
+  it("a mail whose inbox the caller no longer owns (unlinked) is 404: never sent from another account", async () => {
+    const res = await send({ ...DRAFT, inReplyToEmailId: "e-stale" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({
+      error: "The inbox this email arrived in is no longer connected.",
+    });
+    expect(db.linkedFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "li-gone", userId: "user-1" } }),
+    );
+    expect(gmail.getReplyHeaders).not.toHaveBeenCalled();
+    expect(gmail.sendEmail).not.toHaveBeenCalled();
+    expect(db.emailUpdateMany).not.toHaveBeenCalled();
+    expect(db.labelUpdateMany).not.toHaveBeenCalled();
+    expect(db.sentUpsert).not.toHaveBeenCalled();
+  });
+
+  it("a mail in a linked mailbox that cannot send from Klorn is 501: never a primary send", async () => {
+    const res = await send({ ...DRAFT, inReplyToEmailId: "e-naver" });
+    expect(res.statusCode).toBe(501);
+    expect(res.json()).toMatchObject({
+      error: expect.stringContaining("does not support sending"),
+    });
+    expect(gmail.sendEmail).not.toHaveBeenCalled();
+    expect(db.emailUpdateMany).not.toHaveBeenCalled();
+    expect(db.labelUpdateMany).not.toHaveBeenCalled();
+    expect(db.sentUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("an account the caller names wins over the mail's inbox", () => {
+  it('"primary" → leaves from the primary inbox, not threaded, but recorded', async () => {
+    // The original is in linked inbox li-1; the caller explicitly picks the primary inbox.
+    const res = await send({ ...DRAFT, linkedInboxAccountId: "primary", inReplyToEmailId: "e-li" });
     expect(res.statusCode).toBe(200);
     // The account the caller chose and the exact bytes, as /send always sent them.
     expect(gmail.sendEmail.mock.calls[0]).toEqual([
@@ -255,6 +365,40 @@ describe("an AI-draft send that names the caller's own mail", () => {
         create: expect.objectContaining({ threadId: "t-new", inbox: "primary", origin: "user" }),
       }),
     );
+  });
+
+  it("another of the caller's linked inboxes → leaves from it, not threaded", async () => {
+    const res = await send({ ...DRAFT, linkedInboxAccountId: "li-2", inReplyToEmailId: "e-li" });
+    expect(res.statusCode).toBe(200);
+    expect(gmail.getReplyHeaders).not.toHaveBeenCalled();
+    expect(gmail.sendEmail.mock.calls[0][5]).toEqual({ linkedInboxAccountId: "li-2" });
+    expect(db.sentUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ threadId: "t-new", inbox: "li-2", origin: "user" }),
+      }),
+    );
+  });
+
+  it("a named account that is not an id is 400 on a reply too, with no send", async () => {
+    const res = await send({ ...DRAFT, linkedInboxAccountId: 42, inReplyToEmailId: "e-li" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "linkedInboxAccountId must be a linked inbox id." });
+    expect(gmail.getReplyHeaders).not.toHaveBeenCalled();
+    expect(gmail.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("another user's linked inbox is 404 and nothing is sent, threaded or stamped", async () => {
+    const res = await send({ ...DRAFT, linkedInboxAccountId: "li-x", inReplyToEmailId: "e-li" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Linked inbox not found" });
+    expect(db.linkedFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "li-x", userId: "user-1" } }),
+    );
+    expect(gmail.getReplyHeaders).not.toHaveBeenCalled();
+    expect(gmail.sendEmail).not.toHaveBeenCalled();
+    expect(db.emailUpdateMany).not.toHaveBeenCalled();
+    expect(db.labelUpdateMany).not.toHaveBeenCalled();
+    expect(db.sentUpsert).not.toHaveBeenCalled();
   });
 });
 

@@ -4,7 +4,9 @@
  * exactly the bytes they confirmed — not POST /:id/reply, which derives both
  * itself. `inReplyToEmailId` names the mail being answered so the API records
  * the reply the way /:id/reply does: the reply chip, REPLIED on the decision
- * ledger, the thread. The API checks the id is the caller's own mail.
+ * ledger, the thread. The API checks the id is the caller's own mail. No account
+ * is named: the API sends from the inbox that mail arrived in (a linked inbox's
+ * mail is answered from that address, as POST /:id/reply does).
  *
  * The pure half — no React, no DOM — so the api vitest suite pins it
  * (packages/api/src/__tests__/web-reply-draft-send.test.ts).
