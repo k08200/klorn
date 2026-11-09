@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_SKILL_VARIABLE_LENGTH, renderSkillTemplate } from "../agentcore/skill-render.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 describe("renderSkillTemplate", () => {
   it("substitutes {{key}} placeholders with their values", () => {
@@ -25,11 +26,10 @@ describe("renderSkillTemplate", () => {
   it("does not catastrophically backtrack on a hostile key + long input (ReDoS regression)", () => {
     // The old `new RegExp('\\{\\{' + key + '\\}\\}')` blocked the event loop for
     // seconds-to-hours on this exact input; split/join is linear. A generous
-    // 500ms budget that the vulnerable version blew past by orders of magnitude.
+    // 500ms budget (CPU time) that the vulnerable version blew past by orders of
+    // magnitude.
     const template = "{{".concat("a".repeat(50), "!");
-    const start = Date.now();
-    renderSkillTemplate(template, { "(a+)+": "Z" });
-    expect(Date.now() - start).toBeLessThan(500);
+    expect(fastestCpuMs(() => renderSkillTemplate(template, { "(a+)+": "Z" }))).toBeLessThan(500);
   });
 
   it("stringifies non-string values from an untyped JSON body", () => {

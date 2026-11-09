@@ -130,6 +130,7 @@
 "prefs.section.support" = "アプリとサポート";
 "push.announce" = "新しいPUSHメール：%d件";
 "push.announce.meeting" = "新しいMEETINGメール：%d件";
+"push.heldSummary.title" = "通知しない時間中に緊急メール%d件";
 "prefs.launchAtLogin" = "ログイン時にKlornを起動";
 "prefs.launchAtLogin.unavailable.label" = "ログイン時に起動";
 "prefs.launchAtLogin.unavailable.value" = "パッケージ版のみ";

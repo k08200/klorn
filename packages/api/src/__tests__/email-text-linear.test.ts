@@ -5,6 +5,7 @@ import {
   htmlToPlainText,
   trimBlanksBeforeNewlines,
 } from "../mail/email-text.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 // Two regexes in this module backtracked quadratically on sender-controlled
 // text, on the single API event loop (measured 2026-10-16):
@@ -79,13 +80,8 @@ function randomText(next: () => number, maxParts: number): string {
   return out;
 }
 
+/** In CPU time (helpers/linear-timing.ts): a busy machine's waits are not billed. */
 const BUDGET_MS = 300;
-
-function timed<T>(fn: () => T): { value: T; ms: number } {
-  const start = performance.now();
-  const value = fn();
-  return { value, ms: performance.now() - start };
-}
 
 describe("raw-HTML detection is linear and matches the old regex", () => {
   it("counts exactly what the old regex counted (5,000 seeded random inputs)", () => {
@@ -153,8 +149,7 @@ describe("raw-HTML detection is linear and matches the old regex", () => {
       "<a ".repeat(330_000),
       `${"<div ".repeat(200_000)}>`,
     ]) {
-      const { ms } = timed(() => coercePlainBody(hostile, null));
-      expect(ms).toBeLessThan(BUDGET_MS);
+      expect(fastestCpuMs(() => coercePlainBody(hostile, null))).toBeLessThan(BUDGET_MS);
     }
   });
 });
@@ -170,8 +165,7 @@ describe("htmlToPlainText's whitespace tidy is linear and matches the old regex"
 
   it("projects a hostile HTML body within budget", () => {
     const hostile = `<p>${" ".repeat(400_000)}x</p>`;
-    const { value, ms } = timed(() => htmlToPlainText(hostile));
-    expect(value).toBe("x");
+    const ms = fastestCpuMs(() => expect(htmlToPlainText(hostile)).toBe("x"));
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 });

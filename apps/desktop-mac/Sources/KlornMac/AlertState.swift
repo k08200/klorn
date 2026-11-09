@@ -14,7 +14,8 @@ struct AlertStateWire: Decodable, Sendable, Equatable {
     struct Gate: Decodable, Sendable, Equatable {
         let allowed: Bool
         /// Why a banner is held: "user_preferences", "quiet_hours" or
-        /// "focus_window". For the log only; the Mac never branches on it.
+        /// "focus_window". Logged; "quiet_hours" also decides that held PUSH
+        /// mail waits for the catch-up (`ServerAlertGate.verdict`).
         let reason: String?
     }
 
@@ -32,10 +33,12 @@ struct AlertStateWire: Decodable, Sendable, Equatable {
 
 /// Whether the server lets a banner of `kind` post now. Pure.
 ///
-/// - Held (`allowed: false`): the banner is not posted and is dropped — the
-///   ledger records it as seen, so it is not posted later when quiet hours
-///   end. That matches Web Push, which skips the ring and keeps the bell row;
-///   the mail stays in its lane in the main window.
+/// - Held (`allowed: false`): the banner is not posted. PUSH mail held for
+///   quiet hours waits and comes back as one catch-up once banners are
+///   allowed again, as on Windows (decision N6; `HeldBanners`). Anything else
+///   held — MEETING-lane mail, a meeting-soon banner, or any hold for another
+///   reason (the category turned off) — is dropped: the ledger records it as
+///   seen, and the mail stays in its lane in the main window.
 /// - No verdict (`state == nil` after a network or server error, a timeout,
 ///   or an older server): the banner posts. Fail-open on purpose: a missed
 ///   urgent mail is worse than a banner during quiet hours.
@@ -57,10 +60,30 @@ enum ServerAlertGate {
         return gate.reason.flatMap { known.contains($0) ? $0 : nil } ?? "other"
     }
 
+    /// The verdict for `kind`, as the quiet-hours catch-up (`HeldBanners`)
+    /// needs it. Pure.
+    static func verdict(_ kind: InterruptKind, state: AlertStateWire?) -> AlertVerdict {
+        guard let gate = gate(kind, state: state) else { return .unknown }
+        if gate.allowed { return .allowed }
+        return gate.reason == "quiet_hours" ? .quietHours : .refused  // wire-value
+    }
+
     private static func gate(_ kind: InterruptKind, state: AlertStateWire?) -> AlertStateWire.Gate? {
         switch kind {
         case .emailUrgent: state?.alerts?.push
         case .meeting: state?.alerts?.meeting
         }
     }
+}
+
+/// The server's answer for one banner kind, as the catch-up needs it.
+enum AlertVerdict: Equatable, Sendable {
+    case allowed
+    /// Held for quiet hours: PUSH mail waits for the catch-up.
+    case quietHours
+    /// Held for any other reason (the category turned off): dropped.
+    case refused
+    /// No answer (network or server error, a timeout, an older server): new
+    /// mail posts (fail-open); held mail waits for a real answer.
+    case unknown
 }

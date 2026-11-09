@@ -130,6 +130,7 @@
 "prefs.section.support" = "APP & SUPPORT";
 "push.announce" = "New PUSH mail: %d";
 "push.announce.meeting" = "New MEETING mail: %d";
+"push.heldSummary.title" = "%d urgent emails during quiet hours";
 "prefs.launchAtLogin" = "Start Klorn at login";
 "prefs.launchAtLogin.unavailable.label" = "Start at login";
 "prefs.launchAtLogin.unavailable.value" = "Packaged app only";

@@ -8,6 +8,7 @@ import {
   renderableEmailHtml,
 } from "../mail/email-text.js";
 import { senderName } from "../notify/notification-format.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 // Event-loop stalls from one email, found by the 2026-10-16 security review:
 //   - sanitize-html (htmlparser2 keeps open tags with stack.unshift) is
@@ -18,14 +19,10 @@ import { senderName } from "../notify/notification-format.js";
 // Production on 2026-10-16: the most '<' in any stored HTML body is 5,780
 // (p99.9 4,156) and the longest From is 115 characters.
 
-// Generous for slow CI runners: before the fix these took 7-40 s.
+// Generous for slow CI runners: before the fix these took 7-40 s. Timed in CPU
+// time (helpers/linear-timing.ts), so waiting for a core on a busy runner is not
+// billed to the code under test.
 const BUDGET_MS = 1000;
-
-function timed(fn: () => unknown): number {
-  const start = performance.now();
-  fn();
-  return performance.now() - start;
-}
 
 describe("sanitize-html input is bounded by tag count", () => {
   it("leaves HTML with fewer tags than the bound untouched", () => {
@@ -48,12 +45,12 @@ describe("sanitize-html input is bounded by tag count", () => {
 
   it("projects deeply nested HTML to text within budget", () => {
     const hostile = `${"<b>".repeat(166_000)}end`;
-    expect(timed(() => htmlToPlainText(hostile))).toBeLessThan(BUDGET_MS);
+    expect(fastestCpuMs(() => htmlToPlainText(hostile))).toBeLessThan(BUDGET_MS);
   });
 
   it("renders deeply nested HTML within budget", () => {
     const hostile = `${"<b>".repeat(166_000)}end`;
-    expect(timed(() => renderableEmailHtml(hostile))).toBeLessThan(BUDGET_MS);
+    expect(fastestCpuMs(() => renderableEmailHtml(hostile))).toBeLessThan(BUDGET_MS);
   });
 });
 
@@ -68,13 +65,13 @@ describe("From values are bounded before any regex reads them", () => {
 
   it("names a sender within budget for a hostile display name", () => {
     const hostile = `a${" ".repeat(200_000)}b`;
-    expect(timed(() => senderName(hostile))).toBeLessThan(BUDGET_MS);
+    expect(fastestCpuMs(() => senderName(hostile))).toBeLessThan(BUDGET_MS);
     expect(senderName("Kim Jiwoo <k@example.com>")).toBe("Kim Jiwoo");
   });
 
   it("classifies a hostile sender within budget", () => {
     const hostile = ".ship".repeat(100_000);
-    expect(timed(() => isTransactionalSender(hostile))).toBeLessThan(BUDGET_MS);
+    expect(fastestCpuMs(() => isTransactionalSender(hostile))).toBeLessThan(BUDGET_MS);
     // Unchanged meaning: it reads the address's local-part role.
     expect(isTransactionalSender("ship-confirm@shop.example")).toBe(true);
     expect(isTransactionalSender("shipley@example.com")).toBe(false);
@@ -87,7 +84,7 @@ describe("From values are bounded before any regex reads them", () => {
       "-order".repeat(16_000),
       `x${".ship".repeat(20_000)}@`,
     ]) {
-      expect(timed(() => isAutomatedSender(hostile))).toBeLessThan(BUDGET_MS);
+      expect(fastestCpuMs(() => isAutomatedSender(hostile))).toBeLessThan(BUDGET_MS);
     }
     expect(isAutomatedSender("Shop <ship-confirm@shop.example>")).toBe(true);
     expect(isAutomatedSender("No Reply <no-reply@service.example>")).toBe(true);

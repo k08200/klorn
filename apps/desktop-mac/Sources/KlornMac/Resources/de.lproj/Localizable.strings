@@ -130,6 +130,7 @@
 "prefs.section.support" = "APP & SUPPORT";
 "push.announce" = "Neue PUSH-Mail: %d";
 "push.announce.meeting" = "Neue MEETING-Mail: %d";
+"push.heldSummary.title" = "%d dringende E-Mails während der Ruhezeiten";
 "prefs.launchAtLogin" = "Klorn beim Anmelden starten";
 "prefs.launchAtLogin.unavailable.label" = "Beim Anmelden starten";
 "prefs.launchAtLogin.unavailable.value" = "Nur in der gepackten App";

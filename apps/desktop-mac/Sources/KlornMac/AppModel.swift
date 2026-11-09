@@ -24,9 +24,20 @@ final class AppModel {
     private(set) var isLoadingQueue = false
 
     /// Called with newly-arrived PUSH and MEETING mail (never the first-sync
-    /// baseline), after the server's alert gate allowed it.
+    /// baseline), after the server's alert gate allowed it — and with a lone
+    /// PUSH mail held during quiet hours, once they end (`HeldBanners`).
     /// The AppDelegate wires this to `PushAlerter`; if unset, it is a no-op.
     var onNewPush: (([FirewallItem]) -> Void)?
+    /// Called with two or more PUSH mails held during quiet hours, newest
+    /// first, once the server allows banners again (`HeldBanners`): ONE
+    /// summary banner. A lone held mail goes to `onNewPush` instead.
+    var onHeldSummary: (([FirewallItem]) -> Void)?
+    /// "Now" for mail banners: the catch-up's 72 h window and its ask-again
+    /// wait. A seam so the self-check runs on a fixed clock.
+    @ObservationIgnored var bannerClock: () -> Date = { Date() }
+    /// Until when held mail alone does not ask the server again, after it
+    /// answered "quiet hours" (`HeldBanners.askAgainSeconds`). Per process.
+    @ObservationIgnored private var heldAskAgainAt = Date.distantPast
 
     /// User preferences (persisted). Observed by the Preferences panel and read
     /// by the controller before posting an OS banner.
@@ -2350,6 +2361,7 @@ final class AppModel {
         realtime?.stop()
         realtime = nil
         pushLedgerStore.clear()
+        heldAskAgainAt = .distantPast
         dismissed = []
         clearSelection()
         didRequestNotifyAuth = false
@@ -2875,31 +2887,57 @@ final class AppModel {
     /// Routed to `onNewPush`, which the AppDelegate wires to `PushAlerter`.
     ///
     /// The ledger is saved BEFORE the server's gate is read, so a concurrent
-    /// tick (poll and a retry or WS wake) never announces the same mail twice,
-    /// and a banner the gate holds is dropped rather than posted when quiet
-    /// hours end — as Web Push drops it. A held sync also skips the VoiceOver
-    /// announcement: in quiet hours that is an interrupt too, the same as with
-    /// the category off. Mail recorded by a session that ended during the wait
-    /// is not announced (sign-out clears the ledger anyway). Server-side,
-    /// MEETING mail rings under the same "email_urgent" category as PUSH
-    /// (judge/firewall-push.ts), so both follow "Urgent email" here too.
+    /// tick (poll and a retry or WS wake) never announces the same mail twice.
+    /// What the gate's answer does (`ServerAlertGate.verdict`, `HeldBanners`):
+    /// - quiet hours: nothing posts; new PUSH mail is held in the ledger and
+    ///   comes back as one catch-up on the first allowed pass — its own banner
+    ///   when one mail waits, else ONE summary (`onHeldSummary`) — as the
+    ///   Windows shell does (decision N6). MEETING-lane mail is dropped, as
+    ///   there. No VoiceOver announcement either: in quiet hours that is an
+    ///   interrupt too;
+    /// - any other hold (the category off on the server, or "Urgent email"
+    ///   off on this Mac): dropped, held mail included;
+    /// - no answer: new mail posts (fail-open); held mail waits.
+    /// Held mail opened meanwhile, gone from the PUSH lane or older than 72 h
+    /// leaves the held list on every pass. Mail recorded by a session that
+    /// ended during the wait is not announced (sign-out clears the ledger
+    /// anyway). Server-side, MEETING mail rings under the same "email_urgent"
+    /// category as PUSH (judge/firewall-push.ts), so both follow "Urgent
+    /// email" here too.
     private func reconcileBanners(_ mail: BannerMail, session: Int) async {
         let owner = SessionIdentity.userId(fromToken: tokenStore.load())
+        let now = bannerClock()
         let ledger = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
         let plan = ledger.plan(pushItems: mail.push, meetingItems: mail.meeting)
-        if plan.next != ledger { pushLedgerStore.save(plan.next) }
+        // Parsed only when something is held or new (most polls: neither).
+        let eligible = ledger.heldIDs.isEmpty && plan.unseenPush.isEmpty
+            ? [] : HeldBanners.eligible(mail.push, opened: openedEmailIds, now: now)
+        let planned = plan.next.keepingHeld(Set(eligible.map(\.id)))
+        if planned != ledger { pushLedgerStore.save(planned) }
+        let catchUpDue = !planned.heldIDs.isEmpty && now >= heldAskAgainAt
+        guard !plan.toNotify.isEmpty || catchUpDue else { return }
         // Respect the user's "Urgent mail" category. Seen-tracking still runs on
         // the muted path so re-enabling the category doesn't dump a backlog of
         // interrupts for mail that arrived while it was off.
-        guard !plan.toNotify.isEmpty, automation.allowsInterrupt(for: .emailUrgent) else { return }
-        let state = await serverAlertState()
-        guard isCurrent(session) else { return }
-        guard ServerAlertGate.allows(.emailUrgent, state: state) else {
-            let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) ?? "other"
-            Log.app.info("mail banners held by the server: \(reason, privacy: .public)")
+        guard automation.allowsInterrupt(for: .emailUrgent) else {
+            if !planned.heldIDs.isEmpty { pushLedgerStore.save(planned.clearingHeld()) }
             return
         }
-        onNewPush?(plan.toNotify)
+        let state = await serverAlertState()
+        guard isCurrent(session) else { return }
+        let verdict = ServerAlertGate.verdict(.emailUrgent, state: state)
+        // Re-read: another tick may have held or caught up mail during the wait.
+        let current = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
+        let outcome = HeldBanners.resolve(
+            verdict: verdict, ledger: current,
+            fresh: plan.toNotify, unseenPush: plan.unseenPush, eligible: eligible)
+        if outcome.next != current { pushLedgerStore.save(outcome.next) }
+        if verdict == .quietHours { heldAskAgainAt = now.addingTimeInterval(HeldBanners.askAgainSeconds) }
+        if let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) {
+            Log.app.info("mail banners held by the server: \(reason, privacy: .public)")
+        }
+        if !outcome.summary.isEmpty { onHeldSummary?(outcome.summary) }
+        if !outcome.post.isEmpty { onNewPush?(outcome.post) }
     }
 
     /// The PUSH and MEETING lanes across every inbox, for banners

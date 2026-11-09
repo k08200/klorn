@@ -153,6 +153,10 @@ final class WindowRouter {
             // The calendar shows the day's events with their join links.
             openMainWindow()
             model.navigate(to: .calendar)
+        case .openToday:
+            // The quiet-hours summary: Today lists the urgent mail it counts.
+            openMainWindow()
+            model.navigate(to: .today)
         }
     }
 

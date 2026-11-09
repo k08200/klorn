@@ -164,6 +164,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let alerter = PushAlerter(model: model)
         self.alerter = alerter
         model.onNewPush = { [weak alerter] items in alerter?.handleNewPush(items) }
+        // Urgent mail held during quiet hours comes back as one summary.
+        model.onHeldSummary = { [weak alerter] items in alerter?.handleHeldSummary(items) }
         // A meeting entering its lead window is a banner too (the floating
         // meeting card was removed, 2026-10-15: no floating Klorn surfaces).
         model.onMeetingSoon = { [weak alerter] event in alerter?.handleMeetingSoon(event) ?? false }
