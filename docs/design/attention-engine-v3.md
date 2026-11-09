@@ -78,7 +78,7 @@ Code: `packages/api/src/judge/v3/` (`facts-schema.ts` is the canonical type and 
   - no zone given → the sent time's offset (else the user's timezone).
 - **Date validity.** ISO-8601 with an explicit offset only; a date more than 60 days before or 400 days after the mail is dropped as a misreading.
 - **The Date header is mail-controlled.** Only its parsed value (a local time with offset, and only when it is within 2 days of receipt) reaches the prompt, never its text. RFC 5322 allows comments in it.
-- **Invites.** Only an attached calendar file (text/calendar, `.ics`) sets `event.hasInvite`. Mail text cannot: an "Invitation: … @ …" subject, or the model reading one, is attacker-writable. `event.conflict` is null until the calendar read lands.
+- **Invites.** Only an attached calendar file (text/calendar, `.ics`) sets `event.hasInvite`. Mail text cannot: an "Invitation: … @ …" subject, or the model reading one, is attacker-writable. `hasInvite` does not gate MEETING, though: the model's reading of the text still makes an event, and an event not sent in bulk is MEETING (§3(5), rule 2). `event.conflict` is null until the calendar read lands.
 - **Spam label.** It fixes no fact field, because Gmail misfiles real mail and SPAM_INTAKE exists to rescue it. It travels as the header signal `spam`, and policy keeps spam out of PUSH and MEETING.
 - **Header signals.** The detector results (list mail, automated sender, spam, Gmail category, calendar file, recipient counts and position) are stored with the facts. They are booleans and counts, never mail text, and replay can read them.
 - **What the model sees.** Mail fields are wrapped as untrusted. Invisible format characters (zero-width, bidi, Unicode tag characters) are dropped first. Recipients go as counts, never third-party addresses.
@@ -228,14 +228,16 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
     - a genuine brand mail that carries attacker text.
 
     The model's `phishing_suspect` is the defence there. Measured on 2026-11-08 with `scripts/v3-phishing-eval.ts` on `eval/phishing-eval-set.json`: 45 synthetic mails, 30 phishing and 15 genuine look-alikes, all addressed to the user. It runs the production extractor with the To header. List headers and calendar parts are absent.
-    - Haiku 5.5, 3 runs:
-      - `phishing_suspect` was set on 84 of 90 phishing judgements (93.3%) and on 0 of 90 genuine ones.
-      - No flagged mail reached PUSH or MEETING. That includes a prompt injection, a thread hijack and a genuine service carrying attacker text.
-    - Both misses, in all 3 runs, are mails with no sign of spoofing:
+    - Haiku 5.5, 3 runs (every answer served by `claude-haiku-5-5`, no item without facts):
+      - It flagged the same 28 of 30 phishing mails in every run (84 of 90 judgements) and none of the 15 genuine ones (0 of 45).
+      - The flagged mails include a prompt injection, a thread hijack and a genuine service carrying attacker text.
+      - That no flagged mail reached PUSH or MEETING holds by construction: the policy vetoes on the flag. Only the flag rate is measured.
+    - The extractor runs at temperature 0, so the unit is the mail, not the run. The set is synthetic and small, and phish-026 to 030 were added after Haiku flagged all of 001 to 025. Read it as a floor test, not a real-world recall estimate.
+    - Both misses are mails with no sign of spoofing:
       - phish-028, an overdue invoice to "settle today" from the attacker's own clean domain, PUSHes through the due-soon ask;
       - phish-029, a call invite with a malicious join link, rings as MEETING.
       - A DMARC pass changes neither, because the ask and event paths do not read it.
-    - Opus 5.5, 1 run: 26 of 29 flagged, with one empty answer, and 0 of 15 genuine mails flagged.
+    - Opus 5.5, 1 run, before the script recorded the served model: 26 of 29 flagged, with one empty answer (26 of 30 if that mail counts as missed), and 0 of 15 genuine mails flagged.
       - It also missed phish-018, a fake "payment declined".
       - That mail PUSHes through the ask path, or through trusted risk when the sender is a known correspondent.
     - Not measured: v2 on this set. An urgent pay request from a person likely PUSHes under v2 as well.
@@ -455,7 +457,7 @@ It reports:
   - The Today responses are `GET /api/email?window=today` and `GET /api/inbox/firewall`. A ranked QUEUE lane page also carries `rankedAt`.
   - `used` counts the day's slot rows, hidden ones included. `queueTotal` is the QUEUE lane's count for the same inbox scope.
 - Open, and not in v3.0:
-  - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event. It shares the interrupt bucket of the per-user push rate limit (6 per 10 minutes, 20 per hour; ambient pushes count in a bucket of their own) with PUSH and meeting alerts. A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
+  - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event, and so does the model's reading of mail text (phish-029, §3(5) "Policy v3.1"). It shares the interrupt bucket of the per-user push rate limit (6 per 10 minutes, 20 per hour; ambient pushes count in a bucket of their own) with PUSH and meeting alerts. A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
   - Floods that never claim a slot (security review). A PUSH that will not ring (quiet hours, preferences) stays in the PUSH lane and spends nothing. Many urgent-looking stranger mails in quiet hours, or held overflow outside them, all list ahead of ordinary QUEUE. Ranking orders held items by importance, so a trusted sender's held alert stays above a stranger's. Since P3 PR2b a stranger's held mail does not rank first at all (ranking above). Collapsing several held mails from one sender into one Today card is left to the client surfaces.
   - In ranking, "held" means `heldAt` is set, the lane is still QUEUE, and no human or agent lane is on the item. A manual override or an agent `set_tier` leaves `heldAt` in place, so readers must check all three.
   - Widening risk-only PUSH trust beyond VIP. Now that `SentMessage.origin` exists (#1591), "the user wrote to them" can become a signal: user-origin sends only, once legacy null rows have aged out or been classified. This would be a new `policyVersion`, decided on replay data.
