@@ -871,6 +871,8 @@ export const LLM_RPM_FOREGROUND_RESERVE = intEnv("LLM_RPM_FOREGROUND_RESERVE", 3
 // instantly — a 58-email sync burst starved the judge and dropped 34 emails to
 // the keyword fallback (permanently: fallback rows are never re-judged),
 // measured on prod 2026-07-15. Waiting turns that burst into an ordered drain.
+// The clock starts at the call's turn: a user's background calls park one at a
+// time, oldest first (quota-limiter awaitUserCallSlot).
 // 0 restores the old fail-fast behavior (kill switch).
 export const LLM_BACKGROUND_RPM_MAX_WAIT_MS = intEnv("LLM_BACKGROUND_RPM_MAX_WAIT_MS", 300_000);
 
