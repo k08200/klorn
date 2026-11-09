@@ -76,13 +76,20 @@ interface Attr {
 }
 
 const MAX_CODE_POINT = 0x10ffff;
-const REPLACEMENT_CHAR = "�";
+const SURROGATE_MIN = 0xd800;
+const SURROGATE_MAX = 0xdfff;
+const REPLACEMENT_CHAR = "\ufffd";
 
-/** A numeric entity's character; out-of-range values become U+FFFD, never a throw. */
+/**
+ * A numeric entity's character. Zero, values past U+10FFFF and the surrogate
+ * range become U+FFFD, as the HTML tokenizer does for those cases: never a
+ * throw, never a lone surrogate. Same rule as the web copy
+ * (packages/web/src/lib/char-ref.ts).
+ */
 function codePointChar(code: number): string {
-  return Number.isInteger(code) && code >= 0 && code <= MAX_CODE_POINT
-    ? String.fromCodePoint(code)
-    : REPLACEMENT_CHAR;
+  if (!Number.isInteger(code) || code <= 0 || code > MAX_CODE_POINT) return REPLACEMENT_CHAR;
+  if (code >= SURROGATE_MIN && code <= SURROGATE_MAX) return REPLACEMENT_CHAR;
+  return String.fromCodePoint(code);
 }
 
 function decodeEntities(value: string): string {
