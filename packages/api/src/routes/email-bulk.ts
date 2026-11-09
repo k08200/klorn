@@ -14,6 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
+import { noteEmailOutcomes } from "../judge/user-outcome.js";
 import type { EmailPriorityValue } from "../mail/email-label-feedback.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
@@ -36,6 +37,8 @@ interface BulkEmailActionResult {
   // Success payload is the @klorn/contract wire shape; failures are an
   // `{ error }` body sent with a 4xx statusCode.
   payload: EmailBulkActionResponse | { error: string };
+  /** Rows an archive actually removed — server-side only, never sent. */
+  archivedIds?: string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -202,7 +205,7 @@ export async function archiveEmailMessages(
 async function applyBulkArchiveAction(
   userId: string,
   emails: EmailMessage[],
-): Promise<BulkEmailActionResult & { payload: EmailBulkActionResponse }> {
+): Promise<BulkEmailActionResult & { payload: EmailBulkActionResponse; archivedIds: string[] }> {
   const results = await archiveAll(userId, emails);
   const failed: Array<{ id: string; error: string }> = [];
   const archivedIds: string[] = [];
@@ -233,6 +236,7 @@ async function applyBulkArchiveAction(
       updatedCount: archivedIds.length,
       failed,
     },
+    archivedIds,
   };
 }
 
@@ -271,6 +275,10 @@ export async function registerEmailBulkRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const result = await handleBulkEmailAction(uid, (request.body as BulkEmailBody) || {});
     if (result.statusCode) return reply.code(result.statusCode).send(result.payload);
+    // Stamped here, not in the shared archive path: the Subscriptions page's
+    // sender-wide archive reuses it and is not a reaction to each mail. A bulk
+    // mark-read is not stamped either — nobody opened those mails.
+    if (result.archivedIds) noteEmailOutcomes(uid, result.archivedIds, "ARCHIVED");
     return result.payload;
   });
 }

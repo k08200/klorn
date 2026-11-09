@@ -25,6 +25,7 @@ import type {
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { archiveEmailMessages } from "./email-bulk.js";
@@ -244,6 +245,10 @@ export function emailSubscriptionsRoutes(opts: {
         // A failed unsubscribe archives nothing: the user asked for both, and
         // half of it silently done is harder to reason about than neither.
         if (!outcome.ok) return reply.code(outcome.statusCode).send({ error: outcome.error });
+        // The mail whose header did the unsubscribe, once it is done (a
+        // handed-back browser link is not). The optional sender-wide archive
+        // below is not stamped: it acts on a sender, not on each mail.
+        if (outcome.body.done) noteEmailOutcome(uid, newest.id, "UNSUBSCRIBED");
 
         const { archived, archiveFailed } = parsed.archive
           ? await archiveSenderMail(scope)
