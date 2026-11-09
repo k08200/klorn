@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "November 1, 2026";
+const updatedAt = "November 9, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -167,6 +167,14 @@ export default function PrivacyPage() {
               </li>
               <li>
                 Usage, token, error, and delivery logs needed to operate and improve the beta.
+              </li>
+              <li>
+                For each email Klorn classifies, when you first opened it or marked it read, replied
+                to it, archived or deleted it, dismissed, snoozed or starred it, or unsubscribed
+                from its sender in Klorn. Only the time of each is recorded, with no message
+                content. These times are used only to measure how well Klorn&apos;s lane choices
+                match what you do with your mail; they are stored with your account and deleted with
+                your data.
               </li>
             </ul>
           </Section>
