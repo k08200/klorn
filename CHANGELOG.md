@@ -29,6 +29,17 @@ runs `prisma migrate deploy`). An entry marked "behind a flag, off by default"
 does nothing until you set the environment variable it names.
 
 ### Breaking — self-hosters and API clients
+- **The api and web images run as a non-root user.** Both run as `klorn`
+  (uid/gid `10001`) instead of root. The app tree stays root-owned; the
+  runtime user owns only `packages/api/data`, `packages/web/.next/cache` and
+  its home directory.
+  - The stock `docker-compose.selfhost.yml` mounts no volume into `api` or
+    `web`, so it needs no change.
+  - A bind mount or named volume you added (for example for
+    `EVE_CONVERSION_STORAGE_DIR`) must be writable by uid `10001`:
+    `sudo chown -R 10001:10001 <path>`, or
+    `docker run --rm -v <volume>:/d alpine chown -R 10001:10001 /d`.
+  - The hosted service does not use these images.
 - **OpenRouter is removed; Klorn calls the Claude API by default.**
   - `OPENROUTER_API_KEY`, `FALLBACK_MODEL` and `DISABLE_FREE_MODEL_FALLBACK`
     are no longer read. Delete them.
@@ -109,6 +120,12 @@ does nothing until you set the environment variable it names.
     To serve it from another host, rebuild it after changing `WEB_URL`,
     `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL` and `GOOGLE_REDIRECT_URI` together.
 - `Dockerfile.api` applies migrations on start (#504).
+- Self-host reference fixes: `RATE_LIMIT_ALLOW_IPS` is documented (format,
+  default, scope and the effect of an over-broad range), along with keeping
+  the API port behind the reverse proxy; `GMAIL_PUSH_OIDC_AUDIENCE`, required
+  whenever `GMAIL_PUSH_OIDC_EMAIL` is set, is passed through the self-host
+  compose file; `.env.selfhost.example` and `.env.example` match what compose
+  and the code do.
 - Health and liveness checks:
   - Compose healthchecks (#1268).
   - `GET /api/health/ready` returns 503 while the database is unreachable
@@ -465,6 +482,7 @@ does nothing until you set the environment variable it names.
   - IMAP bodies were stored as raw MIME (#1468).
 
 ### Security
+- The api and web container images run as a non-root user (see Breaking).
 - Session revocation now applies to password reset and change, logout,
   WebSocket connections, and routes gated only by `getUserId()` (#549, #588,
   #614, #711).
