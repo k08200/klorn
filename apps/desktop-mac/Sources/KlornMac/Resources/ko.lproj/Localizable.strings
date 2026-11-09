@@ -130,6 +130,7 @@
 "prefs.section.support" = "앱 및 지원";
 "push.announce" = "새 PUSH 메일 %d건";
 "push.announce.meeting" = "새 MEETING 메일 %d건";
+"push.heldSummary.title" = "방해 금지 시간 동안 긴급 메일 %d건";
 "prefs.launchAtLogin" = "로그인할 때 Klorn 시작";
 "prefs.launchAtLogin.unavailable.label" = "로그인 시 시작";
 "prefs.launchAtLogin.unavailable.value" = "패키지 앱에서만 가능";

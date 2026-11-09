@@ -130,6 +130,7 @@
 "prefs.section.support" = "APP Y SOPORTE";
 "push.announce" = "Correo PUSH nuevo: %d";
 "push.announce.meeting" = "Correo MEETING nuevo: %d";
+"push.heldSummary.title" = "%d correos urgentes durante las horas de silencio";
 "prefs.launchAtLogin" = "Abrir Klorn al iniciar sesión";
 "prefs.launchAtLogin.unavailable.label" = "Abrir al iniciar sesión";
 "prefs.launchAtLogin.unavailable.value" = "Solo en la app empaquetada";

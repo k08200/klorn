@@ -20,9 +20,10 @@ struct PushLedger: Codable, Equatable, Sendable {
     /// another account is never reused — that account starts a new baseline.
     var owner: String?
     var baselineEstablished: Bool
-    /// Announced (or baselined) item ids, oldest first, capped at `cap`. One
-    /// record for both lanes, so a mail re-tiered PUSH → MEETING is not
-    /// announced twice.
+    /// Announced (or baselined, or dropped, or held for the quiet-hours
+    /// catch-up) item ids, oldest first, capped at `cap`: no plan offers them
+    /// again. One record for both lanes, so a mail re-tiered PUSH → MEETING is
+    /// not announced twice.
     var notified: [String]
     /// The MEETING lane's own baseline (2026-11-07, when MEETING mail started
     /// getting banners). nil on a ledger saved before then: its baseline only
@@ -30,6 +31,10 @@ struct PushLedger: Codable, Equatable, Sendable {
     /// recorded silently on the first sync after the update instead of
     /// arriving as a burst.
     var meetingBaselineEstablished: Bool? = nil
+    /// PUSH mail held during quiet hours, oldest first, waiting for the
+    /// catch-up (`HeldBanners`). Also in `notified`, so it is never planned
+    /// again. nil on a ledger saved before it (none held).
+    var held: [String]? = nil
 
     /// Ids kept. Far above any PUSH lane's size, so trimming only ever drops
     /// ids that left the lane long ago.
@@ -62,6 +67,9 @@ struct PushLedger: Codable, Equatable, Sendable {
     struct Plan: Equatable {
         let toNotify: [FirewallItem]
         let next: PushLedger
+        /// Every new PUSH mail of this sync, past the per-sync cap (empty on a
+        /// baseline): what quiet hours hold for the catch-up.
+        var unseenPush: [FirewallItem] = []
     }
 
     /// Plan the banners for the PUSH and MEETING lanes as they are now: ids
@@ -79,7 +87,9 @@ struct PushLedger: Codable, Equatable, Sendable {
         next.meetingBaselineEstablished = true
         guard baselineEstablished else { return Plan(toNotify: [], next: next) }
         let meetingDue = meetingBaselineEstablished == true ? unseenMeeting : []
-        return Plan(toNotify: Array((unseenPush + meetingDue).prefix(Self.maxBannersPerSync)), next: next)
+        return Plan(
+            toNotify: Array((unseenPush + meetingDue).prefix(Self.maxBannersPerSync)), next: next,
+            unseenPush: unseenPush)
     }
 }
 
@@ -350,6 +360,19 @@ final class PushAlerter {
         return true
     }
 
+    /// Urgent mail held during quiet hours, two or more: ONE summary banner
+    /// (`HeldBanners.summaryBanner`) while the banner switch is on, and its
+    /// title for VoiceOver either way. Returns what was posted, for the harness.
+    @discardableResult
+    func handleHeldSummary(_ items: [FirewallItem]) -> PushBanner? {
+        guard !items.isEmpty else { return nil }
+        let banner = HeldBanners.summaryBanner(for: items)
+        announce(banner.title)
+        guard model.settings.notificationsEnabled else { return nil }
+        model.pushNotifier.post(banner)
+        return banner
+    }
+
     /// VoiceOver announcement for newly arrived PUSH. Pure for testing.
     nonisolated static func pushAnnouncement(newCount n: Int) -> String {
         L("push.announce", n)
@@ -378,6 +401,9 @@ enum PushNotifier {
     nonisolated static let identifierPrefix = "klorn-push-"
     /// Meeting banners: the event id appended verbatim, like PUSH.
     nonisolated static let meetingPrefix = "klorn-meeting-"
+    /// The quiet-hours summary: the newest held item's id appended, so each
+    /// summary is its own notification. Never parsed back into an item.
+    nonisolated static let summaryPrefix = "klorn-held-"
     /// Groups Klorn's banners into one stack in Notification Center.
     nonisolated static let threadIdentifier = "klorn-push"
 
@@ -390,6 +416,10 @@ enum PushNotifier {
 
     nonisolated static func meetingIdentifier(for eventID: String) -> String {
         meetingPrefix + eventID
+    }
+
+    nonisolated static func summaryIdentifier(for itemID: String) -> String {
+        summaryPrefix + itemID
     }
 
     /// Recover the item id a banner was posted for. Returns nil for anything we
@@ -417,6 +447,7 @@ enum PushNotifier {
         if identifier.hasPrefix(meetingPrefix) {
             return .openMeeting(eventID: String(identifier.dropFirst(meetingPrefix.count)))
         }
+        if identifier.hasPrefix(summaryPrefix) { return .openToday }
         guard let id = itemID(fromNotificationIdentifier: identifier) else { return .ignore }
         return isKnownItem(id) ? .open(itemID: id) : .openApp
     }
@@ -434,4 +465,7 @@ enum NotificationTapAction: Equatable {
     case openApp
     /// A meeting banner: open the main window on Calendar.
     case openMeeting(eventID: String)
+    /// The quiet-hours summary: open the main window on Today, where the
+    /// PUSH mail it counts is listed (as the Windows summary opens Today).
+    case openToday
 }
