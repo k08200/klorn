@@ -1475,7 +1475,7 @@ export async function emailRoutes(app: FastifyInstance) {
       };
       // Stamped only once the reply body is built, so a failure above never
       // leaves an OPENED for a mail the user didn't get to see.
-      if (!purpose) noteEmailOutcome(uid, dbEmail.id, "OPENED");
+      if (purpose === undefined) noteEmailOutcome(uid, dbEmail.id, "OPENED");
       return detail;
     }
 

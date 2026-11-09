@@ -23,7 +23,8 @@
  *    Gmail/Outlook shows as no signal, and so does a reply sent from the web
  *    AI-draft composer (it posts to /send, which carries no mail id).
  *  - "Opened" means the reader showed the mail: the Mac app also shows the
- *    mail its arrow keys land on. Mobile builds from before ?purpose=attachments
+ *    mail its arrow keys land on. A mail read only through the thread view
+ *    (GET /api/email/thread/:threadId) is not counted. Mobile builds from before ?purpose=attachments
  *    count the Files tab's background reads (up to 8 mails) as opens.
  *  - Archive and trash both count as archived. An undone archive keeps the
  *    stamp on the original row (the restored mail is a new row).

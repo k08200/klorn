@@ -143,6 +143,14 @@ describe("GET /api/email/:id", () => {
     ]);
   });
 
+  it("does not stamp an empty ?purpose= either: any purpose opts out", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/e1?purpose=", headers });
+
+    expect(res.statusCode).toBe(200);
+    expect(await stamps()).toEqual([]);
+  });
+
   it("answers while the ledger write is still hanging", async () => {
     labelUpdateMany.mockReturnValue(new Promise(() => {}));
     const app = await buildApp();
