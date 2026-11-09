@@ -227,7 +227,20 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
     - an attacker with their own DMARC-passing domain who first gets three mails into the inbox over 30 days;
     - a genuine brand mail that carries attacker text.
 
-    The model's `phishing_suspect` is the defence there. Before the flip, measure its recall on an adversarial set; the eval sets hold no phishing mail yet.
+    The model's `phishing_suspect` is the defence there. Measured on 2026-11-08 with `scripts/v3-phishing-eval.ts` on `eval/phishing-eval-set.json`: 45 synthetic mails, 30 phishing and 15 genuine look-alikes, all addressed to the user. It runs the production extractor with the To header. List headers and calendar parts are absent.
+    - Haiku 5.5, 3 runs:
+      - `phishing_suspect` was set on 84 of 90 phishing judgements (93.3%) and on 0 of 90 genuine ones.
+      - No flagged mail reached PUSH or MEETING. That includes a prompt injection, a thread hijack and a genuine service carrying attacker text.
+    - Both misses, in all 3 runs, are mails with no sign of spoofing:
+      - phish-028, an overdue invoice to "settle today" from the attacker's own clean domain, PUSHes through the due-soon ask;
+      - phish-029, a call invite with a malicious join link, rings as MEETING.
+      - A DMARC pass changes neither, because the ask and event paths do not read it.
+    - Opus 5.5, 1 run: 26 of 29 flagged, with one empty answer, and 0 of 15 genuine mails flagged.
+      - It also missed phish-018, a fake "payment declined".
+      - That mail PUSHes through the ask path, or through trusted risk when the sender is a known correspondent.
+    - Not measured: v2 on this set. An urgent pay request from a person likely PUSHes under v2 as well.
+    - Closing this hole is a founder decision and a new `policyVersion`. One option: a pay ask or an invite from a first-contact sender lists without interrupting.
+      - The open item on requiring trust for an `.ics`-only MEETING (below) would not cover phish-029. It has no calendar part: live, the event comes from the model's reading of the text (`facts-merge.ts`, `hasInvite` false), and that still makes a MEETING.
 - **A notification may interrupt through a due-soon ask**, unless the deterministic automated-sender signal is on (no-reply, notifications@) or its From failed DMARC (a forged brand notification). A person-kind ask could already interrupt in v3.0, so this widens the kinds, not the senders. Newsletter, promotion and receipt never interrupt through an ask.
 - **SILENT is clear marketing only** (the LOCKED narrow-SILENT rule): `kind` promotion. Newsletters and other bulk mail are filed in INFO, still visible. This replaces rule 6, and rule 5 gains newsletter and bulk, checked after a transaction record and the INFO kinds, so their reasons are unchanged.
 - The phishing floor now also covers PUSH. The ask and risk paths already veto it, and the floor keeps the invariant independent of rule order.
@@ -497,7 +510,10 @@ It reports:
   2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The shadow report lists only the newest 20 disagreements. For the full list, run `replay:policy --facts=stored --max-changes=<n>`: one line per changed mail with its id, v2 → v3 lanes and reason codes. `--show-subjects` adds subjects to the terminal output only. The counts go in the flip PR.
   3. The adversarial phishing measurement that §3(5) requires before the flip is done.
 
-  Status on 2026-11-07: replay not met (§3(5), "Against v2"); shadow not started (0 AttentionFacts rows).
+  Status on 2026-11-08:
+  - Replay: not met (§3(5), "Against v2"). Traced to two rules (sender trust, the 24h window) and one extraction error.
+  - Phishing: measured (§3(5) "Policy v3.1"). Two mails with no sign of spoofing interrupt.
+  - Shadow: not started (0 AttentionFacts rows).
 - **Model upgrade procedure:** run the fact eval on the candidate, compare, flip the provider order. No threshold work.
 
 ## 6. Phases
