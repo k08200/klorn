@@ -1,7 +1,7 @@
 /**
  * The judge-health heartbeat is observability: a throw from recordJudgeSource
  * must never skip the AttentionItem upsert that makes the judge's decision
- * visible (#1319 review, email-firewall.ts).
+ * visible (#1572 review, email-firewall.ts).
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

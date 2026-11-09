@@ -124,11 +124,12 @@
 "prefs.section.about" = "ACERCA DE";
 
 "prefs.banners" = "Mostrar avisos de macOS en este Mac";
-"prefs.banners.detail" = "Un aviso por cada correo PUSH nuevo, solo con el remitente y el asunto. Interruptor general local: desactivado, silencia todos los avisos aquí sin importar las categorías de arriba; el recuento de PUSH de la ventana principal se sigue actualizando.";
+"prefs.banners.detail" = "Un aviso por cada correo PUSH o MEETING nuevo, solo con el remitente y el asunto. Interruptor general local: desactivado, silencia todos los avisos aquí sin importar las categorías de arriba; el recuento de PUSH de la ventana principal se sigue actualizando.";
 "prefs.banners.denied" = "macOS está bloqueando las notificaciones de Klorn. Permítelas en Ajustes del Sistema ▸ Notificaciones.";
 "prefs.banners.openSystemSettings" = "Abrir Ajustes del Sistema";
 "prefs.section.support" = "APP Y SOPORTE";
 "push.announce" = "Correo PUSH nuevo: %d";
+"push.announce.meeting" = "Correo MEETING nuevo: %d";
 "prefs.launchAtLogin" = "Abrir Klorn al iniciar sesión";
 "prefs.launchAtLogin.unavailable.label" = "Abrir al iniciar sesión";
 "prefs.launchAtLogin.unavailable.value" = "Solo en la app empaquetada";
@@ -188,7 +189,7 @@
 "auto.preset.detail" = "Solo lo esencial: el correo que necesita respuesta y lo que esté en tu calendario. Lo demás se queda en la barra sin aviso.";
 
 "auto.notify.emailUrgent" = "Correo urgente";
-"auto.notify.emailUrgent.detail" = "Correo que Klorn clasifica como PUSH: alguien te está esperando.";
+"auto.notify.emailUrgent.detail" = "Correo que Klorn clasifica como PUSH o MEETING: alguien te está esperando.";
 "auto.notify.meeting" = "Reuniones";
 "auto.notify.meeting.detail" = "Eventos del calendario a punto de empezar.";
 "auto.notify.taskDue" = "Tareas que vencen";

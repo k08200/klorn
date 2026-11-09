@@ -152,6 +152,9 @@ describe("touch targets on the tablet widths", () => {
 describe("Fold cover screen (< 360px): Today is the Push-only 'Needs you now' view", () => {
   const TODAY = read("app/today/today-view.tsx");
   const COVER = read("app/today/cover-view.tsx");
+  // The Reply · Later card is shared with Today's "Held back" group.
+  const CARD = read("app/today/reply-later-card.tsx");
+  const HELD = read("app/today/held-back.tsx");
 
   it("switches below 360px only, so 360px and up keep the phone home", () => {
     expect(TODAY).toContain('COVER_QUERY = "(max-width: 359.98px)"');
@@ -165,11 +168,24 @@ describe("Fold cover screen (< 360px): Today is the Push-only 'Needs you now' vi
   });
 
   it("gives each card Reply and Later as 44px targets wired to the existing actions", () => {
-    expect(COVER).toContain('t("keys.reply")');
-    expect(COVER).toContain('t("mailV2.reader.later")');
-    expect(COVER.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
-    expect(COVER).toContain("focus=reply");
-    expect(COVER).toMatch(/postReminder\(/);
+    expect(COVER).toMatch(/<ReplyLaterCard\b/);
+    expect(CARD).toContain('t("keys.reply")');
+    expect(CARD).toContain('t("mailV2.reader.later")');
+    expect(CARD.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(COVER).toMatch(/min-h-11/);
+    expect(CARD).toContain("focus=reply");
+    expect(CARD).toMatch(/postReminder\(/);
+  });
+
+  it("shows the 'Held back' group below the list, collapsed behind an aria-expanded disclosure", () => {
+    expect(COVER).toMatch(/<HeldBackGroup\b/);
+    expect(HELD).toMatch(/aria-expanded=\{open\}/);
+    expect(HELD).toMatch(/aria-controls=\{listId\}/);
+    expect(HELD).toMatch(/size="lg"/);
+    // Only asked for once the PUSH read carries the budget (policy on).
+    expect(HELD).toMatch(/useHeldMail\(Boolean\(budget\)\)/);
+    expect(HELD).toMatch(/if \(!group\) return null;/);
+    expect(HELD).toMatch(/<ReplyLaterCard\b/);
   });
 
   it("draws the interruption meter only from the server's budget, else nothing", () => {

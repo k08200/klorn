@@ -20,6 +20,7 @@ import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
 import {
   NOTIFICATION_LANGUAGES,
   resolveNotificationLanguage,
+  URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
 import { normalizeTimeZone, normalizeTimeZoneMode, parseTimeZoneInput } from "../time-zone.js";
@@ -407,7 +408,7 @@ export async function automationRoutes(app: FastifyInstance) {
           userId,
           type: "email",
           createdAt: { gte: sinceUtc },
-          OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+          title: { in: [...URGENT_EMAIL_TITLES] },
         },
         orderBy: { createdAt: "desc" },
         select: { id: true, message: true, link: true, createdAt: true },

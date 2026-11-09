@@ -22,6 +22,7 @@ import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
+import { postReminder } from "../_v2/post-reminder";
 import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
 import { readerLeaveHref } from "./_v2/reader-model";
@@ -112,22 +113,6 @@ function appendUndoParams(
   params.set("undoAction", action);
   params.set("undoGmailId", email.gmailId);
   if (email.subject) params.set("undoSubject", email.subject);
-}
-
-function getReminderDate(option: EmailReminderKey): Date {
-  const date = new Date();
-  if (option === "later-today") {
-    date.setHours(date.getHours() + 4);
-    return date;
-  }
-  if (option === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-    date.setHours(9, 0, 0, 0);
-    return date;
-  }
-  date.setDate(date.getDate() + 7);
-  date.setHours(9, 0, 0, 0);
-  return date;
 }
 
 interface ThreadDetail {
@@ -647,18 +632,7 @@ function EmailDetailView() {
     setReminderBusy(option.key);
     setError(null);
     try {
-      const remindAt = getReminderDate(option.key);
-      const subject = email.subject || t("common.noSubject");
-      await apiFetch("/api/reminders", {
-        method: "POST",
-        body: JSON.stringify({
-          title: email.needsReply
-            ? t("emailDetail.reminderTitle.replyTo", { subject })
-            : t("emailDetail.reminderTitle.review", { subject }),
-          remindAt: remindAt.toISOString(),
-          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
-        }),
-      });
+      await postReminder(email.id, option.key);
       toast(t("emailDetail.toast.reminderSet", { option: option.label.toLowerCase() }), "success");
     } catch (err) {
       captureClientError(err, { scope: "email.detail.reminder", id, option: option.key });
