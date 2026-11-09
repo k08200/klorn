@@ -401,18 +401,25 @@ export type EmailSubscriptionUnsubscribeResponse = EmailUnsubscribeResponse & {
 };
 
 /**
- * `POST /api/email/send` body — a brand-new message (not a reply).
+ * `POST /api/email/send` body — a new message, sent with exactly these bytes.
  * `linkedInboxAccountId` picks the account it leaves from: absent / null /
  * "primary" = the primary inbox (as before the field existed); otherwise the id
  * of one of the caller's linked inboxes. An id that is not the caller's is 404
  * (never a silent primary send), a non-id value 400, and a linked mailbox whose
  * provider cannot send from Klorn 501.
+ * `inReplyToEmailId` names the caller's own mail this message answers (the web
+ * AI-draft reply, whose recipient and subject the user may edit): the API
+ * records the reply as `POST /api/email/:id/reply` does (reply chip, REPLIED on
+ * the decision ledger, "waiting on") and threads it into the original when the
+ * original lives on the sending account. Another user's id is 404 and nothing
+ * is sent; a non-id value 400.
  */
 export interface SendEmailRequest {
   to: string;
   subject: string;
   body: string;
   linkedInboxAccountId?: string | null;
+  inReplyToEmailId?: string | null;
 }
 
 /**

@@ -20,6 +20,8 @@ import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import { SendOutcomeUnknownError } from "../mail/providers/send-outcome-unknown.js";
 import type { MailAttachment, SendMailResult } from "../mail/providers/types.js";
+import { markEmailReplied } from "../mail/reply-state.js";
+import { type ReplyThreading, resolveReplyThreading } from "../mail/reply-threading.js";
 import {
   openSendReceipt,
   outcomeOfSend,
@@ -161,6 +163,42 @@ async function resolveSendInbox(userId: string, value: unknown): Promise<SendInb
   return row ? { kind: "linked", id: row.id } : { kind: "not_found" };
 }
 
+/** Longest mail id accepted (EmailMessage ids are UUIDs; the cap only bounds input). */
+const MAX_EMAIL_ID_LENGTH = 128;
+
+interface AnsweredEmail {
+  id: string;
+  gmailId: string;
+  threadId: string | null;
+  linkedInboxAccountId: string | null;
+}
+
+type AnsweredEmailLookup =
+  | { kind: "none" }
+  | { kind: "found"; email: AnsweredEmail }
+  | { kind: "invalid" }
+  | { kind: "not_found" };
+
+/**
+ * The mail a POST /send answers (`inReplyToEmailId`, the web AI-draft reply,
+ * whose to / subject / body the user may have edited). Absent or null: a new
+ * message, exactly as before the field existed. Otherwise it must be the
+ * EmailMessage id of the CALLER's own mail: the row is read by id AND userId,
+ * so another user's id is not_found and the route refuses before anything is
+ * sent — that id can never be threaded into, reply-chipped or stamped.
+ */
+async function resolveAnsweredEmail(userId: string, value: unknown): Promise<AnsweredEmailLookup> {
+  if (value === undefined || value === null) return { kind: "none" };
+  if (typeof value !== "string") return { kind: "invalid" };
+  const id = value.trim();
+  if (!id || id.length > MAX_EMAIL_ID_LENGTH) return { kind: "invalid" };
+  const email = await prisma.emailMessage.findFirst({
+    where: { id, userId },
+    select: { id: true, gmailId: true, threadId: true, linkedInboxAccountId: true },
+  });
+  return email ? { kind: "found", email } : { kind: "not_found" };
+}
+
 export async function registerEmailMutationsRoutes(app: FastifyInstance) {
   // Multipart parser for the compose route's file uploads. Scoped to this
   // plugin's encapsulation context, so JSON routes elsewhere are untouched.
@@ -189,7 +227,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const uid = getUserId(request);
-      const { to, subject, body, linkedInboxAccountId } = request.body as {
+      const { to, subject, body, linkedInboxAccountId, inReplyToEmailId } = request.body as {
         to: string;
         subject: string;
         body: string;
@@ -197,6 +235,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         // every mail action threads the account id end to end). Absent / null /
         // "primary" = the primary inbox, as before.
         linkedInboxAccountId?: unknown;
+        // Optional: the caller's own EmailMessage this message answers (the web
+        // AI-draft reply). Absent / null = a new message, as before.
+        inReplyToEmailId?: unknown;
       };
 
       if (!to || !subject || !body) {
@@ -212,6 +253,15 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       }
       const linkedId = inbox.kind === "linked" ? inbox.id : null;
 
+      const answered = await resolveAnsweredEmail(uid, inReplyToEmailId);
+      if (answered.kind === "invalid") {
+        return reply.code(400).send({ error: "inReplyToEmailId must be an email id." });
+      }
+      if (answered.kind === "not_found") {
+        return reply.code(404).send({ error: "Email not found" });
+      }
+      const original = answered.kind === "found" ? answered.email : null;
+
       // A soft error from sendEmail (bad address, no-reply, Gmail not connected)
       // must be a 4xx, not a 200 with an { error } body — otherwise callers that
       // gate on HTTP status treat a failed send as success (the reply-draft flow
@@ -221,6 +271,16 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       // send options so the provider uses THAT account's credentials. The primary
       // inbox keeps the exact call it always made.
       const actions = await mailActionsFor(uid, linkedId);
+
+      // A reply threads into the original as POST /:id/reply does — but only when
+      // the original lives on the account this message leaves from: its thread id
+      // and headers belong to that account, and the sending account stays the
+      // caller's choice (never switched here). Recipient, subject and body are the
+      // confirmed bytes either way.
+      const threading: ReplyThreading | null =
+        original && (original.linkedInboxAccountId ?? null) === linkedId
+          ? await resolveReplyThreading(actions, uid, original)
+          : null;
 
       // Deterministic floor (MANUAL_SEND_RECEIPTS_ENABLED): the receipt of the
       // bytes the user confirmed is written before anything leaves. No receipt,
@@ -234,6 +294,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
           subject,
           body,
           inbox: linkedId ?? "primary",
+          emailId: original?.id ?? null,
         });
       } catch (err) {
         captureError(err, { tags: { scope: "email.send.receipt" }, extra: { userId: uid } });
@@ -244,9 +305,13 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (receipt) await verifySendOrRefuse(receipt, uid, { to, subject, body });
       let result: SendMailResult;
       try {
-        result = linkedId
-          ? await actions.sendEmail(uid, to, subject, body, [], { linkedInboxAccountId: linkedId })
-          : await actions.sendEmail(uid, to, subject, body);
+        result =
+          linkedId || threading
+            ? await actions.sendEmail(uid, to, subject, body, [], {
+                ...threading,
+                ...(linkedId ? { linkedInboxAccountId: linkedId } : {}),
+              })
+            : await actions.sendEmail(uid, to, subject, body);
       } catch (err) {
         // A throw may come after the mail left: the receipt says "unknown", never "refused".
         if (receipt) await settleSendReceipt(receipt, uid, { status: "UNKNOWN" });
@@ -271,11 +336,19 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       // Manual send = genuine engagement with this recipient (an importance-graph
       // edge). Only user-initiated routes record this — never the auto-reply path.
       await recordContactEngagement(uid, to, "outbound");
-      // A new thread I am now waiting on (sent-messages.ts).
+      if (original) {
+        // The answered mail's reply chip flips to "replied" and its decision-ledger
+        // row is stamped REPLIED (lane quality), as POST /:id/reply records them.
+        await markEmailReplied(uid, original.id);
+        noteEmailOutcome(uid, original.id, "REPLIED");
+      }
+      // A thread I am now waiting on (sent-messages.ts). The thread the provider
+      // reports wins: the user may have edited the subject, and Gmail starts a new
+      // thread when it no longer matches. Without one (IMAP), the original's.
       if ("success" in result && result.success && result.messageId) {
         await recordSentMessage(uid, {
           gmailId: result.messageId,
-          threadId: result.threadId ?? null,
+          threadId: result.threadId ?? threading?.threadId ?? null,
           to,
           subject,
           sentAt: new Date(),
