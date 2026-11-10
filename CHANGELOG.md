@@ -495,6 +495,15 @@ does nothing until you set the environment variable it names.
       with `origin: "user"`, and threads on the same account.
     - API: `POST /api/email/send` (`SendEmailRequest`) accepts an optional
       `inReplyToEmailId`, scoped to the caller.
+  - A web AI-draft reply to mail in a linked inbox was sent from the primary
+    account, without threading (#1658).
+    - With `inReplyToEmailId` and no account named, `/send` now sends from the
+      inbox the original arrived in. An explicit account still wins, and both
+      go through the same ownership check.
+    - It never falls back to the primary account: if that inbox has been
+      unlinked the request fails with 404, and if it cannot send (for example
+      a mailbox whose sending flag is off) it fails with 501. `POST
+      /api/email/:id/reply` already behaved this way.
 - Gmail attachments were duplicated on every re-sync (#1462). Duplicates
   created before this fix are not cleaned up.
 - The MEETING lane filled with bulk and system invites (#1497).
