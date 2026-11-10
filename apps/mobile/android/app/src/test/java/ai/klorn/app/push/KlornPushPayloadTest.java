@@ -100,6 +100,28 @@ public class KlornPushPayloadTest {
     }
 
     @Test
+    public void aMeetingMailGetsTheMeetingSetAndADraftStillWins() {
+        Map<String, String> data = mail();
+        data.put("lane", "MEETING");
+        KlornPushPayload meeting = KlornPushPayload.parse(false, data, NOW);
+        assertNotNull(meeting);
+        assertEquals(KlornPushPayload.CATEGORY_MEETING, meeting.category);
+        assertEquals("MEETING", meeting.data.get("lane"));
+        data.put("pendingActionId", "pa-1");
+        assertEquals(KlornPushPayload.CATEGORY_DRAFT, KlornPushPayload.parse(false, data, NOW).category);
+    }
+
+    @Test
+    public void anUnknownLaneIsDroppedNeverTrusted() {
+        Map<String, String> data = mail();
+        data.put("lane", "SILENT");
+        KlornPushPayload p = KlornPushPayload.parse(false, data, NOW);
+        assertNotNull(p);
+        assertEquals(KlornPushPayload.CATEGORY_PLAIN, p.category);
+        assertNull(p.data.get("lane"));
+    }
+
+    @Test
     public void malformedIdsAreIgnoredAndWithoutIdsThereAreNoButtons() {
         Map<String, String> data = mail();
         data.put("emailId", "../../etc");

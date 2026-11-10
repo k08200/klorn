@@ -14,9 +14,10 @@ import java.util.regex.Pattern;
  *   - `title` and `body` are required, trimmed, capped at 120 / 600 chars;
  *   - `sentAt` older than 15 minutes is a replay, dropped;
  *   - ids must match [A-Za-z0-9_-]{1,128}; anything else is ignored;
- *   - the action set follows the ids (a pendingActionId → the draft set, an
- *     emailId / attentionItemId → the plain set, else no buttons), never the
- *     server's `category`, which is the NotifCategory;
+ *   - the action set follows the ids and the lane (a pendingActionId → the
+ *     draft set, a `lane: "MEETING"` mail → the meeting set, an emailId /
+ *     attentionItemId → the plain set, else no buttons), never the server's
+ *     `category`, which is the NotifCategory;
  *   - `category: "email_urgent"` (a PUSH-lane mail) rings on klorn_push;
  *   - the notification id is the same 31-bit FNV-1a hash, so a repeat about
  *     the same mail replaces the notification instead of stacking.
@@ -27,6 +28,7 @@ public final class KlornPushPayload {
     public static final String CHANNEL_OTHER = "klorn_other";
     public static final String CATEGORY_DRAFT = "KLORN_PUSH_MAIL_DRAFT";
     public static final String CATEGORY_PLAIN = "KLORN_PUSH_MAIL";
+    public static final String CATEGORY_MEETING = "KLORN_PUSH_MEETING";
     public static final long STALE_AFTER_MS = 15L * 60_000L;
 
     private static final String URGENT_MAIL_CATEGORY = "email_urgent";
@@ -37,7 +39,7 @@ public final class KlornPushPayload {
     public final int notificationId;
     public final String title;
     public final String body;
-    /** CATEGORY_DRAFT, CATEGORY_PLAIN, or null (no buttons; a tap still routes). */
+    /** CATEGORY_DRAFT, CATEGORY_PLAIN, CATEGORY_MEETING, or null (no buttons; a tap still routes). */
     public final String category;
     public final String channelId;
     /** Only the validated fields, handed back to the app on tap (src/push/route.ts reads them). */
@@ -81,9 +83,12 @@ public final class KlornPushPayload {
         String emailId = id(raw.get("emailId"));
         String attentionItemId = id(raw.get("attentionItemId"));
         String pendingActionId = id(raw.get("pendingActionId"));
+        String rawLane = raw.get("lane");
+        String lane = "MEETING".equals(rawLane) || "PUSH".equals(rawLane) ? rawLane : null;
+        boolean isMail = emailId != null || attentionItemId != null;
         String category = pendingActionId != null
             ? CATEGORY_DRAFT
-            : (emailId != null || attentionItemId != null) ? CATEGORY_PLAIN : null;
+            : isMail && "MEETING".equals(lane) ? CATEGORY_MEETING : isMail ? CATEGORY_PLAIN : null;
         boolean isPush = URGENT_MAIL_CATEGORY.equals(raw.get("category"));
 
         Map<String, String> kept = new LinkedHashMap<>();
@@ -92,6 +97,7 @@ public final class KlornPushPayload {
         if (pendingActionId != null) kept.put("pendingActionId", pendingActionId);
         if (raw.get("route") != null) kept.put("route", raw.get("route"));
         if (raw.get("url") != null) kept.put("url", raw.get("url"));
+        if (lane != null) kept.put("lane", lane);
 
         String key = attentionItemId != null
             ? attentionItemId

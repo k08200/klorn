@@ -119,9 +119,10 @@ export function tierV2Enabled(): boolean {
 
 /**
  * Attention engine v3 policy (docs/design/attention-engine-v3.md, P3).
- * Default OFF; the founder flips it after replay and shadow data. While on,
- * PUSH notifications are capped by the daily interrupt budget. Requires
- * JUDGE_V3_SHADOW for lanes from facts; items without facts keep the v2 lane.
+ * Default OFF; the founder flips it after replay and shadow data. It applies
+ * per user, only to users JUDGE_V3_SHADOW covers: use
+ * isJudgeV3PolicyEnabled(userId) in judge/v3/flags.ts, not this, on any
+ * per-user path.
  */
 export function judgeV3PolicyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return dynamicFlag(env, "JUDGE_V3_POLICY");

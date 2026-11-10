@@ -7,7 +7,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 // /_next/static/media, so the strict CSP (font-src 'self') is unchanged.
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import AppShell from "../components/app-shell";
+import AutostartPrompt from "../components/autostart-prompt";
 import CommandPalette from "../components/command-palette";
+import DesktopToastRouter from "../components/desktop-toast-router";
 import GoogleReconnectBanner from "../components/google-reconnect-banner";
 import KeyboardShortcuts from "../components/keyboard-shortcuts";
 import Providers from "../components/providers";
@@ -46,14 +48,14 @@ export const metadata: Metadata = {
     siteName: "Klorn",
     url: "https://app.klorn.ai/",
     type: "website",
-    images: [{ url: "/brand/og-image.png?v=k2", width: 1200, height: 630 }],
+    images: [{ url: "/brand/og-image.png?v=k3", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Klorn — The clear signal worth acting on",
     description:
       "All your mail and calendars in one calm place — every message sorted, with the reason shown.",
-    images: ["/brand/og-image.png?v=k2"],
+    images: ["/brand/og-image.png?v=k3"],
   },
   appleWebApp: {
     capable: true,
@@ -101,6 +103,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <GoogleReconnectBanner />
           <PushOnboardingBanner />
           <PwaPrompts />
+          <AutostartPrompt />
+          <DesktopToastRouter />
         </Providers>
       </body>
     </html>

@@ -262,7 +262,7 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           fake.posted.count == 1 && banner?.title == "Kim & Co" && banner?.body == "Q4 & budget"
           && !(banner?.body.contains("private body") ?? true)
           && banner?.identifier == PushNotifier.notificationIdentifier(for: "x1"))
-    check("SystemPushNotifier sets title and body only (no snippet, no actions)",
+    check("SystemPushNotifier sets title, body and the lane line only (no snippet, no actions)",
           !text("Notifications.swift").contains("snippet")
           && !text("Notifications.swift").contains("UNNotificationAction")
           && !text("Notifications.swift").contains("categoryIdentifier"))
@@ -416,15 +416,13 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           && meetingAlertPlan(now: meetingNow, events: [standup], leadMinutes: 10, shown: [])?.id == "ev-9"
           && meetingLedger.recording("ev-9").notified == ["ev-9"]
           && UserDefaultsPushLedgerStore.meetingKey != UserDefaultsPushLedgerStore.key)
+    // Behaviour (handled-only save, the server gate) is driven end to end in
+    // SelfCheckMeetingMailBanners.swift; this pins the local category gate.
     check("the meeting ledger is saved only after the banner is handled, and the Meetings category gates it",
-          {
-              let model = text("AppModel.swift")
-              guard let asked = model.range(of: "onMeetingSoon?(due) == true"),
-                    let saved = model.range(of: "meetingAlertStore.save(announced.recording(due.id))")
-              else { return false }
-              return asked.upperBound <= saved.lowerBound
-          }()
-          && text("AppModel.swift").contains("if automation.allowsInterrupt(for: .meeting),")
+          text("AppModel.swift").contains(
+              "if onMeetingSoon?(due) == true {\n            meetingAlertStore.save(announced.recording(due.id))")
+          && text("AppModel.swift").contains(
+              "guard automation.allowsInterrupt(for: .meeting), let upcoming else { return }")
           && app.contains("model.onMeetingSoon = { [weak alerter] event in alerter?.handleMeetingSoon(event) ?? false }"))
     check("a meeting banner tap opens the main window on Calendar",
           PushNotifier.tapAction(identifier: PushNotifier.meetingIdentifier(for: "ev-9"), isKnownItem: { _ in true })
@@ -492,25 +490,26 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         let scoped = S.model([S.firewall: .init(body: lane(["s1", "s2"]))])
         let scopedList = try! JSONDecoder().decode(FirewallResponse.self, from: Data(lane(["s1"]).utf8))
         let before = Stub.calls(S.firewall).count
-        let unscoped = await scoped.bannerPushItems(
+        let unscoped = await scoped.bannerMail(
             fetched: scopedList, selection: "linked-1", session: scoped.sessionGeneration)
         let scopedFetches = Stub.calls(S.firewall).count - before
-        let allSelected = await scoped.bannerPushItems(
+        let allSelected = await scoped.bannerMail(
             fetched: scopedList, selection: "all", session: scoped.sessionGeneration)
         check("with a scoped list, banners come from one extra all-inbox read",
-              unscoped?.map(\.id) == ["s1", "s2"] && scopedFetches == 1)
+              unscoped?.push.map(\.id) == ["s1", "s2"] && scopedFetches == 1)
         check("with All selected, banners reuse the fetched list (no extra read)",
-              allSelected?.map(\.id) == ["s1"] && Stub.calls(S.firewall).count - before == 1)
+              allSelected?.push.map(\.id) == ["s1"] && Stub.calls(S.firewall).count - before == 1)
         check("an all-inbox read for an ended session announces nothing",
-              await scoped.bannerPushItems(
+              await scoped.bannerMail(
                   fetched: scopedList, selection: "linked-1", session: scoped.sessionGeneration - 1) == nil)
         check("the sync path takes banners from that source, after the session guard",
               text("AppModel.swift").contains(
-                  "if let pushItems = await bannerPushItems(fetched: fetched, selection: selectionAtFetch, session: session) {"))
+                  "if let mail = await bannerMail(fetched: fetched, selection: selectionAtFetch, session: session) {"))
         scoped.signOut()
     }
     check("the ledger is written only when it changed",
-          text("AppModel.swift").contains("if plan.next != ledger { pushLedgerStore.save(plan.next) }"))
+          text("AppModel.swift").contains("if planned != ledger { pushLedgerStore.save(planned) }")
+          && text("AppModel.swift").contains("if outcome.next != current { pushLedgerStore.save(outcome.next) }"))
     check("the retired pill trace log is removed once at launch, best effort",
           app.contains("RetiredFiles.removePillTrace()")
           && RetiredFiles.pillTraceURL(appSupport: URL(fileURLWithPath: "/x"))?.path

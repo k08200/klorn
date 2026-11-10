@@ -728,6 +728,18 @@ On the real set v3.0 is 1.8–1.9pt above the doc rule, and the whole difference
 
 The trade-off is a founder decision: interrupt recall on a cold account vs. the MEETING-first and VIP-only-risk safeguards. The doc's interrupt budget (default 5/day) already caps volume. P3 owns the code, and #1609 (open) edits the same file, so P1 changes nothing in `policy.ts`.
 
+### P3 policy v3.1 on the same facts (2026-11-07)
+
+P3 shipped v3.1 in response to the two findings above: cold-start urgent recall, and SILENT precision under the LOCKED narrow-SILENT rule. The rules are in docs/design/attention-engine-v3.md §3(5) "Policy v3.1". `--policy=p3` now replays v3.1, and `--policy=p3-v3.0` pins v3.0. Summed over the 12 runs per set:
+
+| | gate PUSH recall | real PUSH precision | gate / real SILENT precision | real overall |
+|---|---|---|---|---|
+| v3.0 | 92/156 (59.0%) | 36/36 | 91.7% / 86.4% | 69.3% |
+| v3.1 | 132/156 (84.6%) | 36/36 | 99.1% / 93.0% | 58.0% |
+
+- v3.1 also trusts a risk-only PUSH from a known correspondent (3+ mails over 30+ days) whose From passed DMARC. The eval mails carry no relationship or DMARC data, so that rule cannot fire here. Its ceiling on the gate set is eval-046 in all 12 runs (92.3%).
+- No run PUSHed or MEETINGed a `phishing_suspect` mail (by construction: the policy vetoes on the flag). The eval sets hold no adversarial phishing mail yet, so the flag's recall is unmeasured.
+
 ### Reproduce
 
 From `packages/api`:
@@ -756,7 +768,8 @@ for model in claude-haiku-5-5 claude-sonnet-5-5 claude-opus-5-5 claude-fable-5-1
   done
 done
 npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --out=/tmp/p1/report.md
-npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --policy=p3 --out=/tmp/p1/report.p3.md   # P3 policy v3.0
+npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --policy=p3 --out=/tmp/p1/report.p3.md   # P3 policy, the live version (v3.1)
+npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --policy=p3-v3.0 --out=/tmp/p1/report.p3-v3.0.md   # P3 policy v3.0
 ```
 
 Exit 3 means instrument degraded: a provider failure, or a call served by another model. The file is still written, the report skips it, and you retry the run. The report re-scores every stored run against the labels in the eval file and replays v3 from the stored raw facts. A relabel or a policy change therefore costs no LLM calls.

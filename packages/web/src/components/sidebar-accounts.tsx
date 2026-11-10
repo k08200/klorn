@@ -67,7 +67,7 @@ export default function SidebarAccounts() {
             <li key={account.scope}>
               <Link
                 href={ACCOUNTS_HREF}
-                className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center gap-2 rounded-control px-3 py-1.5 text-role-label font-normal text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
+                className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center gap-2 rounded-control px-3 py-1.5 text-role-meta text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
               >
                 <span
                   aria-hidden="true"
@@ -101,7 +101,7 @@ export default function SidebarAccounts() {
         <li>
           <Link
             href={ACCOUNTS_HREF}
-            className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 text-role-label font-normal text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
+            className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 text-role-meta text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
           >
             {t("today.accounts.add")}
           </Link>

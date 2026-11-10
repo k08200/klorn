@@ -12,6 +12,7 @@ const emailUpdateMany = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
 const sentUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 const getReplyHeaders = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
+const labelUpdateMany = vi.hoisted(() => vi.fn(async (_args: unknown) => ({ count: 1 })));
 
 vi.mock("../auth.js", () => ({
   requireAuth: async () => {},
@@ -22,6 +23,7 @@ vi.mock("../db.js", () => {
   const prisma = {
     emailMessage: { findFirst: emailFindFirst, updateMany: emailUpdateMany },
     sentMessage: { upsert: sentUpsert },
+    decisionLabel: { updateMany: labelUpdateMany },
     // The provider dispatch resolves a linked id to its provider row.
     linkedInboxAccount: { findFirst: vi.fn(async () => ({ provider: "GOOGLE" })) },
   };
@@ -68,6 +70,8 @@ beforeEach(() => {
   getReplyHeaders.mockReset();
   emailFindFirst.mockReset();
   emailFindFirst.mockResolvedValue(EMAIL);
+  labelUpdateMany.mockReset();
+  labelUpdateMany.mockResolvedValue({ count: 1 });
   sendEmail.mockResolvedValue({ success: true, messageId: "sent-1" });
   getReplyHeaders.mockResolvedValue({ messageId: "<orig@corp.com>", references: "<a@corp.com>" });
 });
@@ -242,6 +246,48 @@ describe("POST /api/email/:id/reply", () => {
     expect(res.json().threaded).toBe(false);
     const options = sendEmail.mock.calls[0][5];
     expect(options).toEqual({ threadId: "t1", inReplyTo: undefined, references: undefined });
+    await app.close();
+  });
+});
+
+describe("POST /api/email/:id/reply — decision ledger", () => {
+  const send = (app: Awaited<ReturnType<typeof buildApp>>) =>
+    app.inject({ method: "POST", url: "/api/email/g1/reply", payload: { body: "Yes." } });
+
+  it("stamps REPLIED on the answered mail's row exactly once", async () => {
+    const app = await buildApp();
+    const res = await send(app);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(res.statusCode).toBe(200);
+    expect(labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "user-1", source: "EMAIL", sourceId: "e1", repliedAt: null },
+        data: { repliedAt: expect.any(Date) },
+      },
+    ]);
+    await app.close();
+  });
+
+  it("stamps nothing when the provider refuses the send", async () => {
+    sendEmail.mockResolvedValue({ error: "Quota exceeded" });
+    const app = await buildApp();
+    const res = await send(app);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(res.statusCode).toBe(409);
+    expect(labelUpdateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("answers exactly the same when the ledger write fails", async () => {
+    const app = await buildApp();
+    const ok = await send(app);
+    labelUpdateMany.mockRejectedValue(new Error("ledger down"));
+    const failed = await send(app);
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
     await app.close();
   });
 });

@@ -46,6 +46,7 @@ import { serverErrorMessage } from "../../lib/server-error";
 import { formatRelative } from "../../lib/text";
 import { useKeyboardTriage } from "../../lib/use-hotkeys";
 import { MailV2 } from "./_v2/mail-v2";
+import { postReminder } from "./_v2/post-reminder";
 import { UNDO_NOTICE_SECONDS, useLaneMove } from "./use-lane-move";
 import { TRIAGE_ROW_ATTR, useListTriage } from "./use-list-triage";
 
@@ -95,22 +96,6 @@ const EMAIL_REMINDER_OPTIONS: EmailReminderOption[] = [
   { key: "tomorrow", labelKey: "mailV2.list.remind.tomorrow" },
   { key: "next-week", labelKey: "mailV2.list.remind.nextWeek" },
 ];
-
-function getReminderDate(option: EmailReminderKey): Date {
-  const date = new Date();
-  if (option === "later-today") {
-    date.setHours(date.getHours() + 4);
-    return date;
-  }
-  if (option === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-    date.setHours(9, 0, 0, 0);
-    return date;
-  }
-  date.setDate(date.getDate() + 7);
-  date.setHours(9, 0, 0, 0);
-  return date;
-}
 
 function parseUndoNotice(searchParams: ReturnType<typeof useSearchParams>): UndoNotice | null {
   const action = searchParams?.get("undoAction");
@@ -662,15 +647,7 @@ function EmailView() {
     setRowReminderBusy(busyKey);
     setError(null);
     try {
-      const remindAt = getReminderDate(option.key);
-      await apiFetch("/api/reminders", {
-        method: "POST",
-        body: JSON.stringify({
-          title: `${email.needsReply ? "Reply to" : "Review"}: ${email.subject || "No subject"}`,
-          remindAt: remindAt.toISOString(),
-          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
-        }),
-      });
+      await postReminder(email.id, option.key);
       toast(t("mailV2.list.remind.set", { when: t(option.labelKey) }), "success");
     } catch (err) {
       captureClientError(err, {
@@ -919,7 +896,7 @@ function EmailView() {
             <p className="text-role-head font-medium text-ink">
               {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
-            <p className="mx-auto mt-1.5 max-w-xs text-role-label font-normal leading-relaxed text-ink-dim">
+            <p className="mx-auto mt-1.5 max-w-xs text-role-meta leading-relaxed text-ink-dim">
               {source === "demo" ? t("mail.emptyDemoBody") : t("mail.emptyBody")}
             </p>
             <button
@@ -1969,8 +1946,10 @@ function EmailRowItem({
               </span>
             </span>
             <span
-              className={`mt-1 block truncate text-role-label ${
-                unread ? "font-medium text-ink-strong" : "font-normal text-ink-muted"
+              className={`mt-1 block truncate ${
+                unread
+                  ? "text-role-label font-medium text-ink-strong"
+                  : "text-role-meta text-ink-muted"
               }`}
             >
               {email.subject || t("common.noSubject")}
@@ -2207,7 +2186,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
             </time>
           </span>
           <span
-            className={`mt-1 block truncate text-role-label ${thread.hasUnread ? "font-medium text-ink-strong" : "font-normal text-ink-muted"}`}
+            className={`mt-1 block truncate ${thread.hasUnread ? "text-role-label font-medium text-ink-strong" : "text-role-meta text-ink-muted"}`}
           >
             {thread.subject || t("common.noSubject")}
           </span>
@@ -2432,7 +2411,7 @@ function MobileEmailRow({
             </time>
           </span>
           <span
-            className={`mt-0.5 block truncate text-role-label font-normal ${unread ? "text-ink" : "text-ink-mid"}`}
+            className={`mt-0.5 block truncate text-role-meta ${unread ? "text-ink" : "text-ink-mid"}`}
           >
             {email.subject || t("common.noSubject")}
           </span>

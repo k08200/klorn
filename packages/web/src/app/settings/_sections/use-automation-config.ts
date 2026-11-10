@@ -36,6 +36,13 @@ export interface AutomationConfig {
   attentionMode?: string;
   autoReplyGuideline?: string | null;
   autoReplyGuidelineDefault?: string;
+  /**
+   * Attention engine v3 daily interrupt budget: sent only for a user under the
+   * policy (routes/automations.ts interruptBudgetFields). null = the default.
+   */
+  interruptBudget?: number | null;
+  interruptBudgetDefault?: number | null;
+  interruptBudgetMax?: number;
 }
 
 /**

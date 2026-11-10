@@ -39,7 +39,7 @@ export async function getOrBuildPath(
   userId: string,
   commitmentId: string,
 ): Promise<CommitmentPathData> {
-  const existing = await loadPath(commitmentId);
+  const existing = await loadPath(userId, commitmentId);
   if (existing) return existing;
   return buildPath(userId, commitmentId);
 }
@@ -124,7 +124,7 @@ export async function materializeStepAsTask(
   commitmentId: string,
   stepIndex: number,
 ): Promise<{ taskId: string }> {
-  const path = await loadPath(commitmentId);
+  const path = await loadPath(userId, commitmentId);
   if (!path) throw new Error("No path found for commitment");
 
   const step = path.steps[stepIndex];
@@ -163,7 +163,7 @@ export async function materializeAllSteps(
   userId: string,
   commitmentId: string,
 ): Promise<{ taskIds: string[] }> {
-  const path = await loadPath(commitmentId);
+  const path = await loadPath(userId, commitmentId);
   if (!path) throw new Error("No path found for commitment");
 
   const taskIds: string[] = [];
@@ -201,11 +201,12 @@ export async function materializeAllSteps(
 
 // ─── Internals ────────────────────────────────────────────────────────────────
 
-async function loadPath(commitmentId: string): Promise<CommitmentPathData | null> {
+/** The stored path of one of `userId`'s commitments; null for any other id. */
+async function loadPath(userId: string, commitmentId: string): Promise<CommitmentPathData | null> {
   const model = (
     prisma as unknown as {
       commitmentPath?: {
-        findUnique: (args: unknown) => Promise<{
+        findFirst: (args: unknown) => Promise<{
           id: string;
           steps: unknown;
           builtAt: Date;
@@ -216,7 +217,7 @@ async function loadPath(commitmentId: string): Promise<CommitmentPathData | null
   ).commitmentPath;
   if (!model) return null;
 
-  const row = await model.findUnique({ where: { commitmentId } });
+  const row = await model.findFirst({ where: { commitmentId, commitment: { userId } } });
   if (!row) return null;
 
   return {

@@ -177,7 +177,7 @@ describe("a failure comes back as a code, never as a throw", () => {
       "rate-limited",
     ],
     [
-      "every provider down (#1319)",
+      "every provider down (#1572)",
       () => new openai.AllProvidersExhaustedError("402"),
       "llm-unavailable",
     ],

@@ -102,6 +102,14 @@ describe("neutralizeMailHtml — XSS", () => {
     expect(() =>
       neutralizeMailHtml('<a href="&#x110000;https://a.example" title="&#99999999999;">a</a>'),
     ).not.toThrow();
+    expect(neutralizeMailHtml('<p title="&#x110000;">x</p>')).toBe('<p title="�">x</p>');
+  });
+
+  it("maps zero and surrogate numeric entities to U+FFFD, as the HTML tokenizer does", () => {
+    for (const ref of ["&#0;", "&#x0;", "&#xD800;", "&#xDFFF;", "&#56320;"]) {
+      const out = neutralizeMailHtml(`<p title="a${ref}b">x</p>`);
+      expect(out).toBe('<p title="a�b">x</p>');
+    }
   });
 
   it.each([

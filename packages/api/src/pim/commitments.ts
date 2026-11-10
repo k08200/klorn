@@ -114,15 +114,25 @@ export async function upsertCommitment(
   return commitment;
 }
 
-export async function updateCommitment(id: string, patch: CommitmentUpdate): Promise<Commitment> {
+/**
+ * Update one of `userId`'s commitments. The owner is part of the filter, so
+ * another user's id matches no row and Prisma rejects the update (P2025).
+ */
+export async function updateCommitment(
+  id: string,
+  userId: string,
+  patch: CommitmentUpdate,
+): Promise<Commitment> {
   const data: Record<string, unknown> = { ...patch };
   if (patch.status === "DONE") data.completedAt = new Date();
-  const commitment = await prisma.commitment.update({ where: { id }, data });
+  const commitment = await prisma.commitment.update({ where: { id, userId }, data });
   await upsertAttentionForCommitment(commitment);
   return commitment;
 }
 
+/** Delete one of `userId`'s commitments and its queue mirror; no-op for any other id. */
 export async function deleteCommitment(id: string, userId: string): Promise<void> {
-  await prisma.commitment.delete({ where: { id } });
+  const { count } = await prisma.commitment.deleteMany({ where: { id, userId } });
+  if (count === 0) return;
   await deleteAttentionForCommitments([id], userId);
 }

@@ -13,6 +13,9 @@ import { likeContainsPattern } from "../db-like.js";
 import { withStatementTimeout } from "../db-statement-timeout.js";
 import { captureError } from "../sentry.js";
 import { toLiveTier } from "./tiers.js";
+import { heldTodaySql } from "./v3/held-today.js";
+import { V3_ITEM_SELECT, type V3ItemRow } from "./v3/item-wire.js";
+import { RANKED_GROUPED_ORDER, rankedOrderSql, rankKeyColumnsSql } from "./v3/ranked-sql.js";
 
 /**
  * Map each email id on a list page to its normalized lane. Deliberately no
@@ -72,6 +75,28 @@ export async function listLaneInfoByEmail(
     );
   } catch (err) {
     captureError(err, { tags: { scope: "email.lane_lookup" }, extra: { userId } });
+    return new Map();
+  }
+}
+
+/**
+ * Each mail's stored v3 decision columns (v3/item-wire.ts maps them), for a
+ * user under the policy. Same fail-soft contract as the chip lookup: a failure
+ * yields an empty map (no v3 block), never a 500.
+ */
+export async function listV3RowsByEmail(
+  userId: string,
+  emailIds: string[],
+): Promise<Map<string, V3ItemRow>> {
+  if (emailIds.length === 0) return new Map();
+  try {
+    const rows = await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: emailIds } },
+      select: { sourceId: true, ...V3_ITEM_SELECT },
+    });
+    return new Map(rows.map(({ sourceId, ...row }) => [sourceId, row]));
+  } catch (err) {
+    captureError(err, { tags: { scope: "email.v3_lookup" }, extra: { userId } });
     return new Map();
   }
 }
@@ -219,6 +244,19 @@ export interface LanePageQuery {
    * no fallback is needed here. Absent = no time bound (every Mail lane view).
    */
   receivedSince?: Date;
+  /**
+   * Opt-in (`GET /api/email?tier=QUEUE&window=held`, Today's "Held back"
+   * group, users under the v3 policy only): QUEUE mail the interrupt budget
+   * held at or after this time and that still shows the hold
+   * (v3/held-today.ts). Absent = no held bound.
+   */
+  heldSince?: Date;
+  /**
+   * Attention engine v3, for a user under the policy: the QUEUE lane in ranked
+   * order as of this time (v3/ranked-sql.ts). Ignored for every other lane.
+   * Absent = newest first, as today.
+   */
+  rankedAt?: Date;
   skip: number;
   take: number;
 }
@@ -238,6 +276,8 @@ export async function pageEmailIdsInLane(
 ): Promise<{ ids: string[]; total: number }> {
   if (query.scope.kind === "unknown") return { ids: [], total: 0 };
   const from = laneFromSql(query);
+  const rankedAt = rankedTime(query);
+  if (rankedAt) return rankedLanePage(query, from, rankedAt);
   const [rows, totals] = await Promise.all([
     prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT e."id" AS id
@@ -249,6 +289,29 @@ export async function pageEmailIdsInLane(
       ${from}`),
   ]);
   return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+}
+
+/**
+ * The ranked QUEUE page. No index serves the ranked order, so it sorts the
+ * whole lane: like the thread page it runs under the statement timeout, and a
+ * slow sort throws QueryTimeoutError (the route answers a retryable 503).
+ */
+async function rankedLanePage(
+  query: LanePageQuery,
+  from: Prisma.Sql,
+  rankedAt: Date,
+): Promise<{ ids: string[]; total: number }> {
+  return withStatementTimeout(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      ORDER BY ${rankedOrderSql(rankedAt)}
+      LIMIT ${query.take} OFFSET ${query.skip}`);
+    const totals = await tx.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS total
+      ${from}`);
+    return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+  });
 }
 
 /**
@@ -280,6 +343,11 @@ export async function pageThreadsInLane(
 ): Promise<{ rows: Array<{ id: string; threadCount: number }>; total: number }> {
   if (query.scope.kind === "unknown") return { rows: [], total: 0 };
   const from = laneFromSql(query);
+  const rankedAt = rankedTime(query);
+  // Ranked: a thread ranks by its newest message in the view (the row DISTINCT
+  // ON keeps), so its rank keys ride the grouped row.
+  const rankKeys = rankedAt ? rankKeyColumnsSql(rankedAt) : Prisma.empty;
+  const order = rankedAt ? RANKED_GROUPED_ORDER : Prisma.sql`"receivedAt" DESC, id DESC`;
   return withStatementTimeout(async (tx) => {
     const rows = await tx.$queryRaw<Array<{ id: string; threadCount: number; total: number }>>(
       Prisma.sql`
@@ -288,11 +356,12 @@ export async function pageThreadsInLane(
                e."id" AS id,
                e."receivedAt" AS "receivedAt",
                (COUNT(*) OVER (PARTITION BY ${THREAD_KEY}))::int AS "threadCount"
+               ${rankKeys}
         ${from}
         ORDER BY ${THREAD_KEY}, e."receivedAt" DESC, e."id" DESC
       )
       SELECT id, "threadCount", (COUNT(*) OVER ())::int AS total FROM grouped
-      ORDER BY "receivedAt" DESC, id DESC
+      ORDER BY ${order}
       LIMIT ${query.take} OFFSET ${query.skip}`,
     );
     const page = rows.map((row) => ({ id: row.id, threadCount: Number(row.threadCount) }));
@@ -308,7 +377,15 @@ export async function pageThreadsInLane(
 /** What a list view is made of: the FROM / WHERE both the page and the reader's neighbours read. */
 type LaneViewQuery = Pick<
   LanePageQuery,
-  "userId" | "scope" | "filter" | "category" | "search" | "hideHandled" | "receivedSince"
+  | "userId"
+  | "scope"
+  | "filter"
+  | "category"
+  | "search"
+  | "hideHandled"
+  | "receivedSince"
+  | "heldSince"
+  | "rankedAt"
 > & {
   /** One live lane, or ALL for every lane (no join at all). */
   lane: LaneFilter;
@@ -326,7 +403,8 @@ function laneFromSql(query: LaneViewQuery): Prisma.Sql {
       ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
       ${searchSql(query.search)}
       ${query.hideHandled ? HANDLED_EXCLUSION : Prisma.empty}
-      ${query.receivedSince ? Prisma.sql`AND e."receivedAt" >= ${query.receivedSince}` : Prisma.empty}`;
+      ${query.receivedSince ? Prisma.sql`AND e."receivedAt" >= ${query.receivedSince}` : Prisma.empty}
+      ${query.heldSince ? heldTodaySql(query.heldSince) : Prisma.empty}`;
 }
 
 export interface LaneNeighbourQuery extends LaneViewQuery {
@@ -345,6 +423,8 @@ export async function neighbourEmailIdsInLane(
   query: LaneNeighbourQuery,
 ): Promise<{ newerId: string | null; olderId: string | null }> {
   if (query.scope.kind === "unknown") return { newerId: null, olderId: null };
+  const rankedAt = rankedTime(query);
+  if (rankedAt) return rankedNeighbours(query, rankedAt);
   const from = laneFromSql(query);
   const anchor = Prisma.sql`(SELECT c."receivedAt", c."id" FROM "EmailMessage" c
     WHERE c."id" = ${query.emailId} AND c."userId" = ${query.userId})`;
@@ -363,6 +443,49 @@ export async function neighbourEmailIdsInLane(
       LIMIT 1`),
   ]);
   return { newerId: newer[0]?.id ?? null, olderId: older[0]?.id ?? null };
+}
+
+/** The ranking time when this view is the ranked QUEUE; undefined otherwise. */
+function rankedTime(query: Pick<LaneViewQuery, "lane" | "rankedAt">): Date | undefined {
+  return query.lane === "QUEUE" ? query.rankedAt : undefined;
+}
+
+/**
+ * The reader's previous / next in the ranked QUEUE. Ranked order has no
+ * keyset, so rows are numbered in that order and the anchor's neighbours are
+ * the rows numbered one above and one below. It runs under the statement
+ * timeout (QueryTimeoutError → a retryable 503). The anchor joins the numbering
+ * even when it is no longer in the view (it may just have been moved out), so
+ * walking on still works. Read by id AND owner, like the time-ordered path.
+ */
+async function rankedNeighbours(
+  query: LaneNeighbourQuery,
+  rankedAt: Date,
+): Promise<{ newerId: string | null; olderId: string | null }> {
+  // Numbering sorts the whole lane: bounded like the ranked page.
+  const rows = await withStatementTimeout((tx) =>
+    tx.$queryRaw<Array<{ id: string; offset: number }>>(Prisma.sql`
+    WITH candidates AS (
+      SELECT e."id" AS id ${laneFromSql(query)}
+      UNION
+      SELECT c."id" FROM "EmailMessage" c
+      WHERE c."id" = ${query.emailId} AND c."userId" = ${query.userId}
+    ),
+    numbered AS (
+      SELECT e."id" AS id, ROW_NUMBER() OVER (ORDER BY ${rankedOrderSql(rankedAt)}) AS rn
+      FROM candidates
+      JOIN "EmailMessage" e ON e."id" = candidates.id AND e."userId" = ${query.userId}
+      LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}
+    ),
+    anchor AS (SELECT rn FROM numbered WHERE id = ${query.emailId})
+    SELECT n.id AS id, (n.rn - anchor.rn)::int AS "offset"
+    FROM numbered n, anchor
+    WHERE n.rn IN (anchor.rn - 1, anchor.rn + 1)`),
+  );
+  return {
+    newerId: rows.find((r) => Number(r.offset) === -1)?.id ?? null,
+    olderId: rows.find((r) => Number(r.offset) === 1)?.id ?? null,
+  };
 }
 
 export function emptyLaneCounts(): EmailLaneCounts {

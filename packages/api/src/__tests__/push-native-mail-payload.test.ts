@@ -190,3 +190,37 @@ describe("FCM data-only message (dataMessages device, ANDROID_DATA_PUSH_ENABLED)
     });
   });
 });
+
+describe("decision N1: the mail's lane picks the native action set", () => {
+  const mail = { ...BASE, emailId: "email-1", attentionItemId: "item-1" };
+
+  it("APNs: a MEETING mail takes KLORN_PUSH_MEETING; a PUSH mail keeps KLORN_PUSH_MAIL", () => {
+    const meeting = JSON.parse(buildApnsBody({ ...mail, lane: "MEETING" }, "email_urgent"));
+    expect(meeting.aps.category).toBe("KLORN_PUSH_MEETING");
+    expect(meeting.lane).toBe("MEETING");
+    const push = JSON.parse(buildApnsBody({ ...mail, lane: "PUSH" }, "email_urgent"));
+    expect(push.aps.category).toBe("KLORN_PUSH_MAIL");
+    expect(push.lane).toBe("PUSH");
+  });
+
+  it("APNs: a reply draft still wins over the lane", () => {
+    const parsed = JSON.parse(
+      buildApnsBody({ ...mail, lane: "MEETING", pendingActionId: "pa-1" }, "email_urgent"),
+    );
+    expect(parsed.aps.category).toBe("KLORN_PUSH_MAIL_DRAFT");
+  });
+
+  it("APNs / FCM: no lane key without one (payloads stay as before)", () => {
+    expect(JSON.parse(buildApnsBody(mail, "email_urgent"))).not.toHaveProperty("lane");
+    expect(buildFcmMessage("tok", mail, "email_urgent").data).not.toHaveProperty("lane");
+  });
+
+  it("FCM: the lane rides the data block (Android picks the action set from it)", () => {
+    expect(buildFcmMessage("tok", { ...mail, lane: "MEETING" }, "email_urgent").data).toMatchObject(
+      {
+        lane: "MEETING",
+        emailId: "email-1",
+      },
+    );
+  });
+});

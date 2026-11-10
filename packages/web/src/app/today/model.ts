@@ -5,7 +5,7 @@
  * it (packages/api/src/__tests__/web-today-model.test.ts).
  */
 
-import type { InboxProvider, LiveTier } from "@klorn/contract";
+import type { InboxProvider, InterruptBudgetStatus, LiveTier } from "@klorn/contract";
 
 /** Rows shown in an expanded lane (PUSH, MEETING) before "N more in Mail". */
 export const EXPANDED_LANE_ROWS = 8;
@@ -97,6 +97,57 @@ export function todayHeaderSummary(counts: TodayHeaderCounts): TodayHeaderSummar
 /** The waiting phrase's key, singular for exactly one (the `.one` / `.many` pattern). */
 export function todayWaitingKey(count: number): string {
   return count === 1 ? "today.strip.waiting.one" : "today.strip.waiting.many";
+}
+
+/**
+ * The cover screen's "N of M interruptions today" (Fold cover, < 360px). Only
+ * from the budget the Today read already carries (attention engine v3, behind
+ * its flag): no budget, no limit, or a value that makes no sense draws
+ * nothing — the meter never guesses. The bar fills to `ratio`, capped at 1;
+ * the text keeps the server's own count.
+ */
+export interface CoverMeter {
+  used: number;
+  limit: number;
+  ratio: number;
+}
+
+export function coverMeter(budget: InterruptBudgetStatus | null | undefined): CoverMeter | null {
+  if (!budget) return null;
+  const { limit, used } = budget;
+  if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) return null;
+  if (!Number.isFinite(used) || used < 0) return null;
+  return { used, limit, ratio: Math.min(used / limit, 1) };
+}
+
+/**
+ * Today's "Held back" group (founder design N2, 2026-11-08): PUSH-worthy mail
+ * the daily interrupt budget held today, so it did not ring. Read through the
+ * QUEUE lane page (`window=held`, users under the v3 policy only), so only
+ * asked for once the PUSH read carries the budget. Like the meter, it never
+ * guesses: no budget, no read yet, or nothing held draws nothing.
+ */
+export function todayHeldQuery(): string {
+  return "&threads=1&window=held";
+}
+
+export interface HeldBack<Row> {
+  /** Held threads today: the server's total, never fewer than the rows shown. */
+  count: number;
+  shown: Row[];
+  more: number;
+}
+
+export function heldBack<Row>(
+  budget: InterruptBudgetStatus | null | undefined,
+  rows: readonly Row[] | null,
+  total: number | null,
+): HeldBack<Row> | null {
+  if (!budget || rows === null || total === null) return null;
+  const count = Math.max(total, rows.length);
+  if (count <= 0) return null;
+  const { shown, more } = laneBlock(rows, count, EXPANDED_LANE_ROWS);
+  return { count, shown, more };
 }
 
 // ── Calendar ────────────────────────────────────────────────────────────────

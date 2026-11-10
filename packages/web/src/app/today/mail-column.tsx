@@ -29,6 +29,7 @@ import {
   MailRowsSkeleton,
   TodayBlock,
 } from "./block";
+import { HeldBackGroup } from "./held-back";
 import { MAIL_HREF, preselectMailLane } from "./mail-link";
 import { EXPANDED_LANE_ROWS, laneBlock, olderOutsideWindow, QUEUE_LANE_ROWS } from "./model";
 import { useLaneCounts, useLaneMail } from "./use-today-data";
@@ -67,6 +68,7 @@ export function MailColumn({ accounts, time, className = "" }: MailColumnProps) 
       className={`contents @min-[912px]:flex @min-[912px]:flex-col @min-[912px]:gap-7 ${className}`}
     >
       <LaneBlock lane="PUSH" accounts={accounts} time={time} />
+      <HeldBackGroup time={time} idPrefix="today-held" className="order-1" />
       <LaneBlock lane="MEETING" accounts={accounts} time={time} />
       <LaneBlock lane="QUEUE" accounts={accounts} time={time} />
       <InfoRow />
@@ -201,7 +203,7 @@ function InfoRow() {
         <h2 id={headingId} className="flex shrink-0 items-center gap-2 text-role-head text-ink">
           <LaneChip tier="INFO" />
         </h2>
-        <span className="min-w-0 truncate text-role-label font-normal text-ink-muted">
+        <span className="min-w-0 truncate text-role-meta text-ink-muted">
           {t("today.lane.info.hint")}
         </span>
         <span className="flex-1" />

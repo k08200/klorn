@@ -1,6 +1,7 @@
 import postcss from "postcss";
 import { describe, expect, it } from "vitest";
 import { renderableEmailHtml, stripPositioningStyles } from "../mail/email-text.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 // renderableEmailHtml allowed the style attribute with no CSS filter, so a
 // sender could pin a fake UI over the reader with position:fixed (the client
@@ -46,9 +47,7 @@ describe("stripPositioningStyles", () => {
 
   it("is linear on a hostile attribute", () => {
     const hostile = `${";".repeat(200_000)}position:fixed${":".repeat(200_000)}`;
-    const start = performance.now();
-    stripPositioningStyles(hostile);
-    expect(performance.now() - start).toBeLessThan(500);
+    expect(fastestCpuMs(() => stripPositioningStyles(hostile))).toBeLessThan(500);
   });
 });
 
@@ -93,9 +92,8 @@ describe("stripPositioningStyles reads CSS the way the sanitizer re-emits it", (
 
   it("drops an oversized style before parsing it (postcss is quadratic on one giant declaration)", () => {
     const hostile = "a/*;*/:".repeat(60_000);
-    const start = performance.now();
-    expect(stripPositioningStyles(hostile)).toBe("");
-    expect(performance.now() - start).toBeLessThan(200);
+    const ms = fastestCpuMs(() => expect(stripPositioningStyles(hostile)).toBe(""));
+    expect(ms).toBeLessThan(200);
   });
 
   it("keeps a custom property's case, which var() references depend on", () => {

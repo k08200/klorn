@@ -128,7 +128,11 @@ covers it. Behind `MANUAL_SEND_RECEIPTS_ENABLED` (OFF by default),
 
 The hash stays `v1` over `{ to, subject, body }`. The reply's thread and
 In-Reply-To are resolved by the server from the user's own row, so they are not
-agent-supplied reply context. The source email id and the account are stored
-next to the receipt for audit. `POST /api/email/compose` is not wired in, because
-the v1 hash does not cover attachments. Covering it needs a new payload hash and
-a schema bump.
+agent-supplied reply context. That holds for a `POST /api/email/send` that names
+the mail it answers (`inReplyToEmailId`, the web AI-draft reply): the id must be
+the caller's own mail, and only its server-read thread and headers are added.
+When the request names no account, the reply leaves from the inbox that mail
+arrived in, checked as the caller's own like a named one.
+The source email id and the account are stored next to the receipt for audit.
+`POST /api/email/compose` is not wired in, because the v1 hash does not cover
+attachments. Covering it needs a new payload hash and a schema bump.

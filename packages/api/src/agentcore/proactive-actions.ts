@@ -490,12 +490,17 @@ async function notify(
     userId,
     { title, body: message.slice(0, 200), url },
     categoryForType(type),
+    // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
+    // warning is not a meeting starting), so it cannot use up the interrupt
+    // room real meeting alerts and urgent mail need (push-bucket.ts).
+    { bucket: "ambient" },
   ).catch((err) => {
     console.warn(`[PROACTIVE] push failed for ${userId}:`, err);
     captureError(err, { tags: { scope: "proactive.push", userId } });
   });
 }
 
+/** Preferences, quiet hours and label only; the push rings ambient regardless. */
 function categoryForType(type: string): NotifCategory {
   switch (type) {
     case "calendar":

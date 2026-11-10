@@ -6,8 +6,9 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
 import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
+import { deliverInPageAlert } from "../lib/in-page-notify";
 import { openExternal, shellKind } from "../lib/native/shell";
-import { deliverDesktopAlert } from "../lib/native/tauri-notify";
+import { catchUpDesktopAlerts, deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
   getTypeLabel,
   groupNotifications,
@@ -180,10 +181,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
       if (notif.id) {
         // Windows desktop shell: banner server-tagged PUSH / meeting frames
-        // (lib/native/desktop-alerts.ts — its own once-per-id dedupe). Runs
-        // before the seen check below: a list refetch can record this id
-        // before the frame arrives, and that must not swallow the banner.
-        if (shellKind() === "tauri") void deliverDesktopAlert(payload);
+        // (lib/native/desktop-catchup.ts — a per-account ledger shared with
+        // catch-up). Runs before the seen check below: a list refetch can
+        // record this id before the frame arrives, and that must not swallow
+        // the banner.
+        if (shellKind() === "tauri") void deliverDesktopAlert(userId, payload);
 
         // Track seen notification IDs to prevent duplicate desktop notifications
         if (seenIdsRef.current.has(notif.id)) return;
@@ -196,29 +198,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
         triggerFlash();
 
-        // Not inside the Tauri shell: its notification plugin replaces
-        // window.Notification, so this generic path would toast EVERY frame
-        // (agent notes, briefings, QUEUE) there. The shell banners above.
-        if (
-          shellKind() !== "tauri" &&
-          typeof window !== "undefined" &&
-          "Notification" in window &&
-          window.Notification.permission === "granted"
-        ) {
-          try {
-            new window.Notification(notif.title, {
-              body: notif.message,
-              icon: "/icon-192.png",
-              requireInteraction: true,
-            });
-          } catch {
-            // Notification constructor failed — ignore
-          }
-        }
+        // Browser tab: an OS notification only for server-tagged PUSH /
+        // meeting frames (the user's notification gate already passed), and
+        // only when the service worker will not show it from Web Push
+        // (lib/in-page-alerts.ts). Every other frame only updates the bell.
+        // No-op inside the Tauri shell, which banners above.
+        void deliverInPageAlert(payload);
       }
     });
     return unsub;
-  }, [on, triggerFlash]);
+  }, [on, triggerFlash, userId]);
 
   // Pull the authoritative notification list from the server (source of truth).
   // WebSocket delivery is best-effort and lives only in server memory, so any
@@ -239,6 +228,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
           // Seed seen IDs so fetched notifications don't re-trigger desktop alerts
           for (const n of notifs) seenIdsRef.current.add(n.id);
           setNotifications(notifs);
+          // Windows desktop shell: frames sent while the app was quit, asleep
+          // or disconnected are gone (the socket has no replay), so banner the
+          // PUSH / meeting rows not announced yet — capped, fresh only, silent
+          // on the first run (lib/native/desktop-catchup.ts).
+          if (shellKind() === "tauri") void catchUpDesktopAlerts(userId, notifs);
           if (opts?.flashOnNew && initializedRef.current && hasNew) {
             triggerFlash();
           }
@@ -246,7 +240,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         })
         .catch(() => {});
     },
-    [triggerFlash],
+    [triggerFlash, userId],
   );
 
   // Re-sync with the server whenever the tab is reactivated, the network
@@ -483,7 +477,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           )}
           {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 ml-auto" />}
         </div>
-        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
+        <p className="text-role-meta md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
           {n.message}
         </p>
         <div className="flex items-center gap-2 mt-1 ml-6">
@@ -555,7 +549,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
           </span>
         </div>
-        <p className="text-role-label font-normal md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
+        <p className="text-role-meta md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
         <p className="text-role-caption text-ink-mid mt-1 ml-6">

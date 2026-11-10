@@ -124,11 +124,13 @@
 "prefs.section.about" = "ABOUT";
 
 "prefs.banners" = "Show macOS banners on this Mac";
-"prefs.banners.detail" = "A banner for each new PUSH mail, showing the sender and subject only. A local master switch: off silences every banner here regardless of the categories above; the PUSH count in the main window still updates.";
+"prefs.banners.detail" = "A banner for each new PUSH or MEETING mail, showing the sender and subject only. A local master switch: off silences every banner here regardless of the categories above; the PUSH count in the main window still updates.";
 "prefs.banners.denied" = "macOS is blocking Klorn's notifications. Allow them in System Settings ▸ Notifications.";
 "prefs.banners.openSystemSettings" = "Open System Settings";
 "prefs.section.support" = "APP & SUPPORT";
 "push.announce" = "New PUSH mail: %d";
+"push.announce.meeting" = "New MEETING mail: %d";
+"push.heldSummary.title" = "%d urgent emails during quiet hours";
 "prefs.launchAtLogin" = "Start Klorn at login";
 "prefs.launchAtLogin.unavailable.label" = "Start at login";
 "prefs.launchAtLogin.unavailable.value" = "Packaged app only";
@@ -188,7 +190,7 @@
 "auto.preset.detail" = "Essentials only: mail that needs an answer, plus anything on your calendar. Everything else stays in the bar without a banner.";
 
 "auto.notify.emailUrgent" = "Urgent email";
-"auto.notify.emailUrgent.detail" = "Mail Klorn sorts into PUSH — someone is waiting on you.";
+"auto.notify.emailUrgent.detail" = "Mail Klorn sorts into PUSH or MEETING — someone is waiting on you.";
 "auto.notify.meeting" = "Meetings";
 "auto.notify.meeting.detail" = "Calendar events about to start.";
 "auto.notify.taskDue" = "Tasks due";

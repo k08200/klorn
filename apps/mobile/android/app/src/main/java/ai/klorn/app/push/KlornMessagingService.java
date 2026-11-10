@@ -54,8 +54,8 @@ public class KlornMessagingService extends MessagingService {
     public static final String EXTRA_NOTIFICATION_ID = "klornNotificationId";
 
     static final String ACTION_LATER = "KLORN_LATER";
+    static final String ACTION_NOT_URGENT = "KLORN_NOT_URGENT";
     static final String ACTION_DONE = "KLORN_DONE";
-    static final String ACTION_REVIEW = "KLORN_REVIEW";
 
     /** Written by the app in its language (src/platform/local-notify.ts); Capacitor Preferences' file. */
     private static final String PREFS_GROUP = "CapacitorStorage";
@@ -120,10 +120,13 @@ public class KlornMessagingService extends MessagingService {
             .setContentIntent(intentFor(push, tapId, null, 0));
 
         if (push.category != null) {
-            // Same order as src/push/android.ts androidActionTypes: In 1 hour · Done · Review.
+            // Same order as src/push/android.ts androidActionTypes (decision N1):
+            // Later · Not urgent · Done; a MEETING mail gets Later only.
             builder.addAction(0, labels.later, intentFor(push, tapId, ACTION_LATER, 1));
-            builder.addAction(0, labels.done, intentFor(push, tapId, ACTION_DONE, 2));
-            builder.addAction(0, labels.review, intentFor(push, tapId, ACTION_REVIEW, 3));
+            if (!KlornPushPayload.CATEGORY_MEETING.equals(push.category)) {
+                builder.addAction(0, labels.notUrgent, intentFor(push, tapId, ACTION_NOT_URGENT, 2));
+                builder.addAction(0, labels.done, intentFor(push, tapId, ACTION_DONE, 3));
+            }
         }
         try {
             manager.notify(push.notificationId, builder.build());
@@ -185,15 +188,15 @@ public class KlornMessagingService extends MessagingService {
     static final class Labels {
 
         final String later;
+        final String notUrgent;
         final String done;
-        final String review;
         final String pushChannel;
         final String otherChannel;
 
-        Labels(String later, String done, String review, String pushChannel, String otherChannel) {
+        Labels(String later, String notUrgent, String done, String pushChannel, String otherChannel) {
             this.later = later;
+            this.notUrgent = notUrgent;
             this.done = done;
-            this.review = review;
             this.pushChannel = pushChannel;
             this.otherChannel = otherChannel;
         }
@@ -209,8 +212,8 @@ public class KlornMessagingService extends MessagingService {
             JSONObject o = new JSONObject(json);
             return new Labels(
                 o.optString("later", fallback.later),
+                o.optString("notUrgent", fallback.notUrgent),
                 o.optString("done", fallback.done),
-                o.optString("review", fallback.review),
                 o.optString("pushChannel", fallback.pushChannel),
                 o.optString("otherChannel", fallback.otherChannel)
             );
@@ -223,19 +226,19 @@ public class KlornMessagingService extends MessagingService {
         String lang = Locale.getDefault().getLanguage();
         switch (lang) {
             case "ko":
-                return new Labels("1시간 뒤에", "처리 완료", "검토하기", "PUSH 메일", "기타 알림");
+                return new Labels("나중에", "급하지 않음", "처리 완료", "PUSH 메일", "기타 알림");
             case "ja":
-                return new Labels("1時間後に", "処理済み", "確認する", "PUSH メール", "その他の通知");
+                return new Labels("あとで", "急ぎではない", "処理済み", "PUSH メール", "その他の通知");
             case "zh":
-                return new Labels("1 小时后", "已处理", "查看", "PUSH 邮件", "其他通知");
+                return new Labels("稍后", "不紧急", "已处理", "PUSH 邮件", "其他通知");
             case "es":
-                return new Labels("En 1 hora", "Hecho", "Revisar", "Correo PUSH", "Otras notificaciones");
+                return new Labels("Más tarde", "No urgente", "Hecho", "Correo PUSH", "Otras notificaciones");
             case "fr":
-                return new Labels("Dans 1 heure", "Traité", "Examiner", "E-mails PUSH", "Autres notifications");
+                return new Labels("Plus tard", "Pas urgent", "Traité", "E-mails PUSH", "Autres notifications");
             case "de":
-                return new Labels("In 1 Stunde", "Erledigt", "Prüfen", "PUSH-Mails", "Weitere Benachrichtigungen");
+                return new Labels("Später", "Nicht dringend", "Erledigt", "PUSH-Mails", "Weitere Benachrichtigungen");
             default:
-                return new Labels("In 1 hour", "Done", "Review", "PUSH mail", "Other notifications");
+                return new Labels("Later", "Not urgent", "Done", "PUSH mail", "Other notifications");
         }
     }
 }

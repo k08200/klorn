@@ -27,6 +27,12 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      # Client address for rate limits (security/client-address.ts). Render's
+      # edge is Cloudflare, which sets CF-Connecting-IP; a request that already
+      # carries one is answered 403 at the edge (measured 2026-11-09). Also the
+      # default when RENDER=true.
+      - key: CLIENT_IP_SOURCE
+        value: cf-connecting-ip
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
@@ -121,10 +127,6 @@ services:
         value: "https://klorn.ai,https://www.klorn.ai,https://app.klorn.ai"
       - key: RENDER_EXTERNAL_URL
         value: "https://klorn-api.onrender.com"
-      - key: BETA_AUTO_PRO_ENABLED
-        sync: false
-      - key: BETA_AUTO_PRO_LIMIT
-        sync: false
       # iCloud Mail connect + sync (Phase 2, multi-provider plan). OFF until
       # the CASA Letter of Assessment is issued — while unset/false, every
       # /api/icloud-imap route 404s and the poll never selects ICLOUD rows.

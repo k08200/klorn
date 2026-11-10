@@ -16,6 +16,8 @@ import type {
   InboxPurpose,
   LiveTier,
   TrustWire,
+  V3ItemBlock,
+  V3TodayFields,
 } from "@klorn/contract";
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -42,6 +44,10 @@ import {
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { isTier } from "../judge/tiers.js";
 import { TODAY_WINDOW, todayPushCutoff } from "../judge/today-push-window.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { HELD_WINDOW, heldTodayCutoff } from "../judge/v3/held-today.js";
+import { budgetDayFor } from "../judge/v3/push-budget-gate.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
   getTrustScore,
@@ -97,6 +103,7 @@ import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
 import { registerEmailFeedbackRoutes } from "./email-feedback.js";
 import { registerEmailLaneRoutes } from "./email-lanes.js";
+import { registerEmailLaterRoutes } from "./email-later.js";
 import { registerEmailMailboxRoutes } from "./email-mailbox.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
@@ -447,6 +454,26 @@ function normalizeEmailQueue(value: unknown): EmailQueueKey {
 }
 
 /**
+ * The v3 fields for a list page (attention-engine-v3.md §3(5)): a block per
+ * mail, ranks on a ranked QUEUE page, and Today's fields on Today's request (a
+ * ranked QUEUE page carries rankedAt alone).
+ */
+async function v3ListFields(
+  userId: string,
+  inbox: string | undefined,
+  rows: ReadonlyArray<{ id: string; subject: string | null }>,
+  opts: { rankedAt: Date; rankFrom: number | null; today: boolean },
+): Promise<{ blocks: Map<string, V3ItemBlock>; response: V3TodayFields }> {
+  const { v3BlocksFor, v3TodayFields } = await import("../judge/v3/read-fields.js");
+  const blocks = await v3BlocksFor(userId, rows, opts.rankFrom, opts.rankedAt);
+  if (opts.today) {
+    return { blocks, response: await v3TodayFields(userId, inbox, opts.rankedAt) };
+  }
+  const response = opts.rankFrom === null ? {} : { rankedAt: opts.rankedAt.toISOString() };
+  return { blocks, response };
+}
+
+/**
  * GET / for a user with no connected mail source. `source: "demo"` is kept
  * as the wire marker clients already read as "not connected" (actions
  * disabled, connect prompt), but no rows: nobody is shown an inbox that is not
@@ -650,7 +677,9 @@ const listEmailsQuerySchema = {
     threads: { type: "string", enum: ["0", "1", "false", "true"] },
     // Opt-in, lane views only: Today's PUSH block window (today-push-window.ts).
     // Only Today sends it; Mail's lane lists never do.
-    window: { type: "string", enum: [TODAY_WINDOW] },
+    // "held" (QUEUE only, users under the v3 policy): Today's "Held back"
+    // group, mail the daily interrupt budget held today (v3/held-today.ts).
+    window: { type: "string", enum: [TODAY_WINDOW, HELD_WINDOW] },
   },
 } as const;
 
@@ -683,6 +712,10 @@ const emailDetailQuerySchema = {
   properties: {
     // The client's UI language for template lines (request-language.ts).
     lang: LANG_QUERY_PROPERTY,
+    // Set when the caller fetches the detail for something other than showing
+    // the mail (mobile Files reads attachments): not a reader open, so no
+    // OPENED stamp. Any value counts; older servers strip it unseen.
+    purpose: { type: "string", maxLength: 32 },
   },
 } as const;
 
@@ -714,6 +747,7 @@ export async function emailRoutes(app: FastifyInstance) {
   registerEmailMailboxRoutes(app);
   registerEmailSenderLabelRoutes(app);
   registerEmailWaitingRoutes(app);
+  registerEmailLaterRoutes(app);
   await registerEmailBulkRoutes(app);
   registerEmailLaneRoutes(app, { demoRows: () => DEMO_EMAILS });
   // A child plugin (not a register* call) so its dark-route gate wraps only
@@ -755,7 +789,8 @@ export async function emailRoutes(app: FastifyInstance) {
           threads?: string;
           // OPT-IN ("today"), lane views only: mail received inside Today's
           // PUSH window. Narrows rows and `total` alike, so Today's header
-          // count and block agree. Absent = every lane view as before.
+          // count and block agree. "held": Today's "Held back" group (QUEUE,
+          // v3 policy only). Absent = every lane view as before.
           window?: string;
         };
       const uid = getUserId(request);
@@ -776,6 +811,22 @@ export async function emailRoutes(app: FastifyInstance) {
       }
       const receivedSince = window === TODAY_WINDOW ? todayPushCutoff(new Date()) : undefined;
       const laneOnly = lane && lane !== "ALL" ? lane : null;
+      // Attention engine v3, for a user under the policy only: the QUEUE lane in
+      // ranked order, a v3 block per mail, and Today's fields. Everyone else gets
+      // today's order and shape.
+      const rankedAt = isJudgeV3PolicyEnabled(uid) ? new Date() : undefined;
+      // Today's "Held back" group: a hold is only written as QUEUE and only
+      // under the policy, so anything else is refused rather than answered
+      // with the whole lane.
+      if (window === HELD_WINDOW && (laneOnly !== "QUEUE" || !rankedAt)) {
+        return reply
+          .code(400)
+          .send({ error: "window=held needs tier=QUEUE and the attention policy." } as never);
+      }
+      const heldSince =
+        window === HELD_WINDOW && rankedAt
+          ? heldTodayCutoff(rankedAt, (await budgetDayFor(uid, rankedAt)).zone)
+          : undefined;
       const groupByThread = Boolean(lane) && (threads === "1" || threads === "true");
       // Grouping pages through the SQL lane view (ALL included), so it takes the
       // filters that view can apply — candidates is refused, not silently dropped.
@@ -895,6 +946,8 @@ export async function emailRoutes(app: FastifyInstance) {
           search,
           hideHandled: hideHandledRows,
           receivedSince,
+          heldSince,
+          rankedAt,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
         });
@@ -918,6 +971,8 @@ export async function emailRoutes(app: FastifyInstance) {
           search,
           hideHandled: hideHandledRows,
           receivedSince,
+          heldSince,
+          rankedAt,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
         });
@@ -1042,7 +1097,23 @@ export async function emailRoutes(app: FastifyInstance) {
         };
       });
 
-      return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
+      // v3 blocks ride lane pages only (the contract); the plain list is unchanged.
+      if (!rankedAt || !lane) {
+        return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
+      }
+      const v3 = await v3ListFields(uid, inbox, mapped, {
+        rankedAt,
+        rankFrom: laneOnly === "QUEUE" ? (pageNum - 1) * pageSize + 1 : null,
+        today: window === TODAY_WINDOW,
+      });
+      return {
+        emails: mapped.map((row) => ({ ...row, v3: v3.blocks.get(row.id) })),
+        source: "gmail",
+        total,
+        unread: unreadCount,
+        page: pageNum,
+        ...v3.response,
+      };
     },
   );
 
@@ -1303,9 +1374,12 @@ export async function emailRoutes(app: FastifyInstance) {
     });
 
     if (dbEmail) {
-      // Reading a mail is side-effect free. Mark-as-read is explicit — many
-      // users rely on unread as a work queue — and it is a WRITE, so it lives
-      // on PATCH /:id/read, never on this GET (link prefetchers fetch GETs).
+      // Reading a mail changes nothing the user sees. Mark-as-read is explicit
+      // — many users rely on unread as a work queue — so it lives on
+      // PATCH /:id/read, never on this GET (link prefetchers fetch GETs). The
+      // one write here is the OPENED ledger stamp below: internal bookkeeping,
+      // reachable only with the user's Bearer token. A caller that fetches for
+      // another reason must pass ?purpose= so it isn't counted as an open.
       const actionItems = parseJsonArray(dbEmail.actionItems);
       const attachments = await listEmailAttachments([dbEmail.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
@@ -1318,7 +1392,8 @@ export async function emailRoutes(app: FastifyInstance) {
       // chip. Cache-only (fails soft to null, never rebuilds on a request).
       const engagementNode = addr ? await getCachedInteractionNode(uid, addr) : null;
       const readerLanguage = await readerLanguageFor(request, reply, uid);
-      return {
+      const { purpose } = request.query as { purpose?: string };
+      const detail = {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
         threadId: dbEmail.threadId,
@@ -1398,6 +1473,10 @@ export async function emailRoutes(app: FastifyInstance) {
         candidateProfile,
         candidateIntake,
       };
+      // Stamped only once the reply body is built, so a failure above never
+      // leaves an OPENED for a mail the user didn't get to see.
+      if (purpose === undefined) noteEmailOutcome(uid, dbEmail.id, "OPENED");
+      return detail;
     }
 
     // Demo fallback
@@ -1765,6 +1844,8 @@ export async function emailRoutes(app: FastifyInstance) {
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
       const outcome = await unsubscribeFromEmail(uid, dbEmail);
       if (!outcome.ok) return reply.code(outcome.statusCode).send({ error: outcome.error });
+      // A handed-back browser link (done: false) is not an unsubscribe yet.
+      if (outcome.body.done) noteEmailOutcome(uid, dbEmail.id, "UNSUBSCRIBED");
       return outcome.body;
     },
   );

@@ -245,10 +245,10 @@ export default function Sidebar() {
                         <Link
                           href={child.href}
                           aria-current={current ? "page" : undefined}
-                          className={`focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 text-role-label transition-colors duration-120 ease-fluid ${
+                          className={`focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 transition-colors duration-120 ease-fluid ${
                             current
-                              ? "text-ink"
-                              : "font-normal text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
+                              ? "text-role-label text-ink"
+                              : "text-role-meta text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
                           }`}
                         >
                           {t(child.labelKey)}

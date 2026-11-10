@@ -238,6 +238,42 @@ describe("POST /api/email/send with receipts on", () => {
     await inject("/api/email/send", { ...MAIL, linkedInboxAccountId: "not-mine" });
     expect(db.receiptCreate).not.toHaveBeenCalled();
   });
+
+  it("a reply-linked send (web AI draft) binds the same bytes and stores the answered mail", async () => {
+    const res = await inject("/api/email/send", { ...MAIL, inReplyToEmailId: "e1" });
+    expect(res.statusCode).toBe(200);
+    // Threading is server-resolved from the user's own row, outside the v1 hash.
+    const payloadHash = sendEmailPayloadHash(MAIL);
+    expect(res.json().receipt).toMatchObject({ id: "rcpt-1", payloadHash });
+    expect(order).toEqual(["receipt", "send"]);
+    expect(db.receiptCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ route: "send", payloadHash, emailId: "e1" }),
+      }),
+    );
+  });
+
+  it("a reply-linked send naming no account records the inbox the mail arrived in, same bytes", async () => {
+    db.emailFindFirst.mockResolvedValue({ ...EMAIL, linkedInboxAccountId: "li-1" });
+    db.linkedFindFirst.mockResolvedValue({ id: "li-1", provider: "GOOGLE" });
+    const res = await inject("/api/email/send", { ...MAIL, inReplyToEmailId: "e1" });
+    expect(res.statusCode).toBe(200);
+    const payloadHash = sendEmailPayloadHash(MAIL);
+    expect(order).toEqual(["receipt", "send"]);
+    expect(db.receiptCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ route: "send", payloadHash, emailId: "e1", inbox: "li-1" }),
+      }),
+    );
+  });
+
+  it("mail that is not the caller's writes no receipt (404 first)", async () => {
+    db.emailFindFirst.mockResolvedValue(null);
+    const res = await inject("/api/email/send", { ...MAIL, inReplyToEmailId: "not-mine" });
+    expect(res.statusCode).toBe(404);
+    expect(db.receiptCreate).not.toHaveBeenCalled();
+    expect(gmail.sendEmail).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/email/:id/reply with receipts on", () => {

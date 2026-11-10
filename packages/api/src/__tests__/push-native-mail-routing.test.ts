@@ -97,6 +97,27 @@ describe("sendPushNotification — mail deep-link routing", () => {
     expect(body).toMatchObject(legacy);
   });
 
+  it("the bell notification id rides the web push body only (the SW's OS tag)", async () => {
+    const { createPushDeliveryAttempt } = await import("../notify/push-delivery.js");
+    await sendPushNotification(
+      "user-1",
+      { ...BASE, bellNotificationId: "notif-1", emailId: "email-1" },
+      "email_urgent",
+    );
+
+    expect(webBody()).toMatchObject({ ...BASE, bellNotificationId: "notif-1" });
+    // Native, Telegram: byte-identical to before.
+    const native = { ...BASE, emailId: "email-1" };
+    expect(mocks.sendDevicePush).toHaveBeenCalledWith("user-1", native, "email_urgent");
+    expect(mocks.sendApnsPush).toHaveBeenCalledWith("user-1", native, "email_urgent");
+    expect(mocks.sendTelegramForPush).toHaveBeenCalledWith("user-1", BASE, "email_urgent");
+    // Not the delivery log's notificationId: phone escalation keys on that
+    // column, and this display tag must not change who gets a call.
+    expect(vi.mocked(createPushDeliveryAttempt)).toHaveBeenCalledWith(
+      expect.objectContaining({ notificationId: null }),
+    );
+  });
+
   it("a push without mail ids reaches every channel exactly as before", async () => {
     await sendPushNotification("user-1", BASE, "system");
     expect(mocks.sendDevicePush).toHaveBeenCalledWith("user-1", BASE, "system");

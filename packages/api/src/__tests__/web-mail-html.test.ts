@@ -11,6 +11,7 @@ import {
   MAIL_FRAME_MIN_HEIGHT,
   neutralizeMailHtml,
 } from "../../../web/src/lib/mail-html";
+import { expectLinear, fastestCpuMs, repeatTo } from "./helpers/linear-timing.js";
 
 const body = (doc: string) => doc.slice(doc.indexOf("<body>"));
 
@@ -86,6 +87,25 @@ describe("neutralizeMailHtml — parser confusion", () => {
     expect(neutralizeMailHtml('<p title="&#x110000;">x</p>')).toContain("\ufffd");
   });
 
+  it("maps zero and surrogate numeric entities to U+FFFD, as the HTML tokenizer does", () => {
+    for (const ref of ["&#0;", "&#x0;", "&#xD800;", "&#xDFFF;", "&#56320;"]) {
+      const out = neutralizeMailHtml(`<p title="a${ref}b">x</p>`);
+      expect(out).toBe('<p title="a\ufffdb">x</p>');
+    }
+  });
+
+  it("maps a numeric entity with a huge digit string to U+FFFD", () => {
+    const out = neutralizeMailHtml(`<p title="&#${"9".repeat(100_000)};">x</p>`);
+    expect(out).toBe('<p title="\ufffd">x</p>');
+  });
+
+  it("decodes attribute entities in linear time", () => {
+    expectLinear(
+      (bytes) => `<p title="${repeatTo(bytes, "&#x110000;&#0;&#xD800;")}">x</p>`,
+      neutralizeMailHtml,
+    );
+  });
+
   it("emits a duplicated attribute once, keeping the first like the browser", () => {
     const out = neutralizeMailHtml(
       '<p style="color:red" style="background:url(https://t.example/x)">x</p>',
@@ -137,11 +157,12 @@ describe("neutralizeMailHtml — linear on hostile input", () => {
     ["url( without close", "<p style='url(url(url("],
   ])("handles %s repeated to 200k chars quickly", (_label, unit) => {
     const input = unit.repeat(Math.ceil(SIZE / unit.length));
-    const started = performance.now();
-    buildMailSrcdoc(input, { allowRemoteImages: false });
-    countRemoteImages(input);
-    estimateMailFrameHeight(input);
-    expect(performance.now() - started).toBeLessThan(BUDGET_MS);
+    const ms = fastestCpuMs(() => {
+      buildMailSrcdoc(input, { allowRemoteImages: false });
+      countRemoteImages(input);
+      estimateMailFrameHeight(input);
+    });
+    expect(ms).toBeLessThan(BUDGET_MS);
   });
 });
 

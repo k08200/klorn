@@ -1,5 +1,5 @@
 /**
- * DB-backed judge fallback alarm (#1319 follow-up).
+ * DB-backed judge fallback alarm (#1572 follow-up).
  *
  * Prod volume is ~3 emails/hour and deploys wipe process memory several times
  * a day, so the alarm reads the judged-by source that attention-mirror stamps

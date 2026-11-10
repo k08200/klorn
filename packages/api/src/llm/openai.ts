@@ -173,12 +173,15 @@ export class DailyCostCapExceededError extends Error {
  * is at the single highest-intent conversion moment we have, so they get
  * the upgrade nudge; everyone else (paid user, paywall off, global cap)
  * gets the BYOK nudge — upselling a user who already pays would be wrong.
+ * The upgrade variant must not offer BYOK: with the paywall on, a FREE user
+ * cannot store a key (routes/billing.ts) and a stored one is ignored
+ * (llm-credentials.ts).
  */
 export const DAILY_COST_CAP_MESSAGE =
   "You've used today's AI quota. It resets at 00:00 UTC. To unblock right now, add your own API key in Settings.";
 
 export const DAILY_COST_CAP_UPGRADE_MESSAGE =
-  "You've used today's free AI quota. It resets at 00:00 UTC. Upgrade to Pro for a much higher daily limit, or add your own API key in Settings.";
+  "You've used today's free AI quota. It resets at 00:00 UTC. Upgrade to Pro for a higher daily limit.";
 
 export function dailyCostCapMessageFor(freeCapApplied: boolean): string {
   return freeCapApplied ? DAILY_COST_CAP_UPGRADE_MESSAGE : DAILY_COST_CAP_MESSAGE;
@@ -270,7 +273,7 @@ async function enforceCostGates(
 }
 
 /**
- * Failure-side ledger (#1319): LlmUsageLog only sees successful calls, so a
+ * Failure-side ledger (#1572): LlmUsageLog only sees successful calls, so a
  * failed dispatch is noted here (logged now, content-free and rate-limited)
  * before the original error is rethrown unchanged. The entry point tallies the
  * noted attempts only if the whole call then fails — a hop a fallback provider

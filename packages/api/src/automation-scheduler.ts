@@ -9,6 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
+import type { DesktopMailToast } from "@klorn/contract";
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
@@ -48,6 +49,7 @@ import {
   sweepOverrideUndoSnapshots,
 } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
+import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
 import {
   effectiveAutoReplyGuideline,
   normalizeAttentionMode,
@@ -73,7 +75,9 @@ import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
+import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendSms } from "./notify/sms.js";
@@ -83,7 +87,7 @@ import {
   unnotifiedEmails,
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
-import { autoModeSendEnabled, judgeV3PolicyEnabled, tierV2Enabled } from "./ops/feature-flags.js";
+import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -193,7 +197,7 @@ let lastOverrideUndoSweepAt = 0;
 // Own constant on purpose: piggybacking WATCH_RENEWAL_INTERVAL_MS would let
 // a Gmail-quota retune silently change the aging cadence too.
 const ATTENTION_AGING_INTERVAL_MS = 60 * 60 * 1000;
-// Judge fallback alarm (#1319): DB-backed, so the cadence only bounds how fast
+// Judge fallback alarm (#1572): DB-backed, so the cadence only bounds how fast
 // an outage is noticed. Own constant; mirrors JUDGE_FALLBACK_CHECK_INTERVAL_MS
 // in judge-fallback-check.ts (lazy-imported, so not importable here).
 const JUDGE_FALLBACK_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -844,13 +848,20 @@ export async function ensureAutoModeReplyNotification(
  * recorded for the next tick's read-back — the accumulation logic is preserved.
  * The winner returns its notification so the CALLER runs the follow-on web-push /
  * SMS side-effects; a P2002 loser returns null and the caller skips them.
+ * The title follows the user's notification language; the dedupe reads match
+ * every language's title (URGENT_EMAIL_TITLES).
  */
 export async function ensureUrgentEmailNotification(
   userId: string,
   lead: { id: string; gmailId: string },
   dbMessage: string,
   userBody: string,
+  language?: string | null,
+  /** A batch of ONE mail: its N1 toast for the desktop shell, and the mail id
+   *  on the row for the desktop catch-up (decision N6). */
+  mail?: DesktopMailToast,
 ): Promise<{ id: string; createdAt: Date } | null> {
+  const title = notificationCopy(language).urgentMailTitle;
   let notification: { id: string; createdAt: Date };
   try {
     notification = await prisma.notification.create({
@@ -858,8 +869,9 @@ export async function ensureUrgentEmailNotification(
         userId,
         type: "email",
         dedupeKey: urgentDedupeKey(lead),
-        title: "Urgent email",
+        title,
         message: dbMessage,
+        ...(mail ? { sourceEmailId: mail.emailId } : {}),
       },
       select: { id: true, createdAt: true },
     });
@@ -871,14 +883,45 @@ export async function ensureUrgentEmailNotification(
   pushNotification(userId, {
     id: notification.id,
     type: "email",
-    title: "Urgent email",
+    title,
     message: userBody,
     createdAt: notification.createdAt.toISOString(),
     // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
     // OS banner in the desktop shell, under the Web Push gate.
     ...(await desktopAlertTag(userId, "push")),
+    ...(mail ? { mail } : {}),
   });
   return notification;
+}
+
+/**
+ * The device push for an urgent-mail bell row (the winner of
+ * ensureUrgentEmailNotification). Native deep link only when the push is about
+ * ONE mail; a batch keeps opening the briefing. No pendingActionId here (no
+ * draft lookup on the sweep's hot path). `bellNotificationId` names the row,
+ * so the web push's OS tag matches the one an open tab uses for it. A push
+ * about one mail also names its lane (PUSH) and the user's language, so it
+ * offers the same action buttons as the firewall ring (decision N1).
+ */
+export function urgentMailPushPayload(input: {
+  notificationId: string;
+  title: string;
+  body: string;
+  leads: ReadonlyArray<{ id: string }>;
+  attentionItemId: string | null;
+  language: string | null | undefined;
+}) {
+  const { notificationId, title, body, leads, attentionItemId, language } = input;
+  return {
+    title,
+    body,
+    url: "/briefing",
+    attentionItemId: attentionItemId ?? undefined,
+    bellNotificationId: notificationId,
+    ...(leads.length === 1
+      ? { emailId: leads[0].id, lane: "PUSH" as const, ...(language ? { language } : {}) }
+      : {}),
+  };
 }
 
 async function runAutomations() {
@@ -974,7 +1017,7 @@ async function runAutomations() {
         });
     }
 
-    // --- Hourly: judge fallback alarm (#1319) ---
+    // --- Hourly: judge fallback alarm (#1572) ---
     // Reads the last 24 h of judged-by sources from AttentionItem (one
     // aggregate query) and raises a deduped ops Notification when the LLM
     // judge has been falling back to keywords. Runs under the scheduler lock;
@@ -1779,11 +1822,11 @@ async function runUserCycle(
 
         // Check for urgent unread emails — notify only for NEW urgent emails
         // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-        // With JUDGE_V3_POLICY on, the judge's PUSH lane under the daily
-        // interrupt budget is the only email interrupt (attention-engine-v3.md
-        // §3(4)); this keyword sweep would ring outside the budget, so it
-        // stands down.
-        const urgentEmails = judgeV3PolicyEnabled()
+        // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
+        // under the daily interrupt budget is the only email interrupt
+        // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
+        // the budget, so it stands down for that user.
+        const urgentEmails = isJudgeV3PolicyEnabled(config.userId)
           ? []
           : await prisma.emailMessage.findMany({
               where: {
@@ -1821,7 +1864,10 @@ async function runUserCycle(
             where: {
               userId: config.userId,
               type: "email",
-              OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+              // Every language's title plus the legacy ones: a row written
+              // before a language switch (or before the title was localized)
+              // still marks its mails as notified.
+              title: { in: [...URGENT_EMAIL_TITLES] },
               createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
             },
             select: { message: true, createdAt: true },
@@ -1838,10 +1884,9 @@ async function runUserCycle(
             // (not just the first) and they aren't re-notified next tick.
             // Klorn's own copy follows the user's notification language;
             // the email subject/summary inside it stays as written.
-            const userBody = formatUrgentEmailBody(
-              newUrgent,
-              (config as { notificationLanguage?: string | null }).notificationLanguage,
-            );
+            const notificationLanguage = (config as { notificationLanguage?: string | null })
+              .notificationLanguage;
+            const userBody = formatUrgentEmailBody(newUrgent, notificationLanguage);
             const dbMessage = buildUrgentDedupMessage(
               userBody,
               newUrgent.map((e) => e.gmailId),
@@ -1857,6 +1902,17 @@ async function runUserCycle(
               newUrgent[0],
               dbMessage,
               userBody,
+              notificationLanguage,
+              newUrgent.length === 1
+                ? {
+                    emailId: newUrgent[0].id,
+                    ...mailPushContent({
+                      from: newUrgent[0].from ?? "",
+                      subject: newUrgent[0].subject,
+                      language: notificationLanguage ?? "en",
+                    }),
+                  }
+                : undefined,
             );
 
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
@@ -1873,17 +1929,17 @@ async function runUserCycle(
 
               sendPushNotification(
                 config.userId,
-                {
-                  title: "Urgent mail",
+                urgentMailPushPayload({
+                  notificationId: notification.id,
+                  title: notificationCopy(notificationLanguage).urgentMailTitle,
                   body: userBody,
-                  url: "/briefing",
-                  attentionItemId: attentionItemId ?? undefined,
-                  // Native deep link only when the push is about ONE mail; a
-                  // batch keeps opening the briefing. No pendingActionId at
-                  // this call site (no draft lookup on the sweep's hot path).
-                  ...(newUrgent.length === 1 ? { emailId: newUrgent[0].id } : {}),
-                },
+                  leads: newUrgent,
+                  attentionItemId,
+                  language: notificationLanguage,
+                }),
                 "email_urgent",
+                // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
+                { bucket: "interrupt" },
                 // Unawaited (don't block the tick) but guarded: an
                 // unhandled rejection from the push internals would
                 // otherwise crash the single dyno. Matches the candidate

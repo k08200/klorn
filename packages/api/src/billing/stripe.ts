@@ -17,7 +17,10 @@ export const PLANS = {
     testLimit: 10,
     messageLimit: 50,
     tokenLimit: 500_000,
-    deviceLimit: 1,
+    // Same as Pro (founder decision 2026-11-07): web + Mac + phone at once.
+    // With 1, signing in anywhere else — including the web /billing page the
+    // Mac upgrade link opens — logged the other session out.
+    deviceLimit: 3,
   },
   PRO: {
     name: "Pro",

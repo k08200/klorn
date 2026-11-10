@@ -108,6 +108,9 @@ model User {
   // the user to zero devices and the "no devices = legacy, allow" branch
   // resurrected every still-unexpired stolen token.
   sessionsInvalidatedAt      DateTime?
+  // Historical marker only: stamped on the signups that got free beta PRO
+  // before 2026-10-24. Nothing writes it now (every signup starts on FREE);
+  // kept so those accounts stay identifiable.
   betaProGrantedAt           DateTime?
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in
@@ -1076,6 +1079,9 @@ model AutomationConfig {
   focusWindowEnabled     Boolean  @default(false)
   briefingTime           String   @default("06:00")
   timezone               String   @default("Asia/Seoul")
+  // Daily PUSH interrupt budget for this user (attention engine v3, 1–50).
+  // Null = the system default (JUDGE_V3_PUSH_BUDGET, else 5).
+  interruptBudget        Int?
   /// null = Automatic (no saved choice): the client follows the device zone and
   /// keeps `timezone` synced to it. "MANUAL" = the user pinned `timezone` in
   /// Settings. `timezone` always holds the zone server-side features use.
@@ -1219,6 +1225,13 @@ model PushSubscription {
   // — the duplicate "Daily Briefing" bug. Mirrors DevicePushToken's
   // prune-on-register. Nullable for rows created before this column existed.
   deviceId  String?
+  // Browser family and OS of the agent that registered this subscription, read
+  // from its User-Agent at /push/subscribe (notify/alert-endpoints.ts
+  // parseClientPlatform). Labels "Where you get alerts" and tells a phone from
+  // a desktop. Only the derived values are kept, never the raw User-Agent.
+  // Nullable: rows from before this column, and agents we cannot name.
+  browser   String?
+  os        String?
   createdAt DateTime @default(now())
 
   // Budgeted-retry eviction: consecutive ambiguous (non-410/404) delivery
@@ -1286,6 +1299,10 @@ model PushRingEvent {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Which cap the ring counted against: "interrupt" (urgent mail, meeting
+  // alerts, reminders; the caller asks) | "ambient" (everything else,
+  // agent-originated pushes included). notify/push-bucket.ts.
+  bucket    String   @default("ambient")
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
@@ -1831,6 +1848,23 @@ model AttentionItem {
   inputHash   String? // sha256 hex, 64 chars
   inputHashAt DateTime? // when the hash was computed
 
+  // Attention engine v3 live decision (docs/design/attention-engine-v3.md
+  // §3(5) "Live decision"). Written only for users JUDGE_V3_POLICY covers;
+  // null for everyone else. The policy version that decided the lane ("v3.0",
+  // "v3.1"), or "v2" when the v2 lane stood because LLM facts were missing.
+  v3PolicyVersion String?
+  // judge/v3/live-item.ts V3DecisionJson: { basis, reasons, threadTurn }.
+  // Reason evidence quotes the mail, like title and body.
+  v3Decision      Json?
+  // QUEUE ranking inputs at decision time: the earliest ask due (or the
+  // decision time for an unpushed payment/security risk), and the
+  // relationship importance prior.
+  v3Due           DateTime?
+  v3Importance    Float?
+  // The daily interrupt budget held this PUSH in QUEUE. A hold is final for
+  // the item. Ranking trusts this column, not tierReason.
+  heldAt          DateTime?
+
   surfacedAt      DateTime  @default(now())
   resolvedAt      DateTime?
   snoozedUntil    DateTime?
@@ -1953,10 +1987,23 @@ model DecisionLabel {
   // once flipped, how often the signal fires and whether those rows get corrected.
   engagementKind String?
 
-  // Stamped once when the user acts. For an override, "OVERRIDE:<tier>";
-  // otherwise a terminal status. Null until then.
+  // The user's explicit lane judgement, stamped once: "OVERRIDE:<tier>" or
+  // "CONFIRM:<tier>". Null until then. Engagement (open, reply, …) is NOT
+  // written here — fallback-rejudge and the override/confirm stamps key on
+  // outcome being null, so an earlier open would block the user's lane move.
   outcome   String?
   outcomeAt DateTime?
+
+  // Engagement signals: when the user FIRST did each thing to this item
+  // (stampDecisionOutcome; first action of each kind wins). Kept per kind so
+  // an open doesn't hide the reply that follows it.
+  openedAt       DateTime?
+  repliedAt      DateTime?
+  archivedAt     DateTime?
+  dismissedAt    DateTime?
+  snoozedAt      DateTime?
+  starredAt      DateTime?
+  unsubscribedAt DateTime?
 
   judgedAt DateTime @default(now())
 
@@ -2149,7 +2196,7 @@ model SendReceipt {
   payloadHash       String // sha256 hex, = receipt.payloadHash
   receipt           Json // the full ActionReceipt (v, action, inputHash, payloadHash, target, approvedAt, approvedBy)
   inbox             String // "primary" | LinkedInboxAccount id — the account the mail left from
-  emailId           String? // reply: the EmailMessage answered (no FK: the receipt outlives the row)
+  emailId           String? // the EmailMessage answered: reply, or send with inReplyToEmailId (no FK: the receipt outlives the row)
   status            String    @default("PENDING") // PENDING | SENT | REFUSED | UNKNOWN
   providerMessageId String?
   createdAt         DateTime  @default(now())

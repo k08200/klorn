@@ -76,6 +76,7 @@ import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
+import { clientAddress } from "../security/client-address.js";
 import {
   clearLoginAttempts,
   loginThrottleRemainingMs,
@@ -308,30 +309,6 @@ export function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
   timer.unref?.();
 }
 
-// Beta auto-PRO: when the gate is OFF and BETA_AUTO_PRO_ENABLED=true, the
-// first BETA_AUTO_PRO_LIMIT signups silently get PRO. Past the cap returns
-// null and the caller falls back to default plan. Used by both the
-// email/password register endpoint and the Google OAuth signup callback so
-// the two paths stay consistent.
-// Exported for auth/social-login.ts so the Apple/Naver signup path grants (or
-// exhausts) the same beta-PRO pool instead of forking a third policy.
-export async function evaluateBetaAutoPro(): Promise<{
-  plan: "PRO";
-  betaProGrantedAt: Date;
-} | null> {
-  const betaGateEnabled = process.env.BETA_GATE_ENABLED === "true";
-  const betaAutoProEnabled = !betaGateEnabled && process.env.BETA_AUTO_PRO_ENABLED === "true";
-  const betaAutoProLimit = Number.parseInt(process.env.BETA_AUTO_PRO_LIMIT || "50", 10);
-  if (!betaAutoProEnabled || !Number.isFinite(betaAutoProLimit) || betaAutoProLimit <= 0) {
-    return null;
-  }
-  const grantedCount = await prisma.user.count({
-    where: { betaProGrantedAt: { not: null } },
-  });
-  if (grantedCount >= betaAutoProLimit) return null;
-  return { plan: "PRO", betaProGrantedAt: new Date() };
-}
-
 export function authRoutes(app: FastifyInstance) {
   // GET /api/auth/signup-status — Public probe so the login UI can hide the
   // sign-up tab when BETA_GATE_ENABLED is on. Returning a boolean keeps the
@@ -385,9 +362,10 @@ export function authRoutes(app: FastifyInstance) {
       }
 
       // Beta gate: when BETA_GATE_ENABLED=true, registration is restricted to
-      // waitlist entries that an admin has approved. APPROVED registrants are
-      // auto-granted PRO for approved beta testers (avoids manual SQL per
-      // signup).
+      // waitlist entries that an admin has approved. Approval only opens the
+      // door: every new account starts on FREE (the schema default), and Pro
+      // comes from a paid subscription or an admin (founder decision
+      // 2026-10-24, guarded by signup-plan-guard.test.ts).
       const betaGateEnabled = process.env.BETA_GATE_ENABLED === "true";
       const waitlistEntry = betaGateEnabled
         ? await prisma.waitlist.findUnique({
@@ -406,8 +384,6 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: "Email already registered" });
       }
 
-      const betaAutoProGrant = await evaluateBetaAutoPro();
-
       // Only the hash is stored (one-time-token.ts); the raw token exists
       // only in the verification email.
       const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
@@ -418,8 +394,6 @@ export function authRoutes(app: FastifyInstance) {
           email: normalizedEmail,
           passwordHash: await hashPassword(password),
           name: normalizedName || normalizedEmail.split("@")[0],
-          ...(betaGateEnabled && { plan: "PRO" }),
-          ...(betaAutoProGrant ?? {}),
           ...(attribution ? { attribution } : {}),
           verifyToken: verifyTokenHash,
           verifyTokenExp,
@@ -443,8 +417,7 @@ export function authRoutes(app: FastifyInstance) {
       const token = signToken({ userId: user.id, email: user.email });
 
       // Register device session
-      const ip =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+      const ip = clientAddress(request);
       const ua = request.headers["user-agent"] || "";
       await registerDevice(user.id, token, {
         deviceName: parseDeviceName(ua),
@@ -574,8 +547,7 @@ export function authRoutes(app: FastifyInstance) {
       const token = signToken({ userId: user.id, email: user.email });
 
       // Register device session
-      const ip =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+      const ip = clientAddress(request);
       const ua = request.headers["user-agent"] || "";
       await registerDevice(user.id, token, {
         deviceName: parseDeviceName(ua),
@@ -1322,7 +1294,6 @@ export function authRoutes(app: FastifyInstance) {
                 return reply.redirect(`${webUrl}/login?error=invite_only`);
               }
             }
-            const betaAutoProGrant = await evaluateBetaAutoPro();
             user = await withDbRetry(
               () =>
                 prisma.user.create({
@@ -1331,8 +1302,6 @@ export function authRoutes(app: FastifyInstance) {
                     name: profile.name || email.split("@")[0],
                     passwordHash: null, // Google-only user, no password
                     emailVerified: true, // Google accounts are pre-verified
-                    ...(betaGateEnabled && { plan: "PRO" }),
-                    ...(betaAutoProGrant ?? {}),
                     ...(statePayload.attr ? { attribution: statePayload.attr } : {}),
                   },
                 }),
@@ -1398,8 +1367,7 @@ export function authRoutes(app: FastifyInstance) {
           const token = signToken({ userId: user.id, email: user.email });
 
           // Register device session for Google login
-          const ip =
-            (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+          const ip = clientAddress(request);
           const ua = request.headers["user-agent"] || "";
           await registerDevice(user.id, token, {
             deviceName: parseDeviceName(ua),

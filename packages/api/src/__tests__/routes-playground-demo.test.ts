@@ -146,6 +146,23 @@ describe("no-key demo — defense 1: per-IP rate limit", () => {
     await app.close();
   });
 
+  it("a rotated X-Forwarded-For does not buy fresh slots (trustProxy as in index.ts)", async () => {
+    const app = Fastify({ trustProxy: true });
+    await app.register(playgroundRoutes, { prefix: "/api/playground" });
+    const fromForged = (n: number) =>
+      app.inject({
+        method: "POST",
+        url: "/api/playground/classify",
+        payload: DEMO_PAYLOAD,
+        headers: { "x-forwarded-for": `198.51.100.${n}` },
+      });
+    for (let i = 0; i < 3; i++) expect((await fromForged(i + 1)).statusCode).toBe(200);
+    const blocked = await fromForged(99);
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().error).toBe("demo_rate_limited");
+    await app.close();
+  });
+
   it("caps one IP at 10 demo calls per UTC day even across minutes", async () => {
     vi.useFakeTimers({ now: new Date("2026-07-23T01:00:00Z"), toFake: ["Date"] });
     const app = await buildApp();

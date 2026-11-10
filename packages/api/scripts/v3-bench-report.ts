@@ -5,10 +5,11 @@
  * facts under the current evidence rules and policy, so a relabel or a policy
  * change needs no new LLM calls.
  *
- *   npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs [--out=/tmp/p1/report.md] [--policy=doc|p3]
+ *   npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs [--out=/tmp/p1/report.md] [--policy=doc|p3|p3-v3.0]
  *
  * --policy=doc (default) maps facts with doc §3(4) read literally; --policy=p3
- * replays them through P3's production policy (judge/v3/policy.ts, v3.0).
+ * replays them through P3's production policy (judge/v3/policy.ts, the live
+ * version); --policy=p3-v3.0 pins v3.0.
  *
  * Skipped with a warning: files named *.degraded.*, and any run whose meta or
  * summary records a provider failure or a call served by another model.
@@ -31,6 +32,7 @@ import {
 } from "../src/eval-v3/report.js";
 import type { ClassifiableEmail } from "../src/judge/email-classifier.js";
 import { TIERS, type Tier } from "../src/judge/tiers.js";
+import { POLICY_VERSION } from "../src/judge/v3/policy.js";
 import { tierV2Enabled } from "../src/ops/feature-flags.js";
 
 interface RawItem {
@@ -107,12 +109,14 @@ function main(): void {
   const dir = arg("dir");
   if (!dir) throw new Error("--dir=<runs dir> is required");
   const policy = (arg("policy") ?? "doc") as ReplayPolicy;
-  if (policy !== "doc" && policy !== "p3") throw new Error("--policy must be doc or p3");
+  if (policy !== "doc" && policy !== "p3" && policy !== "p3-v3.0") {
+    throw new Error("--policy must be doc, p3 or p3-v3.0");
+  }
   const warnings: string[] = [];
   const runs = loadRuns(dir, warnings, policy);
   const cells = groupCells(runs);
   const md = [
-    `v3 rows mapped with: ${policy === "doc" ? "doc §3(4) read literally" : "P3 policy v3.0 (judge/v3/policy.ts), relationship unknown"}`,
+    `v3 rows mapped with: ${policy === "doc" ? "doc §3(4) read literally" : `P3 policy ${policy === "p3-v3.0" ? "v3.0" : POLICY_VERSION} (judge/v3/policy.ts), relationship unknown`}`,
     "",
     "### Per cell (one value per run)",
     "",
