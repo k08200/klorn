@@ -20,8 +20,9 @@
  *    counted as unreplied.
  *  - A re-judge rewrites shownTier/decidedBy in place, so a re-judged row is
  *    reported under its latest lane.
- *  - The main table counts only actions taken in Klorn. A reply sent from the
- *    web AI-draft composer before #1656 carried no mail id and is missing.
+ *  - The main table counts only actions taken in Klorn. Web AI-draft replies
+ *    (POST /send with inReplyToEmailId) count from #1656 on; ones sent before
+ *    it are missing.
  *  - The provider table counts what sync saw the user do in Gmail itself, from
  *    migration 20261110000000 on (rows judged before it can still be stamped
  *    by a later action), and only where Klorn recorded no signal of that kind:
