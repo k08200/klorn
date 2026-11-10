@@ -118,6 +118,7 @@ Useful optional vars (full tuning catalog with defaults:
 | `GMAIL_PUSH_OIDC_EMAIL` or `GMAIL_PUSH_TOKEN` | Auth for the Pub/Sub push endpoint (OIDC preferred) |
 | `GMAIL_PUSH_OIDC_AUDIENCE` | Required with `GMAIL_PUSH_OIDC_EMAIL`: the push subscription's Audience. Without it every push is refused |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | Web Push notifications |
+| `PUSH_QUIET_HOLD_DISABLED` | `true` drops pushes held by quiet hours instead of ringing them once when quiet hours end (default: held and summarized) |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` / `TELEGRAM_WEBHOOK_SECRET` | PUSH-tier delivery to Telegram |
 | `ADMIN_EMAILS` | Comma-separated operator emails with admin access |
 | `LLM_PROVIDER_ORDER` | Order of the cloud providers when more than one key is set, e.g. `anthropic,gemini` |
