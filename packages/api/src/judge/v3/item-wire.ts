@@ -93,6 +93,7 @@ const PARAMS_BY_CODE: Readonly<Partial<Record<ReasonCode, readonly string[]>>> =
   transaction_record: ["transactionKind"],
   held_budget: ["budget"],
   relationship: CLIENT_RELATIONSHIP_KEYS,
+  first_contact: ["payAsk", "event"],
 };
 /** Every version a stored decision may name: each policy version replay knows, and v2. */
 const KNOWN_VERSIONS = new Set<string>([...POLICY_RULE_VERSIONS, V2_POLICY_VERSION]);

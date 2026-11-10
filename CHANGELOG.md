@@ -24,6 +24,21 @@ calendar time.
     recorded none, plus counts from either source.
   - Migration `20261110000000_decision_label_provider_engagement` is
     additive. Gmail only; Outlook and IMAP are not covered yet.
+- Attention Engine v3 policy v3.2, opt-in: `JUDGE_V3_POLICY_VERSION=v3.2`
+  selects it. v3.1 stays the default, and `JUDGE_V3_POLICY` is off by
+  default, so nothing changes until both are set.
+  - From a sender with no established contact, a PUSH or MEETING whose mail
+    carries a pay ask or an event goes to QUEUE with the reason
+    `first_contact`. Established contact is a VIP label or PUSH pin, two
+    sends from the user, three mails from the sender over 30+ days, or a
+    shared meeting.
+  - The due-soon window is a per-version parameter. v3.2 keeps ±24h.
+  - `replay:policy --policy-version=v3.2` loads the sender relationship for
+    the rows the gate could hold. `v3-phishing-eval.ts --policy-versions=`
+    scores several versions over the same facts. `v3-policy-variants.ts`
+    replays stored eval facts under candidate rules, with no LLM calls.
+  - Measurements and open decisions are in
+    `docs/design/attention-engine-v3.md` §3(5), "Policy v3.2".
 
 ### Changed
 - **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail

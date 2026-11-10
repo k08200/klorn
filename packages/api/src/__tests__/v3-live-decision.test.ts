@@ -391,6 +391,9 @@ describe("judgeV3LivePolicyVersion", () => {
     expect(judgeV3LivePolicyVersion({})).toBe(POLICY_VERSION);
     expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: "v3.0" })).toBe("v3.0");
     expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: " v3.1 " })).toBe("v3.1");
+    // v3.2 is opt-in: selectable, never the default.
+    expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: "v3.2" })).toBe("v3.2");
+    expect(POLICY_VERSION).toBe("v3.1");
     for (const bad of ["", "v9", "constructor", "__proto__"]) {
       expect(judgeV3LivePolicyVersion({ JUDGE_V3_POLICY_VERSION: bad })).toBe(POLICY_VERSION);
     }
