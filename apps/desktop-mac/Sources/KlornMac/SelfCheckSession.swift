@@ -121,7 +121,8 @@ enum SessionScenarios {
     /// A model whose every request goes to the stub: signed in as account A,
     /// or signed out with `token: nil`. It never opens the wake socket.
     static func model(
-        _ replies: [String: Stub.Reply] = [:], hold: Set<String> = [], token: String? = "token-A"
+        _ replies: [String: Stub.Reply] = [:], hold: Set<String> = [], token: String? = "token-A",
+        pushLedgerStore: (any PushLedgerStoring)? = nil
     ) -> AppModel {
         let base = Stub.reset(replies, hold: hold)
         let store = InMemoryTokenStore(token: token)
@@ -131,7 +132,7 @@ enum SessionScenarios {
         let api = APIClient(
             base: base, session: URLSession(configuration: configuration),
             token: { store.load() })
-        let model = AppModel(tokenStore: store, api: api)
+        let model = AppModel(tokenStore: store, api: api, pushLedgerStore: pushLedgerStore)
         model.updateCheck = { .unknown }  // never GitHub from a harness
         model.opensRealtime = false
         return model

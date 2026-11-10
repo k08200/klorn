@@ -1987,10 +1987,23 @@ model DecisionLabel {
   // once flipped, how often the signal fires and whether those rows get corrected.
   engagementKind String?
 
-  // Stamped once when the user acts. For an override, "OVERRIDE:<tier>";
-  // otherwise a terminal status. Null until then.
+  // The user's explicit lane judgement, stamped once: "OVERRIDE:<tier>" or
+  // "CONFIRM:<tier>". Null until then. Engagement (open, reply, …) is NOT
+  // written here — fallback-rejudge and the override/confirm stamps key on
+  // outcome being null, so an earlier open would block the user's lane move.
   outcome   String?
   outcomeAt DateTime?
+
+  // Engagement signals: when the user FIRST did each thing to this item
+  // (stampDecisionOutcome; first action of each kind wins). Kept per kind so
+  // an open doesn't hide the reply that follows it.
+  openedAt       DateTime?
+  repliedAt      DateTime?
+  archivedAt     DateTime?
+  dismissedAt    DateTime?
+  snoozedAt      DateTime?
+  starredAt      DateTime?
+  unsubscribedAt DateTime?
 
   judgedAt DateTime @default(now())
 
@@ -2183,7 +2196,7 @@ model SendReceipt {
   payloadHash       String // sha256 hex, = receipt.payloadHash
   receipt           Json // the full ActionReceipt (v, action, inputHash, payloadHash, target, approvedAt, approvedBy)
   inbox             String // "primary" | LinkedInboxAccount id — the account the mail left from
-  emailId           String? // reply: the EmailMessage answered (no FK: the receipt outlives the row)
+  emailId           String? // the EmailMessage answered: reply, or send with inReplyToEmailId (no FK: the receipt outlives the row)
   status            String    @default("PENDING") // PENDING | SENT | REFUSED | UNKNOWN
   providerMessageId String?
   createdAt         DateTime  @default(now())

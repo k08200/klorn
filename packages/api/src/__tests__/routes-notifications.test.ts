@@ -52,6 +52,7 @@ const remindLaterFromPush = vi.hoisted(() =>
   ),
 );
 vi.mock("../notify/push-later.js", () => ({ remindLaterFromPush }));
+const labelUpdateMany = vi.hoisted(() => vi.fn(async (_args: unknown) => ({ count: 1 })));
 vi.mock("../notify/push-delivery.js", () => ({
   recordPushReceipt: vi.fn(async () => true),
   getPushDeliveryStats: vi.fn(async () => ({
@@ -113,7 +114,8 @@ vi.mock("../db.js", () => {
       }),
       update: vi.fn(async () => ({})),
     },
-    decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
+    // The tier-override stamp and a push Later's SNOOZED stamp both land here.
+    decisionLabel: { updateMany: labelUpdateMany },
     // overrideAttentionTier wraps the tier write + ledger stamp in one
     // prisma.$transaction (batch form since the 2026-07-16 P2028 fix). Support
     // both forms: settle an operation array, or run a callback with this mock
@@ -664,5 +666,51 @@ describe("notification routes", () => {
     });
     expect(res.statusCode).toBe(404);
     await app.close();
+  });
+});
+
+describe("POST /api/notifications/push/later — decision ledger", () => {
+  const pushLater = async (token: string) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token },
+    });
+    await app.close();
+    await new Promise((r) => setTimeout(r, 0));
+    return res;
+  };
+
+  it("stamps SNOOZED once on the token user's mail", async () => {
+    labelUpdateMany.mockClear();
+    const res = await pushLater(mintPushLaterToken("user-1", "email-1"));
+
+    expect(res.statusCode).toBe(200);
+    expect(labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "user-1", source: "EMAIL", sourceId: "email-1", snoozedAt: null },
+        data: { snoozedAt: expect.any(Date) },
+      },
+    ]);
+  });
+
+  it("stamps nothing for a bad token or a mail that isn't the token user's", async () => {
+    labelUpdateMany.mockClear();
+    const bad = await pushLater("not-a-real-token");
+    const foreign = await pushLater(mintPushLaterToken("user-1", "email-2"));
+
+    expect([bad.statusCode, foreign.statusCode]).toEqual([401, 404]);
+    expect(labelUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("answers exactly the same when the ledger write fails", async () => {
+    labelUpdateMany.mockResolvedValueOnce({ count: 1 });
+    const ok = await pushLater(mintPushLaterToken("user-1", "email-1"));
+    labelUpdateMany.mockRejectedValueOnce(new Error("ledger down"));
+    const failed = await pushLater(mintPushLaterToken("user-1", "email-1"));
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
   });
 });

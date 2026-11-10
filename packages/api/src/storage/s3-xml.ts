@@ -21,12 +21,38 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   apos: "'",
 };
 
+const MAX_CODE_POINT = 0x10ffff;
+const SURROGATE_MIN = 0xd800;
+const SURROGATE_MAX = 0xdfff;
+
+/**
+ * A character reference's character. Zero, the surrogate range and anything
+ * past U+10FFFF are not characters at all, so an answer carrying one is
+ * malformed: the whole page fails as an upstream StorageError rather than a
+ * RangeError from String.fromCodePoint (or a lone surrogate). Other code points
+ * XML 1.0 disallows (e.g. U+0001) are still decoded on purpose: S3 writes such
+ * key characters as references because the list request does not ask for
+ * URL-encoded keys.
+ */
+function xmlCharFromCodePoint(code: number): string {
+  const valid =
+    Number.isInteger(code) &&
+    code > 0 &&
+    code <= MAX_CODE_POINT &&
+    (code < SURROGATE_MIN || code > SURROGATE_MAX);
+  if (!valid) {
+    throw new StorageError("upstream", "object storage answer has an invalid character reference");
+  }
+  return String.fromCodePoint(code);
+}
+
 /** Decode the entities XML text may carry. One pass, so `&amp;lt;` stays `&lt;`. */
 function decodeXmlText(text: string): string {
   return text.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-z]+);/g, (whole, entity: string) => {
-    if (entity.startsWith("#x")) return String.fromCodePoint(Number.parseInt(entity.slice(2), 16));
-    if (entity.startsWith("#")) return String.fromCodePoint(Number.parseInt(entity.slice(1), 10));
-    return NAMED_ENTITIES[entity] ?? whole;
+    if (entity.startsWith("#x")) return xmlCharFromCodePoint(Number.parseInt(entity.slice(2), 16));
+    if (entity.startsWith("#")) return xmlCharFromCodePoint(Number.parseInt(entity.slice(1), 10));
+    // Own keys only: `&constructor;` must not find the object prototype's.
+    return Object.hasOwn(NAMED_ENTITIES, entity) ? (NAMED_ENTITIES[entity] as string) : whole;
   });
 }
 

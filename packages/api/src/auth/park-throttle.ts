@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import { clientAddress } from "../security/client-address.js";
 
 /**
  * Per-IP cap on the account-link PARK path. The OAuth callbacks are public
@@ -23,16 +24,9 @@ interface Window {
 
 const windows = new Map<string, Window>();
 
-/**
- * The unspoofable client address, keyed exactly like the global limiter
- * (index.ts) and device-calendar.ts: Cloudflare's verified CF-Connecting-IP,
- * else the socket address. Never request.ip, which trusts X-Forwarded-For.
- */
+/** Keyed on the same client address as the global limiter (security/client-address.ts). */
 export function parkClientKey(request: FastifyRequest): string {
-  const cf = request.headers["cf-connecting-ip"];
-  const ip =
-    typeof cf === "string" && cf.length > 0 ? cf : (request.socket?.remoteAddress ?? "unknown");
-  return `link-park:${ip}`;
+  return `link-park:${clientAddress(request)}`;
 }
 
 function prune(now: number): void {

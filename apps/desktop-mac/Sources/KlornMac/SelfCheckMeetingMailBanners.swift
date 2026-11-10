@@ -11,8 +11,9 @@ import Foundation
 //    opt-outs are evaluated on the server (notify/notification-prefs.ts) and
 //    read from GET /api/notifications/alert-state right before a banner posts.
 //    A held banner is dropped, as Web Push drops it (the mail stays in its
-//    lane); a failed check posts anyway (fail-open: a missed urgent mail is the
-//    worse failure).
+//    lane) — except PUSH mail held by quiet hours, which since 2026-11-08 comes
+//    back as one catch-up (SelfCheckQuietHoursSummary.swift); a failed check
+//    posts anyway (fail-open: a missed urgent mail is the worse failure).
 //
 // Network is the session stub (URLProtocol); nothing here posts a real banner.
 
@@ -69,6 +70,8 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     do {
         let quiet = S.model([S.firewall: .init(body: lanes(push: ["p1"])),
                              alertState: gate(push: false, meeting: false)])
+        // A fixed clock: the held mail must stay inside the 72 h catch-up window.
+        quiet.bannerClock = { ISO8601DateFormatter().date(from: "2026-11-07T09:00:00Z")! }
         var announced: [[String]] = []
         quiet.onNewPush = { announced.append($0.map(\.id)) }
         await quiet.loadQueue()
@@ -77,16 +80,16 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         await quiet.loadQueue()
         let heldDuringQuiet = announced.isEmpty
         let askedWhenDue = Stub.calls(alertState).count == 1
-        // The window ends: nothing held comes back as a burst.
+        // The window ends as a new mail arrives: the held PUSH mail comes back
+        // with it (quiet-hours summary, SelfCheckQuietHoursSummary.swift); the
+        // held MEETING mail does not (N6 catches up PUSH mail only).
         Stub.set(alertState, gate(push: true, meeting: true))
-        await quiet.loadQueue()
-        let noBurst = announced.isEmpty
         Stub.set(S.firewall, .init(body: lanes(push: ["p1", "p2", "p3"], meeting: ["m1"])))
         await quiet.loadQueue()
         check("no alert-state read while nothing is due (the silent baseline)", gateCallsAtBaseline == 0)
         check("inside quiet hours a new PUSH or MEETING mail posts no banner", heldDuringQuiet && askedWhenDue)
-        check("a held banner is dropped, not posted when the window ends (as Web Push drops it)",
-              noBurst && announced == [["p3"]])
+        check("when the window ends a held PUSH mail is posted once; a held MEETING mail stays dropped",
+              announced == [["p2", "p3"]])
         quiet.signOut()
     }
     do {

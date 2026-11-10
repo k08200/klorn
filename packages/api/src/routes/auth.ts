@@ -76,6 +76,7 @@ import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
+import { clientAddress } from "../security/client-address.js";
 import {
   clearLoginAttempts,
   loginThrottleRemainingMs,
@@ -416,8 +417,7 @@ export function authRoutes(app: FastifyInstance) {
       const token = signToken({ userId: user.id, email: user.email });
 
       // Register device session
-      const ip =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+      const ip = clientAddress(request);
       const ua = request.headers["user-agent"] || "";
       await registerDevice(user.id, token, {
         deviceName: parseDeviceName(ua),
@@ -547,8 +547,7 @@ export function authRoutes(app: FastifyInstance) {
       const token = signToken({ userId: user.id, email: user.email });
 
       // Register device session
-      const ip =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+      const ip = clientAddress(request);
       const ua = request.headers["user-agent"] || "";
       await registerDevice(user.id, token, {
         deviceName: parseDeviceName(ua),
@@ -1368,8 +1367,7 @@ export function authRoutes(app: FastifyInstance) {
           const token = signToken({ userId: user.id, email: user.email });
 
           // Register device session for Google login
-          const ip =
-            (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+          const ip = clientAddress(request);
           const ua = request.headers["user-agent"] || "";
           await registerDevice(user.id, token, {
             deviceName: parseDeviceName(ua),

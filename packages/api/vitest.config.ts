@@ -18,6 +18,11 @@ export default defineConfig({
       // site that ignores its `tx` handle passes every test and then reads zero
       // rows on the day the role switches. Tests are where that is catchable.
       RLS_ENFORCEMENT: "on",
+      // Client-address tests assume the default source (the TCP peer); a shell
+      // that exports any of these must not flip them. Empty means unset.
+      CLIENT_IP_SOURCE: "",
+      TRUSTED_PROXY_HOPS: "",
+      RENDER: "",
     },
     // Scope vitest to api unit/integration suites only. Without `include`,
     // vitest walks up the monorepo and picks up Playwright e2e specs from

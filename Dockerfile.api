@@ -17,6 +17,27 @@ COPY packages/api/ packages/api/
 RUN cd packages/api && npx prisma generate
 RUN pnpm --filter @klorn/api build
 
+# Run as an unprivileged user with a fixed uid/gid (10001), so a host
+# directory mounted into the container can be chowned to match. The app tree
+# stays root-owned and read-only to the process; the one path it writes inside
+# it is the file-conversion result store (packages/api/data, overridable with
+# EVE_CONVERSION_STORAGE_DIR). Temporary files go to /tmp, and npx (start.sh
+# runs `npx prisma migrate deploy`) keeps its cache under $HOME.
+RUN groupadd --gid 10001 klorn \
+  && useradd --uid 10001 --gid klorn --create-home --home-dir /home/klorn \
+    --shell /usr/sbin/nologin klorn \
+  && mkdir -p packages/api/data \
+  && chown -R klorn:klorn packages/api/data
+# The pnpm prepared above lives in root's corepack cache. Prepare it again under
+# a shared COREPACK_HOME so operator commands run in the container
+# (`docker compose exec api pnpm ...`) find it without a download.
+ENV COREPACK_HOME=/usr/local/share/corepack
+RUN corepack prepare pnpm@10.28.2 --activate
+# Set explicitly: a `user:` override with a uid missing from /etc/passwd would
+# otherwise get HOME=/ and nowhere to write the npx cache.
+ENV HOME=/home/klorn
+USER klorn
+
 EXPOSE 3001
 # start.sh runs `prisma migrate deploy` (with cold-start retry + baseline
 # fallback) before exec'ing the server — a fresh `docker compose up` must

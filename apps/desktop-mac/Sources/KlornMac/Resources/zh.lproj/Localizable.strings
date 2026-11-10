@@ -130,6 +130,7 @@
 "prefs.section.support" = "应用与支持";
 "push.announce" = "新的 PUSH 邮件：%d 封";
 "push.announce.meeting" = "新的 MEETING 邮件：%d 封";
+"push.heldSummary.title" = "免打扰时段内有 %d 封紧急邮件";
 "prefs.launchAtLogin" = "登录时启动 Klorn";
 "prefs.launchAtLogin.unavailable.label" = "登录时启动";
 "prefs.launchAtLogin.unavailable.value" = "仅打包版可用";

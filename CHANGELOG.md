@@ -29,6 +29,17 @@ runs `prisma migrate deploy`). An entry marked "behind a flag, off by default"
 does nothing until you set the environment variable it names.
 
 ### Breaking — self-hosters and API clients
+- **The api and web images run as a non-root user.** Both run as `klorn`
+  (uid/gid `10001`) instead of root. The app tree stays root-owned; the
+  runtime user owns only `packages/api/data`, `packages/web/.next/cache` and
+  its home directory.
+  - The stock `docker-compose.selfhost.yml` mounts no volume into `api` or
+    `web`, so it needs no change.
+  - A bind mount or named volume you added (for example for
+    `EVE_CONVERSION_STORAGE_DIR`) must be writable by uid `10001`:
+    `sudo chown -R 10001:10001 <path>`, or
+    `docker run --rm -v <volume>:/d alpine chown -R 10001:10001 /d`.
+  - The hosted service does not use these images.
 - **OpenRouter is removed; Klorn calls the Claude API by default.**
   - `OPENROUTER_API_KEY`, `FALLBACK_MODEL` and `DISABLE_FREE_MODEL_FALLBACK`
     are no longer read. Delete them.
@@ -55,10 +66,23 @@ does nothing until you set the environment variable it names.
   an unset `CORS_ORIGINS` trusts only `https://klorn.ai` and
   `https://www.klorn.ai`. The self-host compose file defaults it to
   `http://localhost:3000` (#931).
-- **The rate-limit client IP no longer comes from `X-Forwarded-For`.** It comes
-  from `CF-Connecting-IP`, or from the socket address when that header is
-  absent. Behind a reverse proxy that is not Cloudflare, all clients can share
-  one bucket (#932).
+- **Behind a reverse proxy, set `CLIENT_IP_SOURCE`.** One helper now derives
+  the client address for rate limits, the `RATE_LIMIT_ALLOW_IPS` exemption,
+  device sessions, playground demo slots and the request log.
+  `request.ip` (the leftmost `X-Forwarded-For` entry) is no longer used.
+  - `socket`: the TCP peer. This is the default.
+  - `cf-connecting-ip`: the header, used only when it holds one valid IP.
+    This is the default when `RENDER=true`.
+  - `x-forwarded-for`: the entry `TRUSTED_PROXY_HOPS` positions from the
+    right (default 1, allowed 1–10).
+  - An invalid value stops the API at boot.
+  - Behind a proxy, set `CLIENT_IP_SOURCE=x-forwarded-for`, plus
+    `TRUSTED_PROXY_HOPS` if you run more than one proxy. If your proxy sets
+    `CF-Connecting-IP`, `cf-connecting-ip` works instead. Without either
+    setting, every client shares the proxy's bucket. The API logs a one-time
+    warning when forwarding headers arrive in `socket` mode.
+  - See `docs/self-hosting.md` ("Client address").
+  - (#932, #1655)
 - **Gmail Pub/Sub push:** OIDC tokens are now verified against Google's
   certificates. `GMAIL_PUSH_OIDC_AUDIENCE` is required whenever
   `GMAIL_PUSH_OIDC_EMAIL` is set (#496).
@@ -109,6 +133,12 @@ does nothing until you set the environment variable it names.
     To serve it from another host, rebuild it after changing `WEB_URL`,
     `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL` and `GOOGLE_REDIRECT_URI` together.
 - `Dockerfile.api` applies migrations on start (#504).
+- Self-host reference fixes: `RATE_LIMIT_ALLOW_IPS` is documented (format,
+  default, scope and the effect of an over-broad range), along with keeping
+  the API port behind the reverse proxy; `GMAIL_PUSH_OIDC_AUDIENCE`, required
+  whenever `GMAIL_PUSH_OIDC_EMAIL` is set, is passed through the self-host
+  compose file; `.env.selfhost.example` and `.env.example` match what compose
+  and the code do.
 - Health and liveness checks:
   - Compose healthchecks (#1268).
   - `GET /api/health/ready` returns 503 while the database is unreachable
@@ -186,6 +216,14 @@ does nothing until you set the environment variable it names.
   - `GET /api/admin/judge-health`.
   - LLM usage ledger (`GET /api/admin/llm-usage`).
   - (#500, #508, #509, #536, #538, #539, #647)
+- Decision-ledger engagement (#1651):
+  - `DecisionLabel` records when a judged item was opened, replied to,
+    archived, dismissed, snoozed, starred or unsubscribed. Each is a
+    first-wins timestamp. `outcome` stays reserved for overrides and
+    confirms.
+  - `pnpm --filter @klorn/api lane-quality -- --since=<date>` reports these
+    per lane.
+  - Migration `20261108120000_decision_label_engagement` is additive.
 - Ontology:
   - Deterministic policy modules, exposed at `GET /api/admin/ontology` and on
     the `/admin/ontology` page.
@@ -409,9 +447,10 @@ does nothing until you set the environment variable it names.
 - **Other:**
   - The license changed from MIT to AGPL-3.0 (#493, #494, #731).
   - On self-host and native builds, `/` redirects to `/login` (#716, #719).
-  - Legal pages: Anthropic replaces OpenRouter as a subprocessor, and the pages
-    now cover the mobile apps, the digest opt-out and a minimum age of 16
-    (#1473, #1543, #1579, #1581, #1611).
+  - Legal pages: Anthropic replaces OpenRouter as a subprocessor. The pages
+    now also cover the mobile apps, the digest opt-out, per-email engagement
+    timestamps and a minimum age of 16 (#1473, #1543, #1579, #1581, #1611,
+    #1654).
 
 ### Removed
 - OpenRouter, its model-catalog tooling and the `model-canary.yml` workflow
@@ -450,6 +489,21 @@ does nothing until you set the environment variable it names.
   - Linked-inbox replies and sends now use the right account (#760, #766,
     #785).
   - The web "Later" action posted to a route that did not exist (#1643).
+  - An AI-draft reply sent from the web was not recorded against the mail it
+    answers (#1656).
+    - It now stamps REPLIED, shows the replied chip, records a `SentMessage`
+      with `origin: "user"`, and threads on the same account.
+    - API: `POST /api/email/send` (`SendEmailRequest`) accepts an optional
+      `inReplyToEmailId`, scoped to the caller.
+  - A web AI-draft reply to mail in a linked inbox was sent from the primary
+    account, without threading (#1658).
+    - With `inReplyToEmailId` and no account named, `/send` now sends from the
+      inbox the original arrived in. An explicit account still wins, and both
+      go through the same ownership check.
+    - It never falls back to the primary account: if that inbox has been
+      unlinked the request fails with 404, and if it cannot send (for example
+      a mailbox whose sending flag is off) it fails with 501. `POST
+      /api/email/:id/reply` already behaved this way.
 - Gmail attachments were duplicated on every re-sync (#1462). Duplicates
   created before this fix are not cleaned up.
 - The MEETING lane filled with bulk and system invites (#1497).
@@ -465,6 +519,14 @@ does nothing until you set the environment variable it names.
   - IMAP bodies were stored as raw MIME (#1468).
 
 ### Security
+- The api and web container images run as a non-root user (see Breaking).
+- The client address is derived in one place. A forwarding header is
+  trusted only when `CLIENT_IP_SOURCE` names it. Before this,
+  `CF-Connecting-IP` was trusted from any peer, and some paths read
+  `X-Forwarded-For` directly (#1655). See Breaking.
+- HTML numeric character references decode per spec: invalid code points
+  become U+FFFD instead of throwing. Commitment updates, deletes and path
+  loading are scoped to the caller (#1653).
 - Session revocation now applies to password reset and change, logout,
   WebSocket connections, and routes gated only by `getUserId()` (#549, #588,
   #614, #711).

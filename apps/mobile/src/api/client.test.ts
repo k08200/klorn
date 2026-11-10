@@ -157,6 +157,19 @@ describe("api client", () => {
       "https://a/api/auth/apple/login?source=desktop&nonce=n&appScheme=ai.klorn.app",
     );
   });
+
+  it("tells the API that Files' attachment read is not the user opening the mail", async () => {
+    const { calls, transport } = recording(() => json(200, { ok: true }));
+    const ep = endpoints(createApiClient({ baseUrl: "https://a", getToken: () => "t", transport }));
+    await ep.files.attachmentsOf("e 1");
+    await ep.mail.detail("e 1");
+    expect(calls.map((c) => c.url.replace("https://a", ""))).toEqual([
+      // Background read: no OPENED stamp on the decision ledger.
+      "/api/email/e%201?purpose=attachments",
+      // The reader's own fetch stays bare, so it counts as an open.
+      "/api/email/e%201",
+    ]);
+  });
 });
 
 describe("mock transport", () => {

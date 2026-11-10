@@ -508,7 +508,8 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         scoped.signOut()
     }
     check("the ledger is written only when it changed",
-          text("AppModel.swift").contains("if plan.next != ledger { pushLedgerStore.save(plan.next) }"))
+          text("AppModel.swift").contains("if planned != ledger { pushLedgerStore.save(planned) }")
+          && text("AppModel.swift").contains("if outcome.next != current { pushLedgerStore.save(outcome.next) }"))
     check("the retired pill trace log is removed once at launch, best effort",
           app.contains("RetiredFiles.removePillTrace()")
           && RetiredFiles.pillTraceURL(appSupport: URL(fileURLWithPath: "/x"))?.path
