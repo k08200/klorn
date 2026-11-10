@@ -27,7 +27,7 @@ vi.mock("../judge/judge-context.js", () => ({
   buildJudgeContext: vi.fn(async () => ({ senderFacts: null })),
 }));
 
-import { resetActedScanCursor, sweepAttentionAging } from "../judge/attention-aging.js";
+import { _resetActedScanCursorForTests, sweepAttentionAging } from "../judge/attention-aging.js";
 import { upsertAttentionForEmailJudgement } from "../judge/attention-mirror.js";
 import { rejudgeFallbackItems } from "../judge/fallback-rejudge.js";
 
@@ -192,7 +192,7 @@ describe("attention aging", () => {
   // The sweep is dark unless ATTENTION_AGING_ENABLED is on (it checks itself).
   beforeEach(() => {
     vi.stubEnv("ATTENTION_AGING_ENABLED", "true");
-    resetActedScanCursor();
+    _resetActedScanCursorForTests();
     return () => vi.unstubAllEnvs();
   });
 

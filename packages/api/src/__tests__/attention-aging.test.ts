@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
+  captureError: vi.fn(),
   attentionFindMany: vi.fn(),
   attentionUpdateMany: vi.fn(async () => ({ count: 0 })),
   emailFindMany: vi.fn(async () => []),
@@ -22,10 +23,12 @@ vi.mock("../db.js", () => {
   };
   return { prisma, db: prisma };
 });
+vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
 const {
   sweepAttentionAging,
-  resetActedScanCursor,
+  _resetActedScanCursorForTests,
+  AGING_REASON_PREFIX,
   AGING_RESOLVED_REASON,
   ACTED_SCAN_PAGE,
   ACTED_SCAN_MAX_PAGES,
@@ -45,7 +48,7 @@ const actedCall = (): UpdateArgs | undefined => updateCalls().find((c) => "id" i
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("ATTENTION_AGING_ENABLED", "true");
-  resetActedScanCursor();
+  _resetActedScanCursorForTests();
   m.attentionFindMany.mockResolvedValue([]);
   m.attentionUpdateMany.mockResolvedValue({ count: 0 });
   m.emailFindMany.mockResolvedValue([]);
@@ -76,8 +79,8 @@ describe("sweepAttentionAging — acted elsewhere", () => {
       { id: "att-live", userId: "u1", sourceId: "em-live" },
     ]);
     m.emailFindMany.mockResolvedValueOnce([
-      { id: "em-archived", labels: ["ARCHIVE"] },
-      { id: "em-live", labels: ["INBOX", "UNREAD"] },
+      { id: "em-archived", userId: "u2", labels: ["ARCHIVE"] },
+      { id: "em-live", userId: "u1", labels: ["INBOX", "UNREAD"] },
     ]);
     m.attentionUpdateMany.mockResolvedValueOnce({ count: 2 });
 
@@ -100,11 +103,26 @@ describe("sweepAttentionAging — acted elsewhere", () => {
     );
   });
 
+  it("reads an item's mail only from its own user's row", async () => {
+    m.attentionFindMany.mockResolvedValueOnce([
+      { id: "att-u1", userId: "u1", sourceId: "em-shared" },
+    ]);
+    // A row with that id under another user says nothing about u1's mail.
+    m.emailFindMany.mockResolvedValueOnce([{ id: "em-shared", userId: "u2", labels: ["INBOX"] }]);
+    m.attentionUpdateMany.mockResolvedValueOnce({ count: 1 });
+
+    await sweepAttentionAging(NOW);
+
+    expect(actedCall()?.where).toEqual({ id: { in: ["att-u1"] }, status: "OPEN" });
+  });
+
   it("keeps a spam-lane item that is still in SPAM open — Klorn surfaced it on purpose", async () => {
     m.attentionFindMany.mockResolvedValueOnce([
       { id: "att-rescued", userId: "u1", sourceId: "em-rescued" },
     ]);
-    m.emailFindMany.mockResolvedValueOnce([{ id: "em-rescued", labels: ["SPAM", "UNREAD"] }]);
+    m.emailFindMany.mockResolvedValueOnce([
+      { id: "em-rescued", userId: "u1", labels: ["SPAM", "UNREAD"] },
+    ]);
 
     const result = await sweepAttentionAging(NOW);
 
@@ -119,8 +137,8 @@ describe("sweepAttentionAging — acted elsewhere", () => {
       { id: "att-spam-kept", userId: "u1", sourceId: "em-spam-kept" },
     ]);
     m.emailFindMany.mockResolvedValueOnce([
-      { id: "em-spam-trashed", labels: ["TRASH"] },
-      { id: "em-spam-kept", labels: ["SPAM"] },
+      { id: "em-spam-trashed", userId: "u1", labels: ["TRASH"] },
+      { id: "em-spam-kept", userId: "u1", labels: ["SPAM"] },
     ]);
     m.attentionUpdateMany.mockResolvedValueOnce({ count: 2 });
 
@@ -138,7 +156,7 @@ describe("sweepAttentionAging — acted elsewhere", () => {
     m.attentionFindMany.mockResolvedValueOnce([
       { id: "att-not-spam", userId: "u1", sourceId: "em-not-spam" },
     ]);
-    m.emailFindMany.mockResolvedValueOnce([{ id: "em-not-spam", labels: ["INBOX"] }]);
+    m.emailFindMany.mockResolvedValueOnce([{ id: "em-not-spam", userId: "u1", labels: ["INBOX"] }]);
 
     await sweepAttentionAging(NOW);
 
@@ -155,73 +173,136 @@ describe("sweepAttentionAging — acted elsewhere", () => {
       }),
     );
   });
+});
+
+describe("sweepAttentionAging — acted-path paging", () => {
+  const pageOf = (tag: string, length = ACTED_SCAN_PAGE) =>
+    Array.from({ length }, (_, i) => ({
+      id: `${tag}-${String(i).padStart(4, "0")}`,
+      userId: "u1",
+      sourceId: `em-${tag}-${i}`,
+    }));
+  const scanWhere = (call: number) =>
+    (m.attentionFindMany.mock.calls[call] as unknown as [UpdateArgs])[0].where;
+  /** Every mail asked for is still in the INBOX. */
+  const allLive = () =>
+    m.emailFindMany.mockImplementation(async (args: unknown) => {
+      const ids = (args as { where: { id: { in: string[] } } }).where.id.in;
+      return ids.map((id) => ({ id, userId: "u1", labels: ["INBOX"] }));
+    });
 
   it("pages past a full page of still-live items instead of rescanning the same head every tick", async () => {
-    const livePage = Array.from({ length: ACTED_SCAN_PAGE }, (_, i) => ({
-      id: `att-${String(i).padStart(4, "0")}`,
-      userId: "u1",
-      sourceId: `em-${i}`,
-    }));
+    const livePage = pageOf("a");
     m.attentionFindMany
       .mockResolvedValueOnce(livePage)
-      .mockResolvedValueOnce([{ id: "att-zzzz", userId: "u1", sourceId: "em-archived" }]);
+      .mockResolvedValueOnce([{ id: "b-0000", userId: "u1", sourceId: "em-archived" }]);
     m.emailFindMany
-      .mockResolvedValueOnce(livePage.map((i) => ({ id: i.sourceId, labels: ["INBOX"] })))
-      .mockResolvedValueOnce([{ id: "em-archived", labels: [] }]);
+      .mockResolvedValueOnce(
+        livePage.map((i) => ({ id: i.sourceId, userId: "u1", labels: ["INBOX"] })),
+      )
+      .mockResolvedValueOnce([{ id: "em-archived", userId: "u1", labels: [] }]);
     m.attentionUpdateMany.mockResolvedValueOnce({ count: 1 });
 
     const result = await sweepAttentionAging(NOW);
 
-    const pages = m.attentionFindMany.mock.calls.map((c) => (c as unknown as [UpdateArgs])[0]);
-    expect(pages).toHaveLength(2);
-    expect(pages[1]?.where).toEqual({
+    expect(m.attentionFindMany).toHaveBeenCalledTimes(2);
+    expect(scanWhere(1)).toEqual({
       status: "OPEN",
       source: "EMAIL",
-      id: { gt: livePage[livePage.length - 1]?.id },
+      id: { gt: livePage.at(-1)?.id },
     });
-    expect(actedCall()?.where).toEqual({ id: { in: ["att-zzzz"] }, status: "OPEN" });
+    expect(actedCall()?.where).toEqual({ id: { in: ["b-0000"] }, status: "OPEN" });
     expect(result.resolvedActed).toBe(1);
   });
 
-  it("bounds one tick and resumes from where it stopped on the next tick", async () => {
-    const fullPage = (n: number) =>
-      Array.from({ length: ACTED_SCAN_PAGE }, (_, i) => ({
-        id: `p${String(n).padStart(3, "0")}-${String(i).padStart(4, "0")}`,
-        userId: "u1",
-        sourceId: `em-${n}-${i}`,
-      }));
-    m.attentionFindMany.mockImplementation(async () =>
-      fullPage(m.attentionFindMany.mock.calls.length),
+  it("continues each page from the last id of the one before, stops at the page budget, and resumes there next tick", async () => {
+    const pages = Array.from({ length: ACTED_SCAN_MAX_PAGES }, (_, n) =>
+      pageOf(`p${String(n).padStart(3, "0")}`),
     );
-    m.emailFindMany.mockImplementation(async (args: unknown) => {
-      const ids = (args as { where: { id: { in: string[] } } }).where.id.in;
-      return ids.map((id) => ({ id, labels: ["INBOX"] }));
-    });
+    m.attentionFindMany.mockImplementation(
+      async () => pages[m.attentionFindMany.mock.calls.length - 1] ?? [],
+    );
+    allLive();
 
     await sweepAttentionAging(NOW);
     expect(m.attentionFindMany).toHaveBeenCalledTimes(ACTED_SCAN_MAX_PAGES);
-    const lastOfTick = fullPage(ACTED_SCAN_MAX_PAGES).at(-1)?.id;
+    expect(scanWhere(0)).toEqual({ status: "OPEN", source: "EMAIL" });
+    for (let n = 1; n < ACTED_SCAN_MAX_PAGES; n++) {
+      expect(scanWhere(n)).toEqual({
+        status: "OPEN",
+        source: "EMAIL",
+        id: { gt: pages[n - 1]?.at(-1)?.id },
+      });
+    }
 
-    m.attentionFindMany.mockClear();
-    m.attentionFindMany.mockResolvedValueOnce([]);
+    m.attentionFindMany.mockReset();
+    m.attentionFindMany.mockResolvedValue([]);
     await sweepAttentionAging(NOW);
-    const firstOfNextTick = (m.attentionFindMany.mock.calls[0] as unknown as [UpdateArgs])[0];
-    expect(firstOfNextTick.where).toEqual({
+    expect(scanWhere(0)).toEqual({
       status: "OPEN",
       source: "EMAIL",
-      id: { gt: lastOfTick },
+      id: { gt: pages.at(-1)?.at(-1)?.id },
     });
   });
 
-  it("wraps to the start once the scan reaches the end", async () => {
+  it("starts over from the head when one tick's scan reaches the end", async () => {
     m.attentionFindMany.mockResolvedValueOnce([{ id: "att-a", userId: "u1", sourceId: "em-a" }]);
-    m.emailFindMany.mockResolvedValueOnce([{ id: "em-a", labels: ["INBOX"] }]);
+    allLive();
     await sweepAttentionAging(NOW);
+    expect(m.attentionFindMany).toHaveBeenCalledTimes(1);
 
     m.attentionFindMany.mockClear();
     await sweepAttentionAging(NOW);
-    const first = (m.attentionFindMany.mock.calls[0] as unknown as [UpdateArgs])[0];
-    expect(first.where).toEqual({ status: "OPEN", source: "EMAIL" });
+    expect(scanWhere(0)).toEqual({ status: "OPEN", source: "EMAIL" });
+  });
+
+  it("wraps within the tick when it resumed mid-way and reached the end", async () => {
+    const full = pageOf("a");
+    // Tick 1 stops after one good page (the next one fails): the cursor is mid-way.
+    m.attentionFindMany.mockResolvedValueOnce(full).mockRejectedValueOnce(new Error("timeout"));
+    allLive();
+    await sweepAttentionAging(NOW);
+
+    m.attentionFindMany.mockReset();
+    m.attentionFindMany
+      .mockResolvedValueOnce([]) // nothing after the cursor: the end
+      .mockResolvedValueOnce([{ id: "a-0000", userId: "u1", sourceId: "em-a-0" }]); // the head
+    await sweepAttentionAging(NOW);
+
+    expect(m.attentionFindMany).toHaveBeenCalledTimes(2);
+    expect(scanWhere(0)).toEqual({ status: "OPEN", source: "EMAIL", id: { gt: full.at(-1)?.id } });
+    expect(scanWhere(1)).toEqual({ status: "OPEN", source: "EMAIL" });
+  });
+
+  it("does not rescan the head in a tick that began at the head", async () => {
+    m.attentionFindMany
+      .mockResolvedValueOnce(pageOf("a"))
+      .mockResolvedValueOnce([{ id: "b-0000", userId: "u1", sourceId: "em-b-0" }]);
+    allLive();
+
+    await sweepAttentionAging(NOW);
+
+    expect(m.attentionFindMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed page is reported, keeps the cursor at the last good page, and the age-out still runs", async () => {
+    const good = pageOf("a");
+    m.attentionFindMany
+      .mockResolvedValueOnce(good)
+      .mockRejectedValueOnce(new Error("connection reset"));
+    allLive();
+
+    const result = await sweepAttentionAging(NOW);
+
+    expect(result.resolvedActed).toBe(0);
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    // The three age-out writes ran despite the failure.
+    expect(updateCalls().filter((c) => "tier" in c.where)).toHaveLength(3);
+
+    m.attentionFindMany.mockReset();
+    m.attentionFindMany.mockResolvedValue([]);
+    await sweepAttentionAging(NOW);
+    expect(scanWhere(0)).toEqual({ status: "OPEN", source: "EMAIL", id: { gt: good.at(-1)?.id } });
   });
 });
 
@@ -277,8 +358,9 @@ describe("sweepAttentionAging — age-out", () => {
   });
 
   it("uses one shared prefix for every aging reason (the rollback key)", () => {
+    expect(AGING_REASON_PREFIX).toBe("aging:");
     for (const reason of Object.values(AGING_RESOLVED_REASON)) {
-      expect(reason.startsWith("aging:")).toBe(true);
+      expect(reason.startsWith(AGING_REASON_PREFIX)).toBe(true);
     }
     expect(new Set(Object.values(AGING_RESOLVED_REASON)).size).toBe(3);
   });

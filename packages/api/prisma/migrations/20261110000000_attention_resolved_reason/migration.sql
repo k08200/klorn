@@ -6,5 +6,9 @@
 -- EXPAND ONLY, metadata-only: a nullable column with no default adds without a
 -- table rewrite. The previous instance keeps resolving rows without it during
 -- the swap; the sweep is OFF by default, so no aging resolution is unstamped.
+--
+-- If it fails on lock_timeout, Prisma records the migration as failed: run
+-- `prisma migrate resolve --rolled-back 20261110000000_attention_resolved_reason`
+-- and redeploy.
 SET LOCAL lock_timeout = '5s';
 ALTER TABLE "AttentionItem" ADD COLUMN "resolvedReason" TEXT;

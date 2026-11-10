@@ -1871,7 +1871,7 @@ model AttentionItem {
   // and undone. Today only the aging sweep writes it (judge/attention-aging.ts:
   // "aging:acted" | "aging:silent" | "aging:queue"). NULL = resolved by any
   // other path, or not resolved. Meaningful only while status is RESOLVED;
-  // snooze, the one way out of RESOLVED, clears it.
+  // snooze and dismiss, the user paths out of RESOLVED, clear it.
   resolvedReason  String?
   snoozedUntil    DateTime?
   lastAmplifiedAt DateTime?

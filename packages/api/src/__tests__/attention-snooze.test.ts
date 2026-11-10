@@ -41,9 +41,9 @@ describe("snoozeAttentionItem", () => {
     const res = await snoozeAttentionItem("u1", "i1", until);
 
     expect(res).toEqual({ ok: true });
-    // resolvedReason is cleared because snooze is the one way out of RESOLVED:
-    // an aging stamp must not ride along and make a later rollback reopen an
-    // item some other path resolved.
+    // resolvedReason is cleared because snooze leaves RESOLVED: an aging stamp
+    // must not ride along and make a later rollback reopen an item some other
+    // path resolved.
     expect(update).toHaveBeenCalledWith({
       where: { id: "i1" },
       data: {

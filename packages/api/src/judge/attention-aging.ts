@@ -24,9 +24,12 @@
  *   is classification-only.
  *
  * Every resolution is stamped with its rule in `resolvedReason` (all share
- * the AGING_REASON_PREFIX), so the sweep is reversible: with the flag off,
- * reopening `status = 'RESOLVED' AND starts_with("resolvedReason", 'aging:')`
- * undoes exactly what it did and nothing another path resolved.
+ * AGING_REASON_PREFIX), so what the sweep resolved can be told apart from what
+ * any other path resolved, and reopened (the rollback SQL is in the PR that
+ * added the column): with the flag off, reopen RESOLVED rows carrying an
+ * aging stamp whose mail row still exists and is still in INBOX or SPAM. A
+ * stamped row whose mail is gone or left both stays resolved — reopening it
+ * would leave an orphan OPEN item nothing ever resolves again.
  *
  * Gated by ATTENTION_AGING_ENABLED (OFF by default — what leaves the board
  * is a product decision; the flip is deliberate). Runs hourly from the
@@ -36,6 +39,7 @@
 
 import { attentionAgingEnabled } from "../config.js";
 import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
 
 export const SILENT_MAX_AGE_DAYS = 14;
@@ -50,11 +54,11 @@ export const AGING_REASON_PREFIX = "aging:";
 /** `AttentionItem.resolvedReason` per rule. One prefix, so one query undoes all. */
 export const AGING_RESOLVED_REASON = {
   /** The mail is gone, or left every folder Klorn reads it from. */
-  ACTED: "aging:acted",
+  ACTED: `${AGING_REASON_PREFIX}acted`,
   /** SILENT, surfaced more than SILENT_MAX_AGE_DAYS ago. */
-  SILENT: "aging:silent",
+  SILENT: `${AGING_REASON_PREFIX}silent`,
   /** QUEUE or legacy null tier, surfaced more than QUEUE_MAX_AGE_DAYS ago. */
-  QUEUE: "aging:queue",
+  QUEUE: `${AGING_REASON_PREFIX}queue`,
 } as const;
 
 /** The folders Klorn reads mail from: INBOX, and SPAM for the spam lane. */
@@ -75,7 +79,7 @@ export interface AttentionAgingResult {
 let actedScanCursor: string | undefined;
 
 /** Test seam: start the next acted-path walk from the first item. */
-export function resetActedScanCursor(): void {
+export function _resetActedScanCursorForTests(): void {
   actedScanCursor = undefined;
 }
 
@@ -106,11 +110,13 @@ async function resolveActedPage(
       id: { in: items.map((i) => i.sourceId) },
       userId: { in: [...new Set(items.map((i) => i.userId))] },
     },
-    select: { id: true, labels: true },
+    select: { id: true, userId: true, labels: true },
   });
-  const labelsById = new Map(emails.map((e) => [e.id, e.labels]));
+  // Keyed by (user, mail): an item reads only its own user's row, never another
+  // user's row that happens to carry the id.
+  const labelsOf = new Map(emails.map((e) => [`${e.userId}:${e.id}`, e.labels]));
   const actedIds = items
-    .filter((item) => actedElsewhere(labelsById.get(item.sourceId)))
+    .filter((item) => actedElsewhere(labelsOf.get(`${item.userId}:${item.sourceId}`)))
     .map((item) => item.id);
 
   let resolved = 0;
@@ -126,15 +132,31 @@ async function resolveActedPage(
 
 /**
  * Acted-elsewhere: walk OPEN EMAIL items in id order, a bounded number of
- * pages per tick, resuming where the last tick stopped and wrapping at the end.
+ * pages per tick, resuming where the last tick stopped. Reaching the end
+ * restarts from the head: within the same tick when the tick began mid-way,
+ * otherwise on the next tick. A failed page is reported and ends this tick's walk: the cursor
+ * stays on the last good page so the next tick retries it, and the age-out
+ * still runs. Returns how many it resolved before any failure.
  */
 async function resolveActedElsewhere(now: Date): Promise<number> {
   let resolved = 0;
-  for (let page = 0; page < ACTED_SCAN_MAX_PAGES; page++) {
-    const result = await resolveActedPage(now, actedScanCursor);
-    resolved += result.resolved;
-    actedScanCursor = result.full ? result.lastId : undefined;
-    if (!result.full) break;
+  // Only a tick that began mid-way has a head left to cover after the end.
+  let canWrap = actedScanCursor !== undefined;
+  try {
+    for (let page = 0; page < ACTED_SCAN_MAX_PAGES; page++) {
+      const result = await resolveActedPage(now, actedScanCursor);
+      resolved += result.resolved;
+      if (result.full) {
+        actedScanCursor = result.lastId;
+        continue;
+      }
+      actedScanCursor = undefined;
+      if (!canWrap) break;
+      canWrap = false;
+    }
+  } catch (err) {
+    console.warn("[ATTENTION-AGING] acted-elsewhere scan failed:", err);
+    captureError(err, { tags: { scope: "attention-aging.acted" } });
   }
   return resolved;
 }
