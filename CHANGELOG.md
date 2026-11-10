@@ -26,7 +26,7 @@ calendar time.
   the judge, only for the users in `ROLLOUT_COHORT_USER_IDS`. `true` still
   means everyone.
 - `GET /api/admin/flags` lists `CALENDAR_COATTENDANCE_ENABLED` and
-  `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`).
+  `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`) (#1666).
 
 ## [0.4.0] — 2026-11-08
 
