@@ -1867,6 +1867,12 @@ model AttentionItem {
 
   surfacedAt      DateTime  @default(now())
   resolvedAt      DateTime?
+  // Which system rule resolved the row, so a sweep's resolutions can be found
+  // and undone. Today only the aging sweep writes it (judge/attention-aging.ts:
+  // "aging:acted" | "aging:silent" | "aging:queue"). NULL = resolved by any
+  // other path, or not resolved. Meaningful only while status is RESOLVED;
+  // snooze and dismiss, the user paths out of RESOLVED, clear it.
+  resolvedReason  String?
   snoozedUntil    DateTime?
   lastAmplifiedAt DateTime?
 
