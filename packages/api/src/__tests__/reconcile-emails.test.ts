@@ -17,6 +17,7 @@ const m = vi.hoisted(() => ({
   isGoogleAuthError: vi.fn(() => false),
   markGoogleReconnect: vi.fn(async () => {}),
   markLinkedReconnect: vi.fn(async () => {}),
+  noteProviderArchives: vi.fn(async () => 0),
 }));
 
 vi.mock("googleapis", () => ({
@@ -33,6 +34,7 @@ vi.mock("../mail/gmail.js", () => ({
   markLinkedInboxForReconnect: m.markLinkedReconnect,
 }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
+vi.mock("../mail/provider-archives.js", () => ({ noteProviderArchives: m.noteProviderArchives }));
 // Stub heavy import chains pulled in by email-sync.ts but unused by reconcileEmails.
 vi.mock("../judge/email-firewall.js", () => ({ persistGmailEmail: vi.fn() }));
 vi.mock("../mail/gmail-fetch.js", () => ({
@@ -173,6 +175,70 @@ describe("reconcileEmails", () => {
       },
       data: expect.objectContaining({ status: "RESOLVED" }),
     });
+  });
+});
+
+describe("reconcile → provider-side archive stamps", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    m.findMany.mockResolvedValue([]);
+    m.deleteMany.mockResolvedValue({ count: 0 });
+    m.getLinkedInboxClients.mockResolvedValue([]);
+  });
+
+  const at = new Date("2026-11-10T09:00:00Z");
+
+  it("hands the rows that left the INBOX to the provider-archive stamp, with this account's client", async () => {
+    m.listMock.mockResolvedValue(inboxListing(["a", "b"]));
+    m.findMany.mockResolvedValueOnce([
+      { id: "row-1", gmailId: "g1", receivedAt: at },
+      { id: "row-2", gmailId: "g2", receivedAt: at },
+    ] as never);
+    m.deleteMany.mockResolvedValue({ count: 2 });
+
+    await reconcileEmails("user-1");
+
+    // The stale lookup now reads gmailId + receivedAt: the stamp re-checks each
+    // message in Gmail (spam, back in inbox) and keeps the newest mail first.
+    expect(m.findMany.mock.calls[0][0]).toMatchObject({
+      select: { id: true, gmailId: true, receivedAt: true },
+    });
+    expect(m.noteProviderArchives).toHaveBeenCalledTimes(1);
+    const [userId, gmail, rows] = m.noteProviderArchives.mock.calls[0] as unknown as [
+      string,
+      { users: { messages: { get: unknown } } },
+      unknown[],
+    ];
+    expect(userId).toBe("user-1");
+    expect(gmail.users.messages.get).toBe(m.getMock);
+    expect(rows).toEqual([
+      { id: "row-1", gmailId: "g1", receivedAt: at },
+      { id: "row-2", gmailId: "g2", receivedAt: at },
+    ]);
+  });
+
+  it("hands the large-INBOX fallback's stale rows too", async () => {
+    const bigInbox = Array.from({ length: 10_001 }, (_, i) => `m${i}`);
+    m.listMock.mockResolvedValue(inboxListing(bigInbox));
+    m.findMany.mockResolvedValueOnce([
+      { id: "row-x", gmailId: "stale-1", labels: ["INBOX"], receivedAt: at },
+      { id: "row-in", gmailId: "m5", labels: ["INBOX"], receivedAt: at },
+    ] as never);
+    m.deleteMany.mockResolvedValue({ count: 1 });
+
+    await reconcileEmails("user-1");
+
+    expect(m.noteProviderArchives.mock.calls[0]?.[2]).toEqual([
+      { id: "row-x", gmailId: "stale-1", receivedAt: at },
+    ]);
+  });
+
+  it("makes no stamp call when nothing left the INBOX, nor on the empty-listing skip", async () => {
+    m.listMock.mockResolvedValue(inboxListing(["a"]));
+    await reconcileEmails("user-1");
+    m.listMock.mockResolvedValue(inboxListing([]));
+    await reconcileEmails("user-1");
+    expect(m.noteProviderArchives).not.toHaveBeenCalled();
   });
 });
 
