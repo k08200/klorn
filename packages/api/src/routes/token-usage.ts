@@ -19,70 +19,85 @@ interface UsageRow {
   createdAt: Date;
 }
 
+const usageQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    period: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 export async function tokenUsageRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
   // GET /api/usage — Overall usage stats for the current user
-  app.get("/", rateLimitConfig, async (request) => {
-    const userId = getUserId(request);
-    const { period } = request.query as { period?: string };
+  app.get(
+    "/",
+    { ...rateLimitConfig, schema: { querystring: usageQuerySchema } },
+    async (request) => {
+      const userId = getUserId(request);
+      const { period } = request.query as { period?: string };
 
-    // Default period: current month
-    const now = new Date();
-    let since: Date;
-    if (period === "week") {
-      since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else if (period === "all") {
-      since = new Date(0);
-    } else {
-      // "month" (default)
-      since = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
+      // Default period: current month
+      const now = new Date();
+      let since: Date;
+      if (period === "week") {
+        since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (period === "all") {
+        since = new Date(0);
+      } else {
+        // "month" (default)
+        since = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
 
-    const usages: UsageRow[] = await db.tokenUsage.findMany({
-      where: { userId, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-    });
+      const usages: UsageRow[] = await db.tokenUsage.findMany({
+        where: { userId, createdAt: { gte: since } },
+        orderBy: { createdAt: "desc" },
+      });
 
-    const totalTokens = usages.reduce((sum: number, u: UsageRow) => sum + u.totalTokens, 0);
-    const totalCost = usages.reduce((sum: number, u: UsageRow) => sum + u.estimatedCost, 0);
-    const totalPromptTokens = usages.reduce((sum: number, u: UsageRow) => sum + u.promptTokens, 0);
-    const totalCompletionTokens = usages.reduce(
-      (sum: number, u: UsageRow) => sum + u.completionTokens,
-      0,
-    );
-    const messageCount = usages.length;
+      const totalTokens = usages.reduce((sum: number, u: UsageRow) => sum + u.totalTokens, 0);
+      const totalCost = usages.reduce((sum: number, u: UsageRow) => sum + u.estimatedCost, 0);
+      const totalPromptTokens = usages.reduce(
+        (sum: number, u: UsageRow) => sum + u.promptTokens,
+        0,
+      );
+      const totalCompletionTokens = usages.reduce(
+        (sum: number, u: UsageRow) => sum + u.completionTokens,
+        0,
+      );
+      const messageCount = usages.length;
 
-    // Daily breakdown
-    const dailyMap = new Map<string, { tokens: number; cost: number; messages: number }>();
-    for (const u of usages) {
-      const day = u.createdAt.toISOString().split("T")[0];
-      const existing = dailyMap.get(day) || { tokens: 0, cost: 0, messages: 0 };
-      existing.tokens += u.totalTokens;
-      existing.cost += u.estimatedCost;
-      existing.messages += 1;
-      dailyMap.set(day, existing);
-    }
+      // Daily breakdown
+      const dailyMap = new Map<string, { tokens: number; cost: number; messages: number }>();
+      for (const u of usages) {
+        const day = u.createdAt.toISOString().split("T")[0];
+        const existing = dailyMap.get(day) || { tokens: 0, cost: 0, messages: 0 };
+        existing.tokens += u.totalTokens;
+        existing.cost += u.estimatedCost;
+        existing.messages += 1;
+        dailyMap.set(day, existing);
+      }
 
-    return {
-      period: period || "month",
-      since: since.toISOString(),
-      summary: {
-        totalTokens,
-        totalPromptTokens,
-        totalCompletionTokens,
-        totalCost: Math.round(totalCost * 10000) / 10000,
-        messageCount,
-      },
-      daily: Array.from(dailyMap.entries())
-        .map(([date, stats]) => ({
-          date,
-          ...stats,
-          cost: Math.round(stats.cost * 10000) / 10000,
-        }))
-        .sort((a, b) => b.date.localeCompare(a.date)),
-    };
-  });
+      return {
+        period: period || "month",
+        since: since.toISOString(),
+        summary: {
+          totalTokens,
+          totalPromptTokens,
+          totalCompletionTokens,
+          totalCost: Math.round(totalCost * 10000) / 10000,
+          messageCount,
+        },
+        daily: Array.from(dailyMap.entries())
+          .map(([date, stats]) => ({
+            date,
+            ...stats,
+            cost: Math.round(stats.cost * 10000) / 10000,
+          }))
+          .sort((a, b) => b.date.localeCompare(a.date)),
+      };
+    },
+  );
 
   // GET /api/usage/conversations — Per-conversation breakdown
   app.get("/conversations", rateLimitConfig, async (request) => {

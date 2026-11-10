@@ -42,6 +42,12 @@ vi.mock("../mail/email-sync.js", () => ({
   getEmailThreads: vi.fn(async () => ({ threads: [], total: 0 })),
 }));
 vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn() }));
+vi.mock("../mail/meeting-context.js", () => ({
+  getMeetingContext: vi.fn(async () => null),
+}));
+vi.mock("../user-timezone.js", () => ({
+  getUserTimeZone: vi.fn(async () => "Asia/Seoul"),
+}));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 
 vi.mock("../db.js", () => {
@@ -83,8 +89,20 @@ vi.mock("../db.js", () => {
       })),
     },
     attentionItem: { upsert: vi.fn(async () => ({})) },
-    linkedInboxAccount: { findMany: vi.fn(async () => []) },
-    user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
+    linkedInboxAccount: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
+    user: {
+      findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })),
+      update: vi.fn(async () => ({})),
+    },
+    senderLabel: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
+    },
+    sentMessage: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn(async () => ({})),
+    },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       findMany: vi.fn(async () => []),
@@ -106,12 +124,60 @@ async function buildApp() {
 }
 
 describe("email routes (demo mode)", () => {
-  it("returns demo emails when Gmail not connected", async () => {
+  it("answers an honest empty inbox, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/email", headers: auth() });
     expect(res.statusCode).toBe(200);
-    expect(res.json().source).toBe("demo");
-    expect(res.json().emails.length).toBeGreaterThan(0);
+    const body = res.json();
+    expect(body.source).toBe("demo");
+    expect(body.needsConnection).toBe(true);
+    expect(body.emails).toEqual([]);
+    expect(body.total).toBe(0);
+    expect(JSON.stringify(body)).not.toContain("investor@vc.com");
+    await app.close();
+  });
+
+  it("serves the real DB inbox to an IMAP-only (iCloud / Naver) user with no Google token", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.linkedInboxAccount.findFirst).mockResolvedValueOnce({
+      id: "li-icloud",
+    } as never);
+    vi.mocked(prisma.emailMessage.findMany).mockResolvedValueOnce([
+      {
+        id: "imap-1",
+        gmailId: "icloud:42",
+        threadId: null,
+        linkedInboxAccountId: "li-icloud",
+        from: "Friend <friend@icloud.com>",
+        to: "me@icloud.com",
+        subject: "Dinner Friday?",
+        snippet: "Are you free",
+        body: "Are you free",
+        receivedAt: new Date("2026-10-15T01:00:00.000Z"),
+        labels: [],
+        isRead: false,
+        isStarred: false,
+        priority: "NORMAL",
+        category: null,
+        summary: null,
+        keyPoints: null,
+        actionItems: null,
+        sentiment: null,
+        needsReply: false,
+      },
+    ] as never);
+    vi.mocked(prisma.emailMessage.count).mockResolvedValueOnce(1);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.source).toBe("gmail");
+    expect(body.needsConnection).toBeUndefined();
+    expect(body.emails.map((e: { id: string }) => e.id)).toEqual(["imap-1"]);
+    expect(body.emails[0].linkedInboxAccountId).toBe("li-icloud");
+    expect(prisma.emailMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: "user-1" }) }),
+    );
     await app.close();
   });
 
@@ -120,20 +186,6 @@ describe("email routes (demo mode)", () => {
     const res = await app.inject({ method: "GET", url: "/api/email/demo-1", headers: auth() });
     expect(res.statusCode).toBe(200);
     expect(res.json().id).toBe("demo-1");
-    await app.close();
-  });
-
-  it("filters demo emails by unread", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/email?filter=unread",
-      headers: auth(),
-    });
-    expect(res.statusCode).toBe(200);
-    for (const email of res.json().emails) {
-      expect(email.isRead).toBe(false);
-    }
     await app.close();
   });
 
@@ -264,6 +316,7 @@ describe("email routes (demo mode)", () => {
           id: null,
           email: "primary@example.com",
           kind: "primary",
+          purpose: null,
           needsReconnect: false,
           provider: "GOOGLE",
         },
@@ -271,16 +324,50 @@ describe("email routes (demo mode)", () => {
           id: "linked-1",
           email: "second@school.edu",
           kind: "linked",
+          purpose: null,
           needsReconnect: false,
           provider: "GOOGLE",
         },
       ],
+      companyDomains: [],
+      priorities: null,
     });
     // Self-scoped: linked lookup keyed by the caller's userId. Flag off →
     // the historical GOOGLE-only selector.
     expect(prisma.linkedInboxAccount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: "user-1", provider: "GOOGLE" } }),
     );
+    await app.close();
+  });
+
+  it("GET /inboxes hides a linked row that mirrors the primary address", async () => {
+    const { prisma } = await import("../db.js");
+    const primaryUser = {
+      id: "user-1",
+      email: "Primary@Example.com",
+      plan: "PRO",
+      role: "USER",
+    } as never;
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce(primaryUser)
+      .mockResolvedValueOnce(primaryUser);
+    // Pre-guard data: the user OAuth-linked their own primary account. The
+    // selector must not show the same mailbox twice.
+    vi.mocked(prisma.linkedInboxAccount.findMany).mockResolvedValueOnce([
+      { id: "dup", email: "primary@example.com", needsReconnect: false, provider: "GOOGLE" },
+      { id: "ok", email: "second@school.edu", needsReconnect: false, provider: "GOOGLE" },
+    ] as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/inboxes",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const emails = res.json().inboxes.map((i: { email: string }) => i.email.toLowerCase());
+    expect(emails).toEqual(["primary@example.com", "second@school.edu"]);
     await app.close();
   });
 
@@ -300,6 +387,239 @@ describe("email routes (demo mode)", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().inboxes[0]).toMatchObject({ kind: "primary", needsReconnect: true });
+    await app.close();
+  });
+
+  it("GET /inboxes carries the declared company domains", async () => {
+    const { prisma } = await import("../db.js");
+    const owner = {
+      id: "user-1",
+      email: "primary@example.com",
+      plan: "PRO",
+      role: "USER",
+      companyDomains: ["acme.com"],
+    } as never;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(owner).mockResolvedValueOnce(owner);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/inboxes", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().companyDomains).toEqual(["acme.com"]);
+    await app.close();
+  });
+
+  it("PATCH /inboxes/company-domains stores canonical hostnames and echoes them", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/company-domains",
+      headers: auth(),
+      payload: { domains: [" Acme.com", "acme.com", "*.acme.io"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, companyDomains: ["acme.com", "acme.io"] });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { companyDomains: ["acme.com", "acme.io"] },
+    });
+    await app.close();
+  });
+
+  it("PATCH /inboxes/company-domains refuses a public provider / non-domain and stores nothing", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const bad = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/company-domains",
+      headers: auth(),
+      payload: { domains: ["acme.com", "Gmail.com"] },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error).toContain("gmail.com is a public mail provider");
+    const garbage = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/company-domains",
+      headers: auth(),
+      payload: { domains: "acme.com" },
+    });
+    expect(garbage.statusCode).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PATCH /inboxes/priorities stores the user's words collapsed; GET echoes them", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: "  investor mail\n first " },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, priorities: "investor mail first" });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { triagePriorities: "investor mail first" },
+    });
+    const owner = {
+      id: "user-1",
+      email: "primary@example.com",
+      plan: "PRO",
+      role: "USER",
+      triagePriorities: "investor mail first",
+    } as never;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(owner).mockResolvedValueOnce(owner);
+    const get = await app.inject({ method: "GET", url: "/api/email/inboxes", headers: auth() });
+    expect(get.json().priorities).toBe("investor mail first");
+    await app.close();
+  });
+
+  it("PATCH /inboxes/priorities refuses over-cap text and stores nothing; null clears", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const long = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: "x".repeat(501) },
+    });
+    expect(long.statusCode).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    const clear = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: null },
+    });
+    expect(clear.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { triagePriorities: null },
+    });
+    await app.close();
+  });
+
+  it("GET /waiting-on lists my unanswered threads, oldest first, with the applied floor", async () => {
+    const { prisma } = await import("../db.js");
+    const day = 86_400_000;
+    vi.mocked(prisma.sentMessage.findMany).mockResolvedValueOnce([
+      {
+        gmailId: "s1",
+        threadId: "t1",
+        to: "a@x.com",
+        subject: "A",
+        sentAt: new Date(Date.now() - 3 * day),
+        inbox: "primary",
+      },
+      {
+        gmailId: "s2",
+        threadId: "t2",
+        to: "b@x.com",
+        subject: "B",
+        sentAt: new Date(Date.now() - 5 * day),
+        inbox: "primary",
+      },
+    ] as never);
+    // t2 was answered yesterday; t1 was not.
+    vi.mocked(prisma.emailMessage.findMany).mockResolvedValueOnce([
+      { threadId: "t2", receivedAt: new Date(Date.now() - day), from: "b@x.com" },
+    ] as never);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/waiting-on?days=2",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().minDays).toBe(2);
+    expect(
+      res
+        .json()
+        .items.map((i: { threadId: string; daysWaiting: number }) => [i.threadId, i.daysWaiting]),
+    ).toEqual([["t1", 3]]);
+    // Garbage days falls back to the default floor, never a 400.
+    vi.mocked(prisma.sentMessage.findMany).mockResolvedValueOnce([] as never);
+    const bad = await app.inject({
+      method: "GET",
+      url: "/api/email/waiting-on?days=abc",
+      headers: auth(),
+    });
+    expect(bad.statusCode).toBe(200);
+    expect(bad.json()).toEqual({ items: [], minDays: 2 });
+    await app.close();
+  });
+
+  it("PUT /sender-labels stores the user's correction, canonicalized", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderLabel.upsert).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/email/sender-labels",
+      headers: auth(),
+      payload: { scope: "sender", value: "Sarah Kim <Sarah@Acme.com>", category: "customer" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      success: true,
+      label: { scope: "sender", value: "sarah@acme.com", category: "customer" },
+    });
+    expect(prisma.senderLabel.upsert).toHaveBeenCalledWith({
+      where: { userId_scope_value: { userId: "user-1", scope: "sender", value: "sarah@acme.com" } },
+      create: { userId: "user-1", scope: "sender", value: "sarah@acme.com", category: "customer" },
+      update: { category: "customer" },
+    });
+    await app.close();
+  });
+
+  it("PUT /sender-labels refuses a public-provider domain and an unknown category", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderLabel.upsert).mockClear();
+    const app = await buildApp();
+    const pub = await app.inject({
+      method: "PUT",
+      url: "/api/email/sender-labels",
+      headers: auth(),
+      payload: { scope: "domain", value: "gmail.com", category: "customer" },
+    });
+    expect(pub.statusCode).toBe(400);
+    expect(pub.json().error).toContain("public mail provider");
+    const cat = await app.inject({
+      method: "PUT",
+      url: "/api/email/sender-labels",
+      headers: auth(),
+      payload: { scope: "sender", value: "a@b.com", category: "vip" },
+    });
+    expect(cat.statusCode).toBe(400);
+    expect(prisma.senderLabel.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("DELETE /sender-labels forgets one correction; a miss is 404", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderLabel.deleteMany).mockResolvedValueOnce({ count: 1 } as never);
+    const app = await buildApp();
+    const ok = await app.inject({
+      method: "DELETE",
+      url: "/api/email/sender-labels?scope=domain&value=Acme.io",
+      headers: auth(),
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(prisma.senderLabel.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", scope: "domain", value: "acme.io" },
+    });
+    vi.mocked(prisma.senderLabel.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
+    const miss = await app.inject({
+      method: "DELETE",
+      url: "/api/email/sender-labels?scope=sender&value=nobody@acme.io",
+      headers: auth(),
+    });
+    expect(miss.statusCode).toBe(404);
     await app.close();
   });
 
@@ -334,6 +654,7 @@ describe("email routes (demo mode)", () => {
           id: null,
           email: "primary@example.com",
           kind: "primary",
+          purpose: null,
           needsReconnect: false,
           provider: "GOOGLE",
         },
@@ -341,6 +662,7 @@ describe("email routes (demo mode)", () => {
           id: "linked-1",
           email: "second@school.edu",
           kind: "linked",
+          purpose: null,
           needsReconnect: false,
           provider: "GOOGLE",
         },
@@ -348,13 +670,16 @@ describe("email routes (demo mode)", () => {
           id: "linked-2",
           email: "me@naver.com",
           kind: "linked",
+          purpose: null,
           needsReconnect: false,
           provider: "NAVER",
         },
       ]);
-      // Flag on → no provider filter: every connected mailbox joins the selector.
+      // Flag on → every connected mailbox joins the selector, except the Klorn
+      // address (E1a): no client handles it yet (unlink, From, titles), so it
+      // stays out until E3 adds that.
       expect(prisma.linkedInboxAccount.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: "user-1" } }),
+        expect.objectContaining({ where: { userId: "user-1", provider: { not: "KLORN" } } }),
       );
       await app.close();
     } finally {
@@ -390,7 +715,7 @@ describe("email routes (demo mode)", () => {
     await app.close();
   });
 
-  it("returns demo stats summary", async () => {
+  it("answers zeroed stats, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -398,17 +723,43 @@ describe("email routes (demo mode)", () => {
       headers: auth(),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().source).toBe("demo");
-    expect(res.json()).toHaveProperty("total");
-    expect(res.json()).toHaveProperty("unread");
+    expect(res.json()).toEqual({
+      total: 0,
+      unread: 0,
+      urgent: 0,
+      today: 0,
+      categories: {},
+      source: "demo",
+      needsConnection: true,
+    });
     await app.close();
   });
 
-  it("returns demo threads", async () => {
+  it("answers no threads, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/email/threads", headers: auth() });
     expect(res.statusCode).toBe(200);
-    expect(res.json().source).toBe("demo");
+    expect(res.json()).toEqual({
+      threads: [],
+      total: 0,
+      source: "demo",
+      needsConnection: true,
+      page: 1,
+    });
+    await app.close();
+  });
+
+  it("serves real threads to an IMAP-only user with no Google token", async () => {
+    const { prisma } = await import("../db.js");
+    const emailSync = await import("../mail/email-sync.js");
+    vi.mocked(prisma.linkedInboxAccount.findFirst).mockResolvedValueOnce({
+      id: "li-naver",
+    } as never);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/threads", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().source).toBe("gmail");
+    expect(emailSync.getEmailThreads).toHaveBeenCalledWith("user-1", expect.anything());
     await app.close();
   });
 
@@ -642,6 +993,120 @@ describe("email routes (demo mode)", () => {
       },
       orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
     });
+    await app.close();
+  });
+
+  it("GET /:id/meeting-context returns the context for meeting mail and an empty shape otherwise", async () => {
+    const { getMeetingContext } = await import("../mail/meeting-context.js");
+    const { prisma } = await import("../db.js");
+    const row = {
+      id: "email-1",
+      gmailId: "gmail-1",
+      userId: "user-1",
+      category: "meeting",
+      summary: "confirms 4 PM tomorrow",
+      keyPoints: null,
+      body: "Can we shift tomorrow to 4pm?",
+      receivedAt: new Date("2026-08-12T19:58:00Z"),
+    };
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce(row as never);
+    vi.mocked(getMeetingContext).mockResolvedValueOnce({
+      proposed: {
+        title: "Meeting",
+        startTime: "2026-08-13T16:00:00+09:00",
+        endTime: "2026-08-13T17:00:00+09:00",
+      },
+      conflict: { hasConflicts: false, message: "No conflicts — this time slot is free." },
+      nearby: [],
+      timeZone: "Asia/Seoul",
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/email-1/meeting-context",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().proposed.startTime).toBe("2026-08-13T16:00:00+09:00");
+    expect(res.json().conflict.hasConflicts).toBe(false);
+    // receivedAt must reach the parser as the anchor (wire-through check).
+    const arg = vi.mocked(getMeetingContext).mock.calls.at(-1)?.[1];
+    expect(arg?.receivedAt).toEqual(row.receivedAt);
+
+    // Non-meeting mail: module returns null → route answers the empty shape.
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce({
+      ...row,
+      category: "newsletter",
+    } as never);
+    vi.mocked(getMeetingContext).mockResolvedValueOnce(null);
+    const empty = await app.inject({
+      method: "GET",
+      url: "/api/email/email-1/meeting-context",
+      headers: auth(),
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json()).toEqual({
+      proposed: null,
+      conflict: null,
+      nearby: [],
+      timeZone: "Asia/Seoul",
+    });
+
+    // Unknown id → 404, user-scoped.
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce(null);
+    const missing = await app.inject({
+      method: "GET",
+      url: "/api/email/nope/meeting-context",
+      headers: auth(),
+    });
+    expect(missing.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("GET /:id is side-effect free — legacy ?markRead=true no longer mutates", async () => {
+    // The read-flag mutation moved to the existing PATCH /:id/read; a GET
+    // must never write (semantic hygiene + link-prefetchers must not mark
+    // mail read). Old clients still sending ?markRead=true get it stripped
+    // by the querystring schema and see the true DB state.
+    const { prisma } = await import("../db.js");
+    // This file's mocks are not reset between tests — clear the update spy so
+    // earlier mutation tests (star toggle) don't leak into this assertion.
+    vi.mocked(prisma.emailMessage.update).mockClear();
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce({
+      id: "email-1",
+      gmailId: "gmail-1",
+      userId: "user-1",
+      threadId: null,
+      from: "Sender <s@example.com>",
+      to: "me@example.com",
+      cc: null,
+      subject: "Hello",
+      snippet: "hi",
+      body: "hi",
+      htmlBody: null,
+      receivedAt: new Date("2026-05-03T12:00:00.000Z"),
+      labels: [],
+      isRead: false,
+      isStarred: false,
+      priority: "LATER",
+      category: null,
+      summary: null,
+      keyPoints: null,
+      actionItems: null,
+      linkedInboxAccountId: null,
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/email-1?markRead=true",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().isRead).toBe(false);
+    expect(prisma.emailMessage.update).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -880,6 +1345,12 @@ describe("emailSearchOr — search query builder", () => {
     const { emailSearchOr } = await import("../routes/email.js");
     const [subjectCond] = emailSearchOr("Q3 report");
     expect(subjectCond).toEqual({ subject: { contains: "Q3 report", mode: "insensitive" } });
+  });
+
+  it("matches LIKE's own characters literally (Prisma does not escape them)", async () => {
+    const { emailSearchOr } = await import("../routes/email.js");
+    const [subjectCond] = emailSearchOr("50%_off\\");
+    expect(subjectCond).toEqual({ subject: { contains: "50\\%\\_off\\\\", mode: "insensitive" } });
   });
 });
 

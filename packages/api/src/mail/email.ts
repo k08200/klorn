@@ -1,5 +1,7 @@
 import { Resend } from "resend";
 import { captureError } from "../sentry.js";
+import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
+import { parseAddress } from "./email-address.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -15,8 +17,7 @@ function maskEmail(email: string): string {
 
 /** Extract the bare address from a `Name <addr@x>` header, or pass through. */
 function addressOf(fromHeader: string): string {
-  const m = fromHeader.match(/<([^>]+)>/);
-  return (m ? m[1] : fromHeader).trim();
+  return parseAddress(fromHeader);
 }
 
 /** Strip angle brackets so a name can't break out of an HTML/email header. */
@@ -91,131 +92,11 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
   }
 }
 
-export async function sendWaitlistAdminAlert(entry: {
-  email: string;
-  name?: string | null;
-  useCase?: string | null;
-  isResubmission?: boolean;
-}): Promise<boolean> {
-  const adminEmails = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const alertTo = process.env.WAITLIST_ALERT_EMAIL || adminEmails[0];
-  if (!alertTo) {
-    console.log(
-      "[EMAIL] No waitlist alert target configured (ADMIN_EMAILS or WAITLIST_ALERT_EMAIL)",
-    );
-    return false;
-  }
-
-  if (!resend) {
-    console.log(
-      "[EMAIL] No RESEND_API_KEY — would alert",
-      maskEmail(alertTo),
-      "about",
-      maskEmail(entry.email),
-    );
-    return true;
-  }
-
-  const safeEmail = entry.email.replace(/[<>]/g, "");
-  const safeName = (entry.name || "").replace(/[<>]/g, "");
-  const safeUseCase = (entry.useCase || "").replace(/[<>]/g, "");
-
-  try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to: alertTo,
-      subject: entry.isResubmission
-        ? `[Klorn] Waitlist re-submission: ${safeEmail}`
-        : `[Klorn] New waitlist signup: ${safeEmail}`,
-      html: `
-        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #0ea5e9; margin: 0 0 16px;">${entry.isResubmission ? "Waitlist re-submission" : "New early-access request"}</h2>
-          <p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Email:</strong> ${safeEmail}</p>
-          ${safeName ? `<p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Name:</strong> ${safeName}</p>` : ""}
-          ${safeUseCase ? `<p style="color: #374151; font-size: 14px; margin: 0 0 12px;"><strong>How they use email:</strong> ${safeUseCase}</p>` : ""}
-          <p style="color: #6b7280; font-size: 13px; margin: 16px 0 0;">
-            Review at <a href="${WEB_URL}/admin/waitlist">${WEB_URL}/admin/waitlist</a>.
-          </p>
-        </div>
-      `,
-    });
-    console.log("[EMAIL] Waitlist alert sent for", maskEmail(entry.email));
-    return true;
-  } catch (err) {
-    console.error("[EMAIL] Failed to send waitlist alert:", err);
-    return false;
-  }
-}
-
-/**
- * Applicant-facing confirmation sent right after a waitlist signup, so the
- * request doesn't feel like it vanished into a black hole while a human
- * reviews it. Best-effort: callers must not block the signup response on it.
- */
-export async function sendWaitlistConfirmationEmail(
-  to: string,
-  name?: string | null,
-): Promise<boolean> {
-  const safeAddr = maskEmail(to);
-  const safeName = name?.trim()?.replace(/[<>]/g, "");
-  const greeting = safeName ? `Hi ${escapeHtml(safeName)},` : "Hi,";
-
-  if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — waitlist confirmation skipped for", safeAddr);
-    return true;
-  }
-
-  try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject: "You're on the Klorn early-access list",
-      html: `
-        <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #0ea5e9; margin-bottom: 24px;">You're on the list</h2>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            ${greeting}
-          </p>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            Got your request — you're on the Klorn early-access list. Klorn is a
-            <strong style="color: #111827;">4-tier attention firewall</strong> for your email:
-            every signal sorts into push / queue / silent / auto, so only the clear signal interrupts you.
-          </p>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            Invites are approved personally by the founder — a human reads every request, not a queue bot.
-            Most requests are approved within a few hours during daytime hours (KST).
-          </p>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            When you're in, you'll get an email titled
-            <strong style="color: #111827;">"You're approved — sign in to Klorn"</strong>
-            with your sign-in steps. Nothing else to do until then.
-          </p>
-          <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-            Questions in the meantime? Just reply to this email — I read every one personally.
-          </p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
-          <p style="color: #9ca3af; font-size: 12px;">
-            Klorn — the clear signal worth acting on
-          </p>
-        </div>
-      `,
-    });
-    console.log("[EMAIL] Waitlist confirmation sent to", safeAddr);
-    return true;
-  } catch (err) {
-    console.error("[EMAIL] Failed to send waitlist confirmation:", err);
-    return false;
-  }
-}
-
 export async function sendBetaInviteEmail(to: string, name?: string | null): Promise<boolean> {
   const loginUrl = `${WEB_URL}/login`;
   const safeAddr = maskEmail(to);
   const safeName = name?.trim()?.replace(/[<>]/g, "");
-  const greeting = safeName ? `Hi ${safeName},` : "Hi,";
+  const greeting = safeName ? `Hi ${escapeHtml(safeName)},` : "Hi,";
 
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — invite link generated for", safeAddr);
@@ -234,10 +115,10 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
             ${greeting}
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            I've added <strong style="color: #111827;">${to}</strong> to the Klorn test-user list in Google Cloud Console. Google's "Access blocked" screen should be gone for you now.
+            You're approved. Sign in with this address: <strong style="color: #111827;">${escapeHtml(to)}</strong>.
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will start connecting your Gmail and Calendar into a single decision queue — every send, permanent delete, or external forward stops at an approval step with a verifiable receipt.
+            Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will connect your Gmail and Calendar and sort your mail so only what needs you interrupts you.
           </p>
           <a href="${loginUrl}" style="display: inline-block; background: #0ea5e9; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Open Klorn → Continue with Google
@@ -449,5 +330,88 @@ export async function sendWelcomeEmail(
     console.error("[EMAIL] Failed to send welcome email:", err);
     captureError(err, { tags: { scope: "email.welcome-send" } });
     return "failed";
+  }
+}
+
+/**
+ * Send one daily-digest mail.
+ *
+ * Plain text is the payload; the HTML part is the same text in a monospace
+ * block, escaped. A digest is a list of addresses and counts — there is nothing
+ * here that a layout would make clearer, and an address rendered as unescaped
+ * HTML is an injection waiting to happen.
+ *
+ * This is the one sender in this module that recurs on a schedule, so it is the
+ * one that carries an opt-out: in the plain-text part (which had none at all —
+ * a text-only client saw no way out), in the HTML part, and in the
+ * `List-Unsubscribe` header that Gmail weights when it decides whether Klorn's
+ * mail is wanted. The transactional senders above (reset, verify, invite)
+ * deliberately carry none: an unsubscribe control on a password reset offers to
+ * stop a mail that is only ever sent because the user just asked for it.
+ *
+ * No `List-Unsubscribe-Post`: that header promises RFC 8058 one-click, which
+ * requires an endpoint that unsubscribes on an unauthenticated POST. This link
+ * goes to the user's own settings instead, so advertising one-click would be a
+ * header that lies about what the URL does.
+ *
+ * `webUrl` is the caller's, not this module's: pim/daily-digest.ts already owns
+ * "where the digest points" for the links inside the body, and reading the env
+ * var separately here let the two disagree — an unset WEB_URL pointed the body
+ * at the deployed app and the opt-out at localhost.
+ *
+ * If no usable opt-out URL can be built, the mail is NOT sent. A recurring mail
+ * with no way out is the exact thing this function exists to prevent, so a
+ * misconfigured WEB_URL has to cost a skipped digest rather than silently
+ * produce the non-compliant mail the old code would have sent. The digest is a
+ * safety net, and the sweep already tolerates a false return per user.
+ *
+ * Returns false rather than throwing: the digest sweep runs over every user,
+ * and one bad address must not end it.
+ */
+export async function sendDigestEmail(
+  to: string,
+  subject: string,
+  text: string,
+  opts: { language?: string; webUrl?: string } = {},
+): Promise<boolean> {
+  if (!resend) {
+    console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", maskEmail(to));
+    return false;
+  }
+  const unsubscribeUrl = digestUnsubscribeUrl(opts.webUrl ?? WEB_URL);
+  if (!unsubscribeUrl) {
+    console.error(
+      "[EMAIL] digest NOT sent to",
+      maskEmail(to),
+      "— WEB_URL yields no usable unsubscribe target; refusing to send a recurring mail with no opt-out",
+    );
+    captureError(new Error("digest unsubscribe URL unavailable"), {
+      tags: { scope: "digest-email" },
+    });
+    return false;
+  }
+  const label = digestUnsubscribeLabel(opts.language ?? "en");
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      // The opt-out is part of the text payload, not a decoration on the HTML
+      // part: a client that shows only text/plain must still see a way out.
+      text: `${text}\n\n—\n${label}: ${unsubscribeUrl}`,
+      html:
+        `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;` +
+        `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
+        `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
+        `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
+        `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>` +
+        `</div>`,
+      headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+    });
+    return true;
+  } catch (err) {
+    console.warn("[EMAIL] digest send failed for", maskEmail(to));
+    captureError(err, { tags: { scope: "digest-email" } });
+    return false;
   }
 }

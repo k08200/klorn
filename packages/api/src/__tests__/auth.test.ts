@@ -46,6 +46,24 @@ describe("hashPassword / comparePassword", () => {
     const b = await hashPassword("hunter2");
     expect(a).not.toBe(b);
   });
+
+  it("hashes new passwords at the current cost factor (12)", async () => {
+    const bcrypt = (await import("bcryptjs")).default;
+    const hash = await hashPassword("hunter2");
+    expect(bcrypt.getRounds(hash)).toBe(12);
+  });
+
+  it("flags legacy cost-10 hashes for upgrade, not current or malformed ones", async () => {
+    const bcrypt = (await import("bcryptjs")).default;
+    const { passwordHashNeedsUpgrade } = await import("../auth.js");
+    const legacy = await bcrypt.hash("hunter2", 10);
+    const current = await hashPassword("hunter2");
+    expect(passwordHashNeedsUpgrade(legacy)).toBe(true);
+    expect(passwordHashNeedsUpgrade(current)).toBe(false);
+    // A malformed hash must never throw out of the login path — fail closed
+    // to "no upgrade" and let comparePassword be the thing that rejects it.
+    expect(passwordHashNeedsUpgrade("not-a-bcrypt-hash")).toBe(false);
+  });
 });
 
 describe("isTokenRevokedByEpoch (password-reset session revocation)", () => {

@@ -2,12 +2,16 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
+import AuthStatus from "../../../components/auth/auth-status";
 import { API_BASE } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
+import { useT } from "../../../lib/i18n";
+import { takeLoginBinding } from "../../../lib/login-binding";
 
 function CallbackHandler() {
   const searchParams = useSearchParams();
   const { loginWithToken } = useAuth();
+  const { t } = useT();
   const handled = useRef(false);
 
   useEffect(() => {
@@ -20,26 +24,29 @@ function CallbackHandler() {
     const code = searchParams.get("code");
 
     if (code) {
+      // The nonce this browser kept when it started the sign-in: the code
+      // redeems only with it (lib/login-binding.ts, login CSRF).
+      const nonce = takeLoginBinding();
       fetch(`${API_BASE}/api/auth/exchange-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        // `web`: this is the browser callback, so a native app's unbound
+        // relay code is refused here (api routes/auth.ts /exchange-code).
+        body: JSON.stringify(nonce ? { code, nonce, web: true } : { code, web: true }),
       })
         .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
         .then((data: { token: string }) => loginWithToken(data.token))
-        .catch(() => {
-          window.location.href = "/login?error=google_failed";
+        .catch((status: unknown) => {
+          // 403: started in another browser, or before this page could bind it.
+          window.location.href =
+            status === 403 ? "/login?error=session_expired" : "/login?error=google_failed";
         });
     } else {
       window.location.href = "/login?error=google_failed";
     }
   }, [searchParams, loginWithToken]);
 
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="w-5 h-5 border-2 border-sky-300 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  return <AuthStatus label={t("auth.signingIn")} />;
 }
 
 export default function AuthCallbackPage() {

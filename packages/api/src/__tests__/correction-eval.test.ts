@@ -49,13 +49,11 @@ beforeEach(() => {
     senderFacts: null,
   });
   judgeEmailMock.mockReset();
-  process.env.OPENROUTER_API_KEY = "test-key";
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
 });
 
 afterEach(() => {
-  delete process.env.OPENROUTER_API_KEY;
-  delete process.env.GEMINI_API_KEY;
-  delete process.env.OPENAI_COMPAT_BASE_URL;
+  vi.unstubAllEnvs();
 });
 
 describe("summarizeCorrectionEval", () => {
@@ -124,7 +122,9 @@ describe("runCorrectionEval", () => {
   });
 
   it("returns null when no LLM provider key is configured (keyword-only eval is noise)", async () => {
-    delete process.env.OPENROUTER_API_KEY;
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("OPENAI_COMPAT_BASE_URL", "");
     const payload = await runCorrectionEval("u1", NOW, { delayMs: 0 });
     expect(payload).toBeNull();
     expect(attentionFindMany).not.toHaveBeenCalled();

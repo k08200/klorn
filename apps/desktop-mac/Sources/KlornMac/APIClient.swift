@@ -1,12 +1,18 @@
 import Foundation
 
+/// What the server did with one device calendar snapshot (step C6).
+enum DeviceSnapshotReply: Sendable, Equatable { case applied, stale }
+
 enum APIError: Error, Sendable, Equatable {
     /// Non-2xx status + the server's `message`/`error` field when present, so the
     /// UI can show the real reason (e.g. a 409 "no-reply sender") not just a code.
     case http(Int, String?)
     case unauthorized  // 401 — session invalid/expired (drop to sign-in)
     case forbidden     // 403 — authenticated but not entitled (e.g. Pro-only); do NOT sign out
-    case transport(String)
+    /// No HTTP answer. `code` is the `URLError` code when there was one: it
+    /// tells "this Mac is offline" from a timeout, a TLS failure or a
+    /// cancelled request (`SurfaceStateRules.failureKind`).
+    case transport(String, code: Int? = nil)
     case decoding(String)
 }
 
@@ -27,8 +33,11 @@ struct APIClient: Sendable {
     }
 
     /// Decode a GET response. `authed` attaches the Bearer token when present.
-    func get<T: Decodable>(_ path: String, authed: Bool = true, as _: T.Type = T.self) async throws -> T {
-        let data = try await data(path, authed: authed)
+    /// `timeout` (seconds) overrides URLSession's 60 s default for one request.
+    func get<T: Decodable>(
+        _ path: String, authed: Bool = true, timeout: TimeInterval? = nil, as _: T.Type = T.self
+    ) async throws -> T {
+        let data = try await data(path, authed: authed, timeout: timeout)
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
@@ -43,6 +52,103 @@ struct APIClient: Sendable {
     /// the per-inbox selector. Read-only; the server returns no tokens.
     func fetchInboxes() async throws -> InboxesResponse {
         try await get("/api/email/inboxes")
+    }
+
+    /// GET /api/<provider>-imap/status — that provider's connected mailboxes.
+    /// Naver's is never gated; iCloud's answers 404 while its flag is off.
+    /// Either way it is the reliable account list, even when
+    /// /api/email/inboxes hides non-Google rows.
+    func fetchImapStatus(_ provider: ImapMailProvider) async throws -> ImapStatusResponse {
+        try await get(provider.statusPath)
+    }
+
+    /// POST /api/<provider>-imap/connect with exactly `{ email, password }`.
+    /// The app password is passed straight through to the server (which
+    /// verifies it with a live IMAP login and stores it enciphered) and is
+    /// never persisted or logged on this machine. Its own request, like
+    /// `putDeviceCalendarSnapshot`: a refusal's machine `code` matters, so a
+    /// non-2xx answer throws `ImapConnectRejection` rather than `APIError.http`.
+    func connectImap(_ provider: ImapMailProvider, email: String, password: String) async throws {
+        guard ImapConnectRequest.isSecureBase(base) else { throw ImapConnectRequest.InsecureTransport() }
+        var req = URLRequest(url: try url(provider.connectPath))
+        req.httpMethod = "POST"
+        req.httpBody = try ImapConnectRequest.body(email: email, password: password)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let t = token() { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        let bytes: Data
+        let resp: URLResponse
+        do {
+            (bytes, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
+        }
+        guard let http = resp as? HTTPURLResponse else { throw APIError.transport("non-HTTP response") }
+        switch http.statusCode {
+        case 200...299: return
+        case 401: throw APIError.unauthorized
+        default:
+            struct Reply: Decodable { let message: String?; let error: String?; let code: String? }
+            let reply = try? JSONDecoder().decode(Reply.self, from: bytes)
+            throw ImapConnectRejection(
+                status: http.statusCode, code: reply?.code, message: reply?.message ?? reply?.error)
+        }
+    }
+
+    /// POST /api/<provider>-imap/disconnect — ALWAYS with an email: the
+    /// bodyless form removes every mailbox for the provider, which no desktop
+    /// control should be able to trigger by accident.
+    func disconnectImap(_ provider: ImapMailProvider, email: String) async throws {
+        let body = try JSONEncoder().encode(["email": email])
+        _ = try await data(
+            provider.disconnectPath, method: "POST", body: body,
+            contentType: "application/json")
+    }
+
+    /// GET /api/device-calendar/sources — the device calendars this user uploaded
+    /// (step C6). The server answers its default 404 while the feature is off, which
+    /// DeviceCalendarBridge reads as "hide the setting".
+    func fetchDeviceCalendarSources() async throws -> DeviceCalendarSourcesResponse {
+        try await get("/api/device-calendar/sources")
+    }
+
+    /// PUT one opted-in calendar's full snapshot of its window. `key` is the
+    /// device-scoped hash (DeviceCalendarSnapshot.sourceKey), never the raw
+    /// EventKit identifier.
+    /// The body is already encoded (off the main thread, by DeviceCalendarReader).
+    /// Its own request, like `rawGet`: the reply's body matters on both sides of 2xx.
+    /// A 200 may say `stale: true` (ignored as older than what the server holds),
+    /// and a 409 carries a machine `code` naming the cap that was hit, thrown as the
+    /// error's message so the bridge can pick the text.
+    func putDeviceCalendarSnapshot(key: String, body: Data) async throws -> DeviceSnapshotReply {
+        var req = URLRequest(url: try url("/api/device-calendar/sources/\(key)/window"))
+        req.httpMethod = "PUT"
+        req.httpBody = body
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let t = token() { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        let bytes: Data
+        let resp: URLResponse
+        do {
+            (bytes, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
+        }
+        guard let http = resp as? HTTPURLResponse else { throw APIError.transport("non-HTTP response") }
+        struct Reply: Decodable { let stale: Bool?; let code: String? }
+        let reply = try? JSONDecoder().decode(Reply.self, from: bytes)
+        switch http.statusCode {
+        case 200...299: return reply?.stale == true ? .stale : .applied
+        case 401: throw APIError.unauthorized
+        case 403: throw APIError.forbidden
+        case 409: throw APIError.http(409, reply?.code ?? Self.serverMessage(bytes))
+        default: throw APIError.http(http.statusCode, Self.serverMessage(bytes))
+        }
+    }
+
+    /// DELETE a calendar the user turned off: the server removes it and its events.
+    func deleteDeviceCalendarSource(key: String) async throws {
+        try await delete("/api/device-calendar/sources/\(key)")
     }
 
     /// GET /api/automations — server-owned behaviour settings (agent mode,
@@ -77,6 +183,32 @@ struct APIClient: Sendable {
         _ = try await data(path, method: "POST", body: body, contentType: "application/json", authed: authed)
     }
 
+    /// POST any Encodable body; discard the response (arrays/optionals that
+    /// the [String: String] helper cannot express — e.g. event attendees).
+    func post(_ path: String, encodable: some Encodable, authed: Bool = true) async throws {
+        let body = try JSONEncoder().encode(encodable)
+        _ = try await data(path, method: "POST", body: body, contentType: "application/json", authed: authed)
+    }
+
+    /// DELETE a resource; discard the response body.
+    func delete(_ path: String, authed: Bool = true) async throws {
+        _ = try await data(path, method: "DELETE", authed: authed)
+    }
+
+    /// PATCH an Encodable body; discard the response. For payloads a
+    /// [String: String] can't express (optional fields must serialize null).
+    func patch(_ path: String, encodable: some Encodable, authed: Bool = true) async throws {
+        let body = try JSONEncoder().encode(encodable)
+        _ = try await data(path, method: "PATCH", body: body, contentType: "application/json", authed: authed)
+    }
+
+    /// PUT an Encodable body; discard the response (e.g. a sender label —
+    /// "this address is X", create-or-overwrite semantics).
+    func put(_ path: String, encodable: some Encodable, authed: Bool = true) async throws {
+        let body = try JSONEncoder().encode(encodable)
+        _ = try await data(path, method: "PUT", body: body, contentType: "application/json", authed: authed)
+    }
+
     /// PATCH a JSON object; discard the response body (e.g. commitment status).
     func patch(_ path: String, json: [String: String], authed: Bool = true) async throws {
         let body = try JSONEncoder().encode(json)
@@ -84,6 +216,21 @@ struct APIClient: Sendable {
     }
 
     /// POST a JSON object and decode the response (e.g. an AI reply draft).
+    /// Encodable body + decoded response — for payloads a [String: String]
+    /// can't express (nested objects, optional fields).
+    func post<T: Decodable>(
+        _ path: String, encodable: some Encodable, as _: T.Type = T.self, authed: Bool = true
+    ) async throws -> T {
+        let reqBody = try JSONEncoder().encode(encodable)
+        let data = try await data(path, method: "POST", body: reqBody, contentType: "application/json", authed: authed)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            Log.net.debug("decode failed for \(path, privacy: .public): \(String(describing: error), privacy: .private)")
+            throw APIError.decoding(path)
+        }
+    }
+
     func post<T: Decodable>(_ path: String, json: [String: String], as _: T.Type = T.self, authed: Bool = true) async throws -> T {
         let reqBody = try JSONEncoder().encode(json)
         let data = try await data(path, method: "POST", body: reqBody, contentType: "application/json", authed: authed)
@@ -103,10 +250,12 @@ struct APIClient: Sendable {
         body: Data? = nil,
         contentType: String? = nil,
         authed: Bool = true,
-        headers: [String: String]? = nil
+        headers: [String: String]? = nil,
+        timeout: TimeInterval? = nil
     ) async throws -> Data {
         var req = URLRequest(url: try url(path))
         req.httpMethod = method
+        if let timeout { req.timeoutInterval = timeout }
         if let body { req.httpBody = body }
         if let contentType { req.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         if let headers {
@@ -120,7 +269,8 @@ struct APIClient: Sendable {
         do {
             (bytes, resp) = try await session.data(for: req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
         }
         guard let http = resp as? HTTPURLResponse else {
             throw APIError.transport("non-HTTP response")
@@ -131,6 +281,27 @@ struct APIClient: Sendable {
         case 403: throw APIError.forbidden
         default: throw APIError.http(http.statusCode, Self.serverMessage(bytes))
         }
+    }
+
+    /// GET raw bytes plus the server's content type — inline mail images,
+    /// where the MIME type matters and the body is not JSON.
+    func rawGet(_ path: String) async throws -> (Data, String?) {
+        var req = URLRequest(url: try url(path))
+        if let t = token() {
+            req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        }
+        let bytes: Data
+        let resp: URLResponse
+        do {
+            (bytes, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
+        }
+        guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw APIError.transport("inline fetch failed")
+        }
+        return (bytes, http.value(forHTTPHeaderField: "Content-Type"))
     }
 
     /// Pull a human message out of an error response body (`{message}`/`{error}`).

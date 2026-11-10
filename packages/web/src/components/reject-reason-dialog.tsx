@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../lib/i18n";
 
 // Matches the API contract: PendingAction reject accepts an optional reason
 // of at most 500 characters (chat-pending-actions.ts rejectActionBodySchema).
@@ -20,6 +21,7 @@ interface RejectReasonDialogProps {
  * keeping back-compat with the existing endpoint behaviour.
  */
 export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDialogProps) {
+  const { t } = useT();
   const [reason, setReason] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -74,16 +76,13 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
         role="dialog"
         aria-modal="true"
         aria-labelledby="reject-reason-title"
-        className="panel-elevated w-full max-w-sm origin-center rounded-2xl border border-slate-200/70 bg-white p-6 transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
+        className="panel-elevated w-full max-w-sm origin-center rounded-sheet border border-line/70 bg-surface-panel p-6 transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
       >
-        <h3
-          id="reject-reason-title"
-          className="mb-2 text-base font-semibold tracking-[-0.01em] text-slate-900"
-        >
-          Reject this suggestion?
+        <h3 id="reject-reason-title" className="mb-2 text-role-title tracking-[-0.01em] text-ink">
+          {t("rejectDialog.title")}
         </h3>
-        <label htmlFor="reject-reason" className="mb-2 block text-sm text-slate-500">
-          Why? Helps Klorn avoid proposing this again — optional
+        <label htmlFor="reject-reason" className="mb-2 block text-role-label text-ink-mid">
+          {t("rejectDialog.reasonLabel")}
         </label>
         <textarea
           id="reject-reason"
@@ -92,33 +91,33 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           onChange={(e) => setReason(e.target.value.slice(0, MAX_REJECT_REASON_LENGTH))}
           maxLength={MAX_REJECT_REASON_LENGTH}
           rows={3}
-          placeholder="e.g. Wrong recipient, bad timing, not my task"
-          className="w-full resize-none rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
+          placeholder={t("rejectDialog.placeholder")}
+          className="w-full resize-none rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body text-ink placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
         />
-        <p className="mt-1 text-right text-[10px] tabular-nums text-slate-400">
+        <p className="mt-1 text-right text-role-caption tabular-nums text-ink-dim">
           {reason.length}/{MAX_REJECT_REASON_LENGTH}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-slate-500 transition duration-150 hover:text-slate-900 active:scale-[0.97]"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control px-3 py-2 text-role-label text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97]"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
             onClick={() => onReject(null)}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-role-label text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           >
-            Skip &amp; Reject
+            {t("rejectDialog.skipAndReject")}
           </button>
           <button
             type="button"
             onClick={() => onReject(trimmed || null)}
-            className="ease-strong inline-flex min-h-11 items-center rounded-lg bg-gradient-to-b from-red-500 to-red-600 px-4 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgba(127,29,29,0.3),0_8px_18px_-8px_rgba(220,38,38,0.5)] transition duration-150 hover:from-red-500 hover:to-red-700 active:scale-[0.97]"
+            className="ease-strong inline-flex min-h-11 items-center rounded-control bg-danger-solid px-4 py-2 text-role-label text-danger-solid-ink shadow-[0_1px_2px_rgba(127,29,29,0.3),0_8px_18px_-8px_rgba(220,38,38,0.5)] transition duration-150 hover:from-red-500 hover:to-red-700 active:scale-[0.97]"
           >
-            Reject
+            {t("notif.reject")}
           </button>
         </div>
       </div>

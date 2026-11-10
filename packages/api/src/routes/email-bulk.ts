@@ -13,8 +13,14 @@ import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
+import { noteEmailOutcomes } from "../judge/user-outcome.js";
 import type { EmailPriorityValue } from "../mail/email-label-feedback.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { isImapFamily } from "../mail/providers/error-semantics.js";
+import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
+import type { MailProviderActions } from "../mail/providers/types.js";
+import { captureError } from "../sentry.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -31,6 +37,8 @@ interface BulkEmailActionResult {
   // Success payload is the @klorn/contract wire shape; failures are an
   // `{ error }` body sent with a 4xx statusCode.
   payload: EmailBulkActionResponse | { error: string };
+  /** Rows an archive actually removed — server-side only, never sent. */
+  archivedIds?: string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -67,10 +75,19 @@ async function applyBulkReadAction(
   await Promise.all(
     emails.map((email) =>
       mailActionsFor(userId, email.linkedInboxAccountId)
-        .then((actions) =>
-          actions.toggleRead(userId, email.gmailId, isRead, email.linkedInboxAccountId),
-        )
-        .catch(() => null),
+        .then(async (actions) => {
+          const result = await actions.toggleRead(
+            userId,
+            email.gmailId,
+            isRead,
+            email.linkedInboxAccountId,
+          );
+          logProviderSoftFailure("EMAIL-BULK", email.id, result);
+        })
+        .catch((err) => {
+          // Local write below still happens (accepted divergence) — but never silently.
+          console.warn(`[EMAIL-BULK] toggleRead threw for ${email.id}:`, err);
+        }),
     ),
   );
   await prisma.emailMessage.updateMany({
@@ -94,30 +111,124 @@ async function applyBulkPriorityAction(
   return { payload: { success: true, updatedCount: emails.length, failed: [] } };
 }
 
+/** What happened to one message: archived, or why not. */
+type ArchiveResult = { ok: true } | { ok: false; error: string };
+
+const ARCHIVE_FAILED = "Gmail archive failed";
+
+const archiveError = (err: unknown): ArchiveResult => ({
+  ok: false,
+  error: err instanceof Error ? err.message : ARCHIVE_FAILED,
+});
+
+async function archiveOne(
+  userId: string,
+  email: EmailMessage,
+  actions: MailProviderActions,
+): Promise<ArchiveResult> {
+  try {
+    const result = await actions.archive(userId, email.gmailId, email.linkedInboxAccountId);
+    // Includes unsupported providers and every IMAP failure: the per-item failure
+    // keeps the row local instead of faking success.
+    if (result && "error" in result) return { ok: false, error: result.error || ARCHIVE_FAILED };
+    return { ok: true };
+  } catch (err) {
+    return archiveError(err);
+  }
+}
+
+interface ResolvedArchive {
+  email: EmailMessage;
+  /** The provider's actions, or why the lookup failed. */
+  resolved: { actions: MailProviderActions } | { failure: ArchiveResult };
+}
+
+/** The provider of each message; one message's lookup failure never aborts the batch. */
+function resolveArchiveProviders(
+  userId: string,
+  emails: EmailMessage[],
+): Promise<ResolvedArchive[]> {
+  return Promise.all(
+    emails.map(async (email): Promise<ResolvedArchive> => {
+      try {
+        return {
+          email,
+          resolved: { actions: await mailActionsFor(userId, email.linkedInboxAccountId) },
+        };
+      } catch (err) {
+        return { email, resolved: { failure: archiveError(err) } };
+      }
+    }),
+  );
+}
+
+/**
+ * Archive every message; the result of each, by message id.
+ *
+ * IMAP mailboxes queue their moves per account and coalesce what is queued into
+ * one login and one UID MOVE (providers/imap-session.ts), which only happens when
+ * the calls are in flight together, so they are started together. Everything else
+ * keeps its one-at-a-time order, as Gmail's per-call quota was always given.
+ */
+async function archiveAll(
+  userId: string,
+  emails: EmailMessage[],
+): Promise<Map<string, ArchiveResult>> {
+  const items = await resolveArchiveProviders(userId, emails);
+  const results = new Map<string, ArchiveResult>();
+  const run = async ({ email, resolved }: ResolvedArchive): Promise<void> => {
+    results.set(
+      email.id,
+      "actions" in resolved ? await archiveOne(userId, email, resolved.actions) : resolved.failure,
+    );
+  };
+  const concurrent = (item: ResolvedArchive) =>
+    "actions" in item.resolved && isImapFamily(item.resolved.actions.provider);
+
+  await Promise.all(items.filter(concurrent).map(run));
+  for (const item of items.filter((i) => !concurrent(i))) await run(item);
+  return results;
+}
+
+/**
+ * Archive these (already userId-scoped) messages at their providers, drop the
+ * archived rows and close their attention items. Exported so the Subscriptions
+ * page's "Unsubscribe and archive" goes through this exact path.
+ */
+export async function archiveEmailMessages(
+  userId: string,
+  emails: EmailMessage[],
+): Promise<EmailBulkActionResponse> {
+  return (await applyBulkArchiveAction(userId, emails)).payload;
+}
+
 async function applyBulkArchiveAction(
   userId: string,
   emails: EmailMessage[],
-): Promise<BulkEmailActionResult> {
+): Promise<BulkEmailActionResult & { payload: EmailBulkActionResponse; archivedIds: string[] }> {
+  const results = await archiveAll(userId, emails);
   const failed: Array<{ id: string; error: string }> = [];
   const archivedIds: string[] = [];
   for (const email of emails) {
-    try {
-      const actions = await mailActionsFor(userId, email.linkedInboxAccountId);
-      const result = await actions.archive(userId, email.gmailId, email.linkedInboxAccountId);
-      if (result && "error" in result) {
-        // Includes unsupported providers (no IMAP archive yet): the per-item
-        // failure keeps the row local instead of faking success.
-        failed.push({ id: email.id, error: result.error || "Gmail archive failed" });
-      } else archivedIds.push(email.id);
-    } catch (err) {
-      failed.push({
-        id: email.id,
-        error: err instanceof Error ? err.message : "Gmail archive failed",
-      });
-    }
+    const result = results.get(email.id);
+    if (result?.ok) archivedIds.push(email.id);
+    else failed.push({ id: email.id, error: result?.error ?? ARCHIVE_FAILED });
   }
   if (archivedIds.length > 0) {
     await prisma.emailMessage.deleteMany({ where: { userId, id: { in: archivedIds } } });
+    // The rows are gone, so the inbox sync can never notice they left and
+    // close their attention items the way it does for rows it still sees
+    // (email-sync.ts). Close them here. Fail-soft: the archive already went
+    // out, and a bookkeeping miss must not report it as failed.
+    try {
+      await resolveAttentionForEmails(userId, archivedIds);
+    } catch (err) {
+      console.warn(
+        "[EMAIL-BULK] attention resolve failed:",
+        err instanceof Error ? err.message : err,
+      );
+      captureError(err, { tags: { scope: "email-bulk.archive.resolve" }, extra: { userId } });
+    }
   }
   return {
     payload: {
@@ -125,6 +236,7 @@ async function applyBulkArchiveAction(
       updatedCount: archivedIds.length,
       failed,
     },
+    archivedIds,
   };
 }
 
@@ -163,6 +275,10 @@ export async function registerEmailBulkRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const result = await handleBulkEmailAction(uid, (request.body as BulkEmailBody) || {});
     if (result.statusCode) return reply.code(result.statusCode).send(result.payload);
+    // Stamped here, not in the shared archive path: the Subscriptions page's
+    // sender-wide archive reuses it and is not a reaction to each mail. A bulk
+    // mark-read is not stamped either — nobody opened those mails.
+    if (result.archivedIds) noteEmailOutcomes(uid, result.archivedIds, "ARCHIVED");
     return result.payload;
   });
 }

@@ -1,9 +1,11 @@
 name: Security Deep
 
-# The slow, non-gating scans. Neither job gates a PR (CodeQL only uploads to
-# the Security tab; the audit is informational), so neither has a pull_request
-# trigger — keeping them here means zero "skipped" rows in every PR's checks
-# list. Main stays continuously analyzed via push + the weekly cron.
+# The slow scans. Neither job has a pull_request trigger — keeping them here
+# means zero "skipped" rows in every PR's checks list, and a new advisory
+# published upstream should not block unrelated PRs. But the audit IS blocking
+# on main + the weekly cron: a red run is the signal that a production
+# dependency has a known vulnerability (Dependabot then raises the fix PR).
+# CodeQL stays upload-only to the Security tab.
 
 on:
   push:
@@ -22,19 +24,19 @@ jobs:
     name: Dependency Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check for known vulnerabilities
-        run: pnpm audit --prod || true
+      - name: Check for known vulnerabilities (blocking)
+        run: pnpm audit --prod
 
       - name: Check for outdated critical packages
         run: |
@@ -48,17 +50,17 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           queries: security-extended
           config-file: .github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           # Upload results to Security tab only, no PR comments
           upload: always

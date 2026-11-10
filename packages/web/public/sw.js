@@ -1,7 +1,12 @@
 // Klorn Service Worker — offline caching + push notification support
 // v8: icons regenerated to a bigger K on a full-white tile; flush the v7 cache
 // so the query-less push icon/badge (/icon-192.png, /badge-96.png) re-fetch.
-const CACHE_NAME = "klorn-v9";
+// v10: stop caching cross-origin requests and non-ok responses. The old
+// cache-first .js rule captured cdn.paddle.com/paddle.js — one bad CDN
+// response got pinned forever and the checkout overlay died silently on
+// every later visit (observed 2026-08-13). The version bump flushes any
+// cache poisoned that way.
+const CACHE_NAME = "klorn-v10";
 const PRECACHE_URLS = ["/", "/chat", "/briefing", "/manifest.json"];
 
 // Install: precache shell
@@ -31,13 +36,20 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   if (url.pathname.startsWith("/api/")) return;
 
+  // Never intercept cross-origin requests (payment/CDN scripts like
+  // cdn.paddle.com). Serving those cache-first pinned one bad response
+  // forever; the browser's own HTTP cache handles them correctly.
+  if (url.origin !== self.location.origin) return;
+
   // For navigation requests, try network first then cache
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return res;
         })
         .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
@@ -50,8 +62,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return res;
         })
         .catch(() => caches.match(request)),
@@ -65,8 +79,10 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            }
             return res;
           }),
       ),
@@ -74,6 +90,56 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 });
+
+// OS tag for one bell notification. An open tab tags its own notification for
+// the same row identically (src/lib/in-page-alerts.ts notificationTag); the tab
+// stays quiet while this browser holds a push subscription, and the shared tag
+// lets the browser collapse a same-row duplicate. A push without the id (older
+// server, or no bell row) stays untagged, exactly as before.
+const NOTIFICATION_TAG_PREFIX = "klorn-notification:";
+const NOTIFICATION_ID_MAX = 200;
+
+function notificationTag(id) {
+  if (typeof id !== "string" || id.length === 0 || id.length > NOTIFICATION_ID_MAX) {
+    return undefined;
+  }
+  return NOTIFICATION_TAG_PREFIX + id;
+}
+
+// Decision N1 (2026-11-08): a mail notification offers Reply and Later only
+// (Chrome / Windows show two actions reliably). Silent / Mute is gone. Any
+// other action id from a payload is dropped.
+const MAIL_ACTIONS = ["reply", "later"];
+const MAX_ACTIONS = 2;
+
+function mailActions(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const actions = raw
+    .filter(
+      (a) =>
+        a &&
+        MAIL_ACTIONS.includes(a.action) &&
+        typeof a.title === "string" &&
+        a.title.length > 0 &&
+        a.title.length <= 40,
+    )
+    .slice(0, MAX_ACTIONS)
+    .map((a) => ({ action: a.action, title: a.title }));
+  return actions.length > 0 ? actions : undefined;
+}
+
+// A path inside this app ("/email/abc?focus=reply"), never another origin:
+// openWindow() is handed nothing a payload could turn into an open redirect.
+function appPath(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return null;
+  if (value.includes("\\")) return null;
+  try {
+    const url = new URL(value, self.location.origin);
+    return url.origin === self.location.origin ? url.pathname + url.search + url.hash : null;
+  } catch {
+    return null;
+  }
+}
 
 // Push notifications
 self.addEventListener("push", (event) => {
@@ -110,15 +176,17 @@ self.addEventListener("push", (event) => {
       body: data.body || "You have a new notification",
       icon: "/icon-192.png",
       badge: "/badge-96.png",
-      // One-tap "Later"/"Mute" buttons for firewall interrupts (server only
-      // sends these when the push maps 1:1 to an attention item).
-      actions: Array.isArray(data.actions) ? data.actions : undefined,
+      // Reply / Later on a notification about one mail (decision N1). The
+      // server sends them only for a lane-tagged mail push.
+      actions: mailActions(data.actions),
+      tag: notificationTag(data.bellNotificationId),
       data: {
         url: data.url || "/chat",
         deliveryId: data.deliveryId || null,
         receiptUrl: data.receiptUrl || null,
-        overrideUrl: data.overrideUrl || null,
-        overrideToken: data.overrideToken || null,
+        replyUrl: data.replyUrl || null,
+        laterUrl: data.laterUrl || null,
+        laterToken: data.laterToken || null,
       },
     };
   } catch (err) {
@@ -136,53 +204,69 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// Notification click → open app
+function openOrFocus(url) {
+  return self.clients.matchAll({ type: "window" }).then((clients) => {
+    for (const client of clients) {
+      if (client.url.includes(url) && "focus" in client) return client.focus();
+    }
+    return self.clients.openWindow(url);
+  });
+}
+
+// "Later" (decision N1): the mail's later-today reminder, set in the
+// background without opening the app. The signed push-later token in the body
+// is the credential (the SW has no session); it names exactly one mail of one
+// user. Whenever the request cannot be made or fails, open the mail instead,
+// so the tap is never silently lost.
+async function remindLater(data, fallbackUrl) {
+  if (!data.laterUrl || !data.laterToken || !(await isTrustedActionUrl(data.laterUrl))) {
+    return openOrFocus(fallbackUrl);
+  }
+  try {
+    const res = await fetch(data.laterUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: data.laterToken }),
+    });
+    if (!res.ok) return openOrFocus(fallbackUrl);
+  } catch (err) {
+    console.warn("[SW] Later failed:", err);
+    return openOrFocus(fallbackUrl);
+  }
+}
+
+// Notification click → open the mail (or the push's page)
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+  const url = appPath(data.url) || "/chat";
 
-  // One-tap tier override from an action button: retier in the background and
-  // do NOT open the app. The capability token authenticates (the SW has no
-  // session); only the reversible tiers are offered.
-  if (
-    (event.action === "queue" || event.action === "silent") &&
-    data.overrideUrl &&
-    data.overrideToken &&
-    isSameOrigin(data.overrideUrl)
-  ) {
-    const tier = event.action === "queue" ? "QUEUE" : "SILENT";
-    event.waitUntil(
-      Promise.all([
-        sendPushReceipt(data, "clicked"),
-        fetch(data.overrideUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: data.overrideToken, tier }),
-        }).catch((err) => console.warn("[SW] tier override failed:", err)),
-      ]),
-    );
+  if (event.action === "later") {
+    event.waitUntil(Promise.all([sendPushReceipt(data, "clicked"), remindLater(data, url)]));
     return;
   }
 
-  const url = data.url || "/chat";
-  event.waitUntil(
-    Promise.all([
-      sendPushReceipt(data, "clicked"),
-      self.clients.matchAll({ type: "window" }).then((clients) => {
-        for (const client of clients) {
-          if (client.url.includes(url) && "focus" in client) return client.focus();
-        }
-        return self.clients.openWindow(url);
-      }),
-    ]),
-  );
+  // Reply: the reader on that mail with the reply composer focused. Sending
+  // stays a deliberate tap in the app.
+  const target = event.action === "reply" ? appPath(data.replyUrl) || url : url;
+  event.waitUntil(Promise.all([sendPushReceipt(data, "clicked"), openOrFocus(target)]));
 });
 
-// Only ever POST the capability token to our own origin — defends against a
-// misconfigured server base URL sending the token off-origin.
-function isSameOrigin(url) {
+// The capability token is only ever POSTed to this app's own origin or to the
+// API origin the page configured (the rotate URL it posts after registration,
+// see "Subscription rotation" below) — never to wherever a payload points.
+async function isTrustedActionUrl(url) {
+  let origin;
   try {
-    return new URL(url, self.location.origin).origin === self.location.origin;
+    origin = new URL(url, self.location.origin).origin;
+  } catch {
+    return false;
+  }
+  if (origin === self.location.origin) return true;
+  const rotateUrl = await readRotateUrl();
+  if (!rotateUrl) return false;
+  try {
+    return new URL(rotateUrl).origin === origin;
   } catch {
     return false;
   }

@@ -14,9 +14,10 @@
  *      removing it early makes decryptToken fail-closed on every remaining v1
  *      row (by design), e.g. breaking Gmail sync for those users.
  *
- * Covers every encrypted column: UserToken (Google OAuth), the two linked
- * account tables (calendar/inbox OAuth), and the User BYOK/app-secret columns
- * (Naver IMAP password, GitHub PAT, OpenRouter/Gemini keys).
+ * Covers every encrypted column: UserToken (Google OAuth), the three linked
+ * account tables (OAuth tokens plus the CalDAV/IMAP password ciphers; the drive
+ * accounts hold the token pair only), and the User BYOK/app-secret columns
+ * (Naver IMAP password, GitHub PAT, Anthropic/Gemini keys).
  *
  * Usage:
  *   cd packages/api && pnpm tsx src/scripts/reencrypt-tokens.ts            # dry run
@@ -131,9 +132,13 @@ function buildSweeps(): FieldSweep[] {
       "LinkedCalendarAccount",
       () =>
         prisma.linkedCalendarAccount.findMany({
-          select: { id: true, accessToken: true, refreshToken: true },
+          // caldavPasswordCipher joined with C1: CalDAV-provider rows carry their
+          // credential there, and a key rotation that skipped it would strand
+          // every CalDAV calendar on the retired key (same lesson as Phase 0b's
+          // imapPasswordCipher below).
+          select: { id: true, accessToken: true, refreshToken: true, caldavPasswordCipher: true },
         }),
-      ["accessToken", "refreshToken"],
+      ["accessToken", "refreshToken", "caldavPasswordCipher"],
       (id, data, guard) =>
         prisma.linkedCalendarAccount.updateMany({ where: { id, ...guard }, data }),
     ),
@@ -150,6 +155,18 @@ function buildSweeps(): FieldSweep[] {
       (id, data, guard) => prisma.linkedInboxAccount.updateMany({ where: { id, ...guard }, data }),
     ),
     tableSweep(
+      "LinkedDriveAccount",
+      // D5a: a linked Google Drive / OneDrive account's OAuth token pair. Covered
+      // from the day the table exists, so no rotation can strand a linked drive
+      // on the retired key.
+      () =>
+        prisma.linkedDriveAccount.findMany({
+          select: { id: true, accessToken: true, refreshToken: true },
+        }),
+      ["accessToken", "refreshToken"],
+      (id, data, guard) => prisma.linkedDriveAccount.updateMany({ where: { id, ...guard }, data }),
+    ),
+    tableSweep(
       "User(secrets)",
       () =>
         prisma.user.findMany({
@@ -157,11 +174,11 @@ function buildSweeps(): FieldSweep[] {
             id: true,
             naverImapPasswordCipher: true,
             githubTokenCipher: true,
-            openRouterApiKey: true,
+            anthropicApiKey: true,
             geminiApiKey: true,
           },
         }),
-      ["naverImapPasswordCipher", "githubTokenCipher", "openRouterApiKey", "geminiApiKey"],
+      ["naverImapPasswordCipher", "githubTokenCipher", "anthropicApiKey", "geminiApiKey"],
       (id, data, guard) => prisma.user.updateMany({ where: { id, ...guard }, data }),
     ),
   ];

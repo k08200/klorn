@@ -1,5 +1,7 @@
 /**
- * Eval-set regression gate for the 4-tier judge.
+ * Eval-set regression gate for the judge. The SET is v1-labelled (labelV2 was
+ * added alongside in #1134 and is only consulted when TIER_V2_ENABLED is set);
+ * the judge itself is not four-lane.
  *
  * Runs the committed synthetic 50-email set (eval/judge-eval-set.json)
  * through the NO-LLM pipeline (fast-path + keyword fallback) and enforces:
@@ -121,12 +123,15 @@ describe("eval-set gate (no-LLM pipeline)", () => {
     createCompletionMock.mockReset();
   });
 
-  it("eval set is well-formed: 50 items, valid tiers, unique ids", () => {
-    expect(file.items).toHaveLength(50);
+  it("eval set is well-formed: 56 items, valid tiers (v1 and v2), unique ids", () => {
+    // 50 v1 items + 6 dual-labelled ontology-v2 items (2026-08-18).
+    expect(file.items).toHaveLength(56);
     const ids = new Set(file.items.map((i) => i.id));
-    expect(ids.size).toBe(50);
+    expect(ids.size).toBe(56);
     for (const item of file.items) {
       expect(POC_TIERS).toContain(item.label);
+      const v2 = (item as { labelV2?: string }).labelV2;
+      if (v2 !== undefined) expect(POC_TIERS).toContain(v2);
     }
   });
 
@@ -135,7 +140,9 @@ describe("eval-set gate (no-LLM pipeline)", () => {
 
     const predictions = await Promise.all(
       file.items.map(async (item) => ({
-        item,
+        // v2 is the default now — the expectation is labelV2 when present,
+        // mirroring loadLabelledSet in scripts/poc-accuracy.ts.
+        item: { ...item, label: (item as { labelV2?: typeof item.label }).labelV2 ?? item.label },
         judgement: await judgeEmail({
           from: item.from,
           subject: item.subject,

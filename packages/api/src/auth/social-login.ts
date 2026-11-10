@@ -3,7 +3,6 @@ import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import {
-  evaluateBetaAutoPro,
   isDemoUser,
   normalizeEmail,
   parseDeviceName,
@@ -16,6 +15,8 @@ import { resolveSocialLoginAction, type SocialIdentity } from "./social-identity
 export interface SocialLoginContext {
   ip: string;
   userAgent: string;
+  /** A web sign-in's login binding, bound to its exchange code (auth/exchange-codes.ts). */
+  binding?: string;
 }
 
 /**
@@ -32,7 +33,7 @@ export interface SocialLoginContext {
 export async function completeSocialLogin(
   identity: SocialIdentity,
   ctx: SocialLoginContext,
-): Promise<{ redirect: string }> {
+): Promise<{ redirect: string; token?: string }> {
   const webUrl = process.env.WEB_URL || "http://localhost:8001";
   const fail = (reason: string) => ({
     redirect: `${webUrl}/login?error=${identity.provider}_${reason}`,
@@ -143,7 +144,6 @@ export async function completeSocialLogin(
           return { redirect: `${webUrl}/login?error=invite_only` };
         }
       }
-      const betaAutoProGrant = await evaluateBetaAutoPro();
       const created = await withDbRetry(
         () =>
           prisma.user.create({
@@ -155,8 +155,8 @@ export async function completeSocialLogin(
               // (resolveSocialLoginAction rejects the rest), so this mirrors
               // the Google branch's pre-verified stance exactly.
               emailVerified: true,
-              ...(betaGateEnabled && { plan: "PRO" as const }),
-              ...(betaAutoProGrant ?? {}),
+              // Every signup starts on FREE, the schema default (founder
+              // decision 2026-10-24, signup-plan-guard.test.ts).
               identities: {
                 create: { provider: identity.provider, subject: identity.subject, email },
               },
@@ -199,6 +199,10 @@ export async function completeSocialLogin(
   });
   triggerDueLoginBriefing(user.id, 10_000);
 
-  const code = mintExchangeCode(token);
-  return { redirect: `${webUrl}/auth/callback?code=${code}` };
+  // Bound to the browser that started a web sign-in (auth/exchange-codes.ts).
+  const code = mintExchangeCode(token, ctx.binding);
+  // token: for the DESKTOP callback branch (routes/social-auth.ts), which
+  // relays/parks the JWT instead of redirecting a browser. Web callers use
+  // only `redirect` — the token never lands in a URL there.
+  return { redirect: `${webUrl}/auth/callback?code=${code}`, token };
 }

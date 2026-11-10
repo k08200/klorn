@@ -54,7 +54,7 @@ export function linkifyText(text: string): ReactNode[] {
         href={url}
         target="_blank"
         rel="noopener noreferrer nofollow"
-        className="break-all text-accent underline underline-offset-2 hover:opacity-80"
+        className="break-all text-accent-deep underline underline-offset-2 hover:opacity-80"
         onClick={(e) => openExternal(url, e)}
       >
         {url}

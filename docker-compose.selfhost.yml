@@ -6,7 +6,12 @@
 #
 # Usage:
 #   cp .env.selfhost.example .env.selfhost      # then fill in the values
-#   docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
+#   docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d
+#
+# api and web pull prebuilt images from ghcr.io — no toolchain, no source
+# build. To build from source instead (e.g. you changed the code, or you
+# serve web beyond localhost and must rebake NEXT_PUBLIC_API_URL), swap the
+# `image:` line for the commented `build:` block on that service.
 #
 # Migrations run automatically: the api image's entrypoint
 # (packages/api/scripts/start.sh) executes `prisma migrate deploy` with
@@ -37,9 +42,11 @@ services:
       retries: 5
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: ghcr.io/k08200/klorn-api:latest
+    # To build from source, remove the image: line and uncomment:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.api
     restart: unless-stopped
     ports:
       - "3001:3001"
@@ -61,11 +68,14 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/auth/google/callback}
 
       # ── LLM provider (set at least one; local-first is supported) ────
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-}
       OPENAI_COMPAT_MODEL: ${OPENAI_COMPAT_MODEL:-}
       OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+      # Order of the cloud providers when more than one key is set.
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-}
 
       # ── URLs the API must know about ─────────────────────────────────
       # Where the browser reaches the web app (OAuth redirects land here).
@@ -73,10 +83,19 @@ services:
       # Browser origins allowed to call the API with credentials. Must
       # include the web app origin — production fails CLOSED without it.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # Where the API reads the client address for rate limits. Empty = the
+      # TCP peer, right with no proxy. Behind Caddy/nginx/Traefik set
+      # x-forwarded-for AND publish 3001 on loopback ("127.0.0.1:3001:3001")
+      # so no client can reach the API around the proxy.
+      # See docs/self-hosting.md ("Client address").
+      CLIENT_IP_SOURCE: ${CLIENT_IP_SOURCE:-}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-}
 
       # ── Optional: real-time Gmail push (polling fallback otherwise) ──
       GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-}
       GMAIL_PUSH_OIDC_EMAIL: ${GMAIL_PUSH_OIDC_EMAIL:-}
+      # Required with GMAIL_PUSH_OIDC_EMAIL: the push subscription's Audience.
+      GMAIL_PUSH_OIDC_AUDIENCE: ${GMAIL_PUSH_OIDC_AUDIENCE:-}
       GMAIL_PUSH_TOKEN: ${GMAIL_PUSH_TOKEN:-}
 
       # ── Optional: notifications ──────────────────────────────────────
@@ -92,24 +111,58 @@ services:
       JUDGE_MODEL: ${JUDGE_MODEL:-}
       CHAT_MODEL: ${CHAT_MODEL:-}
       AGENT_MODEL: ${AGENT_MODEL:-}
+    # /api/health is liveness: it answers 200 and reports
+    # {status: "ok" | "degraded"} in the body, so a status-code probe would call
+    # the API healthy while Postgres is unreachable. Parse the body instead
+    # (/api/health/ready answers 503 then, for status-code monitors).
+    # node:22-slim ships neither curl nor wget; node's global fetch is the one
+    # thing guaranteed to be in this image.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r=>r.json()).then(j=>process.exit(j.status==='ok'?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
     depends_on:
       postgres:
         condition: service_healthy
 
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-      args:
-        # Inlined into the client bundle at BUILD time — a runtime env entry
-        # cannot change it. Point it at where browsers reach the API (your
-        # public API URL when serving beyond localhost), then rebuild.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    image: ghcr.io/k08200/klorn-web:latest
+    # NEXT_PUBLIC_API_URL is inlined into the client bundle at BUILD time —
+    # a runtime env entry cannot change it. The published image is baked
+    # with the single-host default (http://localhost:3001). If browsers
+    # reach your API at any other address (reverse proxy, separate host),
+    # remove the image: line and rebuild from source:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.web
+    #   args:
+    #     NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
     restart: unless-stopped
     ports:
       - "3000:3000"
+    # The web app has no /health route, so the probe is the root page actually
+    # rendering. start_period covers the first render on a cold boot.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    # service_healthy, not start-order: without it a reverse proxy can route to
+    # web before it serves, and web can call an API that is still migrating.
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   klorn-selfhost-pgdata:

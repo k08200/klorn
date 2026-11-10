@@ -22,3 +22,10 @@ GoogleService-Info.plist
 *.p8
 *.p12
 .env
+
+# Bundled SPA build output (copied into the native projects by `cap sync`)
+/dist/
+/dist-mock/
+# Playwright
+/test-results/
+/playwright-report/

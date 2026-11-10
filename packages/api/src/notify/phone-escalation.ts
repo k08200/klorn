@@ -3,10 +3,10 @@
  * goes unacknowledged (GoAlert/PagerDuty-style escalation applied to a
  * personal email firewall).
  *
- * This is an opt-in DELIVERY channel for the PUSH tier, NOT a new tier.
- * The 4-tier vocabulary in tiers.ts (SILENT/QUEUE/PUSH/AUTO) is locked;
- * nothing here adds a "CALL" tier — it only re-delivers a PUSH that the
- * phone push channel demonstrably failed to land.
+ * This is an opt-in DELIVERY channel for the PUSH lane, NOT a new lane.
+ * The vocabulary in tiers.ts is locked — SILENT/INFO/QUEUE/MEETING/PUSH, plus
+ * retired AUTO for pre-v2 rows; nothing here adds a "CALL" lane. It only
+ * re-delivers a PUSH that the phone push channel demonstrably failed to land.
  *
  * Hard safety rails (all named constants below):
  *   - max 1 call per notification EVER (UNIQUE PhoneEscalation.notificationId)

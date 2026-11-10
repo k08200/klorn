@@ -22,6 +22,7 @@ import {
   type FormEvent,
   Fragment,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -29,13 +30,25 @@ import {
 } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { ComposeModal } from "../../components/compose-modal";
+import { LaneChip } from "../../components/lane-chip";
+import MailSubscriptionsEntry from "../../components/mail-subscriptions-entry";
+import { ListSkeleton } from "../../components/skeleton";
 import { useToast } from "../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
+import ErrorAlert from "../../components/ui/error-alert";
 import { apiFetch } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
+import { modKeyLabel, useIsApplePlatform } from "../../lib/platform";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
+import { serverErrorMessage } from "../../lib/server-error";
 import { formatRelative } from "../../lib/text";
+import { useKeyboardTriage } from "../../lib/use-hotkeys";
+import { MailV2 } from "./_v2/mail-v2";
+import { postReminder } from "./_v2/post-reminder";
+import { UNDO_NOTICE_SECONDS, useLaneMove } from "./use-lane-move";
+import { TRIAGE_ROW_ATTR, useListTriage } from "./use-list-triage";
 
 type Filter =
   | "all"
@@ -75,30 +88,14 @@ interface BulkUndoNotice {
 
 interface EmailReminderOption {
   key: EmailReminderKey;
-  label: string;
+  labelKey: string;
 }
 
 const EMAIL_REMINDER_OPTIONS: EmailReminderOption[] = [
-  { key: "later-today", label: "Today" },
-  { key: "tomorrow", label: "Tomorrow" },
-  { key: "next-week", label: "Next week" },
+  { key: "later-today", labelKey: "mail.remind.today" },
+  { key: "tomorrow", labelKey: "mailV2.list.remind.tomorrow" },
+  { key: "next-week", labelKey: "mailV2.list.remind.nextWeek" },
 ];
-
-function getReminderDate(option: EmailReminderKey): Date {
-  const date = new Date();
-  if (option === "later-today") {
-    date.setHours(date.getHours() + 4);
-    return date;
-  }
-  if (option === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-    date.setHours(9, 0, 0, 0);
-    return date;
-  }
-  date.setDate(date.getDate() + 7);
-  date.setHours(9, 0, 0, 0);
-  return date;
-}
 
 function parseUndoNotice(searchParams: ReturnType<typeof useSearchParams>): UndoNotice | null {
   const action = searchParams?.get("undoAction");
@@ -155,28 +152,28 @@ const FILTERS: { key: Filter; label: string; labelKey?: string; query: string }[
 // until then these are honest navigation tiles, not metrics.
 const WORK_QUEUES: Array<{
   key: Filter;
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
 }> = [
   {
     key: "finance",
-    title: "Finance docs",
-    description: "Billing, invoices, failed payments, contract amounts",
+    titleKey: "mail.queue.finance.title",
+    descriptionKey: "mail.queue.finance.description",
   },
   {
     key: "legal",
-    title: "Legal review",
-    description: "Contracts, compliance, signatures, risk",
+    titleKey: "mail.queue.legal.title",
+    descriptionKey: "mail.queue.legal.description",
   },
   {
     key: "sales",
-    title: "Revenue and customers",
-    description: "Customer replies, renewals, pricing, meeting follow-up",
+    titleKey: "mail.queue.sales.title",
+    descriptionKey: "mail.queue.sales.description",
   },
   {
     key: "support",
-    title: "Support issues",
-    description: "Bugs, incidents, complaints, escalations",
+    titleKey: "mail.queue.support.title",
+    descriptionKey: "mail.queue.support.description",
   },
 ];
 
@@ -187,18 +184,29 @@ const DOMAIN_FILTER_KEYS: Filter[] = ["finance", "legal", "sales", "support"];
 export default function EmailPage() {
   return (
     <AuthGuard>
-      <EmailView />
+      <MailSwitch />
     </AuthGuard>
   );
+}
+
+// MAIL_V2 (productization plan P5): the lane-first list, only when the API
+// reports the flag. Anything else renders the list below, unchanged.
+function MailSwitch() {
+  return useAuth().user?.mailV2 === true ? <MailV2 /> : <EmailView />;
 }
 
 function EmailView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useT();
+  const isApple = useIsApplePlatform();
   const { toast } = useToast();
   const undoNotice = useMemo(() => parseUndoNotice(searchParams), [searchParams]);
   const queryClient = useQueryClient();
+  // KEYBOARD_TRIAGE (productization plan P4): hotkeys, optimistic lane moves
+  // and the 6s undo. Off, nothing below it changes how this page behaves.
+  const keyboardTriage = useKeyboardTriage();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   // The page promises "mail that needs a reply" — default to the matching
   // filter so users don't land on a full-noise All view that contradicts the
   // headline. A user with no reply-needed mail still has every other tab
@@ -253,7 +261,7 @@ function EmailView() {
   const resolveInboxLabel = (row: EmailRow): string | null => {
     if (!showInboxBadges) return null;
     if (row.linkedInboxAccountId)
-      return inboxLabelById.get(row.linkedInboxAccountId) ?? "Linked inbox";
+      return inboxLabelById.get(row.linkedInboxAccountId) ?? t("mail.inbox.linked");
     return primaryLabel;
   };
 
@@ -312,7 +320,7 @@ function EmailView() {
 
   useEffect(() => {
     if (listQuery.error) {
-      setError("Could not load mail.");
+      setError(t("mail.error.load"));
     }
   }, [listQuery.error]);
 
@@ -365,32 +373,36 @@ function EmailView() {
       if (result?.error) {
         const notConnected = result.error.toLowerCase().includes("not connected");
         setError(
-          notConnected
-            ? "Gmail isn't connected. Reconnect in Settings → Connections."
-            : "Gmail sync failed. Check Settings → Connections to reconnect.",
+          notConnected ? t("mail.error.gmailNotConnected") : t("mail.error.gmailSyncFailed"),
         );
-        toast(notConnected ? "Gmail isn't connected." : "Gmail sync failed.", "error");
+        toast(
+          notConnected ? t("mail.toast.gmailNotConnected") : t("mail.toast.gmailSyncFailed"),
+          "error",
+        );
         return;
       }
       await load(filter, appliedSearch);
       const newCount = typeof result?.newCount === "number" ? result.newCount : 0;
       const synced = typeof result?.synced === "number" ? result.synced : 0;
       if (newCount > 0) {
-        toast(`Synced ${synced} — ${newCount} new.`, "success");
+        toast(
+          t("mail.toast.syncedNew", { synced: String(synced), count: String(newCount) }),
+          "success",
+        );
       } else if (synced > 0) {
-        toast(`Synced ${synced} — nothing new.`, "success");
+        toast(t("mail.toast.syncedNothingNew", { synced: String(synced) }), "success");
       } else {
-        toast("Sync complete. Nothing new.", "success");
+        toast(t("mailV2.sync.nothingNew"), "success");
       }
     } catch (err) {
       captureClientError(err, { scope: "email.sync" });
       const message = err instanceof Error ? err.message : "";
       if (message.toLowerCase().includes("not connected")) {
-        setError("Gmail isn't connected. Reconnect in Settings → Connections.");
-        toast("Gmail isn't connected.", "error");
+        setError(t("mail.error.gmailNotConnected"));
+        toast(t("mail.toast.gmailNotConnected"), "error");
       } else {
-        setError("Gmail sync failed. Check Settings → Connections to reconnect.");
-        toast("Gmail sync failed.", "error");
+        setError(t("mail.error.gmailSyncFailed"));
+        toast(t("mail.toast.gmailSyncFailed"), "error");
       }
     } finally {
       setSyncing(false);
@@ -408,7 +420,7 @@ function EmailView() {
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.analyzeAll" });
-      setError("Could not rerun attachment analysis.");
+      setError(t("mailV2.reanalyze.failed"));
     } finally {
       setReanalyzing(false);
     }
@@ -488,15 +500,50 @@ function EmailView() {
         setBulkUndoNotice(null);
       }
       if (data.failed && data.failed.length > 0) {
-        setError(`${data.failed.length} messages could not be processed. Please try again.`);
+        setError(t("mailV1.bulk.partialFailed", { count: String(data.failed.length) }));
       }
     } catch (err) {
       captureClientError(err, { scope: "email.bulk", action });
-      setError("Could not process the selected mail.");
+      setError(t("mail.error.bulk"));
     } finally {
       setBulkBusy(false);
     }
   };
+
+  // The exact key the live list query uses; an optimistic write to any other
+  // key lands in a bucket nothing renders.
+  const listKey = queryKeys.email.list({ filter, search: appliedSearch, inbox });
+
+  // Optimistic lane chip: write the lane into the cached rows. Cancelling the
+  // in-flight poll first keeps a stale response from overwriting it;
+  // `revert: false` because the default revert restores the pre-fetch state
+  // asynchronously and would land on top of the optimistic write.
+  const applyLane = useCallback(
+    (emailId: string, tier: EmailRow["tier"]) => {
+      void queryClient.cancelQueries({ queryKey: listKey }, { revert: false });
+      queryClient.setQueryData<typeof listQuery.data>(listKey, (prev) =>
+        prev
+          ? {
+              ...prev,
+              pages: prev.pages.map((page) =>
+                page.kind === "list"
+                  ? {
+                      ...page,
+                      emails: page.emails.map((e) => (e.id === emailId ? { ...e, tier } : e)),
+                    }
+                  : page,
+              ),
+            }
+          : prev,
+      );
+    },
+    // biome-ignore lint/correctness/useExhaustiveDependencies: listKey is rebuilt every render; its parts are the real dependencies
+    [queryClient, filter, appliedSearch, inbox],
+  );
+  const refreshLanes = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  }, [queryClient]);
+  const laneMove = useLaneMove({ apply: applyLane, onError: setError, onSettled: refreshLanes });
 
   const dismissUndoNotice = () => {
     router.replace("/email");
@@ -506,7 +553,7 @@ function EmailView() {
     setBulkUndoNotice(null);
   };
 
-  const UNDO_DISMISS_SECONDS = 8;
+  const UNDO_DISMISS_SECONDS = keyboardTriage ? UNDO_NOTICE_SECONDS : 8;
 
   useEffect(() => {
     if (!undoNotice) return;
@@ -522,7 +569,7 @@ function EmailView() {
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [undoNotice, router]);
+  }, [undoNotice, router, UNDO_DISMISS_SECONDS]);
 
   useEffect(() => {
     if (!bulkUndoNotice) return;
@@ -538,7 +585,7 @@ function EmailView() {
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [bulkUndoNotice]);
+  }, [bulkUndoNotice, UNDO_DISMISS_SECONDS]);
 
   const undoLastAction = async () => {
     if (!undoNotice || undoBusy) return;
@@ -552,11 +599,11 @@ function EmailView() {
           body: JSON.stringify({ gmailId: undoNotice.gmailId }),
         },
       );
-      toast("Restored to inbox.", "success");
+      toast(t("emailDetail.toast.restored"), "success");
       router.replace(`/email/${data.emailId}?markRead=false`);
     } catch (err) {
       captureClientError(err, { scope: "email.list.undo", action: undoNotice.action });
-      setError("Could not restore that email. Check Gmail connection and try again.");
+      setError(t("mail.error.restoreOne"));
     } finally {
       setUndoBusy(false);
     }
@@ -580,15 +627,15 @@ function EmailView() {
       );
       const failedCount = results.filter((result) => result.status === "rejected").length;
       if (failedCount > 0) {
-        setError(`${failedCount} messages could not be restored. Check Gmail and try again.`);
+        setError(t("mail.error.restoreFailed", { count: String(failedCount) }));
       } else {
-        toast("Restored to inbox.", "success");
+        toast(t("emailDetail.toast.restored"), "success");
         setBulkUndoNotice(null);
       }
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.bulk.undo" });
-      setError("Could not restore the archived mail. Check Gmail connection and try again.");
+      setError(t("mail.error.restoreArchived"));
     } finally {
       setUndoBusy(false);
     }
@@ -600,23 +647,15 @@ function EmailView() {
     setRowReminderBusy(busyKey);
     setError(null);
     try {
-      const remindAt = getReminderDate(option.key);
-      await apiFetch("/api/reminders", {
-        method: "POST",
-        body: JSON.stringify({
-          title: `${email.needsReply ? "Reply to" : "Review"}: ${email.subject || "No subject"}`,
-          remindAt: remindAt.toISOString(),
-          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
-        }),
-      });
-      toast(`Reminder set for ${option.label.toLowerCase()}.`, "success");
+      await postReminder(email.id, option.key);
+      toast(t("mailV2.list.remind.set", { when: t(option.labelKey) }), "success");
     } catch (err) {
       captureClientError(err, {
         scope: "email.list.reminder",
         emailId: email.id,
         option: option.key,
       });
-      setError("Could not create a reminder for that email.");
+      setError(t("mail.error.reminder"));
     } finally {
       setRowReminderBusy(null);
     }
@@ -653,7 +692,7 @@ function EmailView() {
         body: JSON.stringify({ ids: [email.id], action: "archive" }),
       });
       if (data.failed && data.failed.length > 0) {
-        toast("Could not archive that email.", "error");
+        toast(t("mail.toast.archiveFailed"), "error");
         return;
       }
       patchListPages([email.id], "archive");
@@ -663,11 +702,89 @@ function EmailView() {
       });
     } catch (err) {
       captureClientError(err, { scope: "email.row.quickArchive", emailId: email.id });
-      toast("Could not archive that email.", "error");
+      toast(t("mail.toast.archiveFailed"), "error");
     } finally {
       setRowQuickBusy(null);
     }
   };
+
+  // Keyboard archive (e): the row leaves at once and the request follows. A
+  // refusal — including a source that cannot archive, which only the server
+  // knows per account — puts the row back and says why, inline.
+  const archiveOptimistic = async (email: EmailRow) => {
+    if (rowQuickBusy) return;
+    setRowQuickBusy(email.id);
+    setError(null);
+    laneMove.dismiss();
+    await queryClient.cancelQueries({ queryKey: listKey });
+    const snapshot = queryClient.getQueryData<typeof listQuery.data>(listKey);
+    queryClient.setQueryData<typeof listQuery.data>(listKey, (prev) =>
+      prev
+        ? {
+            ...prev,
+            pages: prev.pages.map((page) =>
+              page.kind === "list"
+                ? { ...page, emails: updateEmailsAfterBulk(page.emails, [email.id], "archive") }
+                : page,
+            ),
+          }
+        : prev,
+    );
+    setBulkUndoNotice({
+      action: "archive",
+      emails: [{ id: email.id, gmailId: email.gmailId, subject: email.subject || "No subject" }],
+    });
+    try {
+      const data = await apiFetch<BulkActionResponse>("/api/email/bulk", {
+        method: "POST",
+        body: JSON.stringify({ ids: [email.id], action: "archive" }),
+      });
+      const failure = data.failed?.[0];
+      if (failure) throw new Error(`API 200: ${JSON.stringify({ error: failure.error })}`);
+    } catch (err) {
+      captureClientError(err, { scope: "email.row.archiveOptimistic", emailId: email.id });
+      queryClient.setQueryData(listKey, snapshot);
+      setBulkUndoNotice(null);
+      setError(serverErrorMessage(err, t("undo.archive.failed")));
+    } finally {
+      setRowQuickBusy(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+    }
+  };
+
+  const openEmail = (email: EmailRow, intent?: "reply") => {
+    const params = new URLSearchParams({ markRead: "false", queue: filter });
+    if (intent) params.set("focus", intent);
+    router.push(`/email/${email.id}?${params.toString()}`);
+  };
+
+  const { cursorId } = useListTriage({
+    active: keyboardTriage,
+    emails,
+    setSelectedIds,
+    open: openEmail,
+    archive: (email) => void archiveOptimistic(email),
+    archiveBlockedReason: () =>
+      source === "demo"
+        ? t("keys.reason.demo")
+        : rowQuickBusy || undoBusy
+          ? t("keys.reason.busy")
+          : null,
+    laneBlockedReason: () => (source === "demo" ? t("keys.reason.demo") : null),
+    moveLane: (email, tier) => {
+      setError(null);
+      setBulkUndoNotice(null);
+      laneMove.move({ id: email.id, subject: email.subject || null, tier: email.tier }, tier);
+    },
+    undo: () => {
+      if (laneMove.notice) void laneMove.undo();
+      else if (bulkUndoNotice) void undoBulkArchive();
+      else if (undoNotice) void undoLastAction();
+    },
+    canUndo: Boolean(laneMove.notice || bulkUndoNotice || undoNotice) && !rowQuickBusy && !undoBusy,
+    compose: () => setComposeOpen(true),
+    focusSearch: () => searchInputRef.current?.focus(),
+  });
 
   const quickToggleRead = async (email: EmailRow) => {
     if (rowQuickBusy) return;
@@ -680,13 +797,13 @@ function EmailView() {
         body: JSON.stringify({ ids: [email.id], action }),
       });
       if (data.failed && data.failed.length > 0) {
-        toast("Could not update read state.", "error");
+        toast(t("mail.toast.readFailed"), "error");
         return;
       }
       patchListPages([email.id], action);
     } catch (err) {
       captureClientError(err, { scope: "email.row.quickToggleRead", emailId: email.id, action });
-      toast("Could not update read state.", "error");
+      toast(t("mail.toast.readFailed"), "error");
     } finally {
       setRowQuickBusy(null);
     }
@@ -704,25 +821,23 @@ function EmailView() {
       <div className="px-4 pb-28 pt-3 md:hidden">
         <header className="mb-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-900">
-              {t("nav.mail")}
-            </h1>
-            <p className="mt-1.5 text-sm text-slate-500">
+            <h1 className="text-role-page text-ink">{t("nav.mail")}</h1>
+            <p className="mt-1.5 text-role-body text-ink-mid">
               {source === "demo"
-                ? "Demo data — connect Gmail"
+                ? t("mail.header.noAccount")
                 : replyCount > 0
-                  ? `${replyCount} need a reply`
+                  ? t("mail.header.needReply", { count: String(replyCount) })
                   : unreadCount > 0
-                    ? `${unreadCount} unread`
-                    : "All caught up"}
+                    ? t("mailV2.list.tally.unread", { count: String(unreadCount) })
+                    : t("mail.header.allCaughtUp")}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setComposeOpen(true)}
             disabled={source === "demo"}
-            aria-label="Compose"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-500 text-white transition active:bg-sky-500 disabled:opacity-40"
+            aria-label={t("mail.compose")}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover disabled:opacity-40"
           >
             <svg
               aria-hidden="true"
@@ -747,7 +862,7 @@ function EmailView() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45"
+            className="h-11 min-w-0 flex-1 rounded-control border border-line bg-surface-panel px-4 text-role-body text-ink outline-none transition placeholder:text-ink-dim focus:border-accent/45"
           />
           {appliedSearch && (
             <button
@@ -756,9 +871,9 @@ function EmailView() {
                 setSearch("");
                 setAppliedSearch("");
               }}
-              className="shrink-0 rounded-xl border border-slate-200 px-3 text-xs text-slate-500 transition active:bg-slate-100"
+              className="shrink-0 rounded-control border border-line px-3 text-role-caption text-ink-mid transition active:bg-surface-hover"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </form>
@@ -768,31 +883,27 @@ function EmailView() {
 
         {loading && (
           <div className="mt-3 space-y-2">
-            <div className="h-16 animate-pulse rounded-2xl bg-slate-200" />
-            <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
-            <div className="h-16 animate-pulse rounded-2xl bg-slate-50" />
+            <div className="h-16 animate-pulse rounded-control bg-surface-inset" />
+            <div className="h-16 animate-pulse rounded-control bg-surface-hover" />
+            <div className="h-16 animate-pulse rounded-control bg-surface-raised" />
           </div>
         )}
 
-        {error && (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        {error && <ErrorAlert className="mt-3">{error}</ErrorAlert>}
 
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
-          <div className="mt-6 rounded-2xl bg-slate-50 px-6 py-12 text-center">
-            <p className="text-base font-medium text-slate-900">
+          <div className="mt-6 rounded-card bg-surface-raised px-6 py-12 text-center">
+            <p className="text-role-head font-medium text-ink">
               {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
-            <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-slate-400">
+            <p className="mx-auto mt-1.5 max-w-xs text-role-meta leading-relaxed text-ink-dim">
               {source === "demo" ? t("mail.emptyDemoBody") : t("mail.emptyBody")}
             </p>
             <button
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-5 text-sm text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
+              className="mt-5 inline-flex min-h-11 items-center rounded-control border border-line px-5 text-role-label text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
             >
               {syncing ? t("common.syncing") : t("common.syncNow")}
             </button>
@@ -817,9 +928,9 @@ function EmailView() {
             type="button"
             onClick={() => listQuery.fetchNextPage()}
             disabled={listQuery.isFetchingNextPage}
-            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 text-sm text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
+            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-control border border-line text-role-label text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
           >
-            {listQuery.isFetchingNextPage ? "Loading..." : "Load more"}
+            {listQuery.isFetchingNextPage ? t("common.loading") : t("mailV2.loadMore")}
           </button>
         )}
       </div>
@@ -835,39 +946,40 @@ function EmailView() {
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
-              <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
-                {t("nav.mail")}
-              </h1>
+              <h1 className="text-role-page text-ink">{t("nav.mail")}</h1>
               {source === "gmail" && (
                 <span
-                  title="Real-time sync is on — new mail lands in seconds"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600"
+                  title={t("mail.live.title")}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-state-ok-line bg-state-ok-bg px-2 py-0.5 text-role-caption font-medium text-state-ok-ink"
                 >
                   <span aria-hidden="true" className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
                     <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   </span>
-                  Live
+                  {t("mail.live")}
                 </span>
               )}
             </div>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-role-body text-ink-mid">
               {source === "demo" ? (
-                <span className="text-sky-600">Demo data — connect Gmail in Settings</span>
+                <span className="text-accent-deep">{t("mail.header.noMailAccount")}</span>
               ) : replyCount > 0 ? (
                 <>
-                  <span className="font-medium text-slate-700">{replyCount}</span>
-                  {replyCount === 1 ? " needs a reply" : " need a reply"}
+                  <span className="font-medium text-ink-soft">{replyCount}</span>{" "}
+                  {replyCount === 1
+                    ? t("mail.header.needsReplyOne")
+                    : t("mail.header.needsReplyMany")}
                 </>
               ) : unreadCount > 0 ? (
-                `${unreadCount} unread`
+                t("mailV2.list.tally.unread", { count: String(unreadCount) })
               ) : (
-                "You're all caught up"
+                t("mail.header.youreAllCaughtUp")
               )}
               {totalAvailable > 0 && (
-                <span className="text-slate-400">
+                <span className="text-ink-dim">
                   {" "}
-                  <span className="mx-0.5 text-slate-300">·</span> {totalAvailable} in view
+                  <span className="mx-0.5 text-slate-300">·</span>{" "}
+                  {t("mail.header.inView", { count: String(totalAvailable) })}
                 </span>
               )}
             </p>
@@ -877,8 +989,8 @@ function EmailView() {
               type="button"
               onClick={() => setComposeOpen(true)}
               disabled={source === "demo"}
-              title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
-              className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+              title={source === "demo" ? t("mail.compose.demoTitle") : t("mail.compose.title")}
+              className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg
                 aria-hidden="true"
@@ -902,7 +1014,7 @@ function EmailView() {
               disabled={syncing}
               aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
               title={t("common.syncNow")}
-              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               <svg
                 aria-hidden="true"
@@ -924,11 +1036,12 @@ function EmailView() {
               type="button"
               onClick={reanalyzeAttachments}
               disabled={reanalyzing}
-              title="Re-run attachment analysis"
-              className="ease-strong hidden h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
+              title={t("mailV2.more.reanalyze")}
+              className="ease-strong hidden h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
             >
-              {reanalyzing ? "Analyzing…" : "Reanalyze"}
+              {reanalyzing ? t("mail.reanalyzing") : t("mail.reanalyze")}
             </button>
+            <MailSubscriptionsEntry />
           </div>
         </header>
 
@@ -944,11 +1057,34 @@ function EmailView() {
 
         {bulkUndoNotice && (
           <BulkUndoActionBanner
-            notice={bulkUndoNotice}
+            title={
+              bulkUndoNotice.emails.length === 1
+                ? t("mail.undo.bulkArchivedOne")
+                : t("mail.undo.bulkArchivedMany", {
+                    count: String(bulkUndoNotice.emails.length),
+                  })
+            }
+            preview={bulkUndoNotice.emails
+              .slice(0, 2)
+              .map((email) => email.subject)
+              .join(", ")}
+            undoLabel={keyboardTriage ? t("undo.action") : t("mail.undo.all")}
             busy={undoBusy}
             countdown={bulkUndoCountdown}
             onDismiss={dismissBulkUndoNotice}
             onUndo={undoBulkArchive}
+          />
+        )}
+
+        {laneMove.notice && (
+          <BulkUndoActionBanner
+            title={t("undo.lane.moved", { lane: laneMove.notice.tier })}
+            preview={laneMove.notice.subject ?? ""}
+            undoLabel={t("undo.action")}
+            busy={laneMove.busy}
+            countdown={laneMove.countdown}
+            onDismiss={laneMove.dismiss}
+            onUndo={() => void laneMove.undo()}
           />
         )}
 
@@ -967,24 +1103,25 @@ function EmailView() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-dim"
             >
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
             </svg>
             <input
+              ref={searchInputRef}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("mail.searchPlaceholder")}
               aria-label={t("mail.searchPlaceholder")}
-              className="h-9 w-full rounded-lg border border-slate-200 bg-white/80 pl-9 pr-12 text-sm text-slate-900 shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-slate-400 focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
+              className="h-9 w-full rounded-control border border-line bg-surface-panel/80 pl-9 pr-12 text-role-body text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
             />
             {!appliedSearch && (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400"
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-chip border border-line bg-surface-raised px-1.5 py-0.5 font-mono text-role-caption font-medium text-ink-dim"
               >
-                ⌘K
+                {modKeyLabel(isApple)}K
               </span>
             )}
             {appliedSearch && (
@@ -994,8 +1131,8 @@ function EmailView() {
                   setSearch("");
                   setAppliedSearch("");
                 }}
-                aria-label="Clear search"
-                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                aria-label={t("mail.clearSearch")}
+                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-chip text-ink-dim transition hover:bg-surface-hover hover:text-ink-muted"
               >
                 <svg
                   aria-hidden="true"
@@ -1020,8 +1157,8 @@ function EmailView() {
         {/* Domain views — quiet chips instead of four competing cards, so they
             aid triage without burying the list. */}
         <div className="mb-4 mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="mr-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-            Views
+          <span className="mr-0.5 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
+            {t("mail.views")}
           </span>
           {WORK_QUEUES.map((queue) => {
             const active = filter === queue.key;
@@ -1030,17 +1167,17 @@ function EmailView() {
                 key={queue.key}
                 type="button"
                 onClick={() => setFilter(queue.key)}
-                title={queue.description}
-                className={`ease-strong inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
+                title={t(queue.descriptionKey)}
+                className={`ease-strong inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] ${
                   active
-                    ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
-                    : "text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm"
+                    ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
+                    : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
                 }`}
               >
                 {active && (
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
                 )}
-                {queue.title}
+                {t(queue.titleKey)}
               </button>
             );
           })}
@@ -1049,12 +1186,12 @@ function EmailView() {
         {candidateCount > 0 && (
           <Link
             href="/email/candidates"
-            className="group mb-4 flex items-center justify-between gap-3 overflow-hidden rounded-xl border border-sky-200/70 bg-gradient-to-r from-sky-50 to-white px-4 py-2.5 text-sm text-sky-800 shadow-[0_1px_2px_rgba(2,60,110,0.05)] transition duration-150 ease-out hover:from-sky-100/70"
+            className="group mb-4 flex items-center justify-between gap-3 overflow-hidden rounded-control border border-state-info-line bg-state-info-bg px-4 py-2.5 text-role-body text-state-info-ink shadow-[0_1px_2px_rgba(2,60,110,0.05)] transition duration-150 ease-out hover:from-accent-dim/70"
           >
             <span className="inline-flex items-center gap-2.5">
               <span
                 aria-hidden="true"
-                className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600"
+                className="flex h-6 w-6 items-center justify-center rounded-chip bg-accent/15 text-accent-deep"
               >
                 <svg
                   width="13"
@@ -1072,13 +1209,15 @@ function EmailView() {
               </span>
               <span>
                 <span className="font-medium">
-                  {candidateCount} candidate {candidateCount === 1 ? "signal" : "signals"}
+                  {candidateCount === 1
+                    ? t("mail.candidates.countOne")
+                    : t("mail.candidates.countMany", { count: String(candidateCount) })}
                 </span>{" "}
-                waiting in the intake queue.
+                {t("mail.candidates.waiting")}
               </span>
             </span>
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-sky-600">
-              Review
+            <span className="inline-flex shrink-0 items-center gap-1 text-role-caption font-semibold text-accent-deep">
+              {t("assistantHub.mode.suggest")}
               <svg
                 aria-hidden="true"
                 width="13"
@@ -1097,24 +1236,24 @@ function EmailView() {
           </Link>
         )}
 
-        {loading && <p className="px-1 py-3 text-sm text-slate-400">Loading...</p>}
-
-        {error && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+        {loading && (
+          <div className="mt-3">
+            <ListSkeleton />
           </div>
         )}
 
+        {error && <ErrorAlert className="mt-3">{error}</ErrorAlert>}
+
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
-            <p className="text-sm text-slate-500">
+          <div className="mt-4 rounded-card border border-line bg-surface-raised p-6 text-center">
+            <p className="text-role-body text-ink-mid">
               {filter === "all"
                 ? t("mail.emptyAll")
                 : filter === "reply-needed"
                   ? t("mail.emptyReplyNow")
                   : t("mail.emptyFilter")}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-role-caption text-ink-mid">
               {filter === "reply-needed" ? t("mail.emptyReplyHint") : t("mail.emptySyncHint")}
             </p>
             {filter === "reply-needed" && (
@@ -1122,7 +1261,7 @@ function EmailView() {
                 <button
                   type="button"
                   onClick={() => setFilter("all")}
-                  className="inline-flex min-h-11 items-center rounded-md border border-slate-200 px-4 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                  className="inline-flex min-h-11 items-center rounded-control border border-line px-4 text-role-caption font-medium text-ink-mid transition hover:border-line-strong hover:text-ink"
                 >
                   {t("mail.showAllSignals")}
                 </button>
@@ -1130,7 +1269,7 @@ function EmailView() {
                   type="button"
                   onClick={syncNow}
                   disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-slate-200 px-4 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-control border border-line px-4 text-role-caption font-medium text-ink-mid transition hover:border-line-strong hover:text-ink disabled:opacity-50"
                 >
                   {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
@@ -1139,8 +1278,8 @@ function EmailView() {
             {filter === "all" && (
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <Link
-                  href="/settings"
-                  className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-white transition hover:bg-accent-muted"
+                  href="/settings/accounts"
+                  className="inline-flex min-h-11 items-center rounded-control bg-accent-solid px-4 text-role-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
                 >
                   {t("mail.connectGoogle")}
                 </Link>
@@ -1148,7 +1287,7 @@ function EmailView() {
                   type="button"
                   onClick={syncNow}
                   disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-slate-200 px-4 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-control border border-line px-4 text-role-caption font-medium text-ink-mid transition hover:border-line-strong hover:text-ink disabled:opacity-50"
                 >
                   {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
@@ -1158,7 +1297,7 @@ function EmailView() {
         )}
 
         {!loading && filter !== "threads" && emails.length > 0 && (
-          <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+          <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
             <BulkActionBar
               allVisibleSelected={allVisibleSelected}
               busy={bulkBusy}
@@ -1169,11 +1308,11 @@ function EmailView() {
               onClear={() => setSelectedIds(new Set())}
               onToggleAll={toggleAllVisible}
             />
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line-soft">
               {groupEmailsByDate(emails).map((group) => (
                 <Fragment key={`${group.label}-${group.emails[0]?.id}`}>
-                  <li className="bg-slate-50/60 px-4 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
-                    {group.label} <span className="text-slate-300">· {group.emails.length}</span>
+                  <li className="bg-surface-raised/60 px-4 py-1.5 text-role-caption font-bold uppercase tracking-wider text-ink-dim">
+                    {t(group.label)} <span className="text-slate-300">· {group.emails.length}</span>
                   </li>
                   {group.emails.map((e) => (
                     <EmailRowItem
@@ -1183,6 +1322,7 @@ function EmailView() {
                       reminderBusyKey={rowReminderBusy}
                       quickBusyId={rowQuickBusy}
                       selected={selectedIds.has(e.id)}
+                      cursor={cursorId === e.id}
                       inboxLabel={resolveInboxLabel(e)}
                       onCreateReminder={createRowReminder}
                       onQuickArchive={quickArchive}
@@ -1197,14 +1337,14 @@ function EmailView() {
         )}
 
         {!loading && filter === "threads" && threads.length === 0 && !error && (
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
-            <p className="text-sm text-slate-500">No threads match this filter.</p>
+          <div className="mt-4 rounded-card border border-line bg-surface-raised p-6 text-center">
+            <p className="text-role-body text-ink-mid">{t("mail.noThreads")}</p>
           </div>
         )}
 
         {!loading && filter === "threads" && threads.length > 0 && (
-          <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-            <ul className="divide-y divide-slate-100">
+          <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
+            <ul className="divide-y divide-line-soft">
               {threads.map((thread) => (
                 <ThreadRowItem key={thread.threadId} thread={thread} />
               ))}
@@ -1232,13 +1372,13 @@ const DAY_MS = 86_400_000;
 // calculation — no state, no re-sorting (the server already ordered the list).
 function dateGroupLabel(dateIso: string): string {
   const date = new Date(dateIso);
-  if (Number.isNaN(date.getTime())) return "Earlier";
+  if (Number.isNaN(date.getTime())) return "mail.group.earlier";
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  if (date.getTime() >= todayStart.getTime()) return "Today";
-  if (date.getTime() >= todayStart.getTime() - DAY_MS) return "Yesterday";
-  if (date.getTime() >= todayStart.getTime() - 6 * DAY_MS) return "This week";
-  return "Earlier";
+  if (date.getTime() >= todayStart.getTime()) return "mail.group.today";
+  if (date.getTime() >= todayStart.getTime() - DAY_MS) return "mail.group.yesterday";
+  if (date.getTime() >= todayStart.getTime() - 6 * DAY_MS) return "mail.group.thisWeek";
+  return "mail.group.earlier";
 }
 
 // Splits the loaded rows into consecutive label runs, preserving server order.
@@ -1289,13 +1429,14 @@ function UndoActionBanner({
   onDismiss: () => void;
   onUndo: () => void;
 }) {
-  const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
+  const { t } = useT();
+  const title = notice.action === "archive" ? t("mail.undo.archived") : t("mail.undo.trashed");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-sky-50 px-4 py-3 text-sm text-slate-900 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-role-body text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="font-medium">Email {actionLabel}.</p>
+        <p className="font-medium">{title}</p>
         {notice.subject && (
-          <p className="mt-0.5 truncate text-xs text-slate-500">{notice.subject}</p>
+          <p className="mt-0.5 truncate text-role-caption text-ink-mid">{notice.subject}</p>
         )}
       </div>
       <div className="flex shrink-0 gap-2">
@@ -1303,65 +1444,68 @@ function UndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-white transition hover:bg-accent-muted disabled:opacity-50"
+          className="min-h-10 rounded-control bg-accent-solid px-3 text-role-caption font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
-          {busy ? "Restoring..." : "Undo"}
+          {busy ? t("mail.undo.restoring") : t("mailV2.undo")}
         </button>
         <button
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+          className="min-h-10 rounded-control border border-line px-3 text-role-caption text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
         >
-          Dismiss {countdown > 0 && `(${countdown}s)`}
+          {t("common.dismiss")} {countdown > 0 && `(${countdown}s)`}
         </button>
       </div>
     </div>
   );
 }
 
+// One banner for every undoable list action (bulk archive, and with
+// KEYBOARD_TRIAGE the lane move): the caller words it, the banner counts down.
 function BulkUndoActionBanner({
-  notice,
+  title,
+  preview,
+  undoLabel,
   busy,
   countdown,
   onDismiss,
   onUndo,
 }: {
-  notice: BulkUndoNotice;
+  title: string;
+  preview: string;
+  undoLabel: string;
   busy: boolean;
   countdown: number;
   onDismiss: () => void;
   onUndo: () => void;
 }) {
-  const count = notice.emails.length;
-  const preview = notice.emails
-    .slice(0, 2)
-    .map((email) => email.subject)
-    .join(", ");
+  const { t } = useT();
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-sky-50 px-4 py-3 text-sm text-slate-900 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      role="status"
+      className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-role-body text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="min-w-0">
-        <p className="font-medium">
-          {count} {count === 1 ? "email" : "emails"} archived.
-        </p>
-        {preview && <p className="mt-0.5 truncate text-xs text-slate-500">{preview}</p>}
+        <p className="font-medium">{title}</p>
+        {preview && <p className="mt-0.5 truncate text-role-caption text-ink-mid">{preview}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-white transition hover:bg-accent-muted disabled:opacity-50"
+          className="min-h-10 rounded-control bg-accent-solid px-3 text-role-caption font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
-          {busy ? "Restoring..." : "Undo all"}
+          {busy ? t("mail.undo.restoring") : undoLabel}
         </button>
         <button
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+          className="min-h-10 rounded-control border border-line px-3 text-role-caption text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
         >
-          Dismiss {countdown > 0 && `(${countdown}s)`}
+          {t("common.dismiss")} {countdown > 0 && `(${countdown}s)`}
         </button>
       </div>
     </div>
@@ -1387,20 +1531,21 @@ function BulkActionBar({
   onClear: () => void;
   onToggleAll: () => void;
 }) {
+  const { t } = useT();
   return (
-    <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2.5 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-2 border-b border-line-soft px-4 py-2.5 md:flex-row md:items-center md:justify-between">
       <button
         type="button"
         onClick={onToggleAll}
         aria-pressed={allVisibleSelected}
-        className="group inline-flex items-center gap-2 text-xs font-medium text-slate-500 transition hover:text-slate-900"
+        className="group inline-flex items-center gap-2 text-role-caption font-medium text-ink-mid transition hover:text-ink"
       >
         <span
           aria-hidden="true"
           className={`flex h-4 w-4 items-center justify-center rounded border transition ${
             allVisibleSelected
-              ? "border-accent bg-accent text-white"
-              : "border-slate-300 bg-white group-hover:border-slate-400"
+              ? "border-accent-solid bg-accent-solid text-accent-solid-ink"
+              : "border-line-strong bg-surface-panel group-hover:border-slate-400"
           }`}
         >
           {allVisibleSelected && (
@@ -1418,41 +1563,44 @@ function BulkActionBar({
             </svg>
           )}
         </span>
-        {selectedCount > 0 ? `${selectedCount} selected` : "Select page"}
+        {selectedCount > 0
+          ? t("mailV2.bulk.selected", { count: String(selectedCount) })
+          : t("mail.bulk.selectPage")}
       </button>
       {selectedCount > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           <BulkButton disabled={busy} onClick={() => onApply("mark-read")}>
-            Mark read
+            {t("mailV2.row.markRead")}
           </BulkButton>
           <BulkButton disabled={busy} onClick={() => onApply("mark-unread")}>
-            Mark unread
+            {t("mailV2.row.markUnread")}
           </BulkButton>
           <BulkButton
             disabled={busy}
             onClick={() => onApply("set-priority", { priority: "URGENT" })}
           >
-            Urgent
+            {t("emailDetail.priority.urgent")}
           </BulkButton>
           <BulkButton disabled={busy} onClick={() => onApply("set-priority", { priority: "LOW" })}>
-            Low
+            {t("emailDetail.priority.low")}
           </BulkButton>
           <BulkButton disabled={busy} danger onClick={() => onApply("archive")}>
-            Archive
+            {t("mailV2.row.archive")}
           </BulkButton>
           <button
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="h-7 rounded-md px-2 text-xs text-slate-400 transition hover:bg-slate-100 disabled:opacity-50"
+            className="h-7 rounded-chip px-2 text-role-caption text-ink-dim transition hover:bg-surface-hover disabled:opacity-50"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       ) : (
-        <span className="text-[11px] text-slate-400">
-          {totalVisible}
-          {totalAvailable > totalVisible ? ` of ${totalAvailable}` : " on this page"}
+        <span className="text-role-caption text-ink-dim">
+          {totalAvailable > totalVisible
+            ? t("mailV2.shown", { shown: String(totalVisible), total: String(totalAvailable) })
+            : t("mail.bulk.onThisPage", { count: String(totalVisible) })}
         </span>
       )}
     </div>
@@ -1475,10 +1623,10 @@ function BulkButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
+      className={`h-8 rounded-chip border px-2.5 text-role-caption font-medium transition disabled:opacity-50 ${
         danger
-          ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
-          : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
+          ? "border-red-500/25 bg-red-500/10 text-state-danger-ink hover:bg-red-500/15"
+          : "border-line bg-surface-raised text-ink-mid hover:bg-surface-hover"
       }`}
     >
       {children}
@@ -1498,6 +1646,7 @@ function InboxSelector({
   current: string;
   onChange: (value: string) => void;
 }) {
+  const { t } = useT();
   if (inboxes.length < 2) return null;
   // Non-Google mailboxes (in the selector since Phase 1) get a small provider
   // tag — the address alone doesn't identify the service on custom domains.
@@ -1508,10 +1657,15 @@ function InboxSelector({
     IMAP: "IMAP",
   };
   const options = [
-    { value: "all", label: "All inboxes", needsReconnect: false, tag: null as string | null },
+    {
+      value: "all",
+      label: t("mail.inbox.all"),
+      needsReconnect: false,
+      tag: null as string | null,
+    },
     ...inboxes.map((i) => ({
       value: i.id ?? "primary",
-      label: i.email ?? (i.kind === "primary" ? "Primary" : "Linked inbox"),
+      label: i.email ?? (i.kind === "primary" ? t("mail.inbox.primary") : t("mail.inbox.linked")),
       needsReconnect: i.needsReconnect,
       tag: providerTag[i.provider] ?? null,
     })),
@@ -1519,7 +1673,7 @@ function InboxSelector({
   return (
     <div
       role="group"
-      aria-label="Filter by inbox"
+      aria-label={t("mail.inbox.filter")}
       className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {options.map((o) => {
@@ -1530,19 +1684,19 @@ function InboxSelector({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            className={`inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-role-caption transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
-                ? "bg-accent/90 text-white"
-                : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                ? "bg-accent-solid text-accent-solid-ink"
+                : "border border-line bg-surface-raised text-ink-mid hover:bg-surface-hover hover:text-ink"
             }`}
           >
             <span className="max-w-[168px] truncate">{o.label}</span>
             {o.tag && (
               <span
-                className={`shrink-0 rounded px-1 text-[10px] font-medium leading-4 ${
+                className={`shrink-0 rounded px-1 text-role-caption font-medium leading-4 ${
                   // AA on both states: sky-700 on near-white ≈ 6:1; slate-600
                   // on slate-200 ≈ 6.1:1 (white-on-white/20-over-accent was 2.2:1).
-                  active ? "bg-white text-sky-700" : "bg-slate-200 text-slate-600"
+                  active ? "bg-surface-panel text-accent-deeper" : "bg-surface-inset text-ink-muted"
                 }`}
               >
                 {o.tag}
@@ -1551,9 +1705,9 @@ function InboxSelector({
             {o.needsReconnect && (
               <span
                 role="img"
-                aria-label="Reconnect needed"
-                title="Reconnect needed"
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500"
+                aria-label={t("mailV2.accounts.needsReconnect")}
+                title={t("mailV2.accounts.needsReconnect")}
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
               />
             )}
           </button>
@@ -1582,8 +1736,8 @@ function FilterTabs({
   return (
     <div
       role="group"
-      aria-label="Filter mail"
-      className="flex gap-0.5 overflow-x-auto rounded-xl border border-slate-200/70 bg-white/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      aria-label={t("mail.filter.label")}
+      className="flex gap-0.5 overflow-x-auto rounded-control border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
@@ -1593,15 +1747,15 @@ function FilterTabs({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(f.key)}
-            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} ease-strong h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs transition duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} ease-strong h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip px-3 text-role-caption transition duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
-                ? "seg-active bg-white font-semibold text-slate-900"
-                : "font-medium text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                ? "seg-active bg-surface-panel font-semibold text-ink"
+                : "font-medium text-ink-mid hover:bg-surface-panel/70 hover:text-ink"
             }`}
           >
             {f.labelKey ? t(f.labelKey) : f.label}
             {active && typeof activeCount === "number" && activeCount > 0 && (
-              <span className="rounded bg-sky-100 px-1 text-[10px] font-bold text-sky-700">
+              <span className="rounded bg-accent-dim px-1 text-role-caption font-bold text-accent-deeper">
                 {activeCount}
               </span>
             )}
@@ -1631,6 +1785,7 @@ function LoadMoreBar({
   // 'Load more' button stays as a fallback for keyboard / a11y users and
   // for the rare case where IntersectionObserver is throttled by the
   // browser (e.g. background tab).
+  const { t } = useT();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1653,23 +1808,24 @@ function LoadMoreBar({
   return (
     <div
       ref={sentinelRef}
-      className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/60 px-4 py-2.5 text-[11px] text-slate-400 backdrop-blur"
+      className="mt-3 flex items-center justify-between gap-3 rounded-control border border-line/70 bg-surface-panel/60 px-4 py-2.5 text-role-caption text-ink-dim backdrop-blur"
     >
       <span>
-        Showing {loadedCount}
-        {totalAvailable > loadedCount ? ` of ${totalAvailable}` : ""}
+        {totalAvailable > loadedCount
+          ? t("mail.showingOf", { shown: String(loadedCount), total: String(totalAvailable) })
+          : t("mail.showing", { shown: String(loadedCount) })}
       </span>
       {hasNext ? (
         <button
           type="button"
           onClick={onLoadMore}
           disabled={isFetching}
-          className="ease-strong rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 shadow-sm transition duration-150 hover:text-sky-600 active:scale-[0.97] disabled:opacity-50"
+          className="ease-strong rounded-chip border border-line bg-surface-panel px-2.5 py-1 text-role-caption font-medium text-ink-mid shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:opacity-50"
         >
-          {isFetching ? "Loading…" : "Load more"}
+          {isFetching ? t("mailV2.loadingMore") : t("mailV2.loadMore")}
         </button>
       ) : (
-        <span className="text-slate-500">All loaded.</span>
+        <span className="text-ink-mid">{t("mail.allLoaded")}</span>
       )}
     </div>
   );
@@ -1681,6 +1837,7 @@ function EmailRowItem({
   quickBusyId,
   queue,
   selected,
+  cursor,
   inboxLabel,
   onCreateReminder,
   onQuickArchive,
@@ -1692,24 +1849,31 @@ function EmailRowItem({
   quickBusyId: string | null;
   queue: Filter;
   selected: boolean;
+  /** The keyboard cursor (j / k) is on this row. */
+  cursor: boolean;
   inboxLabel?: string | null;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
   onQuickArchive: (email: EmailRow) => void;
   onQuickToggleRead: (email: EmailRow) => void;
   onToggleSelected: (id: string) => void;
 }) {
+  const { t } = useT();
   const unread = !email.isRead;
   const urgent = email.priority === "URGENT";
   const name = senderName(email.from);
   const detailParams = new URLSearchParams({ markRead: "false", queue });
   return (
-    <li className="row-wash group relative">
+    <li
+      className={`row-wash group relative ${cursor ? "z-[1] ring-2 ring-inset ring-accent" : ""}`}
+      aria-current={cursor ? "true" : undefined}
+      {...(cursor ? { [TRIAGE_ROW_ATTR]: email.id } : {})}
+    >
       {/* Tier accent bar: urgent outranks unread; read+normal rows stay bare. */}
       {(urgent || unread) && (
         <span
           aria-hidden="true"
           className={`absolute left-0 top-0 h-full w-[3px] ${
-            urgent ? "bg-gradient-to-b from-rose-400 to-rose-500" : "bg-sky-400"
+            urgent ? "bg-gradient-to-b from-rose-400 to-rose-500" : "bg-accent-light"
           }`}
         />
       )}
@@ -1717,12 +1881,12 @@ function EmailRowItem({
         <button
           type="button"
           aria-pressed={selected}
-          aria-label={`Select ${email.subject || "No subject"}`}
+          aria-label={t("mailV2.list.select", { subject: email.subject || t("common.noSubject") })}
           onClick={() => onToggleSelected(email.id)}
           className={`mt-2.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
             selected
-              ? "border-accent bg-accent text-white"
-              : "border-slate-300 bg-white hover:border-slate-400"
+              ? "border-accent-solid bg-accent-solid text-accent-solid-ink"
+              : "border-line-strong bg-surface-panel hover:border-slate-400"
           }`}
         >
           {selected && (
@@ -1747,7 +1911,7 @@ function EmailRowItem({
         >
           <span
             aria-hidden="true"
-            className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(name)}`}
+            className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(name)}`}
           >
             {senderInitials(name)}
           </span>
@@ -1755,14 +1919,15 @@ function EmailRowItem({
             <span className="flex items-center gap-2">
               <TrustDot trust={email.trust} />
               <span
-                className={`truncate text-sm ${
-                  unread ? "font-semibold text-slate-900" : "text-slate-600"
+                className={`truncate text-role-body ${
+                  unread ? "font-semibold text-ink" : "text-ink-muted"
                 }`}
               >
                 {name}
               </span>
+              {email.tier && <LaneChip tier={email.tier} />}
               {inboxLabel && (
-                <span className="inline-flex max-w-[30%] shrink-0 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                <span className="inline-flex max-w-[30%] shrink-0 items-center gap-1 truncate rounded-full bg-surface-hover px-2 py-0.5 text-role-caption font-medium text-ink-mid">
                   <span
                     aria-hidden="true"
                     className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
@@ -1775,27 +1940,29 @@ function EmailRowItem({
                 {unread && (
                   <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
                 )}
-                <time className="text-[11px] tabular-nums text-slate-400">
+                <time className="text-role-caption tabular-nums text-ink-dim">
                   {formatRelative(email.date)}
                 </time>
               </span>
             </span>
             <span
-              className={`mt-1 block truncate text-[13.5px] ${
-                unread ? "font-medium text-slate-800" : "text-slate-600"
+              className={`mt-1 block truncate ${
+                unread
+                  ? "text-role-label font-medium text-ink-strong"
+                  : "text-role-meta text-ink-muted"
               }`}
             >
-              {email.subject || "No subject"}
+              {email.subject || t("common.noSubject")}
             </span>
             {email.summary ? (
               <span
-                className={`mt-1 line-clamp-1 block text-xs leading-5 ${unread ? "text-slate-500" : "text-slate-400"}`}
+                className={`mt-1 line-clamp-1 block text-role-caption leading-5 ${unread ? "text-ink-mid" : "text-ink-dim"}`}
               >
                 {email.summary}
               </span>
             ) : email.snippet ? (
               <span
-                className={`mt-1 line-clamp-1 block text-xs leading-5 ${unread ? "text-slate-500" : "text-slate-400"}`}
+                className={`mt-1 line-clamp-1 block text-role-caption leading-5 ${unread ? "text-ink-mid" : "text-ink-dim"}`}
               >
                 {email.snippet}
               </span>
@@ -1820,12 +1987,12 @@ function EmailRowItem({
           type="button"
           aria-label={
             email.isRead
-              ? `Mark ${email.subject || "No subject"} as unread`
-              : `Mark ${email.subject || "No subject"} as read`
+              ? t("mail.row.markUnreadLabel", { subject: email.subject || t("common.noSubject") })
+              : t("mail.row.markReadLabel", { subject: email.subject || t("common.noSubject") })
           }
           onClick={() => onQuickToggleRead(email)}
           disabled={quickBusyId !== null}
-          className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm transition duration-150 hover:text-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+          className="ease-strong flex h-7 w-7 items-center justify-center rounded-chip border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
         >
           {email.isRead ? (
             <svg
@@ -1861,10 +2028,12 @@ function EmailRowItem({
         </button>
         <button
           type="button"
-          aria-label={`Archive ${email.subject || "No subject"}`}
+          aria-label={t("mail.row.archiveLabel", {
+            subject: email.subject || t("common.noSubject"),
+          })}
           onClick={() => onQuickArchive(email)}
           disabled={quickBusyId !== null}
-          className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm transition duration-150 hover:text-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+          className="ease-strong flex h-7 w-7 items-center justify-center rounded-chip border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
         >
           <svg
             aria-hidden="true"
@@ -1901,13 +2070,14 @@ function EmailRowReminderActions({
   email: EmailRow;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
 }) {
+  const { t } = useT();
   // Quiet inline strip, indented to the content column (checkbox 16 + gap 12 +
   // avatar 36 + gap 14 = 78px). Text-only buttons keep the row calm while the
   // one-click reminder affordance stays permanently visible (no hover-hiding —
   // touch and keyboard users get the same surface).
   return (
-    <div className="-mt-1.5 flex flex-wrap items-center gap-0.5 pb-2.5 pl-[78px] pr-4 text-[11px] text-slate-400">
-      <span className="mr-1.5">Remind</span>
+    <div className="-mt-1.5 flex flex-wrap items-center gap-0.5 pb-2.5 pl-[78px] pr-4 text-role-caption text-ink-dim">
+      <span className="mr-1.5">{t("mail.remind.label")}</span>
       {EMAIL_REMINDER_OPTIONS.map((option) => {
         const key = `${email.id}:${option.key}`;
         return (
@@ -1916,9 +2086,9 @@ function EmailRowReminderActions({
             type="button"
             onClick={() => onCreateReminder(email, option)}
             disabled={busyKey !== null}
-            className="ease-strong rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+            className="ease-strong rounded-chip px-2 py-1 text-role-caption font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {busyKey === key ? "Setting…" : option.label}
+            {busyKey === key ? t("mail.remind.setting") : t(option.labelKey)}
           </button>
         );
       })}
@@ -1942,7 +2112,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="files"
-        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500"
+        className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid"
       >
         <svg
           aria-hidden="true"
@@ -1961,26 +2131,9 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
       </span>,
     );
   }
-  if ((email.attachmentPendingCount ?? 0) > 0) {
-    badges.push(
-      <span
-        key="pending"
-        className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-400"
-      >
-        Pending {email.attachmentPendingCount}
-      </span>,
-    );
-  }
-  if ((email.attachmentFallbackCount ?? 0) > 0) {
-    badges.push(
-      <span
-        key="fallback"
-        className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20"
-      >
-        Fallback {email.attachmentFallbackCount}
-      </span>,
-    );
-  }
+  // attachmentPendingCount / attachmentFallbackCount are attachment-pipeline
+  // diagnostics (still on the wire; the API is unchanged), not user-facing;
+  // they used to render here as "Pending N" / "Fallback N" row badges.
   if (email.category) badges.push(<CategoryBadge key="category" category={email.category} />);
 
   const visible = badges.slice(0, MAX_VISIBLE_BADGES);
@@ -1990,7 +2143,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     <div className="flex flex-wrap items-center gap-1.5">
       {visible}
       {overflow > 0 && (
-        <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+        <span className="shrink-0 rounded border border-line bg-surface-raised px-1.5 py-0.5 text-role-caption font-medium text-ink-mid">
           +{overflow}
         </span>
       )}
@@ -2000,11 +2153,12 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
 }
 
 function ThreadRowItem({ thread }: { thread: ThreadRow }) {
+  const { t } = useT();
   const firstParticipant = thread.participants[0] ? senderName(thread.participants[0]) : "@";
   return (
     <li className="row-wash group relative">
       {thread.hasUnread && (
-        <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-sky-400" />
+        <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-accent-light" />
       )}
       <Link
         href={`/email/${thread.lastMessage.id}?markRead=false`}
@@ -2012,36 +2166,36 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
       >
         <span
           aria-hidden="true"
-          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(firstParticipant)}`}
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(firstParticipant)}`}
         >
           {senderInitials(firstParticipant)}
         </span>
         <span className="block min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span
-              className={`truncate text-sm ${thread.hasUnread ? "font-semibold text-slate-900" : "text-slate-600"}`}
+              className={`truncate text-role-body ${thread.hasUnread ? "font-semibold text-ink" : "text-ink-muted"}`}
             >
               {thread.participants.map(senderName).join(", ")}
             </span>
             <PriorityBadge priority={thread.latestPriority} />
-            <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
-              {thread.messageCount} msgs
+            <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
+              {t("mail.thread.messages", { count: String(thread.messageCount) })}
             </span>
-            <time className="ml-auto shrink-0 text-[11px] tabular-nums text-slate-400">
+            <time className="ml-auto shrink-0 text-role-caption tabular-nums text-ink-dim">
               {formatRelative(thread.lastMessage.receivedAt)}
             </time>
           </span>
           <span
-            className={`mt-1 block truncate text-[13.5px] ${thread.hasUnread ? "font-medium text-slate-800" : "text-slate-600"}`}
+            className={`mt-1 block truncate ${thread.hasUnread ? "text-role-label font-medium text-ink-strong" : "text-role-meta text-ink-muted"}`}
           >
-            {thread.subject || "No subject"}
+            {thread.subject || t("common.noSubject")}
           </span>
           {thread.summary ? (
-            <span className="mt-1 line-clamp-1 block text-xs leading-5 text-slate-400">
+            <span className="mt-1 line-clamp-1 block text-role-caption leading-5 text-ink-dim">
               {thread.summary}
             </span>
           ) : thread.lastMessage.snippet ? (
-            <span className="mt-1 line-clamp-1 block text-xs leading-5 text-slate-400">
+            <span className="mt-1 line-clamp-1 block text-role-caption leading-5 text-ink-dim">
               {thread.lastMessage.snippet}
             </span>
           ) : null}
@@ -2052,25 +2206,38 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
 }
 
 function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
-  const title = [profile.name || "Name missing", profile.role].filter(Boolean).join(" · ");
+  const { t } = useT();
+  const title = [profile.name || t("mail.candidate.nameMissing"), profile.role]
+    .filter(Boolean)
+    .join(" · ");
   const missing =
     profile.missingFields.length > 0
-      ? `Needs: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
+      ? t("mail.candidate.needs", {
+          fields: profile.missingFields.map((f) => t(candidateMissingLabel(f))).join(", "),
+        })
       : null;
   return (
-    <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/5 px-2.5 py-2">
+    <div className="mt-2 rounded-control border border-accent/15 bg-accent/5 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[11px] font-medium text-accent-muted">{title}</p>
-        <span className="shrink-0 text-[10px] tabular-nums text-accent-light/80">
+        <p className="truncate text-role-caption font-medium text-accent-deep">{title}</p>
+        <span className="shrink-0 text-role-caption tabular-nums text-accent-deep">
           {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-slate-500">{profile.summary}</p>
-      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-slate-400">
-        {profile.contact && <span className="truncate">Contact {profile.contact}</span>}
-        {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}
-        <span>Files {profile.evidenceCount}</span>
-        {missing && <span className="text-accent/80">{missing}</span>}
+      <p className="mt-1 line-clamp-2 text-role-caption leading-5 text-ink-mid">
+        {profile.summary}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-role-caption text-ink-dim">
+        {profile.contact && (
+          <span className="truncate">
+            {t("emailDetail.candidateCard.fact.contact")} {profile.contact}
+          </span>
+        )}
+        {profile.intakeStatus && <span>{t(candidateIntakeLabel(profile.intakeStatus))}</span>}
+        <span>
+          {t("emailDetail.candidateCard.fact.files")} {profile.evidenceCount}
+        </span>
+        {missing && <span className="text-accent-deep">{missing}</span>}
       </div>
     </div>
   );
@@ -2078,39 +2245,41 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
 
 function candidateIntakeLabel(status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "Needs analysis",
-    NEEDS_INFO: "Needs info",
-    READY_TO_REVIEW: "Ready to review",
-    REVIEWING: "Reviewing",
-    CONTACTED: "Contacted",
-    SHORTLISTED: "Shortlisted",
-    REJECTED: "Rejected",
-    ARCHIVED: "Archived",
+    NEEDS_ANALYSIS: "candidates.status.needsAnalysis",
+    NEEDS_INFO: "candidates.status.needsInfo",
+    READY_TO_REVIEW: "candidates.status.readyToReview",
+    REVIEWING: "candidates.status.reviewing",
+    CONTACTED: "candidates.status.contacted",
+    SHORTLISTED: "candidates.status.shortlisted",
+    REJECTED: "candidates.status.rejected",
+    ARCHIVED: "candidates.status.archived",
   };
   return labels[status] || status;
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "Name",
-    contact: "Contact",
-    role: "Role",
-    portfolio: "Portfolio",
+    name: "emailDetail.candidateCard.fact.name",
+    contact: "emailDetail.candidateCard.fact.contact",
+    role: "emailDetail.candidateCard.fact.role",
+    portfolio: "candidates.missingField.portfolio",
   };
   return labels[field] || field;
 }
 function ReplyNeededBadge() {
+  const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
-      Needs reply
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+      {t("mail.filterReplyNeeded")}
     </span>
   );
 }
 
 function CandidateBadge() {
+  const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20">
-      Candidate
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+      {t("mail.badge.candidate")}
     </span>
   );
 }
@@ -2118,14 +2287,19 @@ function CandidateBadge() {
 function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
   const styles = {
     URGENT: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
-    NORMAL: "bg-slate-100 text-slate-500 ring-slate-200",
-    LOW: "bg-slate-100 text-slate-500 ring-transparent",
+    NORMAL: "bg-surface-hover text-ink-mid ring-line",
+    LOW: "bg-surface-hover text-ink-mid ring-transparent",
   } as const;
-  const labels = { URGENT: "Urgent", NORMAL: "Normal", LOW: "Low" } as const;
+  const { t } = useT();
+  const labels = {
+    URGENT: t("emailDetail.priority.urgent"),
+    NORMAL: t("emailDetail.priority.normal"),
+    LOW: t("emailDetail.priority.low"),
+  } as const;
   if (priority === "NORMAL") return null;
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
     >
       {labels[priority]}
     </span>
@@ -2133,19 +2307,20 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
 }
 
 function CategoryBadge({ category }: { category: string }) {
-  const labelMap: Record<string, string> = {
-    business: "Business",
-    engineering: "Engineering",
-    automated: "Automated",
-    newsletter: "Newsletter",
-    meeting: "Meeting",
-    billing: "Billing",
-    conversation: "Conversation",
-    other: "Other",
-  };
-  const label = labelMap[category] || category;
+  const { t } = useT();
+  const known = new Set([
+    "business",
+    "engineering",
+    "automated",
+    "newsletter",
+    "meeting",
+    "billing",
+    "conversation",
+    "other",
+  ]);
+  const label = known.has(category) ? t(`emailDetail.category.${category}`) : category;
   return (
-    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
@@ -2176,7 +2351,7 @@ function senderInitials(name: string): string {
 // Deterministic gradient per sender so the same sender always gets the same
 // color (recognition over decoration). Simple 31-hash over the name.
 const AVATAR_GRADIENTS = [
-  "from-sky-400 to-blue-500",
+  "from-accent-light to-blue-500",
   "from-teal-400 to-emerald-500",
   "from-indigo-500 to-violet-600",
   "from-amber-400 to-orange-500",
@@ -2207,6 +2382,7 @@ function MobileEmailRow({
   queue: Filter;
   inboxLabel?: string | null;
 }) {
+  const { t } = useT();
   const unread = !email.isRead;
   const params = new URLSearchParams({ markRead: "false", queue });
   const preview = email.summary || email.snippet;
@@ -2214,42 +2390,45 @@ function MobileEmailRow({
     <li>
       <Link
         href={`/email/${email.id}?${params.toString()}`}
-        className="flex gap-3 rounded-2xl bg-white px-4 py-3 transition active:bg-slate-100"
+        className="flex gap-3 rounded-control bg-surface-panel px-4 py-3 transition active:bg-surface-hover"
       >
         <span
           aria-hidden="true"
-          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-sky-500" : "bg-transparent"}`}
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-accent" : "bg-transparent"}`}
         />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
-            <span
-              className={`truncate text-[15px] ${unread ? "font-semibold text-slate-900" : "font-medium text-slate-500"}`}
-            >
-              {senderName(email.from)}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span
+                className={`truncate text-role-body ${unread ? "font-semibold text-ink" : "font-medium text-ink-mid"}`}
+              >
+                {senderName(email.from)}
+              </span>
+              {email.tier && <LaneChip tier={email.tier} />}
             </span>
-            <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
+            <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
               {formatRelative(email.date)}
             </time>
           </span>
           <span
-            className={`mt-0.5 block truncate text-[13px] ${unread ? "text-slate-900" : "text-slate-500"}`}
+            className={`mt-0.5 block truncate text-role-meta ${unread ? "text-ink" : "text-ink-mid"}`}
           >
-            {email.subject || "No subject"}
+            {email.subject || t("common.noSubject")}
           </span>
           {preview && (
-            <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-slate-400">
+            <span className="mt-1 line-clamp-2 block text-role-caption leading-5 text-ink-dim">
               {preview}
             </span>
           )}
           {(email.priority === "URGENT" || inboxLabel) && (
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {email.priority === "URGENT" && (
-                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-700">
-                  Urgent
+                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-role-caption font-semibold text-state-danger-ink">
+                  {t("emailDetail.priority.urgent")}
                 </span>
               )}
               {inboxLabel && (
-                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-surface-hover px-2 py-0.5 text-role-caption font-medium text-ink-mid">
                   <span
                     aria-hidden="true"
                     className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"

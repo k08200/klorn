@@ -40,12 +40,12 @@ export const BADGE_META: Record<TrustBadge, BadgeStyle> = {
   },
   unreliable: {
     label: "Unreliable",
-    chip: "text-red-400 bg-red-400/10 border-red-400/20",
+    chip: "text-state-danger-ink bg-red-400/10 border-red-400/20",
     dot: "bg-red-400",
   },
   unknown: {
     label: "Unknown",
-    chip: "text-slate-400 bg-slate-100 border-slate-200",
+    chip: "text-ink-dim bg-surface-hover border-line",
     dot: "bg-slate-400",
   },
 };
@@ -88,7 +88,7 @@ export function TrustBadgeChip({ trust, showUnknown = false }: TrustBadgeChipPro
   return (
     <span
       title={trust.label}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.chip}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-role-caption font-medium ${meta.chip}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
       {meta.label}

@@ -4,7 +4,7 @@ Guidance for AI coding agents (and humans) working in this repo.
 
 ## What this is
 
-Klorn — an AI email chief-of-staff. Emails are triaged into exactly **4 tiers: PUSH / QUEUE / SILENT / AUTO** (AUTO = classification only — never invent a 5th tier). pnpm-workspaces monorepo:
+Klorn — an AI email chief-of-staff. Emails are triaged into exactly **5 lanes: PUSH / MEETING / QUEUE / INFO / SILENT** (QUEUE is the default; canonical source is `AttentionItem.tier` in `packages/api/prisma/schema.prisma`). `AUTO` and `CALL` are **retired v1 values** that `normalizeTier` folds on read — never emit them, never show them in copy, never invent a 6th lane. pnpm-workspaces monorepo:
 
 - `packages/api` — Fastify 5 + Prisma backend (deployed on Render)
 - `packages/contract` — type-only API wire contract shared by api and its clients
@@ -65,10 +65,15 @@ manual backup/restore drill (the free tier has no automated backups):
 
 `docs/product-vocabulary.md` is the canonical word list — read it before naming
 a surface or writing user-facing copy. The load-bearing ones: **"inbox" means a
-connected mail account, never a screen**; the approval surface is the
-**Decision queue**; the 4-tier view is the **Firewall board**. AUTO is a
-classification, not an action. App language / notification language / reply
-language are three different things.
+connected mail account, never a screen**; home is **Today**; the approval
+surface is **Approvals** under **Assistant** (formerly "Decision queue"); lanes
+are Mail's primary filter (the "Firewall board" screen is retired as a
+user-facing term). The old names persist in code until the migration ships
+behind `UNIFIED_HOME`. A lane is a
+classification and never an action — delegation is the separate agent mode
+(`SHADOW` / `SUGGEST` / `AUTO`), which is not the same thing as the retired
+`AUTO` lane. App language / notification language / reply language are three
+different things.
 
 ## Engineering doctrine
 

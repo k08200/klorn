@@ -21,7 +21,7 @@ describe("describePolicy", () => {
 
   it("snapshots every policy axis from the real modules", () => {
     const snap = describePolicy();
-    expect(snap.tiers).toEqual(["SILENT", "QUEUE", "PUSH", "AUTO"]);
+    expect(snap.tiers).toEqual(["SILENT", "INFO", "QUEUE", "MEETING", "PUSH", "AUTO"]);
     // Value-equal but NOT the same reference — the snapshot is a detached copy.
     expect(snap.relation.thresholds).toEqual(TIER_THRESHOLDS);
     expect(snap.relation.thresholds).not.toBe(TIER_THRESHOLDS);

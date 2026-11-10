@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
 const sendBetaInviteEmailSpy = vi.fn(async () => true);
@@ -17,6 +17,17 @@ type StoredWaitlist = {
   approvedAt: Date | null;
 };
 const waitlistById = new Map<string, StoredWaitlist>();
+
+// Shared by the PATCH and DELETE suites — hoisted out of the PATCH describe so
+// both can seed rows without a second copy of the defaults.
+function seedWaitlistEntry(entry: Partial<StoredWaitlist> & { id: string; email: string }) {
+  waitlistById.set(entry.id, {
+    name: null,
+    status: "PENDING",
+    approvedAt: null,
+    ...entry,
+  });
+}
 vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),
@@ -111,7 +122,21 @@ vi.mock("../db.js", () => {
         if (where.id === "admin-1")
           return { id: "admin-1", email: "admin@e.com", role: "ADMIN", plan: "FREE" };
         if (where.id === "user-1")
-          return { id: "user-1", email: "u@e.com", role: "USER", plan: "FREE" };
+          return {
+            id: "user-1",
+            email: "u@e.com",
+            role: "USER",
+            plan: "FREE",
+            emailVerified: true,
+          };
+        if (where.id === "unverified-1")
+          return {
+            id: "unverified-1",
+            email: "u2@e.com",
+            role: "USER",
+            plan: "FREE",
+            emailVerified: false,
+          };
         return null;
       }),
       findMany: vi.fn(async () => []),
@@ -166,8 +191,31 @@ vi.mock("../db.js", () => {
     waitlist: {
       findMany: vi.fn(async () => Array.from(waitlistById.values())),
       groupBy: vi.fn(async () => []),
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
-        return waitlistById.get(where.id) ?? null;
+      // POST /waitlist looks up by email, PATCH /waitlist/:id by id.
+      findUnique: vi.fn(async ({ where }: { where: { id?: string; email?: string } }) => {
+        if (where.id) return waitlistById.get(where.id) ?? null;
+        if (where.email) {
+          for (const entry of waitlistById.values()) {
+            if (entry.email === where.email) return entry;
+          }
+        }
+        return null;
+      }),
+      delete: vi.fn(async ({ where }: { where: { id: string } }) => {
+        const entry = waitlistById.get(where.id);
+        if (!entry) throw new Error("Waitlist entry not found");
+        waitlistById.delete(where.id);
+        return entry;
+      }),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const entry = {
+          id: `w-created-${waitlistById.size + 1}`,
+          status: "PENDING",
+          approvedAt: null,
+          ...data,
+        } as StoredWaitlist;
+        waitlistById.set(entry.id, entry);
+        return entry;
       }),
       update: vi.fn(
         async ({
@@ -334,6 +382,22 @@ describe("admin routes", () => {
     await app.close();
   });
 
+  it("refuses an env-listed address whose account is not verified yet", async () => {
+    // Register hands out a session before verification; an unclaimed
+    // ADMIN_EMAILS address must not become an admin by pre-registering it.
+    process.env.ADMIN_EMAILS = "founder@example.com, u2@e.com";
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/users",
+      headers: {
+        authorization: `Bearer ${signToken({ userId: "unverified-1", email: "u2@e.com" })}`,
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
   it("force-rebuilds the interaction graph and reports the engagement footprint", async () => {
     buildInteractionGraphSpy.mockClear();
     const app = await buildApp();
@@ -389,6 +453,134 @@ describe("admin routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveProperty("totalUsers");
     await app.close();
+  });
+
+  it("reports the Google unverified-app quota in stats", async () => {
+    const { prisma } = (await import("../db.js")) as unknown as {
+      prisma: { user: { count: ReturnType<typeof vi.fn> } };
+    };
+    prisma.user.count.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/stats",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().googleQuota).toEqual({ consumed: 2, cap: 100, remaining: 98 });
+    // Consumed must count Google-origin accounts only — no password and no
+    // Apple/Naver identity. Counting every user would over-report the slot
+    // burn the moment another provider is enabled.
+    expect(prisma.user.count).toHaveBeenCalledWith({
+      where: { passwordHash: null, identities: { none: {} } },
+    });
+    await app.close();
+  });
+
+  it("clamps the Google quota so an over-cap project never reports negative room", async () => {
+    const { prisma } = (await import("../db.js")) as unknown as {
+      prisma: { user: { count: ReturnType<typeof vi.fn> } };
+    };
+    prisma.user.count.mockImplementation(async () => 137);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/stats",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+
+    expect(res.json().googleQuota).toEqual({ consumed: 137, cap: 100, remaining: 0 });
+    prisma.user.count.mockImplementation(async () => 2);
+    await app.close();
+  });
+
+  describe("provider config health", () => {
+    const APPLE_VARS = [
+      "APPLE_CLIENT_ID",
+      "APPLE_TEAM_ID",
+      "APPLE_KEY_ID",
+      "APPLE_PRIVATE_KEY",
+      "APPLE_REDIRECT_URI",
+    ] as const;
+
+    afterEach(() => {
+      for (const key of APPLE_VARS) delete process.env[key];
+      delete process.env.APPLE_LOGIN_ENABLED;
+    });
+
+    async function fetchHealth() {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/admin/provider-config",
+        headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      });
+      await app.close();
+      return res;
+    }
+
+    it("names the vars that are missing without ever returning a value", async () => {
+      process.env.APPLE_LOGIN_ENABLED = "true";
+      process.env.APPLE_CLIENT_ID = "ai.klorn.web";
+      process.env.APPLE_REDIRECT_URI = "https://api.example/api/auth/apple/callback";
+      process.env.APPLE_PRIVATE_KEY =
+        "-----BEGIN PRIVATE KEY-----\nnot-a-key\n-----END PRIVATE KEY-----";
+
+      const res = await fetchHealth();
+
+      expect(res.statusCode).toBe(200);
+      const apple = res.json().apple as { enabled: boolean; missing: string[]; present: string[] };
+      expect(apple.enabled).toBe(true);
+      expect(apple.missing).toEqual(["APPLE_TEAM_ID", "APPLE_KEY_ID"]);
+      expect(apple.present).toContain("APPLE_CLIENT_ID");
+      // Booleans and names only — a config screen must never become a way to
+      // read the signing key back out.
+      expect(JSON.stringify(res.json())).not.toContain("ai.klorn.web");
+      expect(JSON.stringify(res.json())).not.toContain("not-a-key");
+    });
+
+    it("reports a private key that cannot be parsed as ES256", async () => {
+      process.env.APPLE_LOGIN_ENABLED = "true";
+      for (const key of APPLE_VARS) process.env[key] = "set";
+      // The shape a stripped-newline paste leaves behind.
+      process.env.APPLE_PRIVATE_KEY =
+        "-----BEGIN PRIVATE KEY-----MIGTAgEAMBMGBy-----END PRIVATE KEY-----";
+
+      const apple = (await fetchHealth()).json().apple as {
+        privateKey: { present: boolean; parses: boolean; detail: string };
+      };
+
+      expect(apple.privateKey.present).toBe(true);
+      expect(apple.privateKey.parses).toBe(false);
+      expect(apple.privateKey.detail).toBeTruthy();
+    });
+
+    it("passes a well-formed ES256 key", async () => {
+      const { generateKeyPair, exportPKCS8 } = await import("jose");
+      const { privateKey } = await generateKeyPair("ES256", { extractable: true });
+      process.env.APPLE_LOGIN_ENABLED = "true";
+      for (const key of APPLE_VARS) process.env[key] = "set";
+      process.env.APPLE_PRIVATE_KEY = await exportPKCS8(privateKey);
+
+      const apple = (await fetchHealth()).json().apple as {
+        missing: string[];
+        privateKey: { parses: boolean };
+      };
+
+      expect(apple.missing).toEqual([]);
+      expect(apple.privateKey.parses).toBe(true);
+    });
+
+    it("reports a dark provider as disabled rather than broken", async () => {
+      const naver = (await fetchHealth()).json().naver as { enabled: boolean; missing: string[] };
+      expect(naver.enabled).toBe(false);
+      expect(naver.missing).toEqual([
+        "NAVER_CLIENT_ID",
+        "NAVER_CLIENT_SECRET",
+        "NAVER_REDIRECT_URI",
+      ]);
+    });
   });
 
   it("includes trust-loop metrics in ops", async () => {
@@ -447,10 +639,8 @@ describe("admin routes", () => {
     await app.close();
   });
 
-  it("reports fleet judge health via /judge-health", async () => {
-    const { recordJudgeSource, __resetJudgeHealth } = await import("../judge/judge-health.js");
-    __resetJudgeHealth();
-    for (let i = 0; i < 10; i++) recordJudgeSource("llm");
+  it("reports fleet judge health via /judge-health (last DB check + top error)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -458,8 +648,10 @@ describe("admin routes", () => {
       headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ total: 10, fallbackRate: 0, degraded: false });
-    __resetJudgeHealth();
+    const body = res.json();
+    expect(body).toMatchObject({ lookbackMs: 24 * 60 * 60 * 1000 });
+    expect(body).toHaveProperty("lastCheck");
+    expect(body).toHaveProperty("topError");
     await app.close();
   });
 
@@ -479,19 +671,19 @@ describe("admin routes", () => {
       "../llm/model-fallback.js"
     );
     clearFallbackState();
-    markKeyLimited("openrouter:user:test-admin", new Error("429 per day"));
-    expect(isKeyLimited("openrouter:user:test-admin")).toBe(true);
+    markKeyLimited("anthropic:user:test-admin", new Error("429 per day"));
+    expect(isKeyLimited("anthropic:user:test-admin")).toBe(true);
 
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/llm-state/clear",
       headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-      payload: { quotaKey: "openrouter:user:test-admin" },
+      payload: { quotaKey: "anthropic:user:test-admin" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().cleared).toBe("openrouter:user:test-admin");
-    expect(isKeyLimited("openrouter:user:test-admin")).toBe(false);
+    expect(res.json().cleared).toBe("anthropic:user:test-admin");
+    expect(isKeyLimited("anthropic:user:test-admin")).toBe(false);
     await app.close();
   });
 
@@ -508,12 +700,29 @@ describe("admin routes", () => {
     await app.close();
   });
 
+  it("rejects /llm-state/clear for a retired provider's quotaKey", async () => {
+    // OpenRouter was removed (2026-11-01): its quota keys can no longer exist,
+    // so the whitelist must not accept them.
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/llm-state/clear",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { quotaKey: "openrouter:env" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe(
+      "Invalid quotaKey. Expected anthropic|gemini|openai-compat : env|user:<id>.",
+    );
+    await app.close();
+  });
+
   it("clears every provider when /llm-state/clear is called without a quotaKey", async () => {
     const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
       "../llm/model-fallback.js"
     );
     clearFallbackState();
-    markKeyLimited("openrouter:test-all", new Error("429 per day"));
+    markKeyLimited("anthropic:test-all", new Error("429 per day"));
     markKeyLimited("gemini:test-all", new Error("429 per day"));
 
     const app = await buildApp();
@@ -525,9 +734,152 @@ describe("admin routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().cleared).toBe("all");
-    expect(isKeyLimited("openrouter:test-all")).toBe(false);
+    expect(isKeyLimited("anthropic:test-all")).toBe(false);
     expect(isKeyLimited("gemini:test-all")).toBe(false);
     await app.close();
+  });
+});
+
+describe("DELETE /api/admin/waitlist/:id", () => {
+  beforeEach(() => {
+    waitlistById.clear();
+  });
+
+  it("rejects an unauthenticated caller", async () => {
+    seedWaitlistEntry({ id: "w-d0", email: "junk@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({ method: "DELETE", url: "/api/admin/waitlist/w-d0" });
+    expect(res.statusCode).toBe(401);
+    expect(waitlistById.size).toBe(1);
+  });
+
+  it("deletes a PENDING entry", async () => {
+    seedWaitlistEntry({ id: "w-d1", email: "probe@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/waitlist/w-d1",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, deleted: "probe@example.com" });
+    expect(waitlistById.size).toBe(0);
+  });
+
+  it("deletes a REJECTED entry", async () => {
+    seedWaitlistEntry({ id: "w-d2", email: "spam@example.com", status: "REJECTED" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/waitlist/w-d2",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(waitlistById.size).toBe(0);
+  });
+
+  it("refuses to delete an APPROVED entry — that row is a live user's access", async () => {
+    // With BETA_GATE_ENABLED on, auth.ts:411 / auth.ts:1295 /
+    // social-login.ts:142 all gate signup on status === "APPROVED". Deleting
+    // the row locks that person out of their own account with no trace.
+    seedWaitlistEntry({
+      id: "w-d3",
+      email: "realuser@example.com",
+      status: "APPROVED",
+      approvedAt: new Date(),
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/waitlist/w-d3",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/Reject this entry before deleting/i);
+    expect(waitlistById.size).toBe(1);
+  });
+
+  it("returns 404 for an id that does not exist", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/waitlist/missing",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("POST /api/admin/waitlist", () => {
+  // Creation moved here when the public POST /api/waitlist was deleted
+  // (2026-08-26). It is the only way a row is created now, and
+  // docs/oauth-verification/README.md §3.5 depends on it to pre-provision the
+  // Google reviewer and the CASA DAST scanner past BETA_GATE_ENABLED.
+  beforeEach(() => {
+    waitlistById.clear();
+  });
+
+  it("rejects an unauthenticated caller", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/waitlist",
+      payload: { email: "reviewer@example.com" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(waitlistById.size).toBe(0);
+  });
+
+  it("creates a PENDING entry for a new address", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/waitlist",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { email: "Reviewer@Example.com ", name: "Google Reviewer" },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.created).toBe(true);
+    expect(body.entry.status).toBe("PENDING");
+    // Normalised, so a later lookup by the address they actually type matches.
+    expect(body.entry.email).toBe("reviewer@example.com");
+  });
+
+  it("is idempotent — a second call finds the row instead of duplicating it", async () => {
+    const app = await buildApp();
+    const payload = { email: "dast@example.com" };
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/admin/waitlist",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload,
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/admin/waitlist",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload,
+    });
+    expect(first.statusCode).toBe(201);
+    expect(first.json().created).toBe(true);
+    // 200 not 201, and created:false — behind an admin token there is no
+    // enumeration concern, so the caller is told which of the two happened.
+    expect(second.statusCode).toBe(200);
+    expect(second.json().created).toBe(false);
+    expect(waitlistById.size).toBe(1);
+  });
+
+  it("rejects a malformed address before touching the database", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/waitlist",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { email: "not-an-email" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(waitlistById.size).toBe(0);
   });
 });
 
@@ -537,15 +889,6 @@ describe("PATCH /api/admin/waitlist/:id", () => {
     waitlistById.clear();
     sendBetaInviteEmailSpy.mockClear();
   });
-
-  function seedWaitlistEntry(entry: Partial<StoredWaitlist> & { id: string; email: string }) {
-    waitlistById.set(entry.id, {
-      name: null,
-      status: "PENDING",
-      approvedAt: null,
-      ...entry,
-    });
-  }
 
   it("sends an invite email when transitioning PENDING → APPROVED", async () => {
     seedWaitlistEntry({ id: "w-1", email: "applicant@example.com", name: "Applicant" });

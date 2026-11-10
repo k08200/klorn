@@ -89,21 +89,6 @@ export function agentModeLabel(option: AgentModeOption): string {
 export function agentModeClasses(mode: AgentMode, active: boolean): string {
   if (!active) return "bg-stone-900 border-stone-700 text-stone-400 hover:border-stone-600";
   if (mode === "SHADOW") return "bg-stone-800/80 border-stone-500/60 text-stone-100";
-  if (mode === "AUTO") return "bg-emerald-500/15 border-emerald-400/45 text-emerald-200";
-  return "bg-amber-300/20 border-amber-300/50 text-amber-100";
+  if (mode === "AUTO") return "bg-emerald-500/15 border-emerald-400/45 text-state-ok-ink";
+  return "bg-amber-300/20 border-state-warn-line text-amber-100";
 }
-
-export const TIMEZONES = [
-  "Asia/Seoul",
-  "Asia/Tokyo",
-  "America/New_York",
-  "America/Los_Angeles",
-  "America/Chicago",
-  "Europe/London",
-  "Europe/Berlin",
-  "Europe/Paris",
-  "Asia/Shanghai",
-  "Asia/Singapore",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];

@@ -22,6 +22,37 @@ export interface AppleClaims {
   emailVerified: boolean;
 }
 
+/**
+ * Why a sign-in stopped. The four causes need four different answers — a
+ * broken deployment, a rejected client secret, a bad token and a user who
+ * shared no email are not the same problem — but they all used to collapse
+ * into one `apple_failed` that only server logs could disambiguate.
+ */
+export type AppleFailure = "config" | "exchange" | "token" | "claims";
+
+export type AppleExchangeResult =
+  | { ok: true; idToken: string }
+  | { ok: false; reason: Extract<AppleFailure, "config" | "exchange">; detail: string };
+
+export type AppleVerifyResult =
+  | { ok: true; claims: AppleClaims }
+  | { ok: false; reason: Extract<AppleFailure, "token" | "claims">; detail: string };
+
+/** Env the client secret cannot be signed without. */
+function missingAppleEnv(): string[] {
+  return (
+    [
+      ["APPLE_CLIENT_ID", appleClientId()],
+      ["APPLE_TEAM_ID", process.env.APPLE_TEAM_ID],
+      ["APPLE_KEY_ID", process.env.APPLE_KEY_ID],
+      ["APPLE_PRIVATE_KEY", process.env.APPLE_PRIVATE_KEY],
+      ["APPLE_REDIRECT_URI", appleRedirectUri()],
+    ] as const
+  )
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+}
+
 function appleClientId(): string {
   return process.env.APPLE_CLIENT_ID ?? "";
 }
@@ -63,12 +94,29 @@ export async function makeAppleClientSecret(now = Date.now()): Promise<string> {
 }
 
 /** Exchange the authorization code for tokens; the identity is the id_token. */
-export async function exchangeAppleCode(code: string): Promise<string | null> {
+export async function exchangeAppleCode(code: string): Promise<AppleExchangeResult> {
+  const missing = missingAppleEnv();
+  if (missing.length > 0) {
+    // Caught before calling Apple: a half-set deployment would otherwise look
+    // identical to a wrong key, and Apple's answer would be the same either way.
+    console.warn(`[APPLE] not configured — missing ${missing.join(", ")}`);
+    return { ok: false, reason: "config", detail: `missing ${missing.join(", ")}` };
+  }
+
+  let clientSecret: string;
+  try {
+    clientSecret = await makeAppleClientSecret();
+  } catch (err) {
+    // An unparseable .p8 — wrong file, truncated paste, or PEM newlines lost.
+    console.warn("[APPLE] client secret could not be signed:", err);
+    return { ok: false, reason: "config", detail: "APPLE_PRIVATE_KEY is not a usable ES256 key" };
+  }
+
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     client_id: appleClientId(),
-    client_secret: await makeAppleClientSecret(),
+    client_secret: clientSecret,
     redirect_uri: appleRedirectUri(),
   });
   const res = await fetch(APPLE_TOKEN_URL, {
@@ -77,11 +125,31 @@ export async function exchangeAppleCode(code: string): Promise<string | null> {
     body,
   });
   if (!res.ok) {
-    console.warn(`[APPLE] token exchange failed: ${res.status}`);
-    return null;
+    // Apple's slug is the whole diagnosis: invalid_client means the secret was
+    // refused (wrong Team ID / Key ID / key / Services ID), invalid_grant means
+    // the secret was fine and the code was not.
+    const detail = await appleErrorSlug(res);
+    console.warn(`[APPLE] token exchange failed: ${res.status} ${detail}`);
+    return { ok: false, reason: "exchange", detail };
   }
   const json = (await res.json()) as { id_token?: string };
-  return typeof json.id_token === "string" ? json.id_token : null;
+  if (typeof json.id_token !== "string") {
+    console.warn("[APPLE] token exchange returned no id_token");
+    return { ok: false, reason: "exchange", detail: "no id_token in response" };
+  }
+  return { ok: true, idToken: json.id_token };
+}
+
+/** Apple's error body is `{error, error_description}`; fall back to raw text. */
+async function appleErrorSlug(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(text) as { error?: string };
+    if (typeof parsed.error === "string" && parsed.error) return parsed.error;
+  } catch {
+    // Not JSON — the raw prefix is still the best lead we have.
+  }
+  return text.slice(0, 120) || `HTTP ${res.status}`;
 }
 
 // Module-level so the JWKS response is cached across logins (jose refreshes on
@@ -89,17 +157,29 @@ export async function exchangeAppleCode(code: string): Promise<string | null> {
 const appleJwks = createRemoteJWKSet(new URL(APPLE_JWKS_URL));
 
 /** Verify the id_token's signature + iss/aud, then extract the claims. */
-export async function verifyAppleIdToken(idToken: string): Promise<AppleClaims | null> {
+export async function verifyAppleIdToken(idToken: string): Promise<AppleVerifyResult> {
+  let payload: Record<string, unknown>;
   try {
-    const { payload } = await jwtVerify(idToken, appleJwks, {
+    const verified = await jwtVerify(idToken, appleJwks, {
       issuer: APPLE_ISSUER,
       audience: appleClientId(),
     });
-    return parseAppleClaims(payload as Record<string, unknown>);
+    payload = verified.payload as Record<string, unknown>;
   } catch (err) {
+    // Signature, issuer or audience — audience being the one a misconfigured
+    // Services ID trips, since `aud` must equal APPLE_CLIENT_ID exactly.
     console.warn("[APPLE] id_token verification failed:", err);
-    return null;
+    return { ok: false, reason: "token", detail: (err as Error).message };
   }
+  const claims = parseAppleClaims(payload);
+  if (!claims) {
+    // A valid token that carries no usable email: the sign-in was real, the
+    // account cannot be. Worth its own answer — the user can retry and choose
+    // to share an address, which no amount of retrying a broken key fixes.
+    console.warn("[APPLE] id_token carried no usable email claim");
+    return { ok: false, reason: "claims", detail: "no email claim" };
+  }
+  return { ok: true, claims };
 }
 
 /**

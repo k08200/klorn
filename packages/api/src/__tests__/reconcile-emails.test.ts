@@ -79,8 +79,15 @@ describe("reconcileEmails", () => {
     // Scoped to PRIMARY-account rows (linkedInboxAccountId: null): inboxIdList
     // came from the primary INBOX, so linked-inbox rows must be excluded from
     // the notIn wipe or they would ALL match and be deleted.
+    // Spam-lane rows are never in the INBOX listing — the label exclusion is
+    // what keeps them alive between reconcile ticks (2026-08-18).
     expect(m.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", linkedInboxAccountId: null, gmailId: { notIn: ["a", "b"] } },
+      where: {
+        userId: "user-1",
+        linkedInboxAccountId: null,
+        gmailId: { notIn: ["a", "b"] },
+        NOT: { labels: { has: "SPAM" } },
+      },
     });
     expect(result.removed).toBe(3);
   });
@@ -128,7 +135,7 @@ describe("reconcileEmails", () => {
     const bigInbox = Array.from({ length: 10_001 }, (_, i) => `m${i}`);
     m.listMock.mockResolvedValue(inboxListing(bigInbox));
     // First findMany = the in-Node "load stored gmailIds" branch; one stale row.
-    m.findMany.mockResolvedValueOnce([{ id: "row-x", gmailId: "stale-1" }]);
+    m.findMany.mockResolvedValueOnce([{ id: "row-x", gmailId: "stale-1", labels: ["INBOX"] }]);
     m.deleteMany.mockResolvedValue({ count: 1 });
 
     const result = await reconcileEmails("user-1");
@@ -187,7 +194,12 @@ describe("reconcileLinkedInboxes", () => {
     // The delete must be scoped to this linked account — NOT linkedInboxAccountId:
     // null (that is the primary reconcile's job) and NOT unscoped.
     expect(m.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", linkedInboxAccountId: "link-1", gmailId: { notIn: ["a", "b"] } },
+      where: {
+        userId: "user-1",
+        linkedInboxAccountId: "link-1",
+        gmailId: { notIn: ["a", "b"] },
+        NOT: { labels: { has: "SPAM" } },
+      },
     });
     expect(result.removed).toBe(2);
   });
@@ -210,7 +222,12 @@ describe("reconcileLinkedInboxes", () => {
     );
     // ...and the healthy inbox still reconciled.
     expect(m.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", linkedInboxAccountId: "link-ok", gmailId: { notIn: ["a"] } },
+      where: {
+        userId: "user-1",
+        linkedInboxAccountId: "link-ok",
+        gmailId: { notIn: ["a"] },
+        NOT: { labels: { has: "SPAM" } },
+      },
     });
     expect(result.removed).toBe(1);
   });

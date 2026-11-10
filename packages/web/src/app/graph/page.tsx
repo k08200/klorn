@@ -2,10 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
+import { TIER_COUNT } from "@/lib/tiers";
 import AuthGuard from "../../components/auth-guard";
 import type { GraphEdge, GraphNode } from "../../components/relationship-graph";
 import { useToast } from "../../components/toast";
+import LoadingState from "../../components/ui/loading-state";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { captureClientError } from "../../lib/sentry";
 
 // 3d-force-graph touches WebGL/window — load it client-only.
@@ -13,7 +16,7 @@ const ForceGraph3DView = dynamic(
   () => import("../../components/force-graph-3d").then((m) => m.ForceGraph3DView),
   {
     ssr: false,
-    loading: () => <p className="text-sm text-slate-400">Loading 3D graph…</p>,
+    loading: () => <LoadingState rows={1} rowHeight="h-96" />,
   },
 );
 
@@ -28,27 +31,29 @@ interface GraphData {
 }
 
 // Legend swatch shapes double as a non-colour differentiator (WCAG 1.4.1) so
-// the 4 tiers are still distinguishable without relying on hue alone.
+// the lanes are still distinguishable without relying on hue alone.
 type SwatchShape = "circle" | "diamond" | "square" | "ring" | "triangle";
 
+// Labels are i18n keys; lane rows reuse the canonical lane names.
 const REL_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = [
-  { color: "#fbbf24", label: "You", shape: "diamond" },
-  { color: "#fb7185", label: "Waiting on a reply", shape: "triangle" },
-  { color: "#f59e0b", label: "Meeting soon", shape: "square" },
-  { color: "#f472b6", label: "You engage (learned)", shape: "diamond" },
-  { color: "#c084fc", label: "Org you engage (inferred)", shape: "diamond" },
-  { color: "#34d399", label: "Frequent contact", shape: "ring" },
-  { color: "#60a5fa", label: "Contact", shape: "circle" },
+  { color: "#fbbf24", label: "graph.legend.you", shape: "diamond" },
+  { color: "#fb7185", label: "graph.legend.waiting", shape: "triangle" },
+  { color: "#f59e0b", label: "graph.legend.meetingSoon", shape: "square" },
+  { color: "#f472b6", label: "graph.legend.engaged", shape: "diamond" },
+  { color: "#c084fc", label: "graph.legend.orgEngaged", shape: "diamond" },
+  { color: "#34d399", label: "graph.legend.frequent", shape: "ring" },
+  { color: "#60a5fa", label: "graph.legend.contact", shape: "circle" },
 ];
 
 // Tier colours mirror --color-tier-* (globals.css) so the decision-brain view
 // reads identically to the firewall board.
 const DEC_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = [
-  { color: "#a78bfa", label: "Feature (scored input)", shape: "square" },
-  { color: "#fb7185", label: "PUSH", shape: "diamond" },
-  { color: "#fbbf24", label: "QUEUE", shape: "square" },
-  { color: "#a8a29e", label: "SILENT", shape: "ring" },
-  { color: "#34d399", label: "AUTO", shape: "circle" },
+  { color: "#a78bfa", label: "graph.legend.feature", shape: "square" },
+  { color: "#fb7185", label: "lane.name.PUSH", shape: "diamond" },
+  { color: "#818cf8", label: "lane.name.MEETING", shape: "circle" },
+  { color: "#fbbf24", label: "lane.name.QUEUE", shape: "square" },
+  { color: "#22d3ee", label: "lane.name.INFO", shape: "ring" },
+  { color: "#a8a29e", label: "lane.name.SILENT", shape: "ring" },
 ];
 
 const SWATCH_CLASS: Record<SwatchShape, string> = {
@@ -59,16 +64,16 @@ const SWATCH_CLASS: Record<SwatchShape, string> = {
   triangle: "[clip-path:polygon(50%_0%,100%_100%,0%_100%)]",
 };
 
-const COPY: Record<Mode, { eyebrow: string; title: string; body: string }> = {
+const COPY_KEYS: Record<Mode, { eyebrow: string; title: string; body: string }> = {
   relationships: {
-    eyebrow: "Relationships",
-    title: "Who matters to your inbox",
-    body: "A force-directed view of the relationship graph the firewall already reasons over — your ranked contacts (size = interaction score, colour = current signal) clustered by company domain. The people you actually reply to grow larger and turn pink: Klorn learns who matters from your own actions and feeds that back into how it triages.",
+    eyebrow: "graph.mode.relationships",
+    title: "graph.relationships.title",
+    body: "graph.relationships.body",
   },
   decisions: {
-    eyebrow: "Decision brain",
-    title: "How the firewall decides",
-    body: "The classifier's deterministic core: the 4 scored features gating the 4 tiers (the tierFromFeatures rule), with your override signal overlaid on each tier. This is the policy structure itself, so it renders even before you've corrected anything.",
+    eyebrow: "graph.mode.decisions",
+    title: "graph.decisions.title",
+    body: "graph.decisions.body",
   },
 };
 
@@ -82,6 +87,7 @@ export default function GraphPage() {
 
 function GraphPageInner() {
   const { toast } = useToast();
+  const { t, locale } = useT();
   const [mode, setMode] = useState<Mode>("relationships");
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,17 +100,17 @@ function GraphPageInner() {
       // Don't surface the raw apiFetch error to the user — log the detail, show
       // a fixed message.
       captureClientError(err, { scope: "graph.load" });
-      toast("Could not load the graph.", "error");
+      toast(t("statePage.graphLoadError"), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast, mode]);
+  }, [toast, mode, t]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const copy = COPY[mode];
+  const copy = COPY_KEYS[mode];
   const legend = mode === "decisions" ? DEC_LEGEND : REL_LEGEND;
   const contactCount = data ? data.nodes.filter((n) => n.kind === "contact").length : 0;
   // Top nodes by score — a keyboard/AT-reachable text fallback for the WebGL
@@ -117,12 +123,12 @@ function GraphPageInner() {
     : [];
 
   return (
-    <div className="h-full overflow-y-auto bg-surface-app px-4 pb-28 pt-6 text-slate-900 sm:px-6 md:py-10">
+    <div className="h-full overflow-y-auto bg-surface-app px-4 pb-28 pt-6 text-ink sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
         <div
           role="group"
-          aria-label="Graph view"
-          className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1"
+          aria-label={t("graph.view.aria")}
+          className="mb-4 inline-flex rounded-control border border-line bg-surface-raised p-1"
         >
           {(["relationships", "decisions"] as Mode[]).map((mKey) => (
             <button
@@ -130,41 +136,50 @@ function GraphPageInner() {
               type="button"
               aria-pressed={mode === mKey}
               onClick={() => setMode(mKey)}
-              className={`rounded-lg px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              className={`rounded-chip px-3 py-1.5 text-role-body transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 mode === mKey
-                  ? "bg-accent font-semibold text-white"
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-accent-solid font-semibold text-accent-solid-ink"
+                  : "text-ink-mid hover:text-ink"
               }`}
             >
-              {mKey === "relationships" ? "Relationships" : "Decision brain"}
+              {t(`graph.mode.${mKey}`)}
             </button>
           ))}
         </div>
 
-        <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
-            {copy.eyebrow}
+        <header className="mb-6 rounded-card border border-line bg-surface-panel p-5 shadow-sm shadow-black/20">
+          <p className="text-role-caption font-semibold uppercase tracking-[0.24em] text-accent-deep">
+            {t(copy.eyebrow)}
           </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
-            {copy.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{copy.body}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+          <h1 className="mt-3 text-role-page text-ink">{t(copy.title)}</h1>
+          <p className="mt-2 max-w-3xl text-role-body leading-6 text-ink-mid">
+            {t(copy.body, { count: String(TIER_COUNT) })}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-role-caption text-ink-dim">
             {mode === "relationships" ? (
               <>
-                <span>{contactCount} contacts</span>
+                <span>{t("graph.stats.contacts", { count: String(contactCount) })}</span>
                 {data?.builtAt && (
-                  <span>· built {new Date(data.builtAt).toLocaleString("en-US")}</span>
+                  <span>
+                    ·{" "}
+                    {t("graph.stats.built", {
+                      time: new Date(data.builtAt).toLocaleString(locale),
+                    })}
+                  </span>
                 )}
               </>
             ) : (
               <>
                 <span>
-                  override rate{" "}
-                  {data?.overrideRate != null ? `${(data.overrideRate * 100).toFixed(0)}%` : "—"}
+                  {t("graph.stats.overrideRate", {
+                    rate:
+                      data?.overrideRate != null ? `${(data.overrideRate * 100).toFixed(0)}%` : "—",
+                  })}
                 </span>
                 {data?.overriddenKnobs && data.overriddenKnobs.length > 0 && (
-                  <span>· live overrides: {data.overriddenKnobs.join(", ")}</span>
+                  <span>
+                    · {t("graph.stats.liveOverrides", { list: data.overriddenKnobs.join(", ") })}
+                  </span>
                 )}
               </>
             )}
@@ -173,22 +188,25 @@ function GraphPageInner() {
 
         <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2">
           {legend.map((l) => (
-            <span key={l.label} className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span
+              key={l.label}
+              className="flex items-center gap-1.5 text-role-caption text-ink-mid"
+            >
               <span
                 aria-hidden="true"
                 className={`inline-block h-2.5 w-2.5 shrink-0 ${SWATCH_CLASS[l.shape]}`}
                 style={l.shape === "ring" ? { borderColor: l.color } : { backgroundColor: l.color }}
               />
-              {l.label}
+              {t(l.label)}
             </span>
           ))}
         </div>
 
         {loading ? (
-          <p className="text-sm text-slate-400">Loading...</p>
+          <LoadingState rows={1} rowHeight="h-96" label={t("statePage.graphLoading")} />
         ) : !data ? (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-            No graph data.
+          <p className="rounded-card border border-line bg-surface-raised p-6 text-role-body text-ink-mid">
+            {t("graph.noData")}
           </p>
         ) : (
           <>
@@ -204,25 +222,24 @@ function GraphPageInner() {
 // Keyboard + screen-reader alternative to the pointer-only WebGL graph
 // (WCAG 1.1.1 / 2.1.1): the highest-scoring nodes as a plain readable list.
 function TopNodesFallback({ nodes, mode }: { nodes: GraphNode[]; mode: Mode }) {
+  const { t } = useT();
   if (nodes.length === 0) return null;
-  const scoreLabel = mode === "decisions" ? "weight" : "interaction score";
   return (
-    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-slate-900">
-        {mode === "decisions" ? "Top decision signals" : "Top contacts"}
+    <section className="mt-6 rounded-card border border-line bg-surface-panel p-5">
+      <h2 className="text-role-head text-ink">
+        {t(mode === "decisions" ? "graph.top.decisions" : "graph.top.contacts")}
       </h2>
-      <p className="mt-1 text-xs text-slate-400">
-        A text view of the graph for keyboard and screen-reader users — the same ranked nodes shown
-        visually above ({scoreLabel}, highest first).
+      <p className="mt-1 text-role-caption text-ink-dim">
+        {t(mode === "decisions" ? "graph.top.bodyDecisions" : "graph.top.bodyContacts")}
       </p>
       <ol className="mt-3 space-y-1.5">
         {nodes.map((n) => (
           <li
             key={n.id}
-            className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-sm text-slate-500 last:border-0"
+            className="flex items-baseline justify-between gap-3 border-b border-line-soft pb-1.5 text-role-body text-ink-mid last:border-0"
           >
             <span className="min-w-0 truncate">{n.label}</span>
-            <span className="shrink-0 tabular-nums text-xs text-slate-400">
+            <span className="shrink-0 tabular-nums text-role-caption text-ink-dim">
               {Math.round(n.score)}
             </span>
           </li>

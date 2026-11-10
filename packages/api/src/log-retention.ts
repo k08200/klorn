@@ -1,7 +1,7 @@
 /**
  * Operational-log retention sweep.
  *
- * Six append-only log tables grow without bound (the decision/feedback
+ * Append-only log tables grow without bound (the decision/feedback
  * ledgers — DecisionLabel, FeedbackEvent — are deliberately NOT here: they
  * feed calibration and learned rules and must be kept). Today a DELETE is one
  * cheap statement; at hundreds of millions of rows the same cleanup becomes a
@@ -11,7 +11,8 @@
  * in push-delivery.ts): a single unbounded `deleteMany` would take one huge
  * lock, and the first sweep after enabling the flag on a long-accumulated
  * table is exactly the worst case to run on the live dyno. Each table's
- * timestamp column is indexed (migration 20260714120000) so the batch lookup
+ * timestamp column is indexed (migration 20260714120000; mcpWriteAudit in
+ * 20260929010000) so the batch lookup
  * is an index range scan, not a seq scan.
  *
  * OFF by default per the flag doctrine — set LOG_RETENTION_ENABLED=true to
@@ -20,17 +21,21 @@
  */
 
 import { prisma } from "./db.js";
+import { MOVED_MESSAGE_RETENTION_DAYS } from "./mail/providers/imap-moved.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
   registerScheduler,
 } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
+import { newWork } from "./work-context.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const FIRST_SWEEP_DELAY_MS = 5 * 60 * 1000; // let the server warm up first
 const DELETE_BATCH_SIZE = 5000;
+/** MCP write audit (A2a): a security/activity trail, not a learning input. */
+export const MCP_WRITE_AUDIT_RETENTION_DAYS = 90;
 
 export interface LogRetentionPolicy {
   name: string;
@@ -99,6 +104,19 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
     deleteByIds: (ids) => prisma.webhookEvent.deleteMany({ where: { id: { in: ids } } }),
   },
   {
+    // Attention engine v3 shadow facts: verbatim mail quotes per item. Replay
+    // and the disagreement report work on recent mail; 180 days bounds the
+    // table and the quotes. Outcomes stay on DecisionLabel (not swept).
+    name: "attentionFacts",
+    column: "extractedAt",
+    days: 180,
+    findExpiredIds: (cutoff, take) =>
+      prisma.attentionFacts
+        .findMany({ where: { extractedAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.attentionFacts.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
     // Ground-truth token accounting; kept longer for cost-drift analysis.
     name: "llmUsageLog",
     column: "createdAt",
@@ -108,6 +126,32 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.llmUsageLog.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // What agents changed through API keys (step A2a). Bounded because refused
+    // calls are audited too; createdAt is indexed for the range scan.
+    name: "mcpWriteAudit",
+    column: "createdAt",
+    days: MCP_WRITE_AUDIT_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.mcpWriteAudit
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.mcpWriteAudit.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // Where trash/archive parked a Naver or iCloud message so undo can restore it
+    // (step B2). Undo consumes a record; the rest expire with Trash's own window.
+    // recordMove also sweeps its own account on every move, but an account that
+    // stops moving would keep its records forever without this.
+    name: "imapMovedMessage",
+    column: "createdAt",
+    days: MOVED_MESSAGE_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.imapMovedMessage
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.imapMovedMessage.deleteMany({ where: { id: { in: ids } } }),
   },
 ];
 
@@ -186,19 +230,25 @@ export function startLogRetentionScheduler(): void {
   console.log("[RETENTION] Log retention sweep started (every 6h)");
   registerScheduler("log-retention", SWEEP_INTERVAL_MS);
 
-  firstRunTimer = setTimeout(() => {
-    firstRunTimer = null;
-    recordSchedulerTick("log-retention");
-    runLogRetentionSweep().catch((err) =>
-      captureError(err, { tags: { scope: "log-retention.first-sweep" } }),
-    );
-    intervalId = setInterval(() => {
+  firstRunTimer = setTimeout(
+    newWork(() => {
+      firstRunTimer = null;
       recordSchedulerTick("log-retention");
       runLogRetentionSweep().catch((err) =>
-        captureError(err, { tags: { scope: "log-retention.sweep" } }),
+        captureError(err, { tags: { scope: "log-retention.first-sweep" } }),
       );
-    }, SWEEP_INTERVAL_MS);
-  }, FIRST_SWEEP_DELAY_MS);
+      intervalId = setInterval(
+        newWork(() => {
+          recordSchedulerTick("log-retention");
+          runLogRetentionSweep().catch((err) =>
+            captureError(err, { tags: { scope: "log-retention.sweep" } }),
+          );
+        }),
+        SWEEP_INTERVAL_MS,
+      );
+    }),
+    FIRST_SWEEP_DELAY_MS,
+  );
   firstRunTimer.unref?.();
 }
 

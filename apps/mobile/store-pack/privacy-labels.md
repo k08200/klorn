@@ -1,108 +1,174 @@
-# App Privacy questionnaire — answers with code evidence
+# App Privacy (Apple) and Data safety (Google) — answers for the bundled app
 
-Fill-in sheet for App Store Connect → App Privacy ("Privacy Nutrition Labels").
-Every answer below is grounded in the repo; the questionnaire **must agree with**
-`apps/mobile/ios/App/App/PrivacyInfo.xcprivacy` (see the gap flagged at the end).
+Revised 2026-10-16 for the bundled app (`apps/mobile/src`). The app no longer
+loads the web app, so the web bundle's SDKs (`@sentry/browser`, the web
+`track.ts` analytics sender) are **not** in it. Every answer is tied to code
+below; answer the two conditional rows from the build you actually upload.
 
-Apple's definition of "collect": data transmitted off the device and retained
-longer than needed to service the request. Klorn's backend (Fastify + Postgres,
-`packages/api`) stores account, mail-triage, chat, and analytics data → those
-count as collected. On-device-only or pass-through data does not.
+Revised 2026-11-01: the AI provider lists below now name Anthropic (Claude
+API), which has handled the hosted service's model calls since 2026-10-30 and
+was missing from the earlier revision. OpenRouter is removed; Klorn no longer
+uses it.
+
+What "collected" means: Apple — data sent off the device and kept longer than
+needed to answer the request; Google — data sent off the device. Klorn's API
+(`packages/api`, Postgres on Supabase) keeps account, mail, calendar, chat and
+action data while the account exists, so all of that counts. Data that only
+stays on the phone (the offline cache below) is not "collected" for either
+store, but it is described here because reviewers and the privacy policy ask.
 
 ---
 
-## Top-level answers
+## 1. What the app sends and keeps
+
+| Data | Leaves the device? | Kept where, how long | Code |
+|---|---|---|---|
+| Account email address, name (from Google / Apple sign-in, or the email login) | Yes | API database while the account exists | `src/auth/`, `routes/auth.ts` |
+| Account id (server user id) | Yes | API database; also RevenueCat's `appUserID` when IAP is on | `src/platform/iap.ts` (`Purchases.configure({ appUserID })`) |
+| Mail from connected accounts (headers, bodies, attachments), AI summaries and drafts | Mail is fetched server-side from Gmail / IMAP, not from the phone; the app sends replies and new mail the user confirms | API database while the account exists; AI providers per request (Anthropic Claude API, Gemini API — privacy policy "AI Processing") | `routes/email*.ts`; send only from the confirm sheet (`src/screens/mail/compose.tsx`) |
+| Calendar events (Google Calendar, CalDAV) and events the user creates | Created events: yes (after the confirm card) | API database | `POST /api/calendar` |
+| Assistant chat, lane moves, Done / Later, approvals and rejections (with an optional reason) | Yes | API database | `routes/chat-*.ts`, `routes/firewall.ts` |
+| Server-side usage events keyed by user id: `push_sent`, `queue_action` | Generated on the server | API `analyticsEvent` table (first-party, no third-party analytics) | `packages/api/src/analytics.ts`, `notify/push.ts:302` |
+| Push token (APNs on iOS, FCM on Android) | Yes | API, until sign-out (`DELETE /push/device-token`) or account deletion | `src/platform/push.ts`, `routes/notifications.ts` |
+| Purchases | Through StoreKit / Play Billing to RevenueCat, then a webhook sets the plan | RevenueCat + `user.plan` | `src/platform/iap.ts`, `routes/webhook.ts` (`/api/webhook/revenuecat`) |
+| Files uploaded to Klorn Drive (any file the picker allows, photos included) | Yes, only while the drive flags are on in production | API storage | `src/screens/files/FilesScreen.tsx` (`<input type=file>`) |
+| Speech | **No audio leaves through the app.** iOS: the speech plugin is not linked (SPM), the mic button is hidden. Android: the system recognizer returns text; only the text is sent, as chat | — | `src/platform/speech.ts` |
+| Crash / diagnostics | **No.** There is no Sentry or other crash SDK in `apps/mobile/package.json` or `src/` | — | (grep `sentry` in `apps/mobile`: no hits) |
+| Advertising id, location, contacts, health, browsing history | **No** | — | no plugin or permission for them |
+
+### On the device only (not "collected")
+
+- **Offline cache** (`src/api/query-client.ts`): successful reads — Today,
+  mail lists, **opened mail bodies**, calendar, approvals, accounts — are
+  persisted with Capacitor Preferences (iOS `UserDefaults`, Android
+  `SharedPreferences`) for at most **24 h** (`CACHE_MAX_AGE_MS`), keyed to the
+  signed-in user, **encrypted** with AES-256-GCM under a random key kept only
+  in the Keychain / Keystore as a device-only item (`src/platform/cache-crypto.ts`;
+  iOS `afterFirstUnlockThisDeviceOnly`, so an iCloud / iTunes backup holds
+  ciphertext without its key). Wiped — key included — on sign-out, when the
+  server answers 401, and after account deletion (`src/auth/session.tsx` `wipe()`). Searches, provider lists,
+  team slots and drive limits are never persisted (`meta.persist: false`).
+- **Session token**: Keychain / Android Keystore via
+  `@aparajita/capacitor-secure-storage`, not iCloud-synced; removed on
+  sign-out.
+- **Done / Later list** (`src/screens/mail/hidden-store.ts`): email ids and
+  "hide until" times, no content — an optimistic layer over the server's
+  `hideHandled` list (an hour once the server confirmed; up to 30 days for
+  mail the server had nothing to clear for). Cleared on sign-out, on a 401 and
+  after account deletion (`clearHidden()` in `session.tsx` `wipe()`).
+- Push token copy, "push primed" flag, theme and language choice (Preferences).
+
+---
+
+## 2. Apple — App Privacy questionnaire
 
 | Question | Answer |
 |---|---|
 | Do you or your third-party partners collect data from this app? | **Yes** |
-| Is data used to track users across apps/websites (ATT)? | **No** — `NSPrivacyTracking=false`, empty `NSPrivacyTrackingDomains` (`PrivacyInfo.xcprivacy`); no ad/tracker SDK in `apps/mobile/package.json` or `packages/web/package.json` (only Capacitor plugins, RevenueCat, `@sentry/browser`) |
+| Is any data used to track users? | **No** — `NSPrivacyTracking=false`, no tracking domains, no ad / attribution SDK |
 
----
+Declare each type below as **Linked to the user: Yes · Used for tracking: No**.
 
-## Data types — collected
-
-### 1. Contact Info → Email Address
-
-- **Collected: YES · Linked to identity: YES · Used for tracking: NO**
-- **Purpose:** App Functionality (sign-in, running the mail firewall)
-- Evidence:
-  - Declared in `apps/mobile/ios/App/App/PrivacyInfo.xcprivacy` (`NSPrivacyCollectedDataTypeEmailAddress`, linked, app-functionality)
-  - Email/password + Google OAuth auth: `packages/api/src/routes/auth.ts` (account routes; `DELETE /account` at line 1330), `packages/web/src/app/login/page.tsx:33` (email state, register mode)
-
-### 2. Contact Info → Name
-
-- **Collected: YES · Linked to identity: YES · Used for tracking: NO**
-- **Purpose:** App Functionality (account profile)
-- Evidence: the email/password **register** mode asks for a name — `packages/web/src/app/login/page.tsx:63` (`nameRef` focused first in `mode === "register"`).
-- ⚠️ **Manifest gap:** `PrivacyInfo.xcprivacy` does not currently declare Name. Either add `NSPrivacyCollectedDataTypeName` to the manifest (recommended, 5-line edit) or drop the name field from signup. The questionnaire and the manifest must match.
-
-### 3. User Content → Emails or Text Messages
-
-- **Collected: YES · Linked to identity: YES · Used for tracking: NO**
-- **Purpose:** App Functionality (the product — triage of the user's Gmail into PUSH/QUEUE/SILENT/AUTO, briefings, decision cards)
-- Evidence: Gmail message ingestion & classification pipeline in `packages/api/src/routes/gmail-push.ts`, `email.ts`, `email-candidates.ts`, `firewall.ts`; data persisted in the app's own Postgres (Prisma). Gmail data use is bound by Google's Limited Use policy (CASA verification track, `apps/mobile/STORE_SUBMISSION.md` §D).
-
-### 4. User Content → Other User Content (assistant chat)
-
-- **Collected: YES · Linked to identity: YES · Used for tracking: NO**
-- **Purpose:** App Functionality (assistant conversations, incl. voice-dictated text)
-- Evidence: declared in `PrivacyInfo.xcprivacy` (`NSPrivacyCollectedDataTypeOtherUserContent`); chat persistence in `packages/api/src/routes/chat-conversations.ts`.
-
-### 5. Identifiers → User ID
-
-- **Collected: YES · Linked to identity: YES · Used for tracking: NO**
-- **Purpose:** App Functionality, Analytics
-- Evidence:
-  - First-party analytics rows are keyed by `userId` — `packages/api/src/analytics.ts:36-49` (`recordEvent(userId, …)` → `prisma.analyticsEvent.create`)
-  - RevenueCat is configured with the app's own user id as `appUserID` — `packages/web/src/lib/native/iap.ts:40` (`Purchases.configure({ apiKey, appUserID: appUserId })`)
-
-### 6. Usage Data → Product Interaction
-
-- **Collected: YES · Linked to identity: YES · Used for tracking: NO**
-- **Purpose:** Analytics (first-party only — retention/engagement)
-- Evidence: exactly **5 allowlisted events**, first-party Postgres, no third-party tracker — `packages/api/src/analytics.ts:17-23`:
-  `app_open`, `queue_action`, `notif_muted`, `push_opened`, `push_sent`.
-  Client sender: `packages/web/src/lib/track.ts:12-36` (posts to own `/api/analytics/event`; ingest allowlisted in `packages/api/src/routes/analytics.ts:28`). Events carry `userId` → answer **Linked: YES**. `meta` never contains message content (module doc, `analytics.ts:1-15`).
-
-### 7. Purchases (Purchase History) — CONDITIONAL
-
-- **If RevenueCat keys are set for the store build (`NEXT_PUBLIC_REVENUECAT_IOS_KEY`): Collected: YES · Linked: YES · Tracking: NO · Purpose: App Functionality**
-- **If shipping v1 with IAP inert (no key): NO — do not declare.**
-- Evidence: IAP is wired but inert without keys — `packages/web/src/lib/native/iap.ts:25` ("True only when running natively AND a RevenueCat key is configured"); `apps/mobile/STORE_SUBMISSION.md` §C. RevenueCat processes purchase history server-side when active. Decide based on the actual build configuration at submission time.
-
-### 8. Diagnostics → Crash Data — CONDITIONAL
-
-- **If `NEXT_PUBLIC_SENTRY_DSN` is set on the prod web deploy: Collected: YES · Linked to identity: NO · Tracking: NO · Purpose: App Functionality (error diagnosis)**
-- **If DSN unset (current live default per code comment): NO — do not declare.**
-- Evidence: `packages/web/src/lib/sentry.ts` — init gated on DSN (`:10`, `:18`); `tracesSampleRate: 0`, replays 0 (`:30-32`); the comment at `:46-48` states the live default is DSN-unset. **No `Sentry.setUser()` call exists anywhere in `packages/web/src`** → crash reports are not linked to identity ("Linked: NO" is correct). Answer at submission time based on the actual prod env.
-
----
-
-## Data types — NOT collected (answer "No")
-
-| Category | Why not |
-|---|---|
-| Audio Data | Voice input uses the **OS speech recognizer**; the app receives only transcribed text — `Info.plist:80-81` (`NSSpeechRecognitionUsageDescription`: "Audio is processed by Apple's speech recognition and is not stored by Klorn"), `packages/web/src/lib/use-speech-input.ts` (transcript-only callback). The transcribed text falls under User Content (#4). |
-| Device ID | No advertising identifier, no fingerprinting. The APNs device token is used solely to deliver push the user opted into (`packages/web/src/lib/native/native-push.ts:15-40`, token registered at own endpoint `:55`) — functional delivery, not an identifier for analytics/tracking. If you want the maximally conservative posture, declare Identifiers → Device ID (Linked: YES, Tracking: NO, App Functionality); not required. |
-| Location, Contacts, Health & Fitness, Financial Info, Sensitive Info, Browsing History, Search History | No code paths request or transmit these. No `NSLocation*`/`NSContacts*` usage strings in `Info.plist`. Calendar strings were deliberately removed (`STORE_SUBMISSION.md`, "Calendar permission prompt removed"). |
-| Photos/Videos | No camera/photo permission strings, no upload path in the shell. |
-
----
-
-## Third-party partners inventory (for the "third-party partners" wording)
-
-| SDK / service | Data it touches | Tracker? |
+| Category → type | Purposes | Notes |
 |---|---|---|
-| RevenueCat (`@revenuecat/purchases-capacitor`) | Purchase history + app user id (only when key configured) | No |
-| Sentry (`@sentry/browser`, web bundle) | Crash/error events, no user identity attached (no `setUser`), traces/replays off | No |
-| Google (Gmail/Calendar APIs, OAuth) | Service functionality — the user's own data accessed on their behalf | No |
-| — | **No** PostHog / GA / Meta / AdMob / any ad or analytics SDK — analytics is first-party Postgres only (`packages/api/src/analytics.ts:6-9`) | — |
+| Contact Info → **Name** | App Functionality | From the Google / Apple profile at sign-in |
+| Contact Info → **Email Address** | App Functionality | Sign-in and the connected accounts |
+| User Content → **Emails or Text Messages** | App Functionality | The product: mail is synced, classified, summarised, drafted and sent on confirmation |
+| User Content → **Other User Content** | App Functionality | Assistant chat, calendar events, approvals, lane corrections |
+| Identifiers → **User ID** | App Functionality | Klorn account id; RevenueCat `appUserID` |
+| Identifiers → **Device ID** | App Functionality | The APNs push token. Apple's wording is about device-level identifiers; declaring the push token is the conservative choice and matches the Play answer — keep it unless you decide otherwise deliberately |
+| Usage Data → **Product Interaction** | App Functionality, Analytics | Server records of Done / Later / lane moves / approvals, plus the first-party `push_sent` / `queue_action` events |
+| Purchases → **Purchase History** — **conditional** | App Functionality | Declare **only if** the uploaded build was built with `VITE_REVENUECAT_IOS_KEY` |
+| User Content → **Photos or Videos** — **conditional** | App Functionality | Declare **only if** Klorn Drive upload is on in production (`DRIVE_ENABLED`); the file picker can pick photos |
+
+Answer **not collected** for: Health & Fitness, Financial Info (other than
+the purchase row), Location, Sensitive Info, Contacts (the address book is
+never read — addresses inside mail are covered by "Emails"), Browsing History,
+Search History (mail search is sent per request; I found no code that stores
+the query — re-check `routes/email.ts` if you want certainty), Diagnostics,
+Audio Data, Gameplay Content, Customer Support, Other Data.
+
+Third parties inside the binary: **RevenueCat** (purchase history + the
+account id, only with a key), **Apple APNs** (the token). Service providers on
+the server side — Render, Supabase, Vercel, Anthropic (Claude API), Google
+Gemini API, Resend — process data for Klorn and are listed in the privacy
+policy.
+
+### `PrivacyInfo.xcprivacy` — matches the table (done 2026-10-16)
+
+`apps/mobile/ios/App/App/PrivacyInfo.xcprivacy` is a member of the App target
+(`project.pbxproj`: PBXFileReference, PBXBuildFile, Resources phase), so every
+archive carries it. It declares Name, Email Address, Other User Content,
+Emails or Text Messages, User ID, Device ID, Product Interaction (App
+Functionality + Analytics) and Purchase History — every one linked, none used
+for tracking — with `NSPrivacyTracking` false, no tracking domains, and the
+UserDefaults required-reason entry (`CA92.1`, Capacitor Preferences).
+
+Keep it in step with the questionnaire:
+
+- **Purchase History** is declared because store builds carry
+  `VITE_REVENUECAT_IOS_KEY` (`mobile-release.yml`). For a build uploaded
+  without it, remove that dict and the questionnaire row.
+- **Photos or Videos**: add the same shape
+  (`NSPrivacyCollectedDataTypePhotosorVideos`) only if Klorn Drive upload is
+  on in production.
+- After the first archive, run Xcode Organizer → the archive → **Generate
+  Privacy Report**. It merges the SDKs' own manifests (Capacitor, RevenueCat,
+  secure storage); if it lists a type or a required-reason API not in the
+  table above, add it to the questionnaire.
 
 ---
 
-## Action items before submitting the questionnaire
+## 3. Google Play — Data safety form
 
-1. **Fix the Name gap**: add `NSPrivacyCollectedDataTypeName` to `PrivacyInfo.xcprivacy` (linked, no-tracking, app-functionality) so manifest == questionnaire.
-2. **Decide Purchases** (#7) and **Crash Data** (#8) from the real build/env at submission time; both directions are pre-written above.
-3. Remember `PrivacyInfo.xcprivacy` still needs Xcode target membership (`STORE_SUBMISSION.md` §A.3) or it won't ship in the bundle at all.
+### Overview answers
+
+| Question | Answer |
+|---|---|
+| Does your app collect or share any of the required user data types? | **Yes** |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** — the API base must be `https` (`src/config-shared.ts` rejects http except localhost / the emulator) |
+| Do you provide a way for users to request that their data is deleted? | **Yes** — in the app (Settings › Delete account) and on the web |
+| Delete account URL | `https://app.klorn.ai/privacy#retention-and-deletion` |
+| Is data shared with third parties? | **No** for every type. Google's form excludes transfers to service providers that process data on your behalf (hosting, AI providers under API terms, RevenueCat, FCM) |
+
+### Types collected (all: collected **Yes**, shared **No**, processed ephemerally **No**)
+
+| Category → type | Required or optional | Purposes |
+|---|---|---|
+| Personal info → **Name** | Required | App functionality, Account management |
+| Personal info → **Email address** | Required | App functionality, Account management |
+| Personal info → **User IDs** | Required | App functionality, Account management |
+| Messages → **Emails** | Required | App functionality |
+| Calendar → **Calendar events** | Optional (only when a calendar is connected) | App functionality |
+| App activity → **App interactions** | Required | App functionality, Analytics |
+| App activity → **Other user-generated content** (assistant chat, approval reasons) | Optional | App functionality |
+| Device or other IDs → **Device or other IDs** (the FCM token) | Optional (only when notifications are on) | App functionality |
+| Financial info → **Purchase history** — **conditional** | Optional | App functionality — only if the build carries `VITE_REVENUECAT_ANDROID_KEY` |
+| Files and docs → **Files and docs** — **conditional** | Optional | App functionality — only if Klorn Drive / Google Drive is on in production |
+
+Not collected: Location, Contacts, Health and fitness, Photos and videos
+(unless you take the Files row and decide photos count — then add it,
+optional), Audio (the system recognizer handles speech; the app gets text),
+Web browsing, App info and performance (no crash SDK), In-app search history
+(see the Apple note above), Installed apps.
+
+---
+
+## 4. Privacy policy — gaps to fix before submitting
+
+The live policy (`packages/web/src/app/privacy/page.tsx`, reached through
+`https://klorn.ai/privacy/`) has a **Mobile App** section since 2026-10-17
+(k08200/klorn#1473): the encrypted 24 h on-device cache, Google Firebase Cloud
+Messaging next to APNs, App Store / Google Play billing with RevenueCat, voice
+input, no ads or tracking SDKs. Still open: the policy is English only — not a
+store requirement, but the KO listing links to it.
+
+## 5. Code-side privacy items (done 2026-10-16)
+
+- `hidden-store.ts`: `clearHidden()` runs in `session.tsx`'s `wipe()` (sign-out,
+  401, account deletion), so the Done / Later ids do not outlive the session.
+- `android/app/src/main/AndroidManifest.xml`: `android:allowBackup="false"` and
+  `android:dataExtractionRules="@xml/data_extraction_rules"`, which excludes
+  every domain from cloud backup and device-to-device transfer — the 24 h mail
+  cache (`sharedpref/CapacitorStorage.xml`) never reaches a backup or a new
+  phone, matching "cleared on sign-out".

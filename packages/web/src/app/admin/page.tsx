@@ -20,11 +20,24 @@ interface UserRow {
   _count: { conversations: number; tasks: number };
 }
 
+interface ProviderConfig {
+  enabled: boolean;
+  present: string[];
+  missing: string[];
+  privateKey?: { present: boolean; parses: boolean; detail: string };
+}
+
+interface ProviderConfigHealth {
+  apple: ProviderConfig;
+  naver: ProviderConfig;
+}
+
 interface Stats {
   totalUsers: number;
   totalConversations: number;
   monthlyMessages: number;
   planDistribution: Record<string, number>;
+  googleQuota?: { consumed: number; cap: number; remaining: number };
 }
 
 interface OpsMetrics {
@@ -112,6 +125,7 @@ function AdminDashboard() {
   const { confirm } = useConfirm();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [providerConfig, setProviderConfig] = useState<ProviderConfigHealth | null>(null);
   const [ops, setOps] = useState<OpsMetrics | null>(null);
   const [perf, setPerf] = useState<PerfSnapshot | null>(null);
   const [evalData, setEvalData] = useState<EvalReport | null>(null);
@@ -127,10 +141,11 @@ function AdminDashboard() {
     Promise.allSettled([
       apiFetch<{ users: UserRow[] }>("/api/admin/users"),
       apiFetch<Stats>("/api/admin/stats"),
+      apiFetch<ProviderConfigHealth>("/api/admin/provider-config"),
       apiFetch<OpsMetrics>("/api/admin/ops"),
       apiFetch<PerfSnapshot>("/api/admin/perf"),
     ])
-      .then(([usersRes, statsRes, opsRes, perfRes]) => {
+      .then(([usersRes, statsRes, providerRes, opsRes, perfRes]) => {
         const failed: SectionError[] = [];
 
         if (usersRes.status === "fulfilled") setUsers(usersRes.value.users);
@@ -138,6 +153,12 @@ function AdminDashboard() {
 
         if (statsRes.status === "fulfilled") setStats(statsRes.value);
         else failed.push({ endpoint: "/api/admin/stats", message: errMsg(statsRes.reason) });
+        if (providerRes.status === "fulfilled") setProviderConfig(providerRes.value);
+        else
+          failed.push({
+            endpoint: "/api/admin/provider-config",
+            message: errMsg(providerRes.reason),
+          });
 
         if (opsRes.status === "fulfilled") setOps(opsRes.value);
         else failed.push({ endpoint: "/api/admin/ops", message: errMsg(opsRes.reason) });
@@ -213,14 +234,14 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-300 border-t-transparent" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-muted border-t-transparent" />
       </div>
     );
   }
 
   if (user?.role !== "ADMIN") {
     return (
-      <div className="flex h-full items-center justify-center text-slate-400">
+      <div className="flex h-full items-center justify-center text-ink-dim">
         Admin access required.
       </div>
     );
@@ -230,8 +251,8 @@ function AdminDashboard() {
     <div className="h-full overflow-y-auto px-4 pb-28 pt-6 sm:px-6 md:py-10">
       <div className="mx-auto max-w-6xl space-y-6">
         {errors.length > 0 && (
-          <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
-            <p className="font-medium text-amber-700">Some sections could not load</p>
+          <div className="space-y-1 rounded-control border border-state-warn-line bg-state-warn-bg p-3 text-role-caption">
+            <p className="font-medium text-state-warn-ink">Some sections could not load</p>
             {errors.map((e) => (
               <p key={e.endpoint} className="font-mono text-amber-600/80">
                 {e.endpoint} — {e.message}
@@ -241,25 +262,23 @@ function AdminDashboard() {
         )}
         <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
-              Operations console
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            <h1 className="text-role-page text-ink">Operations console</h1>
+            <p className="mt-2 max-w-2xl text-role-body text-ink-mid">
               Monitor execution quality, approval flow, user state, and cost from one compact view.
             </p>
           </div>
-          <div className="flex w-full shrink-0 gap-1 rounded-lg bg-slate-100 p-1 md:w-auto">
+          <div className="flex w-full shrink-0 gap-1 rounded-control bg-surface-hover p-1 md:w-auto">
             <button
               type="button"
               onClick={() => setTab("ops")}
-              className={`ease-strong flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "ops" ? "seg-active bg-white text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
+              className={`ease-strong flex-1 rounded-chip px-3 py-1.5 text-role-caption font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "ops" ? "seg-active bg-surface-panel text-ink" : "text-ink-mid hover:text-ink"}`}
             >
               Ops
             </button>
             <button
               type="button"
               onClick={() => setTab("users")}
-              className={`ease-strong flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "users" ? "seg-active bg-white text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
+              className={`ease-strong flex-1 rounded-chip px-3 py-1.5 text-role-caption font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "users" ? "seg-active bg-surface-panel text-ink" : "text-ink-mid hover:text-ink"}`}
             >
               Users
             </button>
@@ -270,11 +289,11 @@ function AdminDashboard() {
         <RetentionDashboard />
 
         {/* Agent Eval Harness */}
-        <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
+        <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-medium text-slate-900">Decision agent eval</h2>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <h2 className="text-role-head font-medium text-ink">Decision agent eval</h2>
+              <p className="mt-0.5 text-role-caption text-ink-dim">
                 Check tool risk, dedupe, and plan-gate regressions.
               </p>
             </div>
@@ -282,23 +301,23 @@ function AdminDashboard() {
               type="button"
               onClick={runEval}
               disabled={evalLoading}
-              className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-xs font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-caption font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {evalLoading ? "Running..." : "Run eval"}
             </button>
           </div>
           {evalData && (
             <div className="space-y-2">
-              <div className="flex items-center gap-4 text-xs tabular-nums">
-                <span className="text-slate-500">
+              <div className="flex items-center gap-4 text-role-caption tabular-nums">
+                <span className="text-ink-mid">
                   {evalData.summary.passed}/{evalData.summary.total} passed
                 </span>
                 <span
-                  className={`font-medium ${evalData.summary.failed === 0 ? "text-emerald-600" : "text-red-600"}`}
+                  className={`font-medium ${evalData.summary.failed === 0 ? "text-state-ok-ink" : "text-state-danger-ink"}`}
                 >
                   Pass rate {(evalData.summary.passRate * 100).toFixed(0)}%
                 </span>
-                <span className="text-slate-500">
+                <span className="text-ink-mid">
                   {new Date(evalData.runAt).toLocaleString("en-US")}
                 </span>
               </div>
@@ -306,15 +325,17 @@ function AdminDashboard() {
                 {evalData.results.map((r) => (
                   <div
                     key={r.id}
-                    className={`flex items-start gap-2 text-xs p-2 rounded-md ${
-                      r.passed ? "bg-slate-50" : "border border-red-200 bg-red-50"
+                    className={`flex items-start gap-2 text-role-caption p-2 rounded-control ${
+                      r.passed
+                        ? "bg-surface-raised"
+                        : "border border-state-danger-line bg-state-danger-bg"
                     }`}
                   >
                     <span
                       className={`shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
                         r.passed
-                          ? "bg-emerald-500/15 text-emerald-600"
-                          : "bg-red-500/15 text-red-600"
+                          ? "bg-emerald-500/15 text-state-ok-ink"
+                          : "bg-red-500/15 text-state-danger-ink"
                       }`}
                     >
                       <span className="sr-only">{r.passed ? "Passed" : "Failed"}</span>
@@ -322,11 +343,15 @@ function AdminDashboard() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-slate-400">{r.id}</span>
-                        <span className="text-slate-500">{r.name}</span>
-                        <span className="text-[10px] uppercase text-slate-500">[{r.severity}]</span>
+                        <span className="font-mono text-ink-dim">{r.id}</span>
+                        <span className="text-ink-mid">{r.name}</span>
+                        <span className="text-role-caption uppercase text-ink-mid">
+                          [{r.severity}]
+                        </span>
                       </div>
-                      {!r.passed && r.message && <p className="text-red-700 mt-0.5">{r.message}</p>}
+                      {!r.passed && r.message && (
+                        <p className="text-state-danger-ink mt-0.5">{r.message}</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -350,10 +375,14 @@ function AdminDashboard() {
           </div>
         )}
 
+        {stats?.googleQuota && <GoogleQuotaCard quota={stats.googleQuota} />}
+
+        {providerConfig && <ProviderConfigCard health={providerConfig} />}
+
         {tab === "ops" && ops && (
           <div className="space-y-6">
             <section>
-              <h2 className="mb-3 text-sm font-medium text-slate-500">Tool execution (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">Tool execution (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Success rate"
@@ -366,7 +395,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-slate-500">Approval flow (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">Approval flow (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <StatCard
                   label="Approval rate"
@@ -380,7 +409,9 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-slate-500">Daily trust loop (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">
+                Daily trust loop (7d)
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Top-3 useful rate"
@@ -396,7 +427,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-slate-500">
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">
                 Active users and notifications
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -411,7 +442,9 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-slate-500">Model cost ledger (7d)</h2>
+              <h2 className="mb-3 text-role-head font-medium text-ink-mid">
+                Model cost ledger (7d)
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard label="Est. cost" value={`$${ops.tokens.estimatedCostUsd.toFixed(2)}`} />
                 <StatCard label="Prompt tokens" value={ops.tokens.promptTokens.toLocaleString()} />
@@ -425,7 +458,7 @@ function AdminDashboard() {
 
             {perf && perf.routes.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-medium text-slate-500">
+                <h2 className="mb-3 text-role-head font-medium text-ink-mid">
                   Route latency (since last restart)
                 </h2>
                 {/* Mobile: stacked cards; the 7-column table is unreadable when it
@@ -434,9 +467,9 @@ function AdminDashboard() {
                   {perf.routes.slice(0, 20).map((r) => (
                     <div
                       key={r.route}
-                      className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-3 text-xs"
+                      className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-role-caption"
                     >
-                      <p className="font-mono text-slate-500 break-all">{r.route}</p>
+                      <p className="font-mono text-ink-mid break-all">{r.route}</p>
                       <dl className="mt-2 grid grid-cols-3 gap-2">
                         <RouteStat label="Count" value={`${r.count}`} />
                         <RouteStat
@@ -464,10 +497,10 @@ function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-                <div className="panel-elevated hidden overflow-x-auto rounded-2xl border border-slate-200/70 bg-white sm:block">
-                  <table className="w-full text-xs">
+                <div className="panel-elevated hidden overflow-x-auto rounded-card border border-line/70 bg-surface-panel sm:block">
+                  <table className="w-full text-role-caption">
                     <thead>
-                      <tr className="border-b border-slate-100 text-left text-slate-500">
+                      <tr className="border-b border-line-soft text-left text-ink-mid">
                         <th className="p-3">Route</th>
                         <th className="p-3">Count</th>
                         <th className="p-3">Errors</th>
@@ -477,29 +510,29 @@ function AdminDashboard() {
                         <th className="p-3">Max</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-line-soft">
                       {perf.routes.slice(0, 20).map((r) => (
                         <tr key={r.route} className="row-wash">
-                          <td className="p-3 font-mono text-slate-500">{r.route}</td>
-                          <td className="p-3 tabular-nums text-slate-500">{r.count}</td>
+                          <td className="p-3 font-mono text-ink-mid">{r.route}</td>
+                          <td className="p-3 tabular-nums text-ink-mid">{r.count}</td>
                           <td
-                            className={`p-3 tabular-nums ${r.errorCount > 0 ? "text-rose-600" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.errorCount > 0 ? "text-rose-600" : "text-ink-mid"}`}
                           >
                             {r.errorCount}
                           </td>
-                          <td className="p-3 tabular-nums text-slate-500">{r.p50}ms</td>
+                          <td className="p-3 tabular-nums text-ink-mid">{r.p50}ms</td>
                           <td
-                            className={`p-3 tabular-nums ${r.p95 > 1000 ? "text-amber-600" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.p95 > 1000 ? "text-state-warn-ink" : "text-ink-mid"}`}
                           >
                             {r.p95}ms
                           </td>
                           <td
-                            className={`p-3 tabular-nums ${r.p99 > 1000 ? "text-amber-600" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.p99 > 1000 ? "text-state-warn-ink" : "text-ink-mid"}`}
                           >
                             {r.p99}ms
                           </td>
                           <td
-                            className={`p-3 tabular-nums ${r.max > 2000 ? "text-rose-600" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.max > 2000 ? "text-rose-600" : "text-ink-mid"}`}
                           >
                             {r.max}ms
                           </td>
@@ -513,23 +546,23 @@ function AdminDashboard() {
 
             {ops.recentErrors.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-medium text-slate-500">Recent errors</h2>
-                <div className="panel-elevated divide-y divide-slate-100 rounded-2xl border border-slate-200/70 bg-white">
+                <h2 className="mb-3 text-role-head font-medium text-ink-mid">Recent errors</h2>
+                <div className="panel-elevated divide-y divide-line-soft rounded-card border border-line/70 bg-surface-panel">
                   {ops.recentErrors.map((e) => (
                     <div
                       key={`${e.createdAt}-${e.userId}-${e.summary}`}
-                      className="row-wash p-3 text-xs"
+                      className="row-wash p-3 text-role-caption"
                     >
                       <div className="flex justify-between mb-1">
                         <span className="text-rose-600 font-mono">
                           {e.tool || (e.summary.startsWith("Agent error") ? "Agent loop" : "Agent")}
                         </span>
-                        <span className="text-slate-500">
+                        <span className="text-ink-mid">
                           {new Date(e.createdAt).toLocaleString("en-US")}
                         </span>
                       </div>
-                      <p className="truncate text-slate-500">{e.summary}</p>
-                      <p className="mt-1 text-slate-500">User: {e.userId.slice(0, 8)}</p>
+                      <p className="truncate text-ink-mid">{e.summary}</p>
+                      <p className="mt-1 text-ink-mid">User: {e.userId.slice(0, 8)}</p>
                     </div>
                   ))}
                 </div>
@@ -549,10 +582,10 @@ function AdminDashboard() {
             </div>
 
             {/* Desktop: full table, still wrapped for horizontal scroll safety. */}
-            <div className="panel-elevated hidden overflow-x-auto rounded-2xl border border-slate-200/70 bg-white sm:block">
-              <table className="w-full text-sm">
+            <div className="panel-elevated hidden overflow-x-auto rounded-card border border-line/70 bg-surface-panel sm:block">
+              <table className="w-full text-role-body">
                 <thead>
-                  <tr className="border-b border-slate-100 text-left text-slate-500">
+                  <tr className="border-b border-line-soft text-left text-ink-mid">
                     <th className="p-3 pr-4">Email</th>
                     <th className="p-3 pr-4">Name</th>
                     <th className="p-3 pr-4">Role</th>
@@ -563,27 +596,27 @@ function AdminDashboard() {
                     <th className="p-3">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-line-soft">
                   {users.map((u) => (
                     <tr key={u.id} className="row-wash">
-                      <td className="p-3 pr-4 text-slate-500">
+                      <td className="p-3 pr-4 text-ink-mid">
                         <span className="flex items-center gap-2.5">
                           <span
                             aria-hidden="true"
-                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white ${avatarGradient(u.name || u.email)}`}
+                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-caption font-semibold text-white ${avatarGradient(u.name || u.email)}`}
                           >
                             {senderInitials(u.name || u.email)}
                           </span>
                           {u.email}
                         </span>
                       </td>
-                      <td className="p-3 pr-4 text-slate-500">{u.name || "-"}</td>
+                      <td className="p-3 pr-4 text-ink-mid">{u.name || "-"}</td>
                       <td className="p-3 pr-4">
                         <select
                           aria-label={`Role for ${u.email}`}
                           value={u.role}
                           onChange={(e) => updateUser(u.id, { role: e.target.value })}
-                          className="min-h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                          className="min-h-11 rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                         >
                           <option value="USER">USER</option>
                           <option value="ADMIN">ADMIN</option>
@@ -594,18 +627,18 @@ function AdminDashboard() {
                           aria-label={`Plan for ${u.email}`}
                           value={u.plan}
                           onChange={(e) => updateUser(u.id, { plan: e.target.value })}
-                          className="min-h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                          className="min-h-11 rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                         >
                           <option value="FREE">FREE</option>
                           <option value="PRO">PRO</option>
                           <option value="ENTERPRISE">ENTERPRISE</option>
                         </select>
                       </td>
-                      <td className="p-3 pr-4 tabular-nums text-slate-500">{u.messageCount}</td>
-                      <td className="p-3 pr-4 tabular-nums text-slate-500">
+                      <td className="p-3 pr-4 tabular-nums text-ink-mid">{u.messageCount}</td>
+                      <td className="p-3 pr-4 tabular-nums text-ink-mid">
                         {u._count.conversations}
                       </td>
-                      <td className="p-3 pr-4 text-xs tabular-nums text-slate-500">
+                      <td className="p-3 pr-4 text-role-caption tabular-nums text-ink-mid">
                         {new Date(u.createdAt).toLocaleDateString("en-US")}
                       </td>
                       <td className="p-3">
@@ -613,7 +646,7 @@ function AdminDashboard() {
                           <button
                             type="button"
                             onClick={() => deleteUser(u.id, u.email)}
-                            className="ease-strong inline-flex min-h-11 items-center rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                            className="ease-strong inline-flex min-h-11 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-2.5 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                           >
                             Delete
                           </button>
@@ -631,11 +664,116 @@ function AdminDashboard() {
   );
 }
 
+/**
+ * Google's unverified-app allowance — the one number that can quietly end
+ * sign-ups. The allowance is spent over the project's LIFETIME and does not
+ * reset, so this gets a bar rather than another stat tile: the shape of what
+ * is left is the point, not the digit.
+ *
+ * The count is a lower bound (accounts Klorn created); the Cloud console
+ * stays the authority. Said on the card so nobody treats it as exact.
+ */
+function GoogleQuotaCard({
+  quota,
+}: {
+  quota: { consumed: number; cap: number; remaining: number };
+}) {
+  const pct = Math.min(100, Math.round((quota.consumed / quota.cap) * 100));
+  const critical = quota.remaining <= 10;
+  const caution = !critical && quota.remaining <= 25;
+  const fill = critical ? "bg-rose-500" : caution ? "bg-amber-500" : "bg-accent-solid";
+
+  return (
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-role-caption text-ink-mid">Google unverified-app slots</p>
+        <p className="text-role-caption tabular-nums text-ink-mid">
+          <span
+            className={`text-role-head font-semibold ${critical ? "text-rose-500" : "text-ink"}`}
+          >
+            {quota.remaining}
+          </span>{" "}
+          left of {quota.cap}
+        </p>
+      </div>
+      <div
+        role="progressbar"
+        aria-valuenow={quota.consumed}
+        aria-valuemin={0}
+        aria-valuemax={quota.cap}
+        aria-label="Google unverified-app slots consumed"
+        className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-inset"
+      >
+        <div className={`h-full rounded-full ${fill}`} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-2 text-role-caption leading-5 text-ink-mid">
+        {quota.consumed} accounts created. Spent over the project lifetime and never reset — CASA
+        verification is what removes the ceiling. Approximate: the Cloud console is the authority.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Social-login configuration, as names and booleans. `?error=apple_config`
+ * says a deployment is misconfigured but not which of five vars is at fault —
+ * and a key pasted into a field that strips newlines looks, from outside,
+ * exactly like a missing one.
+ */
+function ProviderConfigCard({ health }: { health: ProviderConfigHealth }) {
+  const rows = [
+    ["Apple", health.apple],
+    ["Naver", health.naver],
+  ] as const;
+
+  return (
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="text-role-caption text-ink-mid">Social login configuration</p>
+      <div className="mt-3 space-y-3">
+        {rows.map(([label, cfg]) => {
+          const keyBroken = cfg.privateKey?.present && !cfg.privateKey.parses;
+          const broken = cfg.enabled && (cfg.missing.length > 0 || keyBroken);
+          return (
+            <div key={label} className="rounded-control border border-line/70 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-role-body font-medium text-ink">{label}</span>
+                <span
+                  className={`text-role-caption font-medium ${
+                    broken ? "text-rose-500" : cfg.enabled ? "text-ink-mid" : "text-ink-dim"
+                  }`}
+                >
+                  {broken ? "misconfigured" : cfg.enabled ? "enabled" : "off"}
+                </span>
+              </div>
+              {cfg.missing.length > 0 && (
+                <p className="mt-1.5 text-role-caption leading-5 text-ink-mid">
+                  Not set: <span className="font-mono text-ink">{cfg.missing.join(", ")}</span>
+                </p>
+              )}
+              {keyBroken && (
+                <p className="mt-1.5 text-role-caption leading-5 text-rose-500">
+                  Private key does not parse as ES256 — {cfg.privateKey?.detail}. A paste that lost
+                  its newlines lands here.
+                </p>
+              )}
+              {cfg.enabled && cfg.missing.length === 0 && !keyBroken && (
+                <p className="mt-1.5 text-role-caption leading-5 text-ink-mid">
+                  All variables set{cfg.privateKey ? ", signing key parses" : ""}.
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{value}</p>
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="text-role-caption text-ink-mid">{label}</p>
+      <p className="mt-1 text-role-head tabular-nums text-ink">{value}</p>
     </div>
   );
 }
@@ -650,10 +788,10 @@ function RouteStat({
   tone?: "muted" | "warn" | "error";
 }) {
   const valueTone =
-    tone === "error" ? "text-rose-600" : tone === "warn" ? "text-amber-600" : "text-slate-500";
+    tone === "error" ? "text-rose-600" : tone === "warn" ? "text-state-warn-ink" : "text-ink-mid";
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wide text-slate-400">{label}</dt>
+      <dt className="text-role-caption uppercase tracking-wide text-ink-dim">{label}</dt>
       <dd className={`mt-0.5 font-medium tabular-nums ${valueTone}`}>{value}</dd>
     </div>
   );
@@ -669,50 +807,50 @@ function UserCard({
   onDelete: (id: string, email: string) => void;
 }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4 text-sm">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4 text-role-body">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden="true"
-            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(user.name || user.email)}`}
+            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(user.name || user.email)}`}
           >
             {senderInitials(user.name || user.email)}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-slate-900">{user.email}</p>
-            <p className="text-xs text-slate-500">{user.name || "-"}</p>
+            <p className="truncate text-ink">{user.email}</p>
+            <p className="text-role-caption text-ink-mid">{user.name || "-"}</p>
           </div>
         </div>
         {user.role !== "ADMIN" && (
           <button
             type="button"
             onClick={() => onDelete(user.id, user.email)}
-            className="ease-strong inline-flex min-h-11 shrink-0 items-center rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="ease-strong inline-flex min-h-11 shrink-0 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-2.5 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
           >
             Delete
           </button>
         )}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-xs text-slate-500">
+        <label className="text-role-caption text-ink-mid">
           Role
           <select
             aria-label={`Role for ${user.email}`}
             value={user.role}
             onChange={(e) => onUpdate(user.id, { role: e.target.value })}
-            className="mt-1 block min-h-11 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+            className="mt-1 block min-h-11 w-full rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
           >
             <option value="USER">USER</option>
             <option value="ADMIN">ADMIN</option>
           </select>
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-role-caption text-ink-mid">
           Plan
           <select
             aria-label={`Plan for ${user.email}`}
             value={user.plan}
             onChange={(e) => onUpdate(user.id, { plan: e.target.value })}
-            className="mt-1 block min-h-11 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+            className="mt-1 block min-h-11 w-full rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
           >
             <option value="FREE">FREE</option>
             <option value="PRO">PRO</option>
@@ -720,7 +858,7 @@ function UserCard({
           </select>
         </label>
       </div>
-      <div className="mt-3 flex gap-4 text-xs tabular-nums text-slate-500">
+      <div className="mt-3 flex gap-4 text-role-caption tabular-nums text-ink-mid">
         <span>Turns: {user.messageCount}</span>
         <span>Threads: {user._count.conversations}</span>
         <span>Joined {new Date(user.createdAt).toLocaleDateString("en-US")}</span>
@@ -745,7 +883,7 @@ function senderInitials(name: string): string {
 }
 
 const AVATAR_GRADIENTS = [
-  "from-sky-400 to-blue-500",
+  "from-accent-light to-blue-500",
   "from-teal-400 to-emerald-500",
   "from-indigo-500 to-violet-600",
   "from-amber-400 to-orange-500",

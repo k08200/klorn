@@ -52,6 +52,12 @@ export const SILENT_PRECISION_FLOOR = 0.9;
 // measured baseline exists (the "raise when the judge improves" doctrine).
 export const QUEUE_RECALL_TARGET = 0.8;
 export const AUTO_RECALL_TARGET = 0.5;
+// Ontology-v2 lanes (report-only until a measured baseline exists under
+// TIER_V2_ENABLED; the flag-off run has zero MEETING/INFO truth so both are
+// vacuous there). MEETING recall matters most — its detector is deterministic,
+// so misses are detector-vocabulary gaps, not LLM noise.
+export const MEETING_RECALL_TARGET = 0.8;
+export const INFO_RECALL_TARGET = 0.6;
 
 /**
  * Configurable per-tier gating (#650). Each check has a stable id; an
@@ -66,6 +72,8 @@ export const FLOOR_CHECK_IDS = [
   "silent-precision",
   "queue-recall",
   "auto-recall",
+  "meeting-recall",
+  "info-recall",
 ] as const;
 export type FloorCheckId = (typeof FLOOR_CHECK_IDS)[number];
 export type FloorOverrides = Partial<Record<FloorCheckId, number>>;
@@ -76,6 +84,8 @@ const DEFAULT_FLOORS: Record<FloorCheckId, { floor: number; gating: boolean }> =
   "silent-precision": { floor: SILENT_PRECISION_FLOOR, gating: true },
   "queue-recall": { floor: QUEUE_RECALL_TARGET, gating: false },
   "auto-recall": { floor: AUTO_RECALL_TARGET, gating: false },
+  "meeting-recall": { floor: MEETING_RECALL_TARGET, gating: false },
+  "info-recall": { floor: INFO_RECALL_TARGET, gating: false },
 };
 
 /** Parse "auto-recall=0.5,push-recall=0.95" into overrides. Throws on typos. */
@@ -146,6 +156,14 @@ export function evaluateTierFloors(pairs: TierPair[], overrides: FloorOverrides 
   const silentFloor = resolveFloor("silent-precision", overrides);
   const queueFloor = resolveFloor("queue-recall", overrides);
   const autoFloor = resolveFloor("auto-recall", overrides);
+  const meetingTruth = valid.filter((p) => p.truth === "MEETING");
+  const meetingHit = meetingTruth.filter((p) => p.predicted === "MEETING").length;
+  const meetingRecall = ratio(meetingHit, meetingTruth.length);
+  const infoTruth = valid.filter((p) => p.truth === "INFO");
+  const infoHit = infoTruth.filter((p) => p.predicted === "INFO").length;
+  const infoRecall = ratio(infoHit, infoTruth.length);
+  const meetingFloor = resolveFloor("meeting-recall", overrides);
+  const infoFloor = resolveFloor("info-recall", overrides);
 
   const checks: FloorCheck[] = [
     {
@@ -199,6 +217,28 @@ export function evaluateTierFloors(pairs: TierPair[], overrides: FloorOverrides 
         autoTruth.length === 0
           ? "no AUTO items — vacuous"
           : `${autoHit}/${autoTruth.length}${autoFloor.gating ? "" : " (report-only — low recall is a threshold-tuning target)"}`,
+    },
+    {
+      name: "MEETING recall",
+      value: meetingRecall,
+      floor: meetingFloor.floor,
+      pass: meetingRecall >= meetingFloor.floor,
+      gating: meetingFloor.gating,
+      detail:
+        meetingTruth.length === 0
+          ? "no MEETING items — vacuous (flag-off runs have no v2 truth)"
+          : `${meetingHit}/${meetingTruth.length}${meetingFloor.gating ? "" : " (report-only — detector-vocabulary gaps, not LLM noise)"}`,
+    },
+    {
+      name: "INFO recall",
+      value: infoRecall,
+      floor: infoFloor.floor,
+      pass: infoRecall >= infoFloor.floor,
+      gating: infoFloor.gating,
+      detail:
+        infoTruth.length === 0
+          ? "no INFO items — vacuous (flag-off runs have no v2 truth)"
+          : `${infoHit}/${infoTruth.length}${infoFloor.gating ? "" : " (report-only)"}`,
     },
   ];
 

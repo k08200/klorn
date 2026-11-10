@@ -4,7 +4,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
+import { PAGE_SHELL } from "./page-shell";
 import PaywallScreen from "./paywall-screen";
+import { MailRowSkeleton } from "./ui/skeleton";
 
 // Routes a non-entitled user can still reach: billing (to subscribe), settings
 // (manage/cancel), and the sign-in flow. Everything else shows the paywall.
@@ -19,8 +22,18 @@ function isPaywallBypass(pathname: string): boolean {
 // Naver IMAP — the non-Google way to attach mail); /billing must be reachable
 // so a user can upgrade BEFORE connecting (otherwise a paying customer is
 // bounced to onboarding and can never check out); any path under /auth or
-// /login is the sign-in flow.
-const MAIL_OPTIONAL_PREFIXES = ["/onboarding", "/settings", "/billing", "/login", "/auth"];
+// /login is the sign-in flow. /today (UNIFIED_HOME) shows its own "Connect
+// your first account" state; with the flag off the page leaves for /inbox,
+// which is gated as before.
+const MAIL_OPTIONAL_PREFIXES = [
+  "/onboarding",
+  "/today",
+  "/settings",
+  "/billing",
+  "/usage",
+  "/login",
+  "/auth",
+];
 
 function isMailOptional(pathname: string): boolean {
   return MAIL_OPTIONAL_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -28,6 +41,7 @@ function isMailOptional(pathname: string): boolean {
 
 /** Redirects to /login if user is not authenticated. Wraps protected pages. */
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { t } = useT();
   const { user, loading, authError, hasMailSource } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -53,17 +67,21 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <main
-        className="flex items-center justify-center min-h-[calc(100vh-3.5rem)]"
-        role="status"
-        aria-live="polite"
-      >
+      // W9: the page's own frame as placeholders, anchored at the top + 96px
+      // like the empty and error states — no centred spinner.
+      <div role="status" aria-live="polite" className={`${PAGE_SHELL} flex flex-col gap-4`}>
+        <span className="sr-only">{t("appShell.checkingSession")}</span>
+        <div aria-hidden="true" className="flex flex-col gap-2">
+          <div className="h-7 w-40 rounded-control bg-surface-inset motion-safe:animate-pulse" />
+          <div className="h-3 w-56 max-w-full rounded-control bg-surface-inset opacity-60 motion-safe:animate-pulse" />
+        </div>
         <div
-          className="w-6 h-6 border-2 border-sky-300 border-t-transparent rounded-full animate-spin"
           aria-hidden="true"
-        />
-        <span className="sr-only">Checking session...</span>
-      </main>
+          className="mt-10 overflow-hidden rounded-card bg-surface-panel ring-1 ring-line"
+        >
+          <MailRowSkeleton />
+        </div>
+      </div>
     );
   }
 
@@ -97,6 +115,7 @@ const ATTEMPT_DELAYS_MS = [1500, 3000, 3000, 3000, 4000, 5000, 5000, 5000];
 const TOTAL_BUDGET_MS = ATTEMPT_DELAYS_MS.reduce((a, b) => a + b, 0);
 
 function ApiOfflineScreen() {
+  const { t } = useT();
   const [attempt, setAttempt] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   const cancelledRef = useRef(false);
@@ -152,31 +171,36 @@ function ApiOfflineScreen() {
   };
 
   return (
+    // W9: anchored 96px from the top like the loading and empty states.
     <main
-      className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center"
+      className="mx-auto flex max-w-md flex-col items-center px-6 pb-12 pt-24 text-center"
       role="status"
       aria-live="polite"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600">
-        Connection issue
+      <p className="text-role-caption font-semibold uppercase tracking-[0.16em] text-accent-deep">
+        {t("authGuard.offline.eyebrow")}
       </p>
-      <h1 className="mt-3 text-2xl font-semibold text-slate-900">
-        {exhausted ? "Couldn't reach the API." : "Waking the API up…"}
+      <h1 className="mt-3 text-role-title text-ink">
+        {exhausted ? t("authGuard.offline.titleExhausted") : t("authGuard.offline.titleWaking")}
       </h1>
-      <p className="mt-3 text-sm leading-6 text-slate-500">
+      <p className="mt-3 text-role-body leading-6 text-ink-mid">
         {exhausted
-          ? "Render free tier may be down. Your session is still saved — tap Retry to try again, or check Render."
-          : `First request after idle wakes the server (≈${totalSec}s). Your session is still saved.`}
+          ? t("authGuard.offline.bodyExhausted")
+          : t("authGuard.offline.bodyWaking", { seconds: String(totalSec) })}
       </p>
 
       {!exhausted && (
-        <div className="mt-5 flex items-center gap-3 text-xs text-slate-400">
+        <div className="mt-5 flex items-center gap-3 text-role-caption text-ink-dim">
           <span
             aria-hidden="true"
-            className="h-4 w-4 animate-spin rounded-full border-2 border-sky-300 border-t-transparent"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-accent-muted border-t-transparent"
           />
           <span className="tabular-nums">
-            Attempt {attempt + 1} / {ATTEMPT_DELAYS_MS.length} · {elapsedSec}s elapsed
+            {t("authGuard.offline.attempt", {
+              attempt: String(attempt + 1),
+              total: String(ATTEMPT_DELAYS_MS.length),
+              seconds: String(elapsedSec),
+            })}
           </span>
         </div>
       )}
@@ -185,9 +209,9 @@ function ApiOfflineScreen() {
         <button
           type="button"
           onClick={retryNow}
-          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-sky-500 px-5 text-sm font-semibold text-white transition hover:bg-sky-600"
+          className="mt-6 inline-flex min-h-11 items-center rounded-control bg-accent-solid px-5 text-role-label font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
         >
-          Retry
+          {t("authGuard.offline.retry")}
         </button>
       )}
     </main>

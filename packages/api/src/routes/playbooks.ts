@@ -16,6 +16,15 @@ import {
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 
+const recommendationsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "string", maxLength: 500 },
+    contextLimit: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 const playbookIdParamSchema = {
   type: "object",
   additionalProperties: false,
@@ -41,14 +50,18 @@ export function playbookRoutes(app: FastifyInstance) {
     return { activePlaybookIds: [...(await listActivePlaybookIds(userId))] };
   });
 
-  app.get("/recommendations", async (request) => {
-    const userId = getUserId(request);
-    const { limit, contextLimit } = request.query as { limit?: string; contextLimit?: string };
-    return await buildPlaybookRecommendations(userId, {
-      limit: parseOptionalInteger(limit),
-      contextLimit: parseOptionalInteger(contextLimit),
-    });
-  });
+  app.get(
+    "/recommendations",
+    { schema: { querystring: recommendationsQuerySchema } },
+    async (request) => {
+      const userId = getUserId(request);
+      const { limit, contextLimit } = request.query as { limit?: string; contextLimit?: string };
+      return await buildPlaybookRecommendations(userId, {
+        limit: parseOptionalInteger(limit),
+        contextLimit: parseOptionalInteger(contextLimit),
+      });
+    },
+  );
 
   app.post("/:id/activate", { schema: { params: playbookIdParamSchema } }, async (request) => {
     const userId = getUserId(request);

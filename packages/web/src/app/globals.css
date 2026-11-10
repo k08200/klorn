@@ -1,48 +1,445 @@
 @import "tailwindcss";
 
+/* Class-based dark variant: `.dark` on <html>, set pre-hydration by the
+   inline script in layout.tsx (system preference or the stored override). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Phone landscape (docs/design/design-language-v2.md, "Device classes"): a
+   phone on its side is wide enough for the rail and the mail split but under
+   500px tall, so the rail narrows to 56px and the mail header folds into one
+   row. Keep the query in step with the CSS block below and with
+   app/email/_v2/mail-header.tsx (PHONE_LANDSCAPE_QUERY). Portrait and tall
+   screens never match. */
+@custom-variant phone-landscape {
+  @media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
+    @slot;
+  }
+}
+
+/* ── Theme palettes ─────────────────────────────────────────────────
+   Semantic tokens carry the theme: light values here are byte-identical to
+   what the app hardcoded before dark mode, so the light theme cannot drift.
+   The .dark block swaps the same variables — components tokenized onto the
+   surface / ink / line families need no dark: variants at all. */
+:root {
+  /* Canvas: hue-free, matched to Theme.swift `bg` light (0.98 → #fafafa).
+     Only the canvas moved in P1 — it is LIGHTER than the old #f4f8fc and than
+     --surface-hover, so every text pair measured below against the worst
+     light surface still holds. The slate-tinted ink/line/surface ramp keeps
+     its measured values until those pairs are re-measured (P2). */
+  --surface-app: #fafafa;
+  --surface-canvas: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-panel: #ffffff;
+  --surface-translucent: rgba(255, 255, 255, 0.85);
+  --surface-raised: #f8fafc; /* slate-50 wells */
+  --surface-hover: #f1f5f9; /* slate-100 */
+  --ink: #0b0d12; /* v2 ink — primary text */
+  /* Design Language v2 ink ramp (docs/design/design-language-v2.md). The
+     legacy steps below (ink-strong … ink-dim) stay until pages migrate;
+     ui primitives use ink / ink-2 / ink-3. Pinned by api
+     web-design-tokens-v2.test.ts (AA on every neutral surface). */
+  --ink-2: #3b4250;
+  --ink-3: #5b6270;
+  /* v2 depth: flat hairline (1px) and the control border. */
+  --hairline: rgba(10, 14, 20, 0.08);
+  --hairline-control: rgba(10, 14, 20, 0.14);
+  --ink-strong: #1e293b; /* slate-800 */
+  --ink-soft: #334155; /* slate-700 */
+  /* NOT the slate-500/400 pair they used to be. Measured 2026-08-23 against
+     the lightest surface these ever sit on (--surface-hover #f1f5f9, not
+     white): slate-500 landed at 4.34:1 and slate-400 at 2.40:1, so the whole
+     secondary ramp failed the AA text floor in light — the mirror of the fix
+     the dark block below already carries. Both steps move down until they
+     clear 4.5:1 on EVERY light surface, keeping the ramp monotonic against
+     --ink-muted (6.9:1) above them. */
+  --ink-mid: #556275; /* 5.65:1 worst-surface */
+  --ink-dim: #5f6e84; /* 4.73:1 worst-surface */
+  --line: #e2e8f0; /* slate-200 — borders */
+  --line-soft: #f1f5f9; /* slate-100 — hairlines */
+  --line-strong: #cbd5e1; /* slate-300 — emphasized borders */
+  --surface-inset: #e2e8f0; /* slate-200 wells/tracks */
+  --ink-muted: #475569; /* slate-600 */
+  /* Both are link/text values, so both have to clear the AA text floor on
+     every light surface. sky-600 did not: 4.10:1 on white, 3.74 on
+     --surface-hover, 3.32 on an --surface-inset well (measured 2026-08-23).
+     In light there is no AA-passing "link blue" between sky-600 and sky-700,
+     so the two steps converge here and stay distinct only in the dark block
+     below, where the surfaces are dark and the range opens back up. */
+  --accent-deep: #0369a1; /* 4.81:1 worst light surface */
+  --accent-deeper: #0369a1; /* sky-700 */
+
+  /* Semantic state surfaces for banners and inline notices. They exist
+     because the raw Tailwind recipes they replace (bg-emerald-50 /
+     bg-amber-50) are light-theme literals: on the dark panel they rendered
+     as near-white blocks — worst of all on the post-checkout success banner,
+     the first thing a new subscriber sees. Filled accent CONTROLS are not
+     here; --accent-solid below already owns that contract.
+     Both pairs clear 4.5:1 in both themes, verified in-browser. */
+  --state-ok-bg: #ecfdf5;
+  --state-ok-line: #a7f3d0;
+  --state-ok-ink: #047857; /* 4.9:1 on its own surface */
+  --state-warn-bg: #fffbeb;
+  --state-warn-line: #fde68a;
+  --state-warn-ink: #b45309; /* 4.9:1 */
+  --state-danger-bg: #fef2f2;
+  --state-danger-line: #fecaca;
+  --state-danger-ink: #b91c1c; /* 5.9:1 on its own surface, 6.5:1 on white */
+  /* Lane ink. The --color-tier-* hues below are 400-level and were chosen for
+     the dark board; as TEXT on a light panel they are 1.67:1 (queue) to 2.69:1
+     (push) — the entire lane ramp failed the AA text floor in light, on the
+     count chips and column totals that carry the board's whole read. These are
+     the light-side text values, measured on every surface a lane accent
+     actually lands on (panel #ffffff / raised #f8fafc / hover #f1f5f9); the
+     hue tokens stay unchanged so planes, borders and tints keep their design.
+     queue and auto are the same literals the --state-*-ink ramp already uses. */
+  --tier-push-ink: #be123c; /* 5.74:1 worst-surface */
+  --tier-queue-ink: #b45309; /* 4.58:1 worst-surface */
+  --tier-meeting-ink: #4f46e5; /* 5.74:1 worst-surface */
+  --tier-info-ink: #0e7490; /* 4.89:1 worst-surface */
+  --tier-silent-ink: #57534e; /* 6.96:1 worst-surface */
+  /* LaneChip text (P2). The chip paints a 12% tint of the lane ink under its
+     label, which pulls the plain ink below 4.5:1 for queue (3.86) and info
+     (4.10) on the hover surface. These are the label values, measured against
+     the COMPOSITED chip (13% lane ink over each of #ffffff / #fafafa / #f8fafc
+     / #f1f5f9), worst case shown. Pinned by api web-lane-chip-contrast.test.ts. */
+  --tier-push-chip-ink: #9f1239; /* 5.84:1 worst-surface */
+  --tier-meeting-chip-ink: #4338ca; /* 5.95:1 */
+  --tier-queue-chip-ink: #92400e; /* 5.45:1 */
+  --tier-info-chip-ink: #155e75; /* 5.56:1 */
+  --tier-silent-chip-ink: #57534e; /* 5.76:1 */
+  /* RETIRED v1 lane — kept only so Record<Tier, …> visuals for legacy rows
+     still resolve. No new usage: check-design-tokens.mjs burns this down. */
+  --tier-auto-ink: #047857; /* 5.01:1 worst-surface — retired v1 lane */
+  /* Filled destructive control. Unlike --accent-solid this does NOT invert in
+     the dark: a destructive button has to keep reading as red-with-white, and
+     a red fill carries white in both themes anyway. Only the depth changes. */
+  --danger-solid: #b91c1c; /* white 6.5:1 */
+  --danger-solid-hover: #991b1b; /* 8.3:1 */
+  --danger-solid-ink: #ffffff;
+  --state-info-bg: #eff6ff;
+  --state-info-line: #bfdbfe;
+  --state-info-ink: #0369a1; /* 5.5:1 on its own surface */
+
+  /* FILLED-control accent. The old --color-accent (#0ea5e9) was a tint value:
+     white text on it measures 2.77:1, well under the 4.5:1 AA floor (verified
+     on production 2026-08-22). Filled buttons use this pair instead, and it
+     swaps per theme so the CTA stays loud in both: light = white on sky-700
+     (5.9:1), dark = ink on sky-400 (8.3:1). */
+  --accent-solid: #0369a1;
+  --accent-solid-hover: #075985;
+  --accent-solid-ink: #ffffff;
+
+  /* Informational callouts (deep-link banner, access notice). Was hardcoded
+     text-sky-800 — a light-theme literal that fell to 1.93:1 once the dark
+     theme landed. Tokenized so both themes are defined in one place. */
+  --notice-bg: #e0f2fe;
+  --notice-border: #7dd3fc;
+  --notice-ink: #075985;
+  --notice-ink-strong: #0c4a6e;
+
+  /* Motion (productization plan §2). Durations as variables so CSS and
+     inline styles share them; in classNames use Tailwind's native
+     `duration-120` / `duration-200` / `duration-320` with `ease-fluid`.
+     Reduced-motion is handled globally at the bottom of this file. */
+  --motion-state: 120ms; /* hover, press, toggle */
+  --motion-move: 200ms; /* popovers, toasts, anything that moves */
+  --motion-sheet: 320ms; /* sheets and drawers */
+  /* Legacy (pre-v2) names — kept for page call sites until they migrate. */
+  --motion-enter: 200ms;
+  --motion-exit: 160ms;
+}
+
+/* Dark: a neutral, hue-free ramp (design detail pass X2) — the same #0a0a0b
+   canvas as Theme.swift `bg` dark, so web and Mac share one night palette.
+   It replaces the navy-slate set (canvas rgb(11,17,32)) as ONE set, with
+   every text pair re-measured against the lightest surface it sits on
+   (--surface-hover #222226), worst case shown. */
+.dark {
+  --surface-app: #0a0a0b;
+  --surface-canvas: #141416;
+  --surface-elevated: #1c1c1f; /* v2 raised */
+  --surface-panel: #141416;
+  --surface-translucent: rgba(20, 20, 22, 0.85);
+  --surface-raised: #1c1c1f; /* v2 raised */
+  --surface-hover: #222226;
+  --ink: #f4f4f6; /* 14.4:1 */
+  --ink-2: #a2a2ad; /* v2 */
+  --ink-3: #8e8e9a; /* v2 leaves dark ink-3 open; = ink-dim, AA pinned by test */
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-control: rgba(255, 255, 255, 0.14);
+  --ink-strong: #e4e4e8; /* 12.5:1 */
+  --ink-soft: #c9c9d1; /* 9.6:1 */
+  --ink-mid: #9d9da8; /* 5.9:1 */
+  /* Quieter than ink-mid and still over the 4.5:1 AA text floor on hover. */
+  --ink-dim: #8e8e9a; /* 4.9:1 */
+  --line: #2e2e33;
+  --line-soft: #1f1f23;
+  --line-strong: #45454d;
+  --surface-inset: #2a2a2f;
+  --ink-muted: #a8a8b3; /* 6.7:1 */
+  /* Links brighten in the dark instead of darkening: 7.4:1 on hover. */
+  --accent-deep: #38bdf8;
+  --accent-deeper: #7dd3fc;
+
+  /* State surfaces darken and their ink brightens: the mirror of light,
+     never the same literals (that was the bug these replace). */
+  --state-ok-bg: #0c2a20;
+  --state-ok-line: #1d5c46;
+  --state-ok-ink: #6ee7b7; /* 10.1:1 */
+  --state-warn-bg: #2c220c;
+  --state-warn-line: #6b5320;
+  --state-warn-ink: #fcd34d; /* 10.9:1 */
+  --state-danger-bg: #2b1116;
+  --state-danger-line: #6b2430;
+  --state-danger-ink: #fca5a5; /* 9.1:1 on panel */
+  /* In the dark the 400-level hues ARE the text values — they clear the floor
+     here (4.9:1 to 8.76:1 worst-surface), which is why the failure above went
+     unnoticed: the board was designed dark-first. */
+  --tier-push-ink: #fb7185; /* 5.44:1 worst-surface */
+  --tier-queue-ink: #fbbf24; /* 8.76:1 worst-surface */
+  --tier-meeting-ink: #818cf8; /* 4.9:1 worst-surface */
+  --tier-info-ink: #22d3ee; /* 8.09:1 worst-surface */
+  --tier-silent-ink: #a8a29e; /* 5.8:1 worst-surface */
+  /* LaneChip text, dark (TodayScreen.dc dark values): composited 12% tint over
+     every neutral surface #0a0a0b … #222226, worst case shown. */
+  --tier-push-chip-ink: #fda4af; /* 7.0:1 worst-surface */
+  --tier-meeting-chip-ink: #c7d2fe; /* 8.9:1 */
+  --tier-queue-chip-ink: #fcd34d; /* 8.4:1 */
+  --tier-info-chip-ink: #a5f3fc; /* 10.0:1 */
+  --tier-silent-chip-ink: #a8a29e; /* 5.1:1 — muted on purpose, a silenced lane must not glow */
+  --tier-auto-ink: #34d399; /* 7.61:1 worst-surface — retired v1 lane */
+  --danger-solid: #dc2626; /* white 4.8:1 */
+  --danger-solid-hover: #b91c1c; /* hover goes DARKER, 6.5:1 */
+  --danger-solid-ink: #ffffff;
+  --state-info-bg: #0d2233;
+  --state-info-line: #1e4a66;
+  --state-info-ink: #7dd3fc; /* 9.7:1 */
+  /* Filled CTA inverts in the dark: bright fill, dark ink — 8.3:1. */
+  --accent-solid: #38bdf8;
+  --accent-solid-hover: #7dd3fc;
+  --accent-solid-ink: #0a0a0b; /* 9.2:1 on #38bdf8 */
+  /* Sky tint over the panel, light sky ink — 11.9:1. */
+  --notice-bg: #14243c;
+  --notice-border: #2b5578;
+  --notice-ink: #bae6fd;
+  --notice-ink-strong: #e0f2fe;
+}
+
+/* Theme-following utilities: `inline` makes each utility read the variable
+   at use time, so the .dark swap above applies everywhere. */
+@theme inline {
+  --color-surface-app: var(--surface-app);
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-translucent: var(--surface-translucent);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-hairline: var(--hairline);
+  --color-hairline-control: var(--hairline-control);
+  /* v2 surface names → the existing surface tokens (one value each). */
+  --color-canvas: var(--surface-app);
+  --color-surface: var(--surface-canvas);
+  --color-raised: var(--surface-elevated);
+  --color-ink-strong: var(--ink-strong);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mid: var(--ink-mid);
+  --color-ink-dim: var(--ink-dim);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-surface-inset: var(--surface-inset);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-deeper: var(--accent-deeper);
+  --color-state-ok-bg: var(--state-ok-bg);
+  --color-state-ok-line: var(--state-ok-line);
+  --color-state-ok-ink: var(--state-ok-ink);
+  --color-state-warn-bg: var(--state-warn-bg);
+  --color-state-warn-line: var(--state-warn-line);
+  --color-state-warn-ink: var(--state-warn-ink);
+  --color-state-danger-bg: var(--state-danger-bg);
+  --color-state-danger-line: var(--state-danger-line);
+  --color-state-danger-ink: var(--state-danger-ink);
+  --color-tier-push-ink: var(--tier-push-ink);
+  --color-tier-queue-ink: var(--tier-queue-ink);
+  --color-tier-meeting-ink: var(--tier-meeting-ink);
+  --color-tier-info-ink: var(--tier-info-ink);
+  --color-tier-silent-ink: var(--tier-silent-ink);
+  --color-tier-push-chip-ink: var(--tier-push-chip-ink);
+  --color-tier-meeting-chip-ink: var(--tier-meeting-chip-ink);
+  --color-tier-queue-chip-ink: var(--tier-queue-chip-ink);
+  --color-tier-info-chip-ink: var(--tier-info-chip-ink);
+  --color-tier-silent-chip-ink: var(--tier-silent-chip-ink);
+  --color-tier-auto-ink: var(--tier-auto-ink);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
+  --color-danger-solid-ink: var(--danger-solid-ink);
+  --color-state-info-bg: var(--state-info-bg);
+  --color-state-info-line: var(--state-info-line);
+  --color-state-info-ink: var(--state-info-ink);
+  --color-accent-solid: var(--accent-solid);
+  /* One blue (design detail pass X2): the bare `accent` utilities (dots,
+     rings, 10% washes) ride the same theme-aware solid as filled controls —
+     #0369a1 light / #38bdf8 dark — so the retired Mac #0ea5e9 never paints. */
+  --color-accent: var(--accent-solid);
+  --color-accent-solid-hover: var(--accent-solid-hover);
+  --color-accent-solid-ink: var(--accent-solid-ink);
+  --color-notice-bg: var(--notice-bg);
+  --color-notice-border: var(--notice-border);
+  --color-notice-ink: var(--notice-ink);
+  --color-notice-ink-strong: var(--notice-ink-strong);
+  /* Decelerating curve — heavy at the start, settles without overshoot. The
+     browser default (ease) rushes the last 40%, which is what makes stock
+     transitions read as cheap. */
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 @theme {
-  /* Unified app accent (2026-06-16): was coral #ff6b4a, now the same gold
-     the rest of the app already used (inbox, firewall, login = Tailwind
-     amber). Only the mail surface referenced these tokens, so re-pointing
-     here converges the whole app on one primary accent in one place.
-     `brand-gold` below stays separate — it's the muted marketing gold. */
-  --color-accent: #0ea5e9;
+  /* Device classes (docs/design/design-language-v2.md, "Device classes").
+     Tailwind's defaults stay (md 768 / lg 1024 carry the page layouts); the
+     shell adds one step: from 600px (a Fold opened, a phone on its side, an
+     iPad in split view) the bottom tab bar gives way to the navigation rail.
+     `rail:` / `max-rail:` name that step. The full sidebar replaces the rail
+     at lg (1024). Same unit (rem) as the defaults so the variants sort. */
+  --breakpoint-rail: 37.5rem;
+
+  /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
+     are stamped on <html> by layout.tsx). Hangul falls through to Pretendard,
+     self-hosted from the `pretendard` package (layout.tsx) so Windows, which
+     has no Apple SD Gothic Neo, does not drop to Malgun Gothic (2026-10-21).
+     Geist Mono backs `font-mono` for figures and code. */
+  --font-sans:
+    var(--font-geist-sans), "Pretendard Variable", Pretendard, ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Accent tints. The base `accent` lives in the theme-following block above
+     (= --accent-solid); these lighter steps stay for washes and gradients. */
   --color-accent-light: #38bdf8;
   --color-accent-muted: #7dd3fc;
   --color-accent-dim: #e0f2fe;
 
-  /* Surface tokens — extracted 2026-05-19 from inline bg-[#XXXXXX] usages
-     across the landing page and app shell. Use `bg-surface-app`, etc.
-     instead of bare hex values so the palette can be retuned in one spot. */
-  --color-surface-app: #f4f8fc;
-  --color-surface-canvas: #ffffff;
-  --color-surface-elevated: #ffffff;
-  --color-surface-panel: #ffffff;
-  --color-surface-translucent: rgba(255, 255, 255, 0.85);
-
   /* Text / brand tokens — gold accent and cream foreground used on the
      marketing surface. Same logic: rename here, not 30 className strings. */
-  --color-brand-gold: #0ea5e9;
-  --color-brand-gold-bright: #38bdf8;
   --color-brand-cream: #f8f4ec;
   --color-brand-cream-soft: #f2eadc;
   --color-brand-ink: #11100d;
   --color-brand-ink-soft: #12100d;
 
-  /* 4-tier firewall colors (PUSH/QUEUE/SILENT/AUTO). Single source of truth
-     for the classifier's core mental model — consumed by the firewall board,
-     the relationship-graph legend, and tier badges so the four tiers read as
-     ONE color+label system everywhere instead of drifting per surface
-     (was: graph red #f87171, board rose, retired coral glow — all divergent). */
-  --color-tier-push: #fb7185;
-  --color-tier-queue: #fbbf24;
-  --color-tier-silent: #a8a29e;
-  --color-tier-auto: #34d399;
+  /* Lane hues — one per lane in the v2 ontology (PUSH/MEETING/QUEUE/INFO/
+     SILENT). Single source of truth for the classifier's core mental model —
+     consumed by the firewall board, the relationship-graph legend, and tier
+     badges so the lanes read as ONE color+label system everywhere instead of
+     drifting per surface (was: graph red #f87171, board rose, retired coral
+     glow — all divergent).
+
+     MEETING and INFO had no hue of their own until now: the flip that made
+     TIER_V2_ENABLED default-on (#1138, 2026-08-18) shipped without the lane
+     design it promised, so MEETING borrowed PUSH's rose and INFO borrowed
+     SILENT's grey on every surface. Two of the five lanes were invisible AS
+     lanes on the page whose entire claim is that you can see which lane a
+     message landed in.
+
+     These are TINT/BORDER hues. Text uses --tier-*-ink above, which is
+     theme-aware; these are not. */
+  --color-tier-push: #fb7185; /* rose-400 */
+  --color-tier-meeting: #818cf8; /* indigo-400 */
+  --color-tier-queue: #fbbf24; /* amber-400 */
+  --color-tier-info: #22d3ee; /* cyan-400 */
+  --color-tier-silent: #a8a29e; /* stone-400 */
+  /* RETIRED v1 lane. normalizeTier folds AUTO away on read, but rows written
+     before the flip still render, so the hue stays until a backfill removes
+     the last one. Never emit AUTO in new code — `tier-auto` is a burn-down
+     rule in .github/scripts/check-design-tokens.mjs, so a new call site fails
+     CI. */
+  --color-tier-auto: #34d399; /* emerald-400 */
+
+  /* ── Design system (productization plan §2, P1) ──────────────────────
+     Type: the Design Language v2 roles below (text-role-page … mono). The
+     P1 legacy steps (text-display / title / head / body / label / caption,
+     28/20/15/14/13/12) are retired and removed; `legacy-type` in
+     .github/scripts/check-design-tokens.mjs fails CI if one comes back, since
+     an unknown text-* class would silently render unstyled. Never an
+     arbitrary text-[Npx] (guarded). 10px text is retired. */
+
+  /* Text you type on a touch screen: iOS zooms the page into any field under
+     16px, so inputs switch to this with `pointer-coarse:text-field` (P10). */
+  --text-field: 16px;
+  --text-field--line-height: 24px;
+  --text-field--font-weight: 400;
+
+  /* Design Language v2 type roles (web column,
+     docs/design/design-language-v2.md § Type roles). Pick by meaning, not
+     nearest pixel. mono pairs with `font-mono`. */
+  --text-role-page: 34px;
+  --text-role-page--line-height: 40px;
+  --text-role-page--font-weight: 650;
+  --text-role-page--letter-spacing: -0.025em;
+  --text-role-title: 22px;
+  --text-role-title--line-height: 28px;
+  --text-role-title--font-weight: 650;
+  --text-role-head: 17px;
+  --text-role-head--line-height: 24px;
+  --text-role-head--font-weight: 600;
+  --text-role-body: 15px;
+  --text-role-body--line-height: 22px;
+  --text-role-body--font-weight: 400;
+  --text-role-label: 13px;
+  --text-role-label--line-height: 18px;
+  --text-role-label--font-weight: 500;
+  /* Secondary metadata (sender · time rows, one-line reasons): role-label's
+     size and leading at regular weight. Replaces `text-role-label
+     font-normal` (guarded: label-as-meta). */
+  --text-role-meta: 13px;
+  --text-role-meta--line-height: 18px;
+  --text-role-meta--font-weight: 400;
+  --text-role-caption: 12px;
+  --text-role-caption--line-height: 16px;
+  --text-role-caption--font-weight: 400;
+  --text-role-mono: 13px;
+  --text-role-mono--line-height: 20px;
+  --text-role-mono--font-weight: 400;
+
+  /* Spacing: 4/8/12/16/24/32/48 — Tailwind's default 4px scale already is
+     this (1/2/3/4/6/8/12), so no tokens are added. Stay on those steps. */
+
+  /* Radii: r-sm 6 controls, r-md 10 rows/cards/popovers, r-lg 16 sheets/
+     windows. Named by role, NOT by overriding rounded-sm/md/lg (that would
+     silently restyle every existing call site; `rounded-r-*` is taken by the
+     right-side utilities). Capsule stays `rounded-full`, pills/LaneChip only. */
+  /* Design Language v2 (2026-10-31): 6 chip · 10 control · 16 card · 24 sheet,
+     the same set on web, phone and Mac. Popovers and list rows take
+     `control` (10); `card` is a bordered card. */
+  --radius-chip: 6px;
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-sheet: 24px;
+
+  /* Depth (v2, hairline first): flat = a 1px hairline border, no shadow.
+     menu = popovers, menus, listboxes, toasts. sheet = sheets, dialogs, the
+     palette (pair with a scrim). No other shadows — guarded by api
+     web-design-tokens-v2.test.ts. */
+  --shadow-menu: 0 1px 2px rgba(10, 14, 20, 0.06), 0 4px 12px -4px rgba(10, 14, 20, 0.1);
+  --shadow-sheet: 0 12px 32px -8px rgba(10, 14, 20, 0.18);
 }
 
 body {
   word-break: keep-all;
   overflow-wrap: break-word;
+}
+
+/* Korean headings (design detail pass X4): Hangul glyphs are full-width, so
+   the Latin display tracking (-0.025em and tighter) packs them into each
+   other. One value for every KO heading. Deliberately unlayered: it outranks
+   any tracking utility on the heading itself. <html lang> follows the UI
+   locale (I18nProvider). */
+:is(h1, h2, h3, h4):lang(ko) {
+  letter-spacing: -0.02em;
 }
 
 /* Rich sky background: layered sky-blue glows + a faint dot grid, all in one
@@ -63,29 +460,53 @@ body {
     radial-gradient(40% 30% at 40% 40%, rgba(255, 255, 255, 0.75), transparent 66%);
 }
 
-/* App-canvas wash: a soft sky→indigo two-tone gradient behind every in-app
-   surface so the workspace never reads as flat white. Sits on the body via a
-   fixed pseudo-element (z-index -1) so pages/panels stack above it without any
-   z-index bookkeeping. Auth/marketing pages layer .sky-bg on top of this. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at center, rgba(14, 116, 180, 0.045) 1px, transparent 1.5px),
-    radial-gradient(80% 60% at 12% -5%, rgba(14, 165, 233, 0.14), transparent 60%),
-    radial-gradient(70% 50% at 105% 0%, rgba(99, 102, 241, 0.11), transparent 55%),
-    radial-gradient(60% 45% at 50% 115%, rgba(56, 189, 248, 0.09), transparent 60%),
-    linear-gradient(180deg, #edf3fc 0%, #f4f8fd 40%, #f5f8fc 100%);
-  background-size:
-    26px 26px,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+/* App canvas is FLAT and hue-free (productization plan FD-4, P1). The
+   sky→indigo wash that used to sit here on body::before put a blue cast under
+   every lane tint and competed with the only colours that mean something.
+   The canvas is now just `bg-surface-app` on <body> (layout.tsx). Marketing
+   and auth pages keep their atmosphere via `.sky-bg`, which paints its own
+   opaque background and never depended on the wash. */
+
+/* ── Dark counterparts for the hand-written surfaces ─────────────────
+   The token swap handles utility colors; these are the atmospheric layers
+   and shadows that hardcode light-world values. Same composition, night
+   palette: glows dim, shadows deepen, inset highlights go faint. */
+.dark .sky-bg {
+  background-color: #0a0a0b;
+  background-image:
+    radial-gradient(62% 40% at 88% -4%, rgba(240, 203, 158, 0.08), transparent 68%),
+    radial-gradient(58% 44% at 2% 16%, rgba(240, 222, 226, 0.06), transparent 70%),
+    radial-gradient(64% 46% at 96% 66%, rgba(56, 120, 190, 0.14), transparent 68%),
+    radial-gradient(52% 40% at 20% 96%, rgba(99, 102, 241, 0.1), transparent 70%);
+}
+
+.dark .panel-elevated {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 18px 40px -20px rgba(0, 0, 0, 0.65);
+}
+
+.dark .row-wash:hover {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.09), rgba(56, 189, 248, 0.02));
+}
+
+.dark .glow-primary {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 10px 22px -8px rgba(56, 189, 248, 0.3);
+}
+
+.dark .seg-active {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+
+.dark .avatar-ring {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.09) inset;
 }
 
 /* Strong ease-out (Emil Kowalski's UI curve) — punchier than the built-in
@@ -107,7 +528,7 @@ body::before {
 /* Row hover: a directional sky wash (left→right fade) instead of a flat gray
    fill — keeps the hover subtle while pointing at the accent color. */
 .row-wash:hover {
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.05), rgba(14, 165, 233, 0.015));
+  background: linear-gradient(90deg, rgba(3, 105, 161, 0.05), rgba(3, 105, 161, 0.015));
 }
 
 /* Primary-action glow (Compose): contact shadow + colored bloom so exactly one
@@ -115,7 +536,7 @@ body::before {
 .glow-primary {
   box-shadow:
     0 1px 2px rgba(2, 60, 110, 0.25),
-    0 10px 22px -8px rgba(14, 165, 233, 0.55);
+    0 10px 22px -8px rgba(3, 105, 161, 0.4);
 }
 
 /* Active segment in a segmented control: lifted white pill. */
@@ -146,6 +567,94 @@ body::before {
 .pr-safe {
   padding-right: env(safe-area-inset-right);
 }
+/* Width of the shell's navigation column: nothing on a phone (bottom tabs),
+   the rail from 600px, the sidebar from 1024px. The mail split reads it to
+   put its list/reader seam on a fold's hinge. Keep in step with
+   components/nav-rail.tsx (w-[72px]) and components/sidebar.tsx (w-[260px]). */
+:root {
+  --shell-nav-w: 0px;
+}
+@media (min-width: 37.5rem) {
+  :root {
+    --shell-nav-w: calc(72px + env(safe-area-inset-left));
+  }
+}
+/* Phone landscape: the 56px rail (components/nav-rail.tsx). Before the
+   sidebar step, so a short wide window keeps the 260px sidebar. */
+@media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
+  :root {
+    --shell-nav-w: calc(56px + env(safe-area-inset-left));
+  }
+}
+@media (min-width: 64rem) {
+  :root {
+    --shell-nav-w: calc(260px + env(safe-area-inset-left));
+  }
+}
+
+/* A segmented row wider than its column scrolls inside itself
+   (components/ui/segmented-control.tsx); the edge with segments past it
+   fades out, so a lane scrolled out of view still reads as there. */
+.segmented-track[data-more-start] {
+  mask-image: linear-gradient(to right, transparent, black 2rem);
+}
+.segmented-track[data-more-end] {
+  mask-image: linear-gradient(to left, transparent, black 2rem);
+}
+.segmented-track[data-more-start][data-more-end] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent
+  );
+}
+
+/* Mail split (app/email/layout.tsx). The list takes 45% of what the shell
+   leaves, held between 280px and 440px; the reader takes the rest.
+   On a device whose screen is two segments side by side (a book-style
+   foldable, a dual-screen phone; the Viewport Segments API), the seam goes
+   on the hinge instead: the list ends where the left segment ends and the
+   reader starts where the right one begins, so no line of text crosses the
+   fold. Browsers without the API never match the query; the env() fallbacks
+   only matter if a browser matches it without knowing the variables. */
+.mail-split-list {
+  width: clamp(280px, 45%, 440px);
+}
+/* The split runs to the bottom edge of <main>, through the clearance <main>
+   pads its end with (app-shell.tsx, --main-clear: the tab bar and the
+   assistant button), and each pane pads its own scroll end by the same
+   amount instead. Inside the padding, the panes would stop short and leave
+   a strip of <main>'s background under the reader. */
+.mail-split {
+  height: calc(100% + var(--main-clear, 0px));
+  margin-bottom: calc(-1 * var(--main-clear, 0px));
+}
+.mail-split-list,
+.mail-split-reader {
+  padding-bottom: var(--main-clear, 0px);
+  scroll-padding-bottom: var(--main-clear, 0px);
+}
+/* Phone landscape: a ~360px list beside the reader (half the space at most).
+   After the base width, before the hinge rule, so a hinge keeps its seam. */
+@media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
+  .mail-split-list {
+    width: min(360px, 50%);
+  }
+}
+@media (horizontal-viewport-segments: 2) {
+  .mail-split-list {
+    width: max(240px, calc(env(viewport-segment-right 0 0, 50vw) - var(--shell-nav-w)));
+  }
+  .mail-split-reader {
+    padding-left: max(
+      0px,
+      calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw))
+    );
+  }
+}
+
 /* dvh = dynamic viewport height (iOS 15.4+, all evergreen browsers).
    We already gate the PWA on iOS 16.4+ for Web Push, so no fallback needed. */
 .h-dvh {
@@ -232,7 +741,7 @@ body::before {
 }
 
 .animate-slide-up {
-  animation: slide-up 0.2s ease-out;
+  animation: slide-up var(--motion-move) var(--ease-fluid);
 }
 
 .animate-fade-in {
@@ -256,9 +765,9 @@ body::before {
 }
 
 /* ── Spatial triage (firewall view) ─────────────────
-   Depth + glow language for the 4-tier board. The hierarchy is meant to
+   Depth + glow language for the lane board. The hierarchy is meant to
    be felt before it is read: PUSH sits on an elevated, glowing plane;
-   QUEUE is mid; SILENT recedes and desaturates. */
+   MEETING and QUEUE are mid; INFO and SILENT recede and desaturate. */
 
 /* Per-tier ambient glow on the column panel. The negative spread keeps the
    glow tight to the panel instead of bleeding across the whole board. */
@@ -281,6 +790,21 @@ body::before {
   box-shadow:
     0 0 40px -26px rgba(52, 211, 153, 0.35),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
+}
+/* MEETING sits just under PUSH on the ladder — a scheduling request is
+   time-bound but it is not an interruption, so the glow is tighter than
+   push's and wider than queue's. indigo #818cf8 == --color-tier-meeting. */
+.tier-plane-meeting {
+  box-shadow:
+    0 0 52px -24px rgba(129, 140, 248, 0.45),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+/* INFO is filed, not surfaced: the faintest lit plane on the board, above
+   silent (unlit) and below queue. cyan #22d3ee == --color-tier-info. */
+.tier-plane-info {
+  box-shadow:
+    0 0 40px -30px rgba(34, 211, 238, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.025);
 }
 
 /* Translucent glass surface used by every panel + card on the board. */
@@ -361,10 +885,34 @@ body::before {
   }
 }
 
+/* Pretendard carries some Hanja, so for Japanese and Chinese UI the platform's
+   own CJK face goes ahead of it — otherwise one line of kanji/hanzi would mix
+   Korean-style glyphs with the system font's. html[lang] is set by i18n.tsx. */
+:root:lang(ja) {
+  --font-sans:
+    var(--font-geist-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI",
+    "Yu Gothic", Meiryo, "Pretendard Variable", ui-sans-serif, system-ui, sans-serif;
+}
+:root:lang(zh) {
+  --font-sans:
+    var(--font-geist-sans), "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",
+    "Pretendard Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ── Scrollbar ──────────────────────────────────── */
+/* Windows keeps classic scrollbars always visible (no macOS overlay bars), so
+   they have to read as part of the UI in both themes. The standard properties
+   win over ::-webkit-scrollbar in Chromium 121+ (WebView2, Edge, Chrome) and
+   are the only ones Firefox reads; the webkit rules remain for Safari. Colors
+   come from the theme tokens so the dark canvas does not get a light bar. */
+:root {
+  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-width: thin;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -372,12 +920,42 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--line-strong);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background-color: var(--ink-dim);
+}
+
+/* Reserve the scrollbar's width on the panes whose content length changes
+   (mail list, reader, settings) so an always-visible Windows scrollbar
+   appearing does not shift the layout sideways. */
+.scroll-stable {
+  scrollbar-gutter: stable;
+}
+
+/* ── Forced colors (Windows High Contrast / Contrast themes) ────────────
+   Backgrounds and box-shadows are dropped in forced-colors mode, so chips,
+   selected rows and the focus ring would vanish. Keep a system-colored
+   outline/border so they stay visible. */
+@media (forced-colors: active) {
+  .focus-ring:focus-visible,
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  [aria-current="page"] {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+  .lane-chip {
+    border: 1px solid CanvasText;
+  }
 }
 
 /* ── Focus ring utility ─────────────────────────── */
@@ -385,14 +963,44 @@ body::before {
    mouse click. Primitives (button/input/modal) route their rings through this
    so the ring color lives in exactly one place. */
 .focus-ring:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px #ffffff,
-    0 0 0 4px rgba(14, 165, 233, 0.55);
+  /* outline-offset draws the gap out of whatever is actually behind the
+     control, so the ring needs no knowledge of the surface it sits on. The
+     previous box-shadow faked that gap with a hardcoded white ring, which in
+     the dark theme rendered as a bright white line around the control. The
+     stroke uses --accent-solid (5.9:1 light / 8.3:1 dark) rather than the
+     55%-alpha accent, which sat near the 3:1 non-text floor on white. */
+  outline: 2px solid var(--accent-solid);
+  outline-offset: 2px;
 }
 
 /* ── Selection ──────────────────────────────────── */
 ::selection {
   background: rgba(125, 211, 252, 0.55);
   color: #0a0e14;
+}
+
+/* ── Auth surface: entry motion ─────────────────────────────────────────
+   The sign-in column arrives in two short beats instead of all at once. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* `both` holds the from-state before the delay elapses, so a staggered child
+   cannot flash at full opacity for one frame before its turn. */
+.rise {
+  animation: rise var(--motion-enter, 200ms) var(--ease-fluid) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
 }

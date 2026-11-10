@@ -1,3 +1,5 @@
+> **Superseded in part (2026-10-02):** §2/§4 HUD-only full view replaced by a standard main window — see `docs/design/productization-plan.md` §macOS architecture.
+
 # desktop-mac Rebuild Blueprint — Ambient Interrupt HUD
 
 > Status: DESIGN (not yet implemented). Author date: 2026-07-07.
@@ -31,7 +33,8 @@ of what a mail firewall's UI should be, which is why it is unused:
 >   Clicking `— Close` collapses it back to the pill.
 > Non-focus-stealing throughout (`.nonactivatingPanel`, `orderFrontRegardless`). New PUSH
 > updates the always-visible count (+ optional OS-banner fallback); the user expands on
-> demand. QUEUE/SILENT/AUTO never force anything. Full inbox still lives on web/mobile.
+> demand. MEETING/QUEUE/INFO/SILENT never force anything. Full inbox still lives on
+> web/mobile.
 
 Reference video (`~/Desktop/화면 기록 2026-07-07…mov`): a centered dark pill navbar that
 expands into a wide dark panel on `☰ Menu` and collapses on `— Close`. NOT a system
@@ -42,8 +45,11 @@ menu-bar dropdown, NOT a transient corner card — those were both wrong earlier
    `becomesKeyOnlyIfNeeded`, `hidesOnDeactivate = false`. The user's active app stays active.
 2. **Keyboard-completable.** Reaching the corner with a mouse is itself a context switch.
    Global hotkey to summon/dismiss/act; in-panel key handling for the action set.
-3. **PUSH only.** QUEUE/SILENT/AUTO must never trigger the panel or a banner.
-4. **Low frequency.** ~2–5 surfaces/day. The 4-tier classifier is what makes this
+3. **PUSH only.** Every other lane — MEETING, QUEUE, INFO, SILENT, and legacy
+   AUTO — must never trigger the panel or a banner. Still true as written:
+   `TopBarController.handleNewPush` is the sole caller of `PushNotifier.post`,
+   and `Notifications.swift` plans banners from `pushItems` alone.
+4. **Low frequency.** ~2–5 surfaces/day. The classifier is what makes this
    affordable — this app exposes classifier quality directly (see §8 risk).
 
 ## 3. Architecture: keep the plumbing, rebuild the shell

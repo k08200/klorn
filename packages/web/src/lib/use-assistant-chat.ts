@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { EventDraft } from "../components/event-draft-card";
 import { apiFetch } from "./api";
+import { type CapTurn, capCodeForMessage, capTurnFrom, type DailyCapCode } from "./daily-cap";
 import { queryKeys } from "./query-keys";
 import { captureClientError } from "./sentry";
 
@@ -22,7 +23,7 @@ export interface AssistantChatMessage {
   id: string;
   role: "USER" | "ASSISTANT" | "SYSTEM";
   content: string;
-  metadata: { eventDraft?: EventDraft; turnError?: string } | null;
+  metadata: { eventDraft?: EventDraft; turnError?: string; turnErrorCode?: string } | null;
   createdAt: string;
 }
 
@@ -30,16 +31,26 @@ interface TurnResponse {
   reply: string;
   eventDraft: EventDraft | null;
   error?: string;
+  /** DAILY_COST_CAP_FREE | DAILY_COST_CAP when the daily AI allowance is spent; absent on an older API. */
+  errorCode?: string;
 }
 
-export function useAssistantChat(options?: { enabled?: boolean; onSendError?: () => void }) {
+export function useAssistantChat(options?: {
+  enabled?: boolean;
+  onSendError?: () => void;
+  /** Id of the mail the user is currently reading, so "this email" resolves. */
+  contextEmailId?: string | null;
+}) {
   const enabled = options?.enabled ?? true;
+  const contextEmailId = options?.contextEmailId ?? null;
   const queryClient = useQueryClient();
   const [conversationId, setConversationId] = useState<string | null>(null);
   // Optimistic echo of the user's message while the turn is in flight.
   const [pendingText, setPendingText] = useState<string | null>(null);
   const [sendError, setSendError] = useState<boolean>(false);
   const [input, setInput] = useState("");
+  // The last turn, when it hit the daily AI allowance (lib/daily-cap.ts).
+  const [capTurn, setCapTurn] = useState<CapTurn | null>(null);
 
   const conversationsQuery = useQuery({
     queryKey: queryKeys.chat.conversations(),
@@ -71,11 +82,15 @@ export function useAssistantChat(options?: { enabled?: boolean; onSendError?: ()
       }
       const turn = await apiFetch<TurnResponse>(`/api/chat/conversations/${id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          text,
+          ...(contextEmailId ? { context: { emailId: contextEmailId } } : {}),
+        }),
       });
       return { id, turn };
     },
-    onSuccess: async ({ id }) => {
+    onSuccess: async ({ id, turn }) => {
+      setCapTurn(capTurnFrom(turn));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.chat.conversations() }),
@@ -103,6 +118,10 @@ export function useAssistantChat(options?: { enabled?: boolean; onSendError?: ()
 
   const newChat = () => setConversationId(null);
 
+  /** The cap code an assistant bubble stands for; null renders it as written. */
+  const capCodeFor = (message: AssistantChatMessage): DailyCapCode | null =>
+    capCodeForMessage(message, capTurn);
+
   return {
     activeId,
     input,
@@ -111,6 +130,7 @@ export function useAssistantChat(options?: { enabled?: boolean; onSendError?: ()
     newChat,
     pendingText,
     sendError,
+    capCodeFor,
     sending: sendMutation.isPending,
     messages: messagesQuery.data?.messages ?? [],
     messagesLoading: !!activeId && messagesQuery.isLoading,

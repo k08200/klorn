@@ -94,12 +94,9 @@ export function quantile(sorted: number[], q: number): number {
 }
 
 export function emptyTierMap<T>(value: () => T): Record<Tier, T> {
-  return {
-    SILENT: value(),
-    QUEUE: value(),
-    PUSH: value(),
-    AUTO: value(),
-  };
+  // Derived from TIERS so a vocabulary change (ontology v2 added MEETING and
+  // INFO) can never silently drop a bucket here again.
+  return Object.fromEntries(TIERS.map((t) => [t, value()])) as Record<Tier, T>;
 }
 
 export function tierStats(confidences: number[]): TierStats | null {
@@ -120,12 +117,10 @@ export function computePerTier(rows: AttentionRow[]): Record<Tier, TierStats | n
   for (const row of rows) {
     if (isTier(row.tier)) buckets[row.tier].push(row.confidence);
   }
-  return {
-    SILENT: tierStats(buckets.SILENT),
-    QUEUE: tierStats(buckets.QUEUE),
-    PUSH: tierStats(buckets.PUSH),
-    AUTO: tierStats(buckets.AUTO),
-  };
+  return Object.fromEntries(TIERS.map((t) => [t, tierStats(buckets[t])])) as Record<
+    Tier,
+    TierStats | null
+  >;
 }
 
 export function computeOverrideRate(

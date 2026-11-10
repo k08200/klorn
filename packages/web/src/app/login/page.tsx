@@ -5,14 +5,22 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import AuthScreen from "../../components/auth-screen";
+import LanePreview from "../../components/auth/lane-preview";
+import ProviderButtons from "../../components/auth/provider-buttons";
+import AuthScreen, { BrandHeadline } from "../../components/auth-screen";
 import { useToast } from "../../components/toast";
+import Button from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { API_BASE, apiFetch } from "../../lib/api";
+import { apiFetch } from "../../lib/api";
+import { captureFirstTouchAttribution } from "../../lib/attribution";
 import { useAuth } from "../../lib/auth";
+import { readCachedProviders, writeCachedProviders } from "../../lib/auth-providers-cache";
+import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { startNativeGoogleLogin } from "../../lib/native/native-auth";
 import { isNativeShell } from "../../lib/native/shell";
+import { providerLane } from "../../lib/provider-lane";
+import { loginNextPath } from "../../lib/safe-path";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -41,7 +49,11 @@ function LoginForm() {
   const { t } = useT();
   const { toast } = useToast();
   const router = useRouter();
-  const nextPath = safeNextPath(searchParams.get("next"));
+  // Strict same-origin path (lib/safe-path.ts): "/\evil.com" or "/<tab>/evil.com"
+  // would otherwise resolve to another host after sign-in.
+  const nextPath = loginNextPath(searchParams.get("next"));
+  // Whether the visitor was sent here from a page they should return to.
+  const hasNext = searchParams.get("next") !== null;
 
   // First field of the form — focus moves here when the mode toggles so
   // keyboard/AT users are not stranded after the fields swap.
@@ -68,13 +80,18 @@ function LoginForm() {
   // In the native shell, Google blocks OAuth inside the WebView, so intercept
   // the link and run the system-browser flow instead. On the web the <a href>
   // navigates normally (no-op here).
+  // The desktop poll sign-in's pairing code, shown while the browser asks the
+  // person to confirm against it (api auth/desktop-confirm.ts).
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
   const handleGoogleClick = (e: React.MouseEvent) => {
     if (!isNativeShell()) return;
     e.preventDefault();
-    startNativeGoogleLogin().catch((err) => {
-      console.error("[AUTH] Native Google login failed:", err);
-      toast(t("auth.googleSignInError"), "error");
-    });
+    startNativeGoogleLogin(setPairingCode)
+      .catch((err) => {
+        console.error("[AUTH] Native Google login failed:", err);
+        toast(t("auth.googleSignInError"), "error");
+      })
+      .finally(() => setPairingCode(null));
   };
 
   // Server controls whether sign-up is open. When BETA_GATE_ENABLED is on,
@@ -92,28 +109,55 @@ function LoginForm() {
   }, [signupOpen, mode]);
 
   // Server-advertised sign-in providers (GET /api/auth/providers). Google
-  // renders unconditionally — it must never be held hostage to this probe;
-  // Apple/Naver buttons appear only when the deployment enables them.
-  // Hidden in the native shell: those providers block WebView OAuth like
-  // Google does, and the external-browser relay currently speaks Google only.
+  // renders unconditionally inside ProviderButtons — it must never be held
+  // hostage to this probe; Apple/Naver appear only when the deployment
+  // enables them. Hidden in the native shell: those providers block WebView
+  // OAuth like Google does, and the external-browser relay speaks Google only.
   const providersQuery = useQuery({
     queryKey: ["auth", "providers"],
-    queryFn: () => apiFetch<AuthProvidersResponse>("/api/auth/providers"),
+    queryFn: async () => {
+      const res = await apiFetch<AuthProvidersResponse>("/api/auth/providers");
+      writeCachedProviders(res);
+      return res;
+    },
+    // Seeded from the last visit so the lane renders at its true height on
+    // first paint instead of expanding once the probe lands.
+    initialData: () => readCachedProviders()?.value,
+    // Required, not optional: without the seed's real age react-query treats it
+    // as fetched just-now on every mount, so the query never goes stale and
+    // never refetches — the seed then outlives any server-side change to the
+    // provider list. Passing the timestamp makes a seed older than staleTime
+    // refetch immediately, which is the whole point of keeping one.
+    initialDataUpdatedAt: () => readCachedProviders()?.at,
     staleTime: 5 * 60_000,
   });
-  const [nativeShell, setNativeShell] = useState(false);
+  // null until mount: see providerLane — the first client render must match
+  // the server's, which cannot know this or read the provider cache.
+  const [nativeShell, setNativeShell] = useState<boolean | null>(null);
   useEffect(() => {
     setNativeShell(isNativeShell());
   }, []);
-  const extraProviders = nativeShell
-    ? []
-    : (providersQuery.data?.providers ?? []).filter((p) => p.id === "apple" || p.id === "naver");
+
+  // First-touch inflow capture. This used to live on /early-access; once
+  // sign-up opened, nobody had a reason to go there, so every direct signup
+  // reported nothing. The login page is the one surface both lanes cross.
+  useEffect(() => {
+    captureFirstTouchAttribution();
+  }, []);
+  // Reveal as soon as we have an answer after mount — the seeded cache
+  // counts, so a repeat visitor sees the lane open at hydration instead of
+  // after the probe.
+  const { extras: extraProviders, resolved: providersResolved } = providerLane(
+    nativeShell,
+    providersQuery.data,
+  );
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.push(nextPath);
+      // No `next`: the user's home, which is Today under UNIFIED_HOME.
+      router.push(hasNext ? nextPath : homePath(user));
     }
-  }, [user, authLoading, nextPath, router]);
+  }, [user, authLoading, hasNext, nextPath, router]);
 
   // Surface redirect feedback from Google OAuth and email verification.
   useEffect(() => {
@@ -153,10 +197,10 @@ function LoginForm() {
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(email, password, nextPath);
+        await login(email, password, hasNext ? nextPath : undefined);
         toast(t("auth.welcomeBack"), "success");
       } else {
-        await register(email, password, name || undefined, nextPath);
+        await register(email, password, name || undefined, hasNext ? nextPath : undefined);
         toast(t("auth.accountCreated"), "success");
       }
     } catch (err) {
@@ -196,137 +240,75 @@ function LoginForm() {
   };
 
   return (
-    <AuthScreen
-      eyebrow={mode === "login" ? t("auth.welcomeBack") : t("auth.signUp")}
-      title={mode === "login" ? t("auth.titleLogin") : t("auth.titleRegister")}
-      description={mode === "login" ? t("auth.descLogin") : t("auth.descRegister")}
-      footer={
-        <Link href="/" className="transition hover:text-slate-700">
-          {t("auth.backHome")}
-        </Link>
-      }
-    >
+    <AuthScreen title={<BrandHeadline />} description={t("auth.subline")} preview={<LanePreview />}>
       {nextPath !== "/inbox" && (
-        <div className="mb-4 rounded-md border border-sky-300/40 bg-sky-300/10 px-3 py-2 text-xs leading-5 text-sky-800">
+        <p className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-2.5 text-role-label text-notice-ink">
           {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
-        </div>
+        </p>
       )}
 
       {/* Invite-only cohort: request access is the action almost every visitor
-          needs, so it leads. Google sign-in 403s for the un-invited, so it drops
-          to a clearly-labelled secondary path. One gate message replaces the old
-          three-way callouts. When the beta gate is off, Google leads as before. */}
-      {!signupOpen ? (
-        <div className="space-y-4">
-          <div className="rounded-md border border-sky-300/40 bg-sky-300/10 px-3 py-2.5 text-xs leading-5 text-sky-800">
-            <span className="font-semibold text-sky-900">{t("auth.inviteOnlyTitle")}</span>{" "}
+          needs, so it leads. Social sign-in 403s for the un-invited, so it
+          drops to a clearly-labelled secondary path. When the beta gate is
+          off — the normal production state — the provider lane leads. */}
+      {!signupOpen && (
+        <div className="mb-6 space-y-3">
+          <div
+            data-testid="access-notice"
+            className="rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-role-label text-notice-ink"
+          >
+            <span className="font-semibold text-notice-ink-strong">
+              {t("auth.inviteOnlyTitle")}
+            </span>{" "}
             {t("auth.inviteOnlyBody")}
           </div>
 
           <Link
             href="/early-access"
-            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white shadow-sm shadow-sky-300/20 transition hover:bg-sky-600"
+            className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
           >
             {t("auth.requestEarlyAccess")}
           </Link>
 
-          <a
-            href={`${API_BASE}/api/auth/google/login`}
-            onClick={handleGoogleClick}
-            className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-slate-200 bg-transparent text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-          >
-            <GoogleMark />
-            {t("auth.googleApprovedSignIn")}
-          </a>
+          <p className="text-center text-role-caption text-ink-mid">{t("auth.alreadyApproved")}</p>
         </div>
-      ) : (
-        <>
-          <a
-            href={`${API_BASE}/api/auth/google/login`}
-            onClick={handleGoogleClick}
-            className="flex h-11 w-full items-center justify-center gap-3 rounded-md bg-stone-100 text-sm font-semibold text-stone-900 shadow-sm transition hover:bg-white"
-          >
-            <GoogleMark />
-            {t("auth.continueWithGoogle")}
-          </a>
-          {extraProviders.map((provider) => (
-            <a
-              key={provider.id}
-              href={`${API_BASE}/api/auth/${provider.id}/login`}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-3 rounded-md border border-slate-200 bg-transparent text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
-            >
-              {provider.id === "apple" ? <AppleMark /> : <NaverMark />}
-              {provider.id === "apple" ? t("auth.continueWithApple") : t("auth.continueWithNaver")}
-            </a>
-          ))}
-          {/* Marketing/doctrine copy is landing-page context — hide it on the app
-              (mobile) for a clean login; keep it on desktop. */}
-          <div className="mt-3 hidden space-y-2 text-center text-[11px] leading-5 text-slate-500 md:block">
-            <p>{t("auth.betaScope")}</p>
-            <p>{t("auth.noSilentActions")}</p>
-            <p>
-              <a
-                href="https://github.com/k08200/klorn/blob/main/docs/doctrine/deterministic-floor.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline decoration-slate-300 underline-offset-2 hover:text-sky-600 hover:decoration-sky-300"
-              >
-                {t("auth.readDoctrine")}
-              </a>
-              <span className="ml-2 text-slate-400">{t("auth.openSourceVersion")}</span>
-            </p>
-          </div>
-        </>
       )}
 
-      <div className="my-5 flex items-center gap-3">
-        <div className="h-px flex-1 bg-slate-200" />
-        <span className="text-xs text-slate-500">
+      <h2 className="mb-4 text-role-head text-ink">
+        {mode === "login" ? t("auth.formTitleLogin") : t("auth.formTitleRegister")}
+      </h2>
+
+      <LegalConsent />
+
+      <section aria-label={t("auth.providerLaneLabel")}>
+        <ProviderButtons
+          extraProviders={extraProviders}
+          resolved={providersResolved}
+          onGoogleClick={handleGoogleClick}
+        />
+        {pairingCode && (
+          <p role="status" className="mt-3 text-role-label text-ink-mid">
+            {t("auth.desktopPairingCode", { code: pairingCode })}
+          </p>
+        )}
+      </section>
+
+      <div className="my-5 flex items-center gap-3" aria-hidden="true">
+        <div className="h-px flex-1 bg-line" />
+        <span className="text-role-caption text-ink-mid">
           {signupOpen ? t("auth.orContinueEmail") : t("auth.orSignInEmail")}
         </span>
-        <div className="h-px flex-1 bg-slate-200" />
+        <div className="h-px flex-1 bg-line" />
       </div>
 
-      {signupOpen && (
-        <div
-          role="group"
-          aria-label={t("auth.formGroupLabel")}
-          className="mb-5 grid grid-cols-2 rounded-md border border-slate-200 bg-slate-50 p-1"
-        >
-          <button
-            type="button"
-            aria-pressed={mode === "login"}
-            onClick={() => changeMode("login")}
-            className={`h-11 rounded px-3 text-sm font-medium transition ${
-              mode === "login"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            {t("nav.logIn")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "register"}
-            onClick={() => changeMode("register")}
-            className={`h-11 rounded px-3 text-sm font-medium transition ${
-              mode === "register"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            {t("auth.signUpShort")}
-          </button>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" aria-label={t("auth.formGroupLabel")}>
         {mode === "register" && (
           <Input
             ref={nameRef}
             id="name"
             label={t("auth.name")}
             type="text"
+            autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("auth.name")}
@@ -338,6 +320,7 @@ function LoginForm() {
           id="email"
           label={t("auth.email")}
           type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => {
             if (emailError) setEmailError(null);
@@ -350,13 +333,13 @@ function LoginForm() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <label htmlFor="password" className="block text-xs font-medium text-slate-500">
+            <label htmlFor="password" className="block text-role-caption font-medium text-ink-mid">
               {t("auth.password")}
             </label>
             {mode === "login" && (
               <Link
                 href="/reset-password"
-                className="inline-flex min-h-10 items-center text-xs text-slate-500 transition hover:text-sky-600"
+                className="focus-ring -my-3 inline-flex min-h-11 items-center rounded-control text-role-caption text-ink-mid transition-colors duration-120 ease-fluid hover:text-accent-deep"
               >
                 {t("auth.resetPassword")}
               </Link>
@@ -365,6 +348,7 @@ function LoginForm() {
           <Input
             id="password"
             type="password"
+            autoComplete={mode === "register" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => {
               if (passwordError) setPasswordError(null);
@@ -377,52 +361,119 @@ function LoginForm() {
           />
         </div>
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || !email || !password}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white shadow-sm shadow-sky-300/20 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+          size="lg"
+          className="w-full"
+          loading={loading}
+          disabled={!email || !password}
+          aria-busy={loading}
         >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-950 border-t-transparent" />
-              {mode === "login" ? t("auth.signingIn") : t("auth.creatingAccount")}
-            </span>
-          ) : mode === "login" ? (
-            t("auth.openDecisionQueue")
-          ) : (
-            t("auth.signUp")
-          )}
-        </button>
+          {loading
+            ? mode === "login"
+              ? t("auth.signingIn")
+              : t("auth.creatingAccount")
+            : mode === "login"
+              ? t("auth.signIn")
+              : t("auth.signUp")}
+        </Button>
       </form>
 
-      <div className="mt-5 border-t border-slate-200 pt-4 text-center text-xs text-slate-400">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-role-label text-ink-mid">
         {signupOpen ? (
           <>
-            {mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}{" "}
-            <button
-              type="button"
+            <span>{mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}</span>
+            <Button
+              variant="link"
               onClick={() => changeMode(mode === "login" ? "register" : "login")}
-              className="inline-flex min-h-10 items-center font-medium text-sky-600 transition hover:text-sky-500"
             >
               {mode === "login" ? t("auth.switchToSignUp") : t("auth.switchToLogIn")}
-            </button>
+            </Button>
           </>
         ) : (
           // Invite request already leads above; here we only help invited users
           // who lost their password, so we point at reset rather than repeat the
           // access CTA a third time.
           <>
-            {t("auth.approvedCantSignIn")}{" "}
+            <span>{t("auth.approvedCantSignIn")}</span>
             <Link
               href="/reset-password"
-              className="inline-flex min-h-10 items-center font-medium text-sky-600 transition hover:text-sky-500"
+              className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-accent-deep underline-offset-2 hover:underline"
             >
               {t("auth.resetYourPassword")}
             </Link>
           </>
         )}
-      </div>
+      </p>
     </AuthScreen>
+  );
+}
+
+/**
+ * The consent line, above both sign-in actions it refers to.
+ *
+ * AuthScreen's footer already links /privacy and /terms, but a pair of nav
+ * links at the bottom of the chrome is not the same thing as telling someone
+ * what they are agreeing to at the moment they agree to it — which is what
+ * both sign-in paths here (Google and email) actually do.
+ *
+ * Above the provider lane rather than under the email form, because the
+ * provider buttons are the first action on the page: a line below the form
+ * would sit after the control a Google signer has already clicked, and that
+ * path leaves the page immediately.
+ *
+ * One template with two placeholders rather than three concatenated fragments:
+ * the clause order differs across the seven languages Klorn ships, and
+ * splitting on the tokens lets each locale put the links where its own grammar
+ * wants them. The order is resolved from the string instead of assumed, so a
+ * locale that names the privacy policy first still renders correctly.
+ */
+function LegalConsent() {
+  const { t } = useT();
+  const linkClass =
+    "focus-ring rounded-chip text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-120 ease-fluid hover:text-accent-deep";
+  // Split on the first occurrence of each token only, keeping ALL the text
+  // around them. A plain `split` would silently drop everything after a
+  // repeated token, and the i18n parity guard counts keys, not the
+  // placeholders inside them, so a hand-edited translation can produce any of
+  // these shapes. Order is read from the string rather than assumed, and a
+  // token that never appeared leaves its slot empty instead of printing
+  // "{privacy}" verbatim.
+  const template = t("auth.legalConsent");
+  const termsAt = template.indexOf("{terms}");
+  const privacyAt = template.indexOf("{privacy}");
+  const termsFirst = termsAt <= privacyAt;
+  const first = termsFirst ? "{terms}" : "{privacy}";
+  const second = termsFirst ? "{privacy}" : "{terms}";
+  const firstAt = template.indexOf(first);
+  const rest = firstAt < 0 ? "" : template.slice(firstAt + first.length);
+  const secondAt = rest.indexOf(second);
+  const lead = firstAt < 0 ? template : template.slice(0, firstAt);
+  const middle = secondAt < 0 ? rest : rest.slice(0, secondAt);
+  const tail = secondAt < 0 ? "" : rest.slice(secondAt + second.length);
+  // Any token that survived (a duplicate, or the pair being absent) is stripped
+  // so no brace ever reaches the user.
+  const text = (part: string) => part.replace(/\{(?:terms|privacy)\}/g, "");
+
+  const termsLink = (
+    <Link href="/terms" className={linkClass}>
+      {t("auth.legalConsentTerms")}
+    </Link>
+  );
+  const privacyLink = (
+    <Link href="/privacy" className={linkClass}>
+      {t("auth.legalConsentPrivacy")}
+    </Link>
+  );
+
+  return (
+    <p className="mb-4 text-center text-role-caption text-ink-mid">
+      {text(lead)}
+      {termsFirst ? termsLink : privacyLink}
+      {text(middle)}
+      {termsFirst ? privacyLink : termsLink}
+      {text(tail)}
+    </p>
   );
 }
 
@@ -431,7 +482,10 @@ function LoginForm() {
  * routes). null = not a social error; the caller shows the raw code.
  */
 function socialErrorMessage(error: string, t: (key: string) => string): string | null {
-  const match = /^(?:apple|naver)_(denied|failed|email_in_use|email_unverified)$/.exec(error);
+  const match =
+    /^(?:apple|naver)_(denied|failed|config|exchange|token|claims|email_in_use|email_unverified)$/.exec(
+      error,
+    );
   if (!match) return null;
   switch (match[1]) {
     case "denied":
@@ -440,69 +494,34 @@ function socialErrorMessage(error: string, t: (key: string) => string): string |
       return t("auth.socialEmailInUse");
     case "email_unverified":
       return t("auth.socialEmailUnverified");
+    // The deployment's provider credentials are wrong or half-set. Retrying
+    // cannot fix that, so say so instead of inviting a pointless second try.
+    case "config":
+      return t("auth.socialNotConfigured");
+    // A valid sign-in that carried no email. The visitor CAN fix this by
+    // choosing to share an address, which is worth telling them.
+    case "claims":
+      return t("auth.socialNoEmail");
     default:
       return t("auth.socialSignInError");
   }
 }
 
-function AppleMark() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M16.7 12.9c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.9-1.6 0-3.1 1-4 2.4-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.6-1-2.7-3.6zM14.4 5.6c.7-.8 1.1-1.9 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4z" />
-    </svg>
-  );
-}
-
-function NaverMark() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24">
-      <rect width="24" height="24" rx="4" fill="#03C75A" />
-      <path fill="#fff" d="M13.9 6.5v5.4L10.1 6.5H6.5v11h3.6v-5.4l3.8 5.4h3.6v-11z" />
-    </svg>
-  );
-}
-
-function GoogleMark() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24">
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      />
-    </svg>
-  );
-}
-
-function safeNextPath(value: string | null): string {
-  if (!value) return "/inbox";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/inbox";
-  if (value.startsWith("/login")) return "/inbox";
-  return value;
-}
-
 function returnDestinationLabel(path: string, t: (key: string) => string): string {
   const cleanPath = path.split("?")[0] || path;
-  if (cleanPath === "/inbox") return t("nav.decisionQueue");
+  // "/inbox" is Approvals with UNIFIED_HOME on and the legacy page with it off;
+  // new copy names it Approvals either way (docs/product-vocabulary.md).
+  if (cleanPath === "/inbox") return t("nav.v2.approvals");
+  if (cleanPath === "/today") return t("nav.v2.today");
+  if (cleanPath === "/assistant" || cleanPath.startsWith("/assistant/")) return t("nav.assistant");
   if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return t("nav.mail");
   if (cleanPath === "/calendar") return t("nav.calendar");
   if (cleanPath === "/briefing") return t("nav.briefing");
-  if (cleanPath === "/settings") return t("settings.title");
   if (cleanPath.startsWith("/settings/memory")) return t("auth.destMemory");
   if (cleanPath.startsWith("/settings/usage")) return t("auth.destUsage");
   if (cleanPath.startsWith("/settings/status")) return t("auth.destStatus");
   if (cleanPath.startsWith("/settings/email-feedback")) return t("auth.destFeedback");
+  if (cleanPath === "/settings" || cleanPath.startsWith("/settings/")) return t("settings.title");
   if (cleanPath === "/billing") return t("nav.billing");
   if (cleanPath === "/files") return t("auth.destFiles");
   if (cleanPath === "/admin" || cleanPath.startsWith("/admin/")) return t("nav.admin");

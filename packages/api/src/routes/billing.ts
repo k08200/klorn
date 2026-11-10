@@ -2,9 +2,11 @@ import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import {
+  cancelPaddleSubscription,
   createPaddleCheckout,
   createPaddlePortalUrl,
   isPaddleConfigured,
+  undoPaddleCancellation,
 } from "../billing/paddle.js";
 import { getUserUsage } from "../billing/quota-limiter.js";
 import {
@@ -15,18 +17,40 @@ import {
   PLANS,
   stripe,
 } from "../billing/stripe.js";
-import { verifyOpenRouterKey } from "../billing/verify-provider-key.js";
+import { verifyAnthropicKey } from "../billing/verify-provider-key.js";
 import { TRIAL_DAYS } from "../config.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { CURATED_MODELS, isCuratedModel } from "../llm/model-catalog.js";
-import { clearFallbackState } from "../llm/model-fallback.js";
 import { MODEL } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;
   return crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 12);
+}
+
+/**
+ * Mirror a completed provider action into our row.
+ *
+ * The provider call already succeeded when this runs, so a DB failure must NOT
+ * surface as "cancellation failed" — that would push the user to retry an
+ * action that is already done. Report the divergence for a human instead and
+ * let the confirming webhook reconcile the row.
+ */
+async function persistOrReportDrift(
+  userId: string,
+  data: { subscriptionCancelAt: Date | null; subscriptionRenewsAt: Date | null },
+): Promise<void> {
+  try {
+    await prisma.user.update({ where: { id: userId }, data });
+  } catch (err) {
+    console.error("[BILLING] provider action applied but local write failed", err);
+    captureError(err, {
+      tags: { scope: "billing.subscription.persist_drift" },
+      extra: { userId, ...data },
+    });
+  }
 }
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -126,6 +150,62 @@ export async function billingRoutes(app: FastifyInstance) {
     return { url: session.url };
   });
 
+  // POST /api/billing/cancel — schedule the Paddle subscription to end at the
+  // period boundary. Never immediate: the refund policy promises access until
+  // the end of the period already paid for, and a canceled trial must simply
+  // never be charged. Stripe subscribers cancel via the portal instead.
+  app.post(
+    "/cancel",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.code(404).send({ error: "User not found" });
+      if (!isPaddleConfigured() || !user.paddleSubscriptionId) {
+        return reply.code(400).send({ error: "No cancellable subscription" });
+      }
+
+      // Already scheduled (double-click, or a retry after a flaky response):
+      // report the existing date instead of asking Paddle to cancel twice.
+      if (user.subscriptionCancelAt) {
+        return { cancelAt: user.subscriptionCancelAt.toISOString() };
+      }
+
+      const { effectiveAt } = await cancelPaddleSubscription(user.paddleSubscriptionId);
+      // Persist immediately so the UI reflects the pending cancel without
+      // waiting for the subscription.updated webhook (which re-confirms it).
+      const cancelAt = effectiveAt ? new Date(effectiveAt) : null;
+      await persistOrReportDrift(userId, {
+        subscriptionCancelAt: cancelAt,
+        subscriptionRenewsAt: null,
+      });
+      return { cancelAt: cancelAt ? cancelAt.toISOString() : null };
+    },
+  );
+
+  // POST /api/billing/cancel/undo — remove a scheduled cancellation ("keep my
+  // subscription"). Billing resumes on the original schedule; the follow-up
+  // subscription.updated webhook restores the renewal date.
+  app.post(
+    "/cancel/undo",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.code(404).send({ error: "User not found" });
+      if (!isPaddleConfigured() || !user.paddleSubscriptionId || !user.subscriptionCancelAt) {
+        return reply.code(400).send({ error: "No scheduled cancellation" });
+      }
+
+      const { renewsAt } = await undoPaddleCancellation(user.paddleSubscriptionId);
+      await persistOrReportDrift(userId, {
+        subscriptionCancelAt: null,
+        subscriptionRenewsAt: renewsAt ? new Date(renewsAt) : null,
+      });
+      return { resumed: true, renewsAt };
+    },
+  );
+
   // GET /api/billing/status — Get user's billing status
   app.get("/status", async (request, reply) => {
     const userId = getUserId(request);
@@ -165,6 +245,13 @@ export async function billingRoutes(app: FastifyInstance) {
       // exists for them too (billing-page Manage button, Paddle launch 2026-07-20).
       hasPaddleCustomer: Boolean(user.paddleCustomerId),
       webCheckoutAvailable: isWebCheckoutAvailable(),
+      // Live subscription detail for the billing page: provider status,
+      // renewal date, pending-cancel date, and whether the in-app cancel
+      // route can act (Paddle-only — Stripe cancels live in its portal).
+      subscriptionStatus: user.subscriptionStatus,
+      renewsAt: user.subscriptionRenewsAt?.toISOString() ?? null,
+      cancelAt: user.subscriptionCancelAt?.toISOString() ?? null,
+      canCancelInApp: isPaddleConfigured() && Boolean(user.paddleSubscriptionId),
     };
   });
 
@@ -199,7 +286,7 @@ export async function billingRoutes(app: FastifyInstance) {
       activeModel: MODEL,
       availableModels: CURATED_MODELS,
       selectedModel: isCuratedModel(user.chatModel) ? user.chatModel : null,
-      hasOpenRouterApiKey: !!user.openRouterApiKey,
+      hasAnthropicApiKey: !!user.anthropicApiKey,
       hasGeminiApiKey: !!user.geminiApiKey,
       usage: {
         rpmUsed: usage.rpmUsed,
@@ -216,6 +303,9 @@ export async function billingRoutes(app: FastifyInstance) {
   app.patch(
     "/models",
     {
+      // Each key save makes one outbound verification call; cap the route so
+      // it can't be driven as a key-testing loop from Klorn's egress IP.
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
       // Bound + shape the body: a BYOK key is short, so cap it (an unbounded
       // string would bloat the row and get re-read+decrypted on every hot-path
       // call). additionalProperties:false rejects anything unexpected.
@@ -225,25 +315,25 @@ export async function billingRoutes(app: FastifyInstance) {
           additionalProperties: false,
           properties: {
             chatModel: { type: "string", maxLength: 256 },
-            // Single-key policy (2026-07-16 outage): OpenRouter is THE BYOK
-            // slot — it routes every model we pin, including the Gemini
-            // family. New geminiApiKey writes are rejected by this schema
-            // (additionalProperties:false); clearGeminiApiKey stays so legacy
-            // users can remove a stored one.
+            // Single-key policy (2026-07-16 outage): one BYOK slot, and since
+            // the Claude-only switch (2026-11-01) it is an Anthropic key — the
+            // provider every pinned surface runs on. New geminiApiKey writes
+            // are rejected by this schema (additionalProperties:false);
+            // clearGeminiApiKey stays so legacy users can remove a stored one.
             clearGeminiApiKey: { type: "boolean" },
-            clearOpenRouterApiKey: { type: "boolean" },
-            openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
+            clearAnthropicApiKey: { type: "boolean" },
+            anthropicApiKey: { type: ["string", "null"], maxLength: 512 },
           },
         },
       },
     },
     async (request, reply) => {
       const userId = getUserId(request);
-      const { chatModel, openRouterApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
+      const { chatModel, anthropicApiKey, clearAnthropicApiKey, clearGeminiApiKey } =
         request.body as {
           chatModel?: string;
-          openRouterApiKey?: string | null;
-          clearOpenRouterApiKey?: boolean;
+          anthropicApiKey?: string | null;
+          clearAnthropicApiKey?: boolean;
           clearGeminiApiKey?: boolean;
         };
 
@@ -255,21 +345,28 @@ export async function billingRoutes(app: FastifyInstance) {
       // misleading + unnecessary PII). Clearing keys stays allowed so a
       // downgraded user can remove theirs. The chat-model CHOICE is for
       // everyone — the per-user daily cost cap is the spend guard.
-      const isSettingKey =
-        typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0;
+      const isSettingKey = typeof anthropicApiKey === "string" && anthropicApiKey.trim().length > 0;
       if (isSettingKey && !isEntitled(user.plan, user.role)) {
-        return reply.code(403).send({ error: "BYOK requires an active subscription" });
+        return reply.code(403).send({
+          error: "BYOK requires an active subscription",
+          code: "ENTITLEMENT_REQUIRED",
+        });
       }
 
       // Verify a NEW key upstream before storing it. A definitively-rejected
       // key stored silently is exactly how the 2026-07-16 outage started —
       // every later chain walk failed on it with zero signal to the user.
-      if (isSettingKey && openRouterApiKey) {
-        const verdict = await verifyOpenRouterKey(openRouterApiKey.trim());
+      if (isSettingKey && anthropicApiKey) {
+        const verdict = await verifyAnthropicKey(anthropicApiKey.trim());
+        if (verdict === "malformed") {
+          return reply.code(400).send({
+            error: "That doesn't look like an Anthropic API key — it starts with sk-ant-.",
+          });
+        }
         if (verdict === "invalid") {
           return reply.code(400).send({
             error:
-              "That OpenRouter key was rejected by the provider — check it at openrouter.ai/keys and try again.",
+              "That Anthropic key was rejected by the provider — check it at platform.claude.com/settings/keys and try again.",
           });
         }
         // "unreachable" falls through: never block a save on provider noise.
@@ -278,7 +375,7 @@ export async function billingRoutes(app: FastifyInstance) {
       const updateData: {
         chatModel?: string;
         geminiApiKey?: string | null;
-        openRouterApiKey?: string | null;
+        anthropicApiKey?: string | null;
       } = {};
 
       if (typeof chatModel === "string") {
@@ -291,11 +388,11 @@ export async function billingRoutes(app: FastifyInstance) {
         updateData.chatModel = chatModel;
       }
 
-      if (typeof openRouterApiKey === "string") {
-        const trimmed = openRouterApiKey.trim();
-        updateData.openRouterApiKey = trimmed ? encryptOptional(trimmed) : null;
-      } else if (clearOpenRouterApiKey) {
-        updateData.openRouterApiKey = null;
+      if (typeof anthropicApiKey === "string") {
+        const trimmed = anthropicApiKey.trim();
+        updateData.anthropicApiKey = trimmed ? encryptOptional(trimmed) : null;
+      } else if (clearAnthropicApiKey) {
+        updateData.anthropicApiKey = null;
       }
 
       // Legacy Gemini slot: clear-only (single-key policy — see the schema note).
@@ -314,10 +411,10 @@ export async function billingRoutes(app: FastifyInstance) {
 
       return {
         success: true,
-        hasOpenRouterApiKey:
-          updateData.openRouterApiKey !== undefined
-            ? !!updateData.openRouterApiKey
-            : !!user.openRouterApiKey,
+        hasAnthropicApiKey:
+          updateData.anthropicApiKey !== undefined
+            ? !!updateData.anthropicApiKey
+            : !!user.anthropicApiKey,
         hasGeminiApiKey:
           updateData.geminiApiKey !== undefined ? !!updateData.geminiApiKey : !!user.geminiApiKey,
       };

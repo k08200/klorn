@@ -9,11 +9,17 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
+    implementation project(':aparajita-capacitor-secure-storage')
     implementation project(':capacitor-community-speech-recognition')
     implementation project(':capacitor-app')
     implementation project(':capacitor-browser')
+    implementation project(':capacitor-haptics')
+    implementation project(':capacitor-keyboard')
+    implementation project(':capacitor-local-notifications')
+    implementation project(':capacitor-preferences')
     implementation project(':capacitor-push-notifications')
-    implementation project(':ebarooni-capacitor-calendar')
+    implementation project(':capacitor-share')
+    implementation project(':capacitor-splash-screen')
     implementation project(':revenuecat-purchases-capacitor')
 
 }

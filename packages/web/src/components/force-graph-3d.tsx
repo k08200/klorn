@@ -3,13 +3,13 @@
 import { useEffect, useRef } from "react";
 import { type GraphEdge, type GraphNode, TIER_COLORS } from "./relationship-graph";
 
-// 4-tier colours come from the shared token map in relationship-graph so the
+// Lane colours come from the shared token map in relationship-graph so the
 // 2D SVG, this 3D view, the firewall board, and legend never drift apart.
 
 function colorFor(n: GraphNode): string {
   if (n.kind === "self") return "#fbbf24"; // == --color-accent
   if (n.kind === "feature") return "#a78bfa";
-  if (n.kind === "tier") return TIER_COLORS[n.tags?.[0] ?? ""] ?? "#a78bfa";
+  if (n.kind === "tier") return TIER_COLORS[n.tags?.[0] ?? ""] ?? "#94a3b8"; // slate-400
   if (n.tags?.includes("overdue_reply")) return "#fb7185"; // reuses PUSH rose
   if (n.tags?.includes("meeting_soon")) return "#f59e0b";
   // Learned engagement (from the user's own replies) outranks raw frequency.
@@ -57,6 +57,10 @@ export function ForceGraph3DView({ nodes, edges }: { nodes: GraphNode[]; edges: 
       const height = Math.round(window.innerHeight * 0.72);
       graph = new ForceGraph3D(containerRef.current)
         .backgroundColor("#0c0c10")
+        // The library's built-in hint ("Left-click: rotate, Mouse-wheel…") is
+        // fixed English text overlaid on every locale; the page copy above and
+        // the text fallback below carry the graph instead.
+        .showNavInfo(false)
         .width(containerRef.current.clientWidth)
         .height(height)
         .graphData({
@@ -99,7 +103,7 @@ export function ForceGraph3DView({ nodes, edges }: { nodes: GraphNode[]; edges: 
   return (
     <div
       ref={containerRef}
-      className="overflow-hidden rounded-2xl border border-stone-700/45"
+      className="overflow-hidden rounded-card border border-stone-700/45"
       style={{ minHeight: "60vh" }}
     />
   );

@@ -61,7 +61,7 @@ def card(name, lines, ko=False):
 DEMO = {
     "en": [
         ("login", "Sign in — Klorn connects your Gmail and Calendar"),
-        ("firewall", "The firewall sorts every email: PUSH / QUEUE / SILENT / AUTO"),
+        ("firewall", "The firewall sorts every email: PUSH / MEETING / QUEUE / INFO / SILENT"),
         ("mail_list", "One list across your inboxes — with AI summaries"),
         ("judgment", "Every message gets a judgment: summary, key points, action items"),
         ("draft", "Klorn drafts the reply — you edit and approve"),
@@ -72,7 +72,7 @@ DEMO = {
     ],
     "ko": [
         ("login", "로그인 — Klorn이 Gmail과 캘린더를 연결합니다"),
-        ("firewall", "방화벽이 모든 메일을 분류합니다: PUSH / QUEUE / SILENT / AUTO"),
+        ("firewall", "방화벽이 모든 메일을 분류합니다: PUSH / MEETING / QUEUE / INFO / SILENT"),
         ("mail_list", "여러 인박스를 하나의 리스트로 — AI 요약과 함께"),
         ("judgment", "모든 메일에 판정: 요약 · 핵심 포인트 · 액션 아이템"),
         ("draft", "답장은 Klorn이 초안 — 수정과 승인은 당신이"),
@@ -85,13 +85,13 @@ DEMO = {
 
 PROMO = {
     "en": [
-        ("p1", "Every email sorted — PUSH / QUEUE / SILENT / AUTO"),
+        ("p1", "Every email sorted — PUSH / MEETING / QUEUE / INFO / SILENT"),
         ("p2", "AI judgment on every message"),
         ("p3", "Drafts replies. You approve."),
         ("p4", "Meetings + calendar, from your mail"),
     ],
     "ko": [
-        ("p1", "모든 메일을 4단계로 분류 — PUSH / QUEUE / SILENT / AUTO"),
+        ("p1", "모든 메일을 다섯 레인으로 분류 — PUSH / MEETING / QUEUE / INFO / SILENT"),
         ("p2", "모든 메일에 AI 판정"),
         ("p3", "답장은 AI가 초안, 승인은 당신이"),
         ("p4", "메일에서 미팅·캘린더까지"),

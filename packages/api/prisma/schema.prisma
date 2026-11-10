@@ -10,115 +10,282 @@ datasource db {
 }
 
 model User {
-  id                        String                     @id @default(uuid())
-  email                     String                     @unique
-  passwordHash              String?
-  name                      String?
-  role                      UserRole                   @default(USER)
-  plan                      Plan                       @default(FREE)
-  chatModel                 String                     @default("google/gemma-4-31b-it:free")
-  agentModel                String?
-  openRouterApiKey          String?
-  geminiApiKey              String?
+  id                         String                     @id @default(uuid())
+  email                      String                     @unique
+  // Purpose of the PRIMARY inbox (the account the user signed in with) —
+  // same vocabulary as LinkedInboxAccount.purpose. Null = never asked.
+  primaryInboxPurpose        String?
+  companyDomains             String[]                   @default([])
+  triagePriorities           String?
+  /// Proactive reply drafts: today's slot counter (mail/proactive-drafts.ts).
+  /// proactiveDraftDay is the UTC day ("YYYY-MM-DD") the count belongs to;
+  /// both are only ever changed by conditional updates, which is what makes
+  /// PROACTIVE_DRAFT_DAILY_CAP a hard bound.
+  proactiveDraftDay          String?
+  proactiveDraftCount        Int                        @default(0)
+  /// Automatic one-click unsubscribes: today's per-user slot counter
+  /// (mail/unsubscribe-quota.ts). Same conditional-update pattern as
+  /// proactiveDraftDay/Count — AUTO_UNSUBSCRIBE_USER_DAILY_CAP is a hard bound.
+  autoUnsubscribeDay         String?
+  autoUnsubscribeCount       Int                        @default(0)
+  passwordHash               String?
+  name                       String?
+  role                       UserRole                   @default(USER)
+  plan                       Plan                       @default(FREE)
+  /// The user's chat/assistant model pick (a CURATED_MODELS id). "" — or any
+  /// id no longer in the catalog — means unset: the surface default applies.
+  /// Stays NOT NULL: an instance still running the previous client mid-deploy
+  /// reads it as a required string.
+  chatModel                  String                     @default("")
+  agentModel                 String?
+  /// BYOK Anthropic key, encrypted (crypto-tokens). Paid plans only.
+  anthropicApiKey            String?
+  /// Legacy BYOK slot, encrypted: clear-only, no new writes.
+  geminiApiKey               String?
   // Naver IMAP connection (Korean ICP support).
   // OAuth is intentionally skipped — Naver issues a separate "외부 메일
   // 가져오기 비밀번호" the user generates in their Naver settings; we
   // store the encrypted form so a DB leak doesn't expose the live IMAP
   // password. Host defaults to imap.naver.com:993 (SSL) but is
   // overridable for other IMAP providers in the future.
-  naverImapEmail            String?
-  naverImapPasswordCipher   String?
-  naverImapHost             String?
-  naverImapConnectedAt      DateTime?
+  naverImapEmail             String?
+  naverImapPasswordCipher    String?
+  naverImapHost              String?
+  naverImapConnectedAt       DateTime?
   // GitHub as a second attention source (BYO personal access token, like
   // the Naver app-password above — OAuth/App registration intentionally
   // skipped so self-hosters need no approval). The cipher is the encrypted
   // PAT; lastPolledAt is the Notifications API `since` cursor.
-  githubTokenCipher         String?
-  githubConnectedAt         DateTime?
-  githubLastPolledAt        DateTime?
+  githubTokenCipher          String?
+  githubConnectedAt          DateTime?
+  githubLastPolledAt         DateTime?
   // Telegram delivery (self-hoster BYO bot via BotFather).
   // telegramChatId is the bound chat for outbound PUSH-tier interrupts —
   // unique so a chat can only ever belong to one account. telegramLinkCode
   // is a one-time crypto-random code minted by POST /api/telegram/link and
   // consumed by the bot webhook's `/start <code>` handler within 10 minutes.
-  telegramChatId            String?                    @unique
-  telegramLinkCode          String?                    @unique
-  telegramLinkCodeExpiresAt DateTime?
-  stripeId                  String?                    @unique
+  telegramChatId             String?                    @unique
+  telegramLinkCode           String?                    @unique
+  telegramLinkCodeExpiresAt  DateTime?
+  stripeId                   String?                    @unique
   // Paddle Billing customer (ctm_…). Set by the paddle webhook on the first
   // subscription event; used for the customer portal and as the fallback
   // mapping for events that arrive without custom_data.userId.
-  paddleCustomerId          String?                    @unique
-  emailVerified             Boolean                    @default(false)
+  paddleCustomerId           String?                    @unique
+  // Paddle subscription (sub_…) currently attached to this account, so the
+  // in-app cancel route can call the Paddle API without a lookup. Cleared when
+  // the subscription reaches its terminal `canceled` status.
+  paddleSubscriptionId       String?                    @unique
+  // Live provider subscription status (active/trialing/past_due/paused/
+  // canceled) as last reported by webhook. Entitlement still lives in `plan` —
+  // this is display/guard state, never an entitlement source.
+  subscriptionStatus         String?
+  // Next automatic charge (Paddle next_billed_at). Null when a cancel is
+  // scheduled or there is no live subscription.
+  subscriptionRenewsAt       DateTime?
+  // When a cancellation is scheduled (in-app or portal), the date access ends
+  // (scheduled_change.effective_at). Null = no pending cancel.
+  subscriptionCancelAt       DateTime?
+  // occurred_at of the newest provider event whose detail we applied. Paddle
+  // does not guarantee delivery order, so a late retry carrying an older
+  // scheduled_change must not resurrect a cancellation the user already undid.
+  subscriptionEventAt        DateTime?
+  emailVerified              Boolean                    @default(false)
+  // Calendar co-attendance watermark (pim/coattendance/): a UTC day such that
+  // every finished UTC day up to and including it has been evaluated for every
+  // included Google calendar source. A day at or before it is never evaluated
+  // again. Null until the first pass; a data wipe resets it.
+  coAttendanceCountedThrough DateTime?
   // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
   // token is never stored, same standard as Device.tokenHash.
-  verifyToken               String?
-  verifyTokenExp            DateTime?
-  resetToken                String?
-  resetTokenExp             DateTime?
+  verifyToken                String?
+  verifyTokenExp             DateTime?
+  resetToken                 String?
+  resetTokenExp              DateTime?
   // Global session-revocation epoch. Stamped on password reset; any JWT whose
   // `iat` predates this instant is rejected at the auth gate, independently of
   // the Device table. Closes the reset bypass where wiping all devices dropped
   // the user to zero devices and the "no devices = legacy, allow" branch
   // resurrected every still-unexpired stolen token.
-  sessionsInvalidatedAt     DateTime?
-  betaProGrantedAt          DateTime?
+  sessionsInvalidatedAt      DateTime?
+  // Historical marker only: stamped on the signups that got free beta PRO
+  // before 2026-10-24. Nothing writes it now (every signup starts on FREE);
+  // kept so those accounts stay identifiable.
+  betaProGrantedAt           DateTime?
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in
   // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
-  welcomeEmailSentAt        DateTime?
-  conversations             Conversation[]
-  tokens                    UserToken[]
-  identities                UserIdentity[]
-  linkedCalendarAccounts    LinkedCalendarAccount[]
-  linkedInboxAccounts       LinkedInboxAccount[]
-  tasks                     Task[]
-  notes                     Note[]
-  reminders                 Reminder[]
-  contacts                  Contact[]
-  calendarEvents            CalendarEvent[]
-  automationConfig          AutomationConfig?
-  agentLogs                 AgentLog[]
-  notifications             Notification[]
-  pushSubscriptions         PushSubscription[]
-  devicePushTokens          DevicePushToken[]
-  pushDeliveryLogs          PushDeliveryLog[]
-  pushRingEvents            PushRingEvent[]
-  phoneEscalations          PhoneEscalation[]
-  actionOutbox              ActionOutbox[]
-  calibrationSnapshots      CalibrationSnapshot[]
-  memories                  Memory[]
-  skills                    Skill[]
-  tokenUsages               TokenUsage[]
-  devices                   Device[]
-  emailMessages             EmailMessage[]
-  emailAttachments          EmailAttachment[]
-  candidateIntakes          CandidateIntake[]
-  emailRules                EmailRule[]
-  attentionItems            AttentionItem[]
-  commitments               Commitment[]
-  feedbackEvents            FeedbackEvent[]
-  decisionLabels            DecisionLabel[]
-  emailLabelFeedback        EmailLabelFeedback[]
-  playbookActivations       ActivatedPlaybook[]
-  workContextSnapshots      WorkContextSnapshot[]
-  feedbackPolicyPreferences FeedbackPolicyPreference[]
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  emailProcessingLogs       EmailProcessingLog[]
-  contactTrustScores        ContactTrustScore[]
-  contactEngagementScores   ContactEngagementScore[]
-  llmCostLedger             LlmCostLedger[]
-  llmUsageLogs              LlmUsageLog[]
-  analyticsEvents           AnalyticsEvent[]
-  senderTraits              SenderTrait[]
-  learnedRules              LearnedRule[]
+  welcomeEmailSentAt         DateTime?
+  conversations              Conversation[]
+  tokens                     UserToken[]
+  identities                 UserIdentity[]
+  linkedCalendarAccounts     LinkedCalendarAccount[]
+  linkedInboxAccounts        LinkedInboxAccount[]
+  linkedDriveAccounts        LinkedDriveAccount[]
+  tasks                      Task[]
+  notes                      Note[]
+  reminders                  Reminder[]
+  contacts                   Contact[]
+  calendarEvents             CalendarEvent[]
+  coAttendanceMeetings       CoAttendanceMeeting[]
+  driveFiles                 DriveFile[]
+  driveFileSummaries         DriveFileSummary[]
+  driveSummaryUsage          DriveSummaryUsage[]
+  automationConfig           AutomationConfig?
+  dataWipe                   DataWipe?
+  klornAddress               KlornAddress?
+  agentLogs                  AgentLog[]
+  notifications              Notification[]
+  pushSubscriptions          PushSubscription[]
+  devicePushTokens           DevicePushToken[]
+  pushDeliveryLogs           PushDeliveryLog[]
+  pushRingEvents             PushRingEvent[]
+  phoneEscalations           PhoneEscalation[]
+  actionOutbox               ActionOutbox[]
+  calibrationSnapshots       CalibrationSnapshot[]
+  memories                   Memory[]
+  skills                     Skill[]
+  tokenUsages                TokenUsage[]
+  devices                    Device[]
+  emailMessages              EmailMessage[]
+  emailAttachments           EmailAttachment[]
+  candidateIntakes           CandidateIntake[]
+  emailRules                 EmailRule[]
+  screenerDecisions          ScreenerDecision[]
+  pmfResponse                PmfResponse?
+  attentionItems             AttentionItem[]
+  contactDossiers            ContactDossier[]
+  threadBriefs               ThreadBrief[]
+  teams                      Team[]
+  commitments                Commitment[]
+  feedbackEvents             FeedbackEvent[]
+  decisionLabels             DecisionLabel[]
+  attentionFacts             AttentionFacts[]
+  emailLabelFeedback         EmailLabelFeedback[]
+  playbookActivations        ActivatedPlaybook[]
+  workContextSnapshots       WorkContextSnapshot[]
+  feedbackPolicyPreferences  FeedbackPolicyPreference[]
+  /// First-touch inflow attribution (utm_* / ref / lp), captured on the login
+  /// surface and carried through signup. No PII — params and hostnames only.
+  attribution                String?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  emailProcessingLogs        EmailProcessingLog[]
+  contactTrustScores         ContactTrustScore[]
+  contactEngagementScores    ContactEngagementScore[]
+  contactCoAttendances       ContactCoAttendance[]
+  llmCostLedger              LlmCostLedger[]
+  llmUsageLogs               LlmUsageLog[]
+  analyticsEvents            AnalyticsEvent[]
+  senderTraits               SenderTrait[]
+  senderLabels               SenderLabel[]
+  sentMessages               SentMessage[]
+  sendReceipts               SendReceipt[]
+  learnedRules               LearnedRule[]
+  apiKeys                    ApiKey[]
+  mcpWriteAudits             McpWriteAudit[]
+  imapMovedMessages          ImapMovedMessage[]
 }
 
 enum UserRole {
   USER
   ADMIN
+}
+
+// Machine credentials for the MCP endpoint (routes/mcp.ts) — and ONLY it:
+// requireAuth never accepts one, so a leaked key exposes the MCP toolset,
+// not the account. keyHash is the Device.tokenHash standard (SHA-256 of the
+// raw key; the raw key is shown once at creation and never stored).
+model ApiKey {
+  id         String           @id @default(uuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String           @unique
+  prefix     String // display stub: "klorn_sk_ab12cd"
+  // What the key may do over MCP. Defaults to read, so every key that existed
+  // before this column stays read-only. read_write is only granted, and only
+  // honoured, while MCP_WRITE_TOOLS_ENABLED is on: with the flag off a
+  // read_write key acts as read (authenticateApiKey).
+  permission ApiKeyPermission @default(read)
+  createdAt  DateTime         @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
+
+/// One row per MCP write-tool call (step A2a of
+/// docs/providers/unified-platform-plan.md): what an agent tried to change,
+/// through which key, and how it ended. Nothing is written while
+/// MCP_WRITE_TOOLS_ENABLED is off, on any path.
+///
+/// An ALLOWED call is inserted BEFORE the tool runs as `attempted` (a failed
+/// insert refuses the call, so every executed write has a row) and settled after
+/// it: `ok` only when the tool reported success, `error` otherwise. `error` does
+/// NOT guarantee "no effect" (e.g. the Gmail change succeeded and the local
+/// update failed); `attempted` means the run never settled (crash, or the
+/// settle write failed) and the outcome is unknown. A REFUSED call (read key,
+/// over the cap) is `refused`, inserted best-effort and throttled to one row
+/// per (key, tool, reason) per minute, so a burst never becomes a burst of inserts.
+///
+/// Never holds mail content: targetId is an opaque message id and argsHash is
+/// SHA-256 over the canonical JSON of the arguments. Rows are swept after 90
+/// days by log-retention.ts, removed with the User (cascade) and by purgeUserData.
+///
+/// apiKeyId is deliberately NOT a foreign key: the history must outlive the key
+/// (revoke today, row removal tomorrow) and a read of "writes per key" only
+/// needs the id.
+model McpWriteAudit {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeyId String
+
+  tool     String
+  targetId String? // opaque message id the call named; null when absent or not id-shaped
+  argsHash String // SHA-256 hex of the canonical JSON of the call's arguments
+  outcome  McpAuditOutcome
+  reason   String? // short code: permission_denied | rate_limited | tool_error | exception
+
+  // set_tier only (step A2b): the lane the call changed from and to, recorded when
+  // the lane actually changed. Lets the activity log show the change and a later
+  // step revert it. Null for every other tool, refusal and no-op.
+  tierFrom String?
+  tierTo   String?
+
+  // create_draft only (step A4): what identifies the draft without storing any of
+  // it. bodyHash is the SHA-256 hex of the body text as handed to the provider,
+  // written with the `attempted` row (argsHash only marks a body over 4 KB as
+  // oversize, so it cannot tell two long drafts apart). recipientHash is the
+  // SHA-256 hex of the lowercased recipient address and draftId the provider's
+  // draft id, both written when the draft was created. No body, address or
+  // subject is stored. Null for every other tool, for refusals, and for a draft
+  // that was not created.
+  bodyHash      String?
+  recipientHash String?
+  draftId       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([createdAt]) // the retention sweep's range scan
+}
+
+enum McpAuditOutcome {
+  attempted
+  ok
+  refused
+  error
+}
+
+// Lowercase like SenderTraitKind and SenderTraitStatus: these exact strings are
+// also the wire values of @klorn/contract's ApiKeyWire.permission, so the DB,
+// the API and every client share one spelling and no mapping layer exists.
+enum ApiKeyPermission {
+  read
+  read_write
 }
 
 model Device {
@@ -189,23 +356,45 @@ enum Role {
 }
 
 model UserToken {
-  id                  String    @id @default(uuid())
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider            String // "google"
-  accessToken         String
-  refreshToken        String?
-  expiresAt           DateTime?
+  id                        String    @id @default(uuid())
+  userId                    String
+  user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  String // "google"
+  accessToken               String
+  refreshToken              String?
+  expiresAt                 DateTime?
   // Gmail push watch (users.watch) expires ~7 days after registration.
   // Null means the user has not enabled real-time push.
-  gmailWatchExpiresAt DateTime?
+  gmailWatchExpiresAt       DateTime?
   // Last-synced Gmail historyId watermark for incremental (History API) sync.
   // Null = never baselined; the next sync snapshots then records the current id.
-  historyId           String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  historyId                 String?
+  // The Google account this grant belongs to, lowercased (Gmail's profile
+  // address). Google revokes a grant for the whole account, so a revoke must
+  // first know whether another Klorn account holds a grant for the same one
+  // (auth/google-grant-revoke.ts). Null until read: set at connect, or the
+  // first time a revoke needs it.
+  googleEmail               String?
+  // When the address was last looked up (the lookup order, least recent
+  // first). An empty googleEmail is a grant Google already refuses.
+  googleEmailCheckedAt      DateTime?
+  // Calendar co-attendance (pim/coattendance/) for this primary Google calendar:
+  // the first full UTC day it was covered by an advance of the user's watermark
+  // (cleared when it is left out of an advance, or after a coverage gap), and the
+  // last pass in which its own listing succeeded in full (never a failed or cut
+  // listing). Cleared when the grant is reconnected.
+  coAttendanceObservedSince DateTime?
+  coAttendanceLastPassAt    DateTime?
+  // When the one-time Sent-history import (mail/sent-history-import.ts,
+  // SENT_HISTORY_BACKFILL_ENABLED) finished for this account. Null = not yet.
+  // It lives on the grant, so a new grant is imported again.
+  sentHistoryImportedAt     DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   @@unique([userId, provider])
+  // The revoke's shared-grant check looks other users' grants up by address.
+  @@index([googleEmail])
   // renewExpiringGmailWatches scans all tokens by expiry (no userId) every tick;
   // without this it seq-scans the whole table as the user base grows.
   @@index([gmailWatchExpiresAt])
@@ -232,39 +421,97 @@ model UserIdentity {
   @@unique([userId, provider])
 }
 
-// A secondary Google account (e.g. work) linked ONLY for cross-account calendar
-// free/busy. Kept separate from UserToken (the single primary account that owns
-// email + the main calendar) so the email path stays single-account; this table
-// is read only by checkConflicts. Scope granted is calendar.readonly, nothing else.
+// Which calendar source a LinkedCalendarAccount or CalendarEvent row belongs to
+// (step C1, docs/providers/unified-platform-plan.md). Only the sources the plan's
+// C steps name: GOOGLE (today), OUTLOOK (C4, Graph), ICLOUD + NAVER (C3, CalDAV),
+// DEVICE (C5/C6, on-device calendars uploaded behind per-source opt-in) and LOCAL
+// (events created in Klorn with no external calendar; only ever on CalendarEvent,
+// never on an account row). OAuth sources use the token columns, CalDAV sources
+// the caldav* columns.
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+  ICLOUD
+  NAVER
+  DEVICE
+  LOCAL
+}
+
+// A secondary calendar account linked for cross-account free/busy. Historically
+// Google-only (calendar.readonly, nothing else), which is still the only provider
+// any code path writes; the provider column (C1) makes the row provider-aware for
+// C2-C6. Kept separate from UserToken (the single primary account that owns email
+// + the main calendar) so the email path stays single-account. Mirrors
+// LinkedInboxAccount: OAuth providers use accessToken/refreshToken, CalDAV
+// providers the caldav* columns.
 model LinkedCalendarAccount {
-  id             String    @id @default(uuid())
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email          String // the linked Google account address — label + dedup key
-  accessToken    String
-  refreshToken   String?
-  expiresAt      DateTime?
+  id                        String           @id @default(uuid())
+  userId                    String
+  user                      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  CalendarProvider @default(GOOGLE)
+  email                     String // the linked account address — label + dedup key
+  // OAuth providers (GOOGLE, OUTLOOK): encrypted token pair. Nullable because
+  // CalDAV rows never have one; readers already guard `row.accessToken ?`.
+  accessToken               String?
+  refreshToken              String?
+  expiresAt                 DateTime?
+  // CalDAV providers (ICLOUD, NAVER): server URL + AES-256-GCM password cipher
+  // (an app-specific password), same crypto-tokens helper as the OAuth ciphers.
+  // Unused until C3; covered by the key-rotation sweep from day one. caldavUrl is
+  // user-supplied and fetched server-side, so C3 must validate it against SSRF
+  // (resolve-then-pin, reject private ranges) before the first request.
+  caldavUrl                 String?
+  caldavPasswordCipher      String?
   // Set true when this linked calendar's token is found revoked/undecryptable so
   // the UI can prompt a re-link instead of the account silently dropping out of
   // free/busy; cleared on a successful token refresh or re-link. Mirrors
   // LinkedInboxAccount.needsReconnect.
-  needsReconnect Boolean   @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  needsReconnect            Boolean          @default(false)
+  // Calendar co-attendance (pim/coattendance/), GOOGLE rows only: as on UserToken.
+  // Cleared on a re-link; an unlink deletes the row.
+  coAttendanceObservedSince DateTime?
+  coAttendanceLastPassAt    DateTime?
+  // C6: a DEVICE source is one calendar a desktop app uploads (opt-in per
+  // calendar, decision P4). Its `email` is `device:<key>`, the device's hash of
+  // the calendar identifier plus the device id (never the raw identifier), and
+  // this is the calendar's title on the device, shown as the row's source label.
+  // NULL for every other provider, which label their rows with `email`.
+  displayName               String?
+  // C6: the device's own time of the last snapshot applied to a DEVICE source; an
+  // older one arriving later is ignored (a retry or a slow request must not
+  // overwrite a newer view). NULL for every other provider.
+  deviceSnapshotAt          DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  // Events synced from this account (C2); deleted with it.
+  events                    CalendarEvent[]
 
+  // provider participates so the same address can exist on two services (an
+  // iCloud address linked into Google) without colliding. Mirrors
+  // LinkedInboxAccount.
+  @@unique([userId, provider, email])
+  // The old key, kept through the expand phase: the previous release's upsert is
+  // ON CONFLICT ("userId","email"), so dropping it breaks that release during the
+  // deploy overlap and on rollback. Redundant while every row is GOOGLE. The
+  // contract phase drops it once a second provider for the same address lands
+  // (C3/C4).
   @@unique([userId, email])
 }
 
 // Which mail service a LinkedInboxAccount row belongs to. GOOGLE/OUTLOOK are
 // OAuth providers (token cipher in accessToken); NAVER/ICLOUD/IMAP are IMAP
 // providers (imapHost + imapPasswordCipher). inbox-credentials.ts is the one
-// place that maps provider → required credential shape.
+// place that maps provider → required credential shape. KLORN is the Klorn
+// address (step E1a): mail Klorn receives itself, so no credentials at all; its
+// row's email is `<KlornAddress.handle>@<domain>`. The list is pinned to the
+// API's InboxProviderName and the contract's InboxProvider by a guard test.
 enum InboxProvider {
   GOOGLE
   NAVER
   ICLOUD
   OUTLOOK
   IMAP
+  KLORN
 }
 
 // A SECONDARY mail account linked for FULL INBOX access so the firewall runs
@@ -278,33 +525,62 @@ enum InboxProvider {
 // (the multi_account feature). watch/history/sync fields are for the later
 // real-time + incremental-sync phases and are unused until then.
 model LinkedInboxAccount {
-  id                  String        @id @default(uuid())
-  userId              String
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider            InboxProvider @default(GOOGLE)
-  email               String // the linked account address — label + dedup key
+  id                        String             @id @default(uuid())
+  userId                    String
+  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  InboxProvider      @default(GOOGLE)
+  email                     String // the linked account address — label + dedup key
+  // What this mailbox is FOR — "work" | "personal" | "mixed" | null (unset).
+  // Feeds the analysis prompts: a personal inbox must not be scored as a
+  // work inbox (founder 2026-08-30). Never inferred; the user says so.
+  purpose                   String?
   // OAuth providers (GOOGLE, OUTLOOK): encrypted token pair. Nullable because
   // IMAP rows never have one; Google reads already guard `row.accessToken ?`.
-  accessToken         String?
-  refreshToken        String?
-  expiresAt           DateTime?
+  accessToken               String?
+  refreshToken              String?
+  expiresAt                 DateTime?
   // IMAP providers (NAVER, ICLOUD, IMAP): exact host (SSRF-allowlisted at the
   // route) + AES-256-GCM password cipher, same crypto-tokens helper as OAuth.
-  imapHost            String?
-  imapPasswordCipher  String?
-  gmailWatchExpiresAt DateTime?
+  imapHost                  String?
+  imapPasswordCipher        String?
+  // IMAP providers (NAVER, ICLOUD): the INBOX UIDVALIDITY the poller last saw, as
+  // a canonical decimal string (step B2). A UID in EmailMessage.gmailId names a
+  // message only under this value, so every IMAP action compares the live value
+  // with it before touching a UID. The poller FILLS it (the baseline) and, once the
+  // same new value was seen on two polls at least a minute apart, REPLACES it in the
+  // transaction that re-keys the mailbox's rows (step B2b). Until then a poll that
+  // sees a different value persists nothing for the mailbox, reports once, and every
+  // action refuses the mailbox. A String, not an Int or BigInt: the value is an unsigned
+  // 32-bit integer (over a signed Int), is only compared for equality, and BigInt
+  // would make any route that returns the whole row throw in JSON.stringify. NULL
+  // until the first poll after this column exists.
+  inboxUidValidity          String?
+  // Step B2b. A live value that differs from inboxUidValidity and has been seen on
+  // ONE poll so far, with the time of that sighting. A sighting of the same value at
+  // least a minute later confirms the reset; seeing the stored value again, or
+  // another value, discards or replaces it. NULL when no reset is pending.
+  inboxUidValidityPending   String?
+  inboxUidValidityPendingAt DateTime?
+  // Step B2b. The last applied reset, dated from its FIRST sighting: at most one per
+  // account per 24 h, so a server that keeps renumbering cannot churn the mailbox, and
+  // mail received before it is re-ingested history (no push, no auto-reply). NULL = never.
+  inboxUidValidityResetAt   DateTime?
+  gmailWatchExpiresAt       DateTime?
   // Provider-generic incremental-sync watermark: Gmail historyId for GOOGLE
   // rows, Graph delta/next link (a full URL) for OUTLOOK rows (Phase 3B —
   // same co-opt precedent as gmailId holding provider message ids).
-  historyId           String?
-  lastSyncedAt        DateTime?
+  historyId                 String?
+  lastSyncedAt              DateTime?
+  // Same as UserToken.sentHistoryImportedAt, for this linked GOOGLE inbox.
+  sentHistoryImportedAt     DateTime?
   // Set true when this linked inbox's token is found revoked/undecryptable so the
   // UI can prompt a re-link instead of the inbox silently rotting; cleared on a
   // successful token refresh or re-link. Durable so a revoked inbox stays flagged
   // across restarts (at scale, revoked linked tokens are the norm, not the edge).
-  needsReconnect      Boolean   @default(false)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  needsReconnect            Boolean            @default(false)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  imapMovedMessages         ImapMovedMessage[]
 
   // provider participates so the same address can exist on two services (a
   // user forwarding their iCloud into Gmail links both) without colliding.
@@ -318,6 +594,54 @@ model LinkedInboxAccount {
   // (userId, provider, email) unique above is userId-leading and can't serve
   // that lookup, so without this it seq-scans every linked inbox on each push.
   @@index([email])
+}
+
+// Why a message Klorn moved out of an IMAP INBOX is tracked here (step B2 of
+// docs/providers/unified-platform-plan.md).
+enum ImapMoveRole {
+  TRASH
+  ARCHIVE
+}
+
+// Where a message went when Klorn moved it out of a Naver or iCloud INBOX with
+// trash or archive, so undo can move it back. An IMAP MOVE gives the message a
+// NEW UID in the destination folder, and trash/archive delete the local
+// EmailMessage row (as the Gmail path does), so this has to be its own table:
+// columns on EmailMessage would vanish with the row they belong to.
+//
+// One row per message currently parked by a move, keyed by the INBOX id it had
+// (`sourceId`, the EmailMessage.gmailId). Undo consumes it; rows older than the
+// retention window are swept on the next move for the same account. The
+// destination's own UIDVALIDITY is stored with the UID, because a UID in another
+// folder is only meaningful under that folder's value.
+model ImapMovedMessage {
+  id                   String             @id @default(uuid())
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedInboxAccountId String
+  linkedInboxAccount   LinkedInboxAccount @relation(fields: [linkedInboxAccountId], references: [id], onDelete: Cascade)
+  // EmailMessage.gmailId the message had in INBOX: `<idPrefix>:<email>:<uid>`.
+  sourceId             String
+  role                 ImapMoveRole
+  // Where it is now. folderUid is a BigInt because a UID is an unsigned 32-bit
+  // integer (over a signed Int); read it back with Number().
+  folderPath           String
+  folderUid            BigInt
+  folderUidValidity    String
+  // What the message looked like when it moved, so undo can refuse if the UID
+  // now names something else. messageIdHeader is the RFC 5322 Message-ID when
+  // the message has one; sentAt is NULL when it has no Date header.
+  messageIdHeader      String?
+  subject              String
+  sentAt               DateTime?
+  createdAt            DateTime           @default(now())
+
+  @@unique([linkedInboxAccountId, sourceId])
+  // The retention sweep (log-retention.ts, and recordMove's per-account sweep):
+  // an index range scan by age.
+  @@index([createdAt])
+  // The cascade from User, and the per-user lookup.
+  @@index([userId])
 }
 
 model Task {
@@ -355,8 +679,9 @@ model Note {
   title     String
   content   String
   category  String   @default("general")
-  // Local calendar day (YYYY-MM-DD) this note dedupes on. Set only for the
-  // daily briefing note; NULL for every other note. Postgres treats NULLs as
+  // Dedupe key for scheduled notes: local calendar day (YYYY-MM-DD) for the
+  // daily briefing, ISO week (YYYY-Www) for the weekly signal report; NULL
+  // for every other note. Postgres treats NULLs as
   // DISTINCT in a unique index, so ordinary notes never collide — only the one
   // briefing-per-user-per-day row is deduped, atomically closing the TOCTOU
   // race in createDailyBriefingDelivery.
@@ -407,26 +732,336 @@ model Contact {
 }
 
 model CalendarEvent {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  startTime   DateTime
-  endTime     DateTime
-  location    String?
-  meetingLink String?
-  color       String?
-  allDay      Boolean  @default(false)
-  googleId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String                 @id @default(uuid())
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  startTime         DateTime
+  endTime           DateTime
+  location          String?
+  meetingLink       String?
+  color             String?
+  allDay            Boolean                @default(false)
+  // Legacy Google key. Still what every read and sync lookup uses; it is
+  // dual-written with provider/externalId (C1) and dropped in the contract phase.
+  googleId          String?
+  // C1 provider-aware identity. The DEFAULT only serves the previous release
+  // while the migration and the new code overlap — every writer here sets it
+  // explicitly (guarded by calendar-provider-writers-guard.test.ts).
+  provider          CalendarProvider       @default(GOOGLE)
+  // The id in the source calendar (Google event id, CalDAV UID, Graph id).
+  // NULL for LOCAL rows. Equals googleId for GOOGLE rows.
+  externalId        String?
+  // Which LinkedCalendarAccount the row was synced from. NULL = the primary
+  // Google login calendar, or a LOCAL row. A foreign key with ON DELETE CASCADE
+  // (C2): unlinking an account deletes its rows, in the route's own transaction
+  // and, as a backstop, in the database (see the migration header).
+  sourceAccountId   String?
+  sourceAccount     LinkedCalendarAccount? @relation(fields: [sourceAccountId], references: [id], onDelete: Cascade)
+  // C2 dedupe key: 'primary' for the primary calendar and LOCAL rows, the
+  // LinkedCalendarAccount id for a linked row (a CHECK keeps it equal to
+  // COALESCE(sourceAccountId, 'primary')). Part of the unique below so the same
+  // Google event id can exist once per source calendar. The DEFAULT only serves
+  // the previous release during deploy overlap; every writer here sets it
+  // through pim/calendar-rows.ts.
+  sourceKey         String                 @default("primary")
+  // C3: which calendar of a CalDAV account (ICLOUD, NAVER) the row was listed
+  // from, a hash of the collection path (pim/caldav/caldav-listing.ts
+  // `calendarKeyOf`). A row whose calendar a later discovery does not list is
+  // unknown, never removed for being absent. NULL for every other provider.
+  caldavCalendarKey String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   // Scope the Google event id by user: the SAME googleId can appear in two
   // users' calendars (both attendees of one event), so a global unique would
   // force their rows to collide and lose one user's data. (Multi-tenant fix.)
   @@unique([userId, googleId])
+  // The provider-aware twin of the key above, per source calendar (C2): an
+  // invite present in the primary and a linked calendar is two rows. Postgres
+  // treats NULLs as distinct, so LOCAL rows (externalId NULL) never collide.
+  @@unique([userId, provider, sourceKey, externalId])
   @@index([userId, startTime])
+  @@index([sourceAccountId])
+}
+
+// Which file source a DriveFile row belongs to (step D2,
+// docs/providers/unified-platform-plan.md): KLORN (D3, files Klorn stores
+// itself, including what a device app imports in D7), GOOGLE (D5, Google Drive)
+// and ONEDRIVE (D6, Microsoft Graph). There is no DEVICE value: a device import
+// lands IN the Klorn drive, so its rows are KLORN, and Postgres cannot remove an
+// enum value once it exists.
+enum DriveProvider {
+  KLORN
+  GOOGLE
+  ONEDRIVE
+}
+
+// One file or folder of one source, as METADATA ONLY (step D2): the index every
+// drive surface lists and searches. No content column, ever, and no summary
+// state (D4 keeps that in a table of its own): the bytes stay in the source
+// (GOOGLE, ONEDRIVE) or in object storage (KLORN; D1). A new table, so provider
+// and sourceKey carry no default and the compiler makes every writer state them;
+// drive/drive-rows.ts is the one writer (drive-file-guard.test.ts). Whether a
+// row is read-only is not stored: it follows from the provider (decision V4,
+// drive/drive-read.ts). Row-level security is enabled in the migration, with the
+// two policies every per-user table has.
+model DriveFile {
+  id               String              @id @default(uuid())
+  userId           String
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider         DriveProvider
+  // Which source of that provider: 'klorn' for the user's Klorn drive, the
+  // connector's account id for GOOGLE and ONEDRIVE (D5, D6). Part of the unique
+  // below, so the same upstream id can exist once per source.
+  sourceKey        String
+  // D5a: the LinkedDriveAccount a GOOGLE or ONEDRIVE row came from, so unlinking
+  // the account deletes its rows in the database itself (and a write still in
+  // flight fails the foreign key instead of leaving an orphan). NULL exactly for
+  // KLORN rows, and equal to sourceKey when set (the migration's two CHECKs).
+  // drive-rows.ts derives it from the source on create and never updates it.
+  // The foreign key is composite, (sourceAccountId, userId, provider) to the
+  // account's (id, userId, provider): the database itself refuses a row that
+  // names another user's account or an account of another provider. MATCH
+  // SIMPLE, so a KLORN row (NULL sourceAccountId) is not checked. A connector
+  // still loads the account by (id, userId, provider) before it writes.
+  sourceAccountId  String?
+  sourceAccount    LinkedDriveAccount? @relation(fields: [sourceAccountId, userId, provider], references: [id, userId, provider], onDelete: Cascade)
+  // The id in the source (Drive file id, Graph item id, the id D3 mints for a
+  // Klorn file). Required: every row is addressable, and parentExternalId always
+  // has something to name.
+  externalId       String
+  // Attacker-controlled for an external source (whoever shared the file named
+  // it). Cleaned and capped at the writer; wrapped before any LLM sees it.
+  name             String
+  mimeType         String?
+  isFolder         Boolean             @default(false)
+  // BigInt: a drive file passes 2 GiB. Never negative (the migration's CHECK).
+  // Never returned raw (JSON.stringify throws on a BigInt); drive/drive-read.ts
+  // maps it to a number.
+  sizeBytes        BigInt?
+  // The containing folder's externalId in the SAME source. A parent id, not a
+  // path: both APIs report parents, a path is not stable (a folder rename would
+  // rewrite every descendant) and names may contain '/'.
+  // NULL means "no known parent row", which is NOT the same as "at the root":
+  // it is the root, OR a parent that was never indexed (a file picked through
+  // the Google Picker under drive.file reports a parent the user never picked).
+  // So an external source's root listing is not `parentExternalId IS NULL`.
+  parentExternalId String?
+  // The source's own modified time (the upload time for a Klorn file): the list
+  // order.
+  modifiedAt       DateTime
+  // Where the file opens in its own service. External sources only, https only
+  // (the migration's CHECK, and the writer's safe-link rule). NULL for KLORN
+  // rows, which open through Klorn's own routes (D3).
+  webUrl           String?
+  // The object-storage key of the bytes Klorn holds (D1, D3): opaque, KLORN rows
+  // only (the migration's CHECK), never on the wire.
+  storageKey       String?
+  // The source's own version of the file, opaque: a provider etag or version, or
+  // a content fingerprint. D4, D5 and D6 compare it to see whether a file
+  // changed. Never interpreted here, never on the wire.
+  etag             String?
+  trashed          Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  // Back-relation only, no column: a file's summary state lives in its own
+  // table (D4), never on this row.
+  summary          DriveFileSummary?
+
+  // Named, so the client's key is `driveFileIdentity` and not the generated
+  // name CalendarEvent's unique already has (its guard test greps for that one).
+  // The name changes nothing in the database.
+  @@unique([userId, provider, sourceKey, externalId], name: "driveFileIdentity")
+  // The list and the name search: one user's rows, newest first, keyset-paged
+  // on (modifiedAt, id).
+  @@index([userId, modifiedAt, id])
+  // The same list narrowed to one provider.
+  @@index([userId, provider, modifiedAt, id])
+  // One folder of the Klorn drive (D3): its children newest first, and the
+  // folder walks (cycle check, recursive delete) by parent. For KLORN a NULL
+  // parent is the root, because D3 only writes a parent that exists.
+  @@index([userId, provider, parentExternalId, modifiedAt, id])
+  // The cascade from LinkedDriveAccount and the unlink both look one account's
+  // rows up by it, with no userId to lead with (C2's reason for
+  // CalendarEvent.sourceAccountId). It also serves the composite foreign key's
+  // lookup: the account id is a UUID, so the leading column alone is selective.
+  @@index([sourceAccountId])
+}
+
+// A Google Drive (D5) or OneDrive (D6) account linked for its files (step D5 of
+// docs/providers/unified-platform-plan.md). Its own table, not
+// LinkedCalendarAccount and not UserToken, so unlinking a drive unlinks nothing
+// else. Written by drive/linked-drive-accounts.ts only (D5b); until then nothing
+// but the user purge and the key-rotation sweep touches it
+// (drive-file-guard.test.ts). Row-level security is enabled in the migration,
+// with the two policies every per-user table has.
+//   - provider: no default, so every writer states it; never KLORN (the
+//     migration's CHECK: the Klorn drive has no account).
+//   - email: the account's address as the provider verified it, trimmed and
+//     lower-cased by the link flow (the migration's CHECK: email =
+//     lower(btrim(email))); the label and, with provider, the dedup key.
+//   - accessToken / refreshToken: encryptToken ciphers under the
+//     TOKEN_ENCRYPTION_KEYS ring, never plain text; covered by the key-rotation
+//     sweep (scripts/reencrypt-tokens.ts). Both required: a grant without a
+//     refresh token is refused before anything is stored.
+//   - grantedScopes: the scopes the token response granted, space-delimited as
+//     OAuth returns them (RFC 6749 section 3.3).
+//   - needsReconnect: set when the grant is revoked or a token cannot be
+//     decrypted; refresh stops and the rows stay until the user unlinks.
+//   - lastRefreshedAt: the last metadata refresh of this account's rows; NULL =
+//     never.
+model LinkedDriveAccount {
+  id              String        @id @default(uuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        DriveProvider
+  email           String
+  accessToken     String
+  refreshToken    String
+  expiresAt       DateTime?
+  grantedScopes   String
+  needsReconnect  Boolean       @default(false)
+  lastRefreshedAt DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  // The rows indexed from this account; deleted with it (ON DELETE CASCADE).
+  files           DriveFile[]
+
+  @@unique([userId, provider, email])
+  // The target of DriveFile's composite foreign key, which proves a file's
+  // account is of the same user and provider. Redundant as a key (id is unique).
+  @@unique([id, userId, provider])
+}
+
+enum DriveSummaryStatus {
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+// The summary of one drive file (step D4 of
+// docs/providers/unified-platform-plan.md), one row per file, kept apart from
+// DriveFile so the metadata index stays metadata only. Written by
+// drive/summary-store.ts only. `summary` is model output about attacker-supplied
+// text: capped (the migration's CHECK), shown as data, never fed back to a model
+// as instructions. The extracted text itself is never stored.
+//   - status: PENDING (queued, or deferred by a cap: `error` says which),
+//     DONE, FAILED (gave up; `error` is the code), SKIPPED (folder, unsupported
+//     type, too large, no text).
+//   - sourceEtag: the file's `etag` this row is for. A different etag on the
+//     file re-queues it.
+//   - costMicroCents: the estimated provider cost of the summary call, in
+//     0.0001 cent units like GlobalCostLedger.microCents.
+//   - error: a code only (the migration's CHECK), never a provider message.
+//   - attempts: counted at each claim, given back by a deferral, so only
+//     content errors and runs that never finish spend it; outageStreak: outages
+//     in a row (their backoff); nextAttemptAt: due time, or a live lease's end;
+//     runsDayKey / runsToday: model calls for this file on that UTC day.
+model DriveFileSummary {
+  id             String             @id @default(uuid())
+  driveFileId    String             @unique
+  driveFile      DriveFile          @relation(fields: [driveFileId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         DriveSummaryStatus @default(PENDING)
+  summary        String?
+  sourceEtag     String?
+  model          String?
+  costMicroCents Int                @default(0)
+  error          String?
+  attempts       Int                @default(0)
+  outageStreak   Int                @default(0)
+  nextAttemptAt  DateTime           @default(now())
+  runsDayKey     String?
+  runsToday      Int                @default(0)
+  summarizedAt   DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // The job: due PENDING rows, oldest due first.
+  @@index([status, nextAttemptAt])
+  // The summary search: one user's DONE rows, newest summary first.
+  @@index([userId, status, summarizedAt])
+}
+
+// Summary calls per user per UTC day (step D4): the per-user daily count cap.
+// A ledger of its own so deleting a file does not give its count back.
+model DriveSummaryUsage {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey    String // "YYYY-MM-DD" in UTC
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, dayKey])
+  // The job's prune of past days.
+  @@index([dayKey])
+}
+
+// The handle of a Klorn address (step E1a of docs/providers/unified-platform-plan.md):
+// `<handle>@<domain>`, user-chosen, immutable, one per account. A row whose userId
+// is null is a tombstone: its account was deleted (the FK nulls it, never
+// cascades) and the handle is never issued again (L5). A data wipe keeps the row:
+// the address belongs to the account, like its sign-in address. The product rules
+// (length, the reserved list) are mail/klorn-handle.ts. The database adds what no
+// writer can skip (migration 20261021010100_klorn_mailbox_schema): the shape,
+// lowercase only, no two handles differing only in separators, and a trigger that
+// refuses any rename, delete or reassignment.
+model KlornAddress {
+  handle    String   @id
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+// The data wipe of an account that keeps the account (DELETE /api/user/me/data;
+// privacy/data-wipe-fence.ts). While `purgedAt` is null the wipe is pending;
+// after it, inserts into the account's data tables stay rejected until
+// `fenceUntil`, and the app rejects writes from any work that began before
+// `fenceUntil`. The row stays with the account (one per user, rewritten by the
+// next wipe) and goes with it when the account is deleted.
+model DataWipe {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedAt DateTime
+  // Null while the purge has not committed; the sweep finishes such a wipe.
+  purgedAt    DateTime?
+  // Set when the purge commits: purgedAt plus the fence window.
+  fenceUntil  DateTime?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // The sweep's pending query.
+  @@index([purgedAt])
+}
+
+// The objects of an account still to be deleted from object storage (step D3 of
+// docs/providers/unified-platform-plan.md). Written when a deletion starts and
+// OBJECT_STORAGE_ENABLED is on; the account's rows may then go even if the
+// bucket is down, because this row keeps the one handle on the objects (the
+// user id; the prefix is `u/<userId>/`). An hourly sweep (storage/purge-sweep.ts)
+// retries until a pass that started after the late-upload grace finds the prefix
+// empty, then deletes the row. While it exists, uploads for the user are refused.
+// No relation to User on purpose: it must outlive the account row.
+model StoragePurge {
+  userId        String   @id
+  // When the latest deletion asked for the purge. A pass that started at least
+  // the late-upload grace after this is the one that may finish the record.
+  requestedAt   DateTime
+  attempts      Int      @default(0)
+  // The StorageError code of the last failed pass (never a message, never a key).
+  lastError     String?
+  nextAttemptAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // The sweep's due query.
+  @@index([nextAttemptAt])
 }
 
 model AutomationConfig {
@@ -438,10 +1073,21 @@ model AutomationConfig {
   emailAutoClassify      Boolean  @default(true)
   reminderAutoCheck      Boolean  @default(true)
   dailyBriefing          Boolean  @default(true)
+  /// Focus window (aiindigo-derived design, 2026-08-21): during calendar
+  /// busy blocks only urgent/meeting/system notifications fire; the rest
+  /// arrive as one digest when the block ends.
+  focusWindowEnabled     Boolean  @default(false)
   briefingTime           String   @default("06:00")
   timezone               String   @default("Asia/Seoul")
+  // Daily PUSH interrupt budget for this user (attention engine v3, 1–50).
+  // Null = the system default (JUDGE_V3_PUSH_BUDGET, else 5).
+  interruptBudget        Int?
+  /// null = Automatic (no saved choice): the client follows the device zone and
+  /// keeps `timezone` synced to it. "MANUAL" = the user pinned `timezone` in
+  /// Settings. `timezone` always holds the zone server-side features use.
+  timezoneMode           String?
   downloadAutoOrganize   Boolean  @default(false)
-  // OFF by default: a new install is a pure 4-tier firewall (classify-only),
+  // OFF by default: a new install is a pure classifying firewall (lanes only),
   // matching the README doctrine ("not a suggestion engine"). The proactive
   // agent loop is opt-in. Existing rows keep their value — this only changes
   // the default for newly-created configs.
@@ -455,6 +1101,13 @@ model AutomationConfig {
   // reply surface (all three /reply-options keys and AUTO rule replies); the
   // accept/decline/info axis is unchanged.
   replyTone              String   @default("MATCH_ME") // "MATCH_ME" | "FORMAL" | "FRIENDLY" | "CASUAL"
+  // Ontology v2 account mode: BASIC = notify important+meetings, human answers
+  // (autoEligible items get a one-click suggested reply); AUTO = Klorn answers
+  // autoEligible items unattended (gated by AUTO_MODE_SEND_ENABLED).
+  attentionMode          String   @default("BASIC") // "BASIC" | "AUTO"
+  // auto 모드 답장 지침. null = the founder-authored default applies (editable
+  // in settings; see reply guideline UX in docs/design/tier-ontology-v2.md).
+  autoReplyGuideline     String?
   // Language for notification copy Klorn writes itself ("Draft ready",
   // "긴급 메일 2건"). Server-side because a push is composed on the server, with
   // no browser or Mac to read a locale from — the clients' own language
@@ -499,7 +1152,6 @@ model AgentLog {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
-
   @@index([userId, action, createdAt(sort: Desc)])
   // Userless range for the retention sweep (WHERE createdAt < cutoff).
   @@index([createdAt])
@@ -573,6 +1225,13 @@ model PushSubscription {
   // — the duplicate "Daily Briefing" bug. Mirrors DevicePushToken's
   // prune-on-register. Nullable for rows created before this column existed.
   deviceId  String?
+  // Browser family and OS of the agent that registered this subscription, read
+  // from its User-Agent at /push/subscribe (notify/alert-endpoints.ts
+  // parseClientPlatform). Labels "Where you get alerts" and tells a phone from
+  // a desktop. Only the derived values are kept, never the raw User-Agent.
+  // Nullable: rows from before this column, and agents we cannot name.
+  browser   String?
+  os        String?
   createdAt DateTime @default(now())
 
   // Budgeted-retry eviction: consecutive ambiguous (non-410/404) delivery
@@ -591,13 +1250,17 @@ model PushSubscription {
 // an FCM token (Android) or APNs token (iOS) from the device. Register upserts
 // by the unique token and prunes the stale one when a device re-registers.
 model DevicePushToken {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  platform  String // "android" | "ios"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  platform     String // "android" | "ios"
+  // Android only: this build posts Klorn's DATA-ONLY FCM messages itself, with
+  // action buttons (apps/mobile push/KlornMessagingService.java). Sent by the
+  // app at registration; false = notification messages, as before.
+  dataMessages Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([userId])
 }
@@ -636,6 +1299,10 @@ model PushRingEvent {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Which cap the ring counted against: "interrupt" (urgent mail, meeting
+  // alerts, reminders; the caller asks) | "ambient" (everything else,
+  // agent-originated pushes included). notify/push-bucket.ts.
+  bucket    String   @default("ambient")
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
@@ -859,51 +1526,69 @@ enum OutboxStatus {
 // Persisted copy of Gmail messages for local search, AI summarization, and threading
 
 model EmailMessage {
-  id                   String            @id @default(uuid())
-  userId               String
-  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gmailId              String // Gmail message ID
+  id                      String            @id @default(uuid())
+  userId                  String
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailId                 String // Gmail message ID
   // Which linked secondary inbox this mail came from. NULL = the primary Google
   // account (the vast majority). Plain tag (no FK) so unlinking an inbox keeps
   // its already-classified mail; a stale tag just means getAuthedInboxClient
   // returns null and actions fall back. Dedup stays @@unique([userId, gmailId])
   // — Gmail message IDs don't collide across accounts.
-  linkedInboxAccountId String?
-  threadId             String? // Gmail thread ID for conversation grouping
-  from                 String
+  linkedInboxAccountId    String?
+  threadId                String? // Gmail thread ID for conversation grouping
+  from                    String
   // Normalized sender address (extractEmailAddress(from): lowercased, display
   // name stripped) for an indexed equality lookup in the judge sender-history
   // query. NULL until backfilled — the query only reads it under the
   // SENDER_ADDRESS_INDEX_ENABLED flag (default off), so existing null rows are
   // never consulted until `pnpm backfill:from-address` has populated them.
-  fromAddress          String?
-  to                   String
-  cc                   String?
-  subject              String
-  snippet              String? // Gmail snippet (preview text)
-  body                 String? // Full plain-text body
-  htmlBody             String? // Full HTML body (for rich rendering)
-  labels               String[] // Gmail labels: ["INBOX", "UNREAD", "IMPORTANT"]
-  isRead               Boolean           @default(false)
-  isStarred            Boolean           @default(false)
-  priority             EmailPriority     @default(NORMAL)
-  category             String? // AI classification: billing, meeting, engineering, conversation, automated, other
-  summary              String? // AI-generated one-line summary
+  fromAddress             String?
+  to                      String
+  cc                      String?
+  subject                 String
+  snippet                 String? // Gmail snippet (preview text)
+  body                    String? // Full plain-text body
+  htmlBody                String? // Full HTML body (for rich rendering)
+  labels                  String[] // Gmail labels: ["INBOX", "UNREAD", "IMPORTANT"]
+  // List-Unsubscribe (RFC 2369) parsed at Gmail sync; IMAP/Outlook don't
+  // fetch the header yet, so their rows stay NULL — same "NULL until synced
+  // under the new code" contract as fromAddress above. The judge derives its
+  // bulk-mail signal from these on the backfill/heal paths, and the
+  // unsubscribe endpoint reads them. oneClick = RFC 8058 https POST target.
+  listUnsubscribeMailto   String?
+  listUnsubscribeUrl      String?
+  listUnsubscribeOneClick Boolean           @default(false)
+  isRead                  Boolean           @default(false)
+  isStarred               Boolean           @default(false)
+  priority                EmailPriority     @default(NORMAL)
+  category                String? // AI classification: billing, meeting, engineering, conversation, automated, other
+  summary                 String? // AI-generated one-line summary
   // JSONB after migration 20260519040000. Always a `string[]` payload
   // when present (AI-extracted bullet points / TODOs); `null` when EVE
   // has not summarized the email yet.
-  keyPoints            Json?
-  actionItems          Json?
-  needsReply           Boolean           @default(false)
-  needsReplyReason     String?
-  needsReplyConfidence Float             @default(0.0)
-  sentiment            String? // positive | negative | neutral
-  receivedAt           DateTime // Original email date
-  syncedAt             DateTime          @default(now()) // When we synced from Gmail
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-  attachments          EmailAttachment[]
-  candidateIntakes     CandidateIntake[]
+  keyPoints               Json?
+  actionItems             Json?
+  // The receiving server's SPF, DKIM and DMARC verdicts, `{ spf, dkim, dmarc }`
+  // (step E1a). Set only for mail Klorn receives itself (KLORN); null for every
+  // other provider. Shown and acted on in E4 (L13).
+  authentication          Json?
+  needsReply              Boolean           @default(false)
+  needsReplyReason        String?
+  needsReplyConfidence    Float             @default(0.0)
+  /// When the user answered this mail through Klorn (reply-state.ts). Null = not via Klorn.
+  repliedAt               DateTime?
+  /// A reply Klorn drafted ahead of time (proactive-drafts.ts). Offered in the
+  /// reading pane — never sent. proactiveDraftAt stamps the ATTEMPT (cap + retry guard).
+  proactiveDraft          String?
+  proactiveDraftAt        DateTime?
+  sentiment               String? // positive | negative | neutral
+  receivedAt              DateTime // Original email date
+  syncedAt                DateTime          @default(now()) // When we synced from Gmail
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  attachments             EmailAttachment[]
+  candidateIntakes        CandidateIntake[]
 
   @@unique([userId, gmailId])
   @@index([userId, receivedAt])
@@ -926,6 +1611,13 @@ model EmailMessage {
   // scope is a residual filter over all of the user's rows, which degrades as a
   // heavy user's mailbox grows across accounts.
   @@index([userId, linkedInboxAccountId, receivedAt])
+  // EmailMessage_lane_scan_idx (migration 20261017020000_email_lane_scan_index)
+  // is really (userId, receivedAt DESC, id DESC) INCLUDE (linkedInboxAccountId,
+  // threadId, isRead). Prisma 6 has no INCLUDE syntax and its schema describer
+  // reads INCLUDE columns as trailing key columns, so this line is the shape
+  // `migrate diff` sees — it keeps the CI drift check green. The migration SQL
+  // is the source of truth; never create this index from schema (db push).
+  @@index([userId, receivedAt(sort: Desc), id(sort: Desc), linkedInboxAccountId, threadId, isRead], map: "EmailMessage_lane_scan_idx")
 }
 
 model EmailAttachment {
@@ -934,9 +1626,19 @@ model EmailAttachment {
   user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailId           String
   email             EmailMessage @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  // The fetch handle passed to attachments.get. Gmail mints a fresh one on
+  // every messages.get, so it is NOT an identity (see partKey).
   gmailAttachmentId String
+  // The part's identity within its message: Gmail's MIME partId, immutable per
+  // message. Null only on rows synced before 2026-10-16; the next sync of that
+  // message adopts one of them (mail/email-attachments.ts).
+  partKey           String?
   filename          String
   mimeType          String
+  // MIME Content-ID for inline (cid:) images, captured at sync so the
+  // reading pane can resolve src="cid:…" references. Null on rows synced
+  // before 2026-08-15 — those degrade to a transparent placeholder.
+  contentId         String?
   size              Int?
   contentText       String?
   summary           String?
@@ -950,7 +1652,10 @@ model EmailAttachment {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @default(now()) @updatedAt
 
+  // Legacy key, kept so a rollback's ON CONFLICT still has its arbiter. Drop it
+  // once the pre-2026-10-16 duplicate copies are gone.
   @@unique([emailId, gmailAttachmentId])
+  @@unique([emailId, partKey])
   @@index([userId, createdAt])
   @@index([emailId])
   @@index([userId, category])
@@ -1023,7 +1728,9 @@ model EmailRule {
   name            String // Rule display name
   description     String?
   isActive        Boolean         @default(true)
-  // Conditions: { from?: string[], subjectContains?: string[], category?: string[] }
+  // Conditions: { from?: string[], subjectContains?: string[], category?: string[],
+  //               fromDomain?: string[] } — fromDomain is PIN_TIER-only (exact domain,
+  // judge-context fetchPinnedTier); the reply matcher never sees PIN_TIER rows.
   // Stored as native JSONB so the matching engine can rely on the
   // shape (no per-row JSON.parse) and so a future PR can index/query
   // individual keys without rewriting every row.
@@ -1042,6 +1749,7 @@ model EmailRule {
 }
 
 enum EmailRuleAction {
+  PIN_TIER // User-enforced lane for a sender — judge cascade rank 0
   AUTO_REPLY // Send canned reply
   DRAFT_REPLY // Create draft for user review
   LABEL // Apply label
@@ -1087,17 +1795,49 @@ model AttentionItem {
   costOfIgnoring  String? // "Misses close window", "Loses Q2 budget"
   evidence        Json? // Supporting links/snippets backing the judgment
 
-  // 5-tier escalation policy. Populated by attention-mirror tier selector.
-  // SILENT = recorded only | QUEUE = inbox only, no push | PUSH = send push
-  // AUTO = auto-handled, no interrupt | null = legacy / not yet classified
-  tier       String? // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
+  // Escalation policy. Populated by the attention-mirror tier selector.
+  // SILENT = recorded only | INFO = filed record, no reply expected
+  // QUEUE  = inbox only, no push | MEETING = notifies, calendar cross-checked
+  // PUSH   = send push | null = legacy / not yet classified
+  // AUTO is NOT a lane — automation is a per-account mode. It survives here
+  // only as a retired v1 value on pre-flip rows; normalizeTier folds it on read.
+  tier       String? // v2: "SILENT" | "INFO" | "QUEUE" | "MEETING" | "PUSH" (+ legacy "AUTO"/"CALL" via normalizeTier)
   tierReason String? // why this tier was chosen — free text, may be LLM-authored. NOT a trust signal.
+
+  // Ontology v2 (docs/design/tier-ontology-v2.md): may Klorn answer this item
+  // unattended? Computed by tier-policy floors, meaningful on QUEUE/MEETING
+  // only. Consumed by the auto-mode send path (AUTO_MODE_SEND_ENABLED).
+  autoEligible Boolean @default(false)
 
   // True only when overrideAttentionTier() (attention-override.ts) set this row —
   // the sole authenticated, ownership-checked human-override path. Judge writes
   // (attention-mirror.ts) always reset this to false, so LLM-authored tierReason
   // text can never be mistaken for ground truth (GHSA-cxc5-fmqv-pxv6).
   isManualOverride Boolean @default(false)
+
+  // MCP agent provenance (step A2b of docs/providers/unified-platform-plan.md).
+  // Non-null means the CURRENT tier was set by an agent through the MCP set_tier
+  // tool — not by the judge and not by a human. It is deliberately NOT
+  // isManualOverride: that flag is the human ground-truth boundary and only
+  // overrideAttentionTier sets it. Every learning reader (sender priors, tier
+  // history, correction examples, calibration) skips a row with this stamp, and
+  // anything that replaces the tier with a judge or human decision clears it.
+  // agentTierKeyId is the ApiKey id, deliberately not a foreign key so the
+  // history outlives the key (same as McpWriteAudit.apiKeyId).
+  agentTierSetAt DateTime?
+  agentTierKeyId String?
+
+  // Reversible manual override (productization plan P4, KEYBOARD_TRIAGE). When
+  // overrideAttentionTier() moves the lane it snapshots what it replaced here
+  // (previous tier, reason, isManualOverride, agent stamp, updatedAt, and the
+  // exact outcomeAt it stamped on the decision ledger), so
+  // undoAttentionOverride() can put all of it back within a short server-side
+  // window. overrideUndoToken is the live handle: it is replaced by every later
+  // override and cleared by the undo, so only the most recent override on a row
+  // is ever reversible. The snapshot is server-written and never accepted from
+  // a client. Both stay null while the flag is off.
+  overrideUndoToken String?
+  overrideUndo      Json?
 
   // Content-addressed classification. Hash of the decision-relevant input
   // bytes (from, subject, snippet, labels) at the moment tier was decided.
@@ -1107,6 +1847,23 @@ model AttentionItem {
   // doctrine in attention-input-hash.ts).
   inputHash   String? // sha256 hex, 64 chars
   inputHashAt DateTime? // when the hash was computed
+
+  // Attention engine v3 live decision (docs/design/attention-engine-v3.md
+  // §3(5) "Live decision"). Written only for users JUDGE_V3_POLICY covers;
+  // null for everyone else. The policy version that decided the lane ("v3.0",
+  // "v3.1"), or "v2" when the v2 lane stood because LLM facts were missing.
+  v3PolicyVersion String?
+  // judge/v3/live-item.ts V3DecisionJson: { basis, reasons, threadTurn }.
+  // Reason evidence quotes the mail, like title and body.
+  v3Decision      Json?
+  // QUEUE ranking inputs at decision time: the earliest ask due (or the
+  // decision time for an unpushed payment/security risk), and the
+  // relationship importance prior.
+  v3Due           DateTime?
+  v3Importance    Float?
+  // The daily interrupt budget held this PUSH in QUEUE. A hold is final for
+  // the item. Ranking trusts this column, not tierReason.
+  heldAt          DateTime?
 
   surfacedAt      DateTime  @default(now())
   resolvedAt      DateTime?
@@ -1127,6 +1884,66 @@ model AttentionItem {
   // can't serve it; this status-leading index keeps it from seq-scanning the
   // whole table as rows accumulate across users.
   @@index([status, surfacedAt])
+}
+
+// Attention Engine v3 facts per item (docs/design/attention-engine-v3.md §3,
+// phase P2). Written only by the JUDGE_V3_SHADOW extractor, after the v2 judge
+// on new mail; never read by the lane users see. Additive: no v2 data is
+// rewritten. Same natural key as AttentionItem / DecisionLabel, so policy
+// replay (P3) joins on (userId, source, sourceId).
+model AttentionFacts {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source   AttentionSource
+  sourceId String
+
+  // judge/v3/facts-schema.ts FACTS_VERSION; facts is FactsV1 at that version.
+  factsVersion     Int
+  // "llm" | "none" (no usable model answer)
+  factsSource      String
+  // Model and provider that actually served (createCompletion onServed); null
+  // for "none".
+  model            String?
+  provider         String?
+  extractedAt      DateTime
+  // "llm": FactsV1 after evidence check, date window and the deterministic
+  // merge. "none": only the certain pre-facts (Partial<FactsV1>), so
+  // parseFactsV1 rejects it by design and policy uses its keyword fallback.
+  facts            Json
+  // Fact fields fixed by deterministic pre-facts.
+  certainFields    String[]
+  // judge/v3/pre-facts.ts PreFactSignals: header-derived booleans and counts
+  // (list mail, automated sender, spam, Gmail category, calendar file,
+  // recipients). No mail text.
+  signals          Json?
+  // judge/v3/relationship.ts RelationshipSnapshot at extraction time.
+  relationship     Json?
+  // { checked, dropped: [{ path, evidence }] }
+  evidenceCheck    Json
+  // Validator / date-window issues and LLM failure notes (bounded strings).
+  issues           String[]
+  // Doc §4 escalation candidates: evidence_failed | ambiguous | parse_issues | llm_failed.
+  escalate         Boolean  @default(false)
+  escalateReasons  String[]
+  // The v2 lane shown when the shadow ran. DecisionLabel.shownTier is rewritten
+  // on re-judge, so the disagreement report needs its own frozen copy.
+  v2Tier           String?
+  // Usage of the served call, for the shadow's cost-per-day metric (LlmUsageLog
+  // has no purpose tag). costUsd is 0 when the user's own key served; all null
+  // when no call succeeded.
+  promptTokens     Int?
+  completionTokens Int?
+  costUsd          Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, source, sourceId])
+  @@index([userId, extractedAt])
+  // The cross-user disagreement report filters on extractedAt alone.
+  @@index([extractedAt])
 }
 
 // Decision ledger: the tier the firewall SHOWED the user for each classified
@@ -1154,26 +1971,39 @@ model DecisionLabel {
 
   // The tier the firewall showed at judgement time. Immutable — never
   // overwritten, unlike AttentionItem.tier.
-  shownTier String // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
+  shownTier      String // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
   // The 4 poc-judge features at decision time (confidence/senderTrust/
   // reversibility/urgency) so per-feature analysis can run later.
-  features  Json
+  features       Json
   // Sender identity, for per-sender recall grouping.
-  sender    String?
+  sender         String?
   // Which path decided this: "fast-path" | "sender-prior" | "llm" |
   // "keyword-fallback" — so prior-bypass decisions stay separable (the
   // SILENT-prior over-suppression class is exactly the prior-bypass rows).
-  decidedBy String?
+  decidedBy      String?
   // Which learned-engagement grounding fed the judge, if any: "DIRECT" (measured
   // replies to this sender) | "PROPAGATED" (inferred from an engaged org peer) |
   // null. Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE — lets us see,
   // once flipped, how often the signal fires and whether those rows get corrected.
   engagementKind String?
 
-  // Stamped once when the user acts. For an override, "OVERRIDE:<tier>";
-  // otherwise a terminal status. Null until then.
+  // The user's explicit lane judgement, stamped once: "OVERRIDE:<tier>" or
+  // "CONFIRM:<tier>". Null until then. Engagement (open, reply, …) is NOT
+  // written here — fallback-rejudge and the override/confirm stamps key on
+  // outcome being null, so an earlier open would block the user's lane move.
   outcome   String?
   outcomeAt DateTime?
+
+  // Engagement signals: when the user FIRST did each thing to this item
+  // (stampDecisionOutcome; first action of each kind wins). Kept per kind so
+  // an open doesn't hide the reply that follows it.
+  openedAt       DateTime?
+  repliedAt      DateTime?
+  archivedAt     DateTime?
+  dismissedAt    DateTime?
+  snoozedAt      DateTime?
+  starredAt      DateTime?
+  unsubscribedAt DateTime?
 
   judgedAt DateTime @default(now())
 
@@ -1294,6 +2124,134 @@ model SenderTrait {
   @@unique([userId, sender, factKind])
   @@index([userId, sender])
   @@index([userId, factKind, status])
+}
+
+/// The user's correction of who a sender IS (2026-09-11): "this address is
+/// a customer", "everyone at acme.io is an investor". Sender (address) or
+/// domain scope, the address wins. The strongest row-chip evidence there is
+/// — the user said so — and one line in the analysis prompt. Validated in
+/// mail/sender-labels.ts (vocabulary, public providers refused).
+model SenderLabel {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scope    String // "sender" | "domain"
+  value    String // lowercase address or hostname
+  category String // internal | customer | investor | system | billing | promotions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, scope, value])
+  @@index([userId])
+}
+
+/// Mail the user sent (2026-09-18) — recorded at send time through Klorn and
+/// by a throttled Sent-folder scan, so "waiting on" (mail/sent-messages.ts)
+/// can see what nobody answered. Headers only, never a body.
+model SentMessage {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  gmailId  String
+  threadId String?
+  to       String
+  subject  String
+  sentAt   DateTime
+  inbox    String // "primary" | LinkedInboxAccount id — where a live read must go
+  /// Who sent it (2026-10-31): "user" (a manual send through Klorn),
+  /// "approved" (agent-drafted, the user approved the exact bytes),
+  /// "auto_reply" (an autonomous reply), "unsubscribe" (a mailto unsubscribe).
+  /// Null = seen only by the Sent-folder scan, with no proof that Klorn sent it
+  /// (counted as the user's own mail). Legacy rows were labelled from send-time records by
+  /// migration 20261101000000_sent_message_origin_backfill. See SentOrigin in
+  /// sent-messages.ts.
+  origin   String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, gmailId])
+  @@index([userId, sentAt])
+}
+
+/// Deterministic floor for USER-INITIATED sends (POST /api/email/send and
+/// POST /api/email/:id/reply), behind MANUAL_SEND_RECEIPTS_ENABLED (OFF).
+///
+/// The agent path keeps its ActionReceipt on PendingAction / ActionOutbox and
+/// tool-executor verifies it. A manual send never passes through either: the
+/// user's confirm IS the approval and the request carries the approved bytes.
+/// This row is that approval's receipt: the same ActionReceipt (attention-floor.ts,
+/// RECEIPT_SCHEMA_VERSION) over sendEmailPayloadHash({ to, subject, body }), written
+/// BEFORE the provider is called — no row, no send — and verified against the
+/// bytes handed to the provider, then settled with the outcome. A crash between
+/// the write and the settle leaves PENDING, which reads as "may have gone out".
+model SendReceipt {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  route             String // "send" | "reply"
+  action            String // FloorAction — "send_email"
+  payloadHash       String // sha256 hex, = receipt.payloadHash
+  receipt           Json // the full ActionReceipt (v, action, inputHash, payloadHash, target, approvedAt, approvedBy)
+  inbox             String // "primary" | LinkedInboxAccount id — the account the mail left from
+  emailId           String? // the EmailMessage answered: reply, or send with inReplyToEmailId (no FK: the receipt outlives the row)
+  status            String    @default("PENDING") // PENDING | SENT | REFUSED | UNKNOWN
+  providerMessageId String?
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  @@index([userId, createdAt])
+}
+
+/// A standing, user-made decision about whether a sender may reach them.
+///
+/// Written by the screener (first-contact gate). BLOCK also creates a
+/// `PIN_TIER -> SILENT` EmailRule — that rule is what the judge enforces at
+/// rank 0; this table is the record of the decision itself, so the screener
+/// can stop asking and so ALLOW can be told apart from "never seen".
+model ScreenerDecision {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Normalized (trimmed, lowercased) sender address.
+  sender    String
+  verdict   ScreenerVerdict
+  decidedAt DateTime        @default(now())
+
+  @@unique([userId, sender])
+  @@index([userId, decidedAt])
+}
+
+enum ScreenerVerdict {
+  ALLOW
+  BLOCK
+}
+
+/// One product/market-fit answer per user (Sean Ellis: "how would you feel if
+/// you could no longer use Klorn?").
+///
+/// Upsert, not append: the measurement is what they think NOW, and a user who
+/// reconsiders should be able to say so. History is deliberately not kept —
+/// nobody would act on it, and keeping it invites reading a trend into three
+/// data points.
+model PmfResponse {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  answer      PmfAnswer
+  respondedAt DateTime  @default(now())
+
+  @@index([answer])
+}
+
+enum PmfAnswer {
+  VERY
+  SOMEWHAT
+  NOT
 }
 
 enum AttentionSource {
@@ -1587,17 +2545,134 @@ model ContactEngagementScore {
   @@index([userId])
 }
 
+/// Per-contact co-attendance from ended calendar meetings: a relationship signal
+/// for attention engine v3 (docs/design/attention-engine-v3.md §3(2)). Founder
+/// decision 2026-11-01: counts and dates only, never an attendee list; attendee
+/// addresses are read in memory during the sync and only the counted contact's own
+/// address is kept, as its row key. Written by pim/coattendance/ behind
+/// CALENDAR_COATTENDANCE_ENABLED. No row means never counted (flag off, no calendar
+/// connected, or no shared meeting): unknown to readers, never 0.
+model ContactCoAttendance {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEmail      String // trimmed and lowercased (a CHECK enforces it)
+  meetingCount      Int      @default(0) // ended meetings the user took part in, the contact invited and not declining
+  smallMeetingCount Int      @default(0) // of those, with at most 5 such people (rooms, decliners excluded)
+  firstMetAt        DateTime // UTC end-day (midnight) of the earliest counted meeting
+  lastMetAt         DateTime // UTC end-day (midnight) of the latest counted meeting
+  // No createdAt/updatedAt: rows written in one transaction would share a time
+  // and line up into one meeting's guest list.
+
+  @@unique([userId, contactEmail])
+}
+
+/// A meeting already counted into ContactCoAttendance, so a meeting the sync lists
+/// again is never counted twice. eventKey is the SHA-256 (hex) of the meeting's
+/// identity across calendars (Google: iCalUID plus the instance's original start),
+/// so one meeting in two of the user's calendars is one key; a CHECK keeps it a
+/// hash. endedAt only prunes the marker once the meeting is older than the counting
+/// window. No title, attendee or start is stored.
+model CoAttendanceMeeting {
+  id       String           @id @default(uuid())
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider CalendarProvider
+  eventKey String
+  endedAt  DateTime // UTC day (midnight) the meeting ended; no write time is kept
+
+  @@unique([userId, provider, eventKey])
+  @@index([userId, endedAt])
+}
+
+/// A named group of people (team mode P1: "AX팀", "PM팀") whose combined
+/// availability the assistant can check. Per-user; members are bare emails.
+model Team {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(80)
+  members   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+
+/// Team-of-one memory: per-sender relationship context distilled from the
+/// mail already exchanged (why this person writes, what is in flight, what
+/// was last promised). Regenerated lazily when new mail from the sender
+/// arrives; consumed by the reading pane and injected into reply drafts.
+model ContactDossier {
+  id                 String    @id @default(uuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderEmail        String    @db.VarChar(320)
+  summary            String    @db.VarChar(600)
+  openThreads        Json?
+  lastPromise        String?   @db.VarChar(300)
+  /// How many stored messages involving this sender the summary covered —
+  /// staleness check: regenerate when the live count differs.
+  analyzedEmailCount Int
+  lastEmailAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([userId, senderEmail])
+}
+
+/// Per-THREAD reasoning cache: "why did this person write, now?" Built from
+/// the whole Gmail thread — both directions, including the user's own sent
+/// replies, which the INBOX-only local mirror does not have. Feeds the reply
+/// prompt, the assistant, and the reading pane, so the expensive read happens
+/// once per thread state instead of once per surface.
+model ThreadBrief {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threadId String @db.VarChar(120)
+
+  /// Why this message arrived NOW — the trigger, not a summary.
+  whyNow  String  @db.VarChar(400)
+  /// Concrete things the sender is asking for. String[] as Json.
+  asks    Json?
+  /// Outstanding commitment the USER owes them, if any.
+  weOwe   String? @db.VarChar(300)
+  /// Outstanding commitment THEY owe the user, if any.
+  theyOwe String? @db.VarChar(300)
+  /// One-line recommended stance for a reply.
+  stance  String? @db.VarChar(300)
+
+  /// How many thread messages the brief covered — staleness check, mirroring
+  /// ContactDossier.analyzedEmailCount: regenerate when the count differs.
+  analyzedMessageCount Int
+  lastMessageAt        DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([userId, threadId])
+}
+
 // Public early-access waitlist. Submissions land here before the founder
 // adds the email to the Google Cloud Console Test users list and approves
 // access. No FK to User — these are people without accounts yet.
 model Waitlist {
-  id         String         @id @default(uuid())
-  email      String         @unique
-  name       String?
-  useCase    String?        @db.VarChar(500)
-  status     WaitlistStatus @default(PENDING)
-  approvedAt DateTime?
-  createdAt  DateTime       @default(now())
+  id          String         @id @default(uuid())
+  email       String         @unique
+  name        String?
+  useCase     String?        @db.VarChar(500)
+  /// Self-reported "how did you hear about us", free text. This is the only
+  /// channel attribution we get: GitHub restricted the stargazers API on
+  /// 2026-06-30, so referral reconstruction from outside is no longer
+  /// possible, and self-hosted installs are invisible by design. Never
+  /// overwritten once set — the first touch is the one worth attributing.
+  source      String?        @db.VarChar(80)
+  /// Automatic inflow attribution (utm_* + referrer host + landing path),
+  /// captured by the funnel itself. First-touch; never overwritten once set.
+  attribution String?        @db.VarChar(300)
+  status      WaitlistStatus @default(PENDING)
+  approvedAt  DateTime?
+  createdAt   DateTime       @default(now())
 
   @@index([status, createdAt])
 }
@@ -1647,8 +2722,8 @@ model GlobalCostLedger {
   dayKey     String   @id // "YYYY-MM-DD" in UTC
   microCents Int      @default(0)
   callCount  Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Persistent Stripe webhook idempotency. The handler records an event id here
@@ -1678,7 +2753,7 @@ model LlmUsageLog {
   id                 String   @id @default(uuid())
   userId             String? // null = system-initiated call (no user accounting)
   user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  provider           String // "openrouter" | "gemini"
+  provider           String // ProviderName that served the call: "anthropic" | "gemini" | "openai-compat" | "openai" (rows before 2026-11-01 may also say "openrouter")
   model              String // model that actually served the call (post-failover)
   promptTokens       Int      @default(0)
   // Prompt tokens served from the provider's prompt cache (OpenAI
@@ -1718,4 +2793,15 @@ model AnalyticsEvent {
   @@index([event, createdAt])
   @@index([userId, event, createdAt])
   @@index([createdAt])
+}
+
+/// Fleet-wide daily counters for automatic one-click unsubscribes
+/// (mail/unsubscribe-quota.ts): "host:<domain>" per target domain and
+/// "global". No user data — the per-user count lives on User. System-only
+/// under RLS (bypass policy, no tenant line).
+model UnsubscribeQuota {
+  key       String   @id
+  day       String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
 }

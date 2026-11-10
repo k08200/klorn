@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Klorn vs Inbox Zero — 둘 다 오픈소스, 라이선스는 다름</title>
+<meta name="description" content="Inbox Zero는 AGPL v3에 상업적 수익화 제한과 5인 이상 조직 조항이 덧붙어 있습니다. Klorn은 수정 없는 AGPL-3.0입니다. 두 LICENSE 파일을 직접 열어 비교해 보세요.">
+<meta property="og:title" content="Klorn vs Inbox Zero — 둘 다 오픈소스, 라이선스는 다름">
+<meta property="og:description" content="Inbox Zero는 AGPL v3에 상업적 수익화 제한과 5인 이상 조직 조항이 덧붙어 있습니다. Klorn은 수정 없는 AGPL-3.0입니다. 두 LICENSE 파일을 직접 열어 비교해 보세요.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ko/vs/inbox-zero/">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k3">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Klorn vs Inbox Zero — 둘 다 오픈소스, 라이선스는 다름">
+<meta name="twitter:description" content="Inbox Zero는 AGPL v3에 상업적 수익화 제한과 5인 이상 조직 조항이 덧붙어 있습니다. Klorn은 수정 없는 AGPL-3.0입니다. 두 LICENSE 파일을 직접 열어 비교해 보세요.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
+<link rel="canonical" href="https://klorn.ai/ko/vs/inbox-zero/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/">
+<link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<nav class="nav" aria-label="메인"><div class="nav-pill">
+  <a class="nav-brand" href="/ko/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="섹션" data-site-nav><a href="/ko/#accounts">계정</a><a href="/ko/#lanes">레인</a><a href="/ko/pricing/">요금</a><a href="/ko/security/">보안</a><a href="/ko/blog/">블로그</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">한국어 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/vs/inbox-zero/" role="menuitem" lang="en">English</a>
+      <a href="/ko/vs/inbox-zero/" role="menuitem" lang="ko" aria-current="true">한국어</a>
+      <a href="/ja/vs/inbox-zero/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/vs/inbox-zero/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/vs/inbox-zero/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/vs/inbox-zero/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/vs/inbox-zero/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">로그인</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="다운로드">다운로드</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
+  <h1>둘 다 오픈소스입니다.<br><em>라이선스</em>는 같지 않습니다.</h1>
+  <p class="thesis">이 사이트에서 가장 가까운 비교입니다. 모양도 스택 계열도 같고, 둘 다 셀프호스트가 되고, 둘 다 유료 호스팅 티어가 있습니다. 갈리는 지점은 두 개인데, 그중 하나는 1분이면 직접 확인됩니다.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>축</th><th>Klorn</th><th>Inbox Zero</th></tr></thead>
+    <tbody>
+      <tr><th>라이선스</th><td class="us"><strong>수정 없는 AGPL-3.0. 추가 조항 없음</strong></td><td>AGPL v3 + 덧붙인 <code>ADDITIONAL TERMS</code></td></tr>
+      <tr><th>상업적 사용</th><td class="us"><strong>허용 — AGPL 조건 그대로, 추가 없음</strong></td><td>LICENSE 파일에 <code>COMMERCIAL MONETIZATION RESTRICTION</code></td></tr>
+      <tr><th>5인 이상 조직</th><td class="us"><strong>별도 라이선스 불필요</strong></td><td><code>ENTERPRISE USE LIMITATION</code> — 라이선스를 취득해야 함</td></tr>
+      <tr><th>GitHub 인식</th><td class="us"><strong><code>AGPL-3.0</code></strong></td><td><code>NOASSERTION</code></td></tr>
+      <tr><th>판단 방식</th><td class="us">모델이 네 피처를 채점하고, 유닛테스트 가능한 결정론적 규칙이 레인을 고릅니다</td><td>평문 영어로 직접 쓴 룰</td></tr>
+      <tr><th>왜 그렇게 판단했나</th><td class="us"><strong>모든 행에 표시되고, 교정이 재학습됩니다</strong></td><td>당신이 룰을 썼으니 룰이 곧 이유입니다</td></tr>
+      <tr><th>공개 가격</th><td class="us"><strong><a href="/ko/pricing/">월 $29.99</a></strong></td><td>월 $20 Starter · $35 Plus · $50 Professional</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>라이선스는 직접 확인하세요</h2>
+  <p>믿고 받아들이라는 주장이 아닙니다. <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">Klorn의 LICENSE</a>와 <a href="https://github.com/elie222/inbox-zero/blob/main/LICENSE" rel="noreferrer noopener">Inbox Zero의 LICENSE</a>를 두 탭에 나란히 열어보세요. 한쪽은 GNU AGPL v3이고 거기서 끝납니다. 다른 쪽은 GNU AGPL v3 뒤에 <code>ADDITIONAL TERMS FOR INBOX ZERO</code>라는 절이 붙어 있습니다.</p>
+  <p>이 차이에는 실무적인 날이 있습니다. Klorn 라이선스에서는 5인 회사가 이걸 돌리고, 고치고, 계속 돌려도 됩니다. 우리와 대화할 필요가 없습니다. AGPL을 고르고 <strong>거기에 아무것도 덧붙이지 않은</strong> 이유가 그것입니다.</p>
+
+  <h2>직접 쓴 룰 vs 감사할 수 있는 판단</h2>
+  <p>Inbox Zero의 모델은 무슨 일이 일어나야 하는지를 평문으로 쓰면 그대로 실행하는 것입니다. 읽기 쉽고 예측 가능하며, 행동을 이미 파악한 발신자에 대해서는 이기기 어렵습니다.</p>
+  <p>Klorn은 <strong>아직 본 적 없는 메일에 대해서는 룰을 미리 열거할 수 없다</strong>고 가정합니다. 그래서 판단하고, 이유를 보여주고, 당신의 교정을 정책으로 바꿉니다. 같은 교정이 두 번이면 그 발신자는 결정론적으로 고정되고 모델은 더 이상 호출되지 않습니다. 의도적으로 비대칭입니다 — 학습된 패턴은 메일을 더 시끄러운 레인으로 올릴 수 있지만, 학습된 것이 스스로 발신자를 침묵시킬 수는 없습니다. 낡은 패턴이 당신이 볼 수 없는 곳에서 누군가를 음소거해서는 안 되기 때문입니다.</p>
+
+  <div class="not">
+    <p><strong>주장하지 않는 것.</strong> 둘 사이의 정확도 비교는 한 적이 없습니다. 위 라이선스 서술은 2026-08-23 기준 각 프로젝트의 <code>LICENSE</code> 파일에 실제로 있는 절 제목을 인용한 것이고, GitHub 인식 값은 저장소 API가 반환하는 값입니다.</p>
+    <p>인정할 건 인정합니다. Inbox Zero는 잘 만들어진 프로젝트이고 커뮤니티는 우리보다 훨씬 큽니다. 룰 모델이 사고방식에 맞는다면 좋은 도구이고, 라이선스 조항이 당신에게 영향을 주지 않을 수도 있습니다.</p>
+  </div>
+
+  <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Klorn 무료로 써보기</a></div>
+
+  <p class="checked">가격·제품 사실은 각 벤더 공개 자료 기준, 2026-08-23 확인. 틀린 내용이 있으면 <a href="mailto:k0820086@gmail.com">알려주세요</a>. 고치겠습니다.</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ko/">Klorn</a>
+      <p class="foot-note">메일과 캘린더를 한 곳에서, 이유와 함께 정리합니다. 오픈소스.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="제품"><h4>제품</h4>
+      <a href="/ko/download/">모든 다운로드</a>
+      <a href="/ko/pricing/">요금</a>
+      <a href="https://app.klorn.ai/login">로그인</a>
+      <a href="/ko/status/">서비스 상태</a>
+      <a href="/ko/blog/">블로그</a></nav>
+    <nav aria-label="오픈소스"><h4>오픈소스</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 저장소</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">릴리스</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">평가 세트</a>
+      <a href="/ko/methodology/">측정 방법</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 라이선스</a>
+      <a href="/ko/open-source/">추가 조항 없는 AGPL인 이유</a>
+      <a href="/ko/self-host/">직접 설치</a></nav>
+    <nav aria-label="비교"><h4>비교</h4>
+      <a href="/ko/vs/fyxer/">Fyxer와 비교</a>
+      <a href="/ko/vs/superhuman/">Superhuman과 비교</a>
+      <a href="/ko/vs/sanebox/">SaneBox와 비교</a>
+      <a href="/ko/vs/inbox-zero/" aria-current="page">Inbox Zero와 비교</a></nav>
+    <nav aria-label="법적 고지"><h4>법적 고지</h4>
+      <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
+      <a href="https://app.klorn.ai/terms">이용약관</a>
+      <a href="https://app.klorn.ai/refund">환불 정책</a>
+      <a href="/ko/security/">보안</a>
+      <a href="/ko/gdpr/">GDPR</a>
+      <a href="/ko/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">문의</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+    <span class="langsw"><a href="/vs/inbox-zero/" lang="en">EN</a><i aria-hidden="true">·</i><a href="/ko/vs/inbox-zero/" lang="ko" aria-current="true">KO</a></span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Carry the campaign that produced the click through to the app, so a signup
+// can be attributed to the page that earned it. `lp` is the landing path —
+// without it every comparison page is indistinguishable from the home page in
+// the signup data. Same block as the landing pages; inline because it has to
+// run before anyone clicks.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

@@ -3,79 +3,42 @@
 // Wire shapes come from @klorn/contract — the same types the server builds
 // (routes/receipt.ts), so a response-shape change fails to compile here
 // instead of silently desyncing.
-import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReceiptItem } from "@klorn/contract";
 import Link from "next/link";
-import { useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { HubHandoff } from "../../../components/hub-handoff";
 import { useToast } from "../../../components/toast";
-import { apiFetch } from "../../../lib/api";
-import { queryKeys } from "../../../lib/query-keys";
-import { captureClientError } from "../../../lib/sentry";
+import ErrorAlert from "../../../components/ui/error-alert";
+import LoadingState from "../../../components/ui/loading-state";
+import { useT } from "../../../lib/i18n";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
+import { useReceipt } from "./use-receipt";
 
 export default function ReceiptPage() {
   return (
     <AuthGuard>
-      <ReceiptView />
+      <HubHandoff>
+        <ReceiptView />
+      </HubHandoff>
     </AuthGuard>
   );
 }
 
 function ReceiptView() {
-  const queryClient = useQueryClient();
-  const [undoLoading, setUndoLoading] = useState<Record<string, boolean>>({});
+  const { t } = useT();
   const { toast } = useToast();
-
-  const receiptQuery = useQuery({
-    queryKey: queryKeys.inbox.receipt(),
-    queryFn: async () => {
-      try {
-        return await apiFetch<DailyReceipt>("/api/inbox/receipt/today");
-      } catch (err) {
-        captureClientError(err, { scope: "receipt.load" });
-        throw err;
-      }
-    },
+  const { receiptQuery, isUndoing, requestUndo } = useReceipt({
+    onUndoAnswer: (result) => toast(result.message, result.ok ? "success" : "error"),
+    onUndoError: () => toast(t("receipt.undo.error"), "error"),
   });
   const receipt = receiptQuery.data ?? null;
   const loading = receiptQuery.isLoading;
-  const error = receiptQuery.error ? "Could not load today's attention receipt." : null;
-
-  const undoMutation = useMutation({
-    mutationFn: (pendingActionId: string) =>
-      apiFetch<ReceiptUndoResponse>(`/api/inbox/receipt/undo/${pendingActionId}`, {
-        method: "POST",
-      }),
-    onMutate: (pendingActionId) => {
-      setUndoLoading((prev) => ({ ...prev, [pendingActionId]: true }));
-    },
-    onSuccess: (result) => {
-      if (result.ok) {
-        toast(result.message, "success");
-        // The undo creates a new proposal server-side; refetch reflects it.
-        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.receipt() });
-      } else {
-        toast(result.message, "error");
-      }
-    },
-    onError: (err, pendingActionId) => {
-      captureClientError(err, { scope: "receipt.undo", pendingActionId });
-      toast("Could not create undo proposal. Please try again.", "error");
-    },
-    onSettled: (_data, _err, pendingActionId) => {
-      setUndoLoading((prev) => ({ ...prev, [pendingActionId]: false }));
-    },
-  });
-
-  const handleUndo = (pendingActionId: string) => {
-    if (undoLoading[pendingActionId]) return;
-    undoMutation.mutate(pendingActionId);
-  };
+  const error = receiptQuery.error ? t("receipt.error.load") : null;
 
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-10">
-        <p className="text-sm text-slate-400 text-center">Loading today's receipt...</p>
+        <LoadingState rows={2} label={t("receipt.loading")} />
       </div>
     );
   }
@@ -83,9 +46,7 @@ function ReceiptView() {
   if (error || !receipt) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-10">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error ?? "No receipt available."}
-        </div>
+        <ErrorAlert>{error ?? t("receipt.error.noReceipt")}</ErrorAlert>
       </div>
     );
   }
@@ -96,46 +57,44 @@ function ReceiptView() {
       <header className="mb-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
-              What Klorn did today
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">{receipt.summary.narrative}</p>
+            <h1 className="text-role-page text-ink">{t("receipt.title")}</h1>
+            <p className="mt-2 text-role-body text-ink-mid">{receipt.summary.narrative}</p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <p className="hidden text-xs text-slate-400 sm:block">
+            <p className="hidden text-role-caption text-ink-dim sm:block">
               {formatReceiptDate(receipt.date)}
             </p>
             <button
               type="button"
               onClick={() => receiptQuery.refetch()}
-              className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
             >
-              Refresh
+              {t("receipt.refresh")}
             </button>
           </div>
         </div>
 
         {/* Summary row — one elevated panel */}
-        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
           <SummaryMetric
-            label="Signals seen"
+            label={t("receipt.metric.signalsSeen")}
             value={receipt.summary.totalSeen}
-            color="text-slate-900"
+            color="text-ink"
           />
           <SummaryMetric
-            label="Silenced"
+            label={t("receipt.silenced.title")}
             value={receipt.summary.savedFromInbox}
-            color="text-slate-500"
+            color="text-ink-mid"
           />
           <SummaryMetric
-            label="Pushed"
+            label={t("receipt.metric.pushed")}
             value={receipt.summary.totalInterrupted}
             color="text-rose-600"
           />
           <SummaryMetric
-            label="Auto-handled"
+            label={t("receipt.autoHandled.title")}
             value={receipt.summary.autoHandled}
-            color="text-emerald-600"
+            color="text-state-ok-ink"
           />
         </div>
       </header>
@@ -144,19 +103,19 @@ function ReceiptView() {
         {/* Auto-handled */}
         {receipt.auto.length > 0 && (
           <ReceiptSection
-            title="Auto-handled"
-            description="Low-risk actions Klorn executed without interrupting you"
+            title={t("receipt.autoHandled.title")}
+            description={t("receipt.autoHandled.description")}
             accentBar="bg-gradient-to-b from-emerald-400 to-emerald-500"
-            labelClass="text-emerald-600"
+            labelClass="text-state-ok-ink"
             items={receipt.auto}
             renderActions={(item) => (
               <button
                 type="button"
-                onClick={() => handleUndo(item.id)}
-                disabled={!!undoLoading[item.id]}
-                className="text-[11px] text-slate-400 transition duration-150 hover:text-sky-700 disabled:opacity-50"
+                onClick={() => requestUndo(item.id)}
+                disabled={isUndoing(item.id)}
+                className="text-role-caption text-ink-dim transition duration-150 hover:text-accent-deeper disabled:opacity-50 focus-ring min-h-9 min-w-9"
               >
-                {undoLoading[item.id] ? "Creating undo..." : "Request undo"}
+                {isUndoing(item.id) ? t("receipt.undo.creating") : t("receipt.undo.request")}
               </button>
             )}
           />
@@ -165,8 +124,8 @@ function ReceiptView() {
         {/* Pushed */}
         {receipt.pushed.length > 0 && (
           <ReceiptSection
-            title="Pushed to you"
-            description="Signals Klorn judged urgent enough to interrupt you"
+            title={t("receipt.pushed.title")}
+            description={t("receipt.pushed.description")}
             accentBar="bg-gradient-to-b from-rose-400 to-rose-500"
             labelClass="text-rose-600"
             items={receipt.pushed}
@@ -181,10 +140,10 @@ function ReceiptView() {
         {/* Queued */}
         {receipt.queued.length > 0 && (
           <ReceiptSection
-            title="Queued in inbox"
-            description="Items placed in your decision queue — no push sent"
-            accentBar="bg-sky-400"
-            labelClass="text-sky-600"
+            title={t("receipt.queued.title")}
+            description={t("receipt.queued.description")}
+            accentBar="bg-accent-light"
+            labelClass="text-accent-deep"
             items={receipt.queued}
           />
         )}
@@ -192,20 +151,18 @@ function ReceiptView() {
         {/* Silenced */}
         {receipt.silenced.length > 0 && (
           <ReceiptSection
-            title="Silenced"
-            description="Signals Klorn filtered out to protect your focus"
+            title={t("receipt.silenced.title")}
+            description={t("receipt.silenced.description")}
             accentBar={null}
-            labelClass="text-slate-500"
+            labelClass="text-ink-mid"
             items={receipt.silenced}
           />
         )}
 
         {receipt.summary.totalSeen === 0 && (
-          <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-8 text-center">
-            <p className="text-sm text-slate-500">No signals processed today yet.</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Come back later — Klorn processes your mail and meetings continuously.
-            </p>
+          <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-8 text-center">
+            <p className="text-role-body text-ink-mid">{t("receipt.empty.title")}</p>
+            <p className="mt-1 text-role-caption text-ink-mid">{t("receipt.empty.description")}</p>
           </div>
         )}
       </div>
@@ -213,9 +170,9 @@ function ReceiptView() {
       <div className="mt-8 flex justify-center">
         <Link
           href="/inbox"
-          className="text-sm text-slate-400 transition duration-150 hover:text-slate-600"
+          className="text-role-body text-ink-dim transition duration-150 hover:text-ink-muted"
         >
-          ← Back to Decision Queue
+          {t("receipt.backToQueue")}
         </Link>
       </div>
     </div>
@@ -239,17 +196,19 @@ function ReceiptSection({
   renderActions?: (item: ReceiptItem) => React.ReactNode;
   renderExtra?: (item: ReceiptItem) => React.ReactNode;
 }) {
+  // The display zone (pinned, else device), matching the receipt's day.
+  const timeZone = useDisplayTimeZone();
   return (
     <section aria-label={title}>
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <h2 className={`text-sm font-semibold ${labelClass}`}>{title}</h2>
-          <p className="text-xs text-slate-500">{description}</p>
+          <h2 className={`text-role-head font-semibold ${labelClass}`}>{title}</h2>
+          <p className="text-role-caption text-ink-mid">{description}</p>
         </div>
-        <span className="text-[11px] tabular-nums text-slate-400">{items.length}</span>
+        <span className="text-role-caption tabular-nums text-ink-dim">{items.length}</span>
       </div>
-      <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-        <ul className="divide-y divide-slate-100">
+      <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
+        <ul className="divide-y divide-line-soft">
           {items.map((item) => (
             <li key={item.id} className="row-wash relative">
               {accentBar && (
@@ -261,17 +220,17 @@ function ReceiptSection({
               <div className="px-4 py-3 pl-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900">{item.title}</p>
+                    <p className="truncate text-role-body font-medium text-ink">{item.title}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <SourceBadge source={item.source} type={item.type} />
                       {item.tierReason && (
-                        <span className="text-[11px] text-slate-500">{item.tierReason}</span>
+                        <span className="text-role-caption text-ink-mid">{item.tierReason}</span>
                       )}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-[11px] tabular-nums text-slate-400">
-                      {formatTime(item.surfacedAt)}
+                    <span className="text-role-caption tabular-nums text-ink-dim">
+                      {formatTime(item.surfacedAt, timeZone)}
                     </span>
                     {renderExtra?.(item)}
                     {renderActions?.(item)}
@@ -288,58 +247,62 @@ function ReceiptSection({
 
 function SummaryMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="border-r border-slate-100 px-4 py-3 last:border-r-0">
-      <p className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</p>
-      <p className="mt-1 text-[11px] text-slate-400">{label}</p>
+    <div className="border-r border-line-soft px-4 py-3 last:border-r-0">
+      <p className={`text-role-title font-semibold tabular-nums ${color}`}>{value}</p>
+      <p className="mt-1 text-role-caption text-ink-dim">{label}</p>
     </div>
   );
 }
 
 function SourceBadge({ source, type }: { source: string; type: string }) {
-  const label = sourceLabel(source, type);
+  const { t } = useT();
+  const label = sourceLabel(t, source, type);
   return (
-    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
+    <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
 }
 
 function PushStatusBadge({ status, clickedAt }: { status: string; clickedAt: string | null }) {
+  const { t } = useT();
   if (clickedAt) {
     return (
-      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-emerald-600 ring-1 ring-inset ring-emerald-500/20">
-        Opened
+      <span className="rounded-chip bg-emerald-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
+        {t("receipt.status.opened")}
       </span>
     );
   }
   if (status === "SENT") {
     return (
-      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-600 ring-1 ring-inset ring-amber-500/20">
-        Sent
+      <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+        {t("receipt.status.sent")}
       </span>
     );
   }
   return null;
 }
 
-function sourceLabel(source: string, type: string): string {
+/** `t` is passed in rather than called via useT() here — this is a plain
+ * helper, not a component, so it cannot use hooks itself. */
+function sourceLabel(t: (key: string) => string, source: string, type: string): string {
   const typeMap: Record<string, string> = {
-    COMMITMENT_DUE: "Commitment due",
-    COMMITMENT_OVERDUE: "Overdue commitment",
-    COMMITMENT_UNCONFIRMED: "Unconfirmed commitment",
-    REPLY_NEEDED: "Reply needed",
-    DEADLINE: "Deadline",
-    AGENT_PROPOSAL: "Agent proposal",
-    DECISION: "Auto action",
+    COMMITMENT_DUE: t("receipt.type.commitmentDue"),
+    COMMITMENT_OVERDUE: t("receipt.type.commitmentOverdue"),
+    COMMITMENT_UNCONFIRMED: t("receipt.type.commitmentUnconfirmed"),
+    REPLY_NEEDED: t("receipt.type.replyNeeded"),
+    DEADLINE: t("receipt.type.deadline"),
+    AGENT_PROPOSAL: t("receipt.type.agentProposal"),
+    DECISION: t("receipt.type.decision"),
   };
   if (typeMap[type]) return typeMap[type];
   const sourceMap: Record<string, string> = {
-    PENDING_ACTION: "Agent",
-    TASK: "Task",
-    CALENDAR_EVENT: "Calendar",
-    NOTIFICATION: "Notification",
-    COMMITMENT: "Commitment",
-    EMAIL: "Email",
+    PENDING_ACTION: t("receipt.source.pendingAction"),
+    TASK: t("receipt.source.task"),
+    CALENDAR_EVENT: t("receipt.source.calendarEvent"),
+    NOTIFICATION: t("receipt.source.notification"),
+    COMMITMENT: t("receipt.source.commitment"),
+    EMAIL: t("receipt.source.email"),
   };
   return sourceMap[source] ?? source.toLowerCase().replace(/_/g, " ");
 }
@@ -356,11 +319,12 @@ function formatReceiptDate(dateStr: string): string {
   }
 }
 
-function formatTime(isoStr: string): string {
+function formatTime(isoStr: string, timeZone?: string): string {
   try {
     return new Date(isoStr).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone,
     });
   } catch {
     return "";

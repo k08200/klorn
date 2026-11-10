@@ -3,6 +3,8 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startGoogleConnect } from "../lib/api";
+import { useT } from "../lib/i18n";
+import { MailAccountProGate } from "./mail-account-pro-gate";
 
 /**
  * Shows an explicit error card when the OAuth callback came back without a
@@ -17,50 +19,69 @@ export function OAuthErrorBanner() {
   const searchParams = useSearchParams();
   const status = searchParams.get("google");
   const [dismissed, setDismissed] = useState(false);
+  const { t } = useT();
 
   useEffect(() => {
     setDismissed(false);
   }, [status]);
 
-  if (status !== "offline_access_denied" || dismissed) return null;
+  if (dismissed) return null;
+  // ?google=pro: the primary Gmail connect was refused because Gmail would be
+  // a second mail account on Free.
+  if (status === "pro") {
+    return (
+      <div className="mb-4">
+        <MailAccountProGate />
+      </div>
+    );
+  }
+  if (status === "wipe_in_progress") {
+    // The data wipe's fence refused the new Google grant; it lifts minutes
+    // after the wipe finishes.
+    return (
+      <div
+        className="mb-4 rounded-control border border-line-soft bg-surface-raised p-4"
+        role="status"
+      >
+        <h3 className="text-role-head text-ink">{t("oauthError.wipeInProgress.title")}</h3>
+        <p className="mt-1 text-role-meta leading-5 text-ink-mid">
+          {t("oauthError.wipeInProgress.body")}
+        </p>
+      </div>
+    );
+  }
+  if (status !== "offline_access_denied") return null;
 
   return (
-    <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+    <div className="mb-4 rounded-control border border-red-500/30 bg-red-500/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-red-600">
-            Gmail offline access wasn't granted
-          </h3>
-          <p className="mt-1 text-[13px] leading-5 text-slate-500">
-            Google returned a short-lived token without the refresh permission Klorn needs to keep
-            syncing in the background. This is almost always one of two things:
-          </p>
-          <ul className="mt-2 space-y-1 text-[13px] leading-5 text-slate-500">
+          <h3 className="text-role-head text-state-danger-ink">{t("oauthError.title")}</h3>
+          <p className="mt-1 text-role-meta leading-5 text-ink-mid">{t("oauthError.body")}</p>
+          <ul className="mt-2 space-y-1 text-role-meta leading-5 text-ink-mid">
             <li>
-              <span className="text-slate-900">Workspace policy</span> — your IT admin restricts
-              third-party apps from offline Gmail access. Ask them to allow Klorn's OAuth client ID,
-              then reconnect below.
+              <span className="text-ink">{t("oauthError.policy.title")}</span>{" "}
+              {t("oauthError.policy.body")}
             </li>
             <li>
-              <span className="text-slate-900">Missing scope on consent</span> — the Google consent
-              screen didn't grant all Gmail permissions. Reconnect and make sure every checkbox is
-              selected.
+              <span className="text-ink">{t("oauthError.scope.title")}</span>{" "}
+              {t("oauthError.scope.body")}
             </li>
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void startGoogleConnect()}
-              className="rounded-lg bg-sky-500 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-sky-500"
+              className="rounded-control bg-accent-solid px-3 py-1.5 text-role-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
             >
-              Reconnect Google
+              {t("reconnect.googleAction")}
             </button>
             <button
               type="button"
               onClick={() => setDismissed(true)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-500 transition hover:text-slate-900"
+              className="rounded-control border border-line px-3 py-1.5 text-role-caption text-ink-mid transition hover:text-ink"
             >
-              Dismiss
+              {t("common.dismiss")}
             </button>
           </div>
         </div>

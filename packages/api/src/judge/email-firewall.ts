@@ -1,8 +1,10 @@
 /**
  * Email persist + firewall (M3 decomposition, extracted from email-sync.ts).
  *
- * Persists a fetched Gmail message, classifies it into a SILENT/QUEUE/PUSH/AUTO
- * tier, mirrors it to an AttentionItem, and fires a PUSH-tier interrupt. Also
+ * Persists a fetched Gmail message, classifies it into one lane, mirrors it to
+ * an AttentionItem, and fires a PUSH-lane interrupt. Which lanes are reachable
+ * depends on TIER_V2_ENABLED (default-ON since 2026-08-18): the five live v2
+ * lanes with it on, the v1 four with it off — see judge/tiers.ts. Also
  * the backfill sweep that re-judges any email left without an AttentionItem.
  * push/websocket/attention-override are lazy-imported to avoid a top-level
  * cycle. Must NOT import email-sync.ts (the sync orchestrator imports THIS).
@@ -18,8 +20,12 @@ import {
   upsertEmailAttachments,
 } from "../mail/email-attachments.js";
 import { classifyNeedsReplyFromSignals, classifyPriority } from "../mail/email-priority.js";
+import { coercePlainBody } from "../mail/email-text.js";
 import type { GmailRawEmail } from "../mail/gmail-fetch.js";
+import { applyLaneLabel } from "../mail/gmail-labels.js";
+import { autoUnsubscribeEnabled, executeOneClickUnsubscribe } from "../mail/list-unsubscribe.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { reserveAutoUnsubscribe } from "../mail/unsubscribe-quota.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
@@ -27,10 +33,15 @@ import type { ProviderCredentials } from "../providers/index.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
 import { captureError } from "../sentry.js";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
+import { deliverFirewallPush, pushForFirewallEmail } from "./firewall-push.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
-import { judgeEmail, type PocTier } from "./poc-judge.js";
+import { reconcileLabelCorrection } from "./label-correction.js";
+import { judgeEmail, type PocJudgement, type PocTier } from "./poc-judge.js";
+import { isJudgeV3PolicyEnabled, isJudgeV3ShadowEnabled } from "./v3/flags.js";
+import type { V3ItemFields } from "./v3/live-item.js";
+import type { V3PushPlan } from "./v3/live-judge.js";
 
 /**
  * Normalized sender address for the `fromAddress` column — the SINGLE source of
@@ -41,10 +52,33 @@ function normalizedFromAddress(from: string): string | null {
   return extractEmailAddress(from) || null;
 }
 
+/// The body and snippet to write on re-sync: only when asked and only when they
+/// changed, so a poll that re-touches its window does not churn TOAST rows.
+function refreshedBodyFields(
+  existing: { body: string | null; snippet: string | null },
+  email: GmailRawEmail,
+  refresh: boolean,
+): { body?: string | null; snippet?: string } {
+  // The snippet decides, as a cheap compare: a poll that re-touches its window
+  // never runs coercePlainBody on an unchanged row. Every raw-MIME row's
+  // snippet differs from its decoded one (a boundary, base64, or a QP soft
+  // break falls within the first 200 characters).
+  if (!refresh || email.snippet === existing.snippet) return {};
+  const body = coercePlainBody(email.body || null, email.htmlBody || null);
+  return { body, snippet: email.snippet };
+}
+
 export async function persistGmailEmail(
   userId: string,
   email: GmailRawEmail,
-  options: { userEmail?: string | null; linkedInboxAccountId?: string | null } = {},
+  options: {
+    userEmail?: string | null;
+    linkedInboxAccountId?: string | null;
+    /// Re-sync rewrites body and snippet when they changed. The IMAP poll sets
+    /// it: rows stored as raw MIME before decoding pick up the decoded text.
+    /// Gmail never sets it, so its stored body is never touched on re-sync.
+    refreshBody?: boolean;
+  } = {},
 ): Promise<{ emailId: string; isNew: boolean }> {
   const existing = await prisma.emailMessage.findUnique({
     where: { userId_gmailId: { userId, gmailId: email.gmailId } },
@@ -60,6 +94,18 @@ export async function persistGmailEmail(
         // Backfill the normalized address on re-sync so already-persisted mail
         // gets an indexed fromAddress without a separate backfill pass.
         fromAddress: normalizedFromAddress(email.from),
+        ...refreshedBodyFields(existing, email, options.refreshBody === true),
+        // Same backfill contract for the List-Unsubscribe targets: rows that
+        // predate the columns pick them up on the next re-sync. Guarded on
+        // "the producer parsed the header at all" so a non-Gmail path that
+        // never sets these can't null out stored values.
+        ...(email.listUnsubscribeMailto !== undefined || email.listUnsubscribeUrl !== undefined
+          ? {
+              listUnsubscribeMailto: email.listUnsubscribeMailto ?? null,
+              listUnsubscribeUrl: email.listUnsubscribeUrl ?? null,
+              listUnsubscribeOneClick: email.listUnsubscribeOneClick ?? false,
+            }
+          : {}),
         // (Re)stamp provenance only when the caller holds a REAL account id:
         // the Naver poll re-touches its recent window every cycle, so pre-0b
         // rows adopt their account id without a data migration. Truthy-only on
@@ -78,6 +124,23 @@ export async function persistGmailEmail(
         attachments: email.attachments,
       });
     }
+    // Label mode's other half: if the user dragged this message to a different
+    // Klorn/* label in Gmail, that is the same act as moving the row in the
+    // app, and it must reach the same ledger. Fire-and-forget — a sync must
+    // never fail because a correction could not be recorded, and
+    // reconcileLabelCorrection is a no-op when label mode is off.
+    void reconcileLabelCorrection(
+      userId,
+      existing.id,
+      email.labels,
+      options.linkedInboxAccountId ?? null,
+    ).catch((err) =>
+      captureError(err, {
+        tags: { scope: "sync-label-correction" },
+        extra: { userId, emailId: existing.id },
+      }),
+    );
+
     return { emailId: existing.id, isNew: false };
   }
 
@@ -103,7 +166,10 @@ export async function persistGmailEmail(
       cc: email.cc || null,
       subject: email.subject,
       snippet: email.snippet,
-      body: email.body || null,
+      // Some senders put raw HTML source into the text/plain part (observed
+      // 2026-08-13, Paddle) — coerce at the shared persist choke point so
+      // every provider path (Gmail, Outlook Graph, IMAP) stores real text.
+      body: coercePlainBody(email.body || null, email.htmlBody || null),
       htmlBody: email.htmlBody || null,
       labels: email.labels,
       isRead: email.isRead,
@@ -113,6 +179,12 @@ export async function persistGmailEmail(
       needsReplyReason: replyNeeded.reason,
       needsReplyConfidence: replyNeeded.confidence,
       receivedAt: email.receivedAt,
+      listUnsubscribeMailto: email.listUnsubscribeMailto ?? null,
+      listUnsubscribeUrl: email.listUnsubscribeUrl ?? null,
+      listUnsubscribeOneClick: email.listUnsubscribeOneClick ?? false,
+      // Only the Klorn mailbox has verdicts (step E1b); every other producer
+      // leaves the column out, so it stays null.
+      ...(email.authentication ? { authentication: email.authentication } : {}),
     },
   });
   if (email.attachments.length > 0) {
@@ -160,27 +232,42 @@ export async function persistGmailEmail(
     });
   }
 
-  // POC firewall: classify the email into SILENT/QUEUE/PUSH/AUTO and mirror
-  // it to an AttentionItem so the firewall route surfaces it. Fire-and-forget
+  // POC firewall: classify the email into one lane and mirror it to an
+  // AttentionItem so the firewall route surfaces it. Fire-and-forget
   // so sync never blocks on the LLM. If this rejects (or the process dies
   // mid-flight) the email is persisted but has no AttentionItem — the
   // backfill sweep (backfillEmailAttentionItems, run by the scheduler) is the
   // safety net that re-judges any email left without one.
-  judgeAndMirrorEmail(userId, {
-    id: createdEmail.id,
-    gmailId: email.gmailId,
-    from: email.from,
-    subject: email.subject,
-    snippet: email.snippet,
-    body: email.body,
-    labels: email.labels,
-    receivedAt: email.receivedAt,
-  })
+  judgeAndMirrorEmail(
+    userId,
+    {
+      id: createdEmail.id,
+      gmailId: email.gmailId,
+      from: email.from,
+      subject: email.subject,
+      snippet: email.snippet,
+      body: email.body,
+      labels: email.labels,
+      receivedAt: email.receivedAt,
+      hasListUnsubscribe: email.hasListUnsubscribe,
+      linkedInboxAccountId: options.linkedInboxAccountId ?? null,
+    },
+    undefined,
+    undefined,
+    { liveRaw: email },
+  )
     .then((tier) => {
       // Actionable tiers (PUSH/QUEUE) trigger an immediate agent run so the
       // user sees a draft proposal without waiting for the cron. Debounced
       // inside the trigger to bound LLM cost.
       scheduleAgentForActionableEmail(userId, tier);
+      // Attention engine v3 facts shadow (JUDGE_V3_SHADOW, OFF by default):
+      // after the v2 lane is decided, never changing it. Fire-and-forget. A
+      // user under policy v3 already got live facts inside the judge, so the
+      // shadow would only spend a second call.
+      if (isJudgeV3ShadowEnabled(userId) && !isJudgeV3PolicyEnabled(userId)) {
+        void startFactsShadow(userId, createdEmail.id, email, tier);
+      }
       // Promotional / marketing mail (the judge's fast-path SILENT bucket) is
       // noise the user never needs to open — mark it read in Gmail so it
       // doesn't sit unread. Promotional-ONLY by product decision: QUEUE/PUSH/
@@ -196,6 +283,13 @@ export async function persistGmailEmail(
           gmailId: email.gmailId,
           linkedInboxAccountId: options.linkedInboxAccountId ?? null,
         });
+        // Flag-gated automation (AUTO_UNSUBSCRIBE_ENABLED, default OFF):
+        // one-click ONLY — a mailto sends as the user and a link needs a
+        // browser, so neither may run unattended. Same double gate as the
+        // read-marking above; fire-and-forget for the same reason.
+        if (autoUnsubscribeEnabled() && email.listUnsubscribeOneClick && email.listUnsubscribeUrl) {
+          void autoUnsubscribePromotional(userId, email.listUnsubscribeUrl);
+        }
       }
     })
     .catch((err) => {
@@ -249,7 +343,56 @@ async function markPromotionalEmailRead(
   }
 }
 
-interface JudgeableEmailRow {
+/**
+ * The flag-gated automatic half of unsubscribe. executeOneClickUnsubscribe
+ * never throws; failures are a warn only — list servers fail routinely, and
+ * Sentry noise here would bury real signal (same rationale as the benign
+ * branch of promo auto-read above).
+ */
+async function autoUnsubscribePromotional(userId: string, url: string): Promise<void> {
+  // Capped per user, per target domain and fleet-wide (unsubscribe-quota.ts).
+  // Fail closed: if the caps cannot be checked, nothing is sent.
+  let quota: Awaited<ReturnType<typeof reserveAutoUnsubscribe>>;
+  try {
+    quota = await reserveAutoUnsubscribe(userId, url);
+  } catch (err) {
+    console.warn("[FIREWALL] auto-unsubscribe skipped: quota check failed", err);
+    captureError(err, { tags: { scope: "firewall.auto_unsubscribe_quota" }, extra: { userId } });
+    return;
+  }
+  if (!quota.ok) {
+    console.warn(`[FIREWALL] auto-unsubscribe skipped: ${quota.reason}`);
+    return;
+  }
+  const result = await executeOneClickUnsubscribe(url);
+  if (!result.ok) {
+    console.warn(`[FIREWALL] auto-unsubscribe failed: ${result.reason}`);
+  }
+}
+
+/** A judgeable row as SELECTed from the DB (re-judge paths): the stored
+ * List-Unsubscribe targets instead of the sync-time boolean. */
+export interface StoredJudgeableEmailRow extends Omit<JudgeableEmailRow, "hasListUnsubscribe"> {
+  listUnsubscribeMailto: string | null;
+  listUnsubscribeUrl: string | null;
+}
+
+/**
+ * The ONE derivation of the judge's bulk-mail boolean from the stored
+ * columns — shared by the backfill sweep and the read-path heal
+ * (routes/firewall.ts) so the two re-judge paths can't drift.
+ */
+export function toJudgeableEmailRow(row: StoredJudgeableEmailRow): JudgeableEmailRow {
+  const { listUnsubscribeMailto, listUnsubscribeUrl, ...rest } = row;
+  return {
+    ...rest,
+    // Loose != so an undefined field (a row shape that never selected the
+    // columns) reads as "no header", never as a bulk-mail signal.
+    hasListUnsubscribe: listUnsubscribeMailto != null || listUnsubscribeUrl != null,
+  };
+}
+
+export interface JudgeableEmailRow {
   id: string;
   gmailId: string;
   from: string;
@@ -258,20 +401,54 @@ interface JudgeableEmailRow {
   body?: string | null;
   labels: string[];
   receivedAt: Date;
+  /** Bulk-mail marker from sync; feeds the v2 transactional detector. */
+  hasListUnsubscribe?: boolean;
+  /**
+   * Which linked inbox this message belongs to (null = the primary account).
+   * Threaded so label mode writes to the account the message actually lives
+   * in — CLAUDE.md: never assume the primary account for a Gmail action.
+   */
+  linkedInboxAccountId?: string | null;
+}
+
+/**
+ * Run the v3 facts shadow for a new mail. The module graph loads only when
+ * the flag is on, so a flag-off install pays nothing. runFactsShadow never
+ * throws; the catch covers a failed module load.
+ */
+async function startFactsShadow(
+  userId: string,
+  emailId: string,
+  email: GmailRawEmail,
+  tier: PocTier,
+): Promise<void> {
+  try {
+    const { runFactsShadow, shadowMailFromRaw } = await import("./v3/shadow.js");
+    await runFactsShadow(userId, shadowMailFromRaw(emailId, email), tier);
+  } catch (err) {
+    captureError(err, { tags: { scope: "judge-v3-shadow-load" }, extra: { userId, emailId } });
+  }
 }
 
 /**
  * Classify one stored email into a tier and mirror it to an AttentionItem.
  * Shared by the inline sync path and the backfill sweep. buildJudgeContext
- * never throws and judgeEmail falls back to keyword features when the LLM is
- * down, so the only way this produces no AttentionItem is the upsert itself
- * throwing — in which case the next backfill pass retries it.
+ * never throws, judgeEmail falls back to keyword features when the LLM is
+ * down, and a failed v3 plan falls back to the v2 lane, so the only way this
+ * produces no AttentionItem is the upsert itself throwing — in which case the
+ * next backfill pass retries it.
  */
 export async function judgeAndMirrorEmail(
   userId: string,
   email: JudgeableEmailRow,
   credentials?: ProviderCredentials,
   language?: string | null,
+  /**
+   * `rejudge`: the item already exists (the stale-hash heal). See EmailUpsertOptions.
+   * `liveRaw`: the message just ingested. For a user under policy v3 it feeds the
+   * live facts call; without it (re-judge, backfill) v3 reads stored facts.
+   */
+  options: { rejudge?: boolean; liveRaw?: GmailRawEmail } = {},
 ): Promise<PocTier> {
   // BYOK: route this user's classify call to their own provider key when they
   // have set one (billing.ts), so per-user load never lands on the shared env
@@ -298,6 +475,7 @@ export async function judgeAndMirrorEmail(
       snippet: email.snippet,
       body: email.body,
       labels: email.labels,
+      hasListUnsubscribe: email.hasListUnsubscribe,
     },
     userId,
     judgeContext,
@@ -306,15 +484,30 @@ export async function judgeAndMirrorEmail(
     undefined,
     reasonLanguage,
   );
-  // Fleet-wide accuracy tripwire: track how the judge decided (LLM vs the
-  // keyword fallback that caps PUSH recall ~46%). Prod path only — the eval
-  // harness calls judgeEmail directly and must not pollute the window.
-  recordJudgeSource(judgement.source);
-  await upsertAttentionForEmailJudgement(
-    { userId, ...email },
-    judgement,
-    engagementKindOf(judgeContext.senderFacts),
-  );
+  // Judge heartbeat (#742). Prod path only — the eval harness calls judgeEmail
+  // directly. Observability: a throw here must never skip the upsert below.
+  try {
+    recordJudgeSource(judgement.source);
+  } catch (err) {
+    console.warn("[JUDGE-HEALTH] recordJudgeSource failed:", err);
+    captureError(err, { tags: { scope: "judge-health.record" } });
+  }
+  // Attention engine v3 (JUDGE_V3_POLICY, for the users it covers): the lane
+  // and any interrupt-budget hold are decided here, before the item is written.
+  const v3 = await v3PlanFor(userId, email, judgement, llmCredentials, options);
+  const written = v3?.written ?? judgement;
+  const outcome = await writeJudgedItem(userId, email, written, judgeContext, options, v3);
+  // A human override or an agent lane landed while the judge ran, so the write
+  // was refused and their decision stands. Nothing below may run: no wake-up, no
+  // push and no Gmail label for a tier that is not the one the item carries. A
+  // budget slot already claimed stays spent; its bell row is hidden.
+  if (outcome === "preserved") {
+    if (v3?.push.kind === "deliver") {
+      const { hideClaimedBellRow } = await import("./v3/push-budget-gate.js");
+      await hideClaimedBellRow(userId, v3.push.notification.id);
+    }
+    return written.tier;
+  }
   // The email just became visible on the firewall surfaces — they read
   // AttentionItem, which is written only here, post-judge. Wake every open
   // client so it refetches NOW: without this, only PUSH-tier mail produced
@@ -325,135 +518,135 @@ export async function judgeAndMirrorEmail(
   notifyConversationsUpdated(userId);
 
   // The whole point of the firewall: a PUSH tier should actually interrupt
-  // you. Until now nothing did — email pushes fired only off the separate
-  // keyword `classifyPriority === URGENT` heuristic, so the smart judge could
-  // (correctly) tier an email PUSH and the notification never went out. Wire
-  // the judge's PUSH decision to a real push. Best-effort: never block or
-  // fail classification on the notification.
-  if (judgement.tier === "PUSH") {
-    await pushForFirewallEmail(userId, email).catch((err) =>
-      captureError(err, {
-        tags: { scope: "firewall-push" },
-        extra: { userId, emailId: email.id },
-      }),
-    );
-  }
-  return judgement.tier;
+  // you. MEETING (v2 only — v1 never emits it) notifies like PUSH: the
+  // founder's 기본 모드 contract is "important mail + calendar/scheduling
+  // interrupt, everything else is silent" (docs/design/tier-ontology-v2.md).
+  // Best-effort: never block or fail classification on the notification.
+  await ringForFirewallEmail(userId, email, written.tier, v3?.push ?? null);
+
+  // Label mode: mirror the decided lane back into Gmail so the classification
+  // is visible in whatever client the user already reads mail in. Best-effort
+  // and flag-gated — applyLaneLabel never throws, and returns "skipped" when
+  // the flag is off, the account is IMAP, or the tier is the retired AUTO.
+  void applyLaneLabel(
+    userId,
+    email.gmailId,
+    written.tier,
+    email.linkedInboxAccountId ?? null,
+  ).catch((err) =>
+    captureError(err, {
+      tags: { scope: "firewall-label-mode" },
+      extra: { userId, emailId: email.id },
+    }),
+  );
+
+  return written.tier;
 }
 
-// A push for a PUSH-tier email only fires for genuinely recent mail. The
-// backfill sweep re-judges emails that arrived while the dyno slept; tiering
-// a days-old email in the firewall is right, but firing a stale "urgent" push
-// for it is not.
-const FIREWALL_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
-const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-// Shared notification title with the urgent-priority sweep
-// (automation-scheduler.ts) so the two dedup against each other: whichever
-// fires first writes "Urgent email" + "[gmailId]", and the other skips. An
-// email that is both keyword-URGENT and judge-PUSH gets exactly one push.
-const FIREWALL_PUSH_TITLE = "Urgent email";
-
-function senderDisplayName(from: string): string {
-  const angle = from.indexOf("<");
-  const name = angle > 0 ? from.slice(0, angle).trim().replace(/^"|"$/g, "") : from.trim();
-  return name || from;
+interface V3Write {
+  written: PocJudgement;
+  v3?: V3ItemFields;
+  push: V3PushPlan;
 }
 
 /**
- * Send a push for an email the judge tiered PUSH. Recency-guarded (never push
- * backfilled old mail) and deduped (shared marker with the urgent-priority
- * sweep so an email never gets two pushes). sendPushNotification applies the
- * quiet-hours / rate-limit / Telegram gates, so we don't re-check them here.
+ * The v3 plan for a user under the policy; null for everyone else. A plan that
+ * fails (a database error) falls back to the v2 lane with no v3 columns and no
+ * PUSH notification, so the mail is still written and the budget is never
+ * bypassed. MEETING still rings: it is not budgeted.
  */
-async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): Promise<void> {
-  const ageMs = Date.now() - email.receivedAt.getTime();
-  if (ageMs > FIREWALL_PUSH_RECENCY_MS) {
-    // Suppressing a stale PUSH is intentional (dyno slept, or a late manual sync
-    // / backfill surfaced old mail), but it must not be silent: this is the
-    // first thing to check when a PUSH-tier email fired no alarm. push.ts logs
-    // every other suppression reason; this early return is the one blind spot.
-    console.log(
-      `[PUSH] Firewall PUSH suppressed (stale: ${Math.round(ageMs / 3_600_000)}h old) ` +
-        `for email ${email.gmailId} user ${userId}`,
-    );
-    return;
-  }
-
-  const id = email.gmailId;
-  const already = await prisma.notification.findFirst({
-    where: {
+async function v3PlanFor(
+  userId: string,
+  email: JudgeableEmailRow,
+  judgement: PocJudgement,
+  credentials: ProviderCredentials,
+  options: { rejudge?: boolean; liveRaw?: GmailRawEmail },
+): Promise<V3Write | null> {
+  if (!isJudgeV3PolicyEnabled(userId)) return null;
+  try {
+    const { judgementUnderPlan, planV3Write } = await import("./v3/live-judge.js");
+    const plan = await planV3Write({
       userId,
-      type: "email",
-      title: FIREWALL_PUSH_TITLE,
-      // Match the gmailId as a COMPLETE token inside a `[id1,id2,…]` marker
-      // (a firewall single push or an urgent-sweep batch share this title),
-      // bounded by the bracket/comma delimiters. A bare `contains` substring-
-      // matched, so a Naver IMAP id like `…:5` falsely deduped against a longer
-      // `…:53` already sitting in a marker — silently suppressing a legitimate
-      // Naver PUSH. Gmail ids are non-nesting hex, but Naver UIDs are
-      // sequential integers, so the substring nesting is real for that source.
-      OR: [
-        { message: { contains: `[${id}]` } },
-        { message: { contains: `[${id},` } },
-        { message: { contains: `,${id},` } },
-        { message: { contains: `,${id}]` } },
-      ],
-      createdAt: { gte: new Date(Date.now() - PUSH_DEDUP_WINDOW_MS) },
-    },
-    select: { id: true },
-  });
-  if (already) {
-    console.log(
-      `[PUSH] Firewall PUSH deduped (already notified within ${PUSH_DEDUP_WINDOW_MS / 86_400_000}d) ` +
-        `for email ${email.gmailId} user ${userId}`,
-    );
-    return;
+      email,
+      judgement,
+      rejudge: options.rejudge === true,
+      liveRaw: options.liveRaw,
+      credentials,
+      allowPush: true,
+    });
+    return { written: judgementUnderPlan(judgement, plan), v3: plan.v3, push: plan.push };
+  } catch (err) {
+    console.warn("[FIREWALL] v3 plan failed; writing the v2 lane (ids in Sentry extra)", err);
+    captureError(err, { tags: { scope: "judge-v3-plan" }, extra: { userId, emailId: email.id } });
+    const push: V3PushPlan = judgement.tier === "MEETING" ? { kind: "meeting" } : { kind: "none" };
+    return { written: judgement, push };
   }
+}
 
-  const sender = senderDisplayName(email.from);
-  const body = `${sender}: ${email.subject || "(no subject)"}`.slice(0, 200);
+/**
+ * Write the item. If the write throws after a budget slot was claimed, the
+ * claim is released: nothing rang, and the retry (the backfill sweep) must be
+ * able to claim and ring again rather than find its own bell row as a dedupe.
+ */
+async function writeJudgedItem(
+  userId: string,
+  email: JudgeableEmailRow,
+  written: PocJudgement,
+  judgeContext: Awaited<ReturnType<typeof buildJudgeContext>>,
+  options: { rejudge?: boolean },
+  v3: V3Write | null,
+) {
+  try {
+    return await upsertAttentionForEmailJudgement(
+      { userId, ...email },
+      written,
+      engagementKindOf(judgeContext.senderFacts),
+      { rejudge: options.rejudge, v3: v3?.v3 },
+    );
+  } catch (err) {
+    if (v3?.push.kind === "deliver") {
+      const { releaseClaimedBellRow } = await import("./v3/push-budget-gate.js");
+      await releaseClaimedBellRow(userId, v3.push.notification.id).catch((releaseErr) =>
+        captureError(releaseErr, {
+          tags: { scope: "judge-v3-release-claim" },
+          extra: { userId, emailId: email.id },
+        }),
+      );
+    }
+    throw err;
+  }
+}
 
-  // Bell row carries the [gmailId] dedup marker (read back by both this path
-  // and the urgent-priority sweep).
-  const notification = await prisma.notification.create({
-    data: {
-      userId,
-      type: "email",
-      title: FIREWALL_PUSH_TITLE,
-      message: `${body} [${email.gmailId}]`,
-    },
-  });
-
-  const [{ pushNotification }, { sendPushNotification }, { findOpenEmailAttentionItemId }] =
-    await Promise.all([
-      import("../websocket.js"),
-      import("../notify/push.js"),
-      import("./attention-override.js"),
-    ]);
-
-  pushNotification(userId, {
-    id: notification.id,
-    type: "email",
-    title: FIREWALL_PUSH_TITLE,
-    message: body,
-    createdAt: notification.createdAt.toISOString(),
-  });
-
-  const attentionItemId = await findOpenEmailAttentionItemId(userId, email.id);
-  await sendPushNotification(
-    userId,
-    {
-      title: `Klorn — ${sender}`,
-      body: email.subject || "(no subject)",
-      url: "/inbox/firewall",
-      attentionItemId: attentionItemId ?? undefined,
-    },
-    "email_urgent",
-  );
+/**
+ * Ring for a judged email. v2 (plan null): PUSH and MEETING through the usual
+ * gates. v3: the plan already ran the gates and claimed any budget slot for a
+ * PUSH, so only delivery is left; MEETING takes the usual unbudgeted path.
+ */
+async function ringForFirewallEmail(
+  userId: string,
+  email: JudgeableEmailRow,
+  tier: PocTier,
+  push: V3PushPlan | null,
+): Promise<void> {
+  try {
+    if (push === null) {
+      if (tier === "PUSH" || tier === "MEETING") await pushForFirewallEmail(userId, email, false);
+      return;
+    }
+    if (push.kind === "deliver") await deliverFirewallPush(userId, email, push.notification);
+    else if (push.kind === "meeting") await pushForFirewallEmail(userId, email, true);
+  } catch (err) {
+    captureError(err, { tags: { scope: "firewall-push" }, extra: { userId, emailId: email.id } });
+  }
 }
 
 const BACKFILL_LOOKBACK_DAYS = 14;
 const BACKFILL_LOOKBACK_MS = BACKFILL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+// For a user under policy v3 the inline judge can run for the live facts
+// deadline plus a wait for a model slot. The sweep leaves mail that young to
+// the inline judge, so the two never judge (and claim a budget slot for) the
+// same mail at once.
+const V3_BACKFILL_MIN_AGE_MS = 5 * 60 * 1000;
 const BACKFILL_SCAN_LIMIT = 200;
 const BACKFILL_BATCH = 10;
 
@@ -471,21 +664,29 @@ const BACKFILL_BATCH = 10;
  */
 export async function backfillEmailAttentionItems(userId: string): Promise<number> {
   const cutoff = new Date(Date.now() - BACKFILL_LOOKBACK_MS);
-  const recent = (await prisma.emailMessage.findMany({
-    where: { userId, receivedAt: { gte: cutoff } },
-    select: {
-      id: true,
-      gmailId: true,
-      from: true,
-      subject: true,
-      snippet: true,
-      body: true,
-      labels: true,
-      receivedAt: true,
-    },
-    orderBy: { receivedAt: "desc" },
-    take: BACKFILL_SCAN_LIMIT,
-  })) as JudgeableEmailRow[];
+  const youngest = isJudgeV3PolicyEnabled(userId)
+    ? { createdAt: { lte: new Date(Date.now() - V3_BACKFILL_MIN_AGE_MS) } }
+    : {};
+  const recent = (
+    (await prisma.emailMessage.findMany({
+      where: { userId, receivedAt: { gte: cutoff }, ...youngest },
+      select: {
+        id: true,
+        gmailId: true,
+        from: true,
+        subject: true,
+        snippet: true,
+        body: true,
+        labels: true,
+        receivedAt: true,
+        linkedInboxAccountId: true,
+        listUnsubscribeMailto: true,
+        listUnsubscribeUrl: true,
+      },
+      orderBy: { receivedAt: "desc" },
+      take: BACKFILL_SCAN_LIMIT,
+    })) as StoredJudgeableEmailRow[]
+  ).map(toJudgeableEmailRow);
   if (recent.length === 0) return 0;
 
   const judged = (await prisma.attentionItem.findMany({

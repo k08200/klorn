@@ -77,7 +77,10 @@ interface NormalizedEmail {
   priority: string;
   /** Firewall verdict (EmailMessage.needsReply). */
   needsReply: boolean;
-  /** Firewall 4-tier verdict (AttentionItem.tier): "PUSH"|"QUEUE"|"SILENT"|"AUTO"|"". */
+  /** Firewall lane verdict (AttentionItem.tier), or "" when unclassified:
+   *  "PUSH"|"MEETING"|"QUEUE"|"INFO"|"SILENT", plus legacy "AUTO" on rows
+   *  written before the v2 flip. Typed `string` on purpose — this reads
+   *  whatever the DB holds, so a value this build predates must not throw. */
   tier: string;
 }
 
@@ -117,7 +120,7 @@ const URGENCY_PATTERNS = [
   { pattern: /긴급|급함|급해|마감|오늘까지|기한|늦었|지연|장애|실패/i, reason: "긴급 키워드" },
 ];
 
-// The 4-tier firewall already scored each email (subject + body, when
+// The firewall already scored each email (subject + body, when
 // JUDGE_INCLUDE_BODY is on). When it tags an email URGENT, that verdict is
 // stronger evidence than a surface keyword match — it can see urgency buried
 // below the snippet, which the regex above cannot. Used both as an urgency
@@ -352,7 +355,7 @@ function buildUrgency(input: {
   for (const email of input.emails) {
     // Prefer the firewall's verdict over a surface keyword match: it scored the
     // body too, so it catches urgency the snippet-level regex can't. PUSH is the
-    // 4-tier "interrupt now" verdict; URGENT is the classifier priority.
+    // The lane verdict's "interrupt now" case; URGENT is the classifier priority.
     const firewallUrgent = email.tier === "PUSH" || email.priority === "URGENT";
     const match = URGENCY_PATTERNS.find((entry) => entry.pattern.test(textFromEmail(email)));
     if (!firewallUrgent && !match) continue;

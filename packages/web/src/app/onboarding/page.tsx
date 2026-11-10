@@ -7,16 +7,28 @@ import AuthGuard from "../../components/auth-guard";
 import { ONBOARDING_ACTIVE_KEY } from "../../components/google-connect-redirect";
 import { startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { homePath } from "../../lib/home";
+import { useT } from "../../lib/i18n";
 import { ReviewStep } from "./review-step";
+import { OnboardingV2 } from "./v2/flow";
 
 export default function OnboardingPage() {
   return (
     <AuthGuard>
       <Suspense>
-        <OnboardingFlow />
+        <OnboardingGate />
       </Suspense>
     </AuthGuard>
   );
+}
+
+/**
+ * ONBOARDING_V2 (productization plan P8): the multi-provider first run when
+ * the server says so, otherwise the flow below, untouched.
+ */
+function OnboardingGate() {
+  const { user } = useAuth();
+  return user?.onboardingV2 === true ? <OnboardingV2 /> : <OnboardingFlow />;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -38,7 +50,7 @@ function deriveStep(
 }
 
 function OnboardingFlow() {
-  const { googleConnected, hasMailSource, initSync } = useAuth();
+  const { user, googleConnected, hasMailSource, initSync } = useAuth();
   const router = useRouter();
   const [manualStep, setManualStep] = useState<Step | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -54,7 +66,7 @@ function OnboardingFlow() {
   }, [step, initSync.status]);
 
   const handleDone = () => {
-    router.replace("/inbox");
+    router.replace(homePath(user));
   };
 
   const handleConnectClick = async () => {
@@ -73,7 +85,7 @@ function OnboardingFlow() {
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         {/* Brand mark */}
-        <p className="mb-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-600">
+        <p className="mb-10 text-role-caption font-semibold uppercase tracking-[0.22em] text-accent-deep">
           Klorn
         </p>
 
@@ -89,10 +101,10 @@ function OnboardingFlow() {
               key={s}
               className={`ease-strong h-1.5 rounded-full transition-[width,background-color] duration-150 ${
                 s === step
-                  ? "w-6 bg-sky-500"
+                  ? "w-6 bg-accent"
                   : s < step
-                    ? "w-1.5 bg-sky-300/40"
-                    : "w-1.5 bg-slate-200"
+                    ? "w-1.5 bg-accent-muted/40"
+                    : "w-1.5 bg-surface-inset"
               }`}
             />
           ))}
@@ -111,62 +123,79 @@ function WelcomeStep({
   connecting: boolean;
   onConnectClick: () => void;
 }) {
+  const { t } = useT();
+  const { googleNeedsReconnect } = useAuth();
   return (
     <div>
-      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
-        Klorn surfaces only the
+      {/* Same screen, different situation: this person already connected once
+          and the grant died on its own. Without saying so, the first-run
+          headline reads as though their account was reset. */}
+      {googleNeedsReconnect && (
+        <div
+          data-testid="google-reconnect-notice"
+          role="status"
+          className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-role-caption leading-5 text-notice-ink"
+        >
+          <span className="font-semibold text-notice-ink-strong">
+            {t("reconnect.googleExpiredTitle")}
+          </span>{" "}
+          {t("reconnect.googleExpiredBody")}
+        </div>
+      )}
+      <h1 className="text-role-page leading-tight text-ink">
+        {t("onboarding.welcome.titleLine1")}
         <br />
-        decisions worth acting on.
+        {t("onboarding.welcome.titleLine2")}
       </h1>
-      <p className="mt-4 text-sm leading-6 text-slate-500">
-        Connect Gmail and Google Calendar. Klorn pulls the items that need a decision and quiets the
-        rest.
-      </p>
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">{t("onboarding.welcome.desc")}</p>
 
       <div className="mt-8 space-y-3">
         <button
           type="button"
           onClick={onConnectClick}
           disabled={connecting}
-          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-5 py-3.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-ring"
         >
-          {connecting ? "Redirecting to Google..." : "Connect Gmail & Calendar"}
+          {connecting ? t("onboarding.welcome.connecting") : t("onboarding.welcome.connectButton")}
           {!connecting && <span aria-hidden>→</span>}
         </button>
         {/* Non-Google escape hatch: a user who signed in with Apple/Naver and
             lives in Naver Mail attaches it via IMAP in Settings instead —
             without this line the Google button reads as the only way in. */}
-        <p className="text-center text-xs leading-5 text-slate-400">
-          Prefer Naver Mail?{" "}
+        <p className="text-center text-role-caption leading-5 text-ink-dim">
+          {t("onboarding.welcome.preferNaver")}{" "}
           <Link
-            href="/settings"
-            className="font-medium text-sky-600 underline decoration-sky-200 underline-offset-2 hover:text-sky-500"
+            href="/settings/accounts"
+            className="font-medium text-accent-deep underline decoration-sky-200 underline-offset-2 hover:text-accent-deep"
           >
-            Connect it via IMAP in Settings
+            {t("onboarding.welcome.connectViaImap")}
           </Link>
         </p>
       </div>
 
       <div className="mt-8 grid grid-cols-3 gap-3">
         {[
-          { icon: "✉", label: "Read mail" },
-          { icon: "◉", label: "Track meetings" },
-          { icon: "✦", label: "Surface decisions" },
+          { icon: "✉", label: t("onboarding.welcome.feature.readMail") },
+          { icon: "◉", label: t("onboarding.welcome.feature.trackMeetings") },
+          { icon: "✦", label: t("onboarding.welcome.feature.surfaceDecisions") },
         ].map((item) => (
           <div
             key={item.label}
-            className="panel-elevated rounded-xl border border-slate-200/70 bg-white p-3 text-center"
+            className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-center"
           >
-            <p className="text-lg text-slate-500">{item.icon}</p>
-            <p className="mt-1 text-[11px] leading-4 text-slate-400">{item.label}</p>
+            <p className="text-lg text-ink-mid">{item.icon}</p>
+            <p className="mt-1 text-role-caption leading-4 text-ink-dim">{item.label}</p>
           </div>
         ))}
       </div>
 
       {/* Permissions disclosure — Klorn never sends without explicit approval. */}
-      <p className="mt-6 text-center text-[11px] leading-5 text-slate-400">
-        Klorn <span className="text-slate-500">only reads</span> Gmail and Calendar. Sending mail or
-        creating events always waits for <span className="text-slate-500">your approval</span>.
+      <p className="mt-6 text-center text-role-caption leading-5 text-ink-dim">
+        {t("onboarding.welcome.permissions.pre")}{" "}
+        <span className="text-ink-mid">{t("onboarding.welcome.permissions.emphasis1")}</span>{" "}
+        {t("onboarding.welcome.permissions.mid")}{" "}
+        <span className="text-ink-mid">{t("onboarding.welcome.permissions.emphasis2")}</span>
+        {t("onboarding.welcome.permissions.suffix")}
       </p>
     </div>
   );
@@ -182,6 +211,7 @@ interface SyncState {
 }
 
 function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue: () => void }) {
+  const { t } = useT();
   const isDone = initSync.status === "done";
   const canContinue = isDone || initSync.status === "failed" || initSync.status === "skipped";
 
@@ -195,26 +225,30 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
 
   return (
     <div>
-      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
-        {isDone ? "Sync complete." : "Setting up your workspace..."}
+      <h1 className="text-role-page leading-tight text-ink">
+        {isDone ? t("onboarding.syncing.titleDone") : t("onboarding.syncing.title")}
       </h1>
-      <p className="mt-4 text-sm leading-6 text-slate-500">
-        {isDone
-          ? "Klorn has read your inbox and mapped your schedule."
-          : "Reading your recent emails and calendar. This takes about 30 seconds."}
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">
+        {isDone ? t("onboarding.syncing.descDone") : t("onboarding.syncing.desc")}
       </p>
 
-      <div className="panel-elevated mt-8 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+      <div className="panel-elevated mt-8 divide-y divide-line-soft overflow-hidden rounded-card border border-line/70 bg-surface-panel">
         <SyncRow
           icon="✉"
-          label={initSync.emails > 0 ? `${initSync.emails} emails processed` : "Reading emails..."}
+          label={
+            initSync.emails > 0
+              ? t("onboarding.syncing.emailsProcessed", { count: String(initSync.emails) })
+              : t("onboarding.syncing.readingEmails")
+          }
           done={initSync.emails > 0}
           loading={initSync.status === "syncing" && initSync.emails === 0}
         />
         <SyncRow
           icon="◷"
           label={
-            initSync.calendar > 0 ? `${initSync.calendar} events synced` : "Syncing calendar..."
+            initSync.calendar > 0
+              ? t("onboarding.syncing.eventsSynced", { count: String(initSync.calendar) })
+              : t("onboarding.syncing.syncingCalendar")
           }
           done={initSync.calendar > 0}
           loading={initSync.status === "syncing" && initSync.calendar === 0}
@@ -222,7 +256,9 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         <SyncRow
           icon="◉"
           label={
-            initSync.contacts > 0 ? `${initSync.contacts} contacts saved` : "Loading contacts..."
+            initSync.contacts > 0
+              ? t("onboarding.syncing.contactsSaved", { count: String(initSync.contacts) })
+              : t("onboarding.syncing.loadingContacts")
           }
           done={isDone && initSync.contacts > 0}
           loading={initSync.status === "syncing"}
@@ -233,9 +269,11 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         <button
           type="button"
           onClick={onContinue}
-          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-5 py-3.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
+          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
         >
-          {isDone ? "See what Klorn found" : "Continue to inbox"}
+          {isDone
+            ? t("onboarding.syncing.continueSeeFound")
+            : t("onboarding.syncing.continueToInbox")}
           <span aria-hidden>→</span>
         </button>
       )}
@@ -256,11 +294,13 @@ function SyncRow({
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
-      <span className="shrink-0 text-base text-slate-500">{icon}</span>
-      <p className="flex-1 text-sm text-slate-500">{label}</p>
-      {done && <span className="shrink-0 text-[11px] font-semibold text-emerald-600">✓</span>}
+      <span className="shrink-0 text-base text-ink-mid">{icon}</span>
+      <p className="flex-1 text-role-body text-ink-mid">{label}</p>
+      {done && (
+        <span className="shrink-0 text-role-caption font-semibold text-state-ok-ink">✓</span>
+      )}
       {loading && (
-        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500" />
+        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent" />
       )}
     </div>
   );
@@ -269,37 +309,35 @@ function SyncRow({
 // ─── Step 3: Ready ────────────────────────────────────────────────────────
 
 function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => void }) {
+  const { t } = useT();
   return (
     <div>
-      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
-        You&apos;re set up.
-      </h1>
-      <p className="mt-4 text-sm leading-6 text-slate-500">
-        Klorn is running. It&apos;ll surface decisions, track commitments, and prepare your morning
-        briefing — all before you open your inbox.
-      </p>
+      <h1 className="text-role-page leading-tight text-ink">{t("onboarding.ready.title")}</h1>
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">{t("onboarding.ready.desc")}</p>
 
       <div className="mt-6 grid grid-cols-3 gap-3">
-        <StatCard value={initSync.emails} label="Emails read" />
-        <StatCard value={initSync.calendar} label="Events synced" />
-        <StatCard value={initSync.contacts} label="Contacts" />
+        <StatCard value={initSync.emails} label={t("onboarding.ready.stat.emailsRead")} />
+        <StatCard value={initSync.calendar} label={t("onboarding.ready.stat.eventsSynced")} />
+        <StatCard value={initSync.contacts} label={t("onboarding.ready.stat.contacts")} />
       </div>
 
-      <div className="panel-elevated mt-4 rounded-2xl border border-sky-200/70 bg-white p-4">
-        <p className="text-xs font-semibold text-sky-700">What happens next</p>
-        <ul className="mt-2 space-y-1.5 text-xs text-slate-500">
-          <li>Your morning briefing will be ready before you wake up.</li>
-          <li>Decision cards appear when Klorn finds something that needs your approval.</li>
-          <li>Commitments are tracked automatically from your emails.</li>
+      <div className="panel-elevated mt-4 rounded-card border border-state-info-line bg-surface-panel p-4">
+        <p className="text-role-caption font-semibold text-accent-deeper">
+          {t("onboarding.ready.whatNext.title")}
+        </p>
+        <ul className="mt-2 space-y-1.5 text-role-caption text-ink-mid">
+          <li>{t("onboarding.ready.whatNext.item1")}</li>
+          <li>{t("onboarding.ready.whatNext.item2")}</li>
+          <li>{t("onboarding.ready.whatNext.item3")}</li>
         </ul>
       </div>
 
       <button
         type="button"
         onClick={onDone}
-        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-5 py-3.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
+        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
       >
-        Open decision queue
+        {t("onboarding.ready.openQueue")}
         <span aria-hidden>→</span>
       </button>
     </div>
@@ -308,11 +346,9 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
 
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
-    <div className="panel-elevated rounded-xl border border-slate-200/70 bg-white p-3 text-center">
-      <p className="text-2xl font-semibold tabular-nums text-slate-900">
-        {value > 0 ? value : "—"}
-      </p>
-      <p className="mt-1 text-[11px] text-slate-400">{label}</p>
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-center">
+      <p className="text-role-title tabular-nums text-ink">{value > 0 ? value : "—"}</p>
+      <p className="mt-1 text-role-caption text-ink-dim">{label}</p>
     </div>
   );
 }

@@ -98,7 +98,10 @@ describe("buildJudgeContext", () => {
       senderPrior: null,
       senderFacts: null,
       senderTraits: [],
+      pinnedTier: null,
       learnedRules: [],
+      // The user's priorities text (triage-priorities.ts) — null until set.
+      userPriorities: null,
     });
   });
 
@@ -111,7 +114,10 @@ describe("buildJudgeContext", () => {
       senderPrior: null,
       senderFacts: null,
       senderTraits: [],
+      pinnedTier: null,
       learnedRules: [],
+      // The user's priorities text (triage-priorities.ts) — null until set.
+      userPriorities: null,
     });
   });
 

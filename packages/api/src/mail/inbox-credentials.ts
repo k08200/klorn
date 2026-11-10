@@ -8,6 +8,9 @@
  *   - IMAP providers (NAVER, ICLOUD, IMAP) authenticate with host + an
  *     encrypted password (app-specific password for iCloud).
  *
+ * "none" = the Klorn address (KLORN, step E1a): Klorn receives that mail
+ * itself, so the row has no credentials to lack.
+ *
  * "broken" = the row claims a provider but lacks that provider's credentials.
  * Callers treat it exactly like needsReconnect — prompt a re-link — never as
  * an invariant violation: rows can legitimately reach this state via a failed
@@ -15,9 +18,10 @@
  * crash the sync tick.
  */
 
-export type InboxProviderName = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP";
+// KLORN: the Klorn address (step E1a), mail Klorn receives itself: no credentials.
+export type InboxProviderName = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP" | "KLORN";
 
-export type InboxAuthKind = "oauth" | "imap" | "broken";
+export type InboxAuthKind = "oauth" | "imap" | "none" | "broken";
 
 const OAUTH_PROVIDERS: ReadonlySet<InboxProviderName> = new Set(["GOOGLE", "OUTLOOK"]);
 
@@ -27,6 +31,7 @@ export function inboxAuthKind(row: {
   imapHost: string | null;
   imapPasswordCipher: string | null;
 }): InboxAuthKind {
+  if (row.provider === "KLORN") return "none";
   if (OAUTH_PROVIDERS.has(row.provider)) {
     return row.accessToken ? "oauth" : "broken";
   }

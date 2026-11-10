@@ -30,14 +30,20 @@ and **sensitive** scopes (`gmail.send`, `calendar.events`,
       disclosure verbatim — confirm against `limited-use-disclosure.md`.
 - [ ] Terms of service live at `https://app.klorn.ai/terms`.
 - [ ] The homepage must describe what the app does with Google user data (a
-      short "Klorn reads your Gmail to triage it into PUSH/QUEUE/SILENT/AUTO"
-      line with a link to the privacy policy satisfies this).
+      short "Klorn reads your Gmail to triage it into PUSH/MEETING/QUEUE/
+      INFO/SILENT" line with a link to the privacy policy satisfies this).
 - [ ] App is functional in production — reviewers will create an account and
       click through.
-- [ ] `LOG_RETENTION_ENABLED=true` set on Render. The privacy policy states
-      concrete log-retention windows (90/30/180 days); the sweep that enforces
-      them is OFF by default (`packages/api/src/log-retention.ts`), so the
-      claim is only true with the flag on.
+- [x] `LOG_RETENTION_ENABLED=true` set on Render — confirmed by the founder
+      2026-08-26. The privacy policy states concrete log-retention windows
+      (90/30/180 days); the sweep that enforces them is OFF by default
+      (`packages/api/src/log-retention.ts:17`), so the claim is only true with
+      the flag on. Five of the six tables are deleted by that sweep alone:
+      `pruneOldPushDeliveryLogs` is reachable only from
+      `scripts/prune-push-logs.ts`, and the one flag-free prune
+      (`push-rate-limit.ts:94`) covers PushRingEvent on a 60-minute window for
+      active users. If the flag is ever turned off, the policy sentence stops
+      being true the same day — change the sentence, not just the flag.
 
 ## Step 1 — Complete the OAuth consent screen
 
@@ -112,9 +118,11 @@ email/password and Google paths. Google reviewers click through the production
 app, and the CASA lab's DAST scanner needs working login credentials — neither
 can pass the gate on their own. Pre-provision access like this:
 
-1. Add the reviewer/assessor email to the waitlist:
-   `POST /api/waitlist` with `{ "email": "<their-address>" }` (public
-   endpoint, rate-limited), or ask them for the address they will use.
+1. Add the reviewer/assessor email to the waitlist (admin token required):
+   `POST /api/admin/waitlist` with `{ "email": "<their-address>" }`. The
+   public `POST /api/waitlist` was deleted 2026-08-26 — it had no caller and
+   the landing says "no invite, no waitlist" — so this is now the only way a
+   row is created. Ask them for the address they will actually use.
 2. Approve it (admin token required):
    `GET /api/admin/waitlist?status=PENDING` → find the entry id →
    `PATCH /api/admin/waitlist/:id` with `{ "status": "APPROVED" }`.

@@ -8,7 +8,9 @@
 import { type gmail_v1, google } from "googleapis";
 import { Semaphore } from "../semaphore.js";
 import { captureError } from "../sentry.js";
-import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
+import { extractAttachmentContentIsolated } from "./attachment-extract-isolated.js";
+import { isPlainAddress, parseAddress } from "./email-address.js";
+import { isReadableEmailAttachment } from "./email-attachment-text.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
 import { htmlToPlainText } from "./email-text.js";
 import {
@@ -17,6 +19,7 @@ import {
   isGoogleNotFoundError,
   markGoogleTokenForReconnect,
 } from "./gmail.js";
+import { parseListUnsubscribe } from "./list-unsubscribe.js";
 
 // Gmail has no batch endpoint for messages.get, so each message is a separate
 // round-trip. Fetching them serially makes a 30-message sync take 30× the
@@ -45,6 +48,106 @@ export interface GmailRawEmail {
   // and appointment systems. Read by the commitment-mining gate. Optional so
   // non-Gmail producers and older fixtures don't have to set it.
   hasListUnsubscribe?: boolean;
+  // Parsed List-Unsubscribe targets (RFC 2369 / RFC 8058), persisted so the
+  // unsubscribe endpoint and the re-judge paths can act without re-fetching.
+  // Optional for the same non-Gmail-producer reason as hasListUnsubscribe.
+  listUnsubscribeMailto?: string | null;
+  listUnsubscribeUrl?: string | null;
+  listUnsubscribeOneClick?: boolean;
+  // The receiving server's SPF, DKIM and DMARC verdicts, already whitelisted
+  // (mail/klorn-inbound-map.ts). Only the Klorn mailbox has them; written on
+  // create only, into EmailMessage.authentication.
+  authentication?: { spf: string; dkim: string; dmarc: string } | null;
+  // Header signals for the attention engine v3 facts shadow
+  // (judge/v3/pre-facts.ts). In memory only, never persisted. Gmail-only, so
+  // optional for the same reason as hasListUnsubscribe.
+  listId?: string | null;
+  precedence?: string | null;
+  autoSubmitted?: string | null;
+  /** Raw Date header, kept for its UTC offset; parsed before any prompt use. */
+  dateHeader?: string | null;
+  /** A text/calendar part or .ics attachment anywhere in the MIME tree. */
+  hasCalendarInvite?: boolean;
+  /** Gmail's DMARC verdict for the From domain (gmailDmarcPass); null = none. */
+  dmarcPass?: boolean | null;
+}
+
+/** Longest header value kept for the shadow signals. */
+const SHADOW_HEADER_MAX_CHARS = 500;
+const SHADOW_MIME_MAX_DEPTH = 10;
+
+type HeaderList = ReadonlyArray<{ name?: string | null; value?: string | null }>;
+type MimePart = {
+  mimeType?: string | null;
+  filename?: string | null;
+  parts?: MimePart[] | null;
+};
+
+function isCalendarPart(part: MimePart): boolean {
+  const mime = (part.mimeType ?? "").toLowerCase();
+  return (
+    mime === "text/calendar" ||
+    mime === "application/ics" ||
+    (part.filename ?? "").toLowerCase().endsWith(".ics")
+  );
+}
+
+function hasCalendarPart(part: MimePart, depth: number): boolean {
+  if (depth > SHADOW_MIME_MAX_DEPTH) return false;
+  if (isCalendarPart(part)) return true;
+  return (part.parts ?? []).some((child) => hasCalendarPart(child, depth + 1));
+}
+
+const GMAIL_AUTHSERV_ID = "mx.google.com";
+
+/** The domain of the From header's one parseable mailbox, or "" (same strict
+ * parser the relationship snapshot keys on, so both judge the same address). */
+function fromMailboxDomain(from: string): string {
+  const address = parseAddress(from.slice(0, SHADOW_HEADER_MAX_CHARS)).trim().toLowerCase();
+  if (!isPlainAddress(address)) return "";
+  return address.slice(address.lastIndexOf("@") + 1);
+}
+
+// The whole dmarc segment, anchored: a "dmarc=pass" inside another method's
+// value or comment (spf/dkim carry sender-chosen text) never matches.
+const DMARC_SEGMENT_RE = /^dmarc=(\w+)(?:\s*\([^()]*\))?\s+header\.from=([a-z0-9.-]+)$/;
+
+/**
+ * Gmail's own DMARC verdict for the From domain: the FIRST Authentication-Results
+ * header (the receiving server prepends its own; anything below it may be
+ * sender-written) with authserv-id mx.google.com, exactly one result segment
+ * that is a whole `dmarc=… header.from=…`, and header.from equal to the From
+ * mailbox's domain. null when Gmail left no usable verdict.
+ */
+export function gmailDmarcPass(headers: HeaderList): boolean | null {
+  const first = headers.find((h) => h.name?.toLowerCase() === "authentication-results");
+  const value = (first?.value ?? "").slice(0, 2000).toLowerCase();
+  const [authserv, ...segments] = value.split(";").map((seg) => seg.replace(/\s+/g, " ").trim());
+  if (authserv !== GMAIL_AUTHSERV_ID) return null;
+  const dmarc = segments.filter((seg) => seg.startsWith("dmarc="));
+  if (dmarc.length !== 1) return null;
+  const m = DMARC_SEGMENT_RE.exec(dmarc[0] ?? "");
+  if (!m) return null;
+  const from = headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
+  const domain = fromMailboxDomain(from);
+  if (!domain) return null;
+  return m[1] === "pass" && m[2] === domain;
+}
+
+/** The header signals the v3 facts shadow reads, from a Gmail message. */
+export function readShadowHeaders(headers: HeaderList, payload: MimePart) {
+  const get = (name: string): string | null => {
+    const value = headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
+    return value ? value.slice(0, SHADOW_HEADER_MAX_CHARS) : null;
+  };
+  return {
+    listId: get("List-Id"),
+    precedence: get("Precedence"),
+    autoSubmitted: get("Auto-Submitted"),
+    dateHeader: get("Date"),
+    hasCalendarInvite: hasCalendarPart(payload, 0),
+    dmarcPass: gmailDmarcPass(headers),
+  };
 }
 
 function decodeBase64Url(data: string): Buffer {
@@ -69,6 +172,20 @@ function collectParts(part: gmail_v1.Schema$MessagePart): gmail_v1.Schema$Messag
   return parts;
 }
 
+/// The part's MIME Content-ID, without the angle brackets ("<x@y>" → "x@y").
+/// Null when the header is absent. Exported for the harness.
+export function extractContentId(part: gmail_v1.Schema$MessagePart): string | null {
+  const raw = part.headers?.find((h) => h.name?.toLowerCase() === "content-id")?.value;
+  if (!raw) return null;
+  const stripped = raw.trim().replace(/^<|>$/g, "").trim();
+  // Control characters are invalid in a Content-ID (RFC 2045) and would only
+  // ever appear in a crafted header — treat the whole header as absent rather
+  // than storing a value that can break the DB insert or URL round-trip.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional reject filter
+  if (/[\u0000-\u001f\u007f]/.test(stripped)) return null;
+  return stripped || null;
+}
+
 async function extractAttachmentsFromPayload(
   gmail: gmail_v1.Gmail,
   messageId: string,
@@ -76,18 +193,42 @@ async function extractAttachmentsFromPayload(
 ): Promise<RawEmailAttachment[]> {
   const attachments: RawEmailAttachment[] = [];
   const parts = collectParts(payload).filter((part) => part.filename || part.body?.attachmentId);
+  const usedKeys = new Set<string>();
 
   for (let index = 0; index < parts.length; index++) {
     const part = parts[index];
-    const filename = part.filename?.trim();
+    // Inline (cid:) images usually ship WITHOUT a filename — skipping
+    // filename-less parts silently dropped every inline asset before
+    // 2026-08-15. A part is worth keeping when it has a filename OR a
+    // Content-ID; the synthesized name keeps the storage contract intact.
+    const contentId = extractContentId(part);
+    const mimeType = part.mimeType || "application/octet-stream";
+    const inlineOnly = !part.filename?.trim() && !!contentId;
+    // Filename-less cid parts are captured solely so src="cid:…" can resolve
+    // to bytes later — anything that is not an actual image is useless for
+    // that and only widens the attack/cost surface (sender-declared MIME is
+    // untrusted), so it keeps the pre-2026-08-15 skip behavior.
+    if (inlineOnly && !mimeType.startsWith("image/")) continue;
+    const filename = part.filename?.trim() || (contentId ? `inline-${contentId}` : "");
     if (!filename) continue;
 
     const gmailAttachmentId = part.body?.attachmentId || `${messageId}:${index}:${filename}`;
-    const mimeType = part.mimeType || "application/octet-stream";
+    // Gmail re-mints attachmentId on every messages.get; partId is immutable
+    // per message, so it is the identity the upsert keys on. The root part's
+    // partId is "", and the walk order is fixed, so the position is stable too.
+    // A repeated partId (never seen, but the upsert would let the second part
+    // overwrite the first row) gets its position appended to stay distinct.
+    const baseKey = part.partId || `index:${index}`;
+    const partKey = usedKeys.has(baseKey) ? `${baseKey}#${index}` : baseKey;
+    usedKeys.add(partKey);
     const size = typeof part.body?.size === "number" ? part.body.size : null;
 
     let contentText: string | null = null;
-    const shouldFetch = isReadableEmailAttachment(filename, mimeType, size);
+    // Inline-only images are fetched lazily by the /inline/:cid endpoint —
+    // extracting content here would both add a Gmail fetch per logo/banner at
+    // sync time and enqueue every one of them (contentText != null ⇒ PENDING)
+    // into the per-user LLM attachment analysis, a sender-controlled cost.
+    const shouldFetch = !inlineOnly && isReadableEmailAttachment(filename, mimeType, size);
     if (shouldFetch) {
       try {
         let data = part.body?.data || "";
@@ -100,7 +241,9 @@ async function extractAttachmentsFromPayload(
           data = attachment.data.data || "";
         }
         if (data) {
-          contentText = extractAttachmentContent(decodeBase64Url(data), filename, mimeType).text;
+          contentText = (
+            await extractAttachmentContentIsolated(decodeBase64Url(data), filename, mimeType)
+          ).text;
         }
       } catch {
         contentText = null;
@@ -109,9 +252,11 @@ async function extractAttachmentsFromPayload(
 
     attachments.push({
       gmailAttachmentId,
+      partKey,
       filename,
       mimeType,
       size,
+      contentId,
       contentText,
     });
   }
@@ -123,6 +268,10 @@ async function parseGmailMessageDetail(
   gmail: gmail_v1.Gmail,
   messageId: string,
   detail: gmail_v1.Schema$Message,
+  // Thread reads want text only: downloading attachment bytes for every
+  // message in a thread costs a multiple of the fetch and feeds nothing the
+  // reasoning needs.
+  opts?: { skipAttachments?: boolean },
 ): Promise<GmailRawEmail> {
   const headers = detail.payload?.headers || [];
   const getHeader = (name: string) =>
@@ -170,11 +319,18 @@ async function parseGmailMessageDetail(
   }
 
   if (payload) {
-    attachments.push(...(await extractAttachmentsFromPayload(gmail, messageId, payload)));
+    if (!opts?.skipAttachments) {
+      attachments.push(...(await extractAttachmentsFromPayload(gmail, messageId, payload)));
+    }
   }
 
   const labelIds = detail.labelIds || [];
   const dateStr = getHeader("Date");
+
+  const listUnsubscribe = parseListUnsubscribe(
+    getHeader("List-Unsubscribe"),
+    getHeader("List-Unsubscribe-Post"),
+  );
 
   return {
     gmailId: messageId,
@@ -192,6 +348,10 @@ async function parseGmailMessageDetail(
     receivedAt: parseReceivedAt(dateStr),
     attachments,
     hasListUnsubscribe: getHeader("List-Unsubscribe") !== "",
+    listUnsubscribeMailto: listUnsubscribe.mailto,
+    listUnsubscribeUrl: listUnsubscribe.url,
+    listUnsubscribeOneClick: listUnsubscribe.oneClick,
+    ...readShadowHeaders(headers, payload ?? {}),
   };
 }
 
@@ -338,6 +498,64 @@ export async function fetchGmailEmailById(
       }
       return null;
     }
+    throw err;
+  }
+}
+
+/**
+ * Every message in a Gmail thread, oldest first — INCLUDING the user's own
+ * sent replies. The local mirror is INBOX-only (see `fetchGmailEmails`), so
+ * this is the only way to see both sides of a conversation. Needs no extra
+ * scope: `gmail.readonly` already covers every label.
+ *
+ * Attachment bytes are deliberately NOT downloaded here (`skipAttachments`):
+ * a thread read is for reasoning about text, and pulling binaries for a whole
+ * thread would cost a multiple of the message fetch itself.
+ */
+export async function fetchGmailThread(
+  userId: string,
+  threadId: string,
+  authClient?: InstanceType<typeof google.auth.OAuth2> | null,
+): Promise<GmailRawEmail[] | null> {
+  const auth = authClient ?? (await getAuthedClient(userId));
+  if (!auth) return null;
+
+  const gmail = google.gmail({ version: "v1", auth });
+  try {
+    const res = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+      format: "full",
+    });
+    const messages = res.data.messages ?? [];
+    const parsed: GmailRawEmail[] = [];
+    for (const message of messages) {
+      if (!message.id) continue;
+      parsed.push(
+        await parseGmailMessageDetail(gmail, message.id, message, { skipAttachments: true }),
+      );
+    }
+    return parsed.sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+  } catch (err) {
+    if (isGoogleAuthError(err)) {
+      if (authClient) {
+        console.warn(
+          `[GMAIL-FETCH] linked-inbox auth error for user ${userId} (thread ${threadId}); primary token left intact`,
+        );
+        captureError(err, {
+          tags: { scope: "gmail.fetch.thread.linked-auth" },
+          extra: { userId, threadId },
+        });
+      } else {
+        await markGoogleTokenForReconnect(userId);
+      }
+      return null;
+    }
+    // A thread that vanished (deleted/expunged) is a 404, not an outage —
+    // the caller degrades to single-message context.
+    const status =
+      (err as { code?: number; status?: number })?.code ?? (err as { status?: number })?.status;
+    if (status === 404) return null;
     throw err;
   }
 }

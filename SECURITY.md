@@ -74,6 +74,58 @@ Klorn's difference is structural, not rhetorical:
   above — approval is enforced by hash verification in code the model cannot
   reach, not by a system-prompt instruction the model could be talked out of.
 
+## Claims and their falsifiers
+
+The sections above state what Klorn guarantees. This section states, for each
+guarantee, **what would disprove it and where that check lives** — so the
+claims can be attacked without taking this document's word for anything.
+
+A note on authority, because it matters more than the claims themselves: a
+source that can only *agree* with a claim is not evidence for it. Each row
+below names something that can make the claim fail.
+
+| # | Claim | What would falsify it | Where the falsifier lives |
+|---|---|---|---|
+| C1 | The model never assigns a tier; a deterministic rule does. | Any code path that produces a tier without passing four clamped scalars through `tierFromFeatures`. | [`tier-policy.ts:96`](packages/api/src/judge/tier-policy.ts) · [`__tests__/tier-policy.test.ts`](packages/api/src/__tests__/tier-policy.test.ts) |
+| C2 | Uncertainty degrades to visibility, never to silence. | A feature vector with `confidence < lowConfidenceFloor` (0.5) resolving to anything other than QUEUE. | [`tier-policy.ts:113`](packages/api/src/judge/tier-policy.ts) |
+| C3 | AUTO is a classification, not an execution grant. | An AUTO tier causing a side effect while `AUTO_TIER_EXECUTION` is off. | `isActionableTier` in [`email-action-trigger.ts`](packages/api/src/agentcore/email-action-trigger.ts) |
+| C4 | No floor action executes without a receipt. | Any `send_email` / `delete_permanent` / `forward_external` reaching execution with a null or absent `ActionReceipt`. | [`tool-executor.ts`](packages/api/src/agentcore/tool-executor.ts) · [`__tests__/tool-executor-floor.test.ts`](packages/api/src/__tests__/tool-executor-floor.test.ts) |
+| C5 | Approval binds bytes, not intent. | Any payload mutation between mint and execute that `verifyReceipt` tolerates — including cross-action receipt reuse or a stale schema version. | [`attention-floor.ts:200`](packages/api/src/judge/attention-floor.ts) · [`__tests__/attention-floor.test.ts`](packages/api/src/__tests__/attention-floor.test.ts) |
+| C6 | A floor violation is terminal, not retried. | A receipt mismatch that re-enters the retry queue instead of failing permanently. | [`action-outbox.ts:106`](packages/api/src/agentcore/action-outbox.ts) |
+| C7 | Retries never re-consult the model. | A retry path that re-derives tool arguments from an LLM instead of replaying the persisted `toolArgs` + receipt. | [`action-outbox.ts`](packages/api/src/agentcore/action-outbox.ts) |
+| C8 | The product still works with no LLM at all. | The deterministic keyword path failing to produce a tier, or the measured no-LLM floor dropping below what is published. | [`keyword-policy.ts`](packages/api/src/judge/keyword-policy.ts) · [`__tests__/eval-floors.test.ts`](packages/api/src/__tests__/eval-floors.test.ts) |
+| C9 | The policy the classifier runs on is inspectable. | `describePolicy()` diverging from the constants actually used, or a caller mutating the snapshot and affecting live classification. | [`ontology.ts:41`](packages/api/src/learning/ontology.ts) |
+
+### What does **not** have authority here
+
+- **The eval sets** ([`packages/api/eval/`](packages/api/eval)) measure
+  *classification accuracy*. They say nothing about whether authority is
+  contained. A 94% accuracy number is not a safety argument and is not
+  offered as one. Accuracy and containment are different properties with
+  different falsifiers, and conflating them is the most common way a claim
+  like C4 gets "supported" by evidence that cannot test it.
+- **This document.** It describes intent. Only the code and the tests it
+  cites can refuse anything.
+- **The absence of a reported incident.** Not evidence.
+
+### Known gaps, stated rather than omitted
+
+- **No end-to-end adversarial corpus yet.** C4 and C5 are covered by unit
+  tests that start at the tool call. What does not exist yet is a fixture set
+  that starts at a *hostile email* — one written to maximize model confidence
+  and to argue for an irreversible action — and asserts containment across
+  the whole path from ingestion to execution. The tier may legitimately come
+  out wrong in such a case; the assertion is that no floor action becomes
+  reachable. Contributions welcome: open an issue or a PR against
+  `packages/api/src/__tests__/`.
+- **No dedicated in-app second factor for the admin surface.** Administrative
+  routes enforce a server-side role check plus full session validation, and
+  the sole administrator's only authentication path is Google OAuth protected
+  by Google 2-Step Verification — but Klorn itself does not mint a second
+  factor.
+- **`AUTO_TIER_EXECUTION` changes the shape of C3 when enabled.** It is off by
+  default; every claim above is stated for the default configuration.
+
 ## Data protection
 
 - **Encryption at rest**: Google OAuth tokens are encrypted with
@@ -122,7 +174,7 @@ promises to ask first.
 
 ## Reporting a vulnerability
 
-- Email **hello@klorn.ai** with a description and reproduction steps.
+- Email **k0820086@gmail.com** with a description and reproduction steps.
   Please do not open a public issue for exploitable findings.
 - You can also use GitHub's private vulnerability reporting on
   [k08200/klorn](https://github.com/k08200/klorn) if enabled.

@@ -1,12 +1,13 @@
 import Carbon.HIToolbox
 import SwiftUI
 
-/// The Preferences overlay shown over the full view. A self-contained dark card:
-/// notification control, hotkey reference, account, and about. Dismissed via
-/// "Done" (default keyboard action) or by clicking the scrim (see FullView).
+/// One tab of the Settings window: the sections `SettingsTab` assigns to it,
+/// in a scroll view pinned to the top (a short window scrolls; it never
+/// clips the first section). The sections themselves are the ones the old
+/// in-window Preferences overlay showed — regrouped, not redesigned.
 struct PreferencesView: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let tab: SettingsTab
 
     // Login-item state is owned by the OS (System Settings can flip it behind
     // our back), so it's read live on appear rather than persisted here.
@@ -14,191 +15,291 @@ struct PreferencesView: View {
     @State private var loginItemError: String?
     @State private var updateChecking = false
     @State private var updateOutcome: UpdateCheck.Outcome?
+    @State private var selfUpdating = false
     @State private var recordingShortcut = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(L("prefs.title")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-                Spacer()
-                // Amber, not system blue — the sheet's one primary action
-                // speaks in the brand accent like every other primary.
-                Button(L("prefs.done")) { model.showPreferences = false }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(PrimaryButtonStyle())
+        let visible = tab.visibleSections(signedIn: model.phase == .signedIn)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if visible.isEmpty {
+                    // Only the server-backed tabs can end up empty, and only
+                    // while signed out — say why instead of showing nothing.
+                    Text(L("settings.signedOutNote"))
+                        .font(.callout).foregroundStyle(Theme.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 12)
+                }
+                ForEach(visible, id: \.self) { section in
+                    sectionView(section)
+                }
             }
-            .padding(.bottom, 12)
-
-            // Pinned header, scrolling body: the behaviour sections push the
-            // panel past the 860pt full view, and Done must stay reachable
-            // without scrolling to the bottom first.
-            ScrollView { sections }
-                .frame(maxHeight: 620)
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .onAppear { launchAtLogin = LoginItem.isEnabled }
-        .padding(22)
-        .frame(width: 440)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        // Re-ask the server whether device calendars and the Klorn drive exist each
+        // time Settings shows this tab, so a server-side flip shows (or hides) the
+        // section without a relaunch.
+        .task {
+            guard model.phase == .signedIn else { return }
+            if tab.sections.contains(.driveImport) { await model.driveImport.refreshAvailability() }
+            if tab.sections.contains(.deviceCalendars) {
+                await model.deviceCalendars.refreshAvailability()
+            }
+        }
     }
 
     @ViewBuilder
-    private var sections: some View {
-        @Bindable var settings = model.settings
-
-        VStack(alignment: .leading, spacing: 0) {
-            // Server-owned behaviour first: "what does Klorn do, and what is
-            // allowed to interrupt me" outranks local chrome like the hotkey.
-            if model.phase == .signedIn {
-                AutomationPreferences()
-            }
-
-            section(L("prefs.section.notifications")) {
-                Toggle(isOn: $settings.notificationsEnabled) {
-                    Text(L("prefs.banners")).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(.switch).tint(Theme.accent)
-                Text(L("prefs.banners.detail"))
-                    .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-            }
-
-            section(L("prefs.section.general")) {
-                if LoginItem.isAvailable {
-                    Toggle(isOn: $launchAtLogin) {
-                        Text(L("prefs.launchAtLogin")).foregroundStyle(Theme.text)
-                    }
-                    .toggleStyle(.switch).tint(Theme.accent)
-                    .onChange(of: launchAtLogin) { _, wanted in
-                        guard wanted != LoginItem.isEnabled else { return }
-                        if let error = LoginItem.setEnabled(wanted) {
-                            loginItemError = error
-                            launchAtLogin = LoginItem.isEnabled  // revert to OS truth
-                        } else {
-                            loginItemError = nil
-                        }
-                    }
-                    if let loginItemError {
-                        Text(loginItemError).font(.caption).foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else {
-                    infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
-                }
-
-                HStack {
-                    Text(L("prefs.updates")).font(.body).foregroundStyle(Theme.text)
-                    Spacer()
-                    switch updateOutcome {
-                    case .updateAvailable(let version):
-                        Button(L("prefs.updates.get", version)) { UpdateCheck.openReleasePage() }
-                            .buttonStyle(PrimaryButtonStyle())
-                    case .upToDate:
-                        Text(L("prefs.updates.upToDate", AppInfo.version))
-                            .font(.caption).foregroundStyle(Theme.textDim)
-                    case .unknown:
-                        Text(L("prefs.updates.unknown"))
-                            .font(.caption).foregroundStyle(Theme.textDim)
-                    case nil:
-                        EmptyView()
-                    }
-                    Button(updateChecking ? L("prefs.updates.checking") : L("prefs.updates.check")) {
-                        updateChecking = true
-                        Task {
-                            updateOutcome = await UpdateCheck.run()
-                            updateChecking = false
-                        }
-                    }
-                    .buttonStyle(.bordered).controlSize(.small).disabled(updateChecking)
+    private func sectionView(_ kind: PrefsSection) -> some View {
+        switch kind {
+        case .mode: AutomationPreferences(parts: [.mode])
+        case .behaviour: AutomationPreferences(parts: [.behaviour])
+        case .replies: AutomationPreferences(parts: [.replies])
+        case .interrupts: AutomationPreferences(parts: [.interrupts])
+        case .banners: bannersSection
+        case .appearance: appearanceSection
+        case .mail: mailSection
+        case .general: generalSection
+        case .support: section(L("prefs.section.support")) { SupportSection() }
+        case .keyboard: keyboardSection
+        case .language: languageSection
+        case .account: accountSection
+        case .inboxes:
+            section(L("prefs.section.inboxes")) { InboxAccountsSection(model: model) }
+        case .deviceCalendars:
+            // Step C6: drawn only while the server has the feature (its 404 hides it).
+            if model.deviceCalendars.availability == .available {
+                section(L("prefs.section.deviceCalendars")) {
+                    DeviceCalendarSection(bridge: model.deviceCalendars)
                 }
             }
-
-            section(L("prefs.section.topBar")) {
-                Toggle(isOn: $settings.pillVisible) {
-                    Text(L("prefs.pillVisible")).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(.switch).tint(Theme.accent)
-                Text(L("prefs.pillVisible.detail"))
-                    .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-
-                Toggle(isOn: $settings.showInDock) {
-                    Text(L("prefs.showInDock")).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(.switch).tint(Theme.accent)
-                Text(L("prefs.showInDock.detail"))
-                    .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+        case .driveImport:
+            // Step D7: drawn only while the server has the Klorn drive (its 404 hides it).
+            if model.driveImport.availability == .available {
+                section(L("prefs.section.driveImport")) { DriveImportSection(importer: model.driveImport) }
             }
-
-            section(L("prefs.section.keyboard")) {
-                HStack {
-                    Text(L("prefs.shortcut")).font(.body).foregroundStyle(Theme.text)
-                    Spacer()
-                    ShortcutRecorder(
-                        shortcut: model.settings.shortcut,
-                        recording: recordingShortcut,
-                        onStartRecording: {
-                            recordingShortcut = true
-                            model.settings.onShortcutRecordingChanged?(true)
-                        },
-                        onCapture: { model.settings.shortcut = $0 },
-                        onFinished: {
-                            recordingShortcut = false
-                            model.settings.onShortcutRecordingChanged?(false)
-                        },
-                        onReset: {
-                            recordingShortcut = false
-                            model.settings.onShortcutRecordingChanged?(false)
-                            model.settings.shortcut = .defaultToggle
-                        })
-                }
-                Text(recordingShortcut
-                     ? L("prefs.shortcut.recording")
-                     : L("prefs.shortcut.idle"))
-                    .font(.caption).foregroundStyle(Theme.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            section(L("prefs.section.language")) {
-                HStack {
-                    Text(L("lang.label")).font(.body).foregroundStyle(Theme.text)
-                    Spacer()
-                    Picker(L("lang.label"), selection: $settings.appLanguage) {
-                        ForEach(AppLanguage.allCases, id: \.self) { language in
-                            Text(language.label).tag(language)
-                        }
-                    }
-                    .labelsHidden().pickerStyle(.menu).frame(width: 160)
-                    .accessibilityLabel(L("lang.label"))
-                }
-                Text(L("lang.detail"))
-                    .font(.caption).foregroundStyle(Theme.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            section(L("prefs.section.account")) {
-                infoRow(L("prefs.account.status"),
-                        model.phase == .signedIn ? L("prefs.account.signedIn") : L("prefs.account.signedOut"))
-                if model.phase == .signedIn {
-                    Button(L("prefs.account.signOut")) { model.showPreferences = false; actions.onSignOut() }
-                        .buttonStyle(.bordered).controlSize(.small)
-                    Button(L("account.add")) { Task { await model.addAccount() } }
-                        .buttonStyle(.bordered).controlSize(.small)
-                    Text(L("account.add.hint"))
-                        .font(.caption).foregroundStyle(Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let error = model.linkAccountError {
-                        Text(error).font(.caption).foregroundStyle(Theme.textDim)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-
+        case .about:
             section(L("prefs.section.about")) {
                 infoRow(L("prefs.about.version"), AppInfo.version)
                 infoRow(L("prefs.about.api"), Config.apiBaseURL)
             }
         }
     }
+
+    // MARK: Sections
+
+    @ViewBuilder
+    private var bannersSection: some View {
+        @Bindable var settings = model.settings
+        section(L("prefs.section.notifications")) {
+            Toggle(isOn: $settings.notificationsEnabled) {
+                Text(L("prefs.banners")).foregroundStyle(Theme.text)
+            }
+            .toggleStyle(.switch).tint(Theme.accent)
+            Text(L("prefs.banners.detail"))
+                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+            // macOS said no: the switch above cannot help, System Settings can.
+            if NotificationHint.showsDeniedHint(model.notificationPermission) {
+                HStack(spacing: 8) {
+                    Text(L("prefs.banners.denied"))
+                        .font(.caption).foregroundStyle(Theme.warningInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button(L("prefs.banners.openSystemSettings")) {
+                        NSWorkspace.shared.open(NotificationHint.systemSettingsURL)
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
+                }
+            }
+        }
+        .task { await model.refreshNotificationPermission() }
+    }
+
+    @ViewBuilder
+    private var appearanceSection: some View {
+        @Bindable var settings = model.settings
+        section(L("prefs.section.appearance")) {
+            Picker(L("prefs.appearance"), selection: $settings.appearance) {
+                ForEach(AppearanceChoice.allCases, id: \.self) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel(L("prefs.appearance"))
+            Text(L("prefs.appearance.detail"))
+                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var mailSection: some View {
+        @Bindable var settings = model.settings
+        section(L("prefs.section.mail")) {
+            Toggle(isOn: $settings.loadRemoteImages) {
+                Text(L("prefs.remoteImages")).foregroundStyle(Theme.text)
+            }
+            .toggleStyle(.switch).tint(Theme.accent)
+            Text(L("prefs.remoteImages.detail"))
+                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var generalSection: some View {
+        section(L("prefs.section.general")) {
+            if LoginItem.isAvailable {
+                Toggle(isOn: $launchAtLogin) {
+                    Text(L("prefs.launchAtLogin")).foregroundStyle(Theme.text)
+                }
+                .toggleStyle(.switch).tint(Theme.accent)
+                .onChange(of: launchAtLogin) { _, wanted in
+                    guard wanted != LoginItem.isEnabled else { return }
+                    if let error = LoginItem.setEnabled(wanted) {
+                        loginItemError = error
+                        launchAtLogin = LoginItem.isEnabled  // revert to OS truth
+                    } else {
+                        loginItemError = nil
+                    }
+                }
+                if let loginItemError {
+                    Text(loginItemError).font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
+            }
+            updatesRow
+        }
+    }
+
+    private var updatesRow: some View {
+        HStack {
+            Text(L("prefs.updates")).font(.body).foregroundStyle(Theme.text)
+            Spacer()
+            switch updateOutcome {
+            case .updateAvailable(let version):
+                // Install in place (download → verify → swap → relaunch); the
+                // release page is only SelfUpdate's own fallback.
+                Button(selfUpdating ? L("update.updating") : L("prefs.updates.get", version)) {
+                    guard !selfUpdating else { return }
+                    selfUpdating = true
+                    Task {
+                        _ = await SelfUpdate.run(version: version)
+                        selfUpdating = false  // reached only on fallback
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(selfUpdating)
+            case .upToDate:
+                Text(L("prefs.updates.upToDate", AppInfo.version))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+            case .unknown:
+                Text(L("prefs.updates.unknown"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+            case nil:
+                EmptyView()
+            }
+            Button(updateChecking ? L("prefs.updates.checking") : L("prefs.updates.check")) {
+                updateChecking = true
+                Task {
+                    updateOutcome = await UpdateCheck.run()
+                    updateChecking = false
+                }
+            }
+            .buttonStyle(.bordered).controlSize(.small).disabled(updateChecking)
+        }
+    }
+
+    @ViewBuilder
+    private var keyboardSection: some View {
+        section(L("prefs.section.keyboard")) {
+            HStack {
+                Text(L("prefs.shortcut")).font(.body).foregroundStyle(Theme.text)
+                Spacer()
+                ShortcutRecorder(
+                    shortcut: model.settings.shortcut,
+                    recording: recordingShortcut,
+                    onStartRecording: {
+                        recordingShortcut = true
+                        model.settings.onShortcutRecordingChanged?(true)
+                    },
+                    onCapture: { model.settings.shortcut = $0 },
+                    onFinished: {
+                        recordingShortcut = false
+                        model.settings.onShortcutRecordingChanged?(false)
+                    },
+                    onReset: {
+                        recordingShortcut = false
+                        model.settings.onShortcutRecordingChanged?(false)
+                        model.settings.shortcut = .defaultToggle
+                    })
+            }
+            Text(recordingShortcut
+                 ? L("prefs.shortcut.recording")
+                 : L("prefs.shortcut.idle"))
+                .font(.caption).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var languageSection: some View {
+        @Bindable var settings = model.settings
+        section(L("prefs.section.language")) {
+            HStack {
+                Text(L("lang.label")).font(.body).foregroundStyle(Theme.text)
+                Spacer()
+                Picker(L("lang.label"), selection: $settings.appLanguage) {
+                    ForEach(AppLanguage.allCases, id: \.self) { language in
+                        Text(language.label).tag(language)
+                    }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(width: 160)
+                .accessibilityLabel(L("lang.label"))
+            }
+            Text(L("lang.detail"))
+                .font(.caption).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var accountSection: some View {
+        section(L("prefs.section.account")) {
+            infoRow(L("prefs.account.status"),
+                    model.phase == .signedIn ? L("prefs.account.signedIn") : L("prefs.account.signedOut"))
+            if model.phase == .signedIn {
+                Button(L("prefs.account.signOut")) { model.signOut() }
+                    .buttonStyle(.bordered).controlSize(.small)
+                // Always offered, not only when an inbox already reports
+                // needsReconnect: a dead primary token is exactly the state
+                // where the app cannot be trusted to know it is dead.
+                Button(L("account.reconnectPrimary")) { Task { await model.reconnectPrimary() } }
+                    .buttonStyle(.bordered).controlSize(.small)
+                Button(L("account.add")) { Task { await model.addAccount() } }
+                    .buttonStyle(.bordered).controlSize(.small)
+                Text(L("account.add.hint"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let error = model.linkAccountError {
+                    Text(error).font(.caption).foregroundStyle(Theme.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
+                }
+                // Edited in the bar's full sidebar until M8 deleted it; the
+                // purpose prompt asks once, this is where they change later.
+                CompanyDomainsRow()
+                PrioritiesRow()
+                if let usage = model.usage {
+                    AIUsageMeter(used: usage.dailyUsed, cap: usage.dailyCap).padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    // MARK: Layout
 
     @ViewBuilder
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
@@ -280,4 +381,128 @@ private struct ShortcutRecorder: View {
     private func stopCapture() {
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
     }
+}
+
+/// Connected mailboxes: every inbox Klorn reads, what it is, and — for the
+/// IMAP ones the desktop can manage directly — a way to add or remove them.
+/// Google inboxes are OAuth-linked in the browser (see the Account section),
+/// so they are listed read-only here.
+struct InboxAccountsSection: View {
+    let model: AppModel
+    @State private var connectingProvider: ImapMailProvider?
+    @State private var pendingDisconnect: PendingImapDisconnect?
+
+    /// The IMAP mailbox a disconnect confirmation is about.
+    struct PendingImapDisconnect: Equatable {
+        let provider: ImapMailProvider
+        let email: String
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(inboxesNotListedAsImap(model.inboxes, imap: model.imapAccounts)) { inbox in
+                accountRow(
+                    email: inbox.email ?? L("inbox.unknownAddress"),
+                    provider: providerLabel(inbox.provider),
+                    beta: MailSourceCatalog.isBeta(inbox.provider),
+                    needsReconnect: inbox.needsReconnect,
+                    detail: nil,
+                    onDisconnect: nil)
+            }
+            ForEach(ImapMailProvider.allCases) { provider in
+                ForEach(model.imapAccounts[provider] ?? []) { account in
+                    accountRow(
+                        email: account.email,
+                        provider: providerLabel(provider.rawValue),
+                        beta: MailSourceCatalog.isBeta(provider.rawValue),
+                        needsReconnect: account.needsReconnect,
+                        detail: account.host,
+                        onDisconnect: {
+                            pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)
+                        })
+                }
+            }
+            if model.inboxes.isEmpty && model.imapAccounts.values.allSatisfy(\.isEmpty) {
+                Text(L("prefs.inboxes.empty"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let provider = connectingProvider {
+                ImapConnectForm(provider: provider, model: model) { connectingProvider = nil }
+                    .id(provider)
+            } else {
+                connectButton(.naver, title: L("account.naver.connect"))
+                // Drawn only while the server has iCloud Mail (its status 404s while off).
+                if model.availableImapProviders.contains(.icloud) {
+                    connectButton(.icloud, title: L("account.icloud.connect"))
+                }
+            }
+            if let error = model.imapError {
+                Text(error).font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .task { await model.refreshImapAccounts() }
+        .confirmationDialog(
+            L("account.disconnect.confirm", pendingDisconnect?.email ?? ""),
+            isPresented: Binding(
+                get: { pendingDisconnect != nil },
+                set: { if !$0 { pendingDisconnect = nil } })
+        ) {
+            Button(L("account.disconnect"), role: .destructive) {
+                guard let target = pendingDisconnect else { return }
+                pendingDisconnect = nil
+                Task { await model.disconnectImapInbox(target.provider, email: target.email) }
+            }
+            Button(L("common.cancel"), role: .cancel) { pendingDisconnect = nil }
+        }
+    }
+
+    private func connectButton(_ provider: ImapMailProvider, title: String) -> some View {
+        HStack(spacing: 6) {
+            Button(title) { connectingProvider = provider }
+                .buttonStyle(.bordered).controlSize(.small)
+            BetaChip()
+        }
+    }
+
+    private func accountRow(
+        email: String, provider: String, beta: Bool, needsReconnect: Bool, detail: String?,
+        onDisconnect: (() -> Void)?
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(email).font(.body).foregroundStyle(Theme.text)
+                    .lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) {
+                    Text(detail.map { "\(provider) · \($0)" } ?? provider)
+                        .font(.caption).foregroundStyle(Theme.textDim)
+                    if beta { BetaChip() }
+                }
+            }
+            Spacer()
+            if needsReconnect {
+                Text(L("inbox.needsReconnect"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+            }
+            if let onDisconnect {
+                Button(L("account.disconnect"), action: onDisconnect)
+                    .buttonStyle(.bordered).controlSize(.small)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+}
+
+/// Settings ▸ Notifications' one-line hint when macOS has denied Klorn
+/// banners. Pure for the harness.
+enum NotificationHint {
+    static func showsDeniedHint(_ permission: NotificationPermission) -> Bool {
+        permission == .denied
+    }
+
+    /// System Settings ▸ Notifications.
+    static let systemSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
 }

@@ -204,6 +204,50 @@ describe("syncEmails — expired watermark falls back to snapshot + re-baseline"
     );
     expect(result.synced).toBe(2);
   });
+
+  it("snapshots DEEPER than the caller's per-tick depth", async () => {
+    // Only one situation reaches this branch: sync has not succeeded in over a
+    // week, so Gmail dropped the watermark. Recovering the scheduler's 30
+    // most-recent messages leaves the rest of that week (or month) on the
+    // floor — that is how the founder's own 2026-07-21 token death lost a month
+    // of mail behind a reconnect that looked like it had worked.
+    userTokenFindFirst.mockResolvedValue({ historyId: "old" });
+    fetchGmailHistory.mockResolvedValue({ emails: [], newHistoryId: null, expired: true });
+    fetchGmailEmails.mockResolvedValue([]);
+    fetchCurrentHistoryId.mockResolvedValue("7777");
+
+    await syncEmails("user-1", 30);
+
+    const depth = fetchGmailEmails.mock.calls[0][1] as number;
+    expect(depth).toBeGreaterThan(30);
+    expect(depth).toBe(250);
+  });
+
+  it("never narrows a caller that already asked for more", async () => {
+    userTokenFindFirst.mockResolvedValue({ historyId: "old" });
+    fetchGmailHistory.mockResolvedValue({ emails: [], newHistoryId: null, expired: true });
+    fetchGmailEmails.mockResolvedValue([]);
+    fetchCurrentHistoryId.mockResolvedValue("7777");
+
+    await syncEmails("user-1", 400);
+
+    expect(fetchGmailEmails.mock.calls[0][1]).toBe(400);
+  });
+
+  it("leaves the healthy incremental path alone", async () => {
+    // The deepening must be scoped to the expired branch. A normal tick that
+    // gap-fills from a live watermark never reaches the snapshot at all.
+    userTokenFindFirst.mockResolvedValue({ historyId: "1000" });
+    fetchGmailHistory.mockResolvedValue({
+      emails: [raw("a")],
+      newHistoryId: "1001",
+      expired: false,
+    });
+
+    await syncEmails("user-1", 30);
+
+    expect(fetchGmailEmails).not.toHaveBeenCalled();
+  });
 });
 
 describe("syncEmails — linked inbox uses LinkedInboxAccount watermark", () => {

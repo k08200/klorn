@@ -104,12 +104,23 @@ const Noise: React.FC<{ lang: Lang }> = ({ lang }) => {
   );
 };
 
-// ── Scene 2: 4 tier badges spring in ──
+// ── Scene 2: the five lane badges spring in ──
+//
+// Counts and hues are the landing's, deliberately: website/index.html runs the
+// same 64-message illustration (`var totals`) and takes its bucket colours from
+// the app's --color-tier-* tokens. Two marketing surfaces describing the same
+// product should not disagree about how many lanes it has or what colour one is.
+//
+// AUTO used to sit here as a fifth card captioned "handled for you". It is a
+// retired v1 value, and docs/product-vocabulary.md forbids that sentence
+// outright: automation is a per-account mode, never a lane, and nothing is
+// handled without you.
 const TIERS = [
-  { name: "PUSH", n: 30, color: "#fb7185", desc: { en: "worth interrupting", ko: "지금 알릴 것" } },
-  { name: "QUEUE", n: 84, color: "#fcd34d", desc: { en: "when you choose", ko: "볼 때 보는 것" } },
-  { name: "SILENT", n: 83, color: "#78716c", desc: { en: "recorded, muted", ko: "조용히 기록" } },
-  { name: "AUTO", n: 3, color: "#4ade80", desc: { en: "handled for you", ko: "알아서 처리" } },
+  { name: "PUSH", n: 3, color: "#fb7185", desc: { en: "interrupts you now", ko: "지금 당신을 끊습니다" } },
+  { name: "MEETING", n: 2, color: "#818cf8", desc: { en: "checked against your calendar", ko: "캘린더와 대조합니다" } },
+  { name: "QUEUE", n: 12, color: "#fbbf24", desc: { en: "read it today", ko: "오늘 안에 읽으면 됩니다" } },
+  { name: "INFO", n: 8, color: "#22d3ee", desc: { en: "no reply expected", ko: "답장이 필요 없습니다" } },
+  { name: "SILENT", n: 39, color: "#a8a29e", desc: { en: "filed, not deleted", ko: "보관됩니다, 삭제가 아닙니다" } },
 ];
 const Tiers: React.FC<{ lang: Lang }> = ({ lang }) => {
   const frame = useCurrentFrame();
@@ -127,7 +138,7 @@ const Tiers: React.FC<{ lang: Lang }> = ({ lang }) => {
       >
         {t.sorts}
       </div>
-      <div style={{ display: "flex", gap: 42 }}>
+      <div style={{ display: "flex", gap: 34 }}>
         {TIERS.map((tier, i) => {
           const s = spring({ frame: frame - 10 - i * 9, fps: FPS, config: { damping: 11, mass: 0.8 } });
           const count = Math.round(interpolate(Math.min(frame - 10 - i * 9, 45), [0, 45], [0, tier.n], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }));
@@ -137,7 +148,7 @@ const Tiers: React.FC<{ lang: Lang }> = ({ lang }) => {
               style={{
                 transform: `translateY(${(1 - s) * 120}px) scale(${0.6 + s * 0.4})`,
                 opacity: s,
-                width: 300,
+                width: 280,
                 borderRadius: 22,
                 border: `1.5px solid ${tier.color}55`,
                 background: `linear-gradient(180deg, ${tier.color}14, transparent)`,
@@ -148,7 +159,7 @@ const Tiers: React.FC<{ lang: Lang }> = ({ lang }) => {
             >
               <div style={{ color: tier.color, fontSize: 34, fontWeight: 800, letterSpacing: 2 }}>{tier.name}</div>
               <div style={{ color: WHITE, fontSize: 84, fontWeight: 800, margin: "10px 0 6px" }}>{count}</div>
-              <div style={{ color: GREY, fontSize: 24 }}>{tier.desc[lang]}</div>
+              <div style={{ color: GREY, fontSize: 21, lineHeight: 1.35 }}>{tier.desc[lang]}</div>
             </div>
           );
         })}

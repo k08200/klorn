@@ -73,6 +73,18 @@ export interface ThresholdConfig {
 export const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
 
 /**
+ * Deterministic content signals feeding the v2 rule. Computed by detectors in
+ * keyword-policy.ts (not the LLM), so their reliability is independent of the
+ * classifier's confidence score.
+ */
+export interface TierSignals {
+  /** Scheduling intent: invite/reschedule wording or a meeting link. */
+  scheduling: boolean;
+  /** Automated transactional notice (receipt/alert), not bulk marketing. */
+  transactional: boolean;
+}
+
+/**
  * Deterministic 4-feature → 4-tier mapping.
  *
  * Re-tuned 2026-05-28 after the first 50-email accuracy run: QUEUE is the
@@ -143,4 +155,117 @@ export function tierFromFeatures(
   //    belongs in the manual review queue. The founder's mental model treats
   //    "I'll look at this on my own pace" as the dominant bucket.
   return { tier: "QUEUE", reason: "Visible in queue for manual review" };
+}
+
+/**
+ * Ontology v2 rule (docs/design/tier-ontology-v2.md, TIER_V2_ENABLED):
+ * 5 tiers describe what the mail IS; `autoEligible` — the old AUTO floors —
+ * says whether Klorn may answer it unattended. Reads the SAME thresholds as
+ * v1 so ontology overrides keep applying; AUTO is never emitted.
+ *
+ * Order matters. Scheduling wins even over the low-confidence floor because
+ * its detector is deterministic content, not an LLM score — a meeting invite
+ * with a shaky feature vector is still a meeting invite.
+ */
+/**
+ * Which v2 branch placed the email, in evaluation order. Returned so a surface
+ * that explains a verdict (the public playground's "decided the lane" marker)
+ * reads the rule that actually fired instead of re-deriving it client-side,
+ * where it could drift from these thresholds.
+ */
+export type TierRuleV2 =
+  | "scheduling"
+  | "low-confidence"
+  | "urgent"
+  | "promotional"
+  | "transactional"
+  | "default";
+
+export interface TierDecisionV2 {
+  tier: Tier;
+  reason: string;
+  autoEligible: boolean;
+  rule: TierRuleV2;
+}
+
+export function tierFromFeaturesV2(
+  features: TierFeatures,
+  signals: TierSignals,
+  thresholds: ThresholdConfig = TIER_THRESHOLDS,
+): TierDecisionV2 {
+  const f: TierFeatures = {
+    confidence: CLAMP(features.confidence),
+    senderTrust: CLAMP(features.senderTrust),
+    reversibility: CLAMP(features.reversibility),
+    urgency: CLAMP(features.urgency),
+  };
+  const t = thresholds;
+  // The old AUTO branch, demoted to a per-item flag: reversible, very sure,
+  // not urgent, trusted. Only meaningful on the human-answerable lanes
+  // (QUEUE/MEETING) — enforced at the return sites below.
+  const eligible =
+    f.reversibility >= t.auto.reversibility &&
+    f.confidence >= t.auto.confidence &&
+    f.urgency < t.auto.urgency &&
+    f.senderTrust >= t.auto.senderTrust;
+
+  // 1. Scheduling mail → MEETING (own lane: structured accept/decline +
+  //    calendar cross-check; notifies like PUSH regardless of scored urgency).
+  if (signals.scheduling) {
+    return {
+      tier: "MEETING",
+      reason: "Scheduling — meeting lane",
+      autoEligible: eligible,
+      rule: "scheduling",
+    };
+  }
+
+  // 2. Very low confidence → QUEUE (visible; never hide uncertain mail).
+  if (f.confidence < t.lowConfidenceFloor) {
+    return {
+      tier: "QUEUE",
+      reason: "Low classification confidence — queued for review",
+      autoEligible: false,
+      rule: "low-confidence",
+    };
+  }
+
+  // 3. Urgent + sure → PUSH.
+  if (f.urgency >= t.push.urgency && f.confidence >= t.push.confidence) {
+    return { tier: "PUSH", reason: "Urgent and confident", autoEligible: false, rule: "urgent" };
+  }
+
+  // 4. Clear promotional → SILENT (same narrow v1 branch).
+  if (
+    f.senderTrust < t.silent.senderTrust &&
+    f.urgency < t.silent.urgency &&
+    f.reversibility > t.silent.reversibility
+  ) {
+    return {
+      tier: "SILENT",
+      reason: "Promotional / marketing — no human attention needed",
+      autoEligible: false,
+      rule: "promotional",
+    };
+  }
+
+  // 5. Calm automated transactional notice → INFO (record, no reply ever;
+  //    urgent notices — "verify this transaction" — stay out of the archive
+  //    lane and fall through to QUEUE/PUSH handling above).
+  if (signals.transactional && f.urgency < t.auto.urgency) {
+    return {
+      tier: "INFO",
+      reason: "Transactional record — filed, no reply expected",
+      autoEligible: false,
+      rule: "transactional",
+    };
+  }
+
+  // 6. Default → QUEUE, carrying the eligibility flag.
+  return {
+    tier: "QUEUE",
+    reason: "Visible in queue for manual review",
+    autoEligible: eligible,
+    rule: "default",
+  };
 }

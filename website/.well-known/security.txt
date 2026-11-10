@@ -1,0 +1,11 @@
+# Klorn — https://klorn.ai
+# Report an exploitable finding privately. Please do not open a public issue.
+# RFC 9116. Expires must stay in the future; refresh this file before then.
+
+Contact: mailto:k0820086@gmail.com
+Contact: https://github.com/k08200/klorn/security/advisories/new
+Expires: 2027-08-24T00:00:00.000Z
+Preferred-Languages: en, ko
+Canonical: https://klorn.ai/.well-known/security.txt
+Policy: https://klorn.ai/security/
+Acknowledgments: https://github.com/k08200/klorn/blob/main/SECURITY.md

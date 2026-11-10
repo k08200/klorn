@@ -22,3 +22,17 @@ describe("extractWsSubprotocolToken", () => {
     expect(extractWsSubprotocolToken(WS_AUTH_SUBPROTOCOL)).toBeNull();
   });
 });
+
+describe("websocket auth — subprotocol is the only credential channel", () => {
+  it("the connection handler no longer reads the legacy ?token= query param", async () => {
+    // Regression guard for the fallback removal: the query fallback leaked
+    // long-lived JWTs into proxy/LB access logs. Every shipped client (web,
+    // macOS, and the shells wrapping web) offers the subprotocol, so a
+    // ?token= read must never come back. Source-level pin: this is a pure
+    // string assertion because the handler is only reachable over a real
+    // socket, which the unit harness doesn't open.
+    const fs = await import("node:fs/promises");
+    const src = await fs.readFile(new URL("../websocket.ts", import.meta.url), "utf8");
+    expect(src).not.toContain('searchParams.get("token")');
+  });
+});

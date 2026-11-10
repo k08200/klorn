@@ -10,6 +10,11 @@ enum AppLanguage: String, CaseIterable, Sendable {
     case system
     case english = "en"
     case korean = "ko"
+    case japanese = "ja"
+    case chinese = "zh"
+    case spanish = "es"
+    case french = "fr"
+    case german = "de"
 
     /// Shown in its own language — a language picker the user can't read is
     /// useless. "System" is the exception: it names a behaviour, not a language.
@@ -18,6 +23,11 @@ enum AppLanguage: String, CaseIterable, Sendable {
         case .system: return L10n.t("lang.system")
         case .english: return "English"
         case .korean: return "한국어"
+        case .japanese: return "日本語"
+        case .chinese: return "中文（简体）"
+        case .spanish: return "Español"
+        case .french: return "Français"
+        case .german: return "Deutsch"
         }
     }
 }
@@ -42,7 +52,7 @@ enum L10n {
     static func resolvedCode(
         override: AppLanguage,
         preferred: [String] = Locale.preferredLanguages,
-        available: [String] = ["en", "ko"]
+        available: [String] = L10n.shipped
     ) -> String {
         if override != .system { return override.rawValue }
         for tag in preferred {
@@ -64,6 +74,14 @@ enum L10n {
             cachedBundle = nil
             cachedCode = nil
         }
+    }
+
+    /// A Locale for the language the UI is actually showing. Date/number
+    /// formatting must follow the APP language, not the system locale — the
+    /// English UI was stamping Korean month names on every mail row because
+    /// mailTimeLabel defaulted to `.current` (render audit 2026-08-26).
+    static var activeLocale: Locale {
+        Locale(identifier: resolvedCode(override: override))
     }
 
     private static func bundle() -> Bundle {
@@ -103,9 +121,18 @@ extension L10n {
         return Set(dict.keys)
     }
 
+    /// One key's text in one shipped language, whatever the UI shows now; nil
+    /// when that catalogue lacks the key.
+    static func value(_ key: String, language code: String) -> String? {
+        guard let path = Bundle.module.path(forResource: code, ofType: "lproj"),
+              let bundle = Bundle(path: path) else { return nil }
+        let text = bundle.localizedString(forKey: key, value: key, table: "Localizable")
+        return text == key ? nil : text
+    }
+
     /// Languages Klorn ships. The picker and the drift check read this, so
     /// adding a translation is one .lproj folder plus one case.
-    static let shipped = ["en", "ko"]
+    static let shipped = ["en", "ko", "ja", "zh", "es", "fr", "de"]
 }
 
 /// Shorthand so a view reads `L("prefs.done")` rather than `L10n.t("prefs.done")`.
@@ -119,9 +146,7 @@ func L(_ key: String, _ args: CVarArg...) -> String {
 
 /// Korean postpositions agree with the final consonant (받침) of the word they
 /// follow, so a fixed string can't be correct for both. The shipped copy used
-/// the "%@(으)로" escape hatch, which is a workaround rather than Korean — and
-/// the app already contradicted itself, since the collapsed pill renders a
-/// correct "PUSH 3건".
+/// the "%@(으)로" escape hatch, which is a workaround rather than Korean.
 ///
 /// The word in front is user- or server-supplied (a tier name, a search query),
 /// so the particle has to be chosen at runtime.
@@ -155,11 +180,37 @@ extension L10n {
 
     private enum FinalConsonant { case none, rieul, some }
 
+    /// Lane names and providers as spoken in Korean.
+    private nonisolated static let spokenEnding: [String: FinalConsonant] = [
+        "push": .none,  // 푸시
+        "meeting": .some,  // 미팅
+        "queue": .none,  // 큐
+        "info": .none,  // 인포
+        "silent": .none,  // 사일런트
+        "gmail": .rieul,  // 지메일
+        "outlook": .some,  // 아웃룩
+        "naver": .none,  // 네이버
+        "icloud": .none,  // 아이클라우드
+    ]
+
     /// Whether the last character ends in a consonant, judged the way the word
     /// is *spoken*: Hangul decomposes arithmetically, Latin letters and digits
     /// fall back to how their Korean reading ends (3 → 삼, so 으로; 2 → 이, so 로).
     private nonisolated static func finalConsonant(of word: String) -> FinalConsonant {
         guard let last = word.last else { return .none }
+
+        // Whole words Klorn puts in front of a particle, by how they are
+        // spoken in Korean. The lane names come first: Push is 푸시 (no
+        // final consonant, so 로 — "Push로", not "Push으로"), Meeting is
+        // 미팅 (ㅇ, so 으로).
+        if let spoken = spokenEnding[word.lowercased()] { return spoken }
+        // English words ending in -ng end on ㅇ (미팅, 링); -sh / -ch on a
+        // vowel (푸시, 서치).
+        let lowerWord = word.lowercased()
+        if lowerWord.count > 2 {
+            if lowerWord.hasSuffix("ng") { return .some }
+            if lowerWord.hasSuffix("sh") || lowerWord.hasSuffix("ch") { return .none }
+        }
 
         if let scalar = last.unicodeScalars.first,
            (0xAC00...0xD7A3).contains(scalar.value) {

@@ -12,6 +12,11 @@ enum SignInResult: Sendable, Equatable {
     case failure(reason: SignInFailure, detail: String)
 }
 
+/// What POST /api/auth/link/complete said about an account-link hand-off.
+enum LinkCompletion: Sendable, Equatable {
+    case linked, needsPro, mismatch, expired, failed
+}
+
 /// One poll outcome from GET /api/auth/desktop-token/:nonce.
 enum PollOutcome: Sendable, Equatable {
     case pending
@@ -99,10 +104,11 @@ enum AuthFlow {
         return s
     }()
 
-    /// The browser-bounce URL. Pure for testing.
-    static func loginURL(apiBase: String, nonce: String) -> String {
+    /// The browser-bounce URL. Pure for testing. `provider` is a server route
+    /// segment from our own enum, never user input.
+    static func loginURL(apiBase: String, nonce: String, provider: String = "google") -> String {
         let encoded = nonce.addingPercentEncoding(withAllowedCharacters: nonceAllowed) ?? nonce
-        return "\(apiBase)/api/auth/google/login?source=desktop&nonce=\(encoded)&appScheme=\(appScheme)"
+        return "\(apiBase)/api/auth/\(provider)/login?source=desktop&nonce=\(encoded)&appScheme=\(appScheme)"
     }
 
     /// Parse a relay deep link (`klorn://oauth-callback?code=…`). Pure for testing.
@@ -116,11 +122,82 @@ enum AuthFlow {
         return code
     }
 
-    static func run(_ deps: AuthFlowDeps, apiBase: String) async -> SignInResult {
+    // MARK: Account-link hand-off
+
+    /// Host of the account-link hand-off deep link (`klorn://link-complete?h=…`).
+    static let linkCompleteHost = "link-complete"
+    /// A hand-off handle is 32 random bytes as lowercase hex (server pending-links).
+    static let linkHandleLength = 64
+    private static let lowercaseHex = Set("0123456789abcdef".utf8)
+
+    /// A link start route that asks the server to hand the finished consent
+    /// back to this app (`klorn://link-complete`) instead of the web. A server
+    /// without the hand-off has no querystring schema on these routes, ignores
+    /// the extra query, and runs its old flow.
+    static func nativeStartPath(_ route: String) -> String {
+        "\(route)?appScheme=\(appScheme)"
+    }
+
+    /// Parse an account-link hand-off (`klorn://link-complete?h=<64 hex>`).
+    /// Pure for testing. The OAuth callback parks the consent under this
+    /// handle instead of storing the account; the app attaches it with its
+    /// own session (`AppModel.completeLink`). Only the exact shape passes:
+    /// another scheme or host, a path, port, user or fragment, any query item
+    /// besides one raw `h`, or an `h` that is not 64 lowercase hex is refused.
+    static func linkHandle(from url: URL) -> String? {
+        guard url.scheme?.lowercased() == appScheme,
+              url.host?.lowercased() == linkCompleteHost,
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.path.isEmpty, parts.fragment == nil, parts.port == nil,
+              parts.user == nil, parts.password == nil,
+              let items = parts.percentEncodedQueryItems, items.count == 1,
+              items[0].name == "h", let handle = items[0].value,
+              isLinkHandle(handle)
+        else { return nil }
+        return handle
+    }
+
+    /// Exactly `linkHandleLength` lowercase hex characters.
+    static func isLinkHandle(_ value: String) -> Bool {
+        value.utf8.count == linkHandleLength && value.utf8.allSatisfy(lowercaseHex.contains)
+    }
+
+    /// The result params the server's link finishers put on `next` (the web
+    /// settings and calendar banners read the same ones).
+    private static let linkResultParams: Set<String> = ["inbox", "google", "linked"]
+    private static let linkSuccessValues: Set<String> = ["success", "connected"]
+    private static let linkNeedsProValue = "pro"
+
+    /// A 2xx reply (`{next}`) from POST /api/auth/link/complete. The finishers
+    /// keep today's entitlement, cap and verification checks, so a 2xx can
+    /// still report a refusal on `next` (`?inbox=limit`). A reply with no
+    /// readable result counts as landed: the inbox refresh shows the truth.
+    static func linkCompletion(reply data: Data) -> LinkCompletion {
+        struct Reply: Decodable { let next: String? }
+        let next = (try? JSONDecoder().decode(Reply.self, from: data))?.next
+        let items = next.flatMap { URLComponents(string: $0)?.queryItems } ?? []
+        let results = items.filter { linkResultParams.contains($0.name) }.map { $0.value ?? "" }
+        if results.contains(linkNeedsProValue) { return .needsPro }
+        return results.allSatisfy(linkSuccessValues.contains) ? .linked : .failed
+    }
+
+    /// A non-2xx answer from POST /api/auth/link/complete (401 is the
+    /// session's, handled by the caller).
+    static func linkCompletion(status: Int) -> LinkCompletion {
+        switch status {
+        case 409: return .mismatch  // the session is not the account that started the link
+        case 404: return .expired   // unknown, expired or already spent handle
+        default: return .failed
+        }
+    }
+
+    static func run(
+        _ deps: AuthFlowDeps, apiBase: String, provider: String = "google"
+    ) async -> SignInResult {
         guard let nonce = await deps.fetchNonce(), !nonce.isEmpty else {
             return .failure(reason: .nonceFailed, detail: "could not obtain a sign-in nonce")
         }
-        deps.openLogin(loginURL(apiBase: apiBase, nonce: nonce))
+        deps.openLogin(loginURL(apiBase: apiBase, nonce: nonce, provider: provider))
 
         let deadline = deps.now() + maxWaitSeconds
         while deps.now() < deadline {
@@ -156,7 +233,10 @@ enum AuthFlow {
 /// Real wiring of AuthFlow against the live API + OS browser. Cancellation rides
 /// on the enclosing Task (cancel the task to abort sign-in).
 enum GoogleSignIn {
-    static func run(api: APIClient = APIClient(), apiBase: String = Config.apiBaseURL) async -> SignInResult {
+    static func run(
+        api: APIClient = APIClient(), apiBase: String = Config.apiBaseURL,
+        provider: String = "google"
+    ) async -> SignInResult {
         let pkce = PKCE.generate()
         let deps = AuthFlowDeps(
             fetchNonce: {
@@ -183,7 +263,7 @@ enum GoogleSignIn {
                 return resp?.token
             }
         )
-        return await AuthFlow.run(deps, apiBase: apiBase)
+        return await AuthFlow.run(deps, apiBase: apiBase, provider: provider)
     }
 
     /// One poll. The API client throws on non-2xx, so 404/410 surface as
@@ -223,9 +303,11 @@ enum GoogleSignIn {
 enum GoogleConnectFlow {
     enum Failure: Error, Equatable, Sendable { case unauthorized, network }
 
+    static let startPath = AuthFlow.nativeStartPath("/api/auth/google/start")
+
     static func start(api: APIClient = APIClient()) async -> Result<URL, Failure> {
         do {
-            let bytes = try await api.data("/api/auth/google/start", method: "POST")
+            let bytes = try await api.data(startPath, method: "POST")
             guard let url = LinkInboxFlow.url(from: bytes) else { return .failure(.network) }
             await MainActor.run { NSWorkspace.shared.open(url) }
             return .success(url)
@@ -241,9 +323,11 @@ enum GoogleConnectFlow {
 enum LinkInboxFlow {
     enum Failure: Error, Equatable, Sendable { case needsPro, unauthorized, network }
 
+    static let startPath = AuthFlow.nativeStartPath("/api/auth/google/link-inbox")
+
     static func start(api: APIClient = APIClient()) async -> Result<URL, Failure> {
         do {
-            let bytes = try await api.data("/api/auth/google/link-inbox", method: "POST")
+            let bytes = try await api.data(startPath, method: "POST")
             guard let url = url(from: bytes) else { return .failure(.network) }
             await MainActor.run { NSWorkspace.shared.open(url) }
             return .success(url)

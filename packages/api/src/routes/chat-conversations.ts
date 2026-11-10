@@ -14,10 +14,62 @@ import { runChatTurn } from "../agentcore/chat-engine.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
 import { captureError } from "../sentry.js";
+import { wrapUntrusted } from "../untrusted.js";
 
 const MAX_TEXT_LENGTH = 4000;
 const HISTORY_LIMIT = 20;
+/** Snippet budget for the "what you're looking at" block. The assistant can
+ *  pull the full body with read_email; this only has to anchor "this email". */
+const VIEW_CONTEXT_SNIPPET = 400;
+
+/**
+ * Compact description of the mail the user currently has open, for the chat
+ * turn. Ownership-scoped (a foreign id resolves to nothing, never an error —
+ * a stale client must not break the conversation), and mail-derived text is
+ * wrapped as untrusted so the model treats it as data, not instructions.
+ */
+async function buildViewContext(userId: string, rawEmailId: unknown): Promise<string | null> {
+  if (typeof rawEmailId !== "string" || !rawEmailId.trim()) return null;
+  const id = rawEmailId.trim();
+  try {
+    const email = await prisma.emailMessage.findFirst({
+      where: { userId, OR: [{ id }, { gmailId: id }] },
+      select: {
+        id: true,
+        from: true,
+        subject: true,
+        summary: true,
+        snippet: true,
+        threadId: true,
+      },
+    });
+    if (!email) return null;
+    const gist = email.summary || email.snippet || "";
+    const lines = [
+      `- email id: ${email.id}`,
+      `- from: ${wrapUntrusted(email.from ?? "", "email-from")}`,
+      `- subject: ${wrapUntrusted(email.subject ?? "", "email-subject")}`,
+    ];
+    if (gist) {
+      lines.push(`- gist: ${wrapUntrusted(gist.slice(0, VIEW_CONTEXT_SNIPPET), "email-summary")}`);
+    }
+    // Cached-only: the turn already costs an LLM call, and the reading pane
+    // warms this when the user opens the mail. Absent is fine — the model
+    // still has read_email.
+    const brief = threadBriefFacts(await cachedThreadBrief(userId, email.threadId));
+    if (brief) {
+      lines.push(`- thread context: ${wrapUntrusted(brief, "thread-brief")}`);
+    }
+    return lines.join("\n");
+  } catch (err) {
+    // Context is an enhancement: a lookup failure must degrade to a normal
+    // turn, never fail the message the user just sent.
+    console.warn("[CHAT] view-context lookup failed:", err);
+    return null;
+  }
+}
 const CONVERSATION_LIST_LIMIT = 30;
 const MESSAGE_LIST_LIMIT = 100;
 const TITLE_LENGTH = 60;
@@ -68,7 +120,10 @@ export async function chatConversationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const userId = getUserId(request);
       const { id } = request.params as { id: string };
-      const body = (request.body ?? {}) as { text?: unknown };
+      const body = (request.body ?? {}) as {
+        text?: unknown;
+        context?: { emailId?: unknown } | null;
+      };
 
       const text = typeof body.text === "string" ? body.text.trim() : "";
       if (!text) return reply.code(400).send({ error: "text is required" });
@@ -106,7 +161,8 @@ export async function chatConversationRoutes(app: FastifyInstance) {
         },
       });
 
-      const result = await runChatTurn({ userId, history, userText: text });
+      const viewContext = await buildViewContext(userId, body.context?.emailId);
+      const result = await runChatTurn({ userId, history, userText: text, viewContext });
 
       // The turn already spent (and billed) LLM tokens — a persistence failure
       // must never eat the reply. Best-effort persist, loud signal, and the
@@ -121,6 +177,7 @@ export async function chatConversationRoutes(app: FastifyInstance) {
               source: "chat",
               ...(result.eventDraft ? { eventDraft: { ...result.eventDraft } } : {}),
               ...(result.error ? { turnError: result.error } : {}),
+              ...(result.errorCode ? { turnErrorCode: result.errorCode } : {}),
             } as Prisma.InputJsonValue,
           },
         });
@@ -143,6 +200,9 @@ export async function chatConversationRoutes(app: FastifyInstance) {
         reply: result.reply,
         eventDraft: result.eventDraft,
         ...(result.error ? { error: result.error } : {}),
+        // Only the daily cost cap carries a code (DAILY_COST_CAP_FREE /
+        // DAILY_COST_CAP) — clients show the cap, not a false "try again".
+        ...(result.errorCode ? { errorCode: result.errorCode } : {}),
       };
     },
   );

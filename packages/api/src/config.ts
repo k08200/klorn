@@ -14,6 +14,9 @@
  *   - Do NOT add anything secret here; secrets stay in their own modules.
  */
 
+import { isPlainAddress } from "./mail/email-address.js";
+import { asciiLower } from "./mail/text-normalize.js";
+
 function intEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
@@ -29,12 +32,22 @@ function floatEnv(name: string, fallback: number): number {
 }
 
 // ── Push notifications ────────────────────────────────────────────────
-// Caps how often a single user's phone can ring across a sliding window.
-// Originally tuned 2026-04-21 after the notification-flood incident.
+// Caps how often a single user's phone can ring across a sliding window, in two
+// independent buckets (notify/push-bucket.ts) that share the two windows.
 export const PUSH_WINDOW_10MIN_MS = intEnv("PUSH_WINDOW_10MIN_MS", 10 * 60 * 1000);
 export const PUSH_WINDOW_60MIN_MS = intEnv("PUSH_WINDOW_60MIN_MS", 60 * 60 * 1000);
-export const PUSH_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
-export const PUSH_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
+// Ambient (briefings, proposals, every agent-originated push, system): the caps
+// tuned 2026-04-21 after the notification-flood incident. The env names predate
+// the split and are kept so an existing override still applies.
+export const PUSH_AMBIENT_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
+export const PUSH_AMBIENT_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
+// Interrupt (firewall PUSH/MEETING mail, urgent sweep, meeting alerts, user-set
+// reminders; the caller asks for it): its own caps, so ambient traffic can
+// never use them up. Room for a real burst (a meeting alert plus a few urgent
+// mails in one sweep), but still a cap: a classifier flood (2026-10-19, 28 of
+// 30 LinkedIn invites tiered MEETING) must not ring the phone 30 times.
+export const PUSH_INTERRUPT_CAP_10MIN = intEnv("PUSH_INTERRUPT_CAP_10MIN", 6);
+export const PUSH_INTERRUPT_CAP_60MIN = intEnv("PUSH_INTERRUPT_CAP_60MIN", 20);
 
 // ── Proactive actions (rule-based, no LLM) ────────────────────────────
 export const UNANSWERED_THRESHOLD_HOURS = intEnv("PROACTIVE_UNANSWERED_HOURS", 48);
@@ -119,6 +132,62 @@ export const FALLBACK_REJUDGE_LOOKBACK_DAYS =
 // admins can comp any account's plan from /admin.
 export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === "true";
 
+// ── Rollout cohort ────────────────────────────────────────────────────
+// Rollout cohort (decision L23 of docs/providers/unified-platform-plan.md: flip
+// order founder account, then cohort, then everyone). A feature flag that takes
+// part reads `cohort` as well as on and off: the feature is live, and its routes
+// then let in only the users listed in ROLLOUT_COHORT_USER_IDS (comma or
+// whitespace separated user ids); everyone else gets exactly the answer of the
+// flag off (routes/cohort-gate.ts). An empty cohort lets no one in. Read per
+// call, so a flip needs no redeploy. Infrastructure flags (OBJECT_STORAGE_ENABLED)
+// take no part: they are on or off for everyone.
+export type FlagMode = "off" | "cohort" | "on";
+
+export function flagMode(envName: string): FlagMode {
+  const raw = (process.env[envName] ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(raw)) return "on";
+  return raw === "cohort" ? "cohort" : "off";
+}
+
+export function rolloutCohortUserIds(): ReadonlySet<string> {
+  return new Set(
+    (process.env.ROLLOUT_COHORT_USER_IDS ?? "").split(/[\s,]+/).filter((id) => id !== ""),
+  );
+}
+
+/**
+ * Whether a feature made of these flags is open to this user: every flag on, or
+ * none off and the user in the cohort when any is `cohort`.
+ */
+export function featureOpenTo(userId: string, envNames: readonly string[]): boolean {
+  const restriction = cohortRestriction(envNames);
+  if (restriction.kind === "all") return true;
+  return restriction.kind === "only" && restriction.userIds.includes(userId);
+}
+
+/** Which users a feature reaches: everyone, no one, or only these (the cohort). */
+export type CohortRestriction =
+  | { kind: "all" }
+  | { kind: "none" }
+  | { kind: "only"; userIds: string[] };
+
+/**
+ * The users a feature made of these flags reaches, for a job that works across
+ * users and must filter its query (a feature made of no flags reaches no one).
+ */
+export function cohortRestriction(envNames: readonly string[]): CohortRestriction {
+  const modes = envNames.map(flagMode);
+  if (modes.length === 0 || modes.includes("off")) return { kind: "none" };
+  if (!modes.includes("cohort")) return { kind: "all" };
+  return { kind: "only", userIds: [...rolloutCohortUserIds()] };
+}
+
+/** The flags of each drive surface, as featureOpenTo takes them. */
+export const DRIVE_LIST_FLAGS = ["DRIVE_ENABLED"] as const;
+export const KLORN_DRIVE_FLAGS = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED"] as const;
+export const GOOGLE_DRIVE_FLAGS = ["DRIVE_ENABLED", "GOOGLE_DRIVE_ENABLED"] as const;
+export const DRIVE_SUMMARY_FLAGS = ["DRIVE_ENABLED", "DRIVE_SUMMARIES_ENABLED"] as const;
+
 // Multi-account: fan the classify sync out over a user's LINKED secondary
 // inboxes (Pro), not just the primary Google account. Default OFF — the linked
 // sync path is built but stays dark until real-account testing flips it, so a
@@ -173,12 +242,446 @@ export function outlookInboxEnabled(): boolean {
     (process.env.OUTLOOK_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Outlook (Microsoft Graph) calendar, read-only — step C4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and it
+// ALSO needs OUTLOOK_INBOX_ENABLED, exactly as the Outlook mail path does: the
+// calendar link rides the Outlook OAuth routes and app registration, so the inbox
+// flag's CASA surface freeze must stay the outer gate. While either is off, every
+// /api/auth/outlook/link-calendar and /linked-calendars route answers Fastify's
+// default 404 and the calendar provider dispatcher answers the same unsupported
+// result it did before C4 (no Graph call, no row). Syncing the linked account's
+// events additionally needs LINKED_CALENDAR_SYNC_ENABLED, like Google's.
+// Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
+// lenient truthy parse, so a flip needs no redeploy.
+export function outlookCalendarEnabled(): boolean {
+  return (
+    outlookInboxEnabled() &&
+    ["true", "1", "yes", "on"].includes(
+      (process.env.OUTLOOK_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+    )
+  );
+}
+// iCloud and Naver calendars over CalDAV, read-only — step C3 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/caldav-calendar route answers Fastify's default 404
+// (darkRouteGate), the calendar provider dispatcher answers ICLOUD and NAVER with
+// the same unsupported result it did before C3 (no CalDAV request, no password
+// decrypt, no row), every reader hides ICLOUD and NAVER rows already stored
+// (CALENDAR_PROVIDER_ENABLED in pim/calendar-scope.ts), and no row is removed by
+// the CalDAV window reconcile. Syncing events additionally needs
+// LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement, the C2 loop's own
+// gates. Independent of ICLOUD_INBOX_ENABLED: the calendar routes are their own
+// dark surface. Read at request time with the same lenient truthy parse, so a
+// flip needs no redeploy.
+export function caldavCalendarEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALDAV_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Device calendars uploaded by the desktop app (EventKit), read-only — step C6 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/device-calendar route answers Fastify's default 404
+// (darkRouteGate), so the Mac app hides its setting; no snapshot is stored; and
+// every reader hides DEVICE rows already stored (CALENDAR_PROVIDER_ENABLED in
+// pim/calendar-scope.ts). A device uploads only the calendars its user turned on
+// (decision P4), so nothing reaches the server without that per-calendar opt-in.
+// Independent of LINKED_CALENDAR_SYNC_ENABLED: nothing is fetched by the server.
+// Read at request time with the same lenient truthy parse, so a flip needs no
+// redeploy.
+export function deviceCalendarEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.DEVICE_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Subscriptions: the per-sender, per-account bulk unsubscriber (Mail →
+// Subscriptions). OFF by default (repo doctrine). While off, GET
+// /api/email/subscriptions and POST /api/email/subscriptions/unsubscribe answer
+// Fastify's default 404 (darkRouteGate), and the web hides its entry point.
+// User-initiated only: nothing runs on a schedule, and it never touches the
+// separate AUTO_UNSUBSCRIBE_ENABLED classification-time path. Read at request
+// time with the same lenient truthy parse, so a flip needs no redeploy.
+export function bulkUnsubscribeEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.BULK_UNSUBSCRIBE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// The drive: a metadata index of files across sources — step D2 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/drive route answers Fastify's default 404 (darkRouteGate), and
+// every reader hides every DriveFile row (drive/drive-scope.ts), whatever a
+// connector's own flag says. On, a row is visible only while its provider's
+// connector flag is on too (DRIVE_PROVIDER_ENABLED): KLORN (D3) and GOOGLE (D5)
+// are registered, ONEDRIVE (D6) is not yet. Read at request time
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function driveEnabled(): boolean {
+  return flagMode("DRIVE_ENABLED") !== "off";
+}
+// The Klorn drive: files a user uploads, stored in object storage — step D3 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). It is
+// live only while DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are on too
+// (drive/drive-scope.ts, `klornDriveLive`): until then the upload, folder,
+// download, rename/move and delete routes answer Fastify's default 404
+// (darkRouteGate) and every KLORN row is hidden from the drive list. Turning it
+// off hides the files and stops writes; it never deletes them (the account
+// purge does that, flag or not, while OBJECT_STORAGE_ENABLED is on). Read at
+// request time with the same lenient truthy parse, so a flip needs no redeploy.
+export function klornDriveEnabled(): boolean {
+  return flagMode("KLORN_DRIVE_ENABLED") !== "off";
+}
+// The Klorn mailbox's inbound webhook — step E1b of
+// docs/providers/unified-platform-plan.md (L6). OFF by default (repo doctrine).
+// While off, POST /api/mailbox/inbound/resend answers Fastify's default 404
+// (darkRouteGate). The route serves every recipient at once, so it is not per
+// user: `cohort` (L23) counts as live here, and the claim (E3) is what honours
+// the cohort. Read at request time, so a flip needs no redeploy.
+export function klornMailboxEnabled(): boolean {
+  return flagMode("KLORN_MAILBOX_ENABLED") !== "off";
+}
+
+export type KlornInboundConfig =
+  | {
+      ok: true;
+      webhookSecret: string;
+      apiKey: string;
+      /** ASCII lowercase. */
+      domain: string;
+      /** Where postmaster@ and abuse@ go (L18); null drops them. */
+      forwardTo: string | null;
+      /** Set but unusable values the route logs (names only, never values). */
+      warnings: string[];
+    }
+  | { ok: false; missing: string[] };
+
+const MAILBOX_DOMAIN_SHAPE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+const WEBHOOK_SECRET_PREFIX = "whsec_";
+const STRICT_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+/** The HMAC key under the prefix; Resend's are longer. `whsec_` alone verified forged signatures. */
+const MIN_WEBHOOK_KEY_BYTES = 16;
+
+function isStrongWebhookSecret(secret: string): boolean {
+  if (!secret.startsWith(WEBHOOK_SECRET_PREFIX)) return false;
+  const key = secret.slice(WEBHOOK_SECRET_PREFIX.length);
+  return STRICT_BASE64.test(key) && Buffer.from(key, "base64").length >= MIN_WEBHOOK_KEY_BYTES;
+}
+
+/** One plain address, not at the mailbox domain (mail forwarded there would loop back). */
+function usableForwardTarget(value: string, domain: string): boolean {
+  if (!isPlainAddress(value)) return false;
+  return asciiLower(value.slice(value.lastIndexOf("@") + 1)) !== domain;
+}
+
+// The inbound webhook's settings, read per request (a flip or a rotated secret
+// needs no redeploy):
+// - RESEND_INBOUND_WEBHOOK_SECRET: the receiving webhook's signing secret, `whsec_`
+//   and a base64 key of at least 16 bytes.
+// - RESEND_INBOUND_API_KEY: a full-access key that can read received mail.
+//   Separate from RESEND_API_KEY on purpose, so the transactional key can stay
+//   sending-only (and best in a separate Resend team: .env.example).
+// - KLORN_MAILBOX_DOMAIN: no default (L19: the domain is operational).
+// - KLORN_MAILBOX_FORWARD_TO: optional; the support inbox told of postmaster@ and
+//   abuse@ mail (a notice, never the mail), one plain address outside the domain.
+//   Unset or unusable, system mail is dropped and counted (unusable also warns).
+// Any of the first three unset or unusable is `missing`.
+export function klornInboundConfig(): KlornInboundConfig {
+  const webhookSecret = (process.env.RESEND_INBOUND_WEBHOOK_SECRET ?? "").trim();
+  const apiKey = (process.env.RESEND_INBOUND_API_KEY ?? "").trim();
+  const domain = asciiLower((process.env.KLORN_MAILBOX_DOMAIN ?? "").trim());
+  const missing = [
+    isStrongWebhookSecret(webhookSecret) ? null : "RESEND_INBOUND_WEBHOOK_SECRET",
+    apiKey ? null : "RESEND_INBOUND_API_KEY",
+    MAILBOX_DOMAIN_SHAPE.test(domain) ? null : "KLORN_MAILBOX_DOMAIN",
+  ].filter((name): name is string => name !== null);
+  if (missing.length > 0) return { ok: false, missing };
+  const rawForwardTo = (process.env.KLORN_MAILBOX_FORWARD_TO ?? "").trim();
+  const usable = rawForwardTo !== "" && usableForwardTarget(rawForwardTo, domain);
+  const warnings =
+    rawForwardTo !== "" && !usable
+      ? [
+          "KLORN_MAILBOX_FORWARD_TO is not one plain address outside KLORN_MAILBOX_DOMAIN; system mail is dropped",
+        ]
+      : [];
+  return {
+    ok: true,
+    webhookSecret,
+    apiKey,
+    domain,
+    forwardTo: usable ? rawForwardTo : null,
+    warnings,
+  };
+}
+// The Google Drive connector — step D5 of docs/providers/unified-platform-plan.md
+// (D5b: link and unlink a Google account for its picked files, drive.file only).
+// OFF by default (repo doctrine), and flipping it waits on Google's verification
+// of drive.file (the plan's "Before the flip"). It is live only while
+// DRIVE_ENABLED is on too (drive/drive-scope.ts): until then the
+// /api/drive/google routes answer Fastify's default 404 (darkRouteGate), every
+// GOOGLE row is hidden from the drive, and a link callback still in flight
+// stores nothing and exchanges no code. Read at request time with the same
+// lenient truthy parse, so a flip needs no redeploy.
+export function googleDriveEnabled(): boolean {
+  return flagMode("GOOGLE_DRIVE_ENABLED") !== "off";
+}
+
+// The Google Picker's two public values (D5c): the browser API key, restricted
+// in the Cloud console to the web origin's referrers and the Picker API, and the
+// Cloud project NUMBER (`setAppId`, which ties picked files to this project's
+// drive.file grant). Neither is a secret, but both stay server-side: POST
+// /api/drive/google/accounts/:id/picker-session hands them out, so a web bundle
+// built without the Picker holds neither. Either unset answers 503
+// `picker-not-configured`. Read at request time.
+export function googlePickerConfig(): { developerKey: string; appId: string } | null {
+  const developerKey = (process.env.GOOGLE_PICKER_API_KEY ?? "").trim();
+  const appId = (process.env.GOOGLE_CLOUD_PROJECT_NUMBER ?? "").trim();
+  return developerKey !== "" && appId !== "" ? { developerKey, appId } : null;
+}
+// Drive file summaries and summary search — step D4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). It
+// acts only while DRIVE_ENABLED is on too, and only on files whose provider is
+// visible (for a Klorn file: KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED).
+// While off: no upload enqueues a summary, the summary job claims nothing, POST
+// /api/drive/files/:id/summarize answers Fastify's default 404, the file
+// response carries no `summary` and the search matches names only. Read at
+// request and job time with the same lenient truthy parse.
+export function driveSummariesEnabled(): boolean {
+  return flagMode("DRIVE_SUMMARIES_ENABLED") !== "off";
+}
+// IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported
+// refusal exactly as before (501 at the routes). Generic IMAP stays unsupported
+// either way. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent)
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function imapActionsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.IMAP_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Send, reply and drafts for Naver and iCloud over SMTP and IMAP — step B3 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
+// independent of IMAP_ACTIONS_ENABLED. While OFF, mail/providers/dispatch.ts
+// leaves NAVER and ICLOUD `sendEmail`, `createDraft` and `getReplyHeaders` as the
+// unsupported stubs, exactly as before. ICLOUD additionally needs
+// ICLOUD_INBOX_ENABLED (the CASA surface freeze). Generic IMAP stays unsupported
+// either way. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent)
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function imapSendEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.IMAP_SEND_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Generic IMAP with a user-supplied host — step B4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and it
+// stays off until the security review of its SSRF design (resolve-then-pin) signs
+// off. While OFF, every /api/generic-imap route answers the cloaked 404, the poll
+// never selects IMAP rows, and mail/providers/dispatch.ts leaves a generic mailbox
+// on the unsupported stubs whatever IMAP_ACTIONS_ENABLED and
+// IMAP_MOVE_ACTIONS_ENABLED say (those two still need to be on as well). Send never
+// reaches a generic mailbox. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED
+// precedent) with the same lenient truthy parse, so a flip needs no redeploy.
+export function genericImapEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.GENERIC_IMAP_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Linked Google calendar sync — step C2 of docs/providers/unified-platform-plan.md.
+// OFF by default (repo doctrine). While unset/false the scheduler's calendar step
+// syncs the primary calendar exactly as before: no linked-account lookup, no
+// extra Google call, no linked CalendarEvent row. When on, each linked GOOGLE
+// calendar account is synced into rows too (same window and caps). Read at
+// request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
+// lenient truthy parse, so a flip needs no redeploy. Turning it off stops the
+// syncing; rows already written stay until their account is unlinked.
+export function linkedCalendarSyncEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.LINKED_CALENDAR_SYNC_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Removing events cancelled in Google on the next calendar sync — step C2b of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// unset/false every calendar sync (the scheduler cycle, the login init-sync,
+// POST /api/calendar/sync, linked accounts included) makes exactly the Google
+// calls it always did and removes no row. When on, each sync also asks Google
+// which events were cancelled (a second events.list) and deletes their rows and
+// resolves their attention items. Read at sync time with the same lenient truthy
+// parse, so a flip needs no redeploy. Flipping it is a founder action, after a
+// check against a real Google calendar. Turning it off stops the scanning; rows
+// already removed stay removed.
+export function calendarCancellationSyncEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_CANCELLATION_SYNC_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Google invitations the user declined. OFF by default (repo doctrine). While
+// unset/false a sync writes a row for a declined invitation like any event. When
+// on, a sync writes no row for it and removes the row an earlier sync wrote,
+// resolving its open attention items (the same removal as C2b's), so the briefing,
+// the reminders and the conflict checks stop showing meetings the user said no to.
+// Rows only: a live Google read (listEvents callers) still returns them. Google
+// only: Outlook and CalDAV do not report the user's answer yet. Read at sync time
+// with the same lenient truthy parse. Turning it off lets the next sync write the
+// rows again.
+export function calendarHideDeclinedEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_HIDE_DECLINED_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Per-contact calendar co-attendance (pim/coattendance/, attention engine v3
+// §3(2)). OFF by default (repo doctrine). While unset/false the sync lists no past
+// events and writes nothing to ContactCoAttendance or CoAttendanceMeeting. When on,
+// the scheduler queues a background job that, for each Google calendar source
+// (primary and linked) at most once per 6 hours, lists the last 30 days and counts
+// each ended meeting once per contact: counts and UTC days only, never an attendee
+// list (founder decision 2026-11-01).
+// Read at sync time with the same lenient truthy parse.
+export function calendarCoattendanceEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_COATTENDANCE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
+// of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
+// independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,
+// mail/providers/dispatch.ts leaves NAVER and ICLOUD `trash`, `untrash`,
+// `archive` and `unarchive` as the unsupported stubs, exactly as before (501 at
+// the routes). ICLOUD additionally needs ICLOUD_INBOX_ENABLED (the CASA surface
+// freeze). Generic IMAP stays unsupported either way. Read at request time
+// (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy parse,
+// so a flip needs no redeploy.
+export function imapMoveActionsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.IMAP_MOVE_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// One calendar read path — step C7 of docs/providers/unified-platform-plan.md.
+// OFF by default (repo doctrine). While unset/false `list_events` calls Google
+// live and `check_calendar_conflicts` asks Google free/busy only, exactly as
+// before: no CalendarEvent row is read for either. When on, both read the synced
+// CalendarEvent rows through pim/calendar-read.ts (the scope, the dedupe and
+// provider/readOnly per event); the conflict check still asks Google free/busy
+// as well. The price is freshness: rows are synced about every 15 minutes, and
+// an event deleted upstream can stay in them until the sync removes it.
+// REACH: the flag changes `listEvents` and `checkConflicts` for EVERY caller, not
+// only the chat and the MCP tools: the autonomous agent's list_events and
+// check_calendar_conflicts, create_event's enforced conflict check (a booking is
+// refused on a row conflict, including a stale one), and the reading pane's
+// meeting-context conflict line. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED
+// precedent) with the same lenient truthy parse, so a flip needs no redeploy.
+export function unifiedCalendarReadEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.UNIFIED_CALENDAR_READ_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Keyboard triage (productization plan P4) — OFF by default (repo doctrine).
+// ONE flag for both halves: the web client learns it from GET /api/auth/me
+// (`user.keyboardTriage`) and turns on the hotkey registry, the `?` sheet and
+// the optimistic lane move with undo; the API turns on the reversible lane
+// override (the override records an undo snapshot and returns an undo token,
+// POST /api/inbox/firewall/:id/undo and POST /api/inbox/firewall/email/:emailId
+// exist). While OFF the override writes exactly what it wrote before, the two
+// new routes 404 like any unknown route, and /me reports false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function keyboardTriageEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.KEYBOARD_TRIAGE ?? "").trim().toLowerCase(),
+  );
+}
+// Mail v2 (productization plan P5) — OFF by default (repo doctrine). ONE flag
+// for both halves: the web client learns it from GET /api/auth/me
+// (`user.mailV2`) and renders /email as the lane-first list (lanes as the
+// primary filter, one-badge rows, account facet); the API honours the `tier`
+// query param on GET /api/email and serves GET /api/email/lane-counts. While
+// OFF the list ignores `tier` (what it did before the param existed), the
+// counts route 404s like any unknown route, and /me reports false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function mailV2Enabled(): boolean {
+  return ["true", "1", "yes", "on"].includes((process.env.MAIL_V2 ?? "").trim().toLowerCase());
+}
+// Unified home (productization plan P6/P7) — OFF by default (repo doctrine).
+// ONE flag for both halves: the web client learns it from GET /api/auth/me and
+// the login/register responses (`user.unifiedHome`) and makes Today (`/today`)
+// the home, with the nav Today · Mail · Calendar · Assistant; the API serves
+// Today's mail block, which reads mail by lane (see `laneReadsEnabled`). While
+// OFF nothing changes: `/inbox` is home and the clients are told false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function unifiedHomeEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes((process.env.UNIFIED_HOME ?? "").trim().toLowerCase());
+}
+// Multi-provider first run (productization plan P8) — OFF by default (repo
+// doctrine). ONE flag for both halves: the web client learns it from GET
+// /api/auth/me and the login/register responses (`user.onboardingV2`) and
+// renders /onboarding as the provider grid with the live sync screen; the API
+// serves GET /api/providers/available, which tells that grid which providers
+// this deployment can connect. While OFF nothing changes: /onboarding is the
+// existing four-step flow, the availability route 404s like any unknown route,
+// and the clients are told false. Read at request time with the same lenient
+// truthy parse as the flags above, so a flip needs no redeploy.
+export function onboardingV2Enabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.ONBOARDING_V2 ?? "").trim().toLowerCase(),
+  );
+}
+// The lane reads — `tier` on GET /api/email and GET /api/email/lane-counts —
+// have two consumers: Mail v2 (MAIL_V2) and Today (UNIFIED_HOME). Either flag
+// turns them on, so Today never depends on Mail v2 having been flipped first;
+// with both off the list ignores `tier` and the counts route 404s, as before.
+export function laneReadsEnabled(): boolean {
+  return mailV2Enabled() || unifiedHomeEnabled();
+}
+// MCP write tools — API key permission level and the MCP write set (steps A1
+// and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
+// doctrine). It gates minting a read-write API key, using one, the MCP-only
+// write tools (mark_read today) and every audit write they cause: while OFF,
+// POST /api/keys ignores the permission field (every new key is read), a stored
+// read-write key acts as read at the MCP endpoint, no write tool is listed or
+// callable, and nothing is inserted into McpWriteAudit on any path. Read at
+// request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
+// lenient truthy parse, so a flip needs no redeploy. The gate and the refused-
+// call audit re-read it themselves (defence in depth).
+export function mcpWriteToolsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.MCP_WRITE_TOOLS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Object storage (step D1 of docs/providers/unified-platform-plan.md) — the
+// S3-compatible bucket behind the Klorn drive (D3), file summaries (D4) and
+// mailbox attachments (E4). OFF by default (repo doctrine). While OFF nothing in
+// storage/ loads the S3 client, builds one, reads the value of an
+// OBJECT_STORAGE_* variable or opens a connection, and the account purge does
+// not touch storage. While ON, the OBJECT_STORAGE_* variables are validated at
+// startup and on first use, and deleting an account (or its data) first records
+// a pending purge of that user's objects, then tries the bucket; a failure no
+// longer blocks the deletion, an hourly sweep finishes it (step D3). Do not turn
+// it back OFF once objects exist: a purge would then skip them. Startup warns ([STORAGE]) when
+// the flag is OFF and a bucket is still configured. Kill switches belong to the
+// features built on top (D3, E4). Read at request time
+// (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy
+// parse. D1 ships no route and no UI, so the flag alone changes nothing a user
+// can see.
+export function objectStorageEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.OBJECT_STORAGE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Social LOGIN providers beyond Google (Sign in with Apple, Naver OAuth) —
 // OFF by default (repo doctrine). While OFF, every /api/auth/apple/* and
 // /api/auth/naver/* route 404s with the same cloak as the dark IMAP providers
 // and GET /api/auth/providers omits them, so neither the DAST-scanned surface
 // nor the login page changes until the provider apps are registered and the
 // flags flip. Read at request time with the lenient truthy parse.
+/// Team mode (saved teams + whole-team availability + invite-carrying
+/// drafts) is a PAID team-tier capability (founder, 2026-08-20). No team
+/// plan exists yet, so it ships DARK behind this flag; when team pricing
+/// lands, replace call sites with a plan check (planHasFeature "team") —
+/// the env flag then becomes the kill switch, not the seat gate.
+export function teamModeEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.TEAM_MODE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+
 export function appleLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.APPLE_LOGIN_ENABLED ?? "").trim().toLowerCase(),
@@ -187,6 +690,35 @@ export function appleLoginEnabled(): boolean {
 export function naverLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.NAVER_LOGIN_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Manual send receipts — OFF by default (repo doctrine). CLAUDE.md's
+// deterministic floor: send / delete / forward always produce an ActionReceipt
+// with a payload hash. The agent path does (PendingAction / ActionOutbox,
+// verified in tool-executor); the user-initiated POST /api/email/send and
+// POST /api/email/:id/reply did not. While ON, both write a SendReceipt row
+// (mail/send-receipt.ts) BEFORE calling the provider — a failed write refuses
+// the send with 503 — verify the bytes handed to the provider against it, settle
+// it with the outcome, and add `receipt` to the success response. While OFF
+// neither route touches the table and both answer exactly as before. Needs the
+// 20261016010000_send_receipt migration (applied by start.sh before the app
+// boots). Read at request time with the same lenient truthy parse.
+export function manualSendReceiptsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.MANUAL_SEND_RECEIPTS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Android data-only mail pushes — OFF by default (repo doctrine). While ON, a
+// MAIL push (one email: emailId set) to an Android device that registered with
+// `dataMessages: true` goes out as an FCM data-only message (title and body in
+// `data`, `sentAt`, no `notification` block), which the app's native service
+// posts with In 1 hour · Done · Review buttons in every app state
+// (apps/mobile push/KlornMessagingService.java). Every other push, every other
+// device, and every push while OFF stay notification messages exactly as before.
+// Needs the 20261017010000_device_push_data_messages migration. Read per send.
+export function androidDataPushEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.ANDROID_DATA_PUSH_ENABLED ?? "").trim().toLowerCase(),
   );
 }
 // Attention aging sweep (hourly): auto-resolve firewall items the user
@@ -216,8 +748,9 @@ export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);
 
 // ── Autonomous agent ──────────────────────────────────────────────────
 // Scheduler tick. Used to be 1 min, which meant 24 dogfood users × 5–10 LLM
-// calls/cycle = 7k–14k calls/hour, blowing through the free OpenRouter daily
-// cap of 50 within minutes. 10 min is a 10× reduction at the scheduler level.
+// calls/cycle = 7k–14k calls/hour, blowing through the then-provider's free
+// daily cap of 50 within minutes. 10 min is a 10× reduction at the scheduler
+// level.
 export const AGENT_CHECK_INTERVAL_MS = intEnv("AGENT_CHECK_INTERVAL_MS", 10 * 60_000);
 // Hard cap on tool calls per cycle. Used to be 10 which let one cycle fire
 // 10 follow-up completions; 3 is enough for "read inbox → classify → propose"
@@ -243,6 +776,22 @@ export const DAILY_COST_CAP_CENTS = intEnv("DAILY_COST_CAP_CENTS", 100);
 // classifications, enough to feel Klorn sort + auto-handle your inbox before
 // the wall. Entitled users (paid/trial/admin) keep DAILY_COST_CAP_CENTS.
 export const FREE_DAILY_COST_CAP_CENTS = intEnv("FREE_DAILY_COST_CAP_CENTS", 10);
+
+// Slice of the per-user daily cap that ONLY the firewall judge may spend.
+// Chat, agent, briefing and summarize stop at (cap - reserve); the judge may
+// use the whole cap. 0 disables the reserve.
+//
+// 2026-10-15: chat/agent on claude-sonnet-5 spent 101¢ of a 100¢ cap in 21
+// minutes, the gate blocked every paid call until UTC midnight, and the judge
+// degraded to the keyword fallback — which cannot emit PUSH at all. Mail kept
+// being sorted, so nothing looked broken. Each call pre-bills a nominal
+// 2000+500 tokens (llm-usage.ts) and the floor is never refunded, so at
+// gemini-2.5-flash rates a classification costs ~0.185¢ — 25¢ buys ~135 a day.
+// Size it against the mailbox: 25 suits a light inbox, a heavy one needs more.
+// Default 0 = OFF. Turning it on narrows what chat/agent may spend, so it is
+// a deliberate flip per deploy rather than a behaviour change that arrives
+// with an upgrade. Recommended first value: 25.
+export const JUDGE_BUDGET_RESERVE_CENTS = intEnv("JUDGE_BUDGET_RESERVE_CENTS", 0);
 
 // Global hard cap across ALL users + system-initiated calls per UTC day, in
 // cents (USD). The per-user gate can't see calls made without a userId
@@ -307,9 +856,9 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
   30 * 60 * 1000,
 );
 // LLM per-user rate limit (token bucket). Protects against runaway loops and
-// avoids tripping upstream provider RPM caps. Numbers chosen for OpenRouter
-// free tier (20 RPM upstream) — we cap each user well below so background
-// agents can still progress under load.
+// avoids tripping upstream provider RPM caps. Numbers were chosen for a 20 RPM
+// upstream free tier — we cap each user well below so background agents can
+// still progress under load.
 export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
 
 // Of the shared RPM window, this many slots are reserved for foreground chat —

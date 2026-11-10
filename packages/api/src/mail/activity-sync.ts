@@ -76,7 +76,15 @@ export async function ensureRecentMailSync(
   try {
     if (!(await autoClassifyAllows(userId))) return;
     const run = sync ?? (await import("./email-sync.js")).syncEmails;
-    await run(userId, ACTIVITY_SYNC_MAX_RESULTS);
+    const result = await run(userId, ACTIVITY_SYNC_MAX_RESULTS);
+    // Every other sync producer wakes the open clients on new mail; this one
+    // silently didn't, so opening the firewall on one device left a second
+    // device stale until its own poll (realtime audit 2026-08-18).
+    const newCount = (result as { newCount?: number } | undefined)?.newCount ?? 0;
+    if (newCount > 0) {
+      const { notifyConversationsUpdated } = await import("../notify/conversations-updated.js");
+      notifyConversationsUpdated(userId);
+    }
   } catch (err) {
     // "Gmail not connected" is the expected shape for a dead token — the
     // reconnect prompt is surfaced by /api/email/inboxes, not by shouting

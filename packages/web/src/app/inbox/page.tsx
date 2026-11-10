@@ -9,15 +9,23 @@ import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
 import type { CommitmentItem } from "../../components/commitment-card";
 import { FirewallBoard } from "../../components/firewall-board";
+import { HubHandoff } from "../../components/hub-handoff";
+import PmfCard from "../../components/pmf-card";
+import { ProFeatureNotice } from "../../components/pro-feature-notice";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
+import ScreenerCard from "../../components/screener-card";
 import { useToast } from "../../components/toast";
+import ErrorAlert from "../../components/ui/error-alert";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { isEntitlementRefusal } from "../../lib/entitlement";
 import { useT } from "../../lib/i18n";
 import type { InboxSummary, ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
+import { TIER_NAMES } from "../../lib/tiers";
+import { toolLabelKey } from "../../lib/tool-labels";
 
 interface PendingActionItem {
   id: string;
@@ -46,7 +54,9 @@ function parseView(raw: string | null): SegmentView {
 export default function InboxPage() {
   return (
     <AuthGuard>
-      <CommandCenterView />
+      <HubHandoff>
+        <CommandCenterView />
+      </HubHandoff>
     </AuthGuard>
   );
 }
@@ -61,9 +71,12 @@ function CommandCenterView() {
   >({});
   // Action id awaiting the reject-with-reason dialog; null when closed.
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  // Approving executes the action, which is Pro: a FREE user's 403 shows the notice.
+  const [proGated, setProGated] = useState(false);
   const { toast } = useToast();
+  const { t } = useT();
 
-  // Top-level surface toggle ("Decisions" ⇄ "Firewall board"). Read from
+  // Top-level surface toggle ("Decisions" ⇄ "Lanes"). Read from
   // `?view=` so it's shareable and works with the back button; changing it
   // rewrites the URL rather than holding local state.
   const router = useRouter();
@@ -135,7 +148,10 @@ function CommandCenterView() {
         // 200-with-{error} is the dead-token shape — surface it instead of
         // silently refreshing stale DB contents (2026-08-10 diagnosis).
         if (result?.error) {
-          toast("Gmail isn't connected — reconnect in Settings.", "error");
+          toast(
+            t("inboxLegacy.toast.notConnected", { section: t("settings.nav.accounts") }),
+            "error",
+          );
         }
       } catch (err) {
         // Sync is best-effort; still refetch below so the queue reflects the DB.
@@ -148,7 +164,7 @@ function CommandCenterView() {
         setSyncing(false);
       }
     },
-    [queryClient],
+    [queryClient, toast, t],
   );
 
   useEffect(() => {
@@ -159,11 +175,11 @@ function CommandCenterView() {
       captureClientError(commitmentsQuery.error, { scope: "inbox.load.commitments" });
     }
     if (actionsQuery.error || commitmentsQuery.error) {
-      setError("Could not load the decision queue.");
+      setError(t("inboxLegacy.loadFailed"));
     } else {
       setError(null);
     }
-  }, [actionsQuery.error, commitmentsQuery.error]);
+  }, [actionsQuery.error, commitmentsQuery.error, t]);
 
   useEffect(() => {
     // Filter change retriggers the keyed query automatically; no-op here
@@ -181,6 +197,7 @@ function CommandCenterView() {
   const handleApprove = async (actionId: string) => {
     if (actionLoading[actionId]) return;
     setActionLoading((prev) => ({ ...prev, [actionId]: "approve" }));
+    setProGated(false);
     try {
       await apiFetch(`/api/chat/pending-actions/${actionId}/approve`, { method: "POST" });
       queryClient.setQueryData<PendingActionItem[]>(
@@ -190,10 +207,14 @@ function CommandCenterView() {
             ? (prev ?? []).filter((a) => a.id !== actionId)
             : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)),
       );
-      toast("Action approved.", "success");
+      toast(t("inboxLegacy.toast.approved"), "success");
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "inbox.approve", actionId });
-      toast("Could not approve this action. Please try again.", "error");
+      toast(t("inboxLegacy.toast.approveFailed"), "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -214,10 +235,10 @@ function CommandCenterView() {
             ? (prev ?? []).filter((a) => a.id !== actionId)
             : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
       );
-      toast("Suggestion rejected.", "success");
+      toast(t("inboxLegacy.toast.rejected"), "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.reject", actionId });
-      toast("Could not reject this action. Please try again.", "error");
+      toast(t("inboxLegacy.toast.rejectFailed"), "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -239,10 +260,10 @@ function CommandCenterView() {
         [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
         (prev) => (prev ?? []).filter((a) => a.id !== actionId),
       );
-      toast(`Snoozed for ${hours}h — will resurface automatically.`, "success");
+      toast(t("inboxLegacy.toast.snoozed", { hours: String(hours) }), "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.snooze", actionId });
-      toast("Could not snooze this action. Please try again.", "error");
+      toast(t("inboxLegacy.toast.snoozeFailed"), "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -254,7 +275,9 @@ function CommandCenterView() {
   // the list change isn't silent (WCAG 4.1.3). Re-derives from query data
   // after each optimistic update.
   const queueAnnouncement =
-    pendingCount === 1 ? "1 decision waiting" : `${pendingCount} decisions waiting`;
+    pendingCount === 1
+      ? t("inboxLegacy.waiting.one")
+      : t("inboxLegacy.waiting.many", { count: String(pendingCount) });
 
   return (
     <>
@@ -280,6 +303,7 @@ function CommandCenterView() {
           setFilter={setFilter}
           loading={loading || syncing}
           error={error}
+          proGated={proGated}
           view={view}
           onSelectView={setView}
           actionLoading={actionLoading}
@@ -315,20 +339,21 @@ function SegmentControl({
   view: SegmentView;
   onSelect: (next: SegmentView) => void;
 }) {
+  const { t } = useT();
   return (
     <div
       role="group"
-      aria-label="Inbox view"
-      className="mb-4 inline-flex items-center gap-1 rounded-xl border border-slate-200/70 bg-white/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
+      aria-label={t("inboxLegacy.segment.label")}
+      className="mb-4 inline-flex items-center gap-1 rounded-control border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
     >
       <FilterTab
         active={view === "decisions"}
-        label="Decisions"
+        label={t("inbox.decisions")}
         onClick={() => onSelect("decisions")}
       />
       <FilterTab
         active={view === "firewall"}
-        label="Firewall board"
+        label={t("inboxLegacy.segment.lanes")}
         onClick={() => onSelect("firewall")}
       />
     </div>
@@ -350,6 +375,7 @@ function DecisionsBody({
   setFilter,
   loading,
   error,
+  proGated,
   view,
   onSelectView,
   actionLoading,
@@ -365,6 +391,7 @@ function DecisionsBody({
   setFilter: (f: StatusFilter) => void;
   loading: boolean;
   error: string | null;
+  proGated: boolean;
   view: SegmentView;
   onSelectView: (next: SegmentView) => void;
   actionLoading: Record<string, "approve" | "reject" | "snooze" | null>;
@@ -380,6 +407,11 @@ function DecisionsBody({
       <div className="px-4 pb-8 pt-3 md:hidden">
         <SegmentControl view={view} onSelect={onSelectView} />
         <OnboardingHint />
+        {/* The screener is a decision queue, and this screen IS the mobile
+            decision queue — mounting it only on desktop would hide the feature
+            from half the surface. */}
+        <ScreenerCard />
+        <PmfCard />
         <MobileDecisionQueue
           actions={actions}
           commitments={commitments}
@@ -402,15 +434,15 @@ function DecisionsBody({
         {/* Flat flagship header on the canvas — no boxed hero. */}
         <header className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+            <h1 className="text-role-page text-ink">
               <Greeting />
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
-              <span className="text-slate-400">{formatToday()}</span>
+            <p className="mt-2 text-role-body text-ink-mid">
+              <span className="text-ink-dim">{formatToday()}</span>
               <span className="mx-1.5 text-slate-300">·</span>
               {pendingCount > 0 ? (
                 <>
-                  <span className="font-medium text-slate-700">{pendingCount}</span>
+                  <span className="font-medium text-ink-soft">{pendingCount}</span>
                   {pendingCount === 1 ? " decision waiting" : " decisions waiting"}
                 </>
               ) : commitments.length > 0 ? (
@@ -427,7 +459,7 @@ function DecisionsBody({
               disabled={loading}
               aria-label="Refresh"
               title="Refresh"
-              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               <svg
                 aria-hidden="true"
@@ -447,7 +479,7 @@ function DecisionsBody({
             </button>
             <Link
               href="/inbox/receipt"
-              className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
             >
               Today's receipt
             </Link>
@@ -469,20 +501,17 @@ function DecisionsBody({
           onPendingClick={() => setFilter("pending")}
         />
 
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        {error && <ErrorAlert className="mb-4">{error}</ErrorAlert>}
+        {proGated && <ProFeatureNotice className="mb-4" />}
 
         {/* 2-column grid — decisions fill the wide column, reply rail on the right. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           {/* ── LEFT: decision queue panel ── */}
           <section aria-label="Approval queue" className="min-w-0">
             {loading && actions.length === 0 && (
-              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="h-20 animate-pulse rounded-lg bg-slate-100" />
-                <div className="h-20 animate-pulse rounded-lg bg-slate-100" />
+              <div className="space-y-2 rounded-card border border-line bg-surface-raised p-4">
+                <div className="h-20 animate-pulse rounded-control bg-surface-hover" />
+                <div className="h-20 animate-pulse rounded-control bg-surface-hover" />
               </div>
             )}
 
@@ -498,12 +527,12 @@ function DecisionsBody({
             {/* Today's real substance below the queue: Top-3 attention + TODAY
                 calendar/tasks, then open commitments — the command-center core. */}
             {actions.length > 0 && (
-              <div className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-                <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+              <div className="panel-elevated mb-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
+                <div className="flex items-center justify-between gap-2 border-b border-line-soft px-4 py-2.5">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-slate-900">Decisions</h2>
+                    <h2 className="text-role-head text-ink">Decisions</h2>
                     {pendingCount > 0 && (
-                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-600 ring-1 ring-inset ring-amber-500/20">
+                      <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
                         {pendingCount} pending
                       </span>
                     )}
@@ -511,7 +540,7 @@ function DecisionsBody({
                   <div
                     role="group"
                     aria-label="Filter decisions"
-                    className="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-white/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
+                    className="flex items-center gap-1 rounded-control border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
                   >
                     <FilterTab
                       active={filter === "pending"}
@@ -525,7 +554,7 @@ function DecisionsBody({
                     />
                   </div>
                 </div>
-                <ul className="divide-y divide-slate-100">
+                <ul className="divide-y divide-line-soft">
                   {actions.map((action) => (
                     <li key={action.id}>
                       <ActionCard
@@ -541,6 +570,8 @@ function DecisionsBody({
               </div>
             )}
 
+            <ScreenerCard />
+            <PmfCard />
             <CommandCenterSummary />
             <CommitmentsPanel commitments={commitments} />
           </section>
@@ -611,23 +642,24 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
     <section
       id="open-commitments"
       aria-label="Commitments"
-      className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
+      className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel"
     >
-      <div className="border-b border-slate-100 px-4 py-3">
+      <div className="border-b border-line-soft px-4 py-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Commitments</h2>
-          <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-sky-700">
+          <h2 className="text-role-head text-ink">Commitments</h2>
+          <span className="rounded-chip bg-accent-dim px-1.5 py-0.5 text-role-caption font-bold tabular-nums text-accent-deeper">
             {visible.length}
           </span>
         </div>
         {/* Plain-language legend — without it the extracted sentences read as
             unexplained AI output ("뭔지 모르겠고", founder 2026-07-22). */}
-        <p className="mt-1 text-[11px] leading-4 text-slate-400">
-          Promises Klorn spotted in your mail — <span className="text-sky-600">Waiting on</span> =
-          they promised you, <span className="text-amber-600">I owe</span> = you promised them.
+        <p className="mt-1 text-role-caption leading-4 text-ink-dim">
+          Promises Klorn spotted in your mail — <span className="text-accent-deep">Waiting on</span>{" "}
+          = they promised you, <span className="text-state-warn-ink">I owe</span> = you promised
+          them.
         </p>
       </div>
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-line-soft">
         {visible.map((c) => {
           const iOwe = c.owner === "USER";
           return (
@@ -640,22 +672,24 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
               )}
               <div className="flex items-start gap-2.5 px-4 py-2.5 pl-5">
                 <span
-                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                  className={`mt-0.5 shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                     iOwe
-                      ? "bg-amber-500/10 text-amber-600 ring-amber-500/20"
-                      : "bg-sky-500/10 text-sky-700 ring-sky-500/20"
+                      ? "bg-amber-500/10 text-state-warn-ink ring-amber-500/20"
+                      : "bg-accent/10 text-accent-deeper ring-accent/20"
                   }`}
                 >
                   {iOwe ? "I owe" : "Waiting on"}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-1 text-[13px] font-medium text-slate-800">“{c.title}”</p>
+                  <p className="line-clamp-1 text-role-label font-medium text-ink-strong">
+                    “{c.title}”
+                  </p>
                   {c.description && (
-                    <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">
+                    <p className="mt-0.5 line-clamp-1 text-role-caption text-ink-mid">
                       {c.description}
                     </p>
                   )}
-                  <p className="mt-0.5 text-[11px] text-slate-400">
+                  <p className="mt-0.5 text-role-caption text-ink-dim">
                     {COMMITMENT_KIND_LABEL[c.kind]}
                     {c.dueText ? ` · due ${c.dueText}` : ""}
                     <span className="text-slate-300"> · </span>
@@ -678,7 +712,7 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
   // Compact "quiet instrument" moment, not a page-filling void: the K mark +
   // one calm line says "watching, nothing for you" at a glance.
   return (
-    <div className="panel-elevated flex items-center gap-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-4">
+    <div className="panel-elevated flex items-center gap-4 rounded-card border border-line/70 bg-surface-panel px-5 py-4">
       <span className="relative shrink-0">
         <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
         <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white">
@@ -698,8 +732,8 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900">{t("inbox.allClear")}</p>
-        <p className="mt-0.5 truncate text-xs text-slate-400">
+        <p className="text-role-body font-semibold text-ink">{t("inbox.allClear")}</p>
+        <p className="mt-0.5 truncate text-role-caption text-ink-dim">
           {commitmentCount > 0
             ? `Klorn is watching your mail and calendar — ${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"} tracked in the background.`
             : t("inbox.emptyBody")}
@@ -708,13 +742,13 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
       <div className="flex shrink-0 gap-2">
         <Link
           href="/inbox/firewall"
-          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-3.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 px-3.5 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
-          Firewall board
+          {t("inboxLegacy.segment.lanes")}
         </Link>
         <Link
           href="/email"
-          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-3.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 px-3.5 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("inbox.openMail")}
         </Link>
@@ -726,13 +760,15 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
 // ─── Onboarding hint ──────────────────────────────────────────────────────
 //
 // Founder dogfood found that new users land on /inbox without knowing what
-// the product is or where to click first. This banner shows the 4 core
-// destinations once and stays dismissed in localStorage thereafter.
+// the product is or where to click first. This banner shows the core
+// destinations once (the "connect mail" step only while no mail source is
+// connected) and stays dismissed in localStorage thereafter.
 
 const ONBOARDING_STORAGE_KEY = "klorn.inbox.onboarding.v1.dismissed";
 
 function OnboardingHint() {
   const { t } = useT();
+  const { hasMailSource } = useAuth();
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   // On phones the full 4-step tour eats the whole first fold, burying the
   // decision queue. Collapse it to a single title line by default on mobile
@@ -758,32 +794,41 @@ function OnboardingHint() {
 
   if (dismissed !== false) return null;
 
+  // Only tell the user to connect mail when we know nothing is connected:
+  // most users connected Google during onboarding, and `null` (still
+  // loading / unknown) must not flash a stale instruction either.
+  const needsMailSource = hasMailSource === false;
+  const linkClass = "font-medium text-accent-deep hover:text-accent-deeper";
+
   return (
     <>
       {/* DESKTOP — one-line compact strip; the tour never outweighs the queue. */}
-      <div className="mb-4 hidden items-center gap-3 rounded-lg border border-slate-200/60 bg-white/50 px-3 py-1.5 text-[12.5px] md:flex">
-        <p className="min-w-0 flex-1 truncate text-xs text-slate-500">
-          <span className="font-semibold text-sky-700">{t("inbox.tourTitle")}</span>
+      <div className="mb-4 hidden items-center gap-3 rounded-control border border-line/60 bg-surface-panel/50 px-3 py-1.5 text-role-caption md:flex">
+        <p className="min-w-0 flex-1 truncate text-role-caption text-ink-mid">
+          <span className="font-semibold text-accent-deeper">{t("inbox.tourTitle")}</span>
           <span className="mx-1.5 text-slate-300">·</span>
-          Approve decisions here, tune the{" "}
-          <Link href="/inbox/firewall" className="font-medium text-sky-600 hover:text-sky-700">
-            Firewall board
+          {t("inbox.tour.lead")}{" "}
+          <Link href="/inbox/firewall" className={linkClass}>
+            {t("inbox.tour.firewallLink")}
           </Link>
-          , connect Google in{" "}
-          <Link href="/settings" className="font-medium text-sky-600 hover:text-sky-700">
-            Settings
+          {needsMailSource && (
+            <>
+              <span className="mx-1.5 text-slate-300">·</span>
+              <Link href="/settings/accounts" className={linkClass}>
+                {t("inbox.tour.connectLink")}
+              </Link>
+            </>
+          )}
+          <span className="mx-1.5 text-slate-300">·</span>
+          <Link href="/inbox/receipt" className={linkClass}>
+            {t("inbox.tour.receiptLink")}
           </Link>
-          , then check{" "}
-          <Link href="/inbox/receipt" className="font-medium text-sky-600 hover:text-sky-700">
-            Today's receipt
-          </Link>
-          .
         </p>
         <button
           type="button"
           onClick={dismiss}
-          aria-label="Dismiss tour"
-          className="ease-strong flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition duration-150 hover:bg-sky-100 hover:text-slate-700 active:scale-[0.97]"
+          aria-label={t("inbox.tour.dismissAria")}
+          className="ease-strong flex h-6 w-6 shrink-0 items-center justify-center rounded-chip text-ink-dim transition duration-150 hover:bg-accent-dim hover:text-ink-soft active:scale-[0.97]"
         >
           <svg
             aria-hidden="true"
@@ -801,54 +846,56 @@ function OnboardingHint() {
       </div>
 
       {/* MOBILE — collapsed title line, expandable on tap (unchanged behavior). */}
-      <div className="mb-3 text-sm md:hidden">
+      <div className="mb-3 text-role-body md:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
-            <p className="text-[11px] font-medium text-slate-400">{t("inbox.tourTitle")}</p>
-            <ul
-              className={`${expanded ? "block" : "hidden"} space-y-1 text-[13px] leading-5 text-slate-500`}
+            <p className="text-role-caption font-medium text-ink-dim">{t("inbox.tourTitle")}</p>
+            <ol
+              className={`${expanded ? "block" : "hidden"} list-inside list-decimal space-y-1 text-role-meta leading-5 text-ink-mid`}
             >
               <li>
-                1. <span className="text-slate-900">This page</span> — agent decisions waiting on
-                your approval.
+                <span className="text-ink">{t("inbox.tour.queueLabel")}</span> —{" "}
+                {t("inbox.tour.queueBody")}
               </li>
               <li>
-                2.{" "}
-                <Link href="/inbox/firewall" className="text-sky-600 hover:text-sky-700">
-                  Firewall board
+                <Link href="/inbox/firewall" className="text-accent-deep hover:text-accent-deeper">
+                  {t("inbox.tour.firewallLink")}
                 </Link>{" "}
-                — see every signal sorted into SILENT / QUEUE / PUSH. Move what we got wrong.
+                — {t("inbox.tour.firewallBody", { lanes: TIER_NAMES })}
               </li>
+              {needsMailSource && (
+                <li>
+                  <Link
+                    href="/settings/accounts"
+                    className="text-accent-deep hover:text-accent-deeper"
+                  >
+                    {t("inbox.tour.connectLink")}
+                  </Link>{" "}
+                  — {t("inbox.tour.connectBody")}
+                </li>
+              )}
               <li>
-                3.{" "}
-                <Link href="/settings" className="text-sky-600 hover:text-sky-700">
-                  Settings → Connections
+                <Link href="/inbox/receipt" className="text-accent-deep hover:text-accent-deeper">
+                  {t("inbox.tour.receiptLink")}
                 </Link>{" "}
-                — connect Google so Klorn can read mail and calendar.
+                — {t("inbox.tour.receiptBody")}
               </li>
-              <li>
-                4.{" "}
-                <Link href="/inbox/receipt" className="text-sky-600 hover:text-sky-700">
-                  Today's receipt
-                </Link>{" "}
-                — what Klorn silenced, surfaced, and auto-handled today.
-              </li>
-            </ul>
+            </ol>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+              className="rounded-chip border border-line px-2.5 py-1 text-role-caption text-ink-mid transition hover:border-line-strong hover:text-ink"
             >
-              {expanded ? "Hide" : "Show"}
+              {expanded ? t("inbox.tour.hide") : t("inbox.tour.show")}
             </button>
             <button
               type="button"
               onClick={dismiss}
-              className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+              className="rounded-chip border border-line px-2.5 py-1 text-role-caption text-ink-mid transition hover:border-line-strong hover:text-ink"
             >
-              Dismiss
+              {t("inbox.tour.dismiss")}
             </button>
           </div>
         </div>
@@ -918,6 +965,7 @@ function SignalStrip({
   countsLoading: boolean;
   onPendingClick: () => void;
 }) {
+  const { t } = useT();
   const replyQuery = useReplyNeeded();
   const eventsQuery = useTodayEventCount();
 
@@ -934,25 +982,25 @@ function SignalStrip({
 
   const cells: SignalCell[] = [
     {
-      label: "Pending decisions",
+      label: t("inboxLegacy.stat.pending"),
       value: pendingValue,
       dot: "bg-amber-500",
       onClick: onPendingClick,
     },
     {
-      label: "Open commitments",
+      label: t("inboxLegacy.stat.commitments"),
       value: commitmentValue,
-      dot: "bg-sky-500",
+      dot: "bg-accent",
       onClick: scrollToCommitments,
     },
     {
-      label: "Needs reply",
+      label: t("inboxLegacy.stat.needsReply"),
       value: replyQuery.data?.length ?? null,
       dot: "bg-violet-500",
       href: "/email",
     },
     {
-      label: "Today's events",
+      label: t("inboxLegacy.stat.events"),
       value: eventsQuery.data ?? null,
       dot: "bg-emerald-500",
       href: "/calendar",
@@ -960,20 +1008,20 @@ function SignalStrip({
   ];
 
   const cellClass =
-    "ease-strong group flex flex-1 flex-col gap-1.5 px-5 py-4 text-left transition duration-150 hover:bg-slate-50/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
+    "ease-strong group flex flex-1 flex-col gap-1.5 px-5 py-4 text-left transition duration-150 hover:bg-surface-raised/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
 
   return (
-    <div className="panel-elevated mb-5 flex divide-x divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+    <div className="panel-elevated mb-5 flex divide-x divide-line-soft overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       {cells.map((cell) => {
         const inner = (
           <>
             <span className="flex items-center gap-1.5">
               <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${cell.dot}`} />
-              <span className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 transition group-hover:text-slate-500">
+              <span className="truncate text-role-caption font-semibold uppercase tracking-wider text-ink-dim transition group-hover:text-ink-mid">
                 {cell.label}
               </span>
             </span>
-            <span className="text-[26px] font-semibold leading-none tabular-nums text-slate-900">
+            <span className="text-role-title leading-none tabular-nums text-ink">
               {cell.value ?? "—"}
             </span>
           </>
@@ -1001,16 +1049,17 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
   // Shares one cache entry with the "Needs reply" stat tile (same queryKey),
   // so both surfaces read a single fetch. Errors resolve to an empty list —
   // the panel simply stays hidden, matching the previous behavior.
+  const { t } = useT();
   const { data, isLoading } = useReplyNeeded();
   const emails = data ?? [];
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div className="h-6 w-24 animate-pulse rounded bg-slate-100" />
+      <div className="rounded-card border border-line bg-surface-raised p-4">
+        <div className="h-6 w-24 animate-pulse rounded bg-surface-hover" />
         <div className="mt-3 space-y-2">
-          <div className="h-12 animate-pulse rounded-lg bg-slate-100" />
-          <div className="h-12 animate-pulse rounded-lg bg-slate-100" />
+          <div className="h-12 animate-pulse rounded-control bg-surface-hover" />
+          <div className="h-12 animate-pulse rounded-control bg-surface-hover" />
         </div>
       </div>
     );
@@ -1020,18 +1069,18 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
 
   return (
     <section
-      className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
+      className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel"
       aria-label="Reply needed"
     >
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">Reply Needed</h2>
-          <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-sky-700 ring-1 ring-inset ring-sky-500/20">
+          <h2 className="text-role-head text-ink">Reply Needed</h2>
+          <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-semibold tabular-nums text-accent-deeper ring-1 ring-inset ring-accent/20">
             {emails.length}
           </span>
         </div>
       </div>
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-line-soft">
         {emails.map((email) => {
           const fromName = formatFrom(email.from);
           return (
@@ -1043,7 +1092,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                 <span
                   aria-hidden="true"
                   className={`avatar-ring mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-white ${
-                    hero ? "h-9 w-9 text-[13px]" : "h-8 w-8 text-[11px]"
+                    hero ? "h-9 w-9 text-role-label" : "h-8 w-8 text-role-caption"
                   } ${avatarGradient(fromName)}`}
                 >
                   {senderInitials(fromName)}
@@ -1055,28 +1104,28 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
                     <span
-                      className={`min-w-0 flex-1 truncate font-medium text-slate-900 ${hero ? "text-[13.5px]" : "text-xs"}`}
+                      className={`min-w-0 flex-1 truncate font-medium text-ink ${hero ? "text-role-label" : "text-role-caption"}`}
                     >
                       {email.subject || "(no subject)"}
                     </span>
                     {hero && (
-                      <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                      <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
                         {formatRelative(email.receivedAt)}
                       </time>
                     )}
                   </span>
                   {hero && email.snippet && (
-                    <span className="mt-0.5 line-clamp-1 block text-xs leading-5 text-slate-400">
+                    <span className="mt-0.5 line-clamp-1 block text-role-caption leading-5 text-ink-dim">
                       {email.snippet}
                     </span>
                   )}
-                  <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                  <span className="mt-0.5 block truncate text-role-caption text-ink-dim">
                     {fromName}
                     {email.needsReplyReason && (
                       <>
                         {" "}
                         <span className="text-slate-300">·</span>{" "}
-                        {humanizeReplyReason(email.needsReplyReason)}
+                        {humanizeReplyReason(email.needsReplyReason, t)}
                       </>
                     )}
                   </span>
@@ -1086,10 +1135,10 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
           );
         })}
       </ul>
-      <div className="flex justify-end border-t border-slate-100 px-4 py-2.5">
+      <div className="flex justify-end border-t border-line-soft px-4 py-2.5">
         <Link
           href="/email"
-          className="text-xs font-medium text-sky-600 transition duration-150 hover:text-sky-700"
+          className="text-role-caption font-medium text-accent-deep transition duration-150 hover:text-accent-deeper"
         >
           Open mail →
         </Link>
@@ -1107,7 +1156,7 @@ function formatFrom(from: string): string {
 // Monogram avatar helpers — local copy of the email page pattern (recognition
 // over decoration; deterministic gradient per sender).
 const AVATAR_GRADIENTS = [
-  "from-sky-400 to-blue-500",
+  "from-accent-light to-blue-500",
   "from-teal-400 to-emerald-500",
   "from-indigo-500 to-violet-600",
   "from-amber-400 to-orange-500",
@@ -1139,27 +1188,31 @@ function senderInitials(name: string): string {
 
 // The backend's needsReplyReason is a snake_case enum (e.g. "action_items_present").
 // Never show the raw code to the user — map known ones and humanize the rest.
-function humanizeReplyReason(reason: string): string {
-  const map: Record<string, string> = {
-    action_items_present: "Has action items",
-    question_asked: "Asks a question",
-    direct_request: "Direct request",
-    deadline_mentioned: "Mentions a deadline",
-    awaiting_response: "Awaiting your response",
-    meeting_request: "Meeting request",
-    follow_up_needed: "Needs follow-up",
-  };
-  return map[reason] ?? reason.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+const REPLY_REASON_KEYS: Record<string, string> = {
+  action_items_present: "inboxLegacy.reason.actionItems",
+  question_asked: "inboxLegacy.reason.question",
+  direct_request: "inboxLegacy.reason.directRequest",
+  deadline_mentioned: "inboxLegacy.reason.deadline",
+  awaiting_response: "inboxLegacy.reason.awaiting",
+  meeting_request: "inboxLegacy.reason.meeting",
+  follow_up_needed: "inboxLegacy.reason.followUp",
+};
+
+function humanizeReplyReason(reason: string, t: (key: string) => string): string {
+  const key = REPLY_REASON_KEYS[reason];
+  if (key) return t(key);
+  return reason.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 // ─── Quick links panel ─────────────────────────────────────────────────────
 
 function QuickLinksPanel() {
+  const { t } = useT();
   // Trimmed to the two destinations Stadium-mode users actually reach for
   // from /inbox: today's receipt and the morning briefing. Agent timeline
   // and the chat root live one click away through the sidebar nav already.
   const links = [
-    { href: "/inbox/firewall", label: "Firewall board" },
+    { href: "/inbox/firewall", label: t("inboxLegacy.segment.lanes") },
     { href: "/inbox/receipt", label: "Today's receipt" },
     { href: "/briefing", label: "Full briefing" },
   ] as const;
@@ -1170,10 +1223,10 @@ function QuickLinksPanel() {
         <Link
           key={link.href}
           href={link.href}
-          className="ease-strong inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          className="ease-strong inline-flex items-center gap-1 rounded-control border border-line bg-surface-panel/70 px-2.5 py-1.5 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {link.label}
-          <span className="text-slate-500">→</span>
+          <span className="text-ink-mid">→</span>
         </Link>
       ))}
     </nav>
@@ -1196,10 +1249,10 @@ function FilterTab({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`ease-strong rounded-lg px-3 py-1.5 text-xs transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`ease-strong rounded-chip px-3 py-1.5 text-role-caption transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         active
-          ? "seg-active bg-white font-semibold text-slate-900"
-          : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+          ? "seg-active bg-surface-panel font-semibold text-ink"
+          : "text-ink-mid hover:bg-surface-panel/70 hover:text-ink"
       }`}
     >
       {label}
@@ -1228,6 +1281,7 @@ function ActionCard({
   onReject: () => void;
   onSnooze: () => void;
 }) {
+  const { t } = useT();
   const toolName = action.toolName || "prepared_action";
   const toolArgs = action.toolArgs || "{}";
   const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
@@ -1240,10 +1294,7 @@ function ActionCard({
   // subject beats conversation title beats the per-tool preview beats a
   // humanised tool name. We never fall back to the literal "prepared_action".
   const heroSubject =
-    emailPreview?.subject ||
-    action.conversationTitle ||
-    toolPreview ||
-    (toolName === "prepared_action" ? "Decision pending" : toolName.replace(/_/g, " "));
+    emailPreview?.subject || action.conversationTitle || toolPreview || t(toolLabelKey(toolName));
 
   // Single-paragraph context. Prefer the AI's "judgment" framing because
   // that's the why-it-matters. Situation is a weaker fallback.
@@ -1260,7 +1311,7 @@ function ActionCard({
         <span
           aria-hidden="true"
           className={`absolute left-0 top-0 h-full w-[3px] ${
-            risk === "high" ? "bg-gradient-to-b from-rose-400 to-rose-500" : "bg-sky-400"
+            risk === "high" ? "bg-gradient-to-b from-rose-400 to-rose-500" : "bg-accent-light"
           }`}
         />
       )}
@@ -1271,18 +1322,18 @@ function ActionCard({
           <RiskBadge risk={risk} />
           {!isPending && <StatusBadge status={action.status} />}
         </div>
-        <span className="text-[11px] tabular-nums text-slate-400">
+        <span className="text-role-caption tabular-nums text-ink-dim">
           {formatRelative(action.createdAt)}
         </span>
       </div>
 
       {/* Hero subject */}
       <div className="px-5 pb-1 pt-3">
-        <h3 className="break-words text-2xl font-semibold leading-tight tracking-tight text-slate-900">
+        <h3 className="break-words text-role-title leading-tight tracking-tight text-ink">
           {heroSubject}
         </h3>
         {showThreadHint && (
-          <p className="mt-1.5 truncate text-[11px] text-slate-500">
+          <p className="mt-1.5 truncate text-role-caption text-ink-mid">
             Thread: {action.conversationTitle}
           </p>
         )}
@@ -1290,7 +1341,7 @@ function ActionCard({
 
       {/* Context paragraph */}
       {context && (
-        <p className="px-5 pb-4 pt-2 text-sm leading-relaxed text-slate-500 line-clamp-3">
+        <p className="px-5 pb-4 pt-2 text-role-body leading-relaxed text-ink-mid line-clamp-3">
           {context}
         </p>
       )}
@@ -1299,17 +1350,19 @@ function ActionCard({
           send_email dispatches real mail, so the user must see the full body
           before "Act now" rather than opting in to expand a disclosure. */}
       {emailPreview && (
-        <div className="mx-5 mb-4 rounded-lg border border-slate-200 bg-slate-50">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200 px-3 py-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-sky-600">
+        <div className="mx-5 mb-4 rounded-control border border-line bg-surface-raised">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-line px-3 py-2">
+            <span className="font-mono text-role-caption uppercase tracking-[0.14em] text-accent-deep">
               Email to send
             </span>
-            <span className="text-xs text-slate-400">To: {emailPreview.to}</span>
+            <span className="text-role-caption text-ink-dim">To: {emailPreview.to}</span>
           </div>
           <div className="space-y-2 px-3 py-3">
-            <p className="break-words text-xs text-slate-500">Subject: {emailPreview.subject}</p>
+            <p className="break-words text-role-caption text-ink-mid">
+              Subject: {emailPreview.subject}
+            </p>
             {emailPreview.body && (
-              <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-500">
+              <p className="whitespace-pre-wrap text-role-caption leading-relaxed text-ink-mid">
                 {emailPreview.body}
               </p>
             )}
@@ -1319,12 +1372,12 @@ function ActionCard({
 
       {/* Action band */}
       {isPending && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line-soft bg-surface-raised/60 px-5 py-3">
           <button
             type="button"
             onClick={onApprove}
             disabled={!!loading}
-            className="glow-primary ease-strong inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="glow-primary ease-strong inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-control bg-accent-solid px-5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading === "approve" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -1336,7 +1389,7 @@ function ActionCard({
             type="button"
             onClick={onReject}
             disabled={!!loading}
-            className="ease-strong inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-4 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-4 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading === "reject" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-600" />
@@ -1349,7 +1402,7 @@ function ActionCard({
             onClick={onSnooze}
             disabled={!!loading}
             title="Remind me in 1 hour"
-            className="ease-strong inline-flex min-h-11 items-center justify-center gap-1 rounded-lg px-3 text-xs text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 items-center justify-center gap-1 rounded-control px-3 text-role-caption text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:opacity-50"
           >
             {loading === "snooze" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />
@@ -1361,8 +1414,8 @@ function ActionCard({
       )}
 
       {!isPending && action.result && (
-        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3">
-          <p className="truncate text-[11px] text-slate-400">{action.result}</p>
+        <div className="border-t border-line-soft bg-surface-raised/60 px-5 py-3">
+          <p className="truncate text-role-caption text-ink-dim">{action.result}</p>
         </div>
       )}
     </article>
@@ -1370,24 +1423,25 @@ function ActionCard({
 }
 
 function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
+  const { t } = useT();
   const map = {
     low: {
-      label: "Low risk",
-      className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
+      label: t("inboxLegacy.risk.low"),
+      className: "bg-emerald-500/10 text-state-ok-ink ring-1 ring-inset ring-emerald-500/20",
     },
     medium: {
-      label: "Needs approval",
-      className: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",
+      label: t("inboxLegacy.risk.medium"),
+      className: "bg-amber-500/10 text-state-warn-ink ring-1 ring-inset ring-amber-500/20",
     },
     high: {
-      label: "High risk",
+      label: t("inboxLegacy.risk.high"),
       className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
     },
   }[risk];
 
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${map.className}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ${map.className}`}
     >
       {map.label}
     </span>
@@ -1436,15 +1490,15 @@ function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
   const map: Record<PendingActionItem["status"], { label: string; className: string }> = {
     PENDING: {
       label: "Pending",
-      className: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",
+      className: "bg-amber-500/10 text-state-warn-ink ring-1 ring-inset ring-amber-500/20",
     },
     EXECUTED: {
       label: "Done",
-      className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
+      className: "bg-emerald-500/10 text-state-ok-ink ring-1 ring-inset ring-emerald-500/20",
     },
     REJECTED: {
       label: "Rejected",
-      className: "bg-slate-100 text-slate-500",
+      className: "bg-surface-hover text-ink-mid",
     },
     FAILED: {
       label: "Failed",
@@ -1454,7 +1508,7 @@ function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
   const entry = map[status];
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ${entry.className}`}
     >
       {entry.label}
     </span>
@@ -1589,17 +1643,15 @@ function MobileDecisionQueue({
     <div>
       <header className="mb-5 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-900">
-            {title}
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>
+          <h1 className="text-role-page text-ink">{title}</h1>
+          <p className="mt-1.5 text-role-body text-ink-mid">{subtitle}</p>
         </div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
           aria-label="Refresh"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition active:bg-slate-200 disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-hover text-ink-mid transition active:bg-surface-inset disabled:opacity-50"
         >
           <svg
             aria-hidden="true"
@@ -1623,7 +1675,7 @@ function MobileDecisionQueue({
         <div
           role="group"
           aria-label="Filter decisions"
-          className="mb-4 flex gap-1 rounded-xl bg-slate-100 p-1"
+          className="mb-4 flex gap-1 rounded-control bg-surface-hover p-1"
         >
           <MobileSeg
             active={filter === "pending"}
@@ -1636,8 +1688,8 @@ function MobileDecisionQueue({
 
       {loading && actions.length === 0 && (
         <div className="space-y-3">
-          <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
-          <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+          <div className="h-28 animate-pulse rounded-card bg-surface-hover" />
+          <div className="h-28 animate-pulse rounded-card bg-surface-hover" />
         </div>
       )}
 
@@ -1680,8 +1732,8 @@ function MobileSeg({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 active:text-slate-900"
+      className={`flex-1 rounded-chip py-2 text-role-label font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        active ? "bg-surface-panel text-ink shadow-sm" : "text-ink-mid active:text-ink"
       }`}
     >
       {label}
@@ -1692,8 +1744,8 @@ function MobileSeg({
 function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
   const { t } = useT();
   return (
-    <div className="rounded-2xl bg-slate-50 px-6 py-12 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+    <div className="rounded-card bg-surface-raised px-6 py-12 text-center">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-hover">
         <svg
           aria-hidden="true"
           width="22"
@@ -1709,8 +1761,8 @@ function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
-      <p className="text-base font-medium text-slate-900">{t("inbox.nothingToDecide")}</p>
-      <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-slate-400">
+      <p className="text-role-head font-medium text-ink">{t("inbox.nothingToDecide")}</p>
+      <p className="mx-auto mt-1.5 max-w-xs text-role-meta leading-relaxed text-ink-dim">
         {commitmentCount > 0
           ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked in the background.`
           : t("inbox.emptyBodyMobile")}
@@ -1734,6 +1786,7 @@ function MobileActionCard({
 }) {
   // Same derivation as the desktop ActionCard, kept local so the desktop card
   // is never affected by mobile-only changes.
+  const { t } = useT();
   const toolName = action.toolName || "prepared_action";
   const toolArgs = action.toolArgs || "{}";
   const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
@@ -1742,39 +1795,36 @@ function MobileActionCard({
   const isPending = action.status === "PENDING";
   const risk = riskForTool(toolName);
   const heroSubject =
-    emailPreview?.subject ||
-    action.conversationTitle ||
-    toolPreview ||
-    (toolName === "prepared_action" ? "Decision pending" : toolName.replace(/_/g, " "));
+    emailPreview?.subject || action.conversationTitle || toolPreview || t(toolLabelKey(toolName));
   const context = reasoning.judgment || reasoning.situation || action.reasoning;
 
   return (
-    <article className="overflow-hidden rounded-2xl bg-slate-50">
+    <article className="overflow-hidden rounded-card bg-surface-raised">
       <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
         <RiskBadge risk={risk} />
-        <span className="text-[11px] text-slate-400">{formatRelative(action.createdAt)}</span>
+        <span className="text-role-caption text-ink-dim">{formatRelative(action.createdAt)}</span>
       </div>
       <div className="px-4 pt-2.5">
-        <h3 className="break-words text-[17px] font-semibold leading-snug tracking-tight text-slate-900">
+        <h3 className="break-words text-role-head leading-snug tracking-tight text-ink">
           {heroSubject}
         </h3>
         {context && (
-          <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-slate-500">
+          <p className="mt-1.5 line-clamp-3 text-role-meta leading-relaxed text-ink-mid">
             {context}
           </p>
         )}
         {/* Outbound body inline so a send_email can't be approved unseen. */}
         {emailPreview && (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-sky-600">
+          <div className="mt-3 rounded-control border border-line bg-surface-panel p-3">
+            <p className="font-mono text-role-caption uppercase tracking-[0.14em] text-accent-deep">
               Email to send
             </p>
-            <p className="mt-1 break-words text-[11px] text-slate-400">To: {emailPreview.to}</p>
-            <p className="mt-1 break-words text-xs text-slate-500">
+            <p className="mt-1 break-words text-role-caption text-ink-dim">To: {emailPreview.to}</p>
+            <p className="mt-1 break-words text-role-caption text-ink-mid">
               Subject: {emailPreview.subject}
             </p>
             {emailPreview.body && (
-              <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-slate-500">
+              <p className="mt-1.5 whitespace-pre-wrap text-role-caption leading-relaxed text-ink-mid">
                 {emailPreview.body}
               </p>
             )}
@@ -1787,7 +1837,7 @@ function MobileActionCard({
             type="button"
             onClick={onApprove}
             disabled={!!loading}
-            className="glow-primary ease-strong flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 text-[15px] font-semibold text-white transition duration-150 active:scale-[0.97] disabled:opacity-50"
+            className="glow-primary ease-strong flex min-h-12 w-full items-center justify-center rounded-control bg-accent-solid text-role-label font-semibold text-accent-solid-ink transition duration-150 active:scale-[0.97] disabled:opacity-50"
           >
             {loading === "approve" ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -1800,7 +1850,7 @@ function MobileActionCard({
               type="button"
               onClick={onReject}
               disabled={!!loading}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-200 text-sm font-medium text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-line text-role-label text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
             >
               {loading === "reject" ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-600" />
@@ -1812,7 +1862,7 @@ function MobileActionCard({
               type="button"
               onClick={onSnooze}
               disabled={!!loading}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-200 text-sm text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-line text-role-label text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
             >
               {loading === "snooze" ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />
@@ -1825,7 +1875,7 @@ function MobileActionCard({
       ) : (
         action.result && (
           <div className="mt-2 px-4 pb-4">
-            <p className="truncate text-[11px] text-slate-400">{action.result}</p>
+            <p className="truncate text-role-caption text-ink-dim">{action.result}</p>
           </div>
         )
       )}

@@ -13,6 +13,7 @@ let userById: Record<string, unknown> | null = {
 };
 let userByCustomer: Record<string, unknown> | null = null;
 const notifications: Array<{ title: string }> = [];
+const userDetaches: Array<{ where: unknown; data: Record<string, unknown> }> = [];
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -22,6 +23,10 @@ vi.mock("../db.js", () => {
       update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
         userUpdates.push(args);
         return {};
+      }),
+      updateMany: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
+        userDetaches.push(args);
+        return { count: 0 };
       }),
     },
     notification: {
@@ -64,10 +69,14 @@ async function buildApp() {
   return app;
 }
 
-function subscriptionEvent(overrides: Partial<Record<string, unknown>> = {}): string {
+function subscriptionEvent(
+  overrides: Partial<Record<string, unknown>> = {},
+  occurredAt = "2026-08-22T12:00:00Z",
+): string {
   return JSON.stringify({
     event_id: "evt_paddle_1",
     event_type: "subscription.activated",
+    occurred_at: occurredAt,
     data: {
       id: "sub_1",
       status: "active",
@@ -90,6 +99,7 @@ async function post(app: Awaited<ReturnType<typeof buildApp>>, body: string, sig
 afterEach(() => {
   processedEvent = null;
   userUpdates.length = 0;
+  userDetaches.length = 0;
   notifications.length = 0;
   userById = { id: USER_ID, plan: "FREE" };
   userByCustomer = null;
@@ -220,6 +230,130 @@ describe("POST /api/webhook/paddle", () => {
     const body = JSON.stringify({ event_type: "subscription.activated" });
     const res = await post(app, body);
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("persists subscription id, status, and renewal date on an active subscription", async () => {
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    const app = await buildApp();
+    const res = await post(app, subscriptionEvent({ next_billed_at: "2026-09-21T00:00:00Z" }));
+    expect(res.statusCode).toBe(200);
+    expect(userUpdates[0]?.data).toMatchObject({
+      plan: "PRO",
+      paddleSubscriptionId: "sub_1",
+      subscriptionStatus: "active",
+      subscriptionRenewsAt: new Date("2026-09-21T00:00:00Z"),
+      subscriptionCancelAt: null,
+    });
+    await app.close();
+  });
+
+  it("keeps PRO and records the end date when a cancel is scheduled (period-end cancel)", async () => {
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    userById = { id: USER_ID, plan: "PRO" };
+    const app = await buildApp();
+    const res = await post(
+      app,
+      JSON.stringify({
+        event_id: "evt_paddle_5",
+        event_type: "subscription.updated",
+        data: {
+          id: "sub_1",
+          status: "active",
+          customer_id: "ctm_1",
+          custom_data: { userId: USER_ID },
+          next_billed_at: null,
+          scheduled_change: { action: "cancel", effective_at: "2026-09-21T00:00:00Z" },
+        },
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(userUpdates[0]?.data).toMatchObject({
+      plan: "PRO",
+      subscriptionCancelAt: new Date("2026-09-21T00:00:00Z"),
+      subscriptionRenewsAt: null,
+    });
+    await app.close();
+  });
+
+  it("clears the subscription id and dates when the subscription reaches canceled", async () => {
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    userById = { id: USER_ID, plan: "PRO" };
+    const app = await buildApp();
+    const res = await post(
+      app,
+      JSON.stringify({
+        event_id: "evt_paddle_6",
+        event_type: "subscription.canceled",
+        data: {
+          id: "sub_1",
+          status: "canceled",
+          customer_id: "ctm_1",
+          custom_data: { userId: USER_ID },
+        },
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(userUpdates[0]?.data).toMatchObject({
+      plan: "FREE",
+      paddleSubscriptionId: null,
+      subscriptionStatus: "canceled",
+      subscriptionRenewsAt: null,
+      subscriptionCancelAt: null,
+    });
+    await app.close();
+  });
+
+  it("detaches the subscription and customer ids from any other account first", async () => {
+    // Both columns are @unique. Without this detach a subscription that moved
+    // between accounts makes the update throw P2002, the event is never marked
+    // processed, and Paddle retries the same failing event forever.
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    const app = await buildApp();
+    const res = await post(app, subscriptionEvent());
+    expect(res.statusCode).toBe(200);
+    expect(userDetaches).toHaveLength(1);
+    expect(userDetaches[0].where).toMatchObject({
+      id: { not: USER_ID },
+      OR: [{ paddleSubscriptionId: "sub_1" }, { paddleCustomerId: "ctm_1" }],
+    });
+    expect(userDetaches[0].data).toEqual({ paddleSubscriptionId: null, paddleCustomerId: null });
+    await app.close();
+  });
+
+  it("records the event timestamp so later events can be ordered", async () => {
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    const app = await buildApp();
+    await post(app, subscriptionEvent({}, "2026-08-22T12:00:00Z"));
+    expect(userUpdates[0]?.data).toMatchObject({
+      subscriptionEventAt: new Date("2026-08-22T12:00:00Z"),
+    });
+    await app.close();
+  });
+
+  it("ignores stale subscription DETAIL from an out-of-order event, but still syncs plan", async () => {
+    // Paddle does not guarantee delivery order. A retried "cancel scheduled"
+    // event landing after the newer "cancel removed" one must not resurrect
+    // the cancellation in the UI. Entitlement (plan) stays unconditional.
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    userById = {
+      id: USER_ID,
+      plan: "PRO",
+      subscriptionEventAt: new Date("2026-08-22T12:00:00Z"),
+    };
+    const app = await buildApp();
+    const res = await post(
+      app,
+      subscriptionEvent(
+        { scheduled_change: { action: "cancel", effective_at: "2026-09-21T00:00:00Z" } },
+        "2026-08-22T11:00:00Z",
+      ),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(userUpdates).toHaveLength(1);
+    expect(userUpdates[0].data).toMatchObject({ plan: "PRO" });
+    expect(userUpdates[0].data).not.toHaveProperty("subscriptionCancelAt");
+    expect(userUpdates[0].data).not.toHaveProperty("subscriptionEventAt");
     await app.close();
   });
 

@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
+<link rel="canonical" href="https://klorn.ai/zh/">
+<!-- English is the default at klorn.ai. Other languages are reached from the
+     language menu; a Korean-locale first visit to / is routed to /ko/ once. -->
+<title>Klorn — 所有邮件和日历，集中在一个安静的地方。</title>
+<meta name="description" content="Gmail 和 Google 日历，以及测试版的 Naver 邮箱和 iCloud 邮箱，集中在一个视图里。Klorn 按每封邮件需要你做什么来分拣，并告诉你理由。提供免费方案，Klorn Pro 每月 $29.99。">
+<meta property="og:title" content="Klorn — 所有邮件和日历，集中在一个安静的地方。">
+<meta property="og:description" content="邮件和日历集中在一个视图里。每封邮件都分到五个分类之一，并注明理由。发什么，由你决定。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://klorn.ai/zh/">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k3">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
+      imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+      imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/landing.css">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "SoftwareApplication",
+ "name": "Klorn",
+ "operatingSystem": "macOS, Windows, Web",
+ "applicationCategory": "BusinessApplication",
+ "url": "https://klorn.ai/zh/",
+ "inLanguage": "zh",
+ "description": "把 Gmail、Google 日历、Naver 邮箱和 iCloud 邮箱集中到一个视图，把每封邮件分到五个分类 — Push、Meeting、Queue、Info、Silent — 并注明理由。发什么，由你决定。",
+ "sameAs": [
+  "https://github.com/k08200/klorn",
+  "https://dev.to/k08200",
+  "https://x.com/klornai",
+  "https://openalternative.co/klorn"
+ ],
+ "offers": [
+  {
+   "@type": "Offer",
+   "name": "Free",
+   "price": "0",
+   "priceCurrency": "USD",
+   "availability": "https://schema.org/InStock",
+   "priceSpecification": {
+    "@type": "UnitPriceSpecification",
+    "price": "0",
+    "priceCurrency": "USD",
+    "referenceQuantity": {
+     "@type": "QuantitativeValue",
+     "value": 1,
+     "unitCode": "MON"
+    }
+   }
+  },
+  {
+   "@type": "Offer",
+   "name": "Klorn Pro",
+   "price": "29.99",
+   "priceCurrency": "USD",
+   "availability": "https://schema.org/InStock",
+   "priceSpecification": {
+    "@type": "UnitPriceSpecification",
+    "price": "29.99",
+    "priceCurrency": "USD",
+    "referenceQuantity": {
+     "@type": "QuantitativeValue",
+     "value": 1,
+     "unitCode": "MON"
+    }
+   }
+  }
+ ],
+ "softwareHelp": {
+  "@type": "CreativeWork",
+  "url": "https://github.com/k08200/klorn#readme"
+ },
+ "publisher": {
+  "@type": "Organization",
+  "name": "Klorn",
+  "url": "https://klorn.ai/",
+  "sameAs": [
+   "https://github.com/k08200/klorn",
+   "https://dev.to/k08200",
+   "https://x.com/klornai",
+   "https://openalternative.co/klorn"
+  ]
+ },
+ "license": "https://github.com/k08200/klorn/blob/main/LICENSE"
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "每个账户都要单独连接吗？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "是的，每个账户连接一次。登录时会连接你的第一个 Google 账户，其他账户在设置中添加， 之后它们都会进入同一个列表。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Klorn 会自己发送或删除邮件吗？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "除非你让它做。分类只负责分拣。发送、永久删除和转发都会等待你的批准，你自己创建的自动回复规则算作批准。开启自动化后，助手可能会自行执行一些低风险的步骤。每次发送都会留下记录。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "现在可以连接哪些账户？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Gmail 和 Google 日历，以及测试版的 Naver 邮箱和 iCloud 邮箱。目前就是这些； 哪天可以连接新的账户，这个页面当天就会更新。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "我的邮件会去哪里？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "送到 Klorn 的分类器再返回。令牌加密存储，处理它们的代码是公开的。 如果你想自己掌控，可以在自己的服务器上运行 Klorn。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "“使用你自己的 AI 密钥”是什么意思？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Klorn 可以不用我们的密钥，而是使用你在模型服务商那里的密钥。 该功能适用于 Pro 方案。自托管部署可以使用任意密钥或本地模型。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "有 Windows 版吗？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "有，目前是测试版。在应用完成代码签名之前，首次启动时 Windows 可能会显示一次 SmartScreen 警告。 网页版可在任何现代浏览器中使用同一个账户。"
+   }
+  }
+ ]
+}
+</script>
+<script>
+// Hero motion gate (Sig 2): set before first paint so the rows never flash.
+// Skipped for reduced motion; the failsafe reveals the rows if /site-nav.js never runs.
+(function () {
+  try {
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var d = document.documentElement;
+    d.classList.add('hero-motion');
+    window.klornHeroFailsafe = setTimeout(function () { d.classList.add('hero-in'); }, 3000);
+  } catch (e) {}
+})();
+</script>
+<script src="/site-nav.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<nav class="nav" aria-label="主导航"><div class="nav-pill">
+  <a class="nav-brand" href="#top">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="页面板块" data-site-nav><a href="#accounts">账户</a><a href="#lanes">分类</a><a href="#pricing">定价</a><a href="/zh/security/">安全</a><a href="/zh/blog/">博客</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-lang-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">中文（简体） <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/" data-lang-pick="en" role="menuitem">English</a>
+      <a href="/ko/" data-lang-pick="ko" role="menuitem">한국어</a>
+      <a href="/ja/" data-lang-pick="ja" role="menuitem">日本語</a>
+      <a href="/zh/" data-lang-pick="zh" role="menuitem" aria-current="true">中文（简体）</a>
+      <a href="/es/" data-lang-pick="es" role="menuitem">Español</a>
+      <a href="/fr/" data-lang-pick="fr" role="menuitem">Français</a>
+      <a href="/de/" data-lang-pick="de" role="menuitem">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">登录</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载">下载</a>
+</div></nav>
+
+<main id="main">
+<header class="hero" id="top">
+  <picture class="hero-sky" aria-hidden="true">
+    <source type="image/webp" sizes="100vw"
+            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
+    <img src="/media/sky/dusk-1920.jpg" alt="" decoding="async" width="2560" height="1709">
+  </picture>
+
+  <div class="wrap hero-copy">
+    <h1>所有邮件<wbr>和日历，<wbr><span class="ser">集中在<wbr>一个安静的<wbr>地方。</span></h1>
+    <p class="lead">Klorn 把 <b>Gmail、Google 日历、Naver&nbsp;邮箱（测试版）和 iCloud&nbsp;邮箱（测试版）</b>集中到一个视图，按每封邮件需要你做什么来分拣，并告诉你理由。</p>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载 Windows 版">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        下载 Mac 版</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">在浏览器中打开</a>
+    </div>
+    <p class="try"><a href="https://app.klorn.ai/playground">用一封邮件试试 →</a></p>
+    <p class="meta"><span>每月 $29.99</span><i aria-hidden="true">·</i><span>免费方案</span><i aria-hidden="true">·</i><span>可使用你自己的 AI 密钥</span></p>
+  </div>
+
+  <figure class="shot">
+    <div class="win">
+      <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <picture>
+      <source media="(max-width:640px)" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+      <img src="/media/app-2026-10/today-light-2000.webp"
+           srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+           sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
+           alt="Mac 上 Klorn 的“今天”界面：来自三个账户的邮件分为 Push、Meeting 和 Queue，每行标注所属账户，旁边是今天的日程和助手。"></picture>
+    </div>
+    <div class="mlist">
+      <p class="mlist-label">演示数据 · 今天</p>
+      <div class="mlist-card">
+        <p class="mlist-head"><span class="chip c-push">Push</span><span class="mlist-n">2</span></p>
+        <ul><li class="mrow mrow-push"><span class="mrow-top"><span>Sarah Kim · G</span><time>17:12</time></span><b>合同审阅——今天需要签字</b><span class="mrow-why">今天到期的签字请求</span></li>
+          <li class="mrow mrow-push"><span class="mrow-top"><span>billing@vendor.io · G</span><time>16:40</time></span><b>发票 #4821 已逾期</b><span class="mrow-why">供应商付款已过期限</span></li></ul>
+        <p class="mlist-head"><span class="chip c-meeting">Meeting</span><span class="mlist-n">1</span></p>
+        <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>邀请：第三季度董事会准备，周四 14:00</b><span class="mrow-why">日历邀请，需要回复</span></li></ul>
+      </div>
+    </div>
+    <picture>
+      <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
+           srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
+           sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
+           alt="Mac 上的 Klorn 通知：Sarah Kim — Re: Contract review — needs your sign-off today。"></picture>
+    <figcaption class="cap"><span class="demo-tag">演示数据</span>Mac 上的<b>今天</b>界面。所有已连接账户汇成一个列表。Push 邮件以 Mac 通知的形式送达。</figcaption>
+  </figure>
+</header>
+
+<!-- 2 · Every account, one view -->
+<section class="sec" id="accounts" aria-labelledby="accounts-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">所有账户</span>
+      <h2 id="accounts-h">账户再多，<wbr>视图<wbr>只有一个。</h2>
+      <p class="sec-lead">每个账户只需连接一次。所有账户的邮件和日程都汇入同一个列表，并标明来源。</p>
+    </div>
+    <ul class="acct-grid">
+      <li class="acct"><div class="acct-top"><b>Gmail</b><span class="st st-live">可用</span></div>
+        <p>分拣、摘要、可搜索。</p></li>
+      <li class="acct"><div class="acct-top"><b>Google 日历</b><span class="st st-live">可用</span></div>
+        <p>日程就在邮件旁边。只有你开口，才会新建日程。</p></li>
+      <li class="acct"><div class="acct-top"><b>Naver 邮箱</b><span class="st st-beta">测试版</span></div>
+        <p>与其他邮件一起读取和分拣。</p></li>
+      <li class="acct"><div class="acct-top"><b>iCloud 邮箱</b><span class="st st-beta">测试版</span></div>
+        <p>你的 Apple 邮箱地址，也在同一个列表里。</p></li>
+    </ul>
+    <figure class="acct-shot">
+      <div class="win">
+        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <picture>
+        <source media="(max-width:640px)" sizes="94vw" width="840" height="1000" srcset="/media/app-2026-10/mail-m-light-840.webp 840w">
+        <img src="/media/app-2026-10/mail-light-2000.webp"
+             srcset="/media/app-2026-10/mail-light-1200.webp 1200w, /media/app-2026-10/mail-light-2000.webp 2000w"
+             sizes="(min-width:1240px) 1116px, 94vw" width="2000" height="1250" loading="lazy" decoding="async"
+             alt="Mac 上 Klorn 的邮件界面：多个账户的邮件混在一个列表中，每行带有账户小标记和分类标签，右侧是打开的邮件。"></picture>
+      </div>
+      <figcaption class="cap"><span class="demo-tag">演示数据</span>Gmail、Naver 邮箱和 iCloud 邮件汇成一个列表。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 3 · Five lanes, with the reason. The lane list is the landing's lane
+     surface: .github/scripts/check-website-lanes.mjs holds data-lane to the
+     API's live TIERS (never AUTO or CALL) in every language. -->
+<section class="sec sec-alt" id="lanes" aria-labelledby="lanes-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">五个分类</span>
+      <h2 id="lanes-h">五个分类。<wbr>各附理由。</h2>
+      <p class="sec-lead">每封邮件都会进入五个分类之一，并用一句话说明它为什么在那里。</p>
+    </div>
+    <div class="lanes-grid">
+      <div>
+        <ul class="lane-list">
+          <li class="lane" data-lane="push"><span class="chip c-push">Push</span><p>立刻打断你。<span>只有少数等不了的邮件。</span></p></li>
+          <li class="lane" data-lane="meeting"><span class="chip c-meeting">Meeting</span><p>日程安排，与你的日历核对。<span>提议的时间、冲突和空闲时段。</span></p></li>
+          <li class="lane" data-lane="queue"><span class="chip c-queue">Queue</span><p>今天值得一读。<span>不发通知，只在今天的列表里占个位置。</span></p></li>
+          <li class="lane" data-lane="info"><span class="chip c-info">Info</span><p>收据和通知，归档整理。<span>无需回复。</span></p></li>
+          <li class="lane" data-lane="silent"><span class="chip c-silent">Silent</span><p>留着，但不挡你的路。<span>从不删除。</span></p></li>
+        </ul>
+        <p class="rule">分类只负责分拣，从不替你行动。<span>不同意？把邮件移走，Klorn 会从你的更正中学习。</span></p>
+      </div>
+      <figure>
+        <div class="card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <picture>
+          <img src="/media/app-2026-10/reason-light-1278.webp"
+               srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
+               sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
+               alt="Queue 分类中打开的一封邮件。标题下方写着理由“Why Queue · A colleague, no deadline”，后面是一句话摘要。"></picture>
+        </div>
+        <figcaption class="cap"><span class="demo-tag">演示数据</span>每封邮件上方都写着理由。</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Your day, merged, plus assistant -->
+<section class="sec" id="day" aria-labelledby="day-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">你的一天</span>
+      <h2 id="day-h">一天，<wbr>汇于一处。<wbr>还有<wbr>懂这一天的<wbr>助手。</h2>
+      <p class="sec-lead">日历就在邮件旁边，还有晨间简报，以及根据你自己的收件箱作答的助手。</p>
+    </div>
+    <div class="day-grid">
+      <article class="tile">
+        <div><h3>先问，再批准</h3>
+          <p>问问今天还有什么需要你处理。回复草稿和新日程会在“待批准”中等待，直到你同意。</p></div>
+        <div class="tile-stage"><div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <picture>
+          <img src="/media/app-2026-10/approvals-light-656.webp"
+               srcset="/media/app-2026-10/approvals-light-400.webp 400w, /media/app-2026-10/approvals-light-656.webp 656w, /media/app-2026-10/approvals-light-840.webp 840w"
+               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="656" height="609" loading="lazy" decoding="async"
+               alt="Mac 上助手的批准面板：两项待批准事项（一封回复和一个日历事件），各有批准和拒绝按钮。"></picture>
+        </div></div>
+      </article>
+      <div class="tile-col">
+        <article class="tile tile-day">
+          <div><h3>所有日历，汇成一天</h3>
+            <p>每个已连接日历的日程，就在相关邮件旁边。</p></div>
+          <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+            <picture>
+            <img src="/media/app-2026-10/day-light-640.webp"
+                 srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
+                 sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
+                 alt="今天的日历卡片列出四个日程，助手卡片总结了这一天，并显示 2 项待批准。"></picture>
+          </div>
+        </article>
+        <article class="tile">
+          <div><h3>开始前先看简报</h3>
+            <p>今天的整体节奏，以及不能耽误的两件事。</p></div>
+          <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="brief">
+              <p class="brief-date">今天</p>
+              <p class="brief-head">上午没有安排，17:00 起有 4 个会议。</p>
+              <svg class="brief-curve" viewBox="-3 0 706 36" aria-hidden="true" focusable="false"><path d="M0,33 L63.6,33 L127.3,33 L190.9,33 L254.5,33 L318.2,33 L381.8,33 L445.5,33 L509.1,33 L572.7,18 L636.4,3 L700,18"/><circle cx="572.7" cy="18" r="3"/><circle cx="636.4" cy="3" r="3"/><circle cx="700" cy="18" r="3"/></svg>
+              <ul class="brief-segs">
+                <li><b>12:00 前</b><span>没有安排</span></li>
+                <li><b>12:00–17:00</b><span>空闲 5 小时</span></li>
+                <li class="busy"><b>17:00 后</b><span>4 个会议</span></li>
+              </ul>
+              <ol class="brief-list">
+                <li><span>18:00 前签署 Sarah Kim 的合同 <i>— 对方今天会签</i></span></li>
+                <li><span>批准 Alex 的文案修改 <i>— 发布正在等你批准</i></span></li>
+              </ol>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    <p class="cap" style="text-align:left"><span class="demo-tag">演示数据</span>助手和日历为 Mac 界面，简报为网页界面。</p>
+  </div>
+</section>
+
+<!-- 5 · Proof and trust. Licence, Google verification and the comparisons
+     live here, not in the hero or the meta description (FD-6). -->
+<section class="sec sec-alt" id="trust" aria-labelledby="trust-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">信任</span>
+      <h2 id="trust-h">做成<wbr>可以查证的<wbr>样子。</h2>
+      <p class="sec-lead">读你邮件的东西，应该拿出依据。以下是你可以亲自核实的内容。</p>
+    </div>
+    <div class="trust-grid">
+      <article class="trust"><h3>只有你同意的才会发出</h3>
+        <p>发送、永久删除和转发都会等待你的批准；你自己设置的自动回复规则也算作批准。</p><a class="go" href="/zh/security/#approvals">批准如何运作 →</a></article>
+      <article class="trust"><h3>测试集是公开的</h3>
+        <p>分类器的每次改动，都会用仓库中一套已标注的邮件进行检验。</p><a class="go" href="/zh/methodology/">评测方法 →</a></article>
+      <article class="trust"><h3>开源，可自托管</h3>
+        <p>所有接触你邮件的代码都以 AGPL-3.0 公开，可以在你自己的服务器上运行。</p><a class="go" href="/zh/self-host/">自托管指南 →</a></article>
+      <article class="trust"><h3>Google OAuth 验证已完成</h3>
+        <p>于 2026-10-03 完成。已按 CASA Tier&nbsp;2 接受独立评估。</p><a class="go" href="/zh/security/#google-verification">安全 →</a></article>
+    </div>
+    <p class="vs-row">正在比较不同工具？逐项对比：
+      <a href="/zh/vs/fyxer/">对比 Fyxer</a><a href="/zh/vs/superhuman/">对比 Superhuman</a>
+      <a href="/zh/vs/sanebox/">对比 SaneBox</a><a href="/zh/vs/inbox-zero/">对比 Inbox Zero</a></p>
+    <figure class="note">
+      <figcaption class="note-by"><span class="note-label">创始人的话</span><span>打造 Klorn 的人</span></figcaption>
+      <blockquote class="note-q"><p class="ser">“有了 Klorn，找邮件真的轻松多了。连我之前漏掉的邮件也能看到；分散的账户在一个界面里就能看全，这是它最大的优点。”</p></blockquote>
+    </figure>
+  </div>
+</section>
+
+<!-- 6 · Pricing, FAQ, final CTA -->
+<section class="sec" id="pricing" aria-labelledby="pricing-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">定价</span>
+      <h2 id="pricing-h">分拣免费。<wbr>想让它<wbr>多做些，<wbr>$29.99。</h2>
+      <p class="sec-lead">分类和理由免费使用，没有时间限制。只有真正产生 AI 费用的功能才在 Pro 里。</p>
+    </div>
+    <div class="prices">
+      <article class="price">
+        <div class="phead"><span class="plan">Free</span><span class="psub">一个邮箱账户</span></div>
+        <div class="amt">$0<small>/月</small></div>
+        <p class="pnote">无需信用卡，不会到期。</p>
+        <ul>
+          <li>五个分类，每封邮件都附理由</li>
+          <li>晨间简报和日历</li>
+          <li>根据你的邮件作答的助手</li>
+          <li>有上限的每日 AI 预算</li>
+        </ul>
+        <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">免费开始</a>
+      </article>
+      <article class="price feat">
+        <div class="phead"><span class="plan">Pro</span><span class="psub">你使用的所有账户</span></div>
+        <div class="amt">$29.99<small>/月</small></div>
+        <p class="pnote">7 天试用。可随时在应用内取消。</p>
+        <ul>
+          <li>包含 Free 的全部功能</li>
+          <li>由你批准后发送的回复草稿</li>
+          <li>多个邮箱账户</li>
+          <li>更高的每日 AI 预算</li>
+        </ul>
+        <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register&amp;next=/billing">开始 Pro 试用</a>
+      </article>
+      <article class="price org">
+        <div class="phead"><span class="plan">企业版</span><span class="psub">与首批团队共同定价</span></div>
+        <div class="amt amt-ask">面议</div>
+        <p class="pnote">我们正在与首批企业客户一起确定价格——请介绍一下你的团队。</p>
+        <ul>
+          <li>每位成员都享有 Pro 的全部功能</li>
+          <li>基于 AGPL-3.0，在你自己的服务器上运行</li>
+          <li>为整个团队找出共同的空闲时间，与贵公司一起配置</li>
+        </ul>
+        <a class="btn btn-2" href="mailto:k0820086@gmail.com?subject=Klorn%20for%20companies">联系我们</a>
+      </article>
+    </div>
+    <p class="price-foot">价格以美元计。 <a href="/zh/pricing/">查看方案详情</a></p>
+
+    <div class="faq-wrap" id="faq">
+      <h2>常见问题</h2>
+      <div class="faq">
+        <details><summary>每个账户都要单独连接吗？</summary>
+          <p>是的，每个账户连接一次。登录时会连接你的第一个 Google 账户，其他账户在设置中添加，
+            之后它们都会进入同一个列表。</p></details>
+        <details><summary>Klorn 会自己发送或删除邮件吗？</summary>
+          <p>除非你让它做。分类只负责分拣。发送、永久删除和转发都会等待你的批准，你自己创建的自动回复规则算作批准。开启自动化后，助手可能会自行执行一些低风险的步骤。每次发送都会留下记录。</p></details>
+        <details><summary>现在可以连接哪些账户？</summary>
+          <p>Gmail 和 Google 日历，以及测试版的 Naver 邮箱和 iCloud 邮箱。目前就是这些；
+            哪天可以连接新的账户，这个页面当天就会更新。</p></details>
+        <details><summary>我的邮件会去哪里？</summary>
+          <p>送到 Klorn 的分类器再返回。令牌加密存储，处理它们的代码是公开的。
+            如果你想自己掌控，可以<a href="/zh/self-host/">在自己的服务器上运行 Klorn</a>。</p></details>
+        <details><summary>“使用你自己的 AI 密钥”是什么意思？</summary>
+          <p>Klorn 可以不用我们的密钥，而是使用你在模型服务商那里的密钥。
+            该功能适用于 Pro 方案。自托管部署可以使用任意密钥或本地模型。</p></details>
+        <details><summary>有 Windows 版吗？</summary>
+          <p>有，目前是测试版。在应用完成代码签名之前，首次启动时 Windows 可能会显示一次 SmartScreen 警告。
+            网页版可在任何现代浏览器中使用同一个账户。</p></details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final" aria-labelledby="final-h">
+  <picture class="hero-sky" aria-hidden="true">
+    <source type="image/webp" sizes="100vw"
+            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
+    <img src="/media/sky/dusk-1920.jpg" alt="" loading="lazy" decoding="async" width="2560" height="1709">
+  </picture>
+  <div class="wrap">
+    <h2 id="final-h">把分散的<wbr>邮件和日程，<wbr><span class="ser">收进<wbr>一个安静的<wbr>地方。</span></h2>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载 Windows 版">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        下载 Mac 版</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">在浏览器中打开</a>
+    </div>
+    <!-- The Windows entry stays a visible link so a Windows visitor with
+         scripting off is not left with a page that only offers a .dmg. -->
+    <p class="meta"><span>macOS 14 及以上</span><i aria-hidden="true">·</i><span><a href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe">Windows 测试版</a></span><i aria-hidden="true">·</i><span>任何现代浏览器</span><i aria-hidden="true">·</i><span><a href="/zh/download/">系统要求</a></span></p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="#top">Klorn</a>
+      <p class="foot-note">邮件和日历，在一个地方分拣好，附上理由。开源。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="产品"><h4>产品</h4>
+      <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载 Windows 版">下载 Mac 版</a>
+      <a href="/zh/download/">全部下载</a>
+      <a href="/zh/pricing/">定价</a>
+      <a href="https://app.klorn.ai/login">登录</a>
+      <a href="/zh/status/">服务状态</a><a href="/zh/blog/">博客</a></nav>
+    <nav aria-label="开源"><h4>开源</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 仓库</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">版本发布</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">评测集</a>
+      <a href="/zh/methodology/">评测方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 许可证</a>
+      <a href="/zh/open-source/">为什么是不加附加条款的 AGPL</a>
+      <a href="/zh/self-host/">自托管</a></nav>
+    <nav aria-label="对比"><h4>对比</h4>
+      <a href="/zh/vs/fyxer/">对比 Fyxer</a><a href="/zh/vs/superhuman/">对比 Superhuman</a>
+      <a href="/zh/vs/sanebox/">对比 SaneBox</a><a href="/zh/vs/inbox-zero/">对比 Inbox Zero</a></nav>
+    <nav aria-label="法律"><h4>法律</h4>
+      <a href="https://app.klorn.ai/privacy">隐私</a><a href="https://app.klorn.ai/terms">条款</a>
+      <a href="https://app.klorn.ai/refund">退款</a>
+      <a href="/zh/security/">安全</a><a href="/zh/gdpr/">GDPR</a><a href="/zh/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">联系我们</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+    <span class="langsw">
+      <a href="/" lang="en" data-lang-pick="en">EN</a><i aria-hidden="true">·</i><a href="/ko/" lang="ko" data-lang-pick="ko">KO</a><i aria-hidden="true">·</i><a href="/ja/" lang="ja" data-lang-pick="ja">JA</a><i aria-hidden="true">·</i><a href="/zh/" lang="zh" data-lang-pick="zh" aria-current="true">ZH</a><i aria-hidden="true">·</i><a href="/es/" lang="es" data-lang-pick="es">ES</a><i aria-hidden="true">·</i><a href="/fr/" lang="fr" data-lang-pick="fr">FR</a><i aria-hidden="true">·</i><a href="/de/" lang="de" data-lang-pick="de">DE</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Only the text node changes, so
+// the icon survives.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+
+// The language menu. Click to open, click away or Escape to close; Escape
+// returns focus to the trigger.
+(function () {
+  var btn = document.querySelector('[data-lang-toggle]');
+  var menu = document.getElementById('lang-menu');
+  if (!btn || !menu) return;
+  function setOpen(open) {
+    if (open) menu.setAttribute('data-open', '');
+    else menu.removeAttribute('data-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    setOpen(!menu.hasAttribute('data-open'));
+  });
+  menu.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('click', function (e) {
+    if (!menu.hasAttribute('data-open')) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    setOpen(false);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !menu.hasAttribute('data-open')) return;
+    setOpen(false);
+    btn.focus();
+  });
+})();
+
+// Language: follow the browser preference on a first visit to the root, and
+// never again. An explicit pick is remembered, the redirect fires at most once
+// per browser session, and deep links stay where they point.
+(function () {
+  var KEY = 'klorn.lang';
+  document.querySelectorAll('[data-lang-pick]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try { localStorage.setItem(KEY, a.getAttribute('data-lang-pick')); } catch (e) {}
+    });
+  });
+  var stored = null;
+  try { stored = localStorage.getItem(KEY); } catch (e) {}
+  if (stored) return;
+  try { if (sessionStorage.getItem(KEY + '.tried')) return; } catch (e) {}
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  var path = location.pathname;
+  if (path !== '/' && path !== '/index.html') return;
+  var prefers = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+  if (!/^ko\b/i.test(prefers)) return;
+  try { sessionStorage.setItem(KEY + '.tried', '1'); } catch (e) {}
+  location.replace('/ko/');
+})();
+</script>
+<script>
+// Inflow attribution: utm_campaign and friends, the referrer and this landing
+// path ride along on every app.klorn.ai link, so a signup can report which
+// channel brought the person in.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

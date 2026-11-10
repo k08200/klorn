@@ -5,6 +5,7 @@
  */
 
 import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
+import { teamModeEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -16,8 +17,12 @@ import {
 } from "../judge/attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
+import { findUserEmail } from "../mail/email-lookup.js";
 import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmail.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { markEmailReplied } from "../mail/reply-state.js";
+import { getSenderDossier } from "../mail/sender-dossier.js";
+import { recordSentMessage, type SentOrigin } from "../mail/sent-messages.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,
@@ -26,13 +31,17 @@ import {
   deleteEvent,
   listEvents,
 } from "../pim/calendar.js";
+import { withoutLinkedTitles } from "../pim/calendar-read-format.js";
+import { eventSourceForGoogleId } from "../pim/calendar-rows.js";
 import {
   getUpcomingMeetings,
   joinMeeting,
   MEETING_TOOLS,
   summarizeMeeting,
 } from "../pim/meeting.js";
+import { getTeamAvailability } from "../pim/team-availability.js";
 import { captureError } from "../sentry.js";
+import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { capToolResult } from "./tool-result-budget.js";
@@ -45,6 +54,81 @@ const TIME_TOOL = {
     parameters: { type: "object", properties: {}, required: [] },
   },
 };
+
+/// "What were we discussing with this person" — the sender dossier as a chat
+/// tool. Reads only the user's own stored mail; cache-by-count inside the
+/// module keeps repeat questions free.
+const DOSSIER_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "sender_context",
+    description:
+      "Relationship context for one email sender, distilled from mail already exchanged: " +
+      "who they are to the user, topics currently in flight, and the last outstanding " +
+      "promise. Use when the user asks about a person or sender (e.g. 'what were we " +
+      "discussing with alice@…', '이 사람과 무슨 얘기했지').",
+    parameters: {
+      type: "object",
+      properties: {
+        sender_email: {
+          type: "string",
+          description: "The sender's bare email address (user@domain).",
+        },
+      },
+      required: ["sender_email"],
+    },
+  },
+};
+
+/// "When is the whole team free" — common free slots for a saved team or an
+/// ad-hoc member list, intersected with the user's own calendar. Members
+/// whose calendars are not visible are reported as UNKNOWN, never as free.
+const TEAM_AVAILABILITY_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "team_availability",
+    description:
+      "Find time slots where the USER and a group of people are all free. Pass either the " +
+      "name of one of the user's saved teams (team_name) or an explicit members list of " +
+      "email addresses. Members whose calendars are not visible come back in " +
+      "unknownMembers — their availability is UNKNOWN, do not claim they are free. Use for " +
+      "questions like 'AX팀 내일 언제 다 돼?' or 'find an hour for me, alice@ and bob@ this week'.",
+    parameters: {
+      type: "object",
+      properties: {
+        team_name: { type: "string", description: "Name of one of the user's saved teams." },
+        members: {
+          type: "array",
+          items: { type: "string" },
+          description: "Explicit member email addresses (used when team_name is not given).",
+        },
+        window_start: { type: "string", description: "ISO start of the search window." },
+        window_end: { type: "string", description: "ISO end of the search window (max 14 days)." },
+        duration_minutes: { type: "number", description: "Meeting length, default 60." },
+      },
+      required: ["window_start", "window_end"],
+    },
+  },
+};
+
+/// team_availability budget: 10 calls per user per 5 minutes, in-process
+/// (single instance). One call can already answer a whole scheduling question.
+const TEAM_AVAILABILITY_BUDGET = 10;
+const TEAM_AVAILABILITY_WINDOW_MS = 5 * 60 * 1000;
+const teamAvailabilityCalls = new Map<string, number[]>();
+function consumeTeamAvailabilityBudget(userId: string): boolean {
+  const now = Date.now();
+  const calls = (teamAvailabilityCalls.get(userId) ?? []).filter(
+    (t) => now - t < TEAM_AVAILABILITY_WINDOW_MS,
+  );
+  if (calls.length >= TEAM_AVAILABILITY_BUDGET) {
+    teamAvailabilityCalls.set(userId, calls);
+    return false;
+  }
+  calls.push(now);
+  teamAvailabilityCalls.set(userId, calls);
+  return true;
+}
 
 const GOOGLE_TOOLS = [...GMAIL_TOOLS, ...CALENDAR_TOOLS];
 
@@ -74,6 +158,8 @@ export const ALWAYS_TOOLS = [
   ...LOCAL_UTILITY_TOOLS,
   ...MEMORY_TOOLS,
   ...SKILL_TOOLS,
+  DOSSIER_TOOL,
+  TEAM_AVAILABILITY_TOOL,
   TIME_TOOL,
 ];
 
@@ -146,13 +232,27 @@ export class FloorReceiptRequiredError extends Error {
   }
 }
 
+/**
+ * Server-side context for a call. Never derived from tool args, so a model
+ * cannot set it.
+ */
+export interface ExecuteToolCallOptions {
+  /**
+   * How a successful send_email is labelled in SentMessage. Defaults to
+   * "approved" (the user approved these exact bytes); the auto-reply path
+   * passes "auto_reply".
+   */
+  sentOrigin?: Extract<SentOrigin, "approved" | "auto_reply">;
+}
+
 export async function executeToolCall(
   userId: string,
   functionName: string,
   args: Record<string, unknown>,
   receipt?: ActionReceipt | null,
+  opts: ExecuteToolCallOptions = {},
 ): Promise<string> {
-  const raw = await executeToolCallInternal(userId, functionName, args, receipt ?? null);
+  const raw = await executeToolCallInternal(userId, functionName, args, receipt ?? null, opts);
   return capToolResult(raw);
 }
 
@@ -161,6 +261,7 @@ async function executeToolCallInternal(
   functionName: string,
   args: Record<string, unknown>,
   receipt: ActionReceipt | null,
+  opts: ExecuteToolCallOptions,
 ): Promise<string> {
   try {
     // Central floor guard — fail closed for every FLOOR_ACTION before the
@@ -192,6 +293,20 @@ async function executeToolCallInternal(
         );
       case "read_email":
         return JSON.stringify(await readEmail(userId, requireString(args.email_id, "email_id")));
+      case "sender_context": {
+        const sender = requireString(args.sender_email, "sender_email").trim().toLowerCase();
+        if (!sender.includes("@")) {
+          return JSON.stringify({ error: "sender_email must be a bare email address." });
+        }
+        const dossier = await getSenderDossier(userId, sender, "en");
+        if (!dossier) {
+          return JSON.stringify({ error: "No AI provider is configured for this account." });
+        }
+        if (dossier.emailCount === 0) {
+          return JSON.stringify({ info: "No stored mail with this sender yet." });
+        }
+        return JSON.stringify(dossier);
+      }
       case "send_email": {
         const to = requireString(args.to, "to");
         const subject = requireString(args.subject, "subject");
@@ -220,9 +335,35 @@ async function executeToolCallInternal(
           linkedInboxAccountId = source?.linkedInboxAccountId ?? undefined;
         }
         const actions = await mailActionsFor(userId, linkedInboxAccountId ?? null);
-        return JSON.stringify(
-          await actions.sendEmail(userId, to, subject, body, [], { linkedInboxAccountId }),
-        );
+        const sent = await actions.sendEmail(userId, to, subject, body, [], {
+          linkedInboxAccountId,
+        });
+        // A reply that went out (agent or auto mode) flips the source row's
+        // reply chip to "replied". Only on success — a refused send is not
+        // an answer.
+        if (inReplyToId && !("error" in sent) && !("unsupported" in sent)) {
+          await markEmailReplied(userId, inReplyToId);
+        }
+        // Label the send in one write, so the Sent-folder scan never records
+        // an auto reply as mail the user wrote. The mail has already left:
+        // a bookkeeping failure must never surface as a send error, or the
+        // caller would retry and send it twice.
+        if ("success" in sent && sent.success && sent.messageId) {
+          try {
+            await recordSentMessage(userId, {
+              gmailId: sent.messageId,
+              threadId: sent.threadId ?? null,
+              to,
+              subject,
+              sentAt: new Date(),
+              inbox: linkedInboxAccountId ?? "primary",
+              origin: opts.sentOrigin ?? "approved",
+            });
+          } catch (err) {
+            captureError(err, { tags: { scope: "tool-executor.sent-record" }, extra: { userId } });
+          }
+        }
+        return JSON.stringify(sent);
       }
       case "classify_emails":
         return JSON.stringify(await classifyEmails(userId, safeInt(args.max_results, 10, 100)));
@@ -230,9 +371,9 @@ async function executeToolCallInternal(
         // Resolve the row so we mark-read on the RIGHT account: a message synced
         // from a linked secondary inbox must be acted on via that inbox's client.
         const emailId = requireString(args.email_id, "email_id");
-        const row = await prisma.emailMessage.findFirst({
-          where: { userId, OR: [{ id: emailId }, { gmailId: emailId }] },
-          select: { gmailId: true, linkedInboxAccountId: true },
+        const row = await findUserEmail(userId, emailId, {
+          gmailId: true,
+          linkedInboxAccountId: true,
         });
         const actions = await mailActionsFor(userId, row?.linkedInboxAccountId ?? null);
         return JSON.stringify(
@@ -241,6 +382,52 @@ async function executeToolCallInternal(
       }
       case "list_events":
         return JSON.stringify(await listEvents(userId, safeInt(args.max_results, 10, 200)));
+      case "team_availability": {
+        if (!teamModeEnabled()) {
+          return JSON.stringify({
+            error: "Team mode is not part of the current plan.",
+            code: "TEAM_REQUIRED",
+          });
+        }
+        // Dedicated throttle (security review 2026-08-20): chat's generic
+        // caps still allowed thousands of free/busy probes per minute.
+        if (!consumeTeamAvailabilityBudget(userId)) {
+          return JSON.stringify({
+            error: "Too many availability checks — try again in a minute.",
+          });
+        }
+        let members: string[] = [];
+        if (typeof args.team_name === "string" && args.team_name.trim()) {
+          const teams = await prisma.team.findMany({
+            where: { userId },
+            select: { name: true, members: true },
+          });
+          const wanted = args.team_name.trim().toLowerCase();
+          const team = teams.find((t) => t.name.toLowerCase() === wanted);
+          if (!team) {
+            return JSON.stringify({
+              error: `No saved team named "${args.team_name}".`,
+              availableTeams: teams.map((t) => t.name),
+            });
+          }
+          members = Array.isArray(team.members)
+            ? team.members.filter((m): m is string => typeof m === "string")
+            : [];
+        } else if (Array.isArray(args.members)) {
+          members = args.members.filter((m): m is string => typeof m === "string");
+        }
+        if (members.length === 0) {
+          return JSON.stringify({ error: "Provide team_name (a saved team) or a members list." });
+        }
+        const result = await getTeamAvailability(
+          userId,
+          members,
+          requireString(args.window_start, "window_start"),
+          requireString(args.window_end, "window_end"),
+          safeInt(args.duration_minutes, 60, 480),
+        );
+        return JSON.stringify(result);
+      }
       case "create_event": {
         const evSummary = requireString(args.summary, "summary");
         const evStart = requireString(args.start_time, "start_time");
@@ -251,6 +438,10 @@ async function executeToolCallInternal(
         const dupCheck = await prisma.calendarEvent.findFirst({
           where: {
             userId,
+            // Primary and LOCAL rows only, flag on or off: a linked calendar's
+            // event is a read-only mirror, so it is no duplicate to point the model
+            // at. The conflict check below still covers linked calendars.
+            sourceAccountId: null,
             startTime: {
               gte: new Date(evStartDate.getTime() - 30 * 60_000),
               lte: new Date(evStartDate.getTime() + 30 * 60_000),
@@ -260,7 +451,8 @@ async function executeToolCallInternal(
         if (dupCheck) {
           return JSON.stringify({
             skipped: true,
-            message: `이미 같은 시간대에 이벤트가 있습니다: "${dupCheck.title}" (${dupCheck.startTime.toISOString()})`,
+            // The title is external content (an invite's author wrote it).
+            message: `이미 같은 시간대에 이벤트가 있습니다: ${wrapUntrusted(dupCheck.title, "calendar:summary")} (${dupCheck.startTime.toISOString()})`,
             existingEventId: dupCheck.id,
           });
         }
@@ -286,7 +478,8 @@ async function executeToolCallInternal(
           return JSON.stringify({
             skipped: true,
             message: conflictCheck.message,
-            conflicts: conflictCheck.conflicts,
+            // No title of a linked (work) calendar's event reaches the model.
+            conflicts: withoutLinkedTitles(conflictCheck.conflicts),
           });
         }
 
@@ -334,6 +527,8 @@ async function executeToolCallInternal(
             endTime: new Date(canonicalEnd),
             location: (args.location as string) || null,
             googleId: evGoogleId,
+            // C1 dual-write: a Google id makes the row GOOGLE, none makes it LOCAL.
+            ...eventSourceForGoogleId(evGoogleId),
           },
         });
         await upsertAttentionForCalendarEvent(localEvent);
@@ -374,10 +569,30 @@ async function executeToolCallInternal(
           day_of_week: now.toLocaleDateString("ko-KR", { weekday: "long", timeZone: "Asia/Seoul" }),
         });
       }
-      case "get_upcoming_meetings":
-        return JSON.stringify(await getUpcomingMeetings(userId));
+      case "get_upcoming_meetings": {
+        // The summary is external content; the reminder scheduler reads the same
+        // function for a notification the user sees, so the wrap is applied here.
+        const meetings = await getUpcomingMeetings(userId);
+        return JSON.stringify(
+          meetings.map((meeting) => ({
+            ...meeting,
+            summary: wrapUntrusted(meeting.summary, "calendar:summary"),
+            // The link can be lifted from the description, and attendees are addresses
+            // an invite's author chose: both external content.
+            meetingLink:
+              meeting.meetingLink === null
+                ? null
+                : wrapUntrusted(meeting.meetingLink, "calendar:meeting-link"),
+            attendees: meeting.attendees.map((a) => wrapUntrusted(a, "calendar:attendee")),
+          })),
+        );
+      }
       case "join_meeting":
-        return JSON.stringify(await joinMeeting(requireString(args.meeting_link, "meeting_link")));
+        // The link was handed to the model wrapped; a model that copies it verbatim
+        // must still get a joinable URL (the host allowlist still applies).
+        return JSON.stringify(
+          await joinMeeting(stripUntrusted(requireString(args.meeting_link, "meeting_link"))),
+        );
       case "summarize_meeting":
         return JSON.stringify(
           await summarizeMeeting(

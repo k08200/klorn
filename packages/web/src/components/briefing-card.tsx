@@ -81,8 +81,8 @@ export default function BriefingCard() {
 
   if (loading) {
     return (
-      <section className="panel-elevated mb-6 rounded-2xl border border-slate-200/70 bg-white p-4">
-        <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+      <section className="panel-elevated mb-6 rounded-card border border-line/70 bg-surface-panel p-4">
+        <div className="h-16 animate-pulse rounded-control bg-surface-hover" />
       </section>
     );
   }
@@ -94,27 +94,27 @@ export default function BriefingCard() {
       : status.automation.briefingTime;
 
   return (
-    <section className="panel-elevated mb-6 rounded-2xl border border-slate-200/70 bg-white p-4">
+    <section className="panel-elevated mb-6 rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-900">Today's briefing</h2>
-            <span className={`inline-flex items-center gap-1 text-[11px] ${push.className}`}>
+            <h2 className="text-role-head text-ink">Today's briefing</h2>
+            <span className={`inline-flex items-center gap-1 text-role-caption ${push.className}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${push.dotClassName}`} />
               {push.label}
             </span>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+          <p className="mt-1 line-clamp-2 text-role-body text-ink-mid">
             {status.note?.preview || emptyMessage(status)}
           </p>
-          {time && <p className="mt-2 text-[11px] text-slate-500">{time}</p>}
-          {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+          {time && <p className="mt-2 text-role-caption text-ink-mid">{time}</p>}
+          {error && <p className="mt-2 text-role-caption text-state-danger-ink">{error}</p>}
         </div>
 
         {status.generated ? (
           <Link
             href="/briefing"
-            className="ease-strong shrink-0 rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+            className="ease-strong shrink-0 rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           >
             Open
           </Link>
@@ -123,7 +123,7 @@ export default function BriefingCard() {
             type="button"
             onClick={generate}
             disabled={generating}
-            className="glow-primary ease-strong shrink-0 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3 py-1.5 text-xs font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+            className="glow-primary ease-strong shrink-0 rounded-control bg-accent-solid px-3 py-1.5 text-role-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generating ? "Creating..." : "Create now"}
           </button>
@@ -148,25 +148,25 @@ function pushMeta(
 ): { label: string; className: string; dotClassName: string } {
   switch (state) {
     case "received":
-      return { label: "Received", className: "text-emerald-600", dotClassName: "bg-emerald-500" };
+      return { label: "Received", className: "text-state-ok-ink", dotClassName: "bg-emerald-500" };
     case "accepted":
-      return { label: "Sent", className: "text-slate-500", dotClassName: "bg-slate-400" };
+      return { label: "Sent", className: "text-ink-mid", dotClassName: "bg-slate-400" };
     case "failed":
-      return { label: "Failed", className: "text-red-700", dotClassName: "bg-red-500" };
+      return { label: "Failed", className: "text-state-danger-ink", dotClassName: "bg-red-500" };
     case "skipped":
       return {
         label: skipReasonLabel(reason),
-        className: "text-amber-600",
+        className: "text-state-warn-ink",
         dotClassName: "bg-amber-400",
       };
     case "pending":
-      return { label: "Pending", className: "text-slate-500", dotClassName: "bg-slate-400" };
+      return { label: "Pending", className: "text-ink-mid", dotClassName: "bg-slate-400" };
     case "not_sent":
-      return { label: "Not sent", className: "text-slate-400", dotClassName: "bg-slate-300" };
+      return { label: "Not sent", className: "text-ink-dim", dotClassName: "bg-slate-300" };
     case "no_subscription":
       return {
         label: "No browser subscription",
-        className: "text-slate-400",
+        className: "text-ink-dim",
         dotClassName: "bg-slate-300",
       };
   }

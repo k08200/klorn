@@ -13,21 +13,51 @@ import type {
   EmailListResponse,
   EmailThreadListResponse,
   InboxesResponse,
+  InboxPurpose,
+  LiveTier,
   TrustWire,
+  V3ItemBlock,
+  V3TodayFields,
 } from "@klorn/contract";
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireAppAccess } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { planHasFeature } from "../billing/stripe.js";
-import { MULTI_INBOX_SYNC_ENABLED, providerInboxSelectorEnabled } from "../config.js";
+import {
+  bulkUnsubscribeEnabled,
+  laneReadsEnabled,
+  MULTI_INBOX_SYNC_ENABLED,
+  providerInboxSelectorEnabled,
+} from "../config.js";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
+import {
+  isLanePageFilter,
+  LANE_FILTERS,
+  listLaneInfoByEmail,
+  pageEmailIdsInLane,
+  pageThreadsInLane,
+  parseLaneFilter,
+  resolveInboxScope,
+} from "../judge/email-lanes.js";
+import { resolveTierReason } from "../judge/tier-reason-strings.js";
+import { isTier } from "../judge/tiers.js";
+import { TODAY_WINDOW, todayPushCutoff } from "../judge/today-push-window.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { HELD_WINDOW, heldTodayCutoff } from "../judge/v3/held-today.js";
+import { budgetDayFor } from "../judge/v3/push-budget-gate.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
   getTrustScore,
   getTrustScoresBulk,
   type TrustScoreResult,
 } from "../learning/trust-score.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
+import { describeLlmFailure } from "../llm/describe-failure.js";
+import { normalizeCompanyDomains } from "../mail/company-domains.js";
+import { extractEmailAddress } from "../mail/email-address.js";
 import {
   analyzePendingEmailAttachments,
   buildAttachmentCandidateProfile,
@@ -41,6 +71,7 @@ import {
   syncRecentCandidateIntakes,
 } from "../mail/email-candidate-intake.js";
 import type { FeedbackRecord } from "../mail/email-label-feedback.js";
+import { summarizeEmailOnDemand } from "../mail/email-summarize.js";
 import {
   getEmailThreads,
   reconcileEmails,
@@ -48,19 +79,39 @@ import {
   syncEmails,
   syncLinkedInboxesForUser,
 } from "../mail/email-sync.js";
-import { htmlToPlainText } from "../mail/email-text.js";
-import { getLinkedInboxClients } from "../mail/gmail.js";
-import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mail/email-text.js";
+import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
+import { NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
+import { hasAnyMailSource } from "../mail/mail-source.js";
+import { getMeetingContext } from "../mail/meeting-context.js";
+import { needsReplyReasonText } from "../mail/needs-reply-reason-strings.js";
+import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
+import { offeredDraftFor } from "../mail/reply-state.js";
+import { getSenderDossier } from "../mail/sender-dossier.js";
+import { getThreadBrief } from "../mail/thread-brief.js";
+import {
+  invalidateTriagePriorities,
+  normalizeTriagePriorities,
+} from "../mail/triage-priorities.js";
+import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
 import { senderEmail } from "../notify/notification-format.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
 import { registerEmailFeedbackRoutes } from "./email-feedback.js";
+import { registerEmailLaneRoutes } from "./email-lanes.js";
+import { registerEmailLaterRoutes } from "./email-later.js";
+import { registerEmailMailboxRoutes } from "./email-mailbox.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
 import { registerEmailRulesRoutes } from "./email-rules.js";
+import { registerEmailSenderLabelRoutes } from "./email-sender-labels.js";
+import { emailSubscriptionsRoutes } from "./email-subscriptions.js";
+import { registerEmailWaitingRoutes } from "./email-waiting.js";
+import { laneThreadsUserLimit, replyIfQueryTimedOut } from "./lane-read-guards.js";
 
 const MAX_PAGE = 10_000; // guardrail: paging past ~500k rows is a client bug, not a real request
 
@@ -93,6 +144,29 @@ function projectHtmlBody(htmlBody: string | null, emailId: string, userId: strin
   }
 }
 
+/**
+ * Body for the detail view. Rows persisted before the coercePlainBody guard
+ * can still hold raw HTML in `body` (senders that ship HTML source inside the
+ * text/plain part — observed 2026-08-13, Paddle). Coercing at read time heals
+ * those rows without a backfill; failures degrade like projectHtmlBody.
+ */
+function serveBody(
+  body: string | null,
+  htmlBody: string | null,
+  emailId: string,
+  userId: string,
+): string | null {
+  try {
+    const coerced = coercePlainBody(body, htmlBody);
+    if (coerced !== null) return coerced;
+  } catch (err) {
+    console.error("[EMAIL] body coercion failed:", { emailId }, err);
+    captureError(err, { tags: { scope: "email.detail.body_coerce", userId }, extra: { emailId } });
+    if (body) return body;
+  }
+  return projectHtmlBody(htmlBody, emailId, userId);
+}
+
 function trustToWire(t: TrustScoreResult | undefined | null): TrustWire | null {
   if (!t) return null;
   return {
@@ -120,6 +194,9 @@ const DEMO_EMAILS = [
     isRead: false,
     isStarred: false,
     priority: "URGENT" as const,
+    // Demo lanes are hand-assigned to what the judge would say — the
+    // logged-out list must show chips without overstating the lanes.
+    tier: "PUSH" as const,
     category: "business",
     summary: "Series A investor follow-up meeting request",
     keyPoints: ["Interested in leading the Series A", "Requested a call this week"],
@@ -142,6 +219,7 @@ const DEMO_EMAILS = [
     isRead: true,
     isStarred: false,
     priority: "LOW" as const,
+    tier: "INFO" as const,
     category: "automated",
     summary: "Weekly Notion activity summary",
     keyPoints: ["12 pages updated", "3 databases created"],
@@ -164,6 +242,7 @@ const DEMO_EMAILS = [
     isRead: false,
     isStarred: false,
     priority: "NORMAL" as const,
+    tier: "QUEUE" as const,
     category: "business",
     summary: "Q2 partnership proposal with co-marketing and API integration",
     keyPoints: ["Co-marketing proposal", "API integration", "Revenue sharing"],
@@ -185,6 +264,7 @@ const DEMO_EMAILS = [
     isRead: true,
     isStarred: false,
     priority: "NORMAL" as const,
+    tier: "INFO" as const,
     category: "engineering",
     summary: "Calendar integration PR #42 opened",
     keyPoints: ["Adds Google Calendar sync", "Adds event management"],
@@ -206,6 +286,10 @@ const DEMO_EMAILS = [
     isRead: false,
     isStarred: false,
     priority: "NORMAL" as const,
+    // QUEUE, not INFO: this row carries an action item and a due date, and
+    // accounting@ matches no automated-sender pattern — the real judge's
+    // transactional signal would not fire here.
+    tier: "QUEUE" as const,
     category: "billing",
     summary: "March services invoice for $2,450 due April 15",
     keyPoints: ["$2,450 invoice", "Payment due April 15"],
@@ -214,23 +298,6 @@ const DEMO_EMAILS = [
     receivedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
   },
 ];
-
-/** Parse email From header */
-function _parseFromHeader(from: string): { name: string; email: string } | null {
-  if (!from) return null;
-  const match = from.match(/^(.+?)\s*<([^>]+)>$/);
-  if (match) {
-    return {
-      name: match[1].replace(/^["']|["']$/g, "").trim(),
-      email: match[2].trim().toLowerCase(),
-    };
-  }
-  const emailOnly = from.trim().toLowerCase();
-  if (emailOnly.includes("@")) {
-    return { name: emailOnly.split("@")[0], email: emailOnly };
-  }
-  return null;
-}
 
 const SKIP_PATTERNS = [
   /noreply@/i,
@@ -386,6 +453,36 @@ function normalizeEmailQueue(value: unknown): EmailQueueKey {
   return "all";
 }
 
+/**
+ * The v3 fields for a list page (attention-engine-v3.md §3(5)): a block per
+ * mail, ranks on a ranked QUEUE page, and Today's fields on Today's request (a
+ * ranked QUEUE page carries rankedAt alone).
+ */
+async function v3ListFields(
+  userId: string,
+  inbox: string | undefined,
+  rows: ReadonlyArray<{ id: string; subject: string | null }>,
+  opts: { rankedAt: Date; rankFrom: number | null; today: boolean },
+): Promise<{ blocks: Map<string, V3ItemBlock>; response: V3TodayFields }> {
+  const { v3BlocksFor, v3TodayFields } = await import("../judge/v3/read-fields.js");
+  const blocks = await v3BlocksFor(userId, rows, opts.rankFrom, opts.rankedAt);
+  if (opts.today) {
+    return { blocks, response: await v3TodayFields(userId, inbox, opts.rankedAt) };
+  }
+  const response = opts.rankFrom === null ? {} : { rankedAt: opts.rankedAt.toISOString() };
+  return { blocks, response };
+}
+
+/**
+ * GET / for a user with no connected mail source. `source: "demo"` is kept
+ * as the wire marker clients already read as "not connected" (actions
+ * disabled, connect prompt), but no rows: nobody is shown an inbox that is not
+ * theirs. `needsConnection` says why it is empty.
+ */
+function noMailSourceList(): EmailListResponse {
+  return { emails: [], source: "demo", needsConnection: true, total: 0, unread: 0, page: 1 };
+}
+
 function demoEmailMatchesQueue(email: (typeof DEMO_EMAILS)[number], queue: EmailQueueKey): boolean {
   if (queue === "unread") return !email.isRead;
   if (queue === "urgent") return email.priority === "URGENT";
@@ -515,7 +612,7 @@ export function replyNeededSourceId(emailId: string): string {
  * is already searchable via filename / summary / contentText.
  */
 export function emailSearchOr(search: string): Prisma.EmailMessageWhereInput[] {
-  const ci = { contains: search, mode: "insensitive" as const };
+  const ci = { contains: escapeLikePattern(search), mode: "insensitive" as const };
   return [
     { subject: ci },
     { from: ci },
@@ -559,6 +656,69 @@ export function safeAttachmentFilename(filename: string): string {
   return trimmed || "attachment";
 }
 
+const listEmailsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    filter: { type: "string", maxLength: 500 },
+    search: { type: "string", maxLength: 500 },
+    category: { type: "string", maxLength: 500 },
+    page: { type: "string", maxLength: 500 },
+    inbox: { type: "string", maxLength: 500 },
+    // Lane filter (MAIL_V2 or UNIFIED_HOME). Validated in the handler, not
+    // here, so that with both off any value is ignored exactly as an
+    // undeclared param was.
+    tier: { type: "string", maxLength: 500 },
+    // Opt-in: leave out mail the user handled (Done / a Later still pending).
+    // Absent = the list as it always was.
+    hideHandled: { type: "string", enum: ["0", "1", "false", "true"] },
+    // Opt-in: one row per thread (its newest message in the view). Honoured
+    // only together with a lane (`tier`, ALL included); ignored otherwise.
+    threads: { type: "string", enum: ["0", "1", "false", "true"] },
+    // Opt-in, lane views only: Today's PUSH block window (today-push-window.ts).
+    // Only Today sends it; Mail's lane lists never do.
+    // "held" (QUEUE only, users under the v3 policy): Today's "Held back"
+    // group, mail the daily interrupt budget held today (v3/held-today.ts).
+    window: { type: "string", enum: [TODAY_WINDOW, HELD_WINDOW] },
+  },
+} as const;
+
+const listThreadsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    search: { type: "string", maxLength: 500 },
+    priority: { type: "string", maxLength: 500 },
+    unread: { type: "string", maxLength: 500 },
+    category: { type: "string", maxLength: 500 },
+    page: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const emailNextQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    queue: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+// No declared params: the legacy ?markRead= (and anything else) is stripped by
+// additionalProperties: false, so old clients degrade to a plain read-only GET.
+// The read-flag mutation lives on PATCH /:id/read (email-mutations.ts).
+const emailDetailQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    // The client's UI language for template lines (request-language.ts).
+    lang: LANG_QUERY_PROPERTY,
+    // Set when the caller fetches the detail for something other than showing
+    // the mail (mobile Files reads attachments): not a reader open, so no
+    // OPENED stamp. Any value counts; older servers strip it unseen.
+    purpose: { type: "string", maxLength: 32 },
+  },
+} as const;
+
 export async function emailRoutes(app: FastifyInstance) {
   // Every email route is private user mail. Gate the whole plugin (including
   // the sub-route groups registered below, which share this encapsulation
@@ -584,289 +744,414 @@ export async function emailRoutes(app: FastifyInstance) {
   await registerEmailAttachmentsRoutes(app);
   await registerEmailRepliesRoutes(app);
   await registerEmailMutationsRoutes(app);
+  registerEmailMailboxRoutes(app);
+  registerEmailSenderLabelRoutes(app);
+  registerEmailWaitingRoutes(app);
+  registerEmailLaterRoutes(app);
   await registerEmailBulkRoutes(app);
+  registerEmailLaneRoutes(app, { demoRows: () => DEMO_EMAILS });
+  // A child plugin (not a register* call) so its dark-route gate wraps only
+  // these routes; it inherits the auth + app-access hooks above.
+  await app.register(emailSubscriptionsRoutes({ gate: bulkUnsubscribeEnabled }));
 
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
-  app.get("/", async (request): Promise<EmailListResponse> => {
-    const { filter, search, category, page, inbox } = request.query as {
-      filter?: string;
-      search?: string;
-      category?: string;
-      page?: string;
-      // Multi-account: "all"/absent = every inbox, "primary" = the user's own
-      // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
-      // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
-      inbox?: string;
-    };
-    const uid = getUserId(request);
-    const pageNum = parsePageNum(page);
-    // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
-    // morning's intake was the #1 dogfood friction. 50 keeps the first
-    // payload under ~25 KB once joined with attachment summaries and trust
-    // scores; the cap stays as a Gmail throttle guardrail.
-    const pageSize = 50;
+  app.get(
+    "/",
+    {
+      schema: { querystring: listEmailsQuerySchema },
+      // Per-user ceiling on the thread-grouped lane page (a full-view scan);
+      // every other list request is unchanged.
+      preHandler: laneThreadsUserLimit(app),
+    },
+    async (request, reply): Promise<EmailListResponse> => {
+      const { filter, search, category, page, inbox, tier, hideHandled, threads, window } =
+        request.query as {
+          filter?: string;
+          search?: string;
+          category?: string;
+          page?: string;
+          // Multi-account: "all"/absent = every inbox, "primary" = the user's own
+          // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
+          // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
+          inbox?: string;
+          // One of the five live lanes, or ALL. Honoured only while a lane
+          // reader is on: MAIL_V2 (Mail v2) or UNIFIED_HOME (Today).
+          tier?: string;
+          // OPT-IN ("1" / "true"): leave out mail whose attention item is DISMISSED
+          // (Done) or SNOOZED with a wake-up time still ahead (Later), so a Done on
+          // one device is gone on the others. Absent / "0" / "false" = the list
+          // exactly as before; the web and Mac clients never send it.
+          hideHandled?: string;
+          // OPT-IN ("1" / "true"), lane views only: one row per thread — the
+          // thread's newest message in the view, with `threadCount` — and `total`
+          // counts threads. Without a lane it is ignored (the list as before).
+          threads?: string;
+          // OPT-IN ("today"), lane views only: mail received inside Today's
+          // PUSH window. Narrows rows and `total` alike, so Today's header
+          // count and block agree. "held": Today's "Held back" group (QUEUE,
+          // v3 policy only). Absent = every lane view as before.
+          window?: string;
+        };
+      const uid = getUserId(request);
+      const hideHandledRows = hideHandled === "1" || hideHandled === "true";
+      const pageNum = parsePageNum(page);
+      const lane = laneReadsEnabled() && tier !== undefined ? parseLaneFilter(tier) : undefined;
+      if (lane === null) {
+        return reply
+          .code(400)
+          .send({ error: `tier must be one of ${LANE_FILTERS.join(", ")}.` } as never);
+      }
+      // The window narrows a lane page and nothing else: refused without one,
+      // never silently dropped onto the plain list.
+      if (window !== undefined && !lane) {
+        return reply
+          .code(400)
+          .send({ error: "window can only narrow a lane (tier) view." } as never);
+      }
+      const receivedSince = window === TODAY_WINDOW ? todayPushCutoff(new Date()) : undefined;
+      const laneOnly = lane && lane !== "ALL" ? lane : null;
+      // Attention engine v3, for a user under the policy only: the QUEUE lane in
+      // ranked order, a v3 block per mail, and Today's fields. Everyone else gets
+      // today's order and shape.
+      const rankedAt = isJudgeV3PolicyEnabled(uid) ? new Date() : undefined;
+      // Today's "Held back" group: a hold is only written as QUEUE and only
+      // under the policy, so anything else is refused rather than answered
+      // with the whole lane.
+      if (window === HELD_WINDOW && (laneOnly !== "QUEUE" || !rankedAt)) {
+        return reply
+          .code(400)
+          .send({ error: "window=held needs tier=QUEUE and the attention policy." } as never);
+      }
+      const heldSince =
+        window === HELD_WINDOW && rankedAt
+          ? heldTodayCutoff(rankedAt, (await budgetDayFor(uid, rankedAt)).zone)
+          : undefined;
+      const groupByThread = Boolean(lane) && (threads === "1" || threads === "true");
+      // Grouping pages through the SQL lane view (ALL included), so it takes the
+      // filters that view can apply — candidates is refused, not silently dropped.
+      if (groupByThread && !isLanePageFilter(filter)) {
+        return reply
+          .code(400)
+          .send({ error: `filter=${filter} cannot be combined with threads.` } as never);
+      }
+      if (laneOnly && !isLanePageFilter(filter)) {
+        return reply
+          .code(400)
+          .send({ error: `filter=${filter} cannot be combined with a lane.` } as never);
+      }
+      // hideHandled pages through the same SQL view as a lane page (the handled
+      // state lives on AttentionItem, which has no Prisma relation to the mail),
+      // so it takes the filters that view can apply — candidates is refused, not
+      // silently dropped.
+      if (hideHandledRows && !isLanePageFilter(filter)) {
+        return reply
+          .code(400)
+          .send({ error: `filter=${filter} cannot be combined with hideHandled.` } as never);
+      }
+      // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
+      // morning's intake was the #1 dogfood friction. 50 keeps the first
+      // payload under ~25 KB once joined with attachment summaries and trust
+      // scores; the cap stays as a Gmail throttle guardrail.
+      const pageSize = 50;
 
-    // Check if Gmail is connected
-    const token = await prisma.userToken.findFirst({ where: { userId: uid, provider: "google" } });
+      // Any connected source (Google, a linked inbox, an IMAP account such as
+      // iCloud or Naver) gets the real DB-backed list — this path never calls
+      // Gmail. No source at all is an honest empty inbox flagged
+      // needsConnection, never demo mail dressed up as the user's.
+      if (!(await hasAnyMailSource(uid))) return noMailSourceList();
 
-    if (!token) {
-      // Demo mode
-      let emails = [...DEMO_EMAILS];
-      if (filter === "unread") emails = emails.filter((e) => !e.isRead);
-      if (filter === "urgent") emails = emails.filter((e) => e.priority === "URGENT");
+      // Build query (reads from DB only — sync via POST /api/email/sync)
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic Prisma where clause
+      const where: Record<string, any> = { userId: uid };
+      if (filter === "unread") where.isRead = false;
+      if (filter === "urgent") where.priority = "URGENT";
       if (filter === "reply-needed") {
-        emails = emails.filter((e) =>
-          looksReplyNeeded({
-            priority: e.priority,
-            category: e.category,
-            actionItems: e.actionItems,
-            from: e.from,
-          }),
-        );
+        where.needsReply = true;
       }
-      if (filter === "attachments" || filter === "candidates") emails = [];
+      if (filter === "attachments") {
+        where.attachments = { some: {} };
+      }
+      if (filter === "candidates") {
+        where.attachments = {
+          some: {
+            OR: [
+              { category: { in: ["resume", "profile", "portfolio", "audition"] } },
+              { filename: { contains: "resume", mode: "insensitive" } },
+              { filename: { contains: "cv", mode: "insensitive" } },
+              { filename: { contains: "profile", mode: "insensitive" } },
+              { filename: { contains: "portfolio", mode: "insensitive" } },
+              { filename: { contains: "audition", mode: "insensitive" } },
+              { filename: { contains: "casting", mode: "insensitive" } },
+              { filename: { contains: "showreel", mode: "insensitive" } },
+              { filename: { contains: "reel", mode: "insensitive" } },
+              { filename: { contains: "headshot", mode: "insensitive" } },
+              { filename: { contains: "comp card", mode: "insensitive" } },
+              { filename: { contains: "comp-card", mode: "insensitive" } },
+              { filename: { contains: "self tape", mode: "insensitive" } },
+              { filename: { contains: "self-tape", mode: "insensitive" } },
+              { filename: { contains: "actor", mode: "insensitive" } },
+              { filename: { contains: "model", mode: "insensitive" } },
+              { filename: { contains: "이력서" } },
+              { filename: { contains: "프로필" } },
+              { filename: { contains: "오디션" } },
+              { filename: { contains: "캐스팅" } },
+              { filename: { contains: "포트폴리오" } },
+              { filename: { contains: "배우" } },
+              { filename: { contains: "모델" } },
+              { filename: { contains: "지원서" } },
+              { filename: { contains: "상반신" } },
+              { filename: { contains: "전신" } },
+            ],
+          },
+        };
+      }
+      if (category) where.category = category;
       if (search) {
-        const s = search.toLowerCase();
-        emails = emails.filter(
-          (e) =>
-            e.subject.toLowerCase().includes(s) ||
-            e.from.toLowerCase().includes(s) ||
-            e.snippet.toLowerCase().includes(s),
-        );
+        where.OR = emailSearchOr(search);
       }
-      if (category) emails = emails.filter((e) => e.category === category);
-      return {
-        emails: emails.map((e) => ({
-          ...e,
-          linkedInboxAccountId: null,
-          senderEmail: senderEmail(e.from) || null,
-          trust: null,
-          needsReply: looksReplyNeeded({
-            priority: e.priority,
-            category: e.category,
-            actionItems: e.actionItems,
-            from: e.from,
+      // Per-inbox scoping. `where.userId` is always set, so even a foreign or
+      // malformed id can only ever match the caller's own rows (zero) — the userId
+      // scope is the IDOR guard, no separate ownership check needed.
+      if (inbox === "primary") {
+        where.linkedInboxAccountId = null;
+      } else if (inbox && inbox !== "all") {
+        where.linkedInboxAccountId = inbox;
+      }
+      const listPage = () =>
+        Promise.all([
+          prisma.emailMessage.findMany({
+            where,
+            // Mail v2's All view (MAIL_V2 on and `tier=ALL`) breaks a timestamp
+            // tie by id, as the lane pages and the reader's previous / next do,
+            // so the list and the reader agree on the order. Without the lane
+            // parameter the ordering is what it always was.
+            orderBy:
+              lane === "ALL" ? [{ receivedAt: "desc" }, { id: "desc" }] : { receivedAt: "desc" },
+            skip: (pageNum - 1) * pageSize,
+            take: pageSize,
           }),
-          attachmentCount: 0,
-          attachmentCandidateCount: 0,
-          attachmentPendingCount: 0,
-          attachmentFallbackCount: 0,
-          attachmentUnsupportedCount: 0,
-          attachmentCategories: [],
-          candidateProfilePreview: null,
-          candidateIntake: null,
-        })),
-        source: "demo",
-        total: emails.length,
-        unread: emails.filter((e) => !e.isRead).length,
-        page: 1,
+          prisma.emailMessage.count({ where }),
+        ]);
+      // Lane page (MAIL_V2): paged by a join on the lane, so `total` is the
+      // lane's own count; the rows are then read by id and put back in the
+      // join's order. A failure throws — never the unfiltered list.
+      const lanePage = async (laneView: LiveTier | "ALL"): Promise<[EmailMessage[], number]> => {
+        const page = await pageEmailIdsInLane({
+          userId: uid,
+          lane: laneView,
+          scope: await resolveInboxScope(uid, inbox),
+          filter,
+          category,
+          search,
+          hideHandled: hideHandledRows,
+          receivedSince,
+          heldSince,
+          rankedAt,
+          skip: (pageNum - 1) * pageSize,
+          take: pageSize,
+        });
+        if (page.ids.length === 0) return [[], page.total];
+        const rows = await prisma.emailMessage.findMany({
+          where: { userId: uid, id: { in: page.ids } },
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return [page.ids.flatMap((id) => byId.get(id) ?? []), page.total];
       };
-    }
-
-    // Build query (reads from DB only — sync via POST /api/email/sync)
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic Prisma where clause
-    const where: Record<string, any> = { userId: uid };
-    if (filter === "unread") where.isRead = false;
-    if (filter === "urgent") where.priority = "URGENT";
-    if (filter === "reply-needed") {
-      where.needsReply = true;
-    }
-    if (filter === "attachments") {
-      where.attachments = { some: {} };
-    }
-    if (filter === "candidates") {
-      where.attachments = {
-        some: {
-          OR: [
-            { category: { in: ["resume", "profile", "portfolio", "audition"] } },
-            { filename: { contains: "resume", mode: "insensitive" } },
-            { filename: { contains: "cv", mode: "insensitive" } },
-            { filename: { contains: "profile", mode: "insensitive" } },
-            { filename: { contains: "portfolio", mode: "insensitive" } },
-            { filename: { contains: "audition", mode: "insensitive" } },
-            { filename: { contains: "casting", mode: "insensitive" } },
-            { filename: { contains: "showreel", mode: "insensitive" } },
-            { filename: { contains: "reel", mode: "insensitive" } },
-            { filename: { contains: "headshot", mode: "insensitive" } },
-            { filename: { contains: "comp card", mode: "insensitive" } },
-            { filename: { contains: "comp-card", mode: "insensitive" } },
-            { filename: { contains: "self tape", mode: "insensitive" } },
-            { filename: { contains: "self-tape", mode: "insensitive" } },
-            { filename: { contains: "actor", mode: "insensitive" } },
-            { filename: { contains: "model", mode: "insensitive" } },
-            { filename: { contains: "이력서" } },
-            { filename: { contains: "프로필" } },
-            { filename: { contains: "오디션" } },
-            { filename: { contains: "캐스팅" } },
-            { filename: { contains: "포트폴리오" } },
-            { filename: { contains: "배우" } },
-            { filename: { contains: "모델" } },
-            { filename: { contains: "지원서" } },
-            { filename: { contains: "상반신" } },
-            { filename: { contains: "전신" } },
-          ],
-        },
+      // Thread-grouped lane page (`threads=1` with a lane): one row per thread,
+      // its newest message in the view; `total` counts threads. A failure throws.
+      const threadCounts = new Map<string, number>();
+      const threadPage = async (laneView: LiveTier | "ALL"): Promise<[EmailMessage[], number]> => {
+        const page = await pageThreadsInLane({
+          userId: uid,
+          lane: laneView,
+          scope: await resolveInboxScope(uid, inbox),
+          filter,
+          category,
+          search,
+          hideHandled: hideHandledRows,
+          receivedSince,
+          heldSince,
+          rankedAt,
+          skip: (pageNum - 1) * pageSize,
+          take: pageSize,
+        });
+        if (page.rows.length === 0) return [[], page.total];
+        for (const row of page.rows) threadCounts.set(row.id, row.threadCount);
+        const rows = await prisma.emailMessage.findMany({
+          where: { userId: uid, id: { in: page.rows.map((row) => row.id) } },
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return [page.rows.flatMap((row) => byId.get(row.id) ?? []), page.total];
       };
-    }
-    if (category) where.category = category;
-    if (search) {
-      where.OR = emailSearchOr(search);
-    }
-    // Per-inbox scoping. `where.userId` is always set, so even a foreign or
-    // malformed id can only ever match the caller's own rows (zero) — the userId
-    // scope is the IDOR guard, no separate ownership check needed.
-    if (inbox === "primary") {
-      where.linkedInboxAccountId = null;
-    } else if (inbox && inbox !== "all") {
-      where.linkedInboxAccountId = inbox;
-    }
+      let pageResult: [[EmailMessage[], number], number];
+      try {
+        pageResult = await Promise.all([
+          groupByThread && lane
+            ? threadPage(lane)
+            : laneOnly
+              ? lanePage(laneOnly)
+              : hideHandledRows
+                ? lanePage("ALL")
+                : listPage(),
+          prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
+        ]);
+      } catch (err) {
+        // The grouped page runs under a statement timeout: a slow scan is a
+        // retryable 503, not a 500.
+        if (replyIfQueryTimedOut(err, reply)) return reply as never;
+        throw err;
+      }
+      const [[emails, total], unreadCount] = pageResult;
 
-    const [emails, total, unreadCount] = await Promise.all([
-      prisma.emailMessage.findMany({
-        where,
-        orderBy: { receivedAt: "desc" },
-        skip: (pageNum - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.emailMessage.count({ where }),
-      prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
-    ]);
-
-    // Map to API format
-    const emailIds = emails.map((email) => email.id);
-    const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds, uid);
-    const candidateProfiles = await listCandidateProfilesByEmail(emailIds, uid);
-    const candidateIntakes = await listCandidateIntakesByEmail(emailIds, uid);
-    // Backfill candidate intake for résumé/candidate emails that have a
-    // profile but no intake row yet. Run these concurrently instead of
-    // awaiting each in sequence — the old loop added up to ~2 DB round trips
-    // × pageSize serial hops to a single inbox page-load. Each sync writes its
-    // own emailId key so concurrent writes don't race; Prisma's pool provides
-    // backpressure on the fan-out.
-    await Promise.all(
-      emailIds
-        .filter((emailId) => candidateProfiles[emailId] && !candidateIntakes[emailId])
-        .map(async (emailId) => {
-          const intake = await syncCandidateIntakeForEmail({ userId: uid, emailId });
-          if (intake) candidateIntakes[emailId] = intake;
-        }),
-    );
-    // Bulk-fetch Trust Scores for every unique sender on this page so the
-    // inbox row can render a dot without an N+1 query per email.
-    const senderAddresses = Array.from(
-      new Set(emails.map((e) => senderEmail(e.from)).filter(Boolean)),
-    );
-    const trustMap = await getTrustScoresBulk(uid, senderAddresses);
-    const mapped = emails.map((e) => {
-      const actionItems = parseJsonArray(e.actionItems);
-      const candidateProfile = candidateProfiles[e.id] ?? null;
-      const candidateIntake = candidateIntakes[e.id] ?? null;
-      const addr = senderEmail(e.from);
-      return {
-        id: e.id,
-        gmailId: e.gmailId,
-        threadId: e.threadId,
-        // null = the primary Google inbox; a string = the LinkedInboxAccount the
-        // message belongs to. The client maps this to an inbox label/badge.
-        linkedInboxAccountId: e.linkedInboxAccountId,
-        from: e.from,
-        senderEmail: addr || null,
-        trust: trustToWire(addr ? trustMap.get(addr) : null),
-        to: e.to,
-        subject: e.subject,
-        snippet: e.snippet,
-        date: e.receivedAt.toISOString(),
-        labels: e.labels,
-        isRead: e.isRead,
-        isStarred: e.isStarred,
-        priority: e.priority,
-        category: e.category,
-        summary: e.summary,
-        keyPoints: parseJsonArray(e.keyPoints),
-        actionItems,
-        sentiment: e.sentiment,
-        needsReply: looksReplyNeeded({
-          needsReply: e.needsReply,
+      // Map to API format
+      const emailIds = emails.map((email) => email.id);
+      // Lane chips and their reasons ride each row (next to the sender); batched
+      // like the other enrichments below so a 50-row page costs one
+      // AttentionItem query. A failed lookup is no chip and no reason, never a 500.
+      const laneInfo = await listLaneInfoByEmail(uid, emailIds);
+      // One language read per request, and only when some row has a reason.
+      const reasonLanguage = Array.from(laneInfo.values()).some((info) => info.reason)
+        ? await readerLanguageFor(request, reply, uid)
+        : null;
+      const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds, uid);
+      const candidateProfiles = await listCandidateProfilesByEmail(emailIds, uid);
+      const candidateIntakes = await listCandidateIntakesByEmail(emailIds, uid);
+      // Backfill candidate intake for résumé/candidate emails that have a
+      // profile but no intake row yet. Run these concurrently instead of
+      // awaiting each in sequence — the old loop added up to ~2 DB round trips
+      // × pageSize serial hops to a single inbox page-load. Each sync writes its
+      // own emailId key so concurrent writes don't race; Prisma's pool provides
+      // backpressure on the fan-out.
+      await Promise.all(
+        emailIds
+          .filter((emailId) => candidateProfiles[emailId] && !candidateIntakes[emailId])
+          .map(async (emailId) => {
+            const intake = await syncCandidateIntakeForEmail({ userId: uid, emailId });
+            if (intake) candidateIntakes[emailId] = intake;
+          }),
+      );
+      // Bulk-fetch Trust Scores for every unique sender on this page so the
+      // inbox row can render a dot without an N+1 query per email.
+      const senderAddresses = Array.from(
+        new Set(emails.map((e) => senderEmail(e.from)).filter(Boolean)),
+      );
+      const trustMap = await getTrustScoresBulk(uid, senderAddresses);
+      const mapped = emails.map((e) => {
+        const actionItems = parseJsonArray(e.actionItems);
+        const candidateProfile = candidateProfiles[e.id] ?? null;
+        const candidateIntake = candidateIntakes[e.id] ?? null;
+        const addr = senderEmail(e.from);
+        return {
+          id: e.id,
+          gmailId: e.gmailId,
+          threadId: e.threadId,
+          // null = the primary Google inbox; a string = the LinkedInboxAccount the
+          // message belongs to. The client maps this to an inbox label/badge.
+          linkedInboxAccountId: e.linkedInboxAccountId,
+          from: e.from,
+          senderEmail: addr || null,
+          trust: trustToWire(addr ? trustMap.get(addr) : null),
+          tier: laneInfo.get(e.id)?.tier ?? null,
+          tierReason: resolveTierReason(laneInfo.get(e.id)?.reason, reasonLanguage),
+          ...(groupByThread ? { threadCount: threadCounts.get(e.id) ?? 1 } : {}),
+          to: e.to,
+          subject: e.subject,
+          snippet: e.snippet,
+          date: e.receivedAt.toISOString(),
+          labels: e.labels,
+          isRead: e.isRead,
+          isStarred: e.isStarred,
           priority: e.priority,
           category: e.category,
+          summary: e.summary,
+          keyPoints: parseJsonArray(e.keyPoints),
           actionItems,
-          from: e.from,
-        }),
-        attachmentCount: attachmentSummaries[e.id]?.attachmentCount ?? 0,
-        attachmentCandidateCount: attachmentSummaries[e.id]?.candidateAttachmentCount ?? 0,
-        attachmentPendingCount: attachmentSummaries[e.id]?.pendingAttachmentCount ?? 0,
-        attachmentFallbackCount: attachmentSummaries[e.id]?.fallbackAttachmentCount ?? 0,
-        attachmentUnsupportedCount: attachmentSummaries[e.id]?.unsupportedAttachmentCount ?? 0,
-        attachmentCategories: attachmentSummaries[e.id]?.categories ?? [],
-        candidateProfilePreview: candidateProfile
-          ? {
-              name: candidateProfile.name,
-              role: candidateProfile.role,
-              contact: candidateProfile.contact,
-              summary: candidateProfile.summary,
-              missingFields: candidateProfile.missingFields,
-              confidence: candidateProfile.confidence,
-              evidenceCount: candidateProfile.evidenceFiles.length,
-              intakeStatus: candidateIntake?.status ?? null,
-            }
-          : null,
-        candidateIntake,
-      };
-    });
+          sentiment: e.sentiment,
+          needsReply: looksReplyNeeded({
+            needsReply: e.needsReply,
+            priority: e.priority,
+            category: e.category,
+            actionItems,
+            from: e.from,
+          }),
+          attachmentCount: attachmentSummaries[e.id]?.attachmentCount ?? 0,
+          attachmentCandidateCount: attachmentSummaries[e.id]?.candidateAttachmentCount ?? 0,
+          attachmentPendingCount: attachmentSummaries[e.id]?.pendingAttachmentCount ?? 0,
+          attachmentFallbackCount: attachmentSummaries[e.id]?.fallbackAttachmentCount ?? 0,
+          attachmentUnsupportedCount: attachmentSummaries[e.id]?.unsupportedAttachmentCount ?? 0,
+          attachmentCategories: attachmentSummaries[e.id]?.categories ?? [],
+          candidateProfilePreview: candidateProfile
+            ? {
+                name: candidateProfile.name,
+                role: candidateProfile.role,
+                contact: candidateProfile.contact,
+                summary: candidateProfile.summary,
+                missingFields: candidateProfile.missingFields,
+                confidence: candidateProfile.confidence,
+                evidenceCount: candidateProfile.evidenceFiles.length,
+                intakeStatus: candidateIntake?.status ?? null,
+              }
+            : null,
+          candidateIntake,
+        };
+      });
 
-    return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
-  });
+      // v3 blocks ride lane pages only (the contract); the plain list is unchanged.
+      if (!rankedAt || !lane) {
+        return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
+      }
+      const v3 = await v3ListFields(uid, inbox, mapped, {
+        rankedAt,
+        rankFrom: laneOnly === "QUEUE" ? (pageNum - 1) * pageSize + 1 : null,
+        today: window === TODAY_WINDOW,
+      });
+      return {
+        emails: mapped.map((row) => ({ ...row, v3: v3.blocks.get(row.id) })),
+        source: "gmail",
+        total,
+        unread: unreadCount,
+        page: pageNum,
+        ...v3.response,
+      };
+    },
+  );
 
   // ─── Thread View ──────────────────────────────────────────────────────
   // GET /api/email/threads?search=keyword&priority=URGENT&unread=true&page=1
-  app.get("/threads", async (request): Promise<EmailThreadListResponse> => {
-    const { search, priority, unread, category, page } = request.query as {
-      search?: string;
-      priority?: string;
-      unread?: string;
-      category?: string;
-      page?: string;
-    };
-    const uid = getUserId(request);
+  app.get(
+    "/threads",
+    { schema: { querystring: listThreadsQuerySchema } },
+    async (request): Promise<EmailThreadListResponse> => {
+      const { search, priority, unread, category, page } = request.query as {
+        search?: string;
+        priority?: string;
+        unread?: string;
+        category?: string;
+        page?: string;
+      };
+      const uid = getUserId(request);
 
-    const token = await prisma.userToken.findFirst({ where: { userId: uid, provider: "google" } });
-    if (!token) {
-      // Demo thread view
-      const threads = DEMO_EMAILS.map((e) => ({
-        threadId: e.threadId,
-        subject: e.subject,
-        participants: [e.from],
-        messageCount: 1,
-        lastMessage: {
-          id: e.id,
-          from: e.from,
-          snippet: e.snippet,
-          receivedAt: e.receivedAt,
-          isRead: e.isRead,
-        },
-        hasUnread: !e.isRead,
-        latestPriority: e.priority,
-        summary: e.summary,
-      }));
-      return { threads, total: threads.length, source: "demo", page: 1 };
-    }
+      if (!(await hasAnyMailSource(uid))) {
+        return { threads: [], total: 0, source: "demo", needsConnection: true, page: 1 };
+      }
 
-    const pageNum = parsePageNum(page);
-    // Match the /api/email pageSize bump (heavy-user friction). Threads
-    // are heavier per row but a single page still fits in the same envelope.
-    const pageSize = 50;
-    const result = await getEmailThreads(uid, {
-      search,
-      priority,
-      unreadOnly: unread === "true",
-      category,
-      skip: (pageNum - 1) * pageSize,
-      take: pageSize,
-    });
+      const pageNum = parsePageNum(page);
+      // Match the /api/email pageSize bump (heavy-user friction). Threads
+      // are heavier per row but a single page still fits in the same envelope.
+      const pageSize = 50;
+      const result = await getEmailThreads(uid, {
+        search,
+        priority,
+        unreadOnly: unread === "true",
+        category,
+        skip: (pageNum - 1) * pageSize,
+        take: pageSize,
+      });
 
-    return { ...result, source: "gmail", page: pageNum };
-  });
+      return { ...result, source: "gmail", page: pageNum };
+    },
+  );
 
   // ─── Thread Detail ────────────────────────────────────────────────────
   // GET /api/email/thread/:threadId
@@ -919,67 +1204,168 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Triage Continuation ──────────────────────────────────────────────
   // GET /api/email/:id/next?queue=unread
-  app.get("/:id/next", { preHandler: requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { queue } = request.query as { queue?: string };
-    const queueKey = normalizeEmailQueue(queue);
-    const uid = getUserId(request);
+  app.get(
+    "/:id/next",
+    { preHandler: requireAuth, schema: { querystring: emailNextQuerySchema } },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { queue } = request.query as { queue?: string };
+      const queueKey = normalizeEmailQueue(queue);
+      const uid = getUserId(request);
 
-    if (id.startsWith("demo-")) {
-      const currentIndex = DEMO_EMAILS.findIndex((email) => email.id === id);
-      if (currentIndex === -1) return reply.code(404).send({ error: "Email not found" });
-      const next = DEMO_EMAILS.slice(currentIndex + 1).find((email) =>
-        demoEmailMatchesQueue(email, queueKey),
-      );
-      return {
-        queue: queueKey,
-        next: next
-          ? {
-              id: next.id,
-              from: next.from,
-              subject: next.subject,
-              date: next.receivedAt,
-              isRead: next.isRead,
-              priority: next.priority,
-              needsReply: looksReplyNeeded({
-                priority: next.priority,
-                category: next.category,
-                actionItems: next.actionItems,
+      if (id.startsWith("demo-")) {
+        const currentIndex = DEMO_EMAILS.findIndex((email) => email.id === id);
+        if (currentIndex === -1) return reply.code(404).send({ error: "Email not found" });
+        const next = DEMO_EMAILS.slice(currentIndex + 1).find((email) =>
+          demoEmailMatchesQueue(email, queueKey),
+        );
+        return {
+          queue: queueKey,
+          next: next
+            ? {
+                id: next.id,
                 from: next.from,
-              }),
-            }
-          : null,
+                subject: next.subject,
+                date: next.receivedAt,
+                isRead: next.isRead,
+                priority: next.priority,
+                needsReply: looksReplyNeeded({
+                  priority: next.priority,
+                  category: next.category,
+                  actionItems: next.actionItems,
+                  from: next.from,
+                }),
+              }
+            : null,
+        };
+      }
+
+      const current = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      });
+      if (!current) return reply.code(404).send({ error: "Email not found" });
+
+      const next = await prisma.emailMessage.findFirst({
+        where: {
+          AND: [
+            buildQueueWhere(uid, queueKey),
+            {
+              OR: [
+                { receivedAt: { lt: current.receivedAt } },
+                { receivedAt: current.receivedAt, id: { lt: current.id } },
+              ],
+            },
+          ],
+        },
+        orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
+      });
+
+      return { queue: queueKey, next: next ? serializeQueueEmail(next) : null };
+    },
+  );
+
+  // ─── Inline (cid:) image bytes ─────────────────────────────────────────
+  // GET /api/email/:id/inline/:cid — serves an inline MIME image referenced
+  // by src="cid:…" in rendered mail. The desktop webview's cid scheme
+  // handler fetches through here with the normal bearer auth. Misses are a
+  // plain 404 (the client renders a transparent placeholder) — rows synced
+  // before contentId capture landed simply have no match.
+  app.get(
+    "/:id/inline/:cid",
+    {
+      schema: { querystring: { type: "object", additionalProperties: false, properties: {} } },
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id, cid } = request.params as { id: string; cid: string };
+      const uid = getUserId(request);
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+
+      const attachment = await prisma.emailAttachment.findFirst({
+        where: { userId: uid, emailId: dbEmail.id, contentId: cid },
+      });
+      // Only ever serve image/* — mimeType is the sender's declaration, and
+      // reflecting an arbitrary type (e.g. text/html) under our origin is an
+      // XSS foothold the moment any consumer loads this URL outside the
+      // JS-disabled desktop webview.
+      if (!attachment || !attachment.mimeType?.startsWith("image/")) {
+        return reply.code(404).send({ error: "Inline image not found" });
+      }
+
+      const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
+      if (!auth) return reply.code(404).send({ error: "Mail source not connected" });
+      try {
+        const { google } = await import("googleapis");
+        const gmail = google.gmail({ version: "v1", auth });
+        const res = await gmail.users.messages.attachments.get({
+          userId: "me",
+          messageId: dbEmail.gmailId,
+          id: attachment.gmailAttachmentId,
+        });
+        const data = res.data.data;
+        if (!data) return reply.code(404).send({ error: "Inline image not found" });
+        return reply
+          .type(attachment.mimeType || "application/octet-stream")
+          .header("cache-control", "private, max-age=3600")
+          .send(Buffer.from(data, "base64url"));
+      } catch (err) {
+        console.warn(`[EMAIL] inline image fetch failed for ${dbEmail.id}/${cid}:`, err);
+        return reply.code(404).send({ error: "Inline image not found" });
+      }
+    },
+  );
+
+  // ─── Meeting ↔ calendar cross-reference ──────────────────────────────
+  // GET /api/email/:id/meeting-context — for meeting-category mail: the
+  // proposed slot parsed from the email (anchored at receivedAt), a live
+  // conflict verdict, and nearby local events. Reading-pane data; the same
+  // (cached) context also grounds the reply drafts. Rate-limited because a
+  // cold call costs one LLM parse.
+  app.get(
+    "/:id/meeting-context",
+    {
+      schema: { querystring: { type: "object", additionalProperties: false, properties: {} } },
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+
+      const context = await getMeetingContext(uid, {
+        id: dbEmail.id,
+        category: dbEmail.category,
+        summary: dbEmail.summary,
+        keyPoints: parseJsonArray(dbEmail.keyPoints),
+        body: dbEmail.body,
+        receivedAt: dbEmail.receivedAt,
+        from: dbEmail.from,
+      });
+      if (context) return context;
+      // Non-meeting mail answers with an empty context rather than an error —
+      // the client treats "nothing to show" uniformly. Resolve the real zone
+      // so the response always satisfies the MeetingContext contract
+      // (timeZone: string, never null).
+      const { getUserTimeZone } = await import("../user-timezone.js");
+      return {
+        proposed: null,
+        conflict: null,
+        nearby: [],
+        timeZone: await getUserTimeZone(uid),
       };
-    }
-
-    const current = await prisma.emailMessage.findFirst({
-      where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-    });
-    if (!current) return reply.code(404).send({ error: "Email not found" });
-
-    const next = await prisma.emailMessage.findFirst({
-      where: {
-        AND: [
-          buildQueueWhere(uid, queueKey),
-          {
-            OR: [
-              { receivedAt: { lt: current.receivedAt } },
-              { receivedAt: current.receivedAt, id: { lt: current.id } },
-            ],
-          },
-        ],
-      },
-      orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
-    });
-
-    return { queue: queueKey, next: next ? serializeQueueEmail(next) : null };
-  });
+    },
+  );
 
   // ─── Single Email Detail ──────────────────────────────────────────────
   // GET /api/email/:id
-  app.get("/:id", async (request) => {
+  app.get("/:id", { schema: { querystring: emailDetailQuerySchema } }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { markRead } = request.query as { markRead?: string };
     const uid = getUserId(request);
 
     // Check DB first
@@ -988,15 +1374,12 @@ export async function emailRoutes(app: FastifyInstance) {
     });
 
     if (dbEmail) {
-      // Mark-as-read is explicit. Many users rely on unread as a work queue.
-      if (markRead === "true" && !dbEmail.isRead) {
-        mailActionsFor(uid, dbEmail.linkedInboxAccountId)
-          .then((actions) =>
-            actions.toggleRead(uid, dbEmail.gmailId, true, dbEmail.linkedInboxAccountId),
-          )
-          .catch((err) => console.warn(`[EMAIL] toggleRead failed for ${dbEmail.gmailId}`, err));
-        await prisma.emailMessage.update({ where: { id: dbEmail.id }, data: { isRead: true } });
-      }
+      // Reading a mail changes nothing the user sees. Mark-as-read is explicit
+      // — many users rely on unread as a work queue — so it lives on
+      // PATCH /:id/read, never on this GET (link prefetchers fetch GETs). The
+      // one write here is the OPENED ledger stamp below: internal bookkeeping,
+      // reachable only with the user's Bearer token. A caller that fetches for
+      // another reason must pass ?purpose= so it isn't counted as an open.
       const actionItems = parseJsonArray(dbEmail.actionItems);
       const attachments = await listEmailAttachments([dbEmail.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
@@ -1008,7 +1391,9 @@ export async function emailRoutes(app: FastifyInstance) {
       // Learned engagement for the reading-pane "you engage with this sender"
       // chip. Cache-only (fails soft to null, never rebuilds on a request).
       const engagementNode = addr ? await getCachedInteractionNode(uid, addr) : null;
-      return {
+      const readerLanguage = await readerLanguageFor(request, reply, uid);
+      const { purpose } = request.query as { purpose?: string };
+      const detail = {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
         threadId: dbEmail.threadId,
@@ -1029,22 +1414,52 @@ export async function emailRoutes(app: FastifyInstance) {
         cc: dbEmail.cc,
         subject: dbEmail.subject,
         snippet: dbEmail.snippet,
-        // Legacy HTML-only rows persisted body=null; project the stored HTML
-        // so the reader shows real content (incl. verification links) instead
-        // of the snippet stub. A pathological row must degrade to the snippet,
-        // not 500 the whole detail view.
-        body: dbEmail.body ?? projectHtmlBody(dbEmail.htmlBody, dbEmail.id, uid),
+        // Legacy HTML-only rows persisted body=null, and older rows may hold
+        // raw HTML in body (HTML-in-plain-part senders). serveBody projects /
+        // coerces so the reader shows real content (incl. verification links)
+        // instead of tag soup or the snippet stub. A pathological row must
+        // degrade to the snippet, not 500 the whole detail view.
+        body: serveBody(dbEmail.body, dbEmail.htmlBody, dbEmail.id, uid),
+        // Sanitized HTML for clients that render mail as the sender designed
+        // it (JS-disabled webview). null for genuinely-plain mail — the plain
+        // body above stays authoritative there. Failure degrades to null.
+        renderHtml: (() => {
+          try {
+            return renderableEmailHtmlFor(dbEmail.body, dbEmail.htmlBody);
+          } catch (err) {
+            console.error("[EMAIL] renderHtml sanitize failed:", { emailId: dbEmail.id }, err);
+            return null;
+          }
+        })(),
         date: dbEmail.receivedAt.toISOString(),
         labels: dbEmail.labels,
-        isRead: markRead === "true" ? true : dbEmail.isRead,
+        isRead: dbEmail.isRead,
         isStarred: dbEmail.isStarred,
+        // Most-automatic method available; null = no List-Unsubscribe header
+        // (or the row predates the columns and hasn't re-synced) — the
+        // client renders no unsubscribe affordance.
+        unsubscribe: dbEmail.listUnsubscribeOneClick
+          ? ("one-click" as const)
+          : dbEmail.listUnsubscribeMailto
+            ? ("mailto" as const)
+            : dbEmail.listUnsubscribeUrl
+              ? ("link" as const)
+              : null,
         priority: dbEmail.priority,
         category: dbEmail.category,
         summary: dbEmail.summary,
         keyPoints: parseJsonArray(dbEmail.keyPoints),
         actionItems,
         sentiment: dbEmail.sentiment,
+        // The stored value is a classifier code; the Text field is its reader
+        // line in the client's UI language (null when the code has none).
+        // summary / keyPoints / actionItems above are LLM-written in the
+        // language active when they were generated and are never re-rendered.
         needsReplyReason: dbEmail.needsReplyReason,
+        needsReplyReasonText: needsReplyReasonText(dbEmail.needsReplyReason, readerLanguage),
+        // A reply written ahead of time (proactive drafts) — the client
+        // offers it in the composer; null once answered or when none exists.
+        proactiveDraft: offeredDraftFor(dbEmail),
         needsReplyConfidence: dbEmail.needsReplyConfidence,
         needsReply: looksReplyNeeded({
           needsReply: dbEmail.needsReply,
@@ -1058,6 +1473,10 @@ export async function emailRoutes(app: FastifyInstance) {
         candidateProfile,
         candidateIntake,
       };
+      // Stamped only once the reply body is built, so a failure above never
+      // leaves an OPENED for a mail the user didn't get to see.
+      if (purpose === undefined) noteEmailOutcome(uid, dbEmail.id, "OPENED");
+      return detail;
     }
 
     // Demo fallback
@@ -1119,6 +1538,8 @@ export async function emailRoutes(app: FastifyInstance) {
         // as "not analyzed" forever — pressing Sync with 0 new mail summarized 0.
         summarizeUnsummarizedEmails(uid, Math.max(result.newCount, 10)).catch((err) => {
           console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
+          // The daily budget line is expected back-pressure, not a fault.
+          if (err instanceof Error && err.name === "DailyCostCapExceededError") return;
           captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
         });
         analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))
@@ -1175,11 +1596,21 @@ export async function emailRoutes(app: FastifyInstance) {
   // the primary Google account + every linked secondary inbox. Read-only,
   // self-scoped (userId from the JWT), and NO tokens are returned. Built entirely
   // from the user's own rows — nothing about any specific address is hardcoded.
+  // DB stores purpose as a free string column; the wire narrows it — any
+  // unknown value (a rollback, a manual edit) reads as unset, never a crash.
+  const asPurpose = (value: string | null | undefined): InboxPurpose | null =>
+    value === "work" || value === "personal" || value === "mixed" ? value : null;
+
   app.get("/inboxes", async (request): Promise<InboxesResponse> => {
     const uid = getUserId(request);
     const user = await prisma.user.findUnique({
       where: { id: uid },
-      select: { email: true },
+      select: {
+        email: true,
+        primaryInboxPurpose: true,
+        companyDomains: true,
+        triagePriorities: true,
+      },
     });
     // Primary reconnect state: an invalidated token keeps its row but loses
     // the refresh token — that IS "needs reconnect" for the primary account.
@@ -1191,11 +1622,19 @@ export async function emailRoutes(app: FastifyInstance) {
       // Flag OFF keeps the historical GOOGLE-only selector. Flag ON (Phase 1:
       // the contract carries `provider` and actions dispatch by provider, with
       // unsupported ones refusing loudly as 501) surfaces every connected
-      // mailbox — NAVER rows have been in this table since Phase 0b.
-      where: providerInboxSelectorEnabled() ? { userId: uid } : { userId: uid, provider: "GOOGLE" },
-      select: { id: true, email: true, needsReconnect: true, provider: true },
+      // mailbox — NAVER rows have been in this table since Phase 0b — except
+      // the Klorn address (E1a): no client handles it yet (unlink, From,
+      // titles), so it stays out until E3 adds that.
+      where: providerInboxSelectorEnabled()
+        ? { userId: uid, ...NOT_KLORN_ADDRESS }
+        : { userId: uid, provider: "GOOGLE" },
+      select: { id: true, email: true, needsReconnect: true, provider: true, purpose: true },
       orderBy: { email: "asc" },
     });
+    // A pre-guard row that mirrors the primary address (user OAuth-linked
+    // their own account) must not show as a second inbox.
+    const primaryEmail = (user?.email ?? "").trim().toLowerCase();
+    const distinctLinked = linked.filter((l) => l.email.trim().toLowerCase() !== primaryEmail);
     return {
       inboxes: [
         {
@@ -1207,23 +1646,90 @@ export async function emailRoutes(app: FastifyInstance) {
           // client that renders this field (2026-08-07 desktop diagnosis).
           needsReconnect: Boolean(googleToken) && !googleToken?.refreshToken,
           provider: "GOOGLE" as const,
+          purpose: asPurpose(user?.primaryInboxPurpose),
         },
-        ...linked.map((l) => ({
+        ...distinctLinked.map((l) => ({
           id: l.id,
           email: l.email,
           kind: "linked" as const,
           needsReconnect: l.needsReconnect,
+          purpose: asPurpose(l.purpose),
           // No cast on purpose: the Prisma enum and the contract union are the
-          // same five values today, and this assignment is what fails the
+          // same six values today, and this assignment is what fails the
           // build the day a migration adds a provider the contract lacks.
           provider: l.provider,
         })),
       ],
+      companyDomains: user?.companyDomains ?? [],
+      priorities: user?.triagePriorities ?? null,
     };
   });
 
   // ─── Reconcile (remove stale emails from DB) ──────────────────────────
   // POST /api/email/reconcile
+  // What a mailbox is FOR — feeds the analysis prompts (a personal inbox
+  // must not be scored as a work inbox). Declared by the user, never
+  // inferred; null clears the answer.
+  app.patch("/inboxes/purpose", async (request, reply) => {
+    const uid = getUserId(request);
+    const { inbox, purpose } = (request.body ?? {}) as {
+      inbox?: string;
+      purpose?: string | null;
+    };
+    const VALID = ["work", "personal", "mixed"];
+    if (purpose != null && !VALID.includes(purpose)) {
+      return reply.code(400).send({ success: false, error: "Invalid purpose" });
+    }
+    if (!inbox) {
+      return reply.code(400).send({ success: false, error: "inbox is required" });
+    }
+    if (inbox === "primary") {
+      await prisma.user.update({
+        where: { id: uid },
+        data: { primaryInboxPurpose: purpose ?? null },
+      });
+      return { success: true };
+    }
+    // userId in the filter, not just the id — a foreign id must 404, never
+    // write across users.
+    const updated = await prisma.linkedInboxAccount.updateMany({
+      where: { id: inbox, userId: uid },
+      data: { purpose: purpose ?? null },
+    });
+    if (updated.count === 0) {
+      return reply.code(404).send({ success: false, error: "Unknown inbox" });
+    }
+    return { success: true };
+  });
+
+  // The user's company email domains — a sender on one is 회사 as a recorded
+  // fact (row chip + analysis preamble). Validated once, here; the stored
+  // list is always canonical lowercase hostnames.
+  app.patch("/inboxes/company-domains", async (request, reply) => {
+    const uid = getUserId(request);
+    const { domains } = (request.body ?? {}) as { domains?: unknown };
+    const result = normalizeCompanyDomains(domains);
+    if ("error" in result) {
+      return reply.code(400).send({ success: false, error: result.error });
+    }
+    await prisma.user.update({ where: { id: uid }, data: { companyDomains: result.domains } });
+    return { success: true, companyDomains: result.domains };
+  });
+
+  // What matters to the user, in their words — read by the lane judge and
+  // the analysis preamble. Validated once (cap, whitespace); null clears.
+  app.patch("/inboxes/priorities", async (request, reply) => {
+    const uid = getUserId(request);
+    const { text } = (request.body ?? {}) as { text?: unknown };
+    const result = normalizeTriagePriorities(text);
+    if ("error" in result) {
+      return reply.code(400).send({ success: false, error: result.error });
+    }
+    await prisma.user.update({ where: { id: uid }, data: { triagePriorities: result.text } });
+    invalidateTriagePriorities(uid);
+    return { success: true, priorities: result.text };
+  });
+
   app.post("/reconcile", async (request, reply) => {
     const uid = getUserId(request);
     try {
@@ -1254,21 +1760,340 @@ export async function emailRoutes(app: FastifyInstance) {
     },
   );
 
+  // Ids of this user's single-sender PIN_TIER rules for `sender` — EXACT
+  // shape [sender] only, so multi-address rules authored via the generic
+  // /rules endpoint are never retargeted or deleted from the pin routes.
+  // Matching runs in JS (not a JSON path filter): the rule count per user is
+  // tiny, and exactness beats relying on Postgres array-containment shape.
+  async function pinnedRuleIds(uid: string, sender: string): Promise<string[]> {
+    const rules = await prisma.emailRule.findMany({
+      where: { userId: uid, actionType: "PIN_TIER" },
+      select: { id: true, conditions: true },
+    });
+    return rules
+      .filter((rule) => {
+        const from = (rule.conditions as { from?: unknown })?.from;
+        return (
+          Array.isArray(from) &&
+          from.length === 1 &&
+          typeof from[0] === "string" &&
+          from[0].toLowerCase() === sender
+        );
+      })
+      .map((rule) => rule.id);
+  }
+
+  // Ids of this user's single-domain PIN_TIER rules for `domain` — EXACT
+  // shape [domain] only, mirroring pinnedRuleIds for the same reason.
+  async function domainPinnedRuleIds(uid: string, domain: string): Promise<string[]> {
+    const rules = await prisma.emailRule.findMany({
+      where: { userId: uid, actionType: "PIN_TIER" },
+      select: { id: true, conditions: true },
+    });
+    return rules
+      .filter((rule) => {
+        const fromDomain = (rule.conditions as { fromDomain?: unknown })?.fromDomain;
+        return (
+          Array.isArray(fromDomain) &&
+          fromDomain.length === 1 &&
+          typeof fromDomain[0] === "string" &&
+          fromDomain[0].toLowerCase() === domain
+        );
+      })
+      .map((rule) => rule.id);
+  }
+
+  // Resolve :id (db id or gmailId) to the mail's exact parsed sender address.
+  async function senderOfOwnedEmail(uid: string, id: string): Promise<string | null> {
+    const dbEmail = await prisma.emailMessage.findFirst({
+      where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      select: { from: true },
+    });
+    if (!dbEmail) return null;
+    return extractEmailAddress(dbEmail.from ?? "")?.toLowerCase() || null;
+  }
+
+  // POST /api/email/:id/pin-tier {tier} — "this sender is ALWAYS this lane".
+  // Replaces the sender's pin rule(s) atomically (delete-then-create in one
+  // transaction); the judge honors it at cascade rank 0 ("enforced, not
+  // predicted"). Delete-then-create also self-heals any duplicate rows a
+  // concurrent double-submit may have left behind. DELETE unpins.
+  // POST /api/email/:id/unsubscribe — act on the mail's List-Unsubscribe
+  // targets, most automatic first: RFC 8058 one-click POST (server-side,
+  // SSRF-guarded in mail/list-unsubscribe), else a mailto send from the
+  // user's own account, else the browser link handed back to the client.
+  // User-initiated only — the flag-gated automatic path rides the promo
+  // auto-read hook in judge/email-firewall. The steps live in
+  // mail/unsubscribe-action (shared with the Subscriptions page).
+  app.post(
+    "/:id/unsubscribe",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: {
+          id: true,
+          linkedInboxAccountId: true,
+          listUnsubscribeMailto: true,
+          listUnsubscribeUrl: true,
+          listUnsubscribeOneClick: true,
+        },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      const outcome = await unsubscribeFromEmail(uid, dbEmail);
+      if (!outcome.ok) return reply.code(outcome.statusCode).send({ error: outcome.error });
+      // A handed-back browser link (done: false) is not an unsubscribe yet.
+      if (outcome.body.done) noteEmailOutcome(uid, dbEmail.id, "UNSUBSCRIBED");
+      return outcome.body;
+    },
+  );
+
+  app.post("/:id/pin-tier", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = getUserId(request);
+    const { tier, scope } = (request.body as { tier?: string; scope?: string }) || {};
+    if (!tier || !isTier(tier)) {
+      return reply.code(400).send({ error: "tier must be one of the known lanes." });
+    }
+    if (scope !== undefined && scope !== "sender" && scope !== "domain") {
+      return reply.code(400).send({ error: 'scope must be "sender" or "domain".' });
+    }
+    const sender = await senderOfOwnedEmail(uid, id);
+    if (!sender) return reply.code(404).send({ error: "Email not found" });
+
+    if (scope === "domain") {
+      const domain = sender.slice(sender.lastIndexOf("@") + 1);
+      if (!domain || sender.lastIndexOf("@") <= 0) {
+        return reply.code(400).send({ error: "Sender has no domain to pin." });
+      }
+      if (isPublicMailboxDomain(domain)) {
+        return reply.code(400).send({
+          error: "This is a public mailbox domain — pin the sender instead.",
+        });
+      }
+      const stale = await domainPinnedRuleIds(uid, domain);
+      await prisma.$transaction([
+        ...(stale.length
+          ? [prisma.emailRule.deleteMany({ where: { id: { in: stale }, userId: uid } })]
+          : []),
+        prisma.emailRule.create({
+          data: {
+            userId: uid,
+            name: `Pin: @${domain}`,
+            conditions: { fromDomain: [domain] },
+            actionType: "PIN_TIER",
+            actionValue: tier,
+          },
+        }),
+      ]);
+      return { pinned: true, domain, tier };
+    }
+
+    const stale = await pinnedRuleIds(uid, sender);
+    await prisma.$transaction([
+      ...(stale.length
+        ? [prisma.emailRule.deleteMany({ where: { id: { in: stale }, userId: uid } })]
+        : []),
+      prisma.emailRule.create({
+        data: {
+          userId: uid,
+          name: `Pin: ${sender}`,
+          conditions: { from: [sender] },
+          actionType: "PIN_TIER",
+          actionValue: tier,
+        },
+      }),
+    ]);
+    return { pinned: true, sender, tier };
+  });
+
+  // DELETE /api/email/:id/pin-tier — remove the sender's pin(s). deleteMany
+  // (not findFirst+delete) so an unpin always clears every matching row.
+  app.delete("/:id/pin-tier", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = getUserId(request);
+    const { scope } = (request.query as { scope?: string }) || {};
+    if (scope !== undefined && scope !== "sender" && scope !== "domain") {
+      return reply.code(400).send({ error: 'scope must be "sender" or "domain".' });
+    }
+    const sender = await senderOfOwnedEmail(uid, id);
+    if (!sender) return reply.code(404).send({ error: "Email not found" });
+
+    if (scope === "domain") {
+      const domain = sender.slice(sender.lastIndexOf("@") + 1);
+      const stale = domain ? await domainPinnedRuleIds(uid, domain) : [];
+      if (stale.length) {
+        await prisma.emailRule.deleteMany({ where: { id: { in: stale }, userId: uid } });
+      }
+      return { pinned: false, domain };
+    }
+
+    const stale = await pinnedRuleIds(uid, sender);
+    if (stale.length) {
+      await prisma.emailRule.deleteMany({ where: { id: { in: stale }, userId: uid } });
+    }
+    return { pinned: false, sender };
+  });
+
+  // GET /api/email/:id/thread-brief — "why did this person write, now?"
+  // Reads the WHOLE Gmail thread (both directions, including the user's own
+  // sent replies the INBOX-only mirror never stored) and caches the result
+  // per thread state. This is also what warms the cache the reply drafter
+  // reads, so opening a mail pays the read once for every later surface.
+  app.get(
+    "/:id/thread-brief",
+    {
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { lang } = (request.query as { lang?: string }) ?? {};
+
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: { threadId: true },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      // IMAP-sourced mail has no thread id — an honest empty answer beats a
+      // 404 the client has to special-case.
+      if (!dbEmail.threadId) return { brief: null };
+
+      const brief = await getThreadBrief(uid, dbEmail.threadId, {
+        lang: lang === "ko" ? "ko" : "en",
+      });
+      return { brief: brief.whyNow ? brief : null };
+    },
+  );
+
+  // GET /api/email/:id/sender-dossier — relationship context for the mail's
+  // sender ("why did this person write"). Cache-by-count inside the module:
+  // reopening mail costs zero LLM calls until new mail from them arrives.
+  app.get(
+    "/:id/sender-dossier",
+    {
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { lang } = (request.query as { lang?: string }) ?? {};
+
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: { id: true, from: true },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      const sender = extractEmailAddress(dbEmail.from ?? "");
+      if (!sender) return reply.code(404).send({ error: "No sender address" });
+
+      try {
+        const dossier = await getSenderDossier(uid, sender, lang === "ko" ? "ko" : "en");
+        if (!dossier) {
+          return reply
+            .code(503)
+            .send({ error: "No AI provider is configured. Add an API key in Settings." });
+        }
+        return dossier;
+      } catch (err) {
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
+        if (err instanceof Error && err.name === "UserRateLimitedError") {
+          const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
+          reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+          return reply.code(429).send({ error: err.message });
+        }
+        captureError(err, {
+          tags: { scope: "email.sender-dossier" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
+        const reason = describeLlmFailure(err);
+        return reply.code(503).send({
+          error: `Relationship context is temporarily unavailable (${reason}).`,
+        });
+      }
+    },
+  );
+
+  // POST /api/email/:id/summarize — on-demand detailed re-summary of ONE
+  // email (reading-pane "AI 정리"). One foreground LLM call per request, so
+  // the paid-compose gate and the reply-draft rate budget both apply.
+  app.post(
+    "/:id/summarize",
+    {
+      // The plugin-level requireAuth hook already covers this route; the
+      // explicit pair matches the sibling LLM routes and survives hook
+      // reordering. requireAuth first sets userId for requireEntitled.
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { lang } = (request.body as { lang?: string }) || {};
+
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+
+      try {
+        const result = await summarizeEmailOnDemand(uid, dbEmail, lang === "ko" ? "ko" : "en");
+        if (!result) {
+          return reply
+            .code(503)
+            .send({ error: "No AI provider is configured. Add an API key in Settings." });
+        }
+        return result;
+      } catch (err) {
+        // Same failure taxonomy as /reply-draft: the cap and the per-user
+        // throttle are user-visible facts, everything else is a transient 503
+        // with the failure class named — never a bare 500.
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
+        if (err instanceof Error && err.name === "UserRateLimitedError") {
+          const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
+          reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+          return reply.code(429).send({ error: err.message });
+        }
+        if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
+          captureError(err, {
+            tags: { scope: "email.summarize-detail.providers-exhausted" },
+            extra: { userId: uid, emailId: dbEmail.id },
+          });
+          return reply.code(503).send({
+            error: "The AI model provider is unavailable right now. Please try again shortly.",
+          });
+        }
+        captureError(err, {
+          tags: { scope: "email.summarize-detail" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
+        const reason = describeLlmFailure(err);
+        return reply.code(503).send({
+          error: `Summarizing is temporarily unavailable (${reason}). Please try again shortly.`,
+        });
+      }
+    },
+  );
+
   // ─── Email Stats ──────────────────────────────────────────────────────
   app.get("/stats/summary", async (request) => {
     const uid = getUserId(request);
 
-    const token = await prisma.userToken.findFirst({ where: { userId: uid, provider: "google" } });
-    if (!token) {
+    if (!(await hasAnyMailSource(uid))) {
       return {
-        total: DEMO_EMAILS.length,
-        unread: DEMO_EMAILS.filter((e) => !e.isRead).length,
-        urgent: DEMO_EMAILS.filter((e) => e.priority === "URGENT").length,
-        today: DEMO_EMAILS.filter(
-          (e) => new Date(e.date).toDateString() === new Date().toDateString(),
-        ).length,
-        categories: { business: 2, automated: 1, engineering: 1, billing: 1 },
+        total: 0,
+        unread: 0,
+        urgent: 0,
+        today: 0,
+        categories: {},
         source: "demo",
+        needsConnection: true,
       };
     }
 

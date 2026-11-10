@@ -3,11 +3,15 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import AuthStatus from "../../components/auth/auth-status";
 import AuthScreen from "../../components/auth-screen";
+import Button from "../../components/ui/button";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { useT } from "../../lib/i18n";
 
 function VerifyEmailContent() {
+  const { t } = useT();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const { user, token: authToken } = useAuth();
@@ -55,74 +59,58 @@ function VerifyEmailContent() {
   };
 
   // While loading (no decision yet) or verifying a link token (browser is being
-  // handed to the API), show a spinner — never a premature success claim.
+  // handed to the API), show a status — never a premature success claim.
   if (status === "loading" || status === "verifying") {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-surface-app">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-        {status === "verifying" && (
-          <p className="text-sm text-slate-500" aria-live="polite">
-            Verifying your email…
-          </p>
-        )}
-      </div>
-    );
+    return <AuthStatus label={status === "verifying" ? t("verifyEmail.verifying") : undefined} />;
   }
 
   return (
     <AuthScreen
-      eyebrow="Email verification"
       title={
         status === "sent"
-          ? "Verification email sent"
+          ? t("verifyEmail.title.sent")
           : status === "pending"
-            ? "Verify your email"
-            : "Verification failed"
+            ? t("verifyEmail.title.pending")
+            : t("verifyEmail.title.error")
       }
       description={
         status === "sent"
-          ? "Open the verification link in your inbox to unlock your Klorn workspace."
+          ? t("verifyEmail.description.sent")
           : status === "pending"
-            ? "Verify your account email to unlock every workspace feature."
-            : "The link is expired or invalid. Sign in again and request a new verification email."
-      }
-      footer={
-        <Link href="/login" className="transition hover:text-slate-900">
-          Back to login
-        </Link>
+            ? t("verifyEmail.description.pending")
+            : t("verifyEmail.description.error")
       }
     >
-      <div className="space-y-4">
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-            Next step
-          </p>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {status === "sent"
-              ? "Open the Klorn verification email and follow the link. You can return to the decision queue after verification."
-              : status === "pending"
-                ? "If the email is missing, send a fresh verification link."
-                : "Return to login, check your account state, then request a new verification email."}
-          </p>
-        </div>
+      <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
+        {status === "sent"
+          ? t("verifyEmail.nextStepBody.sent")
+          : status === "pending"
+            ? t("verifyEmail.nextStepBody.pending")
+            : t("verifyEmail.nextStepBody.error")}
+      </p>
 
-        {status === "pending" || status === "sent" ? (
-          <button
-            type="button"
-            onClick={resend}
-            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white transition hover:bg-sky-600"
-          >
-            {status === "sent" ? "Resend again" : "Resend verification email"}
-          </button>
-        ) : (
-          <Link
-            href="/login"
-            className="flex h-11 w-full items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900 transition hover:border-slate-300"
-          >
-            Back to login
-          </Link>
-        )}
-      </div>
+      {status === "pending" || status === "sent" ? (
+        <>
+          <Button size="lg" className="mt-6 w-full" onClick={resend}>
+            {status === "sent" ? t("verifyEmail.resendAgain") : t("verifyEmail.resendVerification")}
+          </Button>
+          <p className="mt-6 text-center">
+            <Link
+              href="/login"
+              className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-role-label text-accent-deep underline-offset-2 hover:underline"
+            >
+              {t("auth.backToLogin")}
+            </Link>
+          </p>
+        </>
+      ) : (
+        <Link
+          href="/login"
+          className="focus-ring mt-6 flex h-11 w-full items-center justify-center rounded-control border border-line bg-surface-panel text-role-label text-ink transition-colors duration-120 ease-fluid hover:border-line-strong hover:bg-surface-hover"
+        >
+          {t("auth.backToLogin")}
+        </Link>
+      )}
     </AuthScreen>
   );
 }

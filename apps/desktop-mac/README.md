@@ -1,10 +1,15 @@
 # Klorn — native macOS app
 
 A **real native macOS client** of the Klorn firewall (SwiftUI), not a webview
-wrapper. It lives as a **custom always-on bar pinned to the top-center of your
-screen** — a slim pill you can glance at, that expands into the full firewall on
-demand. It never steals focus from whatever you're working in: the whole point
-is to surface what matters without knocking you out of your flow.
+wrapper. It is a **standard Mac app**: one main window and a Dock icon, and
+**PUSH mail is announced with macOS notification banners** (top-right of the
+screen). Lanes only classify; a banner is informational and acts on nothing.
+
+> **Founder decision 2026-10-15 (LOCKED):** the top-bar pill and the expanded
+> panel are removed. This supersedes FD-5 "the pill stays" and the older
+> Cmd+Tab compromise (`.accessory` while collapsed). Never reintroduce a
+> pill, a floating bar, a floating card or any always-on-top surface. The
+> meeting-prep card went in the same change: meetings are banners too.
 
 This replaces the old Electron `packages/desktop` shell. It's a Swift Package
 (text-based, reproducible, diffable) rather than an `.xcodeproj` — a deliberate
@@ -13,18 +18,17 @@ app (the classification engine in `@klorn/api` stays the moat, served to every s
 
 ## What it looks like
 
-- **Collapsed** — a dark rounded pill at the top-center: `☰ · Klorn · live state`
-  (PUSH count when signed in, `Log In` when not). Always visible, always
-  glanceable. No Dock icon, no system-menu-bar item (it's an `.accessory` app).
-- **Expanded** — click `☰` (or press `⌥⌘K`) and the pill morphs down into a
-  3-column panel:
-  - **INBOX** — the four tier counts (PUSH / QUEUE / SILENT / AUTO), click to open the web inbox.
-  - **RECENT PUSH** — the items that need you, each with **Open · Snooze · Dismiss**.
-  - **ACCOUNT** — open web inbox, sign out, quit.
-- Click `— Close` (or `⌥⌘K` again) to collapse back to the pill.
-
-Because the panel is a non-activating floating window, it appears and expands
-**without stealing keyboard focus** — you keep typing in your editor while it's up.
+- **Main window** — Today · Mail · Calendar · Assistant (Files when the
+  server has a drive) with the connected accounts in the sidebar. See
+  *Standard main window* below.
+- **Dock icon, always** — the activation policy is always `.regular`
+  (`AppRules.activationPolicy`), so Klorn is in the Dock and Cmd+Tab whether
+  or not a window is open.
+- **PUSH banners** — each new PUSH-lane mail posts one macOS banner with the
+  sender and the subject only (no body text). Clicking it opens the main
+  window on that mail. See *PUSH notifications*.
+- **Closing the window keeps Klorn running** (⌘W or the red button): the
+  poll loop and the banners keep working. ⌘Q quits.
 
 ## Run
 
@@ -40,16 +44,266 @@ swift run KlornMac
 KLORN_API_URL=https://klorn-api.onrender.com swift run KlornMac
 ```
 
-On launch the pill appears at the top-center of your screen. Click it and choose
-**Sign in with Google**: the OS browser handles OAuth (the server's desktop
+On launch the onboarding window (signed out) or the main window (signed in)
+opens. Choose **Sign in with Google**: the OS browser handles OAuth (the server's desktop
 nonce-poll flow), one consent also connects Gmail/Calendar, and the app stores
 the JWT in the **Keychain**. The firewall then loads.
 
+### First launch and the not-ready states
+
+A launch with no account opens a small **onboarding window** instead of a
+logged-out main window: the logo, one sentence, the
+sign-in buttons the server offers (Google always; Apple and Naver when
+enabled), the five lanes with what each means, and what Klorn does with the
+mail it reads. Signing in closes it and opens the main window, where the lane
+guide and the mailbox question follow as before. A launch with a token opens
+the main window (`AppRules.launchAction`).
+
+**Launch at login (decision).** A login launch must not steal focus, so it
+opens no window — unless the main window was open when Klorn last quit
+(`klorn.mainWindowOpenAtQuit`, written at quit), in which case the window
+comes back ordered front *without* activating Klorn. A signed-out login
+launch opens nothing (the Dock icon is there; clicking it shows onboarding).
+A login launch is recognised from the launch Apple event
+(`keyAELaunchedAsLogInItem`, `AppRules.isLoginLaunch`). Not yet verified on
+a packaged build with `SMAppService` — see the PR's manual checklist.
+
+The main window maps the model to one `SurfaceState`:
+
+| State | Shows |
+|-------|-------|
+| signed out | "Sign in to Klorn", the sign-in buttons |
+| signing in | "Finish signing in", *Start over* |
+| loading | the "sorting every message into its lane" skeleton, and only here |
+| offline (this Mac has no network, nothing loaded) | "You're offline", *Try again* |
+| failed (a server error, a timeout, a TLS failure; nothing loaded) | "Couldn't load your mail", the reason, *Try again* |
+| ready | the mail |
+
+Loaded mail whose refresh is failing stays on screen under a banner
+("You're offline. This is the mail from the last sync." or "Klorn couldn't
+refresh…") with *Try again* (one load at a time).
+
+"Offline" is decided from the `URLError` code the API client now carries:
+not connected, connection lost, host not found, DNS failure, data not
+allowed, roaming off. A cancelled request is no error; everything else is
+"Klorn can't reach its server". A failed action on one mail (pin, unpin,
+dismiss, snooze) shows a short notice of its own and never raises the
+refresh banner: a row in the main window. A first load
+that was cancelled is retried once, then shows the failed state.
+
+Results belong to the session that asked for them. The model counts its
+sessions (`sessionGeneration`, bumped by sign-out and by every sign-in), and
+every continuation checks `isCurrent(session)` after each `await`: a response
+that lands after the account changed writes nothing, raises no error and
+signs nobody out. New async code in `AppModel` follows the same shape, with
+`catch _ where !isCurrent(session)` ahead of any 401 handler (the self-check
+pins it). Signing out also stops the poll and the socket and clears
+everything fetched for the account (`AppModel.accountFields()` is the one
+list both the reset and the self-check walk).
+
+A 401 ends a session only when there is one (`sessionRejected`): while
+signed out or signing in it ends nothing, so it cannot discard a sign-in in
+flight. The poll loop starts with the session, so a sign-in whose first load
+fails recovers on the next tick.
+
+Delivered OS banners are taken down with the session (`onSessionEnded`), and
+sign-out clears the PUSH and meeting ledgers (see below). Reply, snooze and
+drafts are refused for a session stamp that has ended, before any request.
+
+### PUSH notifications
+
+`AppModel.reconcilePush` → `onNewPush` → `PushAlerter` → `PushNotifying`
+(`SystemPushNotifier` in the app, a fake in the self-check), all in
+`Notifications.swift`.
+
+- **Dedupe across launches.** `PushLedger` records every announced (or
+  baselined) PUSH id per account (JWT subject), persisted in UserDefaults
+  (`klorn.push.ledger`, newest 2000 ids). A relaunch never repeats a banner,
+  and PUSH mail that arrived while Klorn was quit *is* announced.
+- **No banners for old mail.** The first sync for an account is a silent
+  baseline; another account's ledger is never reused; sign-out clears it.
+- **Burst cap.** At most 5 banners per sync; the rest are recorded as seen
+  (the lane count covers them).
+- **Content.** Title = sender display name, body = subject. No snippet, no
+  body text, no action buttons. Clicking routes through
+  `WindowRouter.handleNotificationTap`: the main window opens on that mail
+  in Mail, or just opens if the mail has left the queue.
+- **Preferences.** Settings ▸ Notifications ▸ *Show macOS banners on this
+  Mac* (ON by default) and the existing *Urgent mail* interrupt category
+  both gate banners. VoiceOver hears an announcement either way.
+- **Every inbox.** Banners come from the all-inbox PUSH lane whatever the
+  list is scoped to: with one inbox selected, a sync makes one extra
+  unscoped read (the firewall endpoint has no lane filter), cached as the
+  "All" snapshot and dropped if the session ended (`PushBannerSource`).
+- **Cold-launch tap.** A banner tapped before the first sync opens the
+  window at once and the mail as soon as the queue loads
+  (`pendingRevealItemID`).
+- **Permission.** Requested once per session, only when signed in **and**
+  after the user was shown a window they opened (the main window activated,
+  which includes onboarding finishing into it) —
+  `NotificationPermissionRules`. A launch at login never raises the system
+  dialog. If macOS denied it, Settings ▸ Notifications shows a one-line hint
+  with *Open System Settings*.
+- The ledger is written only when it changed.
+- An unbundled `swift run` has no notification center: banners are logged
+  and skipped.
+
+### Meeting banners
+
+The floating meeting-prep card is gone (no floating Klorn surfaces). When a
+timed event enters its 10-minute lead window (`meetingAlertPlan`), one banner
+goes through the same `PushNotifying` seam: title = meeting title · start
+time, body = "Starts in N min." — no description, location, link or mail
+content. Each event id is announced once per account across launches
+(`PushLedger` under `klorn.meeting.ledger`). The same banner switch and the
+*Meetings* interrupt category gate it. Clicking opens the main window on
+Calendar, where the event and its join link are.
+
+The only windows Klorn creates are the main window (and its sheets),
+onboarding and compose; Settings is the SwiftUI scene. The self-check scans
+the sources for any other window, `NSPanel`, floating level or all-Spaces
+overlay.
+
 ### Keyboard
 
-- **`⌥⌘K`** (Option-Command-K) — expand / collapse the bar from anywhere, even
-  when another app is focused. It's a Carbon global hotkey, so it needs **no
-  Accessibility permission** and never takes focus.
+- **`⌥⌘K`** (Option-Command-K) — from anywhere: raise and focus the main
+  window; if it is already frontmost, hide Klorn (`NSApp.hide`). It's a
+  Carbon global hotkey, so it needs **no Accessibility permission**.
+- **`⌘,`** — the Settings window (also the sidebar's *Settings* button).
+  Tabs: General, Accounts, Assistant, Notifications, Appearance, Privacy.
+  Accounts holds sign out, *Reconnect Google account…*, *Add account*,
+  today's AI usage meter, the company domains and the triage priorities.
+  General holds launch at login, updates, *App & support* (email support;
+  Option-click for Restart and connection status), the shortcut and About.
+
+### Standard main window
+
+The main window is a standard titled window (traffic lights, resizable,
+frame remembered across relaunch); productization plan, macOS M2–M8, and
+since 2026-10-15 Klorn's only main surface. Every "show me Klorn" entry point
+(launch, Dock click / Finder reopen, ⌥⌘K, a banner click, the app menus)
+goes through `WindowRouter` and opens or raises it. Closing it (⌘W or the
+red button) keeps Klorn running. The composer is always its own window.
+
+The window's content is the five-item navigation (M4b), not the bar's full
+view: a sidebar with **Today · Mail · Calendar · Assistant** (Files joins
+when a drive source exists), the connected accounts with a health dot, and
+Settings at the foot.
+
+- **Today** — mail by lane across the accounts (Push and Meeting expanded,
+  Queue as a count plus its top five, Info as a count, Silent never), today's
+  calendar, the briefing line and the approvals waiting. A row opens in Mail.
+- **Mail** — the existing list and reader. Lanes are the primary filter
+  (Push · Meeting · Queue (default) · Info · All; Silent only through
+  *Show silenced* in the filter menu); folders and labels are sidebar facets.
+- **Calendar** — the existing calendar at full width; team availability
+  beside it while the server grants team mode.
+- **Assistant** — the thread, with Approvals (the proposals list),
+  Commitments and the Briefing beside it.
+
+It is a custom two-column split, not `NavigationSplitView`: the window is an
+AppKit `NSWindow` that owns its frame and restoration, the mail list keys
+depend on the window's first responder, and the offscreen renderer cannot
+draw AppKit-backed containers.
+
+With the main window on, the composer and the modal cards are native too
+(M5):
+
+- **Compose** (`⌘N`, the Compose buttons, opening a draft) is its own
+  window: titled, resizable, frame remembered. It covers nothing, so mail
+  stays readable and every menu and list key keeps working behind it.
+  `⌘N` on an open composer brings it forward. There is still one draft,
+  owned by the model. Closing the window (`⌘W`, the red button) keeps the
+  draft; *Discard Draft* clears it, asking first when there is something
+  to lose; `⌘⏎` sends; the window will not close mid-send. Signing out, or
+  switching the main window off, closes it. While it is open Klorn stays a regular app, like the main
+  window. Message commands never act while the compose window is key.
+- **The lane guide, the event editor and the connect-time question** are
+  sheets on the main window (`NSWindow.beginSheet`), one at a time in the
+  old overlays' order. A sheet blocks the list keys and every menu command
+  exactly as the overlay did, and only while it is attached: a sheet asked
+  for with the main window closed waits for the window and blocks nothing.
+
+Signing out discards the compose draft (and forgets the Gmail draft it was
+editing) in both modes, so the next account never inherits it.
+
+Not in the composer because the model and `POST /api/email/send` carry only
+to / subject / body: Cc, Bcc, attachments, recipient autocomplete, choosing
+the sending account, and more than one draft at a time.
+
+The main window wears the design system (M7): the six type roles, three
+radii (6 / 10 / 16), the 4pt spacing grid and `Theme` colors only. A
+self-check source guard holds the main window's own files at zero raw
+style literals. Every view has one style, the main window's: the bar,
+legacy and overlay variants went with the pill and the panel, and a
+self-check type scan fails if one comes back.
+
+- **One badge per row.** A mail row shows sender, subject, snippet and
+  time, plus the lane chip on mixed-lane lists (All, a label, search). The
+  category, the relationship ("Replied ×3"), the reply state and
+  why-this-lane are in the reader header, as plain words beside the lane
+  chip. Search rows also show the unread dot and, with two or more
+  accounts, the account's monogram; firewall rows carry neither fact.
+- **Lane chip.** 12pt on a 13% wash with a dedicated chip ink per lane,
+  pinned at 4.5:1 or better on the canvas, a panel, a raised card, a
+  hovered row and a selected row, in both appearances.
+- **Calendar.** The month's weeks share the window's height.
+- **Title bar.** Transparent over full-size content: the canvas and the
+  sidebar's rule run to the top and the traffic lights sit over the
+  sidebar. The shell stays inside the safe area.
+
+App menus (Klorn is always a regular app, so they are there whenever it is frontmost):
+
+| Menu | Item | Key |
+|------|------|-----|
+| File | New Email | `⌘N` |
+| Edit | Search Mail | `⌘F` |
+| Message | Reply with AI · Dismiss | `⌘R` · — |
+| Message › Move to Lane | PUSH / MEETING / QUEUE / INFO / SILENT | `⌃⌘1`–`⌃⌘5` |
+| Go | Today · Mail · Calendar · Assistant · Approvals | `⌘1`–`⌘5` |
+| Go | Commitments · Waiting on · Sent · Drafts · Archived · Teams (when granted) | — |
+
+Signed in, Find, Go and the sections are always enabled: they open the main
+window first if it is closed.
+
+In the main window the reading pane exists only in Mail, so the Message
+items are off in Today, Calendar and Assistant, and leaving Mail drops the
+open mail's selection.
+
+Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
+to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
+Items disable when signed out or under a modal. Message items also need the
+main window to be key (not Settings) and a selected message. While an inline
+reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
+stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
+
+Mail list keys (the main window's list in Inbox, a lane or a label):
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓`, `j` / `k` | Move the selection (opens the message like a click, scrolls it into view) |
+| `Return` / `o` | Put the keyboard in the reading pane: arrows, Space and Page Up/Down scroll the message |
+| `Esc` | Back to the list (from the reading pane or the search field) |
+| `e` | Dismiss the selected message, then select the next one |
+| `r` | Reply with AI (same as `⌘R`) |
+| `/` | Search mail (same as `⌘F`) |
+| `⌃⌘1`–`⌃⌘5` | Move to lane (the Message menu above) |
+
+Bare keys never fire while a text field or editor has focus (search, inline
+reply, compose, assistant), under a modal, or when the mail surface is not
+the key window. `e` and `r` follow the Message menu's rules, and the
+selection does not move while an inline reply is open. They also stand
+down while a control holds keyboard focus (Tab / Full Keyboard Access on a
+button, segmented control or popup): Return, Space and the arrows stay that
+control's. In the reading pane only `Esc` is taken, so `r` there is `⌘R`;
+bare `1`/`2`/`3` stay the quick replies. Known limit: with the caret in a
+form field inside an email, `Esc` still returns to the list (the page's
+editing state can't be read synchronously); letters typed there are never
+taken, and an input method mid-composition keeps every key, `Esc` included.
+The reading-pane zone is per window. On a non-Latin input source (Korean) the keys go by position. There
+is no `z`/`⌘Z`: dismiss and lane moves have no undo path yet. The search
+field no longer takes the keyboard when the full view first opens (it would
+swallow every list key); `/` or `⌘F` puts it there.
 
 ### Row actions (on each PUSH item)
 
@@ -65,10 +319,12 @@ the JWT in the **Keychain**. The firewall then loads.
 ## Real-time
 
 New PUSH surfaces immediately, not on the next poll: the app connects to the API's
-existing WebSocket hub (`wss://<api>/ws?token=<JWT>&type=desktop`) and refetches
-the firewall on a server `notification`/`sync` event. A 60s poll stays as a
-backstop (reconnect gaps, keep-warm). The connection forces TLS for any remote
-host so the token never crosses plaintext.
+existing WebSocket hub (`wss://<api>/ws?type=desktop`, JWT offered via the
+`klorn-ws-v1` Sec-WebSocket-Protocol subprotocol — never in the URL, so the
+credential stays out of access logs) and refetches the firewall on a server
+`notification`/`sync` event. A 60s poll stays as a backstop (reconnect gaps,
+keep-warm). The connection forces TLS for any remote host so the token never
+crosses plaintext.
 
 ## Notifications & the .app bundle
 
@@ -188,15 +444,31 @@ A full XCTest suite can be added when building under Xcode/CI.
 
 | File | Role |
 |------|------|
-| `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
-| `TopBar.swift` | SwiftUI `CollapsedBar` (pill) + `ExpandedPanel` (3 columns) |
-| `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |
+| `KlornApp.swift` | `@main` entry (+ `--self-check`); always-`.regular` app, `AppDelegate` owns the model, the windows, the banner wiring and the hotkey |
+| `WindowRouter.swift` | `AppRules` (activation policy, launch / login-launch, ⌥⌘K rules) and `WindowRouter` (launch, reopen, hotkey, banner taps, the shell's `ShellActions`) behind the `MainWindowPresenting` / `OnboardingPresenting` seams |
+| `Notifications.swift` | PUSH banners: `PushLedger` (+ stores), `PushBanner`, `PushNotifying` / `SystemPushNotifier`, `PushAlerter`, tap identifiers |
+| `Shell/` | the main window shell: `ShellActions.swift`, `ListMode.swift` (`ListMode`), `OffscreenFriendlyScroll.swift`, `TeamsColumn.swift`, `MainNav.swift` (`NavSection`, `LaneFilter`, `NavRules`), `MainShell.swift`, `NavSidebar.swift` |
+| `Today/` | the main window's home (M4b): `TodayRules.swift` (pure composition), `TodayScreen.swift`, `TodayPanels.swift` (calendar and assistant panels) |
+| `Mail/` | `FullList.swift` (the list column, alone in its file), `WindowMailRow.swift` (`WindowMailRow`, `WindowSearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
+| `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover), `CalendarSection.swift` (main window) |
+| `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`), `AssistantSection.swift` (main window: panes + thread), `BriefingCard.swift` |
+| `Onboarding/` | first launch (M6): `OnboardingWindow.swift` (`OnboardingRules`, `OnboardingWindowController`), `OnboardingView.swift` (the window's content, `LaneExplainer`) |
+| `Shared/` | `SurfaceState.swift` (M6: `SurfaceState`, `SurfaceStateRules`, `SurfaceStateView`, `ConnectionBanner`, `SignInButtons`, `SolidButtonStyle`); views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `SenderLabelMenu.swift` (the sender-label correction items and the reply-state rule; the lane chip, reader meta line and correction menu are in `Mail/WindowLaneChip.swift`), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
+| `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
+| `MainWindow.swift` | standard main window (M2): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5) and its rules |
+| `Mail/ComposeWindow.swift` | compose window (M5): `ComposeWindowRules`, `ComposeWindowController` (lazily created, driven by the model's `showCompose`) |
+| `Shell/MainSheets.swift` | the main window's sheets (M5): `MainSheet`, `MainSheetRules`, the shared modal-card chrome (`modalCard`) |
+| `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
+| `ListKeys.swift` | mail list keyboard (M3): pure key rules, the window-scoped key catcher |
+| `WindowGeometry.swift` | the on-screen clamp shared by the windows |
+| `MeetingSupport.swift` | `MeetingLink` (join-link gate), `meetingAlertPlan`, `meetingStart` |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |
 | `RealtimeClient.swift` | WebSocket wake channel (reuses the API's `/ws` hub) |
 | `AppModel.swift` | `@MainActor @Observable` state (auth, queue, poll, snooze/dismiss) |
 | `AuthFlow.swift` | nonce-poll sign-in — pure orchestration (injectable deps) + live wiring |
 | `APIClient.swift` | async URLSession client, Bearer auth, GET/POST |
 | `KeychainStore.swift` | JWT persistence (Keychain generic password) |
+| `TokenStore.swift` | Token-store seam: Keychain for the app, in-memory for the offscreen harnesses |
 | `Models.swift` | `Tier`, `FirewallItem`, `FirewallResponse` (+ `removingIDs`), auth DTOs |
 | `Config.swift` | env-overridable API + web base URLs |
 | `Notifications.swift` | pure PUSH-diff planner + `UNUserNotification` poster |

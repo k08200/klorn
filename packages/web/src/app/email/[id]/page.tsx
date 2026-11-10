@@ -1,19 +1,46 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
+import MailHtmlBody from "../../../components/mail-html-body";
+import { ProFeatureNotice } from "../../../components/pro-feature-notice";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
+import Button from "../../../components/ui/button";
+import ErrorAlert from "../../../components/ui/error-alert";
+import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
+import { isEntitlementRefusal } from "../../../lib/entitlement";
+import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
+import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
+import { serverErrorMessage } from "../../../lib/server-error";
+import { useKeyboardTriage } from "../../../lib/use-hotkeys";
+import { postReminder } from "../_v2/post-reminder";
+import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
+import { useLaneMove } from "../use-lane-move";
+import { readerLeaveHref } from "./_v2/reader-model";
+import { ReaderV2 } from "./_v2/reader-v2";
+import { useDoneFeedback } from "./_v2/use-done-feedback";
+import { useReaderContext } from "./_v2/use-reader-context";
+import { useReaderTriage } from "./_v2/use-reader-triage";
+import {
+  ActionItemsPanel,
+  HEADER_OWNED_REPLY_CHOICES,
+  LabelFeedbackControl,
+  priorityLabel,
+  ReplyNeededFeedbackControl,
+} from "./analysis-controls";
 import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
+import { replyDraftSendRequest } from "./reply-draft-send";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
-
 // Domain types and the reminder option list live in ./types.ts so
 // sibling components (atoms.tsx, toolbar.tsx, future
 // candidate/attachment/reply extractions) can import them without
@@ -34,6 +61,7 @@ import type {
   UndoNotice,
 } from "./types";
 import { EMAIL_REMINDER_OPTIONS } from "./types";
+import { focusReplyEntry, REPLY_INTENT_INPUT_ID, useDetailTriage } from "./use-detail-triage";
 
 type EmailQueueKey =
   | "all"
@@ -88,51 +116,6 @@ function appendUndoParams(
   if (email.subject) params.set("undoSubject", email.subject);
 }
 
-function getReminderDate(option: EmailReminderKey): Date {
-  const date = new Date();
-  if (option === "later-today") {
-    date.setHours(date.getHours() + 4);
-    return date;
-  }
-  if (option === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-    date.setHours(9, 0, 0, 0);
-    return date;
-  }
-  date.setDate(date.getDate() + 7);
-  date.setHours(9, 0, 0, 0);
-  return date;
-}
-
-interface LabelFeedback {
-  id: string;
-  emailId: string;
-  originalPriority: EmailPriority;
-  correctedPriority: EmailPriority;
-  reason: string | null;
-  signals: string[];
-  note: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-type ReplyNeededChoice =
-  | "needed"
-  | "today"
-  | "waiting_on_me"
-  | "waiting_on_them"
-  | "not_needed"
-  | "later"
-  | "done";
-
-interface ReplyNeededFeedback {
-  id: string;
-  choice: ReplyNeededChoice;
-  signal: string;
-  evidence: string | null;
-  createdAt: string;
-}
-
 interface ThreadDetail {
   threadId: string;
   subject: string;
@@ -150,6 +133,53 @@ interface ThreadDetail {
   }>;
 }
 
+const REPLY_PRESETS_OPEN_KEY = "klorn.mailV2.replyPresetsOpen";
+
+/**
+ * A remembered on/off choice (localStorage). Starts off, reads the stored value
+ * after mount, and never throws when storage is unavailable.
+ */
+function useStoredFlag(key: string): [boolean, (value: boolean) => void] {
+  const [value, setValue] = useState(false);
+  useEffect(() => {
+    try {
+      setValue(window.localStorage.getItem(key) === "1");
+    } catch {
+      // Storage unavailable: the choice just does not persist.
+    }
+  }, [key]);
+  const store = useCallback(
+    (next: boolean) => {
+      setValue(next);
+      try {
+        window.localStorage.setItem(key, next ? "1" : "0");
+      } catch {
+        // Storage unavailable: keep the choice for this visit only.
+      }
+    },
+    [key],
+  );
+  return [value, store];
+}
+
+/** The v2 reader's slots while there is no mail to fill them with. */
+const EMPTY_READER_SLOTS = {
+  thread: null,
+  reply: null,
+  candidate: null,
+  attachments: null,
+  analysis: null,
+  context: null,
+};
+
+function LegacyPlainBody({ body }: { body: string }) {
+  return (
+    <pre className="whitespace-pre-wrap break-words font-sans text-role-body leading-7 text-ink-strong">
+      {linkifyText(body)}
+    </pre>
+  );
+}
+
 export default function EmailDetailPage() {
   return (
     <AuthGuard>
@@ -159,6 +189,7 @@ export default function EmailDetailPage() {
 }
 
 function EmailDetailView() {
+  const { t, locale } = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,12 +199,21 @@ function EmailDetailView() {
   const shouldMarkRead = searchParams?.get("markRead") === "true";
   const queue = normalizeEmailQueue(searchParams?.get("queue"));
   const undoNotice = parseUndoNotice(searchParams);
+  // MAIL_V2 (productization plan P5b): the v2 reader shares this component's
+  // state and handlers and replaces only what is rendered. Anything but an
+  // explicit `true` keeps the legacy reader below exactly as it was.
+  const mailV2 = useAuth().user?.mailV2 === true;
+  const reader = useReaderContext(id, mailV2);
+  const doneFeedback = useDoneFeedback();
   const [email, setEmail] = useState<EmailDetail | null>(null);
   const [nextEmail, setNextEmail] = useState<NextEmailSummary | null>(null);
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which paid action a FREE user just tried (403 ENTITLEMENT_REQUIRED): the
+  // upgrade notice renders next to it instead of the server's English refusal.
+  const [proGate, setProGate] = useState<"reply" | "summary" | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [ocring, setOcring] = useState(false);
   const [draft, setDraft] = useState<ReplyDraft | null>(null);
@@ -193,23 +233,35 @@ function EmailDetailView() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<EmailDetail | { error: string }>(
-        `/api/email/${id}${shouldMarkRead ? "?markRead=true" : "?markRead=false"}`,
-      );
+      const data = await apiFetch<EmailDetail | { error: string }>(`/api/email/${id}`);
       if ("error" in data) {
         setError(data.error);
       } else {
-        setEmail(data);
+        // Reading is a GET and side-effect free; marking read is an explicit
+        // write on PATCH /:id/read. Fire-and-forget: a failed mark-read must
+        // not break the reading pane, and the local state is set optimistically
+        // so the header doesn't flash "unread".
+        const markingRead = shouldMarkRead && !data.isRead;
+        if (markingRead) {
+          apiFetch(`/api/email/${id}/read`, {
+            method: "PATCH",
+            body: JSON.stringify({ isRead: true }),
+          }).catch((err) => captureClientError(err, { scope: "email.markRead", id }));
+        }
+        setEmail(markingRead ? { ...data, isRead: true } : data);
         setSelectedDraftAttachmentIds([]);
         setIncludeBriefAttachment((data.attachments?.length ?? 0) > 0);
-        apiFetch<{ next: NextEmailSummary | null }>(
-          `/api/email/${id}/next?queue=${encodeURIComponent(queue)}`,
-        )
-          .then((nextData) => setNextEmail(nextData.next))
-          .catch((err) => {
-            setNextEmail(null);
-            captureClientError(err, { scope: "email.next.load", id, queue });
-          });
+        // The v2 reader walks its list view (reader-context), not a queue.
+        if (!mailV2) {
+          apiFetch<{ next: NextEmailSummary | null }>(
+            `/api/email/${id}/next?queue=${encodeURIComponent(queue)}`,
+          )
+            .then((nextData) => setNextEmail(nextData.next))
+            .catch((err) => {
+              setNextEmail(null);
+              captureClientError(err, { scope: "email.next.load", id, queue });
+            });
+        }
         if (data.threadId) {
           apiFetch<ThreadDetail | { error: string }>(
             `/api/email/thread/${encodeURIComponent(data.threadId)}`,
@@ -222,15 +274,39 @@ function EmailDetailView() {
       }
     } catch (err) {
       captureClientError(err, { scope: "email.detail", id });
-      setError("Could not load the email.");
+      setError(serverErrorMessage(err, t("emailDetail.error.load")));
     } finally {
       setLoading(false);
     }
-  }, [id, queue, shouldMarkRead]);
+  }, [id, queue, shouldMarkRead, t, mailV2]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const [summarizing, setSummarizing] = useState(false);
+  // On-demand deep re-summary (AI 정리): the server persists richer
+  // summary/keyPoints/actionItems, so a reload IS the merge.
+  const summarize = useCallback(async () => {
+    if (!id || summarizing) return;
+    setSummarizing(true);
+    setProGate(null);
+    try {
+      await apiFetch(`/api/email/${id}/summarize`, {
+        method: "POST",
+        body: JSON.stringify({ lang: locale }),
+      });
+      await load();
+    } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("summary");
+        return;
+      }
+      captureClientError(err, { scope: "email.summarize", id });
+    } finally {
+      setSummarizing(false);
+    }
+  }, [id, summarizing, locale, load]);
 
   const reanalyzeAttachments = async () => {
     if (!id || reanalyzing) return;
@@ -259,7 +335,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.reanalyze", id });
-      setError("Could not reanalyze attachments.");
+      setError(serverErrorMessage(err, t("emailDetail.error.reanalyzeAttachments")));
     } finally {
       setReanalyzing(false);
     }
@@ -283,7 +359,7 @@ function EmailDetailView() {
       setEmail((prev) => (prev ? { ...prev, candidateIntake: data.candidateIntake } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.candidate-intake.update", id });
-      setError("Could not save candidate status.");
+      setError(serverErrorMessage(err, t("emailDetail.error.saveCandidateStatus")));
     } finally {
       setUpdatingCandidate(false);
     }
@@ -316,7 +392,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.ocr", id });
-      setError("Could not run OCR/vision analysis. Check Gmail connection and the AI key.");
+      setError(serverErrorMessage(err, t("emailDetail.error.ocr")));
     } finally {
       setOcring(false);
     }
@@ -360,7 +436,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.attachment-correction", id });
-      setError("Could not save attachment analysis changes.");
+      setError(serverErrorMessage(err, t("emailDetail.error.saveAttachmentCorrection")));
     } finally {
       setSavingAttachmentCorrection(null);
     }
@@ -370,6 +446,7 @@ function EmailDetailView() {
     if (!id || drafting) return;
     setDrafting(true);
     setError(null);
+    setProGate(null);
     try {
       const data = await apiFetch<ReplyDraft>(`/api/email/${id}/reply-draft`, {
         method: "POST",
@@ -378,26 +455,37 @@ function EmailDetailView() {
       setDraft(data);
       setGmailDraftUrl(null);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft", id });
-      setError("Could not draft a reply.");
+      setError(serverErrorMessage(err, t("emailDetail.error.replyDraft")));
     } finally {
       setDrafting(false);
     }
   };
 
   const sendReplyDraft = async () => {
-    if (!draft || sendingDraft) return;
+    if (!email || !draft || sendingDraft) return;
     setSendingDraft(true);
     setError(null);
+    setProGate(null);
     try {
-      await apiFetch("/api/email/send", {
+      // Names the mail it answers, so the API records the reply (reply-draft-send.ts).
+      const request = replyDraftSendRequest(email.id, draft);
+      await apiFetch(request.path, {
         method: "POST",
-        body: JSON.stringify(draft),
+        body: JSON.stringify(request.body),
       });
       setDraft(null);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft.send", id });
-      setError("Could not send the reply. Check the address and body.");
+      setError(serverErrorMessage(err, t("emailDetail.error.sendReply")));
     } finally {
       setSendingDraft(false);
     }
@@ -407,6 +495,7 @@ function EmailDetailView() {
     if (!id || !draft || savingGmailDraft) return;
     setSavingGmailDraft(true);
     setError(null);
+    setProGate(null);
     try {
       const data = await apiFetch<{
         success: boolean;
@@ -433,8 +522,12 @@ function EmailDetailView() {
           : prev,
       );
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft.gmail-draft", id });
-      setError("Could not save a Gmail draft. Check Gmail connection and permissions.");
+      setError(serverErrorMessage(err, t("emailDetail.error.gmailDraft")));
     } finally {
       setSavingGmailDraft(false);
     }
@@ -453,7 +546,7 @@ function EmailDetailView() {
       setEmail((prev) => (prev ? { ...prev, isRead: nextRead } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.detail.toggle-read", id, nextRead });
-      setError(nextRead ? "Could not mark as read." : "Could not mark as unread.");
+      setError(nextRead ? t("emailDetail.error.markRead") : t("emailDetail.error.markUnread"));
     } finally {
       setActionBusy(null);
     }
@@ -472,7 +565,7 @@ function EmailDetailView() {
       setEmail((prev) => (prev ? { ...prev, isStarred: nextStarred } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.detail.toggle-star", id, nextStarred });
-      setError(nextStarred ? "Could not add star." : "Could not remove star.");
+      setError(nextStarred ? t("emailDetail.error.addStar") : t("emailDetail.error.removeStar"));
     } finally {
       setActionBusy(null);
     }
@@ -480,9 +573,18 @@ function EmailDetailView() {
 
   const goToNextOrList = (
     nextMessage: string,
-    doneMessage = "Queue complete.",
+    doneMessage = t("emailDetail.toast.queueComplete"),
     undoAction?: UndoableEmailAction,
   ) => {
+    if (mailV2) {
+      // v2 walks the list view the reader was opened from, and its undo
+      // notice says what happened: no toast on top of it.
+      const params = new URLSearchParams();
+      if (undoAction) appendUndoParams(params, undoAction, email);
+      const target = reader.context?.olderId ?? reader.context?.newerId ?? null;
+      router.push(readerLeaveHref(target, params));
+      return;
+    }
     if (nextEmail) {
       toast(nextMessage, "success");
       const params = new URLSearchParams({ markRead: "false", queue });
@@ -518,12 +620,12 @@ function EmailDetailView() {
           body: JSON.stringify({ gmailId: undoNotice.gmailId }),
         },
       );
-      toast("Restored to inbox.", "success");
+      toast(t("emailDetail.toast.restored"), "success");
       const params = new URLSearchParams({ markRead: "false", queue });
       router.replace(`/email/${data.emailId}?${params.toString()}`);
     } catch (err) {
       captureClientError(err, { scope: "email.detail.undo", action: undoNotice.action });
-      setError("Could not restore that email. Check Gmail connection and try again.");
+      setError(serverErrorMessage(err, t("emailDetail.error.undo")));
       setActionBusy(null);
     }
   };
@@ -533,34 +635,67 @@ function EmailDetailView() {
     setReminderBusy(option.key);
     setError(null);
     try {
-      const remindAt = getReminderDate(option.key);
-      await apiFetch("/api/reminders", {
-        method: "POST",
-        body: JSON.stringify({
-          title: `${email.needsReply ? "Reply to" : "Review"}: ${email.subject || "No subject"}`,
-          remindAt: remindAt.toISOString(),
-          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
-        }),
-      });
-      toast(`Reminder set for ${option.label.toLowerCase()}.`, "success");
+      await postReminder(email.id, option.key);
+      toast(t("emailDetail.toast.reminderSet", { option: option.label.toLowerCase() }), "success");
     } catch (err) {
       captureClientError(err, { scope: "email.detail.reminder", id, option: option.key });
-      setError("Could not create a reminder for this email.");
+      setError(serverErrorMessage(err, t("emailDetail.error.reminder")));
     } finally {
       setReminderBusy(null);
     }
   };
 
-  const archiveEmailNow = async () => {
-    if (!id || actionBusy) return;
+  /** Resolves true once the mail is archived. */
+  const archiveEmailNow = async (): Promise<boolean> => {
+    if (!id || actionBusy) return false;
     setActionBusy("archive");
     setError(null);
     try {
       await apiFetch(`/api/email/${id}/archive`, { method: "POST" });
-      goToNextOrList("Archived. Moving to the next email.", "Archived. Queue complete.", "archive");
+      goToNextOrList(
+        t("emailDetail.toast.archivedMovingNext"),
+        t("emailDetail.toast.archivedQueueComplete"),
+        "archive",
+      );
+      return true;
     } catch (err) {
       captureClientError(err, { scope: "email.detail.archive", id });
-      setError("Could not archive this email.");
+      setError(serverErrorMessage(err, t("emailDetail.error.archive")));
+      setActionBusy(null);
+      return false;
+    }
+  };
+
+  // MAIL_V2: the header's Done is the archive plus the reply-needed DISMISSED
+  // signal the "Reply state" menu's Done used to send (#1483 moved Done to the
+  // header). The archive goes first; the feedback never blocks or fails it.
+  const doneFromV2Reader = async () => {
+    const archived = email;
+    if (!(await archiveEmailNow()) || !archived) return;
+    doneFeedback.sendAfterDone({ id: archived.id, needsReply: archived.needsReply === true });
+  };
+
+  const unsubscribeNow = async () => {
+    if (!id || actionBusy) return;
+    setActionBusy("unsubscribe");
+    setError(null);
+    try {
+      const res = await apiFetch<{ method: string; done: boolean; url?: string }>(
+        `/api/email/${id}/unsubscribe`,
+        { method: "POST" },
+      );
+      if (res.done) {
+        toast(t("emailDetail.toast.unsubscribed"), "success");
+      } else if (res.url) {
+        // Nothing automatic was possible — hand the list's own page to the
+        // user in a fresh tab. noopener: the target is sender-controlled.
+        window.open(res.url, "_blank", "noopener,noreferrer");
+        toast(t("emailDetail.toast.unsubscribeLink"), "success");
+      }
+    } catch (err) {
+      captureClientError(err, { scope: "email.detail.unsubscribe", id });
+      setError(serverErrorMessage(err, t("emailDetail.error.unsubscribe")));
+    } finally {
       setActionBusy(null);
     }
   };
@@ -568,9 +703,11 @@ function EmailDetailView() {
   const deleteEmailNow = async () => {
     if (!id || actionBusy) return;
     const confirmed = await confirm({
-      title: "Move email to trash?",
-      message: `This moves "${email?.subject || "Untitled"}" out of your queue. You can still recover it from Gmail trash.`,
-      confirmLabel: "Move to trash",
+      title: t("emailDetail.confirmDelete.title"),
+      message: t("emailDetail.confirmDelete.message", {
+        subject: email?.subject || t("common.untitled"),
+      }),
+      confirmLabel: t("emailDetail.confirmDelete.confirmLabel"),
       danger: true,
     });
     if (!confirmed) return;
@@ -578,19 +715,195 @@ function EmailDetailView() {
     setError(null);
     try {
       await apiFetch(`/api/email/${id}`, { method: "DELETE" });
-      goToNextOrList("Deleted. Moving to the next email.", "Deleted. Queue complete.", "delete");
+      goToNextOrList(
+        t("emailDetail.toast.deletedMovingNext"),
+        t("emailDetail.toast.deletedQueueComplete"),
+        "delete",
+      );
     } catch (err) {
       captureClientError(err, { scope: "email.detail.delete", id });
-      setError("Could not delete this email.");
+      setError(serverErrorMessage(err, t("emailDetail.error.delete")));
       setActionBusy(null);
     }
   };
+
+  // KEYBOARD_TRIAGE (productization plan P4). The reader shows no lane chip, so
+  // the optimistic part of a lane move here is the notice itself; a failure
+  // takes the notice down and reports inline.
+  const keyboardTriage = useKeyboardTriage();
+  const noLaneToPaint = useCallback(() => {}, []);
+  // The list shows the lane chip: refetch it once the move (or its undo) lands.
+  const queryClient = useQueryClient();
+  const refreshList = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  }, [queryClient]);
+  const laneMove = useLaneMove({
+    apply: mailV2 ? reader.applyLane : noLaneToPaint,
+    onError: setError,
+    onSettled: refreshList,
+  });
+  const isDemoMail = Boolean(email?.id.startsWith("demo-"));
+  useDetailTriage({
+    active: keyboardTriage && !mailV2,
+    email: email ? { id: email.id, subject: email.subject || null } : null,
+    blockedReason: isDemoMail
+      ? t("keys.reason.demo")
+      : actionBusy || laneMove.busy
+        ? t("keys.reason.busy")
+        : null,
+    hasNext: nextEmail !== null,
+    openNext: () => goToNextOrList(t("emailDetail.toast.movingToNext")),
+    back: () => router.push("/email"),
+    archive: () => void archiveEmailNow(),
+    laneMove,
+    undoLastAction: undoNotice ? () => void undoLastAction() : null,
+  });
+
+  const openInReader = (emailId: string) => router.push(readerLeaveHref(emailId));
+  useReaderTriage({
+    active: keyboardTriage && mailV2,
+    email: email ? { id: email.id, subject: email.subject || null } : null,
+    tier: reader.context?.tier ?? null,
+    blockedReason: isDemoMail
+      ? t("keys.reason.demo")
+      : actionBusy || laneMove.busy
+        ? t("keys.reason.busy")
+        : null,
+    olderId: reader.context?.olderId ?? null,
+    newerId: reader.context?.newerId ?? null,
+    open: openInReader,
+    back: () => router.push("/email"),
+    archive: () => void doneFromV2Reader(),
+    laneMove,
+    undoLastAction: undoNotice ? () => void undoLastAction() : null,
+  });
+
+  // ?focus=reply lands on the reply entry: `r` on the list (KEYBOARD_TRIAGE)
+  // and Reply on Today's cover screen both open the mail this way.
+  const focusReplyOnOpen = searchParams?.get("focus") === "reply";
+  const emailLoaded = email !== null;
+  useEffect(() => {
+    if (focusReplyOnOpen && emailLoaded) focusReplyEntry();
+  }, [focusReplyOnOpen, emailLoaded]);
+
+  if (mailV2) {
+    return (
+      <ReaderV2
+        emailId={id}
+        email={email}
+        loading={loading}
+        error={error}
+        onDismissError={() => setError(null)}
+        onRetry={() => void load()}
+        reader={reader}
+        facts={{
+          priority: email && email.priority !== "NORMAL" ? priorityLabel(t, email.priority) : null,
+          category: email?.category ? categoryLabel(t, email.category) : null,
+        }}
+        busy={actionBusy}
+        reminderBusy={reminderBusy !== null}
+        keyboardTriage={keyboardTriage}
+        laneMove={laneMove}
+        undo={{ notice: undoNotice, onUndo: undoLastAction, onDismiss: dismissUndoNotice }}
+        onOpen={openInReader}
+        onReply={focusReplyEntry}
+        onDraft={() => {
+          focusReplyEntry();
+          void generateReplyDraft();
+        }}
+        drafting={drafting}
+        onArchive={() => void doneFromV2Reader()}
+        onDelete={deleteEmailNow}
+        onToggleRead={toggleRead}
+        onToggleStar={toggleStar}
+        onUnsubscribe={unsubscribeNow}
+        onRemind={(key) => void createEmailReminder({ key, label: t(REMINDER_LABEL_KEYS[key]) })}
+        slots={
+          email
+            ? {
+                thread:
+                  thread && thread.messages.length > 1 ? (
+                    <ThreadContextPanel currentEmailId={email.id} thread={thread} />
+                  ) : null,
+                reply: (
+                  <>
+                    {proGate === "reply" && <ProFeatureNotice className="mb-3" />}
+                    <ReplyDraftBox
+                      presets="collapsed"
+                      draft={draft}
+                      intent={draftIntent}
+                      drafting={drafting}
+                      sending={sendingDraft}
+                      savingGmailDraft={savingGmailDraft}
+                      gmailDraftUrl={gmailDraftUrl}
+                      attachments={email.attachments ?? []}
+                      candidateProfile={email.candidateProfile ?? null}
+                      selectedAttachmentIds={selectedDraftAttachmentIds}
+                      includeBriefAttachment={includeBriefAttachment}
+                      onSelectedAttachmentIdsChange={setSelectedDraftAttachmentIds}
+                      onIncludeBriefAttachmentChange={setIncludeBriefAttachment}
+                      onIntentChange={setDraftIntent}
+                      onGenerate={generateReplyDraft}
+                      onDraftChange={setDraft}
+                      onSaveGmailDraft={saveGmailDraft}
+                      onSend={sendReplyDraft}
+                    />
+                  </>
+                ),
+                candidate: email.candidateProfile ? (
+                  <CandidateProfileCard
+                    profile={email.candidateProfile}
+                    intake={email.candidateIntake ?? null}
+                    updating={updatingCandidate}
+                    onUpdate={updateCandidateIntake}
+                  />
+                ) : null,
+                attachments:
+                  email.attachments && email.attachments.length > 0 ? (
+                    <AttachmentAnalysis
+                      emailId={email.id}
+                      attachments={email.attachments}
+                      onReanalyze={reanalyzeAttachments}
+                      onOcr={runAttachmentOcr}
+                      onSaveCorrection={saveAttachmentCorrection}
+                      reanalyzing={reanalyzing}
+                      ocring={ocring}
+                      savingCorrectionId={savingAttachmentCorrection}
+                    />
+                  ) : null,
+                analysis: (
+                  <>
+                    {proGate === "summary" && <ProFeatureNotice className="mb-3" />}
+                    <KlornAnalysis
+                      quiet
+                      email={email}
+                      onReplyStateChange={doneFeedback.onReplyStateChange}
+                      onPriorityChange={(priority) =>
+                        setEmail((prev) => (prev ? { ...prev, priority } : prev))
+                      }
+                      onSummarize={summarize}
+                      summarizing={summarizing}
+                    />
+                  </>
+                ),
+                context: (
+                  <>
+                    <ThreadBriefCard emailId={email.id} />
+                    <SenderContextCard emailId={email.id} />
+                  </>
+                ),
+              }
+            : EMPTY_READER_SLOTS
+        }
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         <svg
           aria-hidden="true"
@@ -606,25 +919,39 @@ function EmailDetailView() {
           <line x1="19" y1="12" x2="5" y2="12" />
           <polyline points="12 19 5 12 12 5" />
         </svg>
-        Mail list
+        {t("emailDetail.backToList")}
       </Link>
 
       {undoNotice && (
         <UndoActionBanner
-          notice={undoNotice}
+          title={t("emailDetail.toolbar.undo.emailActionDone", {
+            action:
+              undoNotice.action === "archive"
+                ? t("emailDetail.toolbar.undo.actionArchived")
+                : t("emailDetail.toolbar.undo.actionMovedToTrash"),
+          })}
+          subject={undoNotice.subject}
+          undoLabel={keyboardTriage ? t("undo.action") : undefined}
           busy={actionBusy === "undo"}
           onDismiss={dismissUndoNotice}
           onUndo={undoLastAction}
         />
       )}
 
-      {loading && <p className="text-sm text-slate-400">Loading...</p>}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+      {laneMove.notice && (
+        <UndoActionBanner
+          title={t("undo.lane.moved", { lane: laneMove.notice.tier })}
+          subject={laneMove.notice.subject}
+          undoLabel={t("undo.action")}
+          busy={laneMove.busy}
+          onDismiss={laneMove.dismiss}
+          onUndo={() => void laneMove.undo()}
+        />
       )}
+
+      {loading && <LoadingState rows={3} rowHeight="h-20" label={t("emailDetail.loadingLabel")} />}
+
+      {error && <ErrorAlert>{error}</ErrorAlert>}
 
       {email && (
         <article>
@@ -635,46 +962,50 @@ function EmailDetailView() {
             <div className="flex items-start gap-3.5">
               <span
                 aria-hidden="true"
-                className={`avatar-ring mt-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-sm font-semibold text-white sm:flex ${avatarGradient(senderName(email.from))}`}
+                className={`avatar-ring mt-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-body font-semibold text-white sm:flex ${avatarGradient(senderName(email.from))}`}
               >
                 {senderInitials(senderName(email.from))}
               </span>
               <div className="min-w-0 flex-1">
-                <h1 className="break-words text-[24px] font-semibold leading-tight tracking-[-0.02em] text-slate-900 md:text-[28px]">
-                  {email.subject || "No subject"}
+                <h1 className="break-words text-role-title leading-tight tracking-[-0.02em] text-ink">
+                  {email.subject || t("common.noSubject")}
                 </h1>
-                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
-                  <span className="max-w-full truncate font-medium text-slate-700">
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-role-body text-ink-mid">
+                  <span className="max-w-full truncate font-medium text-ink-soft">
                     {senderName(email.from)}
                   </span>
                   {email.trust && <TrustBadgeChip trust={email.trust} />}
                   <span aria-hidden="true" className="text-slate-300">
                     ·
                   </span>
-                  <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
+                  <time className="shrink-0 tabular-nums">{formatFull(email.date, locale)}</time>
                   <span aria-hidden="true" className="text-slate-300">
                     ·
                   </span>
-                  <span>{email.isRead ? "Read" : "Kept unread"}</span>
+                  <span>
+                    {email.isRead
+                      ? t("emailDetail.status.read")
+                      : t("emailDetail.status.keptUnread")}
+                  </span>
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                    className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                       email.priority === "URGENT"
                         ? "bg-rose-500/10 text-rose-600 ring-rose-500/20"
-                        : "bg-slate-100 text-slate-500 ring-transparent"
+                        : "bg-surface-hover text-ink-mid ring-transparent"
                     }`}
                   >
-                    {PRIORITY_LABELS[email.priority]}
+                    {priorityLabel(t, email.priority)}
                   </span>
                   {email.needsReply && (
-                    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
-                      Needs reply
+                    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+                      {t("mail.filterReplyNeeded")}
                     </span>
                   )}
                   {email.category && (
-                    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
-                      {categoryLabel(email.category)}
+                    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
+                      {categoryLabel(t, email.category)}
                     </span>
                   )}
                 </div>
@@ -687,9 +1018,10 @@ function EmailDetailView() {
                 nextEmail={nextEmail}
                 onArchive={archiveEmailNow}
                 onDelete={deleteEmailNow}
-                onOpenNext={() => goToNextOrList("Moving to the next email.")}
+                onOpenNext={() => goToNextOrList(t("emailDetail.toast.movingToNext"))}
                 onToggleRead={toggleRead}
                 onToggleStar={toggleStar}
+                onUnsubscribe={unsubscribeNow}
               />
               <EmailReminderQuickActions
                 busyKey={reminderBusy}
@@ -703,6 +1035,7 @@ function EmailDetailView() {
             <ThreadContextPanel currentEmailId={email.id} thread={thread} />
           )}
 
+          {proGate === "reply" && <ProFeatureNotice className="mt-5" />}
           <ReplyDraftBox
             draft={draft}
             intent={draftIntent}
@@ -749,30 +1082,44 @@ function EmailDetailView() {
               panel with a comfortable reading measure; Klorn's judgment sits
               beside it as supporting context. */}
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-            {email.body ? (
-              <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 md:p-6">
-                <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Message
+            {email.renderHtml || email.body ? (
+              <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
+                <h2 className="mb-4 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+                  {t("emailDetail.messageTitle")}
                 </h2>
-                <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-7 text-slate-800">
-                  {linkifyText(email.body)}
-                </pre>
+                {email.renderHtml ? (
+                  <MailHtmlBody
+                    key={email.id}
+                    emailId={email.id}
+                    html={email.renderHtml}
+                    plain={email.body ? <LegacyPlainBody body={email.body} /> : null}
+                  />
+                ) : (
+                  <LegacyPlainBody body={email.body ?? ""} />
+                )}
               </section>
             ) : email.snippet ? (
-              <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 md:p-6">
-                <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Preview
+              <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
+                <h2 className="mb-4 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+                  {t("emailDetail.previewTitle")}
                 </h2>
-                <p className="text-[15px] leading-7 text-slate-600">{linkifyText(email.snippet)}</p>
+                <p className="text-role-body leading-7 text-ink-muted">
+                  {linkifyText(email.snippet)}
+                </p>
               </section>
             ) : null}
 
+            {proGate === "summary" && <ProFeatureNotice />}
             <KlornAnalysis
               email={email}
               onPriorityChange={(priority) =>
                 setEmail((prev) => (prev ? { ...prev, priority } : prev))
               }
+              onSummarize={summarize}
+              summarizing={summarizing}
             />
+            <ThreadBriefCard emailId={email.id} />
+            <SenderContextCard emailId={email.id} />
           </div>
         </article>
       )}
@@ -791,60 +1138,67 @@ function CandidateProfileCard({
   updating: boolean;
   onUpdate: (patch: { status?: CandidateIntakeStatus; notes?: string | null }) => void;
 }) {
+  const { t } = useT();
   const status = intake?.status ?? candidatePipelineToIntakeStatus(profile.pipelineStatus);
+  const candidateStatusOptions = buildCandidateStatusOptions(t);
   return (
-    <section className="panel-elevated relative mt-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
+    <section className="panel-elevated relative mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <span
         aria-hidden="true"
-        className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-sky-300 to-sky-500"
+        className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-accent-muted to-accent"
       />
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-sky-600">
-          Candidate card
+        <h2 className="text-role-caption font-semibold uppercase tracking-wider text-accent-deep">
+          {t("emailDetail.candidateCard.title")}
         </h2>
-        <span className="text-[11px] tabular-nums text-slate-400">
-          Confidence {Math.round(profile.confidence * 100)}%
+        <span className="text-role-caption tabular-nums text-ink-dim">
+          {t("candidates.confidence", { percent: String(Math.round(profile.confidence * 100)) })}
         </span>
       </div>
-      <div className="mb-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Pipeline</p>
-        <p className="mt-1 text-xs font-semibold text-sky-700">
-          {candidatePipelineLabel(profile.pipelineStatus)}
+      <div className="mb-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+        <p className="text-role-caption font-medium uppercase tracking-wider text-ink-dim">
+          {t("emailDetail.candidateCard.pipeline")}
         </p>
-        <p className="mt-1 text-[11px] leading-5 text-slate-500">{profile.nextAction}</p>
+        <p className="mt-1 text-role-caption font-semibold text-accent-deeper">
+          {candidatePipelineLabel(t, profile.pipelineStatus)}
+        </p>
+        <p className="mt-1 text-role-caption leading-5 text-ink-mid">{profile.nextAction}</p>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
-        {CANDIDATE_STATUS_OPTIONS.map((option) => (
+        {candidateStatusOptions.map((option) => (
           <button
             key={option.status}
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`ease-strong rounded-lg border px-2 py-1 text-[11px] font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default ${
+            className={`ease-strong rounded-chip border px-2 py-1 text-role-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
               status === option.status
-                ? "border-sky-300 bg-accent/10 text-sky-700"
-                : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white hover:text-slate-900"
+                ? "border-accent-muted bg-accent/10 text-accent-deeper"
+                : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
             }`}
           >
             {option.label}
           </button>
         ))}
       </div>
-      <p className="text-sm font-medium leading-relaxed text-slate-900">{profile.summary}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-        <ProfileFact label="Name" value={profile.name} />
-        <ProfileFact label="Role" value={profile.role} />
-        <ProfileFact label="Contact" value={profile.contact} />
-        <ProfileFact label="Age" value={profile.age} />
-        <ProfileFact label="Height" value={profile.height} />
-        <ProfileFact label="Files" value={`${profile.evidenceFiles.length}`} />
+      <p className="text-role-body font-medium leading-relaxed text-ink">{profile.summary}</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-role-caption md:grid-cols-3">
+        <ProfileFact label={t("emailDetail.candidateCard.fact.name")} value={profile.name} />
+        <ProfileFact label={t("emailDetail.candidateCard.fact.role")} value={profile.role} />
+        <ProfileFact label={t("emailDetail.candidateCard.fact.contact")} value={profile.contact} />
+        <ProfileFact label={t("emailDetail.candidateCard.fact.age")} value={profile.age} />
+        <ProfileFact label={t("emailDetail.candidateCard.fact.height")} value={profile.height} />
+        <ProfileFact
+          label={t("emailDetail.candidateCard.fact.files")}
+          value={`${profile.evidenceFiles.length}`}
+        />
       </div>
       {profile.skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[11px] text-slate-600"
+              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-role-caption text-ink-muted"
             >
               {skill}
             </span>
@@ -854,23 +1208,32 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-[11px] text-sky-600">
+            <p key={link} className="break-all text-role-caption text-accent-deep">
               {link}
             </p>
           ))}
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-[11px] text-sky-700">
-          Needs follow-up: {profile.missingFields.map(candidateMissingLabel).join(", ")}
+        <p className="mt-3 text-role-caption text-accent-deeper">
+          {t("emailDetail.candidateCard.needsFollowUp", {
+            fields: profile.missingFields
+              .map((field) => candidateMissingLabel(t, field))
+              .join(", "),
+          })}
         </p>
       )}
       {profile.manualReviewFiles.length > 0 && (
-        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
-          <p className="text-[11px] font-semibold text-rose-700">Source review needed</p>
+        <div className="mt-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2">
+          <p className="text-role-caption font-semibold text-rose-700">
+            {t("emailDetail.candidateCard.sourceReviewNeeded")}
+          </p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
-              <li key={`${file.filename}-${file.reason}`} className="text-[11px] text-rose-600/90">
+              <li
+                key={`${file.filename}-${file.reason}`}
+                className="text-role-caption text-rose-600/90"
+              >
                 {file.filename}: {file.reason}
               </li>
             ))}
@@ -878,31 +1241,37 @@ function CandidateProfileCard({
         </div>
       )}
       <label className="mt-3 block">
-        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">
-          Review note
+        <span className="mb-1 block text-role-caption font-medium uppercase tracking-wider text-ink-mid">
+          {t("emailDetail.candidateCard.reviewNoteLabel")}
         </span>
         <textarea
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
-          placeholder="Review note"
+          className="w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-caption leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+          placeholder={t("emailDetail.candidateCard.reviewNoteLabel")}
         />
       </label>
     </section>
   );
 }
 
-const CANDIDATE_STATUS_OPTIONS: Array<{ status: CandidateIntakeStatus; label: string }> = [
-  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
-  { status: "NEEDS_INFO", label: "Needs info" },
-  { status: "READY_TO_REVIEW", label: "Ready to review" },
-  { status: "REVIEWING", label: "Reviewing" },
-  { status: "CONTACTED", label: "Contacted" },
-  { status: "SHORTLISTED", label: "Shortlisted" },
-  { status: "REJECTED", label: "Rejected" },
-  { status: "ARCHIVED", label: "Archived" },
-];
+/** `t` is passed in rather than called via useT() here — this is a plain
+ * builder, not a component, so it cannot use hooks itself. */
+function buildCandidateStatusOptions(
+  t: (key: string) => string,
+): Array<{ status: CandidateIntakeStatus; label: string }> {
+  return [
+    { status: "NEEDS_ANALYSIS", label: t("candidates.status.needsAnalysis") },
+    { status: "NEEDS_INFO", label: t("candidates.status.needsInfo") },
+    { status: "READY_TO_REVIEW", label: t("candidates.status.readyToReview") },
+    { status: "REVIEWING", label: t("candidates.status.reviewing") },
+    { status: "CONTACTED", label: t("candidates.status.contacted") },
+    { status: "SHORTLISTED", label: t("candidates.status.shortlisted") },
+    { status: "REJECTED", label: t("candidates.status.rejected") },
+    { status: "ARCHIVED", label: t("candidates.status.archived") },
+  ];
+}
 
 function candidatePipelineToIntakeStatus(
   status: AttachmentCandidateProfile["pipelineStatus"],
@@ -919,15 +1288,16 @@ function ThreadContextPanel({
   thread: ThreadDetail;
   currentEmailId: string;
 }) {
+  const { t, locale } = useT();
   return (
-    <section className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-      <div className="border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">Thread context</h2>
-        <p className="mt-0.5 text-xs text-slate-400">
-          Review {thread.messageCount} earlier messages to understand the reply context.
+    <section className="panel-elevated mb-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
+      <div className="border-b border-line-soft px-4 py-3">
+        <h2 className="text-role-head text-ink">{t("emailDetail.thread.title")}</h2>
+        <p className="mt-0.5 text-role-caption text-ink-dim">
+          {t("emailDetail.thread.subtitle", { count: String(thread.messageCount) })}
         </p>
       </div>
-      <ol className="divide-y divide-slate-100">
+      <ol className="divide-y divide-line-soft">
         {thread.messages.map((message) => {
           const current = message.id === currentEmailId;
           return (
@@ -938,23 +1308,26 @@ function ThreadContextPanel({
               {current && (
                 <span
                   aria-hidden="true"
-                  className="absolute left-0 top-0 h-full w-[3px] bg-sky-400"
+                  className="absolute left-0 top-0 h-full w-[3px] bg-accent-light"
                 />
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-xs font-medium text-slate-900">
+                <p className="min-w-0 truncate text-role-caption font-medium text-ink">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-[10px] tabular-nums text-slate-400">
-                  {formatFull(message.date)}
+                <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
+                  {formatFull(message.date, locale)}
                 </time>
               </div>
-              <p className="mt-1 truncate text-[11px] text-slate-500">
-                {message.summary || message.snippet || message.subject || "No summary"}
+              <p className="mt-1 truncate text-role-caption text-ink-mid">
+                {message.summary ||
+                  message.snippet ||
+                  message.subject ||
+                  t("emailDetail.thread.noSummary")}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-[10px] font-medium text-sky-600">
-                  {message.actionItems.length} tasks
+                <p className="mt-1 text-role-caption font-medium text-accent-deep">
+                  {t("emailDetail.thread.taskCount", { count: String(message.actionItems.length) })}
                 </p>
               )}
             </li>
@@ -977,137 +1350,149 @@ type EmailWorkMode =
   | "real_estate"
   | "freelance";
 
-const WORK_MODE_OPTIONS: Array<{ value: EmailWorkMode; label: string }> = [
-  { value: "founder", label: "Founder" },
-  { value: "sales", label: "Sales" },
-  { value: "recruiting", label: "Recruiting" },
-  { value: "legal", label: "Legal" },
-  { value: "finance", label: "Finance" },
-  { value: "pm", label: "PM" },
-  { value: "support", label: "Support" },
-  { value: "ops", label: "Ops/events" },
-  { value: "real_estate", label: "Real estate" },
-  { value: "freelance", label: "Freelance" },
-];
+/** `t` is passed in rather than called via useT() here — these are plain
+ * builders, not components, so they cannot use hooks themselves. */
+function buildWorkModeOptions(t: (key: string) => string): Array<{
+  value: EmailWorkMode;
+  label: string;
+}> {
+  return [
+    { value: "founder", label: t("emailDetail.workMode.founder") },
+    { value: "sales", label: t("emailDetail.workMode.sales") },
+    { value: "recruiting", label: t("emailDetail.workMode.recruiting") },
+    { value: "legal", label: t("emailDetail.workMode.legal") },
+    { value: "finance", label: t("emailDetail.workMode.finance") },
+    { value: "pm", label: t("emailDetail.workMode.pm") },
+    { value: "support", label: t("emailDetail.workMode.support") },
+    { value: "ops", label: t("emailDetail.workMode.ops") },
+    { value: "real_estate", label: t("emailDetail.workMode.realEstate") },
+    { value: "freelance", label: t("emailDetail.workMode.freelance") },
+  ];
+}
 
-const MODE_INTENTS: Record<EmailWorkMode, Array<{ label: string; intent: string }>> = {
-  founder: [
-    {
-      label: "Investor follow-up",
-      intent: "Share a brief investor update and ask for possible times for the next meeting.",
-    },
-    {
-      label: "VIP quick reply",
-      intent:
-        "Reply with thanks and a clear next action so the important relationship is not dropped.",
-    },
-  ],
-  sales: [
-    {
-      label: "Book meeting",
-      intent: "Use the customer context and suggest times for a discovery or follow-up meeting.",
-    },
-    {
-      label: "Renewal/pricing",
-      intent: "Confirm renewal timing, pricing terms, and the next approval step.",
-    },
-  ],
-  recruiting: [],
-  legal: [
-    {
-      label: "Review intake",
-      intent:
-        "Confirm that legal review is needed and that a final answer will follow after review.",
-    },
-    {
-      label: "Request contract info",
-      intent:
-        "Ask for parties, deadline, signature status, and requested changes needed for contract review.",
-    },
-  ],
-  finance: [
-    {
-      label: "Confirm invoice",
-      intent: "Confirm receipt of the invoice and ask for any missing tax, bank, or PO details.",
-    },
-    {
-      label: "Payment issue",
-      intent:
-        "Confirm the failed or unpaid payment, request evidence if needed, and share the next timeline.",
-    },
-  ],
-  pm: [
-    {
-      label: "Issue intake",
-      intent: "Acknowledge the issue and ask for impact, repro details, and desired deadline.",
-    },
-    {
-      label: "Decision request",
-      intent: "Summarize what needs a decision, the options, and the input required.",
-    },
-  ],
-  support: [
-    {
-      label: "Support intake",
-      intent: "Acknowledge the request and ask for repro details, account info, and urgency.",
-    },
-    {
-      label: "Escalate",
-      intent: "Say the issue has been escalated internally and give the next update time.",
-    },
-  ],
-  ops: [
-    {
-      label: "Confirm logistics",
-      intent: "Confirm schedule, location, prep items, owner, and deadline.",
-    },
-    {
-      label: "Vendor follow-up",
-      intent: "Ask the vendor about quote, contract, delivery timeline, and missing materials.",
-    },
-  ],
-  real_estate: [
-    {
-      label: "Tour schedule",
-      intent:
-        "Ask for available tour times and preferred criteria, then propose the next appointment.",
-    },
-    {
-      label: "Contract stage",
-      intent: "Request the next materials needed for contract, loan, inspection, or closing.",
-    },
-  ],
-  freelance: [
-    {
-      label: "Confirm scope",
-      intent: "Ask to confirm scope, deliverables, revisions, timeline, and quote.",
-    },
-    {
-      label: "Collect feedback",
-      intent:
-        "Acknowledge feedback and clarify what will be applied and when the next version arrives.",
-    },
-  ],
-};
+function buildModeIntents(
+  t: (key: string) => string,
+): Record<EmailWorkMode, Array<{ label: string; intent: string }>> {
+  return {
+    founder: [
+      {
+        label: t("emailDetail.quickIntent.founder.investorFollowUp.label"),
+        intent: t("emailDetail.quickIntent.founder.investorFollowUp.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.founder.vipQuickReply.label"),
+        intent: t("emailDetail.quickIntent.founder.vipQuickReply.intent"),
+      },
+    ],
+    sales: [
+      {
+        label: t("emailDetail.quickIntent.sales.bookMeeting.label"),
+        intent: t("emailDetail.quickIntent.sales.bookMeeting.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.sales.renewalPricing.label"),
+        intent: t("emailDetail.quickIntent.sales.renewalPricing.intent"),
+      },
+    ],
+    recruiting: [],
+    legal: [
+      {
+        label: t("emailDetail.quickIntent.legal.reviewIntake.label"),
+        intent: t("emailDetail.quickIntent.legal.reviewIntake.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.legal.requestContractInfo.label"),
+        intent: t("emailDetail.quickIntent.legal.requestContractInfo.intent"),
+      },
+    ],
+    finance: [
+      {
+        label: t("emailDetail.quickIntent.finance.confirmInvoice.label"),
+        intent: t("emailDetail.quickIntent.finance.confirmInvoice.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.finance.paymentIssue.label"),
+        intent: t("emailDetail.quickIntent.finance.paymentIssue.intent"),
+      },
+    ],
+    pm: [
+      {
+        label: t("emailDetail.quickIntent.pm.issueIntake.label"),
+        intent: t("emailDetail.quickIntent.pm.issueIntake.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.pm.decisionRequest.label"),
+        intent: t("emailDetail.quickIntent.pm.decisionRequest.intent"),
+      },
+    ],
+    support: [
+      {
+        label: t("emailDetail.quickIntent.support.supportIntake.label"),
+        intent: t("emailDetail.quickIntent.support.supportIntake.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.support.escalate.label"),
+        intent: t("emailDetail.quickIntent.support.escalate.intent"),
+      },
+    ],
+    ops: [
+      {
+        label: t("emailDetail.quickIntent.ops.confirmLogistics.label"),
+        intent: t("emailDetail.quickIntent.ops.confirmLogistics.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.ops.vendorFollowUp.label"),
+        intent: t("emailDetail.quickIntent.ops.vendorFollowUp.intent"),
+      },
+    ],
+    real_estate: [
+      {
+        label: t("emailDetail.quickIntent.realEstate.tourSchedule.label"),
+        intent: t("emailDetail.quickIntent.realEstate.tourSchedule.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.realEstate.contractStage.label"),
+        intent: t("emailDetail.quickIntent.realEstate.contractStage.intent"),
+      },
+    ],
+    freelance: [
+      {
+        label: t("emailDetail.quickIntent.freelance.confirmScope.label"),
+        intent: t("emailDetail.quickIntent.freelance.confirmScope.intent"),
+      },
+      {
+        label: t("emailDetail.quickIntent.freelance.collectFeedback.label"),
+        intent: t("emailDetail.quickIntent.freelance.collectFeedback.intent"),
+      },
+    ],
+  };
+}
 
 function buildQuickReplyIntents(
+  t: (key: string, vars?: Record<string, string>) => string,
   profile: AttachmentCandidateProfile | null,
   mode: EmailWorkMode,
 ): Array<{ label: string; intent: string }> {
-  const intents: Array<{ label: string; intent: string }> = [...MODE_INTENTS[mode]];
+  const intents: Array<{ label: string; intent: string }> = [...buildModeIntents(t)[mode]];
   if (!profile) return intents.slice(0, 4);
-  const missing = profile.missingFields.map(candidateMissingLabel);
+  const missing = profile.missingFields.map((field) => candidateMissingLabel(t, field));
   const manualFiles = profile.manualReviewFiles.map((file) => file.filename);
 
   if (missing.length > 0 || manualFiles.length > 0) {
     intents.push({
-      label: "Request missing materials",
+      label: t("emailDetail.quickIntent.requestMissingMaterials.label"),
       intent: [
-        "I am reviewing the application materials.",
+        t("emailDetail.quickIntent.requestMissingMaterials.intentIntro"),
         manualFiles.length > 0
-          ? `Ask them to resend these files in readable PDF/DOCX/HWPX format: ${manualFiles.join(", ")}.`
+          ? t("emailDetail.quickIntent.requestMissingMaterials.intentFiles", {
+              files: manualFiles.join(", "),
+            })
           : "",
-        missing.length > 0 ? `Also ask for these missing details: ${missing.join(", ")}.` : "",
+        missing.length > 0
+          ? t("emailDetail.quickIntent.requestMissingMaterials.intentMissing", {
+              fields: missing.join(", "),
+            })
+          : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -1116,16 +1501,14 @@ function buildQuickReplyIntents(
 
   if (profile.pipelineStatus === "ready_to_review") {
     intents.push({
-      label: "Confirm intake",
-      intent:
-        "Confirm receipt of the materials, say review is in progress, and promise to follow up with timing or results.",
+      label: t("emailDetail.quickIntent.confirmIntake.label"),
+      intent: t("emailDetail.quickIntent.confirmIntake.intent"),
     });
   }
 
   intents.push({
-    label: "Ask audition times",
-    intent:
-      "Say the profile was reviewed and ask for possible audition times, contact availability, and any portfolio links.",
+    label: t("emailDetail.quickIntent.askAuditionTimes.label"),
+    intent: t("emailDetail.quickIntent.askAuditionTimes.intent"),
   });
 
   return intents.slice(0, 4);
@@ -1149,7 +1532,14 @@ function ReplyDraftBox({
   onDraftChange,
   onSaveGmailDraft,
   onSend,
+  presets = "inline",
 }: {
+  /**
+   * Where the work-mode chips and quick intents sit. "inline" is the legacy
+   * reader; the v2 reader folds them behind one disclosure (closed by default,
+   * its state remembered) so the intent field and the draft button lead.
+   */
+  presets?: "inline" | "collapsed";
   draft: ReplyDraft | null;
   intent: string;
   drafting: boolean;
@@ -1168,6 +1558,9 @@ function ReplyDraftBox({
   onSaveGmailDraft: () => void;
   onSend: () => void;
 }) {
+  const { t } = useT();
+  // MAIL_V2 (P10): fields type at 16px on touch so iOS does not zoom into them.
+  const touchField = useAuth().user?.mailV2 === true ? " pointer-coarse:text-field" : "";
   const [mode, setMode] = useState<EmailWorkMode>("founder");
   const toggleAttachment = (attachmentId: string) => {
     onSelectedAttachmentIdsChange(
@@ -1178,48 +1571,27 @@ function ReplyDraftBox({
   };
   const selectedCount = selectedAttachmentIds.length;
   const draftAttachmentCount = selectedCount + (includeBriefAttachment ? 1 : 0);
-  const quickIntents = buildQuickReplyIntents(candidateProfile, mode);
-
-  return (
-    <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            Reply draft
-          </h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Klorn drafts it. You approve before anything is sent.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={drafting}
-          className="ease-strong inline-flex h-9 shrink-0 items-center rounded-lg border border-sky-200 bg-sky-50/70 px-3 text-xs font-medium text-sky-700 transition duration-150 hover:bg-sky-50 hover:text-sky-800 active:scale-[0.97] disabled:opacity-50"
-        >
-          {drafting ? "Drafting..." : draft ? "Regenerate" : "Draft reply"}
-        </button>
-      </div>
-      <input
-        value={intent}
-        onChange={(e) => onIntentChange(e.target.value)}
-        placeholder="Example: confirm the profile was reviewed and ask for next audition availability"
-        className="mb-3 w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700 placeholder-slate-400 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
-      />
+  const workModeOptions = buildWorkModeOptions(t);
+  const quickIntents = buildQuickReplyIntents(t, candidateProfile, mode);
+  const [presetsOpen, setPresetsOpen] = useStoredFlag(REPLY_PRESETS_OPEN_KEY);
+  // The same two rows in both layouts: inline for the legacy reader, inside
+  // the disclosure for v2.
+  const presetRows = (
+    <>
       <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
-        {WORK_MODE_OPTIONS.map((option) => (
+        {workModeOptions.map((option) => (
           <button
             key={option.value}
             type="button"
             onClick={() => setMode(option.value)}
-            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition duration-150 active:scale-[0.97] ${
+            className={`ease-strong inline-flex h-8 pointer-coarse:h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
               mode === option.value
-                ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
-                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
+                : "text-ink-mid hover:bg-surface-raised hover:text-ink"
             }`}
           >
             {mode === option.value && (
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
             )}
             {option.label}
           </button>
@@ -1232,34 +1604,89 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="ease-strong rounded-full border border-slate-200 bg-white/70 px-3 py-1.5 text-[11px] text-slate-500 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97]"
+              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 pointer-coarse:min-h-11 text-role-caption text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
             >
               {item.label}
             </button>
           ))}
         </div>
       )}
+    </>
+  );
+
+  return (
+    <section className="panel-elevated mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-mid">
+            {t("emailDetail.replyDraft.title")}
+          </h2>
+          <p className="mt-1 text-role-caption text-ink-dim">
+            {t("emailDetail.replyDraft.subtitle")}
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onGenerate} disabled={drafting}>
+          {drafting
+            ? t("emailDetail.replyDraft.drafting")
+            : draft
+              ? t("emailDetail.replyDraft.regenerate")
+              : t("emailDetail.replyDraft.draftButton")}
+        </Button>
+      </div>
+      <input
+        id={REPLY_INTENT_INPUT_ID}
+        value={intent}
+        onChange={(e) => onIntentChange(e.target.value)}
+        placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
+        className={`mb-3 w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 pointer-coarse:min-h-11 text-role-caption text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+      />
+      {presets === "collapsed" ? (
+        <details
+          open={presetsOpen}
+          onToggle={(event) => setPresetsOpen(event.currentTarget.open)}
+          className="group mb-3"
+        >
+          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control text-role-label text-ink-mid hover:text-ink [&::-webkit-details-marker]:hidden">
+            {t("mailV2.reader.tone")}
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              className="size-3.5 transition-transform duration-120 ease-fluid group-open:rotate-180"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m4 6 4 4 4-4" />
+            </svg>
+          </summary>
+          <div className="pt-2">{presetRows}</div>
+        </details>
+      ) : (
+        presetRows
+      )}
       {draft && (
         <div className="space-y-2">
-          <div className="grid gap-2 text-xs sm:grid-cols-2">
+          <div className="grid gap-2 text-role-caption sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
-                To
+              <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
+                {t("emailDetail.replyDraft.toLabel")}
               </span>
               <input
                 value={draft.to}
                 onChange={(e) => onDraftChange({ ...draft, to: e.target.value })}
-                className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-1.5 text-slate-700 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
+                className="w-full rounded-control border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
-                Subject
+              <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
+                {t("emailDetail.replyDraft.subjectLabel")}
               </span>
               <input
                 value={draft.subject}
                 onChange={(e) => onDraftChange({ ...draft, subject: e.target.value })}
-                className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-1.5 text-slate-700 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
+                className={`w-full rounded-control border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
               />
             </label>
           </div>
@@ -1267,29 +1694,29 @@ function ReplyDraftBox({
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
+            className={`w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
           />
           {attachments.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-sky-200/70 bg-sky-50/60 px-2 py-1.5">
+            <div className="space-y-2 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+              <label className="flex cursor-pointer items-start gap-2 rounded-control border border-state-info-line bg-state-info-bg px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={includeBriefAttachment}
                   onChange={(e) => onIncludeBriefAttachmentChange(e.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 bg-white text-accent focus:ring-accent focus:ring-offset-white"
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                 />
                 <span>
-                  <span className="block text-[11px] font-medium text-sky-700">
-                    Attach the attachment analysis brief
+                  <span className="block text-role-caption font-medium text-accent-deeper">
+                    {t("emailDetail.replyDraft.attachBriefLabel")}
                   </span>
-                  <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">
-                    Converts the candidate card, key points, and extracted fields into a txt brief.
+                  <span className="mt-0.5 block text-role-caption leading-4 text-ink-dim">
+                    {t("emailDetail.replyDraft.attachBriefDescription")}
                   </span>
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                  Save original attachments too
+                <span className="text-role-caption font-medium uppercase tracking-wider text-ink-mid">
+                  {t("emailDetail.replyDraft.saveOriginalAttachments")}
                 </span>
                 <button
                   type="button"
@@ -1300,27 +1727,29 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-[11px] font-medium text-slate-400 transition duration-150 hover:text-sky-700"
+                  className="text-role-caption font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
                 >
-                  {selectedCount === attachments.length ? "Clear all" : "Select all"}
+                  {selectedCount === attachments.length
+                    ? t("emailDetail.replyDraft.clearAll")
+                    : t("emailDetail.replyDraft.selectAll")}
                 </button>
               </div>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {attachments.map((attachment) => (
                   <label
                     key={attachment.id}
-                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 transition duration-150 ease-out hover:border-sky-200"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-panel px-2 py-1.5 transition duration-150 ease-out hover:border-state-info-line"
                   >
                     <input
                       type="checkbox"
                       checked={selectedAttachmentIds.includes(attachment.id)}
                       onChange={() => toggleAttachment(attachment.id)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 bg-white text-accent focus:ring-accent focus:ring-offset-white"
+                      className="h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                     />
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600">
+                    <span className="min-w-0 flex-1 truncate text-role-caption text-ink-muted">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-[10px] text-slate-400">
+                    <span className="shrink-0 text-role-caption text-ink-dim">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>
@@ -1335,30 +1764,34 @@ function ReplyDraftBox({
                   href={gmailDraftUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="ease-strong inline-flex h-9 items-center rounded-lg border border-sky-200 bg-sky-50/70 px-3 text-xs font-medium text-sky-700 transition duration-150 hover:bg-sky-50 hover:text-sky-800 active:scale-[0.97]"
+                  className="ease-strong inline-flex h-9 items-center rounded-control border border-state-info-line bg-state-info-bg px-3 text-role-caption font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring"
                 >
-                  Open Gmail draft
+                  {t("emailDetail.replyDraft.openGmailDraft")}
                 </a>
               )}
               <button
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+                className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
               >
                 {savingGmailDraft
-                  ? "Saving..."
+                  ? t("emailDetail.replyDraft.saving")
                   : draftAttachmentCount > 0
-                    ? `Save Gmail draft + ${draftAttachmentCount} attachments`
-                    : "Save Gmail draft"}
+                    ? t("emailDetail.replyDraft.saveGmailDraftWithAttachments", {
+                        count: String(draftAttachmentCount),
+                      })
+                    : t("emailDetail.replyDraft.saveGmailDraft")}
               </button>
               <button
                 type="button"
                 onClick={onSend}
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
-                className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-xs font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
               >
-                {sending ? "Sending..." : "Send this reply"}
+                {sending
+                  ? t("emailDetail.replyDraft.sending")
+                  : t("emailDetail.replyDraft.sendButton")}
               </button>
             </div>
           </div>
@@ -1368,33 +1801,209 @@ function ReplyDraftBox({
   );
 }
 
+function SummarizeButton({
+  onSummarize,
+  summarizing,
+}: {
+  onSummarize?: () => void;
+  summarizing?: boolean;
+}) {
+  const { t } = useT();
+  if (!onSummarize) return null;
+  return (
+    <Button variant="chip" onClick={onSummarize} disabled={summarizing} className="ml-auto">
+      {summarizing ? t("emailDetail.analysis.summarizing") : t("emailDetail.analysis.summarize")}
+    </Button>
+  );
+}
+
+/** Why this message arrived NOW — read from the whole thread, both
+ *  directions. Distinct from the dossier: the dossier is who they are, this
+ *  is what just happened. Fetching it here also warms the cache the reply
+ *  drafter reads. */
+function ThreadBriefCard({ emailId }: { emailId: string }) {
+  const { t, locale } = useT();
+  const [brief, setBrief] = useState<{
+    whyNow: string;
+    asks: string[];
+    weOwe: string | null;
+    stance: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setBrief(null);
+    apiFetch<{
+      brief: { whyNow: string; asks: string[]; weOwe: string | null; stance: string | null } | null;
+    }>(`/api/email/${emailId}/thread-brief?lang=${locale}`)
+      .then((d) => {
+        if (alive && d.brief?.whyNow) setBrief(d.brief);
+      })
+      .catch(() => {
+        // Best-effort: a single-message thread or an unreachable Gmail shows
+        // nothing rather than an error the user can do nothing about.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [emailId, locale]);
+
+  if (!brief) return null;
+  return (
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="mb-2 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+        {t("emailDetail.threadBrief.title")}
+      </p>
+      <p className="text-role-body leading-relaxed text-ink">{brief.whyNow}</p>
+      {brief.weOwe && (
+        <p className="mt-1.5 text-role-caption font-medium text-state-warn-ink dark:text-amber-400">
+          {t("emailDetail.threadBrief.weOwe")}: {brief.weOwe}
+        </p>
+      )}
+      {brief.asks.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {brief.asks.map((ask) => (
+            <li key={ask} className="text-role-caption text-ink-mid">
+              · {ask}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Relationship context for the sender (dossier) — why this person writes. */
+function SenderContextCard({ emailId }: { emailId: string }) {
+  const { t, locale } = useT();
+  const [dossier, setDossier] = useState<{
+    summary: string;
+    openThreads: string[];
+    lastPromise: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setDossier(null);
+    apiFetch<{ summary: string; openThreads: string[]; lastPromise: string | null }>(
+      `/api/email/${emailId}/sender-dossier?lang=${locale}`,
+    )
+      .then((d) => {
+        if (alive && d.summary) setDossier(d);
+      })
+      .catch(() => {
+        // Best-effort context — no history / no provider just shows nothing.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [emailId, locale]);
+
+  if (!dossier) return null;
+  return (
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+      <p className="mb-2 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+        {t("emailDetail.senderContext.title")}
+      </p>
+      <p className="text-role-body leading-relaxed text-ink">{dossier.summary}</p>
+      {dossier.openThreads.length > 0 && (
+        <p className="mt-1.5 text-role-caption text-ink-mid">
+          {t("emailDetail.senderContext.inFlight")}: {dossier.openThreads.join(" · ")}
+        </p>
+      )}
+      {dossier.lastPromise && (
+        <p className="mt-1 text-role-caption text-ink-mid">
+          {t("emailDetail.senderContext.promise")}: {dossier.lastPromise}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function KlornAnalysis({
   email,
   onPriorityChange,
+  onSummarize,
+  summarizing,
+  quiet = false,
+  onReplyStateChange,
 }: {
   email: EmailDetail;
+  /** v2 only: hears the reply-state menu so the header's Done does not double-send. */
+  onReplyStateChange?: (emailId: string, choice: string | null) => void;
   onPriorityChange: (priority: EmailPriority) => void;
+  onSummarize?: () => void;
+  summarizing?: boolean;
+  /**
+   * The v2 reader's variant: no priority / needs-reply / category badges (its
+   * header states those, and there only the lane is coloured) and a neutral
+   * card. The default is the legacy card, unchanged.
+   */
+  quiet?: boolean;
 }) {
+  const { t } = useT();
   const hasAnything =
     email.summary || email.keyPoints.length > 0 || email.actionItems.length > 0 || email.category;
 
+  if (quiet && hasAnything) {
+    return (
+      <section className="rounded-card border border-line bg-surface-panel p-4">
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="text-role-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
+          {/* No "Wrong label" here: the header's label menu and "Move to lane"
+              correct the mail in v2. */}
+          <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
+        </div>
+        {email.summary && <p className="text-role-body text-ink">{email.summary}</p>}
+        {email.keyPoints.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1 text-role-caption text-ink-muted">
+              {t("emailDetail.analysis.keyPoints")}
+            </p>
+            <ul className="flex flex-col gap-1">
+              {email.keyPoints.map((point) => (
+                <li key={point} className="flex gap-2 text-role-body text-ink-mid">
+                  <span aria-hidden="true" className="text-ink-muted">
+                    •
+                  </span>
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {email.actionItems.length > 0 && (
+          <ActionItemsPanel emailId={email.id} actionItems={email.actionItems} />
+        )}
+        {email.needsReply && (
+          <ReplyNeededFeedbackControl
+            emailId={email.id}
+            omit={HEADER_OWNED_REPLY_CHOICES}
+            onStateChange={onReplyStateChange}
+          />
+        )}
+      </section>
+    );
+  }
+
   if (!hasAnything) {
     return (
-      <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
-        <p className="text-xs text-slate-400">
-          Klorn has not analyzed this email yet. Sync, then check again shortly.
-        </p>
+      <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
+        <div className="flex items-center">
+          <p className="text-role-caption text-ink-dim">{t("emailDetail.analysis.notAnalyzed")}</p>
+          <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="panel-elevated relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
-      <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-sky-300 to-sky-500" />
+    <section className="panel-elevated relative overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
+      <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-accent-muted to-accent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-600">
-            Klorn judgment
+          <span className="text-role-caption font-semibold uppercase tracking-wider text-accent-deep">
+            {t("emailDetail.analysis.title")}
           </span>
           <div className="flex items-center gap-1.5">
             <PriorityPill priority={email.priority} />
@@ -1406,19 +2015,22 @@ function KlornAnalysis({
             currentPriority={email.priority}
             onPriorityChange={onPriorityChange}
           />
+          <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
 
-        {email.summary && <p className="text-sm leading-relaxed text-slate-900">{email.summary}</p>}
+        {email.summary && (
+          <p className="text-role-body leading-relaxed text-ink">{email.summary}</p>
+        )}
 
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
-              Key points
+            <p className="mb-1.5 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
+              {t("emailDetail.analysis.keyPoints")}
             </p>
             <ul className="space-y-1">
               {email.keyPoints.map((k, i) => (
-                <li key={i} className="flex gap-1.5 text-xs text-slate-500">
-                  <span className="text-accent/75">•</span>
+                <li key={i} className="flex gap-1.5 text-role-caption text-ink-mid">
+                  <span className="text-accent-deep">•</span>
                   <span>{k}</span>
                 </li>
               ))}
@@ -1436,352 +2048,75 @@ function KlornAnalysis({
   );
 }
 
-function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionItems: string[] }) {
-  const { toast } = useToast();
-  const [creating, setCreating] = useState<"all" | number | null>(null);
-  const [created, setCreated] = useState<Set<number>>(new Set());
-
-  async function createTask(index: number) {
-    if (created.has(index) || creating !== null) return;
-    setCreating(index);
-    try {
-      await apiFetch(`/api/email/${emailId}/create-tasks`, {
-        method: "POST",
-        body: JSON.stringify({ indices: [index] }),
-      });
-      setCreated((prev) => new Set([...prev, index]));
-      toast("Task created.", "success");
-    } catch {
-      toast("Failed to create task.", "error");
-    } finally {
-      setCreating(null);
-    }
-  }
-
-  async function createAll() {
-    if (creating !== null) return;
-    setCreating("all");
-    try {
-      const uncreatedIndices = actionItems.map((_, i) => i).filter((i) => !created.has(i));
-      await apiFetch(`/api/email/${emailId}/create-tasks`, {
-        method: "POST",
-        body: JSON.stringify({ indices: uncreatedIndices }),
-      });
-      setCreated(new Set(actionItems.map((_, i) => i)));
-      toast(
-        `${uncreatedIndices.length} task${uncreatedIndices.length > 1 ? "s" : ""} created.`,
-        "success",
-      );
-    } catch {
-      toast("Failed to create tasks.", "error");
-    } finally {
-      setCreating(null);
-    }
-  }
-
-  const allCreated = created.size >= actionItems.length;
-
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-          Action items
-        </p>
-        {!allCreated && (
-          <button
-            type="button"
-            onClick={createAll}
-            disabled={creating !== null}
-            className="ease-strong rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 transition duration-150 hover:bg-teal-100 active:scale-[0.97] disabled:opacity-40"
-          >
-            {creating === "all" ? "Creating…" : "Create all tasks"}
-          </button>
-        )}
-      </div>
-      <ul className="space-y-1">
-        {actionItems.map((a, i) => (
-          <li key={i} className="flex items-center gap-2 text-xs">
-            <span className={created.has(i) ? "text-teal-600" : "text-sky-600"}>
-              {created.has(i) ? "✓" : "□"}
-            </span>
-            <span
-              className={`flex-1 ${created.has(i) ? "text-slate-400 line-through" : "text-slate-600"}`}
-            >
-              {a}
-            </span>
-            {!created.has(i) && (
-              <button
-                type="button"
-                onClick={() => createTask(i)}
-                disabled={creating !== null}
-                className="ease-strong shrink-0 rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:opacity-40"
-              >
-                {creating === i ? "…" : "+ task"}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function ReplyNeededPill() {
+  const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
-      Needs reply
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+      {t("mail.filterReplyNeeded")}
     </span>
   );
 }
 
-const PRIORITY_LABELS: Record<EmailPriority, string> = {
-  URGENT: "Urgent",
-  NORMAL: "Normal",
-  LOW: "Low",
-};
-
-function LabelFeedbackControl({
-  emailId,
-  currentPriority,
-  onPriorityChange,
-}: {
-  emailId: string;
-  currentPriority: EmailPriority;
-  onPriorityChange: (priority: EmailPriority) => void;
-}) {
-  const [feedback, setFeedback] = useState<LabelFeedback | null>(null);
-  const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState<EmailPriority | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ feedback: LabelFeedback | null }>(`/api/email/${emailId}/feedback`)
-      .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
-      })
-      .catch((err) => captureClientError(err, { scope: "email.feedback.load", emailId }));
-    return () => {
-      cancelled = true;
-    };
-  }, [emailId]);
-
-  const submit = async (correctedPriority: EmailPriority) => {
-    if (submitting) return;
-    setSubmitting(correctedPriority);
-    setError(null);
-    try {
-      const data = await apiFetch<{ feedback: LabelFeedback }>(`/api/email/${emailId}/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ correctedPriority }),
-      });
-      setFeedback(data.feedback);
-      onPriorityChange(correctedPriority);
-      setOpen(false);
-    } catch (err) {
-      captureClientError(err, { scope: "email.feedback.submit", emailId, correctedPriority });
-      setError("Could not report this. Please try again soon.");
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  if (feedback) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-sky-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-        Reported: {PRIORITY_LABELS[feedback.originalPriority]} {"->"}{" "}
-        {PRIORITY_LABELS[feedback.correctedPriority]}
-      </span>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-[11px] text-slate-400 underline-offset-2 hover:text-slate-500 hover:underline"
-      >
-        Wrong label
-      </button>
-    );
-  }
-
-  const options: EmailPriority[] = (["URGENT", "NORMAL", "LOW"] as const).filter(
-    (p) => p !== currentPriority,
-  );
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-slate-400">Actual priority:</span>
-      {options.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => submit(p)}
-          disabled={!!submitting}
-          className="ease-strong rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 text-[11px] font-medium text-slate-700 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
-        >
-          {submitting === p ? "..." : PRIORITY_LABELS[p]}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(false);
-          setError(null);
-        }}
-        disabled={!!submitting}
-        className="text-[11px] text-slate-400 hover:text-slate-500"
-      >
-        Cancel
-      </button>
-      {error && <span className="text-[11px] text-red-600">{error}</span>}
-    </div>
-  );
-}
-
-function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
-  const [feedback, setFeedback] = useState<ReplyNeededFeedback | null>(null);
-  const [submitting, setSubmitting] = useState<ReplyNeededChoice | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ feedback: ReplyNeededFeedback | null }>(
-      `/api/email/${emailId}/reply-needed/feedback`,
-    )
-      .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
-      })
-      .catch((err) =>
-        captureClientError(err, { scope: "email.reply-needed-feedback.load", emailId }),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [emailId]);
-
-  const submit = async (choice: ReplyNeededChoice) => {
-    if (submitting) return;
-    setSubmitting(choice);
-    setError(null);
-    try {
-      const data = await apiFetch<{
-        feedback: { emailId: string; choice: ReplyNeededChoice; signal: string };
-      }>(`/api/email/${emailId}/reply-needed/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ choice }),
-      });
-      setFeedback({
-        id: `${emailId}-${data.feedback.choice}`,
-        choice: data.feedback.choice,
-        signal: data.feedback.signal,
-        evidence: null,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      captureClientError(err, { scope: "email.reply-needed-feedback.submit", emailId, choice });
-      setError("Could not save.");
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const options: Array<{ choice: ReplyNeededChoice; label: string }> = [
-    { choice: "today", label: "Reply today" },
-    { choice: "waiting_on_me", label: "On me" },
-    { choice: "waiting_on_them", label: "Waiting on them" },
-    { choice: "needed", label: "Reply needed" },
-    { choice: "not_needed", label: "Not needed" },
-    { choice: "later", label: "Later" },
-    { choice: "done", label: "Done" },
-  ];
-
-  return (
-    <div className="mt-4 border-t border-slate-100 pt-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-slate-400">Reply-needed judgment:</span>
-        {options.map((option) => {
-          const selected = feedback?.choice === option.choice;
-          return (
-            <button
-              key={option.choice}
-              type="button"
-              onClick={() => submit(option.choice)}
-              aria-pressed={selected}
-              disabled={!!submitting}
-              className={`h-7 rounded-lg border px-2 text-[11px] transition disabled:opacity-50 ${
-                selected
-                  ? "border-sky-300 bg-accent/10 text-sky-700"
-                  : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white hover:text-slate-900"
-              }`}
-            >
-              {submitting === option.choice ? "..." : option.label}
-            </button>
-          );
-        })}
-        {error && <span className="text-[11px] text-red-600">{error}</span>}
-      </div>
-    </div>
-  );
-}
-
 function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
+  const { t } = useT();
   if (priority === "NORMAL") return null;
   const styles = {
     URGENT: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
-    LOW: "bg-slate-100 text-slate-500 ring-transparent",
+    LOW: "bg-surface-hover text-ink-mid ring-transparent",
   };
-  const labels = { URGENT: "Urgent", LOW: "Low" };
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
     >
-      {labels[priority as "URGENT" | "LOW"]}
+      {priorityLabel(t, priority as "URGENT" | "LOW")}
     </span>
   );
 }
 
 function CategoryPill({ category }: { category: string }) {
-  const label = categoryLabel(category);
+  const { t } = useT();
+  const label = categoryLabel(t, category);
   return (
-    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
 }
 
-function categoryLabel(category: string): string {
+/** `t` is passed in rather than called via useT() here — these are plain
+ * helpers, not components, so they cannot use hooks themselves. */
+function categoryLabel(t: (key: string) => string, category: string): string {
   const labelMap: Record<string, string> = {
-    business: "Business",
-    engineering: "Engineering",
-    automated: "Automated",
-    newsletter: "Newsletter",
-    meeting: "Meeting",
-    billing: "Billing",
-    conversation: "Conversation",
-    other: "Other",
+    business: t("emailDetail.category.business"),
+    engineering: t("emailDetail.category.engineering"),
+    automated: t("emailDetail.category.automated"),
+    newsletter: t("emailDetail.category.newsletter"),
+    meeting: t("emailDetail.category.meeting"),
+    billing: t("emailDetail.category.billing"),
+    conversation: t("emailDetail.category.conversation"),
+    other: t("emailDetail.category.other"),
   };
   return labelMap[category] || category;
 }
 
-function candidateMissingLabel(key: string): string {
+function candidateMissingLabel(t: (key: string) => string, key: string): string {
   const labelMap: Record<string, string> = {
-    name: "Name",
-    contact: "Contact",
-    role: "Role",
-    portfolio: "Portfolio link",
+    name: t("emailDetail.candidateCard.fact.name"),
+    contact: t("emailDetail.candidateCard.fact.contact"),
+    role: t("emailDetail.candidateCard.fact.role"),
+    portfolio: t("emailDetail.candidateCard.missingField.portfolioLink"),
   };
   return labelMap[key] || key;
 }
 
-function candidatePipelineLabel(status: AttachmentCandidateProfile["pipelineStatus"]): string {
+function candidatePipelineLabel(
+  t: (key: string) => string,
+  status: AttachmentCandidateProfile["pipelineStatus"],
+): string {
   const labels: Record<AttachmentCandidateProfile["pipelineStatus"], string> = {
-    ready_to_review: "Ready to review",
-    needs_info: "Needs info",
-    needs_analysis: "Needs analysis",
+    ready_to_review: t("candidates.status.readyToReview"),
+    needs_info: t("candidates.status.needsInfo"),
+    needs_analysis: t("candidates.status.needsAnalysis"),
   };
   return labels[status];
 }
@@ -1789,7 +2124,7 @@ function candidatePipelineLabel(status: AttachmentCandidateProfile["pipelineStat
 // Monogram avatar helpers — local copy of the email list pattern so the
 // detail header shows the same deterministic per-sender gradient.
 const AVATAR_GRADIENTS = [
-  "from-sky-400 to-blue-500",
+  "from-accent-light to-blue-500",
   "from-teal-400 to-emerald-500",
   "from-indigo-500 to-violet-600",
   "from-amber-400 to-orange-500",
@@ -1819,8 +2154,8 @@ function senderInitials(name: string): string {
     .toUpperCase();
 }
 
-function formatFull(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+function formatFull(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",

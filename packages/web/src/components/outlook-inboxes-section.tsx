@@ -3,10 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch, startLinkOutlookInbox } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
+import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
 import { useToast } from "./toast";
 
 interface OutlookAccount {
@@ -49,26 +52,30 @@ function formatLastSynced(iso: string | null): string {
  */
 export function OutlookInboxesSection() {
   const { user } = useAuth();
-  // Server-computed; always true while the paywall is off (inert pre-launch).
+  // Fallback only, for an API that does not answer canConnect yet.
   const entitled = user?.entitled !== false;
+  const { t } = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
 
   // null = surface unavailable (flag off server-side) → render nothing.
-  const { data: accounts } = useQuery({
+  // canConnect: may a NEW mail account be connected now (the first one is
+  // free whatever the provider, a second one Pro; always true while the
+  // paywall is off).
+  const { data: listing } = useQuery({
     queryKey: queryKeys.inbox.outlookAccounts(),
-    queryFn: async (): Promise<OutlookAccount[] | null> => {
+    queryFn: async (): Promise<{ accounts: OutlookAccount[]; canConnect: boolean } | null> => {
       try {
-        const res = await apiFetch<{ accounts: OutlookAccount[] }>(
+        const res = await apiFetch<{ accounts: OutlookAccount[]; canConnect?: boolean }>(
           "/api/auth/outlook/linked-inboxes",
         );
-        return res.accounts ?? [];
+        return { accounts: res.accounts ?? [], canConnect: res.canConnect ?? entitled };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.startsWith("API 404")) return null;
-        // 403 (not entitled) or transient failure — show the connect prompt.
-        return [];
+        // Transient failure — show the connect prompt; the server still gates it.
+        return { accounts: [], canConnect: entitled };
       }
     },
   });
@@ -84,11 +91,11 @@ export function OutlookInboxesSection() {
       apiFetch(`/api/auth/outlook/linked-inboxes/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.outlookAccounts() });
-      toast("Inbox disconnected.", "success");
+      toast(t("linkedInboxes.toast.disconnected"), "success");
     },
     onError: (err) => {
       captureClientError(err, { scope: "inbox.outlook.disconnect" });
-      toast("Couldn't disconnect. Try again.", "error");
+      toast(t("linkedAccounts.toast.disconnectFailed"), "error");
     },
   });
 
@@ -97,42 +104,46 @@ export function OutlookInboxesSection() {
   const connect = useMutation({
     mutationFn: () => startLinkOutlookInbox(),
     onError: (err) => {
-      captureClientError(err, { scope: "inbox.outlook.connect" });
       const msg = err instanceof Error ? err.message : "";
+      if (isEntitlementRefusal(msg)) {
+        toast(t("mailAccount.proGate.title"), "error");
+        return;
+      }
+      captureClientError(err, { scope: "inbox.outlook.connect" });
       toast(
         msg.startsWith("API 503")
-          ? "Outlook linking isn't configured yet. Try again later."
-          : "Couldn't start Outlook sign-in. A Pro subscription may be required.",
+          ? t("outlookInboxes.toast.notConfigured")
+          : t("outlookInboxes.toast.signInFailed"),
         "error",
       );
     },
   });
 
-  if (accounts === null || accounts === undefined) return null;
+  if (listing === null || listing === undefined) return null;
+  const { accounts, canConnect } = listing;
 
   return (
-    <section className="panel-elevated mb-8 rounded-2xl border border-slate-200/70 bg-white p-5">
-      <h2 className="text-base font-semibold text-slate-900">Outlook inboxes</h2>
-      <p className="mt-1 text-xs text-slate-500">
-        Connect an Outlook or Microsoft account so Klorn runs the same 4-tier firewall across its
-        mail too. You approve access on Microsoft's sign-in page — Klorn never sees your password.
+    <section className="panel-elevated mb-8 rounded-card border border-line/70 bg-surface-panel p-5">
+      <h2 className="text-role-head text-ink">{t("outlookInboxes.title")}</h2>
+      <p className="mt-1 text-role-body text-ink-mid">
+        {t("outlookInboxes.body", { count: String(TIER_COUNT) })}
       </p>
 
       {accounts.length > 0 && (
-        <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/70">
+        <ul className="mt-3 divide-y divide-line-soft rounded-control border border-line-soft bg-surface-raised/70">
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+              className="flex items-center justify-between gap-3 px-3 py-2.5 text-role-body"
             >
               <div className="min-w-0">
-                <span className="block truncate text-slate-900">{account.email}</span>
+                <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect ? (
-                  <span className="block truncate text-[11px] text-amber-600">
-                    Reconnect needed — access was revoked
+                  <span className="block truncate text-role-caption text-state-warn-ink">
+                    {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 ) : (
-                  <span className="block truncate text-[11px] text-slate-400">
+                  <span className="block truncate text-role-caption text-ink-dim">
                     {formatLastSynced(account.lastSyncedAt)}
                   </span>
                 )}
@@ -143,18 +154,18 @@ export function OutlookInboxesSection() {
                     type="button"
                     onClick={() => connect.mutate()}
                     disabled={connect.isPending}
-                    className="ease-strong rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
+                    className="ease-strong rounded-chip border border-state-warn-line bg-state-warn-bg px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
-                    Reconnect
+                    {t("common.reconnect")}
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => disconnect.mutate(account.id)}
                   disabled={disconnect.isPending}
-                  className="ease-strong rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] disabled:opacity-50"
+                  className="ease-strong rounded-chip border border-state-danger-line bg-state-danger-bg px-2 py-1 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
-                  Disconnect
+                  {t("settings.disconnect")}
                 </button>
               </div>
             </li>
@@ -162,24 +173,18 @@ export function OutlookInboxesSection() {
         </ul>
       )}
 
-      {entitled ? (
+      {canConnect ? (
         <button
           type="button"
           onClick={() => connect.mutate()}
           disabled={connect.isPending}
-          className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 py-2 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:opacity-50"
+          className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-control bg-accent-solid px-4 py-2 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
         >
-          Connect Outlook inbox
+          {t("outlookInboxes.connect")}
         </button>
       ) : (
-        <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-sm text-slate-900">
-            Multiple inboxes is a <span className="font-semibold text-sky-600">Pro</span> feature.
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Free covers your primary Google account. Upgrade in the Subscription section to run the
-            firewall across an Outlook inbox too.
-          </p>
+        <div className="mt-3">
+          <MailAccountProGate />
         </div>
       )}
     </section>

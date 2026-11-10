@@ -8,8 +8,9 @@ interface ResponsiveTableProps {
 /**
  * Wraps wide tables so they horizontally scroll on small viewports
  * instead of overflowing the body. Tables with `min-w-[Xpx]` styles
- * (audited 2026-05-19 in /settings/usage) were breaking layouts on
- * phones because no scroll container surrounded them.
+ * (audited 2026-05-19, originally in /settings/usage — now /usage)
+ * were breaking layouts on phones because no scroll container
+ * surrounded them.
  *
  * Pair with a `<table className="min-w-[640px]">` inside to keep
  * column widths usable while preventing page-level overflow.

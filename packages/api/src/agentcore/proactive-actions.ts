@@ -24,10 +24,15 @@ import {
   WEEKLY_REVIEW_DAY,
 } from "../config.js";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
+import { parseAddress } from "../mail/email-address.js";
 import { senderName } from "../notify/notification-format.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { sendSms } from "../notify/sms.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { countCalendarRows, readCalendarRows } from "../pim/calendar-read.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import {
   isLocalTimeWithin,
@@ -37,6 +42,9 @@ import {
   normalizeTimeZone,
 } from "../time-zone.js";
 import { pushNotification } from "../websocket.js";
+
+/** How many of tomorrow's meetings the end-of-day summary names. */
+const TOMORROW_MEETINGS_LIMIT = 5;
 
 /** The user's configured IANA timezone (defaults to the product default). */
 async function getUserTimeZone(userId: string): Promise<string> {
@@ -101,6 +109,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     where: {
       userId,
       startTime: { gte: soon, lte: justAfter },
+      ...calendarSourceScope(),
     },
     select: {
       id: true,
@@ -118,7 +127,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       where: {
         userId,
         type: "calendar",
-        title: { contains: event.title.slice(0, 20) },
+        title: { contains: escapeLikePattern(event.title.slice(0, 20)) },
         createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
       },
     });
@@ -218,9 +227,8 @@ async function checkWeeklyReview(userId: string, tz: string): Promise<void> {
     prisma.emailMessage.count({
       where: { userId, receivedAt: { gte: lastWeek } },
     }),
-    prisma.calendarEvent.count({
-      where: { userId, startTime: { gte: lastWeek, lte: now } },
-    }),
+    // An invite in the primary and a linked calendar is two rows (C2): counted once.
+    countCalendarRows({ userId, when: { startTime: { gte: lastWeek, lte: now } } }),
   ]);
 
   const message = `Last week: ${completedTasks} tasks completed, ${emailCount} emails processed, ${meetingCount} meetings attended.`;
@@ -257,11 +265,11 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
       select: { title: true },
       take: 5,
     }),
-    prisma.calendarEvent.findMany({
-      where: { userId, startTime: { gte: tomorrow, lt: tomorrowEnd } },
-      select: { title: true, startTime: true },
-      orderBy: { startTime: "asc" },
-      take: 5,
+    // Each invite once, and the cap of 5 applies after the dedupe (C7).
+    readCalendarRows({
+      userId,
+      when: { startTime: { gte: tomorrow, lt: tomorrowEnd } },
+      limit: TOMORROW_MEETINGS_LIMIT,
     }),
   ]);
 
@@ -334,11 +342,15 @@ async function checkDeadlineCountdown(userId: string, tz: string): Promise<void>
 
 // ─── NEW: Contact context on emails ────────────────────────────────────
 
-/** Enrich unanswered email notifications with contact history */
-async function getContactContext(userId: string, fromEmail: string): Promise<string> {
-  const email = fromEmail.match(/<([^>]+)>/)?.[1] || fromEmail.trim().toLowerCase();
+/**
+ * Enrich unanswered email notifications with contact history. The sender is
+ * matched on the whole address: the From header is the sender's to write, so a
+ * part of it (`ceo@` of ceo@evil.com, or an empty one) must not pick a contact.
+ */
+export async function getContactContext(userId: string, fromEmail: string): Promise<string> {
+  const email = parseAddress(fromEmail);
   const contact = await prisma.contact.findFirst({
-    where: { userId, email: { contains: email.split("@")[0], mode: "insensitive" } },
+    where: { userId, email: { equals: email.trim(), mode: "insensitive" } },
     select: { name: true, company: true, role: true, tags: true },
   });
   if (!contact) return "";
@@ -414,11 +426,22 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
   });
   if (existing) return;
 
-  const events = await prisma.calendarEvent.findMany({
-    where: { userId, startTime: { gte: now, lte: todayEnd } },
-    select: { title: true, startTime: true, endTime: true },
+  const rows = await prisma.calendarEvent.findMany({
+    where: { userId, startTime: { gte: now, lte: todayEnd }, ...calendarSourceScope() },
+    // The identity fields let an invite present in the primary and a linked
+    // calendar (two rows, C2) count once: a duplicate would read as a meeting
+    // that starts before the previous one ends and raise a false warning.
+    select: {
+      title: true,
+      startTime: true,
+      endTime: true,
+      provider: true,
+      externalId: true,
+      sourceAccountId: true,
+    },
     orderBy: { startTime: "asc" },
   });
+  const events = dedupeCalendarEvents(rows);
 
   if (events.length < 2) return;
 
@@ -467,12 +490,17 @@ async function notify(
     userId,
     { title, body: message.slice(0, 200), url },
     categoryForType(type),
+    // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
+    // warning is not a meeting starting), so it cannot use up the interrupt
+    // room real meeting alerts and urgent mail need (push-bucket.ts).
+    { bucket: "ambient" },
   ).catch((err) => {
     console.warn(`[PROACTIVE] push failed for ${userId}:`, err);
     captureError(err, { tags: { scope: "proactive.push", userId } });
   });
 }
 
+/** Preferences, quiet hours and label only; the push rings ambient regardless. */
 function categoryForType(type: string): NotifCategory {
   switch (type) {
     case "calendar":

@@ -4,7 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { ListSkeleton } from "../../../components/skeleton";
+import ErrorAlert from "../../../components/ui/error-alert";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
+import { byokLocked } from "../../../lib/entitlement";
+import { useT } from "../../../lib/i18n";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { formatRelative } from "../../../lib/text";
@@ -82,24 +87,36 @@ interface AttachmentQuality {
   }>;
 }
 
-const STATUS_FILTERS: Array<{ status: CandidateStatus; label: string }> = [
-  { status: "ALL", label: "All" },
-  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
-  { status: "NEEDS_INFO", label: "Needs info" },
-  { status: "READY_TO_REVIEW", label: "Ready" },
-  { status: "REVIEWING", label: "Reviewing" },
-  { status: "CONTACTED", label: "Contacted" },
-  { status: "SHORTLISTED", label: "Shortlisted" },
-  { status: "REJECTED", label: "Rejected" },
-  { status: "ARCHIVED", label: "Archived" },
-];
+/** `t` is passed in rather than called via useT() here — these are plain
+ * builders, not components, so they cannot use hooks themselves. */
+function buildStatusFilters(t: (key: string) => string): Array<{
+  status: CandidateStatus;
+  label: string;
+}> {
+  return [
+    { status: "ALL", label: t("candidates.status.all") },
+    { status: "NEEDS_ANALYSIS", label: t("candidates.status.needsAnalysis") },
+    { status: "NEEDS_INFO", label: t("candidates.status.needsInfo") },
+    { status: "READY_TO_REVIEW", label: t("candidates.status.ready") },
+    { status: "REVIEWING", label: t("candidates.status.reviewing") },
+    { status: "CONTACTED", label: t("candidates.status.contacted") },
+    { status: "SHORTLISTED", label: t("candidates.status.shortlisted") },
+    { status: "REJECTED", label: t("candidates.status.rejected") },
+    { status: "ARCHIVED", label: t("candidates.status.archived") },
+  ];
+}
 
-const ATTENTION_FILTERS: Array<{ value: AttentionFilter; label: string }> = [
-  { value: "all", label: "All materials" },
-  { value: "manual_review", label: "Source check" },
-  { value: "duplicates", label: "Possible duplicates" },
-  { value: "incomplete", label: "Missing info" },
-];
+function buildAttentionFilters(t: (key: string) => string): Array<{
+  value: AttentionFilter;
+  label: string;
+}> {
+  return [
+    { value: "all", label: t("candidates.attention.all") },
+    { value: "manual_review", label: t("candidates.attention.sourceCheck") },
+    { value: "duplicates", label: t("candidates.attention.duplicates") },
+    { value: "incomplete", label: t("candidates.attention.incomplete") },
+  ];
+}
 
 export default function CandidateIntakePage() {
   return (
@@ -110,7 +127,10 @@ export default function CandidateIntakePage() {
 }
 
 function CandidateIntakeView() {
+  const { t } = useT();
   const queryClient = useQueryClient();
+  const STATUS_FILTERS = buildStatusFilters(t);
+  const ATTENTION_FILTERS = buildAttentionFilters(t);
   const [status, setStatus] = useState<CandidateStatus>("ALL");
   const [attention, setAttention] = useState<AttentionFilter>("all");
   const [bulkUpdating, setBulkUpdating] = useState(false);
@@ -167,7 +187,7 @@ function CandidateIntakeView() {
   // Keep selection in sync when the filter changes (the keyed query
   // already refetches on its own).
   if (candidatesQuery.error && !error) {
-    setError("Could not load the candidate queue.");
+    setError(t("candidates.error.load"));
   }
   const setCandidates = (updater: (prev: CandidateIntake[]) => CandidateIntake[]) => {
     queryClient.setQueryData<CandidateIntake[]>(
@@ -237,7 +257,7 @@ function CandidateIntakeView() {
       setSelectedIds(new Set());
     } catch (err) {
       captureClientError(err, { scope: "email.candidates.bulk-status", status: nextStatus });
-      setError("Could not update the selected candidate status.");
+      setError(t("candidates.error.bulkUpdate"));
     } finally {
       setBulkUpdating(false);
     }
@@ -266,7 +286,7 @@ function CandidateIntakeView() {
       URL.revokeObjectURL(url);
     } catch (err) {
       captureClientError(err, { scope: "email.candidates.export", status, attention });
-      setError("Could not create the candidate CSV.");
+      setError(t("candidates.error.export"));
     } finally {
       setExporting(false);
     }
@@ -288,63 +308,68 @@ function CandidateIntakeView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
-            Candidates
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Resumes, portfolios, and audition materials from email attachments, grouped by review
-            state
-          </p>
+          <h1 className="text-role-page text-ink">{t("mail.filterCandidates")}</h1>
+          <p className="mt-2 text-role-body text-ink-mid">{t("candidates.subtitle")}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => load(status, attention, true)}
             disabled={refreshing}
-            className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
           >
-            {refreshing ? "Refreshing…" : "Rescan"}
+            {refreshing ? t("candidates.refreshing") : t("candidates.rescan")}
           </button>
           <button
             type="button"
             onClick={exportCsv}
             disabled={exporting}
-            className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
           >
-            {exporting ? "Exporting…" : "Export CSV"}
+            {exporting ? t("candidates.exporting") : t("candidates.exportCsv")}
           </button>
           <Link
             href="/email"
-            className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
           >
-            Email list
+            {t("candidates.emailListLink")}
           </Link>
         </div>
       </header>
 
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        <QueueStat label="Needs info" value={needsCount} />
-        <QueueStat label="Ready" value={readyCount} />
-        <QueueStat label="Duplicates" value={duplicateCount} />
-        <QueueStat label="Source checks" value={manualReviewCount} />
+        <QueueStat label={t("candidates.status.needsInfo")} value={needsCount} />
+        <QueueStat label={t("candidates.status.ready")} value={readyCount} />
+        <QueueStat label={t("candidates.stat.duplicates")} value={duplicateCount} />
+        <QueueStat label={t("candidates.stat.sourceChecks")} value={manualReviewCount} />
         {quality && (
           <>
-            <QueueStat label="AI quality" value={`${Math.round(quality.qualityScore * 100)}%`} />
-            <QueueStat label="Analyzed" value={quality.analyzedCount} />
-            <QueueStat label="Corrected" value={quality.correctedCount} />
-            <QueueStat label="Failed" value={quality.failedCount + quality.manualReviewCount} />
+            <QueueStat
+              label={t("candidates.stat.aiQuality")}
+              value={`${Math.round(quality.qualityScore * 100)}%`}
+            />
+            <QueueStat label={t("candidates.stat.analyzed")} value={quality.analyzedCount} />
+            <QueueStat label={t("candidates.stat.corrected")} value={quality.correctedCount} />
+            <QueueStat
+              label={t("candidates.stat.failed")}
+              value={quality.failedCount + quality.manualReviewCount}
+            />
           </>
         )}
       </div>
 
       {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
-        <div className="mb-3 rounded-xl border border-sky-200/70 bg-gradient-to-r from-sky-50 to-white px-3 py-2 text-[11px] text-sky-800">
-          Recent corrections {quality.correctionSummary.total} · categories{" "}
-          {quality.correctionSummary.categoryCorrectionCount} · fields{" "}
-          {quality.correctionSummary.fieldCorrectionCount} · summaries{" "}
-          {quality.correctionSummary.summaryCorrectionCount} · stability{" "}
-          {Math.round(quality.correctionSummary.categoryStability * 100)}%/
-          {Math.round(quality.correctionSummary.fieldStability * 100)}%
+        <div className="mb-3 rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 text-role-caption text-state-info-ink">
+          {t("candidates.correctionSummary", {
+            total: String(quality.correctionSummary.total),
+            categories: String(quality.correctionSummary.categoryCorrectionCount),
+            fields: String(quality.correctionSummary.fieldCorrectionCount),
+            summaries: String(quality.correctionSummary.summaryCorrectionCount),
+            categoryStability: String(
+              Math.round(quality.correctionSummary.categoryStability * 100),
+            ),
+            fieldStability: String(Math.round(quality.correctionSummary.fieldStability * 100)),
+          })}
         </div>
       )}
       {quality?.topIssues && quality.topIssues.length > 0 && (
@@ -352,8 +377,8 @@ function CandidateIntakeView() {
       )}
 
       <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
-        <span className="mr-0.5 shrink-0 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Status
+        <span className="mr-0.5 shrink-0 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
+          {t("candidates.filterStatusLabel")}
         </span>
         {STATUS_FILTERS.map((filter) => {
           const active = filter.status === status;
@@ -362,15 +387,13 @@ function CandidateIntakeView() {
               key={filter.status}
               type="button"
               onClick={() => setStatus(filter.status)}
-              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
                 active
-                  ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
-                  : "text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm"
+                  ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
+                  : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
               }`}
             >
-              {active && (
-                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-              )}
+              {active && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />}
               {filter.label}
             </button>
           );
@@ -378,8 +401,8 @@ function CandidateIntakeView() {
       </div>
 
       <div className="-mx-4 mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
-        <span className="mr-0.5 shrink-0 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Focus
+        <span className="mr-0.5 shrink-0 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
+          {t("candidates.filterFocusLabel")}
         </span>
         {ATTENTION_FILTERS.map((filter) => {
           const active = filter.value === attention;
@@ -388,15 +411,13 @@ function CandidateIntakeView() {
               key={filter.value}
               type="button"
               onClick={() => setAttention(filter.value)}
-              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
                 active
-                  ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
-                  : "text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm"
+                  ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
+                  : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
               }`}
             >
-              {active && (
-                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-              )}
+              {active && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />}
               {filter.label}
             </button>
           );
@@ -404,43 +425,45 @@ function CandidateIntakeView() {
       </div>
 
       {!loading && candidates.length > 0 && (
-        <div className="panel-elevated mt-3 flex flex-col gap-2 rounded-xl border border-slate-200/70 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="panel-elevated mt-3 flex flex-col gap-2 rounded-card border border-line/70 bg-surface-panel p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={toggleAllVisible}
-              className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+              className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
             >
-              {selectedCount > 0 ? `${selectedCount} selected` : "Select visible"}
+              {selectedCount > 0
+                ? t("candidates.bulk.selectedCount", { count: String(selectedCount) })
+                : t("candidates.bulk.selectVisible")}
             </button>
             {selectedCount > 0 && (
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="ease-strong rounded-lg px-3 py-1.5 text-xs text-slate-400 transition duration-150 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.97]"
+                className="ease-strong rounded-control px-3 py-1.5 text-role-caption text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] focus-ring"
               >
-                Clear
+                {t("candidates.bulk.clear")}
               </button>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
             <BulkStatusButton
-              label="Reviewing"
+              label={t("candidates.status.reviewing")}
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("REVIEWING")}
             />
             <BulkStatusButton
-              label="Shortlist"
+              label={t("candidates.bulk.shortlist")}
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("SHORTLISTED")}
             />
             <BulkStatusButton
-              label="Contacted"
+              label={t("candidates.status.contacted")}
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("CONTACTED")}
             />
             <BulkStatusButton
-              label="Archive"
+              label={t("candidates.bulk.archive")}
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("ARCHIVED")}
             />
@@ -448,20 +471,18 @@ function CandidateIntakeView() {
         </div>
       )}
 
-      {loading && <p className="px-1 py-3 text-sm text-slate-400">Loading...</p>}
-
-      {error && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+      {loading && (
+        <div className="mt-3">
+          <ListSkeleton />
         </div>
       )}
 
+      {error && <ErrorAlert className="mt-3">{error}</ErrorAlert>}
+
       {!loading && !error && candidates.length === 0 && (
-        <div className="panel-elevated mt-4 rounded-2xl border border-slate-200/70 bg-white p-6 text-center">
-          <p className="text-sm text-slate-500">No candidate materials yet.</p>
-          <p className="mt-1 text-xs text-slate-400">
-            After Gmail sync and attachment analysis, candidate signals appear here automatically.
-          </p>
+        <div className="panel-elevated mt-4 rounded-card border border-line/70 bg-surface-panel p-6 text-center">
+          <p className="text-role-body text-ink-mid">{t("candidates.empty.title")}</p>
+          <p className="mt-1 text-role-caption text-ink-dim">{t("candidates.empty.description")}</p>
         </div>
       )}
 
@@ -484,34 +505,49 @@ function CandidateIntakeView() {
 // Collapsed one-line warning strip — the failure count is one calm sentence,
 // and the noisy per-file list only appears on demand.
 function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality["topIssues"]> }) {
+  const { t } = useT();
+  const { user } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const count = issues.length;
+  // "Add your own key" is a Pro remedy: a FREE user is told where it lives instead.
+  const locked = byokLocked(user);
   return (
-    <div className="mb-3 overflow-hidden rounded-lg border border-amber-200/70 bg-amber-50/60">
+    <div className="mb-3 overflow-hidden rounded-control border border-state-warn-line bg-state-warn-bg">
       <div className="flex items-center gap-3 px-3 py-2">
-        <p className="min-w-0 flex-1 truncate text-xs text-amber-800">
+        <p className="min-w-0 flex-1 truncate text-role-caption text-amber-800">
+          {t("candidates.qualityIssues.prefix")}
           <span className="font-semibold tabular-nums">{count}</span>{" "}
-          {count === 1 ? "attachment" : "attachments"} failed analysis — add your own key
+          {count === 1
+            ? t(
+                locked
+                  ? "candidates.qualityIssues.oneFailedFree"
+                  : "candidates.qualityIssues.oneFailed",
+              )
+            : t(
+                locked
+                  ? "candidates.qualityIssues.manyFailedFree"
+                  : "candidates.qualityIssues.manyFailed",
+              )}
         </p>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="ease-strong shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-amber-700 transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97]"
+          className="ease-strong shrink-0 rounded-chip px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97] focus-ring"
         >
-          {expanded ? "Hide" : "Details"}
+          {expanded ? t("candidates.qualityIssues.hide") : t("candidates.qualityIssues.details")}
         </button>
       </div>
       {expanded && (
-        <ul className="divide-y divide-amber-200/50 border-t border-amber-200/50 bg-white/60">
+        <ul className="divide-y divide-amber-200/50 border-t border-state-warn-line bg-surface-panel/60">
           {issues.slice(0, 4).map((issue) => (
             <li key={issue.attachmentId}>
               <Link
                 href={`/email/${issue.emailId}`}
-                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-[11px] transition duration-150 hover:bg-amber-50"
+                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-role-caption transition duration-150 hover:bg-state-warn-bg focus-ring"
               >
-                <span className="truncate font-medium text-slate-700">{issue.filename}</span>
-                <span className="min-w-0 truncate text-slate-400">{issue.reason}</span>
+                <span className="truncate font-medium text-ink-soft">{issue.filename}</span>
+                <span className="min-w-0 truncate text-ink-dim">{issue.reason}</span>
               </Link>
             </li>
           ))}
@@ -527,14 +563,12 @@ function QueueStat({ label, value }: { label: string; value: number | string }) 
   const isZero = value === 0 || value === "0";
   return (
     <span
-      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-3 text-[11px] font-medium tabular-nums ${
-        isZero ? "text-slate-400 opacity-60" : "text-slate-500"
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-panel/70 px-3 text-role-caption font-medium tabular-nums ${
+        isZero ? "text-ink-dim opacity-60" : "text-ink-mid"
       }`}
     >
       {label}
-      <span
-        className={`font-semibold tabular-nums ${isZero ? "text-slate-400" : "text-slate-900"}`}
-      >
+      <span className={`font-semibold tabular-nums ${isZero ? "text-ink-dim" : "text-ink"}`}>
         {value}
       </span>
     </span>
@@ -555,7 +589,7 @@ function BulkStatusButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+      className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring"
     >
       {label}
     </button>
@@ -571,95 +605,116 @@ function CandidateCard({
   selected: boolean;
   onToggle: () => void;
 }) {
-  const title = [candidate.name || "Unknown name", candidate.role].filter(Boolean).join(" · ");
+  const { t } = useT();
+  const title = [candidate.name || t("candidates.card.unknownName"), candidate.role]
+    .filter(Boolean)
+    .join(" · ");
   const displayName = candidate.name || senderName(candidate.email.from);
   return (
     <article
-      className={`panel-elevated relative overflow-hidden rounded-2xl border bg-white p-4 transition duration-150 ease-out ${
+      className={`panel-elevated relative overflow-hidden rounded-card border bg-surface-panel p-4 transition duration-150 ease-out ${
         selected
-          ? "border-sky-300 ring-2 ring-accent/20"
-          : "border-slate-200/70 hover:border-sky-200"
+          ? "border-accent-muted ring-2 ring-accent/20"
+          : "border-line/70 hover:border-state-info-line"
       }`}
     >
       {selected && (
-        <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-sky-400" />
+        <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-accent-light" />
       )}
       <div className="flex items-start gap-3">
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="mt-1 h-4 w-4 rounded border-slate-300 bg-white text-accent"
-          aria-label={`Select ${title}`}
+          className="mt-1 h-4 w-4 rounded border-line-strong bg-surface-panel text-accent-deep"
+          aria-label={t("candidates.card.selectAria", { title })}
         />
         <span
           aria-hidden="true"
-          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(displayName)}`}
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(displayName)}`}
         >
           {senderInitials(displayName)}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
-              {candidateStatusLabel(candidate.status)}
+            <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+              {candidateStatusLabel(t, candidate.status)}
             </span>
-            <span className="text-[10px] tabular-nums text-slate-400">
+            <span className="text-role-caption tabular-nums text-ink-dim">
               {Math.round(candidate.confidence * 100)}%
             </span>
             {candidate.duplicateCount > 1 && (
-              <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-500/20">
-                Duplicate {candidate.duplicateCount}
+              <span className="shrink-0 rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+                {t("candidates.card.duplicateBadge", { count: String(candidate.duplicateCount) })}
               </span>
             )}
           </div>
-          <h2 className="mt-1.5 truncate text-sm font-semibold text-slate-900">{title}</h2>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{candidate.summary}</p>
+          <h2 className="mt-1.5 truncate text-role-head text-ink">{title}</h2>
+          <p className="mt-1 line-clamp-2 text-role-caption leading-5 text-ink-mid">
+            {candidate.summary}
+          </p>
         </div>
-        <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
+        <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
           {formatRelative(candidate.email.receivedAt)}
         </time>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
-        {candidate.contact && <span className="truncate">Contact {candidate.contact}</span>}
-        <span className="tabular-nums">{candidate.evidenceFiles.length} files</span>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-role-caption text-ink-dim">
+        {candidate.contact && (
+          <span className="truncate">
+            {t("candidates.card.contactPrefix", { contact: candidate.contact })}
+          </span>
+        )}
+        <span className="tabular-nums">
+          {t("emailDetail.attachment.fileCount", { count: String(candidate.evidenceFiles.length) })}
+        </span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
-          <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 ring-1 ring-inset ring-amber-500/20">
-            Source check {candidate.evidenceFiles.filter((file) => file.needsManualReview).length}
+          <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-medium tabular-nums text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+            {t("candidates.card.sourceCheckCount", {
+              count: String(
+                candidate.evidenceFiles.filter((file) => file.needsManualReview).length,
+              ),
+            })}
           </span>
         )}
         {candidate.duplicateCount > 1 && (
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
-            Duplicate match {candidate.duplicateReasons.map(candidateDuplicateLabel).join(", ")}
+          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-medium text-ink-mid ring-1 ring-inset ring-line">
+            {t("candidates.card.duplicateMatch", {
+              reasons: candidate.duplicateReasons
+                .map((reason) => candidateDuplicateLabel(t, reason))
+                .join(", "),
+            })}
           </span>
         )}
         {candidate.missingFields.length > 0 && (
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-500 ring-1 ring-inset ring-slate-200">
-            {formatMissingBadge(candidate.missingFields)}
+          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-medium tabular-nums text-ink-mid ring-1 ring-inset ring-line">
+            {formatMissingBadge(t, candidate.missingFields)}
           </span>
         )}
       </div>
-      <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-        <p className="truncate text-xs text-slate-600">{candidate.email.subject || "Untitled"}</p>
-        <p className="mt-1 truncate text-[11px] text-slate-400">
+      <div className="mt-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+        <p className="truncate text-role-caption text-ink-muted">
+          {candidate.email.subject || t("common.untitled")}
+        </p>
+        <p className="mt-1 truncate text-role-caption text-ink-dim">
           {senderName(candidate.email.from)}
         </p>
       </div>
       {candidate.notes && (
-        <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-400">
-          Notes: {candidate.notes}
+        <p className="mt-2 line-clamp-2 text-role-caption leading-5 text-ink-dim">
+          {t("candidates.card.notesPrefix", { notes: candidate.notes })}
         </p>
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
-        className="ease-strong mt-3 inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+        className="ease-strong mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
-        Candidate details
+        {t("candidates.card.detailsLink")}
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
-        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-400 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-dim transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
-        Email
+        {t("nav.email")}
       </Link>
     </article>
   );
@@ -668,7 +723,7 @@ function CandidateCard({
 // Monogram avatar helpers — local copy of the email page pattern (recognition
 // over decoration; deterministic gradient per person).
 const AVATAR_GRADIENTS = [
-  "from-sky-400 to-blue-500",
+  "from-accent-light to-blue-500",
   "from-teal-400 to-emerald-500",
   "from-indigo-500 to-violet-600",
   "from-amber-400 to-orange-500",
@@ -698,44 +753,51 @@ function senderInitials(name: string): string {
     .toUpperCase();
 }
 
-function candidateStatusLabel(status: string): string {
+/** `t` is passed in rather than called via useT() here — these are plain
+ * helpers, not components, so they cannot use hooks themselves. */
+function candidateStatusLabel(t: (key: string) => string, status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "Needs analysis",
-    NEEDS_INFO: "Needs info",
-    READY_TO_REVIEW: "Ready",
-    REVIEWING: "Reviewing",
-    CONTACTED: "Contacted",
-    SHORTLISTED: "Shortlisted",
-    REJECTED: "Rejected",
-    ARCHIVED: "Archived",
+    NEEDS_ANALYSIS: t("candidates.status.needsAnalysis"),
+    NEEDS_INFO: t("candidates.status.needsInfo"),
+    READY_TO_REVIEW: t("candidates.status.ready"),
+    REVIEWING: t("candidates.status.reviewing"),
+    CONTACTED: t("candidates.status.contacted"),
+    SHORTLISTED: t("candidates.status.shortlisted"),
+    REJECTED: t("candidates.status.rejected"),
+    ARCHIVED: t("candidates.status.archived"),
   };
   return labels[status] || status;
 }
 
 // "Missing: Name +3" — lead with the first missing field, fold the rest into
 // a count so the badge stays one quiet token instead of a red laundry list.
-function formatMissingBadge(fields: string[]): string {
-  const first = candidateMissingLabel(fields[0]);
+function formatMissingBadge(
+  t: (key: string, vars?: Record<string, string>) => string,
+  fields: string[],
+): string {
+  const first = candidateMissingLabel(t, fields[0]);
   const rest = fields.length - 1;
-  return rest > 0 ? `Missing: ${first} +${rest}` : `Missing: ${first}`;
+  return rest > 0
+    ? t("candidates.card.missingWithRest", { first, rest: String(rest) })
+    : t("candidates.card.missingOnly", { first });
 }
 
-function candidateMissingLabel(field: string): string {
+function candidateMissingLabel(t: (key: string) => string, field: string): string {
   const labels: Record<string, string> = {
-    name: "Name",
-    contact: "Contact",
-    role: "Role",
-    portfolio: "Portfolio",
+    name: t("emailDetail.candidateCard.fact.name"),
+    contact: t("emailDetail.candidateCard.fact.contact"),
+    role: t("emailDetail.candidateCard.fact.role"),
+    portfolio: t("candidates.missingField.portfolio"),
   };
   return labels[field] || field;
 }
 
-function candidateDuplicateLabel(reason: string): string {
+function candidateDuplicateLabel(t: (key: string) => string, reason: string): string {
   const labels: Record<string, string> = {
-    same_email: "Email",
-    same_phone: "Phone",
-    same_name_and_role: "Name + role",
-    same_name: "Name",
+    same_email: t("nav.email"),
+    same_phone: t("candidates.duplicateReason.phone"),
+    same_name_and_role: t("candidates.duplicateReason.nameAndRole"),
+    same_name: t("emailDetail.candidateCard.fact.name"),
   };
   return labels[reason] || reason;
 }

@@ -2,33 +2,45 @@ import type { MemoryType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { db } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 
 // Per-route rate limit config
 const rateLimitConfig = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
+
+const listMemoriesQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    type: { type: "string", maxLength: 500 },
+    search: { type: "string", maxLength: 500 },
+  },
+} as const;
 
 export async function memoryRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
   // GET /api/memories — List user's memories (optionally filter by type)
-  app.get("/", rateLimitConfig, async (request) => {
-    const userId = getUserId(request);
-    const { type, search } = request.query as { type?: string; search?: string };
-    const where: Record<string, unknown> = { userId };
-    if (type) where.type = type;
-    if (search) {
-      where.OR = [
-        { key: { contains: search, mode: "insensitive" } },
-        { content: { contains: search, mode: "insensitive" } },
-      ];
-    }
+  app.get(
+    "/",
+    { ...rateLimitConfig, schema: { querystring: listMemoriesQuerySchema } },
+    async (request) => {
+      const userId = getUserId(request);
+      const { type, search } = request.query as { type?: string; search?: string };
+      const where: Record<string, unknown> = { userId };
+      if (type) where.type = type;
+      if (search) {
+        const ci = { contains: escapeLikePattern(search), mode: "insensitive" as const };
+        where.OR = [{ key: ci }, { content: ci }];
+      }
 
-    const memories = await db.memory.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-    });
+      const memories = await db.memory.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+      });
 
-    return { memories };
-  });
+      return { memories };
+    },
+  );
 
   // POST /api/memories — Create or upsert a memory
   app.post("/", rateLimitConfig, async (request, reply) => {

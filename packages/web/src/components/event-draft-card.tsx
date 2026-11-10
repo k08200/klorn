@@ -17,6 +17,8 @@ export interface EventDraft {
   startTime: string;
   endTime: string;
   location?: string;
+  /** Invitees (team mode P2) — saving is what sends the invitations. */
+  attendees?: string[];
 }
 
 function formatRange(startIso: string, endIso: string): string {
@@ -58,6 +60,7 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
           startTime: draft.startTime,
           endTime: draft.endTime,
           ...(draft.location ? { location: draft.location } : {}),
+          ...(draft.attendees?.length ? { attendees: draft.attendees } : {}),
         }),
       });
 
@@ -81,20 +84,23 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
   };
 
   return (
-    <div className="mt-2 rounded-xl border border-slate-200/70 bg-white p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <span className="inline-flex rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20">
+    <div className="mt-2 rounded-card border border-line/70 bg-surface-panel p-3 text-role-body shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <span className="inline-flex rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
         {t("draft.title")}
       </span>
-      <p className="mt-1.5 font-medium text-slate-900">{draft.title}</p>
-      <p className="mt-0.5 text-slate-500">{formatRange(draft.startTime, draft.endTime)}</p>
-      {draft.location && <p className="mt-0.5 text-slate-500">{draft.location}</p>}
+      <p className="mt-1.5 font-medium text-ink">{draft.title}</p>
+      <p className="mt-0.5 text-ink-mid">{formatRange(draft.startTime, draft.endTime)}</p>
+      {draft.location && <p className="mt-0.5 text-ink-mid">{draft.location}</p>}
+      {draft.attendees && draft.attendees.length > 0 && (
+        <p className="mt-0.5 text-ink-mid">{draft.attendees.join(", ")}</p>
+      )}
 
       {state === "saved" ? (
-        <p className="mt-2 text-emerald-600">{t("draft.saved")}</p>
+        <p className="mt-2 text-state-ok-ink">{t("draft.saved")}</p>
       ) : state === "paywalled" ? (
-        <p className="mt-2 text-slate-500">
+        <p className="mt-2 text-ink-mid">
           {t("draft.paywall")}{" "}
-          <Link href="/billing" className="focus-ring text-sky-600 underline">
+          <Link href="/billing" className="focus-ring text-accent-deep underline">
             {t("draft.seePlans")}
           </Link>
         </p>
@@ -104,11 +110,13 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
             type="button"
             onClick={() => void save()}
             disabled={state === "saving"}
-            className="focus-ring glow-primary ease-strong min-h-[44px] rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring glow-primary ease-strong min-h-[44px] rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {state === "saving" ? t("draft.saving") : t("draft.save")}
           </button>
-          {state === "error" && errorMessage && <p className="text-red-700">{errorMessage}</p>}
+          {state === "error" && errorMessage && (
+            <p className="text-state-danger-ink">{errorMessage}</p>
+          )}
         </div>
       )}
     </div>

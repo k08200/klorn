@@ -19,14 +19,18 @@
 import type { AttentionSource, AttentionStatus, AttentionType } from "@prisma/client";
 import { getToolRisk } from "../agentcore/agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "../agentcore/agent-mode.js";
+import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { getSuppressionSet, isSuppressed } from "../learning/feedback-adaptor.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
 import { captureError } from "../sentry.js";
-import { computeAttentionInputHash } from "./attention-input-hash.js";
+import { CLEAR_AGENT_TIER, NOT_AGENT_SET } from "./agent-tier.js";
+import { attentionHashInputOf, computeAttentionInputHash } from "./attention-input-hash.js";
+import { CLEAR_OVERRIDE_UNDO } from "./attention-override.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
+import { type V3ItemFields, v3Columns } from "./v3/live-item.js";
 
 // Typed wrapper around attentionItem.upsert. The where uses the userId-scoped
 // compound unique (userId, source, sourceId) so an upsert can never collide
@@ -107,8 +111,9 @@ function pendingActionCost(pa: PendingActionLike): string {
   return "If the decision stays pending, the related workstream may stall.";
 }
 
-// ─── 4-Tier Escalation ─────────────────────────────────────────────────────
-// Maps item characteristics to the canonical SILENT | QUEUE | PUSH | AUTO.
+// ─── Lane Escalation ───────────────────────────────────────────────────────
+// Maps item characteristics to a canonical lane. Which lanes are reachable
+// depends on TIER_V2_ENABLED (default-ON since 2026-08-18) — see judge/tiers.ts.
 // SILENT: not worth surfacing (noise reduction)
 // QUEUE:  added to inbox for async review
 // PUSH:   warrants an active push notification — this is the top of the
@@ -807,16 +812,18 @@ export async function deleteAttentionForCommitments(
 //
 // Every email the poc-judge classifies gets mirrored to an AttentionItem
 // keyed on (source=EMAIL, sourceId=EmailMessage.id). The existing firewall
-// route already groups items by tier, so emails appear in the same SILENT/
-// QUEUE/PUSH/AUTO buckets as PendingActions, with the email's own subject
+// route already groups items by lane, so emails appear in the same lane
+// buckets as PendingActions, with the email's own subject
 // and sender shown via the EMAIL source-specific join below.
 //
-// Idempotent — re-running for the same email simply overwrites the tier
-// and tier reason. Override via POST /api/inbox/firewall/:id continues to
-// work because the route mutates the AttentionItem row directly.
+// Idempotent for a NEW item — re-running for the same email overwrites the tier
+// and tier reason. A RE-JUDGE of an existing item (options.rejudge) never
+// overwrites a human override or an agent lane: see EmailUpsertOptions.
 
 export interface EmailJudgementLike {
-  tier: "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+  tier: "SILENT" | "INFO" | "QUEUE" | "MEETING" | "PUSH" | "AUTO";
+  /** v2: may Klorn answer this unattended (tier-policy floors)? */
+  autoEligible?: boolean;
   reason: string;
   features?: {
     confidence: number;
@@ -859,80 +866,140 @@ function emailPriority(j: EmailJudgementLike): number {
   return Math.round(Math.min(100, Math.max(1, urgencyScore + confidenceScore + trustScore)));
 }
 
+/** How an email upsert ended. `preserved` means nothing was written. */
+export type EmailUpsertOutcome = "written" | "preserved";
+
+export interface EmailUpsertOptions {
+  /**
+   * The item already exists and this is a RE-JUDGE of it (the stale-hash heal,
+   * the operator re-judge). The write is then a guarded `updateMany`, mirroring
+   * fallback-rejudge: it only matches while no human override and no MCP agent
+   * lane is on the row, so a decision made WHILE the judge ran — the LLM call
+   * takes seconds — is never overwritten. It creates nothing. Zero rows means
+   * `preserved`, and the caller must skip every side effect that follows
+   * (GHSA-cxc5-fmqv-pxv6: a human always wins). A NEW item (ingest, backfill)
+   * leaves this off and keeps the plain upsert.
+   */
+  rejudge?: boolean;
+  /**
+   * Attention engine v3 live decision columns (judge/v3/live-item.ts), set for
+   * users under JUDGE_V3_POLICY. Absent: those columns are not touched.
+   */
+  v3?: V3ItemFields;
+}
+
+/** What a judgement refreshes on an existing email item and sets on a new one. */
+function emailRefreshFields(
+  email: EmailLike,
+  judgement: EmailJudgementLike,
+  inputHash: string,
+  inputHashAt: Date,
+) {
+  return {
+    priority: emailPriority(judgement),
+    // Confidence on the classification itself (not the underlying ground
+    // truth). Used by callers that surface "the model is unsure" UI.
+    confidence: judgement.features?.confidence ?? 0.5,
+    title: emailTitleFor(email),
+    body: email.snippet ?? null,
+    evidence: evidence("EMAIL", email.id, [
+      { label: "From", value: email.from },
+      { label: "Received", value: email.receivedAt.toISOString() },
+      { label: "Judged by", value: judgement.source ?? "unknown" },
+    ]),
+    tier: judgement.tier,
+    tierReason: judgement.reason,
+    autoEligible: judgement.autoEligible ?? false,
+    inputHash,
+    inputHashAt,
+  };
+}
+
+type EmailRefreshFields = ReturnType<typeof emailRefreshFields>;
+
+function emailCreateFields(email: EmailLike, fields: EmailRefreshFields) {
+  return {
+    userId: email.userId,
+    source: "EMAIL",
+    sourceId: email.id,
+    type: "REPLY_NEEDED",
+    status: "OPEN",
+    autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
+    suggestedAction: null,
+    costOfIgnoring: null,
+    surfacedAt: email.receivedAt,
+    ...fields,
+    // judgement.reason is LLM-authored — never let it set the ground-truth
+    // flag, even if it happens to say "Manual override" (GHSA-cxc5-fmqv-pxv6).
+    isManualOverride: false,
+  };
+}
+
+async function writeEmailItem(
+  email: EmailLike,
+  fields: EmailRefreshFields & Partial<ReturnType<typeof v3Columns>>,
+  rejudge: boolean,
+): Promise<EmailUpsertOutcome> {
+  if (rejudge) {
+    const { count } = await prisma.attentionItem.updateMany({
+      where: {
+        userId: email.userId,
+        source: "EMAIL",
+        sourceId: email.id,
+        isManualOverride: false,
+        ...NOT_AGENT_SET,
+      },
+      data: fields,
+    });
+    return count > 0 ? "written" : "preserved";
+  }
+  await upsertAttentionItem({
+    where: {
+      userId_source_sourceId: { userId: email.userId, source: "EMAIL", sourceId: email.id },
+    },
+    create: emailCreateFields(email, fields),
+    // Intentionally NOT setting status here. A re-judge (Naver poll, backfill
+    // sweep) must refresh the classification but preserve the user's terminal
+    // decision — forcing OPEN resurrected items the user had already
+    // DISMISSED/RESOLVED. New emails still get OPEN via create.
+    update: {
+      ...fields,
+      // Reset on every re-judge: a prior genuine override must not survive
+      // as "true" over fresh judge-authored tierReason text.
+      isManualOverride: false,
+      // Same for an MCP agent's stamp (step A2b): the tier is judge-authored again.
+      ...CLEAR_AGENT_TIER,
+      // And for a manual override's undo snapshot (KEYBOARD_TRIAGE): the row is
+      // no longer what that override wrote, so there is nothing left to undo.
+      ...(keyboardTriageEnabled() ? CLEAR_OVERRIDE_UNDO : {}),
+    },
+  });
+  return "written";
+}
+
 export async function upsertAttentionForEmailJudgement(
   email: EmailLike,
   judgement: EmailJudgementLike,
   /** Learned-engagement grounding that fed this judgement, for the ledger. */
   engagementKind: EngagementKind | null = null,
-): Promise<void> {
+  options: EmailUpsertOptions = {},
+): Promise<EmailUpsertOutcome> {
   // Content-addressed classification — see attention-input-hash.ts.
   // Same bytes that fed the classifier are the bytes we hash so any
   // post-decision mutation invalidates the cached tier at read time.
-  const inputHash = computeAttentionInputHash({
-    from: email.from,
-    subject: email.subject,
-    snippet: email.snippet,
-    labels: email.labels,
-  });
-  const inputHashAt = new Date();
+  const fields = {
+    ...emailRefreshFields(
+      email,
+      judgement,
+      computeAttentionInputHash(attentionHashInputOf(email)),
+      new Date(),
+    ),
+    ...(options.v3 ? v3Columns(options.v3) : {}),
+  };
 
+  let outcome: EmailUpsertOutcome;
   try {
-    await upsertAttentionItem({
-      where: {
-        userId_source_sourceId: { userId: email.userId, source: "EMAIL", sourceId: email.id },
-      },
-      create: {
-        userId: email.userId,
-        source: "EMAIL",
-        sourceId: email.id,
-        type: "REPLY_NEEDED",
-        status: "OPEN",
-        priority: emailPriority(judgement),
-        // Confidence on the classification itself (not the underlying ground
-        // truth). Used by callers that surface "the model is unsure" UI.
-        confidence: judgement.features?.confidence ?? 0.5,
-        autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
-        title: emailTitleFor(email),
-        body: email.snippet ?? null,
-        suggestedAction: null,
-        costOfIgnoring: null,
-        evidence: evidence("EMAIL", email.id, [
-          { label: "From", value: email.from },
-          { label: "Received", value: email.receivedAt.toISOString() },
-          { label: "Judged by", value: judgement.source ?? "unknown" },
-        ]),
-        surfacedAt: email.receivedAt,
-        tier: judgement.tier,
-        tierReason: judgement.reason,
-        // judgement.reason is LLM-authored — never let it set the ground-truth
-        // flag, even if it happens to say "Manual override" (GHSA-cxc5-fmqv-pxv6).
-        isManualOverride: false,
-        inputHash,
-        inputHashAt,
-      },
-      update: {
-        // Intentionally NOT setting status here. A re-judge (Naver poll,
-        // backfill sweep) must refresh the classification but preserve the
-        // user's terminal decision — forcing OPEN resurrected items the user
-        // had already DISMISSED/RESOLVED. New emails still get OPEN via create.
-        priority: emailPriority(judgement),
-        confidence: judgement.features?.confidence ?? 0.5,
-        title: emailTitleFor(email),
-        body: email.snippet ?? null,
-        evidence: evidence("EMAIL", email.id, [
-          { label: "From", value: email.from },
-          { label: "Received", value: email.receivedAt.toISOString() },
-          { label: "Judged by", value: judgement.source ?? "unknown" },
-        ]),
-        tier: judgement.tier,
-        tierReason: judgement.reason,
-        // Reset on every re-judge: a prior genuine override must not survive
-        // as "true" over fresh judge-authored tierReason text.
-        isManualOverride: false,
-        inputHash,
-        inputHashAt,
-      },
-    });
+    outcome = await writeEmailItem(email, fields, options.rejudge === true);
   } catch (err) {
     // NOT best-effort: this write is what makes the judge's decision visible
     // in the firewall UI. Swallowing it lets "judge decided PUSH" and "user
@@ -945,6 +1012,14 @@ export async function upsertAttentionForEmailJudgement(
       extra: { emailId: email.id, tier: judgement.tier },
     });
     throw err;
+  }
+
+  if (outcome === "preserved") {
+    // A human or an agent decided this item while the judge ran (or it is gone).
+    // Their decision stands, and nothing below may run: the ledger row would be
+    // refreshed to a tier that is not the one shown.
+    console.debug("[attention-mirror] re-judge skipped: item was decided meanwhile");
+    return outcome;
   }
 
   // Append the immutable decision label (best-effort, never throws). Records
@@ -962,4 +1037,5 @@ export async function upsertAttentionForEmailJudgement(
       engagementKind,
     });
   }
+  return outcome;
 }

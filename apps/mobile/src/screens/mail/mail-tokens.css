@@ -1,0 +1,141 @@
+/*
+ * Mail tokens — values from Mail / Reader / LaneSheet / Subscriptions
+ * artboards (light) and the MainDark ramp (dark). Light + dark like
+ * styles/tokens.css: the two dark blocks must stay identical.
+ */
+:root {
+  --lane-push-soft: #fff1f2;
+  --lane-meeting-soft: #eef2ff;
+  --lane-queue-soft: #fffbeb;
+  --lane-info-soft: #ecfeff;
+  --lane-silent-soft: #f5f5f4;
+  --lane-push-soft-line: #fecdd3;
+  --lane-meeting-soft-line: #c7d2fe;
+  --lane-queue-soft-line: #fde68a;
+  --lane-info-soft-line: #a5f3fc;
+  --lane-silent-soft-line: #e7e5e4;
+  --avatar-0-bg: #f1f5f9;
+  --avatar-0-ink: #334155;
+  --avatar-1-bg: #e0f2fe;
+  --avatar-1-ink: #075985;
+  --avatar-2-bg: #eef2ff;
+  --avatar-2-ink: #4338ca;
+  --avatar-3-bg: #fef3c7;
+  --avatar-3-ink: #92400e;
+  --avatar-4-bg: #fce7f3;
+  --avatar-4-ink: #9d174d;
+  --tab-chip-bg: #ffffff;
+  --tab-chip-line: rgba(15, 23, 42, 0.1);
+  --tab-chip-count: #5f6e84;
+  --tab-chip-on-bg: #0b0d12;
+  --tab-chip-on-ink: #ffffff;
+  --tab-chip-on-count: #cbd5e1;
+  --swipe-done-bg: #047857;
+  --swipe-lane-bg: #57534e;
+  --swipe-ink: #ffffff;
+  --fab-shadow: 0 8px 24px rgba(3, 105, 161, 0.28);
+  --draft-line: rgba(3, 105, 161, 0.28);
+  --draft-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --reader-bar: rgba(255, 255, 255, 0.9);
+  --toggle-row-bg: #f8fafc;
+  --meter-track: #e2e8f0;
+  --meter-danger: #be123c;
+  --meter-warn: #b45309;
+  --meter-ok: #047857;
+  --ok-ink: #047857;
+  --attachment-tile-bg: #ffe4e6;
+  --attachment-tile-ink: #9f1239;
+  --select-check: #0369a1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --lane-push-soft: rgba(251, 113, 133, 0.1);
+    --lane-meeting-soft: rgba(129, 140, 248, 0.1);
+    --lane-queue-soft: rgba(251, 191, 36, 0.08);
+    --lane-info-soft: rgba(34, 211, 238, 0.08);
+    --lane-silent-soft: rgba(168, 162, 158, 0.1);
+    --lane-push-soft-line: rgba(251, 113, 133, 0.28);
+    --lane-meeting-soft-line: rgba(129, 140, 248, 0.3);
+    --lane-queue-soft-line: rgba(251, 191, 36, 0.25);
+    --lane-info-soft-line: rgba(34, 211, 238, 0.25);
+    --lane-silent-soft-line: rgba(168, 162, 158, 0.25);
+    --avatar-0-bg: rgba(255, 255, 255, 0.08);
+    --avatar-0-ink: #cbd5e1;
+    --avatar-1-bg: #0d2233;
+    --avatar-1-ink: #7dd3fc;
+    --avatar-2-bg: rgba(129, 140, 248, 0.16);
+    --avatar-2-ink: #a5b4fc;
+    --avatar-3-bg: rgba(251, 191, 36, 0.14);
+    --avatar-3-ink: #fcd34d;
+    --avatar-4-bg: rgba(244, 114, 182, 0.16);
+    --avatar-4-ink: #f9a8d4;
+    --tab-chip-bg: #141416;
+    --tab-chip-line: rgba(255, 255, 255, 0.12);
+    --tab-chip-count: #94a3b8;
+    --tab-chip-on-bg: #f1f5f9;
+    --tab-chip-on-ink: #0a0a0b;
+    --tab-chip-on-count: #475569;
+    --swipe-done-bg: #047857;
+    --swipe-lane-bg: #57534e;
+    --swipe-ink: #ffffff;
+    --fab-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --draft-line: rgba(56, 189, 248, 0.3);
+    --draft-shadow: none;
+    --reader-bar: rgba(17, 26, 46, 0.9);
+    --toggle-row-bg: rgba(255, 255, 255, 0.04);
+    --meter-track: rgba(255, 255, 255, 0.1);
+    --meter-danger: #fb7185;
+    --meter-warn: #fbbf24;
+    --meter-ok: #34d399;
+    --ok-ink: #6ee7b7;
+    --attachment-tile-bg: rgba(251, 113, 133, 0.16);
+    --attachment-tile-ink: #fda4af;
+    --select-check: #38bdf8;
+  }
+}
+
+:root[data-theme="dark"] {
+  --lane-push-soft: rgba(251, 113, 133, 0.1);
+  --lane-meeting-soft: rgba(129, 140, 248, 0.1);
+  --lane-queue-soft: rgba(251, 191, 36, 0.08);
+  --lane-info-soft: rgba(34, 211, 238, 0.08);
+  --lane-silent-soft: rgba(168, 162, 158, 0.1);
+  --lane-push-soft-line: rgba(251, 113, 133, 0.28);
+  --lane-meeting-soft-line: rgba(129, 140, 248, 0.3);
+  --lane-queue-soft-line: rgba(251, 191, 36, 0.25);
+  --lane-info-soft-line: rgba(34, 211, 238, 0.25);
+  --lane-silent-soft-line: rgba(168, 162, 158, 0.25);
+  --avatar-0-bg: rgba(255, 255, 255, 0.08);
+  --avatar-0-ink: #cbd5e1;
+  --avatar-1-bg: #0d2233;
+  --avatar-1-ink: #7dd3fc;
+  --avatar-2-bg: rgba(129, 140, 248, 0.16);
+  --avatar-2-ink: #a5b4fc;
+  --avatar-3-bg: rgba(251, 191, 36, 0.14);
+  --avatar-3-ink: #fcd34d;
+  --avatar-4-bg: rgba(244, 114, 182, 0.16);
+  --avatar-4-ink: #f9a8d4;
+  --tab-chip-bg: #141416;
+  --tab-chip-line: rgba(255, 255, 255, 0.12);
+  --tab-chip-count: #94a3b8;
+  --tab-chip-on-bg: #f1f5f9;
+  --tab-chip-on-ink: #0a0a0b;
+  --tab-chip-on-count: #475569;
+  --swipe-done-bg: #047857;
+  --swipe-lane-bg: #57534e;
+  --swipe-ink: #ffffff;
+  --fab-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --draft-line: rgba(56, 189, 248, 0.3);
+  --draft-shadow: none;
+  --reader-bar: rgba(17, 26, 46, 0.9);
+  --toggle-row-bg: rgba(255, 255, 255, 0.04);
+  --meter-track: rgba(255, 255, 255, 0.1);
+  --meter-danger: #fb7185;
+  --meter-warn: #fbbf24;
+  --meter-ok: #34d399;
+  --ok-ink: #6ee7b7;
+  --attachment-tile-bg: rgba(251, 113, 133, 0.16);
+  --attachment-tile-ink: #fda4af;
+  --select-check: #38bdf8;
+}

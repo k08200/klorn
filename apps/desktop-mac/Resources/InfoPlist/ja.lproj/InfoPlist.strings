@@ -1,0 +1,3 @@
+/* Calendar permission prompt (step C6: device calendars, opt-in per calendar). */
+"NSCalendarsFullAccessUsageDescription" = "Klornは、設定でオンにしたカレンダーだけをアップロードし、ブリーフィングとアシスタントで使えるようにします。";
+"NSCalendarsUsageDescription" = "Klornは、設定でオンにしたカレンダーだけをアップロードし、ブリーフィングとアシスタントで使えるようにします。";

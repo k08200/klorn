@@ -7,11 +7,12 @@ import { getUserId, requireAdmin } from "../auth.js";
 import { checkGlobalCostGate } from "../billing/cost-guard.js";
 import { getCostTripSnapshot } from "../billing/cost-trip-alert.js";
 import { getUsageSummary } from "../billing/llm-usage.js";
+import { appleLoginEnabled, naverLoginEnabled } from "../config.js";
 import { db, prisma } from "../db.js";
 import { withTenant } from "../db-tenant.js";
 import type { CalibrationSnapshotPayload } from "../judge/calibration-snapshot.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
-import { getJudgeHealth } from "../judge/judge-health.js";
+import { getJudgeHealth } from "../judge/judge-fallback-check.js";
 import { buildInteractionGraph } from "../learning/interaction-graph.js";
 import {
   listAppliedLearnedRules,
@@ -31,6 +32,7 @@ import { MODEL } from "../llm/openai.js";
 import { sendBetaInviteEmail } from "../mail/email.js";
 import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
+import { cohortReadout, pmfSummary } from "../product/cohort.js";
 import { getProviderChain } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
@@ -68,6 +70,137 @@ function summarizeTrustFeedback(rows: FeedbackGroup[]) {
     ...counts,
     usefulRate: total > 0 ? counts.useful / total : null,
   };
+}
+
+const waitlistCreateSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["email"],
+  properties: {
+    email: { type: "string", minLength: 3, maxLength: 320 },
+    name: { type: "string", minLength: 1, maxLength: 120 },
+    note: { type: "string", minLength: 1, maxLength: 500 },
+  },
+} as const;
+
+const waitlistQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    status: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const llmUsageQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    userId: { type: "string", maxLength: 500 },
+    days: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const calibrationQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    userId: { type: "string", maxLength: 500 },
+    days: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const decisionMetricsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    userId: { type: "string", maxLength: 500 },
+    days: { type: "string", maxLength: 500 },
+    source: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const interactionGraphRebuildQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    userId: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const senderTraitsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    userId: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+/**
+ * Google's unverified-app allowance.
+ *
+ * While the OAuth consent screen is "In production, unverified", the project
+ * can create a fixed number of new users over its LIFETIME — the count does
+ * not reset, and clicking through the unverified warning spends a slot. The
+ * beta gate used to hold this line; with sign-up open it is spending, so the
+ * remaining room needs to be visible somewhere other than the Cloud console.
+ *
+ * Approximate by design: this counts accounts Klorn created, which is a lower
+ * bound on slots Google has actually charged. It tracks the trend, and the
+ * console stays the authority. GOOGLE_UNVERIFIED_USER_CAP lets the number move
+ * (or go effectively away) once CASA verification clears.
+ */
+const DEFAULT_GOOGLE_USER_CAP = 100;
+
+function googleQuota(consumed: number): { consumed: number; cap: number; remaining: number } {
+  const parsed = Number.parseInt(process.env.GOOGLE_UNVERIFIED_USER_CAP ?? "", 10);
+  const cap = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GOOGLE_USER_CAP;
+  // An over-cap project must read as zero room left, never as negative room.
+  return { consumed, cap, remaining: Math.max(0, cap - consumed) };
+}
+
+/**
+ * Which social-login vars a deployment actually has, and whether its signing
+ * key is usable — reported as names and booleans, never values.
+ *
+ * `?error=apple_config` says the deployment is misconfigured but not which of
+ * five vars is at fault, and the only thing that knew was a service log line.
+ * A key pasted into a field that strips newlines is the common case and looks
+ * identical to a missing one from outside.
+ */
+const APPLE_VARS = [
+  "APPLE_CLIENT_ID",
+  "APPLE_TEAM_ID",
+  "APPLE_KEY_ID",
+  "APPLE_PRIVATE_KEY",
+  "APPLE_REDIRECT_URI",
+] as const;
+
+const NAVER_VARS = ["NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "NAVER_REDIRECT_URI"] as const;
+
+function splitByPresence(names: readonly string[]): { present: string[]; missing: string[] } {
+  const present: string[] = [];
+  const missing: string[] = [];
+  for (const name of names) {
+    (process.env[name] ? present : missing).push(name);
+  }
+  return { present, missing };
+}
+
+/** Parse-only: proves the paste survived, never returns the key. */
+async function checkApplePrivateKey(): Promise<{
+  present: boolean;
+  parses: boolean;
+  detail: string;
+}> {
+  const raw = process.env.APPLE_PRIVATE_KEY;
+  if (!raw) return { present: false, parses: false, detail: "not set" };
+  try {
+    const { importPKCS8 } = await import("jose");
+    await importPKCS8(raw.replace(/\\n/g, "\n"), "ES256");
+    return { present: true, parses: true, detail: "ok" };
+  } catch (err) {
+    return { present: true, parses: false, detail: (err as Error).message };
+  }
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -195,20 +328,34 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
+  // GET /api/admin/cohort — who actually showed up, and would they miss it.
+  // Reads only what is already stored; asks no user anything. Ranked by mail
+  // volume because that is the ICP hypothesis under test.
+  app.get("/cohort", async () => {
+    const [rows, pmf] = await Promise.all([cohortReadout(), pmfSummary()]);
+    return { pmf, cohort: rows };
+  });
+
   // GET /api/admin/stats — Dashboard stats
   app.get("/stats", async () => {
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [totalUsers, totalConversations, totalMessages, planDistribution] = await Promise.all([
-      prisma.user.count(),
-      prisma.conversation.count(),
-      prisma.message.count({ where: { createdAt: { gte: periodStart } } }),
-      prisma.user.groupBy({ by: ["plan"], _count: { id: true } }),
-    ]);
+    const [totalUsers, totalConversations, totalMessages, planDistribution, googleUsers] =
+      await Promise.all([
+        prisma.user.count(),
+        prisma.conversation.count(),
+        prisma.message.count({ where: { createdAt: { gte: periodStart } } }),
+        prisma.user.groupBy({ by: ["plan"], _count: { id: true } }),
+        // Google-origin accounts only: no password, and no Apple/Naver
+        // identity. Counting every user would over-report the burn the moment
+        // another provider is enabled.
+        prisma.user.count({ where: { passwordHash: null, identities: { none: {} } } }),
+      ]);
 
     return {
       totalUsers,
+      googleQuota: googleQuota(googleUsers),
       totalConversations,
       monthlyMessages: totalMessages,
       planDistribution: Object.fromEntries(
@@ -217,6 +364,21 @@ export async function adminRoutes(app: FastifyInstance) {
           p._count.id,
         ]),
       ),
+    };
+  });
+
+  // GET /api/admin/provider-config — which social-login vars this deployment
+  // has and whether the Apple key parses. Names and booleans only.
+  app.get("/provider-config", async () => {
+    const apple = splitByPresence(APPLE_VARS);
+    const naver = splitByPresence(NAVER_VARS);
+    return {
+      apple: {
+        enabled: appleLoginEnabled(),
+        ...apple,
+        privateKey: await checkApplePrivateKey(),
+      },
+      naver: { enabled: naverLoginEnabled(), ...naver },
     };
   });
 
@@ -357,7 +519,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // GET /api/admin/waitlist — Public waitlist entries (PENDING first)
-  app.get("/waitlist", async (request) => {
+  app.get("/waitlist", { schema: { querystring: waitlistQuerySchema } }, async (request) => {
     const { status } = request.query as { status?: string };
     const where =
       status === "APPROVED" || status === "REJECTED" ? { status: status as WaitlistStatus } : {};
@@ -375,6 +537,75 @@ export async function adminRoutes(app: FastifyInstance) {
       counts[row.status] = row._count.status;
     }
     return { entries, counts };
+  });
+
+  // POST /api/admin/waitlist — put an address on the list by hand.
+  //
+  // The public intake (POST /api/waitlist) was deleted 2026-08-26: it had no
+  // caller and the landing says "no invite, no waitlist". But it was also the
+  // only way a row could be created, and `docs/oauth-verification/README.md`
+  // §3.5 depends on creating one — with BETA_GATE_ENABLED on, a Google
+  // reviewer and the CASA DAST scanner cannot sign themselves up, so their
+  // addresses have to be pre-provisioned. Deleting a public endpoint should
+  // not cost us that, so creation moved behind `requireAdmin` rather than
+  // disappearing.
+  //
+  // Unlike the public route this does not pretend an existing address is new:
+  // there is no enumeration concern behind an admin token, and the caller
+  // needs to know whether they just created a row or found one.
+  app.post("/waitlist", { schema: { body: waitlistCreateSchema } }, async (request, reply) => {
+    const body = request.body as { email: string; name?: string; note?: string };
+    const email = body.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return reply.code(400).send({ error: "Invalid email" });
+    }
+    const existing = await db.waitlist.findUnique({
+      where: { email },
+      select: { id: true, email: true, status: true },
+    });
+    if (existing) {
+      return reply.code(200).send({ entry: existing, created: false });
+    }
+    const entry = await db.waitlist.create({
+      data: {
+        email,
+        name: body.name?.trim() || null,
+        useCase: body.note?.trim() || null,
+        source: "admin",
+      },
+      select: { id: true, email: true, status: true },
+    });
+    return reply.code(201).send({ entry, created: true });
+  });
+
+  // DELETE /api/admin/waitlist/:id — remove a row for good.
+  //
+  // The list accumulates junk: smoke tests, mistyped addresses, and probes from
+  // back when POST /api/waitlist was public and unauthenticated. Until now the
+  // only cleanup was Reject, which leaves the row in the list forever, so the
+  // PENDING count stopped meaning "people waiting".
+  //
+  // An APPROVED row is refused. While BETA_GATE_ENABLED is on, that row IS the
+  // user's access (auth.ts:411, auth.ts:1295, social-login.ts:142 all look up
+  // status === "APPROVED"), so deleting one silently locks a real person out of
+  // their own account. Reject it first if that is genuinely what you mean —
+  // then the refusal no longer applies and the intent is on the record.
+  app.delete("/waitlist/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const entry = await db.waitlist.findUnique({
+      where: { id },
+      select: { id: true, email: true, status: true },
+    });
+    if (!entry) {
+      return reply.code(404).send({ error: "Waitlist entry not found" });
+    }
+    if (entry.status === "APPROVED") {
+      return reply.code(409).send({
+        error: "Reject this entry before deleting it — an APPROVED row is a live user's access.",
+      });
+    }
+    await db.waitlist.delete({ where: { id } });
+    return { ok: true, deleted: entry.email };
   });
 
   // PATCH /api/admin/waitlist/:id — mark approved or rejected. On the
@@ -480,9 +711,11 @@ export async function adminRoutes(app: FastifyInstance) {
       // Whitelist the quotaKey shape so a malicious admin (or compromised
       // token) can't pass "__proto__" / control chars / 10kb of garbage into
       // the in-memory state Map.
-      if (!/^(openrouter|gemini):(env|user:[A-Za-z0-9_-]{1,64})$/.test(body.quotaKey)) {
+      if (
+        !/^(anthropic|gemini|openai-compat):(env|user:[A-Za-z0-9_-]{1,64})$/.test(body.quotaKey)
+      ) {
         return reply.code(400).send({
-          error: "Invalid quotaKey. Expected openrouter|gemini : env|user:<id>.",
+          error: "Invalid quotaKey. Expected anthropic|gemini|openai-compat : env|user:<id>.",
         });
       }
       target = body.quotaKey;
@@ -496,21 +729,25 @@ export async function adminRoutes(app: FastifyInstance) {
   // chokepoint ledger: actual provider-reported tokens per call, with the
   // model that really served each request after failover.
   // Query: ?userId=<uuid> to scope to one user, ?days=1..90 (default 7).
-  app.get("/llm-usage", async (request, reply) => {
-    const { userId, days } = request.query as { userId?: string; days?: string };
-    const sinceDays = days === undefined ? 7 : Number.parseInt(days, 10);
-    if (!Number.isInteger(sinceDays) || sinceDays < 1 || sinceDays > 90) {
-      return reply.code(400).send({ error: "days must be an integer between 1 and 90" });
-    }
-    return await getUsageSummary(userId || undefined, sinceDays);
-  });
+  app.get(
+    "/llm-usage",
+    { schema: { querystring: llmUsageQuerySchema } },
+    async (request, reply) => {
+      const { userId, days } = request.query as { userId?: string; days?: string };
+      const sinceDays = days === undefined ? 7 : Number.parseInt(days, 10);
+      if (!Number.isInteger(sinceDays) || sinceDays < 1 || sinceDays > 90) {
+        return reply.code(400).send({ error: "days must be an integer between 1 and 90" });
+      }
+      return await getUsageSummary(userId || undefined, sinceDays);
+    },
+  );
 
   // GET /api/admin/calibration — classification-quality KPIs over time.
   //   ?userId=&days=N → daily series (+ latest full payload) for one user
   //   no userId      → latest snapshot per user (overview)
   // Reads CalibrationSnapshot rows written by the scheduler's daily job —
   // never recomputes live, so the endpoint stays cheap and consistent.
-  app.get("/calibration", async (request) => {
+  app.get("/calibration", { schema: { querystring: calibrationQuerySchema } }, async (request) => {
     const q = request.query as { userId?: string; days?: string };
     const days = Math.min(90, Math.max(1, Number(q.days ?? "14") || 14));
 
@@ -547,24 +784,28 @@ export async function adminRoutes(app: FastifyInstance) {
   // ledger. PUSH recall (upper bound) + SILENT over-suppression (lower bound)
   // from real overrides; null outcomes are never counted as agreement.
   // Optional ?userId= narrows to one inbox (the dogfood account).
-  app.get("/decision-metrics", async (request) => {
-    const { userId, days, source } = request.query as {
-      userId?: string;
-      days?: string;
-      source?: string;
-    };
-    const sinceDays = days ? Number(days) : undefined;
-    // EMAIL and GITHUB are the only inbound channels that carry a firewall
-    // decision; default to EMAIL and ignore anything else so a stray query
-    // param can't read an unrelated source. ?source=GITHUB reads the GitHub
-    // firewall accuracy (the no-OAuth dogfood channel).
-    const channel = source === "GITHUB" ? "GITHUB" : "EMAIL";
-    return getDecisionMetrics({
-      ...(userId ? { userId } : {}),
-      ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
-      source: channel,
-    });
-  });
+  app.get(
+    "/decision-metrics",
+    { schema: { querystring: decisionMetricsQuerySchema } },
+    async (request) => {
+      const { userId, days, source } = request.query as {
+        userId?: string;
+        days?: string;
+        source?: string;
+      };
+      const sinceDays = days ? Number(days) : undefined;
+      // EMAIL and GITHUB are the only inbound channels that carry a firewall
+      // decision; default to EMAIL and ignore anything else so a stray query
+      // param can't read an unrelated source. ?source=GITHUB reads the GitHub
+      // firewall accuracy (the no-OAuth dogfood channel).
+      const channel = source === "GITHUB" ? "GITHUB" : "EMAIL";
+      return getDecisionMetrics({
+        ...(userId ? { userId } : {}),
+        ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
+        source: channel,
+      });
+    },
+  );
 
   // POST /api/admin/interaction-graph/rebuild — force-rebuild the interaction
   // graph NOW. The judge reads a CACHED graph (getCachedInteractionGraph, never
@@ -575,34 +816,38 @@ export async function adminRoutes(app: FastifyInstance) {
   // consume (the runbook's "is anything learned yet?" check). Defaults to the
   // acting admin's own account; ?userId= targets another (support/dogfood).
   // Counts only — no contact addresses (see the per-user /graph page for those).
-  app.post("/interaction-graph/rebuild", async (request) => {
-    const { userId: q } = request.query as { userId?: string };
-    const userId = q || getUserId(request);
-    const graph = await buildInteractionGraph(userId);
-    const directlyEngaged = graph.nodes.filter(
-      (n) => n.learnedImportance != null && (n.outboundCount ?? 0) > 0,
-    ).length;
-    const orgPropagated = graph.nodes.filter((n) => n.propagatedImportance != null).length;
-    return {
-      userId,
-      builtAt: graph.builtAt,
-      nodeCount: graph.nodes.length,
-      // Direct measured engagement present in the freshly-built graph. If this is
-      // 0, the flip is inert for this user — no replies have accrued yet.
-      directlyEngaged,
-      // Quiet peers that inherited a soft org prior (cold-start propagation).
-      orgPropagated,
-      // How many org domains carry an engagement signal (≥2 engaged contacts).
-      orgImportanceDomains: Object.keys(graph.orgImportance ?? {}).length,
-    };
-  });
+  app.post(
+    "/interaction-graph/rebuild",
+    { schema: { querystring: interactionGraphRebuildQuerySchema } },
+    async (request) => {
+      const { userId: q } = request.query as { userId?: string };
+      const userId = q || getUserId(request);
+      const graph = await buildInteractionGraph(userId);
+      const directlyEngaged = graph.nodes.filter(
+        (n) => n.learnedImportance != null && (n.outboundCount ?? 0) > 0,
+      ).length;
+      const orgPropagated = graph.nodes.filter((n) => n.propagatedImportance != null).length;
+      return {
+        userId,
+        builtAt: graph.builtAt,
+        nodeCount: graph.nodes.length,
+        // Direct measured engagement present in the freshly-built graph. If this is
+        // 0, the flip is inert for this user — no replies have accrued yet.
+        directlyEngaged,
+        // Quiet peers that inherited a soft org prior (cold-start propagation).
+        orgPropagated,
+        // How many org domains carry an engagement signal (≥2 engaged contacts).
+        orgImportanceDomains: Object.keys(graph.orgImportance ?? {}).length,
+      };
+    },
+  );
 
-  // GET /api/admin/judge-health — fleet-wide judge health: the rolling rate at
-  // which the judge fell back to the keyword pipeline (which caps PUSH recall
-  // ~46% / AUTO 0%). `degraded: true` means the LLM scorer is likely failing and
-  // classification accuracy has silently collapsed across all users. Pairs with
-  // the alarm in judge-health.ts. In-process per dyno (best-effort, resets on
-  // restart) — a point-in-time read, not a historical series.
+  // GET /api/admin/judge-health — fleet-wide judge health: the last DB-backed
+  // check of how often the judge fell back to the keyword pipeline over 24 h
+  // (which caps PUSH recall ~46% / AUTO 0%), plus the top unrecovered provider
+  // error this process has seen. `lastCheck.degraded: true` means the LLM scorer
+  // is likely failing for everyone. Pairs with the alarm in
+  // judge-fallback-check.ts; a stale cache is refreshed in the background.
   app.get("/judge-health", async () => {
     return getJudgeHealth();
   });
@@ -826,31 +1071,35 @@ export async function adminRoutes(app: FastifyInstance) {
   // is verbatim email quotes) is withheld — a cross-user dump would leak one
   // user's mail to an admin scoped to another, violating CASA data-min even
   // behind the admin gate.
-  app.get("/sender-traits", async (request, reply) => {
-    const userId = (request.query as { userId?: string }).userId;
-    if (userId !== undefined && !/^[0-9a-fA-F-]{10,40}$/.test(userId)) {
-      return reply.code(400).send({ error: "Invalid userId" });
-    }
-    const metrics = await getTraitMetrics(prisma, userId);
-    // Per-trait evidence (verbatim email quotes) only for an explicit user —
-    // never a cross-user dump, even behind the admin gate (CASA data-min).
-    const traits = userId
-      ? await prisma.senderTrait.findMany({
-          where: { userId },
-          orderBy: [{ sender: "asc" }, { factKind: "asc" }],
-          take: 200,
-          select: {
-            sender: true,
-            factKind: true,
-            factValue: true,
-            confidence: true,
-            evidenceText: true,
-            status: true,
-            conflictValue: true,
-            observedCount: true,
-          },
-        })
-      : [];
-    return { metrics, traits };
-  });
+  app.get(
+    "/sender-traits",
+    { schema: { querystring: senderTraitsQuerySchema } },
+    async (request, reply) => {
+      const userId = (request.query as { userId?: string }).userId;
+      if (userId !== undefined && !/^[0-9a-fA-F-]{10,40}$/.test(userId)) {
+        return reply.code(400).send({ error: "Invalid userId" });
+      }
+      const metrics = await getTraitMetrics(prisma, userId);
+      // Per-trait evidence (verbatim email quotes) only for an explicit user —
+      // never a cross-user dump, even behind the admin gate (CASA data-min).
+      const traits = userId
+        ? await prisma.senderTrait.findMany({
+            where: { userId },
+            orderBy: [{ sender: "asc" }, { factKind: "asc" }],
+            take: 200,
+            select: {
+              sender: true,
+              factKind: true,
+              factValue: true,
+              confidence: true,
+              evidenceText: true,
+              status: true,
+              conflictValue: true,
+              observedCount: true,
+            },
+          })
+        : [];
+      return { metrics, traits };
+    },
+  );
 }

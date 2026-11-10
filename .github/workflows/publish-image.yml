@@ -1,0 +1,82 @@
+# Publish the self-host container images to GitHub Container Registry.
+#
+# Trigger: push a tag like `v0.4.0`, or run manually via workflow_dispatch.
+#
+# Why this exists: docker-compose.selfhost.yml used to build both services from
+# source, so trying Klorn meant a full toolchain build. Published images turn
+# that into `docker compose up -d`. They are also the only measurable signal of
+# self-host adoption — the product's own analytics write to each deployment's
+# own Postgres and are invisible to us by design, so ghcr pull counts are the
+# one number we can actually see.
+#
+# NOTE on the web image: NEXT_PUBLIC_API_URL is inlined into the client bundle
+# at BUILD time (Dockerfile.web), so the published image is fixed to the
+# compose default (http://localhost:3001). That is correct for the common
+# single-host case. Anyone serving beyond localhost still rebuilds — see
+# docs/self-hosting.md.
+#
+# After the FIRST successful run: flip both packages to Public in GitHub
+# package settings (they default to private, which hides pull counts and
+# blocks anonymous pulls).
+
+name: Publish images
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: Dockerfile.api
+          - name: web
+            dockerfile: Dockerfile.web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tag-push runs emit semver tags + latest; a manual dispatch (no tag)
+      # emits only `latest`, so a dispatch from main refreshes latest without
+      # minting a fake version.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # arm64 included deliberately: a large share of self-hosters run
+          # Apple Silicon or ARM SBCs. It builds under QEMU and is slow — drop
+          # it to linux/amd64 if CI minutes become the constraint.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
+import Button from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 
 // Signup enforces 8; reset must not be weaker — unify to the stronger policy.
 const MIN_PASSWORD_LENGTH = 8;
@@ -31,6 +33,7 @@ function ResetPasswordForm() {
 }
 
 function ForgotPasswordForm() {
+  const { t } = useT();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -50,7 +53,7 @@ function ForgotPasswordForm() {
     } catch {
       // Inline field error is the single announcement (WCAG 4.1.3) — it is
       // rendered role="alert", so no duplicate error toast.
-      setEmailError("Could not send the reset link. Check the address and try again.");
+      setEmailError(t("resetPassword.error.sendFailed"));
     }
     setLoading(false);
   };
@@ -58,67 +61,51 @@ function ForgotPasswordForm() {
   if (sent) {
     return (
       <AuthScreen
-        eyebrow="Password reset"
-        title="Check your email"
-        description="If that email account exists, we sent a password reset link."
-        footer={
-          <Link href="/login" className="transition hover:text-slate-900">
-            Back to login
-          </Link>
-        }
+        title={t("resetPassword.checkEmail.title")}
+        description={t("resetPassword.checkEmail.description")}
       >
-        <div className="border-y border-slate-200 py-5 text-sm leading-6 text-slate-500">
-          The link is only valid for a limited time. Check spam if it does not appear.
-        </div>
+        <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
+          {t("resetPassword.checkEmail.body")}
+        </p>
         <Link
           href="/login"
-          className="mt-5 flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white transition hover:bg-sky-600"
+          className="mt-6 focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
         >
-          Open login
+          {t("resetPassword.openLogin")}
         </Link>
       </AuthScreen>
     );
   }
 
   return (
-    <AuthScreen
-      eyebrow="Password reset"
-      title="Reset password"
-      description="Enter your account email and we will send a secure reset link."
-      footer={
-        <Link href="/login" className="transition hover:text-slate-900">
-          Back to login
-        </Link>
-      }
-    >
+    <AuthScreen title={t("auth.resetPassword")} description={t("resetPassword.description")}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           id="email"
-          label="Email"
+          label={t("auth.email")}
           type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => {
             if (emailError) setEmailError(null);
             setEmail(e.target.value);
           }}
-          placeholder="you@example.com"
+          placeholder={t("resetPassword.emailPlaceholder")}
           required
           error={emailError ?? undefined}
         />
 
-        <button
-          type="submit"
-          disabled={loading || !email}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-        >
-          {loading ? "Sending..." : "Send reset link"}
-        </button>
+        <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email}>
+          {loading ? t("resetPassword.sending") : t("resetPassword.sendLink")}
+        </Button>
       </form>
+      <BackToSignIn />
     </AuthScreen>
   );
 }
 
 function NewPasswordForm({ token }: { token: string }) {
+  const { t } = useT();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -132,13 +119,13 @@ function NewPasswordForm({ token }: { token: string }) {
     setConfirmError(null);
 
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setPasswordError(t("auth.passwordMinChars", { count: String(MIN_PASSWORD_LENGTH) }));
       return;
     }
     if (password !== confirm) {
       // Field-level validation: inline error is the single announcement
       // (WCAG 4.1.3, rendered role="alert") — no duplicate error toast.
-      setConfirmError("Passwords do not match.");
+      setConfirmError(t("resetPassword.confirmPassword.mismatch"));
       return;
     }
     setLoading(true);
@@ -149,7 +136,7 @@ function NewPasswordForm({ token }: { token: string }) {
       });
       setDone(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Reset failed.";
+      const message = err instanceof Error ? err.message : t("resetPassword.error.genericFailed");
       // Inline field error is the single announcement (WCAG 4.1.3) — no toast.
       setPasswordError(message);
     }
@@ -159,15 +146,14 @@ function NewPasswordForm({ token }: { token: string }) {
   if (done) {
     return (
       <AuthScreen
-        eyebrow="Password updated"
-        title="Password reset complete"
-        description="Your password was changed. You can now log in with the new password."
+        title={t("resetPassword.updated.title")}
+        description={t("resetPassword.updated.description")}
       >
         <Link
           href="/login"
-          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white transition hover:bg-sky-600"
+          className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
         >
-          Log in
+          {t("auth.signIn")}
         </Link>
       </AuthScreen>
     );
@@ -175,26 +161,21 @@ function NewPasswordForm({ token }: { token: string }) {
 
   return (
     <AuthScreen
-      eyebrow="New password"
-      title="Set a new password"
-      description="Enter the password you will use for your next login."
-      footer={
-        <Link href="/login" className="transition hover:text-slate-900">
-          Back to login
-        </Link>
-      }
+      title={t("resetPassword.newPassword.title")}
+      description={t("resetPassword.newPassword.description")}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           id="password"
-          label="New password"
+          label={t("resetPassword.newPassword.label")}
           type="password"
+          autoComplete="new-password"
           value={password}
           onChange={(e) => {
             if (passwordError) setPasswordError(null);
             setPassword(e.target.value);
           }}
-          placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+          placeholder={t("auth.passwordMin")}
           required
           minLength={MIN_PASSWORD_LENGTH}
           error={passwordError ?? undefined}
@@ -202,27 +183,46 @@ function NewPasswordForm({ token }: { token: string }) {
 
         <Input
           id="confirm"
-          label="Confirm password"
+          label={t("resetPassword.confirmPassword.label")}
           type="password"
+          autoComplete="new-password"
           value={confirm}
           onChange={(e) => {
             if (confirmError) setConfirmError(null);
             setConfirm(e.target.value);
           }}
-          placeholder="Re-enter password"
+          placeholder={t("resetPassword.confirmPassword.placeholder")}
           required
           minLength={MIN_PASSWORD_LENGTH}
           error={confirmError ?? undefined}
         />
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || !password || !confirm}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          size="lg"
+          className="w-full"
+          loading={loading}
+          disabled={!password || !confirm}
         >
-          {loading ? "Resetting..." : "Reset password"}
-        </button>
+          {loading ? t("resetPassword.resetting") : t("auth.resetPassword")}
+        </Button>
       </form>
+      <BackToSignIn />
     </AuthScreen>
+  );
+}
+
+/** Quiet way back from either reset step; the form stays the only primary. */
+function BackToSignIn() {
+  const { t } = useT();
+  return (
+    <p className="mt-6 text-center">
+      <Link
+        href="/login"
+        className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-role-label text-accent-deep underline-offset-2 hover:underline"
+      >
+        {t("auth.backToLogin")}
+      </Link>
+    </p>
   );
 }

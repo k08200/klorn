@@ -9,11 +9,98 @@ import SwiftUI
 struct AutomationPreferences: View {
     @Environment(AppModel.self) private var model
 
+    /// The server-backed groups, which the Settings window splits across its
+    /// Assistant and Notifications tabs. Order here is display order.
+    enum Part: CaseIterable, Sendable { case mode, behaviour, replies, interrupts }
+
+    /// Which groups to draw. Defaults to all of them (the preview renderer).
+    var parts: [Part] = Part.allCases
+
     var body: some View {
         Group {
-            section(L("auto.section.behaviour")) { modeSection }
-            section(L("auto.section.replies")) { replySection }
-            section(L("auto.section.interrupts")) { notificationSection }
+            ForEach(parts, id: \.self) { part in
+                switch part {
+                case .mode: section(L("mode.section")) { attentionModeSection }
+                case .behaviour: section(L("auto.section.behaviour")) { modeSection }
+                case .replies: section(L("auto.section.replies")) { replySection }
+                case .interrupts: section(L("auto.section.interrupts")) { notificationSection }
+                }
+            }
+        }
+    }
+
+    // MARK: Attention mode (기본 / auto) — the founder's headline switch, so
+    // it leads the panel. BASIC = notify important mail + meetings only, the
+    // human answers; AUTO = Klorn also answers eligible routine mail per the
+    // guideline below (server enforces eligibility + entitlement).
+
+    @State private var guidelineDraft = ""
+    @State private var guidelineLoaded = false
+
+    @ViewBuilder
+    private var attentionModeSection: some View {
+        VStack(alignment: .leading, spacing: Theme.s2) {
+            ForEach(AttentionMode.allCases, id: \.self) { mode in
+                ChoiceRow(
+                    title: mode.label,
+                    detail: mode.explanation,
+                    selected: model.automation.attentionMode == mode,
+                    disabled: model.automationSaving
+                ) {
+                    model.updateAutomation { $0.attentionMode = mode }
+                }
+            }
+            if model.automation.attentionMode == .auto {
+                Text(L("mode.guideline")).font(.body).foregroundStyle(Theme.text)
+                    .padding(.top, Theme.s2)
+                Text(L("mode.guideline.detail"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                if Theme.isRenderingOffscreen {
+                    Text(guidelineDraft.isEmpty ? L("mode.guideline") : guidelineDraft)
+                        .font(.callout).foregroundStyle(Theme.textDim)
+                        .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+                        .padding(6)
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
+                } else {
+                    TextEditor(text: $guidelineDraft)
+                        .font(.callout)
+                        .frame(minHeight: 88, maxHeight: 140)
+                        .scrollContentBackground(.hidden)
+                        .padding(4)
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
+                        .accessibilityLabel(L("mode.guideline"))
+                }
+                HStack(spacing: Theme.s2) {
+                    Button(L("mode.guideline.save")) {
+                        let trimmed = guidelineDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        model.updateAutomation { $0.autoReplyGuideline = trimmed.isEmpty ? nil : trimmed }
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .disabled(model.automationSaving)
+                    Text(L("mode.guideline.resetHint"))
+                        .font(.caption2).foregroundStyle(Theme.textDim)
+                }
+            }
+        }
+        .onChange(of: model.automation.autoReplyGuideline, initial: true) { _, _ in
+            seedGuidelineDraft()
+        }
+        .onChange(of: model.automation.autoReplyGuidelineDefault) { _, _ in
+            seedGuidelineDraft()
+        }
+    }
+
+    /// Prefill once per fresh server state: the user's override, else the
+    /// founder default — the default is the editable starting draft.
+    private func seedGuidelineDraft() {
+        let server = model.automation.autoReplyGuideline
+            ?? model.automation.autoReplyGuidelineDefault ?? ""
+        if !guidelineLoaded || guidelineDraft.isEmpty {
+            guidelineDraft = server
+            guidelineLoaded = true
         }
     }
 
@@ -123,6 +210,26 @@ struct AutomationPreferences: View {
         }
         .padding(.top, Theme.s1)
 
+        // Focus window: during calendar blocks only urgent mail and meetings
+        // interrupt; the rest arrive as one digest when the block ends.
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("auto.focusWindow")).font(Theme.Typo.body).foregroundStyle(Theme.text)
+                Text(L("auto.focusWindow.detail"))
+                    .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { model.automation.focusWindowEnabled },
+                set: { on in model.updateAutomation { $0.focusWindowEnabled = on } }
+            ))
+            .toggleStyle(.switch).labelsHidden()
+            .disabled(model.automationSaving)
+            .accessibilityLabel(L("auto.focusWindow"))
+        }
+        .padding(.top, Theme.s2)
+
         QuietHoursField(
             start: model.automation.quietHoursStart,
             end: model.automation.quietHoursEnd,
@@ -186,8 +293,8 @@ private struct OffscreenPickerLabel: View {
             Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Theme.textDim)
         }
         .padding(.horizontal, 11).padding(.vertical, 5)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
     }
 }
 
@@ -212,7 +319,6 @@ private struct ChoiceRow: View {
                     Text(title).font(.body.weight(selected ? .semibold : .regular))
                         .foregroundStyle(Theme.text)
                     Text(detail).font(.caption).foregroundStyle(Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
@@ -222,11 +328,18 @@ private struct ChoiceRow: View {
             .frame(minHeight: 44, alignment: .top)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .fill(selected ? Theme.surfaceSelected : Theme.surfaceRaised))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .strokeBorder(selected ? Theme.accent.opacity(0.5) : Theme.line))
+            // Ideal-height pin on the WHOLE card (background included), not on
+            // the inner Text: inside a Button label a text-level fixedSize can
+            // measure taller than the card draws, painting the last wrapped
+            // line BELOW the border (founder report 2026-08-21); without any
+            // pin the detail truncates instead. Pinning here keeps background
+            // and text one unit — full wrap, never an escape.
+            .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -313,8 +426,8 @@ private struct QuietHoursField: View {
             Text(text.wrappedValue.isEmpty ? "--:--" : text.wrappedValue)
                 .font(.callout).foregroundStyle(Theme.textDim)
                 .frame(width: 76, height: 22)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
         } else {
             TextField("--:--", text: text)
                 .textFieldStyle(.roundedBorder)

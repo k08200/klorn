@@ -5,7 +5,7 @@ This is Klorn, an AI email attention firewall at app.klorn.ai.
 2
 00:00:08,000 --> 00:00:16,500
 Klorn connects to a user's Gmail and Google Calendar and classifies every
-message into four attention tiers — PUSH, QUEUE, SILENT, and AUTO —
+message into five attention lanes — PUSH, MEETING, QUEUE, INFO, and SILENT —
 
 3
 00:00:16,500 --> 00:00:25,000

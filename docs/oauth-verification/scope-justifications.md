@@ -19,7 +19,8 @@
 ## `https://www.googleapis.com/auth/gmail.readonly` (restricted)
 
 Klorn's core feature is reading each incoming message's headers and body to
-classify it into one of four attention tiers (PUSH / QUEUE / SILENT / AUTO)
+classify it into one of five attention lanes (PUSH / MEETING / QUEUE / INFO
+/ SILENT)
 and to generate the short per-message summaries and daily briefing shown in
 the app. Classification quality depends on message content — sender, subject,
 and body — so metadata-only access is insufficient, and Klorn performs
@@ -100,5 +101,7 @@ CODE EVIDENCE (strip before submission)
 - calendar.readonly rationale: gmail.ts:51-53 comment (calendarList.list + freebusy for
   multi-calendar conflict detection); packages/api/src/pim/calendar.ts:159,202,285 (freebusy degrade
   paths when token predates the scope).
-- Four-tier doctrine (PUSH/QUEUE/SILENT/AUTO): CLAUDE.md "What this is".
+- Five-lane ontology (PUSH/MEETING/QUEUE/INFO/SILENT): CLAUDE.md "What this is";
+  canonical source is AttentionItem.tier in packages/api/prisma/schema.prisma. AUTO and
+  CALL are retired v1 values folded by normalizeTier on read — never shown to a user.
 -->

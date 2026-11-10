@@ -9,10 +9,12 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
-import { planHasFeature } from "../billing/stripe.js";
+import { scopeLinkedInboxes } from "../billing/mail-sync-scope.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { persistGmailEmail } from "../judge/email-firewall.js";
+import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
 import { Semaphore } from "../semaphore.js";
 import { captureError } from "../sentry.js";
@@ -46,6 +48,29 @@ const RECONCILE_REFRESH_CAP = 500;
 // well under that; an INBOX larger than this falls back to an in-Node diff so a
 // single huge NOT IN can never crash the reconcile.
 const INBOX_PARAM_CAP = 10000;
+// Spam-lane snapshot bound (SPAM_INTAKE_ENABLED): only the N most recent spam
+// messages per sweep. Spam volume is unbounded and each row costs a judge
+// pass — the lane exists to catch FALSE POSITIVES, and those are recent by
+// definition. Deliberately separate from the INBOX maxResults so spam can
+// never starve inbox intake.
+const SPAM_FETCH_CAP = 10;
+
+// How deep to snapshot when the stored watermark has aged out of Gmail's ~7-day
+// history retention.
+//
+// The expired branch below already fell back to a snapshot, but it did so with
+// the CALLER's maxResults — 30 from the scheduler tick. That is the right depth
+// for "what arrived in the last few minutes" and the wrong one for the only
+// case that reaches this branch: sync has not succeeded in over a week. The
+// founder's own primary Gmail stopped ingesting 2026-07-21 on a dead refresh
+// token; reconnecting would have recovered ~30 emails out of a month.
+//
+// Depth, not a new code path. The messages still flow through persistGmailEmail
+// (idempotent) and their judge calls are background-priority, so they queue
+// behind backgroundLlmPacer's concurrency and spacing brakes rather than
+// bursting the provider's per-minute quota. One tick pays this; the watermark
+// re-baselines immediately after, so the next tick is incremental again.
+const EXPIRED_WATERMARK_CATCHUP_MAX = 250;
 
 // Persist + firewall (judge/push/backfill) moved to ./email-firewall.js (M3 step 6).
 export { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../judge/email-firewall.js";
@@ -267,8 +292,17 @@ export async function syncEmails(
   }
 
   // Watermark aged out of Gmail's ~7-day retention → snapshot + re-baseline.
+  // Reaching here means more than a week of mail is missing, so go deeper than
+  // the caller's per-tick depth. Math.max, never a replacement: a caller that
+  // explicitly asked for more must not be narrowed to the catch-up cap.
   if (history.expired) {
-    return syncSnapshot(userId, maxResults, query, userEmail, linkedInbox);
+    return syncSnapshot(
+      userId,
+      Math.max(maxResults, EXPIRED_WATERMARK_CATCHUP_MAX),
+      query,
+      userEmail,
+      linkedInbox,
+    );
   }
 
   const newCount = await persistEmailBatch(
@@ -284,51 +318,63 @@ export async function syncEmails(
   return { synced: history.emails.length, newCount, source: "gmail" };
 }
 
-// ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
-
 /**
- * Resolve the EMAIL attention items mirroring the given EmailMessage ids. Called
- * when those emails leave the INBOX (archived/trashed in Gmail) so a handled
- * email also leaves the attention queue — otherwise the AttentionItem is orphaned
- * OPEN and the priority amplifier keeps surfacing it (the stale-PUSH accumulation
- * bug). Only OPEN/SNOOZED are touched, so a terminal user decision (already
- * RESOLVED/DISMISSED) is preserved. Chunked for the bind-param cap.
+ * Spam-lane sweep (SPAM_INTAKE_ENABLED, default OFF): read the N most recent
+ * SPAM-labeled messages so a real mail Gmail wrongly spammed still reaches
+ * the queue. Rides the snapshot/query path deliberately — a query fetch skips
+ * the INBOX watermark (syncSnapshot), so the spam lane can never corrupt the
+ * incremental history sync. Persisted rows carry the SPAM label; the judge's
+ * spam floor keeps them out of PUSH/MEETING and autoEligible stays false.
+ * Best-effort: returns 0 on any failure (the next tick retries).
  */
-async function resolveAttentionForDeletedEmails(userId: string, emailIds: string[]): Promise<void> {
-  for (let i = 0; i < emailIds.length; i += INBOX_PARAM_CAP) {
-    await prisma.attentionItem.updateMany({
-      where: {
-        userId,
-        source: "EMAIL",
-        sourceId: { in: emailIds.slice(i, i + INBOX_PARAM_CAP) },
-        status: { in: ["OPEN", "SNOOZED"] },
-      },
-      data: { status: "RESOLVED", resolvedAt: new Date() },
-    });
+export async function syncSpamLane(userId: string): Promise<number> {
+  if (!spamIntakeEnabled()) return 0;
+  try {
+    const result = await syncEmails(userId, SPAM_FETCH_CAP, "in:spam");
+    return result.newCount;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/not connected/i.test(msg)) {
+      console.warn(`[MAIL-SYNC] spam lane failed for ${userId}: ${msg}`);
+    }
+    return 0;
   }
 }
 
+// ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
+
 /**
- * On-demand fan-out: sync every LINKED secondary inbox for a user, gated exactly
- * like the scheduler's fan-out (MULTI_INBOX_SYNC_ENABLED + the multi_account
- * feature). This exists so the manual "Force Sync" / open-Mail path syncs linked
- * inboxes too — before, linked mail ONLY synced on a scheduler tick (which needs
- * automation enabled), so a user who opened Mail saw their primary account
- * refresh but the linked inbox stayed "Not yet synced". Per-account isolation +
- * stamps lastSyncedAt so the UI reflects it. Returns total new count.
+ * On-demand fan-out: sync the user's LINKED Google inboxes, behind
+ * MULTI_INBOX_SYNC_ENABLED and scoped by billing/mail-sync-scope.ts (the same
+ * rule as connecting them: paywall off or multi_account → all; otherwise only
+ * the first mailbox, when it is a linked row). This exists so the manual
+ * "Force Sync" / open-Mail path syncs linked inboxes too — before, linked mail
+ * ONLY synced on a scheduler tick (which needs automation enabled), so a user
+ * who opened Mail saw their primary account refresh but the linked inbox
+ * stayed "Not yet synced". The scheduler also calls it for users without a
+ * primary Google token. Per-account isolation + stamps lastSyncedAt so the UI
+ * reflects it. Returns total new count.
  */
 export async function syncLinkedInboxesForUser(userId: string): Promise<{ newCount: number }> {
   if (!MULTI_INBOX_SYNC_ENABLED) return { newCount: 0 };
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, role: true },
+    select: { plan: true, role: true, email: true },
   });
-  if (!user || !planHasFeature(user.plan, "multi_account", user.role)) {
-    return { newCount: 0 };
-  }
-  const linked = await getLinkedInboxClients(userId);
+  if (!user) return { newCount: 0 };
+  const [allLinked, primaryToken] = await Promise.all([
+    getLinkedInboxClients(userId),
+    prisma.userToken.findFirst({ where: { userId, provider: "google" }, select: { id: true } }),
+  ]);
+  const linked = await scopeLinkedInboxes(userId, user.plan, user.role, allLinked);
+  // A linked row mirroring the primary address (pre-guard data) would sync
+  // the same mailbox twice per pass — skip it; the primary sync covers it.
+  // Only when a primary Gmail exists: without one, a linked inbox at the login
+  // address IS the user's mailbox and must sync.
+  const primaryEmail = primaryToken ? (user.email ?? "").trim().toLowerCase() : null;
   let newCount = 0;
   for (const inbox of linked) {
+    if (primaryEmail !== null && inbox.email.trim().toLowerCase() === primaryEmail) continue;
     try {
       const r = await syncEmails(userId, 20, undefined, {
         id: inbox.id,
@@ -476,25 +522,35 @@ async function reconcileInboxScope(
     // Resolve the attention items of the rows we're about to delete BEFORE the
     // delete, so an archived/trashed email leaves the attention queue instead of
     // orphaning an OPEN item the priority amplifier keeps surfacing forever.
+    // Spam-lane rows are NOT in the INBOX listing by definition — without the
+    // label exclusion every synced spam row would be wiped on the next
+    // reconcile tick. Their lifecycle is aging, not reconcile (v1 tradeoff:
+    // a spam the user deletes in Gmail lingers until it ages out).
+    const staleWhere = {
+      ...scope,
+      gmailId: { notIn: inboxIdList },
+      NOT: { labels: { has: "SPAM" } },
+    };
     const stale = await prisma.emailMessage.findMany({
-      where: { ...scope, gmailId: { notIn: inboxIdList } },
+      where: staleWhere,
       select: { id: true },
     });
-    await resolveAttentionForDeletedEmails(
+    await resolveAttentionForEmails(
       userId,
       stale.map((r) => r.id),
     );
-    const res = await prisma.emailMessage.deleteMany({
-      where: { ...scope, gmailId: { notIn: inboxIdList } },
-    });
+    const res = await prisma.emailMessage.deleteMany({ where: staleWhere });
     removed = res.count;
   } else {
     const stored = await prisma.emailMessage.findMany({
       where: scope,
-      select: { id: true, gmailId: true },
+      select: { id: true, gmailId: true, labels: true },
     });
-    const staleIds = stored.filter((e) => !inboxIds.has(e.gmailId)).map((e) => e.id);
-    await resolveAttentionForDeletedEmails(userId, staleIds);
+    // Same spam-lane exclusion as the NOT IN branch above.
+    const staleIds = stored
+      .filter((e) => !inboxIds.has(e.gmailId) && !(e.labels ?? []).includes("SPAM"))
+      .map((e) => e.id);
+    await resolveAttentionForEmails(userId, staleIds);
     for (let i = 0; i < staleIds.length; i += INBOX_PARAM_CAP) {
       const res = await prisma.emailMessage.deleteMany({
         // ...scope (not just userId): staleIds already come from scope-filtered

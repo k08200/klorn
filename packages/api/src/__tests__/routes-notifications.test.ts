@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { mintTierOverrideToken } from "../billing/tier-override-token.js";
+import { mintPushLaterToken } from "../notify/push-later-token.js";
 
 // Set before importing push-origin-allowlist (loaded transitively via routes).
 process.env.PUSH_ALLOWED_ORIGINS = "https://app.klorn.ai,http://localhost:8001";
@@ -43,6 +44,15 @@ vi.mock("../notify/push-device.js", () => ({
     failed: 0,
   })),
 }));
+const remindLaterFromPush = vi.hoisted(() =>
+  vi.fn(async (grant: { userId: string; emailId: string }) =>
+    grant.userId === "user-1" && grant.emailId === "email-1"
+      ? { ok: true as const, created: true }
+      : { ok: false as const },
+  ),
+);
+vi.mock("../notify/push-later.js", () => ({ remindLaterFromPush }));
+const labelUpdateMany = vi.hoisted(() => vi.fn(async (_args: unknown) => ({ count: 1 })));
 vi.mock("../notify/push-delivery.js", () => ({
   recordPushReceipt: vi.fn(async () => true),
   getPushDeliveryStats: vi.fn(async () => ({
@@ -57,6 +67,18 @@ vi.mock("../notify/push-delivery.js", () => ({
     clickRate: 0,
     recent: [],
   })),
+}));
+
+const desktopCatchUp = vi.hoisted(() =>
+  vi.fn(async (_userId: string, ids: string[]) => ({
+    held: false,
+    summaryTitle: "{count} urgent emails while Klorn was closed",
+    items: ids.map((id) => ({ id, emailId: "email-1", title: "Kim", body: "s", createdAt: "x" })),
+  })),
+);
+vi.mock("../notify/desktop-catchup.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../notify/desktop-catchup.js")>()),
+  desktopCatchUp,
 }));
 
 vi.mock("../db.js", () => {
@@ -92,7 +114,8 @@ vi.mock("../db.js", () => {
       }),
       update: vi.fn(async () => ({})),
     },
-    decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
+    // The tier-override stamp and a push Later's SNOOZED stamp both land here.
+    decisionLabel: { updateMany: labelUpdateMany },
     // overrideAttentionTier wraps the tier write + ledger stamp in one
     // prisma.$transaction (batch form since the 2026-07-16 P2028 fix). Support
     // both forms: settle an operation array, or run a callback with this mock
@@ -114,6 +137,45 @@ async function buildApp() {
   await app.register(notificationRoutes, { prefix: "/api/notifications" });
   return app;
 }
+
+describe("GET /api/notifications/desktop-catchup (decision N6)", () => {
+  it("needs a session", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/notifications/desktop-catchup?ids=a",
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("asks about the signed-in user's ids only", async () => {
+    desktopCatchUp.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/notifications/desktop-catchup?ids=n1,n2",
+      headers: auth(OTHER),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(desktopCatchUp).toHaveBeenCalledWith("user-2", ["n1", "n2"]);
+    expect(res.json().items.map((i: { id: string }) => i.id)).toEqual(["n1", "n2"]);
+    await app.close();
+  });
+
+  it("rejects a malformed id list with 400 and reads nothing", async () => {
+    desktopCatchUp.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/notifications/desktop-catchup?ids=a%3Bb",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(desktopCatchUp).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
 
 describe("notification routes", () => {
   it("rejects unauthenticated with 401", async () => {
@@ -218,6 +280,30 @@ describe("notification routes", () => {
       },
     });
     expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it("stores the subscribing browser and OS (derived, never the raw user agent)", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.pushSubscription.upsert).mockClear();
+    const app = await buildApp();
+    const ua =
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36";
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscribe",
+      headers: { ...auth(), "user-agent": ua },
+      payload: {
+        endpoint: "https://fcm.googleapis.com/fcm/send/android-1",
+        keys: { p256dh: "key1", auth: "key2" },
+        origin: "https://app.klorn.ai",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const arg = vi.mocked(prisma.pushSubscription.upsert).mock.calls[0][0];
+    expect(arg.create).toMatchObject({ browser: "chrome", os: "android" });
+    expect(arg.update).toMatchObject({ browser: "chrome", os: "android" });
+    expect(JSON.stringify(arg)).not.toContain("Pixel 8");
     await app.close();
   });
 
@@ -357,6 +443,48 @@ describe("notification routes", () => {
     await app.close();
   });
 
+  it("stores dataMessages only for an Android build that sends it", async () => {
+    const { prisma } = await import("../db.js");
+    const upsert = prisma.devicePushToken.upsert as unknown as ReturnType<typeof vi.fn>;
+    const app = await buildApp();
+    const cases: Array<[Record<string, unknown>, boolean]> = [
+      [{ token: "fcm-token-abc123", platform: "android", dataMessages: true }, true],
+      [{ token: "fcm-token-abc123", platform: "android", dataMessages: false }, false],
+      [{ token: "fcm-token-abc123", platform: "android" }, false],
+      [{ token: "a".repeat(64), platform: "ios", dataMessages: true }, false],
+    ];
+    for (const [payload, stored] of cases) {
+      upsert.mockClear();
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/notifications/push/device-token/register",
+        headers: auth(),
+        payload,
+      });
+      expect(res.statusCode).toBe(201);
+      const call = upsert.mock.calls[0]?.[0] as {
+        create: { dataMessages: boolean };
+        update: { dataMessages: boolean };
+      };
+      expect(call.create.dataMessages).toBe(stored);
+      // Re-registration overwrites it: a downgraded build falls back on its next launch.
+      expect(call.update.dataMessages).toBe(stored);
+    }
+    await app.close();
+  });
+
+  it("rejects a non-boolean dataMessages", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      headers: auth(),
+      payload: { token: "fcm-token-abc123", platform: "android", dataMessages: "yes" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("rejects device token register with an invalid platform", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -480,5 +608,109 @@ describe("notification routes", () => {
     });
     expect(res.statusCode).toBe(404);
     await app.close();
+  });
+
+  // ── "Later" from a web push action (public capability endpoint) ─────────
+  it("sets the Later reminder from a valid capability token WITHOUT a session", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: mintPushLaterToken("user-1", "email-1") },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(remindLaterFromPush).toHaveBeenLastCalledWith({ userId: "user-1", emailId: "email-1" });
+    await app.close();
+  });
+
+  it("rejects a garbage, missing or wrong-kind Later token with 400/401 and writes nothing", async () => {
+    const app = await buildApp();
+    remindLaterFromPush.mockClear();
+    const bad = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: "not-a-real-token" },
+    });
+    expect(bad.statusCode).toBe(401);
+    // A tier-override token is a different capability: refused here.
+    const wrongKind = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: mintTierOverrideToken("user-1", "item-1") },
+    });
+    expect(wrongKind.statusCode).toBe(401);
+    // A session JWT is not a Later capability either.
+    const session = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: TOKEN },
+    });
+    expect(session.statusCode).toBe(401);
+    const missing = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: {},
+    });
+    expect(missing.statusCode).toBe(400);
+    expect(remindLaterFromPush).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 404 when the token's mail is not the token user's", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token: mintPushLaterToken("user-1", "email-2") },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("POST /api/notifications/push/later — decision ledger", () => {
+  const pushLater = async (token: string) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/later",
+      payload: { token },
+    });
+    await app.close();
+    await new Promise((r) => setTimeout(r, 0));
+    return res;
+  };
+
+  it("stamps SNOOZED once on the token user's mail", async () => {
+    labelUpdateMany.mockClear();
+    const res = await pushLater(mintPushLaterToken("user-1", "email-1"));
+
+    expect(res.statusCode).toBe(200);
+    expect(labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "user-1", source: "EMAIL", sourceId: "email-1", snoozedAt: null },
+        data: { snoozedAt: expect.any(Date) },
+      },
+    ]);
+  });
+
+  it("stamps nothing for a bad token or a mail that isn't the token user's", async () => {
+    labelUpdateMany.mockClear();
+    const bad = await pushLater("not-a-real-token");
+    const foreign = await pushLater(mintPushLaterToken("user-1", "email-2"));
+
+    expect([bad.statusCode, foreign.statusCode]).toEqual([401, 404]);
+    expect(labelUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("answers exactly the same when the ledger write fails", async () => {
+    labelUpdateMany.mockResolvedValueOnce({ count: 1 });
+    const ok = await pushLater(mintPushLaterToken("user-1", "email-1"));
+    labelUpdateMany.mockRejectedValueOnce(new Error("ledger down"));
+    const failed = await pushLater(mintPushLaterToken("user-1", "email-1"));
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
   });
 });

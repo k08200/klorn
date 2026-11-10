@@ -2,34 +2,57 @@
 
 Founder-stated goals: demo video first; Google OAuth verification so anyone
 can log in and use it; multi-account (2–3 inboxes) with 2+ accounts paid;
-pricing $7.99 or $8.99; more providers (iCloud, Naver, …); mobile "coming
+pricing $29.99 (was $8.99); more providers (iCloud, Naver, …); mobile "coming
 soon"; then promotion. This file sequences that against the actual state of
 the repo and adds the missing pieces. Decisions marked LOCKED are the
 founder's; PENDING ones block only their own step, nothing upstream.
 
-## P0 — Sync integrity (this week; blocks everything user-facing)
+## P0 — Sync integrity (blocks everything user-facing)
+
+> **P0 is closed (2026-08-26).** The four engineering items are done and
+> verified against current code (file:line on each); the founder re-consent is
+> done and verified in the signed-in app; and the mail gap it was supposed to
+> have left does not exist.
+>
+> Checked rather than assumed: filtered the mail list to the PRIMARY inbox and
+> paged back to 16 July — every day from 16 to 31 July is present, straight
+> through the window the 07-21 token death was supposed to have emptied, and on
+> into August unbroken. Whatever was lost has already been recovered.
+>
+> A caution for whoever measures this next: the default mail view is filtered
+> to **Needs reply**, and reading dates off it shows gaps that are only the
+> filter. Switch to "All signals" and pick a single inbox before concluding
+> anything about ingestion.
 
 The founder's own primary Gmail stopped ingesting ~2026-07-21 (Testing-mode
-refresh token death). Diagnosis (2026-08-07, file:line evidence in session):
-ingestion retries and fails every tick with only a console.warn; the desktop
-app surfaces nothing (no /google/status call, no notification rendering, and
-`routes/email.ts` hardcodes `needsReconnect: false` for the primary entry so
-the desktop's reconnect UI can never fire for it); desktop re-login is pure
-JWT and does not touch the Google token.
+refresh token death). Diagnosis as it stood on 2026-08-07 — all four faults
+below have since been fixed, and are kept here because the failure mode is
+what the fixes are shaped around: ingestion retried and failed every tick with
+only a console.warn; the desktop app surfaced nothing (no /google/status call,
+no notification rendering, and `routes/email.ts` hardcoded
+`needsReconnect: false` for the primary entry, so the desktop's reconnect UI
+could never fire for it); desktop re-login was pure JWT and did not touch the
+Google token.
 
-- [ ] Founder: web Settings → Connections → Google → Connect (full re-consent;
-      Production audience since 2026-08-04, so the new token is long-lived).
-- [ ] fix(api): primary inbox entry in `/api/email/inboxes` reports real
+- [x] Founder: Google re-consent — done. Verified 2026-08-26 in the signed-in
+      app: Settings → Connections lists both `k0820086@gmail.com` and
+      `d14947652@gmail.com` as "Synced 1m ago", with no reconnect prompt.
+- [x] fix(api): primary inbox entry in `/api/email/inboxes` reports real
       `needsReconnect` (UserToken.refreshToken null) instead of `false`.
-- [ ] fix(desktop): primary reconnect action must open the primary connect
-      flow (today the TopBar button calls link-inbox and would create a
-      duplicate Pro-gated secondary).
-- [ ] Backfill: after reconnect, history is expired (>7d) and snapshot sync
-      only pulls the most-recent ~20–30 — run a manual deep sync (larger
-      maxResults) so 07-21→now mail actually lands; consider a one-shot
-      "catch-up" path for any user returning from a dead token.
-- [ ] Alerting: "Email sync skipped … Gmail not connected" repeated per tick
-      should reach Sentry/ops, not only stdout.
+      Verified 2026-08-26: `routes/email.ts:1402` computes
+      `Boolean(googleToken) && !googleToken?.refreshToken`.
+- [x] fix(desktop): primary reconnect action opens the primary connect flow.
+      Verified 2026-08-26: `TopBar.swift:931-934` routes PRIMARY through
+      `/google/start` consent and says why link-inbox is wrong for it.
+- [x] Backfill: the "catch-up" path is no longer manual. `email-sync.ts`
+      snapshots at `EXPIRED_WATERMARK_CATCHUP_MAX` (250) whenever the stored
+      watermark has aged out of Gmail's ~7-day retention, instead of the
+      scheduler's per-tick 30. Judge calls are background-priority, so they
+      queue behind `backgroundLlmPacer` rather than bursting the quota.
+      Still needs the founder reconnect above before it can run for 07-21→now.
+- [x] Alerting: reaches Sentry. Verified 2026-08-26:
+      `automation-scheduler.ts:1595` captures "Email sync skipped every tick",
+      throttled once per user per UTC day (`automation-scheduler.ts:156`).
 
 ## P1 — Login-for-everyone gate (deadline-driven)
 
@@ -46,16 +69,22 @@ JWT and does not touch the Google token.
 
 ## P2 — Monetization
 
-- Multi-account = paid is ALREADY the shipped shape (link/connect routes are
-  requireEntitled; entitlement inert while PAYWALL_ENABLED=false). LOCKED.
-- [ ] PENDING founder decision: price $7.99 vs $8.99 /mo. Recommendation:
-      $8.99/mo + ~$79/yr (2 months free) — mid-point between SaneBox ($7–12)
-      and Superhuman ($25–30), and the 4-tier firewall + multi-provider story
-      supports the higher anchor; drop to $7.99 only if beta conversion says so.
-- [ ] Create Stripe (web) + RevenueCat (mobile) price objects; verify webhook
-      plan sync end-to-end in test mode.
+- Multi-account = paid. LOCKED. Refined 2026-10-15 (founder, LOCKED): the FIRST
+  mail account is free whatever the provider (Google, iCloud, Naver, Outlook);
+  connecting a SECOND one needs Pro (`multi_account`). Every connect route asks
+  `packages/api/src/billing/mail-account-entitlement.ts`; inert while
+  PAYWALL_ENABLED=false.
+- Price RAISED 2026-10-14: `$29.99`/mo web, `$34.99`/mo native (was `$8.99`/`$9.99`,
+  decided 2026-08-10). The category sits at $30 and no one had subscribed yet. The
+  single source of truth is `packages/web/src/lib/pricing.ts`; an annual tier
+  (~$79/yr) is still open. Paddle live checkout was verified end-to-end with a
+  real transaction on 2026-08-22.
+- [ ] Create the RevenueCat (mobile) price objects; verify webhook plan sync
+      end-to-end. The Paddle (web) side is done.
 - [ ] PAYWALL flip per docs/launch/paywall-flip-runbook.md (trial stays 7d
-      card-required). Flip AFTER beta cohort feedback, not with it.
+      card-required). Since 2026-10-24 every signup starts on FREE, and the
+      beta cohort was settled on 2026-10-28 (runbook §3a), so the flip no
+      longer waits on cohort feedback; its timing is the founder's call.
 
 ## P2b — Unit economics at 100 users (measured 2026-08-10)
 
@@ -71,7 +100,7 @@ $0.30 / $2.50 per 1M (the rate the cost ledger actually meters).
 | Briefings | 100 | ~$0.19 |
 | **Total** | | **≈ $7/day ≈ $210/mo** |
 
-Against $8.99 × 100 = $899/mo that is **~23% of revenue** — viable, and the
+Against $29.99 × 100 = $2,999/mo that is **~7% of revenue** — viable, and the
 margin improves as the fallback chain (cheap paid SKUs) absorbs spillover.
 
 **Two findings, both actionable:**
@@ -92,13 +121,28 @@ margin improves as the fallback chain (cheap paid SKUs) absorbs spillover.
 
 ## P3 — Product surface for launch
 
-- [ ] Demo video: script around the 4-tier firewall + Decision queue +
+- [ ] Demo video: script around the five-lane firewall + Decision queue +
       multi-inbox; record on web (desktop app b-roll optional).
-- [ ] Landing (EN/KO lockstep + parity CI): providers row (Gmail live,
-      Naver live, iCloud/Outlook "coming soon"), mobile "coming soon",
-      pricing section once P2 lands. Measured claims only.
-- [ ] Legal before paywall: privacy policy + terms + refund policy pages
-      current; support contact (hello@klorn.ai) surfaced in-app.
+- [x] Landing providers row — live and verified 2026-08-26 on klorn.ai:
+      "Naver Mail — Connected over IMAP from Settings", "Outlook & Microsoft
+      365 and iCloud Mail — already built…". Pricing section still waits on P2.
+- [x] Support contact surfaced in-app (2026-08-26). It had lived only inside
+      the privacy/terms/refund pages — all three on a noindex subdomain a
+      signed-in user has no reason to open. Web: Settings → About. Desktop:
+      the App & diagnostics disclosure in BOTH panels, next to the diagnostics
+      button, opening a prefilled mail with the app version.
+- [x] Legal before paywall — all three read in full 2026-08-26, not scanned.
+      Privacy had two undisclosed processors and a date older than its own
+      file; fixed in #1263 (Resend sends every transactional mail; Naver IMAP
+      stores a second mailbox credential and was absent entirely).
+      Terms and the refund policy hold up: the refund text derives the price
+      from `PRO_PRICE_WEB` rather than restating it, covers Paddle as merchant
+      of record, the 7-day trial, self-cancel, the 14-day first-month refund
+      and Korean withdrawal rights. Its "Cancel subscription in Settings"
+      claim is conditional on `canCancel`, which is true for exactly the
+      web/Paddle subscribers the policy addresses — the founder's own account
+      shows "not billed on the web" because it is not one of them.
+      Not legal review; this only makes the documents match the code.
 
 ## P4 — Flag flips (each a separate deliberate decision, post-LoA)
 

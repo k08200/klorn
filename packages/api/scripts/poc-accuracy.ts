@@ -8,7 +8,7 @@
  *   - top disagreements (founder label vs model tier) for prompt tuning
  *
  * Usage:
- *   DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
+ *   DATABASE_URL=... ANTHROPIC_API_KEY=... npx tsx scripts/poc-accuracy.ts \
  *     --in=./poc-ground-truth.json
  *
  * Context (#650 — the eval runs the judge's real context-consumption path):
@@ -52,6 +52,7 @@ import {
   type PocTier,
 } from "../src/judge/poc-judge.js";
 import { TIERS, type Tier } from "../src/judge/tiers.js";
+import { tierV2Enabled } from "../src/ops/feature-flags.js";
 
 interface GroundTruthItem {
   id: string;
@@ -69,6 +70,13 @@ interface GroundTruthItem {
   labels: string[];
   receivedAt: string;
   label: null | PocTier;
+  /**
+   * Ontology-v2 expectation for the SAME mail (dual-label scheme). When the
+   * run executes with TIER_V2_ENABLED, labelV2 (falling back to label)
+   * becomes the truth; a flag-off run ignores it entirely, so adding v2
+   * expectations can never move the flag-off CI gate.
+   */
+  labelV2?: PocTier;
   note?: string;
   /**
    * Optional per-item JudgeContext fixture (#650) — corrections, senderPrior,
@@ -152,7 +160,7 @@ function parseArgs(argv: string[]): CliArgs {
 /** True when at least one LLM provider is configured (mirrors eval.yml). */
 function hasProviderKey(): boolean {
   return Boolean(
-    process.env.OPENROUTER_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
       process.env.GEMINI_API_KEY ||
       process.env.OPENAI_COMPAT_BASE_URL,
   );
@@ -164,12 +172,13 @@ function pad(value: string | number, width: number): string {
 }
 
 function printConfusionMatrix(rows: Array<{ truth: PocTier; predicted: PocTier }>): void {
-  const matrix: Record<PocTier, Record<PocTier, number>> = {
-    SILENT: { SILENT: 0, QUEUE: 0, PUSH: 0, AUTO: 0 },
-    QUEUE: { SILENT: 0, QUEUE: 0, PUSH: 0, AUTO: 0 },
-    PUSH: { SILENT: 0, QUEUE: 0, PUSH: 0, AUTO: 0 },
-    AUTO: { SILENT: 0, QUEUE: 0, PUSH: 0, AUTO: 0 },
-  };
+  // Derived from the canonical vocabulary — the old 4-key literal crashed
+  // with `undefined` cells the moment ontology v2 widened TIERS (2026-08-15).
+  const emptyRow = (): Record<PocTier, number> =>
+    Object.fromEntries(TIERS.map((t) => [t, 0])) as Record<PocTier, number>;
+  const matrix: Record<PocTier, Record<PocTier, number>> = Object.fromEntries(
+    TIERS.map((t) => [t, emptyRow()]),
+  ) as Record<PocTier, Record<PocTier, number>>;
   for (const r of rows) matrix[r.truth][r.predicted]++;
 
   console.log("\nConfusion matrix (rows = ground truth, cols = predicted):");
@@ -316,9 +325,11 @@ function loadLabelledSet(inArg: string): LoadedSet {
   const inPath = resolve(inArg);
   const raw = readFileSync(inPath, "utf8");
   const file = JSON.parse(raw) as GroundTruthFile;
-  const labelled = file.items.filter(
-    (i): i is LabelledItem => i.label !== null && POC_TIERS.includes(i.label as PocTier),
-  );
+  const v2 = tierV2Enabled();
+  const labelled = file.items
+    .map((i) => (v2 && i.labelV2 ? { ...i, label: i.labelV2 } : i))
+    .filter((i): i is LabelledItem => i.label !== null && POC_TIERS.includes(i.label as PocTier));
+  if (v2) console.log("  (TIER_V2_ENABLED: labelV2 expectations in effect)");
   const skipped = file.items.length - labelled.length;
   if (labelled.length === 0) {
     throw new Error(`No items have a label set in ${inPath}. Fill in 'label' fields first.`);
@@ -423,7 +434,7 @@ async function runBodyComparison(
 ): Promise<void> {
   if (!hasProviderKey()) {
     console.log(
-      "\nno provider key — comparison skipped. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the body off-vs-on eval.",
+      "\nno provider key — comparison skipped. Set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the body off-vs-on eval.",
     );
     return;
   }
@@ -475,7 +486,7 @@ async function runBodyComparison(
 async function runContextComparison(loaded: LoadedSet, args: CliArgs): Promise<void> {
   if (!hasProviderKey()) {
     console.log(
-      "\nno provider key — comparison skipped. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the context off-vs-on eval.",
+      "\nno provider key — comparison skipped. Set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the context off-vs-on eval.",
     );
     return;
   }

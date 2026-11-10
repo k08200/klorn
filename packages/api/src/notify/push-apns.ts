@@ -18,11 +18,12 @@
  */
 
 import http2 from "node:http2";
+import type { ApnsMailCategory } from "@klorn/contract";
 import jwt from "jsonwebtoken";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
-import type { DevicePushPayload, DevicePushSummary } from "./push-device.js";
+import { type DevicePushPayload, type DevicePushSummary, mailPushTarget } from "./push-device.js";
 
 const APNS_KEY_P8 = (process.env.APNS_KEY_P8 || "").replace(/\\n/g, "\n");
 const APNS_KEY_ID = process.env.APNS_KEY_ID || "";
@@ -135,6 +136,48 @@ function sendOne(
   });
 }
 
+/** iOS notification categories the app registers lock-screen actions under. */
+export const APNS_MAIL_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MAIL";
+export const APNS_MAIL_DRAFT_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MAIL_DRAFT";
+export const APNS_MEETING_CATEGORY: ApnsMailCategory = "KLORN_PUSH_MEETING";
+
+/** The action set: a reply draft wins, then a MEETING mail, else the mail set. */
+function apnsCategoryOf(mail: { pendingActionId?: string; lane?: string }): ApnsMailCategory {
+  if (mail.pendingActionId) return APNS_MAIL_DRAFT_CATEGORY;
+  return mail.lane === "MEETING" ? APNS_MEETING_CATEGORY : APNS_MAIL_CATEGORY;
+}
+
+/**
+ * The APNs JSON body. The keys a push always carried come first and unchanged
+ * (top-level `category` is the Klorn NotifCategory, not the APNs one). A mail
+ * push then adds, inside `aps`, the action category (the draft one when a reply
+ * draft / approval exists) and `mutable-content: 1` (lets a notification service
+ * extension enrich it; without one iOS shows it as is), and at the top level the
+ * deep link: emailId, attentionItemId, pendingActionId, route. No `thread-id`:
+ * the mail's thread id is not at the call sites and is not worth a query on the
+ * push path; iOS groups by app meanwhile.
+ */
+export function buildApnsBody(payload: DevicePushPayload, category: NotifCategory): string {
+  const mail = mailPushTarget(payload);
+  const aps = {
+    alert: { title: payload.title, body: payload.body },
+    sound: "default",
+    ...(mail
+      ? {
+          category: apnsCategoryOf(mail),
+          "mutable-content": 1,
+        }
+      : {}),
+  };
+  return JSON.stringify({
+    aps,
+    ...(payload.url ? { url: payload.url } : {}),
+    ...(payload.notificationId ? { notificationId: payload.notificationId } : {}),
+    category,
+    ...(mail ?? {}),
+  });
+}
+
 /**
  * Send a push to a user's iOS devices via APNs. Prunes tokens APNs reports as
  * permanently dead. Best-effort: returns a summary and never throws.
@@ -143,6 +186,8 @@ export async function sendApnsPush(
   userId: string,
   payload: DevicePushPayload,
   category: NotifCategory = "system",
+  // "Send test" on one settings row rings that token only (routes/alert-endpoints.ts).
+  opts: { tokenId?: string } = {},
 ): Promise<DevicePushSummary> {
   if (!isApnsConfigured()) {
     console.log(`[PUSH-APNS] Skipped — APNs not configured (user ${userId})`);
@@ -150,7 +195,7 @@ export async function sendApnsPush(
   }
 
   const rows = await prisma.devicePushToken.findMany({
-    where: { userId, platform: "ios" },
+    where: { userId, platform: "ios", ...(opts.tokenId ? { id: opts.tokenId } : {}) },
     select: { token: true },
   });
   if (rows.length === 0) return skipped("no_device_tokens");
@@ -164,12 +209,7 @@ export async function sendApnsPush(
     return skipped("apns_jwt_error");
   }
 
-  const body = JSON.stringify({
-    aps: { alert: { title: payload.title, body: payload.body }, sound: "default" },
-    ...(payload.url ? { url: payload.url } : {}),
-    ...(payload.notificationId ? { notificationId: payload.notificationId } : {}),
-    category,
-  });
+  const body = buildApnsBody(payload, category);
 
   let client: http2.ClientHttp2Session;
   try {

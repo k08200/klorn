@@ -44,11 +44,19 @@ import {
   serializeReplyFeedback,
 } from "./email.js";
 
+const feedbackLimitQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 export async function registerEmailFeedbackRoutes(app: FastifyInstance) {
   // GET /api/email/feedback — list the user's accumulated label corrections
   // in fixture-shape so they can be inspected (and later replayed against
   // the classifier as a regression suite).
-  app.get("/feedback", async (request) => {
+  app.get("/feedback", { schema: { querystring: feedbackLimitQuerySchema } }, async (request) => {
     const userId = getUserId(request);
     const { limit } = request.query as { limit?: string };
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
@@ -60,18 +68,22 @@ export async function registerEmailFeedbackRoutes(app: FastifyInstance) {
 
   // GET /api/email/feedback/eval — replay the user's corrections against
   // the current heuristic classifier without changing runtime behavior.
-  app.get("/feedback/eval", async (request) => {
-    const userId = getUserId(request);
-    const { limit } = request.query as { limit?: string };
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
-    const fixtures = await listUserFeedbackFixtures(userId, {
-      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
-    });
-    return {
-      generatedAt: new Date().toISOString(),
-      ...evaluateUserCorrectionFixtures(fixtures),
-    };
-  });
+  app.get(
+    "/feedback/eval",
+    { schema: { querystring: feedbackLimitQuerySchema } },
+    async (request) => {
+      const userId = getUserId(request);
+      const { limit } = request.query as { limit?: string };
+      const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+      const fixtures = await listUserFeedbackFixtures(userId, {
+        limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      });
+      return {
+        generatedAt: new Date().toISOString(),
+        ...evaluateUserCorrectionFixtures(fixtures),
+      };
+    },
+  );
 
   // POST /api/email/:id/feedback — user reports the auto-priority is wrong.
   // Idempotent on (user, email): re-correction overwrites prior feedback.

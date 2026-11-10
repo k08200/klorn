@@ -49,7 +49,7 @@ test.describe("Command Center sections — authenticated", () => {
     // Register a fresh account to get a real token
     const email = `cc-test-${Date.now()}@example.com`;
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill("password123!");
     await page.getByRole("button", { name: /create account/i }).click();

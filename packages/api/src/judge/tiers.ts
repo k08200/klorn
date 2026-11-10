@@ -1,8 +1,14 @@
 /**
  * The canonical attention tier vocabulary. SINGLE SOURCE OF TRUTH.
  *
- * Klorn is a 4-tier firewall (CLAUDE.md doctrine — never invent a 5th tier):
- * SILENT / QUEUE / PUSH / AUTO.
+ * Ontology v2 (founder decision 2026-08-15, docs/design/tier-ontology-v2.md):
+ * SILENT / INFO / QUEUE / MEETING / PUSH describe WHAT the mail is; whether
+ * Klorn may auto-answer it is the per-item `autoEligible` flag plus the
+ * account mode — delegation is no longer a tier. AUTO remains in the storage
+ * vocabulary for legacy rows and the still-active v1 classifier
+ * (TIER_V2_ENABLED off): v1 emits it, v2 never does. At flip time AUTO rows
+ * are backfilled to QUEUE + autoEligible.
+ *
  * There is no CALL tier. An earlier iteration added CALL as a "phone-call
  * interrupt" above PUSH, but it was never shipped end-to-end (delivery always
  * rendered it as PUSH) and it forked the domain model — calibration and the
@@ -14,7 +20,9 @@
  * to QUEUE by an unknown-value fallback.
  */
 
-export const TIERS = ["SILENT", "QUEUE", "PUSH", "AUTO"] as const;
+import type { LiveTier } from "@klorn/contract";
+
+export const TIERS = ["SILENT", "INFO", "QUEUE", "MEETING", "PUSH", "AUTO"] as const;
 
 export type Tier = (typeof TIERS)[number];
 
@@ -29,6 +37,17 @@ export function normalizeTier(value: string | null | undefined, _strict = false)
   if (value === "CALL") return "PUSH";
   if (value && TIER_SET.has(value)) return value as Tier;
   return "QUEUE";
+}
+
+/**
+ * normalizeTier for user-facing surfaces: additionally folds the retired v1
+ * AUTO lane into QUEUE, the vocabulary's visible default (the same fold the
+ * TIER_V2 backfill applies). Use this wherever a lane is shown to a person —
+ * the firewall board, mail-row chips — so AUTO never renders as a lane.
+ */
+export function toLiveTier(value: string | null | undefined): LiveTier {
+  const tier = normalizeTier(value);
+  return tier === "AUTO" ? "QUEUE" : tier;
 }
 
 export function isTier(value: unknown): value is Tier {

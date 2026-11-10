@@ -5,6 +5,9 @@ managed in one firewall across web/mobile/desktop. This file is the sequenced
 plan; each phase is a separate PR train and each later phase depends on the
 earlier ones.
 
+Sequencing after Phase 3, and calendar, drive, agent and company-edition work,
+is in `unified-platform-plan.md` (2026-09-28). Phase 4 stays defined here.
+
 ## Where the code actually is (audited 2026-08-05)
 
 - No provider interface. The sync/action pipeline is hard-wired to Gmail
@@ -149,6 +152,8 @@ false-success + resurrection on the next delta sync. Reply threading
 deferred: Graph sendMail cannot set In-Reply-To, so `getReplyHeaders`
 answers `{}` (best-effort per contract) to keep `/reply` from claiming
 `threaded: true`; real threading needs the /messages/{id}/reply endpoint.
+Superseded by step B0b (docs/providers/unified-platform-plan.md): replies and
+reply drafts are now made with `createReply` from the original message id.
 
 3B (ingestion) landed: `mail/outlook-{sync,accounts,scheduler}.ts` mirror the
 IMAP trio — Graph delta query against the inbox folder, every message through

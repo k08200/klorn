@@ -9,7 +9,7 @@ import { timingSafeEqualStr } from "../timing-safe-equal.js";
  * isPaddleConfigured() is false and every surface stays inert, mirroring
  * how stripe.ts behaves without STRIPE_SECRET_KEY. Required env at launch:
  *   PADDLE_API_KEY        server-side API key (Paddle → Developer tools)
- *   PADDLE_PRO_PRICE_ID   the $8.99/mo price (pri_…) with the 7-day trial
+ *   PADDLE_PRO_PRICE_ID   the $29.99/mo price (pri_…) with the 7-day trial
  *   PADDLE_WEBHOOK_SECRET notification endpoint secret (webhook signature)
  *   PADDLE_ENV            "sandbox" for the sandbox account; unset = live
  */
@@ -54,9 +54,13 @@ export function verifyPaddleSignature(
   return timingSafeEqualStr(h1, expected);
 }
 
-async function paddleFetch(path: string, body: unknown): Promise<unknown> {
+async function paddleFetch(
+  path: string,
+  body: unknown,
+  method: "POST" | "PATCH" = "POST",
+): Promise<unknown> {
   const res = await fetch(`${apiBase()}${path}`, {
-    method: "POST",
+    method,
     headers: {
       Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
       "Content-Type": "application/json",
@@ -95,6 +99,49 @@ export async function createPaddleCheckout(opts: {
     );
   }
   return url;
+}
+
+/**
+ * Schedule the subscription to end at the period boundary and return the date
+ * access stops (scheduled_change.effective_at). Always "next_billing_period",
+ * never immediate — the refund policy promises access until the end of the
+ * period already paid for, and for a trial this lands on the trial end so a
+ * canceled trial is never charged.
+ */
+export async function cancelPaddleSubscription(
+  subscriptionId: string,
+): Promise<{ effectiveAt: string | null }> {
+  const data = (await paddleFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
+    effective_from: "next_billing_period",
+  })) as {
+    data?: {
+      scheduled_change?: { effective_at?: string | null } | null;
+      current_billing_period?: { ends_at?: string | null } | null;
+    };
+  };
+  return {
+    effectiveAt:
+      data?.data?.scheduled_change?.effective_at ??
+      data?.data?.current_billing_period?.ends_at ??
+      null,
+  };
+}
+
+/**
+ * Remove a scheduled cancellation ("keep my subscription"). Paddle models this
+ * as PATCHing the subscription with scheduled_change: null; billing resumes on
+ * the original schedule. Returns the restored renewal date (next_billed_at)
+ * so the UI can show it without waiting for the follow-up webhook.
+ */
+export async function undoPaddleCancellation(
+  subscriptionId: string,
+): Promise<{ renewsAt: string | null }> {
+  const data = (await paddleFetch(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    { scheduled_change: null },
+    "PATCH",
+  )) as { data?: { next_billed_at?: string | null } };
+  return { renewsAt: data?.data?.next_billed_at ?? null };
 }
 
 /**

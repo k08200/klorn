@@ -9,6 +9,7 @@
  */
 
 import type { Server } from "node:http";
+import type { DesktopAlertKind, DesktopMailToast } from "@klorn/contract";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   isDemoAccessEnabled,
@@ -16,12 +17,18 @@ import {
   sessionRevokedForToken,
   verifyToken,
 } from "./auth.js";
+import {
+  desktopPresence,
+  parseWsClientApp,
+  parseWsClientType,
+  type WsClientType,
+} from "./notify/desktop-presence.js";
 
 interface WsClient {
   ws: WebSocket;
   userId: string;
   clientId: string;
-  type: "web" | "desktop" | "widget";
+  type: WsClientType;
   connectedAt: number;
 }
 
@@ -43,9 +50,8 @@ export const WS_AUTH_SUBPROTOCOL = "klorn-ws-v1";
 /**
  * Pull the auth JWT from a Sec-WebSocket-Protocol header when the client used
  * the subprotocol relay (token as the value right after the marker). Returns
- * null if the marker is absent, so the caller can fall back to the legacy
- * ?token= query param. Keeping the JWT in a header rather than the URL stops
- * the long-lived credential from landing in proxy/LB access logs.
+ * null if the marker is absent. Keeping the JWT in a header rather than the
+ * URL stops the long-lived credential from landing in proxy/LB access logs.
  */
 export function extractWsSubprotocolToken(header: string | string[] | undefined): string | null {
   if (!header) return null;
@@ -66,23 +72,25 @@ export function initWebSocket(server: Server): WebSocketServer {
     // Accept the auth marker subprotocol so clients can carry the JWT in the
     // Sec-WebSocket-Protocol header instead of the URL. Only ever select the
     // marker back — never echo the token. Clients that offer no subprotocol
-    // (legacy query-param path) negotiate none and still connect.
+    // negotiate none and still connect (demo-user tokenless path only,
+    // gated by isDemoAccessEnabled in the connection handler).
     handleProtocols: (protocols: Set<string>) =>
       protocols.has(WS_AUTH_SUBPROTOCOL) ? WS_AUTH_SUBPROTOCOL : false,
   });
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
-    const clientType = (url.searchParams.get("type") || "web") as WsClient["type"];
+    // Validated, not cast: the value lands in clientId, logs and broadcasts.
+    const clientType = parseWsClientType(url.searchParams.get("type"));
+    const desktopApp =
+      clientType === "desktop" ? parseWsClientApp(url.searchParams.get("app")) : null;
 
-    // Authenticate. Prefer the JWT from the Sec-WebSocket-Protocol subprotocol
-    // (keeps the credential out of the URL and access logs); fall back to the
-    // ?token= query param for native clients not yet migrated to the relay, and
-    // finally to userId for the demo-only backward-compat path.
+    // Authenticate. The JWT rides the Sec-WebSocket-Protocol subprotocol —
+    // never the URL, so the credential stays out of proxy/LB access logs. The
+    // legacy ?token= query fallback is gone (every shipped client offers the
+    // subprotocol); the only tokenless path left is the demo branch below.
     let userId: string;
-    const token =
-      extractWsSubprotocolToken(req.headers["sec-websocket-protocol"]) ||
-      url.searchParams.get("token");
+    const token = extractWsSubprotocolToken(req.headers["sec-websocket-protocol"]);
     if (token) {
       try {
         const payload = verifyToken(token);
@@ -114,7 +122,7 @@ export function initWebSocket(server: Server): WebSocketServer {
       const demoAllowed = isDemoAccessEnabled();
       const rawUserId = url.searchParams.get("userId");
       if (!demoAllowed || (rawUserId && rawUserId !== "demo-user")) {
-        ws.close(4001, "Authentication required — use token parameter");
+        ws.close(4001, "Authentication required — offer the auth subprotocol");
         return;
       }
       userId = "demo-user";
@@ -130,6 +138,7 @@ export function initWebSocket(server: Server): WebSocketServer {
     };
 
     clients.set(clientId, client);
+    if (desktopApp) desktopPresence.connected(userId, clientId, desktopApp, Date.now());
     console.log(`[WS] Client connected: ${clientId} (${clientType})`);
 
     // Send welcome message with client info
@@ -164,6 +173,7 @@ export function initWebSocket(server: Server): WebSocketServer {
 
     ws.on("close", () => {
       clients.delete(clientId);
+      desktopPresence.disconnected(userId, clientId, Date.now());
       console.log(`[WS] Client disconnected: ${clientId}`);
 
       // Broadcast to other clients
@@ -179,6 +189,7 @@ export function initWebSocket(server: Server): WebSocketServer {
       // independent, so the user isn't fully unnotified, but ops must see it).
       console.warn(`[WS] socket error for ${clientId}:`, err.message);
       clients.delete(clientId);
+      desktopPresence.disconnected(userId, clientId, Date.now());
     });
   });
 
@@ -269,6 +280,10 @@ export function pushNotification(
     createdAt?: string;
     conversationId?: string;
     link?: string;
+    /** OS-banner tag for the desktop shell — see notify/desktop-alert.ts. */
+    alert?: DesktopAlertKind;
+    /** The desktop shell's toast for a one-mail interrupt (decision N1). */
+    mail?: DesktopMailToast;
   },
 ) {
   broadcastToUser(userId, {

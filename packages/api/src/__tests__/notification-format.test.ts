@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatUrgentEmailBody,
   humanizeAutoExec,
+  senderEmail,
   senderName,
 } from "../notify/notification-format.js";
 
@@ -143,12 +144,13 @@ describe("notification language", () => {
   });
 
   it("falls back to English for a language it does not ship", () => {
+    // fr shipped in 2026-08-23; pt is the current stand-in for "unshipped".
     const out = formatUrgentEmailBody(
       [
         { from: "A <a@x.com>", subject: "First", summary: null },
         { from: "B <b@y.com>", subject: "Second", summary: null },
       ],
-      "fr",
+      "pt",
     );
     expect(out).toContain("2 urgent emails");
   });
@@ -156,5 +158,19 @@ describe("notification language", () => {
   it("keeps an unknown sender label in the chosen language", () => {
     expect(senderName(null, "ko")).not.toBe("Unknown sender");
     expect(senderName(null)).toBe("Unknown sender");
+  });
+});
+
+describe("senderEmail", () => {
+  it.each([
+    ["Name <A@B.com>", "a@b.com"],
+    ["a@b.com", "a@b.com"],
+    ["Sarah :( <s@x.com>", "s@x.com"],
+    ['"<victim@target.com>" <attacker@evil.co>', "attacker@evil.co"],
+    ["<attacker@evil.co>, <victim@target.com>", ""],
+    ["No Address", ""],
+    [null, ""],
+  ])("%j → %j", (raw, address) => {
+    expect(senderEmail(raw)).toBe(address);
   });
 });

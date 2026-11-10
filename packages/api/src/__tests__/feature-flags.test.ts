@@ -34,6 +34,20 @@ describe("collectFeatureFlags", () => {
     ).toBe(false);
   });
 
+  it("reports the request-time object storage flag and the bucket's presence only", () => {
+    const on = collectFeatureFlags({
+      OBJECT_STORAGE_ENABLED: "true",
+      OBJECT_STORAGE_BUCKET: "klorn-objects",
+    } as NodeJS.ProcessEnv);
+    expect(on.dynamic.OBJECT_STORAGE_ENABLED).toBe(true);
+    expect(on.configured.OBJECT_STORAGE_BUCKET).toBe(true);
+    expect(JSON.stringify(on)).not.toContain("klorn-objects");
+
+    const off = collectFeatureFlags({} as NodeJS.ProcessEnv);
+    expect(off.dynamic.OBJECT_STORAGE_ENABLED).toBe(false);
+    expect(off.configured.OBJECT_STORAGE_BUCKET).toBe(false);
+  });
+
   it("reports the import-time linked-inbox auto-reply flag", () => {
     // Import-time: the value tracks the config.ts const frozen at module load,
     // not the env passed in — asserting presence is what's meaningful here.
@@ -67,10 +81,25 @@ describe("collectFeatureFlags", () => {
     expect(keys).not.toContain("SENTRY");
   });
 
-  it("empty env → everything dynamic/configured is off", () => {
+  it("empty env → documented defaults (two default-ON flags, rest off)", () => {
     const report = collectFeatureFlags({} as NodeJS.ProcessEnv);
-    expect(Object.values(report.dynamic).every((v) => v === false)).toBe(true);
+    // Default-ON since 2026-08-18 (founder flip): tier v2 + spam intake.
+    const defaultOn = new Set(["TIER_V2_ENABLED", "SPAM_INTAKE_ENABLED", "AUTO_MODE_SEND_ENABLED"]);
+    for (const [key, value] of Object.entries(report.dynamic)) {
+      expect(value, key).toBe(defaultOn.has(key));
+    }
     expect(Object.values(report.configured).every((v) => v === false)).toBe(true);
+  });
+
+  it("the default-ON flags honor their kill switches", () => {
+    const report = collectFeatureFlags({
+      TIER_V2_ENABLED: "false",
+      SPAM_INTAKE_ENABLED: "off",
+      AUTO_MODE_SEND_ENABLED: "0",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(report.dynamic.TIER_V2_ENABLED).toBe(false);
+    expect(report.dynamic.SPAM_INTAKE_ENABLED).toBe(false);
+    expect(report.dynamic.AUTO_MODE_SEND_ENABLED).toBe(false);
   });
 });
 

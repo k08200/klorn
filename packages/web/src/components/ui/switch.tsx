@@ -56,7 +56,7 @@ export default function Switch({
       >
         <span
           aria-hidden="true"
-          className={`absolute left-1 h-6 w-6 rounded-full bg-white transition-transform ${
+          className={`absolute left-1 h-6 w-6 rounded-full bg-surface-panel transition-transform ${
             checked ? "translate-x-6" : ""
           }`}
         />

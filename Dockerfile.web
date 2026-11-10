@@ -1,20 +1,41 @@
 FROM node:22-slim AS base
+# corepack keeps the pnpm it prepares under COREPACK_HOME (default: the
+# building user's ~/.cache, i.e. /root). A shared path lets the unprivileged
+# runtime user below run that same pnpm without downloading it again at start.
+ENV COREPACK_HOME=/usr/local/share/corepack
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 WORKDIR /app
 
-# Install dependencies
+# Unprivileged runtime user with a fixed uid/gid (10001), created up front so
+# the build step can hand it the .next directory in the same layer.
+RUN groupadd --gid 10001 klorn \
+  && useradd --uid 10001 --gid klorn --create-home --home-dir /home/klorn \
+    --shell /usr/sbin/nologin klorn
+
+# Install dependencies (contract is a type-only workspace dep of web — the
+# `...` filter only links it when its package.json is present at install)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/web/package.json packages/web/
+COPY packages/contract/package.json packages/contract/
 RUN pnpm install --frozen-lockfile --filter @klorn/web...
 
-# Copy source and build.
+# Copy source and build (contract ships raw .ts types — no build step of
+# its own, but `next build`'s type check resolves into its src/)
 # NEXT_PUBLIC_* values are inlined into the client bundle at BUILD time —
 # a runtime `environment:` entry cannot change them. Self-hosters serving
 # the web app anywhere other than localhost must pass this build arg.
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+COPY packages/contract/ packages/contract/
 COPY packages/web/ packages/web/
-RUN pnpm --filter @klorn/web build
+# `next start` writes only .next/cache at runtime (the app uses no ISR), so the
+# runtime user owns that and nothing else of the build. chown in the build
+# layer so the files aren't stored twice.
+RUN pnpm --filter @klorn/web build \
+  && mkdir -p packages/web/.next/cache \
+  && chown -R klorn:klorn packages/web/.next/cache
+ENV HOME=/home/klorn
+USER klorn
 
 EXPOSE 3000
 CMD ["pnpm", "--filter", "@klorn/web", "start"]

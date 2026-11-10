@@ -43,7 +43,9 @@ export function notificationSuppressionReason(args: {
   //     this email as PUSH-worthy. The keyword heuristic must NOT silently veto
   //     that decision — a subject like "confirm your wire transfer" or
   //     "verify your account before the deal closes" is exactly what must ring.
-  const isAuthored = type === "briefing" || type === "firewall";
+  //   - "reminder": a reminder the user set themselves (the mail "Later");
+  //     its title quotes the subject of the mail they chose to come back to.
+  const isAuthored = type === "briefing" || type === "firewall" || type === "reminder";
 
   if (
     !isAuthored &&

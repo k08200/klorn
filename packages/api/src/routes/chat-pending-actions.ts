@@ -14,7 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../agentcore/action-outbox.js";
 import { resolveActionTarget } from "../agentcore/action-target.js";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { db, INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -23,6 +23,7 @@ import {
   sendEmailPayloadHash,
 } from "../judge/attention-floor.js";
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
+import { noteReplyIfSent } from "../judge/user-outcome.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 
 /**
@@ -91,70 +92,85 @@ function hasMeaningfulText(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+const pendingActionsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    status: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 export async function chatRoutes(app: FastifyInstance) {
   // Every route here is per-user (pending actions, run/dismiss). Gate the whole
   // plugin so revoked/kicked tokens are rejected — bare getUserId() skips the
   // device-kick + password-reset epoch checks that requireAuth enforces.
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Paywall (no-op pre-launch): the approvals LIST and the no-effect triage
+  // (reject, snooze) are open to the free tier — Today, Approvals and the
+  // sidebar badge read them. Approving EXECUTES the action, so that route
+  // carries its own requireEntitled.
+  app.addHook("preHandler", requireAppAccess);
 
   // GET /api/chat/pending-actions — All pending actions for the current user across conversations.
   // Powers the mobile inbox so users can see & act on every "needs your attention" item in one place.
-  app.get("/pending-actions", async (request) => {
-    const userId = getUserId(request);
-    const { status } = request.query as { status?: string };
-    const statusFilter = status === "all" ? undefined : status || "PENDING";
+  app.get(
+    "/pending-actions",
+    { schema: { querystring: pendingActionsQuerySchema } },
+    async (request) => {
+      const userId = getUserId(request);
+      const { status } = request.query as { status?: string };
+      const statusFilter = status === "all" ? undefined : status || "PENDING";
 
-    type PendingActionRow = {
-      id: string;
-      conversationId: string;
-      status: string;
-      toolName: string;
-      toolArgs: string;
-      reasoning: string | null;
-      result: string | null;
-      createdAt: Date;
-      conversation?: { id: string; title: string | null } | null;
-    };
-    const actions = (await db.pendingAction.findMany({
-      where: { userId, ...(statusFilter ? { status: statusFilter as ActionStatus } : {}) },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      include: {
-        conversation: { select: { id: true, title: true } },
-      },
-    })) as PendingActionRow[];
+      type PendingActionRow = {
+        id: string;
+        conversationId: string;
+        status: string;
+        toolName: string;
+        toolArgs: string;
+        reasoning: string | null;
+        result: string | null;
+        createdAt: Date;
+        conversation?: { id: string; title: string | null } | null;
+      };
+      const actions = (await db.pendingAction.findMany({
+        where: { userId, ...(statusFilter ? { status: statusFilter as ActionStatus } : {}) },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: {
+          conversation: { select: { id: true, title: true } },
+        },
+      })) as PendingActionRow[];
 
-    // Resolve a human-readable target label for each action (title/name instead of raw UUID).
-    const enriched = await Promise.all(
-      actions.map(async (a) => {
-        let targetLabel: string | null = null;
-        try {
-          const parsed = (
-            typeof a.toolArgs === "string" ? JSON.parse(a.toolArgs) : (a.toolArgs ?? {})
-          ) as Record<string, unknown>;
-          targetLabel = await resolveActionTarget(a.toolName, parsed);
-        } catch {
-          // Malformed toolArgs — leave label null
-        }
-        return {
-          id: a.id,
-          conversationId: a.conversationId,
-          conversationTitle: a.conversation?.title ?? null,
-          status: a.status,
-          toolName: a.toolName,
-          toolArgs: a.toolArgs,
-          targetLabel,
-          reasoning: a.reasoning,
-          result: a.result,
-          createdAt: a.createdAt.toISOString(),
-        };
-      }),
-    );
+      // Resolve a human-readable target label for each action (title/name instead of raw UUID).
+      const enriched = await Promise.all(
+        actions.map(async (a) => {
+          let targetLabel: string | null = null;
+          try {
+            const parsed = (
+              typeof a.toolArgs === "string" ? JSON.parse(a.toolArgs) : (a.toolArgs ?? {})
+            ) as Record<string, unknown>;
+            targetLabel = await resolveActionTarget(a.toolName, parsed);
+          } catch {
+            // Malformed toolArgs — leave label null
+          }
+          return {
+            id: a.id,
+            conversationId: a.conversationId,
+            conversationTitle: a.conversation?.title ?? null,
+            status: a.status,
+            toolName: a.toolName,
+            toolArgs: a.toolArgs,
+            targetLabel,
+            reasoning: a.reasoning,
+            result: a.result,
+            createdAt: a.createdAt.toISOString(),
+          };
+        }),
+      );
 
-    return { actions: enriched };
-  });
+      return { actions: enriched };
+    },
+  );
 
   // GET /api/chat/conversations/:id/pending-actions — Get pending actions for a conversation
   app.get(
@@ -209,7 +225,7 @@ export async function chatRoutes(app: FastifyInstance) {
   // POST /api/chat/pending-actions/:actionId/approve — Approve and execute a pending action
   app.post(
     "/pending-actions/:actionId/approve",
-    { schema: { params: actionIdParamSchema } },
+    { schema: { params: actionIdParamSchema }, preHandler: requireEntitled },
     async (request, reply) => {
       const userId = getUserId(request);
       const { actionId } = request.params as { actionId: string };
@@ -310,12 +326,23 @@ export async function chatRoutes(app: FastifyInstance) {
         // Should never happen — just enqueued in the committed txn.
         return { success: true, queued: true, autoAllowed: !!autoAllow };
       }
+      const runStartedAt = new Date();
       const outcome = await claimAndRunOutboxRow({
         ...outboxRow,
         conversationId: action.conversationId,
       });
 
       if (outcome.kind === "completed") {
+        // An approved reply is the user answering that mail. "completed" can
+        // still carry a provider refusal, so noteReplyIfSent only stamps when
+        // the send set repliedAt during this run. A send left queued for the
+        // worker is not stamped.
+        if (action.toolName === "send_email") {
+          // A legacy string row can parse to null; never throw after the send.
+          const inReplyTo = (toolArgs as { in_reply_to_email_id?: unknown } | null)
+            ?.in_reply_to_email_id;
+          if (typeof inReplyTo === "string") noteReplyIfSent(userId, inReplyTo, runStartedAt);
+        }
         return { success: true, result: outcome.result, autoAllowed: !!autoAllow };
       }
       if (outcome.kind === "dead") {

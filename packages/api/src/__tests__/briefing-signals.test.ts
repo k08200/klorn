@@ -304,7 +304,7 @@ describe("buildBriefingSignals", () => {
     expect(signals.topActions.some((a) => a.refs.some((r) => r.id === "email-silent"))).toBe(false);
   });
 
-  it("surfaces an email the firewall tiered PUSH even with no keyword (4-tier verdict drives the briefing)", () => {
+  it("surfaces an email the firewall tiered PUSH even with no keyword (the lane verdict drives the briefing)", () => {
     const signals = buildBriefingSignals(
       {
         tasks: { tasks: [] },

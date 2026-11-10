@@ -28,8 +28,8 @@ and Terms.
 
 **Narration:** "This is Klorn, an AI email attention firewall at
 app.klorn.ai. Klorn connects to a user's Gmail and Google Calendar and
-classifies every message into four attention tiers — PUSH, QUEUE, SILENT, and
-AUTO — so users are only interrupted by mail that needs them. I'll sign in
+classifies every message into five attention lanes — PUSH, MEETING, QUEUE,
+INFO, and SILENT — so users are only interrupted by mail that needs them. I'll sign in
 with Google and show how each requested scope powers a user-facing feature."
 
 ## Scene 2 — Sign-in, then the Connect consent screen (0:25–1:00)
@@ -53,7 +53,7 @@ sees exactly what is requested and consents before any data is accessed."
 ## Scene 3 — `gmail.readonly`: sync, classification, summaries (1:00–1:50)
 
 **Screen:** Post-login dashboard. Show the inbox syncing, then the triage
-view: messages sorted into PUSH / QUEUE / SILENT / AUTO tiers. Open one
+view: messages sorted into PUSH / MEETING / QUEUE / INFO / SILENT lanes. Open one
 message to show its AI summary and the daily briefing view.
 
 **Narration:** "Immediately after connecting, Klorn uses the Gmail read-only
@@ -110,7 +110,8 @@ without leaving the triage flow. Here is the event in Google Calendar."
 the **system browser** (not an embedded webview) on the same Google flow;
 since the demo account already granted consent, Google returns immediately
 and the app signs in. Show the menu-bar triage surface with the same
-PUSH/QUEUE/SILENT tiers as the web app.
+five lanes as the web app (retired AUTO appears only if the demo account still
+holds pre-2026-08-18 rows; a fresh demo account will not).
 
 **Narration:** "Klorn also ships a desktop client. It authenticates through
 the system browser with the same OAuth client and the same identity-only
@@ -151,7 +152,8 @@ CODE EVIDENCE (strip before submission — maps scenes to implementation)
   sign-in) + getAuthUrl (Gmail/Calendar connect grant via POST /api/auth/google/start).
 - Scene 3 sync/classify/summarize: packages/api/src/mail/gmail.ts (sync),
   packages/api/src/mail/email-summarize.ts, packages/api/src/automation-scheduler.ts
-  (classify cycles + briefing, e.g. :844-861); 4 tiers per CLAUDE.md.
+  (classify cycles + briefing, e.g. :844-861); five lanes per CLAUDE.md,
+  canonical in AttentionItem.tier (packages/api/prisma/schema.prisma).
 - Scene 4 modify/trash: packages/api/src/mail/gmail.ts:1266 (users.messages.trash),
   :1351 (untrash) — reversible trash, no permanent delete API call in the codebase.
 - Scene 5 approved send: packages/api/src/agentcore/auto-reply-send.ts:16-40 and

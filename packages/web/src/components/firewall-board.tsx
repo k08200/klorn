@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
+import { ToolName } from "./tool-name";
 import { TrustDot, type TrustScoreData } from "./trust-badge";
 
 // Wire shapes come from @klorn/contract — the same types the server builds
@@ -14,13 +15,14 @@ import { TrustDot, type TrustScoreData } from "./trust-badge";
 export type { FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
 
 import type { DailyReceipt, FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
+import { CORE_TIERS } from "@/lib/tiers";
 
-type ColumnTier = "PUSH" | "QUEUE" | "SILENT";
+// lane-subset: INFO is a records lane and renders as a strip below the board
+// (InfoStrip), not as a fourth column, so it is deliberately not a ColumnTier.
+type ColumnTier = "PUSH" | "MEETING" | "QUEUE" | "SILENT";
 
 // How often the firewall view re-pulls while the tab is focused.
 export const FIREWALL_REFRESH_MS = 45_000;
-
-const TIER_ORDER: Tier[] = ["PUSH", "QUEUE", "SILENT"];
 
 // Spatial-triage visual language. Depth is meant to be felt before it is
 // read: PUSH sits on a glowing, elevated plane; QUEUE is mid; SILENT
@@ -41,47 +43,82 @@ export const TIER_VISUAL: Record<
     description: "Worth interrupting you for. Push notifications fire here.",
     plane:
       "tier-plane-push border-tier-push/35 bg-gradient-to-b from-tier-push/[0.07] to-transparent",
-    card: "border-tier-push/15 bg-white hover:border-tier-push/45",
-    accent: "text-tier-push",
-    dot: "text-tier-push",
+    card: "border-tier-push/15 bg-surface-panel hover:border-tier-push/45",
+    accent: "text-tier-push-ink",
+    dot: "text-tier-push-ink",
   },
   QUEUE: {
     label: "QUEUE",
     description: "Visible when you choose to look. No push.",
     plane:
       "tier-plane-queue border-tier-queue/25 bg-gradient-to-b from-tier-queue/[0.05] to-transparent",
-    card: "border-tier-queue/10 bg-white hover:border-tier-queue/35",
-    accent: "text-tier-queue",
-    dot: "text-tier-queue",
+    card: "border-tier-queue/10 bg-surface-panel hover:border-tier-queue/35",
+    accent: "text-tier-queue-ink",
+    dot: "text-tier-queue-ink",
   },
   SILENT: {
     label: "SILENT",
     description: "Recorded only. Klorn decided this wasn't worth surfacing.",
-    plane: "tier-plane-silent border-slate-200 bg-slate-50 opacity-90 hover:opacity-100",
-    card: "border-slate-200 bg-white hover:border-slate-300",
-    accent: "text-slate-400",
-    dot: "text-slate-400",
+    plane: "tier-plane-silent border-line bg-surface-raised opacity-90 hover:opacity-100",
+    card: "border-line bg-surface-panel hover:border-line-strong",
+    accent: "text-ink-dim",
+    dot: "text-ink-dim",
   },
   AUTO: {
     label: "AUTO",
-    description: "Handled without asking. Eligible for auto-execution.",
+    // Retired v1 lane: kept only because the Record is keyed by the wire Tier.
+    // Never rendered as a lane — see visibleColumns.
+    description: "Legacy classification. Shown in QUEUE.",
     plane:
       "tier-plane-auto border-tier-auto/30 bg-gradient-to-b from-tier-auto/[0.05] to-transparent",
-    card: "border-tier-auto/15 bg-white hover:border-tier-auto/40",
-    accent: "text-tier-auto",
-    dot: "text-tier-auto",
+    card: "border-tier-auto/15 bg-surface-panel hover:border-tier-auto/40",
+    accent: "text-tier-auto-ink",
+    dot: "text-tier-auto-ink",
+  },
+  // Ontology v2 lanes. TIER_V2_ENABLED has been default-on since #1138
+  // (2026-08-18); the "dedicated lane design lands with the flip work" that
+  // the previous comment here promised did not, so both of these borrowed a
+  // neighbour's colour on every surface — MEETING was indistinguishable from
+  // PUSH, INFO from SILENT. They own their hue now.
+  MEETING: {
+    label: "MEETING",
+    description: "Scheduling. Accept, decline, or propose — calendar checked.",
+    plane:
+      "tier-plane-meeting border-tier-meeting/30 bg-gradient-to-b from-tier-meeting/[0.06] to-transparent",
+    card: "border-tier-meeting/12 bg-surface-panel hover:border-tier-meeting/40",
+    accent: "text-tier-meeting-ink",
+    dot: "text-tier-meeting-ink",
+  },
+  INFO: {
+    label: "INFO",
+    // Quieter than QUEUE, but NOT silent: INFO is a lane with content you can
+    // open, SILENT is suppression. Reusing silent's grey said the opposite.
+    description: "Transactional record. Filed — no reply expected.",
+    plane:
+      "tier-plane-info border-tier-info/20 bg-gradient-to-b from-tier-info/[0.04] to-transparent",
+    card: "border-tier-info/10 bg-surface-panel hover:border-tier-info/30",
+    accent: "text-tier-info-ink",
+    dot: "text-tier-info-ink",
   },
 };
 
 // Per-target tint for the override pills, so "Move → PUSH" hints its tier hue.
 const TARGET_BUTTON: Record<Tier, string> = {
-  PUSH: "hover:border-tier-push/50 hover:text-tier-push",
-  QUEUE: "hover:border-tier-queue/50 hover:text-tier-queue",
-  SILENT: "hover:border-slate-300 hover:text-slate-600",
-  AUTO: "hover:border-tier-auto/50 hover:text-tier-auto",
+  PUSH: "hover:border-tier-push/50 hover:text-tier-push-ink",
+  QUEUE: "hover:border-tier-queue/50 hover:text-tier-queue-ink",
+  SILENT: "hover:border-line-strong hover:text-ink-muted",
+  AUTO: "hover:border-tier-auto/50 hover:text-tier-auto-ink",
+  MEETING: "hover:border-tier-meeting/50 hover:text-tier-meeting-ink",
+  INFO: "hover:border-tier-info/50 hover:text-tier-info-ink",
 };
 
+// lane-subset: v1 board targets. MEETING/INFO are absent on purpose — see
+// OVERRIDE_TARGETS_V2 directly below.
 const OVERRIDE_TARGETS: Tier[] = ["SILENT", "QUEUE", "PUSH"];
+/// v2-mode targets: MEETING/INFO become movable once the server actually
+/// emits those lanes; showing them to a v1 board would offer moves the
+/// server rejects (OVERRIDABLE_TIERS).
+const OVERRIDE_TARGETS_V2: Tier[] = ["SILENT", "INFO", "QUEUE", "MEETING", "PUSH"];
 
 export function FirewallBoard() {
   const { toast } = useToast();
@@ -128,9 +165,15 @@ export function FirewallBoard() {
     };
     const intervalId = window.setInterval(refresh, FIREWALL_REFRESH_MS);
     window.addEventListener("focus", refresh);
+    // Realtime wake: NotificationBell bridges the WS "conversations-updated"
+    // message to this window event. Every other mail surface listened; the
+    // flagship board alone sat on its 45s poll (realtime audit 2026-08-18).
+    // Same overriding/visibility guards as the poll, via refresh().
+    window.addEventListener("conversations-updated", refresh);
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("conversations-updated", refresh);
     };
   }, [load]);
 
@@ -155,20 +198,26 @@ export function FirewallBoard() {
     }
   };
 
-  // Visible columns: PUSH, QUEUE, SILENT. AUTO sits below as a one-line
-  // summary because the user already chose not to be interrupted by it.
+  // Visible columns: PUSH, (MEETING), QUEUE, SILENT. AUTO is a retired v1
+  // lane and is never rendered: the API folds it into QUEUE on read, and any
+  // AUTO row an older API still sends joins the QUEUE column here rather
+  // than vanishing (docs/product-vocabulary.md, "Legacy values").
   const visibleColumns = useMemo(() => {
     if (!data) return null;
     return {
       PUSH: data.tiers.PUSH,
-      QUEUE: data.tiers.QUEUE,
+      MEETING: data.tiers.MEETING ?? [],
+      QUEUE: [
+        ...data.tiers.QUEUE,
+        ...(data.tiers.AUTO ?? []).map((row) => ({ ...row, tier: "QUEUE" as Tier })),
+      ],
       SILENT: data.tiers.SILENT,
     } as Record<ColumnTier, FirewallItem[]>;
   }, [data]);
 
   if (loading) {
     return (
-      <div className="flex min-h-full items-center justify-center px-4 py-10 text-slate-400">
+      <div className="flex min-h-full items-center justify-center px-4 py-10 text-ink-dim">
         Loading firewall…
       </div>
     );
@@ -176,7 +225,7 @@ export function FirewallBoard() {
 
   if (!data) {
     return (
-      <div className="flex min-h-full items-center justify-center px-4 py-10 text-slate-400">
+      <div className="flex min-h-full items-center justify-center px-4 py-10 text-ink-dim">
         Nothing to show yet.
       </div>
     );
@@ -189,10 +238,8 @@ export function FirewallBoard() {
           {announcement}
         </p>
         <header className="mb-8">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
-            Today's attention firewall
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+          <h1 className="text-role-page text-ink">Today's attention firewall</h1>
+          <p className="mt-2 max-w-2xl text-role-body text-ink-mid">
             Klorn evaluated every signal that hit your inbox today and sorted it into a tier. Move
             anything we got wrong — that override teaches the classifier.
           </p>
@@ -200,19 +247,34 @@ export function FirewallBoard() {
 
         <DailyReceiptStrip data={data} receipt={receipt} />
 
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {(["PUSH", "QUEUE", "SILENT"] as const).map((tier) => (
+        {/* Ontology v2: MEETING becomes a real column only when the server
+            emits it (TIER_V2_ENABLED) — a flag-off board is pixel-identical.
+            INFO is a records lane, so it renders as a strip below the columns. */}
+        <div
+          className={`mt-8 grid gap-4 ${
+            (data.summary.MEETING ?? 0) > 0 ? "md:grid-cols-4" : "md:grid-cols-3"
+          }`}
+        >
+          {/* lane-subset: columns only. INFO renders as a strip below, and the
+              MEETING column appears only once the server has emitted one. */}
+          {((data.summary.MEETING ?? 0) > 0
+            ? (["PUSH", "MEETING", "QUEUE", "SILENT"] as const)
+            : (["PUSH", "QUEUE", "SILENT"] as const)
+          ).map((tier) => (
             <TierColumn
               key={tier}
               tier={tier}
               items={visibleColumns?.[tier] ?? []}
               overrideId={overriding}
               onOverride={override}
+              v2={(data.summary.MEETING ?? 0) > 0 || (data.summary.INFO ?? 0) > 0}
             />
           ))}
         </div>
 
-        <AutoStrip count={data.summary.AUTO} items={data.tiers.AUTO} />
+        {(data.summary.INFO ?? 0) > 0 && (
+          <InfoStrip count={data.summary.INFO} items={data.tiers.INFO} />
+        )}
       </div>
     </div>
   );
@@ -226,19 +288,30 @@ function moveItemBetweenTiers(
   if (!prev) return prev;
   const next = {
     ...prev,
-    tiers: { ...prev.tiers, summary: { ...prev.summary } },
+    // summary is a SIBLING of tiers — the old spread nested a summary key
+    // inside tiers, which the key-driven copy below would then try to spread
+    // as an array on the next optimistic move (second-override crash).
+    tiers: { ...prev.tiers },
+    summary: { ...prev.summary },
   } as FirewallResponse;
   // Copy each tier array so we mutate a fresh structure
-  for (const t of TIER_ORDER.concat(["AUTO"])) {
-    next.tiers[t] = [...prev.tiers[t]];
+  for (const t of Object.keys(next.tiers) as Tier[]) {
+    next.tiers[t] = [...next.tiers[t]];
   }
-  next.tiers[item.tier] = next.tiers[item.tier].filter((row) => row.id !== item.id);
+  // Remove from every lane, not just item.tier: a legacy AUTO row is displayed
+  // in QUEUE with tier rewritten, but still lives in tiers.AUTO in the payload.
+  for (const t of Object.keys(next.tiers) as Tier[]) {
+    next.tiers[t] = next.tiers[t].filter((row) => row.id !== item.id);
+  }
   next.tiers[newTier] = [{ ...item, tier: newTier }, ...next.tiers[newTier]];
   next.summary = {
-    SILENT: next.tiers.SILENT.length,
-    QUEUE: next.tiers.QUEUE.length,
-    PUSH: next.tiers.PUSH.length,
-    AUTO: next.tiers.AUTO.length,
+    ...(Object.fromEntries(
+      (Object.keys(next.tiers) as Tier[]).map((t) => [t, next.tiers[t].length]),
+    ) as Record<Tier, number>),
+    // Retired lane: the board shows any legacy AUTO rows inside QUEUE, so the
+    // optimistic counts must agree with what is on screen.
+    QUEUE: next.tiers.QUEUE.length + (next.tiers.AUTO?.length ?? 0),
+    AUTO: 0,
     total: prev.summary.total,
   };
   return next;
@@ -343,22 +416,24 @@ function DailyReceiptStrip({
   data: FirewallResponse;
   receipt: DailyReceipt | null;
 }) {
-  const counts: Tier[] = ["PUSH", "QUEUE", "SILENT", "AUTO"];
+  const counts = CORE_TIERS;
   return (
-    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
-      <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-4">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
+      {/* Five columns, not four: the strip used to count PUSH/QUEUE/SILENT/AUTO
+          — a lane that no longer occurs — while omitting MEETING and INFO. */}
+      <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
         {counts.map((tier) => {
           const v = TIER_VISUAL[tier];
           return (
             <div key={tier} className="flex items-center gap-3">
               <TierGlyph tier={tier} className={v.dot} />
               <div className="flex flex-col">
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                <span className="font-mono text-role-caption uppercase tracking-[0.18em] text-ink-dim">
                   {v.label}
                 </span>
                 <CountChip
                   value={data.summary[tier]}
-                  className={`text-2xl font-semibold leading-none ${v.accent}`}
+                  className={`text-role-title font-semibold leading-none ${v.accent}`}
                 />
               </div>
             </div>
@@ -366,7 +441,7 @@ function DailyReceiptStrip({
         })}
       </div>
       {receipt?.summary?.narrative && (
-        <p className="mt-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-400">
+        <p className="mt-4 border-t border-line pt-4 text-role-caption leading-5 text-ink-dim">
           {receipt.summary.narrative}
         </p>
       )}
@@ -379,26 +454,31 @@ function TierColumn({
   items,
   overrideId,
   onOverride,
+  v2,
 }: {
   tier: ColumnTier;
   items: FirewallItem[];
   overrideId: string | null;
   onOverride: (item: FirewallItem, newTier: Tier) => void;
+  v2: boolean;
 }) {
   const v = TIER_VISUAL[tier];
   return (
-    <section className={`glass rounded-2xl border p-4 transition-opacity ${v.plane}`}>
+    <section className={`glass rounded-card border p-4 transition-opacity ${v.plane}`}>
       <header className="mb-1 flex items-center gap-2">
         <TierGlyph tier={tier} className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900">
+        <h2 className="font-mono text-role-caption font-semibold uppercase tracking-[0.2em] text-ink">
           {v.label}
         </h2>
-        <CountChip value={items.length} className={`ml-auto text-sm font-semibold ${v.accent}`} />
+        <CountChip
+          value={items.length}
+          className={`ml-auto text-role-body font-semibold ${v.accent}`}
+        />
       </header>
-      <p className="mb-4 text-[11px] leading-5 text-slate-400">{v.description}</p>
+      <p className="mb-4 text-role-caption leading-5 text-ink-dim">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-xs text-slate-500">
+        <p className="rounded-control border border-dashed border-line px-3 py-8 text-center text-role-caption text-ink-mid">
           Nothing here yet.
         </p>
       ) : (
@@ -411,6 +491,7 @@ function TierColumn({
               index={i}
               overrideId={overrideId}
               onOverride={onOverride}
+              v2={v2}
             />
           ))}
         </ul>
@@ -425,12 +506,14 @@ function FirewallCard({
   index,
   overrideId,
   onOverride,
+  v2,
 }: {
   item: FirewallItem;
   tier: ColumnTier;
   index: number;
   overrideId: string | null;
   onOverride: (item: FirewallItem, newTier: Tier) => void;
+  v2: boolean;
 }) {
   const v = TIER_VISUAL[tier];
   // Best-effort meaningful heading: actual email subject beats the
@@ -447,28 +530,30 @@ function FirewallCard({
 
   return (
     <li
-      className={`lift animate-card-in rounded-xl border p-3.5 text-sm ${v.card} ${
+      className={`lift animate-card-in rounded-card border p-3.5 text-role-body ${v.card} ${
         busy ? "opacity-50" : ""
       }`}
       // Stagger only the first screenful so a fresh load cascades in; later
       // cards (and re-renders) appear immediately.
       style={index < 8 ? { animationDelay: `${index * 35}ms` } : undefined}
     >
-      <p className="line-clamp-2 break-words font-medium text-slate-900">{subject}</p>
+      <p className="line-clamp-2 break-words font-medium text-ink">{subject}</p>
       {sender && (
-        <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-slate-400">
+        <p className="mt-1 flex items-center gap-1.5 truncate text-role-caption text-ink-dim">
           {item.email?.trust && <TrustDot trust={item.email.trust} />}
           <span className="truncate">
             {item.email?.from ? "From" : "To"}: {sender}
           </span>
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-500">
+      <div className="mt-2 flex items-center gap-1.5 text-role-caption uppercase tracking-wider text-ink-mid">
         <SourceBadge source={item.source} />
         {item.toolName && (
           <>
             <span>·</span>
-            <span>{item.toolName.replace(/_/g, " ")}</span>
+            <span>
+              <ToolName toolName={item.toolName} />
+            </span>
           </>
         )}
         <span>·</span>
@@ -476,42 +561,44 @@ function FirewallCard({
       </div>
 
       {snippet && (
-        <details className="group mt-2.5 rounded-lg border border-slate-200 bg-slate-50">
-          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-500 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <details className="group mt-2.5 rounded-control border border-line bg-surface-raised">
+          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-control px-2.5 py-1.5 text-role-caption text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <span aria-hidden="true" className="inline-block transition group-open:rotate-90">
               ›
             </span>
             <span className="group-open:hidden">Show preview</span>
             <span className="hidden group-open:inline">Hide preview</span>
           </summary>
-          <p className="line-clamp-6 whitespace-pre-wrap border-t border-slate-200 px-2.5 py-2 text-[11px] leading-4 text-slate-500">
+          <p className="line-clamp-6 whitespace-pre-wrap border-t border-line px-2.5 py-2 text-role-caption leading-4 text-ink-mid">
             {snippet}
           </p>
         </details>
       )}
 
       {item.tierReason && (
-        <p className="mt-2.5 line-clamp-2 border-l-2 border-slate-200 pl-2 text-[11px] leading-4 text-slate-400">
+        <p className="mt-2.5 line-clamp-2 border-l-2 border-line pl-2 text-role-caption leading-4 text-ink-dim">
           {item.tierReason}
         </p>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        {OVERRIDE_TARGETS.filter((t) => t !== tier).map((target) => (
-          <button
-            key={target}
-            type="button"
-            disabled={anyOverriding}
-            onClick={() => onOverride(item, target)}
-            className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-slate-200 bg-white/70 px-2.5 text-[10px] font-medium uppercase tracking-wider text-slate-500 transition duration-150 hover:bg-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
-          >
-            Move → {target}
-          </button>
-        ))}
+        {(v2 ? OVERRIDE_TARGETS_V2 : OVERRIDE_TARGETS)
+          .filter((t) => t !== tier)
+          .map((target) => (
+            <button
+              key={target}
+              type="button"
+              disabled={anyOverriding}
+              onClick={() => onOverride(item, target)}
+              className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-line bg-surface-panel/70 px-2.5 text-role-caption font-medium uppercase tracking-wider text-ink-mid transition duration-150 hover:bg-surface-panel active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
+            >
+              Move → {target}
+            </button>
+          ))}
         {item.href && (
           <Link
             href={item.href}
-            className={`ml-auto text-[11px] transition ${v.accent} hover:text-slate-900`}
+            className={`ml-auto text-role-caption transition ${v.accent} hover:text-ink`}
           >
             Open email →
           </Link>
@@ -568,35 +655,24 @@ function toolBodyPreview(item: FirewallItem): string | undefined {
   return undefined;
 }
 
-function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
-  const v = TIER_VISUAL.AUTO;
-  if (count === 0) {
-    return (
-      <section className="glass mt-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-400">
-        <TierGlyph tier="AUTO" className="text-slate-500" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
-          AUTO
-        </span>
-        <span>— nothing handled automatically yet.</span>
-      </section>
-    );
-  }
+/** Records lane (ontology v2): filed transactional mail — visible, never a
+ * column (nothing here ever needs a reply). */
+function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
+  const v = TIER_VISUAL.INFO;
   return (
-    <section className={`glass mt-4 rounded-2xl border p-4 ${v.plane}`}>
+    <section className={`glass mt-4 rounded-card border p-4 ${v.plane}`}>
       <header className="flex items-center gap-2">
-        <TierGlyph tier="AUTO" className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-tier-auto">
-          AUTO
+        <TierGlyph tier="INFO" className={v.dot} />
+        <h2 className="font-mono text-role-caption font-semibold uppercase tracking-[0.2em] text-ink-dim">
+          INFO
         </h2>
-        <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
+        <CountChip value={count} className={`ml-auto text-role-body font-semibold ${v.accent}`} />
       </header>
-      <p className="mt-1.5 text-[11px] leading-5 text-slate-400">
-        Low-risk, pre-approved. Klorn ran these without interrupting you.
-      </p>
-      <ul className="mt-3 space-y-1.5 text-xs text-slate-500">
+      <p className="mt-1.5 text-role-caption leading-5 text-ink-dim">{v.description}</p>
+      <ul className="mt-3 space-y-1.5 text-role-caption text-ink-mid">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
-            <span className="text-tier-auto/60">·</span>
+            <span className="text-ink-dim/60">·</span>
             <span className="truncate">{item.title}</span>
           </li>
         ))}
@@ -606,7 +682,7 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
 }
 
 function SourceBadge({ source }: { source: string }) {
-  return <span className="font-mono text-[10px] text-slate-400">{source}</span>;
+  return <span className="font-mono text-role-caption text-ink-dim">{source}</span>;
 }
 
 function relativeTime(iso: string): string {

@@ -174,6 +174,7 @@ describe("buildSnapshotPayload", () => {
       now: NOW,
     });
     expect(payload.judgeSourceCounts).toEqual({
+      "pinned-rule": 0,
       "fast-path": 1,
       "sender-prior": 1,
       llm: 2,

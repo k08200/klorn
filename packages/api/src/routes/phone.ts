@@ -55,6 +55,14 @@ async function findEscalationByToken(token: string | undefined) {
   return prisma.phoneEscalation.findUnique({ where: { gatherToken: token } });
 }
 
+const phoneTokenQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    token: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 export async function phoneRoutes(app: FastifyInstance) {
   // Twilio posts application/x-www-form-urlencoded; Fastify has no default
   // parser for it. Scoped to this plugin so the rest of the app is untouched.
@@ -75,61 +83,69 @@ export async function phoneRoutes(app: FastifyInstance) {
   );
 
   // POST /api/phone/gather?token=... — keypad input from the <Gather> verb
-  app.post("/gather", async (request, reply) => {
-    if (!isVerifiedTwilioRequest(request)) {
-      return reply.code(403).send({ error: "Invalid Twilio signature" });
-    }
+  app.post(
+    "/gather",
+    { schema: { querystring: phoneTokenQuerySchema } },
+    async (request, reply) => {
+      if (!isVerifiedTwilioRequest(request)) {
+        return reply.code(403).send({ error: "Invalid Twilio signature" });
+      }
 
-    const { token } = request.query as { token?: string };
-    const escalation = await findEscalationByToken(token);
-    if (!escalation) return reply.code(404).send({ error: "Unknown escalation" });
+      const { token } = request.query as { token?: string };
+      const escalation = await findEscalationByToken(token);
+      if (!escalation) return reply.code(404).send({ error: "Unknown escalation" });
 
-    const digits = asParams(request.body).Digits;
+      const digits = asParams(request.body).Digits;
 
-    if (digits === "2") {
-      await prisma.phoneEscalation.update({
-        where: { id: escalation.id },
-        data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date() },
-      });
-      return reply.type("text/xml").send(buildSayHangupTwiml("Acknowledged. Goodbye."));
-    }
+      if (digits === "2") {
+        await prisma.phoneEscalation.update({
+          where: { id: escalation.id },
+          data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date() },
+        });
+        return reply.type("text/xml").send(buildSayHangupTwiml("Acknowledged. Goodbye."));
+      }
 
-    // Any keypress proves a human answered; never downgrade ACKNOWLEDGED.
-    if (escalation.status === "PLACED") {
-      await prisma.phoneEscalation.update({
-        where: { id: escalation.id },
-        data: { status: "ANSWERED" },
-      });
-    }
+      // Any keypress proves a human answered; never downgrade ACKNOWLEDGED.
+      if (escalation.status === "PLACED") {
+        await prisma.phoneEscalation.update({
+          where: { id: escalation.id },
+          data: { status: "ANSWERED" },
+        });
+      }
 
-    if (digits === "1") {
-      const baseUrl = publicBaseUrl();
-      const gatherUrl = `${baseUrl}/api/phone/gather?token=${escalation.gatherToken}`;
-      return reply.type("text/xml").send(buildEscalationTwiml(escalation.title, gatherUrl));
-    }
+      if (digits === "1") {
+        const baseUrl = publicBaseUrl();
+        const gatherUrl = `${baseUrl}/api/phone/gather?token=${escalation.gatherToken}`;
+        return reply.type("text/xml").send(buildEscalationTwiml(escalation.title, gatherUrl));
+      }
 
-    return reply.type("text/xml").send(buildSayHangupTwiml("Goodbye."));
-  });
+      return reply.type("text/xml").send(buildSayHangupTwiml("Goodbye."));
+    },
+  );
 
   // POST /api/phone/status?token=... — terminal call status callback
-  app.post("/status", async (request, reply) => {
-    if (!isVerifiedTwilioRequest(request)) {
-      return reply.code(403).send({ error: "Invalid Twilio signature" });
-    }
+  app.post(
+    "/status",
+    { schema: { querystring: phoneTokenQuerySchema } },
+    async (request, reply) => {
+      if (!isVerifiedTwilioRequest(request)) {
+        return reply.code(403).send({ error: "Invalid Twilio signature" });
+      }
 
-    const { token } = request.query as { token?: string };
-    const escalation = await findEscalationByToken(token);
-    if (!escalation) return reply.code(404).send({ error: "Unknown escalation" });
+      const { token } = request.query as { token?: string };
+      const escalation = await findEscalationByToken(token);
+      if (!escalation) return reply.code(404).send({ error: "Unknown escalation" });
 
-    const callStatus = asParams(request.body).CallStatus ?? "";
-    if (TERMINAL_FAILURE_STATUSES.has(callStatus) && escalation.status === "PLACED") {
-      await prisma.phoneEscalation.update({
-        where: { id: escalation.id },
-        data: { status: "FAILED" },
-      });
-      console.log(`[PHONE] Escalation ${escalation.id} marked FAILED (CallStatus=${callStatus})`);
-    }
+      const callStatus = asParams(request.body).CallStatus ?? "";
+      if (TERMINAL_FAILURE_STATUSES.has(callStatus) && escalation.status === "PLACED") {
+        await prisma.phoneEscalation.update({
+          where: { id: escalation.id },
+          data: { status: "FAILED" },
+        });
+        console.log(`[PHONE] Escalation ${escalation.id} marked FAILED (CallStatus=${callStatus})`);
+      }
 
-    return reply.send({ received: true });
-  });
+      return reply.send({ received: true });
+    },
+  );
 }

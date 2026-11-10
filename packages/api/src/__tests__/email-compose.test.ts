@@ -153,6 +153,129 @@ describe("POST /api/email/compose", () => {
     await app.close();
   });
 
+  it("rejects an attachment whose declared type is not allowlisted with 415", async () => {
+    const app = await buildApp();
+    const { payload, headers } = multipart([
+      { name: "to", value: "bob@example.com" },
+      { name: "subject", value: "Tool" },
+      { name: "body", value: "Run this." },
+      {
+        name: "files",
+        filename: "setup.exe",
+        contentType: "application/x-msdownload",
+        content: Buffer.from("MZ..."),
+      },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(415);
+    expect(res.json().error).toMatch(/not allowed/i);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("normalizes MIME parameters and case before the allowlist check", async () => {
+    const app = await buildApp();
+    const { payload, headers } = multipart([
+      { name: "to", value: "bob@example.com" },
+      { name: "subject", value: "Notes" },
+      { name: "body", value: "Attached." },
+      {
+        name: "files",
+        filename: "notes.txt",
+        contentType: "TEXT/Plain; charset=utf-8",
+        content: Buffer.from("hello"),
+      },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("accepts forwarded email (.eml) and modern iWork types", async () => {
+    const app = await buildApp();
+    const { payload, headers } = multipart([
+      { name: "to", value: "bob@example.com" },
+      { name: "subject", value: "Docs" },
+      { name: "body", value: "Attached." },
+      {
+        name: "files",
+        filename: "original.eml",
+        contentType: "message/rfc822",
+        content: Buffer.from("From: a@b.c"),
+      },
+      {
+        name: "files",
+        filename: "deck.pages",
+        contentType: "application/vnd.apple.pages",
+        content: Buffer.from("PK"),
+      },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("rejects macro-enabled Office formats (the vnd.ms- prefix is deliberately not blanket-allowed)", async () => {
+    const app = await buildApp();
+    const { payload, headers } = multipart([
+      { name: "to", value: "bob@example.com" },
+      { name: "subject", value: "Sheet" },
+      { name: "body", value: "Attached." },
+      {
+        name: "files",
+        filename: "macro.xlsm",
+        contentType: "application/vnd.ms-excel.sheet.macroenabled.12",
+        content: Buffer.from("PK"),
+      },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(415);
+    await app.close();
+  });
+
+  it("still accepts the octet-stream fallback (clients that don't sniff types)", async () => {
+    const app = await buildApp();
+    const { payload, headers } = multipart([
+      { name: "to", value: "bob@example.com" },
+      { name: "subject", value: "Data" },
+      { name: "body", value: "Attached." },
+      {
+        name: "files",
+        filename: "data.bin",
+        contentType: "application/octet-stream",
+        content: Buffer.from([0, 1, 2]),
+      },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
   it("returns 400 when a required field is missing", async () => {
     const app = await buildApp();
     const { payload, headers } = multipart([

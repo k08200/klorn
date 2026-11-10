@@ -2,8 +2,8 @@
   "metadata": {
     "userEmail": "synthetic@klorn.ai",
     "extractedAt": "2026-06-12T00:00:00.000Z",
-    "count": 50,
-    "note": "Synthetic, PII-free eval set for the 4-tier judge. NOT the founder's private 50-email ground truth (that file is gitignored). Labels encode the locked founder mental model: QUEUE is the default, SILENT is narrow marketing, PUSH is urgent+confident, AUTO is reversible+confident+not-urgent. See eval/README.md."
+    "count": 56,
+    "note": "Synthetic, PII-free eval set for the 4-tier judge. NOT the founder's private 50-email ground truth (that file is gitignored). Labels encode the locked founder mental model: QUEUE is the default, SILENT is narrow marketing, PUSH is urgent+confident, AUTO is reversible+confident+not-urgent. See eval/README.md. Dual-labelled 2026-08-18: labelV2 carries the ontology-v2 expectation (MEETING/INFO; AUTO items map to QUEUE+autoEligible) and is only consulted when TIER_V2_ENABLED is set."
   },
   "items": [
     {
@@ -147,7 +147,8 @@
       "labels": [],
       "receivedAt": "2026-06-01T11:00:00.000Z",
       "label": "QUEUE",
-      "note": "system notification — visible, not interrupting"
+      "note": "system notification — visible, not interrupting | v2: automated record -> INFO",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-014",
@@ -167,7 +168,9 @@
       "snippet": "We noticed a new sign-in to your Google Account.",
       "labels": [],
       "receivedAt": "2026-06-01T11:10:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO",
+      "note": " | v2: automated record -> INFO"
     },
     {
       "id": "eval-016",
@@ -177,7 +180,9 @@
       "snippet": "Invoice #1042 for $49.00 was finalized.",
       "labels": [],
       "receivedAt": "2026-06-01T11:15:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO",
+      "note": " | v2: automated record -> INFO"
     },
     {
       "id": "eval-017",
@@ -197,7 +202,8 @@
       "snippet": "Your card was charged $14.00 for the starter plan.",
       "labels": [],
       "receivedAt": "2026-06-01T11:25:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-019",
@@ -278,7 +284,8 @@
       "labels": [],
       "receivedAt": "2026-06-01T12:35:00.000Z",
       "label": "QUEUE",
-      "note": "own-product signal — founder wants these visible"
+      "note": "own-product signal — founder wants these visible | v2: automated record -> INFO",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-027",
@@ -288,7 +295,9 @@
       "snippet": "Your invoice for May is now available in the billing console.",
       "labels": [],
       "receivedAt": "2026-06-01T12:40:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO",
+      "note": " | v2: automated record -> INFO"
     },
     {
       "id": "eval-028",
@@ -308,7 +317,9 @@
       "snippet": "Sending over an invite for a 30-minute roadmap sync.",
       "labels": [],
       "receivedAt": "2026-06-01T12:50:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "MEETING",
+      "note": " | v2: scheduling invite -> MEETING"
     },
     {
       "id": "eval-030",
@@ -328,7 +339,8 @@
       "snippet": "Your monthly statement is ready to view in the app.",
       "labels": [],
       "receivedAt": "2026-06-01T13:00:00.000Z",
-      "label": "QUEUE"
+      "label": "QUEUE",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-032",
@@ -496,7 +508,8 @@
       "labels": [],
       "receivedAt": "2026-06-01T16:00:00.000Z",
       "label": "AUTO",
-      "note": "trivially reversible to archive — AUTO is classify-only"
+      "note": "trivially reversible to archive — AUTO is classify-only",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-048",
@@ -507,7 +520,8 @@
       "labels": [],
       "receivedAt": "2026-06-01T16:05:00.000Z",
       "label": "AUTO",
-      "note": "calendar acceptance receipt — archive candidate"
+      "note": "calendar acceptance receipt — archive candidate",
+      "labelV2": "QUEUE"
     },
     {
       "id": "eval-049",
@@ -518,7 +532,8 @@
       "labels": [],
       "receivedAt": "2026-06-01T16:10:00.000Z",
       "label": "AUTO",
-      "note": "delivery confirmation — archive candidate"
+      "note": "delivery confirmation — archive candidate | v2: automated record -> INFO",
+      "labelV2": "INFO"
     },
     {
       "id": "eval-050",
@@ -529,7 +544,80 @@
       "labels": [],
       "receivedAt": "2026-06-01T16:15:00.000Z",
       "label": "AUTO",
-      "note": "informational stat mail — archive candidate"
+      "note": "informational stat mail — archive candidate | v2: automated record -> INFO",
+      "labelV2": "INFO"
+    },
+    {
+      "id": "eval-051",
+      "gmailId": "synthetic",
+      "from": "Grace Park <grace.park@vertexlabs.io>",
+      "subject": "Invitation: Klorn x Vertex intro call (Tue 2pm)",
+      "snippet": "Would Tuesday 2pm work for a 30-minute intro call? Sending an invite.",
+      "labels": [],
+      "receivedAt": "2026-06-02T10:00:00.000Z",
+      "label": "QUEUE",
+      "labelV2": "MEETING",
+      "note": "v2: invite wording -> MEETING lane; v1 has no lane so QUEUE"
+    },
+    {
+      "id": "eval-052",
+      "gmailId": "synthetic",
+      "from": "Daniel Cho <daniel@seedcap.kr>",
+      "subject": "미팅 일정 조율 부탁드립니다",
+      "snippet": "다음주 중 편하신 시간 두어 개 알려주시면 맞춰서 초대장 보내겠습니다.",
+      "labels": [],
+      "receivedAt": "2026-06-02T10:10:00.000Z",
+      "label": "QUEUE",
+      "labelV2": "MEETING",
+      "note": "v2: Korean scheduling coordination -> MEETING"
+    },
+    {
+      "id": "eval-053",
+      "gmailId": "synthetic",
+      "from": "Mina Lee <mina@partnerco.com>",
+      "subject": "Reschedule: tomorrow's sync",
+      "snippet": "Something came up — can we move tomorrow's sync? Zoom link stays the same: https://zoom.us/j/9482017465",
+      "labels": [],
+      "receivedAt": "2026-06-02T10:20:00.000Z",
+      "label": "PUSH",
+      "labelV2": "MEETING",
+      "note": "v2: reschedule + meet link -> MEETING even when urgent (v1: PUSH)"
+    },
+    {
+      "id": "eval-054",
+      "gmailId": "synthetic",
+      "from": "Stripe <noreply@stripe.com>",
+      "subject": "Your invoice from Acme Inc is paid",
+      "snippet": "Invoice #8842 for $120.00 was paid on June 1. No action needed.",
+      "labels": [],
+      "receivedAt": "2026-06-02T11:00:00.000Z",
+      "label": "QUEUE",
+      "labelV2": "INFO",
+      "note": "v2: automated receipt, no reply ever -> INFO"
+    },
+    {
+      "id": "eval-055",
+      "gmailId": "synthetic",
+      "from": "GitHub <notifications@github.com>",
+      "subject": "Your weekly contribution summary",
+      "snippet": "You pushed 24 commits across 3 repositories this week.",
+      "labels": [],
+      "receivedAt": "2026-06-02T11:10:00.000Z",
+      "label": "QUEUE",
+      "labelV2": "INFO",
+      "note": "v2: automated stat digest -> INFO"
+    },
+    {
+      "id": "eval-056",
+      "gmailId": "synthetic",
+      "from": "CJ대한통운 <noreply@cjlogistics.com>",
+      "subject": "배송 완료 안내",
+      "snippet": "주문하신 상품이 오늘 오후 배송 완료되었습니다.",
+      "labels": [],
+      "receivedAt": "2026-06-02T11:20:00.000Z",
+      "label": "QUEUE",
+      "labelV2": "INFO",
+      "note": "v2: delivery confirmation -> INFO (and never MEETING despite 배송 일정-adjacent wording)"
     }
   ]
 }

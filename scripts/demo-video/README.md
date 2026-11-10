@@ -55,7 +55,7 @@ labels are substrings of other buttons ("All signals" vs "Show all signals").
 ## Motion-graphics promo (Remotion)
 
 `promo-remotion/` is a code-defined 33-second promo (email-noise intro →
-4-tier count-up cards → Ken Burns product shots → outro), en/ko:
+one count-up card per lane → Ken Burns product shots → outro), en/ko:
 
 ```bash
 cd scripts/demo-video/promo-remotion

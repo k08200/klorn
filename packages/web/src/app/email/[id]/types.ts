@@ -92,6 +92,11 @@ export interface EmailDetail {
   cc: string | null;
   subject: string;
   body: string | null;
+  /**
+   * Server-sanitized HTML for rendering mail as designed; null for plain
+   * mail. Only ever shown inside MailHtmlBody's sandboxed iframe.
+   */
+  renderHtml?: string | null;
   snippet: string | null;
   date: string;
   priority: EmailPriority;
@@ -102,6 +107,9 @@ export interface EmailDetail {
   sentiment: string | null;
   isRead?: boolean;
   isStarred?: boolean;
+  /** Most-automatic List-Unsubscribe method for this mail; null/absent = no
+   * unsubscribe affordance rendered. */
+  unsubscribe?: "one-click" | "mailto" | "link" | null;
   needsReply?: boolean;
   attachmentCount?: number;
   attachments?: EmailAttachment[];

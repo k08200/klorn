@@ -40,11 +40,33 @@ const preferenceBodySchema = {
   },
 } as const;
 
+const listFeedbackQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    source: { type: "string", maxLength: 500 },
+    signal: { type: "string", maxLength: 500 },
+    recipient: { type: "string", maxLength: 500 },
+    toolName: { type: "string", maxLength: 500 },
+    limit: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const policyCandidatesQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    days: { type: "string", maxLength: 500 },
+    limit: { type: "string", maxLength: 500 },
+    minEvents: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 export function feedbackRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
   // GET /api/feedback — recent events for inspection
-  app.get("/", async (request) => {
+  app.get("/", { schema: { querystring: listFeedbackQuerySchema } }, async (request) => {
     const userId = getUserId(request);
     const { source, signal, recipient, toolName, limit } = request.query as {
       source?: string;
@@ -99,32 +121,36 @@ export function feedbackRoutes(app: FastifyInstance) {
 
   // GET /api/feedback/policy-candidates — conservative read-only patterns
   // extracted from recent feedback. These are not active policies yet.
-  app.get("/policy-candidates", async (request) => {
-    const userId = getUserId(request);
-    const { days, limit, minEvents } = request.query as {
-      days?: string;
-      limit?: string;
-      minEvents?: string;
-    };
+  app.get(
+    "/policy-candidates",
+    { schema: { querystring: policyCandidatesQuerySchema } },
+    async (request) => {
+      const userId = getUserId(request);
+      const { days, limit, minEvents } = request.query as {
+        days?: string;
+        limit?: string;
+        minEvents?: string;
+      };
 
-    const result = await getFeedbackPolicyCandidates(userId, {
-      days: parseOptionalInteger(days),
-      limit: parseOptionalInteger(limit),
-      minEvents: parseOptionalInteger(minEvents),
-    });
-    const prefs = await getPolicyPreferences(userId);
-    return {
-      ...result,
-      candidates: result.candidates.map((candidate) => {
-        const pref = prefs.get(candidate.id);
-        return {
-          ...candidate,
-          active: pref?.action === "ACTIVE",
-          ignored: pref?.action === "IGNORED",
-        };
-      }),
-    };
-  });
+      const result = await getFeedbackPolicyCandidates(userId, {
+        days: parseOptionalInteger(days),
+        limit: parseOptionalInteger(limit),
+        minEvents: parseOptionalInteger(minEvents),
+      });
+      const prefs = await getPolicyPreferences(userId);
+      return {
+        ...result,
+        candidates: result.candidates.map((candidate) => {
+          const pref = prefs.get(candidate.id);
+          return {
+            ...candidate,
+            active: pref?.action === "ACTIVE",
+            ignored: pref?.action === "IGNORED",
+          };
+        }),
+      };
+    },
+  );
 
   app.post("/policy-preferences", { schema: { body: preferenceBodySchema } }, async (request) => {
     const userId = getUserId(request);

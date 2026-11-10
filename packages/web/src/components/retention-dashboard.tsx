@@ -27,15 +27,13 @@ function Stat({
 }) {
   return (
     <div
-      className={`rounded-xl border p-4 ${
-        highlight ? "border-sky-300 bg-sky-50" : "border-slate-200/70 bg-white"
+      className={`rounded-card border p-4 ${
+        highlight ? "border-accent-muted bg-state-info-bg" : "border-line/70 bg-surface-panel"
       }`}
     >
-      <div className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
-        {value}
-      </div>
-      <div className="mt-1 text-xs font-medium text-slate-600">{label}</div>
-      {hint ? <div className="mt-0.5 text-[11px] text-slate-400">{hint}</div> : null}
+      <div className="text-role-title tracking-tight text-ink tabular-nums">{value}</div>
+      <div className="mt-1 text-role-caption font-medium text-ink-muted">{label}</div>
+      {hint ? <div className="mt-0.5 text-role-caption text-ink-dim">{hint}</div> : null}
     </div>
   );
 }
@@ -51,18 +49,18 @@ export default function RetentionDashboard() {
   }, []);
 
   return (
-    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-slate-900">Retention (Phase 1)</h2>
-        <span className="text-[11px] text-slate-400">
+        <h2 className="text-role-head font-medium text-ink">Retention (Phase 1)</h2>
+        <span className="text-role-caption text-ink-dim">
           {data ? `as of ${new Date(data.generatedAt).toLocaleString()}` : ""}
         </span>
       </div>
 
       {error ? (
-        <p className="text-sm text-red-600">Could not load analytics: {error}</p>
+        <p className="text-role-body text-state-danger-ink">Could not load analytics: {error}</p>
       ) : !data ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-role-body text-ink-dim">Loading…</p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -105,7 +103,7 @@ export default function RetentionDashboard() {
             />
           </div>
 
-          <p className="mt-3 text-[11px] text-slate-400">
+          <p className="mt-3 text-role-caption text-ink-dim">
             Gate: don&apos;t public-launch until D7 ≥ 40% on real users. First-party events (own
             Postgres), no third-party tracker.
           </p>

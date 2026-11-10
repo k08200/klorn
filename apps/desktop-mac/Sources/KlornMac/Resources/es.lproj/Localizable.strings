@@ -1,0 +1,794 @@
+/* Klorn macOS — English (source of truth).
+   Keys are domain.thing; a %@ is a runtime value. Keep this file and
+   ko.lproj/Localizable.strings key-for-key identical — `--self-check`
+   fails the build if they drift. */
+
+/* Bar */
+"bar.loading" = "Cargando…";
+
+/* Auth */
+"auth.signOut" = "Cerrar sesión";
+
+/* Columns / sections */
+"section.now" = "AHORA";
+"section.briefing" = "RESUMEN";
+"section.aiToday" = "IA HOY";
+"section.commitments" = "Compromisos";
+"section.assistant" = "Asistente";
+"section.search" = "Buscar";
+
+"briefing.a11y" = "Resumen de hoy: %@";
+"aiUsage.a11y" = "Uso de IA hoy: %1$d de %2$d";
+"commitments.a11y" = "Compromisos, %d abiertos";
+"commitments.loadFailed" = "No se pudieron cargar los compromisos: se reintentará en la próxima actualización.";
+"commitments.empty" = "No hay compromisos abiertos.";
+"commitments.markDone" = "Marcar como hecho";
+"commitments.markDone.a11y" = "Marcar como hecho: %@";
+"commitments.dismiss.a11y" = "Descartar: %@";
+
+/* Calendar */
+"calendar.join" = "Unirse";
+"calendar.join.a11y" = "Unirse a %@";
+"calendar.openInKlorn" = "Abrir en Klorn";
+"calendar.addToCalendar" = "Añadir al calendario";
+"calendar.ignore" = "Ignorar";
+"calendar.proposed.a11y" = "Evento propuesto: %@";
+
+/* Mail list + search */
+"mail.searchPlaceholder" = "Buscar en todo el correo…";
+"mail.search.a11y" = "Buscar en todo el correo";
+"mail.clearSearch.a11y" = "Borrar la búsqueda";
+"mail.filterByInbox" = "Filtrar por bandeja";
+"mail.filterByInbox.a11y" = "Filtrar por bandeja: actualmente %@";
+"mail.inbox.a11y" = "Bandeja %@";
+"mail.unread" = "No leído";
+"mail.hasAttachment" = "Con archivo adjunto";
+"mail.threadCount" = "%d mensajes en este hilo";
+"source.account.a11y" = "Cuenta de %@";
+"source.generic" = "correo";
+"mail.searchResult.a11y" = "Resultado de %1$@: %2$@";
+"mail.snooze" = "Posponer…";
+"mail.snooze.a11y" = "Posponer el mensaje de %@";
+"mail.dismiss" = "Descartar";
+"mail.dismiss.a11y" = "Descartar el mensaje de %@";
+"mail.changeTier" = "Mover de carril… (Klorn aprende)";
+"mail.changeTier.a11y" = "Cambiar el carril del mensaje de %1$@, actualmente %2$@";
+"mail.snoozePrefix" = "Posponer ";
+"mail.summarize" = "Resumen IA";
+"mail.summarizing" = "Resumiendo…";
+"mail.summarizeFailed" = "No se pudo resumir: inténtalo de nuevo.";
+"mail.actionItems" = "Acciones";
+"section.filed.help" = "Correo que Klorn ya archivó: registros y ruido silenciado. Haz clic para desplegar.";
+"dossier.inFlight" = "En curso: %@";
+"dossier.promise" = "Última promesa: %@";
+"dossier.a11y" = "Contexto del remitente";
+"prefs.section.teams" = "EQUIPOS";
+"teams.title" = "Equipos";
+"teams.subtitle" = "Guarda un equipo una vez y verás cuándo está libre TODO el equipo, para reservar la reunión desde un hueco. La disponibilidad usa el free/busy de Google; los calendarios no visibles se informan, nunca se dan por libres.";
+"teams.addHeader" = "Nuevo equipo";
+"teams.min30" = "30 min";
+"teams.min60" = "1 hora";
+"teams.findSlots" = "Buscar hueco común";
+"teams.checking" = "Comprobando…";
+"teams.unknown" = "Disponibilidad desconocida (calendario no visible): %@";
+"teams.noSlots" = "No hay hueco común en los próximos 3 días: prueba con 30 minutos o cambia los miembros.";
+"teams.meetingTitlePlaceholder" = "Título de la reunión (por defecto, el nombre del equipo)";
+"teams.book" = "Reservar e invitar a %@ personas";
+"teams.bookNote" = "Reservar crea el evento en tu calendario y envía una invitación por correo a cada miembro: este botón es la aprobación.";
+"teams.booked" = "Reunión creada: invitaciones enviadas.";
+"teams.bookFailed" = "No se pudo crear la reunión: inténtalo de nuevo.";
+"teams.empty" = "Aún no hay equipos: guarda uno para poder preguntar al asistente cuándo está libre todo el equipo.";
+"teams.namePlaceholder" = "Nombre del equipo (p. ej. equipo AX)";
+"teams.membersPlaceholder" = "Correos de los miembros, separados por comas";
+"teams.add" = "Añadir equipo";
+"teams.saving" = "Guardando…";
+"teams.remove" = "Quitar";
+"teams.saveFailed" = "No se pudo guardar el equipo: revisa las direcciones de los miembros.";
+"teams.visibilityNote" = "La disponibilidad usa el free/busy de Google: los miembros deben compartir su calendario contigo (o el mismo Workspace). A quien Klorn no ve se le marca como desconocido, nunca como libre.";
+"calendar.invitees" = "Invitaciones: %@";
+"list.firstSync" = "Leyendo tu buzón…";
+"list.firstSync.detail" = "Klorn está clasificando cada mensaje en su carril. Las primeras decisiones aparecerán aquí en cuanto se tomen.";
+"auto.focusWindow" = "Ventana de concentración";
+"auto.focusWindow.detail" = "Durante los eventos del calendario solo interrumpen el correo urgente y las reuniones. El resto llega como un único resumen al terminar el evento.";
+"mail.whyTier" = "Por qué %1$@ · %2$@";
+
+/* Reading pane */
+"reading.empty.title" = "Nada abierto";
+"reading.empty.detail" = "Elige un mensaje a la izquierda: lee, responde,\npospón y cambia de carril sin salir de Klorn.";
+"reading.replyWithAI" = "Responder con IA";
+"reading.openInWeb" = "Abrir en la web";
+"reading.replyTo" = "Responder a %@";
+"reading.drafting" = "Klorn está redactando…";
+"reading.regenerate" = "Regenerar";
+"reading.regenerate.help" = "Pide a Klorn que reescriba el borrador";
+"reading.cancel" = "Cancelar";
+
+/* Push card */
+"push.draftingReplies" = "Redactando respuestas…";
+"push.proRequired" = "Las respuestas rápidas requieren Klorn Pro.";
+"push.tryAgain" = "Reintentar";
+
+/* Assistant */
+"assistant.placeholder" = "Escribe a Klorn…";
+"assistant.placeholder.a11y" = "Escribe a Klorn";
+"assistant.send.a11y" = "Enviar mensaje";
+"assistant.thinking" = "Pensando…";
+
+/* Preferences — shell */
+"prefs.title" = "Preferencias";
+"prefs.section.notifications" = "NOTIFICACIONES";
+"prefs.section.general" = "GENERAL";
+"prefs.section.keyboard" = "TECLADO";
+"prefs.section.language" = "IDIOMA";
+"prefs.section.account" = "CUENTA";
+"prefs.section.about" = "ACERCA DE";
+
+"prefs.banners" = "Mostrar avisos de macOS en este Mac";
+"prefs.banners.detail" = "Un aviso por cada correo PUSH o MEETING nuevo, solo con el remitente y el asunto. Interruptor general local: desactivado, silencia todos los avisos aquí sin importar las categorías de arriba; el recuento de PUSH de la ventana principal se sigue actualizando.";
+"prefs.banners.denied" = "macOS está bloqueando las notificaciones de Klorn. Permítelas en Ajustes del Sistema ▸ Notificaciones.";
+"prefs.banners.openSystemSettings" = "Abrir Ajustes del Sistema";
+"prefs.section.support" = "APP Y SOPORTE";
+"push.announce" = "Correo PUSH nuevo: %d";
+"push.announce.meeting" = "Correo MEETING nuevo: %d";
+"push.heldSummary.title" = "%d correos urgentes durante las horas de silencio";
+"prefs.launchAtLogin" = "Abrir Klorn al iniciar sesión";
+"prefs.launchAtLogin.unavailable.label" = "Abrir al iniciar sesión";
+"prefs.launchAtLogin.unavailable.value" = "Solo en la app empaquetada";
+"prefs.updates" = "Actualizaciones";
+"prefs.updates.get" = "Obtener v%@";
+"prefs.updates.upToDate" = "Todo al día (v%@)";
+"prefs.updates.unknown" = "No se pudo comprobar: prueba la página de versiones";
+"prefs.updates.check" = "Buscar actualizaciones";
+"prefs.updates.checking" = "Comprobando…";
+"prefs.shortcut" = "Llamar / expandir";
+"prefs.shortcut.recording" = "Escribe un atajo: debe incluir ⌘, ⌥ o ⌃. Esc para cancelar.";
+"prefs.shortcut.idle" = "Atajo global para llamar a la barra. Haz clic para cambiarlo.";
+"prefs.shortcut.typePrompt" = "Escribe el atajo…";
+"prefs.shortcut.change.a11y" = "Cambiar el atajo de llamada, actualmente %@";
+"prefs.shortcut.reset.help" = "Restablecer a ⌥⌘K";
+"prefs.shortcut.reset.a11y" = "Restablecer el atajo por defecto";
+"prefs.account.status" = "Estado";
+"prefs.account.signedIn" = "Sesión iniciada";
+"prefs.account.signedOut" = "Sin sesión";
+"prefs.account.signOut" = "Cerrar sesión";
+"prefs.about.version" = "Versión";
+"prefs.about.api" = "API";
+"prefs.infoRow.a11y" = "%1$@: %2$@";
+
+/* Preferences — language */
+"lang.system" = "Seguir a macOS";
+"lang.label" = "Idioma de la app";
+"lang.detail" = "Klorn sigue el idioma de macOS por defecto. Las respuestas siempre se escriben en el idioma del correo al que contestas: esto solo cambia la app.";
+
+/* Preferences — automation */
+"auto.section.behaviour" = "CÓMO TRABAJA KLORN";
+"auto.section.replies" = "RESPUESTAS";
+"auto.section.interrupts" = "QUÉ TE INTERRUMPE";
+"auto.section.behaviour.a11y" = "Cómo trabaja Klorn";
+
+"auto.mode.shadow" = "Silencioso";
+"auto.mode.shadow.detail" = "Klorn ordena y prepara en segundo plano. Nunca te interrumpe y nunca actúa.";
+"auto.mode.suggest" = "Preguntar primero";
+"auto.mode.suggest.detail" = "Klorn redacta la respuesta y pregunta antes de enviar nada. Tú apruebas cada acción.";
+"auto.mode.auto" = "Ejecutar acciones seguras";
+"auto.mode.auto.detail" = "Klorn realiza por sí mismo las acciones de bajo riesgo y te avisa después; todo lo más arriesgado espera tu aprobación. Las respuestas siguen el modo de respuesta, que se configura aparte.";
+
+"auto.tone" = "Tono";
+"auto.tone.a11y" = "Tono de las respuestas";
+"auto.tone.scope" = "Se aplica a las tres respuestas de una tecla: aceptar, rechazar y preguntar. Cambia cómo suenan, no lo que dicen.";
+"auto.tone.matchMe" = "Como yo";
+"auto.tone.matchMe.detail" = "Aprende el registro de tu propio correo enviado.";
+"auto.tone.formal" = "Formal";
+"auto.tone.formal.detail" = "Cortés y profesional, con las formas de respeto que tenga el idioma.";
+"auto.tone.friendly" = "Trabajo";
+"auto.tone.friendly.detail" = "Cercano pero profesional: el valor por defecto.";
+"auto.tone.casual" = "Informal";
+"auto.tone.casual.detail" = "Relajado y breve, como le escribirías a un compañero.";
+
+"auto.preset.essentials" = "Solo lo esencial";
+"auto.preset.everything" = "Todo";
+"auto.preset.detail" = "Solo lo esencial: el correo que necesita respuesta y lo que esté en tu calendario. Lo demás se queda en la barra sin aviso.";
+
+"auto.notify.emailUrgent" = "Correo urgente";
+"auto.notify.emailUrgent.detail" = "Correo que Klorn clasifica como PUSH o MEETING: alguien te está esperando.";
+"auto.notify.meeting" = "Reuniones";
+"auto.notify.meeting.detail" = "Eventos del calendario a punto de empezar.";
+"auto.notify.taskDue" = "Tareas que vencen";
+"auto.notify.taskDue.detail" = "Compromisos cerca de su fecha o ya vencidos.";
+"auto.notify.agentProposal" = "Propuestas de Klorn";
+"auto.notify.agentProposal.detail" = "Acciones para las que Klorn quiere tu aprobación.";
+"auto.notify.dailyBriefing" = "Resumen diario";
+"auto.notify.dailyBriefing.detail" = "El resumen de una vez por mañana.";
+"auto.notify.emailCandidate" = "Lectura de adjuntos";
+"auto.notify.emailCandidate.detail" = "Currículums y perfiles adjuntos que Klorn ha leído.";
+
+"auto.quietHours" = "Horas de silencio";
+"auto.quietHours.start.a11y" = "Inicio de las horas de silencio";
+"auto.quietHours.end.a11y" = "Fin de las horas de silencio";
+"auto.quietHours.detail" = "Sin avisos durante esta franja. Puede cruzar la medianoche sin problema.";
+"auto.quietHours.invalid" = "Usa horas de 24 h como 22:00 y 08:00. Vacía ambas para desactivarlo.";
+
+"auto.error.unauthorized" = "La sesión ha caducado: vuelve a iniciar sesión.";
+"auto.error.forbidden" = "Tu plan no incluye este ajuste.";
+"auto.error.offline" = "No se pudo conectar con Klorn. El ajuste no se guardó.";
+"auto.error.generic" = "No se pudo guardar ese ajuste.";
+
+/* Menu bar */
+
+/* Sender engagement */
+"engagement.repliedOnce" = "Tienes trato con este remitente · respondiste una vez";
+"engagement.repliedTimes" = "Tienes trato con este remitente · respondiste %d veces";
+"engagement.consistent" = "Siempre importante para ti";
+"engagement.important" = "Importante para ti";
+"engagement.building" = "Ganando importancia";
+"engagement.combined.a11y" = "%1$@. %2$@";
+
+/* Reply option chips (the accept/decline/info keys) */
+"reply.tone.accept" = "Aceptar";
+"reply.tone.decline" = "Rechazar";
+"reply.tone.info" = "Preguntar";
+
+/* Snooze options */
+"snooze.oneHour" = "En 1 hora";
+"snooze.thisEvening" = "Esta tarde";
+"snooze.tomorrow" = "Mañana a las 9";
+"snooze.nextWeek" = "La semana que viene";
+
+/* Misc labels */
+"mail.allInboxes" = "Todas las bandejas";
+"calendar.allDay" = "Todo el día";
+
+/* Menu bar menu */
+"menu.restart" = "Reiniciar Klorn";
+"menu.diagnostics" = "Estado de la conexión…";
+"menu.contactSupport" = "Escribir a soporte…";
+"diagnostics.checking" = "Comprobando…";
+"mail.reclassifying" = "reclasificando";
+
+/* Proposals — actions awaiting approval */
+"proposals.title" = "Aprobaciones";
+"proposals.a11y" = "Aprobaciones, %d en espera";
+"proposals.approve" = "Aprobar";
+"proposals.decline" = "Rechazar";
+"proposals.empty" = "Nada pendiente de ti.";
+"proposals.empty.detail" = "Cuando Klorn quiere hacer algo que no puede hacer por su cuenta, lo pregunta aquí.";
+"proposals.row.a11y" = "%1$@. %2$@";
+
+/* Column headers and states the first pass missed */
+"section.inbox" = "CORREO";
+"push.nothingNeedsYou" = "Ahora mismo nada requiere tu atención.";
+"auth.signInNaver" = "Continuar con Naver";
+"auth.signInApple" = "Continuar con Apple";
+"calendar.eventRow.a11y" = "%1$@, %2$@. Muestra los detalles.";
+"mail.needsReconnect" = "%@ — hay que reconectar";
+
+/* Tier meanings — the product's core idea, previously unexplained in-app */
+"tier.meeting.blurb" = "Agenda: invitaciones y cambios de hora, contrastados con tu calendario. Acepta o rechaza con una tecla.";
+"tier.meeting.empty" = "No hay reuniones esperándote";
+"tier.info.blurb" = "Registros: recibos, confirmaciones, avisos. Archivados y buscables; nada de aquí necesita respuesta.";
+"tier.info.empty" = "No hay registros nuevos";
+"tier.push.blurb" = "Te interrumpe. Alguien espera respuesta, o hay una fecha límite.";
+"tier.queue.blurb" = "Te espera. Vale la pena leerlo hoy, pero no un aviso.";
+"tier.silent.blurb" = "Archivado, no borrado. Boletines y promociones: siguen aquí cuando los busques.";
+
+"tier.push.empty" = "Ahora mismo nada requiere tu atención.";
+"tier.queue.empty" = "No hay nada esperando lectura.";
+"tier.silent.empty" = "Aquí todavía no hay nada archivado.";
+
+/* First-run guide */
+"guide.title" = "Cómo clasifica Klorn tu correo";
+"guide.pipeline" = "Klorn lee cada buzón conectado y coloca cada mensaje en uno de los %d carriles de abajo. Esta columna CORREO es ese resultado clasificado, no tu bandeja de Gmail en bruto.";
+"guide.intro" = "Cada mensaje cae en uno de los %d carriles. Nada se borra y nada se responde sin ti: el carril solo decide con cuánta fuerza te llega.";
+"guide.correcting" = "¿Alguno mal clasificado? Muévelo a otro carril y Klorn aprende de la corrección. Cada mensaje muestra además por qué acabó donde acabó.";
+"guide.done" = "Entendido";
+"guide.reopen" = "Cómo funciona la clasificación";
+
+"tier.row.a11y" = "%1$@, %2$d mensajes. %3$@";
+"reading.noPreview" = "No hay vista previa para este elemento.";
+"mail.noMatches" = "Ningún correo coincide con “%1$@”%2$@";
+
+"section.waitingOn" = "ESPERANDO A";
+"section.iOwe" = "DEBO";
+"assistant.empty" = "Pregunta por tu correo, tu calendario o tu día.";
+
+"reply.emailOnly" = "Las respuestas rápidas solo funcionan con elementos de correo.";
+"reply.nothingToSend" = "No hay nada que enviar.";
+"reply.needsPro" = "Responder desde la app requiere Klorn Pro.";
+"error.sessionExpired" = "La sesión ha caducado. Vuelve a iniciar sesión.";
+"mail.noSubjectParen" = "(sin asunto)";
+"reading.noContent" = "(sin contenido)";
+"reading.send" = "Enviar";
+"reading.sending" = "Enviando…";
+"reading.needsReply" = "Necesita respuesta";
+"reading.suggestReplies" = "Sugerir respuestas";
+"reading.quickReply.a11y" = "Usar la respuesta %1$@: %2$@";
+
+"error.badResponse" = "Respuesta inesperada del servidor.";
+"error.needsPro" = "Esta acción requiere Klorn Pro.";
+"error.generic" = "Algo ha ido mal.";
+"mail.inboxPrimary" = "Principal";
+"mail.inboxLinked" = "Bandeja vinculada";
+"mail.unknownSender" = "(remitente desconocido)";
+"account.add" = "Añadir cuenta de Google…";
+"account.add.hint" = "Abre el navegador para conectar otra bandeja de Gmail a Klorn.";
+"account.add.failed" = "No se pudo iniciar la vinculación. Inténtalo de nuevo.";
+"account.reconnect" = "Reconectar la cuenta…";
+"account.reconnectPrimary" = "Reconectar la cuenta de Google…";
+"account.reconnect.failed" = "No se pudo iniciar la reconexión. Inténtalo de nuevo.";
+"account.link.mismatch" = "Esta vinculación se inició desde otra cuenta de Klorn, así que no se añadió nada. Vuelve a empezar desde esta cuenta.";
+"account.link.expired" = "La vinculación caducó antes de completarse. Inténtalo de nuevo.";
+"account.link.failed" = "No se pudo completar la vinculación. Inténtalo de nuevo.";
+"source.unknown" = "Klorn";
+"source.github" = "GitHub";
+
+/* Account section diagnostics (2026-08-13) */
+"diag.google" = "Cuenta de Google";
+"diag.aiProvider" = "Proveedor de IA";
+"diag.automations" = "Configuración de automatización";
+"diag.push" = "Notificaciones push";
+"diag.db" = "Base de datos";
+"diag.status.ok" = "Correcto";
+"diag.status.warning" = "Aviso";
+"diag.status.error" = "Error";
+"update.updating" = "Actualizando…";
+"update.installVersion" = "Actualizar a v%@";
+"update.a11y.updating" = "Actualizando a la versión %@";
+"update.a11y.available" = "Actualización disponible: versión %@. Se instala y reinicia.";
+"calendar.addedConfirm" = "✓ Añadido al calendario: %@";
+
+/* Meeting <-> calendar cross-reference (2026-08-13) */
+"meeting.alternatives" = "Ambos libres: %@";
+"meeting.banner.body" = "Empieza en %d min.";
+"meeting.proposedSlot" = "Propuesto: %@";
+"meeting.slotFree" = "Ese hueco está libre en tu calendario";
+"meeting.slotBusy" = "Choca con un evento existente";
+"meeting.slotUnknown" = "Calendario no disponible: disponibilidad sin verificar";
+
+/* Calendar list-column screen (2026-08-13) */
+"section.calendar" = "Calendario";
+
+/* Account maintenance disclosure (2026-08-14) */
+"account.maintenance" = "App y soporte";
+"account.showSupportTools" = "Mostrar herramientas de soporte";
+"a11y.expanded" = "Desplegado";
+"a11y.collapsed" = "Plegado";
+
+/* Mail remote-content privacy toggle (2026-08-14) */
+"prefs.section.mail" = "CORREO";
+"prefs.remoteImages" = "Cargar imágenes remotas en el correo";
+"prefs.remoteImages.detail" = "Al desactivarlo se bloquea toda petición de red mientras lees el correo, incluidos los píxeles de seguimiento. Las imágenes incrustadas siguen funcionando.";
+
+/* Appearance (2026-08-15) */
+"prefs.section.appearance" = "APARIENCIA";
+"prefs.appearance" = "Tema";
+"prefs.appearance.detail" = "«Sistema» sigue a macOS y se actualiza al momento.";
+"appearance.system" = "Sistema";
+"appearance.light" = "Claro";
+"appearance.dark" = "Oscuro";
+
+/* Sidebar section resize (2026-08-15) */
+"sidebar.resize.a11y" = "Cambiar el tamaño de la sección de cuenta";
+
+/* Inboxes (connected mailboxes) */
+"prefs.section.inboxes" = "BANDEJAS";
+"prefs.inboxes.empty" = "Todavía no hay ningún buzón conectado.";
+"inbox.provider.generic" = "Correo";
+"inbox.unknownAddress" = "Dirección desconocida";
+"inbox.needsReconnect" = "Hay que reconectar";
+"common.cancel" = "Cancelar";
+"account.disconnect" = "Desconectar";
+"account.disconnect.confirm" = "¿Desconectar %@? Klorn dejará de leerlo. El correo ya sincronizado se queda.";
+"account.naver.connect" = "Conectar buzón de Naver…";
+"common.beta" = "Beta";
+"account.naver.email" = "Dirección de Naver";
+"account.naver.password" = "Contraseña de aplicación";
+"account.naver.password.hint" = "Naver Mail > Ajustes > IMAP/SMTP: actívalo y usa la contraseña de aplicación de ahí, no la de inicio de sesión.";
+"account.naver.submit" = "Conectar";
+"account.imap.failed" = "No se pudo conectar ese buzón.";
+"account.imap.rateLimited" = "Demasiados intentos. Prueba de nuevo en unos minutos.";
+"account.imap.disconnectFailed" = "No se pudo desconectar ese buzón.";
+"account.icloud.connect" = "Conectar iCloud Mail…";
+"account.icloud.title" = "Conectar iCloud Mail";
+"account.naver.title" = "Conectar Naver Mail";
+"account.icloud.body" = "iCloud Mail (beta) se conecta por IMAP. Klorn clasifica cada mensaje nuevo en los mismos carriles que Gmail.";
+"account.icloud.email" = "Correo del Apple ID";
+"account.icloud.password" = "Contraseña específica de app";
+"account.icloud.password.hint" = "Usa una contraseña específica de app, no la de tu Apple ID. Créala en appleid.apple.com ▸ Inicio de sesión y seguridad ▸ Contraseñas específicas de apps. La autenticación de dos factores debe estar activada.";
+"account.icloud.help.link" = "Abrir appleid.apple.com";
+"account.icloud.error.authFailed" = "iCloud rechazó el inicio de sesión. Usa una contraseña específica de app de appleid.apple.com, no la de tu Apple ID. La autenticación de dos factores debe estar activada.";
+"account.naver.error.authFailed" = "Naver rechazó el inicio de sesión. Activa IMAP en los ajustes de Naver Mail y usa la contraseña de app de allí, no la de inicio de sesión.";
+"account.imap.connecting" = "Conectando…";
+"account.imap.error.unreachable" = "No se pudo contactar con el servidor de correo. Inténtalo de nuevo en un momento.";
+"account.imap.error.tooMany" = "Ya conectaste el máximo de buzones permitido para este proveedor.";
+"account.imap.error.invalidEmail" = "Introduce una dirección de correo válida.";
+"account.imap.error.needsPro" = "Conectar una segunda cuenta de correo requiere Klorn Pro.";
+"account.imap.error.offline" = "Este Mac no tiene conexión. Conéctate a internet e inténtalo de nuevo.";
+"account.icloud.error.unavailable" = "iCloud Mail aún no está disponible en este servidor.";
+"account.naver.error.unavailable" = "Naver Mail aún no está disponible en este servidor.";
+"account.imap.error.insecure" = "Klorn solo envía una contraseña de app por una conexión segura (HTTPS).";
+"account.imap.submit" = "Conectar";
+
+/* Attention mode (기본/auto) */
+"mode.section" = "MODO DE RESPUESTA";
+"mode.basic" = "Básico";
+"mode.basic.detail" = "Avisa solo del correo importante y las reuniones: tú eliges y tú respondes. El resto se queda en silencio.";
+"mode.auto" = "Respuesta automática";
+"mode.auto.detail" = "Klorn además responde por ti el correo rutinario y seguro, siguiendo la pauta de abajo. Los avisos siguen limitados a reuniones y correo que exige respuesta.";
+"mode.guideline" = "Pauta de respuesta";
+"mode.guideline.detail" = "Toda respuesta sin supervisión sigue esto. Edita la pauta por defecto o añade a ella.";
+"mode.guideline.save" = "Guardar la pauta";
+"mode.guideline.resetHint" = "Vacíala y guarda para restaurar la pauta por defecto.";
+"mode.sidebar.a11y" = "Modo de atención";
+
+/* Sender pin (TierMenu) */
+"pin.always" = "Este remitente siempre…";
+"pin.remove" = "Quitar la fijación del remitente";
+
+/* Compose (new mail) */
+"compose.new" = "Correo nuevo (⌘N)";
+"compose.title" = "Correo nuevo";
+"compose.to" = "Para";
+"compose.subject" = "Asunto";
+"compose.bodyPlaceholder" = "Mensaje";
+"compose.send" = "Enviar";
+"compose.sending" = "Enviando…";
+"compose.cancel" = "Cancelar";
+"compose.missingFields" = "Destinatario, asunto y mensaje son obligatorios.";
+"compose.needsPro" = "Enviar correo requiere el plan Pro.";
+
+/* Assistant dock */
+"assistant.dock.toggle" = "Asistente (⌘J)";
+"assistant.dock.close.a11y" = "Cerrar el asistente";
+"assistant.dock.context.a11y" = "Preguntando sobre: %@";
+
+/* Thread brief (why they wrote now) */
+"thread.weOwe" = "Todavía debes: %@";
+"thread.brief.a11y" = "Por qué ha llegado esto: %@";
+
+// Mail folders — Sent / Drafts / Archived (shell restructure 2026-08-26).
+"section.mailboxes" = "CORREO";
+"mailbox.drafts" = "Borradores";
+"mailbox.sent" = "Enviados";
+"mailbox.archived" = "Archivados";
+"mailbox.refresh" = "Actualizar carpeta";
+"mailbox.loadFailed" = "No se pudo cargar la carpeta. Comprueba la conexión y actualiza.";
+"mailbox.empty.drafts" = "Sin borradores";
+"mailbox.empty.sent" = "Aún no hay enviados";
+"mailbox.empty.archived" = "Nada archivado";
+"mailbox.noSubject" = "(sin asunto)";
+"mailbox.fromTo" = "%@ → %@";
+
+// Mail-first shell — two-level sidebar + row chips (2026-08-26).
+"nav.back" = "Atrás";
+"nav.mail" = "Correo";
+"nav.workspace" = "ESPACIO";
+"section.categories" = "CATEGORÍAS";
+"inbox.empty" = "Bandeja vacía — nada en espera";
+"chip.first" = "Primer contacto";
+"chip.replied" = "Respondido ×%d";
+"chip.promotions" = "Promo";
+"chip.social" = "Social";
+"chip.updates" = "Avisos";
+"chip.forums" = "Foro";
+
+// Real calendar views — 일/월/년 (2026-08-26).
+"cal.scope.day" = "Día";
+"cal.scope.week" = "Semana";
+"cal.scope.month" = "Mes";
+"cal.scope.year" = "Año";
+"cal.today" = "Hoy";
+"cal.prev" = "Anterior";
+"cal.next" = "Siguiente";
+"cal.dayFree" = "Nada programado — el día está libre.";
+"cal.more" = "+%d más";
+"cal.cell.a11y" = "%@, %d eventos";
+"cal.scope.a11y" = "Vista de calendario";
+
+// Label categories — 카테고리 follows the labeling (2026-08-27).
+"label.personal" = "Personal";
+"section.lanes" = "CARRILES";
+"label.empty" = "No hay correo de %@ ahora";
+
+// Judge categories on rows + appearance toggle (2026-08-27).
+"chip.internal" = "Equipo";
+"chip.customer" = "Cliente";
+"chip.investor" = "Inversor";
+"chip.system" = "Sistema";
+"compose.editDraft" = "Editar borrador";
+"compose.discard" = "Descartar borrador";
+"compose.discard.confirm.title" = "¿Descartar este borrador?";
+"compose.discard.confirm.detail" = "Lo que has escrito aquí se perderá.";
+"mailbox.loadMore" = "Cargar más";
+"chip.billing" = "Facturación";
+
+// Inbox purpose — the connect-time question (2026-09-01).
+"purpose.title" = "¿Para qué es este buzón?";
+"purpose.detail" = "Klorn ajusta su análisis al uso de esta cuenta — un buzón personal se lee distinto a uno de trabajo. Puedes cambiarlo cuando quieras en la sección de cuenta.";
+"purpose.work" = "Trabajo";
+"purpose.personal" = "Personal";
+"purpose.mixed" = "Ambos";
+"purpose.later" = "Después";
+"purpose.unset" = "Definir uso";
+"purpose.primaryFallback" = "Cuenta principal";
+
+// Body-first reading pane + pre-login purpose pick (2026-09-01).
+"reading.analysis" = "Análisis de Klorn";
+"reading.analysis.expand" = "Mostrar análisis";
+"reading.analysis.collapse" = "Ocultar análisis";
+// Linked-account purpose question (2026-09-03).
+"purpose.title.linked" = "¿Para qué es %@?";
+
+// Company domains (2026-09-10).
+"company.title" = "¿Cuál es el dominio de correo de tu empresa?";
+"company.detail" = "El correo del dominio de tu empresa se etiqueta como Empresa y se analiza como colegas, no clientes. Los subdominios cuentan. Puedes cambiarlo en Cuentas.";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "Guardar";
+"company.skip" = "Omitir";
+"company.label" = "Dominios de la empresa";
+"company.none" = "Sin definir";
+"company.saveFailed" = "No se pudo guardar — revisa los dominios (sin gmail.com / naver.com, máximo 10).";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "Corregir la etiqueta";
+"label.correct.domain" = "Todo el dominio: %@";
+"label.correct.clear" = "Quitar mi corrección para este remitente";
+"label.correct.clearDomain" = "Quitar mi corrección para el dominio";
+"label.correct.a11y" = "%@ — corregir la etiqueta";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "Nuevo evento";
+"cal.edit" = "Editar";
+"cal.delete" = "Eliminar";
+"cal.delete.confirm" = "Eliminar de verdad";
+"cal.delete.failed" = "No se pudo eliminar — inténtalo de nuevo.";
+"cal.editor.newTitle" = "Nuevo evento";
+"cal.editor.editTitle" = "Editar evento";
+"cal.editor.title" = "Título";
+"cal.editor.start" = "Inicio";
+"cal.editor.end" = "Fin";
+"cal.editor.location" = "Lugar";
+"cal.source.linked" = "Vinculado";
+"cal.readOnly" = "Solo lectura";
+"cal.source.a11y" = "Solo lectura, de %@";
+"cal.save" = "Guardar";
+"cal.save.failed" = "No se pudo guardar — inténtalo de nuevo.";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "¿Qué es lo más importante para ti?";
+"priorities.detail" = "Con tus palabras. Klorn pondera la urgencia y cuándo interrumpirte según esto — cada correo, cada cuenta. Cámbialo cuando quieras en Cuentas.";
+"priorities.placeholder" = "p. ej. El correo de inversores siempre es urgente. Los boletines pueden esperar. Todo lo de Sara me llega directo.";
+"priorities.label" = "Prioridades";
+"priorities.none" = "Sin definir";
+"priorities.saveFailed" = "No se pudo guardar — inténtalo de nuevo (máximo 500 caracteres).";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "Requiere respuesta";
+"chip.answered" = "Respondido";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "Esperando respuesta";
+"waiting.hint" = "Correos enviados sin respuesta durante %d+ días — de Klorn y tu carpeta Enviados de Gmail.";
+"waiting.empty" = "Nada espera respuesta.";
+"waiting.days" = "%d días";
+"waiting.row.a11y" = "%@ — %@, esperando %d días";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "General";
+"settings.tab.accounts" = "Cuentas";
+"settings.tab.assistant" = "Asistente";
+"settings.tab.notifications" = "Notificaciones";
+"settings.tab.appearance" = "Apariencia";
+"settings.tab.privacy" = "Privacidad";
+"settings.signedOutNote" = "Inicia sesión en Klorn para ver estos ajustes.";
+"menu.message" = "Mensaje";
+"menu.go" = "Ir";
+"menu.compose" = "Nuevo correo";
+"menu.find" = "Buscar correo";
+"menu.moveToLane" = "Mover a carril";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Borrador listo";
+"reading.openDraft" = "Abrir borrador";
+"reading.preparedDraft" = "Klorn preparó este borrador por adelantado — revísalo antes de enviar.";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "CALENDARIOS DEL DISPOSITIVO";
+"deviceCalendars.upload" = "Subir calendarios del dispositivo";
+"deviceCalendars.detail" = "Solo se suben a Klorn los calendarios que actives abajo, como copias de solo lectura. Tu resumen y el asistente los leen en el servidor.";
+"deviceCalendars.denied" = "Klorn no puede leer tus calendarios. Permítelo en Ajustes del Sistema › Privacidad y seguridad › Calendarios.";
+"deviceCalendars.openSettings" = "Abrir Ajustes del Sistema";
+"deviceCalendars.empty" = "No hay calendarios en este Mac.";
+"deviceCalendars.count" = "%d subidos";
+"deviceCalendars.untitled" = "Calendario sin título";
+"deviceCalendars.error.limit" = "Hay demasiados calendarios subidos. Desactiva uno primero.";
+"deviceCalendars.error.rows" = "Hay demasiados eventos guardados de los calendarios de este Mac. Desactiva un calendario primero.";
+"deviceCalendars.error.generic" = "No se pudo subir un calendario. Klorn lo intentará de nuevo.";
+
+/* Main window: five-item navigation and Today (M4b) */
+"nav.today" = "Hoy";
+"nav.calendar" = "Calendario";
+"nav.assistant" = "Asistente";
+"nav.accounts" = "Cuentas";
+"nav.accounts.signedOut" = "Inicia sesión para ver tus cuentas.";
+"nav.accounts.none" = "Aún no hay cuentas conectadas.";
+"nav.accounts.connected" = "Conectada";
+"nav.accounts.needsReconnect" = "Hay que reconectar";
+"assistant.pane.approvals" = "Aprobaciones";
+"assistant.pane.commitments" = "Compromisos";
+"assistant.pane.briefing" = "Resumen";
+"mail.lane.all" = "Todo";
+"mail.lane.a11y" = "Filtrar por carril";
+"mail.lane.filter" = "Filtros de correo";
+"mail.lane.showSilenced" = "Mostrar silenciados";
+"today.signedOut.title" = "Inicia sesión para ver tu día";
+"today.signedOut.detail" = "Klorn ordena tu correo y tus calendarios cuando inicias sesión.";
+"today.signingIn.title" = "Termina de iniciar sesión";
+"today.signingIn.detail" = "Completa el inicio de sesión en el navegador. Esta ventana se actualiza al terminar.";
+"today.failed.title" = "No se pudo cargar el correo";
+"today.retry" = "Reintentar";
+"today.clear.title" = "Nada te está esperando";
+"today.clear.detail" = "El correo nuevo aparece aquí cuando Klorn lo clasifica.";
+"today.lane.more" = "%d más en Correo";
+"today.header.lane" = "%1$d %2$@";
+"today.waiting.one" = "1 en espera en Correo";
+"today.waiting.many" = "%d en espera en Correo";
+"today.lane.push.older" = "Ver correo %@ anterior";
+"today.row.a11y" = "%1$@: %2$@";
+"today.open" = "Abrir";
+"today.calendar.empty" = "No hay nada en el calendario hoy.";
+"today.assistant.noBriefing" = "Hoy todavía no hay resumen.";
+"today.approvals.waiting" = "Aprobaciones pendientes: %d";
+"today.approvals.none" = "No hay aprobaciones pendientes.";
+"today.ask.a11y" = "Preguntar al asistente";
+"today.signIn.restart" = "Empezar de nuevo";
+"a11y.position" = "%1$d de %2$d";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Continuar con Google";
+"state.signedOut.title" = "Inicia sesión en Klorn";
+"state.offline.title" = "Estás sin conexión";
+"state.offline.detail" = "Klorn no puede conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.";
+"banner.offline" = "Estás sin conexión. Este es el correo de la última sincronización.";
+"banner.stale" = "No se pudo actualizar. Este es el correo de la última sincronización.";
+"error.server" = "Error del servidor (%d).";
+"error.network" = "Error de red. Comprueba tu conexión.";
+"onboarding.windowTitle" = "Te damos la bienvenida a Klorn";
+"onboarding.value" = "Todo tu correo y tus calendarios en un solo lugar. El correo, ordenado en %d carriles.";
+"onboarding.lane.push" = "Te interrumpe ahora";
+"onboarding.lane.meeting" = "Citas, comprobadas con tu calendario";
+"onboarding.lane.queue" = "Vale la pena leerlo hoy";
+"onboarding.lane.info" = "Recibos y avisos, archivados";
+"onboarding.lane.silent" = "Guardado, sin mostrarse";
+"onboarding.lanes.note" = "Los carriles solo ordenan tu correo. Nunca actúan sobre él.";
+"onboarding.privacy" = "Klorn lee tu correo para ordenarlo. Tú decides qué más puede hacer.";
+"error.unreachable" = "Klorn no puede conectar con el servidor.";
+"banner.dismiss.a11y" = "Cerrar mensaje";
+"assistant.starter.1" = "¿Cuál es el correo más importante de hoy?";
+"assistant.starter.2" = "¿Qué correos sin responder son urgentes?";
+"assistant.starter.3" = "¿Qué tengo que preparar para las reuniones de esta semana?";
+"assistant.message.user.a11y" = "Dijiste: %@";
+"assistant.message.failure.a11y" = "Error: %@";
+"assistant.message.reply.a11y" = "Klorn respondió: %@";
+
+/* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
+"prefs.section.driveImport" = "KLORN DRIVE";
+"menu.importToDrive" = "Importar a Klorn Drive…";
+"driveImport.detail" = "Los archivos y carpetas que elijas en este Mac se suben a Klorn Drive, también desde iCloud Drive y desde las carpetas que una app en la nube mantiene en este Mac. Solo se sube lo que eliges, una sola vez. Klorn no vigila tus carpetas.";
+"driveImport.button" = "Importar archivos…";
+"driveImport.cancel" = "Cancelar";
+"driveImport.clear" = "Borrar";
+"driveImport.preparing" = "Preparando…";
+"driveImport.progress" = "Subiendo %1$d de %2$d";
+"driveImport.usage" = "%1$@ de %2$@ en uso";
+"driveImport.summary.all" = "%d subidos";
+"driveImport.summary" = "%1$d subidos, %2$d sin subir";
+"driveImport.cancelled" = "Importación cancelada.";
+"driveImport.more" = "y %d más";
+"driveImport.cap.files" = "Se detuvo en %d archivos, el límite de una importación.";
+"driveImport.cap.folders" = "Se detuvo en %d carpetas, el límite de una importación.";
+"driveImport.cap.depth" = "Se omitieron las carpetas anidadas a más de %d niveles.";
+"driveImport.cap.bytes" = "Se detuvo en %d GB, el límite de una importación.";
+"driveImport.cap.examined" = "Se detuvo tras revisar %d elementos, el límite de una importación.";
+"driveImport.panel.prompt" = "Importar";
+"driveImport.panel.message" = "Elige archivos o carpetas para subir a Klorn Drive. Solo se sube lo que elijas.";
+"driveImport.error.unavailable" = "Klorn Drive no está disponible.";
+"driveImport.error.signedOut" = "Vuelve a iniciar sesión para importar.";
+"driveImport.error.notConfigured" = "Aún no se puede subir a Klorn Drive.";
+"driveImport.error.full" = "Tu Klorn Drive está lleno.";
+"driveImport.error.purging" = "Se están eliminando tus datos de Klorn. Inténtalo más tarde.";
+"driveImport.error.tooLarge" = "Más de %d MB";
+"driveImport.error.rateLimited" = "Demasiadas subidas a la vez. Inténtalo dentro de un minuto.";
+"driveImport.error.malformed" = "La subida no llegó completa. Inténtalo de nuevo.";
+"driveImport.error.invalidName" = "Este nombre no se puede usar en Klorn Drive.";
+"driveImport.error.folderMissing" = "No se pudo crear su carpeta.";
+"driveImport.error.storage" = "El almacenamiento de archivos no está disponible. Inténtalo más tarde.";
+"driveImport.error.offline" = "No se pudo conectar con Klorn.";
+"driveImport.error.notDownloaded" = "No se pudo descargar en este Mac. Descárgalo en el Finder y vuelve a intentarlo.";
+"driveImport.error.unreadable" = "Klorn no puede leer este archivo.";
+"driveImport.error.changed" = "Cambió mientras se leía. Inténtalo de nuevo.";
+"driveImport.error.unsupported" = "No es un único archivo (un enlace, una app o un paquete)";
+"driveImport.error.cancelled" = "Cancelado";
+"driveImport.error.generic" = "No se pudo subir este archivo.";
+
+/* Files and Teams free-time (productization plan P12; strings mirror the web) */
+"nav.files" = "Archivos";
+"files.subtitle" = "Tus archivos de todas las fuentes conectadas. Aquí solo lectura.";
+"files.search.label" = "Buscar archivos";
+"files.search.placeholder" = "Buscar nombres de archivo";
+"files.loading" = "Cargando archivos";
+"files.loadingMore" = "Cargando…";
+"files.loadMore" = "Cargar más";
+"files.error" = "No se pudieron cargar tus archivos.";
+"files.empty.title" = "Aún no hay archivos";
+"files.empty.body" = "Los archivos de tus unidades conectadas aparecerán aquí cuando se indexen.";
+"files.noMatch.title" = "Ningún archivo coincide";
+"files.noMatch.body" = "Prueba con otro nombre.";
+"files.folder" = "Carpeta";
+"files.openFolder" = "Abrir la carpeta %@";
+"files.download.label" = "Descargar %@";
+"files.download.preparing" = "Preparando la descarga…";
+"files.download.error" = "No se pudo descargar %@. Inténtalo de nuevo.";
+"files.download.gone" = "%@ ya no está en tu unidad.";
+"files.download.busy" = "Demasiadas descargas a la vez. Inténtalo de nuevo en un minuto.";
+"files.trail.label" = "Ruta de la carpeta";
+"files.trail.all" = "Todos los archivos";
+"files.folderEmpty.title" = "Esta carpeta está vacía";
+"files.folderEmpty.body" = "Los archivos que pongas en esta carpeta aparecen aquí.";
+"today.files.title" = "Archivos recientes";
+"today.files.open" = "Abrir Archivos";
+"today.files.none" = "Aún no hay archivos.";
+"today.freeTime.title" = "Equipos";
+"today.freeTime.team" = "Equipo";
+"today.freeTime.find" = "¿Cuándo está libre todo el mundo?";
+"today.freeTime.finding" = "Revisando calendarios…";
+"today.freeTime.error" = "No se pudieron revisar los calendarios del equipo.";
+"today.freeTime.none" = "No hay tiempo libre común en los próximos %d días.";
+"today.freeTime.unknown" = "Calendarios no visibles, no contados como libres: %@";
+"today.freeTime.selfOnly" = "Klorn aún no puede ver el calendario de nadie más, así que estos son solo tus huecos libres.";
+"today.freeTime.selfOnlyList" = "Tus huecos libres";
+"today.freeTime.teamList" = "Horas en que todas las personas visibles están libres";
+"today.freeTime.stale" = "Es posible que estas horas ya no estén actualizadas.";
+"today.freeTime.recheck" = "Volver a comprobar";
+"files.opensBrowser" = "Se abre en el navegador";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "Mover de carril";
+"error.timeout" = "El servidor tardó demasiado en responder. Inténtalo de nuevo.";
+"auth.failed.nonce" = "No se pudo contactar con Klorn para iniciar sesión. Revisa tu conexión e inténtalo de nuevo.";
+"auth.failed.invalidNonce" = "No se reconoció la sesión de inicio. Inténtalo de nuevo.";
+"auth.failed.expired" = "El inicio de sesión tardó demasiado y caducó. Inténtalo de nuevo.";
+"auth.failed.timeout" = "Se agotó el tiempo esperando al navegador. Termina el inicio allí y vuelve a intentarlo.";
+"auth.failed.cancelled" = "Se canceló el inicio de sesión.";
+"proposals.approveSend" = "Aprobar y enviar";
+"proposals.sendsNow" = "Se envía de inmediato. Un correo enviado no se puede deshacer.";
+"proposals.runsNow" = "Se ejecuta en cuanto lo apruebas.";
+"tool.label.send_email" = "Enviar correo";
+"tool.label.draft_reply" = "Borrador de respuesta";
+"tool.label.reply_to_email" = "Responder correo";
+"tool.label.archive_email" = "Archivar correo";
+"tool.label.delete_email" = "Eliminar correo";
+"tool.label.mark_read" = "Marcar como leído";
+"tool.label.create_event" = "Crear evento";
+"tool.label.delete_event" = "Eliminar evento";
+"tool.label.schedule_meeting" = "Programar reunión";
+"tool.label.create_contact" = "Añadir contacto";
+"tool.label.update_contact" = "Actualizar contacto";
+"tool.label.delete_contact" = "Eliminar contacto";
+"tool.label.create_note" = "Crear nota";
+"tool.label.delete_note" = "Eliminar nota";
+"tool.label.create_task" = "Crear tarea";
+"tool.label.delete_task" = "Eliminar tarea";
+"tool.label.record_skill" = "Guardar habilidad";
+"tool.label.execute_skill" = "Ejecutar habilidad";
+"tool.label.classify_emails" = "Clasificar el correo en carriles";
+"tool.label.unknown" = "Acción";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "Pasar a Pro";
+"plan.upgrade.a11yHint" = "Abre la página de facturación en tu navegador.";
+"proposals.needsPro" = "Aprobar o rechazar requiere Klorn Pro.";
+"chat.cap.free" = "Has usado tu cupo gratuito de IA de hoy. Se restablece a las 00:00 UTC.";
+"chat.cap.daily" = "Has usado tu cupo de IA de hoy. Se restablece a las 00:00 UTC.";
+"chat.send.failed" = "No se pudo conectar con Klorn: %@";
+"chat.event.failed" = "No se pudo crear el evento: %@";
+"commitments.needsPro" = "Los compromisos requieren Klorn Pro.";

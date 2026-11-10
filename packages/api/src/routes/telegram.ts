@@ -23,6 +23,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { handleTelegramChatMessage, telegramChatEnabled } from "../agentcore/telegram-chat.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import {
@@ -49,6 +50,7 @@ interface TelegramChat {
 }
 
 interface TelegramUpdate {
+  update_id?: number;
   message?: { text?: string; chat?: TelegramChat };
   callback_query?: { id?: string; data?: string; message?: { chat?: TelegramChat } };
 }
@@ -99,7 +101,7 @@ export async function telegramRoutes(app: FastifyInstance) {
       if (update.callback_query) {
         await handleCallbackQuery(update.callback_query);
       } else if (update.message) {
-        await handleMessage(update.message);
+        await handleMessage(update.message, update.update_id);
       }
     } catch (err) {
       // Contain everything: a 5xx would make Telegram redeliver the same
@@ -111,15 +113,28 @@ export async function telegramRoutes(app: FastifyInstance) {
   });
 }
 
-async function handleMessage(message: NonNullable<TelegramUpdate["message"]>): Promise<void> {
+async function handleMessage(
+  message: NonNullable<TelegramUpdate["message"]>,
+  updateId?: number,
+): Promise<void> {
   const chatId = chatIdString(message.chat);
   const text = message.text;
   if (!chatId || typeof text !== "string") return;
 
-  // v1 only understands /start — everything else is silently ignored so the
-  // bot never becomes an accidental chat surface.
+  // /start is the link handshake; everything else is a chat message — but
+  // ONLY behind TELEGRAM_CHAT_ENABLED (default OFF): with the flag off the
+  // bot keeps its original contract of never being an accidental chat
+  // surface. Chat turns are fire-and-forget: an LLM turn takes seconds and
+  // Telegram redelivers slow webhooks, so ack now, reply out-of-band.
   const match = text.match(/^\/start(?:\s+(\S+))?\s*$/);
-  if (!match) return;
+  if (!match) {
+    if (telegramChatEnabled()) {
+      void handleTelegramChatMessage({ chatId, text, updateId }).catch((err) =>
+        captureError(err, { tags: { scope: "telegram-chat.dispatch" } }),
+      );
+    }
+    return;
+  }
 
   const code = match[1];
   if (!code) {

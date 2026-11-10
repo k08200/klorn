@@ -88,8 +88,8 @@ describe("markKeyLimited cooldown durations", () => {
   });
 
   it("applies a 5-minute cooldown when the error is per-minute", () => {
-    markKeyLimited("openrouter:test", new Error("429 rate limit exceeded per minute"));
-    const info = getProviderCooldownInfo("openrouter:test");
+    markKeyLimited("anthropic:test", new Error("429 rate limit exceeded per minute"));
+    const info = getProviderCooldownInfo("anthropic:test");
     expect(info.keyLimitedUntil).not.toBeNull();
     const diffMs = (info.keyLimitedUntil as Date).getTime() - Date.now();
     expect(diffMs).toBeGreaterThan(4 * 60_000);
@@ -119,17 +119,14 @@ describe("markKeyLimited cooldown durations", () => {
   });
 });
 
-describe("fallback-chain SKUs are metered at their real rates (100-user economics)", () => {
-  // Every chain entry used to fall into a generic family row or the
-  // sonnet-tier default, over-billing 60-100x. The caps are what stop the
-  // fleet, so a mis-priced fallback does not cost money — it costs SERVICE
-  // (2026-08-10 analysis: 100 users x ~100 mails/day ≈ $5.50/day of real
-  // judge spend against a $10/day global cap; a 100x mis-price trips it in
-  // minutes).
+describe("cheap SKUs are metered at their real rates (100-user economics)", () => {
+  // A cheap model falling into a generic family row or the sonnet-tier
+  // default is over-billed 60-100x. The caps are what stop the fleet, so a
+  // mis-priced model does not cost money — it costs SERVICE (2026-08-10
+  // analysis: 100 users x ~100 mails/day against a $10/day global cap; a
+  // 100x mis-price trips it in minutes).
   it.each([
-    ["openai/gpt-oss-120b", 0.05, 0.2],
-    ["qwen/qwen3.7-flash", 0.1, 0.3],
-    ["mistralai/mistral-nemo", 0.05, 0.1],
+    ["qwen3:8b", 0.1, 0.3],
     ["google/gemini-3.1-flash-lite", 0.25, 1.5],
     ["openai/gpt-5-nano", 0.1, 0.4],
   ])("%s is priced at $%s/$%s per M", (model, input, output) => {

@@ -28,6 +28,7 @@ const conversationCreate = vi.fn(async () => ({
 const conversationUpdate = vi.fn(async () => ({}));
 const messageFindMany = vi.fn(async () => [] as unknown[]);
 const messageCreate = vi.fn(async () => ({ id: "msg-1" }));
+const emailFindFirst = vi.fn(async (): Promise<unknown> => null);
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -48,6 +49,9 @@ vi.mock("../db.js", () => {
     message: {
       findMany: (...a: unknown[]) => messageFindMany(...a),
       create: (...a: unknown[]) => messageCreate(...a),
+    },
+    emailMessage: {
+      findFirst: (...a: unknown[]) => emailFindFirst(...a),
     },
   };
   return { prisma, db: prisma };
@@ -73,6 +77,8 @@ beforeEach(() => {
   conversationUpdate.mockClear();
   messageFindMany.mockClear();
   messageCreate.mockClear();
+  emailFindFirst.mockReset();
+  emailFindFirst.mockResolvedValue(null);
 });
 
 describe("chat conversation routes", () => {
@@ -238,6 +244,54 @@ describe("chat conversation routes", () => {
     await app.close();
   });
 
+  it("passes the open mail to the engine as untrusted view context", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1" });
+    emailFindFirst.mockResolvedValue({
+      id: "email-1",
+      from: "Sarah <sarah@acme.com>",
+      subject: "Contract review",
+      summary: "Needs sign-off before 17:00",
+      snippet: null,
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+      payload: { text: "이 메일 어떻게 답장하지?", context: { emailId: "email-1" } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const turnArgs = runChatTurn.mock.calls[0][0] as { viewContext?: string | null };
+    expect(turnArgs.viewContext).toContain("email id: email-1");
+    // Mail-derived text is DATA: it must reach the model wrapped.
+    expect(turnArgs.viewContext).toContain('<untrusted_content source="email-subject">');
+    expect(turnArgs.viewContext).toContain("Needs sign-off before 17:00");
+    // Ownership is enforced in the lookup itself, never post-hoc.
+    const where = (emailFindFirst.mock.calls[0][0] as { where: { userId: string } }).where;
+    expect(where.userId).toBe("user-1");
+    await app.close();
+  });
+
+  it("degrades to a normal turn for a foreign or missing email id", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1" });
+    emailFindFirst.mockResolvedValue(null); // not the caller's mail
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+      payload: { text: "hi", context: { emailId: "someone-elses" } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const turnArgs = runChatTurn.mock.calls[0][0] as { viewContext?: string | null };
+    expect(turnArgs.viewContext).toBeNull();
+    await app.close();
+  });
+
   it("still answers 200 with the engine's honest error reply", async () => {
     conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
     runChatTurn.mockResolvedValueOnce({
@@ -256,6 +310,75 @@ describe("chat conversation routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ error: "provider down" });
+    // No code for an ordinary failure — only the cap carries one.
+    expect(res.json()).not.toHaveProperty("errorCode");
+    const assistantCall = messageCreate.mock.calls[1]?.[0] as {
+      data: { metadata: Record<string, unknown> };
+    };
+    expect(assistantCall.data.metadata).not.toHaveProperty("turnErrorCode");
+    await app.close();
+  });
+
+  it("returns stored message metadata as-is, so turnErrorCode survives a reload", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
+    const metadata = {
+      source: "chat",
+      turnError: "Free quota used for today.",
+      turnErrorCode: "DAILY_COST_CAP_FREE",
+    };
+    messageFindMany.mockResolvedValueOnce([
+      {
+        id: "m1",
+        role: "ASSISTANT",
+        content: "Free quota used for today.",
+        metadata,
+        createdAt: new Date("2026-10-30T00:00:00.000Z"),
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().messages[0].metadata).toEqual(metadata);
+    await app.close();
+  });
+
+  it("returns and persists the cost-cap code so clients can tell the cap from an outage", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
+    const message = "You've used today's free AI quota.";
+    runChatTurn.mockResolvedValueOnce({
+      reply: message,
+      eventDraft: null,
+      error: message,
+      errorCode: "DAILY_COST_CAP_FREE",
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+      payload: { text: "hi" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      reply: message,
+      eventDraft: null,
+      error: message,
+      errorCode: "DAILY_COST_CAP_FREE",
+    });
+    const assistantCall = messageCreate.mock.calls[1]?.[0] as {
+      data: { content: string; metadata: Record<string, unknown> };
+    };
+    expect(assistantCall.data.content).toBe(message);
+    expect(assistantCall.data.metadata).toMatchObject({
+      turnError: message,
+      turnErrorCode: "DAILY_COST_CAP_FREE",
+    });
     await app.close();
   });
 });

@@ -4,14 +4,29 @@ How to turn on monetization. Everything below is already built and merged;
 nothing here ships code. The flip is **configuration only**, and every step is
 independently reversible.
 
-Current state (verified live 2026-07-20): `PAYWALL_ENABLED` is **off**, so
-`isEntitled()` returns true for everyone and the entitlement guards are no-ops.
-Additionally `BETA_AUTO_PRO_ENABLED=true`, so the first `BETA_AUTO_PRO_LIMIT`
-(default 50) signups are silently granted PRO (`betaProGrantedAt` set) — this
-is why a brand-new account already shows plan `PRO` with no payment. The Paddle
-web pipeline is fully wired and sandbox-verified (see §2a); the only reason no
-one is paying yet is that everyone is auto-PRO. The other active billing
-mechanism is the per-user daily LLM cost cap.
+Current state: `PAYWALL_ENABLED` is **off**, so `isEntitled()` returns true
+for everyone and the entitlement guards are no-ops.
+
+Since 2026-10-24 (founder decision) **every signup starts on FREE** — email,
+Google (web and desktop), Apple and Naver alike, waitlist-approved or not. The
+old beta auto-PRO grant (`BETA_AUTO_PRO_ENABLED` / `BETA_AUTO_PRO_LIMIT`) and the
+"gate-approved signups get PRO" rule are deleted; the env names are dead and
+`signup-plan-guard.test.ts` fails if any User create sets `plan` again. Pro now
+comes only from a paid subscription (or its card-backed trial) or an admin
+setting the plan. The accounts that got free beta PRO before that date keep
+`betaProGrantedAt` as a marker — §3a records what happened to them.
+
+The plan matters before the flip too. `isEntitled` / `requireEntitled` are
+no-ops while the paywall is off, but `planHasFeature` reads `user.plan`
+directly: a FREE account gets the pre-launch FREE set (`FREE_FEATURES` in
+`billing/stripe.ts`), so auto-reply, agent AUTO mode and the agent's write
+tools (send, calendar write, web search, integrations) stay off for it even
+with `PAYWALL_ENABLED=false`. The signed-in device limit is plan-based too and
+not paywall-gated: Free and Pro both keep 3 sessions (founder decision
+2026-11-07; `PLANS.*.deviceLimit` in `billing/stripe.ts`).
+
+The Paddle web pipeline is wired and was verified live 2026-08-22 (at the old
+price). The other active billing mechanism is the per-user daily LLM cost cap.
 
 ---
 
@@ -19,7 +34,7 @@ mechanism is the per-user daily LLM cost cap.
 
 | # | Decision | Where it lands |
 |---|----------|----------------|
-| D1 | **Final price — DECIDED 2026-07-06: founding `$7.99` web / `$9.99` native.** UI copy is consistent across `packages/web/src/app/billing/page.tsx`, `components/paywall-screen.tsx:30`, `components/subscription-section.tsx:30`. The payment provider price/offering must charge exactly these amounts. | Provider dashboard price/offering (UI already aligned) |
+| D1 | **Final price — RAISED 2026-10-14: `$29.99` web / `$34.99` native** (was `$8.99`/`$9.99`, live-verified 2026-08-22). The web number's single source of truth is `packages/web/src/lib/pricing.ts` (`PRO_PRICE_WEB`); quote it from there, never inline. UI copy reads it from `pricing.ts`. The payment provider price/offering must charge exactly these amounts. | Provider dashboard price/offering (UI already aligned) |
 | D2 | **Free-tier daily AI budget.** `FREE_DAILY_COST_CAP_CENTS` (default 10¢/day) bounds free-user COGS once the paywall is on. | Render env |
 | D3 | **Trial length.** `TRIAL_DAYS` (default 7) drives the Stripe path and the paywall copy; on Paddle the trial lives on the price itself — keep both at 7 days. | Render env + Paddle price |
 | D4 | **Web payment provider — DECIDED 2026-07-06: Paddle** (merchant of record — Paddle is the legal seller, so no Korean business registration is needed; individual/sole-trader onboarding with identity verification only). The integration is fully coded and inert until `PADDLE_*` env is set. Stripe code remains as the dormant alternative for a future entity. | Paddle account (founder) + `PADDLE_*` env on Render |
@@ -30,7 +45,7 @@ mechanism is the per-user daily LLM cost cap.
 1. Sign up at paddle.com as an individual/sole trader (identity + product/domain
    review; approval can take a few days — start early). A sandbox account is
    separate and instant; use it for the end-to-end test first.
-2. Create the Pro product + recurring Price at the D1 amount (`$7.99`/mo) with
+2. Create the Pro product + recurring Price at the D1 amount (`$29.99`/mo) with
    a **7-day trial configured on the price** (the code does not pass a trial —
    Paddle applies the price's own trial).
 3. Checkout settings → set the **default payment link** domain (app.klorn.ai).
@@ -47,6 +62,53 @@ mechanism is the per-user daily LLM cost cap.
 6. The moment `PADDLE_API_KEY` + `PADDLE_PRO_PRICE_ID` are set, the web
    subscribe buttons come alive automatically (`webCheckoutAvailable` flips)
    and `/api/billing/checkout` returns Paddle checkout URLs. No web deploy needed.
+
+**Payment methods at checkout (why KakaoPay / Pix / Alipay do not appear)**
+
+Nothing in this repo selects payment methods. The checkout overlay is opened by
+Paddle itself from the `_ptxn` default-payment-link URL, not by a
+`Paddle.Checkout.open()` call, so `allowedPaymentMethods` is not passed and
+cannot be — the list is 100% dashboard- and context-driven. Paddle decides what
+to show from three things: **the transaction currency, the customer's country,
+and their device.**
+
+That is the whole explanation for "we enabled them and they never show up".
+Ticking a method in `Paddle → Checkout → Checkout settings → General` only makes
+it *eligible*; it still has to match the currency and country of the buyer:
+
+| Method | Shows only when | Recurring? |
+|---|---|---|
+| Card, PayPal | almost everywhere | yes |
+| Apple Pay / Google Pay | compatible device + browser (no India) | yes |
+| KakaoPay, Naver Pay | price is in **KRW** and the customer address is in **South Korea** | yes |
+| Pix | **BRL** / Brazil | yes |
+| iDEAL | **EUR** / Netherlands | yes |
+| Bancontact | **EUR** / Belgium | yes |
+| BLIK | **PLN** / Poland | yes |
+| MB WAY | **EUR** / Portugal | yes |
+| Alipay, WeChat Pay | regional, and **Alipay needs separate Paddle approval** | yes |
+
+The PRO price is configured in **USD only**. A Korean buyer is therefore quoted
+USD, and because the item is not priced in KRW, KakaoPay and Naver Pay are
+*never* eligible for them — no matter how the dashboard checkboxes are set. Same
+for Pix (BRL), iDEAL/Bancontact/MB WAY (EUR), BLIK (PLN).
+
+To actually surface them (founder action, dashboard only — no code change):
+
+1. `Paddle → Checkout → Checkout settings → General` — confirm each wanted
+   method is ticked, and request approval for Alipay if it is wanted.
+2. Turn on **automatic currency conversion** (localized pricing) for the
+   account, or add explicit local-currency unit prices (KRW, BRL, EUR, PLN) to
+   the PRO price `pri_…`. This is the step that was missing: without a local
+   currency there is no local payment method.
+3. Re-test from the target country (or with a billing address in it) — the
+   method list is computed per buyer, so a Korean address on a USD-only price
+   will keep showing only card/PayPal/wallets.
+
+Sanity check before blaming the code: `Paddle.PricePreview()` /
+`POST /transactions/preview` return `available_payment_methods` for a given
+country + currency. If a method is absent there, it is a Paddle configuration
+issue and no app change will fix it.
 
 **Stripe (dormant alternative — only with a future business entity)**
 1. Create the Pro Price, webhook endpoint (`/api/webhook/stripe`, events:
@@ -70,10 +132,27 @@ mechanism is the per-user daily LLM cost cap.
 - [ ] `curl -s https://<api-host>/api/billing/status` (authed) returns plan data
       with `webCheckoutAvailable: true` once `PADDLE_*` is set.
 - [ ] Paddle **sandbox** end-to-end once on a staging user: checkout → webhook
-      fires → `user.plan` becomes `PRO` and `paddleCustomerId` is stored →
-      portal ("Manage subscription") opens → cancel → plan reverts to `FREE`.
+      fires → `user.plan` becomes `PRO`, and `paddleCustomerId`,
+      `paddleSubscriptionId`, `subscriptionStatus`, `subscriptionRenewsAt` are
+      all stored → portal ("Manage subscription") opens.
       Webhook idempotency: re-deliver the same event from the Paddle dashboard;
       the `WebhookEvent` table must dedupe it (no double grant).
+- [ ] In-app cancel round trip on that same user:
+      `POST /api/billing/cancel` → Paddle shows a `scheduled_change: cancel`
+      → `/billing` shows "Cancelled · Pro stays active until <date>" and the
+      plan is **still PRO** → `POST /api/billing/cancel/undo` → the scheduled
+      change is gone and the renewal date is back. Then let a cancel run to its
+      effective date (or cancel immediately from the Paddle dashboard) and
+      confirm the terminal `subscription.canceled` webhook drops the plan to
+      `FREE` and clears `paddleSubscriptionId`.
+- [ ] **Cancel while `trialing`** — this is the most common real cancellation
+      and the one path Paddle's docs do not spell out. We always send
+      `effective_from: next_billing_period`; for a trialing subscription that
+      boundary is the trial end, so the expected result is a `scheduled_change`
+      at the trial end date and **no charge**. Verify in sandbox that the call
+      returns 2xx (not a 4xx rejecting `next_billing_period` for trials) and
+      that no transaction is billed afterwards. If Paddle does reject it, the
+      user sees "Could not cancel the subscription" — fix before the flip.
 - [ ] RevenueCat sandbox purchase on a real device → webhook grants plan →
       "Restore purchase" works after app reinstall.
 - [ ] UI copy in the three D1 files matches the live Paddle/RevenueCat price.
@@ -114,29 +193,63 @@ On Render (API service), set — in one deploy:
 PAYWALL_ENABLED=true
 FREE_DAILY_COST_CAP_CENTS=10   # or D2 value
 TRIAL_DAYS=7                   # or D3 value
-# Decide the beta-auto-PRO fate at the same time:
-#   BETA_AUTO_PRO_ENABLED=false   → new signups must pay from day one, OR
-#   leave it on with BETA_AUTO_PRO_LIMIT=50 → first 50 stay free, #51+ pays.
 ```
 
-Note: the paywall (`isEntitled`) and beta-auto-PRO are independent switches.
-If you flip `PAYWALL_ENABLED=true` but leave `BETA_AUTO_PRO_ENABLED=true` with
-room under the limit, new users are still auto-granted PRO and won't see the
-paywall — so to actually collect money from new signups, set
-`BETA_AUTO_PRO_ENABLED=false` (or confirm the limit is already reached).
+Also delete `BETA_AUTO_PRO_ENABLED` and `BETA_AUTO_PRO_LIMIT` from the Render
+environment. Nothing reads them any more, so leaving them changes nothing, but
+they suggest a grant that no longer exists.
+
+`PAYWALL_ENABLED` is read once at boot: it takes effect only when a new
+instance starts, so save the env change with a deploy (not "save only").
 
 What changes at that moment (all code paths already live):
 - `isEntitled()` starts returning false for FREE users → `requireEntitled`
   routes (receipts, commitments, email replies, calendar writes) return 403
   `ENTITLEMENT_REQUIRED`; the web app surfaces upgrade UI for them.
 - FREE shrinks from the historical feature set to the taster set
-  (`FREE_TASTER` in `packages/api/src/stripe.ts`); `multi_account` and other
+  (`FREE_TASTER` in `packages/api/src/billing/stripe.ts`); `multi_account` and other
   `TOOL_FEATURE_MAP` tools gate per plan.
+- Mail accounts: a FREE user may connect ONE mail account of any provider
+  (their first); a second one answers 403 `ENTITLEMENT_REQUIRED`
+  (`billing/mail-account-entitlement.ts`, founder decision 2026-10-15).
 - Free users' daily LLM cap drops from `DAILY_COST_CAP_CENTS` (100¢) to
   `FREE_DAILY_COST_CAP_CENTS`; on cap they now get the **upgrade nudge**
-  message instead of the BYOK-only one.
-- Existing beta users keep access only via `betaProGrantedAt` / admin-set
-  plan — decide beforehand who gets comped.
+  message instead of the BYOK one (BYOK is Pro-only once the paywall is on, so
+  the free message does not offer it).
+- Access follows `user.plan` only. `betaProGrantedAt` grants nothing; an
+  account is Pro because its `plan` column says `PRO`. See §3a.
+
+## 3a. Accounts that got free beta PRO — decided 2026-10-28
+
+Before 2026-10-24 signups got PRO for free in two ways: the beta auto-PRO
+grant (stamped `betaProGrantedAt`) and the waitlist-approval rule (set `PRO`
+without the marker). So the marker does not find every comped account — the
+payment-less query below does. Founder decision 2026-10-28: the external accounts in that cohort were
+moved to FREE (only `plan` changed; `betaProGrantedAt` stays as the marker,
+nothing else was touched), and the founder's own accounts stay PRO by choice.
+What a FREE account keeps and loses once the paywall is on: mail reads,
+classification and the briefing stay; sending/replying, calendar writes, a
+second inbox's sync, linked-calendar sync, BYOK, MCP and auto-reply stop.
+Nothing is deleted.
+
+Right before the flip, list every non-admin account that is Pro without paying
+and confirm each row is a deliberate comp (an admin comp via
+`PATCH /api/admin/users/:id { "plan": … }` shows up here too, and so does a
+mobile in-app subscriber, since the RevenueCat path stores no subscription id
+on `User` — check those in RevenueCat before ending anything. A comp who once
+opened Stripe checkout keeps `stripeId` and is hidden by this filter — if
+Stripe checkout was ever live, drop the `"stripeId" IS NULL` condition and
+check each row that has a `stripeId` in Stripe):
+
+```sql
+SELECT id, email, plan, "betaProGrantedAt", "createdAt"
+FROM "User"
+WHERE role = 'USER' AND plan <> 'FREE'
+  AND "paddleSubscriptionId" IS NULL AND "stripeId" IS NULL;
+```
+
+To end a comp: `/admin` → user → plan `FREE`. Undo by setting `plan` back to
+`PRO`.
 
 ## 4. Post-flip smoke (first hour)
 

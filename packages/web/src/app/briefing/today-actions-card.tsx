@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 
 interface TodayActionsResponse {
@@ -27,6 +28,7 @@ interface TodayActionsResponse {
 }
 
 export function TodayActionsCard() {
+  const { t } = useT();
   const query = useQuery({
     queryKey: queryKeys.briefing.todayActions(),
     queryFn: () => apiFetch<TodayActionsResponse>("/api/automations/today-actions"),
@@ -35,8 +37,8 @@ export function TodayActionsCard() {
 
   if (query.isLoading) {
     return (
-      <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs text-slate-400">Loading today's activity…</p>
+      <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
+        <p className="text-role-caption text-ink-dim">{t("todayActions.loading")}</p>
       </section>
     );
   }
@@ -52,40 +54,41 @@ export function TodayActionsCard() {
 
   if (idle) {
     return (
-      <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+      <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
         <header className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">What Klorn did today</h2>
-          <span className="text-[11px] text-slate-400">Since UTC midnight</span>
+          <h2 className="text-role-head text-ink">{t("todayActions.title")}</h2>
+          <span className="text-role-caption text-ink-dim">{t("todayActions.since")}</span>
         </header>
-        <p className="text-xs text-slate-400">
-          Nothing to decide and nothing to run yet today. When a mail sync or decision card lands, a
-          summary appears here.
-        </p>
+        <p className="text-role-caption text-ink-dim">{t("todayActions.idle")}</p>
       </section>
     );
   }
 
   return (
-    <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">What Klorn did today</h2>
-        <span className="text-[11px] text-slate-400">Since UTC midnight</span>
+        <h2 className="text-role-head text-ink">{t("todayActions.title")}</h2>
+        <span className="text-role-caption text-ink-dim">{t("todayActions.since")}</span>
       </header>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <TodayStat
-          label="Auto-executed"
+          label={t("todayActions.stat.executed")}
           value={data.totals.executed}
           tone={data.totals.executed > 0 ? "good" : "idle"}
         />
         <TodayStat
-          label="Pending"
+          label={t("todayActions.stat.pending")}
           value={data.totals.pending}
           tone={data.totals.pending > 0 ? "warn" : "idle"}
         />
-        <TodayStat label="Declined" value={data.totals.rejected} tone="idle" />
         <TodayStat
-          label="Urgent mail"
+          label={t("todayActions.stat.declined")}
+          value={data.totals.rejected}
+          tone="idle"
+        />
+        <TodayStat
+          label={t("todayActions.stat.urgent")}
           value={data.totals.urgent}
           tone={data.totals.urgent > 0 ? "hot" : "idle"}
         />
@@ -96,31 +99,39 @@ export function TodayActionsCard() {
           <TodayRow
             key={item.id}
             tone="executed"
+            label={t("todayActions.row.executed")}
             tool={item.toolName}
-            text={item.summary || "No summary"}
+            text={item.summary || t("todayActions.noSummary")}
           />
         ))}
         {data.pending.slice(0, 2).map((item) => (
           <TodayRow
             key={item.id}
             tone="pending"
+            label={t("todayActions.row.pending")}
             tool={item.toolName}
-            text={item.summary || "No summary"}
+            text={item.summary || t("todayActions.noSummary")}
             href="/inbox"
           />
         ))}
         {data.urgent.slice(0, 1).map((item) => (
-          <TodayRow key={item.id} tone="urgent" text={item.message} href={item.link ?? undefined} />
+          <TodayRow
+            key={item.id}
+            tone="urgent"
+            label={t("todayActions.row.urgent")}
+            text={item.message}
+            href={item.link ?? undefined}
+          />
         ))}
       </div>
 
       {data.totals.pending > 0 && (
-        <div className="mt-3 border-t border-slate-200 pt-3">
+        <div className="mt-3 border-t border-line pt-3">
           <Link
             href="/inbox"
-            className="text-[11px] text-amber-300 transition hover:text-amber-200"
+            className="text-role-caption text-amber-300 transition hover:text-state-warn-ink"
           >
-            See all {data.totals.pending} pending decision{data.totals.pending === 1 ? "" : "s"} →
+            {t("todayActions.seeAll", { count: String(data.totals.pending) })} →
           </Link>
         </div>
       )}
@@ -138,26 +149,28 @@ function TodayStat({
   tone: "good" | "warn" | "hot" | "idle";
 }) {
   const toneClasses = {
-    good: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
-    warn: "border-amber-300/30 bg-amber-300/10 text-amber-100",
+    good: "border-emerald-400/30 bg-emerald-500/10 text-state-ok-ink",
+    warn: "border-state-warn-line bg-amber-300/10 text-amber-100",
     hot: "border-rose-400/30 bg-rose-400/10 text-rose-100",
-    idle: "border-slate-200 bg-white text-slate-500",
+    idle: "border-line bg-surface-panel text-ink-mid",
   }[tone];
   return (
-    <div className={`rounded-lg border px-2.5 py-2 ${toneClasses}`}>
-      <p className="text-[10px] uppercase tracking-wider opacity-70">{label}</p>
-      <p className="text-base font-semibold leading-none">{value}</p>
+    <div className={`rounded-control border px-2.5 py-2 ${toneClasses}`}>
+      <p className="text-role-caption uppercase tracking-wider opacity-70">{label}</p>
+      <p className="text-role-head leading-none">{value}</p>
     </div>
   );
 }
 
 function TodayRow({
   tone,
+  label,
   tool,
   text,
   href,
 }: {
   tone: "executed" | "pending" | "urgent";
+  label: string;
   tool?: string;
   text: string;
   href?: string;
@@ -167,30 +180,25 @@ function TodayRow({
     pending: "bg-amber-300",
     urgent: "bg-rose-400",
   }[tone];
-  const label = {
-    executed: "Executed",
-    pending: "Pending",
-    urgent: "Urgent",
-  }[tone];
   const inner = (
-    <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="flex items-start gap-2 rounded-control border border-line bg-surface-raised px-3 py-2">
       <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium text-slate-500">
+        <p className="text-role-caption font-medium text-ink-mid">
           <span className="opacity-60">{label}</span>
           {tool && (
             <>
               <span className="mx-1.5 opacity-40">·</span>
-              <code className="text-slate-500">{tool}</code>
+              <code className="text-ink-mid">{tool}</code>
             </>
           )}
         </p>
-        <p className="mt-0.5 truncate text-xs leading-snug text-slate-500">{text}</p>
+        <p className="mt-0.5 truncate text-role-caption leading-snug text-ink-mid">{text}</p>
       </div>
     </div>
   );
   return href ? (
-    <Link href={href} className="block transition hover:[&>div]:border-slate-200">
+    <Link href={href} className="block transition hover:[&>div]:border-line">
       {inner}
     </Link>
   ) : (

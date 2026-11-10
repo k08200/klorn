@@ -57,7 +57,8 @@ describe("judgeEmail — automated-sender PUSH floor", () => {
       labels: [],
     });
     // Without the floor, the keyword fallback scores this PUSH (system notice +
-    // urgent word). The floor must catch it.
+    // urgent word). The floor must catch it. (Unchanged under v2: the urgent
+    // branch outranks the INFO check, and the floor then demotes.)
     expect(out.tier).toBe("QUEUE");
     expect(out.source).toBe("keyword-fallback");
   });
@@ -74,13 +75,14 @@ describe("judgeEmail — automated-sender PUSH floor", () => {
   });
 
   it("leaves a non-PUSH automated sender untouched (no forced SILENT/QUEUE churn)", async () => {
-    // No urgent word → keyword fallback scores QUEUE already; the floor is a
-    // no-op here (it only ever demotes PUSH), so the tier is unchanged.
+    // No urgent word → v2 (default since 2026-08-18) files a calm automated
+    // notice as INFO — a record, visible in the strip, never a reply target.
+    // The PUSH floor stays a no-op here either way.
     const out = await judgeEmail({
       from: "Vercel <noreply@vercel.com>",
       subject: "Deployment completed: klorn-web",
       labels: [],
     });
-    expect(out.tier).toBe("QUEUE");
+    expect(out.tier).toBe("INFO");
   });
 });

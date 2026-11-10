@@ -13,7 +13,17 @@ const m = vi.hoisted(() => ({
   eventsListMock: vi.fn(),
   markGoogleTokenForReconnect: vi.fn(async () => {}),
   captureError: vi.fn(),
-  linkedClientsMock: vi.fn(async () => [] as Array<{ client: unknown; email: string }>),
+  markLinkedCalendarForReconnect: vi.fn(async () => {}),
+  linkedFindMany: vi.fn(async () => [] as unknown[]),
+  linkedFindFirst: vi.fn(async () => null),
+  // The linked accounts the seam lists, and the client each one resolves to.
+  linkedRows: [] as Array<{
+    id: string;
+    email: string;
+    provider: string;
+    needsReconnect: boolean;
+    client: unknown;
+  }>,
 }));
 const {
   calendarListMock,
@@ -21,8 +31,21 @@ const {
   eventsListMock,
   markGoogleTokenForReconnect,
   captureError,
-  linkedClientsMock,
+  markLinkedCalendarForReconnect,
 } = m;
+
+function setLinkedAccounts(
+  accounts: Array<{ id?: string; email: string; client?: unknown; needsReconnect?: boolean }>,
+) {
+  m.linkedRows = accounts.map((a, i) => ({
+    id: a.id ?? `acct-${i + 1}`,
+    email: a.email,
+    provider: "GOOGLE",
+    needsReconnect: a.needsReconnect ?? false,
+    client: a.client ?? {},
+  }));
+  m.linkedFindMany.mockResolvedValue(m.linkedRows);
+}
 
 vi.mock("googleapis", () => ({
   google: {
@@ -36,14 +59,27 @@ vi.mock("googleapis", () => ({
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
-  getLinkedCalendarClients: m.linkedClientsMock,
+  // The dispatcher hands the listed row over; the fixture's `client` stands for the decrypted token.
+  buildLinkedCalendarClient: (
+    _userId: string,
+    row: { id: string; email: string; client: unknown },
+  ) => ({
+    client: row.client,
+    id: row.id,
+    email: row.email,
+  }),
   isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,
   markGoogleTokenForReconnect: m.markGoogleTokenForReconnect,
+  markLinkedCalendarForReconnect: m.markLinkedCalendarForReconnect,
 }));
 
 vi.mock("../db.js", () => ({
   prisma: {
     automationConfig: { findUnique: vi.fn(async () => ({ timezone: "Asia/Seoul" })) },
+    linkedCalendarAccount: {
+      findMany: m.linkedFindMany,
+      findFirst: m.linkedFindFirst,
+    },
   },
 }));
 
@@ -57,7 +93,8 @@ const END = "2026-06-03T15:00:00+09:00"; // 06:00Z
 describe("checkConflicts — multi-calendar free/busy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    linkedClientsMock.mockResolvedValue([]); // default: no linked accounts
+    m.linkedRows = []; // default: no linked accounts
+    m.linkedFindMany.mockResolvedValue([]);
   });
 
   it("queries free/busy across owner+writer calendars (skips reader subs) and merges busy blocks", async () => {
@@ -154,10 +191,11 @@ describe("checkConflicts — multi-calendar free/busy", () => {
     const result = await checkConflicts("user-1", START, END);
 
     expect(result).toMatchObject({ hasConflicts: true, scope: "primary_only" });
+    // The degraded path names no event: free/busy does not, and an invite's title is
+    // external content the model must not be handed raw (changed in C7).
     expect(result.conflicts).toEqual([
       {
         id: "timed",
-        summary: "1:1",
         start: "2026-06-03T14:00:00+09:00",
         end: "2026-06-03T15:00:00+09:00",
       },
@@ -182,7 +220,7 @@ describe("checkConflicts — multi-calendar free/busy", () => {
   it("merges a busy block from a LINKED (work) account across a separate Google account", async () => {
     // The real cross-account fix: the work calendar lives on a different Google
     // account, so the primary token can't see it — a linked account can.
-    linkedClientsMock.mockResolvedValue([{ client: {}, email: "me@work.com" }]);
+    setLinkedAccounts([{ email: "me@work.com" }]);
     // Call sequence: primary calendarList → primary freebusy → work calendarList → work freebusy.
     calendarListMock
       .mockResolvedValueOnce({
@@ -220,7 +258,7 @@ describe("checkConflicts — multi-calendar free/busy", () => {
   });
 
   it("does not let a failing linked account sink the check (best-effort + capture)", async () => {
-    linkedClientsMock.mockResolvedValue([{ client: {}, email: "me@work.com" }]);
+    setLinkedAccounts([{ email: "me@work.com" }]);
     calendarListMock
       .mockResolvedValueOnce({
         data: {
@@ -254,5 +292,68 @@ describe("checkConflicts — multi-calendar free/busy", () => {
           "calendar.linked_freebusy_failed",
       ),
     ).toBe(true);
+  });
+
+  it("a revoked linked account flags it for reconnect, is never sent to Sentry, and does not sink the check (C2)", async () => {
+    setLinkedAccounts([{ id: "acct-work", email: "me@work.com" }]);
+    calendarListMock
+      .mockResolvedValueOnce({
+        data: { items: [{ id: "primary", primary: true, accessRole: "owner", summary: "me" }] },
+      })
+      .mockRejectedValueOnce({ response: { status: 401 }, message: "invalid_grant" });
+    freebusyMock.mockResolvedValueOnce({ data: { calendars: { primary: { busy: [] } } } });
+
+    const result = await checkConflicts("user-1", START, END);
+
+    expect(result).toMatchObject({ hasConflicts: false, linkedAccountsChecked: 1 });
+    expect(markLinkedCalendarForReconnect).toHaveBeenCalledWith("user-1", "acct-work");
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("still checks an account flagged needsReconnect: a successful refresh clears the flag (C2)", async () => {
+    setLinkedAccounts([{ email: "me@work.com", needsReconnect: true }]);
+    calendarListMock.mockResolvedValue({
+      data: { items: [{ id: "primary", primary: true, accessRole: "owner", summary: "me" }] },
+    });
+    freebusyMock.mockResolvedValue({ data: { calendars: { primary: { busy: [] } } } });
+
+    const result = await checkConflicts("user-1", START, END);
+
+    expect(result).toMatchObject({ linkedAccountsChecked: 1 });
+    expect(calendarListMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("an account of a provider with no calendar implementation yet is skipped, not counted (C2)", async () => {
+    setLinkedAccounts([{ email: "me@work.com" }]);
+    m.linkedRows = m.linkedRows.map((r) => ({ ...r, provider: "OUTLOOK" }));
+    m.linkedFindMany.mockResolvedValue(m.linkedRows);
+    calendarListMock.mockResolvedValue({
+      data: { items: [{ id: "primary", primary: true, accessRole: "owner", summary: "me" }] },
+    });
+    freebusyMock.mockResolvedValue({ data: { calendars: { primary: { busy: [] } } } });
+
+    const result = await checkConflicts("user-1", START, END);
+
+    expect(result).toMatchObject({ linkedAccountsChecked: 0 });
+    expect(calendarListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a conflict check reads the linked accounts once, however many there are, and looks nothing else up (C2)", async () => {
+    setLinkedAccounts([
+      { email: "a@work.com" },
+      { email: "b@school.edu" },
+      { email: "c@side.org" },
+    ]);
+    calendarListMock.mockResolvedValue({
+      data: { items: [{ id: "primary", primary: true, accessRole: "owner", summary: "me" }] },
+    });
+    freebusyMock.mockResolvedValue({ data: { calendars: { primary: { busy: [] } } } });
+
+    const result = await checkConflicts("user-1", START, END);
+
+    expect(result).toMatchObject({ linkedAccountsChecked: 3 });
+    // What main paid: one read of the linked rows. Nothing per account.
+    expect(m.linkedFindMany).toHaveBeenCalledTimes(1);
+    expect(m.linkedFindFirst).not.toHaveBeenCalled();
   });
 });

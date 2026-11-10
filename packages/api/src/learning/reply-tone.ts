@@ -30,12 +30,12 @@ export const REPLY_TONE_POLICIES: Record<ReplyTone, ReplyTonePolicy> = {
   },
   FORMAL: {
     tone: "FORMAL",
-    label: "Formal",
+    label: "Polite",
     description: "Polite and businesslike. Honorifics where the language has them.",
   },
   FRIENDLY: {
     tone: "FRIENDLY",
-    label: "Friendly",
+    label: "Work",
     description: "Warm but still professional. The everyday default.",
   },
   CASUAL: {

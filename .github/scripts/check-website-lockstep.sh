@@ -1,27 +1,257 @@
 #!/usr/bin/env bash
-# The EN (website/index.html) and KO (website/ko/index.html) landings are full
-# parallel copies with no shared template — every structural edit must land in
-# both files. This compares the structure-bearing skeleton of each page (element
-# ids, /media/ video sources and posters, CSS class definitions) and fails on
-# drift. Copy (translated text) is free to differ; structure is not.
+# The landing pages are full parallel copies with no shared template — every
+# structural edit must land in every language. This compares the
+# structure-bearing skeleton of each page (element ids, /media/ video sources
+# and posters, CSS class definitions) against English and fails on drift.
+# Copy (translated text) is free to differ; structure is not.
+#
+# Generic over N languages: every website/<code>/index.html is discovered, so
+# adding a language needs no edit here. With two pages this was a nicety; with
+# seven it is the only thing standing between a copy edit and a page that
+# silently loses a section.
 set -euo pipefail
 
 EN=website/index.html
-KO=website/ko/index.html
 
 skeleton() {
   {
     grep -o 'id="[^"]*"' "$1" || true
-    grep -o 'src="/media/[^"]*"' "$1" || true
+    # Localized app screenshots (/media/app/<code>/…) are the one sanctioned
+    # per-language asset divergence — normalize the prefix so each language may
+    # point at its own set while the FILENAMES still must match the EN page.
+    # The desktop captures in /media/app-2026-10/ may also carry a language tag
+    # (today-ko-light-2000.webp vs today-light-2000.webp, and the phone crop
+    # mail-m-ko-light-840.webp vs mail-m-light-840.webp); strip it the same way.
+    grep -o 'src="/media/[^"]*"' "$1" \
+      | sed -E -e 's|/media/app/[a-z]{2}/|/media/app/|' \
+               -e 's|(/media/app-2026-10/[a-z]+(-m)?)-[a-z]{2}-(light\|dark)-|\1-\3-|' || true
     grep -o 'poster="/media/[^"]*"' "$1" || true
     grep -oE '^[[:space:]]*\.[a-z][a-zA-Z0-9., :()-]*\{' "$1" | sed 's/[[:space:]]//g' || true
+    # Styles now live in /landing.css, so the class definitions above no longer
+    # carry the page's shape. The classes the markup USES, the data-* hooks the
+    # scripts and guards read, and the stylesheet link do.
+    grep -oE 'class="[^"]*"' "$1" || true
+    grep -oE 'data-[a-z-]+(="(push|meeting|queue|info|silent)")?' "$1" || true
+    # Webfont stylesheets under /fonts/ are per-script, not structure: only the
+    # Korean pages load Pretendard (/fonts/pretendard/pretendard.css).
+    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" | grep -v 'href="/fonts/' || true
   } | sort
 }
 
-if ! diff <(skeleton "$EN") <(skeleton "$KO") > /tmp/lockstep.diff; then
-  echo "::error::website EN/KO structural drift — edit both landings in lockstep (< only in EN, > only in KO):"
-  cat /tmp/lockstep.diff
+# Two-letter directories only. website/ also holds privacy/, terms/, refund/
+# and oauth-native/ — separate pages, not translations of the landing, and
+# comparing them against it would fail on every run.
+langs=()
+for dir in website/*/; do
+  code="$(basename "$dir")"
+  [[ "$code" =~ ^[a-z]{2}$ ]] || continue
+  [ -f "${dir}index.html" ] || continue
+  langs+=("$code")
+done
+
+if [ ${#langs[@]} -eq 0 ]; then
+  echo "::error::no website/<code>/index.html found — did the landings move?"
   exit 1
 fi
 
-echo "EN/KO structural skeleton matches ($(skeleton "$EN" | wc -l | tr -d ' ') anchors)."
+failed=0
+for code in "${langs[@]}"; do
+  page="website/${code}/index.html"
+  if ! diff <(skeleton "$EN") <(skeleton "$page") > "/tmp/lockstep-${code}.diff"; then
+    echo "::error::website EN/${code} structural drift — edit every landing in lockstep (< only in EN, > only in ${code}):"
+    cat "/tmp/lockstep-${code}.diff"
+    failed=1
+  fi
+done
+
+[ "$failed" -eq 0 ] || exit 1
+
+# A language is only "shipped" once search engines can see it. Adding the
+# directory but forgetting the hreflang set or the sitemap entry leaves the page
+# live and unreachable, which looks identical to done from the browser.
+all=(en "${langs[@]}")
+for code in "${all[@]}"; do
+  [ "$code" = en ] && page="$EN" || page="website/${code}/index.html"
+  [ "$code" = en ] && href="/" || href="/${code}/"
+
+  grep -q "<html lang=\"${code}\">" "$page" || {
+    echo "::error::${page} does not declare <html lang=\"${code}\">"; failed=1; }
+
+  # Every page must point at every other one, or the set reads as unrelated
+  # pages rather than translations of one another.
+  for other in "${all[@]}" x-default; do
+    grep -q "hreflang=\"${other}\"" "$page" || {
+      echo "::error::${page} is missing hreflang=\"${other}\""; failed=1; }
+  done
+
+  grep -q "<loc>https://klorn.ai${href}</loc>" website/sitemap.xml || {
+    echo "::error::website/sitemap.xml has no entry for ${href}"; failed=1; }
+
+  # The language switcher must mark THIS page's language as current, in the nav
+  # menu and the footer both. Pages are generated by copying the English body,
+  # where the marker sits on English — a screen reader on the Japanese page
+  # would otherwise be told it is reading English.
+  marked="$(grep -o 'data-lang-pick="[a-z]\{2\}"[^>]*aria-current="true"' "$page" \
+            | grep -o 'data-lang-pick="[a-z]\{2\}"' | sort -u | tr -d '\n')"
+  [ "$marked" = "data-lang-pick=\"${code}\"" ] || {
+    echo "::error::${page} marks aria-current on [${marked:-none}], expected only ${code}"
+    failed=1; }
+done
+
+[ "$failed" -eq 0 ] || exit 1
+
+# ---------------------------------------------------------------------------
+# Translated subpages.
+#
+# Until 2026-10-31 only the landings were translated: a Japanese reader who
+# clicked Pricing landed on English, and the language menu on every subpage
+# offered two of the seven languages. Every page below now exists in all seven
+# languages; a missing locale, a page that drifted structurally from English,
+# an incomplete hreflang set or a link that drops the reader back into English
+# fails here. scripts/site-i18n/sync-chrome.py writes the chrome this checks
+# (keep its SUBPAGES list identical to this one).
+LOCALIZED_SUBPAGES=(pricing security download methodology open-source self-host
+  status gdpr dpa blog vs/fyxer vs/superhuman vs/sanebox vs/inbox-zero)
+SUB_LANGS=(en ko ja zh es fr de)
+sub_alt="$(IFS='|'; echo "${LOCALIZED_SUBPAGES[*]}")"
+
+sub_skeleton() {
+  {
+    grep -o 'id="[^"]*"' "$1" || true
+    grep -oE 'class="[^"]*"' "$1" || true
+    grep -oE 'data-[a-z-]+(="(push|meeting|queue|info|silent)")?' "$1" || true
+    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" | grep -v 'href="/fonts/' || true
+  } | sort
+}
+
+sub_pages=0
+for sp in "${LOCALIZED_SUBPAGES[@]}"; do
+  en_page="website/${sp}/index.html"
+  [ -f "$en_page" ] || { echo "::error::${en_page} is missing"; failed=1; continue; }
+  for code in "${SUB_LANGS[@]}"; do
+    [ "$code" = en ] && pre="/" || pre="/${code}/"
+    page="website${pre}${sp}/index.html"
+    if [ ! -f "$page" ]; then
+      echo "::error::${page} is missing — every localized subpage must exist in all ${#SUB_LANGS[@]} languages"
+      failed=1; continue
+    fi
+    sub_pages=$((sub_pages + 1))
+
+    if [ "$code" != en ] && ! diff <(sub_skeleton "$en_page") <(sub_skeleton "$page") > "/tmp/lockstep-sub.diff"; then
+      echo "::error::${page} structural drift from ${en_page} (< only in EN, > only in ${code}):"
+      cat /tmp/lockstep-sub.diff
+      failed=1
+    fi
+
+    grep -q "<html lang=\"${code}\">" "$page" || {
+      echo "::error::${page} does not declare <html lang=\"${code}\">"; failed=1; }
+
+    for other in "${SUB_LANGS[@]}"; do
+      [ "$other" = en ] && opre="/" || opre="/${other}/"
+      grep -q "<link rel=\"alternate\" hreflang=\"${other}\" href=\"https://klorn.ai${opre}${sp}/\">" "$page" || {
+        echo "::error::${page} is missing hreflang=\"${other}\" → ${opre}${sp}/"; failed=1; }
+      grep -q "<a href=\"${opre}${sp}/\" role=\"menuitem\" lang=\"${other}\"" "$page" || {
+        echo "::error::${page} language menu has no ${other} entry for ${opre}${sp}/"; failed=1; }
+    done
+    grep -q "<link rel=\"alternate\" hreflang=\"x-default\" href=\"https://klorn.ai/${sp}/\">" "$page" || {
+      echo "::error::${page} is missing hreflang=\"x-default\""; failed=1; }
+
+    marked="$(grep -o 'role="menuitem" lang="[a-z]\{2\}" aria-current="true"' "$page" \
+              | grep -o 'lang="[a-z]\{2\}"' | sort -u | tr -d '\n')"
+    [ "$marked" = "lang=\"${code}\"" ] || {
+      echo "::error::${page} language menu marks [${marked:-none}] current, expected only ${code}"
+      failed=1; }
+  done
+done
+
+# A translated page (landing or subpage) must keep the reader in their
+# language: any <a> to a localized page must carry this page's prefix. Links
+# that deliberately go to another language say so with lang="xx" (language
+# menu, the "English version governs" notice) or data-lang-pick (landings).
+for code in "${SUB_LANGS[@]}"; do
+  [ "$code" = en ] && continue
+  for page in "website/${code}/index.html" $(printf "website/${code}/%s/index.html " "${LOCALIZED_SUBPAGES[@]}"); do
+    [ -f "$page" ] || continue
+    bad="$(grep -oE '<a [^>]*>' "$page" | grep -v 'data-lang-pick' | grep -v ' lang="' \
+           | grep -oE 'href="/([a-z]{2}/)?('"${sub_alt}"')/(#[^"]*)?"' \
+           | grep -v "href=\"/${code}/" || true)"
+    if [ -n "$bad" ]; then
+      echo "::error::${page} links out of ${code} to:"; echo "$bad" | sort -u
+      failed=1
+    fi
+  done
+done
+
+[ "$failed" -eq 0 ] || exit 1
+
+# ---------------------------------------------------------------------------
+# Every page, not just the landings.
+#
+# The comparison pages shipped in #1219 for SEO and then sat for weeks with no
+# sitemap entry, no OG card and no attribution — indexable in principle,
+# invisible in practice. The checks below are the ones whose absence produced
+# that: they run over every index.html under website/, so a new page cannot
+# repeat it.
+pages=0
+while IFS= read -r page; do
+  pages=$((pages + 1))
+  # Derive the URL from the file's own location rather than trusting the tag —
+  # that way a canonical pointing at the wrong page is a failure, not the
+  # premise of every check below it.
+  url="https://klorn.ai/${page#website/}"
+  url="${url%index.html}"
+
+  # noindex and a sitemap entry are contradictory instructions. A page is
+  # either something we want indexed (sitemap, no noindex) or it is not.
+  if grep -q 'name="robots" content="[^"]*noindex' "$page"; then
+    if grep -q "<loc>${url}</loc>" website/sitemap.xml; then
+      echo "::error::${page} is noindex but listed in sitemap.xml (${url})"
+      failed=1
+    fi
+    continue
+  fi
+
+  canonical="$(grep -o '<link rel="canonical" href="[^"]*"' "$page" \
+               | sed 's/.*href="//; s/"//' || true)"
+  [ "$canonical" = "$url" ] || {
+    echo "::error::${page} canonical is [${canonical:-none}], expected ${url}"
+    failed=1; }
+
+  grep -q "<loc>${url}</loc>" website/sitemap.xml || {
+    echo "::error::website/sitemap.xml has no entry for ${url} (from ${page})"
+    failed=1; }
+
+  # A page with no OG card is a bare URL everywhere it gets shared.
+  for tag in 'property="og:title"' 'property="og:description"' 'property="og:url"' \
+             'property="og:image"' 'name="twitter:card"'; do
+    grep -q "$tag" "$page" || {
+      echo "::error::${page} is missing <meta ${tag}>"; failed=1; }
+  done
+
+  og_url="$(grep -o '<meta property="og:url" content="[^"]*"' "$page" \
+            | sed 's/.*content="//; s/"//' || true)"
+  [ "$og_url" = "$url" ] || {
+    echo "::error::${page} og:url is [${og_url:-none}], expected ${url}"
+    failed=1; }
+
+  # A signup link that carries no campaign is a conversion we cannot attribute
+  # to the page that earned it.
+  if grep -q 'app\.klorn\.ai' "$page" && ! grep -q 'utm_campaign' "$page"; then
+    echo "::error::${page} links to app.klorn.ai without the attribution block"
+    failed=1
+  fi
+
+  # A pinned tag in a download link goes stale silently — the site handed out a
+  # build 51 releases old for three weeks. /releases/latest/ never does.
+  if grep -q 'releases/\(download\|tag\)/desktop-v' "$page"; then
+    echo "::error::${page} pins a release tag in a download link; use /releases/latest/"
+    failed=1
+  fi
+done < <(find website -name index.html | sort)
+
+[ "$failed" -eq 0 ] || exit 1
+
+echo "EN skeleton matches ${#langs[@]} translated landing(s) [${langs[*]}] ($(skeleton "$EN" | wc -l | tr -d ' ') anchors)."
+echo "hreflang + sitemap complete for ${#all[@]} language(s) [${all[*]}]."
+echo "${#LOCALIZED_SUBPAGES[@]} subpage(s) × ${#SUB_LANGS[@]} language(s): ${sub_pages} page(s) present, skeleton + hreflang + language menu + in-locale links verified."
+echo "canonical + sitemap + OG card + attribution verified on ${pages} page(s)."

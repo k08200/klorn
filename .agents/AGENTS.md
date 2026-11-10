@@ -1,7 +1,8 @@
 # Klorn — Agent Operating Guide
 
-Klorn is an **AI email firewall/router**: it classifies inbound mail into 4 tiers
-(PUSH / QUEUE / SILENT / AUTO) and only interrupts the user for what matters.
+Klorn is an **AI email firewall/router**: it classifies inbound mail into five
+lanes (PUSH / MEETING / QUEUE / INFO / SILENT) and only interrupts the user for
+what matters.
 
 This file tells an agent **which skill or agent to use for each situation** in this
 repo. It is the authoritative situation→tool map; [`skills/skill-library`](skills/skill-library/SKILL.md)
@@ -37,7 +38,7 @@ reviewer/build/test skill. Use the TS surfaces below.
 ### Tests & the classifier quality gate
 - **New feature / bug fix** → `tdd-guide` agent (RED→GREEN→IMPROVE, 80%+ coverage).
 - **Check PR test coverage** → `pr-test-analyzer` agent or `/test-coverage`.
-- **Classifier accuracy / regressions** (the 4-tier model, PoC ≥80% gate)
+- **Classifier accuracy / regressions** (the lane model, PoC ≥80% gate)
   → `ai-regression-testing` + `/eval` / `eval-harness`. CI mirrors this in
   `eval.yml` and `judge-canary.yml` — keep them green before merge.
 
@@ -93,5 +94,7 @@ reviewer/build/test skill. Use the TS surfaces below.
 ## Don't
 
 - Don't run other-language skills (no Python/Go/Rust/etc. — not in this stack).
-- Don't add a 5th tier or "Call" — the model is **4-tier** (PUSH/QUEUE/SILENT/AUTO), locked.
+- Don't invent a sixth lane, and don't emit `AUTO` or `CALL` — they are retired v1
+  values that `normalizeTier` folds away on read. The vocabulary is the **five lanes**
+  (PUSH/MEETING/QUEUE/INFO/SILENT), canonical in `schema.prisma`, locked 2026-08-23.
 - Don't pull LIBRARY surfaces (marketing, domain packs, media gen) into a coding session.

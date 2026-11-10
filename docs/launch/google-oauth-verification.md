@@ -83,7 +83,8 @@ linking a second account requests no new scope.
 
 ### `https://www.googleapis.com/auth/gmail.readonly` — RESTRICTED
 **Feature:** Klorn's core value — it reads the user's incoming mail to classify
-each message into one of four attention tiers (PUSH / QUEUE / SILENT / AUTO),
+each message into one of five attention lanes (PUSH / MEETING / QUEUE /
+INFO / SILENT),
 generate a one-line summary, and surface only what needs the user's attention.
 **API calls:** `users.messages.list`, `users.messages.get`, `users.threads.*`.
 **Why nothing narrower works:** There is no metadata-only scope that returns
@@ -149,6 +150,13 @@ Used only to identify the signed-in account and which mailbox was linked.
 The privacy policy (`/privacy`) already states the above, including the verbatim
 "Limited Use" reference and the "do not train" commitment.
 
+> **2026-11-01** — The provider list above is the text as prepared for the
+> original verification submission; leave it as the record. If this statement
+> is reused (e.g. at the next CASA re-assessment), the current server-side AI
+> providers are Anthropic (Claude API) and Google (Gemini API). OpenRouter was
+> removed from Klorn on 2026-11-01; the privacy policy and DPA name the same two
+> providers.
+
 ---
 
 ## 3. Demo video script (unlisted YouTube, English, screen recording)
@@ -163,7 +171,8 @@ demonstration of **each restricted scope's** functionality.
    Google, **pause on the consent screen** so the app name "Klorn" is clearly
    visible, then **highlight the browser address bar** showing
    `accounts.google.com/...client_id=...` (the OAuth client ID). Approve.
-3. **gmail.readonly (30s):** Show the inbox classified into PUSH/QUEUE/SILENT/AUTO
+3. **gmail.readonly (30s):** Show the inbox classified into
+   PUSH/MEETING/QUEUE/INFO/SILENT
    with AI summaries — "this uses read access to classify and summarize mail."
 4. **gmail.modify (30s):** Open a message, click "mark handled / archive", switch
    to Gmail in another tab to show it moved, then click **Undo** in Klorn and show

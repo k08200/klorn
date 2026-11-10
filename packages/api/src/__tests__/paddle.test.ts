@@ -157,6 +157,96 @@ describe("createPaddleCheckout", () => {
   });
 });
 
+describe("cancelPaddleSubscription", () => {
+  it("POSTs a period-end cancel and returns the scheduled effective date", async () => {
+    process.env.PADDLE_API_KEY = "pdl_test_key";
+    process.env.PADDLE_PRO_PRICE_ID = "pri_123";
+    delete process.env.PADDLE_ENV;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: {
+          status: "active",
+          scheduled_change: { action: "cancel", effective_at: "2026-09-21T00:00:00Z" },
+        },
+      }),
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { cancelPaddleSubscription } = await import("../billing/paddle.js");
+
+    const result = await cancelPaddleSubscription("sub_1");
+
+    expect(result.effectiveAt).toBe("2026-09-21T00:00:00Z");
+    const [calledUrl, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(calledUrl).toBe("https://api.paddle.com/subscriptions/sub_1/cancel");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ effective_from: "next_billing_period" });
+  });
+
+  it("falls back to the current billing period end when no scheduled_change is returned", async () => {
+    process.env.PADDLE_API_KEY = "pdl_test_key";
+    process.env.PADDLE_PRO_PRICE_ID = "pri_123";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: { current_billing_period: { ends_at: "2026-09-01T00:00:00Z" } },
+        }),
+        text: async () => "",
+      })),
+    );
+    const { cancelPaddleSubscription } = await import("../billing/paddle.js");
+    expect((await cancelPaddleSubscription("sub_1")).effectiveAt).toBe("2026-09-01T00:00:00Z");
+  });
+
+  it("throws on a non-2xx API response (no silent failure)", async () => {
+    process.env.PADDLE_API_KEY = "pdl_test_key";
+    process.env.PADDLE_PRO_PRICE_ID = "pri_123";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({}),
+        text: async () => "conflict",
+      })),
+    );
+    const { cancelPaddleSubscription } = await import("../billing/paddle.js");
+    await expect(cancelPaddleSubscription("sub_1")).rejects.toThrow(/409/);
+  });
+});
+
+describe("undoPaddleCancellation", () => {
+  it("PATCHes the subscription with scheduled_change:null", async () => {
+    process.env.PADDLE_API_KEY = "pdl_test_key";
+    process.env.PADDLE_PRO_PRICE_ID = "pri_123";
+    delete process.env.PADDLE_ENV;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: { status: "active", scheduled_change: null, next_billed_at: "2026-09-21T00:00:00Z" },
+      }),
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { undoPaddleCancellation } = await import("../billing/paddle.js");
+
+    const result = await undoPaddleCancellation("sub_1");
+
+    expect(result.renewsAt).toBe("2026-09-21T00:00:00Z");
+
+    const [calledUrl, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(calledUrl).toBe("https://api.paddle.com/subscriptions/sub_1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ scheduled_change: null });
+  });
+});
+
 describe("createPaddlePortalUrl", () => {
   it("creates a customer portal session and returns the overview url", async () => {
     process.env.PADDLE_API_KEY = "pdl_test_key";

@@ -41,6 +41,11 @@ export interface ClassifiableEmail {
    * fastClassify so promotional mail never escapes the LLM's politeness.
    */
   labels?: string[];
+  /**
+   * Bulk-mail marker (List-Unsubscribe header), forwarded from sync. Read by
+   * the v2 transactional detector to keep marketing out of the INFO lane.
+   */
+  hasListUnsubscribe?: boolean;
 }
 
 export interface ClassifiedLabel {

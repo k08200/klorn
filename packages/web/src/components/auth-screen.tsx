@@ -2,131 +2,121 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { accentSerif } from "../lib/fonts/accent-serif";
 import { useT } from "../lib/i18n";
 
+/** Published facts behind the trust line live here; the line links to them. */
+const SECURITY_URL = "https://klorn.ai/security/";
+
+/** Locales whose script the accent serif covers (it ships a Latin subset). */
+const SERIF_LOCALES = new Set(["en", "de", "fr", "es"]);
+
 interface AuthScreenProps {
-  eyebrow: string;
-  title: string;
-  description: string;
+  /** The page's h1 — a string, or <BrandHeadline /> on the sign-in page. */
+  title: ReactNode;
+  description?: string;
   children: ReactNode;
-  asideTitle?: string;
-  asideBody?: string;
-  asideItems?: Array<{ label: string; value: string }>;
-  footer?: ReactNode;
-  navCtaHref?: string;
-  navCtaLabel?: string;
+  /**
+   * Wide-screen product panel (lg and up). Omitted on the secondary flows
+   * (reset, verify), which centre a single column instead.
+   */
+  preview?: ReactNode;
 }
 
-export default function AuthScreen({
-  eyebrow,
-  title,
-  description,
-  children,
-  asideTitle,
-  asideBody,
-  asideItems,
-  footer,
-  navCtaHref = "/early-access",
-  navCtaLabel,
-}: AuthScreenProps) {
-  const { t } = useT();
-  // Callers may override the marketing aside (e.g. early-access); otherwise
-  // fall back to the translated defaults so the panel matches the app locale.
-  const resolvedAsideTitle = asideTitle ?? t("auth.asideTitle");
-  const resolvedAsideBody = asideBody ?? t("auth.asideBody");
-  const resolvedAsideItems = asideItems ?? [
-    { label: t("auth.stepSignal"), value: t("auth.stepSignalDesc") },
-    { label: t("auth.stepContext"), value: t("auth.stepContextDesc") },
-    { label: t("auth.stepApproval"), value: t("auth.stepApprovalDesc") },
-  ];
-  const resolvedNavCtaLabel = navCtaLabel ?? t("nav.earlyAccess");
+/** Entry stagger: two beats, under 200ms in total — this is a task surface. */
+const STEP_MS = 80;
+const rise = (step: number) => ({ animationDelay: `${step * STEP_MS}ms` });
+
+/**
+ * The shell every sign-in surface shares: brand mark, one column holding the
+ * task, a quiet footer, and — on the sign-in page at desktop width — a panel
+ * showing the product itself. Flat hue-free canvas (productization plan §2);
+ * the old landing-sky wash and marketing aside are gone.
+ */
+export default function AuthScreen({ title, description, children, preview }: AuthScreenProps) {
   return (
-    <main id="main" className="min-h-screen overflow-x-hidden sky-bg text-slate-900">
-      <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
-        <Link href="/" className="flex items-center gap-3">
-          <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
-          <span className="text-sm font-semibold tracking-[0.14em] text-slate-900">Klorn</span>
-        </Link>
-        {/* Landing nav (Home / Early access) is noise on the app login —
-            hide it on phones; the logo stays. */}
-        <div className="hidden items-center gap-3 text-sm sm:flex">
+    <main
+      id="main"
+      className={`grid min-h-dvh bg-surface-panel text-ink ${
+        preview ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]" : ""
+      }`}
+    >
+      <div className="flex min-h-dvh min-w-0 flex-col px-4 pt-safe sm:px-8">
+        <header className="flex h-16 shrink-0 items-center">
           <Link
-            className="inline-flex min-h-11 items-center whitespace-nowrap text-slate-500 transition hover:text-slate-900"
             href="/"
+            className="focus-ring -mx-2 inline-flex min-h-11 items-center gap-2.5 rounded-control px-2"
           >
-            {t("nav.home")}
+            <img src="/brand/mark.svg?v=matte2" alt="" className="h-7 w-7" />
+            <span className="text-role-head text-ink">Klorn</span>
           </Link>
-          <Link
-            className="inline-flex min-h-11 items-center whitespace-nowrap rounded-md border border-slate-200 px-3 py-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-            href={navCtaHref}
-          >
-            {resolvedNavCtaLabel}
-          </Link>
-        </div>
-      </nav>
+        </header>
 
-      <section className="relative z-10 mx-auto grid min-h-[calc(100svh-76px)] max-w-6xl items-start gap-8 px-5 pb-16 pt-6 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center">
-        <aside className="hidden lg:block">
-          <div className="max-w-xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              {t("nav.decisionQueue")}
-            </p>
-            <h2 className="mt-4 text-5xl font-semibold leading-[1.02] tracking-tight text-slate-900">
-              {resolvedAsideTitle}
-            </h2>
-            <p className="mt-5 max-w-lg text-base leading-7 text-slate-500">{resolvedAsideBody}</p>
+        <div className="flex flex-1 items-start justify-center py-6 sm:items-center sm:py-8">
+          <div className="w-full max-w-sm">
+            <div className="rise" style={rise(0)}>
+              <h1 className="text-role-page text-balance text-ink">{title}</h1>
+              {description && (
+                <p className="mt-3 text-role-body text-pretty text-ink-mid">{description}</p>
+              )}
+            </div>
+            <div className="rise mt-8" style={rise(1)}>
+              {children}
+            </div>
           </div>
-          <div className="mt-9 max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-surface-panel shadow-[0_18px_44px_-26px_rgba(2,60,110,0.28)]">
-            {resolvedAsideItems.map((item, index) => (
-              <div
-                key={item.label}
-                className="grid grid-cols-[72px_1fr] gap-4 border-b border-slate-200 px-4 py-4 last:border-b-0"
-              >
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                    0{index + 1}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-slate-900">{item.label}</p>
-                </div>
-                <p className="text-sm leading-6 text-slate-500">{item.value}</p>
-              </div>
-            ))}
-          </div>
+        </div>
+
+        <AuthFooter />
+      </div>
+
+      {preview && (
+        <aside className="hidden min-w-0 items-center justify-center border-l border-line bg-surface-app px-12 py-16 lg:flex xl:px-20">
+          {preview}
         </aside>
-
-        <div className="mx-auto w-full max-w-md">
-          <div className="mb-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-              {eyebrow}
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">{description}</p>
-          </div>
-
-          {/* Condensed reassurance for mobile + WebView users — the full <aside>
-              is hidden below lg, so surface the same three signals compactly
-              above the form so phone visitors still get context. */}
-          <div className="mb-5 overflow-hidden rounded-lg border border-slate-200 bg-surface-panel lg:hidden">
-            <p className="border-b border-slate-200 px-4 py-3 text-sm font-medium text-slate-900">
-              {resolvedAsideTitle}
-            </p>
-            <ul className="divide-y divide-slate-200">
-              {resolvedAsideItems.map((item) => (
-                <li key={item.label} className="flex gap-3 px-4 py-2.5">
-                  <span className="shrink-0 text-xs font-medium text-slate-500">{item.label}</span>
-                  <span className="text-xs leading-5 text-slate-500">{item.value}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-surface-panel p-4 shadow-[0_28px_64px_-28px_rgba(2,60,110,0.32)] sm:p-5">
-            {children}
-          </div>
-
-          {footer && <div className="mt-5 text-center text-xs text-slate-400">{footer}</div>}
-        </div>
-      </section>
+      )}
     </main>
+  );
+}
+
+/**
+ * "All your mail and calendars, in one calm place." — the landing's promise,
+ * with its serif accent. CJK locales keep the UI face for the accent, as the
+ * landing does: the serif has no glyphs for them and a synthetic italic of a
+ * fallback font reads as a rendering bug.
+ */
+export function BrandHeadline() {
+  const { t, locale } = useT();
+  const accentFace = SERIF_LOCALES.has(locale) ? `${accentSerif.className} font-normal` : "";
+  return (
+    <>
+      {t("auth.headline")}{" "}
+      <span className={`block text-accent-deep ${accentFace}`}>{t("auth.headlineAccent")}</span>
+    </>
+  );
+}
+
+function AuthFooter() {
+  const { t } = useT();
+  const linkClass =
+    "focus-ring inline-flex min-h-11 items-center rounded-control text-ink-mid transition-colors duration-120 ease-fluid hover:text-ink";
+  return (
+    <footer className="flex shrink-0 flex-col gap-1 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 text-role-caption text-ink-mid sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <a
+        href={SECURITY_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${linkClass} text-pretty underline decoration-line-strong underline-offset-2`}
+      >
+        {t("auth.trustLine")}
+      </a>
+      <nav aria-label={t("auth.legalNav")} className="flex shrink-0 items-center gap-4">
+        <Link href="/privacy" className={linkClass}>
+          {t("auth.privacy")}
+        </Link>
+        <Link href="/terms" className={linkClass}>
+          {t("auth.terms")}
+        </Link>
+      </nav>
+    </footer>
   );
 }

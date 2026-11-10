@@ -12,7 +12,8 @@
 >
 > 1. **Use is limited to user-facing features.** Google user data is used
 >    only to provide and improve Klorn's visible features: classifying
->    messages into attention tiers (PUSH / QUEUE / SILENT / AUTO),
+>    messages into attention lanes (PUSH / MEETING / QUEUE / INFO /
+>    SILENT),
 >    summarizing messages and generating daily briefings, reflecting the
 >    user's triage decisions back into Gmail (labels, read state, archive,
 >    reversible trash), sending user-approved replies, and providing
@@ -82,9 +83,29 @@ Reviewed against `packages/web/src/app/privacy/page.tsx` (live at
 > transaction); affirmative self-service deletion/export/reset wording matching
 > the real Settings controls; sub-processors named (Render, Vercel, Supabase
 > ap-northeast-2; AI: Google Gemini API + OpenRouter, BYOK/self-host caveat).
-> ⚠️ **Prerequisite for the retention claim**: `LOG_RETENTION_ENABLED=true`
-> must be set in the production environment (the sweep is OFF by default,
-> `log-retention.ts:114-116`) — verify on Render before submitting.
+> ✅ **Prerequisite for the retention claim**: `LOG_RETENTION_ENABLED=true`
+> is set in the production environment (founder-confirmed 2026-08-26). The
+> sweep is OFF by default (`log-retention.ts:114-116`), so this flag is load
+> bearing for a statement the policy makes as fact — re-check it after any
+> environment change.
+>
+> **2026-10-25** — AI sub-processor added: Anthropic (Claude API), on the
+> privacy page ("AI Processing") and the DPA subprocessor table. Basis:
+> Anthropic Commercial Terms §B (no training on Customer Content) and its
+> default 30-day deletion of API inputs/outputs. The provider ships OFF
+> (`ANTHROPIC_API_KEY` unset); this disclosure must be live BEFORE the key is
+> set in production.
+>
+> **2026-11-01** — AI sub-processor removed: OpenRouter, from the privacy page
+> ("AI Processing" and the playground paragraph; "Last updated" bumped to
+> November 1, 2026) and the DPA subprocessor table in all 7 locales. Basis:
+> founder decision 2026-11-01 to run Klorn on the Claude API only; production
+> has sent every model call through Anthropic since 2026-10-30, and the
+> OpenRouter provider is removed from the code. The policy now names Anthropic
+> (Claude API) and Google (Gemini API) as the server-side AI providers; BYOK
+> takes an Anthropic key. Order matters in reverse of the 2026-10-25 entry: the
+> narrower text may go live only once OpenRouter can no longer receive data in
+> production (code removal deployed, `OPENROUTER_API_KEY` unset on Render).
 > Gap 8 (contact address): resolved by decision — the support address is pinned
 > to `k0820086@gmail.com` everywhere (policy already uses it consistently in 3
 > places; the consent screen must use the same literal). Switching to a domain
@@ -156,6 +177,10 @@ Add to the "Security" section:
 > access is scoped to your account, transport is TLS-encrypted, and your
 > Google user data is stored only in Klorn's own database — it is not
 > shared with analytics or advertising services.
+
+_2026-10-19: the live page now reads "stored only in Klorn's own database and
+its encrypted backups", and names GitHub as the store of the nightly encrypted
+backups (expiring after 14 days). See .github/workflows/db-backup.yml._
 
 <!--
 CODE EVIDENCE (strip before submission)

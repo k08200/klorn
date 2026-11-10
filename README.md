@@ -4,37 +4,72 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-success.svg)](docs/self-hosting.md)
-[![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.4.0-blue.svg)](CHANGELOG.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 Every other AI inbox tool *adds* a surface — a suggestion card next to each email, a badge that says "AI thinks you should reply," a draft waiting for review. The inbox gets louder, not quieter.
 
-Klorn does the opposite. Each inbound email gets exactly **one** classification — `SILENT` / `QUEUE` / `PUSH` / `AUTO` — bound to the exact bytes that produced it. No chat surface. No suggestion cards. No 60-tool agent. The output is a single decision, and most of the time that decision is "you don't need to see this."
+Klorn does the opposite. Each inbound email gets exactly **one** classification — `PUSH` / `MEETING` / `QUEUE` / `INFO` / `SILENT` — bound to the exact bytes that produced it. No chat surface. No suggestion cards. No 60-tool agent. The output is a single decision, and most of the time that decision is "you don't need to see this."
 
 **[Read the doctrine](docs/doctrine/deterministic-floor.md) before the code — that's the actual product.**
 
-[![Klorn — 31-second demo](website/media/klorn-demo-poster.jpg)](website/media/klorn-demo.mp4)
+[![Klorn on Mac — Today: mail by lane across accounts, with the day's calendar beside it (demo data)](website/media/app-2026-10/today-light-1200.webp)](https://klorn.ai)
 
-▶️ **[31-second demo](website/media/klorn-demo.mp4)** · 🎬 **[14-second promo](website/media/klorn-promo.mp4)** · 🌐 **[Live demo on klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
+🌐 **[klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
 
-## The four tiers
+> The screenshot is demo data, drawn straight from the shipping SwiftUI views by
+> `KlornMac --render-previews`.
 
-| Tier | What it means | What happens |
+## The five lanes
+
+| Lane | What it means | What happens |
 | --- | --- | --- |
-| **`SILENT`** | Recorded, never rendered | The row exists for ground-truth feedback; you never see it. (marketing, receipts, FYI) |
-| **`QUEUE`** | Review on your own schedule | Visible in the queue. No push, no notification. *This is the default.* |
 | **`PUSH`** | Worth interrupting you | A notification fires. Optionally Telegram or one phone call. |
-| **`AUTO`** | Reversible, hands-off | Classified today; the action side sits behind a deterministic floor (below). |
+| **`MEETING`** | Scheduling mail | Notifies like PUSH, plus a calendar cross-check: the proposed slot, whether it clashes, the sender's availability when their calendar is visible — and, on a clash, the first slots verified free for both sides. |
+| **`QUEUE`** | Review on your own schedule | Visible in the queue. No push, no notification. *This is the default.* |
+| **`INFO`** | Calm transactional record | Receipts, confirmations, status notices — filed, no reply ever expected. |
+| **`SILENT`** | Recorded, never rendered | The row exists for ground-truth feedback; you never see it. (marketing, noise) |
 
-## How it decides — and why a cheap model runs it
+Automation is deliberately **not** a lane. Each answerable email carries an `autoEligible` flag (reversible, high-confidence, trusted, calm), and the account has a mode: **BASIC** (only important mail and calendar events notify; you choose every reply) or **AUTO** (Klorn replies on its own — but only to eligible mail, under guidelines you set and can edit, and every send writes a receipt pinning a hash of exactly what went out). Classification and delegation stay separate decisions.
+
+## How Klorn compares
+
+> Full comparison against Superhuman, Shortwave, and Fyxer: [docs/comparisons.md](docs/comparisons.md)
+
+| | Klorn | Generic AI email agents | Rule-based filters |
+| --- | --- | --- | --- |
+| Output | One decision per mail, with the reason shown | Chat surface / suggestion cards | Folder moves, no reasons |
+| Acting on your behalf | Approval-gated; unattended replies only in AUTO mode under your written guidelines, each send with a receipt pinned to a payload hash | Often acts first, reports later | Never acts |
+| When it's wrong | Move the row — the correction is training signal (77.4% cold → 86.8% warm on real labelled mail) | Varies | You rewrite the rule |
+| Source & hosting | AGPLv3, self-hostable end to end | Closed SaaS | Built into the client |
+| AI spend | Hard daily budget cap — it stops rather than overspends | Metered | None |
+
+## How it decides — and why the model choice is a measurement, not a bet
 
 The LLM does **not** pick the tier. On every email it scores four features between 0 and 1 — `confidence`, `senderTrust`, `reversibility`, `urgency` — and a deterministic rule in [`tier-policy.ts`](packages/api/src/judge/tier-policy.ts) maps those four numbers to a tier. The model perceives; a rule you can read and unit-test decides. The policy is auditable without the model in the loop.
 
-Two consequences fall out of that split:
+What falls out of that split:
 
-- **A cheap model wins.** When the model only has to read four signals consistently, you don't need a frontier model's reasoning depth. On the committed 50-email gate set ([`eval/judge-eval-set.json`](packages/api/eval/judge-eval-set.json)), `gemini-2.5-flash` scores **88%** with 100% recall on urgent mail — beating `gpt-4o` and `gemini-2.5-pro` (both 82%) at a fraction of the cost. Run it yourself: `pnpm eval:judge`.
-- **Measured on real mail, not just synthetic.** A second committed set ([`eval/real-eval-set.json`](packages/api/eval/real-eval-set.json)) holds 53 real, hand-labeled, PII-scrubbed emails with per-sender context snapshots from the production learning loop. Current score: **50/53 (94.3%) overall, 95.5% precision on silenced mail** — when Klorn hides something, it is almost never something you wanted. (Honest caveats: one inbox's ground truth so far, and the urgent tier has only 4 labeled samples, so its floor stays report-only until support grows. Full measurement history: [`eval/README.md`](packages/api/eval/README.md).)
-- **It fails open, safely — and heals.** If the LLM is down or rate-limited, a keyword fallback produces the same four features with zero model calls, so urgent mail still gets through. When the provider recovers, a bounded background sweep re-judges the degraded verdicts through the real pipeline — decisions you already touched are never rewritten.
+- **Price stops predicting accuracy.** When the model only has to read four signals consistently, frontier reasoning depth buys much less than you would expect. Measured 2026-09-04 on the committed 56-email gate set ([`eval/judge-eval-set.json`](packages/api/eval/judge-eval-set.json)) — ten current models, same prompt, same rule, **three runs each** at the provider-default temperature production uses; runs where any item fell back to the keyword path were discarded, not averaged:
+
+  | model | runs | correct / 56 | range | urgent / 13 | gate | $/M input |
+  |---|---|---|---|---|---|---|
+  | `openai/gpt-5.4` | 3 | 56 · 56 · 56 | **100.0** | 13 · 13 · 13 | 3/3 | $2.50 |
+  | `google/gemini-3.5-flash` | 3 | 55 · 55 · 55 | 98.2 | 13 · 13 · 13 | 3/3 | $1.50 |
+  | `openai/gpt-5.6-terra` | 2 | 55 · 55 | 98.2 | 13 · 13 | 2/2 | $2.00 |
+  | `x-ai/grok-4.6` | 1* | 55 | 98.2 | 12 | 1/1 | $2.00 |
+  | `google/gemini-3.7-flash` | 3 | 55 · 55 · 54 | 96.4–98.2 | 13 · 13 · 12 | 3/3 | $0.75 |
+  | `openai/gpt-5.6-luna` | 2 | 53 · 55 | 94.6–98.2 | 12 · 12 | 2/2 | **$0.20** |
+  | `google/gemini-2.5-flash` — *default pin at measurement time* | 3 | 54 · 54 · 54 | 96.4 | 13 · 13 · 13 | 3/3 | $0.30 |
+  | `x-ai/grok-4.3` | 2 | 54 · 54 | 96.4 | 12 · 12 | 2/2 | $1.25 |
+  | `anthropic/claude-opus-4.8` | 2 | 50 · 49 | 87.5–89.3 | 9 · 8 | **0/2** | $5.00 |
+  | `anthropic/claude-sonnet-5` | 2 | 48 · 45 | 80.4–85.7 | 7 · 5 | **0/2** | $2.00 |
+
+  \* two grok-4.6 runs were lost to upstream timeouts of over 90 minutes and are reported as lost, not averaged in. Read this as **tiers, not ranks**: the four models at 98.2 are a tie — one email on 56 items is not a gap — while the top (gpt-5.4, 56/56 every run) and the failing tier (both Anthropic models, below the urgent-recall floor every run) are stable across runs. The $5.00 model never passes the gate; the $0.20 model reaches the top tier. At measurement time the default pin was `gemini-2.5-flash`, because 54/56 three times at $0.30 is the stability a per-email judge needs, not because 96.4 is the best number in the table. The default is now Claude Haiku 5.5 (`claude-haiku-5-5`; production has served the judge with it since 2026-10-30), measured separately through the native Anthropic provider, where it passed the gate in 4 of 5 runs — see [Native Anthropic provider](packages/api/eval/README.md#native-anthropic-provider-2026-10-30--claude-55-family-pr-1543). The ids in this table are OpenRouter ids, measured before OpenRouter was removed from Klorn on 2026-11-01. Gate floors: overall ≥80%, urgent recall ≥90%, silenced precision ≥90% ([`eval-floors.ts`](packages/api/src/eval-floors.ts)). Run it yourself: `JUDGE_MODEL=<id> pnpm --filter @klorn/api eval:judge`.
+- **A failing model tells you *why* it failed.** Of the eight urgent emails `claude-sonnet-5` missed, seven failed the `confidence` threshold rather than the `urgency` one — it scored urgency 0.80–1.00 (correct) against confidence 0.55–0.60, under the 0.70 bar both must clear in [`tier-policy.ts`](packages/api/src/judge/tier-policy.ts). It read the mail correctly and then declined to say it was sure. That diagnosis is only available because the threshold is a number in a file you can open; where the model picks the tier directly, the same result reads as "this one is worse at email" and there is nothing to do about it.
+- **Measured on real mail, not just synthetic — and that set's labels have gone stale.** A second committed set ([`eval/real-eval-set.json`](packages/api/eval/real-eval-set.json)) holds 53 real, hand-labeled, PII-scrubbed emails with per-sender context snapshots from the production learning loop. Re-measured 2026-08-26 on the then-default pin (`gemini-2.5-flash`): **46/53 (86.8%) overall, 95.5% precision on silenced mail** (3 runs, identical every time). This README previously claimed 94.3% here, and the arithmetic of the gap is worth being precise about: **4 of the 7 misses are `QUEUE` → `INFO`**, and `INFO` did not exist as a lane when the set was labelled — the label vocabulary cannot express it, so those items are scored wrong by construction. 46 + 4 = 50 = exactly the old 94.3%. So the drop is an ontology change, not a quality regression; but the honest number today is the one that reproduces, and 94.3% no longer does. Two of those four (a Google application confirmation, a Reddit digest) look like textbook `INFO`; the two GitHub address-verification items are genuinely arguable, since a verification link is an action. The other three misses are real: one `QUEUE` → `SILENT`, one `QUEUE` → `PUSH`, one `PUSH` → `QUEUE`. **The set needs re-labelling against the five-lane ontology before any headline number from it is quotable.** (Standing caveats: one inbox's ground truth so far, and the urgent lane has only 4 labelled samples, so its floor stays report-only until support grows. Full measurement history: [`eval/README.md`](packages/api/eval/README.md).)
+- **The floor held through every one of them.** Across all 23 clean runs of the ten models above — a 15–20-point accuracy spread including two models that fail the gate every time — **zero** urgent emails were classified `SILENT`. Every miss degraded to `QUEUE`, where you still see it. That is what the split buys: not a better classifier, a bounded worst case.
+- **It fails open, safely — and heals.** If the LLM is down or rate-limited, a keyword fallback produces the same four features with zero model calls: **82.1% overall (46/56)** on the same set, with urgent recall down to 46.2% (6/13). Degraded mode costs you the *interrupt*, never the message — all seven missed urgent items landed in `QUEUE` and none in `SILENT`. When the provider recovers, a bounded background sweep re-judges the degraded verdicts through the real pipeline — decisions you already touched are never rewritten.
 
 Every classification is **content-hash-bound**: the exact bytes the scorer read (`from`, `subject`, `snippet`, `labels`) are sha256'd at decision time and stored with the row. The read path re-hashes and throws `AttentionHashMismatchError` on mismatch, so a later enrichment can't silently invalidate a tier ([PR #468](https://github.com/k08200/klorn/pull/468)).
 
@@ -54,28 +89,26 @@ It's enforced, not aspirational: a central guard in `executeToolCall` fails clos
 
 Three writeups walk through the architecture, with the tradeoffs and the honest edges:
 
-1. [I let GPT-4o and a cheaper model fight over my inbox. GPT-4o lost.](https://dev.to/k08200/i-let-gpt-4o-and-a-cheaper-model-fight-over-my-inbox-gpt-4o-lost-fkj) — the model bake-off
+1. [I let GPT-4o and a cheaper model fight over my inbox. GPT-4o lost.](https://dev.to/k08200/i-let-gpt-4o-and-a-cheaper-model-fight-over-my-inbox-gpt-4o-lost-fkj) — the model bake-off. **Superseded:** its headline result does not hold against the current model generation. The 2026-08-26 re-run is in the table above and in [`eval/README.md`](packages/api/eval/README.md).
 2. [I don't trust the LLM to classify my email. So I don't let it.](https://dev.to/k08200/i-dont-trust-the-llm-to-classify-my-email-so-i-dont-let-it-55d9) — feature-scorer vs. decider
 3. [Confidence is enough to decide. It's not enough to do.](https://dev.to/k08200/confidence-is-enough-to-decide-its-not-enough-to-do-8ck) — the deterministic floor
 
 ## What it's NOT
 
-- **Not finished.** This is an early PoC with one real user (me); ICP retention measurement is what's happening now. The [CHANGELOG](CHANGELOG.md) is honest about what's solid vs. what's stitched.
+- **Not finished.** The cloud is live and billing is real, but the user base is early and the beta cohort is still forming. The [CHANGELOG](CHANGELOG.md) is honest about what's solid vs. what's stitched.
 - **Not a "chat with your inbox" thing.** There is no chat surface.
-- **Not multi-tenant cloud.** Self-host is the only path right now.
+- **Not unlimited.** The hosted cloud is capped at 100 accounts while Gmail scope verification is pending. Self-host has no cap.
 - **Not feature-gated against open source.** [`docs/EDITIONS.md`](docs/EDITIONS.md) lists what Cloud will sell on top (managed hosting, verified Gmail scope, team workspaces) — the firewall doctrine and code stay in the repo on both editions.
 
 > **Why is a CI check red?** `Scope Budget` fails *on purpose*. It's a self-imposed ratchet that trips when a change grows the route / page / schema surface past a fixed budget, forcing a conscious "yes, this scope is worth it" instead of silent sprawl. A red Scope Budget is by design, not a broken build — every other check (lint, types, tests, build, security, eval) is green.
 
-## Trying the hosted demo (klorn.ai)
+## Trying the hosted app (klorn.ai)
 
-The hosted demo runs in **Google OAuth testing mode** while we hold off on CASA Tier 2 verification (Klorn uses Gmail's restricted `gmail.modify` scope). To try it without self-hosting, you have to be added as a test user first. Three paths, fastest first:
+**Sign in with Google at [klorn.ai](https://klorn.ai). That's the whole flow.** No waitlist, no approval step, nobody to email — the OAuth screen is in production, so any Google account can complete it.
 
-- **Open an issue** with the Google email you want to use: [new oauth-tester issue](https://github.com/k08200/klorn/issues/new?title=oauth-tester&labels=oauth-tester) — we add you, comment "added", you log in.
-- **Email** `k0820086@gmail.com` with the same info.
-- **Or skip the gating entirely** and [self-host](#local-development) — full feature parity, you bring your own Google OAuth credentials, no verification needed.
+One limit, and it is a real one: **the first 100 accounts.** Klorn reads Gmail's restricted `gmail.modify` scope, and until CASA Tier 2 verification lands the app is capped at 100 lifetime users. Seats are first-come. When it fills, it fills.
 
-Google caps test-user slots at 100 in this mode. Once CASA verification ships (gated on PoC retention measurement), the OAuth screen flips to production and the gating goes away. **For most people landing here, self-host is the fastest way in.**
+[Self-hosting](#local-development) has no cap at all — you register your own Google OAuth client, so the verification question is between you and Google, not you and us.
 
 ## What we're building
 
@@ -103,21 +136,35 @@ Klorn's first screen is not a chat or an inbox — it's a decision queue. Scatte
 | API | Fastify, TypeScript, Prisma |
 | DB | PostgreSQL |
 | Auth | JWT, bcrypt, Google OAuth |
-| AI | OpenAI-compatible (local-first), OpenRouter / Gemini failover |
+| AI | Claude API (Anthropic) by default; Gemini or any OpenAI-compatible endpoint (local-first) for self-host |
 | Realtime | WebSocket, Web Push |
-| Billing | Stripe |
+| Billing | Paddle (web, live) · RevenueCat (mobile) · Stripe (legacy accounts) |
 | Monorepo | pnpm workspaces |
 
 ```text
 packages/
   api/          Fastify API, Prisma schema, agent/tool orchestration
   web/          Next.js app: decision queue, mail, calendar, briefing, settings
-  core/         shared utilities and CLI-facing primitives
+  contract/     shared types and the API contract between web and api
 apps/
   desktop-mac/  native macOS app — the always-on top-bar firewall (SwiftUI)
+  desktop-win/  Windows client (Tauri shell)
   mobile/       Capacitor shell (iOS / Android)
 docs/           doctrine, screenshots, operational notes
 ```
+
+## MCP
+
+Klorn's inbox is an MCP server. Create a key in **Settings → MCP API keys**, put it in `KLORN_API_KEY`, then add the server. Claude Code:
+
+```bash
+claude mcp add --transport http klorn --scope user https://api.klorn.ai/api/mcp \
+  --header "Authorization: Bearer $KLORN_API_KEY"
+```
+
+Self-hosted: use your API origin plus `/api/mcp`. Setup for Codex CLI, Cursor, Gemini CLI and the xAI API, plus limits and what is not supported yet: [docs/mcp/connect-clients.md](docs/mcp/connect-clients.md).
+
+The toolset is the assistant chat's locked-down set — list/read/classify/briefing and other read-or-low-risk tools (generate_briefing may trigger the day's briefing notification, deduped to one per day). Nothing reachable over MCP can send, delete, or archive mail, and the API key works **only** on this endpoint: it is never accepted by the rest of the API. One caution: tool results contain your actual mail — to the agent you connect, inbound email becomes live context, so treat message content as untrusted data in that agent's own rules.
 
 ## Native macOS app
 
@@ -153,7 +200,7 @@ Self-host is the primary way to run Klorn today: full feature parity, your own G
 
   [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/k08200/klorn)
 
-- **Docker Compose** — [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml) runs postgres + api + web on one box, migrations included.
+- **Docker Compose** — [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml) runs postgres + api + web on one box, migrations included. The api/web images are prebuilt on ghcr.io, so `up -d` pulls — no local toolchain, no source build.
 
 The complete guide (OAuth client setup, env reference, real-time Gmail push, updating) is **[docs/self-hosting.md](docs/self-hosting.md)**.
 
@@ -199,7 +246,7 @@ Open `packages/api/.env` and at minimum set:
 
 ```bash
 DATABASE_URL="postgresql://klorn:klorn-local-dev@localhost:5432/klorn"
-OPENROUTER_API_KEY=""  # https://openrouter.ai/keys — a free key works (or go fully local, below)
+ANTHROPIC_API_KEY=""  # https://platform.claude.com/settings/keys (or go fully local, below)
 WEB_URL="http://localhost:8001"
 PORT=8000
 ```
@@ -321,7 +368,8 @@ Docker Compose ports: Web `3000`, API `3001`, PostgreSQL `5432`.
 pnpm --filter @klorn/web build
 pnpm --filter @klorn/api build
 pnpm --filter @klorn/api test
-pnpm eval:judge   # run the 4-tier classifier against the committed gate set
+pnpm --filter @klorn/api eval:judge   # classifier vs the synthetic gate set (judge-eval-set.json)
+pnpm --filter @klorn/api eval:real    # classifier vs the 53 hand-labelled real emails (86.8%; labels predate INFO/MEETING)
 packages/api/node_modules/.bin/biome check packages/
 ```
 
@@ -360,7 +408,13 @@ When touching core UX, verify at least:
 
 ## Contributing
 
-Issues and pull requests are welcome. For anything non-trivial, open an issue first to discuss the approach. Run `pnpm -r test` and `biome check packages/` before submitting.
+Issues and pull requests are welcome. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)**: it covers local setup without a Google account, the checks CI runs, and the PR format.
+
+- Newcomer-sized work: [`good first issue`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+- Bigger pieces: [`help wanted`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22)
+- Questions: [Discussions → Q&A](https://github.com/k08200/klorn/discussions/categories/q-a)
+
+For anything non-trivial, open an issue first to discuss the approach. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

@@ -93,7 +93,11 @@ describe("computePerTierMetrics", () => {
         ["AUTO", "AUTO", 1],
       ]),
     );
-    for (const m of metrics) {
+    // v2 vocabulary tiers with no data in this run (MEETING/INFO) report
+    // null, not a fake 1.0 — only tiers that actually appeared are asserted.
+    const supported = metrics.filter((m) => m.truthSupport > 0);
+    expect(supported.length).toBe(4);
+    for (const m of supported) {
       expect(m.precision).toBe(1);
       expect(m.recall).toBe(1);
     }

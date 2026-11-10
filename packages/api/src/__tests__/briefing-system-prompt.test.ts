@@ -24,4 +24,10 @@ describe("BRIEFING_SYSTEM_PROMPT", () => {
     expect(BRIEFING_SYSTEM_PROMPT).toMatch(/briefing/i);
     expect(BRIEFING_SYSTEM_PROMPT).toMatch(/markdown|prose/i);
   });
+
+  it("carries the standard untrusted-content rule, and never asks for the tags back", () => {
+    expect(BRIEFING_SYSTEM_PROMPT).toContain("<untrusted_content>");
+    expect(BRIEFING_SYSTEM_PROMPT).toMatch(/data[^.]*not instructions/i);
+    expect(BRIEFING_SYSTEM_PROMPT).toMatch(/never (repeat|copy|reproduce)[^.]*tags/i);
+  });
 });

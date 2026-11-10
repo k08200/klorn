@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
+<link rel="canonical" href="https://klorn.ai/ja/">
+<!-- English is the default at klorn.ai. Other languages are reached from the
+     language menu; a Korean-locale first visit to / is routed to /ko/ once. -->
+<title>Klorn — メールもカレンダーも、ひとつの落ち着いた場所に。</title>
+<meta name="description" content="GmailとGoogleカレンダー、ベータ版のNaverメールとiCloudメールをひとつの画面に。Klornはすべてのメールを、あなたに何が必要かで振り分け、その理由を添えます。無料プランあり、Klorn Proは月$29.99。">
+<meta property="og:title" content="Klorn — メールもカレンダーも、ひとつの落ち着いた場所に。">
+<meta property="og:description" content="メールとカレンダーをひとつの画面に。すべてのメールを5つのレーンに振り分け、1通ごとに理由を添えます。何を送るかは、あなたが決めます。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://klorn.ai/ja/">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k3">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
+      imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+      imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/landing.css">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "SoftwareApplication",
+ "name": "Klorn",
+ "operatingSystem": "macOS, Windows, Web",
+ "applicationCategory": "BusinessApplication",
+ "url": "https://klorn.ai/ja/",
+ "inLanguage": "ja",
+ "description": "Gmail、Googleカレンダー、Naverメール、iCloudメールをひとつの画面にまとめ、すべてのメールを5つのレーン — Push, Meeting, Queue, Info, Silent — に振り分けて、1通ごとに理由を添えます。何を送るかは、あなたが決めます。",
+ "sameAs": [
+  "https://github.com/k08200/klorn",
+  "https://dev.to/k08200",
+  "https://x.com/klornai",
+  "https://openalternative.co/klorn"
+ ],
+ "offers": [
+  {
+   "@type": "Offer",
+   "name": "Free",
+   "price": "0",
+   "priceCurrency": "USD",
+   "availability": "https://schema.org/InStock",
+   "priceSpecification": {
+    "@type": "UnitPriceSpecification",
+    "price": "0",
+    "priceCurrency": "USD",
+    "referenceQuantity": {
+     "@type": "QuantitativeValue",
+     "value": 1,
+     "unitCode": "MON"
+    }
+   }
+  },
+  {
+   "@type": "Offer",
+   "name": "Klorn Pro",
+   "price": "29.99",
+   "priceCurrency": "USD",
+   "availability": "https://schema.org/InStock",
+   "priceSpecification": {
+    "@type": "UnitPriceSpecification",
+    "price": "29.99",
+    "priceCurrency": "USD",
+    "referenceQuantity": {
+     "@type": "QuantitativeValue",
+     "value": 1,
+     "unitCode": "MON"
+    }
+   }
+  }
+ ],
+ "softwareHelp": {
+  "@type": "CreativeWork",
+  "url": "https://github.com/k08200/klorn#readme"
+ },
+ "publisher": {
+  "@type": "Organization",
+  "name": "Klorn",
+  "url": "https://klorn.ai/",
+  "sameAs": [
+   "https://github.com/k08200/klorn",
+   "https://dev.to/k08200",
+   "https://x.com/klornai",
+   "https://openalternative.co/klorn"
+  ]
+ },
+ "license": "https://github.com/k08200/klorn/blob/main/LICENSE"
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "アカウントはそれぞれ接続する必要がありますか？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "はい、それぞれ一度ずつです。ログインすると最初のGoogleアカウントが接続され、ほかは設定から追加します。 その後はすべて同じリストに届きます。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Klornが勝手にメールを送ったり削除したりしますか？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "指示しない限りしません。レーンは振り分けるだけです。送信・完全削除・転送は承認を待ち、自分で作った自動返信ルールはその承認として扱われます。自動化をオンにすると、アシスタントがリスクの低い一部の作業を自分で行います。送信のたびに記録が残ります。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "今接続できるアカウントは？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "GmailとGoogleカレンダー、そしてベータ版のNaverメールとiCloudメールです。現時点ではこれがすべてで、 ほかのアカウントが接続できるようになった日にこのページを更新します。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "私のメールはどこへ行きますか？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Klornの分類器へ渡り、戻ってきます。トークンは暗号化して保存され、それを扱うコードは公開されています。 自分で管理したい場合は、自分のサーバーでKlornを動かせます。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "「自分のAIキーを使う」とはどういう意味ですか？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Klornが私たちのキーの代わりに、あなたが持つモデル提供元のキーを使えるということです。 Proで使えます。セルフホストの場合は、どのキーでもローカルモデルでも使えます。"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Windows版はありますか？",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "はい、ベータ版があります。コード署名が済むまでは、初回起動時にWindowsのSmartScreen警告が一度表示されることがあります。 ウェブアプリは同じアカウントで、最新のブラウザならどこからでも使えます。"
+   }
+  }
+ ]
+}
+</script>
+<script>
+// Hero motion gate (Sig 2): set before first paint so the rows never flash.
+// Skipped for reduced motion; the failsafe reveals the rows if /site-nav.js never runs.
+(function () {
+  try {
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var d = document.documentElement;
+    d.classList.add('hero-motion');
+    window.klornHeroFailsafe = setTimeout(function () { d.classList.add('hero-in'); }, 3000);
+  } catch (e) {}
+})();
+</script>
+<script src="/site-nav.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">本文へスキップ</a>
+
+<nav class="nav" aria-label="メイン"><div class="nav-pill">
+  <a class="nav-brand" href="#top">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="メニュー"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="セクション" data-site-nav><a href="#accounts">アカウント</a><a href="#lanes">レーン</a><a href="#pricing">料金</a><a href="/ja/security/">セキュリティ</a><a href="/ja/blog/">ブログ</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-lang-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">日本語 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/" data-lang-pick="en" role="menuitem">English</a>
+      <a href="/ko/" data-lang-pick="ko" role="menuitem">한국어</a>
+      <a href="/ja/" data-lang-pick="ja" role="menuitem" aria-current="true">日本語</a>
+      <a href="/zh/" data-lang-pick="zh" role="menuitem">中文（简体）</a>
+      <a href="/es/" data-lang-pick="es" role="menuitem">Español</a>
+      <a href="/fr/" data-lang-pick="fr" role="menuitem">Français</a>
+      <a href="/de/" data-lang-pick="de" role="menuitem">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">ログイン</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="ダウンロード">ダウンロード</a>
+</div></nav>
+
+<main id="main">
+<header class="hero" id="top">
+  <picture class="hero-sky" aria-hidden="true">
+    <source type="image/webp" sizes="100vw"
+            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
+    <img src="/media/sky/dusk-1920.jpg" alt="" decoding="async" width="2560" height="1709">
+  </picture>
+
+  <div class="wrap hero-copy">
+    <h1>メールも<wbr>カレンダーも、<wbr><span class="ser">ひとつの<wbr>落ち着いた<wbr>場所に。</span></h1>
+    <p class="lead"><b>Gmail、Googleカレンダー、Naverメール（ベータ）、iCloudメール（ベータ）</b>をひとつの画面にまとめます。すべてのメールを、あなたに何が必要かで振り分け、その理由を一行で伝えます。</p>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Windows版をダウンロード">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Mac版をダウンロード</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">ブラウザで開く</a>
+    </div>
+    <p class="try"><a href="https://app.klorn.ai/playground">メール1通で試してみる →</a></p>
+    <p class="meta"><span>月$29.99</span><i aria-hidden="true">·</i><span>無料プラン</span><i aria-hidden="true">·</i><span>自分のAIキーも使えます</span></p>
+  </div>
+
+  <figure class="shot">
+    <div class="win">
+      <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <picture>
+      <source media="(max-width:640px)" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+      <img src="/media/app-2026-10/today-light-2000.webp"
+           srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+           sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
+           alt="MacのKlorn「今日」画面：3つのアカウントのメールがPush、Meeting、Queueに分かれ、各行にアカウントの印が付き、横に今日の予定とアシスタントがあります。"></picture>
+    </div>
+    <div class="mlist">
+      <p class="mlist-label">デモデータ · 今日</p>
+      <div class="mlist-card">
+        <p class="mlist-head"><span class="chip c-push">Push</span><span class="mlist-n">2</span></p>
+        <ul><li class="mrow mrow-push"><span class="mrow-top"><span>Sarah Kim · G</span><time>17:12</time></span><b>契約書レビュー — 本日中に署名が必要</b><span class="mrow-why">本日締切の署名依頼</span></li>
+          <li class="mrow mrow-push"><span class="mrow-top"><span>billing@vendor.io · G</span><time>16:40</time></span><b>請求書 #4821 支払期限超過</b><span class="mrow-why">取引先への支払期限が過ぎています</span></li></ul>
+        <p class="mlist-head"><span class="chip c-meeting">Meeting</span><span class="mlist-n">1</span></p>
+        <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>招待: 第3四半期取締役会の準備、木曜 14:00</b><span class="mrow-why">カレンダーの招待、返信が必要</span></li></ul>
+      </div>
+    </div>
+    <picture>
+      <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
+           srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
+           sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
+           alt="Mac上のKlornの通知：Sarah Kim — Re: Contract review — needs your sign-off today。"></picture>
+    <figcaption class="cap"><span class="demo-tag">デモデータ</span>Macの<b>今日</b>画面。接続したすべてのアカウントがひとつのリストに。Pushのメールは Mac の通知で届きます。</figcaption>
+  </figure>
+</header>
+
+<!-- 2 · Every account, one view -->
+<section class="sec" id="accounts" aria-labelledby="accounts-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">すべてのアカウント</span>
+      <h2 id="accounts-h">アカウントはいくつでも、<wbr>画面はひとつ。</h2>
+      <p class="sec-lead">アカウントごとに一度接続するだけ。すべてのアカウントのメールと予定がひとつのリストに届き、どこから来たかが表示されます。</p>
+    </div>
+    <ul class="acct-grid">
+      <li class="acct"><div class="acct-top"><b>Gmail</b><span class="st st-live">利用可能</span></div>
+        <p>振り分け、要約し、検索できます。</p></li>
+      <li class="acct"><div class="acct-top"><b>Googleカレンダー</b><span class="st st-live">利用可能</span></div>
+        <p>メールの横に予定を。新しい予定は、あなたが言ったときだけ作成します。</p></li>
+      <li class="acct"><div class="acct-top"><b>Naverメール</b><span class="st st-beta">ベータ</span></div>
+        <p>ほかのメールと一緒に読み込み、振り分けます。</p></li>
+      <li class="acct"><div class="acct-top"><b>iCloudメール</b><span class="st st-beta">ベータ</span></div>
+        <p>Appleのアドレスも同じリストに。</p></li>
+    </ul>
+    <figure class="acct-shot">
+      <div class="win">
+        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <picture>
+        <source media="(max-width:640px)" sizes="94vw" width="840" height="1000" srcset="/media/app-2026-10/mail-m-light-840.webp 840w">
+        <img src="/media/app-2026-10/mail-light-2000.webp"
+             srcset="/media/app-2026-10/mail-light-1200.webp 1200w, /media/app-2026-10/mail-light-2000.webp 2000w"
+             sizes="(min-width:1240px) 1116px, 94vw" width="2000" height="1250" loading="lazy" decoding="async"
+             alt="MacのKlornメール画面：複数のアカウントのメールがひとつのリストに混在し、各行に小さなアカウントバッジとレーンの表示があり、右側に開いたメールがあります。"></picture>
+      </div>
+      <figcaption class="cap"><span class="demo-tag">デモデータ</span>Gmail、Naverメール、iCloudメールがひとつのリストに。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 3 · Five lanes, with the reason. The lane list is the landing's lane
+     surface: .github/scripts/check-website-lanes.mjs holds data-lane to the
+     API's live TIERS (never AUTO or CALL) in every language. -->
+<section class="sec sec-alt" id="lanes" aria-labelledby="lanes-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">5つのレーン</span>
+      <h2 id="lanes-h">5つのレーン。<wbr>それぞれに理由を。</h2>
+      <p class="sec-lead">すべてのメールは5つのレーンのどれかに入り、なぜそこにあるのかが一文で書かれています。</p>
+    </div>
+    <div class="lanes-grid">
+      <div>
+        <ul class="lane-list">
+          <li class="lane" data-lane="push"><span class="chip c-push">Push</span><p>今すぐ割り込む。<span>待てない数通だけ。</span></p></li>
+          <li class="lane" data-lane="meeting"><span class="chip c-meeting">Meeting</span><p>日程調整、カレンダーと照合して。<span>提案された時間、重なる予定、空いている時間まで。</span></p></li>
+          <li class="lane" data-lane="queue"><span class="chip c-queue">Queue</span><p>今日中に読む価値があるもの。<span>通知はせず、今日のリストに置くだけ。</span></p></li>
+          <li class="lane" data-lane="info"><span class="chip c-info">Info</span><p>領収書やお知らせを整理。<span>返信は不要です。</span></p></li>
+          <li class="lane" data-lane="silent"><span class="chip c-silent">Silent</span><p>保管しつつ、目の前からは片付けます。<span>削除はしません。</span></p></li>
+        </ul>
+        <p class="rule">レーンは振り分けるだけ。代わりに行動はしません。<span>納得できなければメールを移動してください。Klornはその修正から学びます。</span></p>
+      </div>
+      <figure>
+        <div class="card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <picture>
+          <img src="/media/app-2026-10/reason-light-1278.webp"
+               srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
+               sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
+               alt="Queueレーンで開いたメール。ヘッダーの下に「Why Queue · A colleague, no deadline」という理由と一文の要約があります。"></picture>
+        </div>
+        <figcaption class="cap"><span class="demo-tag">デモデータ</span>すべてのメールの上に理由が表示されます。</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Your day, merged, plus assistant -->
+<section class="sec" id="day" aria-labelledby="day-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">あなたの1日</span>
+      <h2 id="day-h">1日がひとつの画面に。<wbr>その1日を知るアシスタント。</h2>
+      <p class="sec-lead">メールの横のカレンダー、朝のブリーフィング、そして自分の受信トレイをもとに答えるアシスタント。</p>
+    </div>
+    <div class="day-grid">
+      <article class="tile">
+        <div><h3>聞いて、承認する</h3>
+          <p>今日まだ残っていることを聞いてみてください。返信の下書きと新しい予定は、あなたが承認するまで「承認待ち」で待機します。</p></div>
+        <div class="tile-stage"><div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <picture>
+          <img src="/media/app-2026-10/approvals-light-656.webp"
+               srcset="/media/app-2026-10/approvals-light-400.webp 400w, /media/app-2026-10/approvals-light-656.webp 656w, /media/app-2026-10/approvals-light-840.webp 840w"
+               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="656" height="609" loading="lazy" decoding="async"
+               alt="Macのアシスタントの承認パネル：返信と予定作成の2件が承認・拒否ボタン付きで待機しています。"></picture>
+        </div></div>
+      </article>
+      <div class="tile-col">
+        <article class="tile tile-day">
+          <div><h3>すべてのカレンダーを1日に</h3>
+            <p>接続したカレンダーの予定を、関連するメールの横に。</p></div>
+          <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+            <picture>
+            <img src="/media/app-2026-10/day-light-640.webp"
+                 srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
+                 sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
+                 alt="4件の予定がある今日のカレンダーカードと、1日を要約し承認待ち2件を示すアシスタントカード。"></picture>
+          </div>
+        </article>
+        <article class="tile">
+          <div><h3>始める前のブリーフィング</h3>
+            <p>今日1日の流れと、落とせない2つのこと。</p></div>
+          <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="brief">
+              <p class="brief-date">今日</p>
+              <p class="brief-head">午前は予定なし、17:00から会議が4件。</p>
+              <svg class="brief-curve" viewBox="-3 0 706 36" aria-hidden="true" focusable="false"><path d="M0,33 L63.6,33 L127.3,33 L190.9,33 L254.5,33 L318.2,33 L381.8,33 L445.5,33 L509.1,33 L572.7,18 L636.4,3 L700,18"/><circle cx="572.7" cy="18" r="3"/><circle cx="636.4" cy="3" r="3"/><circle cx="700" cy="18" r="3"/></svg>
+              <ul class="brief-segs">
+                <li><b>12:00まで</b><span>予定なし</span></li>
+                <li><b>12:00〜17:00</b><span>5時間の空き</span></li>
+                <li class="busy"><b>17:00以降</b><span>会議4件</span></li>
+              </ul>
+              <ol class="brief-list">
+                <li><span>18:00までにSarah Kimさんの契約書に署名 <i>— 先方が今日中に署名します</i></span></li>
+                <li><span>Alexさんの文言変更を承認 <i>— リリースが承認を待っています</i></span></li>
+              </ol>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    <p class="cap" style="text-align:left"><span class="demo-tag">デモデータ</span>アシスタントとカレンダーはMac、ブリーフィングはウェブの画面です。</p>
+  </div>
+</section>
+
+<!-- 5 · Proof and trust. Licence, Google verification and the comparisons
+     live here, not in the hero or the meta description (FD-6). -->
+<section class="sec sec-alt" id="trust" aria-labelledby="trust-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">信頼</span>
+      <h2 id="trust-h">自分で<wbr>確かめられるように。</h2>
+      <p class="sec-lead">メールを読むものなら、根拠を見せるべきです。あなた自身で確認できることをまとめました。</p>
+    </div>
+    <div class="trust-grid">
+      <article class="trust"><h3>許可したものだけが送られます</h3>
+        <p>送信・完全削除・転送は承認を待ちます。自分で作った自動返信ルールも承認として扱われます。</p><a class="go" href="/ja/security/#approvals">承認の仕組み →</a></article>
+      <article class="trust"><h3>テストセットは公開されています</h3>
+        <p>分類器を変更するたびに、リポジトリにあるラベル付きメールのセットで検証します。</p><a class="go" href="/ja/methodology/">評価方法 →</a></article>
+      <article class="trust"><h3>オープンソース、セルフホスト可能</h3>
+        <p>メールに触れるコードはすべてAGPL-3.0で公開。自分のサーバーで動かせます。</p><a class="go" href="/ja/self-host/">セルフホストのガイド →</a></article>
+      <article class="trust"><h3>Google OAuth検証 完了</h3>
+        <p>2026-10-03に完了。CASA Tier&nbsp;2に基づく独立した評価を受けています。</p><a class="go" href="/ja/security/#google-verification">セキュリティ →</a></article>
+    </div>
+    <p class="vs-row">ほかのツールと比べるなら：
+      <a href="/ja/vs/fyxer/">Fyxerと比較</a><a href="/ja/vs/superhuman/">Superhumanと比較</a>
+      <a href="/ja/vs/sanebox/">SaneBoxと比較</a><a href="/ja/vs/inbox-zero/">Inbox Zeroと比較</a></p>
+    <figure class="note">
+      <figcaption class="note-by"><span class="note-label">創業者より</span><span>Klornをつくった人</span></figcaption>
+      <blockquote class="note-q"><p class="ser">「Klornのおかげで、メールを探すのが本当に楽になりました。見落としていたメールまで目に入るし、バラバラだったアカウントをひとつの画面で見られる。これがいちばんの良さです。」</p></blockquote>
+    </figure>
+  </div>
+</section>
+
+<!-- 6 · Pricing, FAQ, final CTA -->
+<section class="sec" id="pricing" aria-labelledby="pricing-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">料金</span>
+      <h2 id="pricing-h">振り分けは無料。<wbr>もっと任せるなら$29.99。</h2>
+      <p class="sec-lead">レーンと理由は期間の制限なく無料です。実際にAIの費用がかかる機能だけがProにあります。</p>
+    </div>
+    <div class="prices">
+      <article class="price">
+        <div class="phead"><span class="plan">Free</span><span class="psub">メールアカウント1つ</span></div>
+        <div class="amt">$0<small>/月</small></div>
+        <p class="pnote">カード登録も、期限もありません。</p>
+        <ul>
+          <li>5つのレーン、すべてのメールに理由を表示</li>
+          <li>朝のブリーフィングとカレンダー</li>
+          <li>自分のメールをもとに答えるアシスタント</li>
+          <li>上限付きの1日のAI予算</li>
+        </ul>
+        <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">無料で始める</a>
+      </article>
+      <article class="price feat">
+        <div class="phead"><span class="plan">Pro</span><span class="psub">使うすべてのアカウントに</span></div>
+        <div class="amt">$29.99<small>/月</small></div>
+        <p class="pnote">7日間の体験。アプリからいつでも解約できます。</p>
+        <ul>
+          <li>Freeのすべての機能</li>
+          <li>承認してから送る返信の下書き</li>
+          <li>複数のメールアカウント</li>
+          <li>より大きな1日のAI予算</li>
+        </ul>
+        <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register&amp;next=/billing">Proの体験を始める</a>
+      </article>
+      <article class="price org">
+        <div class="phead"><span class="plan">企業向け</span><span class="psub">最初のチームと決める価格</span></div>
+        <div class="amt amt-ask">要相談</div>
+        <p class="pnote">価格は最初の企業のお客様と一緒に決めています。チームについて教えてください。</p>
+        <ul>
+          <li>メンバー全員にProのすべての機能</li>
+          <li>AGPL-3.0のもと、自社のサーバーで運用</li>
+          <li>チーム全員が空いている時間を探す（企業ごとに一緒に設定）</li>
+        </ul>
+        <a class="btn btn-2" href="mailto:k0820086@gmail.com?subject=Klorn%20for%20companies">お問い合わせ</a>
+      </article>
+    </div>
+    <p class="price-foot">価格は米ドルです。 <a href="/ja/pricing/">プランの詳細</a></p>
+
+    <div class="faq-wrap" id="faq">
+      <h2>よくある質問</h2>
+      <div class="faq">
+        <details><summary>アカウントはそれぞれ接続する必要がありますか？</summary>
+          <p>はい、それぞれ一度ずつです。ログインすると最初のGoogleアカウントが接続され、ほかは設定から追加します。
+            その後はすべて同じリストに届きます。</p></details>
+        <details><summary>Klornが勝手にメールを送ったり削除したりしますか？</summary>
+          <p>指示しない限りしません。レーンは振り分けるだけです。送信・完全削除・転送は承認を待ち、自分で作った自動返信ルールはその承認として扱われます。自動化をオンにすると、アシスタントがリスクの低い一部の作業を自分で行います。送信のたびに記録が残ります。</p></details>
+        <details><summary>今接続できるアカウントは？</summary>
+          <p>GmailとGoogleカレンダー、そしてベータ版のNaverメールとiCloudメールです。現時点ではこれがすべてで、
+            ほかのアカウントが接続できるようになった日にこのページを更新します。</p></details>
+        <details><summary>私のメールはどこへ行きますか？</summary>
+          <p>Klornの分類器へ渡り、戻ってきます。トークンは暗号化して保存され、それを扱うコードは公開されています。
+            自分で管理したい場合は、<a href="/ja/self-host/">自分のサーバーでKlornを動かせます</a>。</p></details>
+        <details><summary>「自分のAIキーを使う」とはどういう意味ですか？</summary>
+          <p>Klornが私たちのキーの代わりに、あなたが持つモデル提供元のキーを使えるということです。
+            Proで使えます。セルフホストの場合は、どのキーでもローカルモデルでも使えます。</p></details>
+        <details><summary>Windows版はありますか？</summary>
+          <p>はい、ベータ版があります。コード署名が済むまでは、初回起動時にWindowsのSmartScreen警告が一度表示されることがあります。
+            ウェブアプリは同じアカウントで、最新のブラウザならどこからでも使えます。</p></details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final" aria-labelledby="final-h">
+  <picture class="hero-sky" aria-hidden="true">
+    <source type="image/webp" sizes="100vw"
+            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
+    <img src="/media/sky/dusk-1920.jpg" alt="" loading="lazy" decoding="async" width="2560" height="1709">
+  </picture>
+  <div class="wrap">
+    <h2 id="final-h">散らばったメールと予定を、<wbr><span class="ser">ひとつの場所に。</span></h2>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Windows版をダウンロード">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Mac版をダウンロード</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">ブラウザで開く</a>
+    </div>
+    <!-- The Windows entry stays a visible link so a Windows visitor with
+         scripting off is not left with a page that only offers a .dmg. -->
+    <p class="meta"><span>macOS 14以降</span><i aria-hidden="true">·</i><span><a href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe">Windowsベータ</a></span><i aria-hidden="true">·</i><span>最新のブラウザ</span><i aria-hidden="true">·</i><span><a href="/ja/download/">動作環境</a></span></p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="#top">Klorn</a>
+      <p class="foot-note">メールとカレンダーをひとつの場所で、理由とともに整理します。オープンソース。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="製品"><h4>製品</h4>
+      <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Windows版をダウンロード">Mac版をダウンロード</a>
+      <a href="/ja/download/">すべてのダウンロード</a>
+      <a href="/ja/pricing/">料金</a>
+      <a href="https://app.klorn.ai/login">ログイン</a>
+      <a href="/ja/status/">ステータス</a><a href="/ja/blog/">ブログ</a></nav>
+    <nav aria-label="オープンソース"><h4>オープンソース</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHubリポジトリ</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">リリース</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">評価セット</a>
+      <a href="/ja/methodology/">評価方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3ライセンス</a>
+      <a href="/ja/open-source/">なぜAGPLなのか、付け足しなしで</a>
+      <a href="/ja/self-host/">セルフホスト</a></nav>
+    <nav aria-label="比較"><h4>比較</h4>
+      <a href="/ja/vs/fyxer/">Fyxerと比較</a><a href="/ja/vs/superhuman/">Superhumanと比較</a>
+      <a href="/ja/vs/sanebox/">SaneBoxと比較</a><a href="/ja/vs/inbox-zero/">Inbox Zeroと比較</a></nav>
+    <nav aria-label="法的事項"><h4>法的事項</h4>
+      <a href="https://app.klorn.ai/privacy">プライバシー</a><a href="https://app.klorn.ai/terms">利用規約</a>
+      <a href="https://app.klorn.ai/refund">返金</a>
+      <a href="/ja/security/">セキュリティ</a><a href="/ja/gdpr/">GDPR</a><a href="/ja/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">お問い合わせ</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+    <span class="langsw">
+      <a href="/" lang="en" data-lang-pick="en">EN</a><i aria-hidden="true">·</i><a href="/ko/" lang="ko" data-lang-pick="ko">KO</a><i aria-hidden="true">·</i><a href="/ja/" lang="ja" data-lang-pick="ja" aria-current="true">JA</a><i aria-hidden="true">·</i><a href="/zh/" lang="zh" data-lang-pick="zh">ZH</a><i aria-hidden="true">·</i><a href="/es/" lang="es" data-lang-pick="es">ES</a><i aria-hidden="true">·</i><a href="/fr/" lang="fr" data-lang-pick="fr">FR</a><i aria-hidden="true">·</i><a href="/de/" lang="de" data-lang-pick="de">DE</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Only the text node changes, so
+// the icon survives.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+
+// The language menu. Click to open, click away or Escape to close; Escape
+// returns focus to the trigger.
+(function () {
+  var btn = document.querySelector('[data-lang-toggle]');
+  var menu = document.getElementById('lang-menu');
+  if (!btn || !menu) return;
+  function setOpen(open) {
+    if (open) menu.setAttribute('data-open', '');
+    else menu.removeAttribute('data-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    setOpen(!menu.hasAttribute('data-open'));
+  });
+  menu.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('click', function (e) {
+    if (!menu.hasAttribute('data-open')) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    setOpen(false);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !menu.hasAttribute('data-open')) return;
+    setOpen(false);
+    btn.focus();
+  });
+})();
+
+// Language: follow the browser preference on a first visit to the root, and
+// never again. An explicit pick is remembered, the redirect fires at most once
+// per browser session, and deep links stay where they point.
+(function () {
+  var KEY = 'klorn.lang';
+  document.querySelectorAll('[data-lang-pick]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try { localStorage.setItem(KEY, a.getAttribute('data-lang-pick')); } catch (e) {}
+    });
+  });
+  var stored = null;
+  try { stored = localStorage.getItem(KEY); } catch (e) {}
+  if (stored) return;
+  try { if (sessionStorage.getItem(KEY + '.tried')) return; } catch (e) {}
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  var path = location.pathname;
+  if (path !== '/' && path !== '/index.html') return;
+  var prefers = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+  if (!/^ko\b/i.test(prefers)) return;
+  try { sessionStorage.setItem(KEY + '.tried', '1'); } catch (e) {}
+  location.replace('/ko/');
+})();
+</script>
+<script>
+// Inflow attribution: utm_campaign and friends, the referrer and this landing
+// path ride along on every app.klorn.ai link, so a signup can report which
+// channel brought the person in.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

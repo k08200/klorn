@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import RefundPolicy from "../../components/refund-policy";
 
 export const metadata: Metadata = {
   title: "Terms of Service - Klorn",
   description: "Klorn beta terms of service.",
 };
 
-const updatedAt = "May 4, 2026";
+const updatedAt = "October 31, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -17,12 +18,14 @@ function slug(title: string): string {
 }
 
 const SECTIONS = [
+  "Eligibility",
   "Beta Product",
   "Your Responsibilities",
   "Approval and Automation",
   "Google Services",
   "Not Professional Advice",
   "Availability and Data Loss",
+  "Billing, Cancellation, and Refunds",
   "Limitation of Liability",
   "Governing Law",
   "Account Deletion",
@@ -33,8 +36,8 @@ const SECTIONS = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section id={slug(title)} className="scroll-mt-24 space-y-3">
-      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      <div className="space-y-3 text-base leading-7 text-slate-500">{children}</div>
+      <h2 className="text-role-title text-ink">{title}</h2>
+      <div className="space-y-3 text-role-body leading-7 text-ink-mid">{children}</div>
     </section>
   );
 }
@@ -43,15 +46,17 @@ function TableOfContents({ sections }: { sections: string[] }) {
   return (
     <nav
       aria-label="On this page"
-      className="mt-10 rounded-xl border border-slate-200 bg-slate-50 p-5"
+      className="mt-10 rounded-card border border-line bg-surface-raised p-5"
     >
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">On this page</p>
+      <p className="text-role-caption font-medium uppercase tracking-[0.18em] text-ink-mid">
+        On this page
+      </p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {sections.map((title) => (
           <li key={title}>
             <a
               href={`#${slug(title)}`}
-              className="inline-flex min-h-11 items-center text-sm text-slate-500 transition hover:text-sky-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white rounded"
+              className="inline-flex min-h-11 items-center text-role-body text-ink-mid transition hover:text-accent-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white rounded"
             >
               {title}
             </a>
@@ -64,32 +69,30 @@ function TableOfContents({ sections }: { sections: string[] }) {
 
 export default function TermsPage() {
   return (
-    <main id="main" className="min-h-screen sky-bg text-slate-900">
+    <main id="main" className="min-h-screen sky-bg text-ink">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-control bg-[#f5f0e8]">
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-slate-500">
-          <Link href="/privacy" className="transition hover:text-slate-900">
+        <div className="flex items-center gap-5 text-role-body text-ink-mid">
+          <Link href="/privacy" className="transition hover:text-ink">
             Privacy
           </Link>
-          <Link href="/login" className="transition hover:text-slate-900">
+          <Link href="/login" className="transition hover:text-ink">
             Log in
           </Link>
         </div>
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-600">
+        <p className="text-role-body font-medium uppercase tracking-[0.18em] text-accent-deep">
           TERMS OF SERVICE
         </p>
-        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
-          Klorn Beta Terms
-        </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-500">
+        <h1 className="mt-4 max-w-3xl text-role-page text-ink">Klorn Beta Terms</h1>
+        <p className="mt-5 max-w-2xl text-role-body leading-6 text-ink-mid">
           Last updated: {updatedAt}. These terms apply to the Klorn beta. By using Klorn, you agree
           to these terms and the Privacy Policy.
         </p>
@@ -97,6 +100,14 @@ export default function TermsPage() {
         <TableOfContents sections={SECTIONS} />
 
         <div className="mt-12 space-y-10">
+          <Section title="Eligibility">
+            <p>
+              You must be at least 16 years old to use Klorn. The Privacy Policy explains why that
+              single number rather than one per country, and how to report an account that belongs
+              to a child.
+            </p>
+          </Section>
+
           <Section title="Beta Product">
             <p>
               Klorn is currently a beta product. Features may change, fail temporarily, be rate
@@ -149,6 +160,10 @@ export default function TermsPage() {
             </p>
           </Section>
 
+          <Section title="Billing, Cancellation, and Refunds">
+            <RefundPolicy />
+          </Section>
+
           <Section title="Limitation of Liability">
             <p>
               To the maximum extent permitted by law, Klorn and its operators are not liable for
@@ -172,7 +187,10 @@ export default function TermsPage() {
           <Section title="Account Deletion">
             <p>
               To request deletion of Klorn account data, contact{" "}
-              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
+              <a
+                className="text-accent-deep hover:text-accent-deeper"
+                href="mailto:k0820086@gmail.com"
+              >
                 k0820086@gmail.com
               </a>
               . Deleting Klorn account data does not automatically delete data from Google or other
@@ -190,7 +208,10 @@ export default function TermsPage() {
           <Section title="Contact">
             <p>
               For questions about these terms, contact{" "}
-              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
+              <a
+                className="text-accent-deep hover:text-accent-deeper"
+                href="mailto:k0820086@gmail.com"
+              >
                 k0820086@gmail.com
               </a>
               .

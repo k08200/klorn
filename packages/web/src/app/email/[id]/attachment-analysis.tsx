@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { useToast } from "../../../components/toast";
 import { API_BASE, authHeaders } from "../../../lib/api";
+import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import { formatBytes } from "./atoms";
 import type { EmailAttachment } from "./types";
@@ -69,6 +70,7 @@ export function AttachmentAnalysis({
   >({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { t } = useT();
 
   const downloadBrief = async () => {
     if (downloading) return;
@@ -89,7 +91,7 @@ export function AttachmentAnalysis({
       URL.revokeObjectURL(url);
     } catch (err) {
       captureClientError(err, { scope: "email.attachment.brief.download", emailId });
-      toast("Could not create the attachment brief.", "error");
+      toast(t("emailDetail.attachment.error.brief"), "error");
     } finally {
       setDownloading(null);
     }
@@ -115,7 +117,7 @@ export function AttachmentAnalysis({
       URL.revokeObjectURL(url);
     } catch (err) {
       captureClientError(err, { scope: "email.attachment.download", attachmentId: attachment.id });
-      toast("Could not download the original attachment. Check Gmail connection.", "error");
+      toast(t("emailDetail.attachment.error.download"), "error");
     } finally {
       setDownloading(null);
     }
@@ -159,43 +161,54 @@ export function AttachmentAnalysis({
         attachmentId: attachment.id,
         target,
       });
-      toast(err instanceof Error ? err.message : "Attachment conversion failed.", "error");
+      toast(
+        err instanceof Error ? err.message : t("emailDetail.attachment.error.convertFailed"),
+        "error",
+      );
     } finally {
       setConverting(null);
     }
   };
 
   return (
-    <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <section className="mt-5 rounded-card border border-line bg-surface-raised p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          Attachment analysis
+        <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+          {t("emailDetail.attachment.title")}
         </h2>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-400">{attachments.length} files</span>
+          <span className="text-role-caption text-ink-dim">
+            {t("emailDetail.attachment.fileCount", { count: String(attachments.length) })}
+          </span>
           <button
             type="button"
             onClick={downloadBrief}
             disabled={downloading === "brief"}
-            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted transition hover:bg-accent/15 disabled:opacity-50"
+            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-role-caption text-accent-deep transition hover:bg-accent/15 disabled:opacity-50 focus-ring"
           >
-            {downloading === "brief" ? "Creating..." : "Download brief"}
+            {downloading === "brief"
+              ? t("emailDetail.attachment.creatingBrief")
+              : t("emailDetail.attachment.downloadBrief")}
           </button>
           <button
             type="button"
             onClick={onReanalyze}
             disabled={reanalyzing}
-            className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] text-slate-500 transition hover:bg-slate-200 disabled:opacity-50"
+            className="rounded border border-line bg-surface-hover px-2 py-1 text-role-caption text-ink-mid transition hover:bg-surface-inset disabled:opacity-50 focus-ring"
           >
-            {reanalyzing ? "Analyzing..." : "Reanalyze"}
+            {reanalyzing
+              ? t("emailDetail.attachment.analyzing")
+              : t("emailDetail.attachment.reanalyze")}
           </button>
           <button
             type="button"
             onClick={onOcr}
             disabled={ocring}
-            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted transition hover:bg-accent/15 disabled:opacity-50"
+            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-role-caption text-accent-deep transition hover:bg-accent/15 disabled:opacity-50 focus-ring"
           >
-            {ocring ? "Running OCR..." : "OCR/vision"}
+            {ocring
+              ? t("emailDetail.attachment.runningOcr")
+              : t("emailDetail.attachment.ocrVision")}
           </button>
         </div>
       </div>
@@ -203,34 +216,37 @@ export function AttachmentAnalysis({
         {attachments.map((attachment) => (
           <div
             key={attachment.id}
-            className="border-t border-slate-200 pt-3 first:border-t-0 first:pt-0"
+            className="border-t border-line pt-3 first:border-t-0 first:pt-0"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="max-w-full truncate text-sm font-medium text-slate-900">
+              <span className="max-w-full truncate text-role-body font-medium text-ink">
                 {attachment.filename}
               </span>
               {attachment.category && (
-                <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
-                  {attachmentCategoryLabel(attachment.category)}
+                <span className="rounded border border-line bg-surface-hover px-1.5 py-0.5 text-role-caption text-ink-mid">
+                  {attachmentCategoryLabel(t, attachment.category)}
                 </span>
               )}
-              <span className="text-[11px] text-slate-500">
-                {formatBytes(attachment.size)} · {attachmentStatusLabel(attachment.analysisStatus)}
+              <span className="text-role-caption text-ink-mid">
+                {formatBytes(attachment.size)} ·{" "}
+                {attachmentStatusLabel(t, attachment.analysisStatus)}
               </span>
-              {attachmentNeedsManualReview(attachment) && (
-                <span className="rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-[10px] text-rose-200">
-                  Source review
+              {attachmentNeedsManualReview(t, attachment) && (
+                <span className="rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-role-caption text-rose-200">
+                  {t("emailDetail.attachment.sourceReview")}
                 </span>
               )}
               <button
                 type="button"
                 onClick={() => downloadAttachment(attachment)}
                 disabled={downloading === attachment.id}
-                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 transition hover:border-slate-300 hover:text-slate-500 disabled:opacity-50"
+                className="rounded border border-line bg-surface-panel px-2 py-0.5 text-role-caption text-ink-mid transition hover:border-line-strong hover:text-ink-mid disabled:opacity-50 focus-ring"
               >
-                {downloading === attachment.id ? "Downloading" : "Download original"}
+                {downloading === attachment.id
+                  ? t("emailDetail.attachment.downloading")
+                  : t("emailDetail.attachment.downloadOriginal")}
               </button>
-              <div className="flex items-center gap-1 rounded border border-slate-200 bg-white p-0.5">
+              <div className="flex items-center gap-1 rounded border border-line bg-surface-panel p-0.5">
                 <select
                   value={conversionTargets[attachment.id] ?? defaultConversionTarget(attachment)}
                   onChange={(event) =>
@@ -239,8 +255,10 @@ export function AttachmentAnalysis({
                       [attachment.id]: event.target.value as AttachmentConversionTarget,
                     }))
                   }
-                  className="max-w-20 bg-transparent px-1 py-0.5 text-[10px] text-slate-500 outline-none"
-                  aria-label={`${attachment.filename} conversion format`}
+                  className="max-w-20 bg-transparent px-1 py-0.5 text-role-caption text-ink-mid outline-none"
+                  aria-label={t("emailDetail.attachment.conversionFormatAria", {
+                    filename: attachment.filename,
+                  })}
                 >
                   {ATTACHMENT_CONVERSION_TARGETS.map((target) => (
                     <option key={target.value} value={target.value}>
@@ -255,18 +273,22 @@ export function AttachmentAnalysis({
                     converting ===
                     `${attachment.id}:${conversionTargets[attachment.id] ?? defaultConversionTarget(attachment)}`
                   }
-                  className="rounded bg-slate-600 px-2 py-0.5 text-[10px] font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
+                  className="rounded bg-slate-600 px-2 py-0.5 text-role-caption font-medium text-white transition hover:bg-slate-700 disabled:opacity-50 focus-ring"
                 >
-                  {converting?.startsWith(`${attachment.id}:`) ? "Converting" : "Convert"}
+                  {converting?.startsWith(`${attachment.id}:`)
+                    ? t("emailDetail.attachment.converting")
+                    : t("emailDetail.attachment.convert")}
                 </button>
               </div>
             </div>
             {attachment.summary && (
-              <p className="mt-2 text-xs leading-relaxed text-slate-500">{attachment.summary}</p>
+              <p className="mt-2 text-role-caption leading-relaxed text-ink-mid">
+                {attachment.summary}
+              </p>
             )}
-            {attachmentNeedsManualReview(attachment) && (
-              <p className="mt-2 text-[11px] leading-relaxed text-rose-200/80">
-                {attachmentManualReviewReason(attachment)}
+            {attachmentNeedsManualReview(t, attachment) && (
+              <p className="mt-2 text-role-caption leading-relaxed text-rose-200/80">
+                {attachmentManualReviewReason(t, attachment)}
               </p>
             )}
             {attachment.keyPoints.length > 0 && (
@@ -274,7 +296,7 @@ export function AttachmentAnalysis({
                 {attachment.keyPoints.map((point, index) => (
                   <li
                     key={`${attachment.id}-${index}`}
-                    className="flex gap-1.5 text-xs text-slate-500"
+                    className="flex gap-1.5 text-role-caption text-ink-mid"
                   >
                     <span className="text-slate-300">•</span>
                     <span>{point}</span>
@@ -288,36 +310,38 @@ export function AttachmentAnalysis({
                   value === null || value === "" ? null : (
                     <span
                       key={key}
-                      className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500"
+                      className="rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink-mid"
                     >
-                      {fieldLabel(key)}: {String(value)}
+                      {fieldLabel(t, key)}: {String(value)}
                     </span>
                   ),
                 )}
               </div>
             )}
             {attachment.textPreview && (
-              <details className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <summary className="cursor-pointer text-[11px] font-medium text-slate-400">
-                  Converted text preview
+              <details className="mt-2 rounded-control border border-line bg-surface-raised px-3 py-2">
+                <summary className="cursor-pointer text-role-caption font-medium text-ink-dim">
+                  {t("emailDetail.attachment.textPreview")}
                 </summary>
-                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-slate-400">
+                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-role-caption leading-relaxed text-ink-dim">
                   {attachment.textPreview}
                 </pre>
               </details>
             )}
             {attachment.analysisError && (
-              <p className="mt-2 text-[11px] leading-relaxed text-accent/70">
-                Processed with fallback analysis: {attachment.analysisError}
+              <p className="mt-2 text-role-caption leading-relaxed text-accent-deep">
+                {t("emailDetail.attachment.fallbackPrefix", { reason: attachment.analysisError })}
               </p>
             )}
             <div className="mt-2">
               <button
                 type="button"
                 onClick={() => setEditingId(editingId === attachment.id ? null : attachment.id)}
-                className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-500 transition hover:border-accent/30 hover:text-accent-muted"
+                className="rounded border border-line bg-surface-panel px-2 py-1 text-role-caption text-ink-mid transition hover:border-accent/30 hover:text-accent-deep focus-ring"
               >
-                {editingId === attachment.id ? "Close edit" : "Edit analysis"}
+                {editingId === attachment.id
+                  ? t("emailDetail.attachment.closeEdit")
+                  : t("emailDetail.attachment.editAnalysis")}
               </button>
             </div>
             {editingId === attachment.id && (
@@ -412,6 +436,7 @@ function AttachmentCorrectionForm({
     })),
   );
   const [error, setError] = useState<string | null>(null);
+  const { t } = useT();
 
   const save = () => {
     const extractedFields: Record<string, string | number | boolean | null> = {};
@@ -425,26 +450,26 @@ function AttachmentCorrectionForm({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-accent/15 bg-accent/5 p-3">
+    <div className="mt-3 rounded-control border border-accent/15 bg-accent/5 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
         <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
-            Summary
+          <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
+            {t("emailDetail.attachment.form.summaryLabel")}
           </span>
           <input
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
-            className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500 outline-none focus:border-sky-500/40"
+            className="w-full rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
-            Category
+          <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
+            {t("emailDetail.attachment.form.categoryLabel")}
           </span>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500 outline-none focus:border-sky-500/40"
+            className="w-full rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
           >
             {[
               "resume",
@@ -460,7 +485,7 @@ function AttachmentCorrectionForm({
               "other",
             ].map((value) => (
               <option key={value} value={value}>
-                {attachmentCategoryLabel(value)}
+                {attachmentCategoryLabel(t, value)}
               </option>
             ))}
           </select>
@@ -468,21 +493,21 @@ function AttachmentCorrectionForm({
       </div>
       <div className="mt-2">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="block text-[10px] uppercase tracking-wider text-slate-500">
-            Extracted fields
+          <span className="block text-role-caption uppercase tracking-wider text-ink-mid">
+            {t("emailDetail.attachment.form.extractedFieldsLabel")}
           </span>
           <button
             type="button"
             onClick={() => setFields((prev) => [...prev, { key: "", value: "" }])}
-            className="text-[11px] text-slate-400 transition hover:text-slate-500"
+            className="text-role-caption text-ink-dim transition hover:text-ink-mid focus-ring"
           >
-            Add field
+            {t("emailDetail.attachment.form.addField")}
           </button>
         </div>
         <div className="space-y-1.5">
           {fields.length === 0 && (
-            <p className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-400">
-              No extracted fields yet. Add any needed value manually.
+            <p className="rounded border border-line bg-surface-raised px-2 py-2 text-role-caption text-ink-dim">
+              {t("emailDetail.attachment.form.noFields")}
             </p>
           )}
           {fields.map((field, index) => (
@@ -499,8 +524,8 @@ function AttachmentCorrectionForm({
                     ),
                   )
                 }
-                placeholder="Field"
-                className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500 outline-none focus:border-sky-500/40"
+                placeholder={t("emailDetail.attachment.form.fieldPlaceholder")}
+                className="rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
               />
               <input
                 value={field.value}
@@ -511,31 +536,33 @@ function AttachmentCorrectionForm({
                     ),
                   )
                 }
-                placeholder="Value"
-                className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500 outline-none focus:border-sky-500/40"
+                placeholder={t("emailDetail.attachment.form.valuePlaceholder")}
+                className="rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
               />
               <button
                 type="button"
                 onClick={() =>
                   setFields((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
                 }
-                className="rounded border border-slate-200 px-2 py-1.5 text-[11px] text-slate-400 transition hover:border-rose-400/30 hover:text-rose-200"
+                className="rounded border border-line px-2 py-1.5 text-role-caption text-ink-dim transition hover:border-rose-400/30 hover:text-rose-200 focus-ring"
               >
-                Delete
+                {t("common.delete")}
               </button>
             </div>
           ))}
         </div>
       </div>
-      {error && <p className="mt-1 text-[11px] text-rose-300">{error}</p>}
+      {error && <p className="mt-1 text-role-caption text-rose-300">{error}</p>}
       <div className="mt-2 flex justify-end">
         <button
           type="button"
           onClick={save}
           disabled={saving}
-          className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-sky-600 disabled:opacity-50"
+          className="rounded bg-accent-solid px-3 py-1.5 text-role-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50 focus-ring"
         >
-          {saving ? "Saving..." : "Save changes"}
+          {saving
+            ? t("emailDetail.attachment.form.saving")
+            : t("emailDetail.attachment.form.saveChanges")}
         </button>
       </div>
     </div>
@@ -554,64 +581,73 @@ function coerceFieldValue(value: string): string | number | boolean | null {
   return value;
 }
 
-function attachmentCategoryLabel(category: string): string {
+/** `t` is passed in rather than called via useT() here — these are plain
+ * helpers, not components, so they cannot use hooks themselves. */
+function attachmentCategoryLabel(t: (key: string) => string, category: string): string {
   const labelMap: Record<string, string> = {
-    resume: "Resume",
-    profile: "Profile",
-    portfolio: "Portfolio",
-    audition: "Audition",
-    contract: "Contract",
-    invoice: "Invoice",
-    proposal: "Proposal",
-    schedule: "Schedule",
-    image: "Image",
-    document: "Document",
-    other: "Other",
+    resume: t("emailDetail.attachment.category.resume"),
+    profile: t("emailDetail.attachment.category.profile"),
+    portfolio: t("emailDetail.attachment.category.portfolio"),
+    audition: t("emailDetail.attachment.category.audition"),
+    contract: t("emailDetail.attachment.category.contract"),
+    invoice: t("emailDetail.attachment.category.invoice"),
+    proposal: t("emailDetail.attachment.category.proposal"),
+    schedule: t("emailDetail.attachment.category.schedule"),
+    image: t("emailDetail.attachment.category.image"),
+    document: t("emailDetail.attachment.category.document"),
+    other: t("emailDetail.attachment.category.other"),
   };
   return labelMap[category] || category;
 }
 
-function attachmentStatusLabel(status: string): string {
+function attachmentStatusLabel(t: (key: string) => string, status: string): string {
   const labelMap: Record<string, string> = {
-    ANALYZED: "Analyzed",
-    FALLBACK: "Fallback",
-    PENDING: "Pending",
-    UNSUPPORTED: "Limited extraction",
+    ANALYZED: t("emailDetail.attachment.status.analyzed"),
+    FALLBACK: t("emailDetail.attachment.status.fallback"),
+    PENDING: t("emailDetail.attachment.status.pending"),
+    UNSUPPORTED: t("emailDetail.attachment.status.unsupported"),
   };
   return labelMap[status] || status.toLowerCase();
 }
 
-function attachmentNeedsManualReview(attachment: EmailAttachment): boolean {
-  return !!attachmentManualReviewReason(attachment);
+function attachmentNeedsManualReview(
+  t: (key: string) => string,
+  attachment: EmailAttachment,
+): boolean {
+  return !!attachmentManualReviewReason(t, attachment);
 }
 
-function attachmentManualReviewReason(attachment: EmailAttachment): string | null {
+function attachmentManualReviewReason(
+  t: (key: string) => string,
+  attachment: EmailAttachment,
+): string | null {
   if (attachment.analysisStatus === "UNSUPPORTED")
-    return "Text extraction is limited, so source review is needed.";
-  if (attachment.analysisStatus === "PENDING") return "Analysis is still pending.";
+    return t("emailDetail.attachment.reviewReason.unsupported");
+  if (attachment.analysisStatus === "PENDING")
+    return t("emailDetail.attachment.reviewReason.pending");
   if (attachment.analysisStatus === "FALLBACK")
-    return "Fallback analysis was used after AI analysis failed. Source review is recommended.";
+    return t("emailDetail.attachment.reviewReason.fallback");
   const preview = attachment.textPreview ?? "";
-  if (/OCR pending/i.test(preview)) return "This image needs OCR or source review.";
+  if (/OCR pending/i.test(preview)) return t("emailDetail.attachment.reviewReason.ocrNeeded");
   if (/no text layer|extraction failed/i.test(preview))
-    return "Automatic text extraction is incomplete, so source review is needed.";
+    return t("emailDetail.attachment.reviewReason.extractionIncomplete");
   return null;
 }
 
-function fieldLabel(key: string): string {
+function fieldLabel(t: (key: string) => string, key: string): string {
   const labelMap: Record<string, string> = {
-    name: "Name",
-    role: "Role",
-    contact: "Contact",
-    email: "Email",
-    phone: "Phone",
-    age: "Age",
-    height: "Height",
-    skills: "Skills",
-    links: "Links",
-    deadline: "Deadline",
-    amount: "Amount",
-    availability: "Availability",
+    name: t("emailDetail.candidateCard.fact.name"),
+    role: t("emailDetail.candidateCard.fact.role"),
+    contact: t("emailDetail.candidateCard.fact.contact"),
+    email: t("nav.email"),
+    phone: t("emailDetail.attachment.field.phone"),
+    age: t("emailDetail.candidateCard.fact.age"),
+    height: t("emailDetail.candidateCard.fact.height"),
+    skills: t("emailDetail.attachment.field.skills"),
+    links: t("emailDetail.attachment.field.links"),
+    deadline: t("emailDetail.attachment.field.deadline"),
+    amount: t("emailDetail.attachment.field.amount"),
+    availability: t("emailDetail.attachment.field.availability"),
   };
   return labelMap[key] || key;
 }

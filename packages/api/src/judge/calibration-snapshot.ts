@@ -28,6 +28,7 @@ import { prisma } from "../db.js";
 // branch so the daily snapshot path never loads the LLM provider stack.
 import type { CorrectionEvalPayload } from "../learning/correction-eval.js";
 import { captureError } from "../sentry.js";
+import { NOT_AGENT_SET } from "./agent-tier.js";
 import {
   type AttentionRow,
   computeDriftSignal,
@@ -49,6 +50,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const CALIBRATION_USER_BATCH = 500;
 
 export const JUDGE_SOURCES = [
+  "pinned-rule",
   "fast-path",
   "sender-prior",
   "llm",
@@ -129,6 +131,7 @@ export function buildSnapshotPayload(args: {
   for (const tier of TIERS) feedbackCount += feedbackOverrideRate[tier].overridden;
 
   const judgeSourceCounts: JudgeSourceCounts = {
+    "pinned-rule": 0,
     "fast-path": 0,
     "sender-prior": 0,
     llm: 0,
@@ -169,7 +172,10 @@ async function fetchRows(userId: string, since: Date, until: Date): Promise<Snap
       findMany: (args: unknown) => Promise<SnapshotSourceRow[]>;
     }
   ).findMany({
-    where: { userId, createdAt: { gte: since, lt: until } },
+    // Agent-set rows are excluded (step A2b): the snapshot measures the judge and
+    // the human corrections of it, and an agent's lane change is neither. Keeping
+    // them would shift the tier distribution and trip the drift signal.
+    where: { userId, createdAt: { gte: since, lt: until }, ...NOT_AGENT_SET },
     select: {
       id: true,
       source: true,

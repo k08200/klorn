@@ -4,22 +4,26 @@ import Link from "next/link";
 import { useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { isSafeBillingRedirect } from "../lib/billing-redirect";
+import { useT } from "../lib/i18n";
 import { isNativePlatform } from "../lib/native/capacitor";
 import { iapAvailable, restoreNativePurchases, startNativePurchase } from "../lib/native/iap";
+import { proPrice } from "../lib/pricing";
 import { useToast } from "./toast";
 
 const VALUE_PROPS = [
-  "Only get interrupted by mail that actually matters",
-  "Klorn auto-handles the noise while you're away",
-  "A morning brief of what needs a decision",
-  "Learns your calls and gets sharper over time",
-];
+  "paywall.valueProp.interrupt",
+  "paywall.valueProp.noise",
+  "paywall.valueProp.brief",
+  "paywall.valueProp.learns",
+] as const;
 
 // Shown by AuthGuard when the signed-in user is not entitled (trial expired /
 // never subscribed) and the paywall is on. Web starts a card-required Stripe
 // trial; the iOS app uses IAP (wired with RevenueCat at launch).
 export default function PaywallScreen() {
   const { toast } = useToast();
+  const { t } = useT();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const native = isNativePlatform();
@@ -30,8 +34,8 @@ export default function PaywallScreen() {
   // undefined (older API) is treated as available so the button never
   // regresses on deploy skew.
   const webCheckoutReady = user?.webCheckoutAvailable !== false;
-  // Web is cheaper (no Apple cut). Founding price is locked in for early users.
-  const price = native ? "$9.99" : "$7.99";
+  // Web is cheaper (no store cut) — both values live in lib/pricing.ts.
+  const price = proPrice(native);
 
   const startWebTrial = async () => {
     if (loading) return;
@@ -41,9 +45,16 @@ export default function PaywallScreen() {
         method: "POST",
         body: JSON.stringify({ plan: "PRO" }),
       });
-      window.location.href = url;
+      // The URL comes from an API response — same open-redirect guard the
+      // /billing page applies, so this path can't be the weak one.
+      if (url && isSafeBillingRedirect(url, window.location.origin)) {
+        window.location.href = url;
+        return;
+      }
+      toast(t("billing.error.unsafeRedirect"), "error");
+      setLoading(false);
     } catch {
-      toast("Could not start checkout. Please try again.", "error");
+      toast(t("subscription.toast.checkoutFailed"), "error");
       setLoading(false);
     }
   };
@@ -79,8 +90,8 @@ export default function PaywallScreen() {
     }
     toast(
       outcome === "unavailable"
-        ? "Subscriptions aren't available right now."
-        : "Could not complete the purchase. Please try again.",
+        ? t("subscription.toast.unavailable")
+        : t("subscription.toast.purchaseFailed"),
       "error",
     );
     setLoading(false);
@@ -94,27 +105,20 @@ export default function PaywallScreen() {
       await reloadWhenEntitled();
       return;
     }
-    toast("No previous purchase found.", "info");
+    toast(t("subscription.toast.noPurchase"), "info");
     setLoading(false);
   };
 
   return (
-    <main className="flex min-h-dvh flex-col justify-center bg-white px-6 pb-safe pt-safe text-slate-900">
+    <main className="flex min-h-dvh flex-col justify-center bg-surface-panel px-6 pb-safe pt-safe text-ink">
       <div className="mx-auto w-full max-w-sm">
         <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-12 w-12" />
-        <span className="inline-flex items-center rounded-full bg-sky-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-600">
-          Founding price
-        </span>
-        <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight text-slate-900">
-          Start your 7-day free trial
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Klorn Pro is your AI email firewall — it decides what reaches you and handles the rest.
-        </p>
+        <h1 className="text-role-page font-bold leading-tight text-ink">{t("paywall.title")}</h1>
+        <p className="mt-2 text-role-body leading-6 text-ink-mid">{t("paywall.body")}</p>
 
         <ul className="mt-6 space-y-3">
           {VALUE_PROPS.map((prop) => (
-            <li key={prop} className="flex items-start gap-3 text-[15px] text-slate-900">
+            <li key={prop} className="flex items-start gap-3 text-role-body text-ink">
               <svg
                 aria-hidden="true"
                 width="20"
@@ -125,11 +129,11 @@ export default function PaywallScreen() {
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="mt-0.5 shrink-0 text-sky-500"
+                className="mt-0.5 shrink-0 text-accent-deep"
               >
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span>{prop}</span>
+              <span>{t(prop)}</span>
             </li>
           ))}
         </ul>
@@ -142,18 +146,18 @@ export default function PaywallScreen() {
             <button
               type="button"
               disabled
-              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-sky-400/60 text-[15px] font-semibold text-white"
+              className="flex min-h-12 w-full items-center justify-center rounded-control bg-surface-inset text-role-label font-semibold text-ink-mid"
             >
-              Subscription coming soon
+              {t("billing.subscriptionComingSoon")}
             </button>
           ) : (
             <button
               type="button"
               onClick={native ? startAppPurchase : startWebTrial}
               disabled={loading}
-              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-sky-500 text-[15px] font-semibold text-white transition active:bg-sky-500 disabled:opacity-50"
+              className="flex min-h-12 w-full items-center justify-center rounded-control bg-accent-solid text-role-label font-semibold text-accent-solid-ink transition active:bg-accent-solid-hover disabled:opacity-50"
             >
-              {loading ? "Starting..." : "Start free trial"}
+              {loading ? t("subscription.starting") : t("paywall.startTrial")}
             </button>
           )}
           {native && iapReady && (
@@ -161,23 +165,27 @@ export default function PaywallScreen() {
               type="button"
               onClick={restore}
               disabled={loading}
-              className="mt-2 flex min-h-9 w-full items-center justify-center text-xs text-slate-500 transition active:text-slate-900 disabled:opacity-50"
+              className="mt-2 flex min-h-9 w-full items-center justify-center text-role-caption text-ink-mid transition active:text-ink disabled:opacity-50"
             >
-              Restore purchase
+              {t("subscription.restore")}
             </button>
           )}
-          <p className="mt-3 text-center text-xs text-slate-400">
-            7 days free, then {price}/month — locked in for early members. Cancel anytime.
+          <p className="mt-3 text-center text-role-caption text-ink-dim">
+            {t("subscription.trialTerms", { price })}
           </p>
         </div>
 
-        <div className="mt-6 flex items-center justify-center gap-4 text-xs text-slate-400">
-          <Link href="/settings" className="transition hover:text-slate-700">
-            Settings
+        <div className="mt-6 flex items-center justify-center gap-4 text-role-caption text-ink-dim">
+          <Link href="/settings" className="transition hover:text-ink-soft">
+            {t("settings.title")}
           </Link>
           <span aria-hidden="true">·</span>
-          <Link href="/terms" className="transition hover:text-slate-700">
-            Terms
+          <Link href="/terms" className="transition hover:text-ink-soft">
+            {t("auth.terms")}
+          </Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/refund" className="transition hover:text-ink-soft">
+            {t("paywall.refunds")}
           </Link>
         </div>
       </div>

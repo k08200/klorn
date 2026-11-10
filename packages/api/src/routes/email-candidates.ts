@@ -107,39 +107,54 @@ function filterCandidateIntakes(
   return rows;
 }
 
+const candidateListQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    status: { type: "string", maxLength: 500 },
+    limit: { type: "string", maxLength: 500 },
+    refresh: { type: "string", maxLength: 500 },
+    attention: { type: "string", maxLength: 500 },
+  },
+} as const;
+
 export async function registerEmailCandidatesRoutes(app: FastifyInstance) {
   // GET /api/email/candidates/export.csv?status=READY_TO_REVIEW&limit=500
-  app.get("/candidates/export.csv", { preHandler: requireAuth }, async (request, reply) => {
-    const uid = getUserId(request);
-    const { status, limit, refresh, attention } = request.query as {
-      status?: string;
-      limit?: string;
-      refresh?: string;
-      attention?: string;
-    };
-    const normalizedStatus = status ? normalizeCandidateIntakeStatus(status) : null;
-    if (status && !normalizedStatus) {
-      return reply.code(400).send({ error: "Invalid candidate intake status" });
-    }
-    const normalizedAttention = normalizeCandidateAttentionFilter(attention);
-    if (!normalizedAttention) {
-      return reply.code(400).send({ error: "Invalid candidate attention filter" });
-    }
-    const safeLimit = Math.min(Math.max(Number(limit) || 500, 1), 500);
-    if (refresh === "true") {
-      await syncRecentCandidateIntakes(uid, safeLimit);
-    }
-    const candidates = await listCandidateIntakes({
-      userId: uid,
-      status: normalizedStatus,
-      limit: safeLimit,
-    });
-    const csv = candidateIntakeCsv(filterCandidateIntakes(candidates, normalizedAttention));
-    return reply
-      .header("Content-Type", "text/csv; charset=utf-8")
-      .header("Content-Disposition", 'attachment; filename="klorn-candidate-intake.csv"')
-      .send(Buffer.from(csv, "utf-8"));
-  });
+  app.get(
+    "/candidates/export.csv",
+    { preHandler: requireAuth, schema: { querystring: candidateListQuerySchema } },
+    async (request, reply) => {
+      const uid = getUserId(request);
+      const { status, limit, refresh, attention } = request.query as {
+        status?: string;
+        limit?: string;
+        refresh?: string;
+        attention?: string;
+      };
+      const normalizedStatus = status ? normalizeCandidateIntakeStatus(status) : null;
+      if (status && !normalizedStatus) {
+        return reply.code(400).send({ error: "Invalid candidate intake status" });
+      }
+      const normalizedAttention = normalizeCandidateAttentionFilter(attention);
+      if (!normalizedAttention) {
+        return reply.code(400).send({ error: "Invalid candidate attention filter" });
+      }
+      const safeLimit = Math.min(Math.max(Number(limit) || 500, 1), 500);
+      if (refresh === "true") {
+        await syncRecentCandidateIntakes(uid, safeLimit);
+      }
+      const candidates = await listCandidateIntakes({
+        userId: uid,
+        status: normalizedStatus,
+        limit: safeLimit,
+      });
+      const csv = candidateIntakeCsv(filterCandidateIntakes(candidates, normalizedAttention));
+      return reply
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header("Content-Disposition", 'attachment; filename="klorn-candidate-intake.csv"')
+        .send(Buffer.from(csv, "utf-8"));
+    },
+  );
 
   // POST /api/email/candidates/bulk-status
   app.post("/candidates/bulk-status", { preHandler: requireAuth }, async (request, reply) => {
@@ -165,32 +180,36 @@ export async function registerEmailCandidatesRoutes(app: FastifyInstance) {
   });
 
   // GET /api/email/candidates?status=READY_TO_REVIEW&limit=50
-  app.get("/candidates", { preHandler: requireAuth }, async (request, reply) => {
-    const uid = getUserId(request);
-    const { status, limit, refresh, attention } = request.query as {
-      status?: string;
-      limit?: string;
-      refresh?: string;
-      attention?: string;
-    };
-    if (refresh === "true") {
-      await syncRecentCandidateIntakes(uid, Number(limit) || 50);
-    }
-    const normalizedStatus = status ? normalizeCandidateIntakeStatus(status) : null;
-    if (status && !normalizedStatus) {
-      return reply.code(400).send({ error: "Invalid candidate intake status" });
-    }
-    const normalizedAttention = normalizeCandidateAttentionFilter(attention);
-    if (!normalizedAttention) {
-      return reply.code(400).send({ error: "Invalid candidate attention filter" });
-    }
-    const candidates = await listCandidateIntakes({
-      userId: uid,
-      status: normalizedStatus,
-      limit: Number(limit) || 50,
-    });
-    return { candidates: filterCandidateIntakes(candidates, normalizedAttention) };
-  });
+  app.get(
+    "/candidates",
+    { preHandler: requireAuth, schema: { querystring: candidateListQuerySchema } },
+    async (request, reply) => {
+      const uid = getUserId(request);
+      const { status, limit, refresh, attention } = request.query as {
+        status?: string;
+        limit?: string;
+        refresh?: string;
+        attention?: string;
+      };
+      if (refresh === "true") {
+        await syncRecentCandidateIntakes(uid, Number(limit) || 50);
+      }
+      const normalizedStatus = status ? normalizeCandidateIntakeStatus(status) : null;
+      if (status && !normalizedStatus) {
+        return reply.code(400).send({ error: "Invalid candidate intake status" });
+      }
+      const normalizedAttention = normalizeCandidateAttentionFilter(attention);
+      if (!normalizedAttention) {
+        return reply.code(400).send({ error: "Invalid candidate attention filter" });
+      }
+      const candidates = await listCandidateIntakes({
+        userId: uid,
+        status: normalizedStatus,
+        limit: Number(limit) || 50,
+      });
+      return { candidates: filterCandidateIntakes(candidates, normalizedAttention) };
+    },
+  );
 
   // PATCH /api/email/:id/candidate-intake
   app.patch("/:id/candidate-intake", { preHandler: requireAuth }, async (request, reply) => {

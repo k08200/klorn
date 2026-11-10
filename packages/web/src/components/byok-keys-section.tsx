@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { byokLocked, isByokEntitlementRefusal } from "../lib/entitlement";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
+import { serverErrorMessage } from "../lib/server-error";
 import { useConfirm } from "./confirm-dialog";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import Button from "./ui/button";
+import ErrorAlert from "./ui/error-alert";
 import { Input, Select } from "./ui/input";
 import StatusChip from "./ui/status-chip";
 
@@ -16,36 +22,65 @@ interface CuratedModelOption {
 
 interface ModelStatus {
   activeModel: string;
-  hasOpenRouterApiKey: boolean;
+  hasAnthropicApiKey: boolean;
   hasGeminiApiKey: boolean;
   availableModels: CuratedModelOption[];
   selectedModel: string | null;
 }
 
-// Single-key policy (2026-07-16 outage post-mortem): OpenRouter is THE BYOK
-// slot — it routes every model Klorn pins, including the Gemini family. A
-// second per-provider slot is exactly how a dead/free key ends up silently
-// poisoning the provider chain. The legacy Gemini slot renders as remove-only
-// while a stored key remains.
-type Provider = "openRouter" | "gemini";
+// Single-key policy (2026-07-16 outage post-mortem): one BYOK slot. Since the
+// Claude-only switch (2026-11-01) it is an Anthropic key — every surface Klorn
+// pins runs on Claude. A second per-provider slot is exactly how a dead/free
+// key ends up silently poisoning the provider chain. The legacy Gemini slot
+// renders as remove-only while a stored key remains.
+type Provider = "anthropic" | "gemini";
 
-const OPENROUTER = {
-  id: "openRouter" as const,
-  label: "LLM key (OpenRouter)",
-  placeholder: "sk-or-v1-…",
-  helpUrl: "https://openrouter.ai/keys",
-  helpLabel: "openrouter.ai/keys",
+const ANTHROPIC = {
+  id: "anthropic" as const,
+  labelKey: "byok.anthropicLabel",
+  placeholder: "sk-ant-…",
+  // Same page the playground links to (app/playground/models.ts KEY_URL).
+  helpUrl: "https://platform.claude.com/settings/keys",
+  helpLabel: "platform.claude.com/settings/keys",
 };
+
+/** Qualifier keys for the curated catalog (packages/api/src/llm/model-catalog.ts). */
+const MODEL_NOTE_KEY: Record<string, string> = {
+  "claude-haiku-5-5": "byok.modelNote.fastest",
+  "claude-sonnet-5": "byok.modelNote.balanced",
+  "claude-opus-4-8": "byok.modelNote.mostCapable",
+};
+
+/**
+ * The server's note is English ("Anthropic — recommended"). The provider half
+ * is a name and stays; the qualifier comes from the UI language. An id the web
+ * does not know keeps the server note as is.
+ */
+function modelNote(
+  model: { id: string; note: string },
+  t: (key: string, vars?: Record<string, string>) => string,
+): string {
+  const key = MODEL_NOTE_KEY[model.id];
+  if (!key) return model.note;
+  const provider = model.note.split(" — ")[0] ?? model.note;
+  return t(key, { provider });
+}
 
 export function ByokKeysSection() {
   const { confirm } = useConfirm();
+  const { t } = useT();
+  const { user } = useAuth();
+  // BYOK is Pro: the server refuses to store a FREE user's key. `refused`
+  // covers a stale `entitled` (and an older API that only refuses on save).
+  const [refused, setRefused] = useState(false);
+  const locked = byokLocked(user) || refused;
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [inputs, setInputs] = useState<Record<Provider, string>>({ openRouter: "", gemini: "" });
+  const [inputs, setInputs] = useState<Record<Provider, string>>({ anthropic: "", gemini: "" });
   // Per-provider busy so saving one key never locks the other's controls.
   const [busy, setBusy] = useState<Record<Provider, boolean>>({
-    openRouter: false,
+    anthropic: false,
     gemini: false,
   });
 
@@ -56,11 +91,11 @@ export function ByokKeysSection() {
       setStatus(await apiFetch<ModelStatus>("/api/billing/models"));
     } catch (err) {
       captureClientError(err, { scope: "byok.status" });
-      setError("Could not load your LLM key status.");
+      setError(t("byok.error.status"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadStatus();
@@ -76,34 +111,37 @@ export function ByokKeysSection() {
         setInputs((s) => ({ ...s, [p]: "" }));
         await loadStatus();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        if (isByokEntitlementRefusal(err)) {
+          setRefused(true);
+          return;
+        }
         captureClientError(err, { scope: "byok.save" });
-        setError(msg || "Could not update the key.");
+        setError(serverErrorMessage(err, t("byok.error.update")));
       } finally {
         setBusy((s) => ({ ...s, [p]: false }));
       }
     },
-    [busy, loadStatus],
+    [busy, loadStatus, t],
   );
 
   // Errors are handled inside patchModels; void the promise so the click
   // handlers stay synchronous (no floating promise).
   const saveKey = () => {
-    const key = inputs.openRouter.trim();
+    const key = inputs.anthropic.trim();
     if (!key) return;
-    void patchModels({ openRouterApiKey: key }, "openRouter");
+    void patchModels({ anthropicApiKey: key }, "anthropic");
   };
 
   const removeKey = async (p: Provider, label: string) => {
     const ok = await confirm({
-      title: `Remove your ${label} key?`,
-      message: "Klorn falls back to its shared key for your mail.",
-      confirmLabel: "Remove key",
+      title: t("byok.confirmRemove.title", { provider: label }),
+      message: t("byok.confirmRemove.message"),
+      confirmLabel: t("byok.confirmRemove.confirm"),
       danger: true,
     });
     if (!ok) return;
     void patchModels(
-      p === "openRouter" ? { clearOpenRouterApiKey: true } : { clearGeminiApiKey: true },
+      p === "anthropic" ? { clearAnthropicApiKey: true } : { clearGeminiApiKey: true },
       p,
     );
   };
@@ -120,108 +158,105 @@ export function ByokKeysSection() {
       });
       await loadStatus();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       captureClientError(err, { scope: "byok.model" });
-      setError(msg || "Could not change the model.");
+      setError(serverErrorMessage(err, t("byok.error.model")));
     } finally {
       setSavingModel(false);
     }
   };
 
   return (
-    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
-        <h2 className="text-base font-semibold text-slate-900">Bring your own LLM key</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          By default your mail is classified on Klorn&apos;s shared key. Add your own provider key
-          and Klorn routes <span className="text-slate-500">your</span> mail to{" "}
-          <span className="text-slate-500">your</span> key and quota instead — handy if the shared
-          budget is busy. Keys are stored encrypted (AES-GCM); we never log the plaintext.
+        <h2 className="text-role-head text-ink">{t("byok.title")}</h2>
+        <p className="mt-1 text-role-body text-ink-mid">
+          {t(locked ? "byok.bodyFree" : "byok.body")}
         </p>
         {status?.activeModel && (
-          <p className="mt-2 text-[11px] text-slate-400">
-            Active model: <span className="text-slate-500">{status.activeModel}</span>
+          <p className="mt-2 text-role-caption text-ink-dim">
+            {t("byok.activeModel")} <span className="text-ink-mid">{status.activeModel}</span>
           </p>
         )}
       </header>
 
       {loading ? (
-        <div className="text-xs text-slate-400">Loading…</div>
+        <div className="text-role-caption text-ink-dim">{t("common.loading")}</div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-slate-900">{OPENROUTER.label}</span>
-              {status?.hasOpenRouterApiKey && (
-                <StatusChip status="connected" label="Using your key" />
+              <span className="text-role-body font-medium text-ink">{t(ANTHROPIC.labelKey)}</span>
+              {status?.hasAnthropicApiKey && (
+                <StatusChip status="connected" label={t("byok.usingYourKey")} />
               )}
             </div>
-            {status?.hasOpenRouterApiKey ? (
+            {/* Before the disabled field, so the reason is read first. */}
+            {locked && !status?.hasAnthropicApiKey && (
+              <ProFeatureNotice messageKey="proFeature.byok" className="mb-2" />
+            )}
+            {status?.hasAnthropicApiKey ? (
               <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-xs text-slate-500">•••••••• stored</span>
+                <span className="font-mono text-role-mono text-ink-mid">{t("byok.stored")}</span>
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => void removeKey("openRouter", "OpenRouter")}
-                  disabled={busy.openRouter}
-                  loading={busy.openRouter}
+                  onClick={() => void removeKey("anthropic", "Anthropic")}
+                  disabled={busy.anthropic}
+                  loading={busy.anthropic}
                 >
-                  Remove
+                  {t("common.remove")}
                 </Button>
               </div>
             ) : (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Input
-                    id="byok-key-openRouter"
-                    label="OpenRouter API key"
+                    id="byok-key-anthropic"
+                    label={t(ANTHROPIC.labelKey)}
                     type="password"
-                    value={inputs.openRouter}
-                    onChange={(e) => setInputs((s) => ({ ...s, openRouter: e.target.value }))}
-                    placeholder={OPENROUTER.placeholder}
+                    value={inputs.anthropic}
+                    onChange={(e) => setInputs((s) => ({ ...s, anthropic: e.target.value }))}
+                    placeholder={ANTHROPIC.placeholder}
                     autoComplete="off"
                     maxLength={512}
+                    disabled={locked}
                   />
                 </div>
                 <Button
                   variant="primary"
                   onClick={saveKey}
-                  disabled={busy.openRouter || !inputs.openRouter.trim()}
-                  loading={busy.openRouter}
+                  disabled={locked || busy.anthropic || !inputs.anthropic.trim()}
+                  loading={busy.anthropic}
                   className="shrink-0"
                 >
-                  Save
+                  {t("common.save")}
                 </Button>
               </div>
             )}
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              One key covers every model Klorn uses — OpenRouter routes them all. The key is
-              verified with the provider before it&apos;s stored. Get one at{" "}
+            <p className="mt-1.5 text-role-caption text-ink-dim">
+              {t("byok.anthropicHelp")}{" "}
               <a
-                href={OPENROUTER.helpUrl}
+                href={ANTHROPIC.helpUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="underline hover:text-slate-700"
+                className="underline hover:text-ink-soft"
               >
-                {OPENROUTER.helpLabel}
+                {ANTHROPIC.helpLabel}
               </a>
               .
             </p>
           </div>
 
           {status?.hasGeminiApiKey && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+            <div className="rounded-control border border-state-warn-line bg-state-warn-bg p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-900">
-                  Google Gemini <span className="text-[11px] text-amber-600">legacy</span>
+                <span className="text-role-body font-medium text-ink">
+                  Google Gemini{" "}
+                  <span className="text-role-caption text-state-warn-ink">{t("byok.legacy")}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[11px] text-slate-500">
-                  Direct Gemini keys are retired — a free-tier key here silently starves
-                  classification when its daily quota runs out. Remove it and use one OpenRouter key
-                  instead.
-                </span>
+                <span className="text-role-caption text-ink-mid">{t("byok.geminiRetired")}</span>
                 <Button
                   variant="danger"
                   size="sm"
@@ -229,45 +264,40 @@ export function ByokKeysSection() {
                   disabled={busy.gemini}
                   loading={busy.gemini}
                 >
-                  Remove
+                  {t("common.remove")}
                 </Button>
               </div>
             </div>
           )}
           {(() => {
             const options = status?.availableModels ?? [];
+            // Unpicked: show the model the chat surface actually runs
+            // (CHAT_MODEL) when it is in the catalog, not merely index 0.
+            const effective = options.some((m) => m.id === status?.activeModel)
+              ? status?.activeModel
+              : options[0]?.id;
             return (
-              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+              <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
                 <Select
                   id="byok-model"
-                  label="Assistant model"
+                  label={t("byok.assistantModel")}
                   disabled={savingModel}
-                  value={status?.selectedModel ?? options[0]?.id ?? ""}
+                  value={status?.selectedModel ?? effective ?? ""}
                   onChange={(e) => void saveModel(e.target.value)}
                 >
                   {options.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.label} — {m.note}
+                      {m.label} — {modelNote(m, t)}
                     </option>
                   ))}
                 </Select>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Frontier models only — this is the model your Klorn assistant talks in. It works
-                  on your mail, calendar, and tasks and never searches the web. Runs under your
-                  daily AI quota; add your own key above to use your own quota instead. The mail
-                  firewall&apos;s classifier is tuned separately and is not affected.
+                <p className="mt-1 text-role-caption text-ink-dim">
+                  {t(locked ? "byok.assistantModelHelpFree" : "byok.assistantModelHelp")}
                 </p>
               </div>
             );
           })()}
-          {error && (
-            <div
-              role="alert"
-              className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700"
-            >
-              {error}
-            </div>
-          )}
+          {error && <ErrorAlert>{error}</ErrorAlert>}
         </div>
       )}
     </section>

@@ -33,7 +33,7 @@ jobs:
     # default toolchain is 5.10 and fails to build. Mirrors desktop-release.yml.
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select a Swift 6 toolchain
         run: |

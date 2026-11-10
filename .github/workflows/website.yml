@@ -14,10 +14,23 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
           folder: ./website
+
+      # ChatGPT Search cites through Bing's index, so a page Bing has not
+      # crawled cannot be cited however quotable it is. IndexNow pushes the
+      # changed URLs to Bing/Yandex/Seznam/Naver instead of waiting for a
+      # crawl. Non-fatal: the deploy above already succeeded.
+      - name: Ping IndexNow
+        continue-on-error: true
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: node .github/scripts/indexnow.mjs
