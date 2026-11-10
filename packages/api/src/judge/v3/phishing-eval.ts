@@ -18,7 +18,7 @@ import {
   RISK_TRUST_MIN_INBOUND,
 } from "./policy.js";
 import type { PolicyReason } from "./reasons.js";
-import { type RelationshipSnapshot, UNKNOWN_RELATIONSHIP } from "./relationship.js";
+import { NEW_SENDER, type RelationshipSnapshot, UNKNOWN_RELATIONSHIP } from "./relationship.js";
 
 const DAY_MS = 86_400_000;
 
@@ -30,7 +30,7 @@ export interface PhishingScenario {
 }
 
 /**
- * cold_start: the eval's own view (no verdict, no history).
+ * cold_start: the eval's own view (no verdict, no history): a new sender.
  * own_domain_dmarc_pass: an attacker on a domain they control passes DMARC.
  * known_correspondent_dmarc_pass: the residual cases the doc lists for v3.1's
  *   risk trust: a compromised correspondent, or an attacker who first got
@@ -40,8 +40,8 @@ export interface PhishingScenario {
  * notifications@, so every phishing item has it off; some genuine ones have it on.
  */
 export const PHISHING_SCENARIOS: readonly PhishingScenario[] = [
-  { name: "cold_start", senderAuthenticated: null, relationship: () => null },
-  { name: "own_domain_dmarc_pass", senderAuthenticated: true, relationship: () => null },
+  { name: "cold_start", senderAuthenticated: null, relationship: () => NEW_SENDER },
+  { name: "own_domain_dmarc_pass", senderAuthenticated: true, relationship: () => NEW_SENDER },
   {
     name: "known_correspondent_dmarc_pass",
     senderAuthenticated: true,
