@@ -738,7 +738,7 @@ P3 shipped v3.1 in response to the two findings above: cold-start urgent recall,
 | v3.1 | 132/156 (84.6%) | 36/36 | 99.1% / 93.0% | 58.0% |
 
 - v3.1 also trusts a risk-only PUSH from a known correspondent (3+ mails over 30+ days) whose From passed DMARC. The eval mails carry no relationship or DMARC data, so that rule cannot fire here. Its ceiling on the gate set is eval-046 in all 12 runs (92.3%).
-- No run PUSHed or MEETINGed a `phishing_suspect` mail (by construction: the policy vetoes on the flag). The eval sets hold no adversarial phishing mail yet, so the flag's recall is unmeasured.
+- No run PUSHed or MEETINGed a `phishing_suspect` mail (by construction: the policy vetoes on the flag). These sets hold no phishing mail. The flag's rate is measured on the separate adversarial set `eval/phishing-eval-set.json` with `scripts/v3-phishing-eval.ts`; results are in docs/design/attention-engine-v3.md §3(5) "Policy v3.1".
 
 ### Reproduce
 

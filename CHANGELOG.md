@@ -13,6 +13,14 @@ calendar time.
 ## [Unreleased]
 
 ### Changed
+- **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail
+  that rang no web push, Telegram, Android or iOS push because of quiet hours
+  now rings once after they end, as the Mac and Windows apps already do. One
+  held mail rings as itself; two or more ring one summary, "N urgent emails
+  during quiet hours", that names up to three senders and opens Today. Mail
+  that was read, handled or moved off PUSH meanwhile is left out. The ring uses
+  the ambient push bucket. Set `PUSH_QUIET_HOLD_DISABLED=true` to drop held
+  pushes as before.
 - `CALENDAR_COATTENDANCE_ENABLED` accepts `cohort`, like
   `SENT_HISTORY_BACKFILL_ENABLED`: co-attendance is then counted, and read by
   the judge, only for the users in `ROLLOUT_COHORT_USER_IDS`. `true` still
