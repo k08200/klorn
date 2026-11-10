@@ -3,8 +3,9 @@
  *
  * Reads the DecisionLabel ledger only: the shown lane (shownTier), the path
  * that decided it (decidedBy), the engagement columns stampDecisionOutcome
- * fills (openedAt, repliedAt, …) and the explicit lane judgements in `outcome`
- * (OVERRIDE:/CONFIRM:). Answers "is PUSH mail acted on?" and "is SILENT mail
+ * fills (openedAt, repliedAt, …), the provider-side columns sync fills
+ * (providerRepliedAt, providerArchivedAt) and the explicit lane judgements in
+ * `outcome` (OVERRIDE:/CONFIRM:). Answers "is PUSH mail acted on?" and "is SILENT mail
  * ever opened?" — not "was the lane right?" (that is decision-metrics, from
  * confirmed overrides only).
  *
@@ -19,9 +20,39 @@
  *    counted as unreplied.
  *  - A re-judge rewrites shownTier/decidedBy in place, so a re-judged row is
  *    reported under its latest lane.
- *  - Only actions taken in Klorn are stamped. Mail read or answered directly in
- *    Gmail/Outlook shows as no signal. Web AI-draft replies (POST /send with
- *    inReplyToEmailId) count from #1656 on; ones sent before it are missing.
+ *  - The main table counts only actions taken in Klorn. Web AI-draft replies
+ *    (POST /send with inReplyToEmailId) count from #1656 on; ones sent before
+ *    it are missing.
+ *  - The provider table counts what sync saw the user do in Gmail itself, from
+ *    migration 20261110000000 on (rows judged before it can still be stamped
+ *    by a later action), and only where Klorn recorded no signal of that kind:
+ *    it is what a Klorn-only count misses, so "in Klorn" + "provider only" =
+ *    "either". This also keeps a Klorn reply or archive that sync happened to
+ *    see first from counting twice.
+ *      - Gmail only: Outlook and IMAP have no Sent scan or INBOX diff yet. The
+ *        denominators still include their mail, so a user with mixed
+ *        accounts shows lower provider shares.
+ *      - Replied: the user's own send (Sent-folder scan, no Klorn origin) in
+ *        the mail's thread, stamped on the newest mail that arrived before it,
+ *        at its sentAt, and never before the judgement. The scan reads the
+ *        newest Sent page every 30 minutes, so a burst of more than one page
+ *        between scans is missed. A forward kept in the thread counts as a
+ *        reply. The scheduler runs the scan before the reconcile in the same
+ *        tick, so a reply then archive is seen as both; a reconcile started
+ *        from Klorn (POST /sync, /reconcile) can remove the mail first and
+ *        lose the reply. A sender who joins the thread can be the newest mail
+ *        a reply is stamped on.
+ *      - Archived: the mail left the INBOX outside Klorn (archive, a label
+ *        move or trash; spam and mail gone for good are skipped), stamped when
+ *        the 30-minute reconcile saw it. Gmail's own Snooze also takes mail
+ *        out of the INBOX and may be counted, and so may a Subscriptions
+ *        sender-wide archive that a reconcile caught mid-run (Klorn does not
+ *        stamp those). At most 100 per account per reconcile are checked; a
+ *        larger mass archive is under-counted.
+ *      - Read in Gmail is not counted: the provider marks mail read on preview
+ *        and on "mark all as read", so it is not an open.
+ *  - The "either" columns count a row once if either source has the signal;
+ *    replied<24h there uses the earlier of the two reply times.
  *  - "Opened" means the reader showed the mail: the Mac app also shows the
  *    mail its arrow keys land on. A mail read only through the thread view
  *    (GET /api/email/thread/:threadId) is not counted. Mobile builds from before ?purpose=attachments
@@ -62,6 +93,19 @@ export interface LaneCounts {
   unsubscribed: number;
   overridden: number;
   confirmed: number;
+  /**
+   * Matured rows answered from Gmail itself within 24h that Klorn did not see
+   * answered within 24h: what a Klorn-only count misses.
+   */
+  providerOnlyReplied24h: number;
+  /** Rows that left the Gmail INBOX outside Klorn and that Klorn never archived. */
+  providerOnlyArchived: number;
+  /** Matured rows answered within 24h from either source (the earlier reply). */
+  replied24hEither: number;
+  /** Rows archived from either source. */
+  archivedEither: number;
+  /** Rows with any Klorn signal or any provider signal. */
+  anyEither: number;
 }
 
 export interface LaneCountRow extends LaneCounts {
@@ -85,6 +129,11 @@ export interface LaneShares {
   snoozed: number | null;
   starred: number | null;
   unsubscribed: number | null;
+  providerOnlyReplied24h: number | null;
+  providerOnlyArchived: number | null;
+  replied24hEither: number | null;
+  archivedEither: number | null;
+  anyEither: number | null;
 }
 
 export interface LaneStats extends LaneCounts {
@@ -123,6 +172,11 @@ const COUNT_KEYS = [
   "unsubscribed",
   "overridden",
   "confirmed",
+  "providerOnlyReplied24h",
+  "providerOnlyArchived",
+  "replied24hEither",
+  "archivedEither",
+  "anyEither",
 ] as const satisfies readonly (keyof LaneCounts)[];
 
 function emptyCounts(): LaneCounts {
@@ -149,6 +203,11 @@ function sharesOf(c: LaneCounts): LaneShares {
     snoozed: share(c.snoozed, c.judged),
     starred: share(c.starred, c.judged),
     unsubscribed: share(c.unsubscribed, c.judged),
+    providerOnlyReplied24h: share(c.providerOnlyReplied24h, c.matured),
+    providerOnlyArchived: share(c.providerOnlyArchived, c.judged),
+    replied24hEither: share(c.replied24hEither, c.matured),
+    archivedEither: share(c.archivedEither, c.judged),
+    anyEither: share(c.anyEither, c.judged),
   };
 }
 
@@ -231,25 +290,42 @@ export async function queryLaneQuality(query: LaneQualityQuery): Promise<LaneQua
     AND "judgedAt" < ${query.until}
     ${query.userId ? Prisma.sql`AND "userId" = ${query.userId}` : Prisma.empty}`;
 
+  // Any signal recorded in Klorn (any engagement column or a lane judgement).
+  const klornSignal = Prisma.sql`("outcome" IS NOT NULL OR "openedAt" IS NOT NULL
+             OR "repliedAt" IS NOT NULL OR "archivedAt" IS NOT NULL
+             OR "dismissedAt" IS NOT NULL OR "snoozedAt" IS NOT NULL
+             OR "starredAt" IS NOT NULL OR "unsubscribedAt" IS NOT NULL)`;
+  const klornReplied24h = Prisma.sql`COALESCE("repliedAt" <= "judgedAt" + INTERVAL '24 hours', false)`;
+
   const countsSql = Prisma.sql`
     SELECT "shownTier",
            COALESCE("decidedBy", 'unknown') AS "decidedBy",
            COUNT(*)::int AS "judged",
            COUNT(*) FILTER (WHERE "judgedAt" <= ${matureCutoff})::int AS "matured",
-           COUNT(*) FILTER (WHERE "outcome" IS NOT NULL OR "openedAt" IS NOT NULL
-             OR "repliedAt" IS NOT NULL OR "archivedAt" IS NOT NULL
-             OR "dismissedAt" IS NOT NULL OR "snoozedAt" IS NOT NULL
-             OR "starredAt" IS NOT NULL OR "unsubscribedAt" IS NOT NULL)::int AS "anyOutcome",
+           COUNT(*) FILTER (WHERE ${klornSignal})::int AS "anyOutcome",
            COUNT(*) FILTER (WHERE "openedAt" IS NOT NULL)::int AS "opened",
            COUNT(*) FILTER (WHERE "judgedAt" <= ${matureCutoff}
-             AND "repliedAt" <= "judgedAt" + INTERVAL '24 hours')::int AS "replied24h",
+             AND ${klornReplied24h})::int AS "replied24h",
            COUNT(*) FILTER (WHERE "archivedAt" IS NOT NULL)::int AS "archived",
            COUNT(*) FILTER (WHERE "dismissedAt" IS NOT NULL)::int AS "dismissed",
            COUNT(*) FILTER (WHERE "snoozedAt" IS NOT NULL)::int AS "snoozed",
            COUNT(*) FILTER (WHERE "starredAt" IS NOT NULL)::int AS "starred",
            COUNT(*) FILTER (WHERE "unsubscribedAt" IS NOT NULL)::int AS "unsubscribed",
            COUNT(*) FILTER (WHERE starts_with("outcome", 'OVERRIDE:'))::int AS "overridden",
-           COUNT(*) FILTER (WHERE starts_with("outcome", 'CONFIRM:'))::int AS "confirmed"
+           COUNT(*) FILTER (WHERE starts_with("outcome", 'CONFIRM:'))::int AS "confirmed",
+           COUNT(*) FILTER (WHERE "judgedAt" <= ${matureCutoff}
+             AND "providerRepliedAt" <= "judgedAt" + INTERVAL '24 hours'
+             AND NOT ${klornReplied24h})::int AS "providerOnlyReplied24h",
+           COUNT(*) FILTER (WHERE "providerArchivedAt" IS NOT NULL
+             AND "archivedAt" IS NULL)::int AS "providerOnlyArchived",
+           COUNT(*) FILTER (WHERE "judgedAt" <= ${matureCutoff}
+             AND LEAST("repliedAt", "providerRepliedAt") <= "judgedAt" + INTERVAL '24 hours')::int
+             AS "replied24hEither",
+           COUNT(*) FILTER (WHERE "archivedAt" IS NOT NULL
+             OR "providerArchivedAt" IS NOT NULL)::int AS "archivedEither",
+           COUNT(*) FILTER (WHERE ${klornSignal}
+             OR "providerRepliedAt" IS NOT NULL OR "providerArchivedAt" IS NOT NULL)::int
+             AS "anyEither"
     FROM "DecisionLabel"
     WHERE ${scope}
     GROUP BY 1, 2`;
@@ -307,6 +383,28 @@ function statsCells(s: LaneStats): string[] {
   ];
 }
 
+const PROVIDER_HEADER = [
+  "lane",
+  "judged",
+  "replied<24h (only)",
+  "archived (only)",
+  "replied<24h (either)",
+  "archived (either)",
+  "any (either)",
+];
+
+function providerCells(s: LaneStats): string[] {
+  return [
+    s.lane,
+    String(s.judged),
+    `${pct(s.shares.providerOnlyReplied24h)} (n=${s.matured})`,
+    pct(s.shares.providerOnlyArchived),
+    `${pct(s.shares.replied24hEither)} (n=${s.matured})`,
+    pct(s.shares.archivedEither),
+    pct(s.shares.anyEither),
+  ];
+}
+
 function renderTable(rows: string[][]): string {
   const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));
   return rows.map((r) => r.map((cell, i) => cell.padEnd(widths[i])).join("  ")).join("\n");
@@ -318,6 +416,7 @@ export function renderLaneQualityReport(report: LaneQualityReport): string {
     TABLE_HEADER,
     ...report.lanes.map((s) => [s.lane, ...statsCells(s)]),
   ]);
+  const providerTable = renderTable([PROVIDER_HEADER, ...report.lanes.map(providerCells)]);
   const decidedByTable = renderTable([
     ["lane / decidedBy", ...TABLE_HEADER.slice(1)],
     ...report.byDecidedBy.map((s) => [`${s.lane} / ${s.decidedBy}`, ...statsCells(s)]),
@@ -329,9 +428,13 @@ export function renderLaneQualityReport(report: LaneQualityReport): string {
   return [
     `Lane quality — ${report.source}, judged ${report.window.since} … ${report.window.until}`,
     "",
+    "In Klorn:",
     laneTable,
     "",
-    "By decidedBy:",
+    "In the mail provider only (Gmail, seen by sync; Klorn recorded none), and either source:",
+    providerTable,
+    "",
+    "By decidedBy (in Klorn):",
     decidedByTable,
     "",
     "Override flows (shown → moved to):",

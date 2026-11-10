@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   labels: new Map<string, string>(),
   classifyCalls: [] as unknown[][],
   classifyFails: false,
+  providerReplyCalls: [] as unknown[][],
 }));
 
 vi.mock("../db.js", () => ({
@@ -57,6 +58,12 @@ vi.mock("../mail/sent-origin-classifier.js", () => ({
       });
     }
     return state.labels;
+  }),
+}));
+
+vi.mock("../mail/provider-replies.js", () => ({
+  noteProviderReplies: vi.fn(async (...args: unknown[]) => {
+    state.providerReplyCalls.push(args);
   }),
 }));
 
@@ -184,6 +191,7 @@ describe("recordSentMessage / syncSentMessages", () => {
     state.labels = new Map();
     state.classifyCalls = [];
     state.classifyFails = false;
+    state.providerReplyCalls = [];
     state.listResult = {
       items: [
         {
@@ -324,6 +332,51 @@ describe("recordSentMessage / syncSentMessages", () => {
     expect(known?.create).not.toHaveProperty("origin");
     expect(created?.create).toMatchObject({ gmailId: "g1", origin: "unsubscribe" });
     expect(created?.update).not.toHaveProperty("origin");
+  });
+
+  it("hands only the rows it created unlabelled (the user's own Gmail sends) to the reply stamp", async () => {
+    const item = (gmailId: string) => ({
+      gmailId,
+      threadId: `t-${gmailId}`,
+      to: "a@b.com",
+      subject: "Re: Hi",
+      receivedAt: "2026-09-10T00:00:00.000Z",
+      inbox: "primary",
+    });
+    state.listResult = {
+      items: ["known", "mine", "auto", "unsub", "approved"].map(item),
+      nextPageToken: null,
+    };
+    state.sentRows = [{ gmailId: "known" }];
+    state.labels = new Map([
+      ["auto", "auto_reply"],
+      ["unsub", "unsubscribe"],
+      ["approved", "approved"],
+    ]);
+
+    await syncSentMessages("u1", NOW.getTime());
+
+    // "known" was recorded earlier (at send time by Klorn, or by a past scan);
+    // the labelled rows are mail Klorn sent. Only "mine" is the user's.
+    expect(state.providerReplyCalls).toEqual([["u1", ["mine"]]]);
+  });
+
+  it("does not hand a row whose write failed, and makes no call when nothing qualifies", async () => {
+    state.upsertFails = true;
+    await syncSentMessages("u1", NOW.getTime());
+    expect(state.providerReplyCalls).toEqual([]);
+
+    resetSentSyncThrottleForTests();
+    state.upsertFails = false;
+    state.sentRows = [{ gmailId: "g1" }];
+    await syncSentMessages("u1", NOW.getTime());
+    expect(state.providerReplyCalls).toEqual([]);
+  });
+
+  it("never hands a row the classifier could not label (a failed classify)", async () => {
+    state.classifyFails = true;
+    await syncSentMessages("u1", NOW.getTime());
+    expect(state.providerReplyCalls).toEqual([]);
   });
 
   it("sync makes no classifier call when every row already exists", async () => {
