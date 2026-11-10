@@ -36,7 +36,9 @@ export async function dismissAttentionItem(
   await (prisma.attentionItem as unknown as { update: (args: unknown) => Promise<unknown> }).update(
     {
       where: { id: itemId },
-      data: { status: "DISMISSED", resolvedAt: new Date() },
+      // resolvedReason cleared: the row is now the user's decision, so an aging
+      // stamp (judge/attention-aging.ts) must not stay on it.
+      data: { status: "DISMISSED", resolvedAt: new Date(), resolvedReason: null },
     },
   );
 

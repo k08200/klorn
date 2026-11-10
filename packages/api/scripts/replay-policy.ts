@@ -18,7 +18,7 @@
  * Usage:
  *   DATABASE_URL=... pnpm --filter @klorn/api replay:policy -- \
  *     [--user=admin@example.com] [--days=30] [--budget=5|unlimited] \
- *     [--facts=stored|keyword] [--policy-version=v3.0|v3.1] [--out=./replay.json] \
+ *     [--facts=stored|keyword] [--policy-version=v3.0|v3.1|v3.2] [--out=./replay.json] \
  *     [--max-changes=40] [--show-subjects]
  *
  * --policy-version re-runs any policy version (judge/v3/policy.ts POLICY_VERSIONS);
@@ -35,6 +35,7 @@ import { toLiveTier } from "../src/judge/tiers.js";
 import { parseStoredFacts } from "../src/judge/v3/facts-store.js";
 import { resolveInterruptBudget } from "../src/judge/v3/interrupt-budget.js";
 import { POLICY_VERSION, POLICY_VERSIONS, type PolicyVersion } from "../src/judge/v3/policy.js";
+import type { RelationshipSnapshot } from "../src/judge/v3/relationship.js";
 import { loadRelationshipSnapshot } from "../src/judge/v3/relationship-loader.js";
 import {
   LIVE_LANES,
@@ -42,6 +43,7 @@ import {
   type ReplayReport,
   type ReplayRow,
   replayPolicy,
+  rowsNeedingRelationship,
 } from "../src/judge/v3/replay.js";
 import { prismaShadowDeps } from "../src/judge/v3/shadow.js";
 
@@ -231,25 +233,41 @@ function v2LaneOf(item: ItemLane | undefined, frozenV2: string | null): string {
 /**
  * Trust for the slot reserve, as live loads it for a budgeted PUSH with no
  * relationship: only v2 PUSH rows can become one without facts. Read-only.
+ * `needs` adds rows: the ones v3.2's first-contact gate may hold
+ * (rowsNeedingRelationship). Rows from one sender to one user share a load.
+ *
+ * Limits: the snapshot is the sender's history as of now, not as of the mail
+ * (a later reply or mail counts), and DMARC is unknown here. Both make the
+ * gate fire less than it did live, so the v3.2 diff is a lower bound. With
+ * --facts=stored the stored relationship (as of the judge) is used instead.
  */
-async function attachRelationships(rows: ReplayRow[]): Promise<ReplayRow[]> {
+async function attachRelationships(
+  rows: ReplayRow[],
+  needs: (row: ReplayRow) => boolean = () => false,
+): Promise<ReplayRow[]> {
   const contexts = new Map<string, string[]>();
+  const loaded = new Map<string, RelationshipSnapshot>();
   const out: ReplayRow[] = [];
   for (const row of rows) {
-    if (row.v2Tier !== "PUSH" || row.stored?.relationship) {
+    const wanted = row.v2Tier === "PUSH" || needs(row);
+    if (!wanted || row.stored?.relationship || row.relationship) {
       out.push(row);
       continue;
     }
     if (!contexts.has(row.userId)) {
       contexts.set(row.userId, (await prismaShadowDeps.userContext(row.userId)).userAddresses);
     }
-    const relationship = await loadRelationshipSnapshot({
-      userId: row.userId,
-      senderAddress: row.email.from,
-      userAddresses: contexts.get(row.userId) ?? [],
-      senderAuthenticated: null,
-      excludeEmailId: row.id,
-    });
+    const key = `${row.userId}\u0000${row.email.from}`;
+    const relationship =
+      loaded.get(key) ??
+      (await loadRelationshipSnapshot({
+        userId: row.userId,
+        senderAddress: row.email.from,
+        userAddresses: contexts.get(row.userId) ?? [],
+        senderAuthenticated: null,
+        excludeEmailId: row.id,
+      }));
+    loaded.set(key, relationship);
     out.push({ ...row, relationship });
   }
   return out;
@@ -332,7 +350,12 @@ async function main() {
   const userId = args.user ? await resolveUserId(args.user) : undefined;
   const since = new Date(Date.now() - args.days * 24 * 60 * 60 * 1000);
   const loaded = await loadRows(userId, since);
-  const rows = await attachRelationships(loaded.rows);
+  // v3.2: live loads a relationship with every LLM decision; replay loads one
+  // for each row the first-contact gate could hold (one per user and sender).
+  const gateable = new Set(
+    rowsNeedingRelationship(loaded.rows, { facts: args.facts, policyVersion: args.policyVersion }),
+  );
+  const rows = await attachRelationships(loaded.rows, (row) => gateable.has(row.id));
   const { subjects } = loaded;
   if (rows.length === 0) {
     console.error(`No mail in the last ${args.days} days${args.user ? ` for ${args.user}` : ""}.`);

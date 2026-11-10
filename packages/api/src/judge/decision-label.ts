@@ -223,3 +223,51 @@ export async function stampDecisionOutcomes(
     logRecorderError("stamp-bulk", sourceIds[0], err);
   }
 }
+
+/**
+ * What the user did to a judged mail in the mail provider itself, as seen by
+ * sync (mail/provider-replies.ts, mail/provider-archives.ts) rather than by a
+ * Klorn route. Each kind has its own column, apart from the Klorn ones, so the
+ * report can tell the two sources apart and neither overwrites the other.
+ */
+export type ProviderEngagement = "REPLIED" | "ARCHIVED";
+
+const PROVIDER_COLUMN = {
+  REPLIED: "providerRepliedAt",
+  ARCHIVED: "providerArchivedAt",
+} as const satisfies Record<ProviderEngagement, keyof Prisma.DecisionLabelWhereInput>;
+type ProviderColumn = (typeof PROVIDER_COLUMN)[ProviderEngagement];
+
+/**
+ * Stamp a provider-side action at `at` on the user's EMAIL ledger rows
+ * (sourceId = EmailMessage.id). First wins per column. Never before the
+ * judgement (judgedAt <= at): a reply sent before Klorn judged the mail is not
+ * a reaction to its lane, and a first Sent scan would otherwise stamp the
+ * user's pre-Klorn replies. Never throws; logs on failure. Returns the rows
+ * written (0 on failure).
+ */
+export async function stampProviderEngagement(
+  userId: string,
+  kind: ProviderEngagement,
+  sourceIds: readonly string[],
+  at: Date,
+): Promise<number> {
+  if (sourceIds.length === 0) return 0;
+  const column: ProviderColumn = PROVIDER_COLUMN[kind];
+  try {
+    const { count } = await prisma.decisionLabel.updateMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        sourceId: { in: [...sourceIds] },
+        [column]: null,
+        judgedAt: { lte: at },
+      },
+      data: { [column]: at },
+    });
+    return count;
+  } catch (err) {
+    logRecorderError(`stamp-provider-${kind.toLowerCase()}`, sourceIds[0] ?? "", err);
+    return 0;
+  }
+}

@@ -34,9 +34,10 @@ import {
   type LiveDecision,
 } from "./live-decision.js";
 import { classifyParityDivergence, parityViolation } from "./parity.js";
-import { laneFromFactsV3, POLICY_VERSION, type PolicyVersion } from "./policy.js";
+import { laneFromFactsV3, POLICY_VERSION, type PolicyVersion, policyRules } from "./policy.js";
 import type { RelationshipSnapshot } from "./policy-types.js";
 import type { ReasonCode } from "./reasons.js";
+import { NEW_SENDER } from "./relationship.js";
 
 export const LIVE_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"];
 
@@ -151,6 +152,31 @@ export function replayPolicy(
     parity: parityOf(rows, version),
     changes: changesOf(decided, heldIds),
   };
+}
+
+/**
+ * Rows the replay must load a relationship for before it can decide them under
+ * `version`: no stored or loaded relationship, and the first-contact gate would
+ * hold them if the sender were new. Without a relationship the gate does not
+ * apply (the keyword fallback's v2 parity), so these rows would read as known.
+ * Selected from decisions, not from changes: a v2 QUEUE row the gate holds is
+ * no change, yet a known sender would lift it.
+ */
+export function rowsNeedingRelationship(
+  rows: readonly ReplayRow[],
+  opts: { facts?: ReplayFactsMode; policyVersion?: PolicyVersion },
+): string[] {
+  const version = opts.policyVersion ?? POLICY_VERSION;
+  const gate = policyRules(version).firstContactGate;
+  if (!gate.payAsk && !gate.event) return [];
+  const mode = opts.facts ?? "stored";
+  return rows
+    .filter((row) => !(row.stored?.relationship ?? row.relationship))
+    .filter((row) => {
+      const asNew = decideRow({ ...row, relationship: NEW_SENDER }, mode, version);
+      return asNew.decision.reasons[0]?.code === "first_contact";
+    })
+    .map((row) => row.id);
 }
 
 function decideRow(row: ReplayRow, mode: ReplayFactsMode, version: PolicyVersion): Decided {

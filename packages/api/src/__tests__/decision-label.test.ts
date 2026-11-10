@@ -27,6 +27,7 @@ import {
   recordEmailDecision,
   stampDecisionOutcome,
   stampDecisionOutcomes,
+  stampProviderEngagement,
 } from "../judge/decision-label.js";
 import { captureError } from "../sentry.js";
 
@@ -220,6 +221,52 @@ describe("stampDecisionOutcomes (bulk)", () => {
     await expect(
       stampDecisionOutcomes("user-1", "EMAIL", ["e1"], "OPENED"),
     ).resolves.toBeUndefined();
+    expect(captureError).toHaveBeenCalled();
+  });
+});
+
+describe("stampProviderEngagement (what the user did in Gmail itself)", () => {
+  const AT = new Date("2026-11-10T08:00:00Z");
+
+  it("writes its own provider column, first wins, scoped to the user, never before the judgement", async () => {
+    decisionLabel.updateMany.mockResolvedValue({ count: 2 });
+
+    const count = await stampProviderEngagement("user-1", "REPLIED", ["e1", "e2"], AT);
+
+    expect(count).toBe(2);
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+    expect(decisionLabel.updateMany.mock.calls[0][0]).toEqual({
+      where: {
+        userId: "user-1",
+        source: "EMAIL",
+        sourceId: { in: ["e1", "e2"] },
+        providerRepliedAt: null,
+        judgedAt: { lte: AT },
+      },
+      data: { providerRepliedAt: AT },
+    });
+  });
+
+  it("archive goes to providerArchivedAt and never touches the Klorn columns or outcome", async () => {
+    decisionLabel.updateMany.mockResolvedValue({ count: 1 });
+
+    await stampProviderEngagement("user-1", "ARCHIVED", ["e1"], AT);
+
+    const args = decisionLabel.updateMany.mock.calls[0][0];
+    expect(args.data).toEqual({ providerArchivedAt: AT });
+    expect(args.where).toMatchObject({ providerArchivedAt: null });
+    expect(args.where).not.toHaveProperty("archivedAt");
+    expect(args.where).not.toHaveProperty("outcome");
+  });
+
+  it("skips the query for an empty list", async () => {
+    await expect(stampProviderEngagement("user-1", "REPLIED", [], AT)).resolves.toBe(0);
+    expect(decisionLabel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("never throws, logs on failure", async () => {
+    decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
+    await expect(stampProviderEngagement("user-1", "ARCHIVED", ["e1"], AT)).resolves.toBe(0);
     expect(captureError).toHaveBeenCalled();
   });
 });

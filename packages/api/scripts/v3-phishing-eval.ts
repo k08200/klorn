@@ -1,14 +1,17 @@
 /**
  * Adversarial phishing eval (docs/design/attention-engine-v3.md §3(5)): runs
  * the production facts extractor on eval/phishing-eval-set.json and reports
- * phishing_suspect recall, the benign false-positive rate, and the policy v3.1
- * lane of every item under each sender scenario (src/judge/v3/phishing-eval.ts).
+ * phishing_suspect recall, the benign false-positive rate, and the policy lane
+ * of every item under each sender scenario (src/judge/v3/phishing-eval.ts).
+ * `pooled` scores the live version; --policy-versions=v3.1,v3.2 adds
+ * `byVersion`, every listed version over the same facts.
  * Synthetic, PII-free. Every item is To the set's user, so pre-facts fix
  * addressedTo me_direct, as for a targeted phish.
  *
  *   LLM_PROVIDER_ORDER=anthropic GLOBAL_DAILY_COST_CAP_CENTS=0 LLM_USAGE_LOG_DISABLED=true \
  *   DATABASE_URL=postgresql://eval:eval@localhost:5432/eval \
- *   npx tsx scripts/v3-phishing-eval.ts [--model=claude-haiku-5-5] [--runs=3] [--out=report.json]
+ *   npx tsx scripts/v3-phishing-eval.ts [--model=claude-haiku-5-5] [--runs=3] [--out=report.json] \
+ *     [--policy-versions=v3.1,v3.2]
  *
  * Exit codes: 0 ok; 1 failed; 3 instrument degraded: an item got no facts, or
  * (with --model) an answer was served by another model after a silent failover.
@@ -21,10 +24,12 @@ import type { LiveTier } from "@klorn/contract";
 import { assertEvalEnv } from "../src/eval-v3/bench-io.js";
 import { extractFacts } from "../src/judge/v3/facts-extractor.js";
 import {
+  PHISHING_SCENARIOS,
   type PhishingItemResult,
   servedByOther,
   summarizePhishingEval,
 } from "../src/judge/v3/phishing-eval.js";
+import { POLICY_VERSION, POLICY_VERSIONS, type PolicyVersion } from "../src/judge/v3/policy.js";
 
 type RunResult = PhishingItemResult & {
   costUsd: number;
@@ -51,6 +56,15 @@ const MAX_RUNS = 10;
 function arg(name: string): string | undefined {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`));
   return hit?.slice(name.length + 3);
+}
+
+function versionsArg(): PolicyVersion[] {
+  const raw = (arg("policy-versions") ?? POLICY_VERSION).split(",").map((v) => v.trim());
+  const bad = raw.filter((v) => !(POLICY_VERSIONS as readonly string[]).includes(v));
+  if (bad.length > 0) {
+    throw new Error(`--policy-versions must name versions in ${POLICY_VERSIONS.join(", ")}`);
+  }
+  return raw as PolicyVersion[];
 }
 
 function runsArg(): number {
@@ -116,6 +130,7 @@ async function main(): Promise<number> {
   };
   const model = arg("model");
   const runs = runsArg();
+  const versions = versionsArg();
   const results: RunResult[] = [];
   for (let runNo = 1; runNo <= runs; runNo++) {
     for (const item of doc.items) {
@@ -150,12 +165,16 @@ async function main(): Promise<number> {
     costUsd: results.reduce((s, r) => s + r.costUsd, 0),
     perRun,
     pooled: summarizePhishingEval(results),
+    byVersion: Object.fromEntries(
+      versions.map((v) => [v, summarizePhishingEval(results, PHISHING_SCENARIOS, v)]),
+    ),
     facts: results.map((r) => ({
       id: r.id,
       run: r.run,
       model: r.servedModel,
       provider: r.servedProvider,
       facts: r.facts,
+      automatedSenderSignal: r.automatedSenderSignal,
       issues: r.issues,
     })),
   };
@@ -169,6 +188,12 @@ async function main(): Promise<number> {
       `benign FP ${p.benign.flagged}/${p.benign.total}, noFacts ${p.noFacts.total}, ` +
       `served ${JSON.stringify(served)}, cost $${report.costUsd.toFixed(4)}`,
   );
+  for (const [v, summary] of Object.entries(report.byVersion)) {
+    const interrupts = Object.entries(summary.scenarios).map(
+      ([name, sc]) => `${name} ${sc.phishingInterrupts.length}`,
+    );
+    console.error(`[v3-phishing-eval] ${v} phishing interrupts: ${interrupts.join(", ")}`);
+  }
   if (otherModel > 0) {
     console.error(
       `[v3-phishing-eval] ${otherModel} answer(s) were served by a model other than ${model}`,

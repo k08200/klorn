@@ -12,6 +12,34 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Classification and learning
+- Provider-side engagement on the decision ledger (#1664):
+  - `DecisionLabel` records when the user replied to a judged mail from
+    Gmail itself (`providerRepliedAt`, from the Sent-folder scan) or moved
+    it out of the Gmail inbox outside Klorn (`providerArchivedAt`, from the
+    INBOX reconcile). These are kept apart from the Klorn-side stamps and
+    are first-wins. Mail Klorn sent or archived does not count. Reading in
+    Gmail is not recorded.
+  - The `lane-quality` report adds a table with these signals where Klorn
+    recorded none, plus counts from either source.
+  - Migration `20261110000000_decision_label_provider_engagement` is
+    additive. Gmail only; Outlook and IMAP are not covered yet.
+- Attention Engine v3 policy v3.2, opt-in (#1670): `JUDGE_V3_POLICY_VERSION=v3.2`
+  selects it. v3.1 stays the default, and `JUDGE_V3_POLICY` is off by
+  default, so nothing changes until both are set.
+  - From a sender with no established contact, a PUSH or MEETING whose mail
+    carries a pay ask or an event goes to QUEUE with the reason
+    `first_contact`. Established contact is a VIP label or PUSH pin, two
+    sends from the user, three mails from the sender over 30+ days, or a
+    shared meeting.
+  - The due-soon window is a per-version parameter. v3.2 keeps ±24h.
+  - `replay:policy --policy-version=v3.2` loads the sender relationship for
+    the rows the gate could hold. `v3-phishing-eval.ts --policy-versions=`
+    scores several versions over the same facts. `v3-policy-variants.ts`
+    replays stored eval facts under candidate rules, with no LLM calls.
+  - Measurements and open decisions are in
+    `docs/design/attention-engine-v3.md` §3(5), "Policy v3.2".
+
 ### Changed
 - **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail
   that rang no web push, Telegram, Android or iOS push because of quiet hours
@@ -27,6 +55,19 @@ calendar time.
   means everyone.
 - `GET /api/admin/flags` lists `CALENDAR_COATTENDANCE_ENABLED` and
   `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`) (#1666).
+
+### Fixed
+- **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**
+  - A spam-lane item still in Gmail's Spam folder is no longer resolved as
+    "left the inbox". It resolves once its mail leaves Spam without returning
+    to the inbox (for example to the trash), or the mail is gone.
+  - Every resolution the sweep makes is stamped in the new
+    `AttentionItem.resolvedReason` column (`aging:acted`, `aging:silent`,
+    `aging:queue`), so its resolutions can be found and reopened. Dismissing
+    or snoozing an item clears the stamp.
+  - The acted-elsewhere check pages through every open item instead of
+    re-reading the same oldest 500 each hour. A failed page no longer skips
+    that hour's age-out (#1663).
 
 ## [0.4.0] — 2026-11-08
 
