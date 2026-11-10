@@ -9,6 +9,7 @@
  * Each is a controlled component: parent owns busy state and callbacks.
  */
 
+import Button from "../../../components/ui/button";
 import { useT } from "../../../lib/i18n";
 import { EmailActionButton, senderName } from "./atoms";
 import {
@@ -17,50 +18,44 @@ import {
   type EmailReminderKey,
   type EmailReminderOption,
   type NextEmailSummary,
-  type UndoNotice,
 } from "./types";
 
 export function UndoActionBanner({
-  notice,
+  title,
+  subject,
+  undoLabel,
   busy,
   onDismiss,
   onUndo,
 }: {
-  notice: UndoNotice;
+  /** What happened: "Email archived.", or with KEYBOARD_TRIAGE "Moved to QUEUE". */
+  title: string;
+  subject: string | null;
+  /** Defaults to "Undo"; the keyboard path names its key ("Undo (z)"). */
+  undoLabel?: string;
   busy: boolean;
   onDismiss: () => void;
   onUndo: () => void;
 }) {
   const { t } = useT();
-  const actionLabel =
-    notice.action === "archive"
-      ? t("emailDetail.toolbar.undo.actionArchived")
-      : t("emailDetail.toolbar.undo.actionMovedToTrash");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      role="status"
+      className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-role-body text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="min-w-0">
-        <p className="font-medium">
-          {t("emailDetail.toolbar.undo.emailActionDone", { action: actionLabel })}
-        </p>
-        {notice.subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{notice.subject}</p>}
+        <p className="font-medium">{title}</p>
+        {subject && <p className="mt-0.5 truncate text-role-caption text-ink-mid">{subject}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={busy}
-          className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50 focus-ring"
-        >
-          {busy ? t("emailDetail.toolbar.undo.restoring") : t("emailDetail.toolbar.undo.undo")}
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          disabled={busy}
-          className="min-h-10 rounded-md border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50 focus-ring"
-        >
+        <Button variant="primary" size="sm" onClick={onUndo} disabled={busy}>
+          {busy
+            ? t("emailDetail.toolbar.undo.restoring")
+            : (undoLabel ?? t("emailDetail.toolbar.undo.undo"))}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onDismiss} disabled={busy}>
           {t("emailDetail.toolbar.undo.dismiss")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -92,8 +87,8 @@ export function EmailActionToolbar({
   const isDemo = email.id.startsWith("demo-");
   const actionDisabled = disabled || isDemo;
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-ink-dim">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface-raised px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 text-role-caption text-ink-dim">
         <span
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${
             email.isRead ? "bg-slate-300" : "bg-accent"
@@ -113,6 +108,7 @@ export function EmailActionToolbar({
       </div>
       <div className="flex flex-wrap gap-1.5">
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "read"}
           disabled={actionDisabled}
           onClick={onToggleRead}
@@ -122,6 +118,7 @@ export function EmailActionToolbar({
             : t("emailDetail.status.read")}
         </EmailActionButton>
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "star"}
           disabled={actionDisabled}
           onClick={onToggleStar}
@@ -131,6 +128,7 @@ export function EmailActionToolbar({
             : t("emailDetail.toolbar.action.star")}
         </EmailActionButton>
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "archive"}
           disabled={actionDisabled}
           onClick={onArchive}
@@ -139,6 +137,7 @@ export function EmailActionToolbar({
         </EmailActionButton>
         {email.unsubscribe && (
           <EmailActionButton
+            busyLabel={t("emailDetail.toolbar.working")}
             busy={busyAction === "unsubscribe"}
             disabled={actionDisabled}
             onClick={onUnsubscribe}
@@ -147,6 +146,7 @@ export function EmailActionToolbar({
           </EmailActionButton>
         )}
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "delete"}
           danger
           disabled={actionDisabled}
@@ -155,7 +155,12 @@ export function EmailActionToolbar({
           {t("common.delete")}
         </EmailActionButton>
         {nextEmail && (
-          <EmailActionButton busy={false} disabled={disabled} onClick={onOpenNext}>
+          <EmailActionButton
+            busy={false}
+            busyLabel={t("emailDetail.toolbar.working")}
+            disabled={disabled}
+            onClick={onOpenNext}
+          >
             {t("emailDetail.toolbar.action.next")}
           </EmailActionButton>
         )}
@@ -175,19 +180,18 @@ export function EmailReminderQuickActions({
 }) {
   const { t } = useT();
   return (
-    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs text-ink-mid sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-2 rounded-control border border-line bg-surface-raised px-3 py-2 text-role-caption text-ink-mid sm:flex-row sm:items-center sm:justify-between">
       <span className="font-medium text-ink-mid">{t("emailDetail.toolbar.remindMe")}</span>
       <div className="flex flex-wrap gap-1.5">
         {EMAIL_REMINDER_OPTIONS.map((option) => (
-          <button
+          <Button
             key={option.key}
-            type="button"
+            variant="chip"
             onClick={() => onCreate(option)}
             disabled={disabled || busyKey !== null}
-            className="min-h-9 rounded-md border border-line bg-surface-raised px-3 text-xs text-ink-mid transition hover:border-line-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-45 focus-ring"
           >
             {busyKey === option.key ? t("emailDetail.toolbar.settingReminder") : option.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

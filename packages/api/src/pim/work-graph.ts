@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "../db.js";
+import { displayNameOf, isPlainAddress, parseAddress } from "../mail/email-address.js";
 
 /**
  * How far back the work graph reaches when scanning mail. Active contexts
@@ -134,13 +135,8 @@ function normalizeSubject(subject: string): string {
 function parsePerson(raw: string): WorkGraphPerson | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  const angle = trimmed.match(/^(.*?)\s*<([^>]+)>$/);
-  if (angle) {
-    const name = angle[1]?.replace(/^"|"$/g, "").trim() || null;
-    const email = angle[2]?.trim() || null;
-    return { name, email };
-  }
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return { name: null, email: trimmed };
+  const email = parseAddress(trimmed);
+  if (isPlainAddress(email)) return { name: displayNameOf(trimmed), email };
   return { name: trimmed, email: null };
 }
 

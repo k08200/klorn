@@ -5,11 +5,13 @@
 	<!-- Apple Privacy Manifest. Backs the App Privacy "nutrition label" and
 	     declares Required-Reason API usage so uploads don't hit ITMS-91053.
 
-	     NOTE (founder / Xcode): this file must be added to the App target's
-	     membership (drag into the project navigator → check "App" target, or
-	     it will not be copied into the bundle). Also complete the matching App
-	     Privacy questionnaire in App Store Connect — the manifest and the
-	     questionnaire must agree.
+	     It is a member of the App target (project.pbxproj: Resources build
+	     phase), so every archive carries it. The App Privacy questionnaire in
+	     App Store Connect must agree with it: see
+	     apps/mobile/store-pack/privacy-labels.md §2 (the source of the types
+	     below). Every type is linked to the user, never used for tracking.
+	     Conditional: Photos or Videos only if Klorn Drive upload is on in
+	     production (DRIVE_ENABLED) — add it then, with the same shape.
 
 	     If a future upload still reports ITMS-91053 for another Required-Reason
 	     API (a Capacitor plugin using file-timestamp / system-boot-time / disk-
@@ -22,8 +24,9 @@
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
-			<!-- Display name — collected at signup for account identity;
-			     linked; not used for tracking. -->
+			<!-- Display name — from the Google / Apple profile at sign-in (or
+			     typed at email sign-up) for account identity; linked; not used
+			     for tracking. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeName</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
@@ -36,8 +39,9 @@
 			</array>
 		</dict>
 		<dict>
-			<!-- Email address — used to sign in and to run the mail firewall;
-			     linked to the user's identity; not used for tracking. -->
+			<!-- Email address — used to sign in and to sort the connected
+			     accounts' mail; linked to the user's identity; not used for
+			     tracking. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
@@ -57,6 +61,77 @@
 			     not used for tracking. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Mail from the connected accounts: synced, classified,
+			     summarised and sent on the user's confirmation. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeEmailsOrTextMessages</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Klorn account id; RevenueCat appUserID. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- APNs push token, used only to deliver notifications. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Done / Later / lane moves / approvals and first-party
+			     server events (push_sent, queue_action). -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- In-app subscription through StoreKit and RevenueCat. Store
+			     builds carry VITE_REVENUECAT_IOS_KEY (mobile-release.yml); if a
+			     build ships without it (IAP off), remove this dict and the
+			     questionnaire's Purchase History row for that build. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

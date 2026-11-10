@@ -127,6 +127,18 @@ describe("getSenderDossier", () => {
     expect(upsert.create.analyzedEmailCount).toBe(2);
   });
 
+  it("prefilters on the address with LIKE's own characters escaped", async () => {
+    const { prisma } = await import("../db.js");
+    await getSenderDossier("user-1", "john_doe@corp.com", "en");
+    const args = vi.mocked(prisma.emailMessage.findMany).mock.calls.at(-1)?.[0] as {
+      where: { OR: unknown[] };
+    };
+    expect(args.where.OR).toEqual([
+      { from: { contains: "john\\_doe@corp.com" } },
+      { to: { contains: "john\\_doe@corp.com" } },
+    ]);
+  });
+
   it("excludes spoofed display-name and substring-address rows (exact parsed match)", async () => {
     // Attacker forges the trusted address into the DISPLAY NAME; a second row
     // is a substring-collision address. Neither may enter the dossier.

@@ -31,6 +31,17 @@ vi.mock("../pim/briefing-status.js", () => ({
 
 const calendarEventCount = vi.hoisted(() => vi.fn(async (_args?: unknown) => 1));
 const calendarEventFindMany = vi.hoisted(() => vi.fn(async (_args?: unknown) => [] as unknown[]));
+// One mock serves the auth lookup and the readiness BYOK-presence lookup; a
+// test that needs the user's key lanes overrides it for the BYOK select only.
+const userFindUnique = vi.hoisted(() =>
+  vi.fn(
+    async (_args?: unknown): Promise<Record<string, unknown> | null> => ({
+      id: "user-1",
+      plan: "FREE",
+      role: "USER",
+    }),
+  ),
+);
 
 vi.mock("../db.js", () => {
   const now = new Date("2026-04-29T08:00:00.000Z");
@@ -87,7 +98,7 @@ vi.mock("../db.js", () => {
     },
     emailMessage: { count: vi.fn(async () => 3) },
     calendarEvent: { count: calendarEventCount, findMany: calendarEventFindMany },
-    user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
+    user: { findUnique: userFindUnique },
   };
   return { prisma, db: prisma };
 });
@@ -102,9 +113,46 @@ async function buildApp() {
   return app;
 }
 
+/** The BYOK-presence lookup the readiness loader makes (select of the two key columns). */
+const isByokSelect = (args: unknown) =>
+  Boolean(
+    (args as { select?: { anthropicApiKey?: boolean } } | undefined)?.select?.anthropicApiKey,
+  );
+
+/** The user row answers the BYOK lookup with these (stored, encrypted) keys; every other lookup is unchanged. */
+function userHasStoredKeys(keys: { anthropicApiKey?: string; geminiApiKey?: string }) {
+  userFindUnique.mockImplementation(async (args?: unknown) =>
+    isByokSelect(args)
+      ? { anthropicApiKey: keys.anthropicApiKey ?? null, geminiApiKey: keys.geminiApiKey ?? null }
+      : { id: "user-1", plan: "FREE", role: "USER" },
+  );
+}
+
+/** Env with no LLM provider configured, so each test opts its env lanes in explicitly. */
+function stubNoProviderEnv() {
+  vi.stubEnv("ANTHROPIC_API_KEY", undefined);
+  vi.stubEnv("GEMINI_API_KEY", undefined);
+  vi.stubEnv("OPENAI_COMPAT_BASE_URL", undefined);
+}
+
+async function readAiProviderCheck() {
+  const app = await buildApp();
+  const res = await app.inject({ method: "GET", url: "/api/ops/readiness", headers: auth() });
+  await app.close();
+  const body = res.json();
+  return {
+    res,
+    body,
+    ai: body.checks.find((check: { key: string }) => check.key === "aiProvider"),
+  };
+}
+
 describe("ops routes", () => {
   afterEach(() => {
     clearFallbackState();
+    vi.unstubAllEnvs();
+    userFindUnique.mockReset();
+    userFindUnique.mockImplementation(async () => ({ id: "user-1", plan: "FREE", role: "USER" }));
   });
 
   it("rejects unauthenticated readiness requests", async () => {
@@ -143,26 +191,53 @@ describe("ops routes", () => {
   it("downgrades overall status to error when every AI provider is in cooldown", async () => {
     process.env.VAPID_PUBLIC_KEY = "public";
     process.env.VAPID_PRIVATE_KEY = "private";
-    markKeyLimited("openrouter:env");
+    stubNoProviderEnv();
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-env-test");
+    vi.stubEnv("GEMINI_API_KEY", "gem-env-test");
+    userHasStoredKeys({ anthropicApiKey: "v1:enc-anthropic", geminiApiKey: "v1:enc-gemini" });
+    markKeyLimited("anthropic:env");
     markKeyLimited("gemini:env");
-    markKeyLimited("openrouter:user:user-1");
+    markKeyLimited("anthropic:user:user-1");
     markKeyLimited("gemini:user:user-1");
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/ops/readiness",
-      headers: auth(),
-    });
+    const { res, body, ai } = await readAiProviderCheck();
 
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    const ai = body.checks.find((check: { key: string }) => check.key === "aiProvider");
     expect(ai.status).toBe("error");
     expect(ai.detail.unavailableCount).toBe(4);
     expect(ai.message).toMatch(/cooldown/i);
     expect(body.status).toBe("error");
-    await app.close();
+  });
+
+  it("lists an env lane only for a configured env provider", async () => {
+    stubNoProviderEnv();
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-env-test");
+
+    const { ai } = await readAiProviderCheck();
+
+    expect(ai.detail.providers.map((p: { quotaKey: string }) => p.quotaKey)).toEqual([
+      "anthropic:env",
+    ]);
+  });
+
+  it("lists a user lane only when the user row holds that BYOK key, and never echoes the key", async () => {
+    stubNoProviderEnv();
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-env-test");
+    userHasStoredKeys({ anthropicApiKey: "v1:enc-user-anthropic-secret" });
+
+    const { res, ai } = await readAiProviderCheck();
+
+    expect(ai.detail.providers.map((p: { quotaKey: string }) => p.quotaKey)).toEqual([
+      "anthropic:env",
+      "anthropic:user:user-1",
+    ]);
+    // Presence only: the loader selects just the two key columns, and the
+    // stored value never reaches the response.
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      select: { anthropicApiKey: true, geminiApiKey: true },
+    });
+    expect(res.body).not.toContain("enc-user-anthropic-secret");
   });
 });
 

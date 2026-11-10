@@ -13,7 +13,7 @@ import SwiftUI
 /// responses for a range the user already left are dropped.
 struct CalendarScreen: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
 
     enum Scope: String, CaseIterable, Identifiable {
         case day, week, month, year
@@ -30,13 +30,17 @@ struct CalendarScreen: View {
     /// The anchor date the visible range derives from (today at first).
     @State private var anchor = Date()
 
-    init(actions: TopBarActions, initialScope: Scope = .month, initialAnchor: Date = Date()) {
+    /// The month grid fills the height it is given and the month view
+    /// wears the type roles.
+    private var m: CalendarMetrics { .window }
+
+    init(actions: ShellActions, initialScope: Scope = .month, initialAnchor: Date = Date()) {
         self.actions = actions
         self.initialScope = initialScope
         self.initialAnchor = initialAnchor
     }
 
-    private var calendar: Calendar { Calendar.current }
+    private var calendar: Calendar { DisplayTimeZone.calendar }
     private var buckets: [String: [CalendarEventWire]] {
         eventsByDay(model.calendarRangeEvents, calendar: calendar)
     }
@@ -70,12 +74,14 @@ struct CalendarScreen: View {
             guard let first = days.first, let last = days.last else { return "" }
             let interval = DateIntervalFormatter()
             interval.calendar = calendar
+            interval.timeZone = calendar.timeZone
             interval.locale = L10n.activeLocale
             interval.dateTemplate = "yMMMd"
             return interval.string(from: first, to: last)
         }
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.locale = L10n.activeLocale
         switch scope {
         case .day: formatter.setLocalizedDateFormatFromTemplate("yMMMMdEEE")
@@ -122,7 +128,7 @@ struct CalendarScreen: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text(rangeTitle).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+            Text(rangeTitle).font(m.title).foregroundStyle(Theme.text)
                 .contentTransition(.numericText())
             if model.calendarRangeLoading && !Theme.isRenderingOffscreen {
                 ProgressView().controlSize(.mini)
@@ -156,11 +162,11 @@ struct CalendarScreen: View {
                             .foregroundStyle(item == scope ? Theme.text : Theme.textDim)
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(item == scope ? Theme.surfaceHover : .clear,
-                                        in: RoundedRectangle(cornerRadius: 6))
+                                        in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
                     }
                 }
                 .padding(2)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: m.scopeRadius))
             } else {
                 Picker("", selection: $scope) {
                     ForEach(Scope.allCases) { s in
@@ -171,7 +177,7 @@ struct CalendarScreen: View {
                 .accessibilityLabel(L("cal.scope.a11y"))
             }
         }
-        .padding(.horizontal, 24).padding(.vertical, 14)
+        .padding(.horizontal, m.headerInset).padding(.vertical, m.headerVertical)
     }
 
     // MARK: 일 — one day, its events in order (all-day first).
@@ -196,6 +202,7 @@ struct CalendarScreen: View {
                 }
                 Spacer(minLength: 0)
             }
+            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -214,6 +221,7 @@ struct CalendarScreen: View {
                 }
             }
             .background(Theme.line)
+            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -226,7 +234,7 @@ struct CalendarScreen: View {
                 Text(symbol).font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
                 Text("\(calendar.component(.day, from: day))")
                     .font(Theme.Typo.caption.monospacedDigit().weight(isToday ? .bold : .regular))
-                    .foregroundStyle(isToday ? Color.white : Theme.text)
+                    .foregroundStyle(isToday ? Theme.onAccentSolid : Theme.text)
                     .frame(width: 22, height: 22)
                     .background(isToday ? Theme.accent : .clear, in: Circle())
             }
@@ -255,27 +263,39 @@ struct CalendarScreen: View {
         let todayKey = localDayKey(Date(), calendar: calendar)
         let symbols = orderedWeekdaySymbols
         let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
+        let grid = { (rowHeight: CGFloat) in
+            LazyVGrid(columns: columns, spacing: 1) {
+                ForEach(days, id: \.self) { day in
+                    monthCell(day, inMonth: calendar.component(.month, from: day) == comps.month,
+                              todayKey: todayKey, rowHeight: rowHeight)
+                }
+            }
+            .background(Theme.line)
+        }
         return VStack(spacing: 0) {
             HStack(spacing: 1) {
                 ForEach(symbols, id: \.self) { day in
-                    Text(day).font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
+                    Text(day).font(m.weekday).foregroundStyle(Theme.textDim)
                         .frame(maxWidth: .infinity)
                 }
             }
             .padding(.vertical, 6)
             Divider().overlay(Theme.line)
-            LazyVGrid(columns: columns, spacing: 1) {
-                ForEach(days, id: \.self) { day in
-                    monthCell(day, inMonth: calendar.component(.month, from: day) == comps.month,
-                              todayKey: todayKey)
-                }
+            // The weeks share the height the window gives them, so a
+            // large window has no empty band under the last week.
+            GeometryReader { proxy in
+                grid(CalendarMetrics.monthRowHeight(
+                    available: proxy.size.height, weeks: days.count / 7))
             }
-            .background(Theme.line)
-            Spacer(minLength: 0)
+            // The assistant button floats over the bottom-right corner; the
+            // last week ends above it instead of sitting under it.
+            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
-    private func monthCell(_ day: Date, inMonth: Bool, todayKey: String) -> some View {
+    private func monthCell(
+        _ day: Date, inMonth: Bool, todayKey: String, rowHeight: CGFloat
+    ) -> some View {
         let key = localDayKey(day, calendar: calendar)
         let events = sortedForDay(buckets[key] ?? [])
         let isToday = key == todayKey
@@ -287,7 +307,7 @@ struct CalendarScreen: View {
                 Text("\(calendar.component(.day, from: day))")
                     .font(Theme.Typo.caption.monospacedDigit()
                         .weight(isToday ? .bold : .regular))
-                    .foregroundStyle(isToday ? Color.white : inMonth ? Theme.text : Theme.textDim)
+                    .foregroundStyle(isToday ? Theme.onAccentSolid : inMonth ? Theme.text : Theme.textDim)
                     .frame(width: 22, height: 22)
                     .background(isToday ? Theme.accent : .clear, in: Circle())
                 ForEach(events.prefix(2)) { event in
@@ -302,22 +322,22 @@ struct CalendarScreen: View {
                         }
                         Text(event.title).lineLimit(1)
                     }
-                    .font(Theme.Typo.micro)
+                    .font(m.chip)
                     .foregroundStyle(inMonth ? Theme.text : Theme.textDim)
                     .padding(.horizontal, 4).padding(.vertical, 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.accent.opacity(inMonth ? 0.16 : 0.08),
-                                in: RoundedRectangle(cornerRadius: 3))
+                                in: RoundedRectangle(cornerRadius: m.chipRadius))
                 }
                 if events.count > 2 {
                     Text(L("cal.more", events.count - 2))
-                        .font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
+                        .font(m.chip).foregroundStyle(Theme.textDim)
                         .padding(.horizontal, 4)
                 }
                 Spacer(minLength: 0)
             }
             .padding(5)
-            .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .topLeading)
             .background(Theme.panel.opacity(inMonth ? 1 : 0.6))
             .contentShape(Rectangle())
         }
@@ -337,6 +357,7 @@ struct CalendarScreen: View {
                 }
             }
             .padding(20)
+            .padding(.bottom, AssistantDock.contentClearance)
         }
     }
 
@@ -350,6 +371,7 @@ struct CalendarScreen: View {
         let first = calendar.date(from: comps) ?? Date()
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.locale = L10n.activeLocale
         formatter.setLocalizedDateFormatFromTemplate("MMMM")
         return Button {
@@ -375,7 +397,7 @@ struct CalendarScreen: View {
                 }
             }
             .padding(10)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -386,6 +408,7 @@ struct CalendarScreen: View {
     private var orderedWeekdaySymbols: [String] {
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.locale = L10n.activeLocale
         let base = formatter.shortWeekdaySymbols ?? []
         guard base.count == 7 else { return base }

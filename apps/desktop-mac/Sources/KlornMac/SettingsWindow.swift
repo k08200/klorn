@@ -4,8 +4,8 @@ import SwiftUI
 /// One existing Preferences section. The Settings window regroups these into
 /// tabs; it adds no new settings (productization plan, macOS M0).
 enum PrefsSection: CaseIterable, Hashable, Sendable {
-    case general, topBar, keyboard, about
-    case account, inboxes, deviceCalendars
+    case general, support, keyboard, about
+    case account, inboxes, deviceCalendars, driveImport
     case mode, behaviour, replies
     case banners, interrupts
     case appearance, language
@@ -14,7 +14,7 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
     /// Server-backed sections only make sense with an account behind them.
     var requiresSignIn: Bool {
         switch self {
-        case .inboxes, .deviceCalendars, .mode, .behaviour, .replies, .interrupts: true
+        case .inboxes, .deviceCalendars, .driveImport, .mode, .behaviour, .replies, .interrupts: true
         default: false
         }
     }
@@ -26,9 +26,12 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
 /// already has; plan groups with no Mac settings yet (Lanes & rules, Team,
 /// Integrations, billing) are deliberately absent rather than shown empty.
 /// `general` is the macOS-convention home for app chrome (login item,
-/// updates, top bar, hotkey, about), which the web IA has no slot for.
+/// updates, app & support, hotkey, about), which the web IA has no slot for.
 enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     case general, accounts, assistant, notifications, appearance, privacy
+
+    /// The defaults key of the selected tab (the Settings window and the D7 import share it).
+    static let storageKey = "settings.selectedTab"
 
     var id: String { rawValue }
     var titleKey: String { "settings.tab.\(rawValue)" }
@@ -47,8 +50,8 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 
     var sections: [PrefsSection] {
         switch self {
-        case .general: [.general, .topBar, .keyboard, .about]
-        case .accounts: [.account, .inboxes, .deviceCalendars]
+        case .general: [.general, .support, .keyboard, .about]
+        case .accounts: [.account, .inboxes, .deviceCalendars, .driveImport]
         case .assistant: [.mode, .behaviour, .replies]
         case .notifications: [.banners, .interrupts]
         case .appearance: [.appearance, .language]
@@ -85,21 +88,19 @@ enum SettingsMetrics {
 /// Root of the `Settings` scene: a native toolbar-tab Settings window.
 struct SettingsRoot: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("settings.selectedTab") private var selectedRaw = SettingsTab.general.rawValue
+    @AppStorage(SettingsTab.storageKey) private var selectedRaw = SettingsTab.general.rawValue
 
     var body: some View {
         tabs
             // L() is not observable; rebuild the tabs on a language change
-            // (same trick as the top bar) — the tab survives via @AppStorage.
+            // (same trick as the main window) — the tab survives via @AppStorage.
             // Scoped to the tabs only, so the window tracker below is never
             // torn down by a language switch.
             .id(model.settings.languageRevision)
             .frame(width: SettingsMetrics.width, height: SettingsMetrics.height)
-            // Cmd+Tab compromise: an open Settings window is a summoned app
-            // window, so the app is .regular while it is up (see
-            // TopBarController.activationPolicy). Driven by the real NSWindow,
-            // not view lifecycle: SwiftUI may keep this content alive after
-            // the window closes, so onDisappear is not a close signal.
+            // Open/closed comes from the real NSWindow, not view lifecycle:
+            // SwiftUI may keep this content alive after the window closes,
+            // so onDisappear is not a close signal.
             .background(SettingsWindowTracker { open in model.settingsWindowOpen = open })
     }
 
@@ -127,9 +128,8 @@ enum SettingsWindowEvent: Sendable {
 
 extension SettingsWindowEvent {
     /// Whether Settings counts as open after `event`. Only a real close
-    /// clears it: hiding the app (⌘H) or covering the window must not drop
-    /// the app to .accessory, which would leave a hidden accessory app that
-    /// Cmd+Tab can no longer bring back. Pure for the harness.
+    /// clears it: hiding the app (⌘H) or covering the window does not close
+    /// it. Pure for the harness.
     func openState(current: Bool) -> Bool {
         switch self {
         case .willClose: false
@@ -201,12 +201,12 @@ struct SettingsWindowTracker: NSViewRepresentable {
     }
 }
 
-/// Opens the `Settings` scene from AppKit code (status item, top bar).
+/// Opens the `Settings` scene from AppKit code (the shell, the drive import).
 ///
 /// `NSApp.sendAction(Selector(("showSettingsWindow:")))` returns true but
 /// opens nothing on macOS 14+ (verified 2026-10-02), so this captures
 /// SwiftUI's own `openSettings` action from a window-less hosting view —
-/// independent of whether the pill is drawn (hidden-pill mode has no panel).
+/// independent of whether the main window is open.
 @MainActor
 final class SettingsOpener {
     private var action: OpenSettingsAction?

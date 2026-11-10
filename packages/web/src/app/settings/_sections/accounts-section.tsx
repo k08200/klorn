@@ -6,8 +6,13 @@ import { GoogleConnectRedirect } from "../../../components/google-connect-redire
 import { ICloudImapSection } from "../../../components/icloud-imap-section";
 import InAppBrowserNotice from "../../../components/in-app-browser-notice";
 import { LinkedInboxesSection } from "../../../components/linked-inboxes-section";
+import {
+  isEntitlementRefusal,
+  MailAccountProGate,
+} from "../../../components/mail-account-pro-gate";
 import { NaverImapSection } from "../../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../../components/oauth-error-banner";
+import { OnboardingReturn } from "../../../components/onboarding-return";
 import { OutlookInboxesSection } from "../../../components/outlook-inboxes-section";
 import { ListSkeleton } from "../../../components/skeleton";
 import { useToast } from "../../../components/toast";
@@ -29,6 +34,8 @@ interface Integration {
 export function AccountsSection() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [notionConnected, setNotionConnected] = useState(false);
+  // A second mail account on Free: the Pro note with its upgrade link.
+  const [googleRefused, setGoogleRefused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [gmailPushConfigured, setGmailPushConfigured] = useState(false);
   const [gmailPushEnabled, setGmailPushEnabled] = useState(false);
@@ -36,7 +43,7 @@ export function AccountsSection() {
   const [gmailPushLoading, setGmailPushLoading] = useState(false);
   const { toast } = useToast();
   const { confirm } = useConfirm();
-  const { t } = useT();
+  const { t, locale } = useT();
 
   const disconnectGoogle = async () => {
     const ok = await confirm({
@@ -144,19 +151,29 @@ export function AccountsSection() {
       connectUrl: "google-oauth-start",
       statusUrl: `${API_BASE}/api/auth/google/status`,
     },
-    {
-      name: "Notion",
-      description: t("settings.integration.notion.desc"),
-      connected: notionConnected,
-      connectUrl: notionConnected ? undefined : "notion-coming-soon",
-      statusUrl: `${API_BASE}/api/notion/status`,
-    },
+    // Notion has no user-facing connect flow yet: the row appears only on a
+    // deployment where the server already has it configured, never as a
+    // "Coming soon" placeholder among the live mail sources.
+    ...(notionConnected
+      ? [
+          {
+            name: "Notion",
+            description: t("settings.integration.notion.desc"),
+            connected: true,
+            statusUrl: `${API_BASE}/api/notion/status`,
+          },
+        ]
+      : []),
   ];
 
   return (
     <>
       <Suspense>
         <GoogleConnectRedirect />
+      </Suspense>
+      {/* ONBOARDING_V2: a connect the first run started returns there. */}
+      <Suspense>
+        <OnboardingReturn />
       </Suspense>
 
       {/* Integrations */}
@@ -176,7 +193,7 @@ export function AccountsSection() {
               <div key={int.name} className="flex items-center justify-between gap-4 p-4">
                 <div>
                   <h3 className="font-medium">{int.name}</h3>
-                  <p className="text-sm text-ink-mid">{int.description}</p>
+                  <p className="text-role-body text-ink-mid">{int.description}</p>
                 </div>
                 {int.connected ? (
                   <div className="flex items-center gap-3">
@@ -188,20 +205,28 @@ export function AccountsSection() {
                       <button
                         type="button"
                         onClick={disconnectGoogle}
-                        className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-state-danger-line bg-state-danger-bg px-3 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                        className="ease-strong inline-flex min-h-11 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-3 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                       >
                         {t("settings.disconnect")}
                       </button>
                     )}
                   </div>
                 ) : int.connectUrl?.endsWith("-coming-soon") ? (
-                  <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-lg border border-line">
+                  <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
                     {t("settings.chip.comingSoon")}
                   </span>
                 ) : int.connectUrl === "google-oauth-start" ? (
                   <Button
                     onClick={() => {
-                      void startGoogleConnect();
+                      setGoogleRefused(false);
+                      startGoogleConnect().catch((err: unknown) => {
+                        // A second mail account on Free: say so instead of failing silently.
+                        if (isEntitlementRefusal(err)) {
+                          setGoogleRefused(true);
+                          return;
+                        }
+                        captureClientError(err, { scope: "settings.google.connect" });
+                      });
                     }}
                   >
                     {t("settings.connect")}
@@ -213,7 +238,7 @@ export function AccountsSection() {
                     {t("settings.connect")}
                   </a>
                 ) : (
-                  <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-lg border border-line">
+                  <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
                     {t("settings.chip.comingSoon")}
                   </span>
                 )}
@@ -221,17 +246,22 @@ export function AccountsSection() {
             ))
           )}
         </div>
+        {googleRefused && (
+          <div className="mt-3">
+            <MailAccountProGate />
+          </div>
+        )}
 
         {googleConnected && (
           <div className={`mt-3 ${PANEL} p-4 flex items-center justify-between gap-4`}>
             <div>
               <h3 className="font-medium">{t("settings.realtimeSync.title")}</h3>
-              <p className="text-sm text-ink-mid">
+              <p className="text-role-body text-ink-mid">
                 {gmailPushConfigured
                   ? gmailPushEnabled
                     ? gmailPushExpiresAt
                       ? t("settings.realtimeSync.activeUntil", {
-                          date: new Date(gmailPushExpiresAt).toLocaleString("en-US"),
+                          date: new Date(gmailPushExpiresAt).toLocaleString(locale),
                         })
                       : t("settings.realtimeSync.active")
                     : t("settings.realtimeSync.subscribe")
@@ -249,7 +279,7 @@ export function AccountsSection() {
                 </Button>
               )
             ) : (
-              <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-lg border border-line">
+              <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
                 {t("settings.realtimeSync.unavailable")}
               </span>
             )}

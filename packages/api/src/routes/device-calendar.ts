@@ -38,6 +38,7 @@ import {
 } from "../pim/device-calendar/device-snapshot.js";
 import { DEVICE_SOURCE_KEY_SCHEMA_PATTERN } from "../pim/device-calendar/device-source-key.js";
 import { listDeviceSources, removeDeviceSource } from "../pim/device-calendar/device-sources.js";
+import { clientAddress } from "../security/client-address.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
 /**
@@ -93,12 +94,8 @@ export function deviceSessionKey(request: FastifyRequest): string {
     const digest = createHash("sha256").update(auth.slice(7), "utf8").digest("hex").slice(0, 32);
     return `device-cal:session:${digest}`;
   }
-  // No token: the same unspoofable client address as the global limiter (index.ts),
-  // never request.ip, which trusts X-Forwarded-For.
-  const cf = request.headers["cf-connecting-ip"];
-  const ip =
-    typeof cf === "string" && cf.length > 0 ? cf : (request.socket?.remoteAddress ?? "unknown");
-  return `device-cal:ip:${ip}`;
+  // No token: the same client address as the global limiter (security/client-address.ts).
+  return `device-cal:ip:${clientAddress(request)}`;
 }
 
 function userKey(request: FastifyRequest): string {

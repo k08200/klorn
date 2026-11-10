@@ -123,14 +123,27 @@ export async function deleteSenderLabel(userId: string, key: SenderLabelKey): Pr
 }
 
 /**
- * The user's label for each of these sender addresses, one query: address
- * labels first, then the address's domain label. Addresses without a label
- * are absent from the map. Pure lookup — callers decide fail-open.
+ * The domain a "whole domain" correction of this address would target, by
+ * the same rule PUT applies — null for a public mail provider, where a
+ * domain label is refused. Lets a client offer only what the server accepts.
  */
-export async function senderLabelsFor(
+export function labelableDomain(address: string): string | null {
+  const domain = domainOf(address.trim().toLowerCase());
+  if (!domain) return null;
+  const key = normalizeSenderLabelKey({ scope: "domain", value: domain });
+  return "ok" in key ? key.ok.value : null;
+}
+
+/**
+ * The user's label in effect for each of these sender addresses, with the
+ * row it came from, one query: address labels first, then the address's
+ * domain label. Addresses without a label are absent from the map. Pure
+ * lookup — callers decide fail-open.
+ */
+export async function senderLabelEntriesFor(
   userId: string,
   addresses: readonly string[],
-): Promise<Map<string, UserLabelCategory>> {
+): Promise<Map<string, SenderLabel>> {
   const senders = [...new Set(addresses.map((a) => a.trim().toLowerCase()).filter(Boolean))];
   if (!senders.length) return new Map();
   const domains = [...new Set(senders.map(domainOf).filter((d): d is string => d !== null))];
@@ -144,19 +157,29 @@ export async function senderLabelsFor(
     },
     select: { scope: true, value: true, category: true },
   });
-  const bySender = new Map(
-    rows.filter((r) => r.scope === "sender").map((r) => [r.value, r.category]),
+  const labels = rows.flatMap((row): SenderLabel[] =>
+    isUserLabelCategory(row.category) && (row.scope === "sender" || row.scope === "domain")
+      ? [{ scope: row.scope, value: row.value, category: row.category }]
+      : [],
   );
-  const byDomain = new Map(
-    rows.filter((r) => r.scope === "domain").map((r) => [r.value, r.category]),
-  );
-  const out = new Map<string, UserLabelCategory>();
+  const bySender = new Map(labels.filter((r) => r.scope === "sender").map((r) => [r.value, r]));
+  const byDomain = new Map(labels.filter((r) => r.scope === "domain").map((r) => [r.value, r]));
+  const out = new Map<string, SenderLabel>();
   for (const sender of senders) {
     const domain = domainOf(sender);
     const label = bySender.get(sender) ?? (domain ? byDomain.get(domain) : undefined);
-    if (isUserLabelCategory(label)) out.set(sender, label);
+    if (label) out.set(sender, label);
   }
   return out;
+}
+
+/** The category alone, per address — what row chips and prompts need. */
+export async function senderLabelsFor(
+  userId: string,
+  addresses: readonly string[],
+): Promise<Map<string, UserLabelCategory>> {
+  const entries = await senderLabelEntriesFor(userId, addresses);
+  return new Map([...entries].map(([address, label]) => [address, label.category]));
 }
 
 /**

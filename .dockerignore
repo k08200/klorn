@@ -16,6 +16,8 @@ node_modules
 # Build output — rebuilt inside the image.
 **/dist
 packages/web/.next
+# Runtime data a local API run may have written (file-conversion results).
+packages/api/data
 
 # Repo content the images don't need (keeps the context small).
 .git

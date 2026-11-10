@@ -108,10 +108,65 @@ export interface ProviderCalendarEvent {
   readonly startTime: Date | null;
   readonly endTime: Date | null;
   /**
-   * CalDAV only (C3): the calendar collection the event was listed from, as
-   * `calendarKeyOf` (pim/caldav/caldav-listing.ts) names it. Absent elsewhere.
+   * The calendar the event was listed from, for the window reconcile: a CalDAV
+   * collection as `calendarKeyOf` (pim/caldav/caldav-listing.ts) names it (C3), or
+   * Outlook's one `outlook:default`. Absent elsewhere.
    */
   readonly calendarKey?: string;
+  /**
+   * Google only: the calendar's owner declined this invitation (their own attendee
+   * entry, `self: true`, is `declined`). Absent elsewhere.
+   */
+  readonly declinedBySelf?: boolean;
+}
+
+/**
+ * One attendee of a listed meeting, for co-attendance counting only. Held in
+ * memory during the sync and never stored: only a counted contact's normalised
+ * address reaches the database, as its ContactCoAttendance row key.
+ */
+export interface MeetingAttendee {
+  /** As the provider sent it; '' when absent. The counter normalises it. */
+  readonly email: string;
+  /** The calendar owner's own entry. */
+  readonly self: boolean;
+  /** This attendee organised the event. */
+  readonly organizer: boolean;
+  /** A room or equipment, not a person. */
+  readonly resource: boolean;
+  /** accepted | tentative | needsAction | declined; null when absent. */
+  readonly responseStatus: string | null;
+}
+
+/** One event of a past window, as co-attendance counting reads it. */
+export interface ProviderMeeting {
+  /**
+   * The event's identity across the user's calendars, so one meeting in two
+   * calendars is one meeting: Google's iCalUID plus the instance's original start
+   * (as an instant), else its event id. '' when the provider sent neither.
+   */
+  readonly identity: string;
+  readonly cancelled: boolean;
+  readonly allDay: boolean;
+  readonly startTime: Date | null;
+  readonly endTime: Date | null;
+  /** The provider left attendees out (over the listing's attendee cap, or a hidden guest list). */
+  readonly attendeesOmitted: boolean;
+  /** The calendar owner organised the event (Google: `organizer.self`). */
+  readonly organizedBySelf: boolean;
+  readonly attendees: readonly MeetingAttendee[];
+}
+
+export interface MeetingListing {
+  readonly meetings: readonly ProviderMeeting[];
+  /** More events than the listing's page cap: the latest ones were not read. */
+  readonly truncated: boolean;
+  /**
+   * The start of the last event listed (events come in start order), never later
+   * than it really was; null when nothing was listed. When `truncated`, every
+   * event that ends before this instant's UTC day was listed.
+   */
+  readonly lastStart: Date | null;
 }
 
 export interface CalendarCreateInput {
@@ -174,7 +229,7 @@ export interface CalendarWindowListing {
   /** When the listing started: a row written after it (by a concurrent sync) is never removed. */
   readonly listedAt: Date;
   /**
-   * The calendars the listing read (CalDAV, `calendarKeyOf`). A row of any other
+   * The calendars the listing read (CalDAV collections, or `outlook:default`). A row of any other
    * calendar is unknown to it, never removed for being absent.
    */
   readonly calendarKeys?: readonly string[];
@@ -184,7 +239,7 @@ export interface CalendarSession {
   readonly provider: CalendarProviderName;
   listEvents(query: CalendarListQuery): Promise<ProviderCalendarEvent[]>;
   /**
-   * The window's events and whether that is all of them (C3, CalDAV only). The
+   * The window's events and whether that is all of them (C3: CalDAV and Outlook). The
    * sync prefers it to `listEvents` when present. Throws like `listEvents`.
    */
   listWindow?(query: CalendarListQuery): Promise<CalendarWindowListing>;
@@ -195,6 +250,12 @@ export interface CalendarSession {
    * sync treats that as "no cancellations this time", never as a failed sync.
    */
   listCancelledEvents?(query: CancelledEventsQuery): Promise<CancelledEventsResult>;
+  /**
+   * The window's events with their attendees, for co-attendance counting
+   * (pim/coattendance/). Optional: only Google implements it; a provider without it
+   * is never counted. THROWS on a hard failure; the counter never fails the sync.
+   */
+  listMeetingAttendees?(window: CalendarWindow): Promise<MeetingListing>;
   createEvent(input: CalendarCreateInput): Promise<CalendarEventWritten>;
   updateEvent(eventId: string, patch: CalendarEventPatch): Promise<CalendarEventWritten>;
   deleteEvent(eventId: string): Promise<void>;

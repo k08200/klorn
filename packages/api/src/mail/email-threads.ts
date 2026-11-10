@@ -6,6 +6,7 @@
 
 import type { EmailThreadRow } from "@klorn/contract";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 
 // ─── Thread Grouping ──────────────────────────────────────────────────────
 
@@ -34,12 +35,8 @@ export async function getEmailThreads(
   if (options.priority) where.priority = options.priority;
   if (options.category) where.category = options.category;
   if (options.search) {
-    where.OR = [
-      { subject: { contains: options.search, mode: "insensitive" } },
-      { from: { contains: options.search, mode: "insensitive" } },
-      { snippet: { contains: options.search, mode: "insensitive" } },
-      { body: { contains: options.search, mode: "insensitive" } },
-    ];
+    const ci = { contains: escapeLikePattern(options.search), mode: "insensitive" as const };
+    where.OR = [{ subject: ci }, { from: ci }, { snippet: ci }, { body: ci }];
   }
 
   // Get all matching emails

@@ -45,7 +45,8 @@ describe("schema checking", () => {
     const m = items();
     await expect(m.findMany({ distinct: ["tier"] } as never)).rejects.toThrow(/distinct/);
     await expect(m.findMany({ where: { tier: { search: "x" } } })).rejects.toThrow(/operator/);
-    await expect(m.updateMany({ where: {}, data: { priority: { increment: 1 } } })).rejects.toThrow(
+    // `increment` is implemented (see below); any other update operator is not.
+    await expect(m.updateMany({ where: {}, data: { priority: { multiply: 2 } } })).rejects.toThrow(
       /operator\/object/,
     );
   });
@@ -172,6 +173,162 @@ describe("upsert", () => {
   });
 });
 
+describe("createMany", () => {
+  const create = {
+    userId: "u1",
+    source: "EMAIL",
+    sourceId: "s1",
+    type: "REPLY_NEEDED",
+    title: "t",
+  };
+
+  it("inserts every row and answers the count", async () => {
+    const d = db([]);
+    const made = await items(d).createMany({ data: [create, { ...create, sourceId: "s2" }] });
+    expect(made).toEqual({ count: 2 });
+    expect(d.tables.attentionItem).toHaveLength(2);
+  });
+
+  it("with skipDuplicates, skips a row that clashes on a unique key, as ON CONFLICT DO NOTHING", async () => {
+    const d = db();
+    const made = await items(d).createMany({
+      data: [create, { ...create, sourceId: "s2" }, { ...create, sourceId: "s2" }],
+      skipDuplicates: true,
+    });
+    expect(made).toEqual({ count: 1 });
+    expect(d.tables.attentionItem.map((r) => r.sourceId).sort()).toEqual(["s1", "s2"]);
+  });
+
+  it("createManyAndReturn answers only the rows it inserted, projected by select", async () => {
+    const d = db();
+    const made = await items(d).createManyAndReturn({
+      data: [create, { ...create, sourceId: "s2" }],
+      skipDuplicates: true,
+      select: { sourceId: true },
+    });
+    expect(made).toEqual([{ sourceId: "s2" }]);
+  });
+
+  it("without skipDuplicates, throws on a clash, and checks columns like create", async () => {
+    await expect(items().createMany({ data: [create] })).rejects.toThrow(/unique constraint/);
+    await expect(items(db([])).createMany({ data: [{ ...create, nope: 1 }] })).rejects.toThrow();
+  });
+});
+
+describe("atomic increment, as Prisma's `{ increment: n }` on a number column", () => {
+  it("adds to the stored value on update and on an upsert's update", async () => {
+    const d = createFakeDb({ driveSummaryUsage: [] });
+    const where = { userId_dayKey: { userId: "u1", dayKey: "2026-10-14" } };
+    const create = { userId: "u1", dayKey: "2026-10-14", count: 1 };
+    const update = { count: { increment: 1 } };
+    await d.model("driveSummaryUsage").upsert({ where, create, update });
+    await d.model("driveSummaryUsage").upsert({ where, create, update });
+    const third = await d.model("driveSummaryUsage").upsert({
+      where,
+      create,
+      update,
+      select: { count: true },
+    });
+    expect(third).toEqual({ count: 3 });
+    await d.model("driveSummaryUsage").updateMany({ where: { userId: "u1" }, data: update });
+    expect(d.tables.driveSummaryUsage[0].count).toBe(4);
+  });
+
+  it("refuses any other operator, and an increment on a non-number column", async () => {
+    const d = createFakeDb({ driveSummaryUsage: [{ userId: "u1", dayKey: "d", count: 0 }] });
+    const where = { userId: "u1" };
+    await expect(
+      d.model("driveSummaryUsage").updateMany({ where, data: { count: { multiply: 2 } } }),
+    ).rejects.toThrow(/operator\/object writes are not supported/);
+    await expect(
+      d.model("driveSummaryUsage").updateMany({ where, data: { dayKey: { increment: 1 } } }),
+    ).rejects.toThrow(/operator\/object writes are not supported/);
+  });
+});
+
+describe("groupBy with _min, ordered and bounded", () => {
+  it("answers distinct groups ordered by their smallest value, at most `take`", async () => {
+    const at = (m: number) => new Date(Date.UTC(2026, 9, 14, 0, m));
+    const row = (id: string, userId: string, m: number, status = "PENDING") => ({
+      id,
+      driveFileId: `f-${id}`,
+      userId,
+      status,
+      nextAttemptAt: at(m),
+    });
+    const d = createFakeDb({
+      driveFileSummary: [
+        row("a1", "A", 1),
+        row("a2", "A", 2),
+        row("b1", "B", 5),
+        row("c1", "C", 3),
+        row("d1", "D", 0, "DONE"),
+      ],
+    });
+    const groups = await d.model("driveFileSummary").groupBy({
+      by: ["userId"],
+      where: { status: "PENDING" },
+      _min: { nextAttemptAt: true },
+      orderBy: { _min: { nextAttemptAt: "asc" } },
+      take: 2,
+    });
+    expect(groups).toEqual([
+      { userId: "A", _min: { nextAttemptAt: at(1) } },
+      { userId: "C", _min: { nextAttemptAt: at(3) } },
+    ]);
+  });
+});
+
+describe("a relation filter (`is`) on a one-to-one relation, either side", () => {
+  const file = (id: string, userId = "u1") => ({
+    id,
+    userId,
+    provider: "KLORN",
+    sourceKey: "klorn",
+    externalId: id,
+    name: id,
+    modifiedAt: new Date(0),
+  });
+  const summary = (id: string, driveFileId: string, text: string | null) => ({
+    id,
+    driveFileId,
+    userId: "u1",
+    status: text ? "DONE" : "PENDING",
+    summary: text,
+  });
+  const d = () =>
+    createFakeDb({
+      driveFile: [file("f1"), file("f2"), file("f3")],
+      driveFileSummary: [summary("s1", "f1", "Quarterly budget"), summary("s2", "f2", null)],
+    });
+
+  it("matches the rows whose related row matches, from the back-relation side", async () => {
+    const got = await d()
+      .model("driveFile")
+      .findMany({
+        where: {
+          summary: { is: { status: "DONE", summary: { contains: "budget", mode: "insensitive" } } },
+        },
+      });
+    expect(got.map((r) => r.id)).toEqual(["f1"]);
+  });
+
+  it("`isNot` and the forward side work too; any other relation operator is refused", async () => {
+    const db = d();
+    const notDone = await db
+      .model("driveFile")
+      .findMany({ where: { summary: { isNot: { status: "DONE" } } } });
+    expect(notDone.map((r) => r.id)).toEqual(["f2", "f3"]);
+    const forward = await db
+      .model("driveFileSummary")
+      .findMany({ where: { driveFile: { is: { name: "f2" } } } });
+    expect(forward.map((r) => r.id)).toEqual(["s2"]);
+    await expect(
+      db.model("driveFile").findMany({ where: { summary: { some: {} } } }),
+    ).rejects.toThrow(/relation filter/);
+  });
+});
+
 describe("create, update and ordering", () => {
   it("create enforces required columns and unique keys", async () => {
     const d = db();
@@ -207,6 +364,32 @@ describe("create, update and ordering", () => {
     expect((await m.findFirst({ orderBy: { priority: "asc" } }))?.id).toBe("y");
     expect((await m.findFirst({ orderBy: { priority: "asc" }, skip: 1 }))?.id).toBe("z");
     expect((await m.findFirst({ orderBy: { priority: "desc" } }))?.id).toBe("x");
+  });
+
+  it("orderBy { sort, nulls } places NULL where it says, as Postgres NULLS FIRST / LAST", async () => {
+    const at = (iso: string) => new Date(iso);
+    const d = db([
+      item({ id: "late", sourceId: "late", agentTierSetAt: at("2026-10-02T00:00:00Z") }),
+      item({ id: "none", sourceId: "none", agentTierSetAt: null }),
+      item({ id: "early", sourceId: "early", agentTierSetAt: at("2026-10-01T00:00:00Z") }),
+    ]);
+    const m = d.model("attentionItem");
+    const ids = async (orderBy: unknown) => (await m.findMany({ orderBy })).map((r) => r.id);
+    expect(await ids({ agentTierSetAt: "asc" })).toEqual(["early", "late", "none"]);
+    expect(await ids({ agentTierSetAt: "desc" })).toEqual(["none", "late", "early"]);
+    expect(await ids({ agentTierSetAt: { sort: "asc", nulls: "first" } })).toEqual([
+      "none",
+      "early",
+      "late",
+    ]);
+    expect(await ids({ agentTierSetAt: { sort: "desc", nulls: "last" } })).toEqual([
+      "late",
+      "early",
+      "none",
+    ]);
+    await expect(m.findMany({ orderBy: { agentTierSetAt: { sort: "asc" } } })).rejects.toThrow(
+      /orderBy agentTierSetAt/,
+    );
   });
 
   it("groupBy keeps NULL as null (it is not stringified) and counts per group", async () => {

@@ -8,12 +8,21 @@
  * account's tokens carry Calendars.Read and nothing else, so a write would be
  * refused by Microsoft itself; the write methods refuse first.
  *
- *   - events: outlook-events.ts (GET /me/calendarView)
+ *   - events: outlook-events.ts (GET /me/calendarView). The sync lists through
+ *     `listWindow`: calendarView expands every occurrence of the window, so a
+ *     complete listing is the window's whole set and the C3 window reconcile
+ *     removes the rows it lacks (an event deleted, or cancelled, after its first
+ *     sync), with the same guards as CalDAV.
  *   - free/busy: outlook-freebusy.ts (POST /me/calendar/getSchedule)
  *   - tokens: outlook-token.ts
  */
 
-import { listCalendarView, toProviderEvent } from "./outlook-events.js";
+import {
+  calendarViewWindow,
+  listCalendarView,
+  readCalendarView,
+  toProviderEvent,
+} from "./outlook-events.js";
 import { busyBlocksVia, peopleFreeBusyVia, primaryBusyVia } from "./outlook-freebusy.js";
 import { GraphRequestError } from "./outlook-graph.js";
 import {
@@ -31,6 +40,18 @@ function refuseWrite(): Promise<never> {
 }
 
 const HTTP_UNAUTHORIZED = 401;
+
+/**
+ * The one calendar an Outlook account lists (its default calendar), named like a
+ * CalDAV collection key so the window reconcile can account for its rows.
+ */
+export const OUTLOOK_CALENDAR_KEY = "outlook:default";
+
+/**
+ * The most events a sync listing holds and can still be complete, like CalDAV's
+ * cap: not Google's page of 100, or a busy month would turn every removal off.
+ */
+export const OUTLOOK_LISTING_MAX_EVENTS = 500;
 
 /**
  * Run one Graph operation with the account's token. A 401 gets ONE forced refresh
@@ -61,6 +82,26 @@ function outlookSession(tokens: OutlookCalendarTokenSource, accountEmail: string
       if (query.maxResults < 1) return [];
       const events = await withToken(tokens, (token) => listCalendarView(token, query));
       return events.map((event) => toProviderEvent(event, query.timeZone));
+    },
+    async listWindow(query) {
+      // Before the request, so a row a concurrent sync writes meanwhile is never
+      // taken for a vanished one.
+      const listedAt = new Date();
+      const bounded = {
+        ...query,
+        maxResults: Math.max(query.maxResults, OUTLOOK_LISTING_MAX_EVENTS),
+      };
+      const listing = await withToken(tokens, (token) => readCalendarView(token, bounded));
+      return {
+        events: listing.events.map((event) => ({
+          ...toProviderEvent(event, query.timeZone),
+          calendarKey: OUTLOOK_CALENDAR_KEY,
+        })),
+        complete: listing.complete,
+        window: calendarViewWindow(query),
+        listedAt,
+        calendarKeys: [OUTLOOK_CALENDAR_KEY],
+      };
     },
     createEvent: refuseWrite,
     updateEvent: refuseWrite,

@@ -16,6 +16,7 @@ import { prisma } from "../db.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
+import { newWork } from "../work-context.js";
 import { syncImapAccountsForUser } from "./imap-accounts.js";
 import { enabledImapProviderKeys, IMAP_PROVIDERS, type ImapProviderKey } from "./imap-providers.js";
 
@@ -85,15 +86,23 @@ export function startImapScheduler(): void {
   registerScheduler("imap", POLL_INTERVAL_MS);
   // First tick after 30s so the API server can finish booting before
   // we open IMAP sockets. Subsequent ticks on the regular interval.
-  firstTickTimer = setTimeout(() => {
-    firstTickTimer = null;
-    runImapTick().catch((err) =>
-      captureError(err, { tags: { scope: "imap-scheduler.first-tick" } }),
-    );
-    intervalId = setInterval(() => {
-      runImapTick().catch((err) => captureError(err, { tags: { scope: "imap-scheduler.tick" } }));
-    }, POLL_INTERVAL_MS);
-  }, 30_000);
+  firstTickTimer = setTimeout(
+    newWork(() => {
+      firstTickTimer = null;
+      runImapTick().catch((err) =>
+        captureError(err, { tags: { scope: "imap-scheduler.first-tick" } }),
+      );
+      intervalId = setInterval(
+        newWork(() => {
+          runImapTick().catch((err) =>
+            captureError(err, { tags: { scope: "imap-scheduler.tick" } }),
+          );
+        }),
+        POLL_INTERVAL_MS,
+      );
+    }),
+    30_000,
+  );
   console.log(
     `[imap-scheduler] started — first tick in 30s, then every ${POLL_INTERVAL_MS / 1000}s`,
   );

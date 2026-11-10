@@ -19,6 +19,7 @@ const m = vi.hoisted(() => ({
   isEntitled: vi.fn((_plan: string, _role?: string) => true),
   captureError: vi.fn(),
   runJudgeFallbackCheck: vi.fn(async () => {}),
+  runDbSizeCheck: vi.fn(async () => {}),
   overrides: new Map<string, (...args: unknown[]) => unknown>(),
   calls: [] as string[],
 }));
@@ -57,22 +58,20 @@ vi.mock("../billing/stripe.js", async (importOriginal) => ({
 // would reach the network.
 vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: vi.fn(async () => {}) }));
 vi.mock("../pim/weekly-report.js", () => ({ sendWeeklySignalReports: vi.fn(async () => {}) }));
-vi.mock("../llm/openrouter-catalog-check.js", () => ({
-  runOpenRouterCatalogCheck: vi.fn(async () => {}),
-}));
-vi.mock("../llm/openrouter-key-health.js", () => ({
-  runOpenRouterKeyCheck: vi.fn(async () => {}),
-}));
 vi.mock("../judge/calibration-snapshot.js", () => ({
   runDailyCalibrationSnapshots: vi.fn(async () => {}),
 }));
 vi.mock("../learning/ontology-proposals-store.js", () => ({
   recomputeOntologyProposalsSafe: vi.fn(async () => {}),
 }));
-// The hourly judge fallback alarm (#1319) reads the DB with $queryRaw; this
+// The hourly judge fallback alarm (#1572) reads the DB with $queryRaw; this
 // file's prisma mock has no such method, so it is replaced by a spy.
 vi.mock("../judge/judge-fallback-check.js", () => ({
   runJudgeFallbackCheck: m.runJudgeFallbackCheck,
+}));
+// Same for the hourly database size alarm (pg_database_size via $queryRaw).
+vi.mock("../ops/db-size-check.js", () => ({
+  runDbSizeCheck: m.runDbSizeCheck,
 }));
 vi.mock("../judge/judge-health.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../judge/judge-health.js")>()),
@@ -232,7 +231,7 @@ beforeEach(() => {
   ]);
   override("user.findMany", () => [{ id: USER, plan: "PRO", role: "USER" }]);
   override("userToken.findMany", () => [{ userId: USER }]);
-  override("user.findUnique", () => ({ id: USER, timezone: "Asia/Seoul" }));
+  override("automationConfig.findUnique", () => ({ timezone: "Asia/Seoul" }));
   override("calendarEvent.upsert", (arg) => {
     upsertArgs.push(arg);
     return {};
@@ -317,6 +316,12 @@ describe("scheduler calendar step — primary calendar", () => {
     await runOneTick();
 
     expect(m.runJudgeFallbackCheck).not.toHaveBeenCalled();
+  });
+
+  it("the database size check waits for its boot delay instead of running on the first tick", async () => {
+    await runOneTick();
+
+    expect(m.runDbSizeCheck).not.toHaveBeenCalled();
   });
 
   it("upserts each event by (userId, googleId) with the mapped fields", async () => {
@@ -447,6 +452,29 @@ describe("scheduler calendar step — primary calendar", () => {
     });
   });
 
+  it("reads a naive timed value in the zone the user configured (AutomationConfig)", async () => {
+    override("automationConfig.findUnique", () => ({ timezone: "America/New_York" }));
+    m.eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-naive-ny",
+            summary: "Naive",
+            start: { dateTime: "2026-10-02T09:00:00" },
+            end: { dateTime: "2026-10-02T10:00:00" },
+          },
+        ],
+      },
+    });
+
+    await runOneTick();
+
+    expect(eventUpserts()[0]?.create).toMatchObject({
+      startTime: new Date("2026-10-02T13:00:00.000Z"),
+      endTime: new Date("2026-10-02T14:00:00.000Z"),
+    });
+  });
+
   it("does not sync a user who never connected Google, and never asks for a client", async () => {
     override("userToken.findMany", () => []);
     await runOneTick();
@@ -537,7 +565,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
       expect(m.googleCalendar).toHaveBeenCalledTimes(1);
       expect(m.googleCalendar).toHaveBeenCalledWith({ version: "v3", auth: AUTH });
       expect(m.eventsList).toHaveBeenCalledTimes(1);
-      expect(callsTo("user.findUnique")).toBe(1);
+      expect(callsTo("automationConfig.findUnique")).toBe(1);
       const rows = eventUpserts();
       expect(rows).toHaveLength(1);
       expect(rows[0]?.create).toMatchObject({ googleId: "g-primary", sourceAccountId: null });
@@ -634,7 +662,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
       await runOneTick();
 
       expect(m.eventsList).toHaveBeenCalledTimes(1);
-      expect(callsTo("user.findUnique")).toBe(1);
+      expect(callsTo("automationConfig.findUnique")).toBe(1);
     });
 
     it("reads the linked accounts once per cycle and looks nothing else up per account", async () => {

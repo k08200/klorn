@@ -28,6 +28,7 @@ import {
   registerScheduler,
 } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
+import { newWork } from "./work-context.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -101,6 +102,19 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { processedAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.webhookEvent.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // Attention engine v3 shadow facts: verbatim mail quotes per item. Replay
+    // and the disagreement report work on recent mail; 180 days bounds the
+    // table and the quotes. Outcomes stay on DecisionLabel (not swept).
+    name: "attentionFacts",
+    column: "extractedAt",
+    days: 180,
+    findExpiredIds: (cutoff, take) =>
+      prisma.attentionFacts
+        .findMany({ where: { extractedAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.attentionFacts.deleteMany({ where: { id: { in: ids } } }),
   },
   {
     // Ground-truth token accounting; kept longer for cost-drift analysis.
@@ -216,19 +230,25 @@ export function startLogRetentionScheduler(): void {
   console.log("[RETENTION] Log retention sweep started (every 6h)");
   registerScheduler("log-retention", SWEEP_INTERVAL_MS);
 
-  firstRunTimer = setTimeout(() => {
-    firstRunTimer = null;
-    recordSchedulerTick("log-retention");
-    runLogRetentionSweep().catch((err) =>
-      captureError(err, { tags: { scope: "log-retention.first-sweep" } }),
-    );
-    intervalId = setInterval(() => {
+  firstRunTimer = setTimeout(
+    newWork(() => {
+      firstRunTimer = null;
       recordSchedulerTick("log-retention");
       runLogRetentionSweep().catch((err) =>
-        captureError(err, { tags: { scope: "log-retention.sweep" } }),
+        captureError(err, { tags: { scope: "log-retention.first-sweep" } }),
       );
-    }, SWEEP_INTERVAL_MS);
-  }, FIRST_SWEEP_DELAY_MS);
+      intervalId = setInterval(
+        newWork(() => {
+          recordSchedulerTick("log-retention");
+          runLogRetentionSweep().catch((err) =>
+            captureError(err, { tags: { scope: "log-retention.sweep" } }),
+          );
+        }),
+        SWEEP_INTERVAL_MS,
+      );
+    }),
+    FIRST_SWEEP_DELAY_MS,
+  );
   firstRunTimer.unref?.();
 }
 

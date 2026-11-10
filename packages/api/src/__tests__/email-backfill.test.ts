@@ -20,6 +20,10 @@ const captureError = vi.hoisted(() => vi.fn());
 const sendPushNotification = vi.hoisted(() => vi.fn(async () => ({})));
 const pushNotification = vi.hoisted(() => vi.fn());
 const findOpenEmailAttentionItemId = vi.hoisted(() => vi.fn(async () => null));
+// The firewall push reads the mail's open item (id, lane, reason) for its body.
+const attentionItemFindFirst = vi.hoisted(() =>
+  vi.fn(async (): Promise<Record<string, unknown> | null> => null),
+);
 // Hoisted so the BYOK resolve-once invariant is assertable: this is the lookup
 // getUserLlmCredentials performs, and the whole point of the batch pattern is
 // that it fires once per sweep, not once per email.
@@ -28,7 +32,7 @@ const userFindUnique = vi.hoisted(() => vi.fn(async () => null));
 vi.mock("../db.js", () => {
   const prisma = {
     emailMessage: { findMany: emailFindMany },
-    attentionItem: { findMany: attentionFindMany },
+    attentionItem: { findMany: attentionFindMany, findFirst: attentionItemFindFirst },
     notification: { findFirst: notifFindFirst, create: notifCreate },
     // judgeAndMirrorEmail resolves the user's BYOK credentials; a keyless user
     // (null) yields {} and the call falls through to the shared env key.
@@ -85,6 +89,8 @@ beforeEach(() => {
   notifyConversationsUpdated.mockClear();
   findOpenEmailAttentionItemId.mockReset();
   findOpenEmailAttentionItemId.mockResolvedValue(null);
+  attentionItemFindFirst.mockReset();
+  attentionItemFindFirst.mockResolvedValue(null);
   userFindUnique.mockReset();
   userFindUnique.mockResolvedValue(null); // keyless user → {} → shared-env path
 });
@@ -188,6 +194,37 @@ describe("judgeAndMirrorEmail — PUSH tier drives a real push", () => {
     expect(notifyConversationsUpdated).toHaveBeenCalledWith("u1");
     // Bell row carries the [gmailId] dedup marker.
     expect(notifCreate.mock.calls[0][0].data.message).toContain("[g-hn]");
+  });
+
+  it("carries the mail deep link (email row id + open attention item) for the native channels", async () => {
+    pushTier();
+    attentionItemFindFirst.mockResolvedValue({ id: "item-1", tier: "PUSH", tierReason: null });
+    await judgeAndMirrorEmail("u1", recent("hn", 5));
+    // Decision N1: sender-only title, subject (+ reason when stored), opens the mail.
+    expect(sendPushNotification.mock.calls[0][1]).toEqual({
+      title: "s-hn@x.com",
+      body: "hn",
+      url: "/email/hn",
+      attentionItemId: "item-1",
+      lane: "PUSH",
+      language: "en",
+      emailId: "hn",
+      bellNotificationId: "n1",
+    });
+  });
+
+  it("names the bell row it rings for, so the tab and the service worker share one OS tag", async () => {
+    pushTier();
+    await judgeAndMirrorEmail("u1", recent("hn", 5));
+    const frame = pushNotification.mock.calls[0][1] as { id: string };
+    expect(frame.id).toBe("n1");
+    expect(sendPushNotification.mock.calls[0][1]).toMatchObject({ bellNotificationId: frame.id });
+  });
+
+  it("a MEETING-tier mail push carries the same deep link", async () => {
+    judgeEmail.mockResolvedValue({ tier: "MEETING", reason: "r", features: {}, source: "llm" });
+    await judgeAndMirrorEmail("u1", recent("mt", 5));
+    expect(sendPushNotification.mock.calls[0][1]).toMatchObject({ emailId: "mt" });
   });
 
   it("does NOT push a QUEUE/SILENT tier", async () => {

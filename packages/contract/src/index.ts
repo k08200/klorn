@@ -12,6 +12,7 @@
  */
 
 export type * from "./api-keys.js";
+export type * from "./attention-v3.js";
 export type * from "./auth-providers.js";
 export type * from "./briefing.js";
 export type * from "./drive.js";
@@ -19,6 +20,9 @@ export type * from "./email.js";
 export type * from "./email-rules.js";
 export type * from "./firewall.js";
 export type * from "./inbox-summary.js";
+export type * from "./providers.js";
+export type * from "./push.js";
 export type * from "./receipt.js";
 export type * from "./reply-needed.js";
 export type * from "./reply-options.js";
+export type * from "./teams.js";

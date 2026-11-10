@@ -5,6 +5,7 @@ import { type MouseEvent, useEffect, useState } from "react";
 import { API_BASE } from "../../lib/api";
 import { captureFirstTouchAttribution, storedAttribution } from "../../lib/attribution";
 import { useT } from "../../lib/i18n";
+import { followBoundLoginLink } from "../../lib/login-binding";
 import { AppleMark, GoogleMark, NaverMark } from "./provider-marks";
 
 /**
@@ -26,14 +27,12 @@ import { AppleMark, GoogleMark, NaverMark } from "./provider-marks";
 /** Order is deliberate: Google first — it is also the Gmail connection. */
 const EXTRA_ORDER: readonly AuthProviderId[] = ["apple", "naver"];
 
-// Radius steps down from the card core (16px) so the curves nest instead of
-// competing. Press feedback is a scale, not a translate: a 1px nudge reads as
-// a rendering glitch at this size, a 1% squash reads as the surface giving.
+// Control radius and the label type role (productization plan §2). Flat: no
+// press squash, colour change only, so reduced motion needs no special case.
 const ROW_CLASS =
-  "flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-line " +
-  "bg-surface-raised text-sm font-medium text-ink transition duration-300 ease-fluid " +
-  "hover:border-line-strong hover:bg-surface-hover active:scale-[0.99] " +
-  "motion-reduce:transition-none motion-reduce:active:scale-100 focus-ring";
+  "flex h-11 w-full items-center justify-center gap-3 rounded-control border border-line " +
+  "bg-surface-panel text-role-label text-ink transition-colors duration-120 ease-fluid " +
+  "hover:border-line-strong hover:bg-surface-hover focus-ring";
 
 interface ProviderButtonsProps {
   /** Extra providers advertised by the server (google is implicit). */
@@ -75,7 +74,16 @@ export default function ProviderButtons({
 
   return (
     <div>
-      <a href={googleHref} onClick={onGoogleClick} className={ROW_CLASS}>
+      <a
+        href={googleHref}
+        onClick={(event) => {
+          // The native shell takes the click over; otherwise the sign-in is
+          // bound to this browser (lib/login-binding.ts).
+          onGoogleClick(event);
+          followBoundLoginLink(event, googleHref);
+        }}
+        className={ROW_CLASS}
+      >
         <GoogleMark />
         {googleLabel ?? t("auth.continueWithGoogle")}
       </a>
@@ -88,10 +96,17 @@ export default function ProviderButtons({
           resolved && extras.length > 0 ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
       >
-        <div className="overflow-hidden">
-          <div className="space-y-3 pt-3">
+        {/* The clip box is widened by 4px each side (and padded back) so a
+            focused row's 2px-offset outline is not cut off by overflow-hidden. */}
+        <div className="-mx-1 overflow-hidden">
+          <div className="space-y-2 px-1 pb-1 pt-2">
             {extras.map((id) => (
-              <a key={id} href={`${API_BASE}/api/auth/${id}/login`} className={ROW_CLASS}>
+              <a
+                key={id}
+                href={`${API_BASE}/api/auth/${id}/login`}
+                onClick={(event) => followBoundLoginLink(event, `${API_BASE}/api/auth/${id}/login`)}
+                className={ROW_CLASS}
+              >
                 {id === "apple" ? <AppleMark /> : <NaverMark />}
                 {id === "apple" ? t("auth.continueWithApple") : t("auth.continueWithNaver")}
               </a>

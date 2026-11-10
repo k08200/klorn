@@ -137,6 +137,10 @@ describe("DriveFile migration", () => {
       "user",
       "provider",
       "sourceKey",
+      // D5a (20261015020000_linked_drive_account): the connected account a row
+      // came from, as a foreign key, and its relation. NULL for a KLORN row.
+      "sourceAccountId",
+      "sourceAccount",
       "externalId",
       "name",
       "mimeType",
@@ -150,7 +154,10 @@ describe("DriveFile migration", () => {
       "trashed",
       "createdAt",
       "updatedAt",
+      // D4's back-relation: no column. The summary's state is its own table's.
+      "summary",
     ]);
+    expect(block("model DriveFile {")).toMatch(/\n\s+summary\s+DriveFileSummary\?\n/);
   });
 
   it("provider and sourceKey have no default, so the compiler makes every writer state them", () => {

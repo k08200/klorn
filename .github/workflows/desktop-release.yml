@@ -108,6 +108,29 @@ jobs:
         # instead of shipping an app that dies on its first menu.
         run: ./Klorn.app/Contents/MacOS/KlornMac --self-check
 
+      - name: Launch the PACKAGED app and keep it alive
+        working-directory: apps/desktop-mac
+        # The self-check above never runs the real launch path: it uses a fake
+        # notification center and no bundle identity. 0.4.80106 passed it and
+        # still crashed at every launch (Swift 6 isolation trap in a
+        # UNUserNotificationCenter callback). So start the assembled app the
+        # way a user does, give it 20 s, and fail the release if it died —
+        # printing the crash report so the cause is in the log.
+        run: |
+          ./Klorn.app/Contents/MacOS/KlornMac > "$RUNNER_TEMP/launch.log" 2>&1 &
+          APP_PID=$!
+          sleep 20
+          if kill -0 "$APP_PID" 2>/dev/null; then
+            echo "app still running after 20 s — launch OK"
+            kill "$APP_PID" || true
+            exit 0
+          fi
+          wait "$APP_PID"; STATUS=$?
+          echo "::error::the packaged app exited within 20 s of launch (status $STATUS)"
+          tail -n 50 "$RUNNER_TEMP/launch.log" || true
+          ls -t ~/Library/Logs/DiagnosticReports/KlornMac* 2>/dev/null | head -1 | xargs -I{} head -c 6000 {} || true
+          exit 1
+
       - name: Import Developer ID certificate
         if: steps.signing.outputs.enabled == 'true'
         env:
@@ -161,7 +184,12 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
             --wait
-          xcrun stapler staple Klorn.app
+          # Apple's ticket service (api.apple-cloudkit.com) drops connections from
+          # hosted runners now and then (NSURLError -1005, stapler "Error 68").
+          # Retry only the network-bound calls; a genuinely bad ticket or
+          # signature fails all five attempts, so the gate stays strict.
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry xcrun stapler staple Klorn.app
 
       - name: Verify Gatekeeper acceptance (the real double-click gate)
         if: steps.signing.outputs.enabled == 'true'
@@ -172,8 +200,10 @@ jobs:
           # a user's Mac. Assert that here so a mis-signed build fails the
           # release loudly instead of shipping a "notarized" app that still
           # bounces at first launch. -vvv prints "source=Notarized Developer ID".
-          spctl --assess --type execute -vvv Klorn.app
-          stapler validate Klorn.app
+          # Network-bound Apple calls retry; see "Notarize & staple".
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry spctl --assess --type execute -vvv Klorn.app
+          retry stapler validate Klorn.app
 
       # Both packages are built from the app AFTER it has been signed, notarized
       # and stapled, so each carries the ticket and opens offline.
@@ -202,7 +232,9 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
             --wait
-          xcrun stapler staple "$RUNNER_TEMP/Klorn.dmg"
+          # Network-bound Apple calls retry; see "Notarize & staple".
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry xcrun stapler staple "$RUNNER_TEMP/Klorn.dmg"
 
       - name: Verify the DMG passes Gatekeeper
         if: steps.signing.outputs.enabled == 'true'
@@ -210,9 +242,11 @@ jobs:
           # A disk image is assessed as "open", not "execute", and needs the
           # primary-signature context — `--type execute` on a .dmg reports a
           # misleading pass.
-          spctl --assess --type open \
+          # Network-bound Apple calls retry; see "Notarize & staple".
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry spctl --assess --type open \
             --context context:primary-signature -vvv "$RUNNER_TEMP/Klorn.dmg"
-          stapler validate "$RUNNER_TEMP/Klorn.dmg"
+          retry stapler validate "$RUNNER_TEMP/Klorn.dmg"
 
       - name: Publish GitHub Release
         env:
@@ -222,7 +256,7 @@ jobs:
         run: |
           NOTES="$RUNNER_TEMP/notes.md"
           {
-            echo "Native macOS app — the always-on top-bar firewall (a slim pill at the top of your screen that expands with \`⌥⌘K\`)."
+            echo "Native macOS app — every connected mail account and calendar in one window, sorted into five lanes. Push mail and meetings about to start arrive as macOS notifications; \`⌥⌘K\` opens Klorn from anywhere."
             echo
             echo "## Install"
             echo "1. Download \`Klorn.dmg\` and open it."

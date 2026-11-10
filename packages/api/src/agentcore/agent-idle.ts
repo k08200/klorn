@@ -4,7 +4,7 @@
  * be unit-tested without booting the scheduler.
  *
  * Why this exists: an early dogfood account list of 24 PRO users was burning
- * the shared OpenRouter free-tier daily cap inside minutes — most users had
+ * the shared free-tier provider daily cap inside minutes — most users had
  * never opened the app, but the scheduler still fired their background LLM
  * loops every minute. Skipping idle users cuts that fan-out by an order of
  * magnitude with no impact on people actively using Klorn.

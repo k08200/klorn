@@ -41,6 +41,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { imapMessageIdHead } from "./imap-message-id.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { isTombstonedId, tombstoneRekeyStatement, tombstoneSuffix } from "./imap-tombstone.js";
@@ -148,12 +149,12 @@ async function resolveMailboxAttention(
 ): Promise<void> {
   const head = imapMessageIdHead(args.provider.idPrefix, args.email);
   const rows = await tx.emailMessage.findMany({
-    where: { userId: args.userId, gmailId: { startsWith: head } },
+    where: { userId: args.userId, gmailId: { startsWith: escapeLikePattern(head) } },
     select: { id: true, gmailId: true },
   });
   // The exact prefix and the anchored tombstone test again in code: the same set the
-  // re-key matches. Prisma's startsWith is LIKE without escaping, so `_` in an address
-  // also matches another of the user's mailboxes; and an address may contain `#uv`.
+  // re-key matches. The prefix is LIKE-escaped (an address may hold `_`); the code test
+  // keeps the set exact on its own, and an address may contain `#uv`.
   const ids = rows
     .filter((row) => row.gmailId.startsWith(head) && !isTombstonedId(row.gmailId))
     .map((row) => row.id);

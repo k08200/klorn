@@ -7,6 +7,15 @@ import { useT } from "../../../lib/i18n";
 import { PANEL, SECTION_TITLE } from "./shared";
 import type { AutomationConfig } from "./use-automation-config";
 
+const REPLY_TONE_IDS = ["MATCH_ME", "FORMAL", "FRIENDLY", "CASUAL"] as const;
+/** Server tone id → i18n key segment (settings.replyTone.<key>.label/desc). */
+const REPLY_TONE_KEY: Record<string, string> = {
+  MATCH_ME: "matchMe",
+  FORMAL: "formal",
+  FRIENDLY: "friendly",
+  CASUAL: "casual",
+};
+
 export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
   // Reply tone and notification language were backend-supported and exposed in
   // the desktop app, but had no web UI — the same account showed different
@@ -122,49 +131,42 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
             <label htmlFor="reply-tone" className="font-medium block">
               {t("settings.field.replyTone")}
             </label>
-            <p className="text-sm text-ink-mid">{t("settings.field.replyToneDesc")}</p>
+            <p className="text-role-body text-ink-mid">{t("settings.field.replyToneDesc")}</p>
           </div>
           <select
             id="reply-tone"
             value={replyTone}
             onChange={(e) => updateReplyTone(e.target.value)}
-            className="min-h-11 w-full rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="min-h-11 w-full rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-role-body text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
           >
             {(replyTones.length > 0
               ? replyTones
-              : [
-                  {
-                    tone: "MATCH_ME",
-                    label: t("settings.replyTone.matchMe.label"),
-                    description: t("settings.replyTone.matchMe.desc"),
-                  },
-                  {
-                    tone: "FORMAL",
-                    label: t("settings.replyTone.formal.label"),
-                    description: t("settings.replyTone.formal.desc"),
-                  },
-                  {
-                    tone: "FRIENDLY",
-                    label: t("settings.replyTone.friendly.label"),
-                    description: t("settings.replyTone.friendly.desc"),
-                  },
-                  {
-                    tone: "CASUAL",
-                    label: t("settings.replyTone.casual.label"),
-                    description: t("settings.replyTone.casual.desc"),
-                  },
-                ]
-            ).map((option) => (
-              <option key={option.tone} value={option.tone}>
-                {option.label} — {option.description}
-              </option>
-            ))}
+              : REPLY_TONE_IDS.map((tone) => ({ tone, label: "", description: "" }))
+            )
+              // The server's list decides WHICH tones exist; their names come
+              // from the UI language (the server copy is English-only, which
+              // showed English options on a Korean screen).
+              .map((option) => {
+                const key = REPLY_TONE_KEY[option.tone];
+                return key
+                  ? {
+                      tone: option.tone,
+                      label: t(`settings.replyTone.${key}.label`),
+                      description: t(`settings.replyTone.${key}.desc`),
+                    }
+                  : option;
+              })
+              .map((option) => (
+                <option key={option.tone} value={option.tone}>
+                  {option.label} — {option.description}
+                </option>
+              ))}
           </select>
         </div>
         <div className="p-5 space-y-3">
           <div>
             <span className="font-medium block">{t("settings.field.attentionMode")}</span>
-            <p className="text-sm text-ink-mid">{t("settings.field.attentionModeDesc")}</p>
+            <p className="text-role-body text-ink-mid">{t("settings.field.attentionModeDesc")}</p>
           </div>
           {/* aria-pressed toggles, not a role=radiogroup: the ARIA radio
                   pattern promises arrow-key navigation with a roving tabindex,
@@ -178,7 +180,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                 type="button"
                 aria-pressed={attentionMode === mode}
                 onClick={() => updateAttentionMode(mode)}
-                className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                className={`min-h-11 rounded-control border px-3 py-2 text-left text-role-body transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
                   attentionMode === mode
                     ? "border-accent/60 bg-accent/5 text-ink"
                     : "border-line-strong bg-surface-panel text-ink-mid hover:border-line-strong hover:text-ink"
@@ -189,7 +191,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                     ? t("settings.attentionMode.basic.label")
                     : t("settings.attentionMode.auto.label")}
                 </span>
-                <span className="text-xs text-ink-dim">
+                <span className="text-role-caption text-ink-dim">
                   {mode === "BASIC"
                     ? t("settings.attentionMode.basic.desc")
                     : t("settings.attentionMode.auto.desc")}
@@ -200,10 +202,12 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
           {attentionMode === "AUTO" && (
             <div className="space-y-2 pt-1">
               <div>
-                <label htmlFor="auto-guideline" className="font-medium block text-sm">
+                <label htmlFor="auto-guideline" className="block text-role-label">
                   {t("settings.field.autoGuideline")}
                 </label>
-                <p className="text-xs text-ink-dim">{t("settings.field.autoGuidelineDesc")}</p>
+                <p className="text-role-caption text-ink-dim">
+                  {t("settings.field.autoGuidelineDesc")}
+                </p>
               </div>
               <textarea
                 id="auto-guideline"
@@ -211,14 +215,14 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                 onChange={(e) => setGuidelineDraft(e.target.value)}
                 rows={5}
                 maxLength={2000}
-                className="w-full rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                className="w-full rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-role-body text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
               />
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={saveGuideline}
                   disabled={guidelineSaving}
-                  className="min-h-11 rounded-lg border border-accent/60 bg-accent/10 px-3 py-2 text-sm font-medium text-accent-deep hover:bg-accent/15 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                  className="min-h-11 rounded-control border border-accent/60 bg-accent/10 px-3 py-2 text-role-body font-medium text-accent-deep hover:bg-accent/15 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                 >
                   {t("settings.action.saveGuideline")}
                 </button>
@@ -226,7 +230,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                   type="button"
                   onClick={requestGuidelineAdvice}
                   disabled={adviceLoading || !guidelineDraft.trim()}
-                  className="min-h-11 rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink-mid hover:text-ink disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                  className="min-h-11 rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-role-body text-ink-mid hover:text-ink disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                 >
                   {adviceLoading
                     ? t("settings.action.guidelineAdviceLoading")
@@ -234,11 +238,11 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                 </button>
               </div>
               {guidelineAdvice && (
-                <div className="rounded-lg border border-line bg-surface-raised p-3 text-sm text-ink-mid whitespace-pre-wrap">
+                <div className="rounded-control border border-line bg-surface-raised p-3 text-role-body text-ink-mid whitespace-pre-wrap">
                   {guidelineAdvice}
                 </div>
               )}
-              <p className="text-xs text-ink-dim">{t("settings.autoMode.flagNote")}</p>
+              <p className="text-role-caption text-ink-dim">{t("settings.autoMode.flagNote")}</p>
             </div>
           )}
         </div>

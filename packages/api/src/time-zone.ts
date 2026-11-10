@@ -20,6 +20,41 @@ export function normalizeTimeZone(value: unknown): string {
   }
 }
 
+/** Longest IANA name is ~32 chars; anything far past that is not a zone. */
+const MAX_TIME_ZONE_LENGTH = 64;
+/** IANA names are letters/digits/`_`/`-`/`+` segments joined by `/`, never a bare offset. */
+const IANA_SHAPE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/;
+
+/**
+ * Strict validation for a client-supplied zone (PATCH /api/automations).
+ * Unlike normalizeTimeZone (a read-side fallback), this returns null for
+ * anything that is not a real IANA zone so the route can reject it with 400
+ * instead of silently storing the product default. Raw offsets ("+09:00") are
+ * refused even though newer Intl accepts them: they carry no DST rules.
+ */
+export function parseTimeZoneInput(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const tz = value.trim();
+  if (tz.length === 0 || tz.length > MAX_TIME_ZONE_LENGTH || !IANA_SHAPE.test(tz)) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz }).format(new Date());
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
+export type TimeZoneMode = "AUTO" | "MANUAL";
+
+/**
+ * AutomationConfig.timezoneMode: null (no saved choice) and anything unknown
+ * read as AUTO — the client follows the device zone and keeps `timezone`
+ * synced to it. MANUAL means the user picked `timezone` in Settings.
+ */
+export function normalizeTimeZoneMode(value: unknown): TimeZoneMode {
+  return value === "MANUAL" ? "MANUAL" : "AUTO";
+}
+
 /**
  * "+09:00" / "-04:00" — the ISO offset string for `timeZone` at `date`.
  * Used wherever a zone-aware offset must be shown/instructed (e.g.

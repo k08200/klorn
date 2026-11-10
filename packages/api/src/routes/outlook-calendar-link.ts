@@ -9,15 +9,15 @@
  *   POST   /link-calendar          — start OAuth (Pro-gated), returns { url }
  *   GET    /linked-calendars       — list OUTLOOK calendar accounts (never tokens)
  *   DELETE /linked-calendars/:id   — unlink one, with the events synced from it
- *   (the callback is outlook-auth.ts's; it hands a calendar state to
- *   `completeOutlookCalendarLink`)
+ *   (the callback is outlook-auth.ts's; it parks a calendar state's code, and
+ *   POST /api/auth/link/complete runs `finishOutlookCalendarLink`)
  *
  * Every route sits behind `outlookCalendarEnabled` (OUTLOOK_CALENDAR_ENABLED and
  * OUTLOOK_INBOX_ENABLED) via darkRouteGate: while off they answer Fastify's
  * default 404, exactly as if they were not registered.
  */
 
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth, signToken } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { isEntitled } from "../billing/stripe.js";
@@ -32,9 +32,10 @@ import {
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { linkStartScheme } from "./link-handoff.js";
 
 /** State marker of a calendar link: distinct from the inbox link's `__link_outlook__`. */
-export const OUTLOOK_CALENDAR_STATE_MARKER = "__link_outlook_calendar__";
+export const OUTLOOK_CALENDAR_STATE_MARKER = "__link_outlook_calendar__" as const;
 
 // Same demo sentinel as routes/auth.ts and routes/outlook-auth.ts (module-private there).
 const DEMO_USER_ID = "demo-user";
@@ -56,9 +57,14 @@ function isUniqueViolation(err: unknown): boolean {
 
 type LinkOutcome = "success" | "failed" | "limit";
 
+/** The web path a calendar link lands on: the same `linked=` markers the Google flow uses. */
+export function calendarLinkPath(outcome: LinkOutcome): string {
+  return `${CALENDAR_PATH}?linked=${outcome}`;
+}
+
 /** Where the browser lands after a calendar link: the same `linked=` markers the Google flow uses. */
 export function calendarLinkRedirect(webUrl: string, outcome: LinkOutcome): string {
-  return `${webUrl}${CALENDAR_PATH}?linked=${outcome}`;
+  return `${webUrl}${calendarLinkPath(outcome)}`;
 }
 
 /** The cap applies to NEW links only: a re-link must always be allowed. */
@@ -122,20 +128,23 @@ async function linkAccount(code: string, userId: string): Promise<LinkOutcome> {
 }
 
 /**
- * The calendar branch of the Outlook callback (the state is already verified and
- * carries the calendar marker). Always answers with a redirect: a failure must
- * land the user back on the calendar, never on a JSON error page.
+ * The calendar branch of the Outlook callback (the state was verified and
+ * carries the calendar marker). Always answers with a path: a failure must land
+ * the user back on the calendar, never on a JSON error page. Run by
+ * POST /api/auth/link/complete for the session of the user who started the
+ * flow; the callback itself only parks the code.
  */
-export async function completeOutlookCalendarLink(
-  reply: FastifyReply,
-  params: { code: string; userId: string; webUrl: string; enabled: boolean },
-): Promise<FastifyReply> {
-  const { code, userId, webUrl, enabled } = params;
+export async function finishOutlookCalendarLink(params: {
+  code: string;
+  userId: string;
+  enabled: boolean;
+}): Promise<string> {
+  const { code, userId, enabled } = params;
   // The flag was turned off after this flow started (the state lives 10 minutes):
   // nothing is exchanged and nothing is written.
-  if (!enabled) return reply.redirect(calendarLinkRedirect(webUrl, "failed"));
+  if (!enabled) return calendarLinkPath("failed");
   try {
-    return reply.redirect(calendarLinkRedirect(webUrl, await linkAccount(code, userId)));
+    return calendarLinkPath(await linkAccount(code, userId));
   } catch (err) {
     if (isUniqueViolation(err)) {
       // The address is already linked as ANOTHER provider's calendar, which the
@@ -143,12 +152,12 @@ export async function completeOutlookCalendarLink(
       console.warn(
         "[outlook-oauth] calendar link refused: address already linked as another provider",
       );
-      return reply.redirect(calendarLinkRedirect(webUrl, "failed"));
+      return calendarLinkPath("failed");
     }
     // console first — captureError is a no-op without a Sentry DSN.
     console.error("[outlook-oauth] calendar callback failed:", err);
     captureError(err, { tags: { scope: "outlook-oauth.calendar-callback" } });
-    return reply.redirect(calendarLinkRedirect(webUrl, "failed"));
+    return calendarLinkPath("failed");
   }
 }
 
@@ -180,7 +189,10 @@ export function outlookCalendarRoutes(opts: {
           // screen that will reject the client_id.
           return reply.code(503).send({ error: "Outlook linking is not configured" });
         }
-        const signedState = signToken({ userId, email: OUTLOOK_CALENDAR_STATE_MARKER }, STATE_TTL);
+        const signedState = signToken(
+          { userId, email: OUTLOOK_CALENDAR_STATE_MARKER, ...linkStartScheme(request) },
+          STATE_TTL,
+        );
         return reply.send({ url: getOutlookAuthUrl(signedState, "calendar") });
       },
     );

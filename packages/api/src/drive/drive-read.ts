@@ -13,7 +13,8 @@
  *     number. `readOnly` is derived from the provider (decision V4), not read
  *     from the row.
  *
- * The search matches NAMES only, with ILIKE inside one user's rows: Prisma's
+ * The search matches NAMES (and, from D4 while summaries are on, summary text:
+ * `matchSummaries`), with ILIKE inside one user's rows: Prisma's
  * `contains`, so the text is a bind parameter, never SQL. It is not trigram:
  * a user's index is small, pg_trgm would need an extension in the migration, and
  * whether its index helps a Korean name depends on the database's locale, which
@@ -29,11 +30,13 @@
 import type { DriveFileWire } from "@klorn/contract";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { safeHttpsLink } from "../safe-https-link.js";
 import { type DriveProviderName, isReadOnlyDriveProvider } from "./drive-providers.js";
+import { type ConnectedDriveProvider, KLORN_DRIVE_SOURCE_KEY } from "./drive-rows.js";
 import {
-  DRIVE_PROVIDER_ENABLED,
   type DriveProviderEnabledMap,
+  driveProvidersFor,
   driveSourceScope,
   isDriveRowVisible,
 } from "./drive-scope.js";
@@ -53,7 +56,6 @@ const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 /** What a DriveFile id can look like (a uuid): checked before any query. */
 const DRIVE_FILE_ID = /^[A-Za-z0-9-]{1,64}$/;
 const CONTROL_CHARACTERS = /\p{Cc}/gu;
-const LIKE_SPECIAL = /[\\%_]/g;
 
 /** The columns the wire shape is built from. The storage key is not among them. */
 export const DRIVE_WIRE_SELECT = {
@@ -84,10 +86,25 @@ export interface DriveListOptions {
   readonly cursor?: DriveCursor;
   readonly provider?: DriveProviderName;
   readonly sourceKey?: string;
+  /**
+   * One folder of the Klorn drive (D3): its `externalId`, or null for the root.
+   * Narrows to KLORN rows, where a null parent IS the root, because D3 writes
+   * only parents that exist (unlike an external source, see D2).
+   */
+  readonly folder?: string | null;
+  /** Folders only, files left out: the web's Move picker lists one level's folders. */
+  readonly foldersOnly?: boolean;
 }
 
 export interface DriveSearchOptions extends DriveListOptions {
   readonly text: string;
+  /**
+   * Also match the files whose DONE summary contains the text (D4). One query:
+   * the summary is joined through its one-to-one relation inside the same AND,
+   * so the scope, the user, the provider and folder filters and the page ceiling
+   * apply to summary matches exactly as to name matches.
+   */
+  readonly matchSummaries?: boolean;
 }
 
 export interface DrivePage {
@@ -152,14 +169,6 @@ export function normaliseDriveSearchText(raw: unknown): string | null {
   return capped.length > 0 ? capped : null;
 }
 
-/**
- * Prisma sends `contains` as LIKE '%value%' without escaping, so `%` and `_` in
- * the value would be wildcards. Escaped, they are the characters themselves.
- */
-export function escapeLikePattern(text: string): string {
-  return text.replace(LIKE_SPECIAL, "\\$&");
-}
-
 function pageLimit(requested: number | undefined): number {
   if (requested === undefined || !Number.isInteger(requested) || requested < 1) {
     return DRIVE_PAGE_DEFAULT;
@@ -172,6 +181,14 @@ function filtersOf(options: DriveListOptions): Prisma.DriveFileWhereInput[] {
   const filters: Prisma.DriveFileWhereInput[] = [{ userId: options.userId, trashed: false }];
   if (options.provider !== undefined) filters.push({ provider: options.provider });
   if (options.sourceKey !== undefined) filters.push({ sourceKey: options.sourceKey });
+  if (options.folder !== undefined) {
+    filters.push(
+      { provider: "KLORN" },
+      { sourceKey: KLORN_DRIVE_SOURCE_KEY },
+      { parentExternalId: options.folder },
+    );
+  }
+  if (options.foldersOnly === true) filters.push({ isFolder: true });
   const cursor = options.cursor;
   if (cursor !== undefined) {
     filters.push({
@@ -197,7 +214,7 @@ function toPage(rows: DriveWireRow[], limit: number): DrivePage {
 /** One page of the user's files, newest first. */
 export async function listFiles(
   options: DriveListOptions,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(options.userId),
 ): Promise<DrivePage> {
   const limit = pageLimit(options.limit);
   const rows = await prisma.driveFile.findMany({
@@ -212,14 +229,17 @@ export async function listFiles(
 /** One page of the user's files whose name contains the text, newest first. */
 export async function searchFiles(
   options: DriveSearchOptions,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(options.userId),
 ): Promise<DrivePage> {
   const text = normaliseDriveSearchText(options.text);
   if (text === null) return EMPTY_PAGE;
   const limit = pageLimit(options.limit);
-  const name = { contains: escapeLikePattern(text), mode: "insensitive" } as const;
+  const like = { contains: escapeLikePattern(text), mode: "insensitive" } as const;
+  const match: Prisma.DriveFileWhereInput = options.matchSummaries
+    ? { OR: [{ name: like }, { summary: { is: { status: "DONE", summary: like } } }] }
+    : { name: like };
   const rows = await prisma.driveFile.findMany({
-    where: { AND: [driveSourceScope(providerEnabled), ...filtersOf(options), { name }] },
+    where: { AND: [driveSourceScope(providerEnabled), ...filtersOf(options), match] },
     orderBy: [{ modifiedAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     select: DRIVE_WIRE_SELECT,
@@ -234,7 +254,7 @@ export async function searchFiles(
 export async function getFile(
   userId: string,
   id: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<DriveFileWire | null> {
   if (!isDriveFileId(id)) return null;
   const row = await prisma.driveFile.findUnique({
@@ -243,4 +263,76 @@ export async function getFile(
   });
   if (row === null || row.trashed || !isDriveRowVisible(row, providerEnabled)) return null;
   return toDriveFileWire(row);
+}
+
+/** One connected account of the user: which provider, and its `sourceKey`. */
+export interface ConnectedAccountRef {
+  readonly provider: ConnectedDriveProvider;
+  readonly sourceKey: string;
+}
+
+/** The AND member that matches every row of one connected account of this user, trashed ones included. */
+function accountRowsOf(userId: string, account: ConnectedAccountRef): Prisma.DriveFileWhereInput[] {
+  return [{ userId, provider: account.provider, sourceKey: account.sourceKey }];
+}
+
+/** One indexed file of a connected account, as the refresh needs it (D5d). */
+export interface ConnectedAccountFile {
+  readonly id: string;
+  readonly externalId: string;
+  readonly etag: string | null;
+}
+
+/**
+ * The rows of one connected account, trashed ones included (a file restored in
+ * the source comes back), oldest id first, at most `take` (D5d's refresh).
+ * Scoped like every read, so it answers nothing while the provider is hidden.
+ */
+export async function connectedAccountFiles(
+  userId: string,
+  account: ConnectedAccountRef,
+  options: { readonly take: number },
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
+): Promise<ConnectedAccountFile[]> {
+  return await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account)] },
+    select: { id: true, externalId: true, etag: true },
+    orderBy: { id: "asc" },
+    take: options.take,
+  });
+}
+
+/** What a write to one connected account must know of its rows first (D5c's cap). */
+export interface ConnectedAccountRows {
+  /** How many rows the account holds, counted up to `countUpTo`. */
+  readonly count: number;
+  /** Which of the asked-for externalIds already have a row. */
+  readonly indexed: ReadonlySet<string>;
+}
+
+/**
+ * How full one connected account's index is, and which of these externalIds it
+ * already holds (D5c: 500 rows per account, and a file picked again refreshes
+ * its row instead of taking a new one). Trashed rows count: the cap bounds what
+ * is stored. Scoped like every read, so it answers nothing while the provider
+ * is hidden; its only caller runs behind the same gate.
+ */
+export async function connectedAccountRows(
+  userId: string,
+  account: ConnectedAccountRef,
+  options: { readonly externalIds: readonly string[]; readonly countUpTo: number },
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
+): Promise<ConnectedAccountRows> {
+  const held = await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account)] },
+    select: { id: true },
+    take: options.countUpTo,
+  });
+  if (options.externalIds.length === 0) return { count: held.length, indexed: new Set() };
+  const match: Prisma.DriveFileWhereInput = { externalId: { in: [...options.externalIds] } };
+  const matching = await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account), match] },
+    select: { externalId: true },
+  });
+  return { count: held.length, indexed: new Set(matching.map((row) => row.externalId)) };
 }

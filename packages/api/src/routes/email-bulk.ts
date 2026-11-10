@@ -13,11 +13,14 @@ import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
+import { noteEmailOutcomes } from "../judge/user-outcome.js";
 import type { EmailPriorityValue } from "../mail/email-label-feedback.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import type { MailProviderActions } from "../mail/providers/types.js";
+import { captureError } from "../sentry.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -34,6 +37,8 @@ interface BulkEmailActionResult {
   // Success payload is the @klorn/contract wire shape; failures are an
   // `{ error }` body sent with a 4xx statusCode.
   payload: EmailBulkActionResponse | { error: string };
+  /** Rows an archive actually removed — server-side only, never sent. */
+  archivedIds?: string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -185,10 +190,22 @@ async function archiveAll(
   return results;
 }
 
+/**
+ * Archive these (already userId-scoped) messages at their providers, drop the
+ * archived rows and close their attention items. Exported so the Subscriptions
+ * page's "Unsubscribe and archive" goes through this exact path.
+ */
+export async function archiveEmailMessages(
+  userId: string,
+  emails: EmailMessage[],
+): Promise<EmailBulkActionResponse> {
+  return (await applyBulkArchiveAction(userId, emails)).payload;
+}
+
 async function applyBulkArchiveAction(
   userId: string,
   emails: EmailMessage[],
-): Promise<BulkEmailActionResult> {
+): Promise<BulkEmailActionResult & { payload: EmailBulkActionResponse; archivedIds: string[] }> {
   const results = await archiveAll(userId, emails);
   const failed: Array<{ id: string; error: string }> = [];
   const archivedIds: string[] = [];
@@ -199,6 +216,19 @@ async function applyBulkArchiveAction(
   }
   if (archivedIds.length > 0) {
     await prisma.emailMessage.deleteMany({ where: { userId, id: { in: archivedIds } } });
+    // The rows are gone, so the inbox sync can never notice they left and
+    // close their attention items the way it does for rows it still sees
+    // (email-sync.ts). Close them here. Fail-soft: the archive already went
+    // out, and a bookkeeping miss must not report it as failed.
+    try {
+      await resolveAttentionForEmails(userId, archivedIds);
+    } catch (err) {
+      console.warn(
+        "[EMAIL-BULK] attention resolve failed:",
+        err instanceof Error ? err.message : err,
+      );
+      captureError(err, { tags: { scope: "email-bulk.archive.resolve" }, extra: { userId } });
+    }
   }
   return {
     payload: {
@@ -206,6 +236,7 @@ async function applyBulkArchiveAction(
       updatedCount: archivedIds.length,
       failed,
     },
+    archivedIds,
   };
 }
 
@@ -244,6 +275,10 @@ export async function registerEmailBulkRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const result = await handleBulkEmailAction(uid, (request.body as BulkEmailBody) || {});
     if (result.statusCode) return reply.code(result.statusCode).send(result.payload);
+    // Stamped here, not in the shared archive path: the Subscriptions page's
+    // sender-wide archive reuses it and is not a reaction to each mail. A bulk
+    // mark-read is not stamped either — nobody opened those mails.
+    if (result.archivedIds) noteEmailOutcomes(uid, result.archivedIds, "ARCHIVED");
     return result.payload;
   });
 }

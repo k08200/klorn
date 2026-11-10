@@ -9,6 +9,7 @@
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deriveClientAddress } from "../security/client-address.js";
 import { createFakeDb, type FakeDb, type Row } from "./helpers/fake-db.js";
 
 const dbHolder = vi.hoisted(() => ({ current: null as unknown }));
@@ -62,6 +63,8 @@ function seed(rows: Row[]): void {
   dbHolder.current = db;
 }
 
+const BEHIND_CLOUDFLARE = { source: "cf-connecting-ip", trustedProxyHops: 1 } as const;
+
 async function buildApp(
   opts: { withRateLimit?: boolean; providerEnabled?: DriveProviderEnabledMap } = {},
 ) {
@@ -71,14 +74,11 @@ async function buildApp(
   const { driveEnabled } = await import("../config.js");
   const app = Fastify();
   if (opts.withRateLimit) {
-    // The client address as index.ts reads it: Cloudflare's header, else the socket.
+    // The client address as the hosted API reads it (CLIENT_IP_SOURCE=cf-connecting-ip).
     await app.register(rateLimit, {
       max: 100_000,
       timeWindow: "1 minute",
-      keyGenerator: (req) => {
-        const cf = req.headers["cf-connecting-ip"];
-        return typeof cf === "string" && cf.length > 0 ? cf : req.ip;
-      },
+      keyGenerator: (req) => deriveClientAddress(req, BEHIND_CLOUDFLARE),
     });
   }
   await app.register(driveRoutes({ gate: driveEnabled, providerEnabled: opts.providerEnabled }), {
@@ -143,6 +143,21 @@ describe("while DRIVE_ENABLED is off", () => {
     expect((await get(app, "/files", me)).statusCode).toBe(200);
     vi.stubEnv("DRIVE_ENABLED", "false");
     expect((await get(app, "/files", me)).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("in cohort mode (L23), only the cohort gets the drive; anyone else gets the dark 404", async () => {
+    vi.stubEnv("DRIVE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    const { app, me, other } = await buildApp();
+    expect((await get(app, "/files", me)).statusCode).toBe(200);
+    const outside = await get(app, "/files", other);
+    expect(outside.statusCode).toBe(404);
+    expect(outside.json()).toEqual({
+      message: `Route GET:${PREFIX}/files not found`,
+      error: "Not Found",
+      statusCode: 404,
+    });
     await app.close();
   });
 });
@@ -366,7 +381,11 @@ describe("rate limits", () => {
     }
     const limited = await get(app, "/files", from(200, me));
     expect(limited.statusCode).toBe(429);
-    expect(limited.json()).toEqual({ error: "Too many drive requests. Try again later." });
+    expect(limited.json()).toEqual({
+      error: "Too many drive requests. Try again later.",
+      code: "rate-limited",
+      retryable: true,
+    });
     expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
     // Another user is not held back by it, and neither is this user's by-id read.
     expect((await get(app, "/files", from(201, other))).statusCode).toBe(200);

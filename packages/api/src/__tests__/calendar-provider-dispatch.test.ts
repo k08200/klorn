@@ -199,6 +199,7 @@ describe("Google session — the neutral event shape", () => {
       allDay: false,
       startTime: null,
       endTime: null,
+      declinedBySelf: false,
     });
   });
 

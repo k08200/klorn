@@ -67,6 +67,7 @@ vi.mock("../db.js", () => {
     },
     linkedCalendarAccount: { findMany: linkedAccountFindMany },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
+    automationConfig: { findUnique: vi.fn(async () => ({ timezone: "Asia/Seoul" })) },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       findMany: vi.fn(async () => []),

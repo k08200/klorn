@@ -15,6 +15,7 @@ struct PreferencesView: View {
     @State private var loginItemError: String?
     @State private var updateChecking = false
     @State private var updateOutcome: UpdateCheck.Outcome?
+    @State private var selfUpdating = false
     @State private var recordingShortcut = false
 
     var body: some View {
@@ -37,10 +38,13 @@ struct PreferencesView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .onAppear { launchAtLogin = LoginItem.isEnabled }
-        // Re-ask the server whether device calendars exist each time Settings shows
-        // this tab, so a server-side flip shows (or hides) the section without a relaunch.
+        // Re-ask the server whether device calendars and the Klorn drive exist each
+        // time Settings shows this tab, so a server-side flip shows (or hides) the
+        // section without a relaunch.
         .task {
-            if model.phase == .signedIn && tab.sections.contains(.deviceCalendars) {
+            guard model.phase == .signedIn else { return }
+            if tab.sections.contains(.driveImport) { await model.driveImport.refreshAvailability() }
+            if tab.sections.contains(.deviceCalendars) {
                 await model.deviceCalendars.refreshAvailability()
             }
         }
@@ -57,7 +61,7 @@ struct PreferencesView: View {
         case .appearance: appearanceSection
         case .mail: mailSection
         case .general: generalSection
-        case .topBar: topBarSection
+        case .support: section(L("prefs.section.support")) { SupportSection() }
         case .keyboard: keyboardSection
         case .language: languageSection
         case .account: accountSection
@@ -69,6 +73,11 @@ struct PreferencesView: View {
                 section(L("prefs.section.deviceCalendars")) {
                     DeviceCalendarSection(bridge: model.deviceCalendars)
                 }
+            }
+        case .driveImport:
+            // Step D7: drawn only while the server has the Klorn drive (its 404 hides it).
+            if model.driveImport.availability == .available {
+                section(L("prefs.section.driveImport")) { DriveImportSection(importer: model.driveImport) }
             }
         case .about:
             section(L("prefs.section.about")) {
@@ -90,7 +99,21 @@ struct PreferencesView: View {
             .toggleStyle(.switch).tint(Theme.accent)
             Text(L("prefs.banners.detail"))
                 .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+            // macOS said no: the switch above cannot help, System Settings can.
+            if NotificationHint.showsDeniedHint(model.notificationPermission) {
+                HStack(spacing: 8) {
+                    Text(L("prefs.banners.denied"))
+                        .font(.caption).foregroundStyle(Theme.warningInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button(L("prefs.banners.openSystemSettings")) {
+                        NSWorkspace.shared.open(NotificationHint.systemSettingsURL)
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
+                }
+            }
         }
+        .task { await model.refreshNotificationPermission() }
     }
 
     @ViewBuilder
@@ -148,7 +171,6 @@ struct PreferencesView: View {
                 infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
             }
             updatesRow
-            MainWindowBetaToggle(settings: model.settings)
         }
     }
 
@@ -158,8 +180,18 @@ struct PreferencesView: View {
             Spacer()
             switch updateOutcome {
             case .updateAvailable(let version):
-                Button(L("prefs.updates.get", version)) { UpdateCheck.openReleasePage() }
-                    .buttonStyle(PrimaryButtonStyle())
+                // Install in place (download → verify → swap → relaunch); the
+                // release page is only SelfUpdate's own fallback.
+                Button(selfUpdating ? L("update.updating") : L("prefs.updates.get", version)) {
+                    guard !selfUpdating else { return }
+                    selfUpdating = true
+                    Task {
+                        _ = await SelfUpdate.run(version: version)
+                        selfUpdating = false  // reached only on fallback
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(selfUpdating)
             case .upToDate:
                 Text(L("prefs.updates.upToDate", AppInfo.version))
                     .font(.caption).foregroundStyle(Theme.textDim)
@@ -177,26 +209,6 @@ struct PreferencesView: View {
                 }
             }
             .buttonStyle(.bordered).controlSize(.small).disabled(updateChecking)
-        }
-    }
-
-    @ViewBuilder
-    private var topBarSection: some View {
-        @Bindable var settings = model.settings
-        section(L("prefs.section.topBar")) {
-            Toggle(isOn: $settings.pillVisible) {
-                Text(L("prefs.pillVisible")).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.switch).tint(Theme.accent)
-            Text(L("prefs.pillVisible.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-
-            Toggle(isOn: $settings.showInDock) {
-                Text(L("prefs.showInDock")).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.switch).tint(Theme.accent)
-            Text(L("prefs.showInDock.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -261,6 +273,11 @@ struct PreferencesView: View {
             if model.phase == .signedIn {
                 Button(L("prefs.account.signOut")) { model.signOut() }
                     .buttonStyle(.bordered).controlSize(.small)
+                // Always offered, not only when an inbox already reports
+                // needsReconnect: a dead primary token is exactly the state
+                // where the app cannot be trusted to know it is dead.
+                Button(L("account.reconnectPrimary")) { Task { await model.reconnectPrimary() } }
+                    .buttonStyle(.bordered).controlSize(.small)
                 Button(L("account.add")) { Task { await model.addAccount() } }
                     .buttonStyle(.bordered).controlSize(.small)
                 Text(L("account.add.hint"))
@@ -269,6 +286,14 @@ struct PreferencesView: View {
                 if let error = model.linkAccountError {
                     Text(error).font(.caption).foregroundStyle(Theme.textDim)
                         .fixedSize(horizontal: false, vertical: true)
+                    if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
+                }
+                // Edited in the bar's full sidebar until M8 deleted it; the
+                // purpose prompt asks once, this is where they change later.
+                CompanyDomainsRow()
+                PrioritiesRow()
+                if let usage = model.usage {
+                    AIUsageMeter(used: usage.dailyUsed, cap: usage.dailyCap).padding(.top, 4)
                 }
             }
         }
@@ -362,42 +387,55 @@ private struct ShortcutRecorder: View {
 /// IMAP ones the desktop can manage directly — a way to add or remove them.
 /// Google inboxes are OAuth-linked in the browser (see the Account section),
 /// so they are listed read-only here.
-private struct InboxAccountsSection: View {
+struct InboxAccountsSection: View {
     let model: AppModel
-    @State private var naverEmail = ""
-    @State private var naverPassword = ""
-    @State private var showConnectForm = false
-    @State private var pendingDisconnect: ImapAccount?
+    @State private var connectingProvider: ImapMailProvider?
+    @State private var pendingDisconnect: PendingImapDisconnect?
+
+    /// The IMAP mailbox a disconnect confirmation is about.
+    struct PendingImapDisconnect: Equatable {
+        let provider: ImapMailProvider
+        let email: String
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(model.inboxes) { inbox in
+            ForEach(inboxesNotListedAsImap(model.inboxes, imap: model.imapAccounts)) { inbox in
                 accountRow(
                     email: inbox.email ?? L("inbox.unknownAddress"),
                     provider: providerLabel(inbox.provider),
+                    beta: MailSourceCatalog.isBeta(inbox.provider),
                     needsReconnect: inbox.needsReconnect,
                     detail: nil,
                     onDisconnect: nil)
             }
-            ForEach(model.imapAccounts) { account in
-                accountRow(
-                    email: account.email,
-                    provider: providerLabel("NAVER"),
-                    needsReconnect: account.needsReconnect,
-                    detail: account.host,
-                    onDisconnect: { pendingDisconnect = account })
+            ForEach(ImapMailProvider.allCases) { provider in
+                ForEach(model.imapAccounts[provider] ?? []) { account in
+                    accountRow(
+                        email: account.email,
+                        provider: providerLabel(provider.rawValue),
+                        beta: MailSourceCatalog.isBeta(provider.rawValue),
+                        needsReconnect: account.needsReconnect,
+                        detail: account.host,
+                        onDisconnect: {
+                            pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)
+                        })
+                }
             }
-            if model.inboxes.isEmpty && model.imapAccounts.isEmpty {
+            if model.inboxes.isEmpty && model.imapAccounts.values.allSatisfy(\.isEmpty) {
                 Text(L("prefs.inboxes.empty"))
                     .font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            if showConnectForm {
-                connectForm
+            if let provider = connectingProvider {
+                ImapConnectForm(provider: provider, model: model) { connectingProvider = nil }
+                    .id(provider)
             } else {
-                Button(L("account.naver.connect")) { showConnectForm = true }
-                    .buttonStyle(.bordered).controlSize(.small)
+                connectButton(.naver, title: L("account.naver.connect"))
+                // Drawn only while the server has iCloud Mail (its status 404s while off).
+                if model.availableImapProviders.contains(.icloud) {
+                    connectButton(.icloud, title: L("account.icloud.connect"))
+                }
             }
             if let error = model.imapError {
                 Text(error).font(.caption).foregroundStyle(Theme.textDim)
@@ -412,59 +450,35 @@ private struct InboxAccountsSection: View {
                 set: { if !$0 { pendingDisconnect = nil } })
         ) {
             Button(L("account.disconnect"), role: .destructive) {
-                guard let account = pendingDisconnect else { return }
+                guard let target = pendingDisconnect else { return }
                 pendingDisconnect = nil
-                Task { await model.disconnectNaverInbox(email: account.email) }
+                Task { await model.disconnectImapInbox(target.provider, email: target.email) }
             }
             Button(L("common.cancel"), role: .cancel) { pendingDisconnect = nil }
         }
     }
 
-    private var connectForm: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L("account.naver.password.hint"))
-                .font(.caption).foregroundStyle(Theme.textDim)
-                .fixedSize(horizontal: false, vertical: true)
-            textInput($naverEmail, label: L("account.naver.email"), secure: false)
-            textInput($naverPassword, label: L("account.naver.password"), secure: true)
-            HStack(spacing: 8) {
-                Button(L("account.naver.submit")) {
-                    Task {
-                        let ok = await model.connectNaverInbox(
-                            email: naverEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-                            password: naverPassword)
-                        if ok {
-                            // Clear the credential from memory the moment the
-                            // server has verified it; keep nothing around.
-                            naverPassword = ""
-                            naverEmail = ""
-                            showConnectForm = false
-                        }
-                    }
-                }
-                .buttonStyle(.borderedProminent).controlSize(.small)
-                .disabled(
-                    model.isConnectingImap
-                        || !canSubmitImapConnect(email: naverEmail, password: naverPassword))
-                Button(L("common.cancel")) {
-                    naverPassword = ""
-                    showConnectForm = false
-                }
+    private func connectButton(_ provider: ImapMailProvider, title: String) -> some View {
+        HStack(spacing: 6) {
+            Button(title) { connectingProvider = provider }
                 .buttonStyle(.bordered).controlSize(.small)
-            }
+            BetaChip()
         }
     }
 
     private func accountRow(
-        email: String, provider: String, needsReconnect: Bool, detail: String?,
+        email: String, provider: String, beta: Bool, needsReconnect: Bool, detail: String?,
         onDisconnect: (() -> Void)?
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(email).font(.body).foregroundStyle(Theme.text)
                     .lineLimit(1).truncationMode(.middle)
-                Text(detail.map { "\(provider) · \($0)" } ?? provider)
-                    .font(.caption).foregroundStyle(Theme.textDim)
+                HStack(spacing: 6) {
+                    Text(detail.map { "\(provider) · \($0)" } ?? provider)
+                        .font(.caption).foregroundStyle(Theme.textDim)
+                    if beta { BetaChip() }
+                }
             }
             Spacer()
             if needsReconnect {
@@ -479,27 +493,16 @@ private struct InboxAccountsSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// AppKit-backed fields paint as placeholder glyphs in the offscreen
-    /// design renderer, so mirror the box with plain text there (same shape
-    /// as the quiet-hours field).
-    @ViewBuilder
-    private func textInput(_ text: Binding<String>, label: String, secure: Bool) -> some View {
-        if Theme.isRenderingOffscreen {
-            Text(secure ? "••••••••" : (text.wrappedValue.isEmpty ? label : text.wrappedValue))
-                .font(.callout).foregroundStyle(Theme.textDim)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: 22)
-                .padding(.horizontal, 6)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
-        } else if secure {
-            SecureField(label, text: text)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(label)
-        } else {
-            TextField(label, text: text)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(label)
-        }
+}
+
+/// Settings ▸ Notifications' one-line hint when macOS has denied Klorn
+/// banners. Pure for the harness.
+enum NotificationHint {
+    static func showsDeniedHint(_ permission: NotificationPermission) -> Bool {
+        permission == .denied
     }
+
+    /// System Settings ▸ Notifications.
+    static let systemSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
 }

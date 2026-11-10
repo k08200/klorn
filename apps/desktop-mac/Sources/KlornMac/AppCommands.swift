@@ -9,6 +9,10 @@ enum MenuCommand: Hashable {
     case dismiss
     case moveTo(Tier)
     case go(ListMode)
+    /// A main-window section (M4b).
+    case section(NavSection)
+    /// "Import to Klorn Drive…" (D7). Only offered while the server has the drive.
+    case importToDrive
 }
 
 /// A Reply request from the menu, bound to the item it was issued for.
@@ -21,8 +25,8 @@ struct ReplyRequest: Equatable, Sendable {
 struct MenuState: Equatable {
     var signedIn: Bool
     var fullViewOpen: Bool
-    /// A window showing the full view (the bar's full panel or the main
-    /// window) is key — not Settings or another window.
+    /// The main window (the full view) is key — not Settings or another
+    /// window.
     var mailSurfaceIsKey: Bool
     var modalOpen: Bool
     /// The lane of the firewall item the reading pane shows, nil if none.
@@ -33,6 +37,13 @@ struct MenuState: Equatable {
     /// The list column currently shows the search field (Find needs no
     /// mode switch, so it can't unmount the reading pane).
     var listHasSearchField: Bool
+    /// A reading pane is on screen: only in Mail in the main window (M4b).
+    /// Message commands need it.
+    var readerVisible: Bool
+    /// The Klorn drive is live with a quota and no import runs (D7).
+    var driveImportReady: Bool
+    /// The server reports a drive source (FD-7): Files is a section.
+    var filesAvailable: Bool = false
 
     @MainActor
     init(model: AppModel) {
@@ -45,13 +56,18 @@ struct MenuState: Equatable {
         readerReplying = model.readerReplying
         teamModeAvailable = model.teamModeAvailable
         listHasSearchField = model.listMode.hasSearchField
+        readerVisible = model.readerVisible
+        driveImportReady = model.driveImport.canImport
+        filesAvailable = model.clientFlags.files
     }
 
     init(
         signedIn: Bool, fullViewOpen: Bool, mailSurfaceIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
         emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool,
-        listHasSearchField: Bool
+        listHasSearchField: Bool, readerVisible: Bool = true, driveImportReady: Bool = false,
+        filesAvailable: Bool = false
     ) {
+        self.filesAvailable = filesAvailable
         self.signedIn = signedIn
         self.fullViewOpen = fullViewOpen
         self.mailSurfaceIsKey = mailSurfaceIsKey
@@ -61,6 +77,8 @@ struct MenuState: Equatable {
         self.readerReplying = readerReplying
         self.teamModeAvailable = teamModeAvailable
         self.listHasSearchField = listHasSearchField
+        self.readerVisible = readerVisible
+        self.driveImportReady = driveImportReady
     }
 }
 
@@ -73,21 +91,22 @@ enum MenuRules {
         .mailbox(.sent), .mailbox(.drafts), .mailbox(.archived), .teams,
     ]
 
-    /// Whether the key window is one that shows the full view: the bar's
-    /// panel only counts in its full state (the pill and the compact panel
-    /// show no reading pane), the main window whenever it is open.
-    static func mailSurfaceIsKey(
-        barPanelIsKey: Bool, barFullOpen: Bool, mainWindowIsKey: Bool, mainWindowOpen: Bool
-    ) -> Bool {
-        (barPanelIsKey && barFullOpen) || (mainWindowIsKey && mainWindowOpen)
+    /// Whether the key window is one that shows the full view: only the
+    /// main window, while it is open.
+    static func mailSurfaceIsKey(mainWindowIsKey: Bool, mainWindowOpen: Bool) -> Bool {
+        mainWindowIsKey && mainWindowOpen
     }
 
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {
+        // Find, Go and the sections open the main window themselves, so
+        // signed in they never wait for it to be open (2026-10-15).
         guard s.signedIn else { return false }
         // Message commands act on the mail visible in the reading pane, so
         // they need the full view up AND key (not Settings), no modal over
         // it, and a firewall item.
-        let canActOnMessage = s.fullViewOpen && s.mailSurfaceIsKey && !s.modalOpen && s.targetTier != nil
+        let canActOnMessage =
+            s.fullViewOpen && s.mailSurfaceIsKey && !s.modalOpen && s.targetTier != nil
+            && s.readerVisible
         // Anything that clears the selection or switches the list mode
         // unmounts the inline reply composer and loses what was typed, so
         // those commands wait until the composer is closed.
@@ -99,6 +118,9 @@ enum MenuRules {
             return !s.modalOpen && (s.listHasSearchField || keepsDraft)
         case .go(let mode):
             return !s.modalOpen && keepsDraft && (mode != .teams || s.teamModeAvailable)
+        case .section(let section):
+            // Same rule as Go: leaving Mail unmounts the inline reply.
+            return !s.modalOpen && keepsDraft && (section != .files || s.filesAvailable)
         case .reply:
             // Re-drafting while the inline composer is open would wipe it.
             return canActOnMessage && s.emailLoaded && keepsDraft
@@ -106,6 +128,8 @@ enum MenuRules {
             return canActOnMessage && keepsDraft
         case .moveTo(let tier):
             return canActOnMessage && keepsDraft && s.targetTier != tier
+        case .importToDrive:
+            return !s.modalOpen && s.driveImportReady
         }
     }
 
@@ -131,7 +155,7 @@ enum MenuRules {
         case .compose: return KeyboardShortcut("n", modifiers: .command)
         case .find: return KeyboardShortcut("f", modifiers: .command)
         case .reply: return KeyboardShortcut("r", modifiers: .command)
-        case .dismiss: return nil
+        case .dismiss, .importToDrive: return nil
         case .moveTo(let tier):
             guard let index = Tier.allCases.firstIndex(of: tier) else { return nil }
             return KeyboardShortcut(
@@ -140,7 +164,29 @@ enum MenuRules {
             let numbered: [ListMode] = [.inbox, .calendar, .proposals, .commitments, .waitingOn]
             guard let index = numbered.firstIndex(of: mode) else { return nil }
             return KeyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+        case .section(let section):
+            return digitShortcut(NavRules.shortcutDigit(for: section))
         }
+    }
+
+    /// The Go menu while the main window is the full view (M4b): the
+    /// sections take ⌘1–4 (Files ⌘6) and Approvals keeps a digit (⌘5); every other old
+    /// destination stays in the menu without one.
+    static func mainWindowShortcut(for command: MenuCommand) -> KeyboardShortcut? {
+        switch command {
+        case .go(NavRules.numberedSecondary): digitShortcut(NavRules.numberedSecondaryDigit)
+        case .go: nil
+        default: shortcut(for: command)
+        }
+    }
+
+    private static func digitShortcut(_ digit: Int) -> KeyboardShortcut {
+        KeyboardShortcut(KeyEquivalent(Character("\(digit)")), modifiers: .command)
+    }
+
+    /// Go-menu title in the main window: Proposals reads "Approvals" (FD-1).
+    static func mainWindowTitle(for mode: ListMode) -> String {
+        mode == .proposals ? AssistantPane.approvals.title : title(for: mode)
     }
 
     /// Menu title for a Go destination — the sidebar's own label for it.
@@ -159,9 +205,8 @@ enum MenuRules {
     }
 }
 
-/// The app menus. Only visible while the app is `.regular` (bar expanded or
-/// full, Settings open, or show-in-Dock on) — the menu bar belongs to the
-/// frontmost regular app, which is the Cmd+Tab compromise working as meant.
+/// The app menus. Klorn is always `.regular`, so they are there whenever it
+/// is the frontmost app, with or without a window open.
 struct KlornCommands: Commands {
     let model: AppModel
     let perform: @MainActor (MenuCommand) -> Void
@@ -170,6 +215,7 @@ struct KlornCommands: Commands {
         // No document model: Compose is the app's "New".
         CommandGroup(replacing: .newItem) {
             CommandButton(model: model, command: .compose, title: L("menu.compose"), perform: perform)
+            DriveImportMenuItem(model: model, perform: perform)
         }
         CommandGroup(after: .textEditing) {
             CommandButton(model: model, command: .find, title: L("menu.find"), perform: perform)
@@ -199,13 +245,34 @@ private struct GoMenuItems: View {
     let perform: @MainActor (MenuCommand) -> Void
 
     var body: some View {
-        ForEach(MenuRules.destinations, id: \.self) { mode in
-            if mode == .mailbox(.sent) { Divider() }
+        ForEach(FilesRules.sections(files: model.clientFlags.files)) { section in
+            CommandButton(
+                model: model, command: .section(section), title: section.title,
+                perform: perform)
+        }
+        Divider()
+        ForEach(NavRules.secondaryDestinations, id: \.self) { mode in
             if mode != .teams || model.teamModeAvailable {
                 CommandButton(
-                    model: model, command: .go(mode), title: MenuRules.title(for: mode),
-                    perform: perform)
+                    model: model, command: .go(mode),
+                    title: MenuRules.mainWindowTitle(for: mode), perform: perform,
+                    shortcut: MenuRules.mainWindowShortcut(for: .go(mode)))
             }
+        }
+    }
+}
+
+/// File › "Import to Klorn Drive…" (D7): present only while the server has the
+/// Klorn drive (its dark 404 hides it, as it hides the Settings section).
+private struct DriveImportMenuItem: View {
+    let model: AppModel
+    let perform: @MainActor (MenuCommand) -> Void
+
+    var body: some View {
+        if model.driveImport.availability == .available {
+            Divider()
+            CommandButton(
+                model: model, command: .importToDrive, title: L("menu.importToDrive"), perform: perform)
         }
     }
 }
@@ -217,10 +284,12 @@ private struct CommandButton: View {
     let command: MenuCommand
     let title: String
     let perform: @MainActor (MenuCommand) -> Void
+    /// Set only by the main-window Go menu, which renumbers its items.
+    var shortcut: KeyboardShortcut?? = nil
 
     var body: some View {
         Button(title) { perform(command) }
-            .keyboardShortcut(MenuRules.shortcut(for: command))
+            .keyboardShortcut(shortcut ?? MenuRules.shortcut(for: command))
             .disabled(!MenuRules.isEnabled(command, in: MenuState(model: model)))
     }
 }

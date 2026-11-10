@@ -8,8 +8,10 @@ private func slotRangeLabel(_ startIso: String, _ endIso: String) -> String {
         return startIso
     }
     let day = DateFormatter()
+    day.timeZone = DisplayTimeZone.current
     day.setLocalizedDateFormatFromTemplate("EdMMM")
     let time = DateFormatter()
+    time.timeZone = DisplayTimeZone.current
     time.setLocalizedDateFormatFromTemplate("HHmm")
     return "\(day.string(from: start)) · \(time.string(from: start))–\(time.string(from: end))"
 }
@@ -32,7 +34,7 @@ struct TeamsColumn: View {
     var body: some View {
         OffscreenFriendlyScroll {
             VStack(alignment: .leading, spacing: 14) {
-                Text(L("teams.title")).font(Theme.Typo.display).foregroundStyle(Theme.text)
+                Text(L("teams.title")).font(Theme.Typo.title).foregroundStyle(Theme.text)
                 Text(L("teams.subtitle")).font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -147,7 +149,7 @@ struct TeamsColumn: View {
             }
         }
         .padding(10)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
     }
 }

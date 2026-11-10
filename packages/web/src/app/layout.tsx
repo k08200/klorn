@@ -1,19 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+// Pretendard (OFL 1.1, public/licenses/pretendard-OFL.txt) for Hangul. The
+// dynamic-subset build is ~90 small woff2 files, each behind a unicode-range,
+// so a page downloads only the slices it renders; Latin stays on Geist, which
+// sits ahead of it in --font-sans. Bundled by Next and served from
+// /_next/static/media, so the strict CSP (font-src 'self') is unchanged.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import AppShell from "../components/app-shell";
+import AutostartPrompt from "../components/autostart-prompt";
 import CommandPalette from "../components/command-palette";
+import DesktopToastRouter from "../components/desktop-toast-router";
 import GoogleReconnectBanner from "../components/google-reconnect-banner";
 import KeyboardShortcuts from "../components/keyboard-shortcuts";
 import Providers from "../components/providers";
 import PushOnboardingBanner from "../components/push-onboarding-banner";
 import PushRegister from "../components/push-register";
 import PwaPrompts from "../components/pwa-prompts";
+import SkipLink from "../components/skip-link";
 import ServiceWorkerRegister from "../components/sw-register";
 import "./globals.css";
 
 // Self-hosted at build time by next/font (no runtime request to Google —
-// the strict CSP stays intact). Korean text falls through to the system
-// stack (Apple SD Gothic Neo / Noto Sans KR), the standard pairing.
+// the strict CSP stays intact). Korean text falls through to Pretendard
+// (imported above): Windows has no Apple SD Gothic Neo, and its Malgun Gothic
+// fallback sets Hangul noticeably heavier and wider than Geist.
 const geistSans = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
@@ -28,7 +38,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Klorn — The clear signal worth acting on",
   description:
-    "Klorn filters mail, calendar, and AI signals into one clear decision queue — with approval before any action.",
+    "All your mail and calendars in one calm place. Klorn sorts every message into one of five lanes, says why, and asks before it acts.",
   manifest: "/manifest.json",
   metadataBase: new URL("https://app.klorn.ai"),
   openGraph: {
@@ -38,14 +48,14 @@ export const metadata: Metadata = {
     siteName: "Klorn",
     url: "https://app.klorn.ai/",
     type: "website",
-    images: [{ url: "/brand/og-image.png?v=k2", width: 1200, height: 630 }],
+    images: [{ url: "/brand/og-image.png?v=k3", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Klorn — The clear signal worth acting on",
     description:
-      "The approval layer for AI agents. Mail, calendar, and signals filtered into one clear decision queue.",
-    images: ["/brand/og-image.png?v=k2"],
+      "All your mail and calendars in one calm place — every message sorted, with the reason shown.",
+    images: ["/brand/og-image.png?v=k3"],
   },
   appleWebApp: {
     capable: true,
@@ -57,7 +67,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fafafa" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0b" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -83,13 +93,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans bg-surface-app text-ink antialiased">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-[200] focus-visible:rounded-md focus-visible:bg-surface-elevated focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-accent-deep focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          Skip to main content
-        </a>
         <Providers>
+          <SkipLink />
           <KeyboardShortcuts />
           <CommandPalette />
           <AppShell>{children}</AppShell>
@@ -98,6 +103,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <GoogleReconnectBanner />
           <PushOnboardingBanner />
           <PwaPrompts />
+          <AutostartPrompt />
+          <DesktopToastRouter />
         </Providers>
       </body>
     </html>

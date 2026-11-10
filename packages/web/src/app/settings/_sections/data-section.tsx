@@ -37,7 +37,16 @@ export function DataSection() {
       }
       localStorage.removeItem(PROFILE_KEY);
       localStorage.removeItem(PINNED_CHATS_KEY);
-      toast(t("settings.toast.workspaceDeleted"), "info");
+      // 202: access is already gone and the server finishes the purge itself
+      // (the data-wipe sweep), so say "started", not "deleted".
+      toast(
+        t(
+          res.status === 202
+            ? "settings.toast.workspaceDeletionPending"
+            : "settings.toast.workspaceDeleted",
+        ),
+        "info",
+      );
     } catch {
       toast(t("settings.toast.deleteWorkspaceFailed"), "error");
     }
@@ -102,7 +111,7 @@ export function DataSection() {
           <div className={`${PANEL} p-4 flex items-center justify-between gap-4`}>
             <div>
               <h3 className="font-medium">{t("settings.exportData")}</h3>
-              <p className="text-sm text-ink-mid">{t("settings.exportWorkspace.desc")}</p>
+              <p className="text-role-body text-ink-mid">{t("settings.exportWorkspace.desc")}</p>
             </div>
             <Button variant="secondary" onClick={exportData}>
               {t("settings.export")}
@@ -113,14 +122,14 @@ export function DataSection() {
 
       {/* Workspace Reset */}
       <section className="mb-8">
-        <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-state-danger-ink">
+        <h2 className="mb-3 text-role-caption font-semibold uppercase tracking-wider text-state-danger-ink">
           {t("settings.dangerZone")}
         </h2>
-        <div className="panel-elevated rounded-2xl border border-state-danger-line bg-surface-panel divide-y divide-state-danger-line">
+        <div className="panel-elevated rounded-card border border-state-danger-line bg-surface-panel divide-y divide-state-danger-line">
           <div className="flex items-center justify-between gap-4 p-4">
             <div>
               <h3 className="font-medium">{t("settings.confirm.deleteWorkspace.title")}</h3>
-              <p className="text-sm text-ink-mid">{t("settings.deleteWorkspace.desc")}</p>
+              <p className="text-role-body text-ink-mid">{t("settings.deleteWorkspace.desc")}</p>
             </div>
             <Button variant="danger" onClick={clearAllData}>
               {t("settings.deleteAll")}
@@ -129,7 +138,9 @@ export function DataSection() {
           <div className="flex items-center justify-between gap-4 p-4">
             <div>
               <h3 className="font-medium">{t("settings.deleteBtn")}</h3>
-              <p className="text-sm text-ink-mid mt-0.5">{t("settings.deleteAccount.desc")}</p>
+              <p className="text-role-body text-ink-mid mt-0.5">
+                {t("settings.deleteAccount.desc")}
+              </p>
             </div>
             <Button variant="danger" onClick={deleteAccount}>
               {t("settings.deleteBtn")}
@@ -142,19 +153,18 @@ export function DataSection() {
       <section>
         <h2 className={SECTION_TITLE}>{t("settings.about")}</h2>
         <div className={`${PANEL} p-4`}>
-          <p className="text-sm text-ink-mid">
+          <p className="text-role-body text-ink-mid">
             <span className="text-accent-deep font-medium">Klorn</span> ·{" "}
             {t("settings.about.tagline")}
           </p>
-          <p className="text-sm text-ink-dim mt-1">{t("settings.about.desc")}</p>
-          <p className="text-xs text-ink-mid mt-3">{t("settings.about.version")}</p>
+          <p className="text-role-body text-ink-dim mt-1">{t("settings.about.desc")}</p>
           {/* The support address lived only inside the privacy, terms and
                 refund pages — all three on a noindex subdomain a signed-in user
                 has no reason to open. A paying account needs a way to reach a
                 human from the app itself. k0820086@gmail.com is the pinned
                 contact: klorn.ai has no MX record, so a @klorn.ai address would
                 bounce. */}
-          <p className="text-xs text-ink-mid mt-2">
+          <p className="text-role-caption text-ink-mid mt-2">
             {t("settings.about.support")}{" "}
             <a
               href="mailto:k0820086@gmail.com"

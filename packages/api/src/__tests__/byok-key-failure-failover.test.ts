@@ -61,19 +61,19 @@ describe("createCompletion when a user-owned key fails", () => {
     }));
   }
 
-  it("falls over to the env key when the user's own key is rejected (401)", async () => {
-    const rejected = Object.assign(new Error("No auth credentials found"), { status: 401 });
+  it("falls over to the env key when the user's own Anthropic key is rejected (401)", async () => {
+    const rejected = Object.assign(new Error("invalid x-api-key"), { status: 401 });
     const userCall = vi.fn().mockRejectedValue(rejected);
     const envCall = vi.fn().mockResolvedValue({ choices: [{ message: { content: "ok" } }] });
 
     mockChain([
-      fakeProvider("openrouter", "user:u1", userCall, true),
-      fakeProvider("openrouter", "env", envCall),
+      fakeProvider("anthropic", "user:u1", userCall, true),
+      fakeProvider("anthropic", "env", envCall),
     ]);
 
     const { createCompletion } = await import("../llm/openai.js");
     const result = (await createCompletion(
-      { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] },
       { userId: "u1" },
     )) as { choices: Array<{ message: { content: string } }> };
 
@@ -88,13 +88,13 @@ describe("createCompletion when a user-owned key fails", () => {
     const envCall = vi.fn().mockResolvedValue({ choices: [{ message: { content: "ok" } }] });
 
     mockChain([
-      fakeProvider("openrouter", "user:u1", userCall, true),
+      fakeProvider("anthropic", "user:u1", userCall, true),
       fakeProvider("gemini", "env", envCall),
     ]);
 
     const { createCompletion } = await import("../llm/openai.js");
     const result = (await createCompletion(
-      { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] },
       { userId: "u1" },
     )) as { choices: Array<{ message: { content: string } }> };
 
@@ -103,37 +103,37 @@ describe("createCompletion when a user-owned key fails", () => {
   });
 
   it("still hard-fails an ENV key rejection — that is an operator fault, not something to mask", async () => {
-    const rejected = Object.assign(new Error("No auth credentials found"), { status: 401 });
+    const rejected = Object.assign(new Error("invalid x-api-key"), { status: 401 });
     const envCall = vi.fn().mockRejectedValue(rejected);
     const neverCall = vi.fn();
 
     mockChain([
-      fakeProvider("openrouter", "env", envCall),
+      fakeProvider("anthropic", "env", envCall),
       fakeProvider("gemini", "env", neverCall),
     ]);
 
     const { createCompletion } = await import("../llm/openai.js");
     await expect(
       createCompletion({
-        model: "google/gemini-2.5-flash",
+        model: "claude-haiku-5-5",
         messages: [{ role: "user", content: "hi" }],
       }),
-    ).rejects.toThrow("No auth credentials found");
+    ).rejects.toThrow("invalid x-api-key");
     expect(neverCall).not.toHaveBeenCalled();
   });
 
   it("surfaces the user key's own error when it is the ONLY provider left", async () => {
-    const rejected = Object.assign(new Error("No auth credentials found"), { status: 401 });
+    const rejected = Object.assign(new Error("invalid x-api-key"), { status: 401 });
     const userCall = vi.fn().mockRejectedValue(rejected);
 
-    mockChain([fakeProvider("openrouter", "user:u1", userCall, true)]);
+    mockChain([fakeProvider("anthropic", "user:u1", userCall, true)]);
 
     const { createCompletion } = await import("../llm/openai.js");
     await expect(
       createCompletion(
-        { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
+        { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] },
         { userId: "u1" },
       ),
-    ).rejects.toThrow("No auth credentials found");
+    ).rejects.toThrow("invalid x-api-key");
   });
 });

@@ -17,6 +17,8 @@
  * caller already decided the sweep should run.
  */
 
+import { parseAddress } from "../mail/email-address.js";
+
 /// Sweep bounds: only items judged within the lookback are candidates (older
 /// mail deserves a human, not a late robot reply), and each tick answers at
 /// most a handful so a burst can't drain the LLM budget.
@@ -44,6 +46,8 @@ export interface AutoModeEmail {
   from: string;
   subject: string;
   body: string | null;
+  listUnsubscribeUrl?: string | null;
+  listUnsubscribeMailto?: string | null;
 }
 
 export interface AutoModeSweepDeps {
@@ -52,6 +56,8 @@ export interface AutoModeSweepDeps {
   /** True when an auto-reply or auto-mode ledger already claims this gmailId. */
   alreadyReplied: (userId: string, gmailId: string) => Promise<boolean>;
   isSingleRecipient: (to: string) => boolean;
+  /** The shared unattended-reply guards (machine/list mail, own address, daily cap). */
+  replyBlocked: (userId: string, email: AutoModeEmail) => Promise<string | null>;
   draftReply: (
     email: { from: string; subject: string; body: string },
     userId: string,
@@ -87,8 +93,7 @@ export interface AutoModeSweepDeps {
 
 /** Extract the reply-to address from a From header. Pure for the tests. */
 export function recipientFromHeader(from: string): string {
-  const match = from.match(/<([^>]+)>/);
-  return (match ? match[1] : from).trim();
+  return parseAddress(from);
 }
 
 export async function runAutoModeSweep(
@@ -111,6 +116,12 @@ export async function runAutoModeSweep(
       const toAddr = recipientFromHeader(email.from);
       if (!deps.isSingleRecipient(toAddr)) {
         deps.warn(`[AUTOMATION] auto-mode skip: non-single recipient from ${item.id}`);
+        continue;
+      }
+      // Machine/list mail, the user's own address, the daily cap: before any LLM spend.
+      const blocked = await deps.replyBlocked(userId, email);
+      if (blocked) {
+        deps.warn(`[AUTOMATION] auto-mode skip (${blocked}): ${item.id}`);
         continue;
       }
       const attempts = autoModeDraftAttempts.get(item.id) ?? 0;

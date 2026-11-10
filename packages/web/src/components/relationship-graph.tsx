@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useT } from "../lib/i18n";
 
 export interface GraphNode {
   id: string;
@@ -54,7 +55,9 @@ export const TIER_COLORS: Record<string, string> = {
 };
 
 // Relationship-signal colours (not part of the lane system).
-const SELF_COLOR = "#0ea5e9"; // you (== --color-accent)
+// You: the accent-solid token (#0369A1 light / #38BDF8 dark), applied through
+// `style` so the var() resolves the same way in every engine.
+const SELF_COLOR = "var(--accent-solid)";
 const FEATURE_COLOR = "#a78bfa"; // a scored input feature (violet)
 // A tier node whose tag is not in TIER_COLORS. Deliberately neutral: falling
 // back to a colour that means something else is worse than admitting we do
@@ -179,6 +182,7 @@ function computeLayout(nodes: GraphNode[], edges: GraphEdge[]): Map<string, Pt> 
 }
 
 export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) {
+  const { t } = useT();
   const { pos, viewBox } = useMemo(() => {
     const p = computeLayout(nodes, edges);
     let minX = Number.POSITIVE_INFINITY;
@@ -203,8 +207,8 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
 
   if (nodes.length <= 1) {
     return (
-      <p className="rounded-xl border border-line bg-surface-raised p-6 text-sm text-ink-mid">
-        No relationships yet — the graph fills in as mail and calendar activity accrues.
+      <p className="rounded-card border border-line bg-surface-raised p-6 text-role-body text-ink-mid">
+        {t("graph.empty")}
       </p>
     );
   }
@@ -212,11 +216,11 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
   return (
     <svg
       viewBox={viewBox}
-      className="h-[70vh] w-full rounded-2xl border border-line bg-surface-raised"
+      className="h-[70vh] w-full rounded-card border border-line bg-surface-raised"
       role="img"
-      aria-label="Relationship graph of your contacts"
+      aria-label={t("graph.ariaLabel")}
     >
-      <title>Relationship graph</title>
+      <title>{t("graph.title")}</title>
       {edges.map((e) => {
         const a = pos.get(e.source);
         const b = pos.get(e.target);
@@ -240,7 +244,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
         const r = radiusFor(n);
         return (
           <g key={n.id}>
-            <circle cx={p.x} cy={p.y} r={r} fill={colorFor(n)} fillOpacity={0.9} />
+            <circle cx={p.x} cy={p.y} r={r} style={{ fill: colorFor(n) }} fillOpacity={0.9} />
             <text
               x={p.x}
               y={p.y - r - 3}

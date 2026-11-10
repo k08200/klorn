@@ -10,7 +10,9 @@
  * deleted or cancelled upstream. The guard is therefore all-or-nothing:
  *   - the listing must say `complete` (every calendar answered, nothing capped, cut
  *     short by the server, unreadable, or over the event cap);
- *   - the provider must be ICLOUD or NAVER, and CALDAV_CALENDAR_ENABLED on;
+ *   - the provider must be ICLOUD or NAVER with CALDAV_CALENDAR_ENABLED on, or
+ *     OUTLOOK with OUTLOOK_CALENDAR_ENABLED on (Graph's calendarView, read to its
+ *     last page and under its cap, is complete in the same sense);
  *   - only that account's rows (user, provider, source key) are candidates, only
  *     those inside the listing's window (decided with the same overlap rule the
  *     listing used), and only those written before the listing started, so a row a
@@ -25,17 +27,25 @@
  *     restore them. A refusal is logged and sent to Sentry once per account per
  *     process; the rows stay and age out of the window. (A user who really deleted
  *     most of a month keeps those rows until then: a known limit, in the plan.)
+ *   - a row of a calendar the listing read but found no event in (an empty 207
+ *     for that calendar) is removed only when the account's previous complete
+ *     listing showed the same such rows gone. One transient empty 207 keeps them,
+ *     whether the window has 3 rows or the account has a second calendar with
+ *     events; a calendar really emptied loses its rows one sync later. A vanished
+ *     row of a calendar that still lists events goes at once, as before. The wait
+ *     is per process (a restart, or a listing that is not complete, starts it
+ *     again), and is checked after the valve, so the valve's report is unchanged.
  * The removal and the resolution of the rows' open attention items are one
  * transaction, like the C2b removal.
  */
 
-import { caldavCalendarEnabled } from "../config.js";
+import { createHash } from "node:crypto";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { isCaldavProviderKey } from "./caldav/caldav-providers.js";
 import { type CaldavWindow, overlapsWindow } from "./caldav/ical-events.js";
 import type { CalendarWindowListing } from "./calendar-providers/types.js";
 import { type CalendarProviderName, linkedSourceScope } from "./calendar-rows.js";
+import { reconcilesByAbsence } from "./calendar-scope.js";
 
 /** The largest share of an account's rows in the window one listing may remove. */
 export const CALDAV_DELETE_MAX_SHARE = 0.5;
@@ -45,9 +55,12 @@ export const CALDAV_DELETE_VALVE_MIN_ROWS = 5;
 const MAX_TRACKED_VALVE_REPORTS = 10_000;
 
 const reportedAccounts = new Set<string>();
+/** Per account: a digest of the rows the last complete listing showed gone from empty calendars. */
+const emptyCalendarRowsSeen = new Map<string, string>();
 
 export function _resetDeletionValveForTests(): void {
   reportedAccounts.clear();
+  emptyCalendarRowsSeen.clear();
 }
 
 export interface WindowRemoval {
@@ -64,6 +77,7 @@ interface WindowRow {
   readonly endTime: Date;
   readonly updatedAt: Date;
   readonly caldavCalendarKey: string | null;
+  readonly allDay: boolean;
 }
 
 interface ValveCounts {
@@ -71,15 +85,54 @@ interface ValveCounts {
   readonly inWindow: number;
 }
 
-/** The ids of the window's rows the listing shows to be gone (see the header). */
-function vanishedRows(inWindow: readonly WindowRow[], listing: CalendarWindowListing): string[] {
+/**
+ * The window's rows the listing shows to be gone (see the header). An all-day row
+ * that began before the window is never one: it is stored at UTC midnight while
+ * the provider overlaps the day in its own zone, so near the window's start the
+ * listing can already have dropped an all-day event the row still overlaps.
+ */
+function vanishedRows(
+  inWindow: readonly WindowRow[],
+  listing: CalendarWindowListing,
+  window: CaldavWindow,
+): WindowRow[] {
   const present = new Set(listing.events.map((event) => event.externalId).filter(Boolean));
   const read = new Set(listing.calendarKeys ?? []);
   return inWindow
     .filter((row) => row.updatedAt.getTime() < listing.listedAt.getTime())
+    .filter((row) => !(row.allDay && row.startTime.getTime() < window.start.getTime()))
     .filter((row) => row.caldavCalendarKey !== null && read.has(row.caldavCalendarKey))
-    .filter((row) => row.externalId !== null && !present.has(row.externalId))
-    .map((row) => row.id);
+    .filter((row) => row.externalId !== null && !present.has(row.externalId));
+}
+
+/**
+ * The calendars the listing read and found no event in. An event without a key
+ * cannot be placed, so then every read calendar counts as empty (only delays).
+ */
+function emptyCalendars(listing: CalendarWindowListing): Set<string> {
+  const read = listing.calendarKeys ?? [];
+  if (listing.events.some((event) => !event.calendarKey)) return new Set(read);
+  const listed = new Set(listing.events.map((event) => event.calendarKey));
+  return new Set(read.filter((key) => !listed.has(key)));
+}
+
+/**
+ * Whether the previous complete listing showed these same rows gone from empty
+ * calendars. Consumes the entry when it did; otherwise records this listing's.
+ */
+function takeEmptyCalendarConfirmation(linkedAccountId: string, ids: readonly string[]): boolean {
+  const digest = createHash("sha256")
+    .update([...ids].sort().join("\n"))
+    .digest("hex");
+  const confirmed = emptyCalendarRowsSeen.get(linkedAccountId) === digest;
+  emptyCalendarRowsSeen.delete(linkedAccountId);
+  if (confirmed) return true;
+  if (emptyCalendarRowsSeen.size >= MAX_TRACKED_VALVE_REPORTS) {
+    const oldest = emptyCalendarRowsSeen.keys().next().value;
+    if (oldest !== undefined) emptyCalendarRowsSeen.delete(oldest);
+  }
+  emptyCalendarRowsSeen.set(linkedAccountId, digest);
+  return false;
 }
 
 /** True when removing `gone` of the account's `inWindow` rows is refused. */
@@ -109,7 +162,10 @@ function reportValve(
   });
 }
 
-type Outcome = WindowRemoval | { readonly refused: ValveCounts };
+type Outcome =
+  | (WindowRemoval & { readonly held: number })
+  | { readonly refused: ValveCounts }
+  | { readonly awaitingConfirmation: number };
 
 async function removeInTransaction(
   provider: CalendarProviderName,
@@ -136,14 +192,25 @@ async function removeInTransaction(
         endTime: true,
         updatedAt: true,
         caldavCalendarKey: true,
+        allDay: true,
       },
     });
     const inWindow = candidates.filter((row) => overlapsWindow(row.startTime, row.endTime, window));
-    const gone = vanishedRows(inWindow, listing);
-    if (gone.length === 0) return NOTHING;
-    if (isOverDeletionValve(gone.length, inWindow.length)) {
-      return { refused: { gone: gone.length, inWindow: inWindow.length } };
+    const goneRows = vanishedRows(inWindow, listing, window);
+    const empty = emptyCalendars(listing);
+    const waiting = goneRows
+      .filter((row) => row.caldavCalendarKey !== null && empty.has(row.caldavCalendarKey))
+      .map((row) => row.id);
+    if (waiting.length === 0) emptyCalendarRowsSeen.delete(linkedAccountId);
+    if (goneRows.length === 0) return { ...NOTHING, held: 0 };
+    if (isOverDeletionValve(goneRows.length, inWindow.length)) {
+      return { refused: { gone: goneRows.length, inWindow: inWindow.length } };
     }
+    const confirmed =
+      waiting.length === 0 || takeEmptyCalendarConfirmation(linkedAccountId, waiting);
+    const held = new Set(confirmed ? [] : waiting);
+    const gone = goneRows.map((row) => row.id).filter((id) => !held.has(id));
+    if (gone.length === 0) return { awaitingConfirmation: held.size };
     const resolved = await tx.attentionItem.updateMany({
       where: {
         userId,
@@ -154,7 +221,7 @@ async function removeInTransaction(
       data: { status: "RESOLVED", resolvedAt: now },
     });
     const removed = await tx.calendarEvent.deleteMany({ where: { userId, id: { in: gone } } });
-    return { removed: removed.count, resolved: resolved.count };
+    return { removed: removed.count, resolved: resolved.count, held: held.size };
   }, INTERACTIVE_TX_OPTIONS);
 }
 
@@ -166,18 +233,28 @@ export async function removeRowsMissingFromWindow(
   listing: CalendarWindowListing,
   now: Date,
 ): Promise<WindowRemoval> {
-  if (listing.complete !== true) return NOTHING;
-  if (!isCaldavProviderKey(provider) || !caldavCalendarEnabled()) return NOTHING;
+  if (listing.complete !== true) {
+    emptyCalendarRowsSeen.delete(linkedAccountId);
+    return NOTHING;
+  }
+  if (!reconcilesByAbsence(provider)) return NOTHING;
 
   const outcome = await removeInTransaction(provider, userId, linkedAccountId, listing, now);
   if ("refused" in outcome) {
     reportValve(provider, userId, linkedAccountId, outcome.refused);
     return NOTHING;
   }
-  if (outcome.removed > 0) {
+  if ("awaitingConfirmation" in outcome) {
     console.log(
-      `[CALENDAR] vanished events removed ${userId}:${linkedAccountId} rows=${outcome.removed} attentionResolved=${outcome.resolved}`,
+      `[CALENDAR] empty calendar ${userId}:${linkedAccountId} rows=${outcome.awaitingConfirmation} kept until the next sync confirms it`,
+    );
+    return NOTHING;
+  }
+  if (outcome.removed > 0) {
+    const held = outcome.held > 0 ? ` heldUntilConfirmed=${outcome.held}` : "";
+    console.log(
+      `[CALENDAR] vanished events removed ${userId}:${linkedAccountId} rows=${outcome.removed} attentionResolved=${outcome.resolved}${held}`,
     );
   }
-  return outcome;
+  return { removed: outcome.removed, resolved: outcome.resolved };
 }

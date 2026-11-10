@@ -93,7 +93,7 @@ export function summarizeCorrectionEval(pairs: EvalPair[], now: Date): Correctio
 }
 
 function hasLlmProviderKey(): boolean {
-  return ["OPENROUTER_API_KEY", "GEMINI_API_KEY", "OPENAI_COMPAT_BASE_URL"].some((key) =>
+  return ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_COMPAT_BASE_URL"].some((key) =>
     Boolean(process.env[key]?.trim()),
   );
 }
@@ -171,6 +171,12 @@ export async function runCorrectionEval(
       { from: email.from, subject: email.subject, snippet: email.snippet, labels: email.labels },
       userId,
       context,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      // Eval loop over labelled history: never spend the judge's reserve.
+      { backlog: true },
     );
     pairs.push({ expected: override.tier, predicted: judgement.tier, source: judgement.source });
 

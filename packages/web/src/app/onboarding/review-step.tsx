@@ -1,16 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  type FirewallItem,
-  type FirewallResponse,
-  TIER_VISUAL,
-  type Tier,
-} from "../../components/firewall-board";
-import { apiFetch } from "../../lib/api";
+import { type FirewallItem, TIER_VISUAL, type Tier } from "../../components/firewall-board";
 import { useT } from "../../lib/i18n";
-import { captureClientError } from "../../lib/sentry";
 import { CORE_TIERS } from "../../lib/tiers";
+import { type Label, useFirewallEmails, useFirewallLabels } from "./use-firewall-emails";
 
 // Both lists are the five live lanes, loudest first: the user reviews
 // interrupts before the pile Klorn silenced, and can reassign to any lane the
@@ -21,13 +14,6 @@ import { CORE_TIERS } from "../../lib/tiers";
 const MOVE_TARGETS = CORE_TIERS;
 const GROUP_ORDER = CORE_TIERS;
 
-// Classification is fire-and-forget, so the freshly-synced emails trickle in as
-// each judge call returns. Poll a bounded number of times until the count holds.
-const MAX_POLLS = 8;
-const POLL_MS = 2000;
-
-type Label = { kind: "confirmed" | "corrected"; tier: Tier };
-
 /**
  * Onboarding step 3: show the user how Klorn classified their most-recent inbox
  * and let them confirm or correct a few. Every confirm/correct writes a
@@ -37,73 +23,8 @@ type Label = { kind: "confirmed" | "corrected"; tier: Tier };
  */
 export function ReviewStep({ onContinue }: { onContinue: () => void }) {
   const { t } = useT();
-  const [items, setItems] = useState<FirewallItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [labels, setLabels] = useState<Record<string, Label>>({});
-  const [pending, setPending] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    let polls = 0;
-    let lastLen = -1;
-    let stableStreak = 0;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const tick = async () => {
-      try {
-        const resp = await apiFetch<FirewallResponse>("/api/inbox/firewall/");
-        if (cancelled) return;
-        const emails = (Object.values(resp.tiers) as FirewallItem[][])
-          .flat()
-          .filter((it) => it.source === "EMAIL");
-        setItems(emails);
-        setLoading(false);
-        stableStreak = emails.length === lastLen ? stableStreak + 1 : 0;
-        lastLen = emails.length;
-      } catch (err) {
-        if (cancelled) return;
-        captureClientError(err);
-        setLoading(false);
-        setLoadError(true);
-        return; // stop polling on error
-      }
-      polls += 1;
-      const settled = lastLen > 0 && stableStreak >= 1;
-      if (!cancelled && polls < MAX_POLLS && !settled) {
-        timer = setTimeout(tick, POLL_MS);
-      }
-    };
-    timer = setTimeout(tick, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
-
-  const label = async (item: FirewallItem, action: "confirm" | Tier) => {
-    if (pending[item.id] || labels[item.id]) return;
-    setPending((p) => ({ ...p, [item.id]: true }));
-    try {
-      if (action === "confirm") {
-        await apiFetch(`/api/inbox/firewall/${item.id}/confirm`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-        setLabels((l) => ({ ...l, [item.id]: { kind: "confirmed", tier: item.tier } }));
-      } else {
-        await apiFetch(`/api/inbox/firewall/${item.id}`, {
-          method: "POST",
-          body: JSON.stringify({ tier: action }),
-        });
-        setLabels((l) => ({ ...l, [item.id]: { kind: "corrected", tier: action } }));
-      }
-    } catch (err) {
-      captureClientError(err);
-    } finally {
-      setPending((p) => ({ ...p, [item.id]: false }));
-    }
-  };
+  const { items, loading, loadError } = useFirewallEmails();
+  const { labels, pending, label } = useFirewallLabels();
 
   const reviewedCount = Object.keys(labels).length;
   // Group by ORIGINAL classification so a corrected card stays put (showing what
@@ -115,26 +36,24 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-ink">
-        {t("onboarding.review.title")}
-      </h1>
-      <p className="mt-4 text-sm leading-6 text-ink-mid">{t("onboarding.review.desc")}</p>
+      <h1 className="text-role-page leading-tight text-ink">{t("onboarding.review.title")}</h1>
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">{t("onboarding.review.desc")}</p>
 
       {loading && items.length === 0 ? (
-        <div className="mt-8 flex items-center gap-3 rounded-xl border border-line bg-surface-raised px-4 py-3">
+        <div className="mt-8 flex items-center gap-3 rounded-control border border-line bg-surface-raised px-4 py-3">
           <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent motion-reduce:animate-none" />
-          <p className="text-sm text-ink-mid">{t("onboarding.review.readingInbox")}</p>
+          <p className="text-role-body text-ink-mid">{t("onboarding.review.readingInbox")}</p>
         </div>
       ) : null}
 
       {loadError && items.length === 0 ? (
-        <p className="mt-8 rounded-xl border border-line bg-surface-raised px-4 py-3 text-sm text-ink-mid">
+        <p className="mt-8 rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
           {t("onboarding.review.loadError")}
         </p>
       ) : null}
 
       {!loading && !loadError && items.length === 0 ? (
-        <p className="mt-8 rounded-xl border border-line bg-surface-raised px-4 py-3 text-sm text-ink-mid">
+        <p className="mt-8 rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
           {t("onboarding.review.emptyState")}
         </p>
       ) : null}
@@ -148,10 +67,10 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
             })}
           >
             <div className="mb-2 flex items-baseline gap-2">
-              <span className={`text-xs font-semibold ${TIER_VISUAL[group.tier].accent}`}>
+              <span className={`text-role-caption font-semibold ${TIER_VISUAL[group.tier].accent}`}>
                 {TIER_VISUAL[group.tier].label}
               </span>
-              <span className="text-[11px] text-ink-dim">
+              <span className="text-role-caption text-ink-dim">
                 {TIER_VISUAL[group.tier].description}
               </span>
             </div>
@@ -174,14 +93,14 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
       <button
         type="button"
         onClick={onContinue}
-        className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-muted/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+        className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-muted/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
       >
         {reviewedCount > 0
           ? t("onboarding.review.continueReviewed", { count: String(reviewedCount) })
           : t("onboarding.review.continueDefault")}
         <span aria-hidden>→</span>
       </button>
-      <p className="mt-3 text-center text-[11px] leading-5 text-ink-dim">
+      <p className="mt-3 text-center text-role-caption leading-5 text-ink-dim">
         {t("onboarding.review.footerNote")}
       </p>
     </div>
@@ -207,13 +126,17 @@ function ReviewCard({
   const snippet = item.email?.snippet ?? null;
 
   return (
-    <div className="rounded-xl border border-line bg-surface-panel p-3">
-      <p className="truncate text-xs text-ink-mid">{sender}</p>
-      <p className="mt-0.5 truncate text-sm font-medium text-ink">{subject}</p>
-      {snippet ? <p className="mt-1 line-clamp-2 text-xs text-ink-dim">{snippet}</p> : null}
+    <div className="rounded-control border border-line bg-surface-panel p-3">
+      <p className="truncate text-role-caption text-ink-mid">{sender}</p>
+      <p className="mt-0.5 truncate text-role-body font-medium text-ink">{subject}</p>
+      {snippet ? (
+        <p className="mt-1 line-clamp-2 text-role-caption text-ink-dim">{snippet}</p>
+      ) : null}
 
       {labelState ? (
-        <p className={`mt-3 text-xs font-semibold ${TIER_VISUAL[labelState.tier].accent}`}>
+        <p
+          className={`mt-3 text-role-caption font-semibold ${TIER_VISUAL[labelState.tier].accent}`}
+        >
           {labelState.kind === "confirmed"
             ? t("onboarding.review.card.keptIn", { tier: labelState.tier })
             : t("onboarding.review.card.movedTo", { tier: labelState.tier })}
@@ -224,11 +147,13 @@ function ReviewCard({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="min-h-11 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400/60 hover:bg-emerald-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-control border border-emerald-500/30 px-3 py-1.5 text-role-caption font-semibold text-emerald-300 transition hover:border-emerald-400/60 hover:bg-emerald-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("onboarding.review.card.looksRight")}
           </button>
-          <span className="text-[11px] text-ink-dim">{t("onboarding.review.card.orMoveTo")}</span>
+          <span className="text-role-caption text-ink-dim">
+            {t("onboarding.review.card.orMoveTo")}
+          </span>
           {/* Tier codes (PUSH/QUEUE/SILENT) are product vocabulary, not
               translated — see docs/product-vocabulary.md. */}
           {MOVE_TARGETS.filter((target) => target !== item.tier).map((target) => (
@@ -237,7 +162,7 @@ function ReviewCard({
               type="button"
               onClick={() => onCorrect(target)}
               disabled={busy}
-              className={`min-h-11 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-mid transition hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50 ${TIER_VISUAL[target].accent}`}
+              className={`min-h-11 rounded-control border border-line px-3 py-1.5 text-role-caption font-medium text-ink-mid transition hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50 ${TIER_VISUAL[target].accent}`}
             >
               {target}
             </button>

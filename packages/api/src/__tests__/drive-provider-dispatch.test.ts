@@ -2,7 +2,8 @@
  * D2: the drive provider seam (drive/providers). v1 of an external connector
  * lists, searches and reads metadata; it never uploads or edits (decision V4),
  * and it does not fetch a file's bytes: that arrives with D4, with a streaming
- * size check. D2 ships no connector: every provider answers the explicit
+ * size check. D2 shipped no connector; D5b registers GOOGLE, behind
+ * GOOGLE_DRIVE_ENABLED. Every other provider answers the explicit
  * "unsupported" result.
  */
 
@@ -13,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DRIVE_PROVIDER_NAMES, type DriveProviderName } from "../drive/drive-providers.js";
 import type { DriveProviderEnabledMap } from "../drive/drive-scope.js";
 import { driveActionsForProvider } from "../drive/providers/dispatch.js";
+import { googleDriveActions } from "../drive/providers/google.js";
 import {
   type DriveProviderActions,
   type DriveProviderSession,
@@ -31,6 +33,7 @@ function fakeSession(provider: DriveProviderName): DriveProviderSession {
     list: vi.fn(async () => ({ files: [], nextPageToken: null })),
     search: vi.fn(async () => ({ files: [], nextPageToken: null })),
     getMetadata: vi.fn(async () => null),
+    fetchForSummary: vi.fn(async () => null),
   };
 }
 
@@ -43,9 +46,29 @@ afterEach(() => {
 });
 
 describe("the shipped dispatcher", () => {
-  it.each([
-    ...DRIVE_PROVIDER_NAMES,
-  ])("%s answers unsupported, even with every flag on", async (provider) => {
+  it("GOOGLE (D5b) is the Google connector while DRIVE_ENABLED and its own flag are on", () => {
+    vi.stubEnv("DRIVE_ENABLED", "true");
+    expect(driveActionsForProvider("GOOGLE", ALL_ON)).toBe(googleDriveActions);
+    expect(driveActionsForProvider("GOOGLE", { ...ALL_ON, GOOGLE: () => false })).not.toBe(
+      googleDriveActions,
+    );
+    vi.stubEnv("DRIVE_ENABLED", "false");
+    expect(driveActionsForProvider("GOOGLE", ALL_ON)).not.toBe(googleDriveActions);
+  });
+
+  it("GOOGLE answers unsupported while its flag is off, so a caller refuses loudly", async () => {
+    vi.stubEnv("DRIVE_ENABLED", "true");
+    vi.stubEnv("GOOGLE_DRIVE_ENABLED", "false");
+    const result = await driveActionsForProvider("GOOGLE").connect(SOURCE);
+    expect(result).toEqual({
+      unsupported: true,
+      error: "Drive provider GOOGLE is not supported from Klorn yet.",
+    });
+  });
+
+  it.each(
+    DRIVE_PROVIDER_NAMES.filter((provider) => provider !== "GOOGLE"),
+  )("%s answers unsupported, even with every flag on", async (provider) => {
     vi.stubEnv("DRIVE_ENABLED", "true");
     const actions = driveActionsForProvider(provider, ALL_ON);
     expect(actions.provider).toBe(provider);
@@ -133,25 +156,29 @@ describe("what a provider reports about a file", () => {
   });
 });
 
-describe("the seam reads metadata only", () => {
+describe("the seam only reads", () => {
   const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "drive", "providers");
   const types = readFileSync(join(dir, "types.ts"), "utf8");
   const dispatch = readFileSync(join(dir, "dispatch.ts"), "utf8");
   const body = types.slice(types.indexOf("export interface DriveProviderSession {"));
   const session = body.slice(0, body.indexOf("\n}"));
 
-  it("a session has exactly these three methods", () => {
+  it("a session has exactly these four methods: reads only (V4), the byte read is D4's", () => {
     const methods = [...session.matchAll(/^ {2}(\w+)\(/gm)].map((match) => match[1]);
-    expect(methods).toEqual(["list", "search", "getMetadata"]);
+    expect(methods).toEqual(["list", "search", "getMetadata", "fetchForSummary"]);
   });
 
   it("decision V4: no type of the seam names a write", () => {
     expect(types).not.toMatch(/\b(upload|create|update|delete|rename|move|write|trash)\w*\s*\(/i);
   });
 
-  it("nothing fetches a file's bytes yet: D4 adds that, with its own size check", () => {
-    for (const text of [types, dispatch]) {
-      expect(text).not.toMatch(/fetchForSummary\s*\(|SUMMARY_MAX_BYTES|Uint8Array/);
-    }
+  it("the one byte read (D4) takes a cap and the row's type, and answers the streaming reader's result", () => {
+    // D5d: the type picks Google's text export for a Google format.
+    expect(session).toMatch(
+      /fetchForSummary\(\s*externalId: string,\s*options: \{ readonly maxBytes: number; readonly mimeType: string \| null \},\s*\): Promise<CappedBytes \| null>;/,
+    );
+    expect(types).toContain('import type { CappedBytes } from "../summary-bytes.js";');
+    // The dispatcher picks an implementation; it reads no bytes itself.
+    expect(dispatch).not.toMatch(/fetchForSummary|Uint8Array|Buffer/);
   });
 });

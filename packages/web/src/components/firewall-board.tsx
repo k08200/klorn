@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
+import { ToolName } from "./tool-name";
 import { TrustDot, type TrustScoreData } from "./trust-badge";
 
 // Wire shapes come from @klorn/contract — the same types the server builds
@@ -237,10 +238,8 @@ export function FirewallBoard() {
           {announcement}
         </p>
         <header className="mb-8">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            Today's attention firewall
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">Today's attention firewall</h1>
+          <p className="mt-2 max-w-2xl text-role-body text-ink-mid">
             Klorn evaluated every signal that hit your inbox today and sorted it into a tier. Move
             anything we got wrong — that override teaches the classifier.
           </p>
@@ -419,7 +418,7 @@ function DailyReceiptStrip({
 }) {
   const counts = CORE_TIERS;
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       {/* Five columns, not four: the strip used to count PUSH/QUEUE/SILENT/AUTO
           — a lane that no longer occurs — while omitting MEETING and INFO. */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
@@ -429,12 +428,12 @@ function DailyReceiptStrip({
             <div key={tier} className="flex items-center gap-3">
               <TierGlyph tier={tier} className={v.dot} />
               <div className="flex flex-col">
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+                <span className="font-mono text-role-caption uppercase tracking-[0.18em] text-ink-dim">
                   {v.label}
                 </span>
                 <CountChip
                   value={data.summary[tier]}
-                  className={`text-2xl font-semibold leading-none ${v.accent}`}
+                  className={`text-role-title font-semibold leading-none ${v.accent}`}
                 />
               </div>
             </div>
@@ -442,7 +441,7 @@ function DailyReceiptStrip({
         })}
       </div>
       {receipt?.summary?.narrative && (
-        <p className="mt-4 border-t border-line pt-4 text-xs leading-5 text-ink-dim">
+        <p className="mt-4 border-t border-line pt-4 text-role-caption leading-5 text-ink-dim">
           {receipt.summary.narrative}
         </p>
       )}
@@ -465,18 +464,21 @@ function TierColumn({
 }) {
   const v = TIER_VISUAL[tier];
   return (
-    <section className={`glass rounded-2xl border p-4 transition-opacity ${v.plane}`}>
+    <section className={`glass rounded-card border p-4 transition-opacity ${v.plane}`}>
       <header className="mb-1 flex items-center gap-2">
         <TierGlyph tier={tier} className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-ink">
+        <h2 className="font-mono text-role-caption font-semibold uppercase tracking-[0.2em] text-ink">
           {v.label}
         </h2>
-        <CountChip value={items.length} className={`ml-auto text-sm font-semibold ${v.accent}`} />
+        <CountChip
+          value={items.length}
+          className={`ml-auto text-role-body font-semibold ${v.accent}`}
+        />
       </header>
-      <p className="mb-4 text-[11px] leading-5 text-ink-dim">{v.description}</p>
+      <p className="mb-4 text-role-caption leading-5 text-ink-dim">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line px-3 py-8 text-center text-xs text-ink-mid">
+        <p className="rounded-control border border-dashed border-line px-3 py-8 text-center text-role-caption text-ink-mid">
           Nothing here yet.
         </p>
       ) : (
@@ -528,7 +530,7 @@ function FirewallCard({
 
   return (
     <li
-      className={`lift animate-card-in rounded-xl border p-3.5 text-sm ${v.card} ${
+      className={`lift animate-card-in rounded-card border p-3.5 text-role-body ${v.card} ${
         busy ? "opacity-50" : ""
       }`}
       // Stagger only the first screenful so a fresh load cascades in; later
@@ -537,19 +539,21 @@ function FirewallCard({
     >
       <p className="line-clamp-2 break-words font-medium text-ink">{subject}</p>
       {sender && (
-        <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-ink-dim">
+        <p className="mt-1 flex items-center gap-1.5 truncate text-role-caption text-ink-dim">
           {item.email?.trust && <TrustDot trust={item.email.trust} />}
           <span className="truncate">
             {item.email?.from ? "From" : "To"}: {sender}
           </span>
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-ink-mid">
+      <div className="mt-2 flex items-center gap-1.5 text-role-caption uppercase tracking-wider text-ink-mid">
         <SourceBadge source={item.source} />
         {item.toolName && (
           <>
             <span>·</span>
-            <span>{item.toolName.replace(/_/g, " ")}</span>
+            <span>
+              <ToolName toolName={item.toolName} />
+            </span>
           </>
         )}
         <span>·</span>
@@ -557,22 +561,22 @@ function FirewallCard({
       </div>
 
       {snippet && (
-        <details className="group mt-2.5 rounded-lg border border-line bg-surface-raised">
-          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <details className="group mt-2.5 rounded-control border border-line bg-surface-raised">
+          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-control px-2.5 py-1.5 text-role-caption text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <span aria-hidden="true" className="inline-block transition group-open:rotate-90">
               ›
             </span>
             <span className="group-open:hidden">Show preview</span>
             <span className="hidden group-open:inline">Hide preview</span>
           </summary>
-          <p className="line-clamp-6 whitespace-pre-wrap border-t border-line px-2.5 py-2 text-[11px] leading-4 text-ink-mid">
+          <p className="line-clamp-6 whitespace-pre-wrap border-t border-line px-2.5 py-2 text-role-caption leading-4 text-ink-mid">
             {snippet}
           </p>
         </details>
       )}
 
       {item.tierReason && (
-        <p className="mt-2.5 line-clamp-2 border-l-2 border-line pl-2 text-[11px] leading-4 text-ink-dim">
+        <p className="mt-2.5 line-clamp-2 border-l-2 border-line pl-2 text-role-caption leading-4 text-ink-dim">
           {item.tierReason}
         </p>
       )}
@@ -586,7 +590,7 @@ function FirewallCard({
               type="button"
               disabled={anyOverriding}
               onClick={() => onOverride(item, target)}
-              className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-line bg-surface-panel/70 px-2.5 text-[10px] font-medium uppercase tracking-wider text-ink-mid transition duration-150 hover:bg-surface-panel active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
+              className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-line bg-surface-panel/70 px-2.5 text-role-caption font-medium uppercase tracking-wider text-ink-mid transition duration-150 hover:bg-surface-panel active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
             >
               Move → {target}
             </button>
@@ -594,7 +598,7 @@ function FirewallCard({
         {item.href && (
           <Link
             href={item.href}
-            className={`ml-auto text-[11px] transition ${v.accent} hover:text-ink`}
+            className={`ml-auto text-role-caption transition ${v.accent} hover:text-ink`}
           >
             Open email →
           </Link>
@@ -656,16 +660,16 @@ function toolBodyPreview(item: FirewallItem): string | undefined {
 function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
   const v = TIER_VISUAL.INFO;
   return (
-    <section className={`glass mt-4 rounded-2xl border p-4 ${v.plane}`}>
+    <section className={`glass mt-4 rounded-card border p-4 ${v.plane}`}>
       <header className="flex items-center gap-2">
         <TierGlyph tier="INFO" className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-dim">
+        <h2 className="font-mono text-role-caption font-semibold uppercase tracking-[0.2em] text-ink-dim">
           INFO
         </h2>
-        <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
+        <CountChip value={count} className={`ml-auto text-role-body font-semibold ${v.accent}`} />
       </header>
-      <p className="mt-1.5 text-[11px] leading-5 text-ink-dim">{v.description}</p>
-      <ul className="mt-3 space-y-1.5 text-xs text-ink-mid">
+      <p className="mt-1.5 text-role-caption leading-5 text-ink-dim">{v.description}</p>
+      <ul className="mt-3 space-y-1.5 text-role-caption text-ink-mid">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
             <span className="text-ink-dim/60">·</span>
@@ -678,7 +682,7 @@ function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
 }
 
 function SourceBadge({ source }: { source: string }) {
-  return <span className="font-mono text-[10px] text-ink-dim">{source}</span>;
+  return <span className="font-mono text-role-caption text-ink-dim">{source}</span>;
 }
 
 function relativeTime(iso: string): string {

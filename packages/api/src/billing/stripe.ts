@@ -17,7 +17,10 @@ export const PLANS = {
     testLimit: 10,
     messageLimit: 50,
     tokenLimit: 500_000,
-    deviceLimit: 1,
+    // Same as Pro (founder decision 2026-11-07): web + Mac + phone at once.
+    // With 1, signing in anywhere else — including the web /billing page the
+    // Mac upgrade link opens — logged the other session out.
+    deviceLimit: 3,
   },
   PRO: {
     name: "Pro",
@@ -85,9 +88,11 @@ export type FeatureKey =
   | "slack"
   | "notion"
   | "meeting_tools"
-  // Connect more than one mail account (e.g. a Naver inbox or a secondary
-  // Google account) so the firewall runs across all of them. Free = the single
-  // primary Google account only; multi-account is a paid differentiator.
+  // Connect more than one mail account so the firewall runs across all of
+  // them. Free = ONE mail account, whatever the provider (Google, iCloud,
+  // Naver, ...); a SECOND one needs this feature (founder decision 2026-10-15).
+  // The connect routes ask billing/mail-account-entitlement.ts, not this key
+  // directly.
   | "multi_account";
 
 // The free tier is a real, continuously-usable product — not just a trial. When

@@ -2,8 +2,8 @@
 
 /**
  * Sheet (productization plan §2, P2) — a modal panel: right-side on ≥768px,
- * bottom sheet on phones. Elevation L3 (`shadow-l3`) over a 40% scrim,
- * `rounded-sheet`, enter 200ms / exit 160ms on `ease-fluid`. Reduced motion
+ * bottom sheet on phones. Sheet depth (`shadow-sheet`) over a 40% scrim,
+ * `rounded-sheet` (24), 320ms in and out on `ease-fluid` (Design Language v2). Reduced motion
  * drops the slide and keeps only the opacity change (and the global
  * reduced-motion rule in globals.css shortens that to an instant swap).
  *
@@ -11,8 +11,9 @@
  * described by `description` when given. Focus moves into the sheet body on
  * open (or `initialFocusRef`), Tab / Shift+Tab are trapped inside (shared
  * lib/focusable trap), Escape and a scrim click close it, and focus returns
- * to the element that opened it. Escape that ends an IME composition is
- * ignored.
+ * to the element that opened it (or to `returnFocusRef`, when the sheet's
+ * action removed that element), whichever is still on the page, else to
+ * `fallbackFocusRef`. Escape that ends an IME composition is ignored.
  *
  * Stacking: the sheet registers in the shared lib/modal-stack and only the
  * TOP overlay handles Escape / Tab, so a confirm or a second sheet opened over
@@ -26,8 +27,8 @@ import { getFocusableElements, trapTab } from "../../lib/focusable";
 import { bodyScrollLock, isPlainEscape, modalStack } from "../../lib/modal-stack";
 import Button from "./button";
 
-/** Matches --motion-exit; the panel unmounts after the exit transition. */
-const EXIT_MS = 160;
+/** Matches --motion-sheet; the panel unmounts after the exit transition. */
+const EXIT_MS = 320;
 
 type Phase = "closed" | "enter" | "open" | "exit";
 
@@ -42,6 +43,19 @@ export interface SheetProps {
   footer?: ReactNode;
   /** Element to focus on open; defaults to the first focusable control. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /**
+   * Element to focus on close instead of the one that opened the sheet: for a
+   * sheet whose action removed its opener (a deleted row's menu button).
+   * Read when the sheet closes.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Focused on close when neither the return target nor the opener is on the page any more. */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
+  /**
+   * The close button shows as unavailable (aria-disabled) while the sheet
+   * cannot be dismissed; `onClose` still decides what a press does.
+   */
+  closeUnavailable?: boolean;
   /** Label for the close button. */
   closeLabel?: string;
 }
@@ -70,6 +84,9 @@ export function Sheet({
   children,
   footer,
   initialFocusRef,
+  returnFocusRef,
+  fallbackFocusRef,
+  closeUnavailable = false,
   closeLabel = "Close",
 }: SheetProps) {
   const [phase, setPhase] = useState<Phase>("closed");
@@ -78,6 +95,9 @@ export function Sheet({
   const tokenRef = useRef<symbol>(Symbol("sheet"));
   const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const returnFocusPropRef = useRef(returnFocusRef);
+  const fallbackFocusPropRef = useRef(fallbackFocusRef);
+  const wasOpenRef = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -85,11 +105,20 @@ export function Sheet({
     onCloseRef.current = onClose;
   }, [onClose]);
 
+  // Must stay above the open/close effect: effects run in order, so in the
+  // commit that closes the sheet this one has stored that render's target
+  // before the close below reads it.
+  useEffect(() => {
+    returnFocusPropRef.current = returnFocusRef;
+    fallbackFocusPropRef.current = fallbackFocusRef;
+  }, [returnFocusRef, fallbackFocusRef]);
+
   // open → enter (offscreen) → open; close → exit → closed after EXIT_MS.
   useEffect(() => {
     if (open) {
       openerRef.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      wasOpenRef.current = true;
       setPhase("enter");
       return;
     }
@@ -97,7 +126,17 @@ export function Sheet({
     const timer = window.setTimeout(() => setPhase("closed"), EXIT_MS);
     const opener = openerRef.current;
     openerRef.current = null;
-    opener?.focus();
+    // Only a sheet that was open hands focus back (not one mounted closed), and
+    // only to an element still on the page: the target, the opener, the fallback.
+    if (wasOpenRef.current) {
+      const candidates = [
+        returnFocusPropRef.current?.current,
+        opener,
+        fallbackFocusPropRef.current?.current,
+      ];
+      candidates.find((element) => element?.isConnected)?.focus();
+    }
+    wasOpenRef.current = false;
     return () => window.clearTimeout(timer);
   }, [open]);
 
@@ -144,14 +183,13 @@ export function Sheet({
   if (phase === "closed") return null;
 
   const shown = phase === "open";
-  const duration = phase === "exit" ? "duration-160" : "duration-200";
 
   return createPortal(
     <div className="fixed inset-0 z-[120]">
       <div
         aria-hidden="true"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/40 transition-opacity ease-fluid ${duration} ${shown ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-black/40 transition-opacity ease-fluid duration-320 ${shown ? "opacity-100" : "opacity-0"}`}
       />
       <div
         ref={panelRef}
@@ -160,7 +198,7 @@ export function Sheet({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-sheet border border-line bg-surface-elevated text-ink shadow-l3 outline-none transition-[transform,opacity] ease-fluid md:inset-x-auto md:top-2 md:right-2 md:bottom-2 md:max-h-none md:w-[28rem] md:max-w-[calc(100vw-1rem)] md:rounded-sheet ${duration} ${
+        className={`absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-sheet border border-line bg-surface-elevated text-ink shadow-sheet outline-none transition-[transform,opacity] ease-fluid md:inset-x-auto md:top-2 md:right-2 md:bottom-2 md:max-h-none md:w-[28rem] md:max-w-[calc(100vw-1rem)] md:rounded-sheet duration-320 ${
           shown
             ? "translate-x-0 translate-y-0 opacity-100"
             : "opacity-0 motion-safe:translate-y-full motion-safe:md:translate-x-full motion-safe:md:translate-y-0"
@@ -168,20 +206,33 @@ export function Sheet({
       >
         <div className="flex shrink-0 items-start gap-3 border-b border-line-soft py-3 pr-2 pl-5">
           <div className="min-w-0 flex-1 pt-2.5">
-            <h2 id={titleId} className="text-title text-ink [word-break:keep-all]">
+            <h2
+              id={titleId}
+              className="text-role-title text-ink [overflow-wrap:anywhere] [word-break:keep-all]"
+            >
               {title}
             </h2>
             {description && (
-              <p id={descriptionId} className="mt-1 text-body text-ink-muted [word-break:keep-all]">
+              <p
+                id={descriptionId}
+                className="mt-1 text-role-body text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
+              >
                 {description}
               </p>
             )}
           </div>
-          <Button variant="ghost" size="icon" aria-label={closeLabel} onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={closeLabel}
+            aria-disabled={closeUnavailable || undefined}
+            className="aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+            onClick={onClose}
+          >
             <CloseGlyph />
           </Button>
         </div>
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-body">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-role-body">
           {children}
         </div>
         {footer && (

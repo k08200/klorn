@@ -1,0 +1,201 @@
+"use client";
+
+/**
+ * Mail v2 reader header (productization plan §1, P5b): the subject, who and
+ * when, and everything that left the list row — the account, the lane with its
+ * reason, and the secondary facts (needs reply, first contact, category,
+ * engagement, priority). Only the lane is coloured; the facts are quiet text.
+ */
+
+import type { EmailReaderContextResponse } from "@klorn/contract";
+import type { ReactNode } from "react";
+import { LaneChip } from "../../../../components/ui/lane-chip";
+import { Skeleton } from "../../../../components/ui/skeleton";
+import { SourceBadge } from "../../../../components/ui/source-badge";
+import { useT } from "../../../../lib/i18n";
+import { sourceGlyph } from "../../../../lib/source-provider";
+import { type AccountOption, senderName } from "../../_v2/model";
+import type { EmailDetail } from "../types";
+import { type ReaderActionsProps, ReaderLaneMenu } from "./reader-actions";
+
+export interface ReaderFacts {
+  /** Localized priority, only when it is not the ordinary one. */
+  priority: string | null;
+  /** Localized category label. */
+  category: string | null;
+}
+
+interface ReaderHeaderProps {
+  email: EmailDetail;
+  context: EmailReaderContextResponse | null;
+  /** The context has not answered yet: draw a placeholder, not "unsorted". */
+  contextPending: boolean;
+  account: AccountOption | null;
+  facts: ReaderFacts;
+  locale: string;
+  timeZone: string;
+  /** The sender label correction menu, beside the lane; absent when there is nothing to label. */
+  senderLabel?: ReactNode;
+  /** What the "Move to lane" chip needs; absent while the mail loads. */
+  lanes?: ReaderActionsProps | null;
+}
+
+function formatWhen(iso: string, locale: string, timeZone: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+/** The address inside "Name <addr>"; empty when the header is only an address. */
+function addressBesideName(from: string): string {
+  const match = /<([^>]+)>/.exec(from);
+  const address = match?.[1]?.trim() ?? "";
+  return address && address !== senderName(from) ? address : "";
+}
+
+/** The facts line, in the order a reader needs them. Absent facts claim nothing. */
+function useFactLabels({ email, context, facts }: ReaderHeaderProps): string[] {
+  const { t } = useT();
+  const replied = context?.repliedCount ?? 0;
+  return [
+    email.isRead === false ? t("mail.filterUnread") : null,
+    email.needsReply ? t("mail.filterReplyNeeded") : null,
+    context?.firstContact ? t("mailV2.reader.firstContact") : null,
+    replied === 1 ? t("mailV2.reader.replied.one") : null,
+    replied > 1 ? t("mailV2.reader.replied.many", { count: String(replied) }) : null,
+    facts.category,
+    facts.priority,
+    email.isStarred ? t("mailV2.reader.starred") : null,
+  ].filter((label): label is string => Boolean(label));
+}
+
+function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
+  const { t } = useT();
+  if (!context) {
+    // Still loading, or the context request failed: no lane is claimed.
+    return contextPending ? <Skeleton width="w-48" /> : null;
+  }
+  if (!context.tier) {
+    return (
+      <p className="flex flex-wrap items-center gap-2 text-role-body text-ink-mid">
+        <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-role-caption text-ink-muted">
+          {t("mailV2.row.sorting")}
+        </span>
+        {t("mailV2.reader.unsorted")}
+      </p>
+    );
+  }
+  return (
+    <div className="flex min-w-0 flex-1 items-start gap-2">
+      <LaneChip tier={context.tier} className="mt-0.5" />
+      {context.tierReason && (
+        // One line until opened: the summary is the reason itself.
+        <details className="group min-w-0 flex-1">
+          <summary className="focus-ring cursor-pointer list-none truncate rounded-chip py-0.5 text-role-meta text-ink-soft group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
+            {t("mailV2.reader.why", { reason: context.tierReason })}
+          </summary>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** The lane and why, then the sender label and "Move to lane" chips (Reader.dc). */
+function LaneLine(props: ReaderHeaderProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <LaneStatus {...props} />
+      {(props.senderLabel || props.lanes) && (
+        <div className="ml-auto flex items-center gap-2">
+          {props.senderLabel}
+          {props.lanes && <ReaderLaneMenu {...props.lanes} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters =
+    parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2);
+  return letters.toUpperCase();
+}
+
+export function ReaderHeader(props: ReaderHeaderProps) {
+  const { email, account, locale, timeZone } = props;
+  const { t } = useT();
+  const factLabels = useFactLabels(props);
+  const address = addressBesideName(email.from);
+  const accountName = account ? (account.email ?? sourceGlyph(account.provider).name) : null;
+  const recipients = [
+    email.to ? t("mailV2.reader.to", { recipients: email.to }) : null,
+    email.cc ? t("mailV2.reader.cc", { recipients: email.cc }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const name = senderName(email.from);
+  return (
+    <header className="flex flex-col gap-3.5">
+      <h1 className="line-clamp-2 max-w-[640px] break-keep text-role-title text-ink [overflow-wrap:anywhere]">
+        {email.subject || t("mailV2.noSubject")}
+      </h1>
+
+      <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 items-center gap-2.5 text-role-meta text-ink-soft">
+          <span
+            aria-hidden="true"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-role-caption font-semibold text-ink-soft"
+          >
+            {initials(name)}
+          </span>
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-ink">{name}</span>
+            {(address || accountName) && (
+              <span className="ml-2 text-ink-muted">
+                {[address, accountName].filter(Boolean).join(" → ")}
+              </span>
+            )}
+          </span>
+          {account && accountName && (
+            <span title={t("mailV2.reader.account", { account: accountName })} className="shrink-0">
+              <SourceBadge provider={account.provider} nickname={account.nickname} />
+              <span className="sr-only">
+                {t("mailV2.reader.account", { account: accountName })}
+              </span>
+            </span>
+          )}
+          <time dateTime={email.date} className="ml-auto shrink-0 tabular-nums text-ink-muted">
+            {formatWhen(email.date, locale, timeZone)}
+          </time>
+        </div>
+        {recipients && (
+          <p
+            title={recipients}
+            className="min-w-0 truncate pl-[38px] text-role-caption text-ink-muted"
+          >
+            {recipients}
+          </p>
+        )}
+      </div>
+
+      <LaneLine {...props} />
+
+      {factLabels.length > 0 && (
+        <ul className="flex flex-wrap gap-x-2 gap-y-1 text-role-caption text-ink-muted">
+          {factLabels.map((label, index) => (
+            <li key={label} className="flex items-center gap-2">
+              {index > 0 && <span aria-hidden="true">·</span>}
+              {label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </header>
+  );
+}

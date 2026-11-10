@@ -8,7 +8,9 @@
  *     `bodyParts` accepts `{ key, start, maxLength }` and sends it as
  *     `BODY.PEEK[TEXT]<0.N>` (imapflow lib/commands/fetch.js, the `bodyParts` branch;
  *     typed at lib/imap-flow.d.ts `FetchQueryObject.bodyParts`). The poll keeps at most
- *     50 000 characters of it, so 64 KiB is enough.
+ *     50 000 characters of the DECODED text (imap-body.ts). The slice is still encoded
+ *     MIME, so a base64 or HTML-heavy body yields less text than that; the decoder
+ *     handles the cut (no NUL, no raw fallback for a parsed message).
  *   - The poll stops consuming FETCH results at its window, so a server that keeps
  *     yielding messages cannot make one poll unbounded. imapflow drains and discards
  *     what is still in flight once the loop exits early (its `aborted` flag).
@@ -16,7 +18,11 @@
 
 import type { ImapProviderConfig } from "./imap-providers.js";
 
-/** More than `toPersistCall` keeps of a body (50 000 characters), far less than a large mail. */
+/**
+ * The encoded slice a user-chosen host may send, far less than a large mail. It
+ * decodes to at most about 48 KB of base64 text, or less for HTML (imap-body.ts),
+ * so it no longer always covers the 50 000 characters `toPersistCall` keeps.
+ */
 export const GENERIC_TEXT_FETCH_BYTES = 64 * 1024;
 
 type TextBodyPart = string | { key: string; start: number; maxLength: number };

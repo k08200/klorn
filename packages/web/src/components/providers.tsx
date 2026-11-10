@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AuthProvider } from "../lib/auth";
 import { I18nProvider } from "../lib/i18n";
 import { initSentryClient } from "../lib/sentry";
+import { activeUiLocale, LEGACY_PROFILE_KEY, PROFILE_KEY } from "../lib/ui-locale";
 import { ConfirmProvider } from "./confirm-dialog";
 import { ToastProvider } from "./toast";
 
@@ -38,6 +39,29 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initSentryClient();
   }, []);
+
+  // Cached responses carry server-composed reasons in the language they were
+  // fetched in (apiFetch sends the UI locale as Accept-Language). When the
+  // user switches language, refetch instead of showing the old language for
+  // up to staleTime. Same two signals I18nProvider listens to.
+  useEffect(() => {
+    let fetchedIn = activeUiLocale();
+    const onLocaleMaybeChanged = () => {
+      const next = activeUiLocale();
+      if (next === fetchedIn) return;
+      fetchedIn = next;
+      void queryClient.invalidateQueries();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === PROFILE_KEY || e.key === LEGACY_PROFILE_KEY) onLocaleMaybeChanged();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("klorn-profile-updated", onLocaleMaybeChanged);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("klorn-profile-updated", onLocaleMaybeChanged);
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return;

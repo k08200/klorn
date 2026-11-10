@@ -34,12 +34,19 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import {
+  canConnectNewMailAccount,
+  keepIfOnlyMailSource,
+  mayConnectMailAccount,
+  normalizeMailAccountEmail,
+  SECOND_MAIL_ACCOUNT_REFUSAL,
+} from "../billing/mail-account-entitlement.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { takeGenericImapAttempt } from "../mail/generic-imap-attempts.js";
 import { type HostRejection, parseGenericImapHost } from "../mail/generic-imap-host.js";
 import { verifyGenericImapCredentials } from "../mail/generic-imap-verify.js";
+import { startFirstImapSync } from "../mail/imap-first-sync.js";
 import { clearPollBackoff } from "../mail/imap-poll-backoff.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "../mail/imap-providers.js";
 import { verifyImapCredentials } from "../mail/imap-sync.js";
@@ -129,6 +136,8 @@ function isServerChange(
 interface ExistingAccount {
   id: string;
   imapHost: string | null;
+  /** The address as stored — the row's key, whatever case this request typed. */
+  email: string;
 }
 
 async function findExistingAccount(
@@ -136,9 +145,21 @@ async function findExistingAccount(
   userId: string,
   email: string,
 ): Promise<ExistingAccount | null> {
-  return prisma.linkedInboxAccount.findUnique({
+  const select = { id: true, imapHost: true, email: true } as const;
+  const exact = await prisma.linkedInboxAccount.findUnique({
     where: { userId_provider_email: { userId, provider: cfg.provider, email } },
-    select: { id: true, imapHost: true },
+    select,
+  });
+  if (exact) return exact;
+  // The same mailbox typed in another case (A@x.com vs a@x.com): re-verify that
+  // row instead of adding a duplicate of it.
+  return prisma.linkedInboxAccount.findFirst({
+    where: {
+      userId,
+      provider: cfg.provider,
+      email: { equals: normalizeMailAccountEmail(email), mode: "insensitive" },
+    },
+    select,
   });
 }
 
@@ -255,6 +276,17 @@ function retryAfterMsFor(cfg: ImapProviderConfig, userId: string): number | null
   return attempt.allowed ? null : attempt.retryAfterMs;
 }
 
+/**
+ * The 400 body for a failed verify. `code` lets a client localize the reason
+ * (IMAP_AUTH_FAILED = not an app password); the English `message` stays for
+ * older clients, and a failure without a code carries no `code` key.
+ */
+function verifyRefusalBody(verify: { message?: string; code?: string }) {
+  return verify.code
+    ? { ok: false, message: verify.message, code: verify.code }
+    : { ok: false, message: verify.message };
+}
+
 /** A user-supplied host gets the verify whose failures all read the same. */
 const verifierFor = (cfg: ImapProviderConfig) =>
   cfg.hostPolicy === "user-supplied" ? verifyGenericImapCredentials : verifyImapCredentials;
@@ -286,6 +318,9 @@ export function imapConnectRoutes(
       });
       const first = rows[0];
       return {
+        // Whether a NEW mailbox may be connected now (the first one is free,
+        // a second needs Pro). The settings UI shows the form or the Pro note.
+        canConnect: await canConnectNewMailAccount(userId),
         // Legacy single-account shape — existing web/desktop clients read these.
         connected: rows.length > 0,
         email: first?.email ?? null,
@@ -307,12 +342,13 @@ export function imapConnectRoutes(
     }>(
       "/connect",
       {
-        // Multi-account (connecting a SECOND inbox beyond the primary Google
-        // account) is a paid feature — Pro/Team/Enterprise only. requireAuth
-        // first sets userId for requireEntitled. Inert while the paywall is off.
-        // /status (read) and /disconnect stay open so a downgraded user can still
-        // see and remove an inbox they connected while paid.
-        preHandler: [requireAuth, requireEntitled],
+        // The first mailbox is free whatever the provider; a SECOND one is Pro
+        // (billing/mail-account-entitlement.ts). Checked in the handler, where
+        // the address is known, so re-verifying the same account is never
+        // refused. Inert while the paywall is off. /status (read) and
+        // /disconnect stay open so a downgraded user can still see and remove
+        // an inbox they connected while paid.
+        preHandler: [requireAuth],
         schema: { body: connectBodySchema },
         // Every call opens a real IMAP connection to the provider; without a
         // tight limit this is both a credential-stuffing oracle and a way to
@@ -328,6 +364,14 @@ export function imapConnectRoutes(
           return { ok: false, message: hostChoice.message };
         }
         const { imapHost } = hostChoice;
+
+        // Before anything else touches the network: no IMAP connection for a
+        // connect the plan refuses anyway.
+        const account = { provider: cfg.provider, email };
+        if (!(await mayConnectMailAccount(userId, account))) {
+          reply.code(403);
+          return SECOND_MAIL_ACCOUNT_REFUSAL;
+        }
 
         const existing = await findExistingAccount(cfg, userId, email);
         const refusal = await connectRefusal(cfg, userId, existing, imapHost);
@@ -354,19 +398,40 @@ export function imapConnectRoutes(
         });
         if (!verify.ok) {
           reply.code(400);
-          return { ok: false, message: verify.message };
+          return verifyRefusalBody(verify);
         }
 
-        const saved = await saveAccount(cfg, { userId, email, imapHost, password, existing });
+        // An existing row keeps its stored address as the key.
+        const saved = await saveAccount(cfg, {
+          userId,
+          email: existing?.email ?? email,
+          imapHost,
+          password,
+          existing,
+        });
         if (!saved.ok) {
           // Another request changed the account's server while this one was being verified.
           reply.code(409);
           return { ok: false, message: SERVER_CHANGE_REFUSED };
         }
+        // Check-after-insert: a parallel first connect of ANOTHER account may
+        // have committed while this one was verifying. Fails closed — the new
+        // row is removed and this request refused.
+        if (
+          !existing &&
+          saved.id &&
+          !(await keepIfOnlyMailSource(userId, { ...account, id: saved.id }))
+        ) {
+          reply.code(403);
+          return SECOND_MAIL_ACCOUNT_REFUSAL;
+        }
         // A relink starts the poll over: no leftover backoff for this account.
         if (saved.id && cfg.hostPolicy === "user-supplied") clearPollBackoff(saved.id);
+        // First mail now, not at the next 5-minute tick. false = this process
+        // does not poll; the client then says the first mail can take ~5 min.
+        const firstSync = saved.id ? startFirstImapSync(userId, cfg, saved.id) : false;
 
-        return { ok: true, email, host: imapHost };
+        return { ok: true, email, host: imapHost, firstSync };
       },
     );
 

@@ -1,0 +1,225 @@
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--state-warn-bg);
+  border: 1px solid var(--state-warn-line);
+  border-radius: var(--radius-row);
+  color: var(--state-warn-ink);
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+}
+
+.offline-banner__icon {
+  flex: none;
+  color: var(--state-warn-icon);
+}
+
+.skeleton-card {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.skeleton-row + .skeleton-row {
+  border-top: 1px solid var(--line);
+}
+
+.skeleton-row__lines {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 3px;
+}
+
+.skeleton {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--skeleton-soft);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton--strong {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--skeleton-strong);
+}
+
+.skeleton--avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--skeleton-strong);
+}
+
+.skeleton--block {
+  border-radius: var(--radius-card);
+  background: var(--skeleton-strong);
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.empty-state {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state__icon--ok {
+  background: var(--state-ok-bg);
+  color: var(--state-ok-ink);
+}
+
+.empty-state__icon--neutral {
+  background: var(--surface-control);
+  color: var(--ink-mid);
+}
+
+.empty-state__title {
+  font-size: var(--type-headline);
+  line-height: var(--type-headline-lh);
+  font-weight: 600;
+}
+
+.empty-state__body {
+  font-size: var(--type-callout);
+  line-height: var(--type-callout-lh);
+  color: var(--ink-mid);
+  max-width: 280px;
+}
+
+.problem-state {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.problem-state--compact {
+  padding: 16px;
+  flex-direction: row;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 12px;
+}
+
+.problem-state--compact .problem-state__title {
+  flex: 1 1 auto;
+  font-size: var(--type-callout);
+}
+
+.problem-state__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.problem-state--compact .problem-state__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.problem-state__icon--error {
+  background: var(--state-danger-bg);
+  color: var(--state-danger-ink);
+}
+
+.problem-state__icon--offline {
+  background: var(--state-warn-bg);
+  color: var(--state-warn-icon);
+}
+
+.problem-state__title {
+  font-size: var(--type-headline);
+  line-height: var(--type-headline-lh);
+  font-weight: 600;
+}
+
+.problem-state__body {
+  font-size: var(--type-callout);
+  line-height: var(--type-callout-lh);
+  color: var(--ink-mid);
+  max-width: 300px;
+}
+
+/* Shared buttons (canvas: controls r12, ≥44px). */
+.button {
+  min-height: var(--touch);
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: var(--type-body);
+  font-weight: 600;
+  line-height: 1.2;
+  transition:
+    background-color var(--motion-state) var(--ease),
+    opacity var(--motion-state) var(--ease);
+}
+
+.button:active {
+  opacity: 0.8;
+}
+
+.button--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.button--quiet {
+  background: var(--surface-control);
+  color: var(--ink);
+}
+
+.button--plain {
+  color: var(--accent);
+}
+
+.button[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}

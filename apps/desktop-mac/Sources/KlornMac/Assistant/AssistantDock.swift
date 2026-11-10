@@ -46,8 +46,8 @@ struct AssistantDock: View {
                     AssistantThread(showsStarters: false)
                 }
                 .frame(width: 380, height: 460)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
                 .shadow(color: Theme.panelShadow, radius: 22, y: 8)
                 .transition(
                     reduceMotion
@@ -63,9 +63,9 @@ struct AssistantDock: View {
             } label: {
                 Image(systemName: model.showAssistantDock ? "xmark" : "sparkles")
                     .font(.title3.weight(.medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onAccentSolid)
                     .frame(width: 48, height: 48)
-                    .background(Theme.accent, in: Circle())
+                    .background(Theme.accentSolid, in: Circle())
                     .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 4)
             }
             .buttonStyle(.plain)
@@ -75,6 +75,18 @@ struct AssistantDock: View {
         }
         .padding(.trailing, 20).padding(.bottom, 20)
     }
+}
+
+extension AssistantDock {
+    /// Extra bottom space for scroll content that already ends on a 24pt
+    /// margin: 24 + 56 = 80pt clears the floating button (48pt + 20pt inset)
+    /// with a gap, so it never covers the last row.
+    static let contentClearance: CGFloat = 56
+
+    /// The band an edge-to-edge surface (the calendar's month grid, which
+    /// has no margin of its own) keeps free at the bottom: the button's
+    /// 48pt + 20pt inset + a 12pt gap. Same 80pt the scroll lists end on.
+    static let edgeClearance: CGFloat = contentClearance + 24
 }
 
 /// Offscreen render harness for the dock (ImageRenderer draws ScrollView

@@ -5,12 +5,12 @@ test.describe("Authentication", () => {
     await page.goto("/login");
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open decision queue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   });
 
   test("shows register mode toggle", async ({ page }) => {
     await page.goto("/login");
-    const toggle = page.getByRole("button", { name: "Switch to sign-up" });
+    const toggle = page.getByRole("button", { name: "Create an account" });
     await expect(toggle).toBeVisible();
     await toggle.click();
     await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
@@ -22,9 +22,12 @@ test.describe("Authentication", () => {
     await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
   });
 
-  test("states the beta scope under the card", async ({ page }) => {
+  test("links the published security facts under the form", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByText(/Free during the private beta/)).toBeVisible();
+    await expect(page.getByRole("link", { name: /CASA Tier 2/ })).toHaveAttribute(
+      "href",
+      "https://klorn.ai/security/",
+    );
   });
 
   test("shows reset password link", async ({ page }) => {
@@ -34,7 +37,7 @@ test.describe("Authentication", () => {
 
   test("password field requires minimum 8 characters for registration", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
     const passwordInput = page.locator('input[type="password"]');
     await expect(passwordInput).toHaveAttribute("minLength", "8");
   });

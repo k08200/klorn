@@ -14,13 +14,15 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import type { CallPriority } from "../billing/quota-limiter.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
 import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
-import { extractEmailAddress } from "../mail/email-address.js";
+import { extractEmailAddress, parseAddress } from "../mail/email-address.js";
 import {
   buildAttachmentCandidateProfile,
   listEmailAttachments,
@@ -35,6 +37,16 @@ import type { SendMailResult } from "../mail/providers/types.js";
 import { pickInReplyTo } from "../mail/reply-headers.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
 import { markEmailReplied } from "../mail/reply-state.js";
+import { resolveReplyThreading } from "../mail/reply-threading.js";
+import {
+  openSendReceipt,
+  outcomeOfSend,
+  SEND_RECEIPT_UNAVAILABLE_MESSAGE,
+  type SendReceiptHandle,
+  sendReceiptWire,
+  settleSendReceipt,
+  verifySendOrRefuse,
+} from "../mail/send-receipt.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
 import { recordSentMessage } from "../mail/sent-messages.js";
 import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
@@ -106,8 +118,9 @@ async function fetchOriginalAttachmentsForDraft(input: {
 }
 
 function extractReplyAddress(raw: string): string {
-  const match = raw.match(/<([^>]+)>/);
-  return (match?.[1] || raw).replace(/^["']|["']$/g, "").trim();
+  return parseAddress(raw)
+    .replace(/^["']|["']$/g, "")
+    .trim();
 }
 
 /**
@@ -356,9 +369,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // A daily-budget trip is a different fact from an outage, and the
         // generic "temporarily unavailable" sent the user in circles retrying
         // something that cannot succeed until tomorrow (founder, 2026-08-10).
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
           // Every model in the fallback chain refused. Still 503 (it is
           // transient), but say which layer failed so a key/quota problem is
@@ -459,9 +471,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // A daily-budget trip is a different fact from an outage, and the
         // generic "temporarily unavailable" sent the user in circles retrying
         // something that cannot succeed until tomorrow (founder, 2026-08-10).
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
           // Every model in the fallback chain refused. Still 503 (it is
           // transient), but say which layer failed so a key/quota problem is
@@ -641,28 +652,47 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         : `Re: ${dbEmail.subject}`;
 
       // RFC822 Message-ID isn't stored — fetch it live so In-Reply-To/References
-      // are correct. References = original chain + original Message-ID (RFC 5322).
-      // A message from a linked secondary inbox lives on THAT account (#757).
+      // are correct (reply-threading.ts). A message from a linked secondary inbox
+      // lives on THAT account (#757).
       const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
-      const { messageId, references } = await actions.getReplyHeaders(
-        uid,
-        dbEmail.gmailId,
-        dbEmail.linkedInboxAccountId,
-      );
-      const referencesChain = [references, messageId].filter(Boolean).join(" ") || undefined;
+      const threading = await resolveReplyThreading(actions, uid, dbEmail);
 
-      let result: SendMailResult;
+      // Deterministic floor (MANUAL_SEND_RECEIPTS_ENABLED): the receipt binds the
+      // recipient and subject derived above and the body the user confirmed, and
+      // is written before anything leaves. No receipt, no send. null while the
+      // flag is off — then nothing below changes.
+      let receipt: SendReceiptHandle | null;
       try {
-        result = await actions.sendEmail(uid, to, subject, body, [], {
-          threadId: dbEmail.threadId,
-          linkedInboxAccountId: dbEmail.linkedInboxAccountId,
-          inReplyTo: messageId,
-          references: referencesChain,
-          // OUTLOOK threads natively from the original's id (step B0b), taken from the
-          // row looked up above and never from the URL.
-          ...replyTargetFor(actions, dbEmail.gmailId),
+        receipt = await openSendReceipt({
+          userId: uid,
+          route: "reply",
+          to,
+          subject,
+          body,
+          inbox: dbEmail.linkedInboxAccountId ?? "primary",
+          emailId: dbEmail.id,
         });
       } catch (err) {
+        captureError(err, {
+          tags: { scope: "email-replies.receipt" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
+        return reply.code(503).send({ error: SEND_RECEIPT_UNAVAILABLE_MESSAGE });
+      }
+
+      // The exact bytes handed to the provider, verified against the receipt.
+      if (receipt) await verifySendOrRefuse(receipt, uid, { to, subject, body });
+      let result: SendMailResult;
+      try {
+        // OUTLOOK threads natively from the original's id (step B0b), taken from the
+        // row looked up above and never from the URL.
+        result = await actions.sendEmail(uid, to, subject, body, [], {
+          ...threading,
+          linkedInboxAccountId: dbEmail.linkedInboxAccountId,
+        });
+      } catch (err) {
+        // A throw may come after the mail left: the receipt says "unknown", never "refused".
+        if (receipt) await settleSendReceipt(receipt, uid, { status: "UNKNOWN" });
         if (!(err instanceof SendOutcomeUnknownError)) throw err;
         // The provider could not say whether the reply went out. Nothing is recorded as
         // answered, and the user is told not to simply retry: that could deliver twice.
@@ -672,6 +702,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         });
         return reply.code(502).send({ error: SEND_OUTCOME_UNKNOWN_MESSAGE });
       }
+      if (receipt) await settleSendReceipt(receipt, uid, outcomeOfSend(result));
       if ("unsupported" in result) return reply.code(501).send({ error: result.error });
       if ("error" in result) return reply.code(409).send(result);
 
@@ -680,6 +711,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       await recordContactEngagement(uid, to, "outbound");
       // The row's reply chip flips to "replied" — a recorded fact.
       await markEmailReplied(uid, dbEmail.id);
+      noteEmailOutcome(uid, dbEmail.id, "REPLIED");
       // And the thread joins "waiting on" until they answer (sent-messages.ts).
       if (result.messageId) {
         await recordSentMessage(uid, {
@@ -689,6 +721,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           subject,
           sentAt: new Date(),
           inbox: dbEmail.linkedInboxAccountId ?? "primary",
+          origin: "user",
         });
       }
 
@@ -701,7 +734,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       return {
         ...result,
         to,
-        threaded: result.threaded === true || pickInReplyTo(messageId) !== undefined,
+        threaded: result.threaded === true || pickInReplyTo(threading.inReplyTo) !== undefined,
+        ...(receipt ? { receipt: sendReceiptWire(receipt) } : {}),
       };
     },
   );

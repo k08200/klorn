@@ -83,7 +83,7 @@ export async function evaluateNotificationGate(
       (config as unknown as { notifyAgentProposal?: boolean }).notifyAgentProposal ?? true,
     notifyDailyBriefing:
       (config as unknown as { notifyDailyBriefing?: boolean }).notifyDailyBriefing ?? true,
-    timezone: normalizeTimeZone((config as unknown as { timezone?: string | null }).timezone),
+    timezone: normalizeTimeZone(config.timezone),
     quietHoursStart:
       (config as unknown as { quietHoursStart?: string | null }).quietHoursStart ?? null,
     quietHoursEnd: (config as unknown as { quietHoursEnd?: string | null }).quietHoursEnd ?? null,

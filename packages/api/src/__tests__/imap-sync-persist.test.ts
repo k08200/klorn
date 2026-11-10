@@ -158,6 +158,145 @@ describe("syncImapInbox → shared persist path", () => {
     expect(judgeEmail).not.toHaveBeenCalled();
   });
 
+  it("fetches the top-level MIME headers and persists the decoded body", async () => {
+    const mime = [
+      "--b1",
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      Buffer.from("내일 3시 회의 확인 부탁드립니다").toString("base64"),
+      "--b1--",
+      "",
+    ].join("\r\n");
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from('Content-Type: multipart/alternative; boundary="b1"\r\n'),
+        bodyParts: new Map([["text", Buffer.from(mime)]]),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    expect(imap.fetch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ headers: ["content-type", "content-transfer-encoding"] }),
+      expect.anything(),
+    );
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        body: "내일 3시 회의 확인 부탁드립니다",
+        snippet: "내일 3시 회의 확인 부탁드립니다",
+      }),
+      // A re-polled row whose body was stored raw before this fix picks up the
+      // decoded text: the IMAP path asks persist to refresh a changed body.
+      expect.objectContaining({ linkedInboxAccountId: "acc-icloud", refreshBody: true }),
+    );
+  });
+
+  it("does not ask persist to refresh a body it could not decode (headers missing)", async () => {
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    // fakeMessages() carry no `headers`: a flaky FETCH must not overwrite a
+    // decoded body with raw text.
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.anything(),
+      expect.objectContaining({ refreshBody: false }),
+    );
+  });
+
+  it("sanitizes only the head of a huge undecodable body for the snippet", async () => {
+    // Fixed hosts fetch the whole TEXT; without headers the raw text is kept,
+    // and sanitize-html is super-linear in tag nesting (<b> x 166k: ~8 s).
+    const hostile = Buffer.from("<b>".repeat(400_000));
+    imap.fetch.mockImplementation(async function* () {
+      yield { ...fakeMessages()[0], bodyParts: new Map([["text", hostile]]) };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    const start = performance.now();
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it("does not refresh a stored body when the TEXT part did not come back", async () => {
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from("Content-Type: text/plain; charset=utf-8\r\n"),
+        bodyParts: new Map(),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.anything(),
+      expect.objectContaining({ refreshBody: false }),
+    );
+  });
+
+  it("never cuts a surrogate pair when it caps the stored body", async () => {
+    const body = `${"a".repeat(49_999)}😀tail`;
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from("Content-Type: text/plain; charset=utf-8\r\n"),
+        bodyParts: new Map([["text", Buffer.from(body)]]),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    const stored = persistGmailEmail.mock.calls[0]?.[1]?.body as string;
+    expect(stored).toBe("a".repeat(49_999));
+    expect(/[\uD800-\uDBFF]$/.test(stored)).toBe(false);
+  });
+
   it("namespaces the dedup key with the provider idPrefix (icloud-imap: for ICLOUD)", async () => {
     persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
 

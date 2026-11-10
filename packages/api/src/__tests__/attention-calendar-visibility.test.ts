@@ -325,19 +325,25 @@ describe("every AttentionItem reader is accounted for", () => {
   const NOT_CALENDAR = [
     "agentcore/auto-mode-candidates.ts",
     "judge/attention-aging.ts",
+    "judge/attention-by-email.ts", // one mail's EMAIL item: id and status only
     "judge/calibration-snapshot.ts",
     "judge/email-firewall.ts",
     "judge/email-lanes.ts",
     "judge/fallback-rejudge.ts",
+    "judge/firewall-push.ts", // one mail's open EMAIL item: id, lane and reason (N1 push body)
     "judge/judge-context.ts",
     "judge/label-correction.ts",
     "judge/rejudge-open-items.ts",
+    "judge/user-outcome.ts", // one item by id: source and sourceId to stamp, never shown
+    "judge/v3/live-judge.ts", // one mail's EMAIL item: its budget hold only
     "learning/learned-rule-store.ts",
     "mail/proactive-drafts.ts", // OPEN PUSH email items, ids only
     "mcp/set-tier.ts",
+    "notify/desktop-catchup.ts", // OPEN PUSH EMAIL items of named mails: reason only
     "pim/briefing.ts",
     "pim/focus-digest.ts", // a count of arrivals, no title
     "routes/commitments.ts",
+    "routes/email-lanes.ts", // one mail's EMAIL item: lane and reason, no title
   ];
   // Show items of every source, so they drop the ones whose calendar event is hidden.
   const FILTERS_CALENDAR_ITEMS = ["pim/briefing-structure.ts", "pim/inbox-summary.ts"];

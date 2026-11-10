@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { getFocusableElements, trapTab } from "../lib/focusable";
+import { useT } from "../lib/i18n";
 import { bodyScrollLock, isPlainEscape, modalStack } from "../lib/modal-stack";
 
 interface ConfirmOptions {
@@ -31,6 +32,7 @@ export function useConfirm() {
 }
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useT();
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -95,7 +97,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[130] px-4">
           <div
             ref={dialogRef}
-            className="bg-surface-panel border border-line rounded-xl p-6 w-full max-w-sm animate-slide-up"
+            className="bg-surface-panel border border-line rounded-sheet p-6 w-full max-w-sm animate-slide-up"
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
@@ -104,27 +106,27 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             <h3 id="confirm-dialog-title" className="font-semibold mb-2">
               {options.title}
             </h3>
-            <p id="confirm-dialog-message" className="text-sm text-ink-mid mb-6">
+            <p id="confirm-dialog-message" className="text-role-body text-ink-mid mb-6">
               {options.message}
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => handleClose(false)}
-                className="min-h-11 px-4 py-2 rounded-lg text-sm text-ink-mid hover:text-ink transition"
+                className="min-h-11 px-4 py-2 rounded-control text-role-label text-ink-mid hover:text-ink transition"
               >
-                {options.dismissLabel || "Cancel"}
+                {options.dismissLabel || t("common.cancel")}
               </button>
               <button
                 type="button"
                 onClick={() => handleClose(true)}
-                className={`min-h-11 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                className={`min-h-11 px-4 py-2 rounded-control text-role-label font-medium transition ${
                   options.danger
                     ? "bg-danger-solid hover:bg-danger-solid-hover text-danger-solid-ink"
                     : "bg-accent-solid hover:bg-accent-solid-hover text-accent-solid-ink"
                 }`}
               >
-                {options.confirmLabel || "Confirm"}
+                {options.confirmLabel || t("common.confirm")}
               </button>
             </div>
           </div>

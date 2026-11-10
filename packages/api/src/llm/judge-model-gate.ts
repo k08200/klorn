@@ -64,16 +64,41 @@ export const GATE_FAILING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
 };
 
 /**
- * The pin to recommend when the configured one fails. Measured 54/56 on all
- * three runs with 13/13 urgent recall at $0.30/M — the cheapest model in the
- * bake-off that passed every run.
+ * Models measured as passing the gate, beyond the recommended pin — with the
+ * run count in `gate`, because at provider-default sampling a model can pass
+ * most runs rather than all of them. Same rule as the failing list: an
+ * empirical claim, re-measure before changing it, and update `eval/README.md`
+ * in the same change.
  */
-export const RECOMMENDED_JUDGE_MODEL = "google/gemini-2.5-flash";
+export const GATE_PASSING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
+  "google/gemini-2.5-flash": {
+    accuracy: "96.4%",
+    urgentRecall: "13, 13 and 13 of 13",
+    gate: "3/3",
+    mechanism:
+      "the hosted judge pin before the Claude switch; 54/56 on all three runs (2026-09-04)",
+  },
+  "anthropic/claude-haiku-5.5": {
+    accuracy: "92.9–98.2%",
+    urgentRecall: "13, 12, 13, 13 and 11 of 13",
+    gate: "4/5",
+    mechanism:
+      "passes through the native Anthropic provider with the forced JSON tool (2026-10-30)",
+  },
+};
+
+/**
+ * The pin to recommend when the configured one fails: the model hosted Klorn
+ * runs (Claude API only, founder decision 2026-11-01). Measured through the
+ * native Anthropic provider (eval/README.md, 2026-10-30): 55 · 54 · 54 · 55 · 52
+ * of 56 over five runs, urgent recall 13 · 12 · 13 · 13 · 11 of 13, gate 4/5.
+ */
+export const RECOMMENDED_JUDGE_MODEL = "claude-haiku-5-5";
 
 /**
  * Compare model ids the way an operator means them.
  *
- * OpenRouter ids carry variant suffixes (`:free`, `:beta`, `:nitro`) that
+ * Proxy-style ids carry variant suffixes (`:free`, `:beta`, `:nitro`) that
  * select routing, not a different set of weights, so `claude-sonnet-5:beta`
  * has the same calibration problem as `claude-sonnet-5` and must match. Case
  * and surrounding whitespace are normalised for the same reason: an env var
@@ -85,7 +110,22 @@ export function normalizeModelId(raw: string): string {
   // so it must survive being handed whatever a caller has — including the
   // `undefined` that an unset env var produces in a path that forgot a default.
   if (typeof raw !== "string") return "";
-  return raw.trim().toLowerCase().split(":")[0] ?? "";
+  const id = raw.trim().toLowerCase().split(":")[0] ?? "";
+  return canonicalClaudeId(id) ?? id;
+}
+
+/**
+ * One spelling per Claude model, so the native provider's ids
+ * (`claude-opus-4-8`, `claude-haiku-4-5-20251001`) match the vendor-prefixed
+ * ids the bake-off recorded (`anthropic/claude-opus-4.8`). Without this a
+ * native pin of a gate-failing model would sail past the check.
+ */
+function canonicalClaudeId(id: string): string | null {
+  const bare = id.startsWith("anthropic/") ? id.slice("anthropic/".length) : id;
+  const parts = bare.match(/^claude-([a-z]+)-(\d+)(?:[.-](\d{1,2}))?(?:-\d{8})?$/);
+  if (!parts) return null;
+  const [, family, major, minor] = parts;
+  return `anthropic/claude-${family}-${major}${minor === undefined ? "" : `.${minor}`}`;
 }
 
 export type JudgeModelVerdict =
@@ -105,7 +145,7 @@ export function judgeModelVerdict(model: string): JudgeModelVerdict {
   const id = normalizeModelId(model);
   const failure = GATE_FAILING_JUDGE_MODELS[id];
   if (failure) return { status: "failed-gate", model: id, result: failure };
-  if (id === normalizeModelId(RECOMMENDED_JUDGE_MODEL)) {
+  if (id === normalizeModelId(RECOMMENDED_JUDGE_MODEL) || GATE_PASSING_JUDGE_MODELS[id]) {
     return { status: "passed-gate", model: id };
   }
   return { status: "not-measured", model: id };
@@ -190,7 +230,7 @@ export function gateFailureMessage(resolution: JudgeModelResolution): string {
   ];
   if (resolution.substituted) {
     lines.push(
-      `  To make this explicit, set JUDGE_MODEL=${RECOMMENDED_JUDGE_MODEL} (54/56 on all three runs, 13/13 urgent, $0.30/M).`,
+      `  To make this explicit, set JUDGE_MODEL=${RECOMMENDED_JUDGE_MODEL} (52–55/56 over five runs, gate 4/5, eval/README.md 2026-10-30).`,
       `  To keep ${configured} anyway, set ${ALLOW_GATE_FAILURE_ENV}=true — or re-run 'pnpm eval:judge' and update eval/README.md if this measurement is stale.`,
     );
   } else {
@@ -199,6 +239,79 @@ export function gateFailureMessage(resolution: JudgeModelResolution): string {
     );
   }
   return lines.join("\n");
+}
+
+/** The part of a provider the serving check needs. */
+export interface JudgeChainHead {
+  readonly name: string;
+  resolveModel(requestedModel: string): string;
+}
+
+/**
+ * The model that will actually serve the judge pin on the leading provider.
+ *
+ * Every provider translates a pin into its own namespace and serves what it
+ * cannot route with its own default — so with Anthropic leading the chain,
+ * JUDGE_MODEL=google/gemini-2.5-flash is served by ANTHROPIC_MODEL. Validating
+ * only the pin would check a model that never runs.
+ */
+export function servedJudgeModel(pin: string, head: JudgeChainHead | undefined): string {
+  if (!head) return pin;
+  return head.resolveModel(pin);
+}
+
+/**
+ * Boot report for the serving check, run for EVERY provider in the chain —
+ * a failover lane serves the judge exactly when the lead is down, which is
+ * when nobody is looking:
+ *  - a swap to a model the committed eval records as failing → stderr + Sentry,
+ *    whatever the provider's position;
+ *  - the LEADING provider swapping the pin for a model the eval never measured
+ *    → stderr warning + Sentry (the judge's every call runs on it);
+ *  - an unmeasured swap on a failover lane → one info line.
+ * No substitution here — the fix is an env change (JUDGE_MODEL or the
+ * provider's model var), and the message names it. Never throws.
+ */
+export function reportJudgeServing(pin: string, chain: readonly JudgeChainHead[]): void {
+  chain.forEach((provider, index) => {
+    try {
+      reportOneServingProvider(pin, provider, index === 0);
+    } catch {
+      // A guard must never be the reason a boot fails.
+    }
+  });
+}
+
+function reportOneServingProvider(pin: string, provider: JudgeChainHead, isLead: boolean): void {
+  const served = servedJudgeModel(pin, provider);
+  if (normalizeModelId(served) === normalizeModelId(pin)) return;
+  const role = isLead ? "leads the provider chain" : "is a failover lane";
+  const line = `[JUDGE-MODEL] ${provider.name} ${role} and serves the judge pin ${pin} as ${served}`;
+  const verdict = judgeModelVerdict(served);
+  const tags = { provider: provider.name, served, pin, lead: String(isLead) };
+  if (verdict.status === "failed-gate") {
+    console.error(
+      `${line} — and ${served} fails the gate (eval/README.md: urgent recall ${verdict.result.urgentRecall}, gate ${verdict.result.gate}): ` +
+        `${verdict.result.mechanism}. Set JUDGE_MODEL to a passing model this provider serves, or change its default model.`,
+    );
+    captureError(new Error(`Judge served by ${served}, which fails the urgent-recall gate`), {
+      tags: { scope: "judge.served_model_fails_gate", ...tags },
+    });
+    return;
+  }
+  if (isLead && verdict.status === "not-measured") {
+    console.warn(
+      `${line} — a model the committed eval has not measured. Run 'pnpm eval:judge' against it, or pin JUDGE_MODEL to a measured model this provider serves.`,
+    );
+    captureError(
+      new Error(`Judge served by ${served}, which the committed eval has not measured`),
+      {
+        tags: { scope: "judge.served_model_unmeasured", ...tags },
+      },
+    );
+    return;
+  }
+  console.log(`${line}.`);
 }
 
 /**

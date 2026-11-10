@@ -68,6 +68,8 @@ export interface JwtPayload {
   sessionId?: string;
   /** Native deep-link relay target — set only on desktop/native login-state tokens. */
   appScheme?: string;
+  /** Login binding (auth/exchange-codes.ts) — set only on web login-state tokens. */
+  lb?: string;
 }
 
 export function signToken(
@@ -216,7 +218,11 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
         .code(401)
         .send({ error: "Session expired. Please log in again.", code: "DEVICE_KICKED" });
     }
-    if (!user || (user.role !== "ADMIN" && !isAdminEmail(user.email))) {
+    // An ADMIN_EMAILS address counts only once verified — the same rule as the
+    // /me promotion: register hands out a session before verification, so an
+    // unverified row on an unclaimed admin address must not reach admin routes.
+    const isEnvAdmin = user?.emailVerified === true && isAdminEmail(user.email);
+    if (!user || (user.role !== "ADMIN" && !isEnvAdmin)) {
       return reply.code(403).send({ error: "Admin access required" });
     }
     (request as unknown as { userId: string }).userId = payload.userId;

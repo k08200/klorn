@@ -112,14 +112,17 @@ vi.mock("../db.js", () => {
           orderBy,
           take,
         }: {
-          where: { userId: string; source?: string; status?: string };
+          where: { userId: string; source?: string | { in: string[] }; status?: string };
           orderBy?: Array<Record<string, "desc" | "asc">>;
           take?: number;
         }) => {
           let rows = attentionItems.filter(
             (a) =>
               a.userId === where.userId &&
-              (!where.source || a.source === where.source) &&
+              (!where.source ||
+                (typeof where.source === "string"
+                  ? a.source === where.source
+                  : where.source.in.includes(a.source))) &&
               (!where.status || a.status === where.status),
           );
           if (orderBy) {

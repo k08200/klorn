@@ -79,6 +79,9 @@ describe("parseXml", () => {
     ["<a/><b/>", "two roots"],
     ["text<a/>", "text outside the root"],
     ["<a>&#x110000;</a>", "an out-of-range character reference"],
+    ["<a>&#0;</a>", "a zero character reference"],
+    ["<a>&#xD800;</a>", "a surrogate character reference"],
+    ["<a>&#57343;</a>", "a decimal surrogate character reference"],
     ["<a>&constructor;</a>", "a name only the object prototype knows"],
     ["<a>&toString;</a>", "another prototype name"],
   ])("refuses %j (%s)", (doc) => {

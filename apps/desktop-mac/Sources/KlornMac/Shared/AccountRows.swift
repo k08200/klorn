@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Account section: the declared company domains, editable in place. Enter
+/// Settings ▸ Accounts: the declared company domains, editable in place. Enter
 /// or the save button PATCHes; the server validates and the row reflects
 /// the canonical list. Offscreen: a text stand-in (ImageRenderer draws
 /// NSTextField as a placeholder).
@@ -50,7 +50,7 @@ struct CompanyDomainsRow: View {
                 }
             }
         }
-        .padding(.horizontal, 20).padding(.vertical, 3)
+        .padding(.vertical, 3)
     }
 
     private func save() async {
@@ -62,7 +62,7 @@ struct CompanyDomainsRow: View {
     }
 }
 
-/// Account section: the user's priorities text, editable in place. Save
+/// Settings ▸ Accounts: the user's priorities text, editable in place. Save
 /// PATCHes; the server collapses whitespace and caps length, and its
 /// message shows inline. Offscreen: text stand-in.
 struct PrioritiesRow: View {
@@ -108,7 +108,7 @@ struct PrioritiesRow: View {
                 }
             }
         }
-        .padding(.horizontal, 20).padding(.vertical, 3)
+        .padding(.vertical, 3)
     }
 }
 
@@ -140,8 +140,7 @@ func openSupportMail() {
     NSWorkspace.shared.open(url)
 }
 
-/// The update affordance, shared by the panel's ACCOUNT column and the
-/// full-window sidebar. Never a popup (never-steal-focus) — but no longer
+/// The update affordance in Settings ▸ General ▸ App & support. Never a popup — but no longer
 /// invisible either: a tinted capsule with a pulsing dot and a gentle
 /// appear transition says "one click waiting" the moment the row exists.
 /// Pulse respects Reduce Motion.
@@ -242,9 +241,9 @@ struct UpdateRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+            .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: Theme.Radius.control))
             .overlay(
-                RoundedRectangle(cornerRadius: 9)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(.plain)

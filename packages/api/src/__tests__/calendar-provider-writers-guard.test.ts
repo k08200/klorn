@@ -109,7 +109,16 @@ describe("every CalendarEvent writer states its provider", () => {
     const DRIVE_SOURCE_KEY_FILES = [
       "drive/drive-read.ts",
       "drive/drive-rows.ts",
+      // D5c: names the account whose rows it counts (connectedAccountRows).
+      "drive/google-drive-picker.ts",
+      // D5d: names the account whose rows it refreshes (connectedAccountFiles).
+      "drive/google-drive-refresh.ts",
+      "drive/klorn-drive-read.ts",
+      "drive/klorn-upload.ts",
       "drive/providers/types.ts",
+      // D4: the summary's source row and the connector it dispatches to.
+      "drive/summary-run.ts",
+      "drive/summary-source.ts",
       "routes/drive.ts",
     ];
     const naming = files.filter((f) => /\bsourceKey\s*:/.test(f.text)).map((f) => f.path);
@@ -126,8 +135,10 @@ describe("every CalendarEvent writer states its provider", () => {
 });
 
 describe("every LinkedCalendarAccount writer states its provider", () => {
-  it("routes/auth.ts link-calendar upsert names provider GOOGLE in both the key and the create", () => {
-    const auth = files.find((f) => f.path === "routes/auth.ts");
+  // The Google link-calendar upsert left the OAuth callback (routes/auth.ts) for
+  // the session-bound completion (routes/google-link-finish.ts).
+  it("routes/google-link-finish.ts link-calendar upsert names provider GOOGLE in both the key and the create", () => {
+    const auth = files.find((f) => f.path === "routes/google-link-finish.ts");
     const windows = callWindows(auth?.text ?? "", ACCOUNT_WRITE);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toContain("userId_provider_email");
@@ -164,8 +175,8 @@ describe("every LinkedCalendarAccount writer states its provider", () => {
     const writers = files.filter((f) => callWindows(f.text, ACCOUNT_WRITE).length > 0);
     expect(writers.map((f) => f.path).sort()).toEqual([
       "pim/device-calendar/device-ingest.ts",
-      "routes/auth.ts",
       "routes/caldav-calendar.ts",
+      "routes/google-link-finish.ts",
       "routes/outlook-calendar-link.ts",
     ]);
   });
@@ -177,19 +188,31 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
   // secrets, whatever the provider. So does the dispatcher: it reads a row's
   // provider to choose the implementation.
   // The source label reads an account's email by id, for a row that already
-  // names it: provider-agnostic on purpose, it only labels.
+  // names it: provider-agnostic on purpose, it only labels. The co-attendance
+  // store reads every linked account's address so none of the user's own
+  // addresses is ever counted as a contact (a DEVICE row's `device:` key is not
+  // an address and is dropped).
   const ALL_PROVIDER_READERS = [
     "scripts/reencrypt-tokens.ts",
     "pim/calendar-providers/dispatch.ts",
     "pim/calendar-source-label.ts",
+    "pim/coattendance/coattendance-store.ts",
   ];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
     const readers = files.filter((f) => callWindows(f.text, READ).length > 0);
     expect(readers.map((f) => f.path).sort()).toEqual([
+      // Reads GOOGLE rows' tokens to revoke them at Google, and counts GOOGLE
+      // rows of an address for the shared-grant check.
+      "auth/google-grant-revoke.ts",
+      // The co-attendance reader's gate: does the user have any non-GOOGLE
+      // calendar the store does not count (doc §3(2), condition 5).
+      "judge/v3/relationship-coattendance.ts",
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",
+      "pim/coattendance/coattendance-sources.ts", // GOOGLE rows' co-attendance markers
+      "pim/coattendance/coattendance-store.ts",
       "pim/device-calendar/device-ingest.ts",
       "pim/device-calendar/device-sources.ts",
       "pim/linked-calendar-unlink.ts",
@@ -373,7 +396,9 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     const LLM_ADJACENT: Array<[string, string[], string]> = [
       [
         "routes/calendar.ts",
-        ["../event-parse.js"], // dynamic import in POST /parse-event
+        // event-parse: dynamic import in POST /parse-event. cost-cap-refusal:
+        // maps a cap-refused call's error to its 429 body — no prompt.
+        ["../event-parse.js", "../llm/cost-cap-refusal.js"],
         "event-parse sends the user's own spoken or typed utterance to the model, never a row",
       ],
       [

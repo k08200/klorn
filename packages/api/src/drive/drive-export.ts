@@ -10,9 +10,10 @@
  * address of an object in Klorn's storage, not data about the user.
  */
 
-import type { DriveFileWire } from "@klorn/contract";
+import type { DriveFileSummaryWire, DriveFileWire } from "@klorn/contract";
 import { prisma } from "../db.js";
 import { DRIVE_WIRE_SELECT, toDriveFileWire } from "./drive-read.js";
+import { SUMMARY_WIRE_SELECT, toDriveSummaryWire } from "./summary-store.js";
 
 export interface DriveFileExport extends DriveFileWire {
   trashed: boolean;
@@ -20,9 +21,21 @@ export interface DriveFileExport extends DriveFileWire {
   etag: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The file's summary (D4), whatever the flags; null when it has none. */
+  summary: DriveFileSummaryWire | null;
+}
+
+/** The user's file summaries by file id (D4): every one, like the rows. */
+async function summariesOf(userId: string): Promise<Map<string, DriveFileSummaryWire>> {
+  const rows = await prisma.driveFileSummary.findMany({
+    where: { userId },
+    select: { driveFileId: true, ...SUMMARY_WIRE_SELECT },
+  });
+  return new Map(rows.map((row) => [row.driveFileId, toDriveSummaryWire(row)]));
 }
 
 export async function exportDriveFiles(userId: string): Promise<DriveFileExport[]> {
+  const summaries = await summariesOf(userId);
   const rows = await prisma.driveFile.findMany({
     where: { userId },
     orderBy: [{ modifiedAt: "desc" }, { id: "desc" }],
@@ -40,5 +53,6 @@ export async function exportDriveFiles(userId: string): Promise<DriveFileExport[
     etag: row.etag,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    summary: summaries.get(row.id) ?? null,
   }));
 }

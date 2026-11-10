@@ -10,12 +10,12 @@
  *     or certificate failure, no greeting, a host the grammar refuses) becomes one
  *     message, so the endpoint is no oracle for what is reachable from Klorn's
  *     network. The real text is logged on the server only, as one capped line
- *     (log-text.ts): it came from a server the user chose and could otherwise forge
- *     log lines.
+ *     (log-text.ts, by imap-verify-failure.ts): it came from a server the user chose
+ *     and could otherwise forge log lines.
  *
- * Kept out of imap-sync.ts on purpose: that file's error text (it quotes the host
- * and the library's message) is right for fixed providers and wrong for a host the
- * user chose, and another change is editing that file.
+ * Kept out of imap-sync.ts on purpose: that file tells a fixed provider's user the
+ * host was unreachable (IMAP_UNREACHABLE), which is right for a fixed host and an
+ * oracle for a host the user chose.
  */
 
 import { verifyImapCredentials } from "./imap-sync.js";
@@ -26,18 +26,21 @@ type VerifyResult = Awaited<ReturnType<typeof verifyImapCredentials>>;
 
 export const GENERIC_CONNECT_FAILURE = "Could not connect securely to that server.";
 
-const GENERIC_FAILURE: VerifyResult = { ok: false, message: GENERIC_CONNECT_FAILURE };
+const GENERIC_FAILURE: VerifyResult = {
+  ok: false,
+  message: GENERIC_CONNECT_FAILURE,
+  code: "IMAP_VERIFY_FAILED",
+};
 
 export async function verifyGenericImapCredentials(args: VerifyArgs): Promise<VerifyResult> {
-  const { logScope, authFailureHint } = args.provider;
+  const { logScope } = args.provider;
   try {
     const result = await verifyImapCredentials(args);
     if (result.ok) return result;
-    if (result.message === authFailureHint) return result;
-    // The text comes from a server the user chose: one capped line, never raw.
-    console.warn(
-      `[${logScope}] connect verification failed: ${sanitizeLogText(result.message ?? "no message")}`,
-    );
+    if (result.code === "IMAP_AUTH_FAILED") return result;
+    // The raw text was already logged (capped) where it was caught; this only
+    // records which answer the generic host got.
+    console.warn(`[${logScope}] connect verification failed: ${result.code}`);
     return GENERIC_FAILURE;
   } catch (err) {
     console.warn(`[${logScope}] connect verification threw: ${sanitizeLogText(err)}`);

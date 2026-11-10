@@ -4,8 +4,8 @@ import SwiftUI
 struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
-        // The K mark — the app icon in miniature, so pill, panel, menu bar,
-        // and Dock all say the same thing: Klorn. Ink on the light panel,
+        // The K mark — the app icon in miniature, so the window and the
+        // Dock say the same thing: Klorn. Ink on the light panel,
         // matching the B&W brand icon (founder direction 2026-07-20: no orange).
         Text("K")
             .font(.system(size: size * 0.82, weight: .heavy, design: .rounded))
@@ -39,7 +39,7 @@ struct FeatureIcon: View {
     let systemName: String
     var tint: Color? = nil
     var body: some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
             .fill(tint.map { AnyShapeStyle($0.opacity(0.13)) }
                 ?? AnyShapeStyle(Theme.surfaceRaised))
             .frame(width: 20, height: 20)
@@ -102,69 +102,22 @@ struct SubtleTextButton: View {
     }
 }
 
-/// Sidebar nav row chrome: the same selection language as list rows — accent
-/// leading bar + the surface ladder's selected rung; hover uses the hover rung.
-/// One modifier so every nav row (tiers, Commitments, Assistant) stays in sync.
-struct SidebarRowChrome: ViewModifier {
-    let selected: Bool
-    @State private var hovering = false
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(alignment: .leading) {
-                if selected {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent)
-                        .frame(width: 3).padding(.vertical, 5)
-                }
-            }
-            .background(
-                selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear,
-                in: RoundedRectangle(cornerRadius: 8))
-            .onHover { hovering = $0 }
-    }
-}
-
 /// Stand-in for a `Menu` while the offscreen renderer runs. Menus are
 /// AppKit-backed and ImageRenderer paints them as a "restricted" placeholder
 /// glyph, which would otherwise end up in the screenshots the landing page
 /// ships. Same size and chrome, no AppKit.
 struct OffscreenMenuLabel: View {
     let title: String
+    /// Set for an icon-only menu: the glyph replaces the words.
+    var systemImage: String? = nil
     var body: some View {
-        (Text(title) + Text(Image(systemName: "chevron.down")))
-            .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line))
+        // Matches a regular-size `.bordered` button (13pt text, ~22pt tall,
+        // the control radius) so the shots show the one button system.
+        let lead = systemImage.map { Text(Image(systemName: $0)) } ?? Text(title)
+        (lead + Text(verbatim: " ") + Text(Image(systemName: "chevron.down")))
+            .font(Theme.Typo.body).foregroundStyle(Theme.text)
+            .padding(.horizontal, 8).frame(height: 22)
+            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
     }
 }
 
-/// Sun/moon appearance toggle (founder 2026-08-27: switchable from the top
-/// right). Shows the mode a CLICK gives you — the universal toggle idiom —
-/// and writes an explicit choice over "system" (the Preferences picker still
-/// offers system-follow for those who want it back).
-struct AppearanceToggle: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var isDark: Bool {
-        switch model.settings.appearance {
-        case .dark: true
-        case .light: false
-        case .system: colorScheme == .dark
-        }
-    }
-
-    var body: some View {
-        Button {
-            model.settings.appearance = isDark ? .light : .dark
-        } label: {
-            Image(systemName: isDark ? "sun.max" : "moon")
-                .font(.callout).iconTarget()
-        }
-        .buttonStyle(.plain).hoverDim()
-        .help(isDark ? L("appearance.toLight") : L("appearance.toDark"))
-        .accessibilityLabel(isDark ? L("appearance.toLight") : L("appearance.toDark"))
-    }
-}

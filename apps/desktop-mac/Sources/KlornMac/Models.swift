@@ -135,6 +135,32 @@ func mailDomain(of address: String) -> String? {
 }
 
 /// Email enrichment for a firewall row (best-effort; fields may be nil).
+/// The connected account a mail arrived on (`email.source` on the firewall
+/// wire). `provider` stays a string: one this build does not know draws the
+/// generic badge instead of failing the decode.
+struct MailSource: Codable, Sendable, Hashable {
+    let provider: String
+    /// The linked inbox account id; nil = the primary account.
+    let accountId: String?
+    /// The account's address.
+    let label: String
+
+    enum CodingKeys: String, CodingKey { case provider, accountId, label }
+
+    init(provider: String, accountId: String?, label: String) {
+        self.provider = provider
+        self.accountId = accountId
+        self.label = label
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try c.decode(String.self, forKey: .provider)
+        accountId = try? c.decodeIfPresent(String.self, forKey: .accountId)
+        label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+    }
+}
+
 struct EmailContext: Codable, Sendable, Hashable {
     let emailDbId: String
     let subject: String?
@@ -157,9 +183,20 @@ struct EmailContext: Codable, Sendable, Hashable {
     /// A reply Klorn drafted ahead of time is waiting for this mail
     /// (proactive drafts — server flag, default off). False on older servers.
     let draftReady: Bool
+    /// The account the mail is on. Nil = the server makes no claim (an older
+    /// server, a removed account) or sent a shape this build cannot read.
+    let source: MailSource?
+    /// The mail's read flag; nil = no claim, and the row reserves no dot.
+    let unread: Bool?
+    /// The mail carries an attached file; nil = no claim.
+    let hasAttachment: Bool?
+    /// Messages in the mail's thread; the row's chip shows from 2. nil = no
+    /// claim (the server does not send it yet, or an older server).
+    let threadCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case emailDbId, subject, from, snippet, receivedAt, signal, replyState, draftReady
+        case source, unread, hasAttachment, threadCount
     }
 
     init(from decoder: Decoder) throws {
@@ -171,6 +208,11 @@ struct EmailContext: Codable, Sendable, Hashable {
         receivedAt = try c.decodeIfPresent(String.self, forKey: .receivedAt)
         replyState = try? c.decodeIfPresent(String.self, forKey: .replyState)
         draftReady = (try? c.decodeIfPresent(Bool.self, forKey: .draftReady)) ?? false
+        // Tolerant like the rest: a wrong shape is "no claim", never a failed queue.
+        source = try? c.decodeIfPresent(MailSource.self, forKey: .source)
+        unread = try? c.decodeIfPresent(Bool.self, forKey: .unread)
+        hasAttachment = try? c.decodeIfPresent(Bool.self, forKey: .hasAttachment)
+        threadCount = try? c.decodeIfPresent(Int.self, forKey: .threadCount)
         if let nested = try? c.nestedContainer(
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
@@ -196,7 +238,9 @@ struct EmailContext: Codable, Sendable, Hashable {
     init(
         emailDbId: String, subject: String?, from: String?, snippet: String?,
         receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false,
-        replyState: String? = nil, draftReady: Bool = false
+        replyState: String? = nil, draftReady: Bool = false,
+        source: MailSource? = nil, unread: Bool? = nil, hasAttachment: Bool? = nil,
+        threadCount: Int? = nil
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -207,6 +251,10 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.signalByUser = signalByUser
         self.replyState = replyState
         self.draftReady = draftReady
+        self.source = source
+        self.unread = unread
+        self.hasAttachment = hasAttachment
+        self.threadCount = threadCount
     }
 }
 
@@ -261,9 +309,25 @@ struct FirewallSummary: Codable, Sendable, Hashable {
 }
 
 /// GET /api/inbox/firewall — open AttentionItems grouped by tier.
+/// Today's "Needs you now" window (founder decision, LOCKED 2026-10-23):
+/// which PUSH cards Today lists — mail received in the last `windowHours`,
+/// decided on the server (packages/api/src/judge/today-push-window.ts). Mail's
+/// lanes are not narrowed by it. Absent from older servers.
+struct TodayPushWindow: Codable, Sendable, Equatable {
+    let windowHours: Int
+    /// ISO cutoff: the earliest received time inside the window.
+    let since: String
+    let ids: [String]
+
+    func removing(_ removed: Set<String>) -> TodayPushWindow {
+        TodayPushWindow(windowHours: windowHours, since: since, ids: ids.filter { !removed.contains($0) })
+    }
+}
+
 struct FirewallResponse: Codable, Sendable {
     let tiers: [String: [FirewallItem]]
     let summary: FirewallSummary
+    var todayPush: TodayPushWindow? = nil
 
     func items(for tier: Tier) -> [FirewallItem] {
         tiers[tier.rawValue] ?? []
@@ -320,7 +384,10 @@ struct FirewallResponse: Codable, Sendable {
             meeting: shifted(.meeting, self.summary.meeting ?? 0),
             info: shifted(.info, self.summary.info ?? 0),
             total: self.summary.total)
-        return FirewallResponse(tiers: newTiers, summary: summary)
+        // A card moved out of PUSH leaves Today's window; one moved in waits
+        // for the next poll, where the server decides whether it belongs.
+        return FirewallResponse(
+            tiers: newTiers, summary: summary, todayPush: todayPush?.removing([id]))
     }
 
     /// A copy with the given item ids removed from every tier and the summary
@@ -350,12 +417,13 @@ struct FirewallResponse: Codable, Sendable {
             silent: newSilent, queue: newQueue, push: newPush,
             meeting: newMeeting, info: newInfo,
             total: max(0, self.summary.total - removedTotal))
-        return FirewallResponse(tiers: newTiers, summary: summary)
+        return FirewallResponse(
+            tiers: newTiers, summary: summary, todayPush: todayPush?.removing(ids))
     }
 }
 
 extension FirewallResponse {
-    private enum Keys: String, CodingKey { case tiers, summary }
+    private enum Keys: String, CodingKey { case tiers, summary, todayPush }
     private struct LegacyAutoCount: Decodable {
         let count: Int?
         enum CodingKeys: String, CodingKey { case count = "AUTO" }
@@ -373,15 +441,18 @@ extension FirewallResponse {
         let c = try decoder.container(keyedBy: Keys.self)
         var tiers = try c.decode([String: [FirewallItem]].self, forKey: .tiers)
         let summary = try c.decode(FirewallSummary.self, forKey: .summary)
+        // A malformed window is no window (every PUSH card shows), never a failed queue.
+        let todayPush = try? c.decodeIfPresent(TodayPushWindow.self, forKey: .todayPush)
         guard let legacy = tiers.removeValue(forKey: "AUTO"), !legacy.isEmpty else {
-            self.init(tiers: tiers, summary: summary)
+            self.init(tiers: tiers, summary: summary, todayPush: todayPush)
             return
         }
         tiers[Tier.queue.rawValue] = (tiers[Tier.queue.rawValue] ?? []) + legacy
         let legacyCount = try c.decode(LegacyAutoCount.self, forKey: .summary).count ?? legacy.count
         self.init(tiers: tiers, summary: FirewallSummary(
             silent: summary.silent, queue: summary.queue + legacyCount, push: summary.push,
-            meeting: summary.meeting, info: summary.info, total: summary.total))
+            meeting: summary.meeting, info: summary.info, total: summary.total),
+            todayPush: todayPush)
     }
 }
 
@@ -412,7 +483,11 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let keyPoints: [String]?
     let actionItems: [String]?
     let needsReply: Bool?
+    /// Classifier code (e.g. "action_items_present") — never shown as text.
     let needsReplyReason: String?
+    /// The reason as a sentence in the UI language (`lang=` on the request).
+    /// Absent on older servers; null when the code has no reader line.
+    let needsReplyReasonText: String?
     /// A reply Klorn drafted ahead of time for this mail (proactive drafts).
     /// Absent on older servers, null when none exists or the mail was answered.
     let proactiveDraft: String?
@@ -590,27 +665,17 @@ struct PendingActionsResponse: Codable, Sendable {
         let reasoning: String?
         let createdAt: String?
 
-        /// "Send email" rather than "send_email" — the tool name is an internal
-        /// identifier and reads like one. Unknown tools degrade to a
-        /// de-underscored form instead of being hidden: an action the user
-        /// can't identify is still an action they must be able to decline.
-        var title: String {
-            toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
-        }
+        /// "메일 보내기" / "Send email" rather than "send_email" — the tool
+        /// name is an internal identifier. Localized from the web's own
+        /// `tool.label.*` map (`ToolLabels`).
+        var title: String { ToolLabels.title(for: toolName) }
+
+        /// Approving this sends mail, which can't be taken back (the web's
+        /// MAIL_SENDING_TOOLS).
+        var sendsMail: Bool { ToolLabels.mailSending.contains(toolName) }
     }
 
     let actions: [Action]
-}
-
-/// One glanceable line for the TODAY column — "2 done · 1 awaiting approval".
-/// nil when the agent did nothing today (the block hides entirely; an empty
-/// receipt is noise, not signal). Pure.
-func agentActivityLine(_ totals: TodayActions.Totals) -> String? {
-    var parts: [String] = []
-    if totals.executed > 0 { parts.append("\(totals.executed) done") }
-    if totals.pending > 0 { parts.append("\(totals.pending) awaiting approval") }
-    if totals.rejected > 0 { parts.append("\(totals.rejected) declined") }
-    return parts.isEmpty ? nil : parts.joined(separator: " · ")
 }
 
 // MARK: - Assistant (chat)
@@ -618,6 +683,52 @@ func agentActivityLine(_ totals: TodayActions.Totals) -> String? {
 /// POST /api/chat/conversations → the conversation the desktop lazily creates.
 struct ChatConversation: Codable, Sendable {
     let id: String
+}
+
+/// `GET /api/chat/conversations`, newest first.
+struct ChatConversationList: Decodable, Sendable {
+    let conversations: [ChatConversation]
+}
+
+/// `GET /api/chat/conversations/:id/messages`, oldest first. Only the user's
+/// and the assistant's text turns become bubbles; tool and system rows, and
+/// empty contents, are not part of the visible thread.
+struct ChatHistory: Decodable, Sendable {
+    struct Item: Decodable, Sendable {
+        /// The stored turn's `metadata`. Only the cap code is read: a turn the
+        /// daily cost cap stopped was stored with the server's English reply.
+        struct Metadata: Decodable, Sendable { let turnErrorCode: String? }
+
+        let role: String
+        let content: String?
+        let metadata: Metadata?
+
+        private enum CodingKeys: String, CodingKey { case role, content, metadata }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            role = try container.decode(String.self, forKey: .role)
+            content = try container.decodeIfPresent(String.self, forKey: .content)
+            // Free-form JSON server-side: a shape this app does not expect must
+            // not cost the whole thread.
+            metadata = try? container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        }
+
+        var bubble: ChatMessage? {
+            if role.uppercased() == "ASSISTANT", let cap = ChatCapNotice(errorCode: metadata?.turnErrorCode) {
+                return ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)
+            }
+            guard let text = content?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return nil }
+            // The server's enum is USER / ASSISTANT / SYSTEM.
+            switch role.uppercased() {
+            case "USER": return ChatMessage(role: .user, text: text)
+            case "ASSISTANT": return ChatMessage(role: .assistant, text: text)
+            default: return nil
+            }
+        }
+    }
+    let messages: [Item]
 }
 
 /// A calendar event the agent drafted from the conversation — the user
@@ -645,6 +756,9 @@ struct ChatTurnResponse: Codable, Sendable {
     let reply: String
     let error: String?
     let eventDraft: EventDraft?
+    /// "DAILY_COST_CAP_FREE" / "DAILY_COST_CAP" when the daily AI cost cap
+    /// stopped the turn (`ChatCapNotice`). Absent from older servers.
+    let errorCode: String?
 }
 
 /// One bubble in the desktop's in-memory thread. An assistant bubble may carry
@@ -655,17 +769,32 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     let role: Role
     let text: String
     var eventDraft: EventDraft?
+    /// A plan refusal: the bubble carries the upgrade link-out.
+    let offersUpgrade: Bool
 
-    init(role: Role, text: String, eventDraft: EventDraft? = nil) {
+    init(role: Role, text: String, eventDraft: EventDraft? = nil, offersUpgrade: Bool = false) {
         self.role = role
         self.text = text
         self.eventDraft = eventDraft
+        self.offersUpgrade = offersUpgrade
     }
+}
+
+/// The bubbles one agent turn adds. At the daily cost cap that is a single
+/// localized line (the server's reply and error are English and say the same
+/// thing twice); otherwise the reply, plus the server's error when it sent one.
+func chatTurnBubbles(_ turn: ChatTurnResponse) -> [ChatMessage] {
+    if let cap = ChatCapNotice(errorCode: turn.errorCode) {
+        return [ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)]
+    }
+    let reply = ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft)
+    guard let error = turn.error else { return [reply] }
+    return [reply, ChatMessage(role: .failure, text: error)]
 }
 
 /// "Title · 15:00–16:00 · Location" — one-line confirm-card label. Time falls
 /// away on malformed ISO (never a crash); location only when present. Pure.
-func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = .current) -> String {
+func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = DisplayTimeZone.calendar) -> String {
     var parts = [draft.title]
     let time = eventTimeLabel(
         startISO: draft.startTime, endISO: draft.endTime, allDay: false, calendar: calendar)
@@ -833,18 +962,26 @@ func providerLabel(_ provider: String?) -> String {
 }
 
 /// Whether an IMAP connect form may be submitted: an address that looks like
-/// one, and a non-empty app password. Deliberately permissive on the address
-/// (the server verifies with a real LOGIN) but it must not be blank or carry
-/// a second recipient. Pure for the harness.
+/// one, and an app password within the server's 4…200 characters. Permissive
+/// on the address (the server verifies with a real LOGIN) but it must not be
+/// blank, carry a second recipient, or hold what the server's format refuses
+/// (':' and '\\' never reach a row id; 200 characters at most). Pure.
 func canSubmitImapConnect(email: String, password: String) -> Bool {
     let mail = email.trimmingCharacters(in: .whitespacesAndNewlines)
     let pass = password.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !pass.isEmpty, pass.count >= 4 else { return false }
-    guard !mail.contains(","), !mail.contains(" ") else { return false }
-    let parts = mail.split(separator: "@")
-    guard parts.count == 2, !parts[0].isEmpty, parts[1].contains(".") else { return false }
-    return true
+    guard pass.count >= imapPasswordMin, password.count <= imapFieldMax else { return false }
+    guard mail.count <= imapFieldMax else { return false }
+    let refused: Set<Character> = [",", " ", ":", "\\", "\t", "\n"]
+    guard !mail.contains(where: { refused.contains($0) }) else { return false }
+    let parts = mail.split(separator: "@", omittingEmptySubsequences: false)
+    guard parts.count == 2, !parts[0].isEmpty else { return false }
+    let domain = parts[1]
+    return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".")
 }
+
+/// The server's connect schema bounds (routes/imap-connect.ts connectBodySchema).
+private let imapPasswordMin = 4
+private let imapFieldMax = 200
 
 /// GET /api/email/inboxes response envelope.
 struct InboxesResponse: Codable, Sendable {
@@ -905,15 +1042,30 @@ func emailSearchPath(query: String, selectedInbox: String) -> String {
 }
 
 /// Firewall queue path with the optional per-inbox scope: "all" (or blank)
-/// sends nothing — the server treats an absent `inbox=` as every inbox
+/// sends no `inbox=` — the server treats an absent `inbox=` as every inbox
 /// (routes/firewall.ts mirrors routes/email.ts's param). Encoded like
-/// emailSearchPath so hyphenated linked ids survive the round trip. Pure.
-func firewallPath(selected: String) -> String {
-    let base = "/api/inbox/firewall"
-    guard let inbox = inboxQueryParam(selected: selected),
-          let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
-    else { return base }
-    return base + "?inbox=\(enc)"
+/// emailSearchPath so hyphenated linked ids survive the round trip.
+/// `lang` is the app UI language: the server renders template tier reasons in
+/// it instead of the stored notification language. Pure.
+func firewallPath(selected: String, lang: String) -> String {
+    var query = [langQueryItem(lang)]
+    if let inbox = inboxQueryParam(selected: selected),
+       let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+        query.insert("inbox=\(enc)", at: 0)
+    }
+    return "/api/inbox/firewall?" + query.joined(separator: "&")
+}
+
+/// Email detail path. `lang` is the app UI language, so server-composed lines
+/// (the needs-reply reason) match the screen. Pure.
+func emailDetailPath(id: String, lang: String) -> String {
+    "/api/email/\(id)?" + langQueryItem(lang)
+}
+
+/// `lang=<code>` for the reader routes; the code is one of AppLanguage's raw
+/// values, encoded anyway so a malformed one can never break the query.
+func langQueryItem(_ lang: String) -> String {
+    "lang=" + (lang.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "en")
 }
 
 /// Folder listing path with the per-inbox scope. Unlike firewallPath, "all"
@@ -1091,7 +1243,7 @@ struct BriefingStructure: Codable, Sendable, Hashable {
     let attention: [Attention]
 }
 
-/// One-line preview of the briefing note for the TODAY column: strip markdown
+/// One-line preview of the briefing note for Today: strip markdown
 /// bold, collapse whitespace/newlines to single spaces, cap length. nil when
 /// there's nothing to show. Pure for testing.
 func briefingPreview(_ content: String?) -> String? {
@@ -1144,60 +1296,13 @@ struct CalendarListResponse: Codable, Sendable {
     let events: [CalendarEventWire]
 }
 
-/// One day of the UPCOMING agenda (tomorrow → +7 days): label + its events.
-struct AgendaDay: Sendable, Identifiable, Hashable {
-    let label: String  // "Tomorrow", then weekday names — unique in a 7-day window
-    let events: [CalendarEventWire]
-    var id: String { label }
-}
-
-/// Group events into the 7 days AFTER today — today is excluded (the TODAY
-/// rows above the section already show it). Days with no events are omitted;
-/// events keep start order; a malformed startTime drops that event, never a
-/// crash. Calendar injectable so the harness pins the boundaries in UTC.
-func upcomingAgenda(
-    now: Date,
-    events: [CalendarEventWire],
-    calendar: Calendar = .current
-) -> [AgendaDay] {
-    let withMillis = ISO8601DateFormatter()
-    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let plain = ISO8601DateFormatter()  // tolerate writers that omit millis
-    guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)),
-          let windowEnd = calendar.date(byAdding: .day, value: 7, to: tomorrow)
-    else { return [] }
-    let dated: [(day: Date, start: Date, event: CalendarEventWire)] = events.compactMap { event in
-        guard let start = withMillis.date(from: event.startTime)
-            ?? plain.date(from: event.startTime),
-            start >= tomorrow, start < windowEnd
-        else { return nil }
-        return (calendar.startOfDay(for: start), start, event)
-    }
-    let groups = Dictionary(grouping: dated, by: \.day)
-    return groups.keys.sorted().map { day in
-        AgendaDay(
-            label: agendaDayLabel(day: day, tomorrow: tomorrow, calendar: calendar),
-            events: groups[day, default: []].sorted { $0.start < $1.start }.map(\.event))
-    }
-}
-
-/// "Tomorrow" for the first agenda day, else the weekday name — unique within
-/// the 7-day window. Pure.
-func agendaDayLabel(day: Date, tomorrow: Date, calendar: Calendar) -> String {
-    if calendar.isDate(day, inSameDayAs: tomorrow) { return L("calendar.tomorrow") }
-    let symbols = calendar.weekdaySymbols
-    let index = calendar.component(.weekday, from: day) - 1
-    guard symbols.indices.contains(index) else { return "" }
-    return symbols[index]
-}
-
 // MARK: - Calendar grid math (real calendar views, 2026-08-26)
 
 /// Local-day bucket key ("2026-08-26"). LOCAL calendar deliberately: an event
 /// at 26일 01:00 KST is a 26일 event to the user even though its UTC instant
 /// is the 25th — bucketing by ISO prefix put events on the wrong day once
 /// already (weekly-report dayKey trap, 2026-08-22).
-func localDayKey(_ date: Date, calendar: Calendar = .current) -> String {
+func localDayKey(_ date: Date, calendar: Calendar = DisplayTimeZone.calendar) -> String {
     let c = calendar.dateComponents([.year, .month, .day], from: date)
     return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
 }
@@ -1207,7 +1312,7 @@ func localDayKey(_ date: Date, calendar: Calendar = .current) -> String {
 /// firstWeekday (Sunday-first in ko/en_US, Monday-first in de/fr). Count is
 /// always a multiple of 7; dates outside the month are included (drawn dim).
 /// Pure for the harness.
-func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Date] {
+func monthGridDays(year: Int, month: Int, calendar: Calendar = DisplayTimeZone.calendar) -> [Date] {
     var comps = DateComponents()
     comps.year = year
     comps.month = month
@@ -1241,7 +1346,7 @@ func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Dat
 
 /// The seven dates of the week containing `date`, from the calendar's own
 /// firstWeekday (Sunday-first ko/en_US, Monday-first de/fr). Pure.
-func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
+func weekDays(containing date: Date, calendar: Calendar = DisplayTimeZone.calendar) -> [Date] {
     let weekday = calendar.component(.weekday, from: date)
     let offset = (weekday - calendar.firstWeekday + 7) % 7
     guard let start = calendar.date(
@@ -1261,7 +1366,7 @@ let maxSpannedDays = 60
 /// dates, so a KST reader never gets a phantom extra day from the 09:00
 /// local instant. Malformed start → no days (the event is dropped, never a
 /// crash); malformed end → the start day alone.
-func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = .current) -> [String] {
+func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> [String] {
     let withMillis = ISO8601DateFormatter()
     withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
@@ -1284,7 +1389,7 @@ func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = .current) -> 
 
 /// The day an event starts on — what a chip on a later day is "continued"
 /// against. nil when the start is malformed.
-func eventStartDayKey(_ event: CalendarEventWire, calendar: Calendar = .current) -> String? {
+func eventStartDayKey(_ event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> String? {
     eventDayKeys(event, calendar: calendar).first
 }
 
@@ -1297,7 +1402,7 @@ func sortedForDay(_ events: [CalendarEventWire]) -> [CalendarEventWire] {
 /// Events bucketed by day — a spanning event appears under EVERY day it
 /// covers (see eventDayKeys). A malformed startTime drops that event.
 func eventsByDay(
-    _ events: [CalendarEventWire], calendar: Calendar = .current
+    _ events: [CalendarEventWire], calendar: Calendar = DisplayTimeZone.calendar
 ) -> [String: [CalendarEventWire]] {
     var out: [String: [CalendarEventWire]] = [:]
     for event in events {
@@ -1335,7 +1440,7 @@ struct CalendarEventPayload: Encodable, Equatable, Sendable {
 /// all-day times as dates off the string): a one-day event on the 24th is
 /// 24T00:00Z … 25T00:00Z. Pure.
 func calendarEventPayload(
-    _ draft: CalendarEventDraft, calendar: Calendar = .current
+    _ draft: CalendarEventDraft, calendar: Calendar = DisplayTimeZone.calendar
 ) -> CalendarEventPayload {
     let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
     let location = draft.location.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1357,7 +1462,7 @@ func calendarEventPayload(
 
 /// Saveable: a title, and a timed end after the start (all-day: the last
 /// day is not before the first). Pure.
-func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = .current) -> Bool {
+func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = DisplayTimeZone.calendar) -> Bool {
     guard !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
     if draft.allDay {
         return calendar.startOfDay(for: draft.end) >= calendar.startOfDay(for: draft.start)
@@ -1368,7 +1473,7 @@ func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = .cur
 /// A draft from an existing event, for editing. All-day: the wire's UTC
 /// dates become local days, and the exclusive end becomes the inclusive
 /// last day the editor shows. nil when a time is malformed. Pure.
-func calendarDraft(from event: CalendarEventWire, calendar: Calendar = .current) -> CalendarEventDraft? {
+func calendarDraft(from event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> CalendarEventDraft? {
     let withMillis = ISO8601DateFormatter()
     withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
@@ -1390,7 +1495,7 @@ func calendarDraft(from event: CalendarEventWire, calendar: Calendar = .current)
 
 /// A fresh draft on a day: the next full hour today, 09:00 on any other
 /// day, one hour long. Pure.
-func newCalendarDraft(on day: Date, now: Date = Date(), calendar: Calendar = .current) -> CalendarEventDraft {
+func newCalendarDraft(on day: Date, now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> CalendarEventDraft {
     var comps = calendar.dateComponents([.year, .month, .day], from: day)
     comps.hour = calendar.isDate(day, inSameDayAs: now)
         ? min(calendar.component(.hour, from: now) + 1, 23) : 9
@@ -1415,7 +1520,7 @@ func eventTimeLabel(
     startISO: String,
     endISO: String,
     allDay: Bool,
-    calendar: Calendar = .current
+    calendar: Calendar = DisplayTimeZone.calendar
 ) -> String {
     if allDay { return L("calendar.allDay") }
     // Both ISO shapes: the API's toISOString() carries millis, hand-written
@@ -1439,11 +1544,14 @@ func eventTimeLabel(
 /// today → clock time, this year → month + day, older → adds the year.
 /// Malformed ISO degrades to an empty string (row shows no time), never a
 /// crash. Calendar + locale injectable so the harness pins the math in UTC.
+/// `relativeDays` (offscreen preview renders only, see `MailClock`) swaps the
+/// past week's month + day for "Yesterday" or the weekday.
 func mailTimeLabel(
     iso: String?,
     now: Date,
-    calendar: Calendar = .current,
-    locale: Locale = L10n.activeLocale
+    calendar: Calendar = DisplayTimeZone.calendar,
+    locale: Locale = L10n.activeLocale,
+    relativeDays: Bool = false
 ) -> String {
     guard let iso else { return "" }
     let withMillis = ISO8601DateFormatter()
@@ -1457,6 +1565,9 @@ func mailTimeLabel(
     formatter.locale = locale
     if calendar.isDate(date, inSameDayAs: now) {
         formatter.setLocalizedDateFormatFromTemplate("HHmm")
+    } else if relativeDays,
+              let day = relativeDayLabel(date, now: now, calendar: calendar, locale: locale) {
+        return day
     } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
     } else {
@@ -1695,11 +1806,11 @@ func showAllLabel(pendingCount: Int) -> String? {
     pendingCount > 0 ? "Show all \(pendingCount + 1)" : nil
 }
 
-// MARK: - Reply options (PushCard quick reply)
+// MARK: - Reply options (reading-pane quick reply)
 
 /// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.
 /// Mirrors packages/contract reply-options.ts — the array order (accept /
-/// decline / info) is wire contract: the card binds keys 1/2/3 positionally.
+/// decline / info) is wire contract: the reading pane binds keys 1/2/3 positionally.
 struct ReplyOption: Codable, Sendable, Hashable {
     let tone: String
     let body: String
@@ -1723,22 +1834,6 @@ struct ReplyOptionsResponse: Codable, Sendable {
     let options: [ReplyOption]
 }
 
-/// Email body for the expanded card's inline reader: trimmed, nil when blank
-/// (no empty scroll box), and capped so one card can't grow unbounded on a
-/// huge message. Pure for testing.
-func cardBodyText(_ body: String?) -> String? {
-    let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if trimmed.isEmpty { return nil }
-    return String(trimmed.prefix(4000))
-}
-
-/// The snooze options the PushCard offers — the full SnoozeOption set, in
-/// display order. A single source of truth shared with the reading pane so the
-/// two surfaces never drift.
-enum PushCardSnooze {
-    static let options: [SnoozeOption] = SnoozeOption.allCases
-}
-
 // MARK: - Snooze options
 
 /// User-selectable snooze targets for a PUSH item; each resolves to a concrete
@@ -1760,7 +1855,7 @@ enum SnoozeOption: String, CaseIterable, Identifiable, Sendable {
 
     /// The concrete resurface time — always strictly in the future. An option whose
     /// natural time has already passed today rolls to its next sensible occurrence.
-    func resurface(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+    func resurface(from now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> Date {
         switch self {
         case .oneHour:
             return calendar.date(byAdding: .hour, value: 1, to: now) ?? now
@@ -1792,4 +1887,43 @@ struct DesktopNonce: Codable, Sendable {
 struct DesktopTokenResponse: Codable, Sendable {
     let status: String
     let token: String?
+}
+
+/// Tool identifiers → the words the UI shows, in the UI language (audit M3:
+/// "Send Email" was English inside the Korean app). The keys and their
+/// translations are the web's `tool.label.*` set
+/// (packages/web/src/lib/locales), so both clients say the same thing.
+enum ToolLabels {
+    /// Tools with a `tool.label.<name>` string in every lproj.
+    static let known: Set<String> = [
+        "send_email", "draft_reply", "reply_to_email", "archive_email", "delete_email",
+        "mark_read", "create_event", "delete_event", "schedule_meeting", "create_contact",
+        "update_contact", "delete_contact", "create_note", "delete_note", "create_task",
+        "delete_task", "record_skill", "execute_skill", "classify_emails",
+    ]
+
+    /// Server spellings of the same action.
+    static let aliases: [String: String] = [
+        "create_calendar_event": "create_event",
+        "trash_email": "delete_email",
+        "create_draft": "draft_reply",
+        "draft_email": "draft_reply",
+    ]
+
+    /// Approving these sends mail now.
+    static let mailSending: Set<String> = ["send_email", "reply_to_email"]
+
+    static func key(for toolName: String) -> String? {
+        let name = aliases[toolName] ?? toolName
+        return known.contains(name) ? "tool.label.\(name)" : nil
+    }
+
+    /// Unknown tools degrade to a de-underscored form instead of being
+    /// hidden: an action the user can't identify is still an action they
+    /// must be able to decline.
+    static func title(for toolName: String) -> String {
+        if let key = key(for: toolName) { return L(key) }
+        let words = toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
+        return words.isEmpty ? L("tool.label.unknown") : words
+    }
 }

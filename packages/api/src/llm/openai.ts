@@ -9,61 +9,44 @@ import {
   type CallPriority,
   UserRateLimitedError,
 } from "../billing/quota-limiter.js";
-import {
-  getProvider,
-  getProviderChain,
-  type Provider,
-  type ProviderCredentials,
-} from "../providers/index.js";
+import { getProviderChain, type Provider, type ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
 import { resolveJudgeModel } from "./judge-model-gate.js";
 import { type DispatchFailureTracker, trackDispatchFailures } from "./llm-failure-log.js";
 import {
-  FALLBACK_MODEL,
   getProviderCooldownInfo,
   isConnectionError,
   isCreditError,
-  isFreeModel,
-  isFreeModelFallbackDisabled,
+  isCreditExhaustionError,
   isKeyLimitError,
   isModelUnavailableError,
+  isOverloadedError,
   isProviderUnavailable,
   markCreditExhausted,
   markKeyLimited,
   redactProviderMessage,
 } from "./model-fallback.js";
-import { isModelKnownAbsent } from "./openrouter-catalog-cache.js";
-import { activeFallbackChain, walkFallbackChain } from "./openrouter-fallback-chain.js";
 
 export { UserRateLimitedError };
 
 /**
- * Back-compat export — some legacy call sites import `openai` directly.
- * Prefer going through createCompletion() so multi-provider failover applies.
+ * In-code default for every surface: the native Claude id the hosted deploy
+ * runs (founder decision 2026-11-01 — Claude API only). One default whatever
+ * NODE_ENV says; per-surface envs still override. A non-Claude provider
+ * (Gemini, a local OpenAI-compatible model) serves a Claude pin with its own
+ * default model, so self-hosters without a Claude key keep working.
  */
-export const openai = (getProvider("openrouter")?.client ?? null) as unknown as OpenAI;
+const DEFAULT_MODEL = "claude-haiku-5-5";
 
-// Funded deploys (NODE_ENV=production, set on Render) default the chat/agent
-// surfaces to the paid, capable model so they aren't on a free model when no
-// env override is set; self-host / dev keeps :free (open-source default).
-// Per-surface envs (CHAT_MODEL/AGENT_MODEL) still override.
-const FREE_DEFAULT = "google/gemma-4-31b-it:free";
-const PAID_DEFAULT = "google/gemini-2.5-flash";
-const SHARED_DEFAULT = process.env.NODE_ENV === "production" ? PAID_DEFAULT : FREE_DEFAULT;
-
-export const MODEL = process.env.CHAT_MODEL || SHARED_DEFAULT;
+export const MODEL = process.env.CHAT_MODEL || DEFAULT_MODEL;
 export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
 // Tier judge model — separate knob from chat/agent. The firewall's PUSH
-// promise dies with the judge's LLM availability: the 2026-06-12 eval run
-// hit the :free daily quota 38s in, locked the provider out for an hour,
-// and the keyword fallback structurally cannot emit PUSH (confidence 0.55
-// < the 0.7 rule floor). Classification is ~700 tokens/email — cents per
-// month at dogfood volume on a paid model. Self-hosters without paid
-// credit: set JUDGE_MODEL to a :free or local model (see .env.example).
+// promise dies with the judge's LLM availability: the keyword fallback
+// structurally cannot emit PUSH (confidence 0.55 < the 0.7 rule floor).
 // The configured pin, before validation. Exported so startup can report what
 // the operator actually set alongside what we run.
-export const CONFIGURED_JUDGE_MODEL = process.env.JUDGE_MODEL || "google/gemini-2.5-flash";
+export const CONFIGURED_JUDGE_MODEL = process.env.JUDGE_MODEL || DEFAULT_MODEL;
 /**
  * The pin the judge actually runs.
  *
@@ -76,18 +59,12 @@ export const CONFIGURED_JUDGE_MODEL = process.env.JUDGE_MODEL || "google/gemini-
  */
 export const JUDGE_MODEL_RESOLUTION = resolveJudgeModel(CONFIGURED_JUDGE_MODEL);
 export const JUDGE_MODEL = JUDGE_MODEL_RESOLUTION.effective;
-// Reply-draft model. Defaults to the same reliable (paid) model as the judge
-// rather than the :free CHAT_MODEL: "Draft reply" is a user-initiated,
-// quality-sensitive action, and a :free daily-quota lockout turned it into a
-// flat "Could not draft a reply" in prod. Env-overridable; self-hosters
-// without paid credit can point it at a :free or local model.
+// Reply-draft model. Defaults to the judge's validated pin: "Draft reply" is a
+// user-initiated, quality-sensitive action. Env-overridable.
 export const DRAFT_MODEL = process.env.DRAFT_MODEL || JUDGE_MODEL;
-// Vision requires a multimodal model — Gemma (the chat default) is text-only,
-// so we keep VISION_MODEL on its own track. Default ends in `:free` so a
-// deploy that forgets to set the env doesn't silently route to OpenRouter's
-// paid catalog. Override at the env layer if the `:free` SKU is missing or
-// daily-quota-zero on OpenRouter.
-export const VISION_MODEL = process.env.VISION_MODEL || "google/gemini-2.5-flash:free";
+// Vision needs a multimodal model, so it keeps its own knob (a CHAT_MODEL
+// override may be text-only). Claude Haiku 5.5 reads images natively.
+export const VISION_MODEL = process.env.VISION_MODEL || DEFAULT_MODEL;
 
 /**
  * User-facing error thrown when every configured provider has failed.
@@ -98,6 +75,14 @@ export class AllProvidersExhaustedError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
     this.name = "AllProvidersExhaustedError";
+  }
+}
+
+/** A noWait background call found no pacer slot free: skipped, nothing spent. */
+export class PacerBusyError extends Error {
+  constructor() {
+    super("background pacer busy");
+    this.name = "PacerBusyError";
   }
 }
 
@@ -121,12 +106,37 @@ export interface CompletionOptions {
    */
   priority?: CallPriority;
   /**
+   * Draw on the judge's reserved slice of the daily cap
+   * (JUDGE_BUDGET_RESERVE_CENTS). Only the firewall judge sets this: it is the
+   * one surface whose failure is invisible, because mail keeps being sorted —
+   * just without the lane the product is sold on. Everything else is admitted
+   * only below (cap - reserve). Calls already in flight settle against the full
+   * cap, so concurrent ordinary calls can overshoot a few cents into the
+   * reserve: it is a floor under contention, not a wall.
+   */
+  reserved?: boolean;
+  /**
    * Conversational surfaces (agent conversations / chat) pass true so the
    * user's chosen frontier chat model (credentials.userModel) is applied.
    * Absent/false = pinned surfaces (judge/summarize/draft/vision) — the
    * user's chat preference never touches those.
    */
   useUserModel?: boolean;
+  /**
+   * Told which provider and model actually served a successful call, after
+   * failover. createCompletion returns a plain ChatCompletion with no provider
+   * name, so callers that must persist provenance (the v3 facts store) read it
+   * here. A throw from it is caught and reported, never treated as a provider
+   * failure (that would fail over into a second, billed call).
+   */
+  onServed?: (served: { provider: string; model: string; ownedByUser: boolean }) => void;
+  /**
+   * Skip rather than wait (background only): if the background pacer has no
+   * slot free right now the call throws PacerBusyError instead of queueing,
+   * and an RPM-window miss throws instead of parking. For optional work (the
+   * v3 facts shadow) that must never sit in front of, or behind, the judge.
+   */
+  noWait?: boolean;
   /**
    * Internal recursion guard for the background pacer — set only by
    * createCompletion itself when re-entering through backgroundLlmPacer.
@@ -135,10 +145,20 @@ export interface CompletionOptions {
   _paced?: boolean;
 }
 
+/**
+ * Stable machine-readable reason clients branch on (never on the message):
+ * DAILY_COST_CAP_FREE is the free-tier cap, where upgrading helps;
+ * DAILY_COST_CAP is the paid per-user cap or the shared global ceiling.
+ */
+export type DailyCostCapCode = "DAILY_COST_CAP" | "DAILY_COST_CAP_FREE";
+
 export class DailyCostCapExceededError extends Error {
-  constructor(message: string) {
+  readonly code: DailyCostCapCode;
+
+  constructor(message: string, code: DailyCostCapCode = "DAILY_COST_CAP") {
     super(message);
     this.name = "DailyCostCapExceededError";
+    this.code = code;
   }
 }
 
@@ -153,15 +173,26 @@ export class DailyCostCapExceededError extends Error {
  * is at the single highest-intent conversion moment we have, so they get
  * the upgrade nudge; everyone else (paid user, paywall off, global cap)
  * gets the BYOK nudge — upselling a user who already pays would be wrong.
+ * The upgrade variant must not offer BYOK: with the paywall on, a FREE user
+ * cannot store a key (routes/billing.ts) and a stored one is ignored
+ * (llm-credentials.ts).
  */
 export const DAILY_COST_CAP_MESSAGE =
   "You've used today's AI quota. It resets at 00:00 UTC. To unblock right now, add your own API key in Settings.";
 
 export const DAILY_COST_CAP_UPGRADE_MESSAGE =
-  "You've used today's free AI quota. It resets at 00:00 UTC. Upgrade to Pro for a much higher daily limit, or add your own API key in Settings.";
+  "You've used today's free AI quota. It resets at 00:00 UTC. Upgrade to Pro for a higher daily limit.";
 
 export function dailyCostCapMessageFor(freeCapApplied: boolean): string {
   return freeCapApplied ? DAILY_COST_CAP_UPGRADE_MESSAGE : DAILY_COST_CAP_MESSAGE;
+}
+
+/** The per-user cap refusal: message and code both follow freeCapApplied. */
+function perUserCapError(freeCapApplied: boolean): DailyCostCapExceededError {
+  return new DailyCostCapExceededError(
+    dailyCostCapMessageFor(freeCapApplied),
+    freeCapApplied ? "DAILY_COST_CAP_FREE" : "DAILY_COST_CAP",
+  );
 }
 
 /**
@@ -177,12 +208,13 @@ async function enforceCostGates(
   userId?: string,
   playgroundOnly?: boolean,
   userKeyAvailable?: boolean,
-): Promise<void> {
+  reserved?: boolean,
+): Promise<{ userKeyOnly: boolean }> {
   // Playground calls run entirely on the visitor's own key (no server provider
   // in the chain), so they incur zero server cost. They must NOT be gated by
   // or recorded against the shared global ceiling — otherwise unauthenticated
   // traffic could trip the cap and lock out real users.
-  if (playgroundOnly) return;
+  if (playgroundOnly) return { userKeyOnly: false };
 
   const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage } =
     await import("../billing/cost-guard.js");
@@ -193,10 +225,11 @@ async function enforceCostGates(
   // BYOK: a signed-in user with their OWN provider key spends their credit, not
   // Klorn's, so the shared global ceiling neither gates nor bills them — that
   // is the whole point of BYOK as an escape hatch when the shared budget is
-  // exhausted. We still CHECK their per-user cap (a broken key that forces an
-  // env fallthrough must not dodge the cap forever) but do NOT pre-bill it: the
-  // post-call true-up charges $0 when their key served and the real cost only
-  // on a genuine env fallthrough (where servedByUserKey is false).
+  // exhausted. We still CHECK their per-user cap — past it the call runs on
+  // their own key alone, so a broken key can never fall through to env money
+  // there — but do NOT pre-bill it: the post-call true-up charges $0 when their
+  // key served and the real cost only on a genuine env fallthrough below the
+  // cap (where servedByUserKey is false).
   if (!userKeyAvailable) {
     const globalGate = await checkGlobalCostGate();
     if (!globalGate.allowed) {
@@ -205,18 +238,24 @@ async function enforceCostGates(
   }
 
   if (userId) {
-    const gate = await checkCostGate(userId);
+    const gate = await checkCostGate(userId, { reserved });
     if (!gate.allowed) {
-      throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
+      // BYOK past the cap (founder decision 2026-10-15): the user's own key
+      // pays, so the call goes ahead — on that key ALONE. The caller drops the
+      // env providers from the chain, so a broken key cannot fall through to
+      // Klorn's money once the cap is reached. Nothing is pre-billed: the
+      // per-user and global pre-bills below are skipped for userKeyAvailable.
+      if (userKeyAvailable) return { userKeyOnly: true };
+      throw perUserCapError(gate.freeCapApplied === true);
     }
     if (!userKeyAvailable) {
       // Await the pre-bill so the atomic increment lands before we return, and
       // re-check the post-increment total: concurrent calls that both passed
       // the read-side gate above can't both slip past the cap (closes the
       // check-then-act TOCTOU under concurrency / multi-dyno).
-      const usage = await recordCostUsage(userId, estCents, model);
+      const usage = await recordCostUsage(userId, estCents, model, { reserved });
       if (usage?.overCap) {
-        throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
+        throw perUserCapError(gate.freeCapApplied === true);
       }
     }
   }
@@ -230,10 +269,11 @@ async function enforceCostGates(
       throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
     }
   }
+  return { userKeyOnly: false };
 }
 
 /**
- * Failure-side ledger (#1319): LlmUsageLog only sees successful calls, so a
+ * Failure-side ledger (#1572): LlmUsageLog only sees successful calls, so a
  * failed dispatch is noted here (logged now, content-free and rate-limited)
  * before the original error is rethrown unchanged. The entry point tallies the
  * noted attempts only if the whole call then fails — a hop a fallback provider
@@ -305,10 +345,10 @@ function signalKeyFailover(provider: Provider, err: unknown, userId?: string): v
 
 /**
  * Is there another provider in the chain that could serve this request once the
- * current one is cooled down? A single-key deployment (one OpenRouter key, the
- * hosted default since the Gemini secondary was retired) answers no — and the
- * cooldown length depends on it: locking out the ONLY provider is an outage,
- * not a routing decision. See markKeyLimited in model-fallback.ts.
+ * current one is cooled down? A single-key deployment (one Anthropic key, the
+ * hosted default) answers no — and the cooldown length depends on it: locking
+ * out the ONLY provider is an outage, not a routing decision. See
+ * markKeyLimited in model-fallback.ts.
  */
 function hasFailoverProvider(chain: Provider[], current: Provider): boolean {
   // Availability, not mere presence: a second provider that is itself cooled
@@ -341,7 +381,7 @@ function signalUserKeyUnusable(provider: Provider, err: unknown, userId?: string
 }
 
 const PROVIDERS_EXHAUSTED_BASE =
-  "All AI providers are unavailable right now. To unblock yourself, add your own OpenRouter or Gemini key in Settings.";
+  "All AI providers are unavailable right now. To unblock yourself, add your own Anthropic API key in Settings.";
 
 /**
  * Strip the user UUID from a provider quotaKey before showing it to the user.
@@ -370,7 +410,7 @@ function buildExhaustedMessage(chain: Provider[], lastError: unknown): string {
   if (reasons.length > 0) {
     parts.push(`Cooldown: ${reasons.join("; ")}.`);
   }
-  // Provider 4xx bodies (Gemini billing URL, OpenRouter dashboard links) leak
+  // Provider 4xx bodies (Gemini billing URL, console/dashboard links) leak
   // operator surface area to end users without giving them anything they can
   // act on — the base message already tells them what to do. Operators get the
   // raw error from `cause` (buildExhaustedError) and from Sentry.
@@ -401,10 +441,10 @@ export function buildExhaustedError(
  * Drop-in replacement for `openai.chat.completions.create()` with multi-provider
  * failover:
  *
- *   OpenRouter (caller's model)
- *     → 402 insufficient_credits → OpenRouter FALLBACK_MODEL (:free)
- *       → 403/429 daily key limit → Gemini (separate key, separate quota)
- *         → all fail              → AllProvidersExhaustedError
+ *   first provider in the chain (caller's model, resolved per provider)
+ *     → 402 credits / 403-429 key limit / 529 overloaded → next provider
+ *       (separate key, separate quota)
+ *         → all fail → AllProvidersExhaustedError
  *
  * Streaming and non-streaming calls are both supported.
  */
@@ -450,19 +490,18 @@ async function createCompletionWithFailover(
   // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
   if ((options.priority ?? "foreground") === "background" && !options._paced) {
     const paced = { ...options, _paced: true };
-    return backgroundLlmPacer.run(
-      () =>
-        createCompletion(
-          params as ChatCompletionCreateParamsNonStreaming,
-          paced,
-        ) as Promise<Result>,
-    );
+    const run = () =>
+      createCompletion(params as ChatCompletionCreateParamsNonStreaming, paced) as Promise<Result>;
+    if (!options.noWait) return backgroundLlmPacer.run(run);
+    const claimed = backgroundLlmPacer.tryRun(run);
+    if (!claimed) throw new PacerBusyError();
+    return claimed;
   }
 
-  const chain = getProviderChain(options.credentials);
-  if (chain.length === 0) {
+  const fullChain = getProviderChain(options.credentials);
+  if (fullChain.length === 0) {
     throw new Error(
-      "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
+      "No LLM providers configured — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
     );
   }
 
@@ -470,7 +509,7 @@ async function createCompletionWithFailover(
   // BYOK: when the chain leads with the user's own key, the cost ledgers skip
   // the pre-bill (true-up settles $0 on a user-key hit, real cost on env
   // fallthrough) — see enforceCostGates / trueUpCostLedgers.
-  const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
+  const userKeyAvailable = hasUserOwnedProvider(fullChain, playgroundOnly);
 
   // The user's chosen chat model (curated frontier only — resolved in
   // llm-credentials) applies ONLY to conversational surfaces that opt in via
@@ -488,13 +527,27 @@ async function createCompletionWithFailover(
   // for a slot (bounded) instead of failing — instant failure demoted every
   // email past the cap in a sync burst to the permanent keyword fallback.
   if (options.userId) {
-    await awaitUserCallSlot(options.userId, { priority: options.priority ?? "foreground" });
+    await awaitUserCallSlot(options.userId, {
+      priority: options.priority ?? "foreground",
+      reserved: options.reserved,
+      ...(options.noWait ? { maxWaitMs: 0 } : {}),
+    });
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
   // when a runaway loop has already crossed the cap. Covers the global
   // ceiling (always) and the per-user cap (when a userId is present).
-  await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
+  const costGate = await enforceCostGates(
+    params.model,
+    options.userId,
+    playgroundOnly,
+    userKeyAvailable,
+    options.reserved,
+  );
+  // Past the per-user cap a BYOK call runs on the user's own key alone.
+  const chain = costGate.userKeyOnly
+    ? fullChain.filter((provider) => provider.ownedByUser === true)
+    : fullChain;
 
   // Ground-truth usage ledger context, frozen before the failover loop so
   // every retry records the same caller identity + the same pre-bill
@@ -539,10 +592,9 @@ async function createCompletionWithFailover(
       recordDispatchFailure(failures, provider, model, err, playgroundOnly);
       throw err;
     }
-    // v1 limitation: streaming responses carry no `usage` block (OpenRouter
-    // supports include_usage on streams, but changing stream behavior is out
-    // of scope) — record a usageMissing row with zero counts instead so the
-    // call is still visible in the ledger.
+    // v1 limitation: streaming responses carry no `usage` block — record a
+    // usageMissing row with zero counts instead so the call is still visible
+    // in the ledger.
     const usage = isStreaming
       ? null
       : ((result as OpenAI.Chat.Completions.ChatCompletion).usage ?? null);
@@ -564,6 +616,15 @@ async function createCompletionWithFailover(
       usage,
       servedByUserKey: provider.ownedByUser === true,
     });
+    try {
+      options.onServed?.({
+        provider: provider.name,
+        model,
+        ownedByUser: provider.ownedByUser === true,
+      });
+    } catch (err) {
+      captureError(err, { tags: { scope: "llm.on-served" } });
+    }
     return result;
   };
 
@@ -579,28 +640,9 @@ async function createCompletionWithFailover(
     const provider = chain[i];
     if (!playgroundOnly && isProviderUnavailable(provider.quotaKey)) continue;
 
-    // First-choice model for this provider:
-    // - OpenRouter: caller's model
-    // - Gemini (and any non-first): resolve caller's model into the provider's namespace
-    let model =
-      i === 0 && provider.name === "openrouter"
-        ? params.model
-        : provider.resolveModel(params.model);
-
-    // Pre-flight lease check: if the last good catalog snapshot already shows
-    // this OpenRouter model is gone, skip the doomed dispatch — it would only
-    // eat a 404 — and walk the fallback chain now. Fail-open: a cold/empty
-    // cache means "unknown", so we dispatch normally and let the reactive
-    // isModelUnavailableError branch below handle it. This is the same
-    // recovery, just one wasted round-trip earlier, for the whole window
-    // between a retirement and the env being updated.
-    if (provider.name === "openrouter" && isModelKnownAbsent(model)) {
-      const result = await walkFallbackChain(activeFallbackChain(), model, (m) =>
-        call(provider, m),
-      );
-      if (result !== null) return result;
-      continue;
-    }
+    // Resolve the caller's model into this provider's namespace (a Claude pin
+    // on Gemini is served by Gemini's own default, and vice versa).
+    const model = provider.resolveModel(params.model);
 
     try {
       return await call(provider, model);
@@ -612,49 +654,6 @@ async function createCompletionWithFailover(
       // cooldown state — a single BYOK key must never lock itself out.
       if (playgroundOnly) throw err;
 
-      // 402: same provider, swap to :free model, retry once
-      if (provider.name === "openrouter" && isCreditError(err) && !isFreeModel(model)) {
-        markCreditExhausted(provider.quotaKey);
-        // Privacy kill switch (hosted prod): never degrade onto a :free model —
-        // its hosts may train on request data. Fail over to the next provider
-        // (env Gemini, paid tier) instead.
-        if (isFreeModelFallbackDisabled()) {
-          console.warn(
-            "[MODEL-FALLBACK] 402 with free fallback disabled — failing over to next provider",
-          );
-          continue;
-        }
-        model = FALLBACK_MODEL;
-        try {
-          return await call(provider, model);
-        } catch (err2) {
-          lastError = err2;
-          if (isKeyLimitError(err2)) {
-            markKeyLimited(provider.quotaKey, err2, {
-              hasFailover: hasFailoverProvider(chain, provider),
-            });
-            signalKeyFailover(provider, err2, options.userId);
-            continue; // → next provider
-          }
-          // The :free fallback model can itself be retired (404) or hit a
-          // transient connection blip. Don't hard-fail the whole request when a
-          // healthy failover provider (env Gemini, separate quota) still exists
-          // downstream — mirror the outer handler: walk the free-model chain on
-          // OpenRouter, then fall through to the next provider.
-          if (isModelUnavailableError(err2)) {
-            const result = await walkFallbackChain(activeFallbackChain(), model, (m) =>
-              call(provider, m),
-            );
-            if (result !== null) return result;
-            continue;
-          }
-          if (isConnectionError(err2)) {
-            continue;
-          }
-          throw err2;
-        }
-      }
-
       // 403/429 quota: this provider is done — move to next provider.
       // markKeyLimited will pick a cooldown duration matching the actual
       // quota window (RPM=5min, daily=until UTC midnight, ambiguous=1h).
@@ -663,6 +662,26 @@ async function createCompletionWithFailover(
           hasFailover: hasFailoverProvider(chain, provider),
         });
         signalKeyFailover(provider, err, options.userId);
+        continue;
+      }
+
+      // Credit exhaustion on a provider with no same-provider swap (Anthropic's
+      // prepaid balance or spend limit — the adapter turns those 400s into a
+      // 402). Treated like a key limit: cool down, move on, say so. Rethrowing
+      // it as an operator fault instead would drop every judge call to the
+      // keyword fallback until someone tops up — PUSH unreachable, and nothing
+      // that looks broken. Matched on the status, never on a "402" substring.
+      // A user's own key keeps its existing, no-cooldown failover below.
+      if (isCreditExhaustionError(err) && provider.ownedByUser !== true) {
+        markCreditExhausted(provider.quotaKey);
+        signalKeyFailover(provider, err, options.userId);
+        continue;
+      }
+
+      // 529 overloaded: capacity, not a fault, and the SDK already retried with
+      // backoff. Next provider, no cooldown — it is usually back in seconds.
+      // (Logged by recordDispatchFailure in `call`.)
+      if (isOverloadedError(err)) {
         continue;
       }
 
@@ -676,19 +695,10 @@ async function createCompletionWithFailover(
         continue;
       }
 
-      // Model retired / not served by this provider (OpenRouter "No endpoints
-      // found for ..." 404). On OpenRouter we first walk the free-model
-      // fallback chain on the SAME provider — losing one :free SKU shouldn't
-      // force us off OpenRouter (where tools/function-calling work) and onto
-      // Gemini (where tools are stripped). If every chain entry is also gone,
-      // then we move on to the next provider as a last resort.
+      // Model retired / not served by this provider (404 naming the model):
+      // the next provider resolves the pin into its own namespace and may
+      // still serve it.
       if (isModelUnavailableError(err)) {
-        if (provider.name === "openrouter") {
-          const result = await walkFallbackChain(activeFallbackChain(), model, (m) =>
-            call(provider, m),
-          );
-          if (result !== null) return result;
-        }
         continue;
       }
 
@@ -735,7 +745,7 @@ async function createVisionCompletionWithFailover(
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
     throw new Error(
-      "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
+      "No LLM providers configured — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
     );
   }
 
@@ -754,15 +764,24 @@ async function createVisionCompletionWithFailover(
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
   // this, a runaway attachment-analysis batch can blow past the cap.
-  await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
+  // Deliberately NOT passing options.reserved: the judge never goes through
+  // the vision path, and the reserve exists for exactly one surface. Honouring
+  // it here would widen who can reach the judge's budget for no caller.
+  const costGate = await enforceCostGates(
+    params.model,
+    options.userId,
+    playgroundOnly,
+    userKeyAvailable,
+  );
 
-  // Vision prefers Gemini (best OCR), but a BYOK user's OWN key must keep
-  // priority — otherwise env Gemini gets hoisted ahead of the user's
-  // OpenRouter/Gemini key and vision silently bills Klorn instead of the user,
+  // Vision prefers Gemini when it is configured (best OCR), but a BYOK user's
+  // OWN key must keep priority — otherwise env Gemini gets hoisted ahead of
+  // the user's key and vision silently bills Klorn instead of the user,
   // defeating BYOK on this path. So: user-owned providers first, then
   // gemini-first only AMONG the env providers (keyless users are unchanged).
   const userOwned = chain.filter((p) => p.ownedByUser);
-  const envProviders = chain.filter((p) => !p.ownedByUser);
+  // Past the per-user cap a BYOK call runs on the user's own key alone.
+  const envProviders = costGate.userKeyOnly ? [] : chain.filter((p) => !p.ownedByUser);
   const ordered = [
     ...userOwned,
     ...envProviders.filter((provider) => provider.name === "gemini"),
@@ -772,9 +791,8 @@ async function createVisionCompletionWithFailover(
   // steer OCR/attachment analysis (a text-focused pick may not be multimodal).
   const visionModel = VISION_MODEL;
 
-  // One provider call + ledger settle. Extracted so the `:free`→paid retry
-  // below records usage for whichever model actually served, exactly like the
-  // first-choice attempt (mirrors createCompletion's `call` closure).
+  // One provider call + ledger settle (mirrors createCompletion's `call`
+  // closure).
   const callVisionProvider = async (
     provider: Provider,
     model: string,
@@ -791,10 +809,8 @@ async function createVisionCompletionWithFailover(
     }
     // Mirror the gate: BYOK and playground spend no Klorn budget, so the
     // pre-bill is 0 and the usage log must not show a cost Klorn never paid.
-    // Estimate against the model that ACTUALLY dispatches (`model`), not the
-    // requested `params.model`: on the `:free`→paid retry below the closure runs
-    // with the paid slug, but `params.model` is still the `:free` slug (which
-    // estimates 0) — so a paid call would record a 0 pre-bill.
+    // Estimate against the model that ACTUALLY dispatches (`model`, resolved
+    // per provider), not the requested `params.model`.
     const prebill = userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(model);
     // Ground-truth usage ledger — record the provider+model that actually
     // served the request, fire-and-forget. Default source "background": vision
@@ -838,59 +854,11 @@ async function createVisionCompletionWithFailover(
         markCreditExhausted(provider.quotaKey);
         continue;
       }
-      // The default VISION_MODEL ends in `:free`, and OpenRouter now 404s that
-      // SKU ("This model is unavailable for free — use google/gemini-2.5-flash").
-      // createCompletion walks a fallback chain on this; vision was missing the
-      // branch entirely, so every image OCR hard-failed → VISION_FAILED with a
-      // raw 404. Retry ONCE on the SAME provider with the paid slug (strip
-      // `:free`). If that provider has no credit it 402s → we fall through to
-      // the next provider (env Gemini's native key, separate quota), so keyless
-      // self-hosters still degrade gracefully instead of surfacing a raw 404.
-      if (isModelUnavailableError(err) && isFreeModel(model)) {
-        const paidModel = model.replace(/:free$/, "");
-        // `openrouter/free` (and any free alias without a `:free` suffix) has no
-        // paid slug to strip to — retrying the same string would just 404 again.
-        // Skip straight to the next provider instead of wasting a round-trip.
-        if (paidModel === model) continue;
-        // Log the swap so an operator can see the firewall fell off the free
-        // vision SKU onto a paid one (CLAUDE.md: signal even on non-fatal paths).
-        console.warn(
-          `[VISION] free SKU unavailable (${model}); retrying paid slug ${paidModel} on ${provider.name}`,
-        );
-        try {
-          return await callVisionProvider(provider, paidModel);
-        } catch (err2) {
-          lastError = err2;
-          if (isKeyLimitError(err2)) {
-            markKeyLimited(provider.quotaKey, err2, {
-              hasFailover: hasFailoverProvider(ordered, provider),
-            });
-            signalKeyFailover(provider, err2, options.userId);
-            continue;
-          }
-          if (isCreditError(err2)) {
-            markCreditExhausted(provider.quotaKey);
-            continue;
-          }
-          if (provider.name === "openai-compat" && isConnectionError(err2)) continue;
-          if (isModelUnavailableError(err2)) continue;
-          // Unknown / non-budget error on the paid retry: don't hard-fail the
-          // WHOLE vision call — a bare `throw err2` here escapes the provider
-          // for-loop and fails every image OCR even when a healthy next provider
-          // (env Gemini, separate quota) could still serve it. Mirror the rest
-          // of this loop: record it as lastError and fall through to the next
-          // provider (CLAUDE.md: signal even on non-fatal paths).
-          console.warn(
-            `[VISION] paid-slug retry failed with unknown error on ${provider.name}`,
-            err2,
-          );
-          lastError = err2;
-          continue;
-        }
-      }
-      // A non-`:free` model reported unavailable → this provider can't serve
-      // vision; move on rather than hard-failing the whole request.
+      // Model reported unavailable → this provider can't serve vision; move on
+      // rather than hard-failing the whole request.
       if (isModelUnavailableError(err)) continue;
+      // 529 overloaded: next provider, no cooldown (same as createCompletion).
+      if (isOverloadedError(err)) continue;
       if (isProviderUnavailable(provider.quotaKey)) continue;
       if (provider.name === "openai-compat" && isConnectionError(err)) continue;
       // Non-budget error (5xx, auth, malformed request, cloud network): don't

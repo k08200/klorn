@@ -103,11 +103,7 @@ struct TierGuide: View {
                 .font(.caption).foregroundStyle(Theme.textDim)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(22)
-        .frame(width: 460)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 460)
     }
 }
 
@@ -193,11 +189,7 @@ struct PurposePrompt: View {
             case .priorities: prioritiesStep
             }
         }
-        .padding(22)
-        .frame(width: 430)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 430)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .onAppear {
@@ -300,8 +292,8 @@ struct PrioritiesEditor: View {
                 .scrollContentBackground(.hidden)
                 .padding(6)
                 .frame(minHeight: 84, maxHeight: 140)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
                 .accessibilityLabel(L("priorities.title"))
             if text.isEmpty {
                 Text(L("priorities.placeholder"))
@@ -323,39 +315,3 @@ func purposeLabel(_ purpose: String) -> String {
     }
 }
 
-/// The pre-OAuth pick (founder 2026-09-01: "로그인 하면서 고르게"): a caption
-/// and three capsules bound to `AppModel.pendingPurpose`, applied the moment
-/// sign-in lands. Shared by the full sidebar and the expanded panel so the
-/// two sign-in entrances ask the same question the same way.
-struct PurposePickRow: View {
-    @Environment(AppModel.self) private var model
-    let horizontalPadding: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L("purpose.loginPick"))
-                .font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
-            HStack(spacing: 6) {
-                ForEach(["work", "personal", "mixed"], id: \.self) { choice in
-                    let selected = model.pendingPurpose == choice
-                    Button {
-                        model.pendingPurpose = selected ? nil : choice
-                    } label: {
-                        Text(purposeLabel(choice))
-                            .font(Theme.Typo.label)
-                            .foregroundStyle(selected ? Theme.text : Theme.textDim)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(
-                                selected ? Theme.surfaceSelected : Theme.surfaceRaised,
-                                in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(purposeLabel(choice))
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-        }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.vertical, 4)
-    }
-}

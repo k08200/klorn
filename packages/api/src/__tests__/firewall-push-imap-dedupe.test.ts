@@ -44,6 +44,7 @@ vi.mock("../mail/gmail-labels.js", () => ({
 }));
 
 import { judgeAndMirrorEmail } from "../judge/email-firewall.js";
+import { URGENT_EMAIL_TITLES } from "../notify/notification-strings.js";
 
 const USER = "user-1";
 const NOW = new Date("2026-09-30T10:00:00.000Z");
@@ -185,7 +186,7 @@ describe("Gmail ids: exactly the query they had", () => {
       where: {
         userId: USER,
         type: "email",
-        title: "Urgent email",
+        title: { in: [...URGENT_EMAIL_TITLES] },
         OR: [
           { message: { contains: `[${GMAIL_ID}]` } },
           { message: { contains: `[${GMAIL_ID},` } },

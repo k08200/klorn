@@ -9,9 +9,10 @@ import SwiftUI
 /// reading pane alone fits at over 100%.
 struct ReadingPane: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
-    /// The owning FullView's key zone; `.reader` draws the focus ring.
+    let actions: ShellActions
+    /// The owning window's key zone; `.reader` draws the focus ring.
     var keyZone: MailKeyZone = .list
+    private var m: ReadingPaneMetrics { .window }
     @State private var replying = false
     @State private var replyText = ""
     /// The composer was opened with the ahead-of-time draft (says so above
@@ -43,7 +44,7 @@ struct ReadingPane: View {
             } else if model.isLoadingEmail {
                 centered { ProgressView().controlSize(.small) }
             } else if let err = model.emailError {
-                centered { Text(err).font(.callout).foregroundStyle(Theme.textDim) }
+                centered { Text(err).font(m.callout).foregroundStyle(Theme.textDim) }
             } else if let email = model.openedEmail {
                 content(email)
             } else if model.selectedItemId != nil {
@@ -56,9 +57,9 @@ struct ReadingPane: View {
                         // The K mark, quiet — the ring identity is retired
                         // (K monogram everywhere since 0.4.80005).
                         LogoRing(size: 44).opacity(0.45)
-                        Text(L("reading.empty.title")).font(.title3).foregroundStyle(Theme.textDim)
+                        Text(L("reading.empty.title")).font(m.title3).foregroundStyle(Theme.textDim)
                         Text(L("reading.empty.detail"))
-                            .font(.caption).foregroundStyle(Theme.textDim)
+                            .font(m.caption).foregroundStyle(Theme.textDim)
                             .multilineTextAlignment(.center)
                     }
                     .accessibilityElement(children: .combine)
@@ -103,20 +104,20 @@ struct ReadingPane: View {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(detail.subject.isEmpty
                     ? L("mailbox.noSubject") : detail.subject))
-                    .font(Theme.Typo.display)
+                    .font(Theme.Typo.title)
                     .foregroundStyle(Theme.text).lineLimit(2)
                 HStack {
                     let from = senderDisplayName(decodeHTMLEntities(detail.from))
                     let to = senderDisplayName(decodeHTMLEntities(detail.to))
                     Text(L("mailbox.fromTo", from.isEmpty ? detail.from : from,
                            to.isEmpty ? detail.to : to))
-                        .font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                        .font(m.callout).foregroundStyle(Theme.textDim).lineLimit(1)
                     Spacer()
                     Text(Self.formatDate(detail.receivedAt))
-                        .font(.caption).foregroundStyle(Theme.textDim)
+                        .font(m.caption).foregroundStyle(Theme.textDim)
                 }
             }
-            .padding(24)
+            .padding(m.inset)
             Divider().overlay(Theme.line)
             if let renderHtml = detail.renderHtml, !renderHtml.isEmpty {
                 EmailHtmlView(
@@ -132,13 +133,13 @@ struct ReadingPane: View {
             } else {
                 ScrollView {
                     Text(detail.body.isEmpty ? L("reading.noContent") : detail.body)
-                        .font(.callout)
+                        .font(m.callout)
                         .foregroundStyle(Theme.text)
                         .lineSpacing(4)
                         .textSelection(.enabled)
                         .frame(maxWidth: 640, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(24)
+                        .padding(m.inset)
                 }
             }
         }
@@ -148,60 +149,33 @@ struct ReadingPane: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(email.subject ?? L("mail.noSubjectParen")))
-                    .font(Theme.Typo.display)
-                    .foregroundStyle(Theme.text).lineLimit(2)
+                    .font(Theme.Typo.title)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(ReaderActionRules.subjectLines)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Text(senderDisplayName(email.from.map(decodeHTMLEntities)))
-                        .font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                        .font(m.sender).foregroundStyle(m.senderInk).lineLimit(1)
                     Spacer()
-                    Text(Self.formatDate(email.date)).font(.caption).foregroundStyle(Theme.textDim)
+                    Text(Self.formatDate(email.date)).font(m.caption).foregroundStyle(Theme.textDim)
+                }
+                // The facts the row no longer carries (one-badge rule): the
+                // lane, then category / relationship / reply state as words.
+                if let item {
+                    ReaderMetaLine(item: item)
                 }
                 if let item {
-                    HStack(spacing: 10) {
-                        Button(email.preparedDraft == nil ? L("reading.replyWithAI") : L("reading.openDraft")) {
-                            startReply(item)
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        // menuIndicator(.hidden) kills the system-blue pull-down
-                        // segment (the one off-palette element on this row —
-                        // design audit 2026-07-20); a dim chevron in the label
-                        // keeps the "this opens a menu" affordance.
-                        // Chevron lives INSIDE one Text (concatenation) — a
-                        // separate Image in the label gets reordered to the
-                        // leading edge by the menu button's label styling
-                        // (screen-verified 0.4.80007: "∨ Snooze").
-                        if Theme.isRenderingOffscreen {
-                            OffscreenMenuLabel(title: L("mail.snoozePrefix"))
-                            OffscreenMenuLabel(
-                                    title: L("mail.moveTo", item.tier.label,
-                                             L10n.josaRoIfKorean(after: item.tier.label)))
-                        } else {
-                            SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
-                                Text(L("mail.snoozePrefix"))
-                                    + Text(Image(systemName: "chevron.down"))
-                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-                            }
-                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
-                            .menuIndicator(.hidden).fixedSize()
-                            TierMenu(
-                            item: item, onSetTier: actions.onSetTier,
-                            onPinSender: actions.onPinSender, onUnpinSender: actions.onUnpinSender
-                        ) {
-                                Text(L("mail.moveTo", item.tier.label,
-                                       L10n.josaRoIfKorean(after: item.tier.label)))
-                                    + Text(Image(systemName: "chevron.down"))
-                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-                            }
-                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
-                            .menuIndicator(.hidden).fixedSize()
-                        }
-                        Button(L("mail.dismiss")) { actions.onDismiss(item) }
-                            .buttonStyle(.bordered).controlSize(.small)
-                    }
+                    // One button system (audit M1): the primary is
+                    // .borderedProminent in accentSolid, every other action
+                    // .bordered, all at the same control size. Steps down to
+                    // icon-only when the pane is narrow (window floor 880).
+                    ReaderActionBar(
+                        item: item, hasDraft: email.preparedDraft != nil, actions: actions
+                    ) { startReply(item) }
                     .padding(.top, 2)
                 }
             }
-            .padding(24)
+            .padding(m.inset)
             Divider().overlay(Theme.line)
             klornBand(email)
             if let item, !replying {
@@ -227,7 +201,7 @@ struct ReadingPane: View {
                     // line spacing — a mail body should read like a document, not
                     // a log dump stretched across the pane.
                     Text(email.text.isEmpty ? L("reading.noContent") : email.text)
-                        .font(.callout)
+                        .font(m.callout)
                         .lineSpacing(4)
                         .foregroundStyle(Theme.text.opacity(0.92))
                         .textSelection(.enabled)
@@ -247,19 +221,19 @@ struct ReadingPane: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(L("reading.replyTo", senderDisplayName(item.email?.from.map(decodeHTMLEntities))))
-                    .font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+                    .font(m.caption).foregroundStyle(Theme.textDim).lineLimit(1)
                 Spacer()
                 if model.isDrafting {
                     HStack(spacing: 5) {
                         ProgressView().controlSize(.mini)
-                        Text(L("reading.drafting")).font(.caption).foregroundStyle(Theme.textDim)
+                        Text(L("reading.drafting")).font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 } else {
                     Button {
                         showingPreparedDraft = false
                         Task { if let d = await model.draftReply(item) { replyText = d } }
                     } label: {
-                        Label(L("reading.regenerate"), systemImage: "sparkles").font(.caption)
+                        Label(L("reading.regenerate"), systemImage: "sparkles").font(m.caption)
                     }
                     .buttonStyle(.plain).foregroundStyle(Theme.accent)
                     .help(L("reading.regenerate.help"))
@@ -267,18 +241,19 @@ struct ReadingPane: View {
             }
             if showingPreparedDraft {
                 Text(L("reading.preparedDraft"))
-                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .font(m.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
             TextEditor(text: $replyText)
-                .font(.callout).foregroundStyle(Theme.text)
+                .font(m.callout).foregroundStyle(Theme.text)
                 .scrollContentBackground(.hidden)
                 .frame(height: 110)
                 .padding(Theme.s2)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.field))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: m.editorRadius))
+                .overlay(RoundedRectangle(cornerRadius: m.editorRadius).strokeBorder(Theme.field))
             if let err = model.replyError {
-                Text(err).font(.caption).foregroundStyle(.orange)
+                Text(err).font(m.caption).foregroundStyle(m.warning)
+                if PlanUpgrade.offersUpgrade(for: err) { UpgradeToProLink() }
             }
             HStack {
                 Spacer()
@@ -288,8 +263,7 @@ struct ReadingPane: View {
                     showingPreparedDraft = false
                 }
                 .buttonStyle(.bordered).controlSize(.small)
-                Button(sending ? L("reading.sending") : L("reading.send")) { send(item) }
-                    .buttonStyle(PrimaryButtonStyle())
+                primaryButton(sending ? L("reading.sending") : L("reading.send")) { send(item) }
                     .disabled(sending || model.isDrafting || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -302,7 +276,9 @@ struct ReadingPane: View {
     /// reachable even before any summary exists (founder, 2026-08-20).
     @ViewBuilder
     private func klornBand(_ email: EmailDetail) -> some View {
-        let reason = item?.tierReason
+        // The generic QUEUE fallback restates the lane; the band then just
+        // says "Analysis" instead of an empty why.
+        let reason = rowTierReason(item?.tierReason)
         // COLLAPSED by default (founder 2026-09-01): the analysis was eating
         // the pane and the mail itself was barely visible. The one-line WHY
         // stays always; everything deeper sits behind the chevron, and the
@@ -319,13 +295,13 @@ struct ReadingPane: View {
                             if let item, let reason, !reason.isEmpty {
                                 Circle().fill(Theme.tint(item.tier)).frame(width: 7, height: 7)
                                 Text(L("mail.whyTier", item.tier.label, reason))
-                                    .font(.caption).foregroundStyle(Theme.textDim)
+                                    .font(m.caption).foregroundStyle(Theme.textDim)
                                     .lineLimit(expanded ? 2 : 1)
                             } else {
                                 Text(L("reading.analysis"))
-                                    .font(.caption).foregroundStyle(Theme.textDim)
+                                    .font(m.caption).foregroundStyle(Theme.textDim)
                             }
-                            Image(systemName: "chevron.down").font(.caption2)
+                            Image(systemName: "chevron.down").font(m.caption2)
                                 .foregroundStyle(Theme.textDim)
                                 .rotationEffect(expanded ? .zero : .degrees(-90))
                                 .accessibilityHidden(true)
@@ -343,17 +319,30 @@ struct ReadingPane: View {
                         Task { await model.summarizeOpenedEmail() }
                     }
                     .buttonStyle(.plain)
-                    .font(.caption.weight(.medium))
+                    .font(m.captionMedium)
                     .foregroundStyle(model.isSummarizing ? Theme.textDim : Theme.accent)
                     .disabled(model.isSummarizing)
                 }
                 if expanded {
-                if model.summarizeFailed {
+                switch model.summarizeFailure {
+                case .needsPro?:
+                    HStack(spacing: Theme.s2) {
+                        Text(L("error.needsPro"))
+                            .font(m.caption).foregroundStyle(Theme.textDim)
+                        UpgradeToProLink()
+                    }
+                case .failed?:
                     Text(L("mail.summarizeFailed"))
-                        .font(.caption).foregroundStyle(Theme.textDim)
+                        .font(m.caption).foregroundStyle(Theme.textDim)
+                case nil:
+                    EmptyView()
                 }
                 if let summary = email.summary, !summary.isEmpty {
-                    Text(summary).font(.callout).foregroundStyle(Theme.text.opacity(0.9))
+                    // Wraps to three lines (audit M2) instead of cutting
+                    // mid-token on one ("before 17:0…").
+                    Text(summary).font(m.callout).foregroundStyle(Theme.text.opacity(0.9))
+                        .lineLimit(ReaderActionRules.summaryLines)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if let points = email.keyPoints, !points.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
@@ -361,9 +350,9 @@ struct ReadingPane: View {
                         // duplicate \.self identities break SwiftUI diffing.
                         ForEach(Array(points.enumerated()), id: \.offset) { _, point in
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text("•").font(.caption).foregroundStyle(Theme.textDim)
+                                Text("•").font(m.caption).foregroundStyle(Theme.textDim)
                                     .accessibilityHidden(true)
-                                Text(point).font(.caption).foregroundStyle(Theme.text.opacity(0.85))
+                                Text(point).font(m.caption).foregroundStyle(Theme.text.opacity(0.85))
                             }
                         }
                     }
@@ -372,9 +361,9 @@ struct ReadingPane: View {
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Image(systemName: "checkmark.circle").font(.caption2)
+                                Image(systemName: "checkmark.circle").font(m.caption2)
                                     .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                                Text(action).font(.caption).foregroundStyle(Theme.text.opacity(0.85))
+                                Text(action).font(m.caption).foregroundStyle(Theme.text.opacity(0.85))
                             }
                         }
                     }
@@ -382,14 +371,14 @@ struct ReadingPane: View {
                 }
                 // Signal lines carry their hue on the ICON (and meter) only; the
                 // text itself stays dim. Stacked colored text lines (accent blue +
-                // engage pink under a red tier dot) made this one band the loudest
+                // a second hue under a red tier dot) made this one band the loudest
                 // surface in the app — the hue is the signal, the sentence is not.
                 if email.needsReply == true {
                     HStack(spacing: 5) {
-                        Image(systemName: "arrowshape.turn.up.left").font(.caption2)
+                        Image(systemName: "arrowshape.turn.up.left").font(m.caption2)
                             .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                        Text((email.needsReplyReason?.isEmpty == false) ? email.needsReplyReason! : L("reading.needsReply"))
-                            .font(.caption).foregroundStyle(Theme.textDim)
+                        Text((email.needsReplyReasonText?.isEmpty == false) ? email.needsReplyReasonText! : L("reading.needsReply"))
+                            .font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 }
                 // Why this arrived NOW — read from the whole thread, both
@@ -398,46 +387,46 @@ struct ReadingPane: View {
                 if let brief = model.threadBrief, !brief.whyNow.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Image(systemName: "arrow.triangle.branch").font(.caption2)
+                            Image(systemName: "arrow.triangle.branch").font(m.caption2)
                                 .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                            Text(brief.whyNow).font(.caption).foregroundStyle(Theme.text)
+                            Text(brief.whyNow).font(m.caption).foregroundStyle(Theme.text)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         if let owe = brief.weOwe, !owe.isEmpty {
                             Text(L("thread.weOwe", owe))
-                                .font(.caption2).foregroundStyle(.orange)
+                                .font(m.caption2).foregroundStyle(m.warning)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         ForEach(brief.asks.prefix(2), id: \.self) { ask in
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Text("·").font(.caption2).foregroundStyle(Theme.textDim)
-                                Text(ask).font(.caption2).foregroundStyle(Theme.textDim)
+                                Text("·").font(m.caption2).foregroundStyle(Theme.textDim)
+                                Text(ask).font(m.caption2).foregroundStyle(Theme.textDim)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: m.cardRadius))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(L("thread.brief.a11y", brief.whyNow))
                 }
                 if let dossier = model.senderDossier, !dossier.summary.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Image(systemName: "person.crop.circle").font(.caption2)
+                            Image(systemName: "person.crop.circle").font(m.caption2)
                                 .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                            Text(dossier.summary).font(.caption)
+                            Text(dossier.summary).font(m.caption)
                                 .foregroundStyle(Theme.textDim).lineLimit(2)
                         }
                         if !dossier.openThreads.isEmpty {
                             Text(L("dossier.inFlight", dossier.openThreads.joined(separator: " · ")))
-                                .font(.caption2).foregroundStyle(Theme.textDim)
+                                .font(m.caption2).foregroundStyle(Theme.textDim)
                                 .padding(.leading, 13).lineLimit(2)
                         }
                         if let promise = dossier.lastPromise, !promise.isEmpty {
                             Text(L("dossier.promise", promise))
-                                .font(.caption2).foregroundStyle(Theme.textDim)
+                                .font(m.caption2).foregroundStyle(Theme.textDim)
                                 .padding(.leading, 13).lineLimit(2)
                         }
                     }
@@ -448,14 +437,14 @@ struct ReadingPane: View {
                     meetingContextRows(context, proposed)
                 }
                 if let engagement = email.engagement, engagement.outboundCount > 0 {
-                    // Warm tint mirrors the web graph's "you engage" pink — the
-                    // signal Klorn learned from the user's own replies. Pink lives
-                    // on the icon and the meter; see the signal-line rule above.
+                    // The signal Klorn learned from the user's own replies. The
+                    // icon is neutral and the meter speaks in the accent (audit
+                    // X2 retired the pink: it out-shouted the PUSH dot).
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 5) {
-                            Image(systemName: "arrow.turn.up.left").font(.caption2)
-                                .foregroundStyle(Theme.engage)
-                            Text(engagement.replyCountLabel).font(.caption)
+                            Image(systemName: "arrow.turn.up.left").font(m.caption2)
+                                .foregroundStyle(Theme.textDim)
+                            Text(engagement.replyCountLabel).font(m.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
                         if engagement.showsImportance {
@@ -470,7 +459,7 @@ struct ReadingPane: View {
         // Same measure as the mail body below: intelligence about a document
         // should not run wider than the document itself.
         .frame(maxWidth: 640, alignment: .leading)
-        .padding(.horizontal, 24).padding(.vertical, 14)
+        .padding(.horizontal, m.inset).padding(.vertical, m.bandVertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surfaceRaised)
         Divider().overlay(Theme.line)
@@ -486,31 +475,31 @@ struct ReadingPane: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
-                Image(systemName: "calendar.badge.clock").font(.caption2)
+                Image(systemName: "calendar.badge.clock").font(m.caption2)
                     .foregroundStyle(Theme.accent).accessibilityHidden(true)
                 Text(L("meeting.proposedSlot", meetingSlotLabel(proposed.startTime, proposed.endTime)))
-                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .font(m.caption).foregroundStyle(Theme.textDim)
             }
             HStack(spacing: 6) {
                 Circle().fill(meetingVerdictColor(context.conflict))
                     .frame(width: 7, height: 7).accessibilityHidden(true)
                 Text(meetingVerdictLabel(context.conflict))
-                    .font(.caption.weight(.medium))
+                    .font(m.captionMedium)
                     .foregroundStyle(context.conflict?.hasConflicts == true ? Theme.text : Theme.textDim)
             }
             if let alts = context.alternatives, !alts.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Image(systemName: "calendar.badge.checkmark").font(.caption2)
+                    Image(systemName: "calendar.badge.checkmark").font(m.caption2)
                         .foregroundStyle(Theme.accent).accessibilityHidden(true)
                     Text(L("meeting.alternatives",
                            alts.prefix(3).map { meetingSlotLabel($0.startTime, $0.endTime) }
                                .joined(separator: " · ")))
-                        .font(.caption).foregroundStyle(Theme.textDim)
+                        .font(m.caption).foregroundStyle(Theme.textDim)
                 }
             }
             ForEach(context.nearby.prefix(3)) { event in
                 Text("\(meetingSlotLabel(event.startTime, event.endTime))  \(event.title)")
-                    .font(.caption2).foregroundStyle(Theme.textDim)
+                    .font(m.caption2).foregroundStyle(Theme.textDim)
                     .padding(.leading, 13)
                     .lineLimit(1)
             }
@@ -525,7 +514,7 @@ struct ReadingPane: View {
 
     private func meetingVerdictColor(_ conflict: MeetingContextWire.Conflict?) -> Color {
         guard let conflict else { return Theme.textDim }
-        return conflict.hasConflicts ? .red : .green
+        return conflict.hasConflicts ? m.danger : m.success
     }
 
     /// "Wed Aug 13 · 16:00–17:00" in the user's locale/zone, from the wire's
@@ -536,8 +525,10 @@ struct ReadingPane: View {
             return startIso
         }
         let day = DateFormatter()
+        day.timeZone = DisplayTimeZone.current
         day.setLocalizedDateFormatFromTemplate("EdMMM")
         let time = DateFormatter()
+        time.timeZone = DisplayTimeZone.current
         time.setLocalizedDateFormatFromTemplate("HHmm")
         return "\(day.string(from: start)) · \(time.string(from: start))–\(time.string(from: end))"
     }
@@ -550,11 +541,11 @@ struct ReadingPane: View {
         let trackWidth: CGFloat = 64
         HStack(spacing: 7) {
             ZStack(alignment: .leading) {
-                Capsule().fill(Theme.engage.opacity(0.22)).frame(width: trackWidth, height: 5)
-                Capsule().fill(Theme.engage)
+                Capsule().fill(Theme.surfaceHover).frame(width: trackWidth, height: 5)
+                Capsule().fill(Theme.accentSolid)
                     .frame(width: max(4, trackWidth * engagement.importanceFill), height: 5)
             }
-            Text(engagement.importanceLabel).font(.caption2).foregroundStyle(Theme.textDim)
+            Text(engagement.importanceLabel).font(m.caption2).foregroundStyle(Theme.textDim)
         }
         .accessibilityHidden(true)
     }
@@ -582,8 +573,7 @@ struct ReadingPane: View {
                             Text(option.toneLabel).frame(minHeight: 24)
                         }
                         .buttonStyle(.bordered).controlSize(.regular)
-                        // The card binds 1/2/3 positionally; mirroring that here
-                        // keeps one muscle memory across both surfaces.
+                        // 1/2/3 pick the drafts positionally (wire order).
                         .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
                         .help(option.body)
                         .accessibilityLabel(L("reading.quickReply.a11y", option.toneLabel, option.body))
@@ -593,10 +583,13 @@ struct ReadingPane: View {
             case .ready:
                 EmptyView()
             case .needsPro:
-                Text(L("push.proRequired")).font(.caption).foregroundStyle(Theme.textDim)
+                HStack(spacing: Theme.s2) {
+                    Text(L("push.proRequired")).font(m.caption).foregroundStyle(Theme.textDim)
+                    UpgradeToProLink()
+                }
             case .failed(let message):
                 HStack(spacing: Theme.s2) {
-                    Text(message).font(.caption).foregroundStyle(.orange)
+                    Text(message).font(m.caption).foregroundStyle(m.warning)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(L("push.tryAgain")) { loadQuickReplies(item) }
                         .buttonStyle(.bordered).controlSize(.small)
@@ -605,7 +598,7 @@ struct ReadingPane: View {
                 if loadingQuickReplies {
                     HStack(spacing: 5) {
                         ProgressView().controlSize(.mini)
-                        Text(L("push.draftingReplies")).font(.caption).foregroundStyle(Theme.textDim)
+                        Text(L("push.draftingReplies")).font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 } else {
                     // Not fetched on selection: every load is three LLM
@@ -615,7 +608,7 @@ struct ReadingPane: View {
                 }
             }
         }
-        .padding(.horizontal, 24).padding(.vertical, 10)
+        .padding(.horizontal, m.inset).padding(.vertical, m.stripVertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         Divider().overlay(Theme.line)
     }
@@ -663,21 +656,50 @@ struct ReadingPane: View {
         }
     }
 
+    /// The pane's one primary action: .borderedProminent in accentSolid.
+    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            // The system draws a prominent label white: 2:1 on the dark
+            // #38BDF8. The accent's own ink is 9.2:1.
+            Text(title).fontWeight(.semibold).foregroundStyle(Theme.onAccentSolid)
+        }
+        .buttonStyle(.borderedProminent).tint(Theme.accentSolid)
+        .controlSize(ReaderActionRules.controlSize)
+    }
+
     private func centered<Content: View>(@ViewBuilder _ c: () -> Content) -> some View {
         VStack { Spacer(); c(); Spacer() }.frame(maxWidth: .infinity)
     }
 
     private static func formatDate(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        let iso1 = ISO8601DateFormatter(); iso1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter(); iso2.formatOptions = [.withInternetDateTime]
-        guard let date = iso1.date(from: iso) ?? iso2.date(from: iso) else { return "" }
-        let out = DateFormatter()
-        // Without this the formatter follows the SYSTEM locale, so a user who set
-        // the app to English on a Korean Mac still read "7월 29 · 5:12 오후".
-        // Follow the app's own resolved language instead.
-        out.locale = Locale(identifier: L10n.resolvedCode(override: L10n.override))
-        out.dateFormat = "MMM d · h:mm a"
-        return out.string(from: date)
+        // Without the app's own resolved language the formatter follows the
+        // SYSTEM locale, so a user who set the app to English on a Korean Mac
+        // still read "7월 29 · 5:12 오후". A preview render tells time by the
+        // fixture clock (`MailClock`), so its fixture mail never reads as a
+        // stale date on the landing captures.
+        readerDateLabel(
+            iso: iso, locale: Locale(identifier: L10n.resolvedCode(override: L10n.override)),
+            relativeTo: Theme.isRenderingOffscreen ? MailClock.fixtureNow : nil)
     }
+
+}
+
+/// The reader's action row, as pure values the self-check pins.
+enum ReaderActionRules {
+    /// "Move to lane ⌄" / "레인 옮기기 ⌄" — the same words on every mail,
+    /// so the label never names the lane the mail is already in.
+    static var moveLabel: String { L("mail.moveToLane") }
+    /// The label for a mail in `tier` (kept as a function so the self-check
+    /// can prove it never depends on the current lane).
+    static func moveLabel(current tier: Tier) -> String { moveLabel }
+    static let controlSize: ControlSize = .regular
+    /// Widest first: the row takes the first that fits the pane.
+    static let densities: [ReaderActionDensity] = [.full, .primaryLabel, .icons]
+    static let replyIcon = "sparkles"
+    static let draftIcon = "doc.text"
+    static let snoozeIcon = "clock"
+    static let moveIcon = "arrow.left.arrow.right"
+    static let dismissIcon = "xmark"
+    static let subjectLines = 2
+    static let summaryLines = 3
 }

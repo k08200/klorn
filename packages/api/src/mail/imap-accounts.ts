@@ -129,7 +129,7 @@ async function handleGenericPollFailure(
 }
 
 /**
- * Sync every row the user has for one provider. Returns null when there are
+ * Sync every row the user has for one provider (or just `options.rowId`). Returns null when there are
  * none (the scheduler treats that as "nothing to log"). Accounts run serially
  * — IMAP providers rate-limit multiple LOGINs from one IP — and one account's
  * failure counts an error but never blocks the next.
@@ -137,10 +137,17 @@ async function handleGenericPollFailure(
 export async function syncImapAccountsForUser(
   userId: string,
   provider: ImapProviderConfig,
+  // `rowId` narrows the fan-out to one row of this user and provider — the
+  // first poll right after connect (imap-first-sync.ts). Same guards either way.
+  options: { rowId?: string } = {},
 ): Promise<ImapSyncAggregate | null> {
   const scope = provider.logScope;
   const rows = await prisma.linkedInboxAccount.findMany({
-    where: { userId, provider: provider.provider },
+    where: {
+      userId,
+      provider: provider.provider,
+      ...(options.rowId ? { id: options.rowId } : {}),
+    },
     orderBy: { createdAt: "asc" },
   });
   if (rows.length === 0) return null;

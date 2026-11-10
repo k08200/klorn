@@ -16,6 +16,7 @@ import { outlookInboxEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
+import { newWork } from "../work-context.js";
 import { syncOutlookAccountsForUser } from "./outlook-accounts.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -56,17 +57,25 @@ export function startOutlookScheduler(): void {
   // Double-start guard covers the boot window too (see imap-scheduler).
   if (intervalId || firstTickTimer) return;
   registerScheduler("outlook", POLL_INTERVAL_MS);
-  firstTickTimer = setTimeout(() => {
-    firstTickTimer = null;
-    recordSchedulerTick("outlook");
-    tickOnce().catch((err) =>
-      captureError(err, { tags: { scope: "outlook-scheduler.first-tick" } }),
-    );
-    intervalId = setInterval(() => {
+  firstTickTimer = setTimeout(
+    newWork(() => {
+      firstTickTimer = null;
       recordSchedulerTick("outlook");
-      tickOnce().catch((err) => captureError(err, { tags: { scope: "outlook-scheduler.tick" } }));
-    }, POLL_INTERVAL_MS);
-  }, 30_000);
+      tickOnce().catch((err) =>
+        captureError(err, { tags: { scope: "outlook-scheduler.first-tick" } }),
+      );
+      intervalId = setInterval(
+        newWork(() => {
+          recordSchedulerTick("outlook");
+          tickOnce().catch((err) =>
+            captureError(err, { tags: { scope: "outlook-scheduler.tick" } }),
+          );
+        }),
+        POLL_INTERVAL_MS,
+      );
+    }),
+    30_000,
+  );
   console.log(
     `[outlook-scheduler] started — first tick in 30s, then every ${POLL_INTERVAL_MS / 1000}s`,
   );

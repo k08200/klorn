@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "../db.js";
+import { displayNameOf, isPlainAddress, parseAddress } from "../mail/email-address.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
 import { captureError } from "../sentry.js";
 import { remember } from "./memory.js";
@@ -523,18 +524,11 @@ interface ParsedAddress {
   name: string | null;
 }
 
+/** The sender's mailbox and display name; null when the header names no single mailbox. */
 function parseSenderAddress(from: string): ParsedAddress | null {
-  if (!from) return null;
-  // "Name <email>" format
-  const match = from.match(/^(.+?)\s*<([^>]+)>$/);
-  if (match) {
-    const name = match[1].trim().replace(/^["']|["']$/g, "");
-    return { email: match[2].trim(), name: name || null };
-  }
-  // Plain email
-  const emailMatch = from.match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
-  if (emailMatch) return { email: emailMatch[0], name: null };
-  return null;
+  const email = parseAddress(from);
+  if (!isPlainAddress(email)) return null;
+  return { email, name: displayNameOf(from) };
 }
 
 const NO_REPLY_PATTERNS = [

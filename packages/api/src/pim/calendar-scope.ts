@@ -52,6 +52,28 @@ export const CALENDAR_PROVIDER_ENABLED: ProviderEnabledMap = {
   DEVICE: deviceCalendarEnabled,
 };
 
+/**
+ * The connectors whose complete window listing is the window's whole set, so a row
+ * it lacks was deleted or cancelled upstream (calendar-window-reconcile.ts), each
+ * behind its own flag. CalDAV (C3) and Outlook's calendarView. GOOGLE is not one:
+ * its listing is capped and paged, and only an explicit cancellation removes a row
+ * (C2b). DEVICE removes through its own snapshot ingest.
+ */
+export const WINDOW_RECONCILE_ENABLED: ProviderEnabledMap = {
+  OUTLOOK: outlookCalendarEnabled,
+  ICLOUD: caldavCalendarEnabled,
+  NAVER: caldavCalendarEnabled,
+};
+
+/** True when a complete listing of `provider` may remove the rows it lacks right now. */
+export function reconcilesByAbsence(
+  provider: CalendarProviderName,
+  map: ProviderEnabledMap = WINDOW_RECONCILE_ENABLED,
+): boolean {
+  const enabled = (map as Partial<Record<CalendarProviderName, () => boolean>>)[provider];
+  return enabled?.() === true;
+}
+
 function registeredProviders(map: ProviderEnabledMap): GatedCalendarProvider[] {
   return Object.keys(map) as GatedCalendarProvider[];
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Create / edit one calendar event (2026-09-11). A card over the full view
+/// Create / edit one calendar event (2026-09-11). A sheet on the main window
 /// like the other one-question surfaces: title, all-day, start, end,
 /// location. Save POSTs (new) or PATCHes (edit) through AppModel, which
 /// re-reads the visible range so the grid reflects the write; a Pro gate or
@@ -31,6 +31,7 @@ struct CalendarEventEditor: View {
             if let error = model.eventEditorError {
                 Text(error).font(.caption).foregroundStyle(Theme.tint(.push))
                     .fixedSize(horizontal: false, vertical: true)
+                if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
             }
             HStack(spacing: Theme.s2) {
                 Button(L("cal.save")) {
@@ -48,11 +49,7 @@ struct CalendarEventEditor: View {
             }
             .padding(.top, Theme.s1)
         }
-        .padding(22)
-        .frame(width: 440)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 440)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(isEdit ? L("cal.editor.editTitle") : L("cal.editor.newTitle"))
         .onAppear {
@@ -80,6 +77,9 @@ struct CalendarEventEditor: View {
             )
             .labelsHidden()
             .datePickerStyle(.compact)
+            // The picker reads the display zone the draft is saved in.
+            .environment(\.timeZone, DisplayTimeZone.current)
+            .environment(\.calendar, DisplayTimeZone.calendar)
             .accessibilityLabel(label)
         }
     }

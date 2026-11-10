@@ -18,53 +18,10 @@ import {
   listGmailMailbox,
   MAILBOXES,
   type Mailbox,
-  type MailboxItemWire,
   resolveMailboxClient,
 } from "../mail/gmail-mailbox.js";
 import { fetchInlineImage } from "../mail/inline-image.js";
-
-/** Demo rows so a signed-out / disconnected session still shows the shape. */
-const DEMO_ROWS: Record<Mailbox, MailboxItemWire[]> = {
-  sent: [
-    {
-      gmailId: "demo-sent-1",
-      threadId: null,
-      subject: "Re: Contract review — needs your sign-off today",
-      from: "you@company.com",
-      to: "Sarah Kim <sarah@company.com>",
-      snippet: "Signed and attached. Clause 4 reads fine after legal's change.",
-      receivedAt: "2026-07-29T05:40:00.000Z",
-      isRead: true,
-      inbox: "primary",
-    },
-  ],
-  drafts: [
-    {
-      gmailId: "demo-draft-1",
-      threadId: null,
-      subject: "Q3 vendor consolidation",
-      from: "you@company.com",
-      to: "billing@vendor.io",
-      snippet: "Before we renew, can you break the invoice into",
-      receivedAt: "2026-07-29T03:12:00.000Z",
-      isRead: true,
-      inbox: "primary",
-    },
-  ],
-  archived: [
-    {
-      gmailId: "demo-arch-1",
-      threadId: null,
-      subject: "Your July invoice is available",
-      from: "billing@saas.example",
-      to: "you@company.com",
-      snippet: "Invoice #4783 for July is attached. No action needed.",
-      receivedAt: "2026-07-28T22:05:00.000Z",
-      isRead: true,
-      inbox: "primary",
-    },
-  ],
-};
+import { hasAnyMailSource } from "../mail/mail-source.js";
 
 function isMailbox(value: string): value is Mailbox {
   return (MAILBOXES as readonly string[]).includes(value);
@@ -89,14 +46,22 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
     if (page === null && isLinkedInboxScope(inbox)) {
       return reply.code(404).send({ success: false, error: "Inbox not found" });
     }
-    // null = Gmail not connected — same demo fallback contract as GET /.
+    if (page !== null) {
+      return {
+        success: true,
+        data: { items: page.items, nextPageToken: page.nextPageToken ?? null, demo: false },
+      };
+    }
+    // null = no Gmail to read folders from. Never demo rows: an IMAP-only user
+    // (iCloud / Naver) has a real inbox elsewhere and gets an honest empty
+    // folder; a user with no source at all gets the same, flagged — the same
+    // rule as GET / (hasAnyMailSource).
+    if (await hasAnyMailSource(uid)) {
+      return { success: true, data: { items: [], nextPageToken: null, demo: false } };
+    }
     return {
       success: true,
-      data: {
-        items: page?.items ?? DEMO_ROWS[box],
-        nextPageToken: page?.nextPageToken ?? null,
-        demo: page === null,
-      },
+      data: { items: [], nextPageToken: null, demo: true, needsConnection: true },
     };
   });
 

@@ -17,7 +17,7 @@
 
 import { objectStorageEnabled } from "../config.js";
 import { captureError } from "../sentry.js";
-import { StorageError, type StorageErrorCode } from "./errors.js";
+import { printableStorageError, type StorageErrorCode } from "./errors.js";
 import type { ObjectStore } from "./object-store.js";
 import { readS3StoreConfig, S3_ENV_NAMES } from "./s3-config.js";
 import { createUserStorage, type UserStorage } from "./user-storage.js";
@@ -82,18 +82,8 @@ export type StorageHealth =
   | { state: "ok" }
   | { state: "misconfigured" | "failing"; code: StorageErrorCode; message: string };
 
-/** The parts of an error that are safe to print and to tag. */
-function printable(err: unknown): { code: StorageErrorCode; message: string; retryable: boolean } {
-  // A StorageError message is built from variable names, HTTP statuses and the
-  // vendor's error code. Anything else is not trusted to be free of secrets.
-  if (err instanceof StorageError) {
-    return { code: err.code, message: err.message, retryable: err.retryable };
-  }
-  return { code: "upstream", message: "unexpected error", retryable: false };
-}
-
 function report(state: "misconfigured" | "failing", err: unknown): StorageHealth {
-  const { code, message } = printable(err);
+  const { code, message } = printableStorageError(err);
   console.error(`${LOG_PREFIX} ${state} (${code}): ${message}`);
   captureError(err, { tags: { scope: "storage.startup", storageCode: code } });
   return { state, code, message };
@@ -140,39 +130,37 @@ export async function checkObjectStorageAtStartup(): Promise<StorageHealth> {
   return { state: "ok" };
 }
 
-export interface PurgeObjectsResult {
-  /** True when the flag is off and storage was not touched. */
-  skipped: boolean;
-  deleted: number;
-}
+/**
+ * What a purge did. Off: `{ skipped: true, deleted: 0 }`, exactly as in D1. On:
+ * the outcome of the first pass ("failed" included: the deletion goes on, and
+ * the pending record lets the sweep finish the job).
+ */
+export type PurgeObjectsResult =
+  | { skipped: true; deleted: 0 }
+  | { skipped: false; deleted: number; outcome: "done" | "settling" | "failed" };
 
 /**
  * Delete every object a user owns. Called BEFORE the database rows go, by both
  * deletion paths (`user-deletion.ts`).
  *
- * It blocks: if the bucket cannot be reached, is misconfigured, or keeps
- * objects, this throws and the caller must not delete the rows. A deletion
- * request is never answered "done" while the user's files may still exist, and
- * the user id (the only handle on those files) is not lost. Deleting is
- * idempotent, so the request is simply retried.
+ * Off: storage, the purge record and the database are not touched at all.
  *
- * A blocked deletion is reported under its own Sentry tag,
- * `scope: storage.purge`, with the error code and whether a retry may pass, so
- * an alert can be built on it. The runbook is in the plan's D1 entry.
+ * On (step D3, replacing D1's blocking purge): the pending purge is recorded
+ * first (StoragePurge), then one pass runs, and the call resolves whatever the
+ * bucket did. A bucket that is down no longer blocks a deletion: the record
+ * keeps the user id, the one handle on the objects, and the hourly sweep
+ * (`purge-sweep.ts`) retries with backoff until a pass that started after the
+ * late-upload grace finds the prefix empty. While the record exists the drive
+ * refuses uploads for the user. The call still throws when the record cannot be
+ * written, and the caller then deletes no row. A failed pass is reported under
+ * `scope: storage.purge`, a purge that keeps failing under
+ * `scope: storage.purge.stuck` (runbook in the plan's D3 entry).
  */
 export async function purgeUserObjects(userId: string): Promise<PurgeObjectsResult> {
-  try {
-    // Null while the flag is off: storage is then not touched at all.
-    const storage = await getUserStorage();
-    if (!storage) return { skipped: true, deleted: 0 };
-    const { deleted } = await storage.purgeUser(userId);
-    return { skipped: false, deleted };
-  } catch (err) {
-    const { code, message, retryable } = printable(err);
-    console.error(`${LOG_PREFIX} purge blocked (${code}): ${message}`);
-    captureError(err, {
-      tags: { scope: "storage.purge", storageCode: code, retryable: String(retryable) },
-    });
-    throw err;
-  }
+  if (!objectStorageEnabled()) return { skipped: true, deleted: 0 };
+  // Loaded only now, like the S3 implementation: a process with the flag off
+  // never loads the purge record's module.
+  const { purgeUserObjectsDurably } = await import("./durable-purge.js");
+  const { outcome, deleted } = await purgeUserObjectsDurably(userId);
+  return { skipped: false, deleted, outcome };
 }

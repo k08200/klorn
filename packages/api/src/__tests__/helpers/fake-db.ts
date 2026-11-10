@@ -49,11 +49,52 @@ interface ModelInfo {
   compound: Map<string, string[]>;
   /** every unique column set: single columns, ids and compound keys. */
   uniqueSets: string[][];
+  /** relation field -> how a row of this model meets the rows of the other. */
+  relations: Map<string, Relation>;
+}
+
+/** row[ownKeys[i]] === other[otherKeys[i]] for every i, in model `target`. */
+interface Relation {
+  target: string;
+  ownKeys: string[];
+  otherKeys: string[];
+}
+
+type DmmfModel = (typeof Prisma.dmmf.datamodel.models)[number];
+
+/** Both sides of a relation: the forward side names its keys, the back side borrows them. */
+function relationsOf(model: DmmfModel, all: readonly DmmfModel[]): Map<string, Relation> {
+  const relations = new Map<string, Relation>();
+  for (const f of model.fields) {
+    if (f.kind !== "object") continue;
+    const target = lowerFirst(f.type);
+    const from = f.relationFromFields ?? [];
+    if (from.length > 0) {
+      relations.set(f.name, {
+        target,
+        ownKeys: [...from],
+        otherKeys: [...(f.relationToFields ?? [])],
+      });
+      continue;
+    }
+    const other = all
+      .find((m) => m.name === f.type)
+      ?.fields.find(
+        (g) => g.relationName === f.relationName && (g.relationFromFields ?? []).length > 0,
+      );
+    if (!other) continue;
+    relations.set(f.name, {
+      target,
+      ownKeys: [...(other.relationToFields ?? [])],
+      otherKeys: [...(other.relationFromFields ?? [])],
+    });
+  }
+  return relations;
 }
 
 const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 
-function buildModelInfo(model: (typeof Prisma.dmmf.datamodel.models)[number]): ModelInfo {
+function buildModelInfo(model: DmmfModel, all: readonly DmmfModel[]): ModelInfo {
   const columns = new Map<string, Field>();
   for (const f of model.fields) {
     if (f.kind === "scalar" || f.kind === "enum") columns.set(f.name, f as unknown as Field);
@@ -69,11 +110,20 @@ function buildModelInfo(model: (typeof Prisma.dmmf.datamodel.models)[number]): M
   for (const fields of model.uniqueFields) addCompound(null, fields);
   if (model.primaryKey) addCompound(model.primaryKey.name, model.primaryKey.fields);
   for (const f of columns.values()) if (f.isId || f.isUnique) sets.push([f.name]);
-  return { name: model.name, columns, compound, uniqueSets: sets };
+  return {
+    name: model.name,
+    columns,
+    compound,
+    uniqueSets: sets,
+    relations: relationsOf(model, all),
+  };
 }
 
 const MODELS = new Map(
-  Prisma.dmmf.datamodel.models.map((m) => [lowerFirst(m.name), buildModelInfo(m)]),
+  Prisma.dmmf.datamodel.models.map((m) => [
+    lowerFirst(m.name),
+    buildModelInfo(m, Prisma.dmmf.datamodel.models),
+  ]),
 );
 
 function infoFor(modelName: string): ModelInfo {
@@ -101,7 +151,8 @@ const same = (a: unknown, b: unknown): boolean => cmp(a) === cmp(b);
 /**
  * A LIKE pattern as a RegExp, as Postgres reads it: `_` is any one character,
  * `%` any run, and a backslash makes the next character literal. Prisma sends
- * `startsWith` and `contains` as LIKE '<value>%' and LIKE '%<value>%' WITHOUT
+ * `startsWith`, `contains` and `endsWith` as LIKE '<value>%', '%<value>%' and
+ * '%<value>' WITHOUT
  * escaping the value (verified on Postgres 16 with Prisma 6.19, steps B2b and D2),
  * so a caller that wants a literal `%` or `_` must escape it. A value ending in
  * a lone backslash is an error in Postgres, and here. One dialect for both
@@ -156,6 +207,11 @@ function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: 
           typeof actual === "string" &&
           likePattern(expected as string, false, insensitive).test(actual)
         );
+      case "endsWith": {
+        if (typeof actual !== "string") return false;
+        const pattern = likePattern(expected as string, false, insensitive);
+        return new RegExp(`(?:${pattern.source})$`, pattern.flags).test(actual);
+      }
       case "gte":
         return cmp(actual) >= cmp(expected);
       case "gt":
@@ -184,21 +240,48 @@ function matchesField(info: ModelInfo, row: Row, name: string, cond: unknown): b
   return same(actual, cond);
 }
 
-function matchesWhere(info: ModelInfo, row: Row, where: Where | undefined): boolean {
+/** The live rows of another model, for a relation filter. */
+type RowsOf = (model: string) => Row[];
+
+/** `{ is: where }` / `{ isNot: where }` on a relation: does a related row match? */
+function matchesRelation(rel: Relation, row: Row, cond: unknown, rowsOf: RowsOf): boolean {
+  const ops = cond as Record<string, unknown>;
+  const keys = isPlain(cond) ? Object.keys(ops) : [];
+  if (keys.length !== 1 || !["is", "isNot"].includes(keys[0] ?? "")) {
+    throw new Error(`fake-db: relation filter supports only { is } or { isNot }, got ${keys}`);
+  }
+  const target = infoFor(rel.target);
+  const related = rowsOf(rel.target).filter((other) =>
+    rel.ownKeys.every((k, i) => row[k] != null && same(row[k], other[rel.otherKeys[i] ?? ""])),
+  );
+  const hit = related.some((other) =>
+    matchesWhere(target, other, ops[keys[0] ?? ""] as Where, rowsOf),
+  );
+  return keys[0] === "is" ? hit : !hit;
+}
+
+function matchesWhere(
+  info: ModelInfo,
+  row: Row,
+  where: Where | undefined,
+  rowsOf: RowsOf = () => [],
+): boolean {
   if (!where) return true;
   return Object.entries(where).every(([key, cond]) => {
     if (cond === undefined) return true;
-    if (key === "AND") return (cond as Where[]).every((w) => matchesWhere(info, row, w));
-    if (key === "OR") return (cond as Where[]).some((w) => matchesWhere(info, row, w));
+    if (key === "AND") return (cond as Where[]).every((w) => matchesWhere(info, row, w, rowsOf));
+    if (key === "OR") return (cond as Where[]).some((w) => matchesWhere(info, row, w, rowsOf));
     if (key === "NOT") {
       const list = Array.isArray(cond) ? (cond as Where[]) : [cond as Where];
-      return !list.some((w) => matchesWhere(info, row, w));
+      return !list.some((w) => matchesWhere(info, row, w, rowsOf));
     }
+    const rel = info.relations.get(key);
+    if (rel) return matchesRelation(rel, row, cond, rowsOf);
     const parts = info.compound.get(key);
     if (parts) {
       const sub = cond as Where;
       for (const p of Object.keys(sub)) column(info, p, `compound ${key}`);
-      return matchesWhere(info, row, sub);
+      return matchesWhere(info, row, sub, rowsOf);
     }
     return matchesField(info, row, key, cond);
   });
@@ -211,6 +294,43 @@ function assertUniqueSelector(info: ModelInfo, where: Where | undefined, op: str
     (k) => info.compound.has(k) || info.uniqueSets.some((s) => s.length === 1 && s[0] === k),
   );
   if (!ok) throw new Error(`fake-db: ${info.name}.${op} needs a unique selector, got ${keys}`);
+}
+
+// ─── groupBy helpers ────────────────────────────────────────────────────────
+
+function minFieldsOf(info: ModelInfo, spec: unknown): string[] {
+  if (spec === undefined) return [];
+  if (!isPlain(spec)) throw new Error("fake-db: groupBy _min must be an object");
+  return Object.entries(spec).map(([f, on]) => {
+    column(info, f, "groupBy._min");
+    if (on !== true) throw new Error(`fake-db: groupBy _min.${f} must be true`);
+    return f;
+  });
+}
+
+/** The smallest non-null value (SQL MIN), or null. */
+function smallest(values: unknown[]): unknown {
+  const present = values.filter((v) => v != null);
+  if (present.length === 0) return null;
+  return present.reduce((a, b) => (cmp(b) < cmp(a) ? b : a));
+}
+
+/** orderBy on a group: `{ _min: { f: dir } }` or a `by` field `{ f: dir }`. */
+function sortGroups(groups: Row[], orderBy: unknown): Row[] {
+  if (orderBy === undefined) return groups;
+  if (!isPlain(orderBy) || Object.keys(orderBy).length !== 1) {
+    throw new Error("fake-db: groupBy orderBy supports one key");
+  }
+  const [key, spec] = Object.entries(orderBy)[0] ?? [];
+  const pick = (g: Row): unknown =>
+    key === "_min" && isPlain(spec) ? (g._min as Row)[Object.keys(spec)[0] ?? ""] : g[key ?? ""];
+  const dir = key === "_min" && isPlain(spec) ? Object.values(spec)[0] : spec;
+  const sign = dir === "desc" ? -1 : 1;
+  return [...groups].sort((a, b) => {
+    const x = cmp(pick(a));
+    const y = cmp(pick(b));
+    return x < y ? -sign : x > y ? sign : 0;
+  });
 }
 
 // ─── rows, defaults, validation ─────────────────────────────────────────────
@@ -236,6 +356,21 @@ function assertValue(info: ModelInfo, f: Field, value: unknown): void {
   if (isPlain(value) && f.type !== "Json") {
     throw new Error(`fake-db: ${info.name}.${f.name}: operator/object writes are not supported`);
   }
+}
+
+/**
+ * Prisma's atomic `{ increment: n }` on an Int column, resolved against the row
+ * it updates. Anything else that is an object is left for `checkedData` to refuse.
+ */
+function resolveIncrements(info: ModelInfo, target: Row, data: Row): Row {
+  const out: Row = { ...data };
+  for (const [k, v] of Object.entries(data)) {
+    if (!isPlain(v) || Object.keys(v).join() !== "increment") continue;
+    const f = column(info, k, "update");
+    if (f.type !== "Int" || typeof v.increment !== "number") continue;
+    out[k] = ((target[k] as number | null) ?? 0) + v.increment;
+  }
+  return out;
 }
 
 /** Validate `data` keys and values; undefined is dropped (Prisma ignores it). */
@@ -283,22 +418,48 @@ function project(info: ModelInfo, row: Row, select: Select | undefined): Row {
   return out;
 }
 
+interface SortKey {
+  field: string;
+  sign: 1 | -1;
+  nullsFirst: boolean;
+}
+
+/**
+ * One orderBy entry: "asc" | "desc", or Prisma's `{ sort, nulls }`. Postgres sorts
+ * NULL as larger than any value (last ascending, first descending) unless `nulls`
+ * says otherwise.
+ */
+function sortKeyOf(field: string, dir: unknown): SortKey {
+  if (dir === "asc" || dir === "desc") {
+    return { field, sign: dir === "desc" ? -1 : 1, nullsFirst: dir === "desc" };
+  }
+  if (isPlain(dir)) {
+    const { sort, nulls, ...rest } = dir;
+    const sorted = sort === "asc" || sort === "desc";
+    if (sorted && (nulls === "first" || nulls === "last") && Object.keys(rest).length === 0) {
+      return { field, sign: sort === "desc" ? -1 : 1, nullsFirst: nulls === "first" };
+    }
+  }
+  throw new Error(`fake-db: orderBy ${field}: ${JSON.stringify(dir)}`);
+}
+
 function sortRows(info: ModelInfo, rows: Row[], orderBy: unknown): Row[] {
   if (orderBy === undefined) return rows;
   const specs = (Array.isArray(orderBy) ? orderBy : [orderBy]) as Array<Record<string, unknown>>;
   const keys = specs.flatMap((spec) => {
     return Object.entries(spec).map(([field, dir]) => {
       column(info, field, "orderBy");
-      if (dir !== "asc" && dir !== "desc") throw new Error(`fake-db: orderBy ${field}: ${dir}`);
-      return { field, sign: dir === "desc" ? -1 : 1 };
+      return sortKeyOf(field, dir);
     });
   });
-  // Postgres sorts NULL as larger than any value.
-  const rank = (v: unknown) => (v == null ? Number.POSITIVE_INFINITY : cmp(v));
   return [...rows].sort((a, b) => {
-    for (const { field, sign } of keys) {
-      const x = rank(a[field]) as number | string;
-      const y = rank(b[field]) as number | string;
+    for (const { field, sign, nullsFirst } of keys) {
+      const aNull = a[field] == null;
+      const bNull = b[field] == null;
+      if (aNull !== bNull) return aNull === nullsFirst ? -1 : 1;
+      if (aNull) continue;
+      const x = cmp(a[field]) as number | string;
+      const y = cmp(b[field]) as number | string;
       if (x !== y) return x < y ? -sign : sign;
     }
     return 0;
@@ -313,6 +474,14 @@ function assertArgs(model: string, op: string, args: object, allowed: readonly s
 
 // ─── the database ───────────────────────────────────────────────────────────
 
+/** A BigInt column sums to a BigInt (as Prisma answers), anything else to a number. */
+function sumOf(values: unknown[]): bigint | number {
+  if (values.every((v) => typeof v === "bigint")) {
+    return (values as bigint[]).reduce((sum, v) => sum + v, 0n);
+  }
+  return values.reduce<number>((sum, v) => sum + Number(v), 0);
+}
+
 export interface WriteLog {
   op: string;
   where?: Where;
@@ -325,8 +494,17 @@ export interface FakeModel {
   findUnique(args: Args): Promise<Row | null>;
   findMany(args?: Args): Promise<Row[]>;
   count(args?: Args): Promise<number>;
-  groupBy(args: Args): Promise<Array<Row & { _count: { _all: number } }>>;
+  groupBy(args: Args): Promise<Array<Row & { _count?: { _all: number }; _min?: Row }>>;
+  aggregate(args: Args): Promise<{ _sum: Row }>;
   create(args: { data: Row; select?: Select }): Promise<Row>;
+  /** `skipDuplicates` skips a row that clashes on a unique key, like ON CONFLICT DO NOTHING. */
+  createMany(args: { data: Row | Row[]; skipDuplicates?: boolean }): Promise<{ count: number }>;
+  /** createMany answering the rows it inserted (only those, under skipDuplicates). */
+  createManyAndReturn(args: {
+    data: Row | Row[];
+    skipDuplicates?: boolean;
+    select?: Select;
+  }): Promise<Row[]>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
   updateMany(args: { where?: Where; data: Row }): Promise<{ count: number }>;
   deleteMany(args?: { where?: Where }): Promise<{ count: number }>;
@@ -341,6 +519,8 @@ interface Args {
   skip?: number;
   by?: string[];
   _count?: unknown;
+  _sum?: unknown;
+  _min?: unknown;
 }
 
 export interface FakeDb {
@@ -378,18 +558,29 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       tables[name] ??= [];
       return tables[name];
     };
-    const find = (where: Where | undefined) => rowsOf().filter((r) => matchesWhere(info, r, where));
+    const otherRows: RowsOf = (model) => tables[model] ?? [];
+    const find = (where: Where | undefined) =>
+      rowsOf().filter((r) => matchesWhere(info, r, where, otherRows));
     const page = (rows: Row[], args: Args) => {
       const sorted = sortRows(info, rows, args.orderBy);
       const from = args.skip ?? 0;
       return args.take === undefined ? sorted.slice(from) : sorted.slice(from, from + args.take);
     };
-    const assertUnique = (candidate: Row, ignore?: Row) => {
-      for (const set of info.uniqueSets) {
-        const clash = rowsOf().some(
+    const clashingSet = (candidate: Row, ignore?: Row): string[] | undefined =>
+      info.uniqueSets.find((set) =>
+        rowsOf().some(
           (r) => r !== ignore && set.every((c) => candidate[c] != null && same(r[c], candidate[c])),
+        ),
+      );
+    const assertUnique = (candidate: Row, ignore?: Row) => {
+      const set = clashingSet(candidate, ignore);
+      // Thrown the way Prisma reports it (P2002), so create-catch-P2002 code
+      // paths behave here as they do against Postgres.
+      if (set) {
+        throw new Prisma.PrismaClientKnownRequestError(
+          `fake-db: unique constraint on ${name}(${set.join(", ")})`,
+          { code: "P2002", clientVersion: "fake-db", meta: { target: set } },
         );
-        if (clash) throw new Error(`fake-db: unique constraint on ${name}(${set.join(", ")})`);
       }
     };
     const insert = (data: Row, select?: Select): Row => {
@@ -398,8 +589,21 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       tables[name] = [...rowsOf(), row];
       return project(info, row, select);
     };
+    /** Inserts each row in order; under skipDuplicates a clashing row is skipped. */
+    const insertMany = (op: string, data: Row | Row[], skipDuplicates?: boolean): Row[] => {
+      const inserted: Row[] = [];
+      for (const one of Array.isArray(data) ? data : [data]) {
+        log(name, { op, data: one });
+        const row = completeRow(info, checkedData(info, one, "create"), true);
+        if (skipDuplicates === true && clashingSet(row)) continue;
+        assertUnique(row);
+        tables[name] = [...rowsOf(), row];
+        inserted.push(row);
+      }
+      return inserted;
+    };
     const apply = (target: Row, data: Row): void => {
-      const clean = checkedData(info, data, "update");
+      const clean = checkedData(info, resolveIncrements(info, target, data), "update");
       Object.assign(target, clean);
       touchUpdatedAt(info, target, clean);
     };
@@ -429,29 +633,64 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
         return find(args.where).length;
       },
       async groupBy(args) {
-        assertArgs(name, "groupBy", args, ["by", "where", "_count"]);
+        assertArgs(name, "groupBy", args, ["by", "where", "_count", "_min", "orderBy", "take"]);
         const by = args.by ?? [];
         for (const f of by) column(info, f, "groupBy.by");
         const counts = args._count as Record<string, unknown> | undefined;
-        if (!counts || Object.keys(counts).join() !== "_all") {
+        const mins = minFieldsOf(info, args._min);
+        if (counts && Object.keys(counts).join() !== "_all") {
           throw new Error("fake-db: groupBy supports only _count: { _all: true }");
         }
+        if (!counts && mins.length === 0) throw new Error("fake-db: groupBy needs _count or _min");
         reads.push(name);
-        const groups = new Map<string, { values: unknown[]; n: number }>();
+        const groups = new Map<string, { values: unknown[]; rows: Row[] }>();
         for (const r of find(args.where)) {
           const values = by.map((f) => r[f]);
           const key = JSON.stringify(values);
-          groups.set(key, { values, n: (groups.get(key)?.n ?? 0) + 1 });
+          const group = groups.get(key) ?? { values, rows: [] };
+          group.rows.push(r);
+          groups.set(key, group);
         }
-        return [...groups.values()].map(({ values, n }) => ({
+        const out = [...groups.values()].map(({ values, rows }) => ({
           ...Object.fromEntries(by.map((f, i) => [f, values[i]])),
-          _count: { _all: n },
+          ...(counts && { _count: { _all: rows.length } }),
+          ...(mins.length > 0 && {
+            _min: Object.fromEntries(mins.map((f) => [f, smallest(rows.map((r) => r[f]))])),
+          }),
         }));
+        const sorted = sortGroups(out, args.orderBy);
+        return args.take === undefined ? sorted : sorted.slice(0, args.take);
+      },
+      async aggregate(args) {
+        assertArgs(name, "aggregate", args, ["where", "_sum"]);
+        const sums = args._sum as Record<string, unknown> | undefined;
+        if (!sums || Object.values(sums).some((v) => v !== true)) {
+          throw new Error("fake-db: aggregate supports only _sum: { <field>: true }");
+        }
+        reads.push(name);
+        const rows = find(args.where);
+        const _sum: Row = {};
+        for (const field of Object.keys(sums)) {
+          column(info, field, "aggregate._sum");
+          // Like Postgres SUM: NULLs are skipped, and no value at all is NULL.
+          const values = rows.map((r) => r[field]).filter((v) => v !== null && v !== undefined);
+          _sum[field] = values.length === 0 ? null : sumOf(values);
+        }
+        return { _sum };
       },
       async create(args) {
         assertArgs(name, "create", args, ["data", "select"]);
         log(name, { op: "create", data: args.data });
         return insert(args.data, args.select);
+      },
+      async createMany(args) {
+        assertArgs(name, "createMany", args, ["data", "skipDuplicates"]);
+        return { count: insertMany("createMany", args.data, args.skipDuplicates).length };
+      },
+      async createManyAndReturn(args) {
+        assertArgs(name, "createManyAndReturn", args, ["data", "skipDuplicates", "select"]);
+        const inserted = insertMany("createManyAndReturn", args.data, args.skipDuplicates);
+        return inserted.map((row) => project(info, row, args.select));
       },
       async update(args) {
         assertArgs(name, "update", args, ["where", "data", "select"]);
@@ -529,10 +768,20 @@ const REKEY_SQL =
 
 const normalisedSql = (text: string): string => text.replace(/\s+/g, " ").trim();
 
+/**
+ * The co-attendance store's per-user lock (pim/coattendance/coattendance-store.ts).
+ * The fake runs one operation at a time, so taking it is a no-op; its text is
+ * pinned the same way, so a changed statement fails here instead of passing.
+ */
+const COATTENDANCE_LOCK_SQL = "SELECT pg_advisory_xact_lock($1::int, hashtext($2))";
+
 /** Applies the re-key with the semantics the SQL has, one unique key checked first. */
 async function executeRaw(db: FakeDb, hooks: FakeDbHooks, statement: unknown): Promise<number> {
   hooks.beforeExecuteRaw?.();
   const given = statement as { text?: string; values?: unknown[] };
+  if (typeof given.text === "string" && normalisedSql(given.text) === COATTENDANCE_LOCK_SQL) {
+    return 1;
+  }
   if (
     typeof given.text !== "string" ||
     normalisedSql(given.text) !== REKEY_SQL ||

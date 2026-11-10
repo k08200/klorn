@@ -31,6 +31,27 @@ export const KNOWN_TOOL_IDS = [
   "delete_task",
   "record_skill",
   "execute_skill",
+  // Every other tool the agent can propose (ALL_TOOLS in the API's
+  // autonomous-agent.ts): read-only today, labelled so none can ever surface
+  // as a bare id.
+  "list_emails",
+  "read_email",
+  "sender_context",
+  "classify_emails",
+  "list_events",
+  "team_availability",
+  "check_calendar_conflicts",
+  "generate_briefing",
+  "get_current_time",
+  "get_upcoming_meetings",
+  "join_meeting",
+  "summarize_meeting",
+  "calculate",
+  "generate_password",
+  "remember",
+  "recall",
+  "forget",
+  "list_skills",
 ] as const;
 
 export const UNKNOWN_TOOL_LABEL_KEY = "tool.label.unknown";

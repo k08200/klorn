@@ -20,6 +20,7 @@ const m = vi.hoisted(() => ({
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
   isGoogleAuthError: vi.fn((e: { response?: { status?: number } }) => e?.response?.status === 401),
   userFindUnique: vi.fn(),
+  configFindUnique: vi.fn(),
   eventUpsert: vi.fn(async () => ({})),
   captureError: vi.fn(),
 }));
@@ -45,6 +46,7 @@ vi.mock("../mail/gmail.js", () => ({
 vi.mock("../db.js", () => {
   const prisma = {
     user: { findUnique: m.userFindUnique },
+    automationConfig: { findUnique: m.configFindUnique },
     calendarEvent: { upsert: m.eventUpsert },
     linkedCalendarAccount: {
       findMany: vi.fn(async () => m.linkedRows),
@@ -96,7 +98,7 @@ beforeEach(() => {
   _resetLinkedCalendarFailureLogForTests();
   vi.spyOn(console, "warn").mockImplementation(() => {});
   setLinked([WORK]);
-  m.userFindUnique.mockResolvedValue({ id: "u1", timezone: "Asia/Seoul" });
+  m.configFindUnique.mockResolvedValue({ timezone: "Asia/Seoul" });
   m.eventsList.mockResolvedValue({ data: { items: [timed("g-1")] } });
 });
 

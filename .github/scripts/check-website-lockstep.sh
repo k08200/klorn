@@ -19,9 +19,22 @@ skeleton() {
     # Localized app screenshots (/media/app/<code>/…) are the one sanctioned
     # per-language asset divergence — normalize the prefix so each language may
     # point at its own set while the FILENAMES still must match the EN page.
-    grep -o 'src="/media/[^"]*"' "$1" | sed -E 's|/media/app/[a-z]{2}/|/media/app/|' || true
+    # The desktop captures in /media/app-2026-10/ may also carry a language tag
+    # (today-ko-light-2000.webp vs today-light-2000.webp, and the phone crop
+    # mail-m-ko-light-840.webp vs mail-m-light-840.webp); strip it the same way.
+    grep -o 'src="/media/[^"]*"' "$1" \
+      | sed -E -e 's|/media/app/[a-z]{2}/|/media/app/|' \
+               -e 's|(/media/app-2026-10/[a-z]+(-m)?)-[a-z]{2}-(light\|dark)-|\1-\3-|' || true
     grep -o 'poster="/media/[^"]*"' "$1" || true
     grep -oE '^[[:space:]]*\.[a-z][a-zA-Z0-9., :()-]*\{' "$1" | sed 's/[[:space:]]//g' || true
+    # Styles now live in /landing.css, so the class definitions above no longer
+    # carry the page's shape. The classes the markup USES, the data-* hooks the
+    # scripts and guards read, and the stylesheet link do.
+    grep -oE 'class="[^"]*"' "$1" || true
+    grep -oE 'data-[a-z-]+(="(push|meeting|queue|info|silent)")?' "$1" || true
+    # Webfont stylesheets under /fonts/ are per-script, not structure: only the
+    # Korean pages load Pretendard (/fonts/pretendard/pretendard.css).
+    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" | grep -v 'href="/fonts/' || true
   } | sort
 }
 
@@ -83,6 +96,90 @@ for code in "${all[@]}"; do
   [ "$marked" = "data-lang-pick=\"${code}\"" ] || {
     echo "::error::${page} marks aria-current on [${marked:-none}], expected only ${code}"
     failed=1; }
+done
+
+[ "$failed" -eq 0 ] || exit 1
+
+# ---------------------------------------------------------------------------
+# Translated subpages.
+#
+# Until 2026-10-31 only the landings were translated: a Japanese reader who
+# clicked Pricing landed on English, and the language menu on every subpage
+# offered two of the seven languages. Every page below now exists in all seven
+# languages; a missing locale, a page that drifted structurally from English,
+# an incomplete hreflang set or a link that drops the reader back into English
+# fails here. scripts/site-i18n/sync-chrome.py writes the chrome this checks
+# (keep its SUBPAGES list identical to this one).
+LOCALIZED_SUBPAGES=(pricing security download methodology open-source self-host
+  status gdpr dpa blog vs/fyxer vs/superhuman vs/sanebox vs/inbox-zero)
+SUB_LANGS=(en ko ja zh es fr de)
+sub_alt="$(IFS='|'; echo "${LOCALIZED_SUBPAGES[*]}")"
+
+sub_skeleton() {
+  {
+    grep -o 'id="[^"]*"' "$1" || true
+    grep -oE 'class="[^"]*"' "$1" || true
+    grep -oE 'data-[a-z-]+(="(push|meeting|queue|info|silent)")?' "$1" || true
+    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" | grep -v 'href="/fonts/' || true
+  } | sort
+}
+
+sub_pages=0
+for sp in "${LOCALIZED_SUBPAGES[@]}"; do
+  en_page="website/${sp}/index.html"
+  [ -f "$en_page" ] || { echo "::error::${en_page} is missing"; failed=1; continue; }
+  for code in "${SUB_LANGS[@]}"; do
+    [ "$code" = en ] && pre="/" || pre="/${code}/"
+    page="website${pre}${sp}/index.html"
+    if [ ! -f "$page" ]; then
+      echo "::error::${page} is missing — every localized subpage must exist in all ${#SUB_LANGS[@]} languages"
+      failed=1; continue
+    fi
+    sub_pages=$((sub_pages + 1))
+
+    if [ "$code" != en ] && ! diff <(sub_skeleton "$en_page") <(sub_skeleton "$page") > "/tmp/lockstep-sub.diff"; then
+      echo "::error::${page} structural drift from ${en_page} (< only in EN, > only in ${code}):"
+      cat /tmp/lockstep-sub.diff
+      failed=1
+    fi
+
+    grep -q "<html lang=\"${code}\">" "$page" || {
+      echo "::error::${page} does not declare <html lang=\"${code}\">"; failed=1; }
+
+    for other in "${SUB_LANGS[@]}"; do
+      [ "$other" = en ] && opre="/" || opre="/${other}/"
+      grep -q "<link rel=\"alternate\" hreflang=\"${other}\" href=\"https://klorn.ai${opre}${sp}/\">" "$page" || {
+        echo "::error::${page} is missing hreflang=\"${other}\" → ${opre}${sp}/"; failed=1; }
+      grep -q "<a href=\"${opre}${sp}/\" role=\"menuitem\" lang=\"${other}\"" "$page" || {
+        echo "::error::${page} language menu has no ${other} entry for ${opre}${sp}/"; failed=1; }
+    done
+    grep -q "<link rel=\"alternate\" hreflang=\"x-default\" href=\"https://klorn.ai/${sp}/\">" "$page" || {
+      echo "::error::${page} is missing hreflang=\"x-default\""; failed=1; }
+
+    marked="$(grep -o 'role="menuitem" lang="[a-z]\{2\}" aria-current="true"' "$page" \
+              | grep -o 'lang="[a-z]\{2\}"' | sort -u | tr -d '\n')"
+    [ "$marked" = "lang=\"${code}\"" ] || {
+      echo "::error::${page} language menu marks [${marked:-none}] current, expected only ${code}"
+      failed=1; }
+  done
+done
+
+# A translated page (landing or subpage) must keep the reader in their
+# language: any <a> to a localized page must carry this page's prefix. Links
+# that deliberately go to another language say so with lang="xx" (language
+# menu, the "English version governs" notice) or data-lang-pick (landings).
+for code in "${SUB_LANGS[@]}"; do
+  [ "$code" = en ] && continue
+  for page in "website/${code}/index.html" $(printf "website/${code}/%s/index.html " "${LOCALIZED_SUBPAGES[@]}"); do
+    [ -f "$page" ] || continue
+    bad="$(grep -oE '<a [^>]*>' "$page" | grep -v 'data-lang-pick' | grep -v ' lang="' \
+           | grep -oE 'href="/([a-z]{2}/)?('"${sub_alt}"')/(#[^"]*)?"' \
+           | grep -v "href=\"/${code}/" || true)"
+    if [ -n "$bad" ]; then
+      echo "::error::${page} links out of ${code} to:"; echo "$bad" | sort -u
+      failed=1
+    fi
+  done
 done
 
 [ "$failed" -eq 0 ] || exit 1
@@ -156,4 +253,5 @@ done < <(find website -name index.html | sort)
 
 echo "EN skeleton matches ${#langs[@]} translated landing(s) [${langs[*]}] ($(skeleton "$EN" | wc -l | tr -d ' ') anchors)."
 echo "hreflang + sitemap complete for ${#all[@]} language(s) [${all[*]}]."
+echo "${#LOCALIZED_SUBPAGES[@]} subpage(s) × ${#SUB_LANGS[@]} language(s): ${sub_pages} page(s) present, skeleton + hreflang + language menu + in-locale links verified."
 echo "canonical + sitemap + OG card + attribution verified on ${pages} page(s)."

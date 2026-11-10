@@ -12,8 +12,16 @@ Related documents:
 - `docs/product-vocabulary.md` — canonical word list, updated with this plan.
 - `apps/desktop-mac/REBUILD_BLUEPRINT.md` — superseded in part (see macOS).
 
-Flag names below are **proposed**; none exist in code yet. All ship OFF by
-default and are flipped as separate decisions.
+Flags (status as of 2026-10-09). All ship OFF by default and are flipped as
+separate decisions:
+
+| Flag | Step | Status |
+|---|---|---|
+| `KEYBOARD_TRIAGE` | P4 | In code, default OFF |
+| `MAIL_V2` | P5 | In code, default OFF |
+| `UNIFIED_HOME` | P6 (Today), P7 (Assistant hub) | In code for P6 and P7, default OFF |
+| `macMainWindow` | P9 (M2–M8) | **Removed 2026-10-15** (founder decision, LOCKED): the main window is the only Mac surface, there is no OFF mode, and a stored value is ignored and deleted at launch |
+| `ONBOARDING_V2` | P8 | In code, default OFF |
 
 ## 1. Information architecture
 
@@ -81,10 +89,10 @@ SourceBadge is a neutral monochrome glyph (G, M, N, iC, IMAP, K). Calendar colou
 is a 3px left bar. Category labels are neutral.
 
 Elevation: L0 canvas, L1 hairline, L2 `0 8 24 12%`, L3 `0 24 48 18%` plus 40%
-scrim. Glass only on the pill, floating cards and the command palette.
+scrim. Glass only on the command palette (the mac pill and floating cards were removed 2026-10-15).
 
-Motion: 120ms state, 200ms enter, 160ms exit, `--ease-fluid`; springs only on the
-mac pill; reduced-motion falls back to fade.
+Motion: 120ms state, 200ms enter, 160ms exit, `--ease-fluid`; no springs (the
+mac pill that had them was removed 2026-10-15); reduced-motion falls back to fade.
 
 Component order: Button (adopt `ui/button`, drop shadow and lift), ListRow /
 MailRow, LaneChip, SourceBadge, EmptyState, Skeleton (loading only), Sheet,
@@ -136,9 +144,57 @@ First run: sign in, provider grid (flag-on providers only, honest scope), live
 per-account sync counts, Today filled with the first briefing, then add another
 account. Mac first launch shows an onboarding window.
 
-## 4. macOS architecture (FD-5)
+### First run on the web (P8, shipped behind `ONBOARDING_V2`)
 
-The pill and expanded states stay `NSPanel`. The full view becomes a standard
+`/onboarding` renders the multi-provider first run only when the server says so
+(`user.onboardingV2` on `GET /api/auth/me` and the login/register responses);
+otherwise it is the earlier four-step flow, unchanged. Four steps: accounts,
+sync, check, done.
+
+The grid draws one tile per entry of `GET /api/providers/available` (dark, the
+default 404, while the flag is off) that the web has a connect flow for:
+
+| Tile | Listed when | Scope the tile states | Connect flow |
+|---|---|---|---|
+| Google | always | Gmail and Google Calendar; a second account (only with `MULTI_INBOX_SYNC_ENABLED`) brings mail only | existing OAuth start |
+| Microsoft | `OUTLOOK_INBOX_ENABLED` and the app registration is present | Outlook and Microsoft 365 mail | existing OAuth start |
+| Naver | always | Naver Mail; "read-only" unless an IMAP write flag is on | Settings' credential form, in a Sheet |
+| iCloud | `ICLOUD_INBOX_ENABLED` | iCloud Mail; "read-only" unless an IMAP write flag is on | Settings' credential form, in a Sheet |
+
+A tile claims only what pressing it connects. The server also reports whether
+it reads a provider's calendar (`OUTLOOK_CALENDAR_ENABLED`,
+`CALDAV_CALENDAR_ENABLED`), but the web has no connect flow for those calendars
+yet, so no tile names them. Generic IMAP (`GENERIC_IMAP_ENABLED`) is reported
+too and has no tile for the same reason: the web has no form for it.
+
+The sync screen shows read numbers only. The primary account's come from its
+sign-in sync; every account's message count and the lane totals come from
+`GET /api/email/lane-counts?inbox=`, which exists while `MAIL_V2` or
+`UNIFIED_HOME` is on. Without it, or for a user with no Google grant (the route
+answers sample data), a row says it has no count.
+
+OAuth callbacks still land on `/settings?google=…|inbox=…`. A connect started
+from the first run leaves a sessionStorage marker holding one of two fixed
+provider names and the time it was written (ignored after 15 minutes); Settings
+reads the callback's status against a fixed list and
+sends the visitor to the constant route `/onboarding`, which shows the result.
+Nothing in the URL chooses a destination and `safeNextPath` is untouched.
+
+## 4. macOS architecture (FD-5, amended 2026-10-15)
+
+> **Founder decision 2026-10-15 (LOCKED), supersedes "the pill stays" and the
+> Cmd+Tab compromise:** the top-bar pill and the expanded panel are removed.
+> Klorn on Mac is a standard app — one main window plus a Dock icon, activation
+> policy always `.regular` — and PUSH mail is announced with standard macOS
+> notification banners (sender + subject; click opens the main window on that
+> mail). The urgent-mail card, the meeting-prep card (now a banner too) and the
+> menu-bar status item went with the pill: no floating Klorn surfaces.
+> Closing the window keeps the app running; a login launch opens no window
+> unless it was open at quit. Reason: after desktop-v0.4.80105 three Klorn
+> surfaces showed at once, and the pill never goes away. Details in
+> `apps/desktop-mac/README.md`.
+
+Original plan (kept for history): the pill and expanded states stay `NSPanel`. The full view becomes a standard
 `Window` scene with `NavigationSplitView`, `List(selection:)`, toolbar search and
 `.commands`; Settings is a `Settings` scene (`TabView`); Compose is a
 `WindowGroup`; editors are sheets. Activation policy switches `.accessory` to
@@ -157,6 +213,7 @@ This reverses the HUD-only full view in `REBUILD_BLUEPRINT.md` §2/§4.
 | M6 | Logged-out, error and onboarding states |
 | M7 | Tokens |
 | M8 | Flip the flag; delete `BarState.full` |
+| M9 (2026-10-15) | Delete the pill, the expanded panel, the urgent-mail and meeting cards and the status item; meetings as banners; always `.regular`; PUSH via notification banners; remove `macMainWindow` |
 
 `REBUILD_BLUEPRINT.md` is rewritten after M-series sign-off.
 
@@ -164,7 +221,7 @@ This reverses the HUD-only full view in `REBUILD_BLUEPRINT.md` §2/§4.
 
 1. **Hero**: outcome claim and a real Mac Today loop with Gmail/Outlook/Naver
    badges; "All your mail and calendars. One calm place."; CTAs Download for Mac
-   and Open in browser; "$8.99/mo · bring your own AI key". No CI, AGPL, eval or
+   and Open in browser; "$29.99/mo · bring your own AI key". No CI, AGPL, eval or
    competitor mentions here.
 2. **Every account, one view**: connector strip with honest status (Available /
    Beta / Via phone app / Coming).
@@ -209,7 +266,7 @@ logo-use approval, legal check of connector claims.
 | FD-2 | Unified list with source badges; no account switcher |
 | FD-3 | Retire the separate Firewall board screen; lanes are Mail's primary filter |
 | FD-4 | One lane palette on both platforms and a neutral app canvas (drop the indigo wash) |
-| FD-5 | Mac gets a real main window (reverses the 2026-07-07 HUD blueprint); the pill stays |
+| FD-5 | Mac gets a real main window (reverses the 2026-07-07 HUD blueprint). ~~The pill stays~~ — **superseded 2026-10-15 (LOCKED):** no pill, no expanded panel; standard app (main window + Dock), PUSH announced by macOS notification banners |
 | FD-6 | Competitors, AGPL and CI leave hero and meta; they live in `/vs` and the trust band |
 | FD-7 | Files appears in nav only when a source is enabled |
 | FD-8 | Nav name is "Assistant" (alternative considered: "Klorn") |

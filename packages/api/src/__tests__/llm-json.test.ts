@@ -1,10 +1,11 @@
 /**
  * parseLlmJson — tolerant parsing of LLM completion content.
  *
- * Locks the contract that the firewall's judge/classifier survive a fallback
- * model that wraps its JSON in a markdown fence. The real-world trigger:
- * meta-llama/llama-3.3-70b-instruct:free (OpenRouter fallback chain #1) returns
- * ```json … ``` while the paid gemini default returns bare JSON.
+ * Locks the contract that the firewall's judge/classifier survive a model that
+ * wraps its JSON in a markdown fence. The original trigger was
+ * meta-llama/llama-3.3-70b-instruct, which returns ```json … ``` while the
+ * default model returns bare JSON; open-weight models served through the
+ * openai-compat provider (Ollama / LM Studio / vLLM) show the same shape.
  */
 import { describe, expect, it } from "vitest";
 import { parseLlmJson } from "../llm/llm-json.js";

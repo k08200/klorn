@@ -711,9 +711,11 @@ export async function adminRoutes(app: FastifyInstance) {
       // Whitelist the quotaKey shape so a malicious admin (or compromised
       // token) can't pass "__proto__" / control chars / 10kb of garbage into
       // the in-memory state Map.
-      if (!/^(openrouter|gemini):(env|user:[A-Za-z0-9_-]{1,64})$/.test(body.quotaKey)) {
+      if (
+        !/^(anthropic|gemini|openai-compat):(env|user:[A-Za-z0-9_-]{1,64})$/.test(body.quotaKey)
+      ) {
         return reply.code(400).send({
-          error: "Invalid quotaKey. Expected openrouter|gemini : env|user:<id>.",
+          error: "Invalid quotaKey. Expected anthropic|gemini|openai-compat : env|user:<id>.",
         });
       }
       target = body.quotaKey;

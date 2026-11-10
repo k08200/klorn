@@ -21,6 +21,15 @@ struct InboxSelectorMenu: View {
         }
         if model.inboxes.count >= 2 {
             let current = inboxSelectorLabel(selected: model.selectedInbox, inboxes: model.inboxes)
+            if Theme.isRenderingOffscreen {
+                // ImageRenderer paints an AppKit menu as a placeholder.
+                (Text(current + " ")
+                    + Text(Image(systemName: "chevron.down"))
+                    .font(.caption2.weight(.semibold)))
+                    .font(.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+            } else {
             Menu {
                 row(value: "all", label: L("mail.allInboxes"), needsReconnect: false)
                 ForEach(model.inboxes) { inbox in
@@ -57,6 +66,7 @@ struct InboxSelectorMenu: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help(L("mail.filterByInbox"))
             .accessibilityLabel(L("mail.filterByInbox.a11y", current))
+            }
         }
     }
 
@@ -67,7 +77,7 @@ struct InboxSelectorMenu: View {
             HStack {
                 // Text suffix, not the web's sky dot: the AppKit borderless
                 // menu drops SwiftUI shapes and renders symbols colorless
-                // (see the tier-dot note on FullRow) — words keep the
+                // (white dot in v0.4.4, no dot in v0.4.5) — words keep the
                 // reconnect signal perceivable, and color-independent.
                 Text(needsReconnect ? L("mail.needsReconnect", label) : label)
                 if value == model.selectedInbox { Image(systemName: "checkmark") }
@@ -119,7 +129,7 @@ struct MailboxList: View {
                 VStack(spacing: 0) {
                     ForEach(items.prefix(8)) { item in
                         MailboxRow(box: box, item: item)
-                        Divider().overlay(Theme.line).padding(.leading, 20)
+                        Divider().overlay(Theme.line).padding(.horizontal, 24)
                     }
                 }
                 Spacer(minLength: 0)
@@ -128,7 +138,7 @@ struct MailboxList: View {
                     LazyVStack(spacing: 0) {
                         ForEach(items) { item in
                             MailboxRow(box: box, item: item)
-                            Divider().overlay(Theme.line).padding(.leading, 20)
+                            Divider().overlay(Theme.line).padding(.horizontal, 24)
                         }
                         if model.mailboxNextToken[box] != nil {
                             Button {
@@ -216,7 +226,9 @@ struct MailboxRow: View {
                     }
                 }
                 Spacer(minLength: 8)
-                let time = mailTimeLabel(iso: item.receivedAt, now: Date())
+                let time = mailTimeLabel(
+                    iso: item.receivedAt, now: MailClock.now(renderingOffscreen: Theme.isRenderingOffscreen),
+                    relativeDays: Theme.isRenderingOffscreen)
                 if !time.isEmpty {
                     Text(time)
                         .font(Theme.Typo.caption.monospacedDigit())
@@ -229,7 +241,7 @@ struct MailboxRow: View {
         .focused($focused)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel("\(counterparty). \(item.subject)")
-        .padding(.horizontal, 20).padding(.vertical, 11)
+        .padding(.horizontal, 24).padding(.vertical, 12)
         .background(alignment: .leading) {
             if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
         }
@@ -237,7 +249,7 @@ struct MailboxRow: View {
         .onHover { hovering = $0 }
         .overlay {
             if focused {
-                RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2)
+                RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.accent, lineWidth: 2)
             }
         }
     }

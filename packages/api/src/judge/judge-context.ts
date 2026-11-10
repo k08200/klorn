@@ -23,6 +23,7 @@ import {
   SENDER_TRAITS_IN_JUDGE,
 } from "../config.js";
 import { db } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "../embedding.js";
 import {
   getCachedInteractionGraph,
@@ -61,6 +62,8 @@ const {
   historySample: SENDER_HISTORY_SAMPLE,
 } = SENDER_PRIOR_POLICY;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Without the sender index, the newest rows of the window the read-behavior fact re-checks. */
+const READ_BEHAVIOR_CANDIDATE_LIMIT = 500;
 
 export interface JudgeContextInput {
   from: string;
@@ -265,7 +268,7 @@ function buildPrior(items: SenderItemRow[]): SenderPrior | null {
  * — an unbackfilled row has fromAddress=null and would silently drop from the
  * equality path, so the flag is the correctness gate.
  */
-function isSenderAddressIndexEnabled(): boolean {
+export function isSenderAddressIndexEnabled(): boolean {
   const v = process.env.SENDER_ADDRESS_INDEX_ENABLED?.toLowerCase();
   return v === "1" || v === "true" || v === "yes";
 }
@@ -300,7 +303,7 @@ async function fetchSenderEmailIdsLegacy(
   const emails = (await db.emailMessage.findMany({
     where: {
       userId,
-      from: { contains: senderAddress, mode: "insensitive" },
+      from: { contains: escapeLikePattern(senderAddress), mode: "insensitive" },
       ...(excludeEmailId ? { id: { not: excludeEmailId } } : {}),
     },
     orderBy: { receivedAt: "desc" },
@@ -488,6 +491,48 @@ async function fetchSenderTraits(
   }
 }
 
+/** The window's mail from this sender and how much was read, by the indexed fromAddress column. */
+async function countReadBehaviorIndexed(
+  userId: string,
+  senderAddress: string,
+  since: Date,
+): Promise<{ read: number; total: number }> {
+  const senderWindow = { userId, fromAddress: senderAddress, receivedAt: { gte: since } };
+  const [total, read] = await Promise.all([
+    db.emailMessage.count({ where: senderWindow }),
+    db.emailMessage.count({ where: { ...senderWindow, isRead: true } }),
+  ]);
+  return { read, total };
+}
+
+/**
+ * The same counts without the index. `contains` on the raw From header is only a
+ * prefilter: the header is the sender's to write, so a spoofed display name
+ * ('"alice@corp.com" <x@evil.co>') or a substring address (malice@corp.com) also
+ * matches it. The parsed address decides, as in fetchSenderEmailIdsLegacy. Only the
+ * newest READ_BEHAVIOR_CANDIDATE_LIMIT candidates are read, so past that many in the
+ * window (a very busy sender, or a flood of lookalikes) the sample is the most
+ * recent mail, which leans unread; the indexed path counts the whole window.
+ */
+async function countReadBehaviorLegacy(
+  userId: string,
+  senderAddress: string,
+  since: Date,
+): Promise<{ read: number; total: number }> {
+  const candidates = (await db.emailMessage.findMany({
+    where: {
+      userId,
+      from: { contains: escapeLikePattern(senderAddress), mode: "insensitive" },
+      receivedAt: { gte: since },
+    },
+    select: { from: true, isRead: true },
+    orderBy: { receivedAt: "desc" },
+    take: READ_BEHAVIOR_CANDIDATE_LIMIT,
+  })) as Array<{ from: string; isRead: boolean }>;
+  const own = candidates.filter((mail) => extractEmailAddress(mail.from) === senderAddress);
+  return { read: own.filter((mail) => mail.isRead).length, total: own.length };
+}
+
 /**
  * Measured read behavior for the sender — the passive half of the engagement
  * channel (CONTACT_ENGAGEMENT_IN_JUDGE). Counts the sender's mail in the
@@ -503,15 +548,9 @@ async function fetchReadBehaviorFact(
   if (!CONTACT_ENGAGEMENT_IN_JUDGE || !senderAddress) return null;
   try {
     const since = new Date(Date.now() - READ_BEHAVIOR.windowDays * DAY_MS);
-    const senderWindow = {
-      userId,
-      from: { contains: senderAddress, mode: "insensitive" as const },
-      receivedAt: { gte: since },
-    };
-    const [total, read] = await Promise.all([
-      db.emailMessage.count({ where: senderWindow }),
-      db.emailMessage.count({ where: { ...senderWindow, isRead: true } }),
-    ]);
+    const { read, total } = isSenderAddressIndexEnabled()
+      ? await countReadBehaviorIndexed(userId, senderAddress, since)
+      : await countReadBehaviorLegacy(userId, senderAddress, since);
     if (total < READ_BEHAVIOR.minSample) return null;
     return { read, total };
   } catch (err) {
@@ -568,50 +607,9 @@ async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
  * mail it was never authored for (subdomains do not inherit a parent-domain
  * pin for the same reason). Fail-open null.
  */
-async function fetchPinnedTier(userId: string, senderAddress: string): Promise<Tier | null> {
-  if (!senderAddress) return null;
+export async function fetchPinnedTier(userId: string, senderAddress: string): Promise<Tier | null> {
   try {
-    const rules = await db.emailRule.findMany({
-      where: { userId, isActive: true, actionType: "PIN_TIER" },
-      select: { conditions: true, actionValue: true },
-      // Deterministic if duplicates ever exist: the newest pin wins.
-      orderBy: { updatedAt: "desc" },
-    });
-    const sender = senderAddress.toLowerCase();
-    const at = sender.lastIndexOf("@");
-    const senderDomain = at > 0 ? sender.slice(at + 1) : "";
-    let domainPin: Tier | null = null;
-    for (const rule of rules) {
-      const conditions = rule.conditions as { from?: unknown; fromDomain?: unknown } | null;
-      const from = conditions?.from;
-      if (
-        Array.isArray(from) &&
-        from.some((f) => typeof f === "string" && f.toLowerCase() === sender)
-      ) {
-        // Junk actionValue must NOT pin to the normalizeTier fallback (QUEUE).
-        return isTier(rule.actionValue) ? rule.actionValue : null;
-      }
-      const fromDomain = conditions?.fromDomain;
-      if (
-        domainPin === null &&
-        senderDomain &&
-        // Enforced at READ time, not only at the /pin-tier write guard: the
-        // generic /api/email/rules endpoint can author arbitrary PIN_TIER
-        // rows, and a public-mailbox domain pin would rank-0 every stranger
-        // mailing from that provider.
-        !isPublicMailboxDomain(senderDomain) &&
-        Array.isArray(fromDomain) &&
-        fromDomain.some(
-          (d) => typeof d === "string" && d.toLowerCase().replace(/^@/, "") === senderDomain,
-        ) &&
-        isTier(rule.actionValue)
-      ) {
-        // Remember but keep scanning: a later rule may hold the exact-address
-        // pin that outranks this one.
-        domainPin = rule.actionValue;
-      }
-    }
-    return domainPin;
+    return await lookupPinnedTier(userId, senderAddress);
   } catch (err) {
     console.warn(
       "[judge-context] pin fetch failed:",
@@ -619,6 +617,56 @@ async function fetchPinnedTier(userId: string, senderAddress: string): Promise<T
     );
     return null;
   }
+}
+
+/** fetchPinnedTier without the fail-open: a lookup failure throws, so a
+ * caller that must tell "no pin" from "unknown" can (v3 relationship). */
+export async function lookupPinnedTier(
+  userId: string,
+  senderAddress: string,
+): Promise<Tier | null> {
+  if (!senderAddress) return null;
+  const rules = await db.emailRule.findMany({
+    where: { userId, isActive: true, actionType: "PIN_TIER" },
+    select: { conditions: true, actionValue: true },
+    // Deterministic if duplicates ever exist: the newest pin wins.
+    orderBy: { updatedAt: "desc" },
+  });
+  const sender = senderAddress.toLowerCase();
+  const at = sender.lastIndexOf("@");
+  const senderDomain = at > 0 ? sender.slice(at + 1) : "";
+  let domainPin: Tier | null = null;
+  for (const rule of rules) {
+    const conditions = rule.conditions as { from?: unknown; fromDomain?: unknown } | null;
+    const from = conditions?.from;
+    if (
+      Array.isArray(from) &&
+      from.some((f) => typeof f === "string" && f.toLowerCase() === sender)
+    ) {
+      // Junk actionValue must NOT pin to the normalizeTier fallback (QUEUE).
+      return isTier(rule.actionValue) ? rule.actionValue : null;
+    }
+    const fromDomain = conditions?.fromDomain;
+    if (
+      domainPin === null &&
+      senderDomain &&
+      // Enforced at READ time, not only at the /pin-tier write guard: the
+      // generic /api/email/rules endpoint can author arbitrary PIN_TIER
+      // rows, and a public-mailbox domain pin would rank-0 every stranger
+      // mailing from that provider.
+      !isPublicMailboxDomain(senderDomain) &&
+      Array.isArray(fromDomain) &&
+      fromDomain.some(
+        (d) => typeof d === "string" && d.toLowerCase().replace(/^@/, "") === senderDomain,
+      ) &&
+      isTier(rule.actionValue)
+    ) {
+      // Remember but keep scanning: a later rule may hold the exact-address
+      // pin that outranks this one.
+      domainPin = rule.actionValue;
+    }
+  }
+  return domainPin;
 }
 
 /**

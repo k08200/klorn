@@ -26,7 +26,6 @@ vi.mock("../pim/notes.js", () => ({
 vi.mock("../llm/openai.js", () => ({
   CHAT_SYSTEM_PROMPT: "system",
   MODEL: "test-model",
-  openai: null,
   createCompletion: vi.fn(),
 }));
 vi.mock("../pim/briefing-status.js", () => ({

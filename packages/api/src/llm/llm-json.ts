@@ -2,16 +2,13 @@
  * Tolerant JSON parsing for LLM completion content.
  *
  * The judge/classifier prompts ask for raw JSON and set
- * `response_format: { type: "json_object" }`. The paid default model
- * (gemini-2.5-flash) honors that and returns bare JSON. But the OpenRouter
- * `:free` fallback chain (e.g. meta-llama/llama-3.3-70b-instruct:free) ignores
- * both the instruction and the response_format hint and wraps its output in a
- * ```json … ``` markdown fence. A bare `JSON.parse` then throws on the leading
- * backtick, the caller degrades to its no-LLM keyword fallback, and every
- * fallback-served email silently drops to the QUEUE floor — the fallback-drift
- * failure mode that only appears once a `:free` SKU takes over from the paid
- * model. Stripping the fence here makes the fallback chain actually usable
- * instead of cosmetically present.
+ * `response_format: { type: "json_object" }`. The hosted models honour that
+ * and return bare JSON, but smaller models (local OpenAI-compatible servers,
+ * cheap fallback SKUs) can ignore both the instruction and the response_format
+ * hint and wrap their output in a ```json … ``` markdown fence. A bare
+ * `JSON.parse` then throws on the leading backtick, the caller degrades to its
+ * no-LLM keyword fallback, and every such email silently drops to the QUEUE
+ * floor. Stripping the fence here keeps those models usable.
  */
 export function parseLlmJson<T = unknown>(raw: string): T {
   const trimmed = raw.trim();

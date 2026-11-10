@@ -97,6 +97,25 @@ describe("handleTelegramChatMessage", () => {
     expect(sendMessage).toHaveBeenCalledWith("chat-1", "Here are your emails.");
   });
 
+  it("stores the daily-cap code on the assistant message, like the in-app chat", async () => {
+    const cap = "You've used today's free AI quota. It resets at 00:00 UTC.";
+    runChatTurnMock.mockResolvedValue({
+      reply: cap,
+      eventDraft: null,
+      error: cap,
+      errorCode: "DAILY_COST_CAP_FREE",
+    });
+    await handleTelegramChatMessage(msg("anything new?"));
+    expect(msgCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "ASSISTANT",
+          metadata: expect.objectContaining({ turnErrorCode: "DAILY_COST_CAP_FREE" }),
+        }),
+      }),
+    );
+  });
+
   it("reuses an existing telegram conversation", async () => {
     convFindFirst.mockResolvedValue({ id: "conv-old", title: "t" });
     await handleTelegramChatMessage(msg("hi"));

@@ -62,6 +62,7 @@ vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { runProactiveActions } from "../agentcore/proactive-actions.js";
+import { sendPushNotification } from "../notify/push.js";
 
 const at = (hourUtc: number) => new Date(Date.UTC(2099, 0, 1, hourUtc));
 
@@ -117,6 +118,20 @@ describe("back-to-back meetings warning — linked calendar copies (flag on)", (
     const alerts = backToBackAlerts();
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.data.title).toContain("1 back-to-back");
+  });
+
+  it("rings the warning against the ambient bucket though its category is meeting", async () => {
+    // Agent-originated (a heuristic, not a meeting starting): it must not use
+    // up the interrupt room that real meeting alerts and urgent mail need.
+    m.backToBackEvents = [event("A", 9, 10, null), event("B", 10, 11, "acct-1")];
+
+    await runProactiveActions("u1");
+
+    const warning = vi
+      .mocked(sendPushNotification)
+      .mock.calls.find(([, payload]) => /back-to-back/.test(payload.title));
+    expect(warning?.[2]).toBe("meeting");
+    expect(warning?.[3]).toEqual({ bucket: "ambient" });
   });
 });
 
