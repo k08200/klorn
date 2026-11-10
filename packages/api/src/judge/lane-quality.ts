@@ -20,8 +20,8 @@
  *  - A re-judge rewrites shownTier/decidedBy in place, so a re-judged row is
  *    reported under its latest lane.
  *  - Only actions taken in Klorn are stamped. Mail read or answered directly in
- *    Gmail/Outlook shows as no signal, and so does a reply sent from the web
- *    AI-draft composer (it posts to /send, which carries no mail id).
+ *    Gmail/Outlook shows as no signal. Web AI-draft replies (POST /send with
+ *    inReplyToEmailId) count from #1656 on; ones sent before it are missing.
  *  - "Opened" means the reader showed the mail: the Mac app also shows the
  *    mail its arrow keys land on. A mail read only through the thread view
  *    (GET /api/email/thread/:threadId) is not counted. Mobile builds from before ?purpose=attachments
