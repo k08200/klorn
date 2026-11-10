@@ -9,7 +9,7 @@ import { hasSpamLabel } from "../judge/poc-judge.js";
 import type { TierFeatures } from "../judge/tier-policy.js";
 import type { Tier } from "../judge/tiers.js";
 import { type FactsV1, parseFactsV1 } from "../judge/v3/facts-schema.js";
-import { laneFromFactsV3 } from "../judge/v3/policy.js";
+import { laneFromFactsV3, type PolicyVersion } from "../judge/v3/policy.js";
 import { CONFIDENCE_VARIANTS, counterfactual, urgentCalibration } from "./calibration.js";
 import type { CallRecord } from "./call-tap.js";
 import { applyEvidenceCheck } from "./evidence.js";
@@ -36,7 +36,7 @@ export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
  * Which lane policy a replay applies to the facts:
  *  - "doc": doc §3(4) read literally (eval-v3/policy.ts), the P1 baseline;
  *  - "p3":  P3's production policy, the live version (judge/v3/policy.ts,
- *           laneFromFactsV3; "p3-v3.0" pins v3.0 for comparison)
+ *           laneFromFactsV3; "p3-v3.0" and "p3-v3.2" pin those versions)
  *           with the inputs replay.ts gives it: no relationship data (the eval
  *           sets carry none, so every sender is unknown: the cold-start case)
  *           and `isAutomatedSender(from)` as the automated-sender signal. The
@@ -46,7 +46,19 @@ export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
  * (`mergeWithPreFacts`: List-Unsubscribe, To/Cc, ICS) — the eval mails have
  * no headers.
  */
-export type ReplayPolicy = "doc" | "p3" | "p3-v3.0";
+export type ReplayPolicy = "doc" | "p3" | "p3-v3.0" | "p3-v3.2";
+
+/** A lane for one v3 row's checked facts: a candidate policy or sender scenario (variants.ts). */
+export type LaneDecider = (
+  facts: FactsV1,
+  email: EvalEmail & { receivedAt: string },
+  id: string,
+) => { lane: Tier; rule: string };
+
+const PINNED_VERSIONS: Partial<Record<ReplayPolicy, PolicyVersion>> = {
+  "p3-v3.0": "v3.0",
+  "p3-v3.2": "v3.2",
+};
 
 function decideLane(
   policy: ReplayPolicy,
@@ -62,7 +74,7 @@ function decideLane(
     spam,
     automatedSender: isAutomatedSender(email.from ?? ""),
     decidedAt: receivedAt,
-    version: policy === "p3-v3.0" ? "v3.0" : undefined,
+    version: PINNED_VERSIONS[policy],
   });
   return { lane: d.lane, rule: `${d.policyVersion}:${d.reasons[0]?.code ?? "default"}` };
 }
@@ -77,7 +89,7 @@ function replayV3(
   row: StoredRow,
   email: EvalEmail | undefined,
   includeBody: boolean,
-  policy: ReplayPolicy,
+  policy: ReplayPolicy | LaneDecider,
 ): StoredRow {
   if (row.source !== "v3" || !row.rawFacts || !email?.receivedAt) return row;
   const parsed = parseFactsV1(row.rawFacts);
@@ -94,7 +106,11 @@ function replayV3(
   }
   const { fields } = buildFactsUserPrompt({ ...email, receivedAt: email.receivedAt }, includeBody);
   const checked = applyEvidenceCheck(parsed.facts, fields);
-  const decision = decideLane(policy, checked.facts, { ...email, receivedAt: email.receivedAt });
+  const dated = { ...email, receivedAt: email.receivedAt };
+  const decision =
+    typeof policy === "function"
+      ? policy(checked.facts, dated, row.id)
+      : decideLane(policy, checked.facts, dated);
   return {
     ...row,
     predicted: decision.lane,
@@ -113,7 +129,7 @@ export function rescore(
   run: StoredRun,
   truthById: ReadonlyMap<string, Tier>,
   emailById: ReadonlyMap<string, EvalEmail>,
-  policy: ReplayPolicy = "doc",
+  policy: ReplayPolicy | LaneDecider = "doc",
 ): StoredRun & { warnings: string[] } {
   const includeBody = run.meta.includeBody ?? true;
   const labelled = run.rows.filter((r) => truthById.has(r.id));

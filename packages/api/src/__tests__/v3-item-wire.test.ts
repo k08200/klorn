@@ -95,9 +95,25 @@ describe("v3ItemWire", () => {
   });
 
   it("accepts every stored version: each policy version, and v2", () => {
-    for (const v3PolicyVersion of ["v3.0", "v3.1", "v2"]) {
+    for (const v3PolicyVersion of ["v3.0", "v3.1", "v3.2", "v2"]) {
       expect(wire(row({ v3PolicyVersion })).policyVersion).toBe(v3PolicyVersion);
     }
+  });
+
+  it("shows a v3.2 first_contact reason with only its two booleans", () => {
+    const w = wire(
+      row({
+        v3PolicyVersion: "v3.2",
+        v3Decision: {
+          reasons: [
+            { code: "first_contact", params: { payAsk: true, event: false, sender: "x@y.z" } },
+            { code: "ask_due_soon", fact: "asks[0]", params: { askKind: "pay", due: null } },
+          ],
+        },
+      }),
+    );
+    expect(w.reasons.map((r) => r.code)).toEqual(["first_contact", "ask_due_soon"]);
+    expect(w.reasons[0]?.params).toEqual({ payAsk: true, event: false });
   });
 
   it("shows no reasons for a version this server does not know (a rollback)", () => {

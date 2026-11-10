@@ -8,9 +8,12 @@
 import { describe, expect, it } from "vitest";
 import { toLiveTier } from "../judge/tiers.js";
 import {
+  isFirstContact,
+  laneFromFactsUnderRules,
   laneFromFactsV3,
   POLICY_VERSION,
   POLICY_VERSIONS,
+  policyRules,
   RISK_TRUST_MIN_HISTORY_MS,
   RISK_TRUST_MIN_INBOUND,
 } from "../judge/v3/policy.js";
@@ -507,7 +510,7 @@ function riskTrusted(
   const { facts: f, relationship: rel, senderAuthenticated: auth } = input;
   if (auth === false) return false;
   if (rel?.vip === true) return true;
-  if (input.version !== "v3.1" || auth !== true) return false;
+  if (input.version === "v3.0" || auth !== true) return false;
   if (f.ambiguous || f.kind === "promotion" || f.kind === "newsletter") return false;
   const firstSeen = rel?.firstSeenAt ? Date.parse(rel.firstSeenAt) : Number.NaN;
   return (
@@ -522,6 +525,214 @@ const dueWithin24h = (f: FactsV1) =>
     const t = a.due ? Date.parse(a.due) : Number.NaN;
     return Number.isFinite(t) && t >= NOW.getTime() - 24 * HOUR && t <= NOW.getTime() + 24 * HOUR;
   });
+
+describe("laneFromFactsV3 — v3.2 first-contact gate and due window", () => {
+  // #1649's two misses, as Haiku extracted them (phishing-eval-set.json).
+  const overdueInvoice = facts({
+    kind: "work_thread",
+    asks: [
+      {
+        kind: "pay",
+        object: "settle invoice",
+        due: inHours(10),
+        evidence: "Could you arrange payment today",
+      },
+    ],
+    transaction: { kind: "invoice", actionRequired: true },
+  });
+  const callInvite = facts({
+    kind: "meeting",
+    asks: [{ kind: "attend", object: "intro call", due: null, evidence: "has invited you" }],
+    event: { proposedTimes: [inHours(48)], hasInvite: false, conflict: null },
+  });
+  const known = (over: Partial<RelationshipSnapshot>): RelationshipSnapshot => ({
+    ...UNKNOWN_RELATIONSHIP,
+    inboundCount: 0,
+    sentCount: 0,
+    meetingCount: 0,
+    vip: false,
+    sameOrgDomain: false,
+    ...over,
+  });
+  const firstContact = known({});
+  const v32 = (f: FactsV1, extra: Partial<Parameters<typeof laneFromFactsV3>[0]> = {}) =>
+    decide(f, { version: "v3.2", relationship: firstContact, ...extra });
+
+  it("phish-028 shape: a stranger's pay ask due today goes to QUEUE, not PUSH", () => {
+    expect(decide(overdueInvoice, { relationship: firstContact }).lane).toBe("PUSH");
+    const d = v32(overdueInvoice);
+    expect(d.lane).toBe("QUEUE");
+    expect(d.pushCandidate).toBe(false);
+    expect(d.policyVersion).toBe("v3.2");
+    expect(d.reasons[0]).toMatchObject({
+      code: "first_contact",
+      params: { payAsk: true, event: false },
+    });
+    // The interrupt it would have made follows as supporting reasons.
+    expect(d.reasons[1]).toMatchObject({ code: "ask_due_soon", params: { askKind: "pay" } });
+  });
+
+  it("phish-029 shape: a stranger's text-only invite goes to QUEUE, not MEETING", () => {
+    expect(decide(callInvite, { relationship: firstContact }).lane).toBe("MEETING");
+    const d = v32(callInvite);
+    expect(d.lane).toBe("QUEUE");
+    expect(d.reasons[0]).toMatchObject({
+      code: "first_contact",
+      params: { payAsk: false, event: true },
+    });
+    expect(d.reasons[1]?.code).toBe("event");
+  });
+
+  it("an urgent invite from a stranger cannot reach PUSH through a due-soon ask either", () => {
+    const urgentInvite = { ...callInvite, asks: [replyAsk(inHours(2))] };
+    expect(decide(urgentInvite, { relationship: firstContact }).lane).toBe("PUSH");
+    expect(v32(urgentInvite)).toMatchObject({ lane: "QUEUE", pushCandidate: false });
+  });
+
+  const monthAgo = new Date(NOW.getTime() - RISK_TRUST_MIN_HISTORY_MS - HOUR).toISOString();
+
+  it("each kind of established contact lifts the gate: the known sender is unaffected", () => {
+    const evidence: Partial<RelationshipSnapshot>[] = [
+      { vip: true },
+      { sentCount: 2 },
+      { inboundCount: RISK_TRUST_MIN_INBOUND, firstSeenAt: monthAgo },
+      { meetingCount: 1 },
+    ];
+    for (const over of evidence) {
+      const rel = known(over);
+      expect(isFirstContact(rel, null, NOW), JSON.stringify(over)).toBe(false);
+      expect(v32(overdueInvoice, { relationship: rel }).lane).toBe("PUSH");
+      expect(v32(callInvite, { relationship: rel }).lane).toBe("MEETING");
+    }
+  });
+
+  it("cheap contact is not established: one mail, one reply, a fresh sender, the same domain", () => {
+    const cheap: Partial<RelationshipSnapshot>[] = [
+      // The same phish sent twice.
+      { inboundCount: 1, firstSeenAt: inHours(-1) },
+      // A "who is this?" reply.
+      { sentCount: 1 },
+      // Plenty of mail, but all of it this week.
+      { inboundCount: 20, firstSeenAt: inHours(-24 * 6) },
+      // A free account at the user's own mail provider can share the domain.
+      { sameOrgDomain: true },
+    ];
+    for (const over of cheap) {
+      expect(isFirstContact(known(over), true, NOW), JSON.stringify(over)).toBe(true);
+      expect(v32(callInvite, { relationship: known(over) }).lane).toBe("QUEUE");
+    }
+  });
+
+  it("fails closed on unknown counts; no snapshot at all keeps the v3.1 lane (keyword fallback parity)", () => {
+    expect(isFirstContact(noRelationship, true, NOW)).toBe(true);
+    expect(v32(callInvite, { relationship: noRelationship }).lane).toBe("QUEUE");
+    // Live LLM facts always carry a snapshot; only the model-down keyword path has none.
+    expect(v32(overdueInvoice, { relationship: null }).lane).toBe("PUSH");
+    expect(v32(callInvite, { relationship: null }).lane).toBe("MEETING");
+  });
+
+  it("history behind a From that failed DMARC is no evidence: a forger copies the address", () => {
+    const correspondent = known({ inboundCount: 12, sentCount: 4, vip: true });
+    expect(isFirstContact(correspondent, false, NOW)).toBe(true);
+    expect(v32(overdueInvoice, { relationship: correspondent }).lane).toBe("PUSH");
+    expect(
+      v32(overdueInvoice, { relationship: correspondent, senderAuthenticated: false }).lane,
+    ).toBe("QUEUE");
+  });
+
+  it("gates only a pay ask or an event: a stranger's due-soon reply ask still interrupts", () => {
+    const d = v32(facts({ asks: [replyAsk(inHours(3))] }));
+    expect(d.lane).toBe("PUSH");
+    expect(d.reasons[0].code).toBe("ask_due_soon");
+  });
+
+  it("a pay ask with no due that would not interrupt keeps its lane and reason", () => {
+    const later = facts({
+      asks: [{ kind: "pay", object: "invoice", due: inHours(24 * 9), evidence: "pay by the 20th" }],
+    });
+    const d = v32(later);
+    expect(d.lane).toBe("QUEUE");
+    expect(d.reasons[0].code).toBe("ask");
+  });
+
+  it("a phishing or spam floor still decides first; a pin or override is not gated", () => {
+    const phish = { ...callInvite, risk: ["phishing_suspect" as const] };
+    expect(v32(phish).reasons[0]).toMatchObject({
+      code: "risk",
+      params: { risk: "phishing_suspect" },
+    });
+    expect(v32(callInvite, { spam: true }).reasons[0].code).toBe("spam_floor");
+    expect(v32(overdueInvoice, { pinnedTier: "PUSH" }).lane).toBe("PUSH");
+    expect(v32(callInvite, { manualOverrideTier: "MEETING" }).lane).toBe("MEETING");
+  });
+
+  it("the gate's two halves are rule parameters: a pay-only candidate lets an invite ring", () => {
+    const payOnly = { ...policyRules("v3.2"), firstContactGate: { payAsk: true, event: false } };
+    const under = (f: FactsV1) =>
+      laneFromFactsUnderRules({ facts: f, relationship: firstContact, decidedAt: NOW }, payOnly);
+    expect(under(overdueInvoice).lane).toBe("QUEUE");
+    expect(under(callInvite).lane).toBe("MEETING");
+    expect(policyRules("v3.1").firstContactGate).toEqual({ payAsk: false, event: false });
+  });
+
+  it("v3.2 keeps the ±24h window, inclusive on both edges", () => {
+    const at = (ms: number) =>
+      v32(facts({ asks: [replyAsk(new Date(NOW.getTime() + ms).toISOString())] })).lane;
+    expect(at(24 * HOUR)).toBe("PUSH");
+    expect(at(24 * HOUR + 1000)).toBe("QUEUE");
+    expect(at(-24 * HOUR)).toBe("PUSH");
+    expect(at(-24 * HOUR - 1000)).toBe("QUEUE");
+    expect(policyRules("v3.2").dueWindow).toEqual(policyRules("v3.1").dueWindow);
+  });
+
+  it("the window is a rule parameter: a candidate ±72h window moves both edges", () => {
+    const wide = {
+      ...policyRules("v3.2"),
+      dueWindow: { overdueMs: 72 * HOUR, aheadMs: 72 * HOUR },
+    };
+    const at = (ms: number) =>
+      laneFromFactsUnderRules(
+        {
+          facts: facts({ asks: [replyAsk(new Date(NOW.getTime() + ms).toISOString())] }),
+          relationship: null,
+          decidedAt: NOW,
+        },
+        wide,
+      ).lane;
+    expect(at(72 * HOUR)).toBe("PUSH");
+    expect(at(72 * HOUR + 1000)).toBe("QUEUE");
+    expect(at(-72 * HOUR)).toBe("PUSH");
+    expect(at(-72 * HOUR - 1000)).toBe("QUEUE");
+  });
+
+  it("a version's own rules through laneFromFactsUnderRules decide exactly as laneFromFactsV3", () => {
+    for (const { i, input } of cases(11)) {
+      const { policyVersion, ...viaVersion } = laneFromFactsV3(input);
+      expect(laneFromFactsUnderRules(input, policyRules(policyVersion)), `case ${i}`).toEqual(
+        viaVersion,
+      );
+    }
+  });
+
+  it("v3.2 differs from v3.1 only by holding a first contact's pay ask or event in QUEUE", () => {
+    for (const { i, input } of cases(12)) {
+      const a = laneFromFactsV3({ ...input, version: "v3.1" });
+      const b = laneFromFactsV3({ ...input, version: "v3.2" });
+      if (a.lane === b.lane) {
+        expect(b.reasons, `case ${i}`).toEqual(a.reasons);
+        continue;
+      }
+      const f = input.facts;
+      expect(["PUSH", "MEETING"], `case ${i}`).toContain(a.lane);
+      expect(b.lane, `case ${i}`).toBe("QUEUE");
+      expect(b.reasons[0].code, `case ${i}`).toBe("first_contact");
+      expect(input.relationship, `case ${i}`).not.toBeNull();
+      const rel = input.relationship as RelationshipSnapshot;
+      expect(isFirstContact(rel, input.senderAuthenticated, NOW), `case ${i}`).toBe(true);
+      expect(f.event !== null || f.asks.some((x) => x.kind === "pay"), `case ${i}`).toBe(true);
+    }
+  });
+});
 
 describe("laneFromFactsV3 — properties", () => {
   it("always returns one of the five lanes and a deciding reason", () => {
