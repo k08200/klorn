@@ -24,7 +24,7 @@ calendar time.
     recorded none, plus counts from either source.
   - Migration `20261110000000_decision_label_provider_engagement` is
     additive. Gmail only; Outlook and IMAP are not covered yet.
-- Attention Engine v3 policy v3.2, opt-in: `JUDGE_V3_POLICY_VERSION=v3.2`
+- Attention Engine v3 policy v3.2, opt-in (#1670): `JUDGE_V3_POLICY_VERSION=v3.2`
   selects it. v3.1 stays the default, and `JUDGE_V3_POLICY` is off by
   default, so nothing changes until both are set.
   - From a sender with no established contact, a PUSH or MEETING whose mail
