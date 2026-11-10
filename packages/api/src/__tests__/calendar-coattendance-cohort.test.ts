@@ -5,8 +5,9 @@
  *   - true: every user;
  *   - cohort: only the users in ROLLOUT_COHORT_USER_IDS.
  * The check runs per user wherever the per-user work happens: the scheduler's
- * queue, the pass itself, and the judge's reader gate (a user outside the
- * cohort has no counts, so co-attendance must read unknown, never 0).
+ * queue (calendar-coattendance-queue-cohort.test.ts), the pass itself, and the
+ * judge's reader gate (a user outside the cohort has no counts, so
+ * co-attendance must read unknown, never 0).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,10 +38,6 @@ vi.mock("../pim/calendar-providers/dispatch.js", () => ({
 import { CALENDAR_COATTENDANCE_FLAG, calendarCoattendanceOpenTo } from "../config.js";
 import { type CoAttendanceDeps, loadCoAttendance } from "../judge/v3/relationship-coattendance.js";
 import {
-  _drainCoAttendanceQueueForTests,
-  enqueueCoAttendance,
-} from "../pim/coattendance/coattendance-job.js";
-import {
   _resetCoAttendancePassesForTests,
   runCoAttendancePass,
 } from "../pim/coattendance/coattendance-sync.js";
@@ -62,11 +59,10 @@ function seed() {
   });
 }
 
-/** Which users the scheduler's queue ran a pass for. */
-async function queuedPasses(): Promise<string[]> {
-  enqueueCoAttendance(MEMBER, { includeLinked: false });
-  enqueueCoAttendance(OUTSIDER, { includeLinked: false });
-  await _drainCoAttendanceQueueForTests();
+/** Which users' passes got past the gate (each reaches its calendar connect). */
+async function passesRun(): Promise<string[]> {
+  await runCoAttendancePass(MEMBER, { includeLinked: false }, NOW);
+  await runCoAttendancePass(OUTSIDER, { includeLinked: false }, NOW);
   return h.connectPrimaryCalendar.mock.calls.map((c) => c[0] as string);
 }
 
@@ -130,7 +126,7 @@ describe("calendarCoattendanceOpenTo", () => {
   });
 });
 
-describe("the pass and the scheduler's queue", () => {
+describe("the pass", () => {
   it("cohort: a cohort member is collected, a user outside it is skipped before any read", async () => {
     vi.stubEnv(CALENDAR_COATTENDANCE_FLAG, "cohort");
 
@@ -142,19 +138,14 @@ describe("the pass and the scheduler's queue", () => {
     expect(h.connectPrimaryCalendar).toHaveBeenCalledWith(MEMBER);
   });
 
-  it("cohort: the queue runs the member's pass only", async () => {
-    vi.stubEnv(CALENDAR_COATTENDANCE_FLAG, "cohort");
-    expect(await queuedPasses()).toEqual([MEMBER]);
-  });
-
-  it("true: the queue runs every user's pass", async () => {
+  it("true: every user's pass runs", async () => {
     vi.stubEnv(CALENDAR_COATTENDANCE_FLAG, "true");
-    expect(await queuedPasses()).toEqual([MEMBER, OUTSIDER]);
+    expect(await passesRun()).toEqual([MEMBER, OUTSIDER]);
   });
 
-  it("off: the queue runs no pass, and nothing is read", async () => {
+  it("off: no pass runs, and nothing is read", async () => {
     vi.stubEnv(CALENDAR_COATTENDANCE_FLAG, "");
-    expect(await queuedPasses()).toEqual([]);
+    expect(await passesRun()).toEqual([]);
     expect((h.db as FakeDb).reads).toEqual([]);
   });
 });
@@ -169,6 +160,13 @@ describe("the judge's reader gate", () => {
     const member = readerDeps();
     await loadCoAttendance(member, MEMBER, "ana@client.example", NOW);
     expect(member.coAttendanceCoverage).toHaveBeenCalledWith(MEMBER);
+  });
+
+  it("true: every user reaches the store", async () => {
+    vi.stubEnv(CALENDAR_COATTENDANCE_FLAG, "true");
+    const deps = readerDeps();
+    await loadCoAttendance(deps, OUTSIDER, "ana@client.example", NOW);
+    expect(deps.coAttendanceCoverage).toHaveBeenCalledWith(OUTSIDER);
   });
 
   it("off: unknown for everyone", async () => {

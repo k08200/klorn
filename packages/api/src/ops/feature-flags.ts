@@ -106,10 +106,12 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
 
 /**
  * A flag that also takes `cohort` (config.ts flagMode): true when it reaches
- * anyone, on for everyone or for the cohort. Pure over `env`.
+ * anyone, on for everyone or for the cohort. The report does not tell the two
+ * apart; ROLLOUT_COHORT_USER_IDS and the env value do. Pure over `env`.
  */
 function cohortCapableFlag(env: NodeJS.ProcessEnv, key: string): boolean {
-  return ["true", "1", "yes", "on", "cohort"].includes((env[key] ?? "").trim().toLowerCase());
+  const value = (env[key] ?? "").trim().toLowerCase();
+  return TRUTHY.has(value) || value === "cohort";
 }
 
 /** Default-ON dynamic flag: set the env var to "false"/"0"/"off" to disable. */
