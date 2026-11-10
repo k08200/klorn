@@ -56,7 +56,7 @@
     "postcss": "8.5.26",
     "resend": "^6.20.0",
     "sanitize-html": "^2.18.0",
-    "stripe": "^18.1.0",
+    "stripe": "^22.6.2",
     "twilio": "^6.1.0",
     "web-push": "^3.6.7",
     "ws": "^8.21.3"
