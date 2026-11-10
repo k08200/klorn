@@ -27,6 +27,7 @@ export const REASON_CODES = [
   "spam_floor",
   "held_budget",
   "relationship",
+  "first_contact",
 ] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
 

@@ -5,8 +5,9 @@
  * share with any outcome, share opened, share replied within 24h, share
  * archived / dismissed / snoozed / starred / unsubscribed, explicit overrides
  * and confirms, and the override flows (shown lane → lane the user moved it
- * to). See src/judge/lane-quality.ts for what each number does and does not
- * mean.
+ * to). A second table shows what sync saw the user do in Gmail itself (replied
+ * within 24h, archived) and the same signals from either source. See
+ * src/judge/lane-quality.ts for what each number does and does not mean.
  *
  * Read-only: the queries run inside a READ ONLY transaction. No LLM, safe
  * against prod.

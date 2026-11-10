@@ -25,6 +25,8 @@
  *   6. QUEUE    default
  * Floors: ambiguous never SILENT/INFO; spam never PUSH/MEETING;
  * phishing_suspect never PUSH/MEETING (and is surfaced as a reason).
+ * v3.2 adds a floor: from a first-contact sender, a PUSH or MEETING that
+ * carries a pay ask or an event goes to QUEUE (firstContactGate).
  */
 
 import type { LiveTier } from "@klorn/contract";
@@ -33,9 +35,9 @@ import type { FactsV1, MailKind, RelationshipSnapshot } from "./policy-types.js"
 import { type PolicyReason, type ReasonParamValue, reason } from "./reasons.js";
 
 /** Every policy version replay can run. Stored decisions name the one that decided. */
-export const POLICY_VERSIONS = ["v3.0", "v3.1"] as const;
+export const POLICY_VERSIONS = ["v3.0", "v3.1", "v3.2"] as const;
 export type PolicyVersion = (typeof POLICY_VERSIONS)[number];
-/** The version the live judge runs. */
+/** The version the live judge runs. v3.2 is opt-in (JUDGE_V3_POLICY_VERSION). */
 export const POLICY_VERSION: PolicyVersion = "v3.1";
 
 /**
@@ -55,35 +57,43 @@ export const POLICY_VERSION: PolicyVersion = "v3.1";
  *    failed DMARC;
  *  - narrowSilent: SILENT is clear marketing only (the LOCKED rule): a
  *    promotion. Newsletters and other bulk mail are filed in INFO.
+ * v3.2 (2026-11-10, opt-in; measured on P1's 60 runs and the phishing set):
+ *  - firstContactGate: from a sender with no established contact
+ *    (isFirstContact), mail that carries a pay ask or an event does not
+ *    interrupt: what would be PUSH or MEETING goes to QUEUE (#1649's two
+ *    phishing misses);
+ *  - dueWindow: the due-soon window is a per-version parameter. v3.2 keeps
+ *    ±24h: wider fixed windows changed nothing on the eval sets (doc §3(5)).
  */
-interface PolicyRules {
-  pushBeforeMeeting: boolean;
-  riskTrustsAuthenticated: boolean;
-  notificationAsks: boolean;
-  narrowSilent: boolean;
+export interface PolicyRules {
+  readonly pushBeforeMeeting: boolean;
+  readonly riskTrustsAuthenticated: boolean;
+  readonly notificationAsks: boolean;
+  readonly narrowSilent: boolean;
+  readonly firstContactGate: FirstContactGate;
+  readonly dueWindow: DueWindow;
+}
+
+/** What the first-contact gate holds in QUEUE: mail with a pay ask, mail with an event. */
+export interface FirstContactGate {
+  readonly payAsk: boolean;
+  readonly event: boolean;
+}
+const NO_GATE: FirstContactGate = { payAsk: false, event: false };
+
+/**
+ * An ask is due soon when its due falls in [decidedAt − overdueMs,
+ * decidedAt + aheadMs]. The overdue side keeps a re-judge of old mail from
+ * turning a stale deadline into a PUSH.
+ */
+export interface DueWindow {
+  readonly overdueMs: number;
+  readonly aheadMs: number;
 }
 
 /** riskTrustsAuthenticated: how much history makes an authenticated sender known. */
 export const RISK_TRUST_MIN_INBOUND = 3;
 export const RISK_TRUST_MIN_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
-
-const RULES: Readonly<Record<PolicyVersion, PolicyRules>> = {
-  "v3.0": {
-    pushBeforeMeeting: false,
-    riskTrustsAuthenticated: false,
-    notificationAsks: false,
-    narrowSilent: false,
-  },
-  "v3.1": {
-    pushBeforeMeeting: true,
-    riskTrustsAuthenticated: true,
-    notificationAsks: true,
-    narrowSilent: true,
-  },
-};
-
-/** The version stored when the v2 lane stood for missing LLM facts (live-decision.ts). */
-export const V2_POLICY_VERSION = "v2";
 
 /** An ask due within this window of the decision time is "due soon" (doc: ≤ 24h). */
 export const DUE_SOON_MS = 24 * 60 * 60 * 1000;
@@ -93,6 +103,42 @@ export const DUE_SOON_MS = 24 * 60 * 60 * 1000;
  * re-judge of old mail must not turn it into a PUSH.
  */
 export const OVERDUE_GRACE_MS = 24 * 60 * 60 * 1000;
+const DUE_WINDOW_24H: DueWindow = { overdueMs: OVERDUE_GRACE_MS, aheadMs: DUE_SOON_MS };
+
+const RULES: Readonly<Record<PolicyVersion, PolicyRules>> = {
+  "v3.0": {
+    pushBeforeMeeting: false,
+    riskTrustsAuthenticated: false,
+    notificationAsks: false,
+    narrowSilent: false,
+    firstContactGate: NO_GATE,
+    dueWindow: DUE_WINDOW_24H,
+  },
+  "v3.1": {
+    pushBeforeMeeting: true,
+    riskTrustsAuthenticated: true,
+    notificationAsks: true,
+    narrowSilent: true,
+    firstContactGate: NO_GATE,
+    dueWindow: DUE_WINDOW_24H,
+  },
+  "v3.2": {
+    pushBeforeMeeting: true,
+    riskTrustsAuthenticated: true,
+    notificationAsks: true,
+    narrowSilent: true,
+    firstContactGate: { payAsk: true, event: true },
+    dueWindow: DUE_WINDOW_24H,
+  },
+};
+
+/** A version's rules, e.g. as the base of a candidate in the variants eval. */
+export function policyRules(version: PolicyVersion): PolicyRules {
+  return RULES[version];
+}
+
+/** The version stored when the v2 lane stood for missing LLM facts (live-decision.ts). */
+export const V2_POLICY_VERSION = "v2";
 
 /**
  * Machine-authored kinds interrupt only through `risk`, never through an ask.
@@ -151,8 +197,27 @@ export function laneFromFactsV3(input: PolicyInput): PolicyDecision {
   // An unknown version (never from a typed caller) runs the live rules.
   const version: PolicyVersion =
     input.version && Object.hasOwn(RULES, input.version) ? input.version : POLICY_VERSION;
+  return { ...decideUnder(input, RULES[version]), policyVersion: version };
+}
+
+/**
+ * Eval only (scripts/v3-policy-variants.ts): the lane under a candidate rule
+ * set that is not a version yet, so a variant is measured before it ships.
+ * The live judge and replay go through laneFromFactsV3. `input.version` is ignored.
+ */
+export function laneFromFactsUnderRules(
+  input: PolicyInput,
+  rules: PolicyRules,
+): Omit<PolicyDecision, "policyVersion"> {
+  return decideUnder(input, rules);
+}
+
+function decideUnder(
+  input: PolicyInput,
+  rules: PolicyRules,
+): Omit<PolicyDecision, "policyVersion"> {
   const precedence = precedenceMatch(input);
-  const matched = precedence ?? applyFloors(matchFacts(input, RULES[version]), input);
+  const matched = precedence ?? applyFloors(matchFacts(input, rules), input, rules);
   const flagged = matched.reasons.some((r) => r.params.risk === "phishing_suspect");
   const supporting = [
     phishingSuspected(input.facts) && !flagged ? phishingReason() : null,
@@ -161,7 +226,6 @@ export function laneFromFactsV3(input: PolicyInput): PolicyDecision {
   return {
     lane: matched.lane,
     reasons: [...matched.reasons, ...supporting],
-    policyVersion: version,
     pushCandidate: matched.pushCandidate,
   };
 }
@@ -240,6 +304,65 @@ function knownCorrespondent(rel: RelationshipSnapshot | null, decidedAt: Date): 
   return Number.isFinite(firstSeen) && decidedAt.getTime() - firstSeen >= RISK_TRUST_MIN_HISTORY_MS;
 }
 
+/**
+ * Sends to a sender before they count as someone the user writes to. One reply
+ * (a "who is this?") is not a relationship. The slot reserve uses the same bar
+ * (live-decision.ts).
+ */
+export const TRUSTED_MIN_SENT = 2;
+
+/**
+ * v3.2 first contact: no established contact with the sender. Established
+ * contact is any of these RelationshipSnapshot fields (relationship.ts, loaded
+ * by relationship-loader.ts), each a bar this file or live-decision.ts already
+ * trusts:
+ *  - vip: an investor/customer label, or a sender pinned to PUSH;
+ *  - sentCount ≥ TRUSTED_MIN_SENT: the user wrote to them twice (Klorn's
+ *    unattended sends do not count, RELATIONSHIP_EVIDENCE_ORIGINS);
+ *  - a known correspondent: RISK_TRUST_MIN_INBOUND earlier mails, the first at
+ *    least RISK_TRUST_MIN_HISTORY_MS ago (the loader leaves out the mail being
+ *    judged). One earlier mail is not enough: the same phish sent twice is;
+ *  - meetingCount ≥ 1: a past meeting the user accepted or organised.
+ * Not sameOrgDomain: an attacker with a free account at the user's mail
+ * provider shares the domain whenever that provider is missing from the
+ * public-domain list. A null field is not evidence (fails closed). Neither is
+ * history behind a From that failed DMARC: it matches by address, which a
+ * forger copies. A null verdict (no Authentication-Results, as on Outlook and
+ * IMAP) leaves that copy open.
+ */
+export function isFirstContact(
+  rel: RelationshipSnapshot,
+  auth: boolean | null,
+  decidedAt: Date,
+): boolean {
+  if (auth === false) return true;
+  const contact =
+    rel.vip === true ||
+    (rel.sentCount ?? 0) >= TRUSTED_MIN_SENT ||
+    knownCorrespondent(rel, decidedAt) ||
+    (rel.meetingCount ?? 0) > 0;
+  return !contact;
+}
+
+/**
+ * The first-contact floor: a pay ask or an event is how a stranger's mail
+ * (an invoice to settle today, an invite with a join link) reaches PUSH or
+ * MEETING with no sign of spoofing. QUEUE keeps it visible and ranked; the
+ * interrupt it would have made follows as supporting reasons. Mail with
+ * neither keeps its lane: a stranger's due-soon reply ask still interrupts.
+ */
+function firstContactHold(f: FactsV1, interrupt: Match, gate: FirstContactGate): Match | null {
+  const payAsk = f.asks.some((a) => a.kind === "pay");
+  const event = f.event !== null;
+  const held = { payAsk: gate.payAsk && payAsk, event: gate.event && event };
+  if (!held.payAsk && !held.event) return null;
+  return {
+    lane: "QUEUE",
+    reasons: [reason("first_contact", { params: held }), ...interrupt.reasons],
+    pushCandidate: false,
+  };
+}
+
 const pushRiskOf = (f: FactsV1) => PUSH_RISKS.find((r) => f.risk.includes(r));
 const phishingReason = (): PolicyReason =>
   reason("risk", { fact: "risk", params: { risk: "phishing_suspect" } });
@@ -274,8 +397,8 @@ function pushMatch(
   if (automatedSender || machine) return null;
   const soonest = earliestAskDueWithin(
     f,
-    decidedAt.getTime() - OVERDUE_GRACE_MS,
-    decidedAt.getTime() + DUE_SOON_MS,
+    decidedAt.getTime() - rules.dueWindow.overdueMs,
+    decidedAt.getTime() + rules.dueWindow.aheadMs,
   );
   if (soonest === null) return null;
   const ask = f.asks[soonest];
@@ -363,7 +486,7 @@ function silentMatch(f: FactsV1, rules: PolicyRules): Match | null {
   return SILENT_KINDS.has(f.kind) ? only("SILENT", kindReason(f.kind)) : null;
 }
 
-function applyFloors(m: Match, input: PolicyInput): Match {
+function applyFloors(m: Match, input: PolicyInput, rules: PolicyRules): Match {
   if (input.facts.ambiguous && (m.lane === "SILENT" || m.lane === "INFO")) {
     return {
       lane: "QUEUE",
@@ -377,6 +500,17 @@ function applyFloors(m: Match, input: PolicyInput): Match {
   }
   if (input.spam && (m.lane === "PUSH" || m.lane === "MEETING")) {
     return { lane: "QUEUE", reasons: [reason("spam_floor"), ...m.reasons], pushCandidate: false };
+  }
+  // v3.2. After the phishing and spam floors, so their reason decides when both
+  // apply. No snapshot at all means the decision has no relationship basis: the
+  // keyword fallback while the model is down, where v2 parity holds (doc
+  // principle 9). Live LLM facts always come with one (live-facts.ts).
+  if ((m.lane === "PUSH" || m.lane === "MEETING") && input.relationship) {
+    const auth = input.senderAuthenticated ?? null;
+    const hold = firstContactHold(input.facts, m, rules.firstContactGate);
+    if (hold && isFirstContact(input.relationship, auth, input.decidedAt ?? new Date())) {
+      return hold;
+    }
   }
   return m;
 }
