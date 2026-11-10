@@ -125,7 +125,8 @@ export function localDayUtcRange(
   };
 }
 
-function localDateTimeToUtc(dateKey: string, hhmm: string, timeZone: string): Date {
+/** The instant `hhmm` on local date `dateKey` is in `timeZone` (DST-correct, see wallClockToUtcMs). */
+export function localDateTimeToUtc(dateKey: string, hhmm: string, timeZone: string): Date {
   const [year, month, day] = dateKey.split("-").map((part) => Number.parseInt(part, 10));
   const [hour, minute] = hhmm.split(":").map((part) => Number.parseInt(part, 10));
   return new Date(wallClockToUtcMs(Date.UTC(year, month - 1, day, hour, minute, 0, 0), timeZone));
@@ -215,7 +216,8 @@ function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
   };
 }
 
-function addDaysToDateKey(dateKey: string, days: number): string {
+/** `YYYY-MM-DD` shifted by whole calendar days (negative goes back). */
+export function addDaysToDateKey(dateKey: string, days: number): string {
   const [year, month, day] = dateKey.split("-").map((part) => Number.parseInt(part, 10));
   const date = new Date(Date.UTC(year, month - 1, day + days));
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;

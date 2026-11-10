@@ -14,6 +14,9 @@
  *   3. a one-time import of the last 12 months of the Sent folder
  *      (sent-history-import.ts, SENT_HISTORY_BACKFILL_ENABLED, default OFF).
  * Rows the scan or the import create are labelled by sent-origin-classifier.ts.
+ * Rows the scan creates unlabelled are the user's own Gmail sends: they stamp
+ * the mail they answered on the decision ledger (provider-replies.ts). The
+ * import never does: a year of old replies says nothing about today's lanes.
  *
  * "Waiting" = the latest thing I sent in a thread is at least `minDays`
  * old and no message from someone else arrived in that thread after it.
@@ -25,6 +28,7 @@ import { prisma } from "../db.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { listGmailMailbox, type MailboxItemWire } from "./gmail-mailbox.js";
 import { UNKNOWN_DATE } from "./mailbox-dates.js";
+import { noteProviderReplies } from "./provider-replies.js";
 import { reportSentError } from "./sent-errors.js";
 import { clampSentField } from "./sent-fields.js";
 import { classifySentRows } from "./sent-origin-classifier.js";
@@ -166,6 +170,32 @@ async function labelFreshRows(
 }
 
 /**
+ * Record the scanned rows: known ones as they are, new ones with their label.
+ * A new row waits for the next scan when labels could not be read. Returns the
+ * rows written and the gmailIds created unlabelled now: the user's own sends
+ * from Gmail itself.
+ */
+async function recordScannedRows(
+  userId: string,
+  rows: readonly ScannedRow[],
+  known: ReadonlySet<string>,
+  labels: ReadonlyMap<string, SentOrigin> | null,
+): Promise<{ written: number; ownSends: string[] }> {
+  let written = 0;
+  const ownSends: string[] = [];
+  for (const row of rows) {
+    const isNew = !known.has(row.gmailId);
+    if (isNew && labels === null) continue;
+    const inferredOrigin = isNew ? labels?.get(row.gmailId) : undefined;
+    const ok = await recordSentMessage(userId, inferredOrigin ? { ...row, inferredOrigin } : row);
+    if (!ok) continue;
+    written += 1;
+    if (isNew && !inferredOrigin) ownSends.push(row.gmailId);
+  }
+  return { written, ownSends };
+}
+
+/**
  * Scan the Sent folder of every connected account (one page each) and
  * record what is there, labelling the rows it creates (sent-origin-classifier).
  * If the labels cannot be read, the rows already recorded are still updated
@@ -191,14 +221,8 @@ export async function syncSentMessages(userId: string, now = Date.now()): Promis
       userId,
       rows.filter((r) => !known.has(r.gmailId)),
     );
-    let written = 0;
-    for (const row of rows) {
-      const isNew = !known.has(row.gmailId);
-      if (isNew && labels === null) continue;
-      const inferredOrigin = isNew ? labels?.get(row.gmailId) : undefined;
-      const ok = await recordSentMessage(userId, inferredOrigin ? { ...row, inferredOrigin } : row);
-      if (ok) written += 1;
-    }
+    const { written, ownSends } = await recordScannedRows(userId, rows, known, labels);
+    if (ownSends.length > 0) await noteProviderReplies(userId, ownSends);
     return written;
   } catch (err) {
     reportSentError("sent-messages.sync", err, userId);

@@ -80,6 +80,7 @@ import { formatUrgentEmailBody, senderName } from "./notify/notification-format.
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
+import { sendQuietHoursSummaries } from "./notify/quiet-hours-summary.js";
 import { sendSms } from "./notify/sms.js";
 import {
   buildUrgentDedupMessage,
@@ -1181,6 +1182,15 @@ async function runAutomations() {
       await sendFocusWindowDigests();
     } catch (err) {
       console.warn("[SCHEDULER] focus digest sweep failed:", err);
+    }
+
+    // --- Quiet hours: ring held urgent mail once when the window ends ---
+    // Idempotent per user per window (claim row), so a restart or a second
+    // worker never rings twice. PUSH_QUIET_HOLD_DISABLED=true turns it off.
+    try {
+      await sendQuietHoursSummaries();
+    } catch (err) {
+      console.warn("[SCHEDULER] quiet-hours summary sweep failed:", err);
     }
 
     const todayUtc = new Date().toISOString().slice(0, 10);

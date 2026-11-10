@@ -60,6 +60,11 @@ function row(over: Partial<LaneCountRow>): LaneCountRow {
     unsubscribed: 0,
     overridden: 0,
     confirmed: 0,
+    providerOnlyReplied24h: 0,
+    providerOnlyArchived: 0,
+    replied24hEither: 0,
+    archivedEither: 0,
+    anyEither: 0,
     ...over,
   };
 }
@@ -100,6 +105,39 @@ describe("buildLaneQualityReport", () => {
     expect(push.shares.opened).toBeCloseTo(0.7);
     expect(push.shares.replied24h).toBeCloseTo(0.5); // 2 of 4 matured, not 2 of 10
     expect(push.shares.dismissed).toBeCloseTo(0.1);
+  });
+
+  it("keeps provider-side engagement apart, and shares either-source counts over the same denominators", () => {
+    const report = buildLaneQualityReport(
+      [
+        row({
+          shownTier: "PUSH",
+          judged: 10,
+          matured: 5,
+          anyOutcome: 2,
+          replied24h: 1,
+          archived: 1,
+          providerOnlyReplied24h: 2,
+          providerOnlyArchived: 4,
+          replied24hEither: 3,
+          archivedEither: 5,
+          anyEither: 7,
+        }),
+      ],
+      [],
+      META,
+    );
+    const push = report.lanes[0];
+
+    // Klorn-only shares are unchanged by provider stamps.
+    expect(push.shares.anyOutcome).toBeCloseTo(0.2);
+    expect(push.shares.replied24h).toBeCloseTo(0.2);
+    expect(push.shares.archived).toBeCloseTo(0.1);
+    expect(push.shares.providerOnlyReplied24h).toBeCloseTo(0.4); // 2 of 5 matured
+    expect(push.shares.providerOnlyArchived).toBeCloseTo(0.4);
+    expect(push.shares.replied24hEither).toBeCloseTo(0.6); // 3 of 5 matured
+    expect(push.shares.archivedEither).toBeCloseTo(0.5);
+    expect(push.shares.anyEither).toBeCloseTo(0.7);
   });
 
   it("folds legacy AUTO into QUEUE and CALL into PUSH, summing their counts", () => {
@@ -183,6 +221,37 @@ describe("renderLaneQualityReport", () => {
   });
 });
 
+describe("renderLaneQualityReport (provider split)", () => {
+  it("prints a separate provider-side table so Klorn and Gmail engagement are never summed silently", () => {
+    const text = renderLaneQualityReport(
+      buildLaneQualityReport(
+        [
+          row({
+            shownTier: "PUSH",
+            judged: 4,
+            matured: 4,
+            providerOnlyReplied24h: 1,
+            providerOnlyArchived: 2,
+            replied24hEither: 3,
+            archivedEither: 2,
+            anyEither: 4,
+          }),
+        ],
+        [],
+        META,
+      ),
+    );
+
+    expect(text).toContain("In the mail provider");
+    const providerTable = text.slice(text.indexOf("In the mail provider"));
+    const pushLine = providerTable.split("\n").find((l) => l.startsWith("PUSH")) ?? "";
+    expect(pushLine).toContain("25.0% (n=4)"); // provider replied<24h
+    expect(pushLine).toContain("50.0%"); // provider archived
+    expect(pushLine).toContain("75.0% (n=4)"); // replied<24h, either source
+    expect(pushLine).toContain("100.0%"); // any signal, either source
+  });
+});
+
 describe("queryLaneQuality", () => {
   it("opens its transaction READ ONLY, with a statement timeout, before either query", async () => {
     const report = await queryLaneQuality({
@@ -207,6 +276,25 @@ describe("queryLaneQuality", () => {
     expect(counts.values).toEqual(expect.arrayContaining([since, until, "user-1", "GITHUB"]));
     expect(counts.sql).not.toContain("user-1");
     expect(counts.sql).not.toContain("GITHUB");
+  });
+
+  it("counts provider-only columns (Klorn recorded none), and either source with LEAST so a null side never hides the other", async () => {
+    await queryLaneQuality({
+      since: new Date("2026-10-25T00:00:00Z"),
+      until: new Date("2026-11-01T00:00:00Z"),
+    });
+
+    const sql = tx.ops[2].sql;
+    expect(sql).toContain('"providerRepliedAt" <= "judgedAt" + INTERVAL \'24 hours\'');
+    expect(sql).toContain('"providerArchivedAt" IS NOT NULL');
+    expect(sql).toContain('LEAST("repliedAt", "providerRepliedAt")');
+    // Provider-only: a row Klorn already recorded is not counted again.
+    expect(sql).toContain(
+      '"providerArchivedAt" IS NOT NULL\n             AND "archivedAt" IS NULL',
+    );
+    expect(sql).toContain(
+      'AND NOT COALESCE("repliedAt" <= "judgedAt" + INTERVAL \'24 hours\', false)',
+    );
   });
 
   it("never counts a row as matured past now, even for a future --until", async () => {
