@@ -130,6 +130,7 @@
 "prefs.section.support" = "APP ET ASSISTANCE";
 "push.announce" = "Nouveau courriel PUSH : %d";
 "push.announce.meeting" = "Nouveau courriel MEETING : %d";
+"push.heldSummary.title" = "%d e-mails urgents pendant les heures calmes";
 "prefs.launchAtLogin" = "Lancer Klorn à l'ouverture de session";
 "prefs.launchAtLogin.unavailable.label" = "Lancer à l'ouverture";
 "prefs.launchAtLogin.unavailable.value" = "Application packagée uniquement";

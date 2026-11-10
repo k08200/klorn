@@ -47,7 +47,7 @@ export interface SendReceiptInput {
   body: string;
   /** "primary" or the LinkedInboxAccount id the mail leaves from. */
   inbox: string;
-  /** reply: the EmailMessage being answered. */
+  /** The EmailMessage being answered: reply, or send with `inReplyToEmailId`. */
   emailId?: string | null;
 }
 

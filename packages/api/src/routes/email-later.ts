@@ -12,6 +12,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { PUSH_LATER_HOURS } from "../notify/push-later.js";
 import { setMailReminder } from "../pim/mail-reminder.js";
 import { captureError } from "../sentry.js";
@@ -75,6 +76,9 @@ export function registerEmailLaterRoutes(app: FastifyInstance) {
       try {
         const result = await setMailReminder(userId, id, remindAt, { onPending: "move" });
         if (!result.ok) return reply.code(404).send({ error: "Email not found" });
+        // ok means `id` is the user's own EmailMessage id (setMailReminder looks
+        // it up by id and userId). A repeat Later is the same signal; first wins.
+        noteEmailOutcome(userId, id, "SNOOZED");
         return { ok: true, created: result.created, reminder: result.reminder };
       } catch (err) {
         captureError(err, { tags: { scope: "email.later" }, extra: { emailId: id } });

@@ -21,7 +21,15 @@ const requireAuth = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../judge/attention-by-email.js", () => byEmail);
 vi.mock("../judge/attention-dismiss.js", () => ({ dismissAttentionItem }));
 vi.mock("../judge/attention-snooze.js", () => ({ snoozeAttentionItem }));
-vi.mock("../db.js", () => ({ prisma: {}, db: {} }));
+// Done / Later stamp the decision ledger (judge/user-outcome.ts); pinned in
+// routes-firewall-outcome.test.ts.
+vi.mock("../db.js", () => {
+  const prisma = {
+    decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
+    attentionItem: { findFirst: vi.fn(async () => null) },
+  };
+  return { prisma, db: prisma };
+});
 vi.mock("../auth.js", () => ({
   resolveEffectiveJwtSecret: () => "test-secret",
   requireAuth,

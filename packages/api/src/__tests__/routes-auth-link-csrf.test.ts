@@ -541,7 +541,19 @@ describe("park throttle: a per-IP cap on the unauthenticated callback's park pat
     await app.close();
   });
 
-  it("keys on the Cloudflare-verified address, and a forged X-Forwarded-For does not reset it", async () => {
+  it("by default keys on the TCP peer: a client-sent CF-Connecting-IP does not reset it", async () => {
+    const app = await buildApp();
+    const state = await startFlow(app, inbox);
+    for (let i = 0; i < PARK_LIMIT_PER_IP; i += 1) await fromIp(app, state);
+
+    const rotated = await fromIp(app, state, { "cf-connecting-ip": "203.0.113.99" });
+
+    expect(rotated.headers.location).toBe(`${WEB}${inbox.failed}`);
+    await app.close();
+  });
+
+  it("behind Cloudflare keys on the edge-reported address, and a forged X-Forwarded-For does not reset it", async () => {
+    vi.stubEnv("CLIENT_IP_SOURCE", "cf-connecting-ip");
     const app = await buildApp();
     const state = await startFlow(app, inbox);
     const blocked = { "cf-connecting-ip": "203.0.113.7" };

@@ -17,6 +17,11 @@ vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForCommitment: vi.fn(async () => undefined),
   deleteAttentionForCommitments: vi.fn(async () => undefined),
 }));
+vi.mock("../learning/feedback.js", () => ({ recordFeedback: vi.fn(async () => undefined) }));
+vi.mock("../llm/openai.js", () => ({
+  MODEL: "test-model",
+  createCompletion: vi.fn(async () => ({ choices: [{ message: { content: "[]" } }] })),
+}));
 
 type CommitmentRow = {
   id: string;
@@ -26,8 +31,15 @@ type CommitmentRow = {
   status: string;
   dueAt: Date | null;
 };
+type PathRow = { id: string; commitmentId: string; steps: unknown; builtAt: Date; model: string };
 const commitments: CommitmentRow[] = [];
+const paths: PathRow[] = [];
 let nextId = 1;
+
+/** True when `row` has every field of `where` (Prisma's equality filters). */
+function matches(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([key, value]) => row[key] === value);
+}
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -38,22 +50,66 @@ vi.mock("../db.js", () => {
         ),
       ),
       findUnique: vi.fn(
-        async ({ where }: { where: { id: string } }) =>
-          commitments.find((c) => c.id === where.id) ?? null,
+        async ({ where }: { where: Record<string, unknown> }) =>
+          commitments.find((c) => matches(c, where)) ?? null,
+      ),
+      findFirst: vi.fn(
+        async ({ where }: { where: Record<string, unknown> }) =>
+          commitments.find((c) => matches(c, where)) ?? null,
       ),
       update: vi.fn(
-        async ({ where, data }: { where: { id: string }; data: Partial<CommitmentRow> }) => {
-          const idx = commitments.findIndex((c) => c.id === where.id);
+        async ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Partial<CommitmentRow>;
+        }) => {
+          const idx = commitments.findIndex((c) => matches(c, where));
           if (idx < 0) throw new Error("Not found");
-          commitments[idx] = { ...commitments[idx], ...data };
+          commitments[idx] = { ...(commitments[idx] as CommitmentRow), ...data };
           return commitments[idx];
         },
       ),
-      delete: vi.fn(async ({ where }: { where: { id: string } }) => {
-        const idx = commitments.findIndex((c) => c.id === where.id);
-        if (idx >= 0) commitments.splice(idx, 1);
-        return { id: where.id };
+      delete: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const idx = commitments.findIndex((c) => matches(c, where));
+        if (idx < 0) throw new Error("Not found");
+        return commitments.splice(idx, 1)[0];
       }),
+      deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const kept = commitments.filter((c) => !matches(c, where));
+        const count = commitments.length - kept.length;
+        commitments.splice(0, commitments.length, ...kept);
+        return { count };
+      }),
+    },
+    commitmentPath: {
+      findFirst: vi.fn(
+        async ({
+          where,
+        }: {
+          where: { commitmentId: string; commitment?: Record<string, unknown> };
+        }) =>
+          paths.find((p) => {
+            if (p.commitmentId !== where.commitmentId) return false;
+            const parent = commitments.find((c) => c.id === p.commitmentId);
+            return !where.commitment || (parent !== undefined && matches(parent, where.commitment));
+          }) ?? null,
+      ),
+      upsert: vi.fn(async () => {
+        throw new Error("no path write expected");
+      }),
+      update: vi.fn(async () => {
+        throw new Error("no path write expected");
+      }),
+    },
+    task: {
+      create: vi.fn(async () => {
+        throw new Error("no task write expected");
+      }),
+    },
+    attentionItem: {
+      findFirst: vi.fn(async () => null),
     },
     user: {
       findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })),
@@ -84,7 +140,9 @@ async function buildApp() {
 
 function reset() {
   commitments.length = 0;
+  paths.length = 0;
   nextId = 1;
+  vi.clearAllMocks();
 }
 
 function seed(over: Partial<CommitmentRow> = {}): CommitmentRow {
@@ -229,6 +287,116 @@ describe("commitment routes", () => {
     });
     expect(res.statusCode).toBe(204);
     expect(commitments).toHaveLength(0);
+    await app.close();
+  });
+});
+
+describe("commitment routes — another user's commitment", () => {
+  beforeEach(reset);
+
+  const OWNER_ONLY = ["Owner-only title", "Owner-only description", "Owner-only step"];
+
+  function seedOwned() {
+    const c = seed({
+      userId: "user-1",
+      title: "Owner-only title",
+      description: "Owner-only description",
+      dueAt: new Date("2026-12-05T00:00:00.000Z"),
+    });
+    paths.push({
+      id: "p-1",
+      commitmentId: c.id,
+      steps: [{ step: "Owner-only step", action: "write", dueIso: "2026-12-01T00:00:00.000Z" }],
+      builtAt: new Date("2026-11-01T00:00:00.000Z"),
+      model: "test-model",
+    });
+    return c;
+  }
+
+  const crossUserCalls = (id: string) => [
+    { method: "GET" as const, url: `/api/commitments/${id}` },
+    { method: "PATCH" as const, url: `/api/commitments/${id}`, payload: { status: "DONE" } },
+    {
+      method: "PATCH" as const,
+      url: `/api/commitments/${id}`,
+      payload: { title: "Taken over", description: null, dueAt: null, status: "DISMISSED" },
+    },
+    { method: "DELETE" as const, url: `/api/commitments/${id}` },
+    { method: "GET" as const, url: `/api/commitments/${id}/path` },
+    { method: "POST" as const, url: `/api/commitments/${id}/path/rebuild` },
+    { method: "POST" as const, url: `/api/commitments/${id}/path/steps/0/materialize` },
+    { method: "POST" as const, url: `/api/commitments/${id}/path/materialize-all` },
+  ];
+
+  it("refuses every route with 403, leaks none of the row, and writes nothing", async () => {
+    const c = seedOwned();
+    const before = JSON.stringify({ commitments, paths });
+    const { prisma } = await import("../db.js");
+    const { createCompletion } = await import("../llm/openai.js");
+    const app = await buildApp();
+    for (const call of crossUserCalls(c.id)) {
+      const res = await app.inject({ ...call, headers: auth(OTHER) });
+      expect(res.statusCode, `${call.method} ${call.url}`).toBe(403);
+      for (const secret of OWNER_ONLY) expect(res.body).not.toContain(secret);
+      expect(res.body).not.toContain(c.id);
+    }
+    expect(JSON.stringify({ commitments, paths })).toBe(before);
+    expect(prisma.commitment.update).not.toHaveBeenCalled();
+    expect(prisma.commitment.delete).not.toHaveBeenCalled();
+    expect(prisma.commitment.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.commitmentPath.upsert).not.toHaveBeenCalled();
+    expect(prisma.commitmentPath.update).not.toHaveBeenCalled();
+    expect(prisma.task.create).not.toHaveBeenCalled();
+    expect(createCompletion).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("answers 404 for an id that does not exist, the same for every route", async () => {
+    const app = await buildApp();
+    for (const call of crossUserCalls("missing")) {
+      const res = await app.inject({ ...call, headers: auth(OTHER) });
+      expect(res.statusCode, `${call.method} ${call.url}`).toBe(404);
+    }
+    await app.close();
+  });
+
+  it("still serves the owner", async () => {
+    const c = seedOwned();
+    const app = await buildApp();
+    const read = await app.inject({
+      method: "GET",
+      url: `/api/commitments/${c.id}`,
+      headers: auth(),
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().title).toBe("Owner-only title");
+    const path = await app.inject({
+      method: "GET",
+      url: `/api/commitments/${c.id}/path`,
+      headers: auth(),
+    });
+    expect(path.statusCode).toBe(200);
+    expect(path.json().path.steps[0].step).toBe("Owner-only step");
+    await app.close();
+  });
+
+  it("scopes the dismissal feedback lookup to the owner", async () => {
+    const c = seed({ userId: "user-1", status: "OPEN" });
+    const { prisma } = await import("../db.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/commitments/${c.id}`,
+      headers: auth(),
+      payload: { status: "DISMISSED" },
+    });
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(() => expect(prisma.attentionItem.findFirst).toHaveBeenCalled());
+    expect(prisma.attentionItem.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "user-1", source: "COMMITMENT", sourceId: c.id },
+      }),
+    );
     await app.close();
   });
 });

@@ -44,6 +44,7 @@ import {
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { isTier } from "../judge/tiers.js";
 import { TODAY_WINDOW, todayPushCutoff } from "../judge/today-push-window.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { HELD_WINDOW, heldTodayCutoff } from "../judge/v3/held-today.js";
 import { budgetDayFor } from "../judge/v3/push-budget-gate.js";
@@ -711,6 +712,10 @@ const emailDetailQuerySchema = {
   properties: {
     // The client's UI language for template lines (request-language.ts).
     lang: LANG_QUERY_PROPERTY,
+    // Set when the caller fetches the detail for something other than showing
+    // the mail (mobile Files reads attachments): not a reader open, so no
+    // OPENED stamp. Any value counts; older servers strip it unseen.
+    purpose: { type: "string", maxLength: 32 },
   },
 } as const;
 
@@ -1369,9 +1374,12 @@ export async function emailRoutes(app: FastifyInstance) {
     });
 
     if (dbEmail) {
-      // Reading a mail is side-effect free. Mark-as-read is explicit — many
-      // users rely on unread as a work queue — and it is a WRITE, so it lives
-      // on PATCH /:id/read, never on this GET (link prefetchers fetch GETs).
+      // Reading a mail changes nothing the user sees. Mark-as-read is explicit
+      // — many users rely on unread as a work queue — so it lives on
+      // PATCH /:id/read, never on this GET (link prefetchers fetch GETs). The
+      // one write here is the OPENED ledger stamp below: internal bookkeeping,
+      // reachable only with the user's Bearer token. A caller that fetches for
+      // another reason must pass ?purpose= so it isn't counted as an open.
       const actionItems = parseJsonArray(dbEmail.actionItems);
       const attachments = await listEmailAttachments([dbEmail.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
@@ -1384,7 +1392,8 @@ export async function emailRoutes(app: FastifyInstance) {
       // chip. Cache-only (fails soft to null, never rebuilds on a request).
       const engagementNode = addr ? await getCachedInteractionNode(uid, addr) : null;
       const readerLanguage = await readerLanguageFor(request, reply, uid);
-      return {
+      const { purpose } = request.query as { purpose?: string };
+      const detail = {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
         threadId: dbEmail.threadId,
@@ -1464,6 +1473,10 @@ export async function emailRoutes(app: FastifyInstance) {
         candidateProfile,
         candidateIntake,
       };
+      // Stamped only once the reply body is built, so a failure above never
+      // leaves an OPENED for a mail the user didn't get to see.
+      if (purpose === undefined) noteEmailOutcome(uid, dbEmail.id, "OPENED");
+      return detail;
     }
 
     // Demo fallback
@@ -1831,6 +1844,8 @@ export async function emailRoutes(app: FastifyInstance) {
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
       const outcome = await unsubscribeFromEmail(uid, dbEmail);
       if (!outcome.ok) return reply.code(outcome.statusCode).send({ error: outcome.error });
+      // A handed-back browser link (done: false) is not an unsubscribe yet.
+      if (outcome.body.done) noteEmailOutcome(uid, dbEmail.id, "UNSUBSCRIBED");
       return outcome.body;
     },
   );

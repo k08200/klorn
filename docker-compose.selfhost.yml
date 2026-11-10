@@ -83,10 +83,19 @@ services:
       # Browser origins allowed to call the API with credentials. Must
       # include the web app origin — production fails CLOSED without it.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # Where the API reads the client address for rate limits. Empty = the
+      # TCP peer, right with no proxy. Behind Caddy/nginx/Traefik set
+      # x-forwarded-for AND publish 3001 on loopback ("127.0.0.1:3001:3001")
+      # so no client can reach the API around the proxy.
+      # See docs/self-hosting.md ("Client address").
+      CLIENT_IP_SOURCE: ${CLIENT_IP_SOURCE:-}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-}
 
       # ── Optional: real-time Gmail push (polling fallback otherwise) ──
       GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-}
       GMAIL_PUSH_OIDC_EMAIL: ${GMAIL_PUSH_OIDC_EMAIL:-}
+      # Required with GMAIL_PUSH_OIDC_EMAIL: the push subscription's Audience.
+      GMAIL_PUSH_OIDC_AUDIENCE: ${GMAIL_PUSH_OIDC_AUDIENCE:-}
       GMAIL_PUSH_TOKEN: ${GMAIL_PUSH_TOKEN:-}
 
       # ── Optional: notifications ──────────────────────────────────────

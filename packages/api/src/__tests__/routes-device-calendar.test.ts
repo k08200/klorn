@@ -112,6 +112,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   if (saved === undefined) delete process.env.DEVICE_CALENDAR_ENABLED;
   else process.env.DEVICE_CALENDAR_ENABLED = saved;
 });
@@ -485,17 +486,29 @@ describe("the device-session limiter key", () => {
     } as never);
     expect(withToken).toMatch(/^device-cal:session:[a-f0-9]{32}$/);
     expect(withToken).not.toContain("secret-token");
-    const viaCloudflare = deviceSessionKey({
+    const spoofedHeaders = {
       headers: { "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.1" },
       socket: { remoteAddress: "10.0.0.1" },
       ip: "198.51.100.1",
-    } as never);
-    expect(viaCloudflare).toBe("device-cal:ip:203.0.113.9");
+    } as never;
+    // Default (self-host): neither header is trusted.
+    expect(deviceSessionKey(spoofedHeaders)).toBe("device-cal:ip:10.0.0.1");
     const direct = deviceSessionKey({
       headers: { "x-forwarded-for": "198.51.100.1" },
       socket: { remoteAddress: "10.0.0.1" },
       ip: "198.51.100.1",
     } as never);
     expect(direct).toBe("device-cal:ip:10.0.0.1");
+  });
+
+  it("behind Cloudflare keys a token-less request on the edge-reported address", async () => {
+    const { deviceSessionKey } = await import("../routes/device-calendar.js");
+    vi.stubEnv("CLIENT_IP_SOURCE", "cf-connecting-ip");
+    const viaCloudflare = deviceSessionKey({
+      headers: { "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.1" },
+      socket: { remoteAddress: "10.0.0.1" },
+      ip: "198.51.100.1",
+    } as never);
+    expect(viaCloudflare).toBe("device-cal:ip:203.0.113.9");
   });
 });
