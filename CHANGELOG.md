@@ -12,6 +12,19 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Classification and learning
+- Provider-side engagement on the decision ledger (#1664):
+  - `DecisionLabel` records when the user replied to a judged mail from
+    Gmail itself (`providerRepliedAt`, from the Sent-folder scan) or moved
+    it out of the Gmail inbox outside Klorn (`providerArchivedAt`, from the
+    INBOX reconcile). These are kept apart from the Klorn-side stamps and
+    are first-wins. Mail Klorn sent or archived does not count. Reading in
+    Gmail is not recorded.
+  - The `lane-quality` report adds a table with these signals where Klorn
+    recorded none, plus counts from either source.
+  - Migration `20261110000000_decision_label_provider_engagement` is
+    additive. Gmail only; Outlook and IMAP are not covered yet.
+
 ## [0.4.0] — 2026-11-08
 
 First server release since 0.3.0 (2026-06-09). It covers every PR merged since
