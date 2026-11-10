@@ -244,6 +244,8 @@ export async function sendPushNotification(
   // silent while the upstream Notification row keeps the event in the bell.
   // (The VAPID check runs later, after the Telegram send, so a
   // Telegram-only self-host without VAPID keys still gets interrupts.)
+  // PUSH mail held by quiet hours rings once after they end, read back from
+  // that bell row (quiet-hours-summary.ts).
   const gate = await evaluateNotificationGate(userId, category);
   if (!gate.allowed) {
     console.log(`[PUSH] Suppressed (${gate.reason}) for ${userId} (${category})`);

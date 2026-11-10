@@ -12,6 +12,7 @@
  *   - pim/reminder-scheduler.ts: reminders the user set for a time.
  * - ambient: everything else, and the default. Briefings and the weekly report,
  *   agent proposals, candidate-mail notices, reconnect prompts, test pushes,
+ *   the quiet-hours summary of held mail (quiet-hours-summary.ts),
  *   and every agent-originated push (autonomous-agent.ts notify_user,
  *   proactive-actions.ts) whatever its category. An LLM or a heuristic chose to
  *   ring those, so they must not use up the room the four above need. None is
