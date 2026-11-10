@@ -12,6 +12,14 @@ calendar time.
 
 ## [Unreleased]
 
+### Changed
+- `CALENDAR_COATTENDANCE_ENABLED` accepts `cohort`, like
+  `SENT_HISTORY_BACKFILL_ENABLED`: co-attendance is then counted, and read by
+  the judge, only for the users in `ROLLOUT_COHORT_USER_IDS`. `true` still
+  means everyone.
+- `GET /api/admin/flags` lists `CALENDAR_COATTENDANCE_ENABLED` and
+  `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`).
+
 ## [0.4.0] — 2026-11-08
 
 First server release since 0.3.0 (2026-06-09). It covers every PR merged since
