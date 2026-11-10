@@ -49,6 +49,12 @@ calendar time.
   that was read, handled or moved off PUSH meanwhile is left out. The ring uses
   the ambient push bucket. Set `PUSH_QUIET_HOLD_DISABLED=true` to drop held
   pushes as before.
+- `CALENDAR_COATTENDANCE_ENABLED` accepts `cohort`, like
+  `SENT_HISTORY_BACKFILL_ENABLED`: co-attendance is then counted, and read by
+  the judge, only for the users in `ROLLOUT_COHORT_USER_IDS`. `true` still
+  means everyone.
+- `GET /api/admin/flags` lists `CALENDAR_COATTENDANCE_ENABLED` and
+  `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`) (#1666).
 
 ### Fixed
 - **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**

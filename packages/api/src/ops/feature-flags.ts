@@ -82,9 +82,12 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       ANDROID_DATA_PUSH_ENABLED: dynamicFlag(env, "ANDROID_DATA_PUSH_ENABLED"),
       // Read per new mail by judge/v3/flags.ts (attention engine v3 facts shadow).
       // True for "true" or "cohort"; the cohort is ROLLOUT_COHORT_USER_IDS.
-      JUDGE_V3_SHADOW: ["true", "1", "yes", "on", "cohort"].includes(
-        (env.JUDGE_V3_SHADOW ?? "").trim().toLowerCase(),
-      ),
+      JUDGE_V3_SHADOW: cohortCapableFlag(env, "JUDGE_V3_SHADOW"),
+      // Per-user data collection for attention engine v3, read per user by
+      // config.ts calendarCoattendanceOpenTo (the co-attendance queue, pass and
+      // reader gate) and mail/sent-history-import.ts. True for "true" or "cohort".
+      CALENDAR_COATTENDANCE_ENABLED: cohortCapableFlag(env, "CALENDAR_COATTENDANCE_ENABLED"),
+      SENT_HISTORY_BACKFILL_ENABLED: cohortCapableFlag(env, "SENT_HISTORY_BACKFILL_ENABLED"),
       // Attention engine v3 policy (P3): interrupt budget on PUSH notifications.
       // Founder flip only, after replay + shadow data. Requires JUDGE_V3_SHADOW.
       JUDGE_V3_POLICY: dynamicFlag(env, "JUDGE_V3_POLICY"),
@@ -99,6 +102,16 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       JUDGE_V3_PUSH_BUDGET: Boolean(env.JUDGE_V3_PUSH_BUDGET),
     },
   };
+}
+
+/**
+ * A flag that also takes `cohort` (config.ts flagMode): true when it reaches
+ * anyone, on for everyone or for the cohort. The report does not tell the two
+ * apart; ROLLOUT_COHORT_USER_IDS and the env value do. Pure over `env`.
+ */
+function cohortCapableFlag(env: NodeJS.ProcessEnv, key: string): boolean {
+  const value = (env[key] ?? "").trim().toLowerCase();
+  return TRUTHY.has(value) || value === "cohort";
 }
 
 /** Default-ON dynamic flag: set the env var to "false"/"0"/"off" to disable. */

@@ -6,7 +6,8 @@
  * A missing ContactCoAttendance row means 0 meetings only when ALL of these hold;
  * otherwise every co-attendance field is null (unknown), and so is a row that
  * exists, because its counts may be incomplete:
- *   1. CALENDAR_COATTENDANCE_ENABLED is on;
+ *   1. CALENDAR_COATTENDANCE_ENABLED is on for the user (true, or cohort with
+ *      the user in ROLLOUT_COHORT_USER_IDS);
  *   2. the watermark User.coAttendanceCountedThrough is at least utcDay(now) − 2;
  *   3. the user has a Google calendar source, and EVERY one (the primary UserToken,
  *      each GOOGLE LinkedCalendarAccount: the store's own readCoverage) has
@@ -23,7 +24,7 @@
  * failing source freezes the watermark while the others' pass times stay fresh.
  */
 
-import { calendarCoattendanceEnabled } from "../../config.js";
+import { calendarCoattendanceOpenTo } from "../../config.js";
 import { prisma } from "../../db.js";
 import {
   COATTENDANCE_LOOKBACK_DAYS,
@@ -94,7 +95,7 @@ export async function loadCoAttendance(
   sender: string,
   now: Date,
 ): Promise<CoAttendanceView | undefined> {
-  if (!calendarCoattendanceEnabled()) return undefined;
+  if (!calendarCoattendanceOpenTo(userId)) return undefined;
   if (!isNormalisedContact(sender)) return undefined;
   const [coverage, own] = await Promise.all([
     deps.coAttendanceCoverage(userId),
