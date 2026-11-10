@@ -31,6 +31,7 @@ import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "../agent/
 import { trackTokenUsage } from "../billing/token-usage.js";
 import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "../config.js";
 import { db, prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { isFloorAction } from "../judge/attention-floor.js";
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
@@ -64,6 +65,7 @@ import {
   LEGACY_AGENT_NOTIFICATION_PREFIX,
   safeJson,
 } from "./agent-proposal-dedup.js";
+import { proposalPushMailFields } from "./proposal-push-target.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 
 const MAX_TOOL_CALLS = AGENT_MAX_TOOLS_PER_LOOP;
@@ -238,6 +240,10 @@ Do NOT notify the user. Do NOT ask for immediate attention. Do NOT call notify_u
   );
 }
 
+/**
+ * The notify_user category → NotifCategory. It drives preferences, quiet hours
+ * and the label only; the push rings ambient whatever this returns.
+ */
 function categoryForAgentNotification(category: unknown): NotifCategory {
   switch (category) {
     case "email":
@@ -783,15 +789,25 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   link: proposalLink,
                 });
 
-                // Always send push notification for proposed actions (phone/browser)
+                // Always send push notification for proposed actions (phone/browser).
+                // A reply draft to one mail also deep-links the native apps to it.
+                const proposalMail = await proposalPushMailFields(
+                  userId,
+                  proposedToolName,
+                  args.toolArgs,
+                  (pendingAction as { id: string }).id,
+                );
                 sendPushNotification(
                   userId,
                   {
                     title: `${AGENT_NOTIFICATION_PREFIX} Review needed`,
                     body: args.message.slice(0, 100),
                     url: proposalLink,
+                    ...proposalMail,
                   },
                   "agent_proposal",
+                  // Agent-originated: always ambient (push-bucket.ts).
+                  { bucket: "ambient" },
                 ).catch((err) => console.warn("[AGENT] proposal push failed", err));
               }
 
@@ -922,6 +938,10 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   url: notifyLink,
                 },
                 categoryForAgentNotification(args.category),
+                // The model chose to ring: ambient whatever the category, so
+                // it cannot use up the interrupt room the firewall's PUSH
+                // mail, meeting alerts and reminders need (push-bucket.ts).
+                { bucket: "ambient" },
               ).catch((err) => console.warn("[AGENT] notify push failed", err));
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
@@ -1079,14 +1099,23 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 conversationId: agentConvo.id,
                 link: riskLink,
               });
+              const riskMail = await proposalPushMailFields(
+                userId,
+                fnName,
+                args,
+                (pendingAction as { id: string }).id,
+              );
               sendPushNotification(
                 userId,
                 {
                   title: notifTitle,
                   body: proposalMessage.slice(0, 100),
                   url: riskLink,
+                  ...riskMail,
                 },
                 "agent_proposal",
+                // Agent-originated: always ambient (push-bucket.ts).
+                { bucket: "ambient" },
               ).catch((err) => console.warn("[AGENT] risk push failed", err));
 
               // Notify sidebar to refresh
@@ -1131,7 +1160,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
               userId,
               action: "auto_action",
               tool: fnName,
-              summary: { contains: JSON.stringify(args).slice(0, 50) },
+              summary: { contains: escapeLikePattern(JSON.stringify(args).slice(0, 50)) },
               createdAt: { gte: toolDedupSince },
             },
           });

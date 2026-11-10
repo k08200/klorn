@@ -122,7 +122,21 @@ vi.mock("../db.js", () => {
         if (where.id === "admin-1")
           return { id: "admin-1", email: "admin@e.com", role: "ADMIN", plan: "FREE" };
         if (where.id === "user-1")
-          return { id: "user-1", email: "u@e.com", role: "USER", plan: "FREE" };
+          return {
+            id: "user-1",
+            email: "u@e.com",
+            role: "USER",
+            plan: "FREE",
+            emailVerified: true,
+          };
+        if (where.id === "unverified-1")
+          return {
+            id: "unverified-1",
+            email: "u2@e.com",
+            role: "USER",
+            plan: "FREE",
+            emailVerified: false,
+          };
         return null;
       }),
       findMany: vi.fn(async () => []),
@@ -368,6 +382,22 @@ describe("admin routes", () => {
     await app.close();
   });
 
+  it("refuses an env-listed address whose account is not verified yet", async () => {
+    // Register hands out a session before verification; an unclaimed
+    // ADMIN_EMAILS address must not become an admin by pre-registering it.
+    process.env.ADMIN_EMAILS = "founder@example.com, u2@e.com";
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/users",
+      headers: {
+        authorization: `Bearer ${signToken({ userId: "unverified-1", email: "u2@e.com" })}`,
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
   it("force-rebuilds the interaction graph and reports the engagement footprint", async () => {
     buildInteractionGraphSpy.mockClear();
     const app = await buildApp();
@@ -609,10 +639,8 @@ describe("admin routes", () => {
     await app.close();
   });
 
-  it("reports fleet judge health via /judge-health", async () => {
-    const { recordJudgeSource, __resetJudgeHealth } = await import("../judge/judge-health.js");
-    __resetJudgeHealth();
-    for (let i = 0; i < 10; i++) recordJudgeSource("llm");
+  it("reports fleet judge health via /judge-health (last DB check + top error)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -620,8 +648,10 @@ describe("admin routes", () => {
       headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ total: 10, fallbackRate: 0, degraded: false });
-    __resetJudgeHealth();
+    const body = res.json();
+    expect(body).toMatchObject({ lookbackMs: 24 * 60 * 60 * 1000 });
+    expect(body).toHaveProperty("lastCheck");
+    expect(body).toHaveProperty("topError");
     await app.close();
   });
 
@@ -641,19 +671,19 @@ describe("admin routes", () => {
       "../llm/model-fallback.js"
     );
     clearFallbackState();
-    markKeyLimited("openrouter:user:test-admin", new Error("429 per day"));
-    expect(isKeyLimited("openrouter:user:test-admin")).toBe(true);
+    markKeyLimited("anthropic:user:test-admin", new Error("429 per day"));
+    expect(isKeyLimited("anthropic:user:test-admin")).toBe(true);
 
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/llm-state/clear",
       headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-      payload: { quotaKey: "openrouter:user:test-admin" },
+      payload: { quotaKey: "anthropic:user:test-admin" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().cleared).toBe("openrouter:user:test-admin");
-    expect(isKeyLimited("openrouter:user:test-admin")).toBe(false);
+    expect(res.json().cleared).toBe("anthropic:user:test-admin");
+    expect(isKeyLimited("anthropic:user:test-admin")).toBe(false);
     await app.close();
   });
 
@@ -670,12 +700,29 @@ describe("admin routes", () => {
     await app.close();
   });
 
+  it("rejects /llm-state/clear for a retired provider's quotaKey", async () => {
+    // OpenRouter was removed (2026-11-01): its quota keys can no longer exist,
+    // so the whitelist must not accept them.
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/llm-state/clear",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { quotaKey: "openrouter:env" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe(
+      "Invalid quotaKey. Expected anthropic|gemini|openai-compat : env|user:<id>.",
+    );
+    await app.close();
+  });
+
   it("clears every provider when /llm-state/clear is called without a quotaKey", async () => {
     const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
       "../llm/model-fallback.js"
     );
     clearFallbackState();
-    markKeyLimited("openrouter:test-all", new Error("429 per day"));
+    markKeyLimited("anthropic:test-all", new Error("429 per day"));
     markKeyLimited("gemini:test-all", new Error("429 per day"));
 
     const app = await buildApp();
@@ -687,7 +734,7 @@ describe("admin routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().cleared).toBe("all");
-    expect(isKeyLimited("openrouter:test-all")).toBe(false);
+    expect(isKeyLimited("anthropic:test-all")).toBe(false);
     expect(isKeyLimited("gemini:test-all")).toBe(false);
     await app.close();
   });

@@ -130,13 +130,19 @@ describe("estimatePrebillCents — fractional pre-bill", () => {
   it("still pre-bills >= 1¢ for sonnet-class models", async () => {
     vi.resetModules();
     const { estimatePrebillCents } = await import("../billing/llm-usage.js");
-    expect(estimatePrebillCents("anthropic/claude-sonnet-5")).toBeGreaterThanOrEqual(1);
+    // Sonnet 4.6 bills $3/$15 → 2000/500 nominal tokens = 1.35¢. (Sonnet 5 is
+    // $2/$10 on the native Claude API, so it pre-bills 0.9¢ and is not the
+    // ">= 1¢" witness any more.)
+    expect(estimatePrebillCents("claude-sonnet-4-6")).toBeGreaterThanOrEqual(1);
   });
 
-  it("still pre-bills 0 for free models", async () => {
+  it("pre-bills the hosted default (claude-haiku-5-5) at its sub-cent true size", async () => {
     vi.resetModules();
     const { estimatePrebillCents } = await import("../billing/llm-usage.js");
-    expect(estimatePrebillCents("google/gemma-4-31b-it:free")).toBe(0);
+    // $0.10/$0.50 per M → 2000/500 nominal tokens = $0.00045 = 0.045¢, rounded
+    // UP to the 0.01¢ grid. The hosted judge runs on this model, so a 1¢
+    // floor here would be a 20x overcharge against the caps.
+    expect(estimatePrebillCents("claude-haiku-5-5")).toBeCloseTo(0.05, 6);
   });
 });
 

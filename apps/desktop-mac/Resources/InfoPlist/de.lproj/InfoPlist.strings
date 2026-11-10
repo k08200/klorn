@@ -1,0 +1,3 @@
+/* Calendar permission prompt (step C6: device calendars, opt-in per calendar). */
+"NSCalendarsFullAccessUsageDescription" = "Klorn lädt nur die Kalender hoch, die du in den Einstellungen einschaltest, damit Briefing und Assistent sie sehen.";
+"NSCalendarsUsageDescription" = "Klorn lädt nur die Kalender hoch, die du in den Einstellungen einschaltest, damit Briefing und Assistent sie sehen.";

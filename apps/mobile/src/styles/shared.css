@@ -1,0 +1,138 @@
+/*
+ * Pieces more than one screen uses. Screen stylesheets load with their
+ * screen's chunk (Calendar, Assistant, Files, Accounts, Settings and Mail are
+ * lazy), so anything a second screen relies on lives here, in the main bundle.
+ */
+
+/* A 36px accent round button (Calendar "new event", Files "upload"), 44px hit area. */
+.round-button {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.round-button::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+.round-button__face {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* List / detail: the detail's back link (hidden when both panes show) and the empty detail pane. */
+.detail-back {
+  height: var(--touch);
+  margin-left: -10px;
+  padding: 0 8px 0 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+  font-size: calc(17 * var(--u));
+}
+
+.shell:not([data-nav="tabs"]) .pane--detail .detail-back,
+.panes--split .pane--detail .detail-back {
+  display: none;
+}
+
+.pane-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pane-empty .empty-state {
+  max-width: 360px;
+  background: transparent;
+  border: 0;
+}
+
+/* A footnote line with a leading icon (event and file details). */
+.event-detail__note {
+  display: flex;
+  gap: 8px;
+  font-size: var(--type-footnote);
+  line-height: var(--type-footnote-lh);
+  color: var(--ink-dim);
+}
+
+.event-detail__note svg {
+  flex: none;
+}
+
+/* Label / value facts of a draft (event drafts, approvals). */
+.draft-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-facts > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  font-size: var(--type-callout);
+  line-height: var(--type-callout-lh);
+}
+
+.draft-facts dt {
+  color: var(--ink-dim);
+}
+
+.draft-facts dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* A sheet's form column (new event, add account). */
+.new-event {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Segmented control (Assistant sections, Settings appearance). */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--surface-control);
+}
+
+.segmented__item {
+  position: relative;
+  height: 32px;
+  border-radius: 8px;
+  font-size: var(--type-subhead);
+  font-weight: 600;
+  color: var(--ink);
+  transition: background-color var(--motion-state) var(--ease);
+}
+
+.segmented__item::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+.segmented__item[aria-selected="true"],
+.segmented__item[aria-checked="true"] {
+  background: var(--surface-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}

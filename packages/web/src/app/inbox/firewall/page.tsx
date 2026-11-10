@@ -2,11 +2,14 @@
 
 import AuthGuard from "../../../components/auth-guard";
 import { FirewallBoard } from "../../../components/firewall-board";
+import { HubHandoff } from "../../../components/hub-handoff";
 
 export default function FirewallPage() {
   return (
     <AuthGuard>
-      <FirewallBoard />
+      <HubHandoff>
+        <FirewallBoard />
+      </HubHandoff>
     </AuthGuard>
   );
 }

@@ -4,30 +4,12 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.expand" = "展开";
-"bar.expand.a11y" = "展开 Klorn";
-"bar.hide" = "隐藏栏（仍在菜单栏运行）";
-"bar.hide.a11y" = "隐藏顶部栏";
-"bar.close" = "关闭";
-"bar.close.a11y" = "关闭面板";
-"bar.fullView" = "全屏视图";
-"bar.fullView.a11y" = "打开全屏视图";
-"bar.smaller" = "缩小";
-"bar.smaller.help" = "回到紧凑面板";
-"bar.push" = "%d 条 PUSH";
-"bar.offline" = "离线";
-"bar.allClear" = "已处理完";
-"bar.signingIn" = "正在登录…";
 "bar.loading" = "加载中…";
-"bar.more" = "还有 %d 条";
-"bar.menuBar.signedOut" = "Klorn — 未登录";
 
 /* Auth */
-"auth.logIn" = "登录";
 "auth.signOut" = "退出登录";
 
 /* Columns / sections */
-"section.today" = "KLORN 今天";
 "section.now" = "现在";
 "section.briefing" = "简报";
 "section.aiToday" = "AI 今天";
@@ -35,7 +17,6 @@
 "section.assistant" = "助理";
 "section.search" = "搜索";
 
-"today.a11y" = "Klorn 今天：%@。打开网页收件箱查看。";
 "briefing.a11y" = "今天的简报：%@";
 "aiUsage.a11y" = "今日 AI 用量：%2$d 中的 %1$d";
 "commitments.a11y" = "承诺，未完成 %d 项";
@@ -49,10 +30,6 @@
 "calendar.join" = "加入";
 "calendar.join.a11y" = "加入 %@";
 "calendar.openInKlorn" = "在 Klorn 中打开";
-"calendar.startingSoon" = "即将开始";
-"calendar.prepPack" = "正在准备会前资料…";
-"calendar.card.a11y" = "即将开始的会议卡片";
-"calendar.dismiss.a11y" = "关闭会议卡片";
 "calendar.addToCalendar" = "添加到日历";
 "calendar.ignore" = "忽略";
 "calendar.proposed.a11y" = "建议的日程：%@";
@@ -64,23 +41,24 @@
 "mail.filterByInbox" = "按收件箱筛选";
 "mail.filterByInbox.a11y" = "按收件箱筛选 — 当前 %@";
 "mail.inbox.a11y" = "收件箱 %@";
+"mail.unread" = "未读";
+"mail.hasAttachment" = "有附件";
+"mail.threadCount" = "此会话中有 %d 封邮件";
+"source.account.a11y" = "%@ 账户";
+"source.generic" = "邮件";
 "mail.searchResult.a11y" = "来自 %1$@ 的搜索结果：%2$@";
-"mail.noSubject" = "无主题";
 "mail.snooze" = "稍后提醒…";
 "mail.snooze.a11y" = "稍后提醒来自 %@ 的邮件";
 "mail.dismiss" = "忽略";
 "mail.dismiss.a11y" = "忽略来自 %@ 的邮件";
-"mail.changeTier" = "移到其他分类…（Klorn 会学习）";
-"mail.changeTier.a11y" = "更改来自 %1$@ 的邮件分类，当前为 %2$@";
-"mail.moveTo" = "移到 %1$@%2$@";
+"mail.changeTier" = "移到其他通道…（Klorn 会学习）";
+"mail.changeTier.a11y" = "更改来自 %1$@ 的邮件通道，当前为 %2$@";
 "mail.snoozePrefix" = "稍后提醒 ";
 "mail.summarize" = "AI 摘要";
 "mail.summarizing" = "正在摘要…";
 "mail.summarizeFailed" = "无法生成摘要 — 请重试。";
 "mail.actionItems" = "待办事项";
-"section.filed" = "已归档";
 "section.filed.help" = "Klorn 已归档的邮件 — 记录与静音噪音。点击展开。";
-"filed.a11y" = "已归档邮件，%d 条";
 "dossier.inFlight" = "进行中：%@";
 "dossier.promise" = "最近的承诺：%@";
 "dossier.a11y" = "发件人背景";
@@ -116,7 +94,7 @@
 
 /* Reading pane */
 "reading.empty.title" = "没有打开的内容";
-"reading.empty.detail" = "从左侧选一封邮件 — 阅读、回复、\n稍后提醒、改分类，都不用离开 Klorn。";
+"reading.empty.detail" = "从左侧选一封邮件 — 阅读、回复、\n稍后提醒、换通道，都不用离开 Klorn。";
 "reading.replyWithAI" = "用 AI 回复";
 "reading.openInWeb" = "在网页打开";
 "reading.replyTo" = "回复 %@";
@@ -126,21 +104,9 @@
 "reading.cancel" = "取消";
 
 /* Push card */
-"push.card.a11y" = "紧急邮件卡片";
-"push.summary" = "摘要";
-"push.message" = "正文";
-"push.showAll.a11y" = "显示所有待处理的紧急邮件";
-"push.snooze.help" = "稍后再看";
-"push.snooze.a11y" = "稍后提醒这封邮件";
-"push.dismiss.a11y" = "关闭卡片";
 "push.draftingReplies" = "正在起草回复…";
 "push.proRequired" = "快捷回复需要 Klorn Pro。";
-"push.proRequired.detail" = "按 ⏎ 或点击“打开”，在网页收件箱中处理。";
 "push.tryAgain" = "重试";
-"push.open" = "打开";
-"push.open.a11y" = "在网页收件箱中打开";
-"push.sent.a11y" = "已发送";
-"push.sendReply.a11y" = "发送 %1$@ 回复：%2$@";
 
 /* Assistant */
 "assistant.placeholder" = "给 Klorn 发消息…";
@@ -150,17 +116,21 @@
 
 /* Preferences — shell */
 "prefs.title" = "偏好设置";
-"prefs.done" = "完成";
 "prefs.section.notifications" = "通知";
 "prefs.section.general" = "通用";
-"prefs.section.topBar" = "顶部栏";
 "prefs.section.keyboard" = "键盘";
 "prefs.section.language" = "语言";
 "prefs.section.account" = "账户";
 "prefs.section.about" = "关于";
 
 "prefs.banners" = "在这台 Mac 上显示 macOS 横幅通知";
-"prefs.banners.detail" = "本机总开关。关闭后，无论上面的分类如何都不会在这里弹出横幅；顶部栏的 PUSH 计数仍会更新。";
+"prefs.banners.detail" = "每封新的 PUSH 或 MEETING 邮件都会显示一条横幅，仅包含发件人和主题。这是本机的总开关：关闭后无论上方分类如何，这里的横幅都会静音；主窗口中的 PUSH 数量仍会更新。";
+"prefs.banners.denied" = "macOS 正在阻止 Klorn 的通知。请在“系统设置 ▸ 通知”中允许。";
+"prefs.banners.openSystemSettings" = "打开系统设置";
+"prefs.section.support" = "应用与支持";
+"push.announce" = "新的 PUSH 邮件：%d 封";
+"push.announce.meeting" = "新的 MEETING 邮件：%d 封";
+"push.heldSummary.title" = "免打扰时段内有 %d 封紧急邮件";
 "prefs.launchAtLogin" = "登录时启动 Klorn";
 "prefs.launchAtLogin.unavailable.label" = "登录时启动";
 "prefs.launchAtLogin.unavailable.value" = "仅打包版可用";
@@ -170,10 +140,6 @@
 "prefs.updates.unknown" = "无法检查 — 请查看发布页";
 "prefs.updates.check" = "检查更新";
 "prefs.updates.checking" = "检查中…";
-"prefs.pillVisible" = "始终显示顶部栏";
-"prefs.pillVisible.detail" = "关闭：顶部栏会隐藏，直到用 ⌥⌘K 呼出。紧急邮件卡片仍会出现。";
-"prefs.showInDock" = "在 Dock 和 ⌘Tab 中显示";
-"prefs.showInDock.detail" = "关闭（默认）：Klorn 不占位置 — 没有 Dock 图标，用 ⌥⌘K 呼出。开启：它像普通应用一样可以 ⌘Tab 切换。";
 "prefs.shortcut" = "呼出 / 展开";
 "prefs.shortcut.recording" = "输入快捷键 — 必须包含 ⌘、⌥ 或 ⌃。按 Esc 取消。";
 "prefs.shortcut.idle" = "呼出顶部栏的全局快捷键。点击可更改。";
@@ -204,8 +170,8 @@
 "auto.mode.shadow.detail" = "Klorn 在后台整理和准备。不打扰你，也不替你行动。";
 "auto.mode.suggest" = "先问我";
 "auto.mode.suggest.detail" = "Klorn 起草回复，发送前一定征求你的同意。每个动作都由你批准。";
-"auto.mode.auto" = "自动";
-"auto.mode.auto.detail" = "安全的操作 Klorn 自己完成。紧急或有时限的事仍会告诉你。";
+"auto.mode.auto" = "执行安全操作";
+"auto.mode.auto.detail" = "低风险的操作由 Klorn 自己执行，事后告诉你；风险更高的会等待你的批准。回复遵循单独设置的回复模式。";
 
 "auto.tone" = "语气";
 "auto.tone.a11y" = "回复语气";
@@ -224,7 +190,7 @@
 "auto.preset.detail" = "只要紧要的：需要回复的邮件，以及日历上的事。其余留在栏里，不弹横幅。";
 
 "auto.notify.emailUrgent" = "紧急邮件";
-"auto.notify.emailUrgent.detail" = "Klorn 判定为 PUSH 的邮件 — 有人在等你。";
+"auto.notify.emailUrgent.detail" = "Klorn 判定为 PUSH 或 MEETING 的邮件 — 有人在等你。";
 "auto.notify.meeting" = "会议";
 "auto.notify.meeting.detail" = "即将开始的日程。";
 "auto.notify.taskDue" = "到期事项";
@@ -248,8 +214,6 @@
 "auto.error.generic" = "无法保存该设置。";
 
 /* Menu bar */
-"bar.menuBar.clear" = "Klorn — 没有紧急邮件";
-"bar.menuBar.push" = "Klorn — %d 条 PUSH 待处理";
 
 /* Sender engagement */
 "engagement.repliedOnce" = "你和这位发件人有来往 · 回复过 1 次";
@@ -272,26 +236,18 @@
 
 /* Misc labels */
 "mail.allInboxes" = "全部收件箱";
-"calendar.tomorrow" = "明天";
 "calendar.allDay" = "全天";
 
 /* Menu bar menu */
-"menu.showBar" = "显示顶部栏";
-"menu.preferences" = "偏好设置…";
-"menu.signIn" = "登录…";
-"menu.quit" = "退出 Klorn";
 "menu.restart" = "重启 Klorn";
 "menu.diagnostics" = "连接状态…";
 "menu.contactSupport" = "发邮件联系支持…";
 "diagnostics.checking" = "检查中…";
-"menu.checkUpdates" = "检查更新…";
-"update.upToDate" = "Klorn 已是最新。";
-"push.tryAgainIn" = "%d 秒后重试";
 "mail.reclassifying" = "重新分类中";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "提议";
-"proposals.a11y" = "提议，%d 项待批准";
+"proposals.title" = "审批";
+"proposals.a11y" = "审批，%d 项等待中";
 "proposals.approve" = "批准";
 "proposals.decline" = "拒绝";
 "proposals.empty" = "没有需要你处理的事。";
@@ -299,14 +255,10 @@
 "proposals.row.a11y" = "%1$@。%2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "收件箱";
-"section.recentPush" = "最近的 PUSH";
-"section.todayShort" = "今天";
+"section.inbox" = "邮件";
 "push.nothingNeedsYou" = "目前没有需要你处理的事。";
 "auth.signInNaver" = "使用 Naver 继续";
 "auth.signInApple" = "使用 Apple 继续";
-"auth.signInGoogle" = "使用 Google 登录";
-"calendar.noEvents" = "今天没有日程";
 "calendar.eventRow.a11y" = "%1$@，%2$@。显示详情。";
 "mail.needsReconnect" = "%@ — 需要重新连接";
 
@@ -317,28 +269,24 @@
 "tier.info.empty" = "没有新记录";
 "tier.push.blurb" = "会打断你。有人在等你回复，或者事情有时限。";
 "tier.queue.blurb" = "等着你。今天值得一读，但不值得弹横幅。";
-"tier.silent.blurb" = "已归档，不是删除。订阅邮件和收据 — 你来找时还在。";
-"tier.auto.blurb" = "自动处理完毕。Klorn 有足够把握，就没有来问你。";
+"tier.silent.blurb" = "已归档，不是删除。订阅邮件和促销邮件 — 你来找时还在。";
 
 "tier.push.empty" = "目前没有需要你处理的事。";
 "tier.queue.empty" = "没有等着读的内容。";
 "tier.silent.empty" = "这里还没有归档任何内容。";
-"tier.auto.empty" = "Klorn 还没有自动处理过任何内容。";
 
 /* First-run guide */
 "guide.title" = "Klorn 如何为你分拣邮件";
-"guide.pipeline" = "Klorn 会读取每个已连接的邮箱，把每封邮件分到下面 %d 个分类中。这个收件箱栏是分拣结果，不是你原始的 Gmail 收件箱。";
-"guide.intro" = "每封邮件都会落入 %d 个分类之一。不会删除任何东西，也不会背着你回复 — 分类只决定它以多大的声音到达你。";
-"guide.correcting" = "分错了？把它移到别的分类，Klorn 会从这次更正中学习。每封邮件也会显示它为什么落在那里。";
+"guide.pipeline" = "Klorn 会读取每个已连接的邮箱，把每封邮件分到下面 %d 个通道中。这个邮件栏是分拣结果，不是你原始的 Gmail 收件箱。";
+"guide.intro" = "每封邮件都会落入 %d 个通道之一。不会删除任何东西，也不会背着你回复 — 通道只决定它以多大的声音到达你。";
+"guide.correcting" = "分错了？把它移到别的通道，Klorn 会从这次更正中学习。每封邮件也会显示它为什么落在那里。";
 "guide.done" = "知道了";
 "guide.reopen" = "分拣是怎么运作的";
 
 "tier.row.a11y" = "%1$@，%2$d 封邮件。%3$@";
-"calendar.noEventsWeek" = "本周没有日程";
 "reading.noPreview" = "该内容没有预览。";
 "mail.noMatches" = "没有邮件匹配“%1$@”%2$@";
 
-"section.upcoming" = "接下来";
 "section.waitingOn" = "等待对方";
 "section.iOwe" = "我欠的";
 "assistant.empty" = "问问你的邮件、日历或今天的安排。";
@@ -358,11 +306,8 @@
 "error.badResponse" = "服务器返回了意外的响应。";
 "error.needsPro" = "此操作需要 Klorn Pro。";
 "error.generic" = "出了点问题。";
-"meeting.needsReview" = "需要确认";
 "mail.inboxPrimary" = "主账户";
 "mail.inboxLinked" = "已连接的收件箱";
-"push.expand.hint" = "点击展开";
-"push.collapse.hint" = "点击收起";
 "mail.unknownSender" = "（发件人未知）";
 "account.add" = "添加 Google 账户…";
 "account.add.hint" = "打开浏览器，把另一个 Gmail 收件箱连接到 Klorn。";
@@ -370,6 +315,9 @@
 "account.reconnect" = "重新连接账户…";
 "account.reconnectPrimary" = "重新连接 Google 账户…";
 "account.reconnect.failed" = "无法开始重新连接。请重试。";
+"account.link.mismatch" = "此连接是从另一个 Klorn 账户发起的，因此未添加。请在此账户中重新开始。";
+"account.link.expired" = "连接在完成前已过期。请重试。";
+"account.link.failed" = "无法完成账户连接。请重试。";
 "source.unknown" = "Klorn";
 "source.github" = "GitHub";
 
@@ -390,6 +338,7 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "双方都有空：%@";
+"meeting.banner.body" = "%d 分钟后开始。";
 "meeting.proposedSlot" = "建议：%@";
 "meeting.slotFree" = "你的日历上这个时段是空的";
 "meeting.slotBusy" = "与已有日程冲突";
@@ -399,7 +348,8 @@
 "section.calendar" = "日历";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "应用与诊断";
+"account.maintenance" = "应用与支持";
+"account.showSupportTools" = "显示支持工具";
 "a11y.expanded" = "已展开";
 "a11y.collapsed" = "已收起";
 
@@ -429,6 +379,7 @@
 "account.disconnect" = "断开连接";
 "account.disconnect.confirm" = "要断开 %@ 吗？Klorn 将停止读取它。已同步的邮件会保留。";
 "account.naver.connect" = "连接 Naver 邮箱…";
+"common.beta" = "测试版";
 "account.naver.email" = "Naver 地址";
 "account.naver.password" = "应用专用密码";
 "account.naver.password.hint" = "Naver 邮件 > 设置 > IMAP/SMTP：打开它，并使用那里的应用专用密码，而不是登录密码。";
@@ -436,12 +387,32 @@
 "account.imap.failed" = "无法连接该邮箱。";
 "account.imap.rateLimited" = "尝试次数过多。请几分钟后再试。";
 "account.imap.disconnectFailed" = "无法断开该邮箱。";
+"account.icloud.connect" = "连接 iCloud 邮件…";
+"account.icloud.title" = "连接 iCloud 邮件";
+"account.naver.title" = "连接 Naver 邮件";
+"account.icloud.body" = "iCloud Mail (beta) 通过 IMAP 连接。新邮件会分到与 Gmail 相同的通道。";
+"account.icloud.email" = "Apple ID 电子邮件";
+"account.icloud.password" = "App 专用密码";
+"account.icloud.password.hint" = "请使用 App 专用密码，而不是 Apple ID 密码。可在 appleid.apple.com ▸ 登录与安全 ▸ App 专用密码中创建，且必须已开启双重认证。";
+"account.icloud.help.link" = "打开 appleid.apple.com";
+"account.icloud.error.authFailed" = "iCloud 拒绝了登录。请使用在 appleid.apple.com 创建的 App 专用密码，而不是 Apple ID 密码。必须已开启双重认证。";
+"account.naver.error.authFailed" = "Naver 拒绝了登录。请在 Naver 邮件设置中开启 IMAP，并使用那里的应用密码，而不是登录密码。";
+"account.imap.connecting" = "正在连接…";
+"account.imap.error.unreachable" = "无法连接邮件服务器，请稍后再试。";
+"account.imap.error.tooMany" = "此服务可连接的邮箱数量已达上限。";
+"account.imap.error.invalidEmail" = "请输入有效的电子邮件地址。";
+"account.imap.error.needsPro" = "连接第二个邮件账户需要 Klorn Pro。";
+"account.imap.error.offline" = "这台 Mac 已离线。请连接互联网后重试。";
+"account.icloud.error.unavailable" = "此服务器尚未提供 iCloud 邮件。";
+"account.naver.error.unavailable" = "此服务器尚未提供 Naver 邮件。";
+"account.imap.error.insecure" = "Klorn 只通过安全 (HTTPS) 连接发送应用密码。";
+"account.imap.submit" = "连接";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "模式";
+"mode.section" = "回复模式";
 "mode.basic" = "基础";
 "mode.basic.detail" = "只通知重要邮件和会议 — 由你挑选、由你回复。其余保持安静。";
-"mode.auto" = "自动";
+"mode.auto" = "自动回复";
 "mode.auto.detail" = "Klorn 还会按下面的方针替你回复安全的日常邮件。提醒仍限于会议和必须回复的邮件。";
 "mode.guideline" = "回复方针";
 "mode.guideline.detail" = "每一封无人值守的回复都遵循这条方针。可编辑或在默认内容上补充。";
@@ -464,7 +435,6 @@
 "compose.cancel" = "取消";
 "compose.missingFields" = "收件人、主题和正文都是必填的。";
 "compose.needsPro" = "发送邮件需要 Pro 套餐。";
-"compose.close.a11y" = "关闭撰写窗口";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "助理（⌘J）";
@@ -503,6 +473,7 @@
 
 // Real calendar views — 일/월/년 (2026-08-26).
 "cal.scope.day" = "日";
+"cal.scope.week" = "周";
 "cal.scope.month" = "月";
 "cal.scope.year" = "年";
 "cal.today" = "今天";
@@ -523,9 +494,10 @@
 "chip.customer" = "客户";
 "chip.investor" = "投资人";
 "chip.system" = "系统";
-"appearance.toLight" = "切换到浅色模式";
-"appearance.toDark" = "切换到深色模式";
 "compose.editDraft" = "编辑草稿";
+"compose.discard" = "舍弃草稿";
+"compose.discard.confirm.title" = "要舍弃这封草稿吗？";
+"compose.discard.confirm.detail" = "你在这里写的内容将会丢失。";
 "mailbox.loadMore" = "加载更多";
 "chip.billing" = "账单·收据";
 
@@ -538,3 +510,285 @@
 "purpose.later" = "稍后";
 "purpose.unset" = "设置用途";
 "purpose.primaryFallback" = "主账户";
+
+// Body-first reading pane + pre-login purpose pick (2026-09-01).
+"reading.analysis" = "Klorn 分析";
+"reading.analysis.expand" = "展开分析";
+"reading.analysis.collapse" = "收起分析";
+// Linked-account purpose question (2026-09-03).
+"purpose.title.linked" = "%@ 的用途是什么？";
+
+// Company domains (2026-09-10).
+"company.title" = "你的公司邮箱域名是什么？";
+"company.detail" = "来自公司域名的邮件会标为「公司」，并按同事而非客户来分析。包含子域名。可随时在账户栏更改。";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "保存";
+"company.skip" = "跳过";
+"company.label" = "公司域名";
+"company.none" = "未设置";
+"company.saveFailed" = "保存失败 — 请检查域名（不能是 gmail.com/naver.com，最多 10 个）。";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "更正标签";
+"label.correct.domain" = "整个域名：%@";
+"label.correct.clear" = "清除对此发件人的更正";
+"label.correct.clearDomain" = "清除对该域名的更正";
+"label.correct.a11y" = "%@ — 更正标签";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "新建日程";
+"cal.edit" = "编辑";
+"cal.delete" = "删除";
+"cal.delete.confirm" = "确认删除";
+"cal.delete.failed" = "删除失败 — 请重试。";
+"cal.editor.newTitle" = "新建日程";
+"cal.editor.editTitle" = "编辑日程";
+"cal.editor.title" = "标题";
+"cal.editor.start" = "开始";
+"cal.editor.end" = "结束";
+"cal.editor.location" = "地点";
+"cal.source.linked" = "已关联";
+"cal.readOnly" = "只读";
+"cal.source.a11y" = "只读，来自 %@";
+"cal.save" = "保存";
+"cal.save.failed" = "保存失败 — 请重试。";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "什么对你最重要？";
+"priorities.detail" = "用你自己的话写。Klorn 会据此判断紧急程度和是否打扰你 — 每封邮件、每个账户。可随时在账户栏更改。";
+"priorities.placeholder" = "例如：投资人邮件永远紧急。新闻简报可以晚点看。来自张总的邮件立刻通知我。";
+"priorities.label" = "优先事项";
+"priorities.none" = "未设置";
+"priorities.saveFailed" = "保存失败 — 请重试（不超过 500 字）。";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "需要回复";
+"chip.answered" = "已回复";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "等待回复";
+"waiting.hint" = "发出后 %d 天以上无人回复的邮件 — 来自 Klorn 和 Gmail 已发送。";
+"waiting.empty" = "没有在等待回复的邮件。";
+"waiting.days" = "第 %d 天";
+"waiting.row.a11y" = "%@ — %@，等待回复第 %d 天";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "通用";
+"settings.tab.accounts" = "账户";
+"settings.tab.assistant" = "助理";
+"settings.tab.notifications" = "通知";
+"settings.tab.appearance" = "外观";
+"settings.tab.privacy" = "隐私";
+"settings.signedOutNote" = "登录 Klorn 后即可查看这些设置。";
+"menu.message" = "邮件";
+"menu.go" = "前往";
+"menu.compose" = "新邮件";
+"menu.find" = "搜索邮件";
+"menu.moveToLane" = "移至通道";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "草稿已备好";
+"reading.openDraft" = "打开草稿";
+"reading.preparedDraft" = "这是 Klorn 提前写好的草稿 — 发送前请确认。";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "设备日历";
+"deviceCalendars.upload" = "上传设备日历";
+"deviceCalendars.detail" = "只有你在下方开启的日历会以只读副本上传到 Klorn。简报和助手在服务器上读取它们。";
+"deviceCalendars.denied" = "Klorn 无法读取你的日历。请在“系统设置 › 隐私与安全性 › 日历”中允许。";
+"deviceCalendars.openSettings" = "打开系统设置";
+"deviceCalendars.empty" = "此 Mac 上没有日历。";
+"deviceCalendars.count" = "已上传 %d 个";
+"deviceCalendars.untitled" = "未命名日历";
+"deviceCalendars.error.limit" = "上传的日历过多。请先关闭一个。";
+"deviceCalendars.error.rows" = "此 Mac 的日历中存储的日程过多。请先关闭一个日历。";
+"deviceCalendars.error.generic" = "无法上传日历。Klorn 会重试。";
+
+/* Main window: five-item navigation and Today (M4b) */
+"nav.today" = "今天";
+"nav.calendar" = "日历";
+"nav.assistant" = "助理";
+"nav.accounts" = "账户";
+"nav.accounts.signedOut" = "登录后会显示已连接的账户。";
+"nav.accounts.none" = "尚未连接账户。";
+"nav.accounts.connected" = "已连接";
+"nav.accounts.needsReconnect" = "需要重新连接";
+"assistant.pane.approvals" = "审批";
+"assistant.pane.commitments" = "承诺";
+"assistant.pane.briefing" = "简报";
+"mail.lane.all" = "全部";
+"mail.lane.a11y" = "按通道筛选";
+"mail.lane.filter" = "邮件筛选";
+"mail.lane.showSilenced" = "显示 Silent 邮件";
+"today.signedOut.title" = "登录后查看今天的安排";
+"today.signedOut.detail" = "登录后，Klorn 会整理你的邮件和日历。";
+"today.signingIn.title" = "请完成登录";
+"today.signingIn.detail" = "在浏览器中完成登录后，此窗口会更新。";
+"today.failed.title" = "无法加载邮件";
+"today.retry" = "重试";
+"today.clear.title" = "没有等待你处理的邮件";
+"today.clear.detail" = "新邮件经 Klorn 分类后会显示在这里。";
+"today.lane.more" = "在邮件中再看 %d 封";
+"today.header.lane" = "%2$@ %1$d";
+"today.waiting.one" = "邮件中有 1 封待处理";
+"today.waiting.many" = "邮件中有 %d 封待处理";
+"today.lane.push.older" = "查看更早的%@邮件";
+"today.row.a11y" = "%1$@: %2$@";
+"today.open" = "打开";
+"today.calendar.empty" = "今天没有日程。";
+"today.assistant.noBriefing" = "今天还没有简报。";
+"today.approvals.waiting" = "待审批 %d 项";
+"today.approvals.none" = "没有待审批项。";
+"today.ask.a11y" = "询问助理";
+"today.signIn.restart" = "重新开始";
+"a11y.position" = "第 %1$d 项，共 %2$d 项";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "使用 Google 继续";
+"state.signedOut.title" = "登录 Klorn";
+"state.offline.title" = "你已离线";
+"state.offline.detail" = "Klorn 无法连接服务器。请检查网络连接后重试。";
+"banner.offline" = "你已离线。这是上次同步时的邮件。";
+"banner.stale" = "无法刷新。这是上次同步时的邮件。";
+"error.server" = "服务器错误（%d）。";
+"error.network" = "网络错误。请检查网络连接。";
+"onboarding.windowTitle" = "欢迎使用 Klorn";
+"onboarding.value" = "你的所有邮件和日历，集中在一处。邮件分入 %d 个通道。";
+"onboarding.lane.push" = "立即提醒你";
+"onboarding.lane.meeting" = "日程安排，已对照你的日历";
+"onboarding.lane.queue" = "值得今天阅读";
+"onboarding.lane.info" = "收据和通知，已归档";
+"onboarding.lane.silent" = "保留，但不显示";
+"onboarding.lanes.note" = "通道只对邮件分类，从不对邮件执行任何操作。";
+"onboarding.privacy" = "Klorn 读取你的邮件以进行分类。除此之外它可以做什么，由你决定。";
+"error.unreachable" = "Klorn 无法连接服务器。";
+"banner.dismiss.a11y" = "关闭消息";
+"assistant.starter.1" = "今天最重要的邮件是哪封？";
+"assistant.starter.2" = "未回复的邮件里哪些紧急？";
+"assistant.starter.3" = "整理一下本周会议要准备什么";
+"assistant.message.user.a11y" = "你说：%@";
+"assistant.message.failure.a11y" = "错误：%@";
+"assistant.message.reply.a11y" = "Klorn 回复：%@";
+
+/* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
+"prefs.section.driveImport" = "Klorn 云盘";
+"menu.importToDrive" = "导入到 Klorn 云盘…";
+"driveImport.detail" = "你在这台 Mac 上选择的文件和文件夹会上传到 Klorn 云盘，也可以从 iCloud 云盘和云应用保存在这台 Mac 上的文件夹中选择。只有你选择的内容会被上传，且只上传一次。Klorn 不会监视你的文件夹。";
+"driveImport.button" = "导入文件…";
+"driveImport.cancel" = "取消";
+"driveImport.clear" = "清除";
+"driveImport.preparing" = "正在准备…";
+"driveImport.progress" = "正在上传第 %1$d 个，共 %2$d 个";
+"driveImport.usage" = "已使用 %1$@，共 %2$@";
+"driveImport.summary.all" = "已上传 %d 个";
+"driveImport.summary" = "已上传 %1$d 个，%2$d 个未上传";
+"driveImport.cancelled" = "已取消导入。";
+"driveImport.more" = "还有 %d 个";
+"driveImport.cap.files" = "已在 %d 个文件处停止，这是单次导入的上限。";
+"driveImport.cap.folders" = "已在 %d 个文件夹处停止，这是单次导入的上限。";
+"driveImport.cap.depth" = "嵌套超过 %d 层的文件夹已被略过。";
+"driveImport.cap.bytes" = "已在 %d GB 处停止，这是单次导入的上限。";
+"driveImport.cap.examined" = "已在查看 %d 个项目后停止，这是单次导入的上限。";
+"driveImport.panel.prompt" = "导入";
+"driveImport.panel.message" = "选择要上传到 Klorn 云盘的文件或文件夹。只有你选择的内容会被上传。";
+"driveImport.error.unavailable" = "Klorn 云盘不可用。";
+"driveImport.error.signedOut" = "请重新登录后再导入。";
+"driveImport.error.notConfigured" = "暂时还不能上传到 Klorn 云盘。";
+"driveImport.error.full" = "你的 Klorn 云盘已满。";
+"driveImport.error.purging" = "正在删除你的 Klorn 数据。请稍后再试。";
+"driveImport.error.tooLarge" = "超过 %d MB";
+"driveImport.error.rateLimited" = "同时上传的文件太多。请一分钟后再试。";
+"driveImport.error.malformed" = "上传内容不完整。请重试。";
+"driveImport.error.invalidName" = "此名称不能在 Klorn 云盘中使用。";
+"driveImport.error.folderMissing" = "无法创建它所在的文件夹。";
+"driveImport.error.storage" = "文件存储不可用。请稍后再试。";
+"driveImport.error.offline" = "无法连接到 Klorn。";
+"driveImport.error.notDownloaded" = "无法下载到这台 Mac。请先在“访达”中下载，然后重试。";
+"driveImport.error.unreadable" = "Klorn 无法读取此文件。";
+"driveImport.error.changed" = "读取时文件发生了变化。请重试。";
+"driveImport.error.unsupported" = "不是单个文件（链接、应用或文件包）";
+"driveImport.error.cancelled" = "已取消";
+"driveImport.error.generic" = "无法上传此文件。";
+
+/* Files and Teams free-time (productization plan P12; strings mirror the web) */
+"nav.files" = "文件";
+"files.subtitle" = "来自所有已连接来源的文件。此处仅可查看。";
+"files.search.label" = "搜索文件";
+"files.search.placeholder" = "搜索文件名";
+"files.loading" = "正在加载文件";
+"files.loadingMore" = "加载中…";
+"files.loadMore" = "加载更多";
+"files.error" = "无法加载你的文件。";
+"files.empty.title" = "还没有文件";
+"files.empty.body" = "已连接云端硬盘的文件建立索引后会显示在这里。";
+"files.noMatch.title" = "没有匹配的文件";
+"files.noMatch.body" = "换个名称试试。";
+"files.folder" = "文件夹";
+"files.openFolder" = "打开文件夹 %@";
+"files.download.label" = "下载 %@";
+"files.download.preparing" = "正在准备下载…";
+"files.download.error" = "无法下载 %@，请重试。";
+"files.download.gone" = "%@ 已不在你的云盘中。";
+"files.download.busy" = "下载请求过多，请一分钟后重试。";
+"files.trail.label" = "文件夹路径";
+"files.trail.all" = "所有文件";
+"files.folderEmpty.title" = "此文件夹为空";
+"files.folderEmpty.body" = "放入此文件夹的文件会显示在这里。";
+"today.files.title" = "最近的文件";
+"today.files.open" = "打开文件";
+"today.files.none" = "还没有文件。";
+"today.freeTime.title" = "团队";
+"today.freeTime.team" = "团队";
+"today.freeTime.find" = "大家什么时候都有空？";
+"today.freeTime.finding" = "正在查看日历…";
+"today.freeTime.error" = "无法查看团队的日历。";
+"today.freeTime.none" = "未来 %d 天内没有共同的空闲时间。";
+"today.freeTime.unknown" = "日历不可见、未计为空闲的成员：%@";
+"today.freeTime.selfOnly" = "Klorn 还看不到其他人的日历，以下只是你自己的空闲时间。";
+"today.freeTime.selfOnlyList" = "你的空闲时间";
+"today.freeTime.teamList" = "所有可见成员都空闲的时间";
+"today.freeTime.stale" = "这些时间可能已过时。";
+"today.freeTime.recheck" = "重新查看";
+"files.opensBrowser" = "在浏览器中打开";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "移到其他通道";
+"error.timeout" = "服务器响应超时。请重试。";
+"auth.failed.nonce" = "无法连接 Klorn 开始登录。请检查网络后重试。";
+"auth.failed.invalidNonce" = "无法识别此登录会话。请重试。";
+"auth.failed.expired" = "登录耗时过长，已过期。请重试。";
+"auth.failed.timeout" = "等待浏览器超时。请在浏览器中完成登录后重试。";
+"auth.failed.cancelled" = "登录已取消。";
+"proposals.approveSend" = "批准并发送";
+"proposals.sendsNow" = "会立即发送。已发送的邮件无法撤回。";
+"proposals.runsNow" = "批准后立即执行。";
+"tool.label.send_email" = "发送邮件";
+"tool.label.draft_reply" = "起草回复";
+"tool.label.reply_to_email" = "回复邮件";
+"tool.label.archive_email" = "归档邮件";
+"tool.label.delete_email" = "删除邮件";
+"tool.label.mark_read" = "标为已读";
+"tool.label.create_event" = "创建日程";
+"tool.label.delete_event" = "删除日程";
+"tool.label.schedule_meeting" = "安排会议";
+"tool.label.create_contact" = "添加联系人";
+"tool.label.update_contact" = "更新联系人";
+"tool.label.delete_contact" = "删除联系人";
+"tool.label.create_note" = "创建笔记";
+"tool.label.delete_note" = "删除笔记";
+"tool.label.create_task" = "创建任务";
+"tool.label.delete_task" = "删除任务";
+"tool.label.record_skill" = "保存技能";
+"tool.label.execute_skill" = "运行技能";
+"tool.label.classify_emails" = "将邮件分类到通道";
+"tool.label.unknown" = "操作";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "升级到 Pro";
+"plan.upgrade.a11yHint" = "在浏览器中打开账单页面。";
+"proposals.needsPro" = "批准和拒绝需要 Klorn Pro。";
+"chat.cap.free" = "今天的免费 AI 额度已用完。将于 00:00 UTC 重置。";
+"chat.cap.daily" = "今天的 AI 额度已用完。将于 00:00 UTC 重置。";
+"chat.send.failed" = "无法连接到 Klorn — %@";
+"chat.event.failed" = "无法创建日程 — %@";
+"commitments.needsPro" = "承诺跟踪需要 Klorn Pro。";

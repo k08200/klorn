@@ -1,0 +1,106 @@
+.snackbar-region {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--snackbar-bottom, calc(var(--safe-bottom) + 16px));
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: 0 calc(16px + var(--safe-right)) 0 calc(16px + var(--safe-left));
+  pointer-events: none;
+}
+
+/* The app-wide host (StatusNoteHost): over every screen and sheet, above the tab bar. */
+.snackbar-region--fixed {
+  position: fixed;
+  z-index: 120;
+  bottom: calc(var(--safe-bottom) + var(--note-offset, 16px));
+}
+
+html:has(.shell[data-nav="tabs"]) .snackbar-region--fixed {
+  --note-offset: calc(var(--tabbar-height) + 12px);
+}
+
+.snackbar {
+  pointer-events: auto;
+  width: min(560px, 100%);
+  min-height: 52px;
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--radius-control);
+  background: var(--snackbar-bg);
+  color: var(--snackbar-ink);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--type-callout);
+  line-height: var(--type-callout-lh);
+  animation: snackbar-in var(--motion-enter) var(--ease);
+}
+
+.snackbar--error {
+  background: var(--state-danger-bg);
+  color: var(--state-danger-ink);
+  border: 1px solid var(--state-danger-line);
+}
+
+.snackbar__icon {
+  flex: none;
+  margin-right: 6px;
+}
+
+.snackbar[data-icon="ok"] .snackbar__icon {
+  color: var(--snackbar-ok);
+}
+
+.snackbar[data-icon="info"] .snackbar__icon {
+  color: var(--snackbar-action);
+}
+
+.snackbar__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 0;
+}
+
+.snackbar__action {
+  flex: none;
+  min-height: var(--touch);
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  color: var(--snackbar-action);
+  font-weight: 700;
+}
+
+.snackbar--error .snackbar__action {
+  color: var(--state-danger-ink);
+}
+
+.snackbar__close {
+  flex: none;
+  width: var(--touch);
+  height: var(--touch);
+  border-radius: var(--radius-control);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+@keyframes snackbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snackbar {
+    animation-name: snackbar-fade;
+  }
+  @keyframes snackbar-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

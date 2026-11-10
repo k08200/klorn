@@ -49,12 +49,24 @@ degraded one. Full feature parity with the hosted product.
 
 ### 2. An LLM provider (one of three)
 
-- **OpenRouter key** — [openrouter.ai/keys](https://openrouter.ai/keys); a
-  free key works with the default free-model configuration.
-- **Gemini API key** — used as failover (or standalone).
-- **Fully local** — any OpenAI-compatible endpoint (Ollama, LM Studio,
-  vLLM): set `OPENAI_COMPAT_BASE_URL` + `OPENAI_COMPAT_MODEL` and no email
-  content leaves your machine.
+- **Anthropic (Claude API)** — `ANTHROPIC_API_KEY` from
+  [platform.claude.com](https://platform.claude.com/settings/keys). The
+  default provider, and the one klorn.ai runs. Model pins default to
+  `claude-haiku-5-5`; a pin that is not a Claude id is served by
+  `ANTHROPIC_MODEL` (default `claude-haiku-5-5`).
+- **Google Gemini** — `GEMINI_API_KEY` from
+  [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Works
+  standalone or as a second provider; pins that are not Gemini ids are served
+  by `GEMINI_FALLBACK_MODEL` (default `gemini-2.5-flash`).
+- **OpenAI-compatible / local** — any OpenAI-compatible endpoint (Ollama,
+  LM Studio, vLLM, llama.cpp server): set `OPENAI_COMPAT_BASE_URL` +
+  `OPENAI_COMPAT_MODEL` and no email content leaves your machine.
+
+With more than one cloud key set, `LLM_PROVIDER_ORDER` (e.g.
+`anthropic,gemini`) puts the listed providers first; configured providers it
+does not list follow in the default order, so a typo can reorder the chain
+but never empty it. A local endpoint keeps its own `OPENAI_COMPAT_PRIORITY`
+(first unless set to `last`).
 
 ## Path 1 — Deploy to Render (managed, free tier)
 
@@ -93,7 +105,7 @@ Required — the API won't boot, or won't log in, without these:
 | `GOOGLE_REDIRECT_URI` | Must exactly match the OAuth client's redirect URI | `packages/api/src/mail/gmail.ts` |
 | `WEB_URL` | Where OAuth redirects send the browser back | `packages/api/src/routes/auth.ts` |
 | `CORS_ORIGINS` | Allowed browser origins (comma-separated). Production **fails closed** to klorn.ai origins only when unset — your web origin must be listed | `packages/api/src/index.ts` |
-| one of `OPENROUTER_API_KEY` / `GEMINI_API_KEY` / `OPENAI_COMPAT_BASE_URL` | LLM provider for the classifier | `packages/api/src/providers/index.ts` |
+| one of `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_COMPAT_BASE_URL` | LLM provider for the classifier | `packages/api/src/providers/index.ts` |
 | `NEXT_PUBLIC_API_URL` | *(web app, build-time)* URL browsers use to reach the API | `packages/web` build |
 
 Useful optional vars (full tuning catalog with defaults:
@@ -104,12 +116,50 @@ Useful optional vars (full tuning catalog with defaults:
 | --- | --- |
 | `GMAIL_PUBSUB_TOPIC` | Real-time Gmail push (see below). Unset = polling fallback |
 | `GMAIL_PUSH_OIDC_EMAIL` or `GMAIL_PUSH_TOKEN` | Auth for the Pub/Sub push endpoint (OIDC preferred) |
+| `GMAIL_PUSH_OIDC_AUDIENCE` | Required with `GMAIL_PUSH_OIDC_EMAIL`: the push subscription's Audience. Without it every push is refused |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | Web Push notifications |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` / `TELEGRAM_WEBHOOK_SECRET` | PUSH-tier delivery to Telegram |
 | `ADMIN_EMAILS` | Comma-separated operator emails with admin access |
-| `JUDGE_MODEL` / `CHAT_MODEL` / `AGENT_MODEL` | Model pins (defaults stay on free models for keyless/cheap operation) |
+| `LLM_PROVIDER_ORDER` | Order of the cloud providers when more than one key is set, e.g. `anthropic,gemini` |
+| `JUDGE_MODEL` / `CHAT_MODEL` / `AGENT_MODEL` | Model pins (default `claude-haiku-5-5`) |
 | `DAILY_COST_CAP_CENTS` | Per-user daily LLM spend cap (default 100 = $1/day) |
 | `KEEPALIVE_URL` | Free-dyno keepalive ping target (Render free tier sleeps) |
+| `RATE_LIMIT_ALLOW_IPS` | Rate-limit exemption, unset by default. See [Rate-limit exemption](#rate-limit-exemption-rate_limit_allow_ips) |
+| `CLIENT_IP_SOURCE` | Where the client address for rate limits comes from: `socket` (default; `cf-connecting-ip` on Render), `x-forwarded-for` or `cf-connecting-ip`. See [Client address](#client-address) |
+| `TRUSTED_PROXY_HOPS` | With `CLIENT_IP_SOURCE=x-forwarded-for`: how many proxies you run in front of the API (default `1`). See [Client address](#client-address) |
+
+#### Rate-limit exemption (`RATE_LIMIT_ALLOW_IPS`)
+
+Read in `packages/api/src/index.ts`, parsed by
+`packages/api/src/security/scanner-allowlist.ts`.
+
+- **Format:** comma-separated IPv4 addresses or CIDR ranges, e.g.
+  `203.0.113.7,198.51.100.0/24`. A bare address means `/32`.
+- **Default:** unset, so no address is exempt.
+- **Effect:** requests from a listed address skip the API's per-address HTTP
+  rate limits: the global 100 requests per minute and the stricter per-route
+  limits (sign-in, registration, password reset and others). Throttles that
+  are not per-address HTTP limits still apply, for example the per-account
+  lockout after repeated failed sign-ins.
+- **Intended use:** a time-boxed, authorized security scan that would
+  otherwise be throttled. Unset it when the scan ends.
+- **Risk:** every address inside a listed range is exempt. An over-broad range
+  turns rate limiting off for all of those addresses, so list the narrowest
+  ranges that cover the scanner.
+- **Ignored entries:** prefixes wider than `/8`, IPv6 entries and entries
+  whose address or prefix does not parse are dropped, never widened. Nothing
+  is logged for a dropped entry.
+- **Address checked:** the client address chosen by `CLIENT_IP_SOURCE`, the
+  same address the rate limiter keys on. By default that is the TCP peer, so a
+  header a client sends cannot claim a listed address. The exemption is only
+  as reliable as that address: see [Client address](#client-address).
+- **Lifecycle:** read once at boot, so a change needs a restart. When at least
+  one entry is valid, the API logs
+  `[security] rate-limit exemption ACTIVE for N range(s)` at startup.
+
+`docker-compose.selfhost.yml` does not pass it through. To use it, add
+`RATE_LIMIT_ALLOW_IPS: ${RATE_LIMIT_ALLOW_IPS:-}` to the api service's
+`environment:` block.
 
 ## Path 2 — Docker Compose (one box, everything included)
 
@@ -135,6 +185,18 @@ Notes:
 
 - **Schema is automatic.** The API entrypoint runs `prisma migrate deploy`
   (with retry) before serving; `prisma generate` happens at image build.
+- **Containers run as a non-root user.** Both images run as `klorn`, uid and
+  gid `10001`, not as root. The compose file mounts no volume into `api` or
+  `web` (Postgres keeps its own named volume and its own user), so a stock
+  setup needs no change. If you add a bind mount, make the host path writable
+  by that uid, for example `sudo chown -R 10001:10001 ./klorn-data`. A named
+  volume that an older (root) image already wrote to needs the same, for
+  example `docker run --rm -v <volume>:/d alpine chown -R 10001:10001 /d`.
+  The paths the processes write are:
+  - api: `/app/packages/api/data` (file-conversion results; move it with
+    `EVE_CONVERSION_STORAGE_DIR`), `/tmp`, and `/home/klorn` (npm cache)
+  - web: `/app/packages/web/.next/cache` (Next.js runtime cache), and
+    `/home/klorn`
 - **Serving beyond localhost?** This is the one case that still needs a
   source build, because `NEXT_PUBLIC_API_URL` is baked into the web bundle.
   See [Reverse proxy](#reverse-proxy) for the four values that change together
@@ -150,8 +212,9 @@ Notes:
     $(docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml ps -q)
   ```
   An api stuck at `unhealthy` with the container running is almost always
-  Postgres: `/api/health` reports `status: "degraded"` rather than failing, and
-  the probe reads that field.
+  Postgres: `/api/health` reports `status: "degraded"` in its body rather than
+  failing, and the probe reads that field. `/api/health/ready` answers 503
+  while the database is unreachable, for monitors that read status codes.
 
 ## Fully local LLM (Ollama)
 
@@ -184,9 +247,10 @@ OPENAI_COMPAT_MODEL=qwen3:8b
 OPENAI_COMPAT_API_KEY=
 
 # This is the line that makes it local-ONLY. A configured local endpoint runs
-# FIRST, but hosted providers stay as failover, so leaving a key here means
-# mail can still leave the box when the local model errors or times out.
-OPENROUTER_API_KEY=
+# FIRST, but hosted providers (Anthropic, Gemini) stay as failover, so leaving
+# a key here means mail can still leave the box when the local model errors or
+# times out.
+ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 ```
 
@@ -235,11 +299,53 @@ client's authorised list, or sign-in fails after consent.
 WebSocket at `/ws`. Everything else is web. So one hostname is enough, and
 same-origin means no CORS preflight at all.
 
+### Client address
+
+The API's per-address rate limits, the scan exemption and the address shown
+on a signed-in device all use one client address. `CLIENT_IP_SOURCE` says
+where it comes from. A forwarding header says whatever the sender wants unless
+your own ingress writes it, so the API trusts a header only when you name it:
+
+| `CLIENT_IP_SOURCE` | Address used | Use when |
+|---|---|---|
+| unset or `socket` | The TCP peer | No proxy: clients connect to the API directly. Behind a proxy this is the proxy, so all clients share one rate-limit bucket |
+| `x-forwarded-for` | The `X-Forwarded-For` entry `TRUSTED_PROXY_HOPS` positions from the right (default `1`) | Behind Caddy, nginx or Traefik. Each puts the address it saw last in `X-Forwarded-For`, so with one proxy the rightmost entry is the client and anything to its left came from the client |
+| `cf-connecting-ip` | The `CF-Connecting-IP` header | Behind Cloudflare, with the origin reachable only through Cloudflare (a Cloudflare Tunnel, or a firewall that admits only [Cloudflare's ranges](https://www.cloudflare.com/ips/)). Cloudflare sets this header to the connecting client. This is the default on Render, whose edge is Cloudflare |
+
+If the chosen header is missing or malformed, the API falls back to the TCP
+peer. An `X-Forwarded-For` entry with a port or brackets (`192.0.2.1:443`,
+`[2001:db8::1]`) counts as malformed. An unknown `CLIENT_IP_SOURCE` or an out-of-range `TRUSTED_PROXY_HOPS`
+(1–10) stops the API at boot. The API logs the active choice at startup as
+`[security] client address source=… trustedProxyHops=…`.
+
+Two rules keep a header-based address dependable:
+
+- **The API is reachable only through your proxy (or Cloudflare).** The stock
+  compose file publishes `3001` on every interface. Behind a proxy, publish it
+  on loopback instead (`"127.0.0.1:3001:3001"`) or firewall it. A client that
+  reaches the API directly can write any `X-Forwarded-For` or
+  `CF-Connecting-IP` it likes.
+- **Count only proxies you run.** If your proxy sits behind a load balancer
+  that also appends to `X-Forwarded-For`, set `TRUSTED_PROXY_HOPS=2`. nginx
+  appends whatever arrives; Caddy and Traefik replace the header from a peer
+  they do not trust, so list the load balancer in Caddy's `trusted_proxies` or
+  Traefik's `forwardedHeaders.trustedIPs` first, or the chain stays one entry
+  long and every client shares the load balancer's bucket. With Cloudflare in
+  front of your proxy, use `cf-connecting-ip` instead.
+
+Upgrading from a setup that had the proxy set `CF-Connecting-IP` (the earlier
+Caddy and nginx examples did): either keep that line and set
+`CLIENT_IP_SOURCE=cf-connecting-ip`, or drop it and set
+`CLIENT_IP_SOURCE=x-forwarded-for`. Without either, every client shares the
+proxy's bucket, which is safe but strict.
+
 ### Caddy
 
 ```caddyfile
 klorn.example.com {
 	@api path /api/* /ws
+	# Caddy puts the client last in X-Forwarded-For: set
+	# CLIENT_IP_SOURCE=x-forwarded-for on the api service.
 	reverse_proxy @api api:3001
 	reverse_proxy web:3000
 }
@@ -263,6 +369,8 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # $proxy_add_x_forwarded_for appends the client address: set
+        # CLIENT_IP_SOURCE=x-forwarded-for on the api service.
     }
 
     # The WebSocket. Without Upgrade/Connection here the app still loads and
@@ -274,6 +382,7 @@ server {
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host       $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 3600s;
     }
 
@@ -312,8 +421,10 @@ services:
       - "traefik.http.services.klorn-web.loadbalancer.server.port=3000"
 ```
 
-Traefik passes WebSocket upgrades through by default, so `/ws` needs nothing
-beyond being matched by the api router above. The api router's rule is more
+Set `CLIENT_IP_SOURCE=x-forwarded-for` on the api service: Traefik puts the
+client last in `X-Forwarded-For`, so each client gets its own rate-limit
+bucket. Traefik passes WebSocket upgrades through by default, so `/ws` needs
+nothing beyond being matched by the api router above. The api router's rule is more
 specific than web's, so Traefik prefers it — no priority needed.
 
 Traefik must share a network with the stack; add its network to both services
@@ -376,8 +487,11 @@ delivery, configure Google Pub/Sub push:
 2. Create a **push subscription** targeting
    `https://<your-api>/api/gmail/push`, with authentication enabled
    (service-account OIDC) — set `GMAIL_PUSH_OIDC_EMAIL` to that service
-   account. (Fallback: a shared secret via `GMAIL_PUSH_TOKEN`, sent as
-   `Authorization: Bearer`.)
+   account. Give the subscription an explicit **Audience** (for example the
+   push URL itself) and set `GMAIL_PUSH_OIDC_AUDIENCE` to the same value: the
+   API refuses every OIDC push while the audience is unset
+   (`packages/api/src/routes/gmail-push.ts`). (Fallback: a shared secret via
+   `GMAIL_PUSH_TOKEN`, sent as `Authorization: Bearer`.)
 3. Set `GMAIL_PUBSUB_TOPIC=projects/<project>/topics/<topic>` on the API.
    Watch registration and renewal are automatic
    (`packages/api/src/mail/gmail.ts`).

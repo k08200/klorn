@@ -15,8 +15,9 @@
 import type OpenAI from "openai";
 import { trackTokenUsage } from "../billing/token-usage.js";
 import { teamModeEnabled } from "../config.js";
+import { costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
-import { AGENT_MODEL, createCompletion } from "../llm/openai.js";
+import { AGENT_MODEL, createCompletion, type DailyCostCapCode } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 import { ALL_TOOLS, executeToolCall } from "./tool-executor.js";
 
@@ -51,6 +52,8 @@ export interface ChatTurnResult {
   eventDraft: EventDraft | null;
   /** Set only when the turn itself failed (LLM unreachable etc.) */
   error?: string;
+  /** Set only when the daily cost cap refused the turn — clients branch on it. */
+  errorCode?: DailyCostCapCode;
 }
 
 const CHAT_SYSTEM_PROMPT = `You are Klorn's assistant. You work ONLY on this user's own Klorn data: their email, their calendar, and their daily briefing.
@@ -248,6 +251,13 @@ export async function runChatTurn(opts: {
       eventDraft,
     };
   } catch (err) {
+    // The daily cost cap is expected back-pressure, not a bug: say what
+    // happened (the cap's own message, until it resets) instead of a false
+    // "try again in a moment", and keep Sentry quiet.
+    const capped = costCapRefusal(err);
+    if (capped) {
+      return { reply: capped.error, eventDraft: null, error: capped.error, errorCode: capped.code };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[CHAT] turn failed for user ${userId}:`, msg);
     captureError(err, { tags: { scope: "chat.turn", userId } });

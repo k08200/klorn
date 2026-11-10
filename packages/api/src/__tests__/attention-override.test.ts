@@ -59,6 +59,10 @@ describe("overrideAttentionTier", () => {
         tier: "QUEUE",
         tierReason: "Manual override — user moved to QUEUE",
         isManualOverride: true,
+        // A human move replaces whatever an MCP agent set (step A2b): the tier is
+        // now human-authored, so the agent stamp must not survive on it.
+        agentTierSetAt: null,
+        agentTierKeyId: null,
       },
     });
   });
@@ -167,8 +171,24 @@ describe("confirmAttentionTier", () => {
     await confirmAttentionTier("user-1", "item-1");
     expect(attentionItem.findFirst).toHaveBeenCalledWith({
       where: { id: "item-1", userId: "user-1" },
-      select: { id: true, source: true, sourceId: true, tier: true },
+      select: { id: true, source: true, sourceId: true, tier: true, agentTierSetAt: true },
     });
+  });
+
+  it("confirming a tier an MCP agent set is not judge agreement: it answers ok but does not stamp the ledger (step A2b)", async () => {
+    // A CONFIRM:<agent's lane> against the judge's shownTier would be a contradictory
+    // label, and first-stamp-wins would then block the human's real later override.
+    attentionItem.findFirst.mockResolvedValueOnce({
+      id: "item-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      tier: "PUSH",
+      agentTierSetAt: new Date("2026-09-30T09:00:00Z"),
+    });
+    const result = await confirmAttentionTier("user-1", "item-1");
+    expect(result).toEqual({ ok: true, tier: "PUSH" });
+    expect(decisionLabel.updateMany).not.toHaveBeenCalled();
+    expect(attentionItem.update).not.toHaveBeenCalled();
   });
 
   it("returns not_found for items the user does not own, without stamping", async () => {

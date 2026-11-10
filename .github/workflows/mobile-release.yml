@@ -1,0 +1,196 @@
+# Build, sign and upload the mobile app to the stores' test tracks.
+#
+# Trigger: push a tag `mobile-v<version>` (e.g. mobile-v1.0.0) or run it by hand.
+# The tag's version becomes versionName / CFBundleShortVersionString; the run
+# number becomes the build number, so every upload is unique and increasing.
+#
+# Each platform job skips cleanly (with a notice) while its secrets are absent,
+# so the workflow can merge before the store accounts are configured.
+#
+# Android → Google Play "internal" track. Secrets:
+#   ANDROID_KEYSTORE_BASE64      base64 of the upload keystore (.jks)
+#   ANDROID_KEYSTORE_PASSWORD    keystore password
+#   ANDROID_KEY_ALIAS            key alias inside the keystore
+#   ANDROID_KEY_PASSWORD         key password
+#   PLAY_SERVICE_ACCOUNT_JSON    Play Console service account JSON (Release manager);
+#                                without it the signed .aab is only kept as a run artifact
+#   ANDROID_GOOGLE_SERVICES_JSON_BASE64  optional, base64 of google-services.json (FCM push)
+#   Google requires the FIRST bundle of a new app to be uploaded by hand in the
+#   Play Console; this job handles every upload after that.
+#
+# iOS → TestFlight. Secrets:
+#   APPLE_TEAM_ID                10-character Team ID
+#   ASC_KEY_ID                   App Store Connect API key id
+#   ASC_ISSUER_ID                App Store Connect API issuer id
+#   ASC_KEY_P8_BASE64            base64 of the AuthKey_<id>.p8 (Admin or App Manager)
+#   The app record (bundle id ai.klorn.app) must exist in App Store Connect.
+#   Signing is automatic and cloud-managed through the API key.
+#
+# In-app purchase (both platforms; optional):
+#   VITE_REVENUECAT_IOS_KEY      RevenueCat public SDK key of the iOS app (appl_…)
+#   VITE_REVENUECAT_ANDROID_KEY  RevenueCat public SDK key of the Android app (goog_…)
+#   Read at `npm run build` (Vite inlines them; src/platform/iap.ts). They are
+#   PUBLIC SDK keys, so a repository secret or a repository variable both work
+#   (a secret wins when both are set). Empty / unset = the build ships with IAP
+#   off: Plans shows the plan only and offers nothing to buy.
+name: Mobile Release
+
+on:
+  push:
+    tags:
+      - "mobile-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.0.0)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ inputs.version || github.ref_name }}
+  BUILD_NUMBER: ${{ github.run_number }}
+
+jobs:
+  android:
+    name: Android → Play internal track
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    steps:
+      - name: Skip without signing secrets
+        if: env.HAS_SECRETS != 'true'
+        run: echo "::notice::Android signing secrets are not set — skipping the Android release."
+      - uses: actions/checkout@v7
+        if: env.HAS_SECRETS == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_SECRETS == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        if: env.HAS_SECRETS == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build the app and sync Android
+        if: env.HAS_SECRETS == 'true'
+        working-directory: apps/mobile
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+          VITE_REVENUECAT_ANDROID_KEY: ${{ secrets.VITE_REVENUECAT_ANDROID_KEY || vars.VITE_REVENUECAT_ANDROID_KEY }}
+        run: |
+          if [ -z "$VITE_REVENUECAT_ANDROID_KEY" ]; then
+            echo "::notice::VITE_REVENUECAT_ANDROID_KEY is not set — this build ships with in-app purchase off."
+          fi
+          npm ci && npm run build && npx cap sync android
+          # FCM push needs google-services.json; without it the app builds and
+          # simply has no Android push (build.gradle applies the plugin only
+          # when the file is present).
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          fi
+      - name: Signed release bundle
+        if: env.HAS_SECRETS == 'true'
+        working-directory: apps/mobile/android
+        env:
+          KLORN_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KLORN_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KLORN_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KLORN_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KLORN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          export KLORN_KEYSTORE_FILE="$RUNNER_TEMP/upload.jks"
+          ./gradlew --no-daemon bundleRelease \
+            -PklornVersionName="${VERSION#mobile-v}" -PklornVersionCode="$BUILD_NUMBER"
+          rm -f "$RUNNER_TEMP/upload.jks"
+      # Kept on the run either way: Google requires the first bundle of a new
+      # app to be uploaded by hand in the Play Console.
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_SECRETS == 'true'
+        with:
+          name: klorn-android-release
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+      - name: Upload to Google Play (internal)
+        if: env.HAS_SECRETS == 'true' && env.HAS_PLAY == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ai.klorn.app
+          releaseFiles: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+  ios:
+    name: iOS → TestFlight
+    runs-on: macos-15
+    env:
+      HAS_SECRETS: ${{ secrets.ASC_KEY_P8_BASE64 != '' && secrets.APPLE_TEAM_ID != '' }}
+    steps:
+      - name: Skip without App Store Connect secrets
+        if: env.HAS_SECRETS != 'true'
+        run: echo "::notice::App Store Connect secrets are not set — skipping the iOS release."
+      - uses: actions/checkout@v7
+        if: env.HAS_SECRETS == 'true'
+      - name: Select the newest Xcode
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          xcodebuild -version
+      - uses: actions/setup-node@v4
+        if: env.HAS_SECRETS == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Build the app and sync iOS
+        if: env.HAS_SECRETS == 'true'
+        working-directory: apps/mobile
+        env:
+          VITE_REVENUECAT_IOS_KEY: ${{ secrets.VITE_REVENUECAT_IOS_KEY || vars.VITE_REVENUECAT_IOS_KEY }}
+        run: |
+          if [ -z "$VITE_REVENUECAT_IOS_KEY" ]; then
+            echo "::notice::VITE_REVENUECAT_IOS_KEY is not set — this build ships with in-app purchase off."
+          fi
+          npm ci && npm run build && npx cap sync ios
+      - name: Archive and upload to App Store Connect
+        if: env.HAS_SECRETS == 'true'
+        working-directory: apps/mobile/ios/App
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$KEY"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" \
+                -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Klorn.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="${VERSION#mobile-v}" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            "${AUTH[@]}" archive
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Klorn.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}"
+          rm -f "$KEY"

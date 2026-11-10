@@ -11,6 +11,11 @@ describe("inboxAuthKind", () => {
   const oauthRow = { accessToken: "cipher", imapHost: null, imapPasswordCipher: null };
   const imapRow = { accessToken: null, imapHost: "imap.naver.com", imapPasswordCipher: "cipher" };
 
+  it("KLORN carries no credentials and is never broken for lacking them (E1a)", () => {
+    const bare = { accessToken: null, imapHost: null, imapPasswordCipher: null };
+    expect(inboxAuthKind({ provider: "KLORN", ...bare })).toBe("none");
+  });
+
   it("GOOGLE with a token cipher is oauth", () => {
     expect(inboxAuthKind({ provider: "GOOGLE", ...oauthRow })).toBe("oauth");
   });

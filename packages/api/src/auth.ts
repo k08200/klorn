@@ -5,6 +5,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
+import { localEventSource } from "./pim/calendar-rows.js";
 
 /**
  * The signing secret for every JWT. Falls back to a hardcoded string that is
@@ -67,6 +68,8 @@ export interface JwtPayload {
   sessionId?: string;
   /** Native deep-link relay target — set only on desktop/native login-state tokens. */
   appScheme?: string;
+  /** Login binding (auth/exchange-codes.ts) — set only on web login-state tokens. */
+  lb?: string;
 }
 
 export function signToken(
@@ -215,7 +218,11 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
         .code(401)
         .send({ error: "Session expired. Please log in again.", code: "DEVICE_KICKED" });
     }
-    if (!user || (user.role !== "ADMIN" && !isAdminEmail(user.email))) {
+    // An ADMIN_EMAILS address counts only once verified — the same rule as the
+    // /me promotion: register hands out a session before verification, so an
+    // unverified row on an unclaimed admin address must not reach admin routes.
+    const isEnvAdmin = user?.emailVerified === true && isAdminEmail(user.email);
+    if (!user || (user.role !== "ADMIN" && !isEnvAdmin)) {
       return reply.code(403).send({ error: "Admin access required" });
     }
     (request as unknown as { userId: string }).userId = payload.userId;
@@ -519,6 +526,7 @@ async function seedDemoData() {
   meetingStart.setHours(14, 0, 0, 0);
   const meetingEnd = new Date(tomorrow);
   meetingEnd.setHours(15, 0, 0, 0);
+  // Sample events have no Google id, so they are LOCAL (C1) — never GOOGLE.
   await prisma.calendarEvent.createMany({
     data: [
       {
@@ -528,6 +536,7 @@ async function seedDemoData() {
         endTime: meetingEnd,
         location: "WeWork Gangnam, 3F",
         color: "#d8a45d",
+        ...localEventSource(),
       },
       {
         userId: uid,
@@ -536,6 +545,7 @@ async function seedDemoData() {
         endTime: new Date(nextWeek.setHours(11, 0, 0, 0)),
         meetingLink: "https://meet.google.com/abc-defg-hij",
         color: "#14b8a6",
+        ...localEventSource(),
       },
     ],
   });

@@ -134,6 +134,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
+import { exchangeCodes } from "../auth/exchange-codes.js";
 import { authRoutes } from "../routes/auth.js";
 import { appleAuthProvider, naverAuthProvider, socialAuthRoutes } from "../routes/social-auth.js";
 
@@ -158,7 +159,10 @@ async function buildApp() {
 }
 
 function naverState(marker = "__naver_login__") {
-  return signToken({ userId: "__login__", email: marker }, "10m");
+  return signToken(
+    { userId: "__login__", email: marker, lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
+    "10m",
+  );
 }
 
 beforeEach(() => {
@@ -248,7 +252,10 @@ describe("Naver login flow", () => {
 
   it("/login bounces to the Naver consent URL with a signed state", async () => {
     const app = await buildApp();
-    const res = await app.inject({ method: "GET", url: "/api/auth/naver/login" });
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/naver/login?lb=${"A".repeat(43)}`,
+    });
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toContain("https://nid.naver.com/oauth2.0/authorize");
     expect(res.headers.location).toContain("state=");
@@ -274,6 +281,34 @@ describe("Naver login flow", () => {
     });
     expect(deviceCreate).toHaveBeenCalledTimes(1);
     expect(welcomeEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to start a web sign-in that names no browser (login CSRF)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/auth/naver/login" });
+    expect(res.headers.location).toBe("http://localhost:8001/login?error=session_expired");
+  });
+
+  it("refuses a callback whose state names no browser, before any account is touched", async () => {
+    const app = await buildApp();
+    const unbound = signToken({ userId: "__login__", email: "__naver_login__" }, "10m");
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/naver/callback?code=abc&state=${encodeURIComponent(unbound)}`,
+    });
+    expect(res.headers.location).toBe("http://localhost:8001/login?error=session_expired");
+    expect(userCreate).not.toHaveBeenCalled();
+    expect(deviceCreate).not.toHaveBeenCalled();
+  });
+
+  it("binds the exchange code to the browser that started the sign-in", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/naver/callback?code=abc&state=${encodeURIComponent(naverState())}`,
+    });
+    const code = new URL(res.headers.location as string).searchParams.get("code") ?? "";
+    expect(exchangeCodes.get(code)?.binding).toBe("A".repeat(43));
   });
 
   it("signs a returning identity straight in without creating anything", async () => {
@@ -378,6 +413,32 @@ describe("Naver login flow", () => {
     expect(res.headers.location).toBe("http://localhost:8001/login?error=invite_only");
     expect(userCreate).not.toHaveBeenCalled();
   });
+
+  it("a new Naver account starts on FREE whatever the BETA_* flags say", async () => {
+    // Founder decision 2026-10-24: Pro is paid. Gate approval and the retired
+    // auto-pro flags must not set a plan on the new row.
+    process.env.BETA_GATE_ENABLED = "true";
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    process.env.BETA_AUTO_PRO_LIMIT = "50";
+    waitlistFindUnique.mockResolvedValue({ status: "APPROVED" });
+    userCount.mockClear();
+    try {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/api/auth/naver/callback?code=abc&state=${encodeURIComponent(naverState())}`,
+      });
+      expect(res.headers.location).toMatch(/\/auth\/callback\?code=/);
+      expect(userCreate).toHaveBeenCalledTimes(1);
+      const { data } = userCreate.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(data).not.toHaveProperty("plan");
+      expect(data).not.toHaveProperty("betaProGrantedAt");
+      expect(userCount).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.BETA_AUTO_PRO_ENABLED;
+      delete process.env.BETA_AUTO_PRO_LIMIT;
+    }
+  });
 });
 
 describe("Apple login flow (form_post callback)", () => {
@@ -387,7 +448,14 @@ describe("Apple login flow (form_post callback)", () => {
 
   it("accepts Apple's urlencoded POST callback and creates the relay-email user", async () => {
     const app = await buildApp();
-    const state = signToken({ userId: "__login__", email: "__apple_login__" }, "10m");
+    const state = signToken(
+      {
+        userId: "__login__",
+        email: "__apple_login__",
+        lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+      "10m",
+    );
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/apple/callback",
@@ -402,6 +470,33 @@ describe("Apple login flow (form_post callback)", () => {
     };
     expect(createArgs.data.email).toBe("relay@privaterelay.appleid.com");
     expect(createArgs.data.identities.create.provider).toBe("apple");
+  });
+
+  it("a new Apple account starts on FREE with the retired auto-pro flag still set", async () => {
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    try {
+      const app = await buildApp();
+      const state = signToken(
+        {
+          userId: "__login__",
+          email: "__apple_login__",
+          lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        },
+        "10m",
+      );
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/apple/callback",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        payload: `code=abc&state=${encodeURIComponent(state)}`,
+      });
+      expect(res.headers.location).toContain("/auth/callback?code=");
+      const { data } = userCreate.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(data).not.toHaveProperty("plan");
+      expect(data).not.toHaveProperty("betaProGrantedAt");
+    } finally {
+      delete process.env.BETA_AUTO_PRO_ENABLED;
+    }
   });
 
   // `apple_failed` covered four unrelated causes, so a broken deployment and a
@@ -421,7 +516,14 @@ describe("Apple login flow (form_post callback)", () => {
   ])("reports a %s failure in the redirect", async (_label, exchangeResult, expected) => {
     appleExchange.mockResolvedValue(exchangeResult as never);
     const app = await buildApp();
-    const state = signToken({ userId: "__login__", email: "__apple_login__" }, "10m");
+    const state = signToken(
+      {
+        userId: "__login__",
+        email: "__apple_login__",
+        lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+      "10m",
+    );
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/apple/callback",
@@ -438,7 +540,14 @@ describe("Apple login flow (form_post callback)", () => {
   ])("reports an id_token %s failure in the redirect", async (reason, expected) => {
     appleVerify.mockResolvedValue({ ok: false, reason } as never);
     const app = await buildApp();
-    const state = signToken({ userId: "__login__", email: "__apple_login__" }, "10m");
+    const state = signToken(
+      {
+        userId: "__login__",
+        email: "__apple_login__",
+        lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+      "10m",
+    );
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/apple/callback",
@@ -458,7 +567,14 @@ describe("Apple login flow (form_post callback)", () => {
       args.where.email === "user@naver.com" || args.where.id === "u1" ? USER_ROW : null,
     );
     const app = await buildApp();
-    const state = signToken({ userId: "__login__", email: "__apple_login__" }, "10m");
+    const state = signToken(
+      {
+        userId: "__login__",
+        email: "__apple_login__",
+        lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+      "10m",
+    );
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/apple/callback",

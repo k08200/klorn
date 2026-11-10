@@ -1,0 +1,117 @@
+/* Reset + app-wide base. Sizes in px for layout, tokens (rem) for text. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--surface-app);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  /* No text selection on chrome by default; reading surfaces opt back in. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* WCAG 2.2 focus appearance: a 2px ring with offset, keyboard only. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.boot {
+  height: 100%;
+  background: var(--surface-app);
+}
+
+/* A screen's large title (canvas: 30/36 Bold, -0.02em). */
+.screen-title {
+  font-size: var(--type-large-title);
+  line-height: var(--type-large-title-lh);
+  font-weight: 700;
+  letter-spacing: var(--tracking-title);
+}
+
+/* A vertical hinge: single-column pages stay on the left segment, never across the fold. */
+.shell[data-posture="book"] .screen > .settings,
+.shell[data-posture="book"] .screen > .accounts {
+  max-width: calc(var(--hinge-start, 50vw) - var(--rail-width) - 56px);
+  margin-left: 0;
+}

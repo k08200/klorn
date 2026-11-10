@@ -2,6 +2,8 @@
 // Capacitor-only test answers "no" inside the Tauri wrapper. capacitor.ts is
 // deliberately NOT imported here so that mistake cannot be made in this file.
 import { isNativeShell, openExternal } from "./native/shell";
+import { safeHttpsUrl } from "./safe-path";
+import { activeUiLocale } from "./ui-locale";
 
 // Keep SSR and client in sync: both must resolve to the same string so React
 // hydration does not mismatch (e.g. an <a href> rendered on the server must
@@ -65,8 +67,14 @@ function handleSessionExpired(): void {
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredAuthToken();
+  // A multipart body (a Klorn drive upload) needs the browser's own
+  // Content-Type, which carries the boundary; a JSON one would break it.
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isForm ? {} : { "Content-Type": "application/json" }),
+    // Server-composed reasons render in the language the screen is in, not
+    // the stored notification language (api: notify/request-language.ts).
+    "Accept-Language": activeUiLocale(),
     ...(init?.headers as Record<string, string>),
   };
   if (token && !headers.Authorization) {
@@ -114,12 +122,17 @@ export function authHeaders(extra?: Record<string, string>): Record<string, stri
 // OAuth flow must stay a same-tab navigation so the redirect back lands in the
 // app rather than in a popup a blocker may have eaten.
 async function openOAuthUrl(url: string): Promise<void> {
+  // The consent URL comes from our API, but a provider page is always https:
+  // anything else (javascript:, data:, http:, a relative path) is refused
+  // rather than navigated to. Callers' catch blocks report it.
+  const safeUrl = safeHttpsUrl(url);
+  if (safeUrl === null) throw new Error("Refusing to open a non-https OAuth URL");
   if (isNativeShell()) {
-    await openExternal(url);
+    await openExternal(safeUrl);
     return;
   }
   if (typeof window !== "undefined") {
-    window.location.href = url;
+    window.location.href = safeUrl;
   }
 }
 
@@ -147,6 +160,15 @@ export async function startLinkInbox(): Promise<void> {
   const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-inbox", {
     method: "POST",
   });
+  await openOAuthUrl(url);
+}
+
+/**
+ * Start the consent to link a Google account for Google Drive (D5c, picked
+ * files only). The server answers 404 while Google Drive is off.
+ */
+export async function startLinkGoogleDrive(): Promise<void> {
+  const { url } = await apiFetch<{ url: string }>("/api/drive/google/link", { method: "POST" });
   await openOAuthUrl(url);
 }
 

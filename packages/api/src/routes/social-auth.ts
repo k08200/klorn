@@ -1,7 +1,13 @@
 import formbody from "@fastify/formbody";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { buildAppleAuthUrl, exchangeAppleCode, verifyAppleIdToken } from "../auth/apple.js";
-import { mintExchangeCode } from "../auth/exchange-codes.js";
+import {
+  beginDesktopConfirmation,
+  desktopConfirmExpiredPage,
+  desktopConfirmPage,
+  pairingCode,
+} from "../auth/desktop-confirm.js";
+import { isLoginBinding, mintExchangeCode } from "../auth/exchange-codes.js";
 import {
   buildNaverAuthUrl,
   exchangeNaverCode,
@@ -12,6 +18,7 @@ import type { SocialIdentity, SocialProviderId } from "../auth/social-identity.j
 import { completeSocialLogin } from "../auth/social-login.js";
 import { signToken, verifyToken } from "../auth.js";
 import { appleLoginEnabled, naverLoginEnabled } from "../config.js";
+import { clientAddress } from "../security/client-address.js";
 import { desktopHandoffPage, desktopLoginTokens, isAllowedNativeScheme } from "./auth.js";
 
 export interface SocialAuthProvider {
@@ -138,18 +145,26 @@ export function socialAuthRoutes(
               source: { type: "string", maxLength: 20 },
               nonce: { type: "string", maxLength: 128 },
               appScheme: { type: "string", maxLength: 64 },
+              // Web sign-in only: the browser's login binding (auth/exchange-codes.ts).
+              lb: { type: "string", maxLength: 64 },
             },
           },
         },
         config: { rateLimit: { max: 20, timeWindow: "15 minutes" } },
       },
       async (request, reply) => {
-        const { source, nonce, appScheme } = request.query as {
+        const { source, nonce, appScheme, lb } = request.query as {
           source?: string;
           nonce?: string;
           appScheme?: string;
+          lb?: string;
         };
         const isDesktop = source === "desktop" && !!nonce;
+        // Same rule as the Google flow: a web sign-in names its browser.
+        if (!isDesktop && !isLoginBinding(lb)) {
+          const webUrl = process.env.WEB_URL || "http://localhost:8001";
+          return reply.redirect(`${webUrl}/login?error=session_expired`);
+        }
         if (isDesktop) {
           const entry = desktopLoginTokens.get(nonce as string);
           if (!entry || entry.jwt !== undefined || entry.relayed || entry.expiresAt < Date.now()) {
@@ -163,6 +178,7 @@ export function socialAuthRoutes(
             userId: isDesktop ? (nonce as string) : "__login__",
             email: isDesktop ? `__${provider.id}_login_desktop__` : `__${provider.id}_login__`,
             ...(isDesktop && isAllowedNativeScheme(appScheme) ? { appScheme } : {}),
+            ...(!isDesktop ? { lb } : {}),
           },
           "10m",
         );
@@ -182,7 +198,7 @@ export function socialAuthRoutes(
       if (!params?.code || !params.state || params.error) {
         return reply.redirect(`${webUrl}/login?error=${provider.id}_denied`);
       }
-      let statePayload: { userId: string; email: string; appScheme?: string };
+      let statePayload: { userId: string; email: string; appScheme?: string; lb?: string };
       try {
         statePayload = verifyToken(params.state);
       } catch {
@@ -211,10 +227,13 @@ export function socialAuthRoutes(
         statePayload.userId !== "__login__"
       ) {
         return reply.redirect(`${webUrl}/login?error=${provider.id}_failed`);
+      } else if (!isLoginBinding(statePayload.lb)) {
+        // A web sign-in without a login binding (login CSRF), refused before
+        // the provider's code is spent or any account touched.
+        return reply.redirect(`${webUrl}/login?error=session_expired`);
       }
 
-      const ip =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip;
+      const ip = clientAddress(request);
       const userAgent = (request.headers["user-agent"] as string) || "";
       // One net for the whole tail — resolveIdentity (Apple's client-secret
       // signing throws if the key env is broken) AND the DB writes inside
@@ -233,7 +252,11 @@ export function socialAuthRoutes(
           return reply.redirect(`${webUrl}/login?error=${provider.id}_${resolved.reason}`);
         }
         const identity = resolved.identity;
-        const { redirect, token } = await completeSocialLogin(identity, { ip, userAgent });
+        const { redirect, token } = await completeSocialLogin(identity, {
+          ip,
+          userAgent,
+          ...(isDesktopLogin ? {} : { binding: statePayload.lb }),
+        });
         if (isDesktopLogin) {
           if (!token) {
             // completeSocialLogin only omits the token on its error redirects;
@@ -255,18 +278,20 @@ export function socialAuthRoutes(
               desktopHandoffPage(`${statePayload.appScheme}://oauth-callback?code=${relayCode}`),
             );
           }
-          const entry = desktopLoginTokens.get(nonce);
-          if (entry) desktopLoginTokens.set(nonce, { ...entry, jwt: token });
+          // Same confirmation step as the Google poll path
+          // (auth/desktop-confirm.ts): parked only once this browser confirms.
+          // A nonce that expired or was used meanwhile gets the expired page now,
+          // not after the person clicks confirm.
+          const live = desktopLoginTokens.get(nonce);
+          if (!live || live.expiresAt < Date.now() || live.jwt !== undefined || live.relayed) {
+            reply.header("Cache-Control", "no-store");
+            reply.type("text/html");
+            return reply.code(400).send(desktopConfirmExpiredPage());
+          }
+          const confirmId = beginDesktopConfirmation(nonce, token);
+          reply.header("Cache-Control", "no-store");
           reply.type("text/html");
-          // Same terminal document as the Google poll path: the browser leg
-          // must end in a committed page, and the app's poller does the rest.
-          return reply.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Klorn Login</title>
-<style>body{font-family:system-ui;background:#0a0a0a;color:#e5e7eb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-.box{text-align:center;padding:40px}.ok{font-size:48px;margin-bottom:16px}.t{font-size:14px;color:#9ca3af;margin-top:12px}</style>
-</head><body><div class="box"><div class="ok">\u2713</div><h2>Login Successful</h2>
-<p class="t">Return to the Klorn desktop app.<br>You can close this tab.</p>
-</div></body></html>`);
+          return reply.send(desktopConfirmPage(confirmId, pairingCode(nonce)));
         }
         return reply.redirect(redirect);
       } catch (err) {

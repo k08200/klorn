@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
+import {
+  collapseEmailThreads,
+  countEmailThreads,
+  emailThreadKey,
+} from "../judge/firewall-thread-collapse.js";
 
 type Row = { id: string; source: string; threadId?: string | null };
 const threadOf = (r: Row) => r.threadId ?? null;
@@ -48,5 +52,31 @@ describe("collapseEmailThreads", () => {
     ];
     const out = collapseEmailThreads(rows, threadOf);
     expect(out.map((r) => r.id)).toEqual(["e1", "pa", "e3"]);
+  });
+});
+
+describe("emailThreadKey", () => {
+  it("scopes the thread id by account (primary = empty account)", () => {
+    expect(emailThreadKey({ threadId: "t1", linkedInboxAccountId: null })).toBe(":t1");
+    expect(emailThreadKey({ threadId: "t1", linkedInboxAccountId: "li-1" })).toBe("li-1:t1");
+  });
+
+  it("has no key without a thread id (the mail is its own thread)", () => {
+    expect(emailThreadKey({ threadId: null, linkedInboxAccountId: null })).toBeNull();
+    expect(emailThreadKey(undefined)).toBeNull();
+  });
+});
+
+describe("countEmailThreads", () => {
+  it("counts EMAIL rows per thread key, ignoring other sources and keyless rows", () => {
+    const rows: Row[] = [
+      { id: "a1", source: "EMAIL", threadId: "t1" },
+      { id: "a2", source: "EMAIL", threadId: "t1" },
+      { id: "p1", source: "PENDING_ACTION", threadId: "t1" },
+      { id: "b1", source: "EMAIL", threadId: "t2" },
+      { id: "n1", source: "EMAIL", threadId: null },
+    ];
+    const counts = countEmailThreads(rows, threadOf);
+    expect(Object.fromEntries(counts)).toEqual({ t1: 2, t2: 1 });
   });
 });

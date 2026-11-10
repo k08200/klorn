@@ -4,12 +4,20 @@
  * once per event (P2002 dedupe) only when something actually arrived.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   config: { focusWindowEnabled: true } as Record<string, unknown> | null,
   ongoingBlock: null as { id: string } | null,
-  endedEvents: [] as Array<{ id: string; userId: string; startTime: Date; endTime: Date }>,
+  endedEvents: [] as Array<{
+    id: string;
+    userId: string;
+    startTime: Date;
+    endTime: Date;
+    provider?: string;
+    externalId?: string | null;
+    sourceAccountId?: string | null;
+  }>,
   arrivedCount: 0,
   notifications: [] as unknown[],
   notifDupe: false,
@@ -45,6 +53,7 @@ vi.mock("../notify/push.js", () => ({
   }),
 }));
 
+import { prisma } from "../db.js";
 import { evaluateNotificationGate } from "../notify/notification-prefs.js";
 import { sendFocusWindowDigests } from "../pim/focus-digest.js";
 
@@ -113,5 +122,69 @@ describe("sendFocusWindowDigests", () => {
     state.notifDupe = true; // dedupeKey already exists
     expect(await sendFocusWindowDigests(new Date("2026-08-21T02:01:00Z"))).toBe(0);
     expect(state.pushes).toHaveLength(0);
+  });
+});
+
+describe("sendFocusWindowDigests — linked calendar copies (C2, flag on)", () => {
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  const copy = (id: string, sourceAccountId: string | null) => ({
+    id,
+    userId: "u1",
+    startTime: new Date("2026-08-21T01:00:00Z"),
+    endTime: new Date("2026-08-21T02:00:00Z"),
+    provider: "GOOGLE",
+    externalId: "g-focus",
+    sourceAccountId,
+  });
+
+  it("sends ONE digest for a focus block that sits in the primary and a linked calendar", async () => {
+    state.endedEvents = [copy("linked-copy", "acct-1"), copy("primary-copy", null)];
+    state.arrivedCount = 4;
+
+    const sent = await sendFocusWindowDigests(new Date("2026-08-21T02:01:00Z"));
+
+    expect(sent).toBe(1);
+    expect(state.pushes).toHaveLength(1);
+    const keys = state.notifications.map(
+      (n) => (n as { data: { dedupeKey: string } }).data.dedupeKey,
+    );
+    expect(keys).toEqual(["focus:primary-copy"]);
+  });
+});
+
+describe("focus window — kill switch (C2)", () => {
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  const lastWhere = (fn: unknown) => {
+    const calls = vi.mocked(fn as (...a: unknown[]) => unknown).mock.calls;
+    return (calls.at(-1)?.[0] as { where: Record<string, unknown> }).where;
+  };
+
+  it("the block-end sweep reads primary and LOCAL rows only while the flag is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await sendFocusWindowDigests(new Date("2026-08-21T02:01:00Z"));
+    expect(lastWhere(prisma.calendarEvent.findMany).sourceAccountId).toBeNull();
+  });
+
+  it("the in-a-block check ignores a linked event while the flag is off, so it cannot hold notifications", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await evaluateNotificationGate("u1", "task_due");
+    expect(lastWhere(prisma.calendarEvent.findFirst).sourceAccountId).toBeNull();
+  });
+
+  it("with the flag on neither query is narrowed: a linked event is a real block", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await sendFocusWindowDigests(new Date("2026-08-21T02:01:00Z"));
+    await evaluateNotificationGate("u1", "task_due");
+    expect(lastWhere(prisma.calendarEvent.findMany)).not.toHaveProperty("sourceAccountId");
+    expect(lastWhere(prisma.calendarEvent.findFirst)).not.toHaveProperty("sourceAccountId");
   });
 });

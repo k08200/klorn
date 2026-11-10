@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 import { captureFirstTouchAttribution } from "@/lib/attribution";
+import { registerRedirectTarget } from "@/lib/safe-path";
 
 /**
  * Retired funnel step.
@@ -30,12 +31,8 @@ function EarlyAccessRedirect() {
 
   useEffect(() => {
     captureFirstTouchAttribution();
-    const next = searchParams.get("next");
-    const target =
-      next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/early-access")
-        ? `/login?mode=register&next=${encodeURIComponent(next)}`
-        : "/login?mode=register";
-    router.replace(target);
+    // Strict same-origin `next` only (lib/safe-path.ts); /login checks it again.
+    router.replace(registerRedirectTarget(searchParams.get("next")));
   }, [router, searchParams]);
 
   // Deliberately blank: this is a redirect, and a flash of "Early access" copy

@@ -8,7 +8,7 @@
  *   - top disagreements (founder label vs model tier) for prompt tuning
  *
  * Usage:
- *   DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
+ *   DATABASE_URL=... ANTHROPIC_API_KEY=... npx tsx scripts/poc-accuracy.ts \
  *     --in=./poc-ground-truth.json
  *
  * Context (#650 — the eval runs the judge's real context-consumption path):
@@ -160,7 +160,7 @@ function parseArgs(argv: string[]): CliArgs {
 /** True when at least one LLM provider is configured (mirrors eval.yml). */
 function hasProviderKey(): boolean {
   return Boolean(
-    process.env.OPENROUTER_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
       process.env.GEMINI_API_KEY ||
       process.env.OPENAI_COMPAT_BASE_URL,
   );
@@ -434,7 +434,7 @@ async function runBodyComparison(
 ): Promise<void> {
   if (!hasProviderKey()) {
     console.log(
-      "\nno provider key — comparison skipped. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the body off-vs-on eval.",
+      "\nno provider key — comparison skipped. Set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the body off-vs-on eval.",
     );
     return;
   }
@@ -486,7 +486,7 @@ async function runBodyComparison(
 async function runContextComparison(loaded: LoadedSet, args: CliArgs): Promise<void> {
   if (!hasProviderKey()) {
     console.log(
-      "\nno provider key — comparison skipped. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the context off-vs-on eval.",
+      "\nno provider key — comparison skipped. Set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the context off-vs-on eval.",
     );
     return;
   }

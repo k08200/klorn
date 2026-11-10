@@ -15,6 +15,14 @@ app then exchanges the one-time code via `POST /api/auth/exchange-code`.
 
 ## Status
 
+- **Bundled mobile app (2026-10-16): always uses the relay** —
+  `apps/mobile/src/auth/oauth.ts` passes `appScheme=ai.klorn.app` for Google and
+  Apple, listens for `appUrlOpen`, and redeems the code at
+  `POST /api/auth/exchange-code`. The scheme is registered in the committed
+  Android manifest and iOS Info.plist, so step 1 below is done for it; step 3
+  (device smoke test) still applies. The `NEXT_PUBLIC_NATIVE_OAUTH_SCHEME`
+  switch only concerns the web build inside the old WebView shell.
+
 - **Server + web client: shipped and verified** (`packages/api/src/routes/auth.ts`,
   `packages/web/src/lib/native/native-auth.ts`).
 - **Currently dormant.** `startNativeGoogleLogin()` uses the relay only when

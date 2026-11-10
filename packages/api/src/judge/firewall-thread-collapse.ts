@@ -35,3 +35,34 @@ export function collapseEmailThreads<T extends { source: string }>(
   }
   return out;
 }
+
+/**
+ * A mail's thread key, the same definition as `GET /api/email?threads=1`
+ * (email-lanes.ts THREAD_KEY): a provider thread id is unique only inside one
+ * mailbox, so the account is part of the key. No thread id → null: the mail is
+ * its own thread (never merged, count 1).
+ */
+export function emailThreadKey(
+  email: { threadId?: string | null; linkedInboxAccountId?: string | null } | undefined,
+): string | null {
+  if (!email?.threadId) return null;
+  return `${email.linkedInboxAccountId ?? ""}:${email.threadId}`;
+}
+
+/**
+ * How many EMAIL rows each thread key holds, over the same rows passed to
+ * collapseEmailThreads — the collapsed card's `threadCount`. Pure, one pass,
+ * no I/O. Rows without a key are not counted (their count is 1).
+ */
+export function countEmailThreads<T extends { source: string }>(
+  rows: T[],
+  threadIdOf: (row: T) => string | null | undefined,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.source !== "EMAIL") continue;
+    const key = threadIdOf(row);
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}

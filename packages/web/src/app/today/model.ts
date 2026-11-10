@@ -1,0 +1,341 @@
+/**
+ * Today home model (productization plan §1, P6, UNIFIED_HOME) — the pure half:
+ * how a lane block is cut, the day's range in the user's zone, and the merged
+ * calendar's order, conflicts and "now" marker. No React and no DOM, so the api vitest suite pins
+ * it (packages/api/src/__tests__/web-today-model.test.ts).
+ */
+
+import type { InboxProvider, InterruptBudgetStatus, LiveTier } from "@klorn/contract";
+
+/** Rows shown in an expanded lane (PUSH, MEETING) before "N more in Mail". */
+export const EXPANDED_LANE_ROWS = 8;
+/** QUEUE is a count plus its top rows (plan §1). */
+export const QUEUE_LANE_ROWS = 5;
+
+// ── Mail ────────────────────────────────────────────────────────────────────
+
+/** The first `limit` rows of a lane, and how many more the lane holds. */
+export function laneBlock<Row>(
+  rows: readonly Row[],
+  total: number,
+  limit: number,
+): { shown: Row[]; more: number } {
+  const shown = rows.slice(0, limit);
+  return { shown, more: Math.max(total, rows.length) - shown.length };
+}
+
+/**
+ * Today's "Needs you now" window (founder decision, LOCKED 2026-10-23): the
+ * PUSH block lists only PUSH mail received recently. The server owns the
+ * window (`window=today`, packages/api/src/judge/today-push-window.ts); older
+ * PUSH stays in Mail's lane view. Only Today's PUSH block sends it.
+ */
+const TODAY_WINDOWED_LANE: LiveTier = "PUSH";
+
+/** The query a Today lane block adds to the lane page: one row per thread, PUSH windowed. */
+export function todayLaneQuery(lane: LiveTier): string {
+  return lane === TODAY_WINDOWED_LANE ? "&threads=1&window=today" : "&threads=1";
+}
+
+/**
+ * The count a Today lane shows — in its block header and in the header strip,
+ * so the two agree. PUSH is the windowed list's own thread total (null until
+ * it lands); every other lane is the lane-counts figure, else the list total.
+ */
+export function todayLaneCount(
+  lane: LiveTier,
+  laneCountThreads: number | null,
+  listTotal: number | null,
+): number | null {
+  if (lane === TODAY_WINDOWED_LANE) return listTotal;
+  return laneCountThreads ?? listTotal;
+}
+
+/** PUSH threads older than Today's window: still in Mail, one link away. */
+export function olderOutsideWindow(laneThreads: number | null, windowed: number | null): number {
+  if (laneThreads === null || windowed === null) return 0;
+  return Math.max(laneThreads - windowed, 0);
+}
+
+/**
+ * Today's header (founder decision 2026-10-24): counts only for the lanes that
+ * need the user — PUSH (Today's windowed figure) and MEETING — and one quiet
+ * "N waiting in Mail" for QUEUE + INFO. SILENT is never counted on Today.
+ * `null` means that figure has not arrived (or its read failed).
+ */
+export interface TodayHeaderCounts {
+  push: number | null;
+  meeting: number | null;
+  queue: number | null;
+  info: number | null;
+}
+
+export interface TodayHeaderSummary {
+  /** PUSH then MEETING, each only when it holds something. */
+  needs: { lane: LiveTier; count: number }[];
+  /** Both PUSH and MEETING are known to be empty: "Nothing needs you right now". */
+  calm: boolean;
+  /** QUEUE + INFO threads; 0 shows nothing. */
+  waiting: number;
+}
+
+export function todayHeaderSummary(counts: TodayHeaderCounts): TodayHeaderSummary {
+  const lanes: [LiveTier, number | null][] = [
+    ["PUSH", counts.push],
+    ["MEETING", counts.meeting],
+  ];
+  const needs = lanes.flatMap(([lane, count]) =>
+    count !== null && count > 0 ? [{ lane, count }] : [],
+  );
+  return {
+    needs,
+    calm: counts.push === 0 && counts.meeting === 0,
+    waiting: (counts.queue ?? 0) + (counts.info ?? 0),
+  };
+}
+
+/** The waiting phrase's key, singular for exactly one (the `.one` / `.many` pattern). */
+export function todayWaitingKey(count: number): string {
+  return count === 1 ? "today.strip.waiting.one" : "today.strip.waiting.many";
+}
+
+/**
+ * The cover screen's "N of M interruptions today" (Fold cover, < 360px). Only
+ * from the budget the Today read already carries (attention engine v3, behind
+ * its flag): no budget, no limit, or a value that makes no sense draws
+ * nothing — the meter never guesses. The bar fills to `ratio`, capped at 1;
+ * the text keeps the server's own count.
+ */
+export interface CoverMeter {
+  used: number;
+  limit: number;
+  ratio: number;
+}
+
+export function coverMeter(budget: InterruptBudgetStatus | null | undefined): CoverMeter | null {
+  if (!budget) return null;
+  const { limit, used } = budget;
+  if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) return null;
+  if (!Number.isFinite(used) || used < 0) return null;
+  return { used, limit, ratio: Math.min(used / limit, 1) };
+}
+
+/**
+ * Today's "Held back" group (founder design N2, 2026-11-08): PUSH-worthy mail
+ * the daily interrupt budget held today, so it did not ring. Read through the
+ * QUEUE lane page (`window=held`, users under the v3 policy only), so only
+ * asked for once the PUSH read carries the budget. Like the meter, it never
+ * guesses: no budget, no read yet, or nothing held draws nothing.
+ */
+export function todayHeldQuery(): string {
+  return "&threads=1&window=held";
+}
+
+export interface HeldBack<Row> {
+  /** Held threads today: the server's total, never fewer than the rows shown. */
+  count: number;
+  shown: Row[];
+  more: number;
+}
+
+export function heldBack<Row>(
+  budget: InterruptBudgetStatus | null | undefined,
+  rows: readonly Row[] | null,
+  total: number | null,
+): HeldBack<Row> | null {
+  if (!budget || rows === null || total === null) return null;
+  const count = Math.max(total, rows.length);
+  if (count <= 0) return null;
+  const { shown, more } = laneBlock(rows, count, EXPANDED_LANE_ROWS);
+  return { count, shown, more };
+}
+
+// ── Calendar ────────────────────────────────────────────────────────────────
+
+/** The fields of GET /api/calendar's rows that Today reads. */
+export interface CalendarEventWire {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  location: string | null;
+  allDay: boolean;
+  /** The calendar's own colour, when the provider recorded one. */
+  color?: string | null;
+  /** CalendarProvider on the row: GOOGLE, OUTLOOK, ICLOUD, NAVER, DEVICE, LOCAL. */
+  provider?: string;
+  /** The linked account's label, on a linked calendar's event only. */
+  sourceLabel?: string;
+}
+
+interface ZoneClock {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function zoneClock(date: Date, timeZone: string): ZoneClock {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour: value("hour"),
+    minute: value("minute"),
+    second: value("second"),
+  };
+}
+
+const SECOND_MS = 1000;
+
+/** The zone's offset from UTC at `date`, in milliseconds (east is positive). */
+function zoneOffsetMs(date: Date, timeZone: string): number {
+  const c = zoneClock(date, timeZone);
+  const asUtc = Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute, c.second);
+  return asUtc - Math.floor(date.getTime() / SECOND_MS) * SECOND_MS;
+}
+
+/** The instant the calendar day (year, month, day) begins in the zone. */
+function zoneMidnight(year: number, month: number, day: number, timeZone: string): Date {
+  const wallClock = Date.UTC(year, month - 1, day);
+  const first = wallClock - zoneOffsetMs(new Date(wallClock), timeZone);
+  // The offset was read a few hours away from the answer; across a clock
+  // change it differs, so read it again at the answer itself.
+  return new Date(wallClock - zoneOffsetMs(new Date(first), timeZone));
+}
+
+function isKnownZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Today in the user's zone: local midnight to the next local midnight (23 or
+ * 25 hours on a clock-change day). An unknown zone reads as UTC.
+ */
+export function dayRangeInZone(now: Date, timeZone: string): { start: Date; end: Date } {
+  const zone = isKnownZone(timeZone) ? timeZone : "UTC";
+  const { year, month, day } = zoneClock(now, zone);
+  return {
+    start: zoneMidnight(year, month, day, zone),
+    // Date.UTC rolls a day past the month's end into the next month.
+    end: zoneMidnight(year, month, day + 1, zone),
+  };
+}
+
+interface Span {
+  start: number;
+  end: number;
+}
+
+function spanOf(event: CalendarEventWire): Span | null {
+  const start = new Date(event.startTime).getTime();
+  const end = new Date(event.endTime).getTime();
+  if (Number.isNaN(start)) return null;
+  return { start, end: Number.isNaN(end) ? start : end };
+}
+
+/** All-day events first, then by start, then the shorter one first. */
+export function orderEvents(events: readonly CalendarEventWire[]): CalendarEventWire[] {
+  return events
+    .flatMap((event) => {
+      const span = spanOf(event);
+      return span ? [{ event, span }] : [];
+    })
+    .sort(
+      (a, b) =>
+        Number(b.event.allDay) - Number(a.event.allDay) ||
+        a.span.start - b.span.start ||
+        a.span.end - b.span.end,
+    )
+    .map(({ event }) => event);
+}
+
+/**
+ * Ids of timed events that overlap another timed event. Back-to-back meetings
+ * do not overlap; all-day events never conflict (a holiday is not a clash).
+ */
+export function findConflicts(events: readonly CalendarEventWire[]): Set<string> {
+  const timed = events
+    .flatMap((event) => {
+      const span = event.allDay ? null : spanOf(event);
+      return span && span.end > span.start ? [{ id: event.id, ...span }] : [];
+    })
+    .sort((a, b) => a.start - b.start);
+  const conflicts = new Set<string>();
+  // Sweep in start order, remembering the event that ends last so far: a long
+  // meeting conflicts with everything that starts before it ends.
+  let latest: (typeof timed)[number] | null = null;
+  for (const current of timed) {
+    if (latest && current.start < latest.end) {
+      conflicts.add(latest.id);
+      conflicts.add(current.id);
+    }
+    if (!latest || current.end > latest.end) latest = current;
+  }
+  return conflicts;
+}
+
+export type EventPhase = "allDay" | "past" | "now" | "upcoming";
+
+export function eventPhase(event: CalendarEventWire, now: Date): EventPhase {
+  if (event.allDay) return "allDay";
+  const span = spanOf(event);
+  const at = now.getTime();
+  if (!span || span.end <= at) return "past";
+  return span.start <= at ? "now" : "upcoming";
+}
+
+/**
+ * Where the "now" marker goes in an ordered list: before the first timed
+ * event that has not ended (so it sits above a running meeting), or at the end
+ * once the day is done. Null when the day has no timed events to place it in.
+ */
+export function nowMarkerIndex(ordered: readonly CalendarEventWire[], now: Date): number | null {
+  if (!ordered.some((event) => !event.allDay)) return null;
+  const index = ordered.findIndex((event) => {
+    const phase = eventPhase(event, now);
+    return phase === "now" || phase === "upcoming";
+  });
+  return index === -1 ? ordered.length : index;
+}
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** A calendar colour safe to put in a style attribute; null for anything else. */
+export function eventBarColor(color: string | null | undefined): string | null {
+  return color && HEX_COLOR.test(color) ? color : null;
+}
+
+/** The calendar providers that are an account a SourceBadge can name. */
+const ACCOUNT_CALENDAR_PROVIDERS: readonly InboxProvider[] = [
+  "GOOGLE",
+  "OUTLOOK",
+  "ICLOUD",
+  "NAVER",
+];
+
+/**
+ * The provider to badge an event with. A device calendar or a local event is
+ * not an account, so it gets no SourceBadge (its label, if any, still shows).
+ */
+export function eventSourceProvider(provider: string | undefined): InboxProvider | null {
+  return ACCOUNT_CALENDAR_PROVIDERS.find((known) => known === provider) ?? null;
+}

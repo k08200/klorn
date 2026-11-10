@@ -131,6 +131,24 @@ describe("POST /api/email/:id/reply-options", () => {
     await app.close();
   });
 
+  it("maps the daily cost cap to 429 with its message + code, not a captured 503", async () => {
+    createCompletion.mockRejectedValue(
+      Object.assign(new Error("Free quota used for today."), {
+        name: "DailyCostCapExceededError",
+        code: "DAILY_COST_CAP_FREE",
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/email/e1/reply-options" });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({
+      error: "Free quota used for today.",
+      code: "DAILY_COST_CAP_FREE",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("404s when the email is not found without spending LLM calls", async () => {
     emailFindFirst.mockResolvedValue(null);
     const app = await buildApp();

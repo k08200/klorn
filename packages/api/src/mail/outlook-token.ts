@@ -6,11 +6,12 @@
  * ingestion chain (outlook-sync -> shared persist path) into its import graph.
  */
 
-import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "../crypto-tokens.js";
+import { decryptOptional, decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { markLinkedInboxForReconnect } from "./gmail.js";
 import { refreshOutlookTokens } from "./outlook-oauth.js";
+import { refreshedTokenUpdate } from "./outlook-token-update.js";
 
 // Refresh BEFORE the token can expire between ticks: the poll runs every
 // 5 minutes, so anything with less than one interval (+ margin) left would
@@ -77,29 +78,20 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
     });
     return null;
   }
-  const rotated = Boolean(refreshed.refreshToken);
   try {
-    await prisma.linkedInboxAccount.updateMany({
-      where: {
-        id: row.id,
-        userId,
-        // Access-only refresh: optimistic guard so a stale concurrent tick
-        // can't clobber a newer token (mirror of gmail's
-        // decideRefreshTokenWrite). A ROTATION writes unconditionally — the
-        // previous refresh token is already dead at Microsoft either way.
-        ...(rotated || !refreshed.expiresAt
-          ? {}
-          : { OR: [{ expiresAt: null }, { expiresAt: { lt: refreshed.expiresAt } }] }),
-      },
-      data: {
-        accessToken: encryptToken(refreshed.accessToken),
-        // Rotation: persist the NEW refresh token when Microsoft sent one;
-        // keep the old cipher otherwise (some responses omit it).
-        ...(rotated ? { refreshToken: encryptOptional(refreshed.refreshToken) } : {}),
-        expiresAt: refreshed.expiresAt,
-        needsReconnect: false,
-      },
+    // A rotation is a compare-and-swap on the refresh cipher that was read: a
+    // concurrent refresh that stored first keeps its token (count 0 here), and this
+    // tick, whose fresh access token is still valid, carries on with it.
+    const update = refreshedTokenUpdate(refreshed, row.refreshToken);
+    const written = await prisma.linkedInboxAccount.updateMany({
+      where: { id: row.id, userId, ...update.where },
+      data: update.data,
     });
+    if (written.count === 0 && Boolean(refreshed.refreshToken)) {
+      console.warn(
+        `[outlook-accounts] another refresh stored a newer token for row ${row.id}; syncing with this tick's`,
+      );
+    }
   } catch (err) {
     // A transient DB failure must not lose the tick — the fresh tokens are
     // in memory and valid. Worst case the rotated refresh cipher is lost and

@@ -22,6 +22,8 @@ vi.mock("../db.js", () => {
     // the legacy preamble.
     user: { findUnique: vi.fn(async () => null) },
     linkedInboxAccount: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
+    // Sender-label lookup (2026-09-11): the prompt line for a corrected sender.
+    senderLabel: { findMany: vi.fn(async () => []) },
     emailMessage: { update: emailUpdate, findMany: vi.fn(async () => []) },
   };
   return { prisma, db: prisma };

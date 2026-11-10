@@ -8,18 +8,21 @@
  * sibling. onRequest (not preHandler) so it fires before any auth hook.
  */
 
-import type { onRequestAsyncHookHandler } from "fastify";
+import type { FastifyReply, FastifyRequest, onRequestAsyncHookHandler } from "fastify";
+
+/** Fastify's default 404 for this request, as for a route that does not exist. */
+export function replyRouteNotFound(request: FastifyRequest, reply: FastifyReply): FastifyReply {
+  const { url, method } = request.raw;
+  reply.code(404);
+  return reply.send({
+    message: `Route ${method}:${url} not found`,
+    error: "Not Found",
+    statusCode: 404,
+  });
+}
 
 export function darkRouteGate(gate: () => boolean): onRequestAsyncHookHandler {
   return async (request, reply) => {
-    if (!gate()) {
-      const { url, method } = request.raw;
-      reply.code(404);
-      return reply.send({
-        message: `Route ${method}:${url} not found`,
-        error: "Not Found",
-        statusCode: 404,
-      });
-    }
+    if (!gate()) return replyRouteNotFound(request, reply);
   };
 }

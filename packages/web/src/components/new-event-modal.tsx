@@ -2,6 +2,10 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
+import { useT } from "../lib/i18n";
+import { serverErrorMessage } from "../lib/server-error";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import ErrorAlert from "./ui/error-alert";
 
 /**
@@ -13,7 +17,7 @@ import ErrorAlert from "./ui/error-alert";
  */
 
 const inputClass =
-  "w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
+  "w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
 
 function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
@@ -64,6 +68,7 @@ export function NewEventModal({
   /** Prefill (e.g. from a parsed voice transcript). Applied each time the dialog opens. */
   initial?: NewEventInitial | null;
 }) {
+  const { t } = useT();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
@@ -71,6 +76,8 @@ export function NewEventModal({
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Creating events is Pro: a FREE user's 403 shows the upgrade notice.
+  const [proGated, setProGated] = useState(false);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +96,7 @@ export function NewEventModal({
     setEndTime(initial?.endTime || plusOneHour(start));
     setLocation(initial?.location ?? "");
     setError(null);
+    setProGated(false);
     setSaving(false);
   }, [open, initial]);
 
@@ -142,6 +150,7 @@ export function NewEventModal({
     if (!canSave) return;
     setSaving(true);
     setError(null);
+    setProGated(false);
     try {
       const start = new Date(`${date}T${startTime}`);
       const end = new Date(`${date}T${endTime}`);
@@ -157,7 +166,9 @@ export function NewEventModal({
       onCreated(title.trim());
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the event");
+      if (isEntitlementRefusal(err)) setProGated(true);
+      // The server's own sentence when it sent one, never the raw `API 4xx: {json}`.
+      else setError(serverErrorMessage(err, t("newEvent.error.create")));
       setSaving(false);
     }
   };
@@ -166,7 +177,7 @@ export function NewEventModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
       <button
         type="button"
-        aria-label="Close new event dialog"
+        aria-label={t("newEvent.close")}
         onClick={() => {
           if (!saving) onClose();
         }}
@@ -177,14 +188,12 @@ export function NewEventModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
-        className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-2xl border border-line/70 bg-surface-panel p-5 shadow-2xl shadow-slate-900/10 md:rounded-2xl"
+        className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-sheet border border-line/70 bg-surface-panel p-5 shadow-2xl shadow-slate-900/10 md:rounded-sheet"
       >
-        <h2 id={headingId} className="text-base font-semibold text-ink">
-          New event
+        <h2 id={headingId} className="text-role-title text-ink">
+          {t("calendar.newEvent")}
         </h2>
-        <p className="mt-1 text-xs text-ink-dim">
-          Created in your Google Calendar and synced back here.
-        </p>
+        <p className="mt-1 text-role-caption text-ink-dim">{t("newEvent.subtitle")}</p>
 
         <form
           className="mt-4 space-y-3"
@@ -194,8 +203,11 @@ export function NewEventModal({
           }}
         >
           <div>
-            <label htmlFor={`${headingId}-title`} className="mb-1 block text-xs text-ink-mid">
-              Title
+            <label
+              htmlFor={`${headingId}-title`}
+              className="mb-1 block text-role-caption text-ink-mid"
+            >
+              {t("newEvent.title")}
             </label>
             <input
               id={`${headingId}-title`}
@@ -203,7 +215,7 @@ export function NewEventModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Coffee with John"
+              placeholder={t("newEvent.titlePlaceholder")}
               maxLength={200}
               disabled={saving}
               className={inputClass}
@@ -212,8 +224,11 @@ export function NewEventModal({
 
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-1">
-              <label htmlFor={`${headingId}-date`} className="mb-1 block text-xs text-ink-mid">
-                Date
+              <label
+                htmlFor={`${headingId}-date`}
+                className="mb-1 block text-role-caption text-ink-mid"
+              >
+                {t("newEvent.date")}
               </label>
               <input
                 id={`${headingId}-date`}
@@ -225,8 +240,11 @@ export function NewEventModal({
               />
             </div>
             <div>
-              <label htmlFor={`${headingId}-start`} className="mb-1 block text-xs text-ink-mid">
-                Starts
+              <label
+                htmlFor={`${headingId}-start`}
+                className="mb-1 block text-role-caption text-ink-mid"
+              >
+                {t("newEvent.starts")}
               </label>
               <input
                 id={`${headingId}-start`}
@@ -242,8 +260,11 @@ export function NewEventModal({
               />
             </div>
             <div>
-              <label htmlFor={`${headingId}-end`} className="mb-1 block text-xs text-ink-mid">
-                Ends
+              <label
+                htmlFor={`${headingId}-end`}
+                className="mb-1 block text-role-caption text-ink-mid"
+              >
+                {t("newEvent.ends")}
               </label>
               <input
                 id={`${headingId}-end`}
@@ -256,19 +277,23 @@ export function NewEventModal({
             </div>
           </div>
           {!startsBeforeEnds && (
-            <p className="text-xs text-state-danger-ink">End time must be after the start time.</p>
+            <p className="text-role-caption text-state-danger-ink">{t("newEvent.endAfterStart")}</p>
           )}
 
           <div>
-            <label htmlFor={`${headingId}-location`} className="mb-1 block text-xs text-ink-mid">
-              Location <span className="text-ink-dim">(optional)</span>
+            <label
+              htmlFor={`${headingId}-location`}
+              className="mb-1 block text-role-caption text-ink-mid"
+            >
+              {t("newEvent.location")}{" "}
+              <span className="text-ink-dim">{t("newEvent.optional")}</span>
             </label>
             <input
               id={`${headingId}-location`}
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="Meeting room / address / link"
+              placeholder={t("newEvent.locationPlaceholder")}
               maxLength={300}
               disabled={saving}
               className={inputClass}
@@ -276,22 +301,23 @@ export function NewEventModal({
           </div>
 
           {error && <ErrorAlert>{error}</ErrorAlert>}
+          {proGated && <ProFeatureNotice />}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="ease-strong min-h-10 rounded-lg border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong min-h-10 rounded-control border border-line bg-surface-panel/70 px-4 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={!canSave}
-              className="glow-primary ease-strong min-h-10 rounded-lg bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+              className="glow-primary ease-strong min-h-10 rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? "Creating..." : "Create event"}
+              {saving ? t("newEvent.creating") : t("newEvent.create")}
             </button>
           </div>
         </form>

@@ -1,151 +1,127 @@
-# Klorn — App Store + Play Store submission checklist
+# Klorn — App Store + Google Play submission status
 
-Capacitor shell (`ai.klorn.app`) wrapping the hosted web app (`app.klorn.ai`).
-This is the source of truth for getting Klorn onto both stores. Items are split
-into **[CODE — done]** (already in the repo), **[CODE — remaining]**, and
-**[YOU — founder-ops]** (accounts, consoles, secrets, signing — cannot be done
-in code).
+Status of getting the bundled app (`ai.klorn.app`) onto both stores, as of
+2026-10-16. Three kinds of item: **[CODE — done]** (in the repo),
+**[CODE — open]** (a repo change still needed) and **[YOU]** (accounts,
+consoles, secrets — only the founder can do them).
 
----
+Where things are:
 
-## 🔦 Pre-submission scan — verified 2026-07-21 (greenlight-style)
-
-Audited the code against the Apple review categories a pre-submission scanner
-checks (IAP policy, privacy manifest + data declarations, required login +
-account-deletion flow, permission strings, binary settings, real user flows).
-**All code-level items PASS.** Remaining blockers are founder-ops only.
-
-| Apple guideline | Status | Evidence |
-|---|---|---|
-| **3.1.1 IAP** (no external purchase in-app) | ✅ PASS | `subscription-section.tsx` / `billing/page.tsx` gate on `isNativePlatform()` — iOS uses RevenueCat IAP; Stripe/Paddle web checkout + portal are hidden on native. |
-| **5.1.1(v) account deletion** | ✅ PASS | `settings/page.tsx` "Delete account" → `DELETE /api/auth/account` (self-service, reachable in the shell). |
-| **4.8 Sign in with Apple** | ✅ EXEMPT | The app offers its own email/password account setup alongside Google, satisfying 4.8's "another login service." SIWA is **optional** de-risking, not required. |
-| **Privacy manifest / ITMS-91053** | ✅ PASS | `PrivacyInfo.xcprivacy` declares tracking=false, email + user-content data types (app functionality), UserDefaults required-reason (CA92.1). Must be added to target membership (see B.3) + match the App Privacy questionnaire. |
-| **Permission usage strings** | ✅ PASS | `Info.plist` has `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` (voice) + push; calendar strings correctly removed (no feature = no prompt). |
-| **Binary settings** | ✅ PASS | `ITSAppUsesNonExemptEncryption=false`, versions aligned (1.0 / build 1), Background Modes present. |
-| **Redesign flows in** | ✅ AUTO | Shell loads `app.klorn.ai`; the new light+sky web redesign ships to mobile automatically — no mobile code change needed. |
-| **4.2 thin-wrapper** | ⚠️ founder | De-risked once native push delivers a visible notification at launch — needs the APNs key (B.4). Native sign-in + voice + push make the case. |
-
-**Only true code item left is optional:** Sign in with Apple (4.8 de-risk). Flag me if you want it wired.
-
-## ✅ [CODE — done] (this repo)
-
-- **SHELL is the default build.** `capacitor.config.ts` now loads `app.klorn.ai`
-  by default; the throwaway Samsung-calendar probe is opt-in only
-  (`KLORN_PROBE=1 npx cap sync`). A plain `npx cap sync` can no longer ship the
-  probe screen. **Store builds must NOT set `KLORN_PROBE`.**
-- **Calendar permission prompt removed.** The on-device calendar probe (which
-  asked for calendar access then only logged) is no longer called on native
-  launch — it was an App Store **5.1.1** risk (permission with no feature). The
-  matching `NSCalendars*` usage strings were removed from `Info.plist`.
-- **Export compliance answered in-binary.** `ITSAppUsesNonExemptEncryption=false`
-  in `Info.plist` (standard HTTPS only) — removes the manual prompt on every
-  upload.
-- **iOS Privacy Manifest added** (`ios/App/App/PrivacyInfo.xcprivacy`) — backs
-  the App Privacy label and declares the Required-Reason API (UserDefaults).
-  ⚠️ You must add it to the App target in Xcode (see below).
-- **Versions aligned** — `package.json` 1.0.0; iOS `MARKETING_VERSION` 1.0 /
-  build 1; Android `versionName` 1.0 / `versionCode` 1.
-- **Native identity & wiring already in place** (pre-existing): bundle id
-  `ai.klorn.app` on all four surfaces; icons + splash for both platforms;
-  native Google sign-in via system browser (RFC 8252); APNs token forwarding
-  (`AppDelegate.swift`) + backend `push-apns.ts`; OAuth deep-link scheme
-  registered on both platforms; Android permissions minimal (INTERNET,
-  POST_NOTIFICATIONS).
-
-## [CODE — remaining] (small, mostly needs your accounts first)
-
-- **iOS `.entitlements`** (`aps-environment`, and optionally `associated-domains`
-  for App Links / Sign in with Apple) — created automatically when you add the
-  **Push Notifications** + **Background Modes** capabilities in Xcode. Needs your
-  Apple team/signing, so it's the first Xcode step below (not hand-editable
-  safely without signing).
-- **Android App Links `autoVerify` + `assetlinks.json`** — hardens the OAuth
-  relay against custom-scheme hijacking. Follow-up, not a submission blocker.
-- **Native calendar (Samsung + Google) feature** — currently only a diagnostic
-  probe existed (removed). The web app already shows Google Calendar; on-device
-  (Samsung) calendar is a fast-follow. Ship v1 without it, or build it first if
-  you want it as a launch differentiator (helps the Apple 4.2 case — see below).
+| Need | File |
+|---|---|
+| Step-by-step order to "Waiting for Review" | `store-pack/submission-checklist.md` |
+| Console click-paths and the exact GitHub / Render secret names | `docs/launch/mobile-store-setup.md` |
+| Listing text, EN + KO, with character counts | `store-pack/metadata.md` |
+| App Privacy + Data safety answers, privacy-manifest edit | `store-pack/privacy-labels.md` |
+| App Review notes, Play app-access text, demo account | `store-pack/review-notes.md` |
+| Screenshot sizes, captions, the capture command | `store-pack/screenshots-plan.md`, `store-pack/capture/` |
+| What the app does, its endpoints, the device checks | `README.md` |
 
 ---
 
-## ⚠️ Apple 4.2 "thin web-wrapper" risk — read this
+## What changed: the bundled app
 
-A WebView over `app.klorn.ai` is exactly the profile Apple rejects under 4.2
-unless genuinely-native behavior is live at first launch. Today the only clearly
-native first-session behavior is the system-browser Google sign-in. **To de-risk
-before submitting, native push must actually deliver a visible notification**
-(needs the iOS entitlement + APNs key + FCM below). With live push + native
-sign-in demonstrable at launch, the app moves from "thin wrapper" to defensible.
+The app is a React + TypeScript SPA built into the binary (`src/` →
+`dist/`), talking to the API directly. It no longer loads `app.klorn.ai` in a
+WebView (`capacitor.config.ts` has no `server.url`), so the old notes about
+"the shell shows whatever web is deployed", `allowNavigation`, the bundled
+offline error page and `NEXT_PUBLIC_*` build variables no longer apply. Web
+deploys do not change the mobile app; only a new `mobile-v*` build does.
 
----
+## Release flow
 
-## 🔑 [YOU — founder-ops] — ordered
-
-### A. Apple (iOS)
-1. **Apple Developer Program** membership ($99/yr). Then in Xcode: open
-   `ios/App/App.xcworkspace` → select the *App* target → **Signing & Capabilities**
-   → set your Team (this writes `DEVELOPMENT_TEAM`, currently absent).
-2. **Add capabilities** (same screen): **Push Notifications** and **Background
-   Modes → Remote notifications**. This creates the `.entitlements` file with
-   `aps-environment`. (Optional now: **Associated Domains**, **Sign in with
-   Apple** — see 4.8 note.)
-3. **Add `PrivacyInfo.xcprivacy` to the target**: in Xcode's Project Navigator,
-   right-click the `App` group → *Add Files…* → select the file → check the
-   *App* target. (The file already exists in the repo; it just needs target
-   membership so it's copied into the bundle.)
-4. **APNs Auth Key (.p8)** in the Apple Developer portal (Keys → +, enable APNs).
-   Put it + IDs on Render: `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`,
-   `APNS_BUNDLE_ID=ai.klorn.app`, `APNS_PRODUCTION=true`. Ensure the App ID
-   `ai.klorn.app` has **Push** enabled. (See `apps/mobile/README.md`.)
-5. **App Store Connect** app record: listing, description, category, age rating,
-   privacy policy URL, and the **App Privacy** questionnaire (must match
-   `PrivacyInfo.xcprivacy`).
-6. **Screenshots** for all required device sizes.
-7. **Apple 4.8 (Sign in with Apple)**: since Google sign-in is offered, Apple may
-   require Sign in with Apple. Check current guidance; if required it's a code
-   add (new auth provider) — flag me and I'll wire it.
-
-### B. Google (Android)
-1. **Firebase project** → Android app `ai.klorn.app` → download
-   `google-services.json` into `apps/mobile/android/app/`. Put
-   `FIREBASE_SERVICE_ACCOUNT` on Render (Android FCM send path).
-2. **Play Console** app record: listing, **Data safety** form, content rating,
-   privacy policy URL, target audience.
-3. **Upload keystore** (app signing) for the Play release. Then add its
-   SHA256 to `website/.well-known/assetlinks.json` (currently debug-only):
-   `keytool -list -v -keystore <release.keystore> | grep SHA256` — this is
-   what activates verified App Links (OAuth hardening) in production.
-4. **Screenshots** + feature graphic.
-
-### C. Payments (required by both stores)
-- **RevenueCat** account + products: App Store subscriptions + Play Billing
-  products. Set `NEXT_PUBLIC_REVENUECAT_IOS_KEY` / `_ANDROID_KEY` on the web
-  build. Apple/Google forbid selling the subscription via Stripe inside the app,
-  so IAP must be live before charging in-app. (IAP code is already wired but
-  inert without these keys.)
-
-### D. Google OAuth / Gmail scopes
-- **CASA Tier 2 / OAuth verification** for the restricted Gmail scopes is
-  required before public store distribution of Google sign-in. This is the
-  standing verification item — start it early, it takes weeks.
-
-### E. Deploy + activate
-- Ensure `packages/web` (with the native login/push code) is deployed to
-  `app.klorn.ai` — the shell loads that site. Optionally set
-  `NEXT_PUBLIC_NATIVE_OAUTH_SCHEME=ai.klorn.app` to activate the OAuth deep-link
-  relay (do a **real-device smoke test** first — `apps/mobile/OAUTH_RELAY.md`).
+- **Every PR / push to `main` touching `apps/mobile/**`** →
+  `.github/workflows/mobile.yml`: typecheck, vitest, build, Playwright
+  screenshots (artifact **`mobile-screenshots`**), Android debug APK
+  (`klorn-android-debug`), iOS simulator build. No secrets.
+- **Tag `mobile-v<x.y.z>`** (or run it by hand) →
+  `.github/workflows/mobile-release.yml`: version from the tag, build number
+  from the run number; signed `.aab` → Play **internal** track (artifact
+  `klorn-android-release`), archive → **TestFlight**. Each job skips with a
+  notice until its secrets exist. Google requires the very first `.aab` to be
+  uploaded by hand.
+- Promotion to review / production is done in the consoles.
 
 ---
 
-## Build commands (once signing + secrets are in)
+## [CODE — done]
+
+Verified in `apps/mobile/src` on 2026-10-16:
+
+| Store requirement | Where |
+|---|---|
+| Native push: priming screen before the OS prompt, token registration (`POST /api/notifications/push/device-token/register`), removal on sign-out and account deletion, foreground banner, tap → route; iOS action categories `KLORN_PUSH_MAIL` / `KLORN_PUSH_MAIL_DRAFT` (the server's `aps.category`) | `src/platform/push.ts`, `src/push/`, `AppDelegate.swift` |
+| iOS push entitlement: `aps-environment` in `App.entitlements`, `CODE_SIGN_ENTITLEMENTS` on Debug + Release | `ios/App/App/App.entitlements`, `ios/App/App.xcodeproj/project.pbxproj` |
+| Privacy manifest in the App target with the §2 data types | `ios/App/App/PrivacyInfo.xcprivacy`, `project.pbxproj` (Resources) |
+| In-app purchase (3.1.1): RevenueCat purchase / restore / manage; no web checkout or external purchase link anywhere; release builds get the SDK keys | `src/platform/iap.ts`, `src/screens/settings/PlansScreen.tsx`, `.github/workflows/mobile-release.yml` |
+| Subscription disclosures (3.1.2): title, length, price per period, auto-renew, how to cancel, Terms + Privacy links, Restore | `src/screens/settings/PlansScreen.tsx`, `plans-model.ts` |
+| Email sign-up (works without a third-party login; invite-only state shown honestly) | `src/screens/login/WelcomeScreen.tsx` (`POST /api/auth/register`) |
+| Account deletion (5.1.1(v)): Settings › Delete account, typed address, `DELETE /api/auth/account`, then wipe and sign-out | `src/screens/settings/DeleteAccountScreen.tsx` |
+| Sign in with Apple / Google (system browser + `ai.klorn.app://oauth-callback` relay) and email; session in Keychain / Keystore | `src/auth/`, `src/screens/login/WelcomeScreen.tsx` |
+| Offline: 24 h persisted cache, offline banner, wiped on sign-out | `src/api/query-client.ts`, `src/auth/session.tsx` |
+| Phones, foldables (Fold book / tabletop, Flip cover), tablets (iPad all orientations, Split View, Stage Manager); Dynamic Type | `src/layout/`, `README.md` "Native configuration" |
+| Privacy / terms links in Welcome and Settings (`https://klorn.ai/privacy/`, `/terms/`) | `WelcomeScreen.tsx`, `src/screens/settings/parts.tsx` |
+| Export compliance in-binary (`ITSAppUsesNonExemptEncryption=false`); remote-notification background mode | `ios/App/App/Info.plist` |
+| Android: `resizeableActivity`, no orientation lock, minimal permissions (INTERNET, POST_NOTIFICATIONS, RECORD_AUDIO for dictation), target SDK 36 | `android/` |
+| CI build + signed release + store upload | `.github/workflows/mobile.yml`, `mobile-release.yml` |
+| No unused native plugin: the calendar plugin and the probe are removed (no EventKit without a usage string) | `package.json`, `capacitor.config.ts`, `ios/App/CapApp-SPM/Package.swift`, `android/capacitor.settings.gradle` |
+| Accurate metadata (2.3): Welcome names Gmail, Google Workspace, Naver (beta), iCloud (beta) only; screenshot fixtures use fictional senders and no Outlook | `WelcomeScreen.tsx`, `src/i18n/locales/`, `src/api/mock/` |
+| Android: no Auto Backup / device transfer of the cache or session | `android/app/src/main/AndroidManifest.xml`, `res/xml/data_extraction_rules.xml` |
+
+Resolved since the WebView-era list: native push in the app itself, IAP and
+account deletion inside the bundled app, settings, the "thin wrapper" profile
+(4.2) and the WebView offline page. **Google OAuth verification for the Gmail
+scopes is complete** (CASA Tier 2, 2026-10-03 per the landing), so it no longer
+gates the stores.
+
+## [CODE — open] (details: `store-pack/submission-checklist.md` Phase 1)
+
+1. Android App Links: add the Play **app signing** SHA-256 to
+   `website/.well-known/assetlinks.json` after the first Play upload.
+2. Privacy-policy additions (`store-pack/privacy-labels.md` §4) — a web PR.
+
+Resolved on 2026-10-16 (table above): push entitlement, privacy manifest in
+the target, IAP keys in the release build, Plans disclosures, Welcome copy,
+the calendar plugin, screenshot fixtures, `clearHidden()` on sign-out, Android
+backup, email sign-up.
+
+Not blockers, tracked in `README.md` → "Gaps": only the agent's reply-draft
+proposal push carries a `pendingActionId` (Send draft); a firewall push
+precedes any draft and carries In 1 hour · Done. Android action buttons need
+`ANDROID_DATA_PUSH_ENABLED` on the server (OFF by default; the app's native
+service is ready for it); voice input is hidden on iOS (speech plugin not
+linked under SPM).
+
+## [YOU] (order and click-paths: `submission-checklist.md` Phases 0, 2, 5–6 and `docs/launch/mobile-store-setup.md`)
+
+1. Apple Developer Program + Paid Apps agreement, banking, tax. Google Play
+   developer account (personal accounts: closed test with 12 testers for 14
+   days before production — confirm the current numbers in the console).
+2. App Store Connect API key and Play upload keystore + service account →
+   GitHub secrets.
+3. APNs key and Firebase → Render env (`APNS_*`, `FIREBASE_SERVICE_ACCOUNT`)
+   and `ANDROID_GOOGLE_SERVICES_JSON_BASE64`.
+4. **Sign in with Apple in production** (`APPLE_*` env, then
+   `APPLE_LOGIN_ENABLED=true`) — needed for Guideline 4.8 because Google
+   sign-in is offered.
+5. Subscription products in both consoles, RevenueCat offering, webhook +
+   `REVENUECAT_WEBHOOK_AUTH`; GitHub secrets `VITE_REVENUECAT_IOS_KEY` /
+   `VITE_REVENUECAT_ANDROID_KEY` (else store builds ship with IAP off).
+   App ID `ai.klorn.app` with Push Notifications enabled (the entitlement is
+   in the project now).
+6. Tag `mobile-v1.0.0`; upload the first `.aab` by hand; run the device pass.
+7. Demo account, screenshots, listings, privacy answers, privacy-policy
+   additions (`privacy-labels.md` §4).
+8. Submit.
+
+## Build commands (local)
 
 ```bash
 cd apps/mobile
-npm install
-npm run sync            # SHELL (product) — the default
-npm run open:ios        # archive + upload via Xcode / Transporter
-npm run open:android    # build App Bundle (.aab) → Play Console
-# diagnostics only, never for the store:
-npm run sync:probe      # KLORN_PROBE=1 — Samsung calendar probe
+npm ci
+npm run build && npx cap sync   # = npm run sync
+npm run open:ios                # Xcode (signing, capabilities)
+npm run open:android            # Android Studio
+# store screenshots
+npx playwright test --config store-pack/capture/playwright.store.config.ts
 ```

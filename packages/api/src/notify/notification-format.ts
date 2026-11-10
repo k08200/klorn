@@ -12,6 +12,7 @@
  * follows the language of the mail it answers).
  */
 
+import { boundedFromValue, extractEmailAddress } from "../mail/email-address.js";
 import { notificationCopy } from "./notification-strings.js";
 
 interface ToolArgs {
@@ -31,9 +32,10 @@ interface ToolArgs {
 /** Strip "Display Name <a@b.com>" → "Display Name", or just trim email. */
 export function senderName(raw: string | null | undefined, language?: string | null): string {
   if (!raw) return notificationCopy(language).unknownSender;
-  const match = raw.match(/^([^<]+?)\s*</);
+  const head = boundedFromValue(raw);
+  const match = head.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim().slice(0, 30);
-  return raw.replace(/[<>]/g, "").trim().slice(0, 30);
+  return head.replace(/[<>]/g, "").trim().slice(0, 30);
 }
 
 /**
@@ -43,17 +45,8 @@ export function senderName(raw: string | null | undefined, language?: string | n
  */
 export function senderEmail(raw: string | null | undefined): string {
   if (!raw) return "";
-  const trimmed = raw.trim();
-  if (trimmed.endsWith(">")) {
-    const open = trimmed.lastIndexOf("<");
-    if (open !== -1)
-      return trimmed
-        .slice(open + 1, -1)
-        .trim()
-        .toLowerCase();
-  }
-  if (trimmed.includes("@")) return trimmed.toLowerCase();
-  return "";
+  const address = extractEmailAddress(raw);
+  return address.includes("@") ? address : "";
 }
 
 /** Map autonomous-agent tool calls to a clear user-facing summary. */

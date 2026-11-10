@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications capability (APNs). "development" is what Xcode
+	     writes for the capability; an App Store / TestFlight export re-signs it
+	     as "production" from the distribution profile, so this one value
+	     covers both. The App ID ai.klorn.app must have Push Notifications
+	     enabled in the Apple Developer portal. Sign in with Apple is NOT
+	     declared: the app signs in with Apple through the web flow in the
+	     system browser, which needs no entitlement. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

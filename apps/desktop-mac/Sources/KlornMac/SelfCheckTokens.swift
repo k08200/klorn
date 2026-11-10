@@ -1,0 +1,590 @@
+import AppKit
+import Foundation
+import SwiftUI
+
+// Self-check for the main window's design tokens and the one-badge row rule
+// (productization plan §1–§2, macOS M7), run by `KlornMac --self-check`.
+//
+// Three kinds of check: colour math on pure components (no NSColor, so the
+// verdict never depends on the machine's appearance), pure rules, and a
+// source guard that keeps the main window's own files on the tokens.
+
+/// The files that draw only in the main window. They are held at zero raw
+/// style literals.
+enum TokenGuard {
+    static let scope = [
+        "Shell/MainShell", "Shell/NavSidebar", "Shell/MainNav", "Shell/MainSheets", "Today/",
+        "Mail/MailSection", "Mail/ComposeWindow", "Mail/WindowMailRow", "Mail/WindowLaneChip",
+        "Calendar/CalendarSection", "Assistant/AssistantSection", "Onboarding/",
+        "Shared/SurfaceState", "Shared/SegmentedBar",
+    ]
+
+    static func inScope(_ relativePath: String) -> Bool {
+        scope.contains { relativePath.hasPrefix($0) }
+    }
+
+    private static func matches(_ pattern: String, in line: String) -> [[String]] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(line.startIndex..., in: line)
+        return regex.matches(in: line, range: range).map { match in
+            (0..<match.numberOfRanges).map { index in
+                Range(match.range(at: index), in: line).map { String(line[$0]) } ?? ""
+            }
+        }
+    }
+
+    /// The argument list of every `.padding(` on the line, parentheses matched.
+    private static func paddingArguments(in line: String) -> [String] {
+        var found: [String] = []
+        var rest = Substring(line)
+        while let open = rest.range(of: ".padding(") {
+            var depth = 1
+            var index = open.upperBound
+            while index < rest.endIndex, depth > 0 {
+                if rest[index] == "(" { depth += 1 }
+                if rest[index] == ")" { depth -= 1 }
+                if depth > 0 { index = rest.index(after: index) }
+            }
+            found.append(String(rest[open.upperBound..<index]))
+            rest = rest[index...]
+        }
+        return found
+    }
+
+    private static let colorNames =
+        "orange|green|red|blue|yellow|pink|purple|gray|white|black|mint|teal|cyan|indigo|brown"
+            + "|primary|secondary|tertiary"
+
+    /// What one line of a main-window file does wrong; empty when clean.
+    /// Pure, so the self-check can pin the rules themselves.
+    static func offenses(in rawLine: String) -> [String] {
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("//") { return [] }
+        let line = rawLine.components(separatedBy: " //").first ?? rawLine
+        var found: [String] = []
+        // Type: only the six roles. A system text style (`.caption` is 10pt)
+        // or a sized system font is a raw literal.
+        if line.contains(".font(.") || line.contains("Font.system(") || line.contains("Font.custom(") {
+            found.append("font outside Theme.Typo")
+        }
+        if line.contains("Typo.micro") { found.append("the retired 10pt micro step") }
+        if line.contains("Typo.label.weight(.regular)") {
+            found.append("label at regular weight — use Theme.Typo.meta")
+        }
+        // Radius: 6 / 10 / 16 by name; pills are a Capsule shape.
+        for match in matches("cornerRadius:\\s*([^,)\\s]+)", in: line)
+        where !match[1].hasPrefix("Theme.Radius.") {
+            found.append("cornerRadius not from Theme.Radius")
+        }
+        // Colour: Theme only.
+        if !matches("(Color\\.|[(:?,]\\s*\\.)(\(colorNames))\\b", in: line).isEmpty
+            || !matches("Color\\((red|white|hue|nsColor|\\.sRGB|\\.displayP3)", in: line).isEmpty
+            || line.contains("NSColor.")
+        {
+            found.append("colour outside Theme")
+        }
+        // Spacing: the 4pt grid by name. Zero is not a size.
+        for arguments in paddingArguments(in: line) {
+            let withoutNames = arguments.replacingOccurrences(
+                of: "\\.?[A-Za-z_][A-Za-z0-9_]*", with: "", options: .regularExpression)
+            let numbers = matches("[0-9]+(\\.[0-9]+)?", in: withoutNames).map { $0[0] }
+            if numbers.contains(where: { Double($0) != 0 }) {
+                found.append("padding not from Theme.s*")
+            }
+        }
+        return found
+    }
+
+    /// Every offense in the scoped files, as "path:line: what".
+    static func offenders(sourceDir: URL) -> (files: Int, offenses: [String]) {
+        var files = 0
+        var offenses: [String] = []
+        for url in swiftSources(under: sourceDir) {
+            let path = String(url.path.dropFirst(sourceDir.path.count + 1))
+            guard inScope(path), let text = try? String(contentsOf: url, encoding: .utf8) else {
+                continue
+            }
+            files += 1
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                for offense in Self.offenses(in: line) {
+                    offenses.append("\(path):\(index + 1): \(offense)")
+                }
+            }
+        }
+        return (files, offenses.sorted())
+    }
+}
+
+/// Every M7 check, as (name, passed). Prints its own section and tables.
+func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
+    print("Design tokens and the one-badge row (M7):")
+    var results: [(String, Bool)] = []
+    func text(_ relativePath: String) -> String {
+        (try? String(contentsOf: sourceDir.appendingPathComponent(relativePath), encoding: .utf8))
+            ?? ""
+    }
+
+    // Lane chip: text on its own 13% wash, on every surface it sits on.
+    for dark in [false, true] {
+        let mode = dark ? "dark" : "light"
+        let surfaces = Theme.windowSurfaces(dark: dark)
+        print("    \(mode) chip contrast — " + surfaces.map(\.name).joined(separator: " / "))
+        for tier in Tier.allCases {
+            let ratios = surfaces.map { Theme.chipContrast(tier, dark: dark, on: $0.color) }
+            print("      \(tier.rawValue): "
+                + ratios.map { String(format: "%.2f", $0) }.joined(separator: " / "))
+            results.append((
+                "\(mode): the \(tier.rawValue) chip clears 4.5:1 on every surface",
+                ratios.allSatisfy { $0 >= 4.5 }))
+        }
+        let inks: [(String, Theme.RGBA)] = dark
+            ? [("warning", Theme.warningInkDark), ("danger", Theme.dangerInkDark),
+               ("success", Theme.successInkDark)]
+            : [("warning", Theme.warningInkLight), ("danger", Theme.dangerInkLight),
+               ("success", Theme.successInkLight)]
+        results.append((
+            "\(mode): the status inks clear 4.5:1 on every surface",
+            inks.allSatisfy { ink in
+                surfaces.allSatisfy { Theme.contrast(ink.1, $0.color) >= 4.5 }
+            }))
+    }
+    results.append((
+        "the lane chip is the measured one",
+        text("Mail/WindowLaneChip.swift").contains("Theme.chipInk(tier)")
+            && text("Mail/WindowLaneChip.swift").contains(".font(Theme.Typo.chip)")))
+    // X1 (2026-10-16): one chip spec on web and Mac.
+    results.append((
+        "the lane chip is 22 tall, 8 padded, radius 6, a 6pt dot, 12pt, a 12% wash",
+        WindowLaneChip.height == 22 && WindowLaneChip.horizontalPadding == 8
+            && WindowLaneChip.radius == 6 && WindowLaneChip.dot == 6
+            && WindowLaneChip.fontSize == 12 && Theme.chipWashOpacity == 0.12
+            && !text("Mail/WindowLaneChip.swift").contains("Capsule()")))
+    results.append((
+        "lane chip labels are title case",
+        Tier.allCases.allSatisfy { tier in
+            let label = tier.label
+            return label.first?.isUppercase == true && label.dropFirst() == label.dropFirst().lowercased()
+        }))
+
+    // The scale itself.
+    results.append((
+        "v2 radii (chip 6 / control 10 / card 16 / sheet 24) and the spacing grid (4 … 48)",
+        [Theme.Radius.sm, Theme.Radius.md, Theme.Radius.lg, Theme.Radius.xl] == [6, 10, 16, 24]
+            && [Theme.Radius.chip, Theme.Radius.control, Theme.Radius.card, Theme.Radius.sheet]
+                == [6, 10, 16, 24]
+            && [Theme.s1, Theme.s2, Theme.s3, Theme.s4, Theme.s6, Theme.s8, Theme.s12]
+                == [4, 8, 12, 16, 24, 32, 48]
+            && Theme.rowHeight == 52))
+    // The mail row is three lines (sender / subject / reason, after the web's
+    // MailRow): 22 + 4 + ~18 + 4 + ~15 + 8 + 8 = 79, so 80 on the 8pt grid.
+    // Other rows (files, Today's non-mail rows) keep the 52 floor.
+    results.append((
+        "the three-line mail row floor is 80 (79 of content, on the 8pt grid)",
+        Theme.mailRowHeight == 80
+            && Theme.mailRowHeight.truncatingRemainder(dividingBy: Theme.s2) == 0
+            && Theme.mailRowHeight >= WindowLaneChip.height + 2 * Theme.s1 + 18 + 15 + 2 * Theme.s2))
+    results.append((
+        "v2 depth (menu, sheet) and motion (120 / 200 / 320 on 0.32,0.72,0,1)",
+        Theme.Elevation.menu.layers == [.init(opacity: 0.06, radius: 1, y: 1), .init(opacity: 0.10, radius: 6, y: 4)]
+            && Theme.Elevation.sheet.layers == [.init(opacity: 0.18, radius: 16, y: 12)]
+            && Theme.shadowInk == Theme.hex(0x0A0E14) && Theme.hairlineOpacity == 0.08
+            && Theme.Motion.state == 0.12 && Theme.Motion.move == 0.20
+            && Theme.Motion.sheet == 0.32 && Theme.Motion.curve == (0.32, 0.72, 0.0, 1.0)))
+    results.append((
+        "v2 type roles, Mac column: page 28 / title 22 / head 15 / body 13 / label 12 / caption 11 / mono 12",
+        [Theme.TypeSize.page, Theme.TypeSize.title, Theme.TypeSize.head, Theme.TypeSize.body,
+         Theme.TypeSize.label, Theme.TypeSize.caption, Theme.TypeSize.mono]
+            == [28, 22, 15, 13, 12, 11, 12]))
+    results.append((
+        "v2 meta role is the label size at regular weight",
+        Theme.Typo.meta == Font.system(size: Theme.TypeSize.label)
+            && Theme.Typo.meta != Theme.Typo.label))
+    results.append((
+        "v2 dark canvas #0A0A0B, ink #0B0D12 and the accent pair is #0369A1 / #38BDF8",
+        Theme.bgDark == Theme.hex(0x0A0A0B) && Theme.textLight == Theme.hex(0x0B0D12)
+            && Theme.accentSolidLight == Theme.hex(0x0369A1)
+            && Theme.accentSolidDark == Theme.hex(0x38BDF8)))
+
+    // The guard's own rules, then the files.
+    let bad = [
+        ".font(.caption)", ".font(.system(size: 10))", ".font(Theme.Typo.micro)",
+        ".font(Theme.Typo.label.weight(.regular))",
+        "RoundedRectangle(cornerRadius: 8)", ".foregroundStyle(.orange)", "Color.white",
+        "x ? .red : .green", "Color(red: 1, green: 0, blue: 0)", ".padding(22)",
+        ".padding(.horizontal, 10)", ".padding(.top, Theme.s6 * 2)",
+    ]
+    let good = [
+        ".font(Theme.Typo.caption.monospacedDigit())", ".padding(.horizontal, Theme.s3)",
+        ".font(Theme.Typo.meta)",
+        "RoundedRectangle(cornerRadius: Theme.Radius.md)", ".padding(compact ? 0 : Theme.s6)",
+        "// .font(.caption) in a comment", ".foregroundStyle(hovering ? Theme.text : .clear)",
+        ".frame(maxWidth: .infinity, alignment: .top)", ".padding(.top, Theme.s12)",
+    ]
+    results.append((
+        "the guard flags every raw literal and passes the tokens",
+        bad.allSatisfy { !TokenGuard.offenses(in: $0).isEmpty }
+            && good.allSatisfy { TokenGuard.offenses(in: $0).isEmpty }))
+    let scan = TokenGuard.offenders(sourceDir: sourceDir)
+    print("    token guard: \(scan.files) main-window files, \(scan.offenses.count) offenses")
+    for offense in scan.offenses { print("      \(offense)") }
+    results.append(("the guard reads the main window's files", scan.files >= 14))
+    results.append(("the main window's files hold zero raw style literals", scan.offenses.isEmpty))
+
+    // v2 radius roles (2026-11-04): every corner names a role, app-wide.
+    let radius = RadiusGuard.offenders(sourceDir: sourceDir)
+    print("    radius guard: \(radius.files) files, \(radius.offenses.count) offenses")
+    for offense in radius.offenses { print("      \(offense)") }
+    results.append((
+        "the radius guard flags literals and rungs and passes the roles",
+        RadiusGuard.badSamples.allSatisfy { !RadiusGuard.offenses(in: $0).isEmpty }
+            && RadiusGuard.goodSamples.allSatisfy { RadiusGuard.offenses(in: $0).isEmpty }))
+    results.append(("the radius guard reads the whole app", radius.files >= 100))
+    results.append((
+        "no corner outside Theme.swift uses a raw number or a sm/md/lg/xl rung",
+        radius.offenses.isEmpty))
+    let solid = text("Shared/SurfaceState.swift")
+    let provider = text("Shared/ProviderButtons.swift")
+    let segmented = text("Shared/SegmentedBar.swift")
+    results.append((
+        "buttons, fields and segmented tracks wear the control role (10)",
+        Theme.Radius.control == 10
+            && solid.contains("in: RoundedRectangle(cornerRadius: Theme.Radius.control))")
+            && !provider.contains("Radius.chip")
+            && provider.components(separatedBy: "Theme.Radius.control").count - 1 == 5
+            && segmented.contains(
+                "selected ? Theme.surfaceHover : hovering ? Theme.surfaceRaised : .clear,\n"
+                    + "                in: RoundedRectangle(cornerRadius: Theme.Radius.control))")
+            && text("Mail/MailListMetrics.swift").contains("fieldRadius: Theme.Radius.control")
+            && text("Mail/ReadingPaneMetrics.swift").contains("editorRadius: Theme.Radius.control")
+            && text("Calendar/CalendarMetrics.swift").contains("scopeRadius: Theme.Radius.control")
+            && text("Shared/Controls.swift").contains(
+                ".background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.control))")))
+
+    // One-badge rule.
+    let row = text("Mail/WindowMailRow.swift")
+    let today = text("Today/TodayScreen.swift")
+    // The lane reason is line 3 by design (three-line row, 2026-10-23); the
+    // category, relationship and reply state stay in the reader.
+    let banned = ["SignalChip(", "ReplyStateChip(", "AddLabelChip("]
+    results.append((
+        "a main-window row carries no category, relationship or reply-state",
+        !row.isEmpty && !today.isEmpty
+            && banned.allSatisfy { !row.contains($0) && !today.contains($0) }))
+    results.append((
+        "the lane chip shows on mixed-lane lists only",
+        tokenFixtureItem().map {
+            WindowRowRules.lane(for: $0, mixedLanes: true) == .queue
+                && WindowRowRules.lane(for: $0, mixedLanes: false) == nil
+        } ?? false))
+    let inboxes = tokenFixtureInboxes()
+    results.append((
+        "a row from an older server claims no read state, account or attachment",
+        tokenFixtureItem().map {
+            let content = WindowRowRules.content(
+                for: $0, mixedLanes: false, inboxes: inboxes, now: Date())
+            return content.unread == nil && !content.showsAccount && !content.hasAttachment
+                && content.sender == "dana@vendor.example" && content.subject == "renewal"
+                && content.snippet == "quote is attached"
+        } ?? false))
+    results.append(contentsOf: sourceBadgeChecks(inboxes: inboxes))
+    results.append(contentsOf: threeLineRowChecks(inboxes: inboxes))
+    let hit = EmailSearchItem(
+        id: "s1", from: "Dana <dana@vendor.example>", subject: "Renewal", snippet: "Renewal",
+        date: nil, isRead: false, linkedInboxAccountId: "linked-1")
+    let hitContent = WindowRowRules.content(for: hit, inboxes: inboxes, now: Date())
+    let single = WindowRowRules.content(for: hit, inboxes: Array(inboxes.prefix(1)), now: Date())
+    results.append((
+        "a search row shows unread and its account, and never echoes the subject as a snippet",
+        inboxes.count == 2 && hitContent.unread == true && hitContent.showsAccount
+            && hitContent.provider == "NAVER" && hitContent.snippet == nil
+            && !single.showsAccount))
+    results.append((
+        "the reader header says what the row no longer does, in words",
+        ReaderMetaRules.parts(signal: .category("customer"), replyState: "needsReply", draftReady: false)
+            == [L("chip.customer"), L("chip.needsReply")]
+            && ReaderMetaRules.parts(signal: .first, replyState: "needsReply", draftReady: true)
+                == [L("chip.first"), L("chip.draftReady")]
+            && ReaderMetaRules.parts(signal: .replied(3), replyState: nil, draftReady: false)
+                == [L("chip.replied", 3)]
+            && ReaderMetaRules.parts(signal: nil, replyState: "unknown", draftReady: false).isEmpty))
+    // Corrections become rules: the sender-label menu must stay reachable
+    // from the main window's reader, as its own control (not folded into
+    // the meta line's combined VoiceOver element).
+    let readerMeta = text("Mail/WindowLaneChip.swift")
+    let correctionHosts = swiftSources(under: sourceDir)
+        .filter { !$0.lastPathComponent.hasPrefix("SelfCheck") }
+        .filter { ((try? String(contentsOf: $0, encoding: .utf8)) ?? "").contains("SenderLabelMenuItems(") }
+        .map(\.lastPathComponent)
+    results.append((
+        "the sender-label correction menu has a main-window call site: the reader header",
+        correctionHosts == ["WindowLaneChip.swift"]
+            && readerMeta.contains("SenderLabelCorrectionMenu(\n            from: item.email?.from")
+            && readerMeta.contains("Menu {\n                    SenderLabelMenuItems(address: address, byUser: byUser)")
+            && readerMeta.contains(".accessibilityLabel(\n                    signalWord.map { L(\"label.correct.a11y\", $0) } ?? L(\"label.correct\"))")
+            && readerMeta.components(separatedBy: ".accessibilityElement(children: .combine)").count == 2
+            && text("Mail/ReadingPane.swift").contains("ReaderMetaLine(item: item)")))
+    results.append((
+        "the correction menu names the current label, or none",
+        ReaderMetaRules.signalWord(.category("customer")) == L("chip.customer")
+            && ReaderMetaRules.signalWord(.replied(2)) == L("chip.replied", 2)
+            && ReaderMetaRules.signalWord(nil) == nil))
+    results.append((
+        "the mail list draws the main window's rows and the reader its meta line",
+        text("Mail/FullList.swift").components(separatedBy: "WindowMailRow(item: item").count == 3
+            && text("Mail/FullList.swift").contains("WindowSearchHitRow(hit: hit)")
+            && text("Mail/ReadingPane.swift").contains("ReaderMetaLine(item: item)")))
+
+    // Calendar month grid.
+    let tall = CalendarMetrics.monthRowHeight(available: 1000, weeks: 5)
+    results.append((
+        "the month's weeks share the height; never under the floor, never past it",
+        tall == 199 && tall * 5 + 4 <= 1000
+            && CalendarMetrics.monthRowHeight(available: 1000, weeks: 6) == 165
+            && CalendarMetrics.monthRowHeight(available: 300, weeks: 6) == CalendarMetrics.minMonthRow
+            && CalendarMetrics.monthRowHeight(available: 0, weeks: 0) == CalendarMetrics.minMonthRow))
+
+    // Title bar.
+    let window = text("MainWindow.swift")
+    let usable = NSSize(width: 900, height: 600)
+    results.append((
+        "the main window's title bar is transparent over full-size content, sizes unchanged",
+        MainWindowRules.styleMask.isSuperset(
+            of: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])
+            && window.contains("titlebarAppearsTransparent = true")
+            && MainWindowRules.titlebarInset(frameHeight: 668, layoutHeight: 640) == 28
+            && MainWindowRules.titlebarInset(frameHeight: 600, layoutHeight: 640) == 0
+            && MainWindowRules.contentSize(usable: usable, titlebarInset: 28)
+                == NSSize(width: 900, height: 628)
+            && text("Shell/MainShell.swift").contains("Theme.bg.ignoresSafeArea()")))
+    results.append(("the new string is localized", L("mail.unread") != "mail.unread"))
+    return results
+}
+
+/// `extra` is spliced into the email preview: the account facts under test.
+private func tokenFixtureItem(_ extra: String = "") -> FirewallItem? {
+    let json = """
+        {"id":"i1","source":"EMAIL","sourceId":"m1","type":"EMAIL","title":"renewal",
+         "tier":"QUEUE","tierReason":"vendor","priority":1,
+         "surfacedAt":"2026-07-29T05:00:00.000Z",
+         "email":{"emailDbId":"e1","subject":"renewal",
+                  "from":"dana@vendor.example",
+                  "snippet":"quote\\n is  attached","receivedAt":"2026-07-29T05:00:00.000Z",
+                  "signal":{"kind":"replied","count":3},"replyState":"needsReply"\(extra)}}
+        """
+    return try? JSONDecoder().decode(FirewallItem.self, from: Data(json.utf8))
+}
+
+/// The account, the read state and the attachment on a main-window row.
+private func sourceBadgeChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
+    var results: [(String, Bool)] = []
+    let now = Date()
+    let one = Array(inboxes.prefix(1))
+    func content(_ extra: String, _ accounts: [InboxOption], opened: Set<String> = [])
+        -> WindowRowContent?
+    {
+        tokenFixtureItem(extra).map {
+            WindowRowRules.content(
+                for: $0, mixedLanes: false, inboxes: accounts, opened: opened, now: now)
+        }
+    }
+    let naver = #","source":{"provider":"NAVER","accountId":"linked-1","label":"you@naver.example"}"#
+    let full = naver + #","unread":true,"hasAttachment":true"#
+
+    results.append((
+        "the source badge shows only when there are two or more accounts to tell apart",
+        content(naver, inboxes).map {
+            $0.showsAccount && $0.provider == "NAVER" && $0.accountLabel == "you@naver.example"
+        } == true
+            && content(naver, one).map { !$0.showsAccount && $0.provider == nil } == true
+            && content(naver, []).map { !$0.showsAccount } == true
+            && content("", inboxes).map { !$0.showsAccount } == true))
+    results.append((
+        "the unread dot and the attachment glyph follow the wire; no claim draws neither",
+        content(full, inboxes).map { $0.unread == true && $0.hasAttachment } == true
+            && content(#","unread":false,"hasAttachment":false"#, inboxes).map {
+                $0.unread == false && !$0.hasAttachment
+            } == true
+            && content(#","unread":null,"hasAttachment":null"#, inboxes).map {
+                $0.unread == nil && !$0.hasAttachment
+            } == true))
+    results.append((
+        "mail opened here drops its dot before the next poll; no claim stays no claim",
+        content(full, inboxes, opened: ["e1"]).map { $0.unread == false } == true
+            && content(full, inboxes, opened: ["other"]).map { $0.unread == true } == true
+            && content("", inboxes, opened: ["e1"]).map { $0.unread == nil } == true))
+    results.append((
+        "a failed mark-read gives the row its dot back",
+        AppModel.afterFailedMarkRead(["e1", "e2"], "e1") == ["e2"]
+            && content(full, inboxes, opened: AppModel.afterFailedMarkRead(["e1"], "e1"))
+                .map { $0.unread == true } == true))
+    results.append((
+        "a wrong shape is no claim, never a failed queue; an unknown provider still decodes",
+        content(#","source":"NAVER","unread":"yes","hasAttachment":3"#, inboxes).map {
+            !$0.showsAccount && $0.unread == nil && !$0.hasAttachment
+        } == true
+            && content(#","source":{"accountId":"x","label":"y"}"#, inboxes).map {
+                !$0.showsAccount
+            } == true
+            && content(#","source":{"provider":"PROTON","accountId":null,"label":"p@x.example"}"#, inboxes)
+                .map { $0.showsAccount && $0.provider == "PROTON" } == true
+            && content(#","source":{"provider":"GOOGLE"}"#, inboxes).map {
+                $0.showsAccount && $0.accountLabel == ""
+            } == true
+            && content(#","source":null"#, inboxes).map { !$0.showsAccount } == true))
+    results.append((
+        "an unknown provider draws the generic badge, never one it is not",
+        sourceMonogram(provider: "PROTON") == "@" && sourceMonogram(provider: "OUTLOOK") == "M"
+            && sourceMonogram(provider: nil) == "K"
+            && sourceName(provider: "PROTON") == L("source.generic")
+            && sourceName(provider: "outlook") == "Microsoft"
+            && sourceName(provider: "ICLOUD") == "iCloud"))
+
+    let account = sourceA11yLabel(provider: "NAVER", label: "you@naver.example")
+    results.append((
+        "a row says its unread state, lane, account, attachment and time, in that order",
+        content(full, inboxes).map { row in
+            var mixed = row
+            mixed.lane = .queue
+            mixed.time = "14:05"
+            return WindowRowRules.a11yLabel(mixed, lead: WindowRowRules.listLead(mixed))
+                == [
+                    L("mail.unread"), "dana@vendor.example", "renewal", "vendor",
+                    Tier.queue.label, account, L("mail.hasAttachment"), "14:05",
+                ].joined(separator: ", ")
+        } == true
+            && account == L("source.account.a11y", "Naver") + ", you@naver.example"
+            && sourceA11yLabel(provider: "GOOGLE", label: " ") == L("source.account.a11y", "Google")))
+    results.append((
+        "a plain row says who, what and when, and nothing it does not show",
+        content("", one).map { row in
+            var plain = row
+            plain.time = ""
+            return WindowRowRules.a11yLabel(plain, lead: "lead") == "lead"
+        } == true))
+    let hit = EmailSearchItem(
+        id: "s1", from: "Dana <dana@vendor.example>", subject: "Renewal", snippet: nil,
+        date: "2026-07-29T05:00:00.000Z", isRead: false, linkedInboxAccountId: "linked-1")
+    let hitContent = WindowRowRules.content(for: hit, inboxes: inboxes, now: now)
+    let hitLabel = WindowRowRules.a11yLabel(
+        hitContent, lead: L("mail.searchResult.a11y", hitContent.sender, hitContent.subject))
+    results.append((
+        "a search row says its account and its time again",
+        !hitContent.time.isEmpty && hitLabel.hasPrefix(L("mail.unread") + ", ")
+            && hitLabel.contains(account) && hitLabel.hasSuffix(", " + hitContent.time)
+            && WindowRowRules.content(for: hit, inboxes: inboxes, opened: ["s1"], now: now).unread
+                == false))
+    results.append((
+        "the account and attachment strings are localized",
+        ["mail.hasAttachment", "source.account.a11y", "source.generic"].allSatisfy { L($0) != $0 }
+            && !L("source.account.a11y", "x").contains("%")))
+    return results
+}
+
+private func tokenFixtureInboxes() -> [InboxOption] {
+    let json = """
+        [{"id":null,"email":"you@company.example","kind":"primary","needsReconnect":false,
+          "provider":"GOOGLE"},
+         {"id":"linked-1","email":"you@naver.example","kind":"linked","needsReconnect":false,
+          "provider":"NAVER"}]
+        """
+    return (try? JSONDecoder().decode([InboxOption].self, from: Data(json.utf8))) ?? []
+}
+
+/// Line 3 and the thread chip of the three-line mail row.
+private func threeLineRowChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
+    let now = Date()
+    func content(_ item: FirewallItem?) -> WindowRowContent? {
+        item.map { WindowRowRules.content(for: $0, mixedLanes: false, inboxes: inboxes, now: now) }
+    }
+    func item(reason: String?) -> FirewallItem? {
+        let base = tokenFixtureItem()
+        return base.map {
+            FirewallItem(
+                id: $0.id, source: $0.source, sourceId: $0.sourceId, type: $0.type,
+                title: $0.title, tier: .push, tierReason: reason, priority: $0.priority,
+                surfacedAt: $0.surfacedAt, email: $0.email, href: $0.href, hashStale: $0.hashStale)
+        }
+    }
+    let withReason = content(item(reason: "due"))
+    let noReason = content(item(reason: nil))
+    // The wire-only reason maps to nil in rowTierReason (pinned in SelfCheck).
+    let empty = content(item(reason: ""))
+    let threaded = content(tokenFixtureItem(#","threadCount":3"#))
+    let single = content(tokenFixtureItem(#","threadCount":1"#))
+    return [
+        ("line 3 is the lane reason in the row's own lane, even where no chip shows",
+         withReason.map {
+             $0.reason == "due" && $0.reasonLane == .push && $0.lane == nil
+                 && WindowRowRules.detail($0) == "due"
+         } ?? false),
+        ("line 3 falls back to the snippet when no reason was recorded (or an empty one)",
+         [noReason, empty].allSatisfy {
+             $0.map {
+                 $0.reason == nil && $0.reasonLane == nil
+                     && WindowRowRules.detail($0) == "quote is attached"
+             } ?? false
+         }),
+        ("the thread chip shows from 2 messages and is spoken; an older server claims none",
+         threaded?.threadCount == 3 && single?.threadCount == nil
+             && content(tokenFixtureItem())?.threadCount == nil
+             && threaded.map {
+                 WindowRowRules.a11yLabel($0, lead: "x").contains(L("mail.threadCount", 3))
+             } ?? false),
+    ]
+}
+
+/// App-wide radius rule (Design Language v2): a corner names a role —
+/// `Theme.Radius.chip / control / card / sheet` — or derives from one
+/// (`m.fieldRadius`). Raw numbers and the sm/md/lg/xl rungs stay in
+/// Theme.swift, the token file. Capsules are a shape, not a radius.
+enum RadiusGuard {
+    /// Files allowed raw radii: the token file itself, and the self-checks
+    /// that quote bad samples.
+    static func exempt(_ relativePath: String) -> Bool {
+        relativePath == "Theme.swift" || relativePath.hasPrefix("SelfCheck")
+    }
+
+    static let badSamples = [
+        "RoundedRectangle(cornerRadius: 8)", "RoundedRectangle(cornerRadius: 1.5)",
+        ".background(x, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))",
+        "static let radius: CGFloat = Theme.Radius.md", "RoundedRectangle(cornerRadius:12)",
+    ]
+    static let goodSamples = [
+        "RoundedRectangle(cornerRadius: Theme.Radius.control)",
+        "RoundedRectangle(cornerRadius: m.fieldRadius).strokeBorder(Theme.line)",
+        "static let radius: CGFloat = Theme.Radius.chip", "Capsule().fill(Theme.accent)",
+        "// RoundedRectangle(cornerRadius: 8) in a comment",
+    ]
+
+    static func offenses(in rawLine: String) -> [String] {
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("//") { return [] }
+        let line = rawLine.components(separatedBy: " //").first ?? rawLine
+        var found: [String] = []
+        if line.range(of: "cornerRadius:\\s*[0-9]", options: .regularExpression) != nil {
+            found.append("raw cornerRadius number")
+        }
+        if line.range(of: "Radius\\.(sm|md|lg|xl)\\b", options: .regularExpression) != nil {
+            found.append("radius rung instead of a role")
+        }
+        return found
+    }
+
+    static func offenders(sourceDir: URL) -> (files: Int, offenses: [String]) {
+        var files = 0
+        var offenses: [String] = []
+        for url in swiftSources(under: sourceDir) {
+            let path = String(url.path.dropFirst(sourceDir.path.count + 1))
+            guard !exempt(path), let text = try? String(contentsOf: url, encoding: .utf8) else {
+                continue
+            }
+            files += 1
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                for offense in Self.offenses(in: line) {
+                    offenses.append("\(path):\(index + 1): \(offense)")
+                }
+            }
+        }
+        return (files, offenses.sorted())
+    }
+}

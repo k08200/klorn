@@ -10,9 +10,9 @@ vi.mock("../providers/index.js", async (importOriginal) => {
     ...actual,
     getProviderChain: () => [
       {
-        name: "openrouter",
-        quotaKey: "openrouter:env",
-        defaultModel: "google/gemma-4-31b-it:free",
+        name: "anthropic",
+        quotaKey: "anthropic:env",
+        defaultModel: "claude-haiku-5-5",
         supportsTools: true,
         client: null,
         resolveModel: (m: string) => m,
@@ -53,28 +53,28 @@ describe("createCompletion — chat-surface model override (useUserModel)", () =
   it("applies credentials.userModel ONLY when the call opts in via useUserModel", async () => {
     create.mockClear();
     await createCompletion(
-      { model: "google/gemma-4-31b-it:free", messages: [{ role: "user", content: "hi" }] },
-      { userId: "u1", credentials: { userModel: "anthropic/claude-sonnet-5" }, useUserModel: true },
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] },
+      { userId: "u1", credentials: { userModel: "claude-sonnet-5" }, useUserModel: true },
     );
-    expect(create.mock.calls[0]?.[0]?.model).toBe("anthropic/claude-sonnet-5");
+    expect(create.mock.calls[0]?.[0]?.model).toBe("claude-sonnet-5");
   });
 
   it("PINNED surfaces ignore userModel when useUserModel is absent (judge/summarize/draft)", async () => {
     create.mockClear();
     await createCompletion(
-      { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
-      { userId: "u1", credentials: { userModel: "anthropic/claude-sonnet-5" } },
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] },
+      { userId: "u1", credentials: { userModel: "claude-sonnet-5" } },
     );
-    expect(create.mock.calls[0]?.[0]?.model).toBe("google/gemini-2.5-flash");
+    expect(create.mock.calls[0]?.[0]?.model).toBe("claude-haiku-5-5");
   });
 
   it("falls back to params.model when no userModel", async () => {
     create.mockClear();
     await createCompletion(
-      { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] },
       { userId: "u1", credentials: {}, useUserModel: true },
     );
-    expect(create.mock.calls[0]?.[0]?.model).toBe("google/gemini-2.5-flash");
+    expect(create.mock.calls[0]?.[0]?.model).toBe("claude-haiku-5-5");
   });
 });
 
@@ -83,7 +83,7 @@ describe("createVisionCompletion — pinned, never steered by chat choice", () =
     create.mockClear();
     await createVisionCompletion(
       { model: VISION_MODEL, messages: [{ role: "user", content: "describe this" }] },
-      { userId: "u1", credentials: { userModel: "anthropic/claude-sonnet-5" } },
+      { userId: "u1", credentials: { userModel: "claude-sonnet-5" } },
     );
     expect(create.mock.calls[0]?.[0]?.model).toBe(VISION_MODEL);
   });

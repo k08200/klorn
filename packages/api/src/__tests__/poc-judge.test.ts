@@ -106,7 +106,9 @@ describe("buildSenderTraitsBlock", () => {
     const block = buildSenderTraitsBlock([investorTrait]);
     expect(block.startsWith("\n\n")).toBe(true);
     expect(block).toContain("a prior, not a verdict");
-    expect(block).toContain('- Relationship: investor — "We\'d like to invest in your round."');
+    expect(block).toContain(
+      '- Relationship: investor — <untrusted_content source="sender-trait-evidence">We\'d like to invest in your round.</untrusted_content>',
+    );
   });
 
   it("neutralizes newline injection in untrusted trait text (stays one line)", () => {
@@ -147,7 +149,9 @@ describe("buildSenderTraitsBlock", () => {
         evidenceText: "This week in AI…",
       },
     ]);
-    expect(block).toContain('- Recurring intent: weekly newsletter — "This week in AI…"');
+    expect(block).toContain(
+      '- Recurring intent: weekly newsletter — <untrusted_content source="sender-trait-evidence">This week in AI…</untrusted_content>',
+    );
   });
 
   it("renders one line per trait, in input order, under a single header", () => {
@@ -362,5 +366,28 @@ describe("judgeEmail fast-path", () => {
     });
     expect(result.source).not.toBe("fast-path");
     expect(result.tier).toBe("QUEUE");
+  });
+});
+
+describe("judgeEmail decidedBy (playground 'decided the lane')", () => {
+  it("names the marketing fast-path", async () => {
+    const result = await judgeEmail({
+      from: "newsletter@example.com",
+      subject: "Weekly digest — view this email in your browser",
+      snippet: "...",
+      labels: [],
+    });
+    expect(result.decidedBy).toBe("marketing");
+  });
+
+  it("names the v2 rule that placed a scored email", async () => {
+    const result = await judgeEmail({
+      from: "Vercel <notifications@vercel.com>",
+      subject: "Failed preview deployment on team 'k0820086'",
+      snippet: "Build error in packages/web",
+      labels: [],
+    });
+    expect(result.tier).toBe("INFO");
+    expect(result.decidedBy).toBe("transactional");
   });
 });

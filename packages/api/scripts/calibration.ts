@@ -41,6 +41,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "../src/db.js";
+import { NOT_AGENT_SET } from "../src/judge/agent-tier.js";
 import {
   type AttentionRow,
   type CalibrationReport,
@@ -101,6 +102,9 @@ async function fetchAttentionItems(
     where: {
       userId,
       createdAt: { gte: since, lt: until },
+      // Same exclusion as the daily snapshot (judge/calibration-snapshot.ts): an MCP
+      // agent's lane change is neither the judge's decision nor a human's.
+      ...NOT_AGENT_SET,
     },
     select: {
       id: true,

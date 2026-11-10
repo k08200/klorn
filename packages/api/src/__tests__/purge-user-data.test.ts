@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { purgeUserData } from "../purge-user-data.js";
+import { purgeUserData, revokeUserAccess } from "../purge-user-data.js";
 
 function makeTxSpy() {
   const called = new Set<string>();
   const scopes: unknown[] = [];
+  const updates: {
+    model: string;
+    arg: { where: Record<string, unknown>; data: Record<string, unknown> };
+  }[] = [];
   const tx = new Proxy(
     {},
     {
@@ -14,11 +18,15 @@ function makeTxSpy() {
             scopes.push(arg);
             return { count: 0 };
           }),
+          updateMany: vi.fn(async (arg: never) => {
+            updates.push({ model, arg });
+            return { count: 0 };
+          }),
         };
       },
     },
   );
-  return { tx, called, scopes };
+  return { tx, called, scopes, updates };
 }
 
 describe("purgeUserData", () => {
@@ -31,16 +39,29 @@ describe("purgeUserData", () => {
     const required = [
       "linkedInboxAccount",
       "linkedCalendarAccount",
+      // D5a: a linked Google Drive / OneDrive account's OAuth tokens and address.
+      "linkedDriveAccount",
       "senderTrait",
+      "senderLabel",
+      "sentMessage",
+      "sendReceipt",
+      "imapMovedMessage",
+      "mcpWriteAudit",
       "userToken",
       "emailMessage",
       "emailAttachment",
       "calendarEvent",
+      "driveFile",
+      "driveFileSummary",
+      "driveSummaryUsage",
       "devicePushToken",
       "emailProcessingLog",
       "learnedRule",
       "contactEngagementScore",
       "contactTrustScore",
+      // Per-contact co-attendance counts, and the markers of the meetings counted.
+      "contactCoAttendance",
+      "coAttendanceMeeting",
       "conversationSummary",
       "message",
       "conversation",
@@ -50,6 +71,19 @@ describe("purgeUserData", () => {
     for (const model of required) {
       expect(called.has(model), `purgeUserData must delete ${model}`).toBe(true);
     }
+  });
+
+  it("revokes (never deletes) the user's API keys, so a purged account cannot be read by an old key", async () => {
+    const { tx, called, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u-7");
+    expect(called.has("apiKey")).toBe(false);
+    const revocations = updates.filter((u) => u.model === "apiKey");
+    expect(revocations).toHaveLength(1);
+    expect(revocations[0]?.arg.where).toEqual({ userId: "u-7", revokedAt: null });
+    expect(revocations[0]?.arg.data.revokedAt).toBeInstanceOf(Date);
+    // Only the api key table is revoked here; nothing else is updated.
+    // The only other update clears credentials on the kept account row.
+    expect(updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
   });
 
   it("scopes every delete to the target user (directly or via conversation)", async () => {
@@ -63,5 +97,138 @@ describe("purgeUserData", () => {
         (where.conversation as { userId?: string } | undefined)?.userId === "u-42";
       expect(direct || viaConversation).toBe(true);
     }
+  });
+});
+
+describe("revokeUserAccess (what lets a sync, a job or an agent act for the user)", () => {
+  it("deletes the grants and the automation config, and nothing else", async () => {
+    const { tx, called, scopes } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u-9");
+
+    expect([...called].sort()).toEqual([
+      "automationConfig",
+      "linkedCalendarAccount",
+      "linkedDriveAccount",
+      "linkedInboxAccount",
+      "userToken",
+    ]);
+    // The Klorn address's mailbox (KLORN, step E1a) is no grant: it holds no
+    // credentials and belongs to the account, like its address. Its mail still
+    // goes with the purge.
+    const keepsKlorn = { where: { userId: "u-9", provider: { not: "KLORN" } } };
+    expect(scopes.filter((s) => JSON.stringify(s) === JSON.stringify(keepsKlorn))).toHaveLength(1);
+    for (const scope of scopes.filter((s) => JSON.stringify(s) !== JSON.stringify(keepsKlorn))) {
+      expect(scope).toEqual({ where: { userId: "u-9" } });
+    }
+  });
+
+  it("revokes the API keys and clears the credentials on the account row", async () => {
+    const { tx, updates } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u-9");
+
+    expect(updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
+    expect(updates[0]?.arg.where).toEqual({ userId: "u-9", revokedAt: null });
+    expect(updates[1]?.arg.where).toEqual({ id: "u-9" });
+    expect(updates[1]?.arg.data).toMatchObject({
+      naverImapPasswordCipher: null,
+      githubTokenCipher: null,
+      anthropicApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+    });
+  });
+
+  it("is part of the full purge, so one purgeUserData call still covers it all", async () => {
+    const access = makeTxSpy();
+    await revokeUserAccess(access.tx as never, "u1");
+    const full = makeTxSpy();
+    await purgeUserData(full.tx as never, "u1");
+
+    // First, so access is gone before the long run of data deletes.
+    expect([...full.called].slice(0, access.called.size)).toEqual([...access.called]);
+    expect(full.updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
+  });
+});
+
+describe("purgeUserData covers every user-scoped model (schema-driven guard)", () => {
+  // Rows that stay with the account on a data wipe, each for a reason. A new
+  // model with a userId must be purged or listed here, or this test fails.
+  const KEPT_WITH_ACCOUNT: Record<string, string> = {
+    userIdentity: "sign-in methods: deleting them locks the user out of the kept account",
+    storagePurge: "the durable queue that deletes the user's stored objects: must survive",
+    apiKey: "revoked (updateMany), never deleted, so audit rows keep their key",
+    dataWipe: "the data-wipe fence's record: it must outlive the purge it describes",
+    klornAddress:
+      "the account's Klorn address: deleting it would let the handle be issued again (L5)",
+  };
+
+  it("deletes or deliberately keeps every model that has a userId", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const schema = readFileSync(
+      fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url)),
+      "utf8",
+    );
+    const userScoped = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)]
+      .filter(([, , body]) => /^\s+userId\s+String/m.test(body ?? ""))
+      .map(([, name]) => (name ?? "").charAt(0).toLowerCase() + (name ?? "").slice(1));
+
+    const { tx, called, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+    const revoked = new Set(updates.map((u) => u.model));
+
+    const uncovered = userScoped.filter(
+      (model) => !called.has(model) && !revoked.has(model) && !(model in KEPT_WITH_ACCOUNT),
+    );
+    expect(uncovered).toEqual([]);
+    expect(userScoped.length).toBeGreaterThan(50);
+  });
+});
+
+describe("purgeUserData — what the account row and the cost ledger keep", () => {
+  it("clears the credentials stored on the User row (dead Naver/GitHub, BYOK keys, Telegram link)", async () => {
+    const { tx, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+
+    const userUpdate = updates.find((u) => u.model === "user");
+    expect(userUpdate?.arg.where).toEqual({ id: "u1" });
+    expect(userUpdate?.arg.data).toMatchObject({
+      naverImapEmail: null,
+      naverImapPasswordCipher: null,
+      githubTokenCipher: null,
+      anthropicApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+      telegramLinkCode: null,
+    });
+  });
+
+  it("resets the co-attendance watermark, so a reconnect counts the whole window again", async () => {
+    // The counts and markers are deleted below; a watermark left behind would let
+    // the next pass start at the day after it and never recount the wiped days.
+    const { tx, updates } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u1");
+    const userUpdate = updates.find((u) => u.model === "user");
+    expect(userUpdate?.arg.data).toMatchObject({ coAttendanceCountedThrough: null });
+  });
+
+  it("keeps today's cost-ledger row, so a wipe cannot reset the daily spend cap", async () => {
+    const { tx, scopes } = makeTxSpy();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T03:00:00Z"));
+    try {
+      await purgeUserData(tx as never, "u1");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(scopes).toContainEqual({ where: { userId: "u1", dayKey: { not: "2026-10-17" } } });
+  });
+
+  it("deletes the user's teams: third-party addresses the user typed, like contacts", async () => {
+    const { tx, called } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+
+    expect(called.has("team")).toBe(true);
   });
 });

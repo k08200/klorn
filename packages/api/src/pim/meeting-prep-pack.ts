@@ -1,4 +1,5 @@
 import { prisma } from "../db.js";
+import { isCalendarRowVisible } from "./calendar-scope.js";
 
 export type MeetingPrepReadiness = "ready" | "watch" | "needs_review";
 
@@ -57,6 +58,8 @@ type EventRow = {
   endTime: Date;
   location: string | null;
   meetingLink: string | null;
+  /** Set on rows synced from a linked calendar (C2); hidden while the flag is off. */
+  sourceAccountId?: string | null;
 };
 
 type EmailRow = {
@@ -207,7 +210,7 @@ export async function buildMeetingPrepPack(
   const event = (await prisma.calendarEvent.findUnique({
     where: { id: eventId },
   })) as EventRow | null;
-  if (!event || event.userId !== userId) return null;
+  if (!event || event.userId !== userId || !isCalendarRowVisible(event)) return null;
 
   const now = opts?.now ?? Date.now();
   const keywords = extractKeywords(event);

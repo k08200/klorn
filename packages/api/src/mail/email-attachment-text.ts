@@ -1,6 +1,16 @@
-import { inflateRawSync } from "node:zlib";
+import { inflateRawSync, constants as zlibConstants } from "node:zlib";
+import {
+  collectPdfLiteralStrings,
+  collectTextRuns,
+  collectWordTextRuns,
+  replaceNamespacedClosingTag,
+  replaceNamespacedSelfClosingTag,
+  replaceSelfClosingTag,
+  stripTags,
+} from "./attachment-text-scan.js";
 
-const MAX_EXTRACTABLE_BYTES = 8_000_000;
+/** The most bytes a file may have for its text to be extracted (also the drive summary cap, D4). */
+export const MAX_EXTRACTABLE_BYTES = 8_000_000;
 // Aggregate caps across a whole archive. inflateRawCapped bounds ONE stream,
 // but a multi-entry archive (docx/xlsx/pptx/hwpx are ZIPs) can still declare
 // thousands of entries that each inflate near the per-stream cap — N × 8MB =
@@ -54,12 +64,41 @@ export function isReadableEmailAttachment(
   );
 }
 
+/**
+ * Whether extracting this file means parsing its bytes. Images, unknown types
+ * and oversized files get a metadata answer without reading the content, so
+ * they need no isolation (attachment-extract-isolated.ts).
+ */
+export function needsParsing(filename: string, mimeType: string, byteLength: number): boolean {
+  if (byteLength > MAX_EXTRACTABLE_BYTES) return false;
+  const lower = filename.toLowerCase();
+  return (
+    isDocx(lower, mimeType) ||
+    isXlsx(lower, mimeType) ||
+    isPptx(lower, mimeType) ||
+    isHwpx(lower, mimeType) ||
+    isLegacyHwp(lower, mimeType) ||
+    isPlainTextLike(lower, mimeType) ||
+    mimeType.includes("pdf") ||
+    lower.endsWith(".pdf")
+  );
+}
+
 export function extractAttachmentContent(
   buffer: Buffer,
   filename: string,
   mimeType: string,
 ): ExtractedAttachmentContent {
   const lower = filename.toLowerCase();
+
+  // isReadableEmailAttachment only bounds the size when the provider reports
+  // one; bound the bytes actually fetched so every scan below is capped too.
+  if (buffer.length > MAX_EXTRACTABLE_BYTES) {
+    return {
+      text: metadataText(filename, mimeType, buffer.length, "추출 크기 제한 초과"),
+      status: "metadata",
+    };
+  }
 
   if (isDocx(lower, mimeType)) {
     const text = extractDocxText(buffer);
@@ -274,38 +313,135 @@ function extractLegacyHwpText(buffer: Buffer): string | null {
   return uniqueLines(chunks).join("\n") || null;
 }
 
-function extractUtf16TextChunks(buffer: Buffer): string[] {
+/**
+ * Readable UTF-16LE runs, at both byte alignments. Each run is decoded in one
+ * call once it ends: building it a character at a time made a string node per
+ * character, about 30× the text in memory, so a 6 MB run ran a 128 MB heap
+ * out (review of #1535, 2026-10-24). The readable set has no surrogates, so
+ * decoding the run is the same text as joining its code units.
+ */
+export function extractUtf16TextChunks(buffer: Buffer): string[] {
   const chunks: string[] = [];
   for (const offset of [0, 1]) {
-    let current = "";
-    for (let i = offset; i + 1 < buffer.length; i += 2) {
-      const code = buffer.readUInt16LE(i);
-      if (isReadableTextCode(code)) {
-        current += String.fromCharCode(code);
-      } else {
-        pushReadableChunk(chunks, current);
-        current = "";
-      }
+    let runStart = offset;
+    let i = offset;
+    for (; i + 1 < buffer.length; i += 2) {
+      if (isReadableTextCode(buffer.readUInt16LE(i))) continue;
+      pushReadableChunk(chunks, buffer.toString("utf16le", runStart, i));
+      runStart = i + 2;
     }
-    pushReadableChunk(chunks, current);
+    pushReadableChunk(chunks, buffer.toString("utf16le", runStart, i));
   }
   return chunks;
 }
 
+/** How far into a legacy HWP file deflate streams are looked for, and how densely. */
+const INFLATE_SCAN_MAX_OFFSET = 1_000_000;
+const INFLATE_SCAN_STEP = 64;
+/** Compressed bytes a probe may read before a candidate offset is judged. */
+const INFLATE_PROBE_BYTES = 1_024;
+/** Output a probe may produce: deflate expands up to ~1000×, so 1 KB in is not a bound on its own. */
+const INFLATE_PROBE_MAX_OUTPUT = 65_536;
+/**
+ * Output per file, once for all probes and once for all full reads; past either
+ * the scan stops. An HWP body is kilobytes to a few hundred KB of UTF-16, far
+ * more text than the summary that reads it can use.
+ */
+const INFLATE_SCAN_OUTPUT_BUDGET = 2_000_000;
+/** Offsets inflated in full once their probe found text; HWP files have a few sections. */
+const INFLATE_MAX_FULL_READS = 16;
+const INFLATE_MAX_CHUNKS = 80;
+
+/**
+ * Text from the raw-deflate streams of a legacy HWP file (its BodyText
+ * sections sit at 64- or 512-byte boundaries of an OLE container, so the scan
+ * tries every 64th offset).
+ *
+ * A candidate whose first block header cannot start a text stream is skipped
+ * without calling zlib. The rest are probed with 1 KB of input and at most
+ * 64 KB of output, and only an offset whose probe yields text (or overflows the
+ * probe) is inflated in full. Probes and full reads each have a 2 MB output
+ * budget for the whole file.
+ * Inflating each offset straight to the end of the file was quadratic: a file
+ * of empty stored blocks — each one valid deflate — sent all 15,625 attempts
+ * through the whole buffer, 2 MB in 8.7 s on the event loop (2026-10-23). And
+ * neither input size bounds the work: a file of tiny streams that each inflate
+ * to ~9 KB of zeros took 4.9 s per MB of probes, and 155 KB of 7.7 KB streams
+ * that each inflate to 7.9 MB took 4.3 s of full reads.
+ */
 function extractInflatedTextChunks(buffer: Buffer): string[] {
   const chunks: string[] = [];
-  const maxOffset = Math.min(buffer.length - 16, 1_000_000);
-  for (let offset = 0; offset < maxOffset; offset += 64) {
+  const maxOffset = Math.min(buffer.length - 16, INFLATE_SCAN_MAX_OFFSET);
+  let fullReads = 0;
+  let probeOutput = 0;
+  let fullReadOutput = 0;
+  for (let offset = 0; offset < maxOffset; offset += INFLATE_SCAN_STEP) {
+    if (probeOutput >= INFLATE_SCAN_OUTPUT_BUDGET) break;
+    if (!mayStartTextStream(buffer, offset)) continue;
+    const probe = probeStream(buffer.subarray(offset, offset + INFLATE_PROBE_BYTES));
+    probeOutput += probe.outputBytes;
+    if (!probe.worthFullRead) continue;
+    fullReads++;
     try {
-      const inflated = inflateRawCapped(buffer.subarray(offset));
-      if (inflated.length < 16) continue;
+      const inflated = inflateRawSync(buffer.subarray(offset), {
+        maxOutputLength: INFLATE_SCAN_OUTPUT_BUDGET - fullReadOutput,
+      });
+      fullReadOutput += inflated.length;
       chunks.push(...extractUtf16TextChunks(inflated), ...extractAsciiKoreanTextChunks(inflated));
-      if (chunks.length >= 80) break;
-    } catch {
-      // Most offsets are not deflate streams. Keep scanning sparsely.
+    } catch (err) {
+      // Past what is left of the budget: the scan has read all it may.
+      if (err instanceof RangeError) break;
+      // Otherwise the stream broke after the probe's window: nothing is added.
+    }
+    if (
+      chunks.length >= INFLATE_MAX_CHUNKS ||
+      fullReads >= INFLATE_MAX_FULL_READS ||
+      fullReadOutput >= INFLATE_SCAN_OUTPUT_BUDGET
+    ) {
+      break;
     }
   }
   return chunks;
+}
+
+/**
+ * The first deflate block header, read without zlib (RFC 1951 §3.2.3–3.2.4):
+ * block type 3 is invalid, and a stored block needs LEN = ~NLEN and some data.
+ * An empty stored block is valid deflate but carries no text, and is what a
+ * flood of them is made of. Real HWP sections start with a Huffman block.
+ */
+function mayStartTextStream(buffer: Buffer, offset: number): boolean {
+  const blockType = (buffer[offset] >> 1) & 0b11;
+  if (blockType === 0b11) return false;
+  if (blockType !== 0b00) return true;
+  const length = buffer.readUInt16LE(offset + 1);
+  const lengthComplement = buffer.readUInt16LE(offset + 3);
+  return length > 0 && (length ^ 0xffff) === lengthComplement;
+}
+
+/**
+ * Whether the start of a possible deflate stream is worth inflating in full: it
+ * yields readable text, or it is so compressed that it passed the probe's output
+ * cap (repetitive text can be). `outputBytes` is what the probe cost.
+ */
+function probeStream(window: Buffer): { outputBytes: number; worthFullRead: boolean } {
+  try {
+    // Z_SYNC_FLUSH: a stream cut off by the window yields what it has instead of throwing.
+    const head = inflateRawSync(window, {
+      maxOutputLength: INFLATE_PROBE_MAX_OUTPUT,
+      finishFlush: zlibConstants.Z_SYNC_FLUSH,
+    });
+    const hasText =
+      head.length >= 16 &&
+      (extractUtf16TextChunks(head).length > 0 || extractAsciiKoreanTextChunks(head).length > 0);
+    return { outputBytes: head.length, worthFullRead: hasText };
+  } catch (err) {
+    if (err instanceof RangeError) {
+      return { outputBytes: INFLATE_PROBE_MAX_OUTPUT, worthFullRead: true };
+    }
+    // Most offsets are not deflate streams.
+    return { outputBytes: 0, worthFullRead: false };
+  }
 }
 
 function extractAsciiKoreanTextChunks(buffer: Buffer): string[] {
@@ -454,18 +590,21 @@ function readZipEntryFromLocalHeader(
   return null;
 }
 
+// Attachment XML is sender-controlled and parsed on the event loop: tag
+// patterns go through the linear scanners in attachment-text-scan.ts, never a
+// backtracking regex (2026-10-14 DoS). Only literal patterns stay as regexes.
 function extractWordXmlText(xml: string): string {
-  const withBreaks = xml
-    .replace(/<w:tab\b[^>]*\/>/g, "\t")
-    .replace(/<w:br\b[^>]*\/>/g, "\n")
+  const withBreaks = replaceSelfClosingTag(
+    replaceSelfClosingTag(xml, "<w:tab", "\t"),
+    "<w:br",
+    "\n",
+  )
     .replace(/<\/w:p>/g, "\n")
     .replace(/<\/w:tr>/g, "\n")
     .replace(/<\/w:tc>/g, "\t");
 
-  const chunks = Array.from(withBreaks.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)).map((match) =>
-    decodeXml(match[1]),
-  );
-  const text = chunks.length > 0 ? chunks.join("") : withBreaks.replace(/<[^>]+>/g, " ");
+  const chunks = collectWordTextRuns(withBreaks).map(decodeXml);
+  const text = chunks.length > 0 ? chunks.join("") : stripTags(withBreaks);
   return (
     cleanText(
       decodeXml(text)
@@ -476,31 +615,33 @@ function extractWordXmlText(xml: string): string {
 }
 
 function extractXmlText(xml: string): string[] {
-  const chunks = Array.from(xml.matchAll(/<[^:>\s]*:?t\b[^>]*>([\s\S]*?)<\/[^:>\s]*:?t\b[^>]*>/gi))
-    .map((match) => cleanText(decodeXml(match[1])))
+  const chunks = collectTextRuns(xml)
+    .map((run) => cleanText(decodeXml(run)))
     .filter((value): value is string => !!value);
   if (chunks.length > 0) return chunks;
-  const fallback = cleanText(decodeXml(xml.replace(/<[^>]+>/g, " ")));
+  const fallback = cleanText(decodeXml(stripTags(xml)));
   return fallback ? [fallback] : [];
 }
 
-function extractHwpxXmlText(xml: string): string[] {
-  const withBreaks = xml
-    .replace(/<[^:>]*:?tab\b[^>]*\/>/g, "\t")
-    .replace(/<[^:>]*:?lineBreak\b[^>]*\/>/g, "\n")
-    .replace(/<[^:>]*:?br\b[^>]*\/>/g, "\n")
-    .replace(/<\/[^:>]*:?p>/g, "\n")
-    .replace(/<\/[^:>]*:?tr>/g, "\n")
-    .replace(/<\/[^:>]*:?tc>/g, "\t");
+/** Applied in this order, as the regex chain it replaces was. */
+const HWPX_BREAKS: ReadonlyArray<(xml: string) => string> = [
+  (xml) => replaceNamespacedSelfClosingTag(xml, "tab", "\t"),
+  (xml) => replaceNamespacedSelfClosingTag(xml, "lineBreak", "\n"),
+  (xml) => replaceNamespacedSelfClosingTag(xml, "br", "\n"),
+  (xml) => replaceNamespacedClosingTag(xml, "p", "\n"),
+  (xml) => replaceNamespacedClosingTag(xml, "tr", "\n"),
+  (xml) => replaceNamespacedClosingTag(xml, "tc", "\t"),
+];
 
-  const chunks = Array.from(
-    withBreaks.matchAll(/<[^:>\s]*:?t\b[^>]*>([\s\S]*?)<\/[^:>\s]*:?t\b[^>]*>/gi),
-  )
-    .map((match) => cleanText(decodeXml(match[1])))
+function extractHwpxXmlText(xml: string): string[] {
+  const withBreaks = HWPX_BREAKS.reduce((current, applyBreak) => applyBreak(current), xml);
+
+  const chunks = collectTextRuns(withBreaks)
+    .map((run) => cleanText(decodeXml(run)))
     .filter((value): value is string => !!value);
   if (chunks.length > 0) return chunks;
 
-  const fallback = cleanText(decodeXml(withBreaks.replace(/<[^>]+>/g, " ")));
+  const fallback = cleanText(decodeXml(stripTags(withBreaks)));
   return fallback ? fallback.split("\n") : [];
 }
 
@@ -526,10 +667,11 @@ function decodeXml(value: string): string {
 }
 
 function extractPdfTextHeuristic(buffer: Buffer): string | null {
+  // Bounded: extractAttachmentContent rejects buffers over MAX_EXTRACTABLE_BYTES.
   const raw = buffer.toString("latin1");
-  const literalStrings = Array.from(raw.matchAll(/\(([^()\\]*(?:\\.[^()\\]*)*)\)/g))
-    .map((match) =>
-      match[1].replace(/\\([nrtbf()\\])/g, (_, ch: string) => {
+  const literalStrings = collectPdfLiteralStrings(raw)
+    .map((literal) =>
+      literal.replace(/\\([nrtbf()\\])/g, (_, ch: string) => {
         if (ch === "n" || ch === "r") return "\n";
         if (ch === "t") return "\t";
         if (ch === "b" || ch === "f") return "";

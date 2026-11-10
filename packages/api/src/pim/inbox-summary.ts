@@ -23,6 +23,7 @@ import type {
   TaskItem as TaskInput,
   TodaySection,
 } from "@klorn/contract";
+import type { AttentionSource } from "@prisma/client";
 import { resolveActionTarget } from "../agentcore/action-target.js";
 import { prisma } from "../db.js";
 import {
@@ -33,6 +34,8 @@ import {
   upsertAttentionForTask,
 } from "../judge/attention-mirror.js";
 import { captureError } from "../sentry.js";
+import { dedupeCalendarEvents } from "./calendar-dedupe.js";
+import { calendarSourceScope } from "./calendar-scope.js";
 
 export type { EventItem as EventInput, TaskItem as TaskInput } from "@klorn/contract";
 // Re-export for existing importers (routes, operating-plan, tests) so the
@@ -101,9 +104,30 @@ export function buildTodaySection(input: {
 
 // ─── Queue read helpers ────────────────────────────────────────────────────
 
+/**
+ * The attention sources the top 3 can render — one per contract item kind.
+ * EMAIL (one item per judged email) and GITHUB items have their own surfaces
+ * (lanes, briefing) and no top-3 kind, so the queue read excludes them at the
+ * query. Listing them here explicitly makes adding an AttentionSource a
+ * compile error until it is placed in one bucket or the other.
+ */
+const TOP3_SOURCES = [
+  "PENDING_ACTION",
+  "TASK",
+  "CALENDAR_EVENT",
+  "NOTIFICATION",
+  "COMMITMENT",
+] as const satisfies readonly AttentionSource[];
+type Top3Source = (typeof TOP3_SOURCES)[number];
+const NOT_IN_TOP3 = ["EMAIL", "GITHUB"] as const satisfies readonly AttentionSource[];
+type Unplaced = Exclude<AttentionSource, Top3Source | (typeof NOT_IN_TOP3)[number]>;
+const ALL_SOURCES_PLACED: [Unplaced] extends [never] ? true : Unplaced = true;
+void ALL_SOURCES_PLACED;
+
 type AttentionRow = {
   id: string;
-  source: "PENDING_ACTION" | "TASK" | "CALENDAR_EVENT" | "NOTIFICATION" | "COMMITMENT";
+  // Typed as the DB returns it: any enum value, including ones added later.
+  source: string;
   sourceId: string;
   type: string;
   priority: number;
@@ -141,6 +165,10 @@ type CalendarEventRow = {
   startTime: Date;
   endTime: Date;
   location: string | null;
+  // Row identity (C2): what the read-time dedupe keys on.
+  provider: string;
+  externalId: string | null;
+  sourceAccountId: string | null;
 };
 
 type NotificationRow = {
@@ -325,6 +353,9 @@ async function buildItemFromAttention(
       const commitment = sources.commitmentById.get(row.sourceId);
       return commitment ? buildCommitmentItem(row, commitment) : null;
     }
+    default:
+      // Not a top-3 source (the query already filters these out). Skip, never throw.
+      return null;
   }
 }
 
@@ -338,7 +369,7 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
   const todayStart = new Date(startOfToday(now));
   const tomorrowStart = new Date(endOfToday(now));
 
-  const [pendingRows, taskRows, eventRows, notifRows, commitmentRows] = await Promise.all([
+  const [pendingRows, taskRows, rawEventRows, notifRows, commitmentRows] = await Promise.all([
     (prisma.pendingAction.findMany as (args: unknown) => Promise<PendingActionRow[]>)({
       where: { userId, status: "PENDING" },
       orderBy: { createdAt: "desc" },
@@ -350,7 +381,11 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
       take: 100,
     }),
     prisma.calendarEvent.findMany({
-      where: { userId, startTime: { gte: todayStart, lt: tomorrowStart } },
+      where: {
+        userId,
+        startTime: { gte: todayStart, lt: tomorrowStart },
+        ...calendarSourceScope(),
+      },
       orderBy: { startTime: "asc" },
     }),
     prisma.notification.findMany({
@@ -364,6 +399,10 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
       take: 50,
     }),
   ]);
+
+  // An invite in both the primary and a linked calendar is two rows (C2); the
+  // today list and the attention mirror below must see it once.
+  const eventRows = dedupeCalendarEvents(rawEventRows);
 
   // Fire-and-forget backfill. The attention-mirror producers keep the queue
   // current; this is a safety net for rows that pre-date the producers.
@@ -386,7 +425,13 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
   // Exclude SILENT items — those have been suppressed by the feedback adaptor
   // and must not resurface in the top3 queue.
   const queue = (await prisma.attentionItem.findMany({
-    where: { userId, status: "OPEN", tier: { not: "SILENT" } },
+    where: {
+      userId,
+      status: "OPEN",
+      tier: { not: "SILENT" },
+      // Only sources the top 3 renders — emails would otherwise fill the overfetch.
+      source: { in: [...TOP3_SOURCES] },
+    },
     orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
     take: TOP_LIMIT * 4, // overfetch to absorb any rows whose source row no longer qualifies
     select: {
@@ -403,14 +448,15 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
   })) as AttentionRow[];
 
   // Bucket source ids and fetch the display data in a single round trip per source.
-  const idsBySource = {
-    PENDING_ACTION: [] as string[],
-    TASK: [] as string[],
-    CALENDAR_EVENT: [] as string[],
-    NOTIFICATION: [] as string[],
-    COMMITMENT: [] as string[],
+  const idsFor = (source: Top3Source) =>
+    queue.filter((r) => r.source === source).map((r) => r.sourceId);
+  const idsBySource: Record<Top3Source, string[]> = {
+    PENDING_ACTION: idsFor("PENDING_ACTION"),
+    TASK: idsFor("TASK"),
+    CALENDAR_EVENT: idsFor("CALENDAR_EVENT"),
+    NOTIFICATION: idsFor("NOTIFICATION"),
+    COMMITMENT: idsFor("COMMITMENT"),
   };
-  for (const row of queue) idsBySource[row.source].push(row.sourceId);
 
   const [paJoinRows, taskJoinRows, eventJoinRows, notifJoinRows, commitmentJoinRows] =
     await Promise.all([
@@ -424,7 +470,9 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
         : prisma.task.findMany({ where: { id: { in: idsBySource.TASK } } }),
       idsBySource.CALENDAR_EVENT.length === 0
         ? Promise.resolve([] as CalendarEventRow[])
-        : prisma.calendarEvent.findMany({ where: { id: { in: idsBySource.CALENDAR_EVENT } } }),
+        : prisma.calendarEvent.findMany({
+            where: { id: { in: idsBySource.CALENDAR_EVENT }, ...calendarSourceScope() },
+          }),
       idsBySource.NOTIFICATION.length === 0
         ? Promise.resolve([] as NotificationRow[])
         : prisma.notification.findMany({ where: { id: { in: idsBySource.NOTIFICATION } } }),
@@ -436,7 +484,10 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
   const sources = {
     paById: new Map(paJoinRows.map((r) => [r.id, r])),
     taskById: new Map(taskJoinRows.map((r) => [r.id, r])),
-    eventById: new Map(eventJoinRows.map((r) => [r.id, r])),
+    // The queue can hold an attention item for each copy of an invite present in
+    // the primary and a linked calendar (C2). Only the winning copy resolves, so
+    // the losing copy's item finds no event and drops out: one meeting, one slot.
+    eventById: new Map(dedupeCalendarEvents(eventJoinRows).map((r) => [r.id, r])),
     notifById: new Map(notifJoinRows.map((r) => [r.id, r])),
     commitmentById: new Map(commitmentJoinRows.map((r) => [r.id, r])),
   };

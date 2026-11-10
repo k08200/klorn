@@ -7,7 +7,7 @@
  * route's demo/no-token fallback.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildMailboxQuery, MAILBOXES } from "../mail/gmail-mailbox.js";
 
 const state = vi.hoisted(() => ({
@@ -21,41 +21,76 @@ const state = vi.hoisted(() => ({
   ],
   draftDeletes: [] as string[],
   nextPageToken: null as string | null,
+  // Multi-account (2026-09-04): every linked GOOGLE row the user has, keyed
+  // by its LinkedInboxAccount id, each with its own page of ids + cursor.
+  linked: {} as Record<string, { ids: string[]; nextPageToken: string | null }>,
+  // internalDate per message id so a merged page can be checked for order.
+  // A present key wins even when null — Gmail can hand back null or "".
+  internalDates: {} as Record<string, string | null>,
+  // Date header per message id: a string replaces the default, null drops it.
+  dateHeaders: {} as Record<string, string | null>,
+  // Live inline images: the MIME tree a format:"full" get returns, and the
+  // attachment bodies by id.
+  fullPayload: null as Record<string, unknown> | null,
+  attachmentData: {} as Record<string, string>,
+  attachmentGets: [] as Record<string, unknown>[],
 }));
 
 vi.mock("../mail/gmail.js", () => ({
-  getAuthedClient: vi.fn(async () => (state.hasToken ? {} : null)),
+  getAuthedClient: vi.fn(async () => (state.hasToken ? { key: "primary" } : null)),
+  getAuthedInboxClient: vi.fn(async (_userId: string, id: string) =>
+    state.linked[id] ? { key: id } : null,
+  ),
+  getLinkedInboxClients: vi.fn(async () =>
+    Object.keys(state.linked).map((id) => ({ client: { key: id }, id, email: `${id}@x.test` })),
+  ),
 }));
 
 vi.mock("googleapis", () => ({
   google: {
-    gmail: vi.fn(() => ({
+    gmail: vi.fn(({ auth }: { auth: { key: string } }) => ({
       users: {
         messages: {
           list: vi.fn(async (params: Record<string, unknown>) => {
-            state.listCalls.push(params);
+            state.listCalls.push({ ...params, account: auth.key });
+            const page =
+              auth.key === "primary"
+                ? { ids: state.listIds, nextPageToken: state.nextPageToken }
+                : state.linked[auth.key];
             return {
               data: {
-                messages: state.listIds.map((id) => ({ id })),
-                nextPageToken: state.nextPageToken,
+                messages: page.ids.map((id) => ({ id })),
+                nextPageToken: page.nextPageToken,
               },
             };
           }),
+          attachments: {
+            get: vi.fn(async (params: { messageId: string; id: string }) => {
+              state.attachmentGets.push({ ...params, account: auth.key });
+              return { data: { data: state.attachmentData[params.id] ?? null } };
+            }),
+          },
           get: vi.fn(async (params: Record<string, unknown>) => {
-            state.metaCalls.push(params);
+            if (params.format === "full") {
+              return { data: { id: params.id, payload: state.fullPayload } };
+            }
+            state.metaCalls.push({ ...params, account: auth.key });
+            const id = params.id as string;
+            const dateHeader =
+              id in state.dateHeaders ? state.dateHeaders[id] : "Tue, 26 Aug 2026 09:00:00 +0900";
             return {
               data: {
                 id: params.id,
                 threadId: `t-${params.id}`,
                 snippet: `snippet ${params.id}`,
                 labelIds: ["SENT"],
-                internalDate: "1756100000000",
+                internalDate: id in state.internalDates ? state.internalDates[id] : "1756100000000",
                 payload: {
                   headers: [
                     { name: "From", value: "me@klorn.ai" },
                     { name: "To", value: "you@example.com" },
                     { name: "Subject", value: `Subject ${params.id}` },
-                    { name: "Date", value: "Tue, 26 Aug 2026 09:00:00 +0900" },
+                    ...(dateHeader === null ? [] : [{ name: "Date", value: dateHeader }]),
                   ],
                 },
               },
@@ -150,6 +185,267 @@ describe("listGmailMailbox", () => {
     expect(state.listCalls[0]).not.toHaveProperty("pageToken");
     expect(page?.nextPageToken).toBeNull();
   });
+
+  it("stamps every row with the account it came from (primary by default)", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent");
+    expect(page?.items.map((r) => r.inbox)).toEqual(["primary", "primary"]);
+  });
+});
+
+// Number(null) and Number("") are both 0, so a missing internalDate used to
+// become 1970-01-01 here — and syncSentMessages recorded that as the sentAt.
+// Same rule as the Sent-history import (#1600): internalDate, else the Date
+// header. A message with neither stays listed (a folder view must never hide
+// mail) at the epoch, which only means "date unknown"; the Sent scan skips it.
+describe("listGmailMailbox — a message with no internalDate", () => {
+  const HEADER = "Tue, 26 Aug 2026 09:00:00 +0900";
+  const EPOCH = new Date(0).toISOString();
+
+  beforeEach(() => {
+    state.listCalls.length = 0;
+    state.metaCalls.length = 0;
+    state.listIds = ["m1"];
+    state.hasToken = true;
+    state.nextPageToken = null;
+    state.internalDates = {};
+    state.dateHeaders = {};
+  });
+
+  afterEach(() => {
+    state.internalDates = {};
+    state.dateHeaders = {};
+  });
+
+  async function listSent() {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    return (await listGmailMailbox("user-1", "sent"))?.items ?? [];
+  }
+
+  it.each([
+    ["null", null],
+    ['""', ""],
+  ])("internalDate %s with a valid Date header takes the header's time", async (_label, missing) => {
+    state.internalDates = { m1: missing };
+    const items = await listSent();
+    expect(items).toHaveLength(1);
+    expect(items[0].receivedAt).toBe(new Date(Date.parse(HEADER)).toISOString());
+    expect(items[0].receivedAt).not.toBe(EPOCH);
+  });
+
+  it.each([
+    ["null", null],
+    ['""', ""],
+  ])("internalDate %s with no Date header stays listed, dated unknown (epoch)", async (_label, missing) => {
+    state.internalDates = { m1: missing };
+    state.dateHeaders = { m1: null };
+    const items = await listSent();
+    expect(items.map((r) => [r.gmailId, r.receivedAt])).toEqual([["m1", EPOCH]]);
+  });
+
+  it.each([
+    ["null", null],
+    ['""', ""],
+  ])("internalDate %s with an unparseable Date header stays listed, dated unknown (epoch)", async (_label, missing) => {
+    state.internalDates = { m1: missing };
+    state.dateHeaders = { m1: "not a date" };
+    const items = await listSent();
+    expect(items.map((r) => [r.gmailId, r.receivedAt])).toEqual([["m1", EPOCH]]);
+  });
+
+  it("a valid internalDate still wins over the Date header", async () => {
+    state.internalDates = { m1: "1756100000000" };
+    state.dateHeaders = { m1: "Mon, 01 Jan 2024 00:00:00 +0000" };
+    const items = await listSent();
+    expect(items).toHaveLength(1);
+    expect(items[0].receivedAt).toBe(new Date(1756100000000).toISOString());
+  });
+
+  it("an undated row never hides its neighbours, and is not hidden itself", async () => {
+    state.listIds = ["m1", "m2"];
+    state.internalDates = { m1: null };
+    state.dateHeaders = { m1: null };
+    const items = await listSent();
+    expect(items.map((r) => r.gmailId).sort()).toEqual(["m1", "m2"]);
+  });
+});
+
+// The inbox selector scopes the queue and the search; the folders read the
+// primary account no matter what was selected — a second account's Sent
+// mail was simply unreachable. `inbox=` mirrors routes/email.ts's param.
+describe("listGmailMailbox — per-inbox scope", () => {
+  beforeEach(() => {
+    state.listCalls.length = 0;
+    state.metaCalls.length = 0;
+    state.listIds = ["p1", "p2"];
+    state.nextPageToken = null;
+    state.hasToken = true;
+    state.linked = { "lnk-a": { ids: ["a1"], nextPageToken: null } };
+    state.internalDates = {};
+  });
+
+  it("a linked id reads THAT account only, and stamps its rows with the id", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", undefined, "lnk-a");
+    expect(state.listCalls.map((c) => c.account)).toEqual(["lnk-a"]);
+    expect(page?.items.map((r) => [r.gmailId, r.inbox])).toEqual([["a1", "lnk-a"]]);
+  });
+
+  it("an unknown / non-Google linked id is null (route → 404, never demo rows)", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    expect(await listGmailMailbox("user-1", "sent", undefined, "lnk-missing")).toBeNull();
+  });
+
+  it("'all' merges every account newest-first and stamps each row", async () => {
+    state.internalDates = { p1: "1000", p2: "3000", a1: "2000" };
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", undefined, "all");
+    expect(new Set(state.listCalls.map((c) => c.account))).toEqual(new Set(["primary", "lnk-a"]));
+    expect(page?.items.map((r) => [r.gmailId, r.inbox])).toEqual([
+      ["p2", "primary"],
+      ["a1", "lnk-a"],
+      ["p1", "primary"],
+    ]);
+    // Every account exhausted → no next page.
+    expect(page?.nextPageToken).toBeNull();
+  });
+
+  it("'all' pages each account on its own cursor, folded into one opaque token", async () => {
+    state.nextPageToken = "p-tok-2";
+    state.linked = { "lnk-a": { ids: ["a1"], nextPageToken: null } };
+    const { decodeCompositeToken, listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const first = await listGmailMailbox("user-1", "sent", undefined, "all");
+    // Only the primary has more; the token says exactly that.
+    expect(first?.nextPageToken).not.toBeNull();
+    expect(decodeCompositeToken(first?.nextPageToken ?? "")).toEqual({ primary: "p-tok-2" });
+
+    state.listCalls.length = 0;
+    state.nextPageToken = null;
+    const second = await listGmailMailbox("user-1", "sent", first?.nextPageToken ?? "", "all");
+    // Page two hits ONLY the account that still had a cursor, with its cursor.
+    expect(state.listCalls).toHaveLength(1);
+    expect(state.listCalls[0]).toMatchObject({ account: "primary", pageToken: "p-tok-2" });
+    expect(second?.nextPageToken).toBeNull();
+  });
+
+  it("'all' with no connected account at all is null (demo fallback)", async () => {
+    state.hasToken = false;
+    state.linked = {};
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    expect(await listGmailMailbox("user-1", "sent", undefined, "all")).toBeNull();
+  });
+
+  it("'all' still works when only a linked account is connected", async () => {
+    state.hasToken = false;
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", undefined, "all");
+    expect(page?.items.map((r) => r.inbox)).toEqual(["lnk-a"]);
+  });
+
+  it("a garbage composite token is treated as the first page, not a crash", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", "not-base64-json", "all");
+    expect(page?.items).toHaveLength(3);
+  });
+});
+
+// Folder rows are never synced, so src="cid:…" had no attachment row to
+// resolve through and every logo degraded to alt text. The live path walks
+// the MIME tree instead.
+describe("inline images of live messages", () => {
+  const cidHeader = (value: string) => [{ name: "Content-ID", value }];
+  const tree = {
+    mimeType: "multipart/alternative",
+    parts: [
+      { mimeType: "text/plain", body: { data: "aGk" } },
+      {
+        mimeType: "multipart/related",
+        parts: [
+          { mimeType: "text/html", body: { data: "PGI+" } },
+          {
+            mimeType: "image/png",
+            headers: cidHeader("<logo@x>"),
+            body: { attachmentId: "att-logo", size: 1234 },
+          },
+          {
+            mimeType: "image/gif",
+            headers: cidHeader("<tiny@x>"),
+            body: { data: "R0lGODlh", size: 8 },
+          },
+          {
+            mimeType: "text/html",
+            headers: cidHeader("<evil@x>"),
+            body: { attachmentId: "att-evil" },
+          },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    state.hasToken = true;
+    state.fullPayload = tree;
+    state.attachmentData = { "att-logo": "iVBORw0KGgo" };
+    state.attachmentGets.length = 0;
+  });
+
+  it("findInlinePart — finds the image through nested multiparts, brackets stripped", async () => {
+    const { findInlinePart } = await import("../mail/inline-image.js");
+    expect(findInlinePart(tree, "logo@x")).toEqual({
+      mimeType: "image/png",
+      attachmentId: "att-logo",
+      data: null,
+    });
+  });
+
+  it("findInlinePart — a small part carries its bytes inline", async () => {
+    const { findInlinePart } = await import("../mail/inline-image.js");
+    expect(findInlinePart(tree, "tiny@x")).toEqual({
+      mimeType: "image/gif",
+      attachmentId: null,
+      data: "R0lGODlh",
+    });
+  });
+
+  it("findInlinePart — a non-image part with a matching cid is NOT served", async () => {
+    const { findInlinePart } = await import("../mail/inline-image.js");
+    expect(findInlinePart(tree, "evil@x")).toBeNull();
+    expect(findInlinePart(tree, "missing@x")).toBeNull();
+    expect(findInlinePart(undefined, "logo@x")).toBeNull();
+  });
+
+  it("fetchInlineImage — reads the message once, then exactly the matching attachment", async () => {
+    const { fetchInlineImage } = await import("../mail/inline-image.js");
+    const image = await fetchInlineImage({ key: "primary" } as never, "m-1", "logo@x");
+    expect(image?.mimeType).toBe("image/png");
+    expect(image?.bytes).toEqual(Buffer.from("iVBORw0KGgo", "base64url"));
+    expect(state.attachmentGets).toEqual([
+      { messageId: "m-1", id: "att-logo", account: "primary", userId: "me" },
+    ]);
+  });
+
+  it("fetchInlineImage — inline bytes need no attachment fetch; a miss is null", async () => {
+    const { fetchInlineImage } = await import("../mail/inline-image.js");
+    const tiny = await fetchInlineImage({ key: "primary" } as never, "m-1", "tiny@x");
+    expect(tiny?.mimeType).toBe("image/gif");
+    expect(state.attachmentGets).toEqual([]);
+    expect(await fetchInlineImage({ key: "primary" } as never, "m-1", "missing@x")).toBeNull();
+  });
+});
+
+describe("resolveMailboxClient", () => {
+  beforeEach(() => {
+    state.hasToken = true;
+    state.linked = { "lnk-a": { ids: [], nextPageToken: null } };
+  });
+
+  it("absent / 'primary' / 'all' act on the primary; a linked id on that account", async () => {
+    const { resolveMailboxClient } = await import("../mail/gmail-mailbox.js");
+    expect(await resolveMailboxClient("user-1", undefined)).toEqual({ key: "primary" });
+    expect(await resolveMailboxClient("user-1", "primary")).toEqual({ key: "primary" });
+    expect(await resolveMailboxClient("user-1", "lnk-a")).toEqual({ key: "lnk-a" });
+    expect(await resolveMailboxClient("user-1", "lnk-missing")).toBeNull();
+  });
 });
 
 describe("deleteGmailDraftByMessageId", () => {
@@ -176,5 +472,12 @@ describe("deleteGmailDraftByMessageId", () => {
     state.hasToken = false;
     const { deleteGmailDraftByMessageId } = await import("../mail/gmail-mailbox.js");
     expect(await deleteGmailDraftByMessageId("user-1", "m-draft-1")).toBe(false);
+  });
+
+  it("deletes on the LINKED account when the draft came from one", async () => {
+    state.linked = { "lnk-a": { ids: [], nextPageToken: null } };
+    const { deleteGmailDraftByMessageId } = await import("../mail/gmail-mailbox.js");
+    expect(await deleteGmailDraftByMessageId("user-1", "m-draft-1", "lnk-a")).toBe(true);
+    expect(state.draftDeletes).toEqual(["draft-1"]);
   });
 });

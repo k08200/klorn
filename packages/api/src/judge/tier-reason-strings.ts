@@ -146,6 +146,30 @@ export const STATIC_TIER_REASONS = {
     fr: "Engagement suivi — ajouté à la file de revue",
     de: "Verfolgte Zusage – zur Prüfliste hinzugefügt",
   },
+  // Policy v3 interrupt budget (attention-engine-v3.md §3(5)): a PUSH
+  // candidate after the day's notifications are spent. Stored items carry the
+  // key, so it must not change. The held marker itself is AttentionItem.heldAt.
+  "email.heldByInterruptBudget": {
+    en: "Held: daily interrupt budget reached — no notification sent",
+    ko: "보류: 오늘 알림 한도에 도달해 알림을 보내지 않았어요",
+    ja: "保留: 今日の通知上限に達したため通知していません",
+    zh: "已暂缓：今日提醒次数已用完，未发送通知",
+    es: "En espera: se alcanzó el límite diario de avisos, no se envió notificación",
+    fr: "En attente : limite quotidienne d'alertes atteinte, aucune notification envoyée",
+    de: "Zurückgestellt: Tageslimit für Benachrichtigungen erreicht – keine Benachrichtigung",
+  },
+  // Attention engine v3 (JUDGE_V3_POLICY): the policy picked a different lane
+  // from the v2 judge, so v2's reason text no longer explains it. Clients
+  // under the flag show the structured v3 reasons instead.
+  "email.v3LaneFromFacts": {
+    en: "Sorted by what this mail asks of you",
+    ko: "메일이 요청하는 내용을 보고 분류했어요",
+    ja: "メールの依頼内容をもとに分類しました",
+    zh: "根据邮件对你的请求进行分类",
+    es: "Clasificado según lo que este correo te pide",
+    fr: "Classé selon ce que ce message vous demande",
+    de: "Eingeordnet nach dem, worum diese Mail dich bittet",
+  },
 } as const satisfies Record<string, Record<NotificationLanguage, string>>;
 // `satisfies`, not an annotation: it checks language completeness at the TABLE
 // (a new NOTIFICATION_LANGUAGES entry errors on the exact reason missing a
@@ -161,13 +185,33 @@ export function isStaticTierReasonKey(value: string): value is StaticTierReasonK
 /**
  * Render a stored reason for display. Keys become copy in the reader's
  * language; anything else (LLM prose, rows written before this change) is
- * returned exactly as stored.
+ * returned as stored, capped at TIER_REASON_MAX_CHARS.
  */
 export function resolveTierReason(
   stored: string | null | undefined,
   language?: string | null,
 ): string | null {
   if (!stored) return null;
-  if (!isStaticTierReasonKey(stored)) return stored;
+  if (!isStaticTierReasonKey(stored)) return capTierReason(stored);
   return STATIC_TIER_REASONS[stored][resolveNotificationLanguage(language)];
+}
+
+/**
+ * The longest reason text sent to a client. Free-text reasons are written by
+ * the judge and passed through as stored, so the server bounds them rather
+ * than trusting every writer (or a client's layout) to.
+ */
+export const TIER_REASON_MAX_CHARS = 280;
+const ELLIPSIS = "…";
+
+/** Cut to TIER_REASON_MAX_CHARS code points (never inside a surrogate pair), ellipsis included. */
+function capTierReason(text: string): string {
+  // Cheap exit: UTF-16 length is an upper bound on the code-point count.
+  if (text.length <= TIER_REASON_MAX_CHARS) return text;
+  const points = Array.from(text);
+  if (points.length <= TIER_REASON_MAX_CHARS) return text;
+  return `${points
+    .slice(0, TIER_REASON_MAX_CHARS - 1)
+    .join("")
+    .trimEnd()}${ELLIPSIS}`;
 }

@@ -14,7 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../agentcore/action-outbox.js";
 import { resolveActionTarget } from "../agentcore/action-target.js";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { db, INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -23,6 +23,7 @@ import {
   sendEmailPayloadHash,
 } from "../judge/attention-floor.js";
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
+import { noteReplyIfSent } from "../judge/user-outcome.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 
 /**
@@ -104,8 +105,11 @@ export async function chatRoutes(app: FastifyInstance) {
   // plugin so revoked/kicked tokens are rejected — bare getUserId() skips the
   // device-kick + password-reset epoch checks that requireAuth enforces.
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Paywall (no-op pre-launch): the approvals LIST and the no-effect triage
+  // (reject, snooze) are open to the free tier — Today, Approvals and the
+  // sidebar badge read them. Approving EXECUTES the action, so that route
+  // carries its own requireEntitled.
+  app.addHook("preHandler", requireAppAccess);
 
   // GET /api/chat/pending-actions — All pending actions for the current user across conversations.
   // Powers the mobile inbox so users can see & act on every "needs your attention" item in one place.
@@ -221,7 +225,7 @@ export async function chatRoutes(app: FastifyInstance) {
   // POST /api/chat/pending-actions/:actionId/approve — Approve and execute a pending action
   app.post(
     "/pending-actions/:actionId/approve",
-    { schema: { params: actionIdParamSchema } },
+    { schema: { params: actionIdParamSchema }, preHandler: requireEntitled },
     async (request, reply) => {
       const userId = getUserId(request);
       const { actionId } = request.params as { actionId: string };
@@ -322,12 +326,23 @@ export async function chatRoutes(app: FastifyInstance) {
         // Should never happen — just enqueued in the committed txn.
         return { success: true, queued: true, autoAllowed: !!autoAllow };
       }
+      const runStartedAt = new Date();
       const outcome = await claimAndRunOutboxRow({
         ...outboxRow,
         conversationId: action.conversationId,
       });
 
       if (outcome.kind === "completed") {
+        // An approved reply is the user answering that mail. "completed" can
+        // still carry a provider refusal, so noteReplyIfSent only stamps when
+        // the send set repliedAt during this run. A send left queued for the
+        // worker is not stamped.
+        if (action.toolName === "send_email") {
+          // A legacy string row can parse to null; never throw after the send.
+          const inReplyTo = (toolArgs as { in_reply_to_email_id?: unknown } | null)
+            ?.in_reply_to_email_id;
+          if (typeof inReplyTo === "string") noteReplyIfSent(userId, inReplyTo, runStartedAt);
+        }
         return { success: true, result: outcome.result, autoAllowed: !!autoAllow };
       }
       if (outcome.kind === "dead") {

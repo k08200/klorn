@@ -96,11 +96,34 @@ jobs:
       - name: Website lane consistency
         run: node .github/scripts/check-website-lanes.mjs
 
+      # website/ imports nothing from lib/pricing.ts, so the constant that was
+      # created to stop the 2026-08-12 price drift ($7.99 advertised, $8.99
+      # charged) could not actually see the pages doing the advertising. It
+      # also catches the native price falling below the web one, which the
+      # $8.99 → $29.99 raise did to PRO_PRICE_NATIVE on 2026-10-14.
+      - name: Price consistency
+        run: node .github/scripts/check-price-consistency.mjs
+
       # sitemap.xml is hand-maintained and had drifted both ways at once: it
       # submitted three noindex redirect stubs while omitting all ten /vs/*
       # and /open-source/ pages (#1219), whose only purpose is being found.
       - name: Sitemap coverage
         run: node .github/scripts/check-sitemap.mjs
+
+      # Blog posts exist only in English, but the localized blog listings put
+      # translated titles into their BlogPosting JSON-LD — declaring a French
+      # or Korean headline for an English document. Visible titles stay
+      # localized; structured data carries the post's English headline and
+      # inLanguage "en", on every listing and on the post pages themselves.
+      - name: Blog JSON-LD language
+        run: node .github/scripts/check-blog-jsonld.mjs
+
+      # P1 of the productization plan added the design tokens; P2 migrates onto
+      # them. This ratchet keeps the gap from widening meanwhile: no new
+      # text-[Npx], raw palette colours, raw <button> in app pages, or retired
+      # AUTO lane styling. Per-file baseline counts can only go down.
+      - name: Design tokens
+        run: node .github/scripts/check-design-tokens.mjs
 
   typecheck:
     name: TypeScript
@@ -137,6 +160,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: scope
     if: needs.scope.outputs.code == 'true'
+    # A real Postgres (production's major version) for the *-pg.test.ts suites:
+    # the data-wipe fence's lock ordering and the attachment upserts cannot be
+    # proven against a mock.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: klorn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -150,6 +189,14 @@ jobs:
         run: cd packages/api && pnpm exec prisma generate
       - name: Run tests
         run: cd packages/api && pnpm exec vitest run
+      - name: Run Postgres integration tests (every migration applied)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/klorn_test
+          KLORN_TEST_PG_URL: postgresql://postgres:postgres@localhost:5432/klorn_test
+        run: |
+          cd packages/api
+          pnpm exec prisma migrate deploy
+          pnpm exec vitest run pg.test.ts
 
   build:
     name: Build
@@ -167,8 +214,23 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma types
         run: cd packages/api && pnpm exec prisma generate
+      # D5c: the Google Picker widens the web CSP only under the build switch
+      # NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on. Loads the real next.config.ts (Node
+      # 22 type stripping) and pins the policy with the switch unset and on.
+      - name: Web CSP pinned (Google Picker switch)
+        run: node packages/web/scripts/check-csp.mjs
       - name: Build all packages
         run: pnpm -r build
+      # D5c: built without the switch, the web bundle holds no Google Picker
+      # (google-drive-connect.tsx imports it behind the literal switch, which
+      # next.config.ts always defines, so the bundler drops the import).
+      - name: Web bundle holds no Google Picker without the switch
+        run: |
+          test -d packages/web/.next/static
+          if grep -rl "apis.google.com/js/api.js" packages/web/.next/static; then
+            echo "The Google Picker was compiled in without NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on"
+            exit 1
+          fi
 
   # Guards prod: prod deploys via `prisma migrate deploy` (start.sh), so a
   # schema.prisma change with no matching migration silently ships nothing and

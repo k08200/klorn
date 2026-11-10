@@ -1,0 +1,39 @@
+# Store upload material for the mobile app, rendered from the mock build:
+# App Store + Play screenshots at upload sizes (KO + EN), the Play feature
+# graphic (1024×500, KO + EN) and the Play icon (512×512). Run it by hand
+# (Actions → Mobile Store Assets → Run workflow) and download the
+# `klorn-store-assets` artifact. Specs: apps/mobile/store-pack/capture/.
+name: Mobile Store Assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assets:
+    name: Store screenshots and Play graphics
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - name: Install Chromium and CJK fonts
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+      - name: Render
+        run: npx playwright test --config store-pack/capture/playwright.store.config.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: klorn-store-assets
+          path: apps/mobile/test-results/store-shots/
+          if-no-files-found: error

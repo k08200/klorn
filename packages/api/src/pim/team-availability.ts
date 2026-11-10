@@ -13,6 +13,7 @@ import { prisma } from "../db.js";
 import { normalizeMembers } from "../routes/teams.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { getAttendeeBusyByMember } from "./calendar.js";
+import { calendarSourceScope } from "./calendar-scope.js";
 import { type BusyInterval, findFreeSlots, type SuggestedSlot } from "./slot-suggest.js";
 
 export interface TeamAvailability {
@@ -60,7 +61,12 @@ export async function getTeamAvailability(
 
   const [myEvents, memberBusy] = await Promise.all([
     prisma.calendarEvent.findMany({
-      where: { userId, startTime: { lte: new Date(end) }, endTime: { gte: new Date(start) } },
+      where: {
+        userId,
+        startTime: { lte: new Date(end) },
+        endTime: { gte: new Date(start) },
+        ...calendarSourceScope(),
+      },
       select: { startTime: true, endTime: true },
       take: 500,
     }),

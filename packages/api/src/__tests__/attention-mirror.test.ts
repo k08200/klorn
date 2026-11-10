@@ -639,9 +639,38 @@ describe("upsertAttentionForEmailJudgement — status preservation", () => {
     expect(call.update.isManualOverride).toBe(false);
   });
 
+  it("KEYBOARD_TRIAGE off: the re-judge update names no override-undo column", async () => {
+    vi.stubEnv("KEYBOARD_TRIAGE", "");
+    await upsertAttentionForEmailJudgement(email, judgement);
+    const call = upsertSpy.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(Object.keys(call.update).filter((k) => k.startsWith("overrideUndo"))).toEqual([]);
+    vi.unstubAllEnvs();
+  });
+
+  it("KEYBOARD_TRIAGE on: the re-judge update drops a manual override's undo snapshot", async () => {
+    vi.stubEnv("KEYBOARD_TRIAGE", "true");
+    await upsertAttentionForEmailJudgement(email, judgement);
+    const call = upsertSpy.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(call.update.overrideUndoToken).toBeNull();
+    expect("overrideUndo" in call.update).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
   it("resets isManualOverride to false on every re-judge, so a stale human override can't paper over fresh judge-authored text", async () => {
     await upsertAttentionForEmailJudgement(email, judgement);
     const call = upsertSpy.mock.calls[0]?.[0] as { update: { isManualOverride?: boolean } };
     expect(call.update.isManualOverride).toBe(false);
+  });
+
+  it("a re-judge that replaces the tier also clears an MCP agent's stamp (step A2b): a judge-authored tier is never left marked as the agent's", async () => {
+    await upsertAttentionForEmailJudgement(email, judgement);
+    const call = upsertSpy.mock.calls[0]?.[0] as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    expect(call.update.agentTierSetAt).toBeNull();
+    expect(call.update.agentTierKeyId).toBeNull();
+    // A new row carries no stamp either (the column defaults to null).
+    expect(call.create.agentTierSetAt ?? null).toBeNull();
   });
 });
