@@ -46,3 +46,15 @@ export const TIER_NAMES = CORE_TIERS.join(" / ");
 /** How many lanes there are, for prose that states a count. Never hard-code
  *  the number: it said "four" above a list of five for weeks. */
 export const TIER_COUNT = CORE_TIERS.length;
+
+/**
+ * Fold any recorded lane value into one a person may see. Mirrors the API's
+ * `toLiveTier` (packages/api/src/judge/tiers.ts): the retired v1 values never
+ * render — CALL reads as PUSH, AUTO as QUEUE — and an unrecognised value
+ * reads as QUEUE, the visible default. Callers that have NO recorded lane
+ * should render no chip rather than call this (a missing lane is not QUEUE).
+ */
+export function toLiveTier(value: string): LiveTier {
+  if (value === "CALL") return "PUSH";
+  return (CORE_TIERS as readonly string[]).includes(value) ? (value as LiveTier) : "QUEUE";
+}

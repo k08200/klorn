@@ -57,6 +57,10 @@ export function ForceGraph3DView({ nodes, edges }: { nodes: GraphNode[]; edges: 
       const height = Math.round(window.innerHeight * 0.72);
       graph = new ForceGraph3D(containerRef.current)
         .backgroundColor("#0c0c10")
+        // The library's built-in hint ("Left-click: rotate, Mouse-wheel…") is
+        // fixed English text overlaid on every locale; the page copy above and
+        // the text fallback below carry the graph instead.
+        .showNavInfo(false)
         .width(containerRef.current.clientWidth)
         .height(height)
         .graphData({
@@ -99,7 +103,7 @@ export function ForceGraph3DView({ nodes, edges }: { nodes: GraphNode[]; edges: 
   return (
     <div
       ref={containerRef}
-      className="overflow-hidden rounded-2xl border border-stone-700/45"
+      className="overflow-hidden rounded-card border border-stone-700/45"
       style={{ minHeight: "60vh" }}
     />
   );

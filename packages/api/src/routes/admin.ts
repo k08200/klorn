@@ -12,7 +12,7 @@ import { db, prisma } from "../db.js";
 import { withTenant } from "../db-tenant.js";
 import type { CalibrationSnapshotPayload } from "../judge/calibration-snapshot.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
-import { getJudgeHealth } from "../judge/judge-health.js";
+import { getJudgeHealth } from "../judge/judge-fallback-check.js";
 import { buildInteractionGraph } from "../learning/interaction-graph.js";
 import {
   listAppliedLearnedRules,
@@ -711,9 +711,11 @@ export async function adminRoutes(app: FastifyInstance) {
       // Whitelist the quotaKey shape so a malicious admin (or compromised
       // token) can't pass "__proto__" / control chars / 10kb of garbage into
       // the in-memory state Map.
-      if (!/^(openrouter|gemini):(env|user:[A-Za-z0-9_-]{1,64})$/.test(body.quotaKey)) {
+      if (
+        !/^(anthropic|gemini|openai-compat):(env|user:[A-Za-z0-9_-]{1,64})$/.test(body.quotaKey)
+      ) {
         return reply.code(400).send({
-          error: "Invalid quotaKey. Expected openrouter|gemini : env|user:<id>.",
+          error: "Invalid quotaKey. Expected anthropic|gemini|openai-compat : env|user:<id>.",
         });
       }
       target = body.quotaKey;
@@ -840,12 +842,12 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 
-  // GET /api/admin/judge-health — fleet-wide judge health: the rolling rate at
-  // which the judge fell back to the keyword pipeline (which caps PUSH recall
-  // ~46% / AUTO 0%). `degraded: true` means the LLM scorer is likely failing and
-  // classification accuracy has silently collapsed across all users. Pairs with
-  // the alarm in judge-health.ts. In-process per dyno (best-effort, resets on
-  // restart) — a point-in-time read, not a historical series.
+  // GET /api/admin/judge-health — fleet-wide judge health: the last DB-backed
+  // check of how often the judge fell back to the keyword pipeline over 24 h
+  // (which caps PUSH recall ~46% / AUTO 0%), plus the top unrecovered provider
+  // error this process has seen. `lastCheck.degraded: true` means the LLM scorer
+  // is likely failing for everyone. Pairs with the alarm in
+  // judge-fallback-check.ts; a stale cache is refreshed in the background.
   app.get("/judge-health", async () => {
     return getJudgeHealth();
   });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isSafeBillingRedirect } from "../lib/billing-redirect";
+import { useT } from "../lib/i18n";
 import { isNativePlatform } from "../lib/native/capacitor";
 import { iapAvailable, restoreNativePurchases, startNativePurchase } from "../lib/native/iap";
 import { proPrice } from "../lib/pricing";
@@ -14,10 +15,10 @@ import { useToast } from "./toast";
 const PRO_PLANS = new Set(["PRO", "TEAM", "ENTERPRISE"]);
 
 const VALUE_PROPS = [
-  "Real-time push for mail that actually matters",
-  "Auto-handle the noise while you're away",
-  "Send, reply, and integrations",
-];
+  "subscription.valueProp.push",
+  "subscription.valueProp.noise",
+  "subscription.valueProp.send",
+] as const;
 
 // The in-app path to subscribe / manage a subscription. On the web it uses
 // Stripe (checkout + portal); in the native app it uses RevenueCat IAP (Apple
@@ -26,6 +27,7 @@ const VALUE_PROPS = [
 export function SubscriptionSection() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useT();
   const native = isNativePlatform();
   const [loading, setLoading] = useState(false);
   // Provider state for the manager below. The hook runs before the early
@@ -56,10 +58,10 @@ export function SubscriptionSection() {
         window.location.href = url;
         return;
       }
-      toast("Unsafe billing redirect URL.", "error");
+      toast(t("billing.error.unsafeRedirect"), "error");
       setLoading(false);
     } catch {
-      toast("Could not start checkout. Please try again.", "error");
+      toast(t("subscription.toast.checkoutFailed"), "error");
       setLoading(false);
     }
   };
@@ -78,8 +80,8 @@ export function SubscriptionSection() {
     }
     toast(
       outcome === "unavailable"
-        ? "Subscriptions aren't available right now."
-        : "Could not complete the purchase. Please try again.",
+        ? t("subscription.toast.unavailable")
+        : t("subscription.toast.purchaseFailed"),
       "error",
     );
     setLoading(false);
@@ -93,30 +95,30 @@ export function SubscriptionSection() {
       window.location.reload();
       return;
     }
-    toast("No previous purchase found.", "info");
+    toast(t("subscription.toast.noPurchase"), "info");
     setLoading(false);
   };
 
   return (
     <section className="mb-8">
-      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
-        Subscription
+      <h2 className="mb-3 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+        {t("subscription.title")}
       </h2>
-      <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+      <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
         {isPro ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-base font-semibold text-ink">Klorn Pro</p>
-              <p className="mt-0.5 text-xs text-ink-dim">Active — thanks for supporting Klorn.</p>
+              <p className="text-role-head text-ink">Klorn Pro</p>
+              <p className="mt-0.5 text-role-caption text-ink-dim">{t("subscription.active")}</p>
             </div>
             {native ? (
               <button
                 type="button"
                 onClick={restore}
                 disabled={loading}
-                className="ease-strong min-h-10 rounded-lg border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+                className="ease-strong min-h-10 rounded-control border border-line bg-surface-panel/70 px-4 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
               >
-                Restore purchase
+                {t("subscription.restore")}
               </button>
             ) : (
               // Real provider state, not an inference from user.plan: a beta
@@ -129,17 +131,18 @@ export function SubscriptionSection() {
         ) : (
           <div>
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-base font-semibold text-ink">Klorn Pro</p>
-              <p className="text-sm text-ink-mid">
-                <span className="text-xl font-bold text-ink">{price}</span>/mo
+              <p className="text-role-head text-ink">Klorn Pro</p>
+              <p className="text-role-body text-ink-mid">
+                <span className="text-role-title font-bold text-ink">{price}</span>
+                {t("billing.plan.pro.period")}
               </p>
             </div>
-            <p className="mt-1 text-xs text-ink-dim">
-              7 days free, then {price}/month. Cancel anytime.
+            <p className="mt-1 text-role-caption text-ink-dim">
+              {t("subscription.trialTerms", { price })}
             </p>
             <ul className="mt-4 space-y-2">
               {VALUE_PROPS.map((prop) => (
-                <li key={prop} className="flex items-start gap-2.5 text-sm text-ink-mid">
+                <li key={prop} className="flex items-start gap-2.5 text-role-body text-ink-mid">
                   <svg
                     aria-hidden="true"
                     width="16"
@@ -154,7 +157,7 @@ export function SubscriptionSection() {
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  <span>{prop}</span>
+                  <span>{t(prop)}</span>
                 </li>
               ))}
             </ul>
@@ -162,18 +165,18 @@ export function SubscriptionSection() {
               <button
                 type="button"
                 disabled
-                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border border-line bg-surface-hover text-sm font-semibold text-ink-dim"
+                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-control border border-line bg-surface-hover text-role-label font-semibold text-ink-dim"
               >
-                Subscription coming soon
+                {t("billing.subscriptionComingSoon")}
               </button>
             ) : (
               <button
                 type="button"
                 onClick={native ? startAppPurchase : startWebTrial}
                 disabled={loading}
-                className="glow-primary ease-strong mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-accent-solid text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+                className="glow-primary ease-strong mt-5 flex min-h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
               >
-                {loading ? "Starting..." : "Start 7-day free trial"}
+                {loading ? t("subscription.starting") : t("billing.startTrial")}
               </button>
             )}
           </div>

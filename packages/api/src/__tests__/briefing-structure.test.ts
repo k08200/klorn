@@ -3,12 +3,19 @@
  * segmentation, measured-only summaries, attention capped at 3.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   timezone: "Asia/Seoul",
   language: "ko" as string | null,
-  events: [] as Array<{ title: string; startTime: Date; endTime: Date }>,
+  events: [] as Array<{
+    title: string;
+    startTime: Date;
+    endTime: Date;
+    provider?: string;
+    externalId?: string | null;
+    sourceAccountId?: string | null;
+  }>,
   pushItems: [] as Array<{ title: string; tierReason: string | null }>,
 }));
 
@@ -26,6 +33,7 @@ vi.mock("../user-timezone.js", () => ({
   getUserTimeZone: vi.fn(async () => state.timezone),
 }));
 
+import { prisma } from "../db.js";
 import { buildBriefingStructure } from "../pim/briefing-structure.js";
 
 // Saturday 2026-08-22, 07:00 KST.
@@ -115,5 +123,94 @@ describe("buildBriefingStructure", () => {
     expect(s.curve[0]).toBe(1); // 08h
     expect(s.curve[1]).toBe(0); // 09h onward free
     expect(s.headline).toContain("1 meeting");
+  });
+});
+
+describe("buildBriefingStructure — linked calendar copies (C2)", () => {
+  const copy = (sourceAccountId: string | null) => ({
+    ...kstEvent("Design review", 10, 11),
+    provider: "GOOGLE",
+    externalId: "g-invite",
+    sourceAccountId,
+  });
+
+  it("counts an invite that sits in the primary and a linked calendar as one meeting", async () => {
+    state.events = [copy(null)];
+    const single = await buildBriefingStructure("u1", NOW);
+
+    state.events = [copy("acct-1"), copy(null)];
+    const both = await buildBriefingStructure("u1", NOW);
+
+    expect(both).toEqual(single);
+    // The overlap curve would read 2 at 10:00 if the copy were counted.
+    expect(Math.max(...both.curve)).toBe(1);
+  });
+
+  it("still counts two different meetings at the same time as two", async () => {
+    state.events = [
+      { ...copy(null), externalId: "g-a" },
+      { ...copy("acct-1"), externalId: "g-b" },
+    ];
+    expect(Math.max(...(await buildBriefingStructure("u1", NOW)).curve)).toBe(2);
+  });
+});
+
+describe("buildBriefingStructure — kill switch (C2)", () => {
+  const eventQueryWhere = () => {
+    const call = vi.mocked(prisma.calendarEvent.findMany).mock.calls.at(-1);
+    return (call?.[0] as { where: Record<string, unknown> }).where;
+  };
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("reads primary and LOCAL rows only while LINKED_CALENDAR_SYNC_ENABLED is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await buildBriefingStructure("u1", NOW);
+    expect(eventQueryWhere().sourceAccountId).toBeNull();
+  });
+
+  it("does not narrow the query once the flag is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await buildBriefingStructure("u1", NOW);
+    expect(eventQueryWhere()).not.toHaveProperty("sourceAccountId");
+  });
+});
+
+describe("buildBriefingStructure — the cap applies after the dedupe (C7)", () => {
+  const DAY_SHAPE_CAP = 50;
+  const queryArg = () => {
+    const call = vi.mocked(prisma.calendarEvent.findMany).mock.calls.at(-1);
+    return call?.[0] as { take?: number };
+  };
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("does not cap the query while copies can exist, so copies never spend the cap", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await buildBriefingStructure("u1", NOW);
+    expect(queryArg().take).toBeUndefined();
+  });
+
+  it("still lets the database cap the query while no linked row is visible (identical to main)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await buildBriefingStructure("u1", NOW);
+    expect(queryArg().take).toBe(DAY_SHAPE_CAP);
+  });
+
+  it("reads at most 50 distinct meetings even when more rows come back", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    state.language = "en";
+    state.events = Array.from({ length: 60 }, (_, i) => ({
+      ...kstEvent(`Meeting ${i}`, 10, 11),
+      provider: "GOOGLE",
+      externalId: `g-${i}`,
+      sourceAccountId: null,
+    }));
+    const s = await buildBriefingStructure("u1", NOW);
+    expect(s.headline).toContain("50 meetings");
   });
 });

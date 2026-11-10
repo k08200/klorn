@@ -89,3 +89,41 @@ describe("checkAutoReplyRules — reply rules only", () => {
     );
   });
 });
+
+describe("checkAutoReplyRules — sender conditions", () => {
+  it("never matches an AUTO_REPLY rule that names no sender", async () => {
+    seeded.rules = [
+      {
+        id: "r1",
+        name: "everyone",
+        actionType: "AUTO_REPLY",
+        actionValue: "hi",
+        conditions: { subjectContains: ["invoice"] },
+      },
+    ];
+    expect(
+      await checkAutoReplyRules("u1", { from: "a@b.example", subject: "Invoice 42" }),
+    ).toBeNull();
+  });
+
+  it("does not fire on a display name that spells the rule's address", async () => {
+    seeded.rules = [
+      {
+        id: "r1",
+        name: "boss",
+        actionType: "AUTO_REPLY",
+        actionValue: "hi",
+        conditions: { from: ["boss@company.com"] },
+      },
+    ];
+    expect(
+      await checkAutoReplyRules("u1", {
+        from: '"boss@company.com" <attacker@evil.com>',
+        subject: "x",
+      }),
+    ).toBeNull();
+    expect(
+      await checkAutoReplyRules("u1", { from: "Boss <boss@company.com>", subject: "x" }),
+    ).not.toBeNull();
+  });
+});

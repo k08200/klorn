@@ -8,18 +8,33 @@
  */
 
 import multipart from "@fastify/multipart";
-import type { EmailUndoActionResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { recordEvent } from "../analytics.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
-import { syncEmailByGmailId } from "../mail/email-sync.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { isImapFamily } from "../mail/providers/error-semantics.js";
+import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
+import { SendOutcomeUnknownError } from "../mail/providers/send-outcome-unknown.js";
 import type { MailAttachment, SendMailResult } from "../mail/providers/types.js";
+import { markEmailReplied } from "../mail/reply-state.js";
+import { type ReplyThreading, resolveReplyThreading } from "../mail/reply-threading.js";
+import {
+  openSendReceipt,
+  outcomeOfSend,
+  SEND_RECEIPT_UNAVAILABLE_MESSAGE,
+  type SendReceiptHandle,
+  sendReceiptWire,
+  settleSendReceipt,
+  verifySendOrRefuse,
+} from "../mail/send-receipt.js";
+import { recordSentMessage } from "../mail/sent-messages.js";
 import { captureError } from "../sentry.js";
 import { safeAttachmentFilename } from "./email.js";
+import { completeUndo, findParkedInbox } from "./email-undo.js";
 
 // Gmail caps a single message (body + all attachments, base64-encoded) at 25 MB.
 // We enforce the raw-byte total below that so the encoded payload stays under
@@ -117,6 +132,92 @@ function resolveUndoLinkedInbox(body: unknown): string | null {
     : null;
 }
 
+const SEND_OUTCOME_UNKNOWN_MESSAGE =
+  "The message may already have been sent. Check Sent Items before retrying.";
+
+/** Longest id accepted for a linked inbox (ids are UUIDs; the cap only bounds input). */
+const MAX_LINKED_INBOX_ID_LENGTH = 128;
+
+type SendInbox =
+  | { kind: "primary" }
+  | { kind: "linked"; id: string }
+  | { kind: "invalid" }
+  | { kind: "not_found" };
+
+/**
+ * Which account a new message (POST /send) leaves from. Absent, null or
+ * "primary" is the primary inbox, exactly as before the field existed. Any other
+ * value must be the id of a LinkedInboxAccount the CALLER owns: the row is read
+ * by id AND userId, so another user's id is not_found — never a silent fall back
+ * to the primary inbox, which would send from an account the user did not pick.
+ * On a reply that names no account, the value is the answered mail's own inbox
+ * (sendAccountValue), checked the same way.
+ */
+async function resolveSendInbox(userId: string, value: unknown): Promise<SendInbox> {
+  if (value === undefined || value === null || value === "primary") return { kind: "primary" };
+  if (typeof value !== "string") return { kind: "invalid" };
+  const id = value.trim();
+  if (!id || id.length > MAX_LINKED_INBOX_ID_LENGTH) return { kind: "invalid" };
+  const row = await prisma.linkedInboxAccount.findFirst({
+    where: { id, userId },
+    select: { id: true },
+  });
+  return row ? { kind: "linked", id: row.id } : { kind: "not_found" };
+}
+
+/** Longest mail id accepted (EmailMessage ids are UUIDs; the cap only bounds input). */
+const MAX_EMAIL_ID_LENGTH = 128;
+
+interface AnsweredEmail {
+  id: string;
+  gmailId: string;
+  threadId: string | null;
+  linkedInboxAccountId: string | null;
+}
+
+type AnsweredEmailLookup =
+  | { kind: "none" }
+  | { kind: "found"; email: AnsweredEmail }
+  | { kind: "invalid" }
+  | { kind: "not_found" };
+
+/**
+ * The mail a POST /send answers (`inReplyToEmailId`, the web AI-draft reply,
+ * whose to / subject / body the user may have edited). Absent or null: a new
+ * message, exactly as before the field existed. Otherwise it must be the
+ * EmailMessage id of the CALLER's own mail: the row is read by id AND userId,
+ * so another user's id is not_found and the route refuses before anything is
+ * sent — that id can never be threaded into, reply-chipped or stamped.
+ */
+async function resolveAnsweredEmail(userId: string, value: unknown): Promise<AnsweredEmailLookup> {
+  if (value === undefined || value === null) return { kind: "none" };
+  if (typeof value !== "string") return { kind: "invalid" };
+  const id = value.trim();
+  if (!id || id.length > MAX_EMAIL_ID_LENGTH) return { kind: "invalid" };
+  const email = await prisma.emailMessage.findFirst({
+    where: { id, userId },
+    select: { id: true, gmailId: true, threadId: true, linkedInboxAccountId: true },
+  });
+  return email ? { kind: "found", email } : { kind: "not_found" };
+}
+
+/**
+ * The account value a POST /send resolves (resolveSendInbox). An account the
+ * caller names — a linked inbox id or "primary" — is their choice and wins. None
+ * named (absent or null) on a reply: the inbox the answered mail arrived in, the
+ * account POST /:id/reply sends from, so the reply leaves from the address it was
+ * written to (the web AI-draft panel names none). That id then passes the same
+ * caller-scoped check as a named one: a tag for an inbox the caller no longer
+ * owns (unlinked; the tag has no FK) is not_found, never a silent primary send.
+ * Neither a reply nor an account named: the primary inbox, as before.
+ */
+function sendAccountValue(named: unknown, original: AnsweredEmail | null): unknown {
+  return named ?? original?.linkedInboxAccountId ?? null;
+}
+
+/** The 404 when the account was derived from the answered mail and is gone. */
+const ANSWERED_INBOX_UNLINKED_MESSAGE = "The inbox this email arrived in is no longer connected.";
+
 export async function registerEmailMutationsRoutes(app: FastifyInstance) {
   // Multipart parser for the compose route's file uploads. Scoped to this
   // plugin's encapsulation context, so JSON routes elsewhere are untouched.
@@ -145,27 +246,144 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const uid = getUserId(request);
-      const { to, subject, body } = request.body as { to: string; subject: string; body: string };
+      const { to, subject, body, linkedInboxAccountId, inReplyToEmailId } = request.body as {
+        to: string;
+        subject: string;
+        body: string;
+        // Optional: the LinkedInboxAccount to send from (multi-inbox rule —
+        // every mail action threads the account id end to end). "primary" = the
+        // primary inbox. Absent / null = the primary inbox, as before — or, on a
+        // reply (inReplyToEmailId), the inbox the answered mail arrived in.
+        linkedInboxAccountId?: unknown;
+        // Optional: the caller's own EmailMessage this message answers (the web
+        // AI-draft reply). Absent / null = a new message, as before.
+        inReplyToEmailId?: unknown;
+      };
 
       if (!to || !subject || !body) {
         return reply.code(400).send({ error: "Missing required fields: to, subject, body" });
       }
 
+      const answered = await resolveAnsweredEmail(uid, inReplyToEmailId);
+      if (answered.kind === "invalid") {
+        return reply.code(400).send({ error: "inReplyToEmailId must be an email id." });
+      }
+      if (answered.kind === "not_found") {
+        return reply.code(404).send({ error: "Email not found" });
+      }
+      const original = answered.kind === "found" ? answered.email : null;
+
+      // The caller's named account, or on a reply that names none, the answered
+      // mail's own inbox (sendAccountValue) — checked as the caller's either way.
+      const accountValue = sendAccountValue(linkedInboxAccountId, original);
+      const inbox = await resolveSendInbox(uid, accountValue);
+      if (inbox.kind === "invalid") {
+        return reply.code(400).send({ error: "linkedInboxAccountId must be a linked inbox id." });
+      }
+      if (inbox.kind === "not_found") {
+        // A derived account is not_found only when the mail's inbox was unlinked.
+        const derived = accountValue !== linkedInboxAccountId;
+        return reply
+          .code(404)
+          .send({ error: derived ? ANSWERED_INBOX_UNLINKED_MESSAGE : "Linked inbox not found" });
+      }
+      const linkedId = inbox.kind === "linked" ? inbox.id : null;
+
       // A soft error from sendEmail (bad address, no-reply, Gmail not connected)
       // must be a 4xx, not a 200 with an { error } body — otherwise callers that
       // gate on HTTP status treat a failed send as success (the reply-draft flow
       // cleared the draft on failure before this).
-      // Compose sends from the primary inbox until per-account send routing
-      // (Phase 1 of the multi-provider plan) lands.
-      const actions = await mailActionsFor(uid, null);
-      const result = await actions.sendEmail(uid, to, subject, body);
+      // The provider is dispatched from the chosen account's row (a linked
+      // Outlook or IMAP mailbox has its own surface), and the id rides into the
+      // send options so the provider uses THAT account's credentials. The primary
+      // inbox keeps the exact call it always made.
+      const actions = await mailActionsFor(uid, linkedId);
+
+      // A reply threads into the original as POST /:id/reply does — but only when
+      // the original lives on the account this message leaves from: its thread id
+      // and headers belong to that account. With no account named that is always
+      // so; an account the caller named is never switched here. Recipient, subject
+      // and body are the confirmed bytes either way.
+      const threading: ReplyThreading | null =
+        original && (original.linkedInboxAccountId ?? null) === linkedId
+          ? await resolveReplyThreading(actions, uid, original)
+          : null;
+
+      // Deterministic floor (MANUAL_SEND_RECEIPTS_ENABLED): the receipt of the
+      // bytes the user confirmed is written before anything leaves. No receipt,
+      // no send. null while the flag is off — then nothing below changes.
+      let receipt: SendReceiptHandle | null;
+      try {
+        receipt = await openSendReceipt({
+          userId: uid,
+          route: "send",
+          to,
+          subject,
+          body,
+          inbox: linkedId ?? "primary",
+          emailId: original?.id ?? null,
+        });
+      } catch (err) {
+        captureError(err, { tags: { scope: "email.send.receipt" }, extra: { userId: uid } });
+        return reply.code(503).send({ error: SEND_RECEIPT_UNAVAILABLE_MESSAGE });
+      }
+
+      // The exact bytes handed to the provider, verified against the receipt.
+      if (receipt) await verifySendOrRefuse(receipt, uid, { to, subject, body });
+      let result: SendMailResult;
+      try {
+        result =
+          linkedId || threading
+            ? await actions.sendEmail(uid, to, subject, body, [], {
+                ...threading,
+                ...(linkedId ? { linkedInboxAccountId: linkedId } : {}),
+              })
+            : await actions.sendEmail(uid, to, subject, body);
+      } catch (err) {
+        // A throw may come after the mail left: the receipt says "unknown", never "refused".
+        if (receipt) await settleSendReceipt(receipt, uid, { status: "UNKNOWN" });
+        if (!(err instanceof SendOutcomeUnknownError)) throw err;
+        // The provider could not say whether the message went out (a linked
+        // Outlook mailbox, step B0b). The user is told not to simply retry.
+        captureError(err, {
+          tags: { scope: "email.send.send-outcome-unknown" },
+          extra: { userId: uid },
+        });
+        return reply.code(502).send({ error: SEND_OUTCOME_UNKNOWN_MESSAGE });
+      }
+      if (receipt) await settleSendReceipt(receipt, uid, outcomeOfSend(result));
+      // A linked mailbox whose provider cannot send from Klorn: 501, as the reply
+      // route answers (the primary Google inbox never returns this).
+      if (result && "unsupported" in result) {
+        return reply.code(501).send({ error: result.error });
+      }
       if (result && "error" in result) {
         return reply.code(400).send(result);
       }
       // Manual send = genuine engagement with this recipient (an importance-graph
       // edge). Only user-initiated routes record this — never the auto-reply path.
       await recordContactEngagement(uid, to, "outbound");
-      return result;
+      if (original) {
+        // The answered mail's reply chip flips to "replied" and its decision-ledger
+        // row is stamped REPLIED (lane quality), as POST /:id/reply records them.
+        await markEmailReplied(uid, original.id);
+        noteEmailOutcome(uid, original.id, "REPLIED");
+      }
+      // A thread I am now waiting on (sent-messages.ts). The thread the provider
+      // reports wins: the user may have edited the subject, and Gmail starts a new
+      // thread when it no longer matches. Without one (IMAP), the original's.
+      if ("success" in result && result.success && result.messageId) {
+        await recordSentMessage(uid, {
+          gmailId: result.messageId,
+          threadId: result.threadId ?? threading?.threadId ?? null,
+          to,
+          subject,
+          sentAt: new Date(),
+          inbox: linkedId ?? "primary",
+          origin: "user",
+        });
+      }
+      return receipt ? { ...result, receipt: sendReceiptWire(receipt) } : result;
     },
   );
 
@@ -270,6 +488,17 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(400).send(result);
       }
       await recordContactEngagement(uid, to, "outbound");
+      if ("success" in result && result.success && result.messageId) {
+        await recordSentMessage(uid, {
+          gmailId: result.messageId,
+          threadId: result.threadId ?? null,
+          to,
+          subject,
+          sentAt: new Date(),
+          inbox: "primary",
+          origin: "user",
+        });
+      }
       return { ...result, attachedCount: attachments.length };
     },
   );
@@ -292,9 +521,15 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     // lookup itself lives inside the same guarded chain: even a DB blip there
     // must degrade to the local write below, never a 500.
     await mailActionsFor(uid, email.linkedInboxAccountId)
-      .then((actions) =>
-        actions.toggleRead(uid, email.gmailId, readVal, email.linkedInboxAccountId),
-      )
+      .then(async (actions) => {
+        const result = await actions.toggleRead(
+          uid,
+          email.gmailId,
+          readVal,
+          email.linkedInboxAccountId,
+        );
+        logProviderSoftFailure("EMAIL", email.id, result);
+      })
       .catch((err) => {
         // Provider sync failed — still update local DB, but surface the divergence
         // (DB will say read while the mailbox still shows unread) instead of hiding it.
@@ -305,6 +540,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       where: { id: email.id },
       data: { isRead: readVal },
     });
+    // The Mac reader marks every mail it shows; mobile marks an unread one on
+    // open. Mark-unread is not an open.
+    if (readVal) noteEmailOutcome(uid, email.id, "OPENED");
     return { success: true };
   });
 
@@ -321,9 +559,15 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
     await mailActionsFor(uid, email.linkedInboxAccountId)
-      .then((actions) =>
-        actions.toggleStar(uid, email.gmailId, starVal, email.linkedInboxAccountId),
-      )
+      .then(async (actions) => {
+        const result = await actions.toggleStar(
+          uid,
+          email.gmailId,
+          starVal,
+          email.linkedInboxAccountId,
+        );
+        logProviderSoftFailure("EMAIL", email.id, result);
+      })
       .catch((err) => {
         console.warn(`[EMAIL] toggleStar failed for ${email.id}:`, err);
         captureError(err, { tags: { scope: "email.star-sync" }, extra: { userId: uid } });
@@ -332,6 +576,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       where: { id: email.id },
       data: { isStarred: starVal },
     });
+    if (starVal) noteEmailOutcome(uid, email.id, "STARRED");
     return { success: true };
   });
 
@@ -358,8 +603,13 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(501).send({ error: result.error });
       }
       if (result && "error" in result) {
+        // An IMAP provider answers { error } for every failure (refused or
+        // unconfirmed MOVE, renumbered mailbox): the message is still in the
+        // mailbox, so the row stays. Only "not connected" may remove it locally.
+        if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         // Gmail not connected — just remove from DB
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
+        noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
@@ -368,7 +618,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: `Gmail delete failed: ${gErr.message || "unknown"}` });
     }
 
-    // Gmail succeeded — DB already cleaned by trashEmail()
+    // Gmail succeeded — DB already cleaned by trashEmail(). The ledger keys on
+    // the id string, not the row, so it still takes the stamp. Trash counts as
+    // ARCHIVED: either way the mail left the inbox.
+    noteEmailOutcome(uid, email.id, "ARCHIVED");
     return { success: true };
   });
 
@@ -377,7 +630,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
-    const linkedInboxAccountId = resolveUndoLinkedInbox(request.body);
+    const linkedInboxAccountId =
+      resolveUndoLinkedInbox(request.body) ?? (await findParkedInbox(uid, gmailId, "TRASH"));
 
     try {
       const actions = await mailActionsFor(uid, linkedInboxAccountId);
@@ -388,9 +642,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
-      const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
-      const payload: EmailUndoActionResponse = { success: true, gmailId, emailId: synced.emailId };
-      return payload;
+      const done = await completeUndo(uid, actions, gmailId, linkedInboxAccountId, result);
+      if ("failure" in done) return reply.code(502).send({ error: done.failure });
+      return done.payload;
     } catch (err) {
       const gErr = err as { message?: string };
       return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });
@@ -417,8 +671,12 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(501).send({ error: result.error });
       }
       if (result && "error" in result) {
+        // Same rule as DELETE above: an IMAP { error } is a failed move, not a
+        // missing account, and the row stays.
+        if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
         void recordEvent(uid, "queue_action", { action: "archive" });
+        noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
@@ -429,6 +687,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
 
     // Retention analytics: archiving is the core "I handled this card" signal.
     void recordEvent(uid, "queue_action", { action: "archive" });
+    noteEmailOutcome(uid, email.id, "ARCHIVED");
     return { success: true };
   });
 
@@ -437,7 +696,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
-    const linkedInboxAccountId = resolveUndoLinkedInbox(request.body);
+    const linkedInboxAccountId =
+      resolveUndoLinkedInbox(request.body) ?? (await findParkedInbox(uid, gmailId, "ARCHIVE"));
 
     try {
       const actions = await mailActionsFor(uid, linkedInboxAccountId);
@@ -448,9 +708,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
-      const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
-      const payload: EmailUndoActionResponse = { success: true, gmailId, emailId: synced.emailId };
-      return payload;
+      const done = await completeUndo(uid, actions, gmailId, linkedInboxAccountId, result);
+      if ("failure" in done) return reply.code(502).send({ error: done.failure });
+      return done.payload;
     } catch (err) {
       const gErr = err as { message?: string };
       return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });

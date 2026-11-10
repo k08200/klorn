@@ -1,36 +1,51 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import type { KeyboardResize } from "@capacitor/keyboard";
 
-// Two run modes (see apps/mobile/README.md):
-//
-//  • SHELL (default, product) — loads the hosted web app (app.klorn.ai), which
-//    carries all native-aware JS guarded by Capacitor.isNativePlatform(). This
-//    is what store builds MUST ship, so it is the default: a plain
-//    `npx cap sync` can never accidentally package the throwaway probe.
-//
-//  • PROBE (opt-in) — loads the bundled www/ Samsung-calendar diagnostic. No
-//    backend, login, or Firebase needed. Only for local device testing:
-//        KLORN_PROBE=1 npx cap sync && npx cap run android
-//
-// Env-driven so there is no config to hand-edit when switching.
-const probe = process.env.KLORN_PROBE === "1";
-const shell = !probe;
+// Klorn mobile is a BUNDLED app: the React SPA in src/ is built by Vite into
+// dist/ and copied into the native projects by `cap sync`. It talks to the
+// Klorn API directly — there is no `server.url`, so nothing loads from
+// app.klorn.ai and the app renders its own offline state when the network is
+// down (src/ui/StateView.tsx). Run `npm run build` before `npx cap sync`
+// (`npm run sync` does both).
 
 const config: CapacitorConfig = {
   appId: "ai.klorn.app",
   appName: "Klorn",
-  webDir: "www",
-  ...(shell
-    ? {
-        server: {
-          url: "https://app.klorn.ai",
-          // https so localStorage / secure-context behave as on the real site.
-          androidScheme: "https",
-          // Only the app's own origin stays in the WebView — API calls are XHR,
-          // and Google OAuth must open in the system browser (RFC 8252).
-          allowNavigation: ["app.klorn.ai"],
-        },
-      }
-    : {}),
+  webDir: "dist",
+  server: {
+    // https so secure-context APIs (crypto.subtle for PKCE) behave as on the
+    // web. The bundle is served from https://localhost (Android) and
+    // capacitor://localhost (iOS); no remote origin is ever navigated to.
+    androidScheme: "https",
+  },
+  plugins: {
+    // API calls go through native HTTP: window.fetch is patched on native, so
+    // the bundled origin never meets CORS and no Origin allowlist entry is
+    // needed on the API. In the browser (dev, tests) plain fetch is used.
+    CapacitorHttp: { enabled: true },
+    // Android edge-to-edge: inject --safe-area-inset-* CSS variables with the
+    // real system-bar/cutout insets (env(safe-area-inset-*) is unreliable in
+    // the Android WebView). iOS fills env() itself.
+    SystemBars: { insetsHandling: "css" },
+    SplashScreen: {
+      // The app hides it as soon as its first real frame is up (src/app/App.tsx);
+      // the auto-hide is only a backstop so a failed bundle never sticks on it.
+      launchAutoHide: true,
+      launchShowDuration: 3000,
+      backgroundColor: "#fafafa",
+    },
+    PushNotifications: {
+      // In the foreground the app shows its own banner (src/push/PushLayer.tsx);
+      // the OS banner would duplicate it.
+      presentationOptions: ["badge"],
+    },
+    Keyboard: {
+      // Resize the body, so composers and their buttons ride above the
+      // keyboard (canvas notes.gestures).
+      resize: "body" as KeyboardResize,
+      resizeOnFullScreen: true,
+    },
+  },
 };
 
 export default config;

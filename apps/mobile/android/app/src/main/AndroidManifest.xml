@@ -1,16 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- No backups (store-pack/privacy-labels.md §5): the offline mail cache and
+         the session are device-only and cleared on sign-out. allowBackup="false"
+         for Android 11 and lower; dataExtractionRules also exclude
+         device-to-device transfers on 12+ (res/xml/data_extraction_rules.xml). -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:resizeableActivity="true"
         android:theme="@style/AppTheme">
 
+        <!-- Every form factor (src/layout/size-class.ts): no orientation lock,
+             resizable for split-screen / Samsung pop-up windows / DeX, and the
+             configChanges below keep the WebView alive across fold, unfold,
+             rotation and window resizes, so the app re-lays out in place
+             (selection lives in the route) instead of restarting. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
@@ -23,14 +37,24 @@
             </intent-filter>
 
             <!-- OAuth deep-link relay (login-CSRF fix): routes the
-                 ai.klorn.app://oauth-callback redirect back to the app. Dormant
-                 until the web build sets NEXT_PUBLIC_NATIVE_OAUTH_SCHEME.
+                 ai.klorn.app://oauth-callback redirect back to the app. The
+                 bundled app always signs in through it (src/auth/oauth.ts).
                  See apps/mobile/OAUTH_RELAY.md. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="ai.klorn.app" android:host="oauth-callback" />
+            </intent-filter>
+            <!-- Account-link relay: after Gmail / Outlook / Google Drive consent in
+                 the system browser, the API deep-links
+                 ai.klorn.app://link-complete?h=<handle> and the app finishes the
+                 link with its own session (src/platform/link-relay.ts). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ai.klorn.app" android:host="link-complete" />
             </intent-filter>
             <!-- App Links hardening path (custom schemes are hijackable by a
                  co-resident app; verified https links are not). Verified against
@@ -49,6 +73,33 @@
 
         </activity>
 
+        <!-- FCM notification messages (no channel of their own) land on the PUSH
+             channel the app creates at launch (src/platform/local-notify.ts,
+             importance high). Data-only messages are posted with action buttons
+             by the native service below — in every app state, a killed app
+             included — or, with the app on screen, shown as its in-app banner. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="klorn_push" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_klorn" />
+
+        <!-- One FCM service per app: the plugin's own MessagingService is
+             replaced by KlornMessagingService, which extends it (token rotation
+             and every message that is not a Klorn data push reach the plugin
+             unchanged) and posts Klorn's data pushes natively. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".push.KlornMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -63,8 +114,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- On-device calendar (Samsung + Google) via @ebarooni/capacitor-calendar -->
-    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Native push (FCM) runtime prompt on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Voice input (@capacitor-community/speech-recognition): dictate chat

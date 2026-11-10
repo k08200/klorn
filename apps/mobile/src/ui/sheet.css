@@ -1,0 +1,431 @@
+/* Sheet tokens (light + dark; the two dark blocks must stay identical). */
+:root {
+  --sheet-scrim: rgba(15, 23, 42, 0.32);
+  --shadow-sheet: 0 -8px 32px rgba(15, 23, 42, 0.16);
+  --sheet-grabber: #cbd5e1;
+  --ink-button: #0b0d12;
+  --ink-button-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sheet-scrim: rgba(2, 6, 18, 0.6);
+    --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.45);
+    --sheet-grabber: #3b4a63;
+    --ink-button: #e2e8f0;
+    --ink-button-text: #0a0a0b;
+  }
+}
+
+:root[data-theme="dark"] {
+  --sheet-scrim: rgba(2, 6, 18, 0.6);
+  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  --sheet-grabber: #3b4a63;
+  --ink-button: #e2e8f0;
+  --ink-button-text: #0a0a0b;
+}
+
+/*
+ * Sheet (ui/Sheet.tsx) — every modal surface in the app: Mail's lane /
+ * account / snooze / confirm / composer sheets and the Calendar, Assistant,
+ * Accounts sheets. LaneSheet artboard: bottom sheet r28, grabber 36×5, scrim
+ * 32%; a centred dialog from medium; a full-height side sheet (`--side`) for
+ * the expanded layout's assistant.
+ */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  pointer-events: none;
+}
+
+.sheet__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--sheet-scrim);
+  opacity: 0;
+  transition: opacity var(--motion-sheet) var(--ease);
+  pointer-events: auto;
+}
+
+.sheet[data-open="true"] .sheet__scrim {
+  opacity: 1;
+  transition-duration: var(--motion-sheet);
+}
+
+.sheet__panel {
+  position: relative;
+  pointer-events: auto;
+  background: var(--surface-card);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  max-height: calc(100% - var(--safe-top) - 24px);
+}
+
+.sheet__panel:focus-visible {
+  outline: none;
+}
+
+/* ── Bottom sheet (compact) ─────────────────────────────────────────────── */
+.sheet--bottom {
+  align-items: flex-end;
+}
+
+.sheet--bottom .sheet__panel {
+  width: 100%;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  padding: 0 calc(16px + var(--safe-right)) calc(var(--safe-bottom) + 16px)
+    calc(16px + var(--safe-left));
+  box-shadow: var(--shadow-sheet);
+  transform: translateY(calc(100% + 24px));
+  transition: transform var(--motion-sheet) var(--ease);
+}
+
+.sheet--bottom[data-open="true"] .sheet__panel {
+  transform: translateY(var(--sheet-drag, 0px));
+  transition-duration: var(--motion-sheet);
+}
+
+.sheet--bottom[data-dragging="true"] .sheet__panel {
+  transition: none;
+}
+
+/* The composer: fills the screen and rides above the keyboard (--kb-inset). */
+.sheet--bottom.sheet--full .sheet__panel {
+  height: calc(100% - var(--safe-top) - 12px - var(--kb-inset, 0px));
+  margin-bottom: var(--kb-inset, 0px);
+  padding-bottom: max(16px, calc(var(--safe-bottom) - var(--kb-inset, 0px)));
+}
+
+.sheet__grab {
+  flex: none;
+  height: 21px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet__grabber {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--sheet-grabber);
+}
+
+/* ── Dialog (medium / expanded) ─────────────────────────────────────────── */
+.sheet--dialog {
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--safe-top) + 24px) 24px calc(var(--safe-bottom) + 24px);
+}
+
+.sheet--dialog .sheet__panel {
+  width: min(var(--sheet-width, 440px), 100%);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  padding: 20px 20px 20px;
+  box-shadow: var(--shadow-float);
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  transition:
+    opacity var(--motion-sheet) var(--ease),
+    transform var(--motion-sheet) var(--ease);
+}
+
+.sheet--dialog[data-open="true"] .sheet__panel {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--motion-sheet);
+}
+
+.sheet--dialog.sheet--full .sheet__panel {
+  height: min(760px, 100%);
+  width: min(640px, 100%);
+}
+
+/* ── Side sheet (expanded): the assistant thread beside the content ────── */
+.sheet--side {
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.sheet--side .sheet__panel {
+  width: min(420px, 100%);
+  height: 100%;
+  max-height: none;
+  border-radius: var(--radius-sheet) 0 0 var(--radius-sheet);
+  border-left: 1px solid var(--line-nav);
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) 0;
+  box-shadow: var(--shadow-float);
+  opacity: 0;
+  transform: translateX(24px);
+  transition:
+    opacity var(--motion-sheet) var(--ease),
+    transform var(--motion-sheet) var(--ease);
+}
+
+.sheet--side[data-open="true"] .sheet__panel {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--motion-sheet);
+}
+
+.sheet--side .sheet__head {
+  padding: 10px 12px 4px 20px;
+}
+
+.sheet--side .sheet__body {
+  gap: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet--bottom .sheet__panel,
+  .sheet--bottom[data-open="true"] .sheet__panel {
+    transform: translateY(var(--sheet-drag, 0px));
+    opacity: 0;
+    transition: opacity var(--motion-sheet) linear;
+  }
+  .sheet--bottom[data-open="true"] .sheet__panel,
+  .sheet--dialog[data-open="true"] .sheet__panel {
+    opacity: 1;
+  }
+  .sheet--dialog .sheet__panel,
+  .sheet--side .sheet__panel {
+    transform: none;
+  }
+  .sheet--side[data-open="true"] .sheet__panel {
+    opacity: 1;
+  }
+}
+
+/* ── Content ────────────────────────────────────────────────────────────── */
+.sheet__head {
+  flex: none;
+  padding: 6px 4px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sheet__titles {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheet__head--close .sheet__titles {
+  padding-top: 8px;
+}
+
+/* The optional close button (44×44, Calendar / Assistant / Accounts sheets). */
+.sheet__close {
+  flex: none;
+  width: var(--touch);
+  height: var(--touch);
+  margin: 0 -8px 0 0;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-mid);
+}
+
+.sheet__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sheet--dialog .sheet__head {
+  padding-top: 0;
+}
+
+.sheet__head--hidden {
+  padding: 0;
+}
+
+.sheet__head--hidden.sheet__head--close {
+  justify-content: flex-end;
+  padding-bottom: 4px;
+}
+
+.sheet__title {
+  font-size: var(--type-title);
+  line-height: var(--type-title-lh);
+  font-weight: 700;
+}
+
+.sheet__subtitle {
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  color: var(--ink-mid);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+:root[data-large-text] .sheet__subtitle {
+  display: block;
+}
+
+.sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.sheet__footer {
+  flex: none;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A footer of `.button`s (Cancel · Confirm) sits in one row, equal widths. */
+.sheet__footer:has(> .button) {
+  flex-direction: row;
+  gap: 10px;
+}
+
+.sheet__footer > .button {
+  flex: 1 1 0;
+}
+
+.sheet--side .sheet__footer {
+  padding: 12px 20px 16px;
+}
+
+/* The sheet's primary button (LaneSheet: 50px, r14, 17px). */
+.sheet-cta {
+  min-height: 50px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: calc(17 * var(--u));
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.sheet-cta[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sheet-cta--dark {
+  background: var(--ink-button);
+  color: var(--ink-button-text);
+  font-size: var(--type-headline);
+}
+
+.sheet-cta--quiet {
+  background: var(--surface-control);
+  color: var(--ink);
+}
+
+/* ── Form fields inside sheets and settings ──────────────────────────────── */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field__label {
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  font-weight: 600;
+  color: var(--ink-mid);
+}
+
+.form-field__hint {
+  font-size: var(--type-footnote);
+  line-height: var(--type-footnote-lh);
+  color: var(--ink-dim);
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-bar);
+  background: var(--surface-card);
+  color: var(--ink);
+  font-size: 16px; /* ≥16px: no iOS zoom on focus */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.form-field textarea {
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-error {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--state-danger-bg);
+  color: var(--state-danger-ink);
+  font-size: var(--type-callout);
+  line-height: var(--type-callout-lh);
+}
+
+.form-note {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--state-warn-bg);
+  color: var(--state-warn-ink);
+  font-size: var(--type-callout);
+  line-height: var(--type-callout-lh);
+}
+
+.button--danger {
+  background: var(--state-danger-ink);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .button--danger {
+  color: #0a0a0b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .button--danger {
+    color: #0a0a0b;
+  }
+}

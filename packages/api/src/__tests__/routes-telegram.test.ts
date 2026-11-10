@@ -39,6 +39,15 @@ vi.mock("../judge/attention-override.js", () => ({
   overrideAttentionTier: vi.fn(async () => ({ ok: true, tier: "QUEUE" })),
 }));
 
+const chatHandlerMock = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("../agentcore/telegram-chat.js", () => ({
+  // Fully stubbed — importing the real module would drag the chat engine's
+  // whole tool graph into a webhook-routing test. The env check is one line,
+  // re-stated here to keep this file's isolation intent.
+  telegramChatEnabled: () => process.env.TELEGRAM_CHAT_ENABLED === "true",
+  handleTelegramChatMessage: chatHandlerMock,
+}));
+
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import {
   answerTelegramCallback,
@@ -343,5 +352,59 @@ describe("POST /api/telegram/webhook — callback_query tier override", () => {
     });
     expect(res.statusCode).toBe(200);
     await app.close();
+  });
+});
+
+describe("chat dispatch (TELEGRAM_CHAT_ENABLED)", () => {
+  it("keeps ignoring non-command messages with the flag off", async () => {
+    delete process.env.TELEGRAM_CHAT_ENABLED;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/telegram/webhook",
+      headers: secretHeader(WEBHOOK_SECRET),
+      payload: { update_id: 7, message: { text: "hello bot", chat: { id: 99 } } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(chatHandlerMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("routes non-command messages to the chat handler with the flag on", async () => {
+    process.env.TELEGRAM_CHAT_ENABLED = "true";
+    try {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/telegram/webhook",
+        headers: secretHeader(WEBHOOK_SECRET),
+        payload: { update_id: 8, message: { text: "what's urgent?", chat: { id: 99 } } },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(chatHandlerMock).toHaveBeenCalledWith({
+        chatId: "99",
+        text: "what's urgent?",
+        updateId: 8,
+      });
+      await app.close();
+    } finally {
+      delete process.env.TELEGRAM_CHAT_ENABLED;
+    }
+  });
+
+  it("still treats /start as the link handshake, never chat, with the flag on", async () => {
+    process.env.TELEGRAM_CHAT_ENABLED = "true";
+    try {
+      const app = await buildApp();
+      await app.inject({
+        method: "POST",
+        url: "/api/telegram/webhook",
+        headers: secretHeader(WEBHOOK_SECRET),
+        payload: { update_id: 9, message: { text: "/start abc", chat: { id: 99 } } },
+      });
+      expect(chatHandlerMock).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.TELEGRAM_CHAT_ENABLED;
+    }
   });
 });

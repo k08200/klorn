@@ -15,7 +15,11 @@
 
 import { google } from "googleapis";
 import { Semaphore } from "../semaphore.js";
-import { getAuthedClient } from "./gmail.js";
+import { getAuthedClient, getAuthedInboxClient, getLinkedInboxClients } from "./gmail.js";
+import { UNKNOWN_DATE } from "./mailbox-dates.js";
+import { sentAtOf } from "./sent-history-fetch.js";
+
+type OAuth2 = InstanceType<typeof google.auth.OAuth2>;
 
 export const MAILBOXES = ["sent", "drafts", "archived"] as const;
 export type Mailbox = (typeof MAILBOXES)[number];
@@ -28,9 +32,88 @@ export interface MailboxItemWire {
   from: string;
   to: string;
   snippet: string;
-  /** ISO. Gmail's internalDate (epoch ms) is the arrival authority. */
+  /** ISO. Gmail's internalDate (epoch ms) is the arrival authority; the Date
+   *  header only when it is missing (sentAtOf). */
   receivedAt: string;
   isRead: boolean;
+  /**
+   * Which account the row lives in: "primary" or a LinkedInboxAccount id.
+   * Every follow-up (open, delete the draft) must go back to the same
+   * account — a Gmail message id only exists in the mailbox that issued it.
+   */
+  inbox: string;
+}
+
+/** One connected Google account the folders can read, keyed like `inbox`. */
+interface MailboxAccount {
+  key: string;
+  auth: OAuth2;
+}
+
+/**
+ * The OAuth client an `inbox=` scope acts on, for single-message follow-ups
+ * (open, delete draft). Absent / "primary" / "all" = the user's own Google
+ * account; anything else = one LinkedInboxAccount id, userId-scoped by the
+ * lookup so a foreign id resolves to null rather than someone else's mail.
+ */
+export async function resolveMailboxClient(
+  userId: string,
+  inbox: string | undefined,
+): Promise<OAuth2 | null> {
+  if (!inbox || inbox === "primary" || inbox === "all") return getAuthedClient(userId);
+  return getAuthedInboxClient(userId, inbox);
+}
+
+/**
+ * Which accounts a listing scope names (mirrors routes/email.ts's `inbox=`):
+ * absent or "primary" = the user's own inbox, "all" = every connected Google
+ * account, anything else = one linked account. Null = nothing connected for
+ * that scope — the route decides between demo rows (primary) and 404 (a
+ * linked id that does not resolve must never show demo mail).
+ */
+async function accountsFor(
+  userId: string,
+  inbox: string | undefined,
+): Promise<MailboxAccount[] | null> {
+  if (inbox === "all") {
+    const [primary, linked] = await Promise.all([
+      getAuthedClient(userId),
+      getLinkedInboxClients(userId),
+    ]);
+    const accounts = [
+      ...(primary ? [{ key: "primary", auth: primary }] : []),
+      ...linked.map((l) => ({ key: l.id, auth: l.client })),
+    ];
+    return accounts.length ? accounts : null;
+  }
+  const auth = await resolveMailboxClient(userId, inbox);
+  if (!auth) return null;
+  return [{ key: inbox && inbox !== "primary" ? inbox : "primary", auth }];
+}
+
+/**
+ * "all" pages every account on its own Gmail cursor while the client sees ONE
+ * opaque token: base64url JSON of {accountKey: cursor}, listing only the
+ * accounts that still have a page. Garbage decodes to null (= first page),
+ * never a throw — a stale token from an older build is a retry, not a 500.
+ */
+export function encodeCompositeToken(cursors: Record<string, string>): string | null {
+  if (!Object.keys(cursors).length) return null;
+  return Buffer.from(JSON.stringify(cursors), "utf8").toString("base64url");
+}
+
+export function decodeCompositeToken(token: string | undefined): Record<string, string> | null {
+  if (!token) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const cursors = Object.fromEntries(
+      Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === "string"),
+    );
+    return Object.keys(cursors).length ? cursors : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -57,24 +140,70 @@ function header(headers: { name?: string | null; value?: string | null }[], name
   return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
+/** One page of a folder listing plus the cursor to the next. */
+export interface MailboxPage {
+  items: MailboxItemWire[];
+  /** Opaque Gmail cursor; null on the final page. Round-trips verbatim. */
+  nextPageToken: string | null;
+}
+
 /**
- * List one folder, newest first, PAGE_SIZE rows. Returns null when Gmail is
- * not connected so the route can fall back to demo data the same way the
- * inbox list does. Metadata fetches run under a small semaphore — 50 parallel
- * requests is how a folder click turns into a Gmail 429.
+ * List one folder page, newest first, PAGE_SIZE rows. 50 rows used to be a
+ * hard cut — a Sent folder past one page just ended; the page token turns
+ * that into "load more". Returns null when Gmail is not connected so the
+ * route can fall back to demo data the same way the inbox list does.
+ * Metadata fetches run under a small semaphore — 50 parallel requests is how
+ * a folder click turns into a Gmail 429.
  */
 export async function listGmailMailbox(
   userId: string,
   box: Mailbox,
-): Promise<MailboxItemWire[] | null> {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return null;
+  pageToken?: string,
+  inbox?: string,
+): Promise<MailboxPage | null> {
+  const accounts = await accountsFor(userId, inbox);
+  if (!accounts) return null;
+  if (inbox !== "all") return listAccountPage(accounts[0], box, pageToken);
+  return listAllAccountsPage(accounts, box, pageToken);
+}
 
-  const gmail = google.gmail({ version: "v1", auth });
+/** One page across every connected account, merged newest-first. Each
+ *  account advances on its own cursor (see encodeCompositeToken); a page
+ *  boundary can interleave slightly across accounts, which Gmail's own
+ *  list order does not promise either. */
+async function listAllAccountsPage(
+  accounts: MailboxAccount[],
+  box: Mailbox,
+  pageToken: string | undefined,
+): Promise<MailboxPage> {
+  const cursors = decodeCompositeToken(pageToken);
+  const targets = cursors ? accounts.filter((a) => a.key in cursors) : accounts;
+  const pages = await Promise.all(
+    targets.map((account) => listAccountPage(account, box, cursors?.[account.key])),
+  );
+  const next = Object.fromEntries(
+    targets.flatMap((account, i) => {
+      const token = pages[i].nextPageToken;
+      return token ? [[account.key, token] as const] : [];
+    }),
+  );
+  const items = pages
+    .flatMap((page) => page.items)
+    .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
+  return { items, nextPageToken: encodeCompositeToken(next) };
+}
+
+async function listAccountPage(
+  account: MailboxAccount,
+  box: Mailbox,
+  pageToken: string | undefined,
+): Promise<MailboxPage> {
+  const gmail = google.gmail({ version: "v1", auth: account.auth });
   const res = await gmail.users.messages.list({
     userId: "me",
     maxResults: PAGE_SIZE,
     q: buildMailboxQuery(box),
+    ...(pageToken ? { pageToken } : {}),
   });
   const ids = (res.data.messages ?? []).map((m) => m.id).filter((id): id is string => Boolean(id));
 
@@ -89,7 +218,11 @@ export async function listGmailMailbox(
           metadataHeaders: ["From", "To", "Subject", "Date"],
         });
         const headers = detail.data.payload?.headers ?? [];
-        const internal = Number(detail.data.internalDate);
+        // internalDate, else the Date header (sentAtOf, same rule as the
+        // Sent-history import). With neither, the row stays listed at the epoch,
+        // which means "date unknown": a folder view never hides mail, and the
+        // Sent scan skips epoch rows (sent-messages.ts toScannedRow).
+        const date = sentAtOf(detail.data) ?? UNKNOWN_DATE;
         return {
           gmailId: detail.data.id ?? id,
           threadId: detail.data.threadId ?? null,
@@ -97,10 +230,9 @@ export async function listGmailMailbox(
           from: header(headers, "From"),
           to: header(headers, "To"),
           snippet: detail.data.snippet ?? "",
-          receivedAt: Number.isFinite(internal)
-            ? new Date(internal).toISOString()
-            : new Date(0).toISOString(),
+          receivedAt: date.toISOString(),
           isRead: !(detail.data.labelIds ?? []).includes("UNREAD"),
+          inbox: account.key,
         };
       } catch {
         // One unreadable message must not blank the folder.
@@ -108,5 +240,33 @@ export async function listGmailMailbox(
       }
     }),
   );
-  return rows.filter((r): r is MailboxItemWire => r !== null);
+  return {
+    items: rows.filter((r): r is MailboxItemWire => r !== null),
+    nextPageToken: res.data.nextPageToken ?? null,
+  };
+}
+
+/**
+ * Delete the Gmail draft whose MESSAGE id is `gmailId`. The folder listing
+ * hands out message ids (messages.list), but drafts.delete wants the DRAFT
+ * id — deleting with the message id silently 404s and the draft lingers, so
+ * this resolves through users.drafts.list first. Called after a draft-based
+ * send so the original doesn't survive as a duplicate; best-effort by
+ * contract (false = not found / not connected, never a throw for a missing
+ * row).
+ */
+export async function deleteGmailDraftByMessageId(
+  userId: string,
+  gmailId: string,
+  inbox?: string,
+): Promise<boolean> {
+  const auth = await resolveMailboxClient(userId, inbox);
+  if (!auth) return false;
+
+  const gmail = google.gmail({ version: "v1", auth });
+  const res = await gmail.users.drafts.list({ userId: "me", maxResults: 100 });
+  const draft = (res.data.drafts ?? []).find((d) => d.message?.id === gmailId);
+  if (!draft?.id) return false;
+  await gmail.users.drafts.delete({ userId: "me", id: draft.id });
+  return true;
 }

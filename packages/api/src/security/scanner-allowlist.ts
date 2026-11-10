@@ -71,9 +71,9 @@ export function isRateLimitAllowedIp(
 ): boolean {
   if (!clientIp || rules.length === 0) return false;
 
-  // IPv6 (including v4-mapped forms) is out of scope: the limiter's key is the
-  // Cloudflare-verified IPv4 address, and half-parsing v6 here would be a
-  // silent bypass.
+  // IPv6 is out of scope: half-parsing v6 here would be a silent bypass, so a
+  // v6 address never matches. security/client-address.ts already unwraps the
+  // v4-mapped form (::ffff:a.b.c.d) before it gets here.
   const value = toUint32(clientIp);
   if (value === null) return false;
 

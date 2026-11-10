@@ -14,54 +14,22 @@ import { getUserId } from "../auth.js";
 import { renderableEmailHtmlFor } from "../mail/email-text.js";
 import { fetchGmailEmailById } from "../mail/gmail-fetch.js";
 import {
+  deleteGmailDraftByMessageId,
   listGmailMailbox,
   MAILBOXES,
   type Mailbox,
-  type MailboxItemWire,
+  resolveMailboxClient,
 } from "../mail/gmail-mailbox.js";
-
-/** Demo rows so a signed-out / disconnected session still shows the shape. */
-const DEMO_ROWS: Record<Mailbox, MailboxItemWire[]> = {
-  sent: [
-    {
-      gmailId: "demo-sent-1",
-      threadId: null,
-      subject: "Re: Contract review — needs your sign-off today",
-      from: "you@company.com",
-      to: "Sarah Kim <sarah@company.com>",
-      snippet: "Signed and attached. Clause 4 reads fine after legal's change.",
-      receivedAt: "2026-07-29T05:40:00.000Z",
-      isRead: true,
-    },
-  ],
-  drafts: [
-    {
-      gmailId: "demo-draft-1",
-      threadId: null,
-      subject: "Q3 vendor consolidation",
-      from: "you@company.com",
-      to: "billing@vendor.io",
-      snippet: "Before we renew, can you break the invoice into",
-      receivedAt: "2026-07-29T03:12:00.000Z",
-      isRead: true,
-    },
-  ],
-  archived: [
-    {
-      gmailId: "demo-arch-1",
-      threadId: null,
-      subject: "Your July invoice is available",
-      from: "billing@saas.example",
-      to: "you@company.com",
-      snippet: "Invoice #4783 for July is attached. No action needed.",
-      receivedAt: "2026-07-28T22:05:00.000Z",
-      isRead: true,
-    },
-  ],
-};
+import { fetchInlineImage } from "../mail/inline-image.js";
+import { hasAnyMailSource } from "../mail/mail-source.js";
 
 function isMailbox(value: string): value is Mailbox {
   return (MAILBOXES as readonly string[]).includes(value);
+}
+
+/** `inbox=` names ONE linked account (not absent / primary / all). */
+function isLinkedInboxScope(inbox: string | undefined): inbox is string {
+  return Boolean(inbox) && inbox !== "primary" && inbox !== "all";
 }
 
 export function registerEmailMailboxRoutes(app: FastifyInstance) {
@@ -71,9 +39,30 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: "Unknown mailbox" });
     }
     const uid = getUserId(request);
-    const items = await listGmailMailbox(uid, box);
-    // null = Gmail not connected — same demo fallback contract as GET /.
-    return { success: true, data: { items: items ?? DEMO_ROWS[box], demo: items === null } };
+    const { pageToken, inbox } = request.query as { pageToken?: string; inbox?: string };
+    const page = await listGmailMailbox(uid, box, pageToken, inbox);
+    // A linked id that does not resolve (unknown, foreign, non-Google) is a
+    // miss, never demo mail dressed up as that account.
+    if (page === null && isLinkedInboxScope(inbox)) {
+      return reply.code(404).send({ success: false, error: "Inbox not found" });
+    }
+    if (page !== null) {
+      return {
+        success: true,
+        data: { items: page.items, nextPageToken: page.nextPageToken ?? null, demo: false },
+      };
+    }
+    // null = no Gmail to read folders from. Never demo rows: an IMAP-only user
+    // (iCloud / Naver) has a real inbox elsewhere and gets an honest empty
+    // folder; a user with no source at all gets the same, flagged — the same
+    // rule as GET / (hasAnyMailSource).
+    if (await hasAnyMailSource(uid)) {
+      return { success: true, data: { items: [], nextPageToken: null, demo: false } };
+    }
+    return {
+      success: true,
+      data: { items: [], nextPageToken: null, demo: true, needsConnection: true },
+    };
   });
 
   // Live single-message read for folder rows: these messages are not in the
@@ -82,8 +71,15 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
   // cost the metadata-only listing avoids paying fifty times.
   app.get("/live/:gmailId", async (request, reply) => {
     const { gmailId } = request.params as { gmailId: string };
+    const { inbox } = request.query as { inbox?: string };
     const uid = getUserId(request);
-    const raw = await fetchGmailEmailById(uid, gmailId);
+    // The row said which account issued this id; open it THERE. The primary
+    // path keeps fetchGmailEmailById's own token handling (no client passed).
+    const linked = isLinkedInboxScope(inbox) ? await resolveMailboxClient(uid, inbox) : null;
+    if (isLinkedInboxScope(inbox) && !linked) {
+      return reply.code(404).send({ success: false, error: "Inbox not found" });
+    }
+    const raw = await fetchGmailEmailById(uid, gmailId, linked);
     if (!raw) {
       return reply.code(404).send({ success: false, error: "Message not found" });
     }
@@ -112,5 +108,48 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
         isRead: raw.isRead,
       },
     };
+  });
+
+  // Inline (cid:) image of a live folder message — the folder counterpart of
+  // GET /:id/inline/:cid. No DB row to consult, so the live MIME tree is
+  // walked for the Content-ID; image/* only. Misses and Gmail errors are a
+  // plain 404: the webview paints a transparent placeholder, never a broken
+  // icon, and the mail itself is unaffected.
+  app.get(
+    "/live/:gmailId/inline/:cid",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { gmailId, cid } = request.params as { gmailId: string; cid: string };
+      const { inbox } = request.query as { inbox?: string };
+      const uid = getUserId(request);
+      const auth = await resolveMailboxClient(uid, inbox);
+      if (!auth) return reply.code(404).send({ error: "Mail source not connected" });
+      try {
+        const image = await fetchInlineImage(auth, gmailId, cid);
+        if (!image) return reply.code(404).send({ error: "Inline image not found" });
+        return reply
+          .type(image.mimeType)
+          .header("cache-control", "private, max-age=3600")
+          .send(image.bytes);
+      } catch (err) {
+        console.warn(`[EMAIL] live inline image fetch failed for ${gmailId}/${cid}:`, err);
+        return reply.code(404).send({ error: "Inline image not found" });
+      }
+    },
+  );
+
+  // Remove the ORIGINAL Gmail draft after a draft-based send — without this
+  // the sent mail and its stale draft coexist and the folder looks broken.
+  // 404 (not found) is a legitimate outcome, not an error: the draft may
+  // have been sent or deleted from another client already.
+  app.delete("/draft/by-message/:gmailId", async (request, reply) => {
+    const { gmailId } = request.params as { gmailId: string };
+    const { inbox } = request.query as { inbox?: string };
+    const uid = getUserId(request);
+    const deleted = await deleteGmailDraftByMessageId(uid, gmailId, inbox);
+    if (!deleted) {
+      return reply.code(404).send({ success: false, error: "Draft not found" });
+    }
+    return { success: true };
   });
 }

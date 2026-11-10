@@ -22,9 +22,11 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
 import {
+  ENGAGEMENT_OUTCOMES,
   recordDecision,
   recordEmailDecision,
   stampDecisionOutcome,
+  stampDecisionOutcomes,
 } from "../judge/decision-label.js";
 import { captureError } from "../sentry.js";
 
@@ -155,6 +157,68 @@ describe("stampDecisionOutcome", () => {
     decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
     await expect(
       stampDecisionOutcome("user-1", "EMAIL", "email-1", "DISMISSED"),
+    ).resolves.toBeUndefined();
+    expect(captureError).toHaveBeenCalled();
+  });
+
+  // An engagement signal must never land in `outcome`: fallback-rejudge selects
+  // outcome:null rows, the override/confirm stamps are outcome:null-guarded, and
+  // the AUTO calibrator reads any non-override outcome as agreement. Each kind
+  // gets its own first-wins column instead.
+  it.each([
+    ["OPENED", "openedAt"],
+    ["REPLIED", "repliedAt"],
+    ["ARCHIVED", "archivedAt"],
+    ["DISMISSED", "dismissedAt"],
+    ["SNOOZED", "snoozedAt"],
+    ["STARRED", "starredAt"],
+    ["UNSUBSCRIBED", "unsubscribedAt"],
+  ] as const)("stamps %s into %s only while that column is empty, never into outcome", async (kind, column) => {
+    await stampDecisionOutcome("user-1", "EMAIL", "email-1", kind);
+
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+    const args = decisionLabel.updateMany.mock.calls[0][0];
+    expect(args.where).toEqual({
+      userId: "user-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      [column]: null,
+    });
+    expect(Object.keys(args.data)).toEqual([column]);
+    expect(args.data[column]).toBeInstanceOf(Date);
+  });
+
+  it("lists exactly the engagement vocabulary the ledger has columns for", () => {
+    expect([...ENGAGEMENT_OUTCOMES].sort()).toEqual(
+      ["ARCHIVED", "DISMISSED", "OPENED", "REPLIED", "SNOOZED", "STARRED", "UNSUBSCRIBED"].sort(),
+    );
+  });
+});
+
+describe("stampDecisionOutcomes (bulk)", () => {
+  it("stamps every listed row of the acting user in one query", async () => {
+    await stampDecisionOutcomes("user-1", "EMAIL", ["e1", "e2"], "ARCHIVED");
+
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+    const args = decisionLabel.updateMany.mock.calls[0][0];
+    expect(args.where).toEqual({
+      userId: "user-1",
+      source: "EMAIL",
+      sourceId: { in: ["e1", "e2"] },
+      archivedAt: null,
+    });
+    expect(args.data.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it("skips the query for an empty list", async () => {
+    await stampDecisionOutcomes("user-1", "EMAIL", [], "ARCHIVED");
+    expect(decisionLabel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("never throws, logs on failure", async () => {
+    decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
+    await expect(
+      stampDecisionOutcomes("user-1", "EMAIL", ["e1"], "OPENED"),
     ).resolves.toBeUndefined();
     expect(captureError).toHaveBeenCalled();
   });

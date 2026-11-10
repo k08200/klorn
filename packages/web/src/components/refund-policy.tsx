@@ -20,6 +20,13 @@ export default function RefundPolicy() {
         receipt, and appears on your card or bank statement.
       </p>
       <p>
+        Subscriptions bought inside the Klorn app for iPhone, iPad or Android are sold by Apple (App
+        Store) or Google (Google Play) instead, at the price the store shows, and billed to your
+        store account. Cancel those in your App Store or Google Play subscription settings; their
+        refunds are handled by Apple or Google under the store&apos;s own policy. The Paddle terms
+        below apply to subscriptions bought on the web.
+      </p>
+      <p>
         New subscriptions start with a 7-day free trial. You are not charged during the trial.
         Cancel before it ends and you are never billed.
       </p>

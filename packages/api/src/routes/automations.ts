@@ -3,19 +3,27 @@ import { listAgentModePolicies, normalizeAgentMode } from "../agentcore/agent-mo
 import { runAgentForUser } from "../agentcore/autonomous-agent.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { db, prisma } from "../db.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import {
+  isValidUserInterruptBudget,
+  MAX_USER_INTERRUPT_BUDGET,
+  resolveInterruptBudget,
+} from "../judge/v3/interrupt-budget.js";
 import {
   DEFAULT_AUTO_REPLY_GUIDELINE,
   normalizeAttentionMode,
   normalizeAutoReplyGuideline,
 } from "../learning/auto-reply-guideline.js";
 import { listReplyTonePolicies, normalizeReplyTone } from "../learning/reply-tone.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
 import {
   NOTIFICATION_LANGUAGES,
   resolveNotificationLanguage,
+  URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
-import { normalizeTimeZone } from "../time-zone.js";
+import { normalizeTimeZone, normalizeTimeZoneMode, parseTimeZoneInput } from "../time-zone.js";
 
 // MEDIUM-risk tools that users may pre-approve for AUTO mode.
 // Email sending is intentionally excluded for dogfood safety: a bad auto-reply
@@ -45,6 +53,21 @@ const agentLogsQuerySchema = {
   },
 } as const;
 
+/**
+ * The interrupt budget setting (attention-engine-v3.md §3(5)). Only for users
+ * under policy v3; everyone else gets today's response shape unchanged.
+ * `interruptBudgetDefault` is the system default the null setting means
+ * (null = no limit).
+ */
+function interruptBudgetFields(userId: string, value: number | null) {
+  if (!isJudgeV3PolicyEnabled(userId)) return {};
+  return {
+    interruptBudget: value,
+    interruptBudgetDefault: resolveInterruptBudget(process.env),
+    interruptBudgetMax: MAX_USER_INTERRUPT_BUDGET,
+  };
+}
+
 export async function automationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
@@ -68,6 +91,7 @@ export async function automationRoutes(app: FastifyInstance) {
       dailyBriefing: config.dailyBriefing,
       briefingTime: config.briefingTime,
       timezone: normalizeTimeZone(configAny.timezone),
+      timezoneMode: normalizeTimeZoneMode(configAny.timezoneMode),
       downloadAutoOrganize: config.downloadAutoOrganize,
       autonomousAgent: configAny.autonomousAgent ?? false,
       agentMode: normalizeAgentMode(configAny.agentMode),
@@ -98,11 +122,12 @@ export async function automationRoutes(app: FastifyInstance) {
       // The founder default the UI shows as the editable starting draft when
       // autoReplyGuideline is null.
       autoReplyGuidelineDefault: DEFAULT_AUTO_REPLY_GUIDELINE,
+      ...interruptBudgetFields(userId, config.interruptBudget),
     };
   });
 
   // PATCH /api/automations — Update automation config
-  app.patch("/", async (request) => {
+  app.patch("/", async (request, reply) => {
     const userId = getUserId(request);
     const body = request.body as Record<string, unknown>;
 
@@ -115,6 +140,7 @@ export async function automationRoutes(app: FastifyInstance) {
       "dailyBriefing",
       "briefingTime",
       "timezone",
+      "timezoneMode",
       "downloadAutoOrganize",
       "autonomousAgent",
       "agentMode",
@@ -136,6 +162,8 @@ export async function automationRoutes(app: FastifyInstance) {
       "phoneEscalationEnabled",
       "attentionMode",
       "autoReplyGuideline",
+      // Only for users under policy v3; ignored like any unknown key otherwise.
+      ...(isJudgeV3PolicyEnabled(userId) ? ["interruptBudget"] : []),
     ];
     const data: Record<string, unknown> = {};
     for (const key of allowed) {
@@ -170,8 +198,31 @@ export async function automationRoutes(app: FastifyInstance) {
       );
     }
 
+    // Client-supplied zone: reject anything Intl does not know (400) rather
+    // than silently storing the product default over the user's real zone.
     if ("timezone" in data) {
-      data.timezone = normalizeTimeZone(data.timezone);
+      const timezone = parseTimeZoneInput(data.timezone);
+      if (!timezone) return reply.code(400).send({ error: "Invalid timezone" });
+      data.timezone = timezone;
+    }
+    // "AUTO" is stored as null (no saved choice): the client follows the device
+    // zone and keeps `timezone` synced to it. "MANUAL" pins `timezone`.
+    if ("timezoneMode" in data) {
+      const mode = data.timezoneMode;
+      if (mode !== "AUTO" && mode !== "MANUAL" && mode !== null) {
+        return reply.code(400).send({ error: "Invalid timezoneMode" });
+      }
+      data.timezoneMode = mode === "MANUAL" ? "MANUAL" : null;
+    }
+
+    // Attention engine v3: the user's own daily PUSH interrupt budget, 1–50,
+    // or null for the system default. Anything else is a 400, not a silent
+    // fallback the user would never see.
+    if ("interruptBudget" in data) {
+      const budget = data.interruptBudget;
+      if (budget !== null && !isValidUserInterruptBudget(budget)) {
+        return reply.code(400).send({ error: "Invalid interruptBudget" });
+      }
     }
 
     // Validate alwaysAllowedTools — only MEDIUM-risk tools from the whitelist
@@ -195,6 +246,7 @@ export async function automationRoutes(app: FastifyInstance) {
       dailyBriefing: config.dailyBriefing,
       briefingTime: config.briefingTime,
       timezone: normalizeTimeZone(configAny.timezone),
+      timezoneMode: normalizeTimeZoneMode(configAny.timezoneMode),
       downloadAutoOrganize: config.downloadAutoOrganize,
       autonomousAgent: configAny.autonomousAgent ?? false,
       agentMode: normalizeAgentMode(configAny.agentMode),
@@ -225,6 +277,7 @@ export async function automationRoutes(app: FastifyInstance) {
       // The founder default the UI shows as the editable starting draft when
       // autoReplyGuideline is null.
       autoReplyGuidelineDefault: DEFAULT_AUTO_REPLY_GUIDELINE,
+      ...interruptBudgetFields(userId, config.interruptBudget),
     };
   });
 
@@ -268,6 +321,8 @@ export async function automationRoutes(app: FastifyInstance) {
         if (!advice) return reply.code(502).send({ error: "No advice produced" });
         return { advice };
       } catch (err) {
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         captureError(err, { tags: { scope: "automations.guideline-advice" }, extra: { userId } });
         return reply.code(502).send({ error: "Advice generation failed" });
       }
@@ -353,7 +408,7 @@ export async function automationRoutes(app: FastifyInstance) {
           userId,
           type: "email",
           createdAt: { gte: sinceUtc },
-          OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+          title: { in: [...URGENT_EMAIL_TITLES] },
         },
         orderBy: { createdAt: "desc" },
         select: { id: true, message: true, link: true, createdAt: true },

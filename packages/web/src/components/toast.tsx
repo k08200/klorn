@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useT } from "../lib/i18n";
 
 interface Toast {
   id: string;
@@ -114,6 +115,7 @@ function ToastItem({
   onPause: () => void;
   onResume: () => void;
 }) {
+  const { t } = useT();
   const isError = toast.type === "error";
   return (
     <div
@@ -124,7 +126,7 @@ function ToastItem({
       onMouseLeave={onResume}
       onFocus={onPause}
       onBlur={onResume}
-      className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg text-sm font-medium shadow-lg animate-slide-up ${
+      className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-control text-role-label shadow-menu animate-slide-up ${
         toast.type === "success"
           ? "bg-green-700 text-white"
           : toast.type === "error"
@@ -136,8 +138,8 @@ function ToastItem({
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss notification"
-        className="focus-ring -mr-1 -mt-0.5 shrink-0 rounded p-1 opacity-70 transition hover:opacity-100"
+        aria-label={t("toast.dismiss")}
+        className="focus-ring -my-1.5 -mr-2 flex size-8 shrink-0 items-center justify-center rounded-chip opacity-70 transition hover:opacity-100"
       >
         <svg
           aria-hidden="true"

@@ -70,7 +70,7 @@ one click, you have three things to do:
    ("Gmail API has no reversal endpoint for this operation" is the
    shape of an acceptable answer; "it would be annoying to undo" is not.)
 2. Add a matching `*PayloadHash` function in
-   [`packages/api/src/attention-floor.ts`](../../packages/api/src/attention-floor.ts)
+   [`packages/api/src/judge/attention-floor.ts`](../../packages/api/src/judge/attention-floor.ts)
    whose canonical body covers every field the action will send to Gmail.
 3. Wire the new action into `tool-executor.ts` to refuse execution
    without a verified `ActionReceipt`.
@@ -94,6 +94,45 @@ one click, you have three things to do:
 
 ## Related code
 
-- [`packages/api/src/attention-floor.ts`](../../packages/api/src/attention-floor.ts) — types, payload hashes, mint, verify.
-- [`packages/api/src/attention-input-hash.ts`](../../packages/api/src/attention-input-hash.ts) — input-hash binding from PR #468 (the input side of this same property).
+- [`packages/api/src/judge/attention-floor.ts`](../../packages/api/src/judge/attention-floor.ts) — types, payload hashes, mint, verify.
+- [`packages/api/src/judge/attention-input-hash.ts`](../../packages/api/src/judge/attention-input-hash.ts) — input-hash binding from PR #468 (the input side of this same property).
 - [`packages/api/src/__tests__/attention-floor.test.ts`](../../packages/api/src/__tests__/attention-floor.test.ts) — stability + sensitivity + cross-action refusal tests.
+
+## User-initiated sends (2026-10-16)
+
+The mechanism above is the agent path: the receipt is minted at `/approve`,
+stored on `PendingAction` / `ActionOutbox`, and verified by `tool-executor.ts`.
+The user's own sends, `POST /api/email/send` and `POST /api/email/:id/reply`,
+never pass through it. They called the provider directly and left no receipt,
+which contradicted CLAUDE.md ("send / delete / forward always produce an
+ActionReceipt with a payload hash") and the OAuth limited-use disclosure ("every
+send is verified against a receipt of the exact content you approved").
+
+For a manual send, the user's confirm is the approval, and the request carries
+the approved bytes, so no approve/execute gap spans two requests. The floor still
+covers it. Behind `MANUAL_SEND_RECEIPTS_ENABLED` (OFF by default),
+[`mail/send-receipt.ts`](../../packages/api/src/mail/send-receipt.ts) does this:
+
+1. It mints the same `ActionReceipt` (`v1`, `send_email`,
+   `sendEmailPayloadHash({ to, subject, body })`) and writes it to a
+   `SendReceipt` row **before** the provider is called. If the write fails, the
+   route answers 503 and sends nothing.
+2. It verifies the bytes handed to the provider against the receipt. On a
+   mismatch the row is settled `REFUSED` and nothing is sent.
+3. It settles the row: `SENT` with the provider message id, `REFUSED`, or
+   `UNKNOWN` when the provider threw, because the mail may have gone out. A row
+   left `PENDING` means the process died mid-send.
+4. It returns `receipt: { id, v, action, payloadHash, approvedAt }` in the
+   success response. This is additive, and the field is absent while the flag
+   is off.
+
+The hash stays `v1` over `{ to, subject, body }`. The reply's thread and
+In-Reply-To are resolved by the server from the user's own row, so they are not
+agent-supplied reply context. That holds for a `POST /api/email/send` that names
+the mail it answers (`inReplyToEmailId`, the web AI-draft reply): the id must be
+the caller's own mail, and only its server-read thread and headers are added.
+When the request names no account, the reply leaves from the inbox that mail
+arrived in, checked as the caller's own like a named one.
+The source email id and the account are stored next to the receipt for audit.
+`POST /api/email/compose` is not wired in, because the v1 hash does not cover
+attachments. Covering it needs a new payload hash and a schema bump.

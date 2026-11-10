@@ -8,8 +8,11 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendEmail = vi.hoisted(() => vi.fn());
+const emailUpdateMany = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
+const sentUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 const getReplyHeaders = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
+const labelUpdateMany = vi.hoisted(() => vi.fn(async (_args: unknown) => ({ count: 1 })));
 
 vi.mock("../auth.js", () => ({
   requireAuth: async () => {},
@@ -18,7 +21,9 @@ vi.mock("../auth.js", () => ({
 }));
 vi.mock("../db.js", () => {
   const prisma = {
-    emailMessage: { findFirst: emailFindFirst },
+    emailMessage: { findFirst: emailFindFirst, updateMany: emailUpdateMany },
+    sentMessage: { upsert: sentUpsert },
+    decisionLabel: { updateMany: labelUpdateMany },
     // The provider dispatch resolves a linked id to its provider row.
     linkedInboxAccount: { findFirst: vi.fn(async () => ({ provider: "GOOGLE" })) },
   };
@@ -65,6 +70,8 @@ beforeEach(() => {
   getReplyHeaders.mockReset();
   emailFindFirst.mockReset();
   emailFindFirst.mockResolvedValue(EMAIL);
+  labelUpdateMany.mockReset();
+  labelUpdateMany.mockResolvedValue({ count: 1 });
   sendEmail.mockResolvedValue({ success: true, messageId: "sent-1" });
   getReplyHeaders.mockResolvedValue({ messageId: "<orig@corp.com>", references: "<a@corp.com>" });
 });
@@ -91,6 +98,21 @@ describe("POST /api/email/:id/reply", () => {
       inReplyTo: "<orig@corp.com>",
       references: "<a@corp.com> <orig@corp.com>", // original chain + original Message-ID
     });
+    // The row's reply chip flips to "replied" — stamped on the user's own row.
+    expect(emailUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1" }),
+        data: { repliedAt: expect.any(Date) },
+      }),
+    );
+    // And the thread joins "waiting on": recorded by the Gmail message id,
+    // on the thread I replied in, on the account the mail lives on.
+    expect(sentUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_gmailId: { userId: "user-1", gmailId: "sent-1" } },
+        create: expect.objectContaining({ threadId: "t1", to: "boss@corp.com", inbox: "primary" }),
+      }),
+    );
     await app.close();
   });
 
@@ -135,6 +157,83 @@ describe("POST /api/email/:id/reply", () => {
     await app.close();
   });
 
+  it.each([
+    ["free text with no message id", { messageId: "not a message id" }],
+    ["an empty id", { messageId: "<>" }],
+    ["a non-string id", { messageId: 12345 }],
+    ["an id with whitespace inside", { messageId: "<a b@corp.com>" }],
+  ])("reports threaded=false when getReplyHeaders returns %s (no In-Reply-To can be emitted)", async (_name, headers) => {
+    getReplyHeaders.mockResolvedValue({ ...headers, references: "<a@corp.com>" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(false);
+    await app.close();
+  });
+
+  it("reports threaded=true when a valid message id is present among other text", async () => {
+    getReplyHeaders.mockResolvedValue({ messageId: "Message-ID: <orig@corp.com> (via relay)" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(true);
+    await app.close();
+  });
+
+  it("names no reply target to a header-path provider: the options are exactly the Gmail ones", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    const options = sendEmail.mock.calls[0][5];
+    expect(options).not.toHaveProperty("replyToProviderMessageId");
+    expect(Object.keys(options).sort()).toEqual([
+      "inReplyTo",
+      "linkedInboxAccountId",
+      "references",
+      "threadId",
+    ]);
+    await app.close();
+  });
+
+  it("reports threaded=true when the provider threaded natively, though no Message-ID header exists", async () => {
+    getReplyHeaders.mockResolvedValue({});
+    sendEmail.mockResolvedValue({ success: true, messageId: null, threaded: true });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(true);
+    await app.close();
+  });
+
+  it("does not take the provider's word for a thread it did not report: no header, no native flag, threaded=false", async () => {
+    getReplyHeaders.mockResolvedValue({});
+    sendEmail.mockResolvedValue({ success: true, messageId: null, threaded: false });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.json().threaded).toBe(false);
+    await app.close();
+  });
+
   it("reports threaded=false when no RFC Message-ID is found (threadId-only)", async () => {
     getReplyHeaders.mockResolvedValue({});
     const app = await buildApp();
@@ -147,6 +246,48 @@ describe("POST /api/email/:id/reply", () => {
     expect(res.json().threaded).toBe(false);
     const options = sendEmail.mock.calls[0][5];
     expect(options).toEqual({ threadId: "t1", inReplyTo: undefined, references: undefined });
+    await app.close();
+  });
+});
+
+describe("POST /api/email/:id/reply — decision ledger", () => {
+  const send = (app: Awaited<ReturnType<typeof buildApp>>) =>
+    app.inject({ method: "POST", url: "/api/email/g1/reply", payload: { body: "Yes." } });
+
+  it("stamps REPLIED on the answered mail's row exactly once", async () => {
+    const app = await buildApp();
+    const res = await send(app);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(res.statusCode).toBe(200);
+    expect(labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "user-1", source: "EMAIL", sourceId: "e1", repliedAt: null },
+        data: { repliedAt: expect.any(Date) },
+      },
+    ]);
+    await app.close();
+  });
+
+  it("stamps nothing when the provider refuses the send", async () => {
+    sendEmail.mockResolvedValue({ error: "Quota exceeded" });
+    const app = await buildApp();
+    const res = await send(app);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(res.statusCode).toBe(409);
+    expect(labelUpdateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("answers exactly the same when the ledger write fails", async () => {
+    const app = await buildApp();
+    const ok = await send(app);
+    labelUpdateMany.mockRejectedValue(new Error("ledger down"));
+    const failed = await send(app);
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
     await app.close();
   });
 });

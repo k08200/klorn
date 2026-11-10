@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31+): nothing of the app leaves the device through Auto
+     Backup or a device-to-device transfer. The app keeps the 24 h offline mail
+     cache and the Done / Later ids in SharedPreferences (Capacitor
+     Preferences, CapacitorStorage.xml) and its session in the Keystore-backed
+     secure storage; all of it is cleared on sign-out, so a backup or a new
+     phone must never bring it back. android:allowBackup="false" covers
+     Android 11 and lower; on 12+ it no longer stops device-to-device
+     transfers, which these rules do. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

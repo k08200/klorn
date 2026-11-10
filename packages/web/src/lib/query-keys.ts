@@ -13,6 +13,24 @@
  */
 
 export const queryKeys = {
+  // Files (productization plan P12): the drive's metadata list, per search.
+  drive: {
+    all: ["drive"] as const,
+    files: (q: string, folder: string | null = null) => ["drive", "files", q, folder] as const,
+    file: (id: string) => ["drive", "file", id] as const,
+    // D3's web UI: one level of the Move picker, folders only.
+    folders: (folder: string) => ["drive", "folders", folder] as const,
+    recent: () => ["drive", "recent"] as const,
+    // D3's web UI: the Klorn drive's file cap, quota and usage (dark: null).
+    limits: () => ["drive", "limits"] as const,
+    // D5c: the linked Google Drive accounts (dark: null).
+    googleAccounts: () => ["drive", "google", "accounts"] as const,
+  },
+  // Saved teams (team mode, P12).
+  teams: {
+    all: ["teams"] as const,
+    list: () => ["teams", "list"] as const,
+  },
   tasks: {
     all: ["tasks"] as const,
     list: () => ["tasks", "list"] as const,
@@ -62,6 +80,7 @@ export const queryKeys = {
       inbox?: string;
     }) => ["email", "list", params ?? {}] as const,
     inboxes: () => ["email", "inboxes"] as const,
+    subscriptions: () => ["email", "subscriptions"] as const,
     detail: (id: string) => ["email", "detail", id] as const,
     candidates: (filters?: { status?: string; attention?: string }) =>
       ["email", "candidates", filters ?? {}] as const,

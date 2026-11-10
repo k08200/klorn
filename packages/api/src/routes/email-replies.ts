@@ -8,17 +8,21 @@
  */
 
 import type { ReplyOptionsResponseWire, ReplyOptionTone } from "@klorn/contract";
+import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
+import type { CallPriority } from "../billing/quota-limiter.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
 import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
-import { extractEmailAddress } from "../mail/email-address.js";
+import { extractEmailAddress, parseAddress } from "../mail/email-address.js";
 import {
   buildAttachmentCandidateProfile,
   listEmailAttachments,
@@ -27,8 +31,24 @@ import { updateCandidateIntake } from "../mail/email-candidate-intake.js";
 import { type GmailDraftAttachment, resolveMailClient } from "../mail/gmail.js";
 import { formatCalendarFacts, getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { replyTargetFor } from "../mail/providers/reply-target.js";
+import { SendOutcomeUnknownError } from "../mail/providers/send-outcome-unknown.js";
+import type { SendMailResult } from "../mail/providers/types.js";
+import { pickInReplyTo } from "../mail/reply-headers.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
+import { markEmailReplied } from "../mail/reply-state.js";
+import { resolveReplyThreading } from "../mail/reply-threading.js";
+import {
+  openSendReceipt,
+  outcomeOfSend,
+  SEND_RECEIPT_UNAVAILABLE_MESSAGE,
+  type SendReceiptHandle,
+  sendReceiptWire,
+  settleSendReceipt,
+  verifySendOrRefuse,
+} from "../mail/send-receipt.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
+import { recordSentMessage } from "../mail/sent-messages.js";
 import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -36,6 +56,9 @@ import { parseJsonArray, safeAttachmentFilename } from "./email.js";
 import { buildEmailAttachmentBrief } from "./email-attachments.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+const SEND_OUTCOME_UNKNOWN_MESSAGE =
+  "The reply may already have been sent. Check Sent Items before retrying.";
 
 async function fetchOriginalAttachmentsForDraft(input: {
   userId: string;
@@ -95,8 +118,9 @@ async function fetchOriginalAttachmentsForDraft(input: {
 }
 
 function extractReplyAddress(raw: string): string {
-  const match = raw.match(/<([^>]+)>/);
-  return (match?.[1] || raw).replace(/^["']|["']$/g, "").trim();
+  return parseAddress(raw)
+    .replace(/^["']|["']$/g, "")
+    .trim();
 }
 
 /**
@@ -178,6 +202,9 @@ async function generateReplyDraft(input: {
   senderContext?: string | null;
   /** Thread reasoning: why they wrote NOW, what is owed either way. */
   threadBrief?: string | null;
+  /** "background" for drafts nobody asked for yet (proactive drafts), so
+   *  the quota limiter ranks them below what the user is waiting on. */
+  priority?: CallPriority;
 }): Promise<string> {
   const [credentials, voiceHint, toneHint] = await Promise.all([
     getUserLlmCredentials(input.userId),
@@ -228,9 +255,54 @@ ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
         },
       ],
     },
-    { credentials, userId: input.userId },
+    {
+      credentials,
+      userId: input.userId,
+      ...(input.priority ? { priority: input.priority } : {}),
+    },
   );
   return response.choices[0]?.message?.content?.trim() || "";
+}
+
+/**
+ * Everything the draft prompt knows about one stored email. Shared by POST
+ * /:id/reply-draft and the proactive sweep so the two can never drift into
+ * different prompts.
+ */
+async function replyDraftContextFor(uid: string, dbEmail: EmailMessage) {
+  const actionItems = parseJsonArray(dbEmail.actionItems);
+  const attachments = await listEmailAttachments([dbEmail.id], uid);
+  const candidateProfile = buildAttachmentCandidateProfile(attachments);
+  const calendarFacts = await calendarFactsFor(uid, dbEmail);
+  const senderContext = await senderContextFor(uid, dbEmail.from);
+  const threadBrief = await threadBriefFor(uid, dbEmail.threadId);
+  return {
+    userId: uid,
+    from: dbEmail.from,
+    subject: dbEmail.subject,
+    body: dbEmail.body,
+    summary: dbEmail.summary,
+    actionItems,
+    candidateProfile,
+    calendarFacts,
+    senderContext,
+    threadBrief,
+  };
+}
+
+/**
+ * The proactive sweep's builder (mail/proactive-drafts.ts DraftBuilder):
+ * the user's own row by id, drafted at background priority. Null when the
+ * row is gone.
+ */
+export async function draftReplyForEmailId(
+  userId: string,
+  emailId: string,
+): Promise<string | null> {
+  const dbEmail = await prisma.emailMessage.findFirst({ where: { id: emailId, userId } });
+  if (!dbEmail) return null;
+  const draftContext = await replyDraftContextFor(userId, dbEmail);
+  return generateReplyDraft({ ...draftContext, priority: "background" });
 }
 
 // Fixed tone presets for /reply-options. The order is wire contract: clients
@@ -278,12 +350,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       });
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-      const actionItems = parseJsonArray(dbEmail.actionItems);
-      const attachments = await listEmailAttachments([dbEmail.id], uid);
-      const candidateProfile = buildAttachmentCandidateProfile(attachments);
-      const calendarFacts = await calendarFactsFor(uid, dbEmail);
-      const senderContext = await senderContextFor(uid, dbEmail.from);
-      const threadBrief = await threadBriefFor(uid, dbEmail.threadId);
+      const draftContext = await replyDraftContextFor(uid, dbEmail);
 
       // The draft is one LLM call. Without this catch a provider outage / quota
       // lockout surfaced as a bare 500 and a generic "Could not draft a reply"
@@ -291,19 +358,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       // cause and return a 503 the client can show as "temporarily unavailable".
       let body: string;
       try {
-        body = await generateReplyDraft({
-          userId: uid,
-          from: dbEmail.from,
-          subject: dbEmail.subject,
-          body: dbEmail.body,
-          summary: dbEmail.summary,
-          actionItems,
-          candidateProfile,
-          intent,
-          calendarFacts,
-          senderContext,
-          threadBrief,
-        });
+        body = await generateReplyDraft({ ...draftContext, intent });
       } catch (err) {
         // A per-user quota trip (quota-limiter self-throttling) is the user
         // going fast, not a provider outage: return the standard 429 +
@@ -314,9 +369,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // A daily-budget trip is a different fact from an outage, and the
         // generic "temporarily unavailable" sent the user in circles retrying
         // something that cannot succeed until tomorrow (founder, 2026-08-10).
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
           // Every model in the fallback chain refused. Still 503 (it is
           // transient), but say which layer failed so a key/quota problem is
@@ -353,7 +407,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         to: extractReplyAddress(dbEmail.from),
         subject: dbEmail.subject.startsWith("Re:") ? dbEmail.subject : `Re: ${dbEmail.subject}`,
         body,
-        candidateProfile,
+        candidateProfile: draftContext.candidateProfile,
       };
     },
   );
@@ -417,9 +471,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // A daily-budget trip is a different fact from an outage, and the
         // generic "temporarily unavailable" sent the user in circles retrying
         // something that cannot succeed until tomorrow (founder, 2026-08-10).
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
           // Every model in the fallback chain refused. Still 503 (it is
           // transient), but say which layer failed so a key/quota problem is
@@ -531,15 +584,17 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       }
 
       const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
-      const result = await actions.createDraft(
-        uid,
+      const result = await actions.createDraft(uid, {
         to,
         subject,
         body,
-        dbEmail.threadId,
+        threadId: dbEmail.threadId,
         attachments,
-        dbEmail.linkedInboxAccountId,
-      );
+        linkedInboxAccountId: dbEmail.linkedInboxAccountId,
+        // A provider that threads by the original's id (OUTLOOK) gets the ROW's id,
+        // never the URL's; every other provider gets nothing extra.
+        ...replyTargetFor(actions, dbEmail.gmailId),
+      });
       if ("unsupported" in result) return reply.code(501).send({ error: result.error });
       if ("error" in result) return reply.code(409).send(result);
       await updateCandidateIntake({
@@ -597,32 +652,91 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         : `Re: ${dbEmail.subject}`;
 
       // RFC822 Message-ID isn't stored — fetch it live so In-Reply-To/References
-      // are correct. References = original chain + original Message-ID (RFC 5322).
-      // A message from a linked secondary inbox lives on THAT account (#757).
+      // are correct (reply-threading.ts). A message from a linked secondary inbox
+      // lives on THAT account (#757).
       const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
-      const { messageId, references } = await actions.getReplyHeaders(
-        uid,
-        dbEmail.gmailId,
-        dbEmail.linkedInboxAccountId,
-      );
-      const referencesChain = [references, messageId].filter(Boolean).join(" ") || undefined;
+      const threading = await resolveReplyThreading(actions, uid, dbEmail);
 
-      const result = await actions.sendEmail(uid, to, subject, body, [], {
-        threadId: dbEmail.threadId,
-        linkedInboxAccountId: dbEmail.linkedInboxAccountId,
-        inReplyTo: messageId,
-        references: referencesChain,
-      });
+      // Deterministic floor (MANUAL_SEND_RECEIPTS_ENABLED): the receipt binds the
+      // recipient and subject derived above and the body the user confirmed, and
+      // is written before anything leaves. No receipt, no send. null while the
+      // flag is off — then nothing below changes.
+      let receipt: SendReceiptHandle | null;
+      try {
+        receipt = await openSendReceipt({
+          userId: uid,
+          route: "reply",
+          to,
+          subject,
+          body,
+          inbox: dbEmail.linkedInboxAccountId ?? "primary",
+          emailId: dbEmail.id,
+        });
+      } catch (err) {
+        captureError(err, {
+          tags: { scope: "email-replies.receipt" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
+        return reply.code(503).send({ error: SEND_RECEIPT_UNAVAILABLE_MESSAGE });
+      }
+
+      // The exact bytes handed to the provider, verified against the receipt.
+      if (receipt) await verifySendOrRefuse(receipt, uid, { to, subject, body });
+      let result: SendMailResult;
+      try {
+        // OUTLOOK threads natively from the original's id (step B0b), taken from the
+        // row looked up above and never from the URL.
+        result = await actions.sendEmail(uid, to, subject, body, [], {
+          ...threading,
+          linkedInboxAccountId: dbEmail.linkedInboxAccountId,
+        });
+      } catch (err) {
+        // A throw may come after the mail left: the receipt says "unknown", never "refused".
+        if (receipt) await settleSendReceipt(receipt, uid, { status: "UNKNOWN" });
+        if (!(err instanceof SendOutcomeUnknownError)) throw err;
+        // The provider could not say whether the reply went out. Nothing is recorded as
+        // answered, and the user is told not to simply retry: that could deliver twice.
+        captureError(err, {
+          tags: { scope: "email-replies.send-outcome-unknown" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
+        return reply.code(502).send({ error: SEND_OUTCOME_UNKNOWN_MESSAGE });
+      }
+      if (receipt) await settleSendReceipt(receipt, uid, outcomeOfSend(result));
       if ("unsupported" in result) return reply.code(501).send({ error: result.error });
       if ("error" in result) return reply.code(409).send(result);
 
       // Manual reply = genuine engagement with this sender (an importance-graph
       // edge). Only user-initiated routes record this — never the auto-reply path.
       await recordContactEngagement(uid, to, "outbound");
+      // The row's reply chip flips to "replied" — a recorded fact.
+      await markEmailReplied(uid, dbEmail.id);
+      noteEmailOutcome(uid, dbEmail.id, "REPLIED");
+      // And the thread joins "waiting on" until they answer (sent-messages.ts).
+      if (result.messageId) {
+        await recordSentMessage(uid, {
+          gmailId: result.messageId,
+          threadId: dbEmail.threadId ?? null,
+          to,
+          subject,
+          sentAt: new Date(),
+          inbox: dbEmail.linkedInboxAccountId ?? "primary",
+          origin: "user",
+        });
+      }
 
-      // threaded=false means we sent by threadId only (no RFC Message-ID found);
-      // surfaced so a client can tell strict-threaded from best-effort.
-      return { ...result, to, threaded: Boolean(messageId) };
+      // threaded=false means no In-Reply-To was emitted: either no RFC
+      // Message-ID was found or none of it parsed as a message id, so the
+      // message went by threadId only. Same parser the MIME builder uses, so
+      // the flag matches the sent headers. A provider that threaded natively
+      // (OUTLOOK, step B0b) says so in its result, and only then. Lets a client
+      // tell strict-threaded from best-effort.
+      return {
+        ...result,
+        to,
+        threaded: result.threaded === true || pickInReplyTo(threading.inReplyTo) !== undefined,
+        ...(receipt ? { receipt: sendReceiptWire(receipt) } : {}),
+      };
     },
   );
 }

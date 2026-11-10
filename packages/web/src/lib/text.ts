@@ -1,3 +1,5 @@
+import { charFromCodePoint } from "./char-ref";
+
 const HTML_ENTITIES: Record<string, string> = {
   amp: "&",
   apos: "'",
@@ -7,22 +9,24 @@ const HTML_ENTITIES: Record<string, string> = {
   quot: '"',
 };
 
+/**
+ * Decode named and numeric character references in display text. Numeric
+ * references to invalid code points become U+FFFD (see char-ref.ts); malformed
+ * or unknown references stay as written. One linear regex pass, never throws.
+ */
 export function decodeHtmlEntities(value: string | null | undefined): string {
   if (!value) return "";
 
-  return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
-    if (entity.startsWith("#x")) {
-      const code = Number.parseInt(entity.slice(2), 16);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
-    }
-
-    if (entity.startsWith("#")) {
-      const code = Number.parseInt(entity.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
-    }
-
-    return HTML_ENTITIES[entity.toLowerCase()] ?? match;
-  });
+  return value.replace(
+    /&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi,
+    (match, hex: string | undefined, dec: string | undefined, name: string | undefined) => {
+      if (hex !== undefined) return charFromCodePoint(Number.parseInt(hex, 16));
+      if (dec !== undefined) return charFromCodePoint(Number.parseInt(dec, 10));
+      // Own keys only: `&constructor;` must not find the object prototype's.
+      const key = (name ?? "").toLowerCase();
+      return Object.hasOwn(HTML_ENTITIES, key) ? (HTML_ENTITIES[key] as string) : match;
+    },
+  );
 }
 
 /**

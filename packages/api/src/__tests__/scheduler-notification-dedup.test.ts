@@ -43,9 +43,10 @@ vi.mock("../websocket.js", () => ({
 }));
 
 import {
-  ensureAutoReplyNotification,
+  claimAutoReplyLedger,
   ensureCalendarDisconnectNotification,
   ensureUrgentEmailNotification,
+  urgentMailPushPayload,
 } from "../automation-scheduler.js";
 import { sendPushNotification } from "../notify/push.js";
 
@@ -84,26 +85,27 @@ describe("ensureCalendarDisconnectNotification — winner-only atomic push", () 
   });
 });
 
-describe("ensureAutoReplyNotification — winner-only atomic push", () => {
-  it("winner: creates + pushes once with dedupeKey auto-reply:<gmailId>", async () => {
+describe("claimAutoReplyLedger — winner-only atomic claim BEFORE the send", () => {
+  it("winner: creates the auto-reply:<gmailId> claim, in-flight, hidden from the bell (type 'claim'), and does NOT push", async () => {
     const { prisma } = await import("../db.js");
-    const result = await ensureAutoReplyNotification(USER, GMAIL_ID, "to@example.com", "My Rule");
+    const result = await claimAutoReplyLedger(USER, GMAIL_ID, "to@example.com", "My Rule");
     expect(result).not.toBeNull();
-    expect(state.pushCalls).toBe(1);
+    expect(state.pushCalls).toBe(0);
     expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           dedupeKey: `auto-reply:${GMAIL_ID}`,
-          type: "email",
-          title: "Auto-reply sent",
+          type: "claim",
+          isRead: true,
+          title: "Auto-reply pending",
         }),
       }),
     );
   });
 
-  it("loser (P2002): returns null and does NOT push — no duplicate auto-reply alert", async () => {
+  it("loser (P2002): returns null — the caller must not send", async () => {
     state.notificationCreateP2002 = true;
-    const result = await ensureAutoReplyNotification(USER, GMAIL_ID, "to@example.com", "My Rule");
+    const result = await claimAutoReplyLedger(USER, GMAIL_ID, "to@example.com", "My Rule");
     expect(result).toBeNull();
     expect(state.pushCalls).toBe(0);
   });
@@ -114,7 +116,7 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     const { prisma } = await import("../db.js");
     const result = await ensureUrgentEmailNotification(
       USER,
-      GMAIL_ID,
+      { id: "email-1", gmailId: GMAIL_ID },
       `body [${GMAIL_ID}]`,
       "body",
     );
@@ -133,11 +135,80 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     );
   });
 
+  it("titles the bell row and the live frame in the user's notification language", async () => {
+    const { prisma } = await import("../db.js");
+    const { pushNotification } = await import("../websocket.js");
+    await ensureUrgentEmailNotification(
+      USER,
+      { id: "email-1", gmailId: GMAIL_ID },
+      `body [${GMAIL_ID}]`,
+      "body",
+      "ko",
+    );
+    expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ title: "긴급 메일" }) }),
+    );
+    expect(vi.mocked(pushNotification)).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ title: "긴급 메일", message: "body" }),
+    );
+  });
+
+  it("a batch of one mail names it on the row and carries its N1 toast on the frame", async () => {
+    const { prisma } = await import("../db.js");
+    const { pushNotification } = await import("../websocket.js");
+    vi.mocked(prisma.notification.create).mockClear();
+    vi.mocked(pushNotification).mockClear();
+    const mail = { emailId: "email-1", title: "Kim", body: "Invoice overdue" };
+    await ensureUrgentEmailNotification(
+      USER,
+      { id: "email-1", gmailId: GMAIL_ID },
+      `body [${GMAIL_ID}]`,
+      "body",
+      "en",
+      mail,
+    );
+    expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ sourceEmailId: "email-1" }) }),
+    );
+    expect(vi.mocked(pushNotification)).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ message: "body", mail }),
+    );
+  });
+
+  it("a batch of several mails names none of them", async () => {
+    const { prisma } = await import("../db.js");
+    const { pushNotification } = await import("../websocket.js");
+    vi.mocked(prisma.notification.create).mockClear();
+    vi.mocked(pushNotification).mockClear();
+    await ensureUrgentEmailNotification(
+      USER,
+      { id: "email-1", gmailId: GMAIL_ID },
+      `body [${GMAIL_ID},gm-2]`,
+      "2 urgent emails",
+    );
+    const data = (vi.mocked(prisma.notification.create).mock.calls[0][0] as { data: object }).data;
+    expect(data).not.toHaveProperty("sourceEmailId");
+    expect(vi.mocked(pushNotification).mock.calls[0][1]).not.toHaveProperty("mail");
+  });
+
+  it("IMAP lead (B2b): the key names the row, so a new message reusing a re-keyed id is not a loser", async () => {
+    const { prisma } = await import("../db.js");
+    const imapId = "naver-imap:me@naver.com:101";
+    await ensureUrgentEmailNotification(USER, { id: "email-9", gmailId: imapId }, "b", "b");
+    expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ dedupeKey: `urgent:${imapId}@email-9` }),
+      }),
+    );
+  });
+
   it("loser (P2002): returns null and does NOT push — no duplicate urgent alert", async () => {
     state.notificationCreateP2002 = true;
     const result = await ensureUrgentEmailNotification(
       USER,
-      GMAIL_ID,
+      { id: "email-1", gmailId: GMAIL_ID },
       `body [${GMAIL_ID}]`,
       "body",
     );
@@ -146,5 +217,47 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     // The follow-on web-push / SMS side-effects are the caller's responsibility
     // and are gated on this non-null return, so a loser triggers no web-push.
     expect(vi.mocked(sendPushNotification)).not.toHaveBeenCalled();
+  });
+});
+
+describe("urgentMailPushPayload — the device push for the urgent bell row", () => {
+  it("names the bell row it rings for (the frame's id), so tab and service worker share one OS tag", () => {
+    const payload = urgentMailPushPayload({
+      notificationId: "notif-new",
+      title: "긴급 메일",
+      body: "Kim: Q4 budget",
+      leads: [{ id: "email-1" }],
+      attentionItemId: "item-1",
+      language: "ko",
+    });
+    expect(payload).toEqual({
+      title: "긴급 메일",
+      body: "Kim: Q4 budget",
+      url: "/briefing",
+      attentionItemId: "item-1",
+      bellNotificationId: "notif-new",
+      emailId: "email-1",
+      // Decision N1: one mail → the same action buttons as the firewall ring.
+      lane: "PUSH",
+      language: "ko",
+    });
+  });
+
+  it("a batch keeps opening the briefing (no single-mail deep link) and omits a missing item", () => {
+    const payload = urgentMailPushPayload({
+      notificationId: "notif-new",
+      title: "Urgent mail",
+      body: "2 urgent",
+      leads: [{ id: "e1" }, { id: "e2" }],
+      attentionItemId: null,
+      language: "en",
+    });
+    expect(payload).toEqual({
+      title: "Urgent mail",
+      body: "2 urgent",
+      url: "/briefing",
+      attentionItemId: undefined,
+      bellNotificationId: "notif-new",
+    });
   });
 });

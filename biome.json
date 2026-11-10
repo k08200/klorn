@@ -94,6 +94,14 @@
   "files": {
     "includes": [
       "packages/**",
+      "apps/mobile/**",
+      "!!apps/mobile/android",
+      "!!apps/mobile/ios",
+      "!!apps/mobile/www",
+      "!!apps/mobile/probe",
+      "!!apps/mobile/store-pack",
+      "!!apps/mobile/dist-mock",
+      "!!apps/mobile/playwright-report",
       "!!**/node_modules",
       "!!**/dist",
       "!!**/.next",

@@ -14,17 +14,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const imap = vi.hoisted(() => ({
+  ctorOpts: [] as Array<Record<string, unknown>>,
   connect: vi.fn(),
   getMailboxLock: vi.fn(),
   logout: vi.fn(),
+  close: vi.fn(),
+  on: vi.fn(),
   status: vi.fn(),
   fetch: vi.fn(),
+  release: vi.fn(),
 }));
 
 class FakeImapFlow {
+  constructor(opts: Record<string, unknown>) {
+    imap.ctorOpts.push(opts);
+  }
   connect = imap.connect;
   getMailboxLock = imap.getMailboxLock;
   logout = imap.logout;
+  close = imap.close;
+  on = imap.on;
   status = imap.status;
   fetch = imap.fetch;
 }
@@ -75,7 +84,7 @@ function fakeMessages() {
 
 function armImap() {
   imap.connect.mockResolvedValue(undefined);
-  imap.getMailboxLock.mockResolvedValue({ release: () => {} });
+  imap.getMailboxLock.mockResolvedValue({ release: imap.release });
   imap.logout.mockResolvedValue(undefined);
   imap.status.mockResolvedValue({ messages: 2 });
   imap.fetch.mockImplementation(async function* () {
@@ -86,6 +95,7 @@ function armImap() {
 describe("syncImapInbox → shared persist path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    imap.ctorOpts.length = 0;
     armImap();
   });
 
@@ -148,6 +158,145 @@ describe("syncImapInbox → shared persist path", () => {
     expect(judgeEmail).not.toHaveBeenCalled();
   });
 
+  it("fetches the top-level MIME headers and persists the decoded body", async () => {
+    const mime = [
+      "--b1",
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      Buffer.from("내일 3시 회의 확인 부탁드립니다").toString("base64"),
+      "--b1--",
+      "",
+    ].join("\r\n");
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from('Content-Type: multipart/alternative; boundary="b1"\r\n'),
+        bodyParts: new Map([["text", Buffer.from(mime)]]),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    expect(imap.fetch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ headers: ["content-type", "content-transfer-encoding"] }),
+      expect.anything(),
+    );
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        body: "내일 3시 회의 확인 부탁드립니다",
+        snippet: "내일 3시 회의 확인 부탁드립니다",
+      }),
+      // A re-polled row whose body was stored raw before this fix picks up the
+      // decoded text: the IMAP path asks persist to refresh a changed body.
+      expect.objectContaining({ linkedInboxAccountId: "acc-icloud", refreshBody: true }),
+    );
+  });
+
+  it("does not ask persist to refresh a body it could not decode (headers missing)", async () => {
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    // fakeMessages() carry no `headers`: a flaky FETCH must not overwrite a
+    // decoded body with raw text.
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.anything(),
+      expect.objectContaining({ refreshBody: false }),
+    );
+  });
+
+  it("sanitizes only the head of a huge undecodable body for the snippet", async () => {
+    // Fixed hosts fetch the whole TEXT; without headers the raw text is kept,
+    // and sanitize-html is super-linear in tag nesting (<b> x 166k: ~8 s).
+    const hostile = Buffer.from("<b>".repeat(400_000));
+    imap.fetch.mockImplementation(async function* () {
+      yield { ...fakeMessages()[0], bodyParts: new Map([["text", hostile]]) };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    const start = performance.now();
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it("does not refresh a stored body when the TEXT part did not come back", async () => {
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from("Content-Type: text/plain; charset=utf-8\r\n"),
+        bodyParts: new Map(),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.anything(),
+      expect.objectContaining({ refreshBody: false }),
+    );
+  });
+
+  it("never cuts a surrogate pair when it caps the stored body", async () => {
+    const body = `${"a".repeat(49_999)}😀tail`;
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from("Content-Type: text/plain; charset=utf-8\r\n"),
+        bodyParts: new Map([["text", Buffer.from(body)]]),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    const stored = persistGmailEmail.mock.calls[0]?.[1]?.body as string;
+    expect(stored).toBe("a".repeat(49_999));
+    expect(/[\uD800-\uDBFF]$/.test(stored)).toBe(false);
+  });
+
   it("namespaces the dedup key with the provider idPrefix (icloud-imap: for ICLOUD)", async () => {
     persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
 
@@ -182,5 +331,88 @@ describe("syncImapInbox → shared persist path", () => {
     });
 
     expect(result).toEqual({ fetched: 2, inserted: 1, classified: 1, errors: 1 });
+  });
+});
+
+describe("syncImapInbox → connection hygiene", () => {
+  const args = {
+    provider: IMAP_PROVIDERS.NAVER,
+    userId: "u1",
+    email: "me@naver.com",
+    password: "app-pw",
+    host: "imap.naver.com:993",
+    linkedInboxAccountId: "acc-naver",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    imap.ctorOpts.length = 0;
+    armImap();
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("keeps the poll's 30 s socket timeout", async () => {
+    await syncImapInbox(args);
+    expect(imap.ctorOpts).toHaveLength(1);
+    expect(imap.ctorOpts[0]).toMatchObject({
+      host: "imap.naver.com",
+      port: 993,
+      secure: true,
+      socketTimeout: 30_000,
+    });
+  });
+
+  it("registers an error listener, so a late socket error cannot crash the process", async () => {
+    await syncImapInbox(args);
+    const listener = imap.on.mock.calls.find(([event]) => event === "error")?.[1];
+    expect(listener).toBeTypeOf("function");
+    expect(() => listener(new Error("read ECONNRESET"))).not.toThrow();
+    const logged = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .flat()
+      .join("\n");
+    expect(logged).toContain("naver-imap");
+    expect(logged).toContain("acc-naver");
+    expect(logged).not.toContain("app-pw");
+    expect(logged).not.toContain("me@naver.com");
+  });
+
+  it("logs out and releases the lock on success", async () => {
+    await syncImapInbox(args);
+    expect(imap.release).toHaveBeenCalledTimes(1);
+    expect(imap.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the session when the fetch throws, and still rethrows", async () => {
+    imap.fetch.mockImplementation(() => {
+      throw new Error("socket hang up");
+    });
+    await expect(syncImapInbox(args)).rejects.toThrow("socket hang up");
+    expect(imap.release).toHaveBeenCalledTimes(1);
+    expect(imap.logout).toHaveBeenCalledTimes(1);
+    expect(imap.close).toHaveBeenCalled();
+  });
+
+  it("closes the session when connect() fails, and still rethrows", async () => {
+    imap.connect.mockRejectedValue(new Error("ECONNREFUSED"));
+    imap.logout.mockRejectedValue(new Error("NoConnection"));
+    await expect(syncImapInbox(args)).rejects.toThrow("ECONNREFUSED");
+    expect(imap.close).toHaveBeenCalled();
+  });
+
+  it("closes the session on the empty-mailbox early return", async () => {
+    imap.status.mockResolvedValue({ messages: 0 });
+    const result = await syncImapInbox(args);
+    expect(result).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    expect(imap.release).toHaveBeenCalledTimes(1);
+    expect(imap.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to open a socket to a host outside the allowlist", async () => {
+    await expect(syncImapInbox({ ...args, host: "169.254.169.254:993" })).rejects.toThrow(
+      /not allowed/i,
+    );
+    expect(imap.ctorOpts).toHaveLength(0);
+    expect(imap.connect).not.toHaveBeenCalled();
   });
 });

@@ -9,12 +9,23 @@ import SwiftUI
 struct AutomationPreferences: View {
     @Environment(AppModel.self) private var model
 
+    /// The server-backed groups, which the Settings window splits across its
+    /// Assistant and Notifications tabs. Order here is display order.
+    enum Part: CaseIterable, Sendable { case mode, behaviour, replies, interrupts }
+
+    /// Which groups to draw. Defaults to all of them (the preview renderer).
+    var parts: [Part] = Part.allCases
+
     var body: some View {
         Group {
-            section(L("mode.section")) { attentionModeSection }
-            section(L("auto.section.behaviour")) { modeSection }
-            section(L("auto.section.replies")) { replySection }
-            section(L("auto.section.interrupts")) { notificationSection }
+            ForEach(parts, id: \.self) { part in
+                switch part {
+                case .mode: section(L("mode.section")) { attentionModeSection }
+                case .behaviour: section(L("auto.section.behaviour")) { modeSection }
+                case .replies: section(L("auto.section.replies")) { replySection }
+                case .interrupts: section(L("auto.section.interrupts")) { notificationSection }
+                }
+            }
         }
     }
 
@@ -50,16 +61,16 @@ struct AutomationPreferences: View {
                         .font(.callout).foregroundStyle(Theme.textDim)
                         .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
                         .padding(6)
-                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
                 } else {
                     TextEditor(text: $guidelineDraft)
                         .font(.callout)
                         .frame(minHeight: 88, maxHeight: 140)
                         .scrollContentBackground(.hidden)
                         .padding(4)
-                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
                         .accessibilityLabel(L("mode.guideline"))
                 }
                 HStack(spacing: Theme.s2) {
@@ -282,8 +293,8 @@ private struct OffscreenPickerLabel: View {
             Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Theme.textDim)
         }
         .padding(.horizontal, 11).padding(.vertical, 5)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
     }
 }
 
@@ -317,10 +328,10 @@ private struct ChoiceRow: View {
             .frame(minHeight: 44, alignment: .top)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .fill(selected ? Theme.surfaceSelected : Theme.surfaceRaised))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .strokeBorder(selected ? Theme.accent.opacity(0.5) : Theme.line))
             // Ideal-height pin on the WHOLE card (background included), not on
             // the inner Text: inside a Button label a text-level fixedSize can
@@ -415,8 +426,8 @@ private struct QuietHoursField: View {
             Text(text.wrappedValue.isEmpty ? "--:--" : text.wrappedValue)
                 .font(.callout).foregroundStyle(Theme.textDim)
                 .frame(width: 76, height: 22)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
         } else {
             TextField("--:--", text: text)
                 .textFieldStyle(.roundedBorder)

@@ -13,6 +13,8 @@ import { sendPushNotification } from "../notify/push.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
+import { newWork } from "../work-context.js";
+import { mailReminderEmailId } from "./mail-reminder.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -29,6 +31,10 @@ type ReminderRecord = {
 
 async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
   const msg = reminder.description || `Reminder: ${reminder.title}`;
+  // A mail's "Later" (pim/mail-reminder.ts) opens that mail: the bell row's
+  // link, the push's url and the native deep link all point at it.
+  const emailId = mailReminderEmailId(reminder.description);
+  const mailPath = emailId ? `/email/${emailId}` : null;
 
   const updated = await prisma.reminder.updateMany({
     where: {
@@ -52,6 +58,7 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
         type: "reminder",
         title: reminder.title,
         message: msg,
+        ...(emailId ? { link: mailPath, sourceEmailId: emailId } : {}),
       },
     });
   } catch (err) {
@@ -75,13 +82,25 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     createdAt: notification.createdAt.toISOString(),
   });
 
-  // Send browser push notification
-  sendPushNotification(reminder.userId, {
-    title: reminder.title,
-    body: msg,
-    url: "/chat",
-    notificationId: notification.id,
-  }).catch((err) => {
+  // Send the push: "system" — no category opt-out, quiet hours apply
+  // (push.ts). userSet: the user asked for this one, so the inbound-mail noise
+  // heuristic does not veto a subject it quotes. For the same reason it rings
+  // against the interrupt bucket (push-bucket.ts): briefings and agent
+  // proposals in the ambient bucket must not crowd out a reminder the user set
+  // for a time.
+  sendPushNotification(
+    reminder.userId,
+    {
+      title: reminder.title,
+      body: msg,
+      url: mailPath ?? "/chat",
+      notificationId: notification.id,
+      ...(emailId ? { emailId } : {}),
+      userSet: true,
+    },
+    "system",
+    { bucket: "interrupt" },
+  ).catch((err) => {
     console.error(`[REMINDER] Push delivery failed for ${reminder.id}:`, err);
     captureError(err, {
       tags: { scope: "reminder.push", userId: reminder.userId },
@@ -164,10 +183,10 @@ export function startReminderScheduler() {
   registerScheduler("reminder", CHECK_INTERVAL_MS);
 
   // Run immediately on start
-  checkDueReminders();
+  newWork(checkDueReminders)();
 
   // Then check periodically
-  intervalId = setInterval(checkDueReminders, CHECK_INTERVAL_MS);
+  intervalId = setInterval(newWork(checkDueReminders), CHECK_INTERVAL_MS);
 }
 
 /** Stop the reminder scheduler */

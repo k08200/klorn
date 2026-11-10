@@ -2,14 +2,15 @@ import AppKit
 import SwiftUI
 
 enum Theme {
+    /// Raw sRGB components (0–1). Tokens that the self-check audits keep
+    /// their values in this pure form so contrast math never needs AppKit.
+    typealias RGBA = (r: Double, g: Double, b: Double, a: Double)
+
     /// Appearance-following color: AppKit resolves the closure against the
     /// EFFECTIVE appearance at draw time, so every consumer of these tokens
     /// flips with the app appearance (system / Preferences override) with no
     /// per-view work. Light values are byte-identical to the pre-dark theme.
-    private static func dyn(
-        light: (r: Double, g: Double, b: Double, a: Double),
-        dark: (r: Double, g: Double, b: Double, a: Double)
-    ) -> Color {
+    static func dyn(light: RGBA, dark: RGBA) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let c = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
             return NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: c.a)
@@ -21,34 +22,37 @@ enum Theme {
     /// surface hue-free so the only color on screen is color that MEANS
     /// something — lane tints, the accent, unread. A navy canvas put a blue
     /// cast under all of it and made the lane hues compete with the ground.
-    static let bg = dyn(light: (0.980, 0.980, 0.980, 1), dark: (0.039, 0.039, 0.045, 1))
-    /// The one interaction accent — CTAs, focus, selection, gauge. Everything
-    /// "choose me / chosen" speaks in this; the brand marks themselves are B&W.
-    /// Web v2 sky-500 `#0ea5e9`.
-    static let accent = Color(red: 0.055, green: 0.647, blue: 0.914)
+    static let bg = dyn(light: bgLight, dark: bgDark)
+    /// The canvas as raw sRGB components — pure, so the self-check can do
+    /// contrast math without resolving an NSColor (see `laneComponents`).
+    static let bgLight: RGBA = (0.980, 0.980, 0.980, 1)
+    static let bgDark: RGBA = hex(0x0A0A0B)  // v2 dark canvas
+    /// The one interaction accent — CTAs, focus, selection, links, the
+    /// floating button. Everything "choose me / chosen" speaks in this; the
+    /// brand marks themselves are B&W. Since the design detail pass
+    /// (2026-10-16, audit X2) this IS `accentSolid` — #0369A1 light /
+    /// #38BDF8 dark, the web's one blue. The old sky-500 #0EA5E9 is retired:
+    /// it was 2.8:1 as text on the light canvas.
+    static var accent: Color { accentSolid }
     /// Deep end of the accent gradient (gauge fill etc.) — sky-600 `#0284c7`
     /// in light; brightens to sky-400 in the dark like the web's accent-deep.
     static let accentDeep = dyn(light: (0.008, 0.518, 0.780, 1), dark: (0.220, 0.741, 0.973, 1))
+    /// The accent as a solid fill that carries text (productization plan §2:
+    /// sky `#0369a1` light / `#38bdf8` dark), with the ink that sits on it.
+    /// White on the light fill is 5.9:1, the dark ink on the dark fill 9.2:1.
+    static let accentSolid = dyn(light: accentSolidLight, dark: accentSolidDark)
+    static let accentSolidLight: RGBA = hex(0x0369A1)
+    static let accentSolidDark: RGBA = hex(0x38BDF8)
+    static let onAccentSolid = dyn(light: (1, 1, 1, 1), dark: (0.039, 0.039, 0.045, 1))
     /// slate-200-grade hairline on the glass panel; faint white line in dark.
     static let line = dyn(light: (0, 0, 0, 0.08), dark: (1, 1, 1, 0.10))
-    /// Panel bevel (GlassPanel edge): a top highlight that FADES DOWN the rim
-    /// instead of outlining it — the Raycast/Sonoma panel edge. A flat stroke
-    /// on a dark desktop reads as a drawn box; a fading bevel reads as light
-    /// catching the material (founder feedback 2026-08-22: the border made
-    /// the design worse).
-    /// Light mode: white-on-near-white is invisible (~1.02:1, render-verified)
-    /// — the light rim is a faint NEUTRAL hairline instead, still fading down
-    /// so it never reads as a drawn box. Dark keeps the white bevel.
-    static let bevelTop = dyn(light: (0, 0, 0, 0.07), dark: (1, 1, 1, 0.16))
-    static let bevelBottom = dyn(light: (0, 0, 0, 0.03), dark: (1, 1, 1, 0.02))
-    /// Interior top-edge light. Was a hardcoded white 0.9 — glaring in dark.
-    static let edgeLight = dyn(light: (1, 1, 1, 0.90), dark: (1, 1, 1, 0.14))
-
     /// The floating surface. Dark is a neutral raised gray one step above the
     /// canvas — not navy (see `bg`).
-    static let panel = dyn(
-        light: (1, 1, 1, panelDefaultOpacity), dark: (0.078, 0.078, 0.086, panelDefaultOpacity))
+    static let panel = dyn(light: panelLight, dark: panelDark)
     static let panelDefaultOpacity = 0.92
+    /// The panel as raw components, for the self-check's contrast math.
+    static let panelLight: RGBA = (1, 1, 1, panelDefaultOpacity)
+    static let panelDark: RGBA = (0.078, 0.078, 0.086, panelDefaultOpacity)
 
     /// Panel fill opacity: fully opaque when the user asked to reduce transparency
     /// (the 8% see-through can drop contrast over a busy backdrop), else the
@@ -58,7 +62,9 @@ enum Theme {
     }
     /// Near-black / near-white, hue-free (the slate ramp carried the navy cast
     /// into every glyph).
-    static let text = dyn(light: (0.060, 0.060, 0.070, 1), dark: (0.957, 0.957, 0.965, 1))
+    static let text = dyn(light: textLight, dark: (0.957, 0.957, 0.965, 1))
+    /// v2 ink #0B0D12.
+    static let textLight: RGBA = hex(0x0B0D12)
     /// Secondary text, neutral gray. Contrast re-measured after the
     /// neutralization: light #52525C on the raised-over-white stack ≈ 6.9:1,
     /// dark #A2A2AD on the raised-over-panel stack ≈ 6.8:1 — both clear the
@@ -72,39 +78,65 @@ enum Theme {
     /// on the white panel. Use only where a control edge must be perceivable.
     static let field = dyn(light: (0, 0, 0, 0.35), dark: (1, 1, 1, 0.45))
 
-    /// The web engagement graph's "you engage with this sender" pink — reused by
-    /// the reading pane's learned-engagement chip so desktop matches the web signal.
-    /// Muted from the web graph's hot pink: at full saturation it outshouts the
-    /// PUSH dot, and a learned-affinity hint must never look more urgent than
-    /// urgency itself. ~4.3:1 on the panel — below the 4.5:1 text floor, fine
-    /// for its actual use (chip icon + meter = non-text, 1.4.11 needs ≥3:1).
-    /// Don't set text in this color.
-    static let engage = Color(red: 0.776, green: 0.302, blue: 0.549)
-
-    /// Per-tier signal palette — semantic hues kept from the dark system, with
-    /// QUEUE/AUTO nudged darker so the dots stay perceivable on the white
-    /// panel: warm signal red, amber-600, cool slate, calm signal blue-500.
+    /// Per-lane palette — ONE palette on web and mac (FD-4,
+    /// docs/design/productization-plan.md §2). Values are the web's
+    /// `--tier-*-ink` tokens (packages/web/src/app/globals.css): Tailwind
+    /// 700-level inks in light, the 400-level hues (`--color-tier-*`) in dark.
+    /// This replaces the old mac ramp, where INFO and SILENT were two near-
+    /// identical slates and MEETING was a teal the web never used.
+    ///
+    /// Light deliberately uses the ink, not the 400 hue, for dots AND text:
+    /// the 400 hues are 1.5–2.7:1 on the light canvas, below even the 3:1
+    /// non-text floor (WCAG 1.4.11), and `tint` already colors text (inline
+    /// error lines). One theme-aware token keeps every call site AA.
+    ///
+    /// Measured text contrast (WCAG 2.2, 4.5:1 floor) — light on bg #FAFAFA /
+    /// raised card; dark on bg / panel / raised card:
+    ///   PUSH     #be123c 6.02 / 5.51   |  #fb7185 7.35 / 6.89 / 6.55
+    ///   MEETING  #4f46e5 6.02 / 5.51   |  #818cf8 6.63 / 6.22 / 5.91
+    ///   QUEUE    #b45309 4.81 / 4.40   |  #fbbf24 11.86 / 11.11 / 10.56
+    ///   INFO     #0e7490 5.13 / 4.70   |  #22d3ee 10.95 / 10.26 / 9.75
+    ///   SILENT   #57534e 7.30 / 6.69   |  #a8a29e 7.85 / 7.35 / 6.99
+    /// The lane chip does not use `tint` for its text: it uses `chipInk`
+    /// (DesignTokens.swift), which clears 4.5:1 on its 13% wash over every
+    /// surface. The self-check pins the inks on `bg` in both appearances and
+    /// the pairwise distinctness.
     static func tint(_ tier: Tier) -> Color {
-        switch tier {
-        case .push: Color(red: 1.0, green: 0.30, blue: 0.34)
-        // v2 lanes: meeting sits near push in urgency (teal keeps it distinct
-        // from every v1 hue); info is records-gray, quieter than queue.
-        case .meeting: Color(red: 0.05, green: 0.60, blue: 0.55)
-        case .queue: Color(red: 0.851, green: 0.467, blue: 0.024)
-        case .info: Color(red: 0.42, green: 0.47, blue: 0.55)
-        case .silent: Color(red: 0.49, green: 0.53, blue: 0.59)
-        case .auto: Color(red: 0.231, green: 0.510, blue: 0.965)
+        dyn(light: laneComponents(tier, dark: false), dark: laneComponents(tier, dark: true))
+    }
+
+    /// The lane color as pure sRGB components (no AppKit) — the source of
+    /// truth `tint` resolves from, and what the self-check audits.
+    static func laneComponents(_ tier: Tier, dark: Bool) -> RGBA {
+        switch (tier, dark) {
+        case (.push, false): hex(0xBE123C)  // rose-700
+        case (.push, true): hex(0xFB7185)  // rose-400
+        case (.meeting, false): hex(0x4F46E5)  // indigo-600
+        case (.meeting, true): hex(0x818CF8)  // indigo-400
+        case (.queue, false): hex(0xB45309)  // amber-700
+        case (.queue, true): hex(0xFBBF24)  // amber-400
+        case (.info, false): hex(0x0E7490)  // cyan-700
+        case (.info, true): hex(0x22D3EE)  // cyan-400
+        case (.silent, false): hex(0x57534E)  // stone-600
+        case (.silent, true): hex(0xA8A29E)  // stone-400
         }
     }
 
+    static func hex(_ value: UInt32) -> RGBA {
+        (Double((value >> 16) & 0xFF) / 255, Double((value >> 8) & 0xFF) / 255,
+         Double(value & 0xFF) / 255, 1)
+    }
+
     // MARK: Label palette (2026-08-27)
+    // NOTE (productization plan §2, 2026-10-02): category labels become
+    // NEUTRAL in the reader — this hued palette is demoted in P5 (web Mail v2)
+    // / M7 (mac tokens). Left as is until then; do not add new hues here.
     // The category labels were monochrome chips and the founder couldn't see
     // them ("라벨도 색깔도 없고… 눈에 안뜨임"). Labels are data — they get
     // hues, one per meaning, distinct from every lane hue so the two chip
     // families never read as one system. Light/dark pairs are tuned so the
     // chip TEXT (tint on a 13% tint wash over the panel) clears the 4.5:1
-    // small-text floor in both modes — engage stays banned for text
-    // (Theme.engage doc), which is why replied gets its own pink ramp.
+    // small-text floor in both modes.
     static func labelTint(_ filter: LabelFilter) -> Color {
         switch filter {
         // "No category label" is the honest meaning — it stays neutral.
@@ -115,29 +147,16 @@ enum Theme {
         case .customer: dyn(light: (0.68, 0.14, 0.34, 1), dark: (1.0, 0.58, 0.68, 1))
         case .investor: dyn(light: (0.56, 0.42, 0.0, 1), dark: (0.90, 0.74, 0.30, 1))
         case .system: dyn(light: (0.32, 0.38, 0.52, 1), dark: (0.66, 0.72, 0.84, 1))
+        // Money-adjacent — a warm bronze apart from investor's gold.
+        case .billing: dyn(light: (0.52, 0.30, 0.08, 1), dark: (0.88, 0.62, 0.38, 1))
         case .promotions: dyn(light: (0.03, 0.42, 0.20, 1), dark: (0.38, 0.80, 0.50, 1))
         case .social: dyn(light: (0.12, 0.34, 0.78, 1), dark: (0.52, 0.70, 1.0, 1))
         case .updates: dyn(light: (0.55, 0.38, 0.0, 1), dark: (0.95, 0.76, 0.28, 1))
         case .forums: dyn(light: (0.42, 0.26, 0.74, 1), dark: (0.74, 0.64, 1.0, 1))
         case .firstContact: dyn(light: (0.0, 0.40, 0.54, 1), dark: (0.32, 0.76, 0.90, 1))
-        }
-    }
-
-    /// The chip color for a row's signal — same ramps as the sidebar rows via
-    /// labelTint, so a chip and its category row always match. Replied is the
-    /// relationship signal: a pink RAMP of its own (engage itself measures
-    /// ~4.3:1 and is documented never-for-text).
-    static func signalTint(_ signal: RowSignal) -> Color {
-        switch signal {
-        case .category(let name):
-            // One lookup for both families — LabelFilter's raw values ARE the
-            // wire's category strings, so a new category needs one enum case
-            // and its tint, nowhere else.
-            LabelFilter(rawValue: name).map { labelTint($0) } ?? textDim
-        case .replied:
-            dyn(light: (0.60, 0.14, 0.40, 1), dark: (0.96, 0.56, 0.76, 1))
-        case .first:
-            labelTint(.firstContact)
+        // The reply axis — a mint apart from every category hue, so "you
+        // owe an answer" never reads as a kind of sender.
+        case .needsReply: dyn(light: (0.0, 0.46, 0.36, 1), dark: (0.40, 0.86, 0.70, 1))
         }
     }
 
@@ -145,189 +164,120 @@ enum Theme {
     /// (Was the web's navy-tinted shadow; a colored shadow is a hue cast.)
     static let panelShadow = dyn(light: (0, 0, 0, 0.18), dark: (0, 0, 0, 0.55))
 
-    /// Glass tint, layered OVER the real blur material. Neutral top→bottom —
-    /// barely darker at the foot so the surface still reads as lit material,
-    /// with no color cast in either mode. Opacity applied by the caller
-    /// (reduce-transparency mode raises it to near-solid, where the blur
-    /// behind barely shows).
-    static func panelGradient(opacity: Double) -> LinearGradient {
-        LinearGradient(
-            colors: [
-                dyn(light: (1, 1, 1, opacity * 0.99), dark: (0.078, 0.078, 0.086, opacity * 0.99)),
-                dyn(light: (0.975, 0.975, 0.978, opacity), dark: (0.055, 0.055, 0.063, opacity)),
-            ],
-            startPoint: .top, endPoint: .bottom)
-    }
-
-    /// Glass tint opacity: lighter than the old solid panel so the real blur
-    /// shows through; near-solid when the user asked to reduce transparency.
-    static func glassTintOpacity(reduceTransparency: Bool) -> Double {
-        reduceTransparency ? 0.98 : 0.72
-    }
-
     // MARK: Surface ladder (design pass 2026-07-20)
     // One opacity scale for every interactive rest→hover→selected state, so
     // "how raised is this?" reads consistently across the app. Never invent
     // ad-hoc `Color.white.opacity(…)` fills in views — pick a rung.
-    static let surfaceRaised = dyn(light: (0, 0, 0, 0.04), dark: (1, 1, 1, 0.06))  // cards, chips at rest
-    static let surfaceHover = dyn(light: (0, 0, 0, 0.07), dark: (1, 1, 1, 0.10))  // pointer feedback
+    static let surfaceRaised = dyn(light: surfaceRaisedLight, dark: surfaceRaisedDark)  // cards, chips at rest
+    static let surfaceHover = dyn(light: surfaceHoverLight, dark: surfaceHoverDark)  // pointer feedback
     /// Selection speaks in the accent — tinted fill (the accent bar still
     /// carries the hard edge, so selection is never color-alone).
-    static let surfaceSelected = accent.opacity(0.12)
+    static let surfaceSelected = accent.opacity(surfaceSelectedOpacity)
+    /// The ladder as raw components, for the self-check's contrast math.
+    static let surfaceRaisedLight: RGBA = (0, 0, 0, 0.04)
+    static let surfaceRaisedDark: RGBA = (1, 1, 1, 0.06)
+    static let surfaceHoverLight: RGBA = (0, 0, 0, 0.07)
+    static let surfaceHoverDark: RGBA = (1, 1, 1, 0.10)
+    /// The accent as raw components (light), for the selected-row contrast math.
+    static let accentComponents: RGBA = accentSolidLight
+    static let surfaceSelectedOpacity = 0.12
 
-    /// True only while `--render-previews` is drawing. See GlassPanel.
+    /// Status signals (diagnostics dots). AppKit's system colors, so they
+    /// follow light/dark and Increase Contrast. Never color-alone: callers
+    /// pair them with a word.
+    static let success = Color(nsColor: .systemGreen)
+    static let warning = Color(nsColor: .systemOrange)
+    static let danger = Color(nsColor: .systemRed)
+
+    /// True only while `--render-previews` is drawing (views swap AppKit-backed
+    /// pieces for flat stand-ins that ImageRenderer can draw).
     nonisolated(unsafe) static var isRenderingOffscreen = false
 
-    // MARK: Spacing (4pt grid)
-    // s2/s3 within a control, s4 between controls, s6 between sections.
-    // MARK: Typography — the five-step scale (design renewal P0, 2026-08-21).
+    // MARK: Typography — the six-step scale (productization plan §2,
+    // 2026-10-02; was the five-step scale of design renewal P0, 2026-08-21).
     // SF stays (native-feel doctrine, writing-style.md); unification with the
-    // web happens at the HIERARCHY level, not the typeface. Every step is a
-    // deliberate contrast jump so a glance separates statement (head) from
-    // metadata (label/caption) — the old surfaces mixed raw .font() sizes one
-    // point apart, which reads as one grey block at arm's length.
+    // web happens at the HIERARCHY level, not the typeface: the step NAMES
+    // match the web roles 1:1 (display/title/head/body/label/caption), the
+    // mac sizes sit a notch under the web px. Every step is a deliberate
+    // contrast jump so a glance separates statement (head) from metadata
+    // (label/caption).
+    /// Design Language v2 type roles, Mac column (docs/design/
+    /// design-language-v2.md): page 28 · title 22 · head 15 · body 13 ·
+    /// label 12 · caption 11 · mono 12. Pure sizes so the self-check can pin
+    /// them; `Typo` builds the fonts from these.
+    enum TypeSize {
+        static let page: CGFloat = 28
+        static let title: CGFloat = 22
+        static let head: CGFloat = 15
+        static let body: CGFloat = 13
+        static let label: CGFloat = 12
+        static let caption: CGFloat = 11
+        static let mono: CGFloat = 12
+    }
+
     enum Typo {
-        /// Screen titles (Preferences, Teams, reading-pane subject).
-        static let display = Font.system(size: 20, weight: .semibold)
-        /// The statement a list is scanned for: subjects, section heads.
-        static let head = Font.system(size: 15, weight: .semibold)
-        /// Identity + controls: senders, buttons, chips.
-        static let label = Font.system(size: 12, weight: .medium)
-        /// Running text.
-        static let body = Font.system(size: 13)
-        /// Metadata: reasons, timestamps, helper lines.
-        static let caption = Font.system(size: 11)
-        /// Tracked micro-labels: column headers. Pair with ColumnHeader tracking.
+        /// Page titles (a whole screen's name, onboarding). 28pt. New in v2.
+        static let page = Font.system(size: TypeSize.page, weight: .semibold)
+        /// Screen and pane titles (Preferences, Teams, reading-pane subject,
+        /// the mail and calendar list headers). 22pt.
+        static let title = Font.system(size: TypeSize.title, weight: .semibold)
+        /// The statement a list is scanned for: subjects, section heads. 15pt.
+        static let head = Font.system(size: TypeSize.head, weight: .semibold)
+        /// Running text. 13pt.
+        static let body = Font.system(size: TypeSize.body)
+        /// Identity + controls: senders, buttons, chips. 12pt.
+        static let label = Font.system(size: TypeSize.label, weight: .medium)
+        /// Secondary metadata: the label size at regular weight (snippets,
+        /// sender · time rows, one-line reasons). Replaces
+        /// `label.weight(.regular)`. 12pt.
+        static let meta = Font.system(size: TypeSize.label)
+        /// Metadata: reasons, timestamps, helper lines. 11pt.
+        static let caption = Font.system(size: TypeSize.caption)
+        /// Code, ids, keys — SF Mono. 12pt.
+        static let mono = Font.system(size: TypeSize.mono, design: .monospaced)
+        /// DEPRECATED — the plan retires 10pt text; new code uses `caption`
+        /// (11pt). The main window is free of it (self-check guard); the
+        /// bar's surfaces keep it until they are deleted in M8.
         static let micro = Font.system(size: 10, weight: .semibold)
         /// Counts — monospaced digits so columns of numbers never shimmy.
-        static let numeric = Font.system(size: 13).monospacedDigit()
+        static let numeric = Font.system(size: TypeSize.body).monospacedDigit()
         /// Row/nav icons — one size, one weight, everywhere.
         static let icon = Font.system(size: 12, weight: .medium)
     }
 
+    // MARK: Radius (productization plan §2)
+    // Design Language v2: 6 chip · 10 control · 16 card · 24 sheet. The
+    // rungs keep their numbers (sm/md/lg/xl = 6/10/16/24) and live only in
+    // this file: call sites pick a role by meaning (the self-check holds
+    // every other file to the role names).
+    enum Radius {
+        /// Chips, badges, tags, skeleton bars, a segment inside a track.
+        static let sm: CGFloat = 6
+        /// Buttons, fields, segmented tracks, row highlights, inline notices.
+        static let md: CGFloat = 10
+        /// Bordered or raised cards and panels.
+        static let lg: CGFloat = 16
+        /// Sheets (top corners of a sheet).
+        static let xl: CGFloat = 24
+
+        // v2 role names — every call site picks one of these.
+        static let chip = sm
+        static let control = md
+        static let card = lg
+        static let sheet = xl
+    }
+
+    // MARK: Spacing (4pt grid)
+    // s2/s3 within a control, s4 between controls, s6 between sections.
     static let s1: CGFloat = 4
     static let s2: CGFloat = 8
     static let s3: CGFloat = 12
     static let s4: CGFloat = 16
     static let s6: CGFloat = 24
+    static let s8: CGFloat = 32
+    static let s12: CGFloat = 48
 }
 
-/// Real macOS blur behind the panel — the difference between "a white
-/// rectangle" and "glass floating over your desk". `.popover` is a light
-/// system material; `.behindWindow` samples whatever is under the panel. The
-/// white tint gradient layers on top of this. The forced `.aqua` appearance
-/// keeps the glass light even when the system is in dark mode — the panel is
-/// always a light surface, matching the web v2 theme.
-///
-/// The blur region does NOT follow SwiftUI clipShape (the effect view's
-/// backdrop is masked by AppKit, not the layer tree) — without `maskImage`
-/// the glass bleeds square past the rounded corner (the corner artifact,
-/// screenshot 2026-07-20). A stretchable rounded-rect mask fixes it.
-struct GlassMaterial: NSViewRepresentable {
-    var cornerRadius: CGFloat
-
-    func makeNSView(context _: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        // Inherit the app appearance — dark mode turns the glass dark.
-        view.material = .popover
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.maskImage = .roundedCornerMask(radius: cornerRadius)
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context _: Context) {
-        view.maskImage = .roundedCornerMask(radius: cornerRadius)
-    }
-}
-
-extension NSImage {
-    /// A stretchable rounded-rect mask for NSVisualEffectView.maskImage.
-    ///
-    /// capInsets must sum to LESS than the smallest dimension being masked. A
-    /// true capsule view is exactly radius×2 tall, so full-radius caps are
-    /// degenerate there (52pt pill vs 53px mask image → the mask fails and the
-    /// square blur backdrop bleeds out as a light corner line — dogfood zoom
-    /// 2026-07-20). Half-point caps keep the stretch valid for every surface.
-    static func roundedCornerMask(radius: CGFloat) -> NSImage {
-        let cap = radius - 0.5
-        let edge = cap * 2 + 1
-        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(top: cap, left: cap, bottom: cap, right: cap)
-        image.resizingMode = .stretch
-        return image
-    }
-}
-
-/// The Light Glass surface, as ONE reusable treatment: masked system blur,
-/// white tint, top-edge light, hairline border, navy-tinted drop shadow. The
-/// top bar, the PushCard, and the MeetingCard all wear exactly this — one
-/// glass, everywhere.
-struct GlassPanel: ViewModifier {
-    var cornerRadius: CGFloat
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                ZStack {
-                    // ImageRenderer cannot draw an NSViewRepresentable — it emits a
-                    // placeholder that swamps the whole surface — so the offscreen
-                    // design renderer substitutes a flat stand-in for the blur.
-                    // Runtime behaviour is untouched.
-                    if Theme.isRenderingOffscreen {
-                        Rectangle().fill(Theme.bg)
-                    } else {
-                        GlassMaterial(cornerRadius: cornerRadius)
-                    }
-                    Theme.panelGradient(
-                        opacity: Theme.glassTintOpacity(reduceTransparency: reduceTransparency))
-                    LinearGradient(
-                        colors: [Theme.edgeLight, .clear],
-                        startPoint: .top, endPoint: .center)
-                        .frame(height: 1.5, alignment: .top)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                // No outline. The rim is a bevel — light catching the top of
-                // the material, gone by the bottom — and the shadow does the
-                // figure-ground separation.
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Theme.bevelTop, Theme.bevelBottom],
-                                startPoint: .top, endPoint: .bottom)))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .shadow(color: Theme.panelShadow, radius: 28, y: 10)
-    }
-}
-
-extension View {
-    func glassPanel(cornerRadius: CGFloat) -> some View {
-        modifier(GlassPanel(cornerRadius: cornerRadius))
-    }
-}
-
-extension NSPanel {
-    /// Round the WINDOW itself, not just the SwiftUI content: clip the content
-    /// view's layer and re-derive the window shadow. Without this the shadow
-    /// rim follows the square window frame and pokes out past the glass corner
-    /// (the corner-hairline artifact, dogfood zoom 2026-07-20). Call after
-    /// every contentView swap or frame change.
-    func applyGlassShape(cornerRadius: CGFloat) {
-        guard let view = contentView else { return }
-        view.wantsLayer = true
-        view.layer?.cornerRadius = cornerRadius
-        view.layer?.masksToBounds = true
-        invalidateShadow()
-    }
-}
 
 /// Dim at rest, full text on hover — the standard treatment for every
 /// secondary icon/text control (header buttons, row utilities). One modifier
@@ -347,25 +297,19 @@ extension View {
     func hoverDim() -> some View { modifier(HoverDim()) }
 }
 
-/// The one primary-CTA treatment — web `glow-primary` equivalent: sky
-/// accent→accentDeep vertical gradient, white text, soft accent shadow.
-/// Every "the one thing to do here" button wears this; secondary actions
-/// stay `.bordered`/plain.
+/// The one primary-CTA treatment: a flat accentSolid fill with its own ink
+/// (no gradient, no glow — plan §2). Every "the one thing to do here"
+/// button wears this; secondary actions stay `.bordered`/plain.
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onAccentSolid)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(
-                LinearGradient(
-                    colors: [Theme.accent, Theme.accentDeep],
-                    startPoint: .top, endPoint: .bottom),
-                in: Capsule())
-            .shadow(color: Theme.accent.opacity(isEnabled ? 0.35 : 0), radius: 6, y: 2)
+            .background(Theme.accentSolid, in: Capsule())
             .opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1.0) : 0.45)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
@@ -388,9 +332,9 @@ struct FirstSyncState: View {
                 HStack(spacing: Theme.s3) {
                     Circle().fill(Theme.surfaceHover).frame(width: 8, height: 8)
                     VStack(alignment: .leading, spacing: Theme.s1) {
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: 90, height: 8)
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: row.isMultiple(of: 2) ? 260 : 200, height: 11)
                     }
                     Spacer()
@@ -431,9 +375,11 @@ struct EmptyState: View {
                 .foregroundStyle(Theme.textDim)
                 .opacity(0.7)
                 .accessibilityHidden(true)
-            Text(title).font(.callout).foregroundStyle(Theme.textDim)
+            Text(title).font(Theme.Typo.body)
+                .foregroundStyle(Theme.textDim)
             if let hint {
-                Text(hint).font(.caption).foregroundStyle(Theme.textDim)
+                Text(hint).font(Theme.Typo.caption)
+                    .foregroundStyle(Theme.textDim)
                     .multilineTextAlignment(.center)
             }
         }

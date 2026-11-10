@@ -1,0 +1,379 @@
+/* ── Shell grid ─────────────────────────────────────────────────────────── */
+.shell {
+  position: relative;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  background: var(--surface-app);
+}
+
+.shell[data-nav="rail"] {
+  --nav-offset: var(--rail-width);
+}
+
+.shell[data-nav="sidebar"] {
+  --nav-offset: var(--sidebar-width);
+}
+
+.shell__content {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* A screen's own scroll area. Bottom padding clears the tab bar. */
+.screen {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(var(--safe-top) + 12px) calc(var(--gutter) + var(--safe-right))
+    calc(var(--safe-bottom) + 24px) calc(var(--gutter) + var(--safe-left));
+}
+
+.shell[data-nav="tabs"] .screen {
+  padding-bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 24px);
+}
+
+.shell[data-nav="rail"] .screen,
+.shell[data-nav="sidebar"] .screen {
+  padding-top: calc(var(--safe-top) + 40px);
+  padding-left: 28px;
+}
+
+.shell[data-nav="sidebar"] .screen {
+  padding-top: calc(var(--safe-top) + 32px);
+}
+
+/* ── Tab bar (compact): 49 + home indicator, translucent blur ──────────── */
+.tabbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 0 calc(4px + var(--safe-right)) var(--safe-bottom) calc(4px + var(--safe-left));
+  background: var(--surface-bar);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-top: 0.5px solid var(--line-bar);
+}
+
+.tabbar__item {
+  height: var(--tabbar-height);
+  min-width: var(--touch);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink-dim);
+  font-size: var(--type-tab);
+  line-height: var(--type-tab-lh);
+  font-weight: 600;
+  text-align: center;
+  transition: color var(--motion-state) var(--ease);
+}
+
+.tabbar__item[data-active] {
+  color: var(--accent);
+}
+
+/* A horizontal hinge: keep the bar inside the bottom segment (it already is,
+   being bottom-anchored). */
+
+/* ── Rail (medium; expanded < 1024) ─────────────────────────────────────── */
+.rail {
+  flex: none;
+  width: var(--rail-width);
+  height: 100%;
+  padding: calc(var(--safe-top) + 40px) 0 calc(var(--safe-bottom) + 24px);
+  margin-left: var(--safe-left);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-nav);
+  border-right: 1px solid var(--line-nav);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand__mark {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: #0b0d12;
+  color: #7dd3fc;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:root[data-theme="dark"] .brand__mark {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand__mark {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+}
+
+.rail .brand {
+  margin-bottom: 18px;
+}
+
+.rail__item {
+  width: 64px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--ink-dim);
+  font-size: var(--type-caption);
+  line-height: var(--type-caption-lh);
+  font-weight: 600;
+  text-align: center;
+}
+
+.rail__pill {
+  width: 48px;
+  height: 30px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--motion-state) var(--ease);
+}
+
+.rail__item[data-active] {
+  color: var(--accent);
+}
+
+.rail__item[data-active] .rail__pill {
+  background: var(--accent-soft);
+}
+
+/* ── Sidebar (expanded ≥ 1024) ──────────────────────────────────────────── */
+.sidebar {
+  flex: none;
+  width: var(--sidebar-width);
+  height: 100%;
+  margin-left: var(--safe-left);
+  padding: calc(var(--safe-top) + 32px) 14px calc(var(--safe-bottom) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  background: var(--surface-nav);
+  border-right: 1px solid var(--line-nav);
+  overflow-y: auto;
+}
+
+.sidebar .brand {
+  padding: 0 8px;
+}
+
+.sidebar .brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.brand__name {
+  font-size: calc(17 * var(--u));
+  font-weight: 700;
+}
+
+.sidebar__nav,
+.sidebar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar__item {
+  min-height: var(--touch);
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-soft);
+  font-size: calc(14.5 * var(--u));
+  font-weight: 600;
+}
+
+.sidebar__item[data-active] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar__badge {
+  margin-left: auto;
+  font-size: var(--type-footnote);
+  font-weight: 500;
+  color: var(--ink-dim);
+}
+
+.sidebar__heading {
+  margin: 0 0 4px;
+  padding: 0 12px;
+  font-size: var(--type-footnote);
+  font-weight: 600;
+  color: var(--ink-mid);
+}
+
+.sidebar__lane {
+  min-height: var(--touch);
+  padding: 0 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: calc(13.5 * var(--u));
+  font-weight: 500;
+}
+
+.sidebar__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.sidebar__account {
+  min-height: 36px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--type-subhead);
+  color: var(--ink-soft);
+  min-width: 0;
+}
+
+.sidebar__account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Floating assistant (expanded) ──────────────────────────────────────── */
+.assistant-fab {
+  position: absolute;
+  right: calc(28px + var(--safe-right));
+  bottom: calc(28px + var(--safe-bottom));
+  z-index: 30;
+  height: 52px;
+  padding: 0 20px 0 16px;
+  border-radius: 26px;
+  background: #0b0d12;
+  color: #ffffff;
+  font-size: calc(14.5 * var(--u));
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-fab);
+}
+
+.assistant-fab__icon {
+  color: #7dd3fc;
+}
+
+:root[data-theme="dark"] .assistant-fab {
+  background: #1c1c1f;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .assistant-fab {
+    background: #1c1c1f;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* ── Panes ──────────────────────────────────────────────────────────────── */
+.panes {
+  height: 100%;
+}
+
+.panes--split {
+  display: grid;
+  grid-template-columns: var(--list-width) 1px minmax(0, 1fr);
+}
+
+/* Book posture: the divider IS the hinge, so nothing straddles it. */
+.panes--book {
+  grid-template-columns: var(--list-width) var(--hinge-size, 0px) minmax(0, 1fr);
+}
+
+.panes__divider {
+  background: var(--line-nav);
+}
+
+.panes--tabletop {
+  display: grid;
+  grid-template-rows: var(--hinge-start, 50%) var(--hinge-size, 0px) minmax(0, 1fr);
+}
+
+.panes__hinge {
+  background: var(--line-nav);
+}
+
+.pane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pane--detail {
+  background: var(--surface-card);
+}
+
+.panes--single .pane--detail {
+  background: var(--surface-app);
+}
+
+/* CSS-only fallback for the Viewport Segments API: if the JS plan has no
+   hinge but the engine reports two segments, at least keep the divider on
+   the fold. */
+@media (horizontal-viewport-segments: 2) {
+  .panes--split:not(.panes--book) {
+    grid-template-columns:
+      calc(env(viewport-segment-right 0 0, 50vw) - var(--nav-offset, 0px))
+      calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw))
+      minmax(0, 1fr);
+  }
+}
+
+/* The keyboard is up (src/platform/keyboard.ts): no tab bar under a composer,
+   which rides on top of the keyboard — on every screen. */
+html.keyboard-open .shell[data-nav="tabs"] .tabbar {
+  display: none;
+}

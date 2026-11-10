@@ -94,6 +94,7 @@ function tableKeys(body, locale) {
 }
 
 const tables = new Map();
+const bodies = new Map();
 let files;
 try {
   files = readdirSync(DIR)
@@ -112,6 +113,7 @@ for (const file of files) {
   const body = readObjectBody(source, openIndex);
   if (body === null) fail(`could not parse the table in ${file}`);
   tables.set(locale, tableKeys(body, locale));
+  bodies.set(locale, body);
 }
 
 if (tables.size < 2) {
@@ -160,6 +162,279 @@ if (problems > 0) {
   process.exit(1);
 }
 
+/**
+ * Copy guard for the keys a step adds. Key parity cannot see a translation that
+ * was never done: copying the English string into every locale passes it, and a
+ * localized surface then ships English text. For the prefixes below (scoped to
+ * what steps have added, so older strings are not newly flagged) each non-English
+ * value must differ from English, be non-empty, and carry the same {placeholders}.
+ * To cover a later step's keys, add its prefix here.
+ */
+const COPY_GUARD_PREFIXES = [
+  "settings.apiKeys.permission.",
+  "settings.apiKeys.activity.",
+  // Assistant hub (productization plan P7).
+  "assistantHub.",
+  "keys.approvals.",
+  // Strings moved out of JSX by the hard-coded string sweep (2026-10-16).
+  "linkedAccounts.",
+  "linkedInboxes.",
+  "outlookInboxes.",
+  "linkedCalendars.",
+  "imap.",
+  "telegram.",
+  "byok.",
+  "subscription.",
+  "paywall.",
+  "oauthError.",
+  "inAppBrowser.",
+  "feedbackPolicy.",
+  "rejectDialog.",
+  "palette.",
+  "shortcuts.",
+  "pushBanner.",
+  "paddle.",
+  "authGuard.",
+  "appShell.",
+  "assistantDock.",
+  "sidebar.",
+  "bottomTabs.",
+  "toast.",
+  "errorAlert.",
+  // Public playground (redesign 2026-10-30).
+  "playground.",
+  "mailRow.",
+  "graph.",
+  "newEvent.",
+  "compose.",
+  // Mail → Subscriptions (bulk unsubscribe).
+  "mailSubscriptions.",
+  // Legacy chrome, command palette, Mail v1 and briefing copy (UI audit 2026-10-15).
+  "commandPalette.",
+  "mailV1.",
+  "inboxLegacy.",
+  "briefingPage.",
+  "todayActions.",
+  "statePage.",
+  // Web app design pass (2026-10-21): English that reached localized screens.
+  "statusChip.",
+  // FREE-tier upgrade notices and the assistant's daily-allowance line (2026-10-30).
+  "proFeature.",
+  "dailyCap.",
+];
+
+/** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
+const SAME_AS_ENGLISH = {
+  "settings.apiKeys.activity.outcome.error": ["es"],
+  // Product names Apple and Naver do not translate in these locales.
+  "imap.icloud.title": ["es", "fr", "de"],
+  "imap.naver.title": ["es", "fr", "de"],
+  "telegram.deepLink.after": ["ko", "es", "fr", "de"],
+  "telegram.codeLabel": ["de"],
+  "newEvent.date": ["fr"],
+  "newEvent.optional": ["de"],
+  "compose.message": ["fr"],
+  // German UI already calls lanes "Lanes" (keys.group.lane); French "Urgent" is the word.
+  "inboxLegacy.segment.lanes": ["de"],
+  "todayActions.row.urgent": ["fr"],
+  // "Contact" is the French word too.
+  "graph.legend.contact": ["fr"],
+  "imap.beta": ["es", "de"],
+  "graph.stats.contacts": ["fr"],
+};
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The string value of a flat-table entry, or null when it is not a plain string literal. */
+function tableValue(body, key) {
+  const literal = new RegExp(
+    `(?:^|\\n)\\s*["']${escapeRegExp(key)}["']\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')`,
+  ).exec(body);
+  if (!literal) return null;
+  const text = literal[1];
+  if (text[0] === '"') return JSON.parse(text);
+  return JSON.parse(`"${text.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`);
+}
+
+const placeholdersOf = (text) => [...new Set(text.match(/\{\w+\}/g) ?? [])].sort().join(" ");
+
+const guardedKeys = baseKeys.filter((key) => COPY_GUARD_PREFIXES.some((p) => key.startsWith(p)));
+for (const key of Object.keys(SAME_AS_ENGLISH)) {
+  if (!guardedKeys.includes(key)) fail(`SAME_AS_ENGLISH names ${key}, which is not a guarded key`);
+}
+
+let copyProblems = 0;
+for (const key of guardedKeys) {
+  const english = tableValue(bodies.get(baseLocale), key);
+  if (english === null) fail(`could not read the value of ${key} in ${baseLocale}.ts`);
+  for (const locale of tables.keys()) {
+    if (locale === baseLocale) continue;
+    const text = tableValue(bodies.get(locale), key);
+    if (text === null) fail(`could not read the value of ${key} in ${locale}.ts`);
+    const allowedSame = (SAME_AS_ENGLISH[key] ?? []).includes(locale);
+    if (text.trim() === "") {
+      console.error(`✗ ${locale} ${key} is empty`);
+      copyProblems++;
+    } else if (text === english && !allowedSame) {
+      console.error(`✗ ${locale} ${key} is still the English text`);
+      copyProblems++;
+    }
+    if (placeholdersOf(text) !== placeholdersOf(english)) {
+      console.error(`✗ ${locale} ${key} has different {placeholders} than ${baseLocale}`);
+      copyProblems++;
+    }
+  }
+}
+
+if (copyProblems > 0) {
+  console.error("\nTranslate the string (or, if the word really is the same, list it in");
+  console.error("SAME_AS_ENGLISH): a localized surface must not ship English text.");
+  process.exit(1);
+}
+
+/**
+ * Prose guard for surfaces that shipped fully translated. Key parity cannot see
+ * a string that never went through t(): it is not in any table. For the
+ * directories below, every file is checked for (a) keys passed as literals
+ * that en.ts does not have — a typo renders as the raw key — and (b) English
+ * written straight into the markup: JSX text, a literal aria-label / title
+ * / placeholder / alt / label / description attribute, or a literal toast().
+ * Heuristic by design: it reads source text, not a syntax tree. To cover a
+ * later surface, add its directory here.
+ */
+const PROSE_GUARD_DIRS = [
+  "packages/web/src/app/assistant",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "packages/web/src/app/briefing",
+  "packages/web/src/app/graph",
+  // Current product surfaces (hard-coded string sweep, 2026-10-16). The legacy
+  // /inbox page is deliberately absent: UNIFIED_HOME replaces it.
+  "packages/web/src/app/billing",
+  "packages/web/src/app/calendar",
+  "packages/web/src/app/email",
+  "packages/web/src/app/files",
+  "packages/web/src/app/login",
+  "packages/web/src/app/onboarding",
+  // Public playground (redesign 2026-10-30): every string through t().
+  "packages/web/src/app/playground",
+  "packages/web/src/app/settings",
+  "packages/web/src/app/today",
+  "packages/web/src/components",
+];
+/** Files inside a guarded directory that are not a translated surface, and why. */
+const PROSE_GUARD_SKIP = new Map([
+  // Rendered only by the legacy /inbox page (Decisions / Firewall board).
+  ["packages/web/src/components/briefing-card.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/command-center-summary.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/commitment-card.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/firewall-board.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/pmf-card.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/screener-card.tsx", "legacy /inbox only"],
+  // Admin-only.
+  ["packages/web/src/components/retention-dashboard.tsx", "admin only"],
+  ["packages/web/src/app/settings/sms/page.tsx", "admin only"],
+  // Legal text: translating it needs a reviewed legal translation, not a sweep.
+  ["packages/web/src/components/refund-policy.tsx", "legal text"],
+]);
+/**
+ * Text that is correctly the same in every locale: product and brand names,
+ * language endonyms in a language picker, and literal codes the user types or
+ * sees from another system. Keep this to names and codes, never prose.
+ */
+const PROSE_ALLOWLIST = new Set([
+  "Klorn",
+  "Klorn Pro",
+  "Telegram",
+  "Google Gemini",
+  "English",
+  "Español",
+  "Français",
+  "Deutsch",
+  "/start",
+  "403: disallowed_useragent",
+  "xxxx-xxxx-xxxx-xxxx",
+  // A CSS selector for the Next.js dev-tools button (providers.tsx), not UI text.
+  "Open Next.js Dev Tools",
+]);
+const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
+const isAllowedProse = (text) => PROSE_ALLOWLIST.has(text.trim()) || EMAIL_ADDRESS_RE.test(text.trim());
+const KEY_LITERAL_RE =
+  /["'`]((?:assistantHub|keys|nav|today|receipt|screener|briefing|chat|settings|mailV2|tool\.label)\.[\w.]+)["'`]/g;
+// Wider surfaces carry query keys and Sentry scopes that look like keys, so
+// there only a literal passed straight to t() is checked.
+const KEY_LITERAL_DIRS = new Set(["packages/web/src/app/assistant"]);
+const T_CALL_KEY_RE = /\bt\(\s*["'`]([\w.]+)["'`]/g;
+// A toast whose message is a string literal rather than t(...).
+const TOAST_LITERAL_RE = /\btoast\(\s*(["'`])((?:(?!\1).)*[A-Za-z]{2}(?:(?!\1).)*)\1/g;
+// Text that ends at a closing tag or an expression, after a tag or an expression.
+// `=>` is an arrow function, not a tag.
+const JSX_TEXT_RE = /(?<!=)>([^<>{}]+)(?:<\/|\{)|\}([^<>{}]+)<\//g;
+const PROSE_RE = /^[\s\w.,:!?'’·—–-]*[A-Za-z]{2}[\s\w.,:!?'’·—–-]*$/;
+const ATTRIBUTE_RE = /\b(aria-label|title|placeholder|alt|label|description)="([^"]*[A-Za-z][^"]*)"/g;
+
+function sourceFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+const stripComments = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+
+let proseProblems = 0;
+let proseFiles = 0;
+for (const dir of PROSE_GUARD_DIRS) {
+  let paths;
+  try {
+    paths = sourceFiles(dir);
+  } catch {
+    fail(`could not read ${dir} — did the guarded surface move?`);
+  }
+  for (const path of paths) {
+    if (PROSE_GUARD_SKIP.has(path)) continue;
+    proseFiles++;
+    const source = stripComments(readFileSync(path, "utf8"));
+    const keyRe = KEY_LITERAL_DIRS.has(dir) ? KEY_LITERAL_RE : T_CALL_KEY_RE;
+    for (const [, key] of source.matchAll(keyRe)) {
+      if (baseSet.has(key)) continue;
+      console.error(`✗ ${path}: "${key}" is not a key in ${baseLocale}.ts`);
+      proseProblems++;
+    }
+    if (!path.endsWith(".tsx")) continue;
+    for (const [, afterTag, afterExpression] of source.matchAll(JSX_TEXT_RE)) {
+      const text = afterTag ?? afterExpression;
+      if (!PROSE_RE.test(text) || isAllowedProse(text)) continue;
+      console.error(`✗ ${path}: text written into the markup: "${text.trim().slice(0, 60)}"`);
+      proseProblems++;
+    }
+    for (const [, attribute, text] of source.matchAll(ATTRIBUTE_RE)) {
+      if (isAllowedProse(text)) continue;
+      console.error(`✗ ${path}: ${attribute}="${text.slice(0, 60)}" is not translated`);
+      proseProblems++;
+    }
+    for (const [, , text] of source.matchAll(TOAST_LITERAL_RE)) {
+      console.error(`✗ ${path}: toast("${text.slice(0, 60)}") is not translated`);
+      proseProblems++;
+    }
+  }
+}
+for (const path of PROSE_GUARD_SKIP.keys()) {
+  try {
+    readFileSync(path, "utf8");
+  } catch {
+    fail(`PROSE_GUARD_SKIP names ${path}, which no longer exists — drop the entry`);
+  }
+}
+
+if (proseProblems > 0) {
+  console.error("\nPass the string through t() and add its key to all seven locale tables.");
+  process.exit(1);
+}
+
 console.log(
-  `✓ i18n parity: ${tables.size} locales × ${baseKeys.length} keys (${[...tables.keys()].join(", ")})`,
+  `✓ i18n parity: ${tables.size} locales × ${baseKeys.length} keys (${[...tables.keys()].join(", ")}); copy guard: ${guardedKeys.length} keys; prose guard: ${proseFiles} files`,
 );

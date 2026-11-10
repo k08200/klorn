@@ -150,6 +150,13 @@ Used only to identify the signed-in account and which mailbox was linked.
 The privacy policy (`/privacy`) already states the above, including the verbatim
 "Limited Use" reference and the "do not train" commitment.
 
+> **2026-11-01** — The provider list above is the text as prepared for the
+> original verification submission; leave it as the record. If this statement
+> is reused (e.g. at the next CASA re-assessment), the current server-side AI
+> providers are Anthropic (Claude API) and Google (Gemini API). OpenRouter was
+> removed from Klorn on 2026-11-01; the privacy policy and DPA name the same two
+> providers.
+
 ---
 
 ## 3. Demo video script (unlisted YouTube, English, screen recording)

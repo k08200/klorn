@@ -4,10 +4,9 @@ import SwiftUI
 // `Tier.coreOrder`, never a literal — see the note by `guide.pipeline` below.
 //
 // The tier names are the product's core idea and they were never explained
-// anywhere in the app: the sidebar showed "Push 3 / Queue 12 / Silent 40 /
-// Auto 8" and left the reader to guess. Worse, the guess is usually wrong —
-// "Silent" reads as deleted and "Auto" reads as "Klorn replied for me", and
-// neither is true.
+// anywhere in the app: the sidebar showed "Push 3 / Queue 12 / Silent 40" and
+// left the reader to guess. Worse, the guess is usually wrong — "Silent" reads
+// as deleted, which it is not.
 
 extension Tier {
     /// One line: what this tier does to your attention.
@@ -18,7 +17,6 @@ extension Tier {
         case .queue: L("tier.queue.blurb")
         case .silent: L("tier.silent.blurb")
         case .info: L("tier.info.blurb")
-        case .auto: L("tier.auto.blurb")
         }
     }
 
@@ -31,7 +29,6 @@ extension Tier {
         case .queue: L("tier.queue.empty")
         case .silent: L("tier.silent.empty")
         case .info: L("tier.info.empty")
-        case .auto: L("tier.auto.empty")
         }
     }
 
@@ -42,7 +39,6 @@ extension Tier {
         case .queue: "tray"
         case .silent: "moon"
         case .info: "archivebox"
-        case .auto: "sparkles"
         }
     }
 }
@@ -107,11 +103,7 @@ struct TierGuide: View {
                 .font(.caption).foregroundStyle(Theme.textDim)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(22)
-        .frame(width: 460)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 460)
     }
 }
 
@@ -132,3 +124,194 @@ enum GuideSeen {
         !seen && signedIn
     }
 }
+
+/// The connect-time question (founder 2026-08-30): what is this mailbox FOR?
+/// One question, three buttons — the answer feeds the analysis prompts, so
+/// asking it early is what makes the labeling accurate from day one. "나중에"
+/// dismisses permanently; the account section can always set it later.
+struct PurposePrompt: View {
+    @Environment(AppModel.self) private var model
+
+    /// Step 1 asks what the mailbox is for; step 2 (work / mixed only, and
+    /// only while no company domain is declared) asks which email domain is
+    /// the company — the fact that turns colleagues into 회사 chips.
+    private enum Step { case purpose, domains, priorities }
+    @State private var step: Step = .purpose
+    @State private var domainsText = ""
+    @State private var prioritiesText = ""
+
+    private var targetEmail: String? {
+        model.purposePromptTarget?.email
+            ?? model.inboxes.first(where: { $0.kind == "primary" })?.email
+    }
+
+    private func choice(_ purpose: String, _ title: String) -> some View {
+        Button(title) {
+            let target = model.purposePromptTarget?.id
+            Task { await model.setInboxPurpose(inboxId: target, purpose: purpose) }
+            if (purpose == "work" || purpose == "mixed"), model.companyDomains.isEmpty {
+                withAnimation(.easeOut(duration: 0.15)) { step = .domains }
+            } else {
+                advanceToPrioritiesOrClose()
+            }
+        }
+        .buttonStyle(PrimaryButtonStyle())
+    }
+
+    /// Names the linked account when the question is about one — "this
+    /// mailbox" is ambiguous the moment there are two.
+    /// Step 3 — what matters, in their words — only while nothing is
+    /// declared; otherwise the card closes.
+    private func advanceToPrioritiesOrClose() {
+        if model.triagePriorities == nil {
+            withAnimation(.easeOut(duration: 0.15)) { step = .priorities }
+        } else {
+            model.dismissPurposePrompt()
+        }
+    }
+
+    private var title: String {
+        if step == .priorities { return L("priorities.title") }
+        if step == .domains { return L("company.title") }
+        if let email = model.purposePromptTarget?.email {
+            return L("purpose.title.linked", email)
+        }
+        return L("purpose.title")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.s3) {
+            Text(title)
+                .font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+            switch step {
+            case .purpose: purposeStep
+            case .domains: domainsStep
+            case .priorities: prioritiesStep
+            }
+        }
+        .modalCard(width: 430)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .onAppear {
+            if model.purposePromptStartsAtDomains { step = .domains }
+            if model.purposePromptStartsAtPriorities { step = .priorities }
+            // The account's own domain is the likely answer — offered, not
+            // assumed (a public provider offers nothing).
+            domainsText = suggestedCompanyDomain(for: targetEmail) ?? ""
+        }
+    }
+
+    private var purposeStep: some View {
+        Group {
+            Text(L("purpose.detail"))
+                .font(.callout).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.s2) {
+                choice("work", L("purpose.work"))
+                choice("personal", L("purpose.personal"))
+                choice("mixed", L("purpose.mixed"))
+            }
+            .padding(.top, Theme.s1)
+            Button(L("purpose.later")) { model.dismissPurposePrompt() }
+                .buttonStyle(.plain).font(Theme.Typo.label)
+                .foregroundStyle(Theme.textDim)
+        }
+    }
+
+    private var domainsStep: some View {
+        Group {
+            Text(L("company.detail"))
+                .font(.callout).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField(L("company.placeholder"), text: $domainsText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { Task { await save() } }
+                .accessibilityLabel(L("company.title"))
+            if let error = model.companyDomainsError {
+                Text(error).font(.caption).foregroundStyle(Theme.tint(.push))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: Theme.s2) {
+                Button(L("company.save")) { Task { await save() } }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(parseCompanyDomainsInput(domainsText).isEmpty)
+                Button(L("company.skip")) { advanceToPrioritiesOrClose() }
+                    .buttonStyle(.plain).font(Theme.Typo.label)
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.top, Theme.s1)
+        }
+    }
+
+    private var prioritiesStep: some View {
+        Group {
+            Text(L("priorities.detail"))
+                .font(.callout).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            PrioritiesEditor(text: $prioritiesText)
+            if let error = model.prioritiesError {
+                Text(error).font(.caption).foregroundStyle(Theme.tint(.push))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: Theme.s2) {
+                Button(L("company.save")) { Task { await savePriorities() } }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(prioritiesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(L("company.skip")) { model.dismissPurposePrompt() }
+                    .buttonStyle(.plain).font(Theme.Typo.label)
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.top, Theme.s1)
+        }
+    }
+
+    private func save() async {
+        let domains = parseCompanyDomainsInput(domainsText)
+        guard !domains.isEmpty else { return }
+        if await model.setCompanyDomains(domains) {
+            advanceToPrioritiesOrClose()
+        }
+    }
+
+    private func savePriorities() async {
+        if await model.setTriagePriorities(prioritiesText) {
+            model.dismissPurposePrompt()
+        }
+    }
+}
+
+/// A short multi-line field for "what matters to me" with the examples as
+/// a placeholder — the same editor the account section reuses.
+struct PrioritiesEditor: View {
+    @Binding var text: String
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text)
+                .font(Theme.Typo.label)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .frame(minHeight: 84, maxHeight: 140)
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
+                .accessibilityLabel(L("priorities.title"))
+            if text.isEmpty {
+                Text(L("priorities.placeholder"))
+                    .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                    .padding(.horizontal, 11).padding(.vertical, 10)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+/// The user-facing word for a purpose value (the wire vocabulary is fixed:
+/// work | personal | mixed).
+func purposeLabel(_ purpose: String) -> String {
+    switch purpose {
+    case "work": L("purpose.work")
+    case "personal": L("purpose.personal")
+    default: L("purpose.mixed")
+    }
+}
+

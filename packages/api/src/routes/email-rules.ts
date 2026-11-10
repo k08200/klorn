@@ -25,6 +25,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { listTierPins, replaceTierPins, validateTierPin } from "../mail/pin-rules.js";
 import { compileRuleText, RULE_TEXT_MAX_CHARS } from "../mail/rule-compile.js";
@@ -53,6 +54,21 @@ function pinRuleShapeError(conditions: unknown, actionValue: unknown): string | 
     tier: String(actionValue ?? ""),
   });
   return "error" in validated ? validated.error : null;
+}
+
+/**
+ * An AUTO_REPLY rule sends with no per-message approval, so it must name its
+ * senders: a non-empty list of non-blank strings (addresses or domains,
+ * matched by mail/email-reply.ts ruleSenderMatches). Applied on create and to
+ * the merged row of an update that touches the rule's shape.
+ */
+function autoReplySenderError(conditions: unknown): string | null {
+  const from = (conditions as { from?: unknown } | null)?.from;
+  const valid =
+    Array.isArray(from) &&
+    from.length > 0 &&
+    from.every((entry) => typeof entry === "string" && entry.trim() !== "");
+  return valid ? null : "An auto-reply rule needs at least one sender address or domain.";
 }
 
 export async function registerEmailRulesRoutes(app: FastifyInstance) {
@@ -91,9 +107,8 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
         }
         return compiled;
       } catch (err) {
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "UserRateLimitedError") {
           const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
@@ -169,6 +184,10 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
       const shapeError = pinRuleShapeError(conditions, actionValue);
       if (shapeError) return { error: shapeError };
     }
+    if ((actionType || "AUTO_REPLY") === "AUTO_REPLY") {
+      const senderError = autoReplySenderError(conditions);
+      if (senderError) return { error: senderError };
+    }
 
     const rule = await prisma.emailRule.create({
       data: {
@@ -212,6 +231,10 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
       updates.actionType !== undefined ||
       updates.conditions !== undefined ||
       updates.actionValue !== undefined;
+    if (nextActionType === "AUTO_REPLY" && touchesPinShape) {
+      const senderError = autoReplySenderError(updates.conditions ?? rule.conditions);
+      if (senderError) return { error: senderError };
+    }
     if (nextActionType === "PIN_TIER" && touchesPinShape) {
       const shapeError = pinRuleShapeError(
         updates.conditions ?? rule.conditions,

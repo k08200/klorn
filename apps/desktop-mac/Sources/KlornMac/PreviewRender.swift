@@ -22,7 +22,7 @@ enum PreviewRender {
       {"id":"p1","source":"email","sourceId":"e1","type":"email","title":"Contract review",
        "tier":"PUSH","tierReason":"You replied to this sender 6 times","priority":9,
        "surfacedAt":"2026-07-29T08:12:00Z",
-       "email":{"emailDbId":"d1","subject":"Re: Contract review — needs your sign-off today",
+       "email":{"emailDbId":"d1","replyState":"needsReply","subject":"Re: Contract review — needs your sign-off today",
                 "from":"Sarah Kim <sarah.kim@northwind-partners.com>",
                 "snippet":"Legal came back with two changes on clause 4…",
                 "signal":{"kind":"replied","count":6}},"hashStale":false},
@@ -76,7 +76,7 @@ enum PreviewRender {
      "attention":[{"rank":1,"action":"회고 생각 두세 가지 준비","reason":"오후 2시 디자인 회고"}]}
     """
 
-    private static let calendarSeedJSON = """
+    static let calendarSeedJSON = """
     [{"id":"c1","title":"디자인 회고","startTime":"2026-07-29T05:00:00Z",
       "endTime":"2026-07-29T06:00:00Z","location":null,"meetingLink":null,"allDay":false},
      {"id":"c2","title":"벤더 체크인","startTime":"2026-07-29T07:30:00Z",
@@ -87,16 +87,25 @@ enum PreviewRender {
      {"id":"c4","title":"파트너 콜","startTime":"2026-07-31T08:00:00Z",
       "endTime":"2026-07-31T09:00:00Z","location":null,"meetingLink":null,"allDay":false},
      {"id":"c5","title":"오프사이트","startTime":"2026-07-24T00:00:00Z",
-      "endTime":"2026-07-25T00:00:00Z","location":null,"meetingLink":null,"allDay":true}]
+      "endTime":"2026-07-25T00:00:00Z","location":null,"meetingLink":null,"allDay":true},
+     {"id":"c6","title":"워크숍","startTime":"2026-07-30T00:00:00Z",
+      "endTime":"2026-08-01T00:00:00Z","location":"강릉","meetingLink":null,"allDay":true}]
     """
 
-    private static let emailJSON = """
+    private static let waitingOnJSON = """
+    [{"gmailId":"w1","threadId":"tw1","to":"Priya Patel <priya@northwind.io>","subject":"Q3 numbers for the board deck",
+      "sentAt":"2026-07-24T02:10:00.000Z","daysWaiting":5,"inbox":"primary"},
+     {"gmailId":"w2","threadId":"tw2","to":"legal@acme.com","subject":"NDA countersign",
+      "sentAt":"2026-07-26T09:00:00.000Z","daysWaiting":3,"inbox":"primary"}]
+    """
+
+    static let emailJSON = """
     {"id":"d1","from":"Sarah Kim <sarah.kim@northwind-partners.com>",
      "subject":"Re: Contract review — needs your sign-off today",
      "date":"2026-07-29T08:12:00Z",
-     "summary":"Legal returned two changes to clause 4 and needs your sign-off before 17:00 so the counterparty can countersign today.",
-     "needsReply":true,"needsReplyReason":"Sign-off requested with a deadline",
-     "text":"Hi,\\n\\nLegal came back with two changes on clause 4 — the indemnity cap and the notice period. Both are minor but they need your sign-off before 17:00 today so the counterparty can countersign.\\n\\nI've attached the redline. Happy to walk through it if easier.\\n\\nBest,\\nSarah",
+     "summary":"Legal returned two changes to clause 4 and needs your sign-off before 18:00 so the counterparty can countersign today.",
+     "needsReply":true,"needsReplyReason":"action_items_present","needsReplyReasonText":"Sign-off requested with a deadline",
+     "text":"Hi,\\n\\nLegal came back with two changes on clause 4 — the indemnity cap and the notice period. Both are minor but they need your sign-off before 18:00 today so the counterparty can countersign.\\n\\nI've attached the redline. Happy to walk through it if easier.\\n\\nBest,\\nSarah",
      "engagement":{"outboundCount":6,"learnedImportance":0.92}}
     """
 
@@ -111,7 +120,9 @@ enum PreviewRender {
         let dir = URL(fileURLWithPath: outputDir)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let model = AppModel()
+        // Never the default store: an unsigned harness binary asking the Keychain
+        // for the shipped app's token blocks on a permission dialog.
+        let model = AppModel(tokenStore: InMemoryTokenStore())
         model.seedForPreview(
             firewallJSON: firewallJSON,
             emailJSON: emailJSON,
@@ -119,12 +130,22 @@ enum PreviewRender {
             briefingJSON: briefingJSON)
         GuideSeen.value = true
         model.showAssistantDock = true
+        // The reading shot sells the analysis band — shoot it expanded (the
+        // in-app default is collapsed so the mail stays the star).
+        // `-klorn.readingBand collapsed` shoots the in-app default instead.
+        model.settings.readingBandExpanded =
+            UserDefaults.standard.string(forKey: "klorn.readingBand") != "collapsed"
         // JSON like every other fixture — the L10n guard treats Swift string
         // literals as UI copy, and these are demo DATA, not copy.
         if let seed = try? JSONDecoder().decode(
             [CalendarEventWire].self, from: Data(calendarSeedJSON.utf8))
         {
             model.seedCalendarForRender(seed)
+        }
+        if let seed = try? JSONDecoder().decode(
+            [WaitingOnItem].self, from: Data(waitingOnJSON.utf8))
+        {
+            model.seedWaitingOnForRender(seed)
         }
         // Folder counts in the sidebar + a populated Sent list for its shot.
         model.seedMailboxForRender(.sent, items: [
@@ -133,19 +154,19 @@ enum PreviewRender {
                 subject: "Re: Contract review — needs your sign-off today",
                 from: "you@company.com", to: "Sarah Kim <sarah.kim@northwind-partners.com>",
                 snippet: "Signed and attached. Clause 4 reads fine after legal's change.",
-                receivedAt: "2026-07-29T05:40:00Z", isRead: true),
+                receivedAt: "2026-07-29T05:40:00Z", isRead: true, inbox: "primary"),
             MailboxItem(
                 gmailId: "s2", threadId: nil,
                 subject: "Q3 numbers for the board deck",
                 from: "you@company.com", to: "Priya Patel <priya@company.com>",
                 snippet: "Final revenue table attached — the churn note is on slide 9.",
-                receivedAt: "2026-07-28T09:12:00Z", isRead: true),
+                receivedAt: "2026-07-28T09:12:00Z", isRead: true, inbox: "primary"),
             MailboxItem(
                 gmailId: "s3", threadId: nil,
                 subject: "Intro: Alex ↔ Jamie",
                 from: "you@company.com", to: "Alex Carter <alex@team.co>",
                 snippet: "Jamie runs infra at Northwind — you two should talk. Moving you both to bcc.",
-                receivedAt: "2026-07-25T18:03:00Z", isRead: true),
+                receivedAt: "2026-07-25T18:03:00Z", isRead: true, inbox: "primary"),
         ])
         model.seedMailboxForRender(.drafts, items: [
             MailboxItem(
@@ -153,7 +174,7 @@ enum PreviewRender {
                 subject: "Q3 vendor consolidation",
                 from: "you@company.com", to: "billing@vendor.io",
                 snippet: "Before we renew, can you break the invoice into",
-                receivedAt: "2026-07-29T03:12:00Z", isRead: true),
+                receivedAt: "2026-07-29T03:12:00Z", isRead: true, inbox: "primary"),
         ])
         model.seedMailboxForRender(.archived, items: [
             MailboxItem(
@@ -161,43 +182,15 @@ enum PreviewRender {
                 subject: "Your July invoice is available",
                 from: "billing@saas.example", to: "you@company.com",
                 snippet: "Invoice #4783 for July is attached. No action needed.",
-                receivedAt: "2026-07-28T22:05:00Z", isRead: true),
+                receivedAt: "2026-07-28T22:05:00Z", isRead: true, inbox: "primary"),
         ])
 
         var ok = true
-        // A view taller than the frame is centred by default, which silently cuts
-        // the title off the top. Surfaces that read top-down pass .top.
         func shot(_ name: String, size: CGSize, align: Alignment = .center,
                   @ViewBuilder _ content: () -> some View) {
-            // .background LAST would sit OUTSIDE the forced colorScheme and
-            // paint the light ground behind a dark render — the shot has to
-            // carry the environment all the way out.
-            let view = content()
-                .environment(model)
-                .frame(width: size.width, height: size.height, alignment: align)
-                .clipped()
-                .background(Theme.bg)
-                .environment(\.colorScheme, renderDark ? .dark : .light)
-            let renderer = ImageRenderer(content: view)
-            // 2x so type rendering is judged at the density a Mac actually shows.
-            renderer.scale = 2
-            guard let image = renderer.nsImage,
-                  let tiff = image.tiffRepresentation,
-                  let rep = NSBitmapImageRep(data: tiff),
-                  let png = rep.representation(using: .png, properties: [:])
-            else {
-                print("  ✗ \(name) — render failed")
-                ok = false
-                return
-            }
-            let out = dir.appendingPathComponent("\(name).png")
-            do {
-                try png.write(to: out)
-                print("  ✓ \(name)  \(Int(size.width))×\(Int(size.height))")
-            } catch {
-                print("  ✗ \(name) — \(error.localizedDescription)")
-                ok = false
-            }
+            ok = writeShot(
+                name, size: size, align: align, model: model, dir: dir, dark: renderDark,
+                content) && ok
         }
 
         let actions = previewActions()
@@ -206,27 +199,13 @@ enum PreviewRender {
         shot("assistant-dock", size: CGSize(width: 440, height: 560), align: .bottomTrailing) {
             AssistantDockRenderProbe()
         }
-        shot("compose", size: CGSize(width: 600, height: 470), align: .top) {
-            ComposePanelRenderProbe()
-        }
         shot("briefing", size: CGSize(width: 380, height: 260), align: .top) {
             BriefingCardRenderProbe()
         }
-        // The narrowest real embedding (full-mode sidebar is 220pt wide) —
-        // the card must survive it, not just the roomy probe.
+        // The narrowest real embedding (a 220pt-wide sidebar column) — the
+        // card must survive it, not just the roomy probe.
         shot("briefing-narrow", size: CGSize(width: 220, height: 340), align: .top) {
             BriefingCardRenderProbe()
-        }
-        shot("full", size: TopBarMetrics.size(for: .full)) {
-            TopBarRoot(state: .full, actions: actions)
-        }
-        shot("expanded", size: TopBarMetrics.size(for: .expanded)) {
-            TopBarRoot(state: .expanded, actions: actions)
-        }
-        shot("collapsed", size: CGSize(
-            width: TopBarMetrics.size(for: .collapsed).width + 80,
-            height: TopBarMetrics.size(for: .collapsed).height + 40)) {
-            TopBarRoot(state: .collapsed, actions: actions)
         }
         // ImageRenderer draws nothing inside a ScrollView, so the mail rows —
         // the densest and most design-critical surface in the app — are composed
@@ -240,8 +219,9 @@ enum PreviewRender {
         shot("rows", size: CGSize(width: tourW, height: 430), align: .top) {
             VStack(spacing: 0) {
                 ForEach(model.queue?.items(for: .push) ?? []) { item in
-                    FullRow(item: item, actions: actions)
-                    Divider().overlay(Theme.line).padding(.leading, 24)
+                    WindowMailRow(item: item, actions: actions)
+                    Rectangle().fill(Theme.line).frame(height: Theme.hairline)
+                        .padding(.horizontal, Theme.s4 + Theme.s1)
                 }
                 Spacer(minLength: 0)
             }
@@ -257,15 +237,17 @@ enum PreviewRender {
                 actions: actions, initialScope: .month,
                 initialAnchor: ISO8601DateFormatter().date(from: "2026-07-29T03:00:00Z") ?? Date())
         }
-        // The mail level of the two-level sidebar — Back / Compose / folders /
-        // categories. Shot with the level flipped, then restored so the full
-        // shot above stays the ROOT (first-open) state.
-        model.sidebarLevel = .mail
-        shot("full-mail", size: TopBarMetrics.size(for: .full)) {
-            FullView(actions: actions)
+        // Waiting on — my unanswered threads, oldest first.
+        shot("waiting-on", size: CGSize(width: tourW, height: 430), align: .top) {
+            WaitingOnList()
         }
-        model.sidebarLevel = .root
-        // The reading pane on its own. Shrinking the whole 1400pt window into a
+        // Week view — seven columns, the spanning 워크숍 on two of them.
+        shot("calendar-week", size: CGSize(width: 760, height: 460), align: .top) {
+            CalendarScreen(
+                actions: actions, initialScope: .week,
+                initialAnchor: ISO8601DateFormatter().date(from: "2026-07-29T03:00:00Z") ?? Date())
+        }
+        // The reading pane on its own. Shrinking the whole window into a
         // landing-page card renders the app's body text at under 7px; this fits
         // the same card at over 100%, so it can actually be read.
         shot("reading", size: CGSize(width: tourW, height: 430), align: .top) {
@@ -279,31 +261,73 @@ enum PreviewRender {
                 HStack {
                     Text(L("prefs.title")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
                     Spacer()
-                    Button(L("prefs.done")) {}.buttonStyle(PrimaryButtonStyle())
                 }
                 .padding(.bottom, 10)
                 AutomationPreferences()
             }
             .padding(22)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+            .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
             .padding(14)
         }
-        shot("tier-guide", size: CGSize(width: tourW, height: 520)) {
-            TierGuide {}
+        // The main window's sections (M4b), on their own model so the
+        // shots above keep their state.
+        ok = renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
+        // The compose window and the sheets (M5).
+        ok = renderWindows(dir: dir, dark: renderDark) && ok
+        // Settings ▸ Accounts' IMAP connect form (Naver + iCloud Mail).
+        ok = renderImapConnect(dir: dir, dark: renderDark) && ok
+        // Signed out, offline, failed and first launch (M6).
+        return renderStates(
+            dir: dir, dark: renderDark, actions: actions, firewallJSON: firewallJSON) && ok
+    }
+
+    /// Render one view to `<dir>/<name>.png`. A view taller than the frame
+    /// is centred by default, which silently cuts the title off the top;
+    /// surfaces that read top-down pass `.top`.
+    static func writeShot(
+        _ name: String, size: CGSize, align: Alignment, model: AppModel, dir: URL, dark: Bool,
+        @ViewBuilder _ content: () -> some View
+    ) -> Bool {
+        // .background LAST would sit OUTSIDE the forced colorScheme and
+        // paint the light ground behind a dark render — the shot has to
+        // carry the environment all the way out.
+        let view = content()
+            .environment(model)
+            .frame(width: size.width, height: size.height, alignment: align)
+            .clipped()
+            .background(Theme.bg)
+            .environment(\.colorScheme, dark ? .dark : .light)
+        let renderer = ImageRenderer(content: view)
+        // 2x so type rendering is judged at the density a Mac actually shows.
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:])
+        else {
+            print("  ✗ \(name) — render failed")
+            return false
         }
-        return ok
+        let out = dir.appendingPathComponent("\(name).png")
+        do {
+            try png.write(to: out)
+            print("  ✓ \(name)  \(Int(size.width))×\(Int(size.height))")
+            return true
+        } catch {
+            print("  ✗ \(name) — \(error.localizedDescription)")
+            return false
+        }
     }
 
     /// No-op actions: the renderer never interacts, and a fixture must not be
     /// able to fire a real network call.
-    private static func previewActions() -> TopBarActions {
-        TopBarActions(
-            onExpand: {}, onExpandFull: {}, onRestore: {}, onCollapse: {}, onClose: {},
+    static func previewActions() -> ShellActions {
+        ShellActions(
             onSignIn: {}, onSignOut: {},
             onOpenInApp: { _ in }, onOpenTier: { _ in }, onOpenFull: {}, onOpenProposals: {},
             onDismiss: { _ in }, onSnooze: { _, _ in }, onSetTier: { _, _ in },
             onPinSender: { _, _ in }, onUnpinSender: { _ in },
-            onSelect: { _ in }, onOpenPreferences: {}, onHideBar: {}, onQuit: {})
+            onSelect: { _ in }, onOpenPreferences: {}, onQuit: {})
     }
 }

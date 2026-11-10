@@ -67,10 +67,21 @@ describe("maybeNudgeFreeDailyLimit (paywall on)", () => {
       userId: "free-1",
       type: "reminder",
       title: "Daily free limit reached",
-      link: "/settings",
+      link: "/settings/account-billing",
     });
     expect(state.pushed).toHaveLength(1);
-    expect(state.pushed[0].payload.link).toBe("/settings");
+    expect(state.pushed[0].payload.link).toBe("/settings/account-billing");
+  });
+
+  it("promises a larger daily limit, never 'unlimited' (Pro has a cap too)", async () => {
+    const { maybeNudgeFreeDailyLimit } = await load(true);
+    await maybeNudgeFreeDailyLimit("free-1", "FREE", "USER");
+    const stored = String(state.created[0].message);
+    const pushed = String(state.pushed[0].payload.message);
+    for (const message of [stored, pushed]) {
+      expect(message).not.toMatch(/unlimited/i);
+      expect(message).toMatch(/larger daily limit/i);
+    }
   });
 
   it("does not create a second nudge when one already exists today (dedup)", async () => {

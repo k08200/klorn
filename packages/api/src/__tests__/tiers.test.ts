@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTier, normalizeTier, TIERS } from "../judge/tiers.js";
+import { isTier, normalizeTier, TIERS, toLiveTier } from "../judge/tiers.js";
 
 describe("TIERS", () => {
   it("is exactly the canonical v2 vocabulary — no CALL", () => {
@@ -26,6 +26,24 @@ describe("normalizeTier", () => {
     expect(normalizeTier(undefined)).toBe("QUEUE");
     expect(normalizeTier("")).toBe("QUEUE");
     expect(normalizeTier("GARBAGE")).toBe("QUEUE");
+  });
+});
+
+describe("toLiveTier", () => {
+  it("folds the retired AUTO lane into QUEUE for user-facing surfaces", () => {
+    expect(toLiveTier("AUTO")).toBe("QUEUE");
+  });
+
+  it("keeps normalizeTier's CALL and unknown-value folds", () => {
+    expect(toLiveTier("CALL")).toBe("PUSH");
+    expect(toLiveTier(null)).toBe("QUEUE");
+    expect(toLiveTier("GARBAGE")).toBe("QUEUE");
+  });
+
+  it("passes every live lane through unchanged", () => {
+    for (const tier of ["SILENT", "INFO", "QUEUE", "MEETING", "PUSH"] as const) {
+      expect(toLiveTier(tier)).toBe(tier);
+    }
   });
 });
 

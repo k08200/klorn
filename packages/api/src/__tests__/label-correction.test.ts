@@ -82,6 +82,27 @@ describe("reconcileLabelCorrection", () => {
     );
   });
 
+  it("never reads a stale label as a human correction of an item an MCP agent moved (step A2b)", async () => {
+    // The agent changed the tier in the database and wrote no Gmail label, so the
+    // label Klorn stamped earlier now disagrees with the tier. That disagreement
+    // is the agent's doing, not a human dragging the label: recording it through
+    // the override path would undo the change AND mint a false human correction.
+    attentionFindFirst.mockResolvedValue({
+      id: "item-1",
+      tier: "QUEUE",
+      agentTierSetAt: new Date("2026-09-30T09:00:00Z"),
+    });
+    await expect(reconcileLabelCorrection(USER, EMAIL, LABEL_IDS)).resolves.toBe("skipped");
+    expect(overrideAttentionTier).not.toHaveBeenCalled();
+  });
+
+  it("selects the agent stamp so it can tell the two apart", async () => {
+    await reconcileLabelCorrection(USER, EMAIL, LABEL_IDS);
+    expect(attentionFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true, tier: true, agentTierSetAt: true } }),
+    );
+  });
+
   it("skips when there is no open item to correct", async () => {
     attentionFindFirst.mockResolvedValue(null);
     await expect(reconcileLabelCorrection(USER, EMAIL, LABEL_IDS)).resolves.toBe("skipped");
