@@ -2005,6 +2005,18 @@ model DecisionLabel {
   starredAt      DateTime?
   unsubscribedAt DateTime?
 
+  // The same signals when the user acted in the mail provider itself (Gmail
+  // today), seen by sync rather than by a Klorn route: a reply found by the
+  // Sent-folder scan (sentAt of the user's own send in the thread), or the mail
+  // leaving the INBOX outside Klorn (found by the reconcile, time observed).
+  // Own columns so the report can tell Klorn from provider engagement and
+  // neither source ever overwrites the other; first wins per column
+  // (stampProviderEngagement). Mail Klorn sent or archived is excluded at the
+  // source (send-time origin, mirror row deleted first) except in a short race;
+  // the report counts a provider stamp only where Klorn recorded none.
+  providerRepliedAt  DateTime?
+  providerArchivedAt DateTime?
+
   judgedAt DateTime @default(now())
 
   // One ledger row per surfaced decision per source row, scoped by user. A
