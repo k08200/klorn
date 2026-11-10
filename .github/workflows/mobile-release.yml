@@ -69,7 +69,7 @@ jobs:
         run: echo "::notice::Android signing secrets are not set — skipping the Android release."
       - uses: actions/checkout@v7
         if: env.HAS_SECRETS == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.HAS_SECRETS == 'true'
         with:
           node-version: 22
@@ -145,7 +145,7 @@ jobs:
           XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
           xcodebuild -version
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.HAS_SECRETS == 'true'
         with:
           node-version: 22
