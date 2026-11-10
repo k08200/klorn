@@ -27,7 +27,7 @@ vi.mock("../judge/judge-context.js", () => ({
   buildJudgeContext: vi.fn(async () => ({ senderFacts: null })),
 }));
 
-import { sweepAttentionAging } from "../judge/attention-aging.js";
+import { resetActedScanCursor, sweepAttentionAging } from "../judge/attention-aging.js";
 import { upsertAttentionForEmailJudgement } from "../judge/attention-mirror.js";
 import { rejudgeFallbackItems } from "../judge/fallback-rejudge.js";
 
@@ -189,6 +189,13 @@ describe("the plain upsert (a new item's path) on an existing agent-set row", ()
 describe("attention aging", () => {
   const OLD = new Date(NOW.getTime() - 60 * 24 * 60 * 60 * 1000);
 
+  // The sweep is dark unless ATTENTION_AGING_ENABLED is on (it checks itself).
+  beforeEach(() => {
+    vi.stubEnv("ATTENTION_AGING_ENABLED", "true");
+    resetActedScanCursor();
+    return () => vi.unstubAllEnvs();
+  });
+
   function seedAging() {
     const ids = ["s-judge", "s-agent", "q-judge", "q-agent", "gone-agent"];
     db = createFakeDb({
@@ -213,8 +220,8 @@ describe("attention aging", () => {
     // and have the aging sweep resolve it within the hour.
     seedAging();
     await sweepAttentionAging(NOW);
-    expect(itemOf("s-judge").status).toBe("RESOLVED");
-    expect(itemOf("q-judge").status).toBe("RESOLVED");
+    expect(itemOf("s-judge")).toMatchObject({ status: "RESOLVED", resolvedReason: "aging:silent" });
+    expect(itemOf("q-judge")).toMatchObject({ status: "RESOLVED", resolvedReason: "aging:queue" });
     expect(itemOf("s-agent").status).toBe("OPEN");
     expect(itemOf("q-agent").status).toBe("OPEN");
   });
@@ -222,6 +229,9 @@ describe("attention aging", () => {
   it("still resolves an agent-set item whose email was archived elsewhere (acted-elsewhere is not aging)", async () => {
     seedAging();
     await sweepAttentionAging(NOW);
-    expect(itemOf("gone-agent").status).toBe("RESOLVED");
+    expect(itemOf("gone-agent")).toMatchObject({
+      status: "RESOLVED",
+      resolvedReason: "aging:acted",
+    });
   });
 });

@@ -12,6 +12,17 @@ calendar time.
 
 ## [Unreleased]
 
+### Fixed
+- **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**
+  - A spam-lane item still in Gmail's Spam folder is no longer resolved as
+    "left the inbox". It resolves once its mail leaves Spam without returning
+    to the inbox (for example to the trash), or the mail is gone.
+  - Every resolution the sweep makes is stamped in the new
+    `AttentionItem.resolvedReason` column (`aging:acted`, `aging:silent`,
+    `aging:queue`), so the sweep can be undone.
+  - The acted-elsewhere check pages through every open item instead of
+    re-reading the same oldest 500 each hour.
+
 ## [0.4.0] — 2026-11-08
 
 First server release since 0.3.0 (2026-06-09). It covers every PR merged since
