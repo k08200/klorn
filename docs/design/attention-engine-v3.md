@@ -507,6 +507,11 @@ It reports:
   - 0 of 5,908 email decisions in 90 days carry an outcome. `stampDecisionOutcome` still has no callers (P0).
   - In 30 days, 10 of 1,700 decisions (those joined to their mail) were followed by the user's reply in the thread, none of them shown as PUSH or SILENT.
   - `EmailMessage.isRead` has no time, and in the same 30 days 88% of mail shown as SILENT reads as read, so "opened later" cannot be derived from it.
+
+  Since #1651 (deployed 2026-11-09) the ledger stamps engagement:
+  - Each kind has its own column, first action wins: `openedAt`, `repliedAt`, `archivedAt`, `dismissedAt`, `snoozedAt`, `starredAt`, `unsubscribedAt`. `outcome` keeps its meaning (overrides and confirms).
+  - `pnpm --filter @klorn/api lane-quality` reports, per lane and per `decidedBy`, the share opened, the share replied within 24h, and the other actions. It does not split by policy version. A v3-against-v2 read joins `AttentionItem.v3PolicyVersion`.
+  - On 2026-11-10 at 07:57 UTC, about 27 hours after the deploy, no ledger row carried a stamp yet. 81 email decisions had been made in that time.
 - **P3 bar (changed 2026-11-07).** The outcome metrics move to the Review phase. P3 is done when:
   1. **Replay:** on the eval sets, v3 ≥ v2 on PUSH recall, PUSH precision and SILENT precision, pooled over models and for the production model on its own. Overall accuracy and QUEUE/INFO swaps are reported, not gated, because the founder's labels disagree on newsletters (§3(5)).
   2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The shadow report lists only the newest 20 disagreements. For the full list, run `replay:policy --facts=stored --max-changes=<n>`: one line per changed mail with its id, v2 → v3 lanes and reason codes. `--show-subjects` adds subjects to the terminal output only. The counts go in the flip PR.
@@ -515,7 +520,8 @@ It reports:
   Status on 2026-11-08:
   - Replay: not met (§3(5), "Against v2"). Traced to two rules (sender trust, the 24h window) and one extraction error.
   - Phishing: measured (§3(5) "Policy v3.1"). Two mails with no sign of spoofing interrupt.
-  - Shadow: not started (0 AttentionFacts rows).
+  - Shadow: not started (0 AttentionFacts rows, still 0 on 2026-11-10).
+  - Outcome metrics (Review phase): engagement stamps are wired (#1651); none recorded on 2026-11-10.
 - **Model upgrade procedure:** run the fact eval on the candidate, compare, flip the provider order. No threshold work.
 
 ## 6. Phases
@@ -524,7 +530,7 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 
 | Phase | Scope | Done when | Flag |
 |---|---|---|---|
-| P0 | Outcome stamping (not wired yet: `stampDecisionOutcome` has no callers on 2026-11-07) and exposing the relationship features from existing tables | per-lane open/reply data accumulates; relationship snapshot available to the judge | none (measurement) |
+| P0 | Outcome stamping (engagement stamps wired by #1651 on 2026-11-09; none recorded on 2026-11-10) and exposing the relationship features from existing tables | per-lane open/reply data accumulates; relationship snapshot available to the judge | none (measurement) |
 | P1 | Re-benchmark **current** models (Haiku/Sonnet/Opus 5.5, Fable 5.1, current Gemini/GPT available to us) × {v2 score prompt, v3 fact prompt} on the gate set + real set | numbers answer whether v2 is calibration-coupled and whether v3 narrows the spread between models | none (eval only, synthetic/consented data) |
 | P2 | Fact extractor (schema v1) + evidence verification + persistence, run in **shadow** | fact eval ≥ the agreed bar; shadow running on prod with a disagreement report | `JUDGE_V3_SHADOW` |
 | P3 | Policy v3 (lanes from facts) + QUEUE ranking + PUSH interrupt budget | replay shows v3 ≥ v2 on PUSH and SILENT, and the founder has reviewed the shadow disagreements (§5, "P3 bar") | `JUDGE_V3_POLICY` (founder flip) |
