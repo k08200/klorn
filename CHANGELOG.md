@@ -23,7 +23,7 @@ calendar time.
     or snoozing an item clears the stamp.
   - The acted-elsewhere check pages through every open item instead of
     re-reading the same oldest 500 each hour. A failed page no longer skips
-    that hour's age-out.
+    that hour's age-out (#1663).
 
 ## [0.4.0] — 2026-11-08
 
