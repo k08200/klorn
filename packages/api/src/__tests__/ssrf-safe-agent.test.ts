@@ -20,6 +20,14 @@ describe("isPrivateIp", () => {
       "fd12:3456::1",
       "::ffff:10.0.0.1",
       "::ffff:127.0.0.1",
+      // Since 2026-10-15 the connect-time check shares the IMAP guard's policy:
+      "100.64.0.1", // CGNAT
+      "198.18.0.1", // benchmarking
+      "224.0.0.1", // multicast
+      "64:ff9b::a00:1", // NAT64
+      "2002:a00:1::", // 6to4
+      "fec0::1", // site-local
+      "fe80::1%en0", // zone id: not a plain address, fails closed
     ]) {
       expect(isPrivateIp(ip), `${ip} should be private`).toBe(true);
     }

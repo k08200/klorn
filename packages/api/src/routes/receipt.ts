@@ -25,27 +25,27 @@ import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/cont
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { localDayUtcRange } from "../time-zone.js";
+import { getUserTimeZone } from "../user-timezone.js";
 
 export async function receiptRoutes(app: FastifyInstance) {
   // Plugin-level auth + paywall gate (the per-route requireAuth below is kept
-  // and idempotent). requireEntitled runs after requireAuth so request.userId
-  // is set; it's a no-op pre-launch. Refuses non-entitled users at the paid
-  // firewall-receipt surface.
+  // and idempotent). Both guards run after requireAuth so request.userId is
+  // set; both are no-ops pre-launch. Reading the daily receipt is open to the
+  // free tier (requireAppAccess); /undo proposes reversing an executed action,
+  // so it carries its own requireEntitled.
   app.addHook("preHandler", requireAuth);
-  app.addHook("preHandler", requireEntitled);
+  app.addHook("preHandler", requireAppAccess);
 
   app.get("/today", { preHandler: requireAuth }, async (request): Promise<DailyReceipt> => {
     const userId = getUserId(request);
 
-    // Determine today's date window in user's timezone
-    const config = await prisma.automationConfig.findUnique({
-      where: { userId },
-      select: { timezone: true },
-    });
-    const tz = config?.timezone || "UTC";
-    const { todayStart, todayEnd } = getTodayWindow(tz);
+    // Today's window in the user's timezone (product default when unset), so
+    // the receipt's day matches the briefing's and the activity page's.
+    const tz = await getUserTimeZone(userId);
+    const { dateKey, gte: todayStart, lt: todayEnd } = localDayUtcRange(new Date(), tz);
 
     // Fetch all AttentionItems surfaced today
     const attentionItems = await (
@@ -59,6 +59,7 @@ export async function receiptRoutes(app: FastifyInstance) {
             tier: string | null;
             tierReason: string | null;
             surfacedAt: Date;
+            agentTierSetAt: Date | null;
           }>
         >;
       }
@@ -75,6 +76,7 @@ export async function receiptRoutes(app: FastifyInstance) {
         tier: true,
         tierReason: true,
         surfacedAt: true,
+        agentTierSetAt: true,
       },
       orderBy: { surfacedAt: "asc" },
     });
@@ -127,7 +129,7 @@ export async function receiptRoutes(app: FastifyInstance) {
       const tier = item.tier === "CALL" ? "PUSH" : item.tier || "QUEUE";
       if (tier === "SILENT") {
         silenced.push(base);
-      } else if (tier === "PUSH") {
+      } else if (tier === "PUSH" && item.agentTierSetAt == null) {
         // Find matching push log
         const push = pushLogs.find((p) => pushByNotifId.has(p.notificationId ?? ""));
         pushed.push({
@@ -136,6 +138,8 @@ export async function receiptRoutes(app: FastifyInstance) {
           pushClickedAt: push?.clickedAt?.toISOString() ?? null,
         });
       } else {
+        // Includes a PUSH lane an MCP agent set (step A2b): moving an item to PUSH
+        // sends nothing, so it is not a push and not an interruption.
         queued.push(base);
       }
     }
@@ -169,7 +173,7 @@ export async function receiptRoutes(app: FastifyInstance) {
     const narrative = buildNarrative(totalSeen, totalInterrupted, savedFromInbox, autoHandled);
 
     return {
-      date: todayStart.toISOString().slice(0, 10),
+      date: dateKey,
       silenced: allSilenced,
       queued,
       pushed,
@@ -187,7 +191,7 @@ export async function receiptRoutes(app: FastifyInstance) {
   // Mark an auto-handled item for undo (surfaces a new PendingAction to reverse it)
   app.post(
     "/undo/:pendingActionId",
-    { preHandler: requireAuth },
+    { preHandler: [requireAuth, requireEntitled] },
     async (request): Promise<ReceiptUndoResponse> => {
       const userId = getUserId(request);
       const { pendingActionId } = request.params as { pendingActionId: string };
@@ -231,30 +235,6 @@ export async function receiptRoutes(app: FastifyInstance) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getTodayWindow(timezone: string): { todayStart: Date; todayEnd: Date } {
-  try {
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, dateStyle: "short" });
-    const localDateStr = formatter.format(now); // YYYY-MM-DD
-    const todayStart = new Date(`${localDateStr}T00:00:00`);
-    const todayEnd = new Date(`${localDateStr}T23:59:59.999`);
-    // Convert local midnight to UTC
-    const offset = now.getTime() - Date.parse(now.toLocaleString("en-US", { timeZone: timezone }));
-    return {
-      todayStart: new Date(todayStart.getTime() + offset),
-      todayEnd: new Date(todayEnd.getTime() + offset),
-    };
-  } catch {
-    // Fallback to UTC day
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setUTCHours(23, 59, 59, 999);
-    return { todayStart, todayEnd };
-  }
-}
 
 function buildNarrative(
   totalSeen: number,

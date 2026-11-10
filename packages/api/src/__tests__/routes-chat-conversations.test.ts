@@ -310,6 +310,75 @@ describe("chat conversation routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ error: "provider down" });
+    // No code for an ordinary failure — only the cap carries one.
+    expect(res.json()).not.toHaveProperty("errorCode");
+    const assistantCall = messageCreate.mock.calls[1]?.[0] as {
+      data: { metadata: Record<string, unknown> };
+    };
+    expect(assistantCall.data.metadata).not.toHaveProperty("turnErrorCode");
+    await app.close();
+  });
+
+  it("returns stored message metadata as-is, so turnErrorCode survives a reload", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
+    const metadata = {
+      source: "chat",
+      turnError: "Free quota used for today.",
+      turnErrorCode: "DAILY_COST_CAP_FREE",
+    };
+    messageFindMany.mockResolvedValueOnce([
+      {
+        id: "m1",
+        role: "ASSISTANT",
+        content: "Free quota used for today.",
+        metadata,
+        createdAt: new Date("2026-10-30T00:00:00.000Z"),
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().messages[0].metadata).toEqual(metadata);
+    await app.close();
+  });
+
+  it("returns and persists the cost-cap code so clients can tell the cap from an outage", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
+    const message = "You've used today's free AI quota.";
+    runChatTurn.mockResolvedValueOnce({
+      reply: message,
+      eventDraft: null,
+      error: message,
+      errorCode: "DAILY_COST_CAP_FREE",
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+      payload: { text: "hi" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      reply: message,
+      eventDraft: null,
+      error: message,
+      errorCode: "DAILY_COST_CAP_FREE",
+    });
+    const assistantCall = messageCreate.mock.calls[1]?.[0] as {
+      data: { content: string; metadata: Record<string, unknown> };
+    };
+    expect(assistantCall.data.content).toBe(message);
+    expect(assistantCall.data.metadata).toMatchObject({
+      turnError: message,
+      turnErrorCode: "DAILY_COST_CAP_FREE",
+    });
     await app.close();
   });
 });

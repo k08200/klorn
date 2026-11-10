@@ -13,6 +13,8 @@
 import { prisma } from "../db.js";
 import { isUserInFocusBlock } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
+import { dedupeCalendarEvents } from "./calendar-dedupe.js";
+import { calendarSourceScope } from "./calendar-scope.js";
 
 /** Lookback slack: two ticks, so a slow tick never drops an ended block. */
 export const FOCUS_DIGEST_LOOKBACK_MS = 3 * 60_000;
@@ -21,14 +23,26 @@ const DIGEST_TIERS = ["QUEUE", "INFO", "MEETING"] as const;
 
 export async function sendFocusWindowDigests(now: Date = new Date()): Promise<number> {
   const since = new Date(now.getTime() - FOCUS_DIGEST_LOOKBACK_MS);
-  const ended = await prisma.calendarEvent.findMany({
+  const endedRows = await prisma.calendarEvent.findMany({
     where: {
       allDay: false,
       endTime: { gt: since, lte: now },
       user: { automationConfig: { focusWindowEnabled: true } },
+      ...calendarSourceScope(),
     },
-    select: { id: true, userId: true, startTime: true, endTime: true },
+    // The identity fields let a block present in the primary and a linked
+    // calendar (two rows, C2) produce one digest: its dedupeKey is per row id.
+    select: {
+      id: true,
+      userId: true,
+      startTime: true,
+      endTime: true,
+      provider: true,
+      externalId: true,
+      sourceAccountId: true,
+    },
   });
+  const ended = dedupeCalendarEvents(endedRows);
   let sent = 0;
   for (const event of ended) {
     try {

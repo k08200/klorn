@@ -4,30 +4,12 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.expand" = "展開";
-"bar.expand.a11y" = "Klornを展開";
-"bar.hide" = "バーを隠す（メニューバーで動作を続けます）";
-"bar.hide.a11y" = "トップバーを隠す";
-"bar.close" = "閉じる";
-"bar.close.a11y" = "パネルを閉じる";
-"bar.fullView" = "全画面";
-"bar.fullView.a11y" = "全画面を開く";
-"bar.smaller" = "小さく";
-"bar.smaller.help" = "コンパクトパネルに戻る";
-"bar.push" = "PUSH %d件";
-"bar.offline" = "オフライン";
-"bar.allClear" = "対応済み";
-"bar.signingIn" = "サインイン中…";
 "bar.loading" = "読み込み中…";
-"bar.more" = "他 %d件";
-"bar.menuBar.signedOut" = "Klorn — 未サインイン";
 
 /* Auth */
-"auth.logIn" = "ログイン";
 "auth.signOut" = "サインアウト";
 
 /* Columns / sections */
-"section.today" = "KLORN 今日";
 "section.now" = "現在";
 "section.briefing" = "ブリーフィング";
 "section.aiToday" = "AI 今日";
@@ -35,7 +17,6 @@
 "section.assistant" = "アシスタント";
 "section.search" = "検索";
 
-"today.a11y" = "Klornの今日: %@。ウェブ受信トレイを開いて確認します。";
 "briefing.a11y" = "今日のブリーフィング: %@";
 "aiUsage.a11y" = "本日のAI使用: %2$d 中 %1$d";
 "commitments.a11y" = "約束、未完了 %d件";
@@ -49,10 +30,6 @@
 "calendar.join" = "参加";
 "calendar.join.a11y" = "%@ に参加";
 "calendar.openInKlorn" = "Klornで開く";
-"calendar.startingSoon" = "まもなく開始";
-"calendar.prepPack" = "準備資料を作成中…";
-"calendar.card.a11y" = "次の会議カード";
-"calendar.dismiss.a11y" = "会議カードを閉じる";
 "calendar.addToCalendar" = "カレンダーに追加";
 "calendar.ignore" = "無視";
 "calendar.proposed.a11y" = "提案された予定: %@";
@@ -64,23 +41,24 @@
 "mail.filterByInbox" = "受信トレイで絞り込む";
 "mail.filterByInbox.a11y" = "受信トレイで絞り込む — 現在 %@";
 "mail.inbox.a11y" = "受信トレイ %@";
+"mail.unread" = "未読";
+"mail.hasAttachment" = "添付ファイルあり";
+"mail.threadCount" = "このスレッドのメッセージ %d 件";
+"source.account.a11y" = "%@アカウント";
+"source.generic" = "メール";
 "mail.searchResult.a11y" = "%1$@ からの検索結果: %2$@";
-"mail.noSubject" = "件名なし";
 "mail.snooze" = "スヌーズ…";
 "mail.snooze.a11y" = "%@ からのメールをスヌーズ";
 "mail.dismiss" = "閉じる";
 "mail.dismiss.a11y" = "%@ からのメールを閉じる";
 "mail.changeTier" = "レーンを変更…（Klornが学習します）";
 "mail.changeTier.a11y" = "%1$@ からのメールのレーンを変更、現在 %2$@";
-"mail.moveTo" = "%1$@ に移動%2$@";
 "mail.snoozePrefix" = "スヌーズ ";
 "mail.summarize" = "AI要約";
 "mail.summarizing" = "要約中…";
 "mail.summarizeFailed" = "要約できませんでした — もう一度お試しください。";
 "mail.actionItems" = "対応事項";
-"section.filed" = "整理済み";
 "section.filed.help" = "Klornが整理済みのメール — 記録と静かな通知。クリックで展開。";
-"filed.a11y" = "整理済みメール、%d件";
 "dossier.inFlight" = "進行中: %@";
 "dossier.promise" = "最後の約束: %@";
 "dossier.a11y" = "差出人の背景";
@@ -126,21 +104,9 @@
 "reading.cancel" = "キャンセル";
 
 /* Push card */
-"push.card.a11y" = "緊急メールカード";
-"push.summary" = "要約";
-"push.message" = "本文";
-"push.showAll.a11y" = "待機中の緊急メールをすべて表示";
-"push.snooze.help" = "後でにする";
-"push.snooze.a11y" = "このメールをスヌーズ";
-"push.dismiss.a11y" = "カードを閉じる";
 "push.draftingReplies" = "返信を作成中…";
 "push.proRequired" = "クイック返信にはKlorn Proが必要です。";
-"push.proRequired.detail" = "⏎ を押すか「開く」でウェブ受信トレイで対応できます。";
 "push.tryAgain" = "再試行";
-"push.open" = "開く";
-"push.open.a11y" = "ウェブ受信トレイで開く";
-"push.sent.a11y" = "送信済み";
-"push.sendReply.a11y" = "%1$@ の返信を送信: %2$@";
 
 /* Assistant */
 "assistant.placeholder" = "Klornにメッセージ…";
@@ -150,17 +116,21 @@
 
 /* Preferences — shell */
 "prefs.title" = "環境設定";
-"prefs.done" = "完了";
 "prefs.section.notifications" = "通知";
 "prefs.section.general" = "一般";
-"prefs.section.topBar" = "トップバー";
 "prefs.section.keyboard" = "キーボード";
 "prefs.section.language" = "言語";
 "prefs.section.account" = "アカウント";
 "prefs.section.about" = "情報";
 
 "prefs.banners" = "このMacでmacOS通知バナーを表示";
-"prefs.banners.detail" = "ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。トップバーのPUSH件数は更新され続けます。";
+"prefs.banners.detail" = "新しいPUSH・MEETINGメールごとに、差出人と件名だけを表示するバナーを出します。ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。メインウィンドウのPUSH件数は更新され続けます。";
+"prefs.banners.denied" = "macOSがKlornの通知をブロックしています。システム設定 ▸ 通知で許可してください。";
+"prefs.banners.openSystemSettings" = "システム設定を開く";
+"prefs.section.support" = "アプリとサポート";
+"push.announce" = "新しいPUSHメール：%d件";
+"push.announce.meeting" = "新しいMEETINGメール：%d件";
+"push.heldSummary.title" = "通知しない時間中に緊急メール%d件";
 "prefs.launchAtLogin" = "ログイン時にKlornを起動";
 "prefs.launchAtLogin.unavailable.label" = "ログイン時に起動";
 "prefs.launchAtLogin.unavailable.value" = "パッケージ版のみ";
@@ -170,10 +140,6 @@
 "prefs.updates.unknown" = "確認できませんでした — リリースページをご覧ください";
 "prefs.updates.check" = "アップデートを確認";
 "prefs.updates.checking" = "確認中…";
-"prefs.pillVisible" = "トップバーを常に表示";
-"prefs.pillVisible.detail" = "オフ: ⌥⌘K で呼び出すまでバーは隠れます。緊急メールのカードは表示されます。";
-"prefs.showInDock" = "Dockと⌘Tabに表示";
-"prefs.showInDock.detail" = "オフ（既定）: Klornは表に出ず、⌥⌘K で呼び出します。オン: ⌘Tabで切り替えられる通常のアプリとして動作します。";
 "prefs.shortcut" = "呼び出し / 展開";
 "prefs.shortcut.recording" = "ショートカットを入力 — ⌘、⌥、⌃ のいずれかが必要です。Escで中止。";
 "prefs.shortcut.idle" = "バーを呼び出すグローバルショートカット。クリックで変更。";
@@ -204,8 +170,8 @@
 "auto.mode.shadow.detail" = "Klornは裏で整理と準備をします。通知もせず、勝手に動きもしません。";
 "auto.mode.suggest" = "確認してから";
 "auto.mode.suggest.detail" = "Klornが返信を下書きし、送信前に必ず確認します。すべてあなたが承認します。";
-"auto.mode.auto" = "自動";
-"auto.mode.auto.detail" = "安全な操作はKlornが自分で行います。急ぎや期限のあるものは引き続き通知します。";
+"auto.mode.auto" = "安全な操作を実行";
+"auto.mode.auto.detail" = "リスクの低い操作はKlornが自分で実行し、後でお知らせします。それ以外はあなたの承認を待ちます。返信は別に設定する返信モードに従います。";
 
 "auto.tone" = "トーン";
 "auto.tone.a11y" = "返信のトーン";
@@ -224,7 +190,7 @@
 "auto.preset.detail" = "重要なものだけ: 返信が必要なメールと、カレンダーの予定。それ以外はバナーなしでバーに残ります。";
 
 "auto.notify.emailUrgent" = "緊急メール";
-"auto.notify.emailUrgent.detail" = "KlornがPUSHと判定したメール — 相手が待っています。";
+"auto.notify.emailUrgent.detail" = "KlornがPUSHまたはMEETINGと判定したメール — 相手が待っています。";
 "auto.notify.meeting" = "会議";
 "auto.notify.meeting.detail" = "まもなく始まる予定。";
 "auto.notify.taskDue" = "期限の近い項目";
@@ -248,8 +214,6 @@
 "auto.error.generic" = "その設定を保存できませんでした。";
 
 /* Menu bar */
-"bar.menuBar.clear" = "Klorn — 緊急メールなし";
-"bar.menuBar.push" = "Klorn — PUSH %d件 待機中";
 
 /* Sender engagement */
 "engagement.repliedOnce" = "よくやり取りする相手 · 1回返信";
@@ -272,26 +236,18 @@
 
 /* Misc labels */
 "mail.allInboxes" = "すべての受信トレイ";
-"calendar.tomorrow" = "明日";
 "calendar.allDay" = "終日";
 
 /* Menu bar menu */
-"menu.showBar" = "トップバーを表示";
-"menu.preferences" = "環境設定…";
-"menu.signIn" = "サインイン…";
-"menu.quit" = "Klornを終了";
 "menu.restart" = "Klornを再起動";
 "menu.diagnostics" = "接続状態…";
 "menu.contactSupport" = "サポートにメールする…";
 "diagnostics.checking" = "確認中…";
-"menu.checkUpdates" = "アップデートを確認…";
-"update.upToDate" = "Klornは最新です。";
-"push.tryAgainIn" = "%d秒後に再試行";
 "mail.reclassifying" = "再分類中";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "提案";
-"proposals.a11y" = "提案、承認待ち %d件";
+"proposals.title" = "承認";
+"proposals.a11y" = "承認、%d件待ち";
 "proposals.approve" = "承認";
 "proposals.decline" = "却下";
 "proposals.empty" = "あなたの対応待ちはありません。";
@@ -299,14 +255,10 @@
 "proposals.row.a11y" = "%1$@。%2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "受信トレイ";
-"section.recentPush" = "最近のPUSH";
-"section.todayShort" = "今日";
+"section.inbox" = "メール";
 "push.nothingNeedsYou" = "今すぐ対応が必要なものはありません。";
 "auth.signInNaver" = "Naverで続ける";
 "auth.signInApple" = "Appleで続ける";
-"auth.signInGoogle" = "Googleでサインイン";
-"calendar.noEvents" = "今日の予定はありません";
 "calendar.eventRow.a11y" = "%1$@、%2$@。詳細を表示します。";
 "mail.needsReconnect" = "%@ — 再接続が必要";
 
@@ -317,28 +269,24 @@
 "tier.info.empty" = "新しい記録はありません";
 "tier.push.blurb" = "通知します。相手が返信を待っているか、時間に関わるものです。";
 "tier.queue.blurb" = "待っています。今日読む価値はありますが、バナーを出すほどではありません。";
-"tier.silent.blurb" = "整理済みで、削除ではありません。ニュースレターや領収書 — 見に来ればここにあります。";
-"tier.auto.blurb" = "自動で処理済み。Klornが確信を持てたため確認しませんでした。";
+"tier.silent.blurb" = "整理済みで、削除ではありません。ニュースレターやプロモーション — 見に来ればここにあります。";
 
 "tier.push.empty" = "今すぐ対応が必要なものはありません。";
 "tier.queue.empty" = "読み待ちのものはありません。";
 "tier.silent.empty" = "ここにはまだ何も整理されていません。";
-"tier.auto.empty" = "Klornが自動で処理したものはまだありません。";
 
 /* First-run guide */
 "guide.title" = "Klornのメール振り分け方";
-"guide.pipeline" = "Klornは接続されたすべてのメールボックスを読み、各メールを下の%dつのレーンに振り分けます。この受信トレイ列はその結果であり、Gmailの生の受信トレイではありません。";
+"guide.pipeline" = "Klornは接続されたすべてのメールボックスを読み、各メールを下の%dつのレーンに振り分けます。このメール列はその結果であり、Gmailの生の受信トレイではありません。";
 "guide.intro" = "すべてのメールは%dつのレーンのいずれかに入ります。削除も、あなた抜きの返信もしません — レーンはどれだけ大きく届くかだけを決めます。";
 "guide.correcting" = "判定が違ったら、別のレーンに移してください。Klornがその修正から学びます。各メールにはその場所に入った理由も表示されます。";
 "guide.done" = "わかりました";
 "guide.reopen" = "振り分けの仕組み";
 
 "tier.row.a11y" = "%1$@、%2$d件。%3$@";
-"calendar.noEventsWeek" = "今週の予定はありません";
 "reading.noPreview" = "この項目のプレビューはありません。";
 "mail.noMatches" = "「%1$@」に一致するメールはありません%2$@";
 
-"section.upcoming" = "予定";
 "section.waitingOn" = "相手待ち";
 "section.iOwe" = "自分の宿題";
 "assistant.empty" = "メール、カレンダー、今日の予定について聞いてください。";
@@ -358,11 +306,8 @@
 "error.badResponse" = "サーバーから予期しない応答がありました。";
 "error.needsPro" = "この操作にはKlorn Proが必要です。";
 "error.generic" = "問題が発生しました。";
-"meeting.needsReview" = "確認が必要";
 "mail.inboxPrimary" = "メイン";
 "mail.inboxLinked" = "連携した受信トレイ";
-"push.expand.hint" = "クリックで展開";
-"push.collapse.hint" = "クリックで折りたたむ";
 "mail.unknownSender" = "（差出人不明）";
 "account.add" = "Googleアカウントを追加…";
 "account.add.hint" = "ブラウザを開き、別のGmail受信トレイをKlornに接続します。";
@@ -370,6 +315,9 @@
 "account.reconnect" = "アカウントを再接続…";
 "account.reconnectPrimary" = "Googleアカウントを再接続…";
 "account.reconnect.failed" = "再接続を開始できませんでした。もう一度お試しください。";
+"account.link.mismatch" = "この連携は別のKlornアカウントで開始されたため、追加されませんでした。このアカウントでもう一度開始してください。";
+"account.link.expired" = "連携が完了する前に期限切れになりました。もう一度お試しください。";
+"account.link.failed" = "アカウント連携を完了できませんでした。もう一度お試しください。";
 "source.unknown" = "Klorn";
 "source.github" = "GitHub";
 
@@ -390,6 +338,7 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "両者空き: %@";
+"meeting.banner.body" = "%d分後に始まります。";
 "meeting.proposedSlot" = "提案: %@";
 "meeting.slotFree" = "その時間はカレンダーが空いています";
 "meeting.slotBusy" = "既存の予定と重なります";
@@ -399,7 +348,8 @@
 "section.calendar" = "カレンダー";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "アプリと診断";
+"account.maintenance" = "アプリとサポート";
+"account.showSupportTools" = "サポートツールを表示";
 "a11y.expanded" = "展開済み";
 "a11y.collapsed" = "折りたたみ済み";
 
@@ -429,6 +379,7 @@
 "account.disconnect" = "接続を解除";
 "account.disconnect.confirm" = "%@ の接続を解除しますか? Klornは読み取りを停止します。同期済みのメールは残ります。";
 "account.naver.connect" = "Naverメールを接続…";
+"common.beta" = "ベータ";
 "account.naver.email" = "Naverアドレス";
 "account.naver.password" = "アプリパスワード";
 "account.naver.password.hint" = "Naverメール > 設定 > IMAP/SMTP でオンにし、そこのアプリパスワードを使ってください（ログインパスワードではありません）。";
@@ -436,12 +387,32 @@
 "account.imap.failed" = "そのメールボックスに接続できませんでした。";
 "account.imap.rateLimited" = "試行回数が多すぎます。数分後にもう一度お試しください。";
 "account.imap.disconnectFailed" = "そのメールボックスの接続を解除できませんでした。";
+"account.icloud.connect" = "iCloudメールを接続…";
+"account.icloud.title" = "iCloudメールを接続";
+"account.naver.title" = "Naverメールを接続";
+"account.icloud.body" = "iCloud Mail (beta) はIMAPで接続します。新着メールはGmailと同じレーンに振り分けられます。";
+"account.icloud.email" = "Apple IDのメールアドレス";
+"account.icloud.password" = "App用パスワード";
+"account.icloud.password.hint" = "Apple IDのパスワードではなく、App用パスワードを使ってください。appleid.apple.com ▸ サインインとセキュリティ ▸ App用パスワードで作成できます。2ファクタ認証がオンである必要があります。";
+"account.icloud.help.link" = "appleid.apple.comを開く";
+"account.icloud.error.authFailed" = "iCloudがサインインを拒否しました。Apple IDのパスワードではなく、appleid.apple.comで作成したApp用パスワードを使ってください。2ファクタ認証がオンである必要があります。";
+"account.naver.error.authFailed" = "Naverがサインインを拒否しました。Naverメールの設定でIMAPをオンにし、ログインパスワードではなくそこのアプリパスワードを使ってください。";
+"account.imap.connecting" = "接続中…";
+"account.imap.error.unreachable" = "メールサーバーに接続できませんでした。少し待ってからもう一度お試しください。";
+"account.imap.error.tooMany" = "このサービスで接続できるメールボックスの上限に達しています。";
+"account.imap.error.invalidEmail" = "有効なメールアドレスを入力してください。";
+"account.imap.error.needsPro" = "2つ目のメールアカウントを接続するにはKlorn Proが必要です。";
+"account.imap.error.offline" = "このMacはオフラインです。インターネットに接続してもう一度お試しください。";
+"account.icloud.error.unavailable" = "このサーバーではiCloudメールはまだ利用できません。";
+"account.naver.error.unavailable" = "このサーバーではNaverメールはまだ利用できません。";
+"account.imap.error.insecure" = "KlornはApp用パスワードを安全な（HTTPS）接続でのみ送信します。";
+"account.imap.submit" = "接続";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "モード";
+"mode.section" = "返信モード";
 "mode.basic" = "ベーシック";
 "mode.basic.detail" = "重要なメールと会議だけ通知します — 選ぶのも返信するのもあなたです。それ以外は静かなままです。";
-"mode.auto" = "自動";
+"mode.auto" = "自動返信";
 "mode.auto.detail" = "下の方針に従って、安全で定型的なメールにKlornが代わりに返信します。通知は会議と要返信のメールに限られます。";
 "mode.guideline" = "返信の方針";
 "mode.guideline.detail" = "あなたが見ていない返信はすべてこれに従います。既定を編集または追記してください。";
@@ -464,7 +435,6 @@
 "compose.cancel" = "キャンセル";
 "compose.missingFields" = "宛先、件名、本文はすべて必須です。";
 "compose.needsPro" = "メール送信にはProプランが必要です。";
-"compose.close.a11y" = "作成画面を閉じる";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "アシスタント（⌘J）";
@@ -503,6 +473,7 @@
 
 // Real calendar views — 일/월/년 (2026-08-26).
 "cal.scope.day" = "日";
+"cal.scope.week" = "週";
 "cal.scope.month" = "月";
 "cal.scope.year" = "年";
 "cal.today" = "今日";
@@ -523,5 +494,301 @@
 "chip.customer" = "顧客";
 "chip.investor" = "投資家";
 "chip.system" = "システム";
-"appearance.toLight" = "ライトモードに切り替え";
-"appearance.toDark" = "ダークモードに切り替え";
+"compose.editDraft" = "下書きを編集";
+"compose.discard" = "下書きを破棄";
+"compose.discard.confirm.title" = "この下書きを破棄しますか？";
+"compose.discard.confirm.detail" = "ここに書いた内容は失われます。";
+"mailbox.loadMore" = "さらに読み込む";
+"chip.billing" = "請求・領収書";
+
+// Inbox purpose — the connect-time question (2026-09-01).
+"purpose.title" = "このメールボックスの用途は？";
+"purpose.detail" = "用途に合わせて分析を調整します — 個人用と仕事用では読み方が違うからです。アカウント欄でいつでも変更できます。";
+"purpose.work" = "仕事";
+"purpose.personal" = "個人";
+"purpose.mixed" = "両方";
+"purpose.later" = "あとで";
+"purpose.unset" = "用途を設定";
+"purpose.primaryFallback" = "メインアカウント";
+
+// Body-first reading pane + pre-login purpose pick (2026-09-01).
+"reading.analysis" = "Klornの分析";
+"reading.analysis.expand" = "分析を表示";
+"reading.analysis.collapse" = "分析を隠す";
+// Linked-account purpose question (2026-09-03).
+"purpose.title.linked" = "%@ の用途は？";
+
+// Company domains (2026-09-10).
+"company.title" = "会社のメールドメインは？";
+"company.detail" = "会社ドメインからのメールは「社内」ラベルが付き、顧客ではなく同僚として分析されます。サブドメインも含みます。アカウント欄でいつでも変更できます。";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "保存";
+"company.skip" = "スキップ";
+"company.label" = "会社ドメイン";
+"company.none" = "未設定";
+"company.saveFailed" = "保存できません — ドメインを確認してください（gmail.com/naver.com 不可、最大10件）。";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "ラベルを修正";
+"label.correct.domain" = "ドメイン全体: %@";
+"label.correct.clear" = "この送信者の修正を解除";
+"label.correct.clearDomain" = "ドメインの修正を解除";
+"label.correct.a11y" = "%@ — ラベルを修正";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "新しい予定";
+"cal.edit" = "編集";
+"cal.delete" = "削除";
+"cal.delete.confirm" = "本当に削除";
+"cal.delete.failed" = "削除できません — もう一度お試しください。";
+"cal.editor.newTitle" = "新しい予定";
+"cal.editor.editTitle" = "予定を編集";
+"cal.editor.title" = "タイトル";
+"cal.editor.start" = "開始";
+"cal.editor.end" = "終了";
+"cal.editor.location" = "場所";
+"cal.source.linked" = "連携";
+"cal.readOnly" = "読み取り専用";
+"cal.source.a11y" = "読み取り専用、%@ から";
+"cal.save" = "保存";
+"cal.save.failed" = "保存できません — もう一度お試しください。";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "何が最も重要ですか？";
+"priorities.detail" = "自分の言葉で。Klornはこれを基準に緊急度と通知を判断します — すべてのメール、すべてのアカウントで。アカウント欄でいつでも変更できます。";
+"priorities.placeholder" = "例: 投資家からのメールは常に緊急。ニュースレターは後回し。佐藤さんのメールはすぐ知らせて。";
+"priorities.label" = "優先事項";
+"priorities.none" = "未設定";
+"priorities.saveFailed" = "保存できません — もう一度お試しください（500文字以内）。";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "返信が必要";
+"chip.answered" = "返信済み";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "返信待ち";
+"waiting.hint" = "送信後 %d 日以上返信がないメール — Klorn と Gmail の送信済みが対象。";
+"waiting.empty" = "返信を待っているメールはありません。";
+"waiting.days" = "%d日目";
+"waiting.row.a11y" = "%@ — %@、%d日目返信待ち";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "一般";
+"settings.tab.accounts" = "アカウント";
+"settings.tab.assistant" = "アシスタント";
+"settings.tab.notifications" = "通知";
+"settings.tab.appearance" = "外観";
+"settings.tab.privacy" = "プライバシー";
+"settings.signedOutNote" = "この設定を表示するには Klorn にサインインしてください。";
+"menu.message" = "メッセージ";
+"menu.go" = "移動";
+"menu.compose" = "新規メール";
+"menu.find" = "メールを検索";
+"menu.moveToLane" = "レーンを移動";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "下書きあり";
+"reading.openDraft" = "下書きを開く";
+"reading.preparedDraft" = "Klornが事前に用意した下書きです — 送信前に確認してください。";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "デバイスのカレンダー";
+"deviceCalendars.upload" = "デバイスのカレンダーをアップロード";
+"deviceCalendars.detail" = "下でオンにしたカレンダーだけが、読み取り専用のコピーとしてKlornにアップロードされます。ブリーフィングとアシスタントはサーバー上でそれを読みます。";
+"deviceCalendars.denied" = "Klornはカレンダーを読めません。システム設定 › プライバシーとセキュリティ › カレンダーで許可してください。";
+"deviceCalendars.openSettings" = "システム設定を開く";
+"deviceCalendars.empty" = "このMacにカレンダーはありません。";
+"deviceCalendars.count" = "%d件をアップロード中";
+"deviceCalendars.untitled" = "名称未設定のカレンダー";
+"deviceCalendars.error.limit" = "アップロードしたカレンダーが多すぎます。先に1つをオフにしてください。";
+"deviceCalendars.error.rows" = "このMacのカレンダーから保存された予定が多すぎます。先にカレンダーを1つオフにしてください。";
+"deviceCalendars.error.generic" = "カレンダーをアップロードできませんでした。Klornが再試行します。";
+
+/* Main window: five-item navigation and Today (M4b) */
+"nav.today" = "今日";
+"nav.calendar" = "カレンダー";
+"nav.assistant" = "アシスタント";
+"nav.accounts" = "アカウント";
+"nav.accounts.signedOut" = "ログインすると接続中のアカウントが表示されます。";
+"nav.accounts.none" = "接続中のアカウントはありません。";
+"nav.accounts.connected" = "接続済み";
+"nav.accounts.needsReconnect" = "再接続が必要";
+"assistant.pane.approvals" = "承認";
+"assistant.pane.commitments" = "約束";
+"assistant.pane.briefing" = "ブリーフィング";
+"mail.lane.all" = "すべて";
+"mail.lane.a11y" = "レーンで絞り込む";
+"mail.lane.filter" = "メールのフィルター";
+"mail.lane.showSilenced" = "Silent のメールを表示";
+"today.signedOut.title" = "ログインすると今日の予定が表示されます";
+"today.signedOut.detail" = "ログインすると Klorn がメールとカレンダーを整理します。";
+"today.signingIn.title" = "ログインを完了してください";
+"today.signingIn.detail" = "ブラウザでログインを完了すると、このウィンドウが更新されます。";
+"today.failed.title" = "メールを読み込めませんでした";
+"today.retry" = "再試行";
+"today.clear.title" = "対応待ちのメールはありません";
+"today.clear.detail" = "新しいメールは Klorn が仕分け次第ここに表示されます。";
+"today.lane.more" = "メールであと %d件";
+"today.header.lane" = "%2$@ %1$d";
+"today.waiting.one" = "メールで1件待機中";
+"today.waiting.many" = "メールで%d件待機中";
+"today.lane.push.older" = "以前の%@メールを見る";
+"today.row.a11y" = "%1$@: %2$@";
+"today.open" = "開く";
+"today.calendar.empty" = "今日の予定はありません。";
+"today.assistant.noBriefing" = "今日のブリーフィングはまだありません。";
+"today.approvals.waiting" = "承認待ち %d件";
+"today.approvals.none" = "承認待ちはありません。";
+"today.ask.a11y" = "アシスタントに質問";
+"today.signIn.restart" = "最初からやり直す";
+"a11y.position" = "%2$d個中 %1$d番目";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Googleで続ける";
+"state.signedOut.title" = "Klornにサインイン";
+"state.offline.title" = "オフラインです";
+"state.offline.detail" = "Klornのサーバーに接続できません。接続を確認して、もう一度お試しください。";
+"banner.offline" = "オフラインです。最後に同期したときのメールを表示しています。";
+"banner.stale" = "更新できませんでした。最後に同期したときのメールを表示しています。";
+"error.server" = "サーバーエラー（%d）。";
+"error.network" = "ネットワークエラーです。接続を確認してください。";
+"onboarding.windowTitle" = "Klornへようこそ";
+"onboarding.value" = "すべてのメールとカレンダーをひとつの場所に。メールは%dつのレーンに振り分けられます。";
+"onboarding.lane.push" = "今すぐ知らせます";
+"onboarding.lane.meeting" = "日程調整。カレンダーと照合します";
+"onboarding.lane.queue" = "今日読む価値のあるメール";
+"onboarding.lane.info" = "領収書やお知らせ。保管のみ";
+"onboarding.lane.silent" = "保管し、表示しません";
+"onboarding.lanes.note" = "レーンはメールを分類するだけです。メールに対して何も実行しません。";
+"onboarding.privacy" = "Klornは分類のためにメールを読みます。それ以上に何をしてよいかは、あなたが決めます。";
+"error.unreachable" = "Klornのサーバーに接続できません。";
+"banner.dismiss.a11y" = "メッセージを閉じる";
+"assistant.starter.1" = "今日いちばん大事なメールは？";
+"assistant.starter.2" = "未返信のうち急ぎのものだけ教えて";
+"assistant.starter.3" = "今週のミーティングの準備をまとめて";
+"assistant.message.user.a11y" = "あなた: %@";
+"assistant.message.failure.a11y" = "エラー: %@";
+"assistant.message.reply.a11y" = "Klornの返答: %@";
+
+/* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
+"prefs.section.driveImport" = "Klorn ドライブ";
+"menu.importToDrive" = "Klorn ドライブに読み込む…";
+"driveImport.detail" = "このMacで選んだファイルやフォルダをKlorn ドライブにアップロードします。iCloud Driveや、クラウドアプリがこのMacに置いているフォルダからも選べます。選んだものだけが一度だけアップロードされ、Klornがフォルダを監視することはありません。";
+"driveImport.button" = "ファイルを読み込む…";
+"driveImport.cancel" = "キャンセル";
+"driveImport.clear" = "消去";
+"driveImport.preparing" = "準備中…";
+"driveImport.progress" = "%2$d件中%1$d件をアップロード中";
+"driveImport.usage" = "%2$@中%1$@を使用";
+"driveImport.summary.all" = "%d件をアップロードしました";
+"driveImport.summary" = "%1$d件をアップロード、%2$d件は未アップロード";
+"driveImport.cancelled" = "読み込みをキャンセルしました。";
+"driveImport.more" = "ほか%d件";
+"driveImport.cap.files" = "1回の上限である%d件のファイルで止めました。";
+"driveImport.cap.folders" = "1回の上限である%d個のフォルダで止めました。";
+"driveImport.cap.depth" = "%d階層より深いフォルダは除外しました。";
+"driveImport.cap.bytes" = "1回の上限である%d GBで止めました。";
+"driveImport.cap.examined" = "1回の上限である%d個の項目を調べたところで止めました。";
+"driveImport.panel.prompt" = "読み込む";
+"driveImport.panel.message" = "Klorn ドライブにアップロードするファイルやフォルダを選んでください。選んだものだけがアップロードされます。";
+"driveImport.error.unavailable" = "Klorn ドライブは利用できません。";
+"driveImport.error.signedOut" = "読み込むにはもう一度サインインしてください。";
+"driveImport.error.notConfigured" = "Klorn ドライブへのアップロードはまだ利用できません。";
+"driveImport.error.full" = "Klorn ドライブがいっぱいです。";
+"driveImport.error.purging" = "Klornのデータを削除しています。しばらくしてからもう一度お試しください。";
+"driveImport.error.tooLarge" = "%d MBを超えています";
+"driveImport.error.rateLimited" = "一度にアップロードしすぎています。1分後にもう一度お試しください。";
+"driveImport.error.malformed" = "アップロードが完全に届きませんでした。もう一度お試しください。";
+"driveImport.error.invalidName" = "この名前はKlorn ドライブでは使えません。";
+"driveImport.error.folderMissing" = "このファイルを入れるフォルダを作成できませんでした。";
+"driveImport.error.storage" = "ファイルストレージを利用できません。しばらくしてからもう一度お試しください。";
+"driveImport.error.offline" = "Klornに接続できませんでした。";
+"driveImport.error.notDownloaded" = "このMacにダウンロードできませんでした。Finderでダウンロードしてから、もう一度お試しください。";
+"driveImport.error.unreadable" = "Klornはこのファイルを読み取れません。";
+"driveImport.error.changed" = "読み取り中にファイルが変更されました。もう一度お試しください。";
+"driveImport.error.unsupported" = "単一のファイルではありません（リンク、アプリ、パッケージ）";
+"driveImport.error.cancelled" = "キャンセル済み";
+"driveImport.error.generic" = "このファイルをアップロードできませんでした。";
+
+/* Files and Teams free-time (productization plan P12; strings mirror the web) */
+"nav.files" = "ファイル";
+"files.subtitle" = "接続中のすべてのソースのファイル。ここでは閲覧のみです。";
+"files.search.label" = "ファイルを検索";
+"files.search.placeholder" = "ファイル名で検索";
+"files.loading" = "ファイルを読み込み中";
+"files.loadingMore" = "読み込み中…";
+"files.loadMore" = "さらに表示";
+"files.error" = "ファイルを読み込めませんでした。";
+"files.empty.title" = "ファイルはまだありません";
+"files.empty.body" = "接続したドライブのファイルは、索引が作成されるとここに表示されます。";
+"files.noMatch.title" = "一致するファイルはありません";
+"files.noMatch.body" = "別の名前で試してください。";
+"files.folder" = "フォルダ";
+"files.openFolder" = "フォルダ %@ を開く";
+"files.download.label" = "%@ をダウンロード";
+"files.download.preparing" = "ダウンロードを準備中…";
+"files.download.error" = "%@ をダウンロードできませんでした。もう一度お試しください。";
+"files.download.gone" = "%@ はドライブにありません。";
+"files.download.busy" = "ダウンロードが多すぎます。1分後にもう一度お試しください。";
+"files.trail.label" = "フォルダの場所";
+"files.trail.all" = "すべてのファイル";
+"files.folderEmpty.title" = "このフォルダは空です";
+"files.folderEmpty.body" = "このフォルダに入れたファイルがここに表示されます。";
+"today.files.title" = "最近のファイル";
+"today.files.open" = "ファイルを開く";
+"today.files.none" = "ファイルはまだありません。";
+"today.freeTime.title" = "チーム";
+"today.freeTime.team" = "チーム";
+"today.freeTime.find" = "全員が空いているのはいつ？";
+"today.freeTime.finding" = "カレンダーを確認中…";
+"today.freeTime.error" = "チームのカレンダーを確認できませんでした。";
+"today.freeTime.none" = "今後%d日間に全員の空き時間はありません。";
+"today.freeTime.unknown" = "カレンダーが見えないため空きとして扱っていないメンバー: %@";
+"today.freeTime.selfOnly" = "まだ他のメンバーのカレンダーが見えないため、以下はあなたの空き時間だけです。";
+"today.freeTime.selfOnlyList" = "あなたの空き時間";
+"today.freeTime.teamList" = "確認できた全員の空き時間";
+"today.freeTime.stale" = "この時間は最新ではない可能性があります。";
+"today.freeTime.recheck" = "もう一度確認";
+"files.opensBrowser" = "ブラウザで開きます";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "レーンを移動";
+"error.timeout" = "サーバーの応答に時間がかかりすぎています。もう一度お試しください。";
+"auth.failed.nonce" = "サインインを開始するために Klorn に接続できませんでした。接続を確認してもう一度お試しください。";
+"auth.failed.invalidNonce" = "サインインのセッションを確認できませんでした。もう一度お試しください。";
+"auth.failed.expired" = "サインインに時間がかかりすぎて期限切れになりました。もう一度お試しください。";
+"auth.failed.timeout" = "ブラウザの応答待ちでタイムアウトしました。ブラウザでサインインを済ませてから、もう一度お試しください。";
+"auth.failed.cancelled" = "サインインはキャンセルされました。";
+"proposals.approveSend" = "承認して送信";
+"proposals.sendsNow" = "すぐに送信されます。送信したメールは取り消せません。";
+"proposals.runsNow" = "承認するとすぐに実行されます。";
+"tool.label.send_email" = "メールを送信";
+"tool.label.draft_reply" = "返信の下書き";
+"tool.label.reply_to_email" = "メールに返信";
+"tool.label.archive_email" = "メールをアーカイブ";
+"tool.label.delete_email" = "メールを削除";
+"tool.label.mark_read" = "既読にする";
+"tool.label.create_event" = "予定を作成";
+"tool.label.delete_event" = "予定を削除";
+"tool.label.schedule_meeting" = "会議を設定";
+"tool.label.create_contact" = "連絡先を追加";
+"tool.label.update_contact" = "連絡先を更新";
+"tool.label.delete_contact" = "連絡先を削除";
+"tool.label.create_note" = "ノートを作成";
+"tool.label.delete_note" = "ノートを削除";
+"tool.label.create_task" = "タスクを作成";
+"tool.label.delete_task" = "タスクを削除";
+"tool.label.record_skill" = "スキルを保存";
+"tool.label.execute_skill" = "スキルを実行";
+"tool.label.classify_emails" = "メールをレーンに分類";
+"tool.label.unknown" = "アクション";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "Proにアップグレード";
+"plan.upgrade.a11yHint" = "ブラウザで請求ページを開きます。";
+"proposals.needsPro" = "承認と却下にはKlorn Proが必要です。";
+"chat.cap.free" = "本日の無料AI利用枠を使い切りました。00:00 UTCにリセットされます。";
+"chat.cap.daily" = "本日のAI利用枠を使い切りました。00:00 UTCにリセットされます。";
+"chat.send.failed" = "Klornに接続できませんでした — %@";
+"chat.event.failed" = "予定を作成できませんでした — %@";
+"commitments.needsPro" = "約束の管理にはKlorn Proが必要です。";

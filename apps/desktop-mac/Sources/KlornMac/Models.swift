@@ -1,10 +1,11 @@
 import Foundation
 
-/// The firewall lane model — PUSH / MEETING / QUEUE / INFO / SILENT
-/// (ontology v2, docs/design/tier-ontology-v2.md), plus retired AUTO for rows
-/// written before the flip. TIER_V2_ENABLED has been default-ON server-side
-/// since 2026-08-18, so the classifier emits the five live lanes and never
-/// AUTO; the case stays so old rows still decode and render.
+/// The firewall lane model — exactly five lanes: PUSH / MEETING / QUEUE /
+/// INFO / SILENT (ontology v2, docs/design/tier-ontology-v2.md,
+/// docs/product-vocabulary.md). `AUTO` and `CALL` are retired v1 values and
+/// never render: a legacy "AUTO" row decodes as .queue (what the v2 flip
+/// backfilled AUTO rows to — QUEUE + autoEligible) and the server already
+/// folds "CALL" into PUSH via normalizeTier.
 ///
 /// Any lane string this build doesn't know decodes as .queue — a server ahead
 /// of the client must never crash or blank it (never a decode throw). See
@@ -16,7 +17,6 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
     case queue = "QUEUE"
     case info = "INFO"
     case silent = "SILENT"
-    case auto = "AUTO"
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -26,25 +26,19 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
     var id: String { rawValue }
 
     /// Display order: loudest first (what interrupts you), quietest last.
-    /// Callers that render one row per tier hide the v2 lanes (meeting/info)
-    /// while their counts are zero — see `visibleOrder(counts:)` — so a
-    /// flag-off server renders the same four rows as before.
-    static let displayOrder: [Tier] = [.push, .meeting, .queue, .info, .silent, .auto]
+    static let displayOrder: [Tier] = [.push, .meeting, .queue, .info, .silent]
 
-    /// What the first-run guide teaches: the five live v2 lanes. AUTO is
-    /// legacy-only after the 2026-08-18 flip (existing rows render; the
-    /// classifier never emits it), so the guide no longer introduces it.
-    static let coreOrder: [Tier] = [.push, .meeting, .queue, .info, .silent]
+    /// What the first-run guide teaches: the five live lanes.
+    static let coreOrder: [Tier] = displayOrder
 
     /// Whether this tier existed before ontology v2. Pure for the harness.
     var isV2Lane: Bool { self == .meeting || self == .info }
 
-    /// Rows worth drawing: the five live v2 lanes ALWAYS (the sidebar is the
+    /// Rows worth drawing: the five live lanes ALWAYS (the sidebar is the
     /// classification scheme itself — a zero-count Meeting lane is
-    /// information, founder 2026-08-19); legacy AUTO only while old rows
-    /// remain (the v2 classifier never emits it).
+    /// information, founder 2026-08-19).
     static func visibleOrder(counts: (Tier) -> Int) -> [Tier] {
-        displayOrder.filter { $0 != .auto || counts($0) > 0 }
+        displayOrder
     }
 
     /// The full sidebar's two-level presentation (founder 2026-08-20: nine
@@ -52,8 +46,8 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
     /// default VIEW earns its rows). Action lanes stay primary: PUSH/QUEUE
     /// always, MEETING only while it holds items (it notifies on arrival, so
     /// an empty row teaches nothing). INFO/SILENT — mail Klorn already filed —
-    /// collapse into one "filed" disclosure row; legacy AUTO joins them only
-    /// while old rows remain. Every lane stays one click away.
+    /// collapse into one "filed" disclosure row. Every lane stays one click
+    /// away.
     /// Pure for the harness.
     struct SidebarLanes: Equatable {
         let primary: [Tier]
@@ -65,8 +59,7 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
         var primary: [Tier] = [.push]
         if counts(.meeting) > 0 { primary.append(.meeting) }
         primary.append(.queue)
-        var filed: [Tier] = [.info, .silent]
-        if counts(.auto) > 0 { filed.append(.auto) }
+        let filed: [Tier] = [.info, .silent]
         return SidebarLanes(
             primary: primary,
             filed: filed,
@@ -80,7 +73,6 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
         case .queue: "Queue"
         case .info: "Info"
         case .silent: "Silent"
-        case .auto: "Auto"
         }
     }
 }
@@ -110,10 +102,65 @@ enum RowSignal: Sendable, Hashable {
         }
     }
 
-    enum CodingKeysImpl: String, CodingKey { case kind, category, count }
+    enum CodingKeysImpl: String, CodingKey { case kind, category, count, byUser }
+}
+
+/// The categories a user may pin on a sender (mirrors USER_LABEL_CATEGORIES
+/// in the API's sender-labels.ts): the relationship / function words, not
+/// Gmail's own tabs (social / updates / forums stay Gmail's call).
+let userLabelCategories = ["internal", "customer", "investor", "system", "billing", "promotions"]
+
+/// The bare address in a From header ("Sarah Kim <sarah@acme.com>" →
+/// "sarah@acme.com", lowercase); nil when there is none. Pure.
+func mailAddress(in from: String?) -> String? {
+    guard let from else { return nil }
+    let trimmed = from.trimmingCharacters(in: .whitespaces)
+    var candidate = trimmed
+    if trimmed.hasSuffix(">"), let open = trimmed.lastIndex(of: "<") {
+        candidate = String(trimmed[trimmed.index(after: open)..<trimmed.index(before: trimmed.endIndex)])
+    }
+    let address = candidate.trimmingCharacters(in: .whitespaces).lowercased()
+    guard let at = address.firstIndex(of: "@"), at != address.startIndex,
+          address[address.index(after: at)...].contains("."),
+          !address.contains(" ")
+    else { return nil }
+    return address
+}
+
+/// The domain of an address ("sarah@acme.com" → "acme.com"). Pure.
+func mailDomain(of address: String) -> String? {
+    guard let at = address.lastIndex(of: "@") else { return nil }
+    let domain = String(address[address.index(after: at)...])
+    return domain.isEmpty ? nil : domain
 }
 
 /// Email enrichment for a firewall row (best-effort; fields may be nil).
+/// The connected account a mail arrived on (`email.source` on the firewall
+/// wire). `provider` stays a string: one this build does not know draws the
+/// generic badge instead of failing the decode.
+struct MailSource: Codable, Sendable, Hashable {
+    let provider: String
+    /// The linked inbox account id; nil = the primary account.
+    let accountId: String?
+    /// The account's address.
+    let label: String
+
+    enum CodingKeys: String, CodingKey { case provider, accountId, label }
+
+    init(provider: String, accountId: String?, label: String) {
+        self.provider = provider
+        self.accountId = accountId
+        self.label = label
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try c.decode(String.self, forKey: .provider)
+        accountId = try? c.decodeIfPresent(String.self, forKey: .accountId)
+        label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+    }
+}
+
 struct EmailContext: Codable, Sendable, Hashable {
     let emailDbId: String
     let subject: String?
@@ -126,9 +173,30 @@ struct EmailContext: Codable, Sendable, Hashable {
     /// See RowSignal. Optional + failable: absent on older servers, and an
     /// unknown shape must never fail the whole queue decode.
     let signal: RowSignal?
+    /// True when `signal` is the USER's own correction (a sender label) —
+    /// the chip menu offers "clear" instead of a fresh pick. Absent = derived.
+    let signalByUser: Bool
+    /// The reply axis: "needsReply" (judged, no reply sent through Klorn) or
+    /// "replied" (the user answered through Klorn — recorded). Nil = no
+    /// claim, or an older server.
+    let replyState: String?
+    /// A reply Klorn drafted ahead of time is waiting for this mail
+    /// (proactive drafts — server flag, default off). False on older servers.
+    let draftReady: Bool
+    /// The account the mail is on. Nil = the server makes no claim (an older
+    /// server, a removed account) or sent a shape this build cannot read.
+    let source: MailSource?
+    /// The mail's read flag; nil = no claim, and the row reserves no dot.
+    let unread: Bool?
+    /// The mail carries an attached file; nil = no claim.
+    let hasAttachment: Bool?
+    /// Messages in the mail's thread; the row's chip shows from 2. nil = no
+    /// claim (the server does not send it yet, or an older server).
+    let threadCount: Int?
 
     enum CodingKeys: String, CodingKey {
-        case emailDbId, subject, from, snippet, receivedAt, signal
+        case emailDbId, subject, from, snippet, receivedAt, signal, replyState, draftReady
+        case source, unread, hasAttachment, threadCount
     }
 
     init(from decoder: Decoder) throws {
@@ -138,12 +206,21 @@ struct EmailContext: Codable, Sendable, Hashable {
         from = try c.decodeIfPresent(String.self, forKey: .from)
         snippet = try c.decodeIfPresent(String.self, forKey: .snippet)
         receivedAt = try c.decodeIfPresent(String.self, forKey: .receivedAt)
+        replyState = try? c.decodeIfPresent(String.self, forKey: .replyState)
+        draftReady = (try? c.decodeIfPresent(Bool.self, forKey: .draftReady)) ?? false
+        // Tolerant like the rest: a wrong shape is "no claim", never a failed queue.
+        source = try? c.decodeIfPresent(MailSource.self, forKey: .source)
+        unread = try? c.decodeIfPresent(Bool.self, forKey: .unread)
+        hasAttachment = try? c.decodeIfPresent(Bool.self, forKey: .hasAttachment)
+        threadCount = try? c.decodeIfPresent(Int.self, forKey: .threadCount)
         if let nested = try? c.nestedContainer(
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
             signal = RowSignal(from: nested)
+            signalByUser = (try? nested.decode(Bool.self, forKey: .byUser)) ?? false
         } else {
             signal = nil
+            signalByUser = false
         }
     }
 
@@ -160,7 +237,10 @@ struct EmailContext: Codable, Sendable, Hashable {
 
     init(
         emailDbId: String, subject: String?, from: String?, snippet: String?,
-        receivedAt: String?, signal: RowSignal? = nil
+        receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false,
+        replyState: String? = nil, draftReady: Bool = false,
+        source: MailSource? = nil, unread: Bool? = nil, hasAttachment: Bool? = nil,
+        threadCount: Int? = nil
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -168,6 +248,13 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.snippet = snippet
         self.receivedAt = receivedAt
         self.signal = signal
+        self.signalByUser = signalByUser
+        self.replyState = replyState
+        self.draftReady = draftReady
+        self.source = source
+        self.unread = unread
+        self.hasAttachment = hasAttachment
+        self.threadCount = threadCount
     }
 }
 
@@ -191,11 +278,12 @@ struct FirewallItem: Codable, Sendable, Identifiable, Hashable {
 
 /// Per-tier open counts (the daily receipt header). The v2 lanes decode as
 /// optional so a v1 server (no MEETING/INFO keys) still parses; absent = 0.
+/// A retired "AUTO" count is ignored here; FirewallResponse folds it into
+/// QUEUE together with the AUTO list it counts (see its decoder).
 struct FirewallSummary: Codable, Sendable, Hashable {
     let silent: Int
     let queue: Int
     let push: Int
-    let auto: Int
     let meeting: Int?
     let info: Int?
     let total: Int
@@ -204,7 +292,6 @@ struct FirewallSummary: Codable, Sendable, Hashable {
         case silent = "SILENT"
         case queue = "QUEUE"
         case push = "PUSH"
-        case auto = "AUTO"
         case meeting = "MEETING"
         case info = "INFO"
         case total
@@ -217,15 +304,30 @@ struct FirewallSummary: Codable, Sendable, Hashable {
         case .queue: queue
         case .info: info ?? 0
         case .silent: silent
-        case .auto: auto
         }
     }
 }
 
 /// GET /api/inbox/firewall — open AttentionItems grouped by tier.
+/// Today's "Needs you now" window (founder decision, LOCKED 2026-10-23):
+/// which PUSH cards Today lists — mail received in the last `windowHours`,
+/// decided on the server (packages/api/src/judge/today-push-window.ts). Mail's
+/// lanes are not narrowed by it. Absent from older servers.
+struct TodayPushWindow: Codable, Sendable, Equatable {
+    let windowHours: Int
+    /// ISO cutoff: the earliest received time inside the window.
+    let since: String
+    let ids: [String]
+
+    func removing(_ removed: Set<String>) -> TodayPushWindow {
+        TodayPushWindow(windowHours: windowHours, since: since, ids: ids.filter { !removed.contains($0) })
+    }
+}
+
 struct FirewallResponse: Codable, Sendable {
     let tiers: [String: [FirewallItem]]
     let summary: FirewallSummary
+    var todayPush: TodayPushWindow? = nil
 
     func items(for tier: Tier) -> [FirewallItem] {
         tiers[tier.rawValue] ?? []
@@ -279,11 +381,13 @@ struct FirewallResponse: Codable, Sendable {
             silent: shifted(.silent, self.summary.silent),
             queue: shifted(.queue, self.summary.queue),
             push: shifted(.push, self.summary.push),
-            auto: shifted(.auto, self.summary.auto),
             meeting: shifted(.meeting, self.summary.meeting ?? 0),
             info: shifted(.info, self.summary.info ?? 0),
             total: self.summary.total)
-        return FirewallResponse(tiers: newTiers, summary: summary)
+        // A card moved out of PUSH leaves Today's window; one moved in waits
+        // for the next poll, where the server decides whether it belongs.
+        return FirewallResponse(
+            tiers: newTiers, summary: summary, todayPush: todayPush?.removing([id]))
     }
 
     /// A copy with the given item ids removed from every tier and the summary
@@ -302,19 +406,53 @@ struct FirewallResponse: Codable, Sendable {
             }
         }
         // Broken into locals: the compiler timed out type-checking the single
-        // six-argument max() expression after the v2 fields joined.
+        // multi-argument max() expression after the v2 fields joined.
         let removedTotal = removed.values.reduce(0, +)
         let newSilent = max(0, self.summary.silent - (removed[.silent] ?? 0))
         let newQueue = max(0, self.summary.queue - (removed[.queue] ?? 0))
         let newPush = max(0, self.summary.push - (removed[.push] ?? 0))
-        let newAuto = max(0, self.summary.auto - (removed[.auto] ?? 0))
         let newMeeting = max(0, (self.summary.meeting ?? 0) - (removed[.meeting] ?? 0))
         let newInfo = max(0, (self.summary.info ?? 0) - (removed[.info] ?? 0))
         let summary = FirewallSummary(
-            silent: newSilent, queue: newQueue, push: newPush, auto: newAuto,
+            silent: newSilent, queue: newQueue, push: newPush,
             meeting: newMeeting, info: newInfo,
             total: max(0, self.summary.total - removedTotal))
-        return FirewallResponse(tiers: newTiers, summary: summary)
+        return FirewallResponse(
+            tiers: newTiers, summary: summary, todayPush: todayPush?.removing(ids))
+    }
+}
+
+extension FirewallResponse {
+    private enum Keys: String, CodingKey { case tiers, summary, todayPush }
+    private struct LegacyAutoCount: Decodable {
+        let count: Int?
+        enum CodingKeys: String, CodingKey { case count = "AUTO" }
+    }
+
+    /// Folds a retired "AUTO" list into QUEUE (its items already decode with
+    /// tier .queue), so no retired lane key survives past the decoder.
+    ///
+    /// The server's summary counts each list separately (QUEUE =
+    /// tiers.QUEUE.length, AUTO = tiers.AUTO.length — routes/firewall.ts), so
+    /// the AUTO count is added to QUEUE only when its list actually moved
+    /// into QUEUE here. A stray AUTO count with an empty list is dropped: those
+    /// rows, if any, are already inside QUEUE and must not count twice.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        var tiers = try c.decode([String: [FirewallItem]].self, forKey: .tiers)
+        let summary = try c.decode(FirewallSummary.self, forKey: .summary)
+        // A malformed window is no window (every PUSH card shows), never a failed queue.
+        let todayPush = try? c.decodeIfPresent(TodayPushWindow.self, forKey: .todayPush)
+        guard let legacy = tiers.removeValue(forKey: "AUTO"), !legacy.isEmpty else {
+            self.init(tiers: tiers, summary: summary, todayPush: todayPush)
+            return
+        }
+        tiers[Tier.queue.rawValue] = (tiers[Tier.queue.rawValue] ?? []) + legacy
+        let legacyCount = try c.decode(LegacyAutoCount.self, forKey: .summary).count ?? legacy.count
+        self.init(tiers: tiers, summary: FirewallSummary(
+            silent: summary.silent, queue: summary.queue + legacyCount, push: summary.push,
+            meeting: summary.meeting, info: summary.info, total: summary.total),
+            todayPush: todayPush)
     }
 }
 
@@ -345,7 +483,14 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let keyPoints: [String]?
     let actionItems: [String]?
     let needsReply: Bool?
+    /// Classifier code (e.g. "action_items_present") — never shown as text.
     let needsReplyReason: String?
+    /// The reason as a sentence in the UI language (`lang=` on the request).
+    /// Absent on older servers; null when the code has no reader line.
+    let needsReplyReasonText: String?
+    /// A reply Klorn drafted ahead of time for this mail (proactive drafts).
+    /// Absent on older servers, null when none exists or the mail was answered.
+    let proactiveDraft: String?
     /// Learned engagement: how often the user has replied to/written this sender.
     /// null (absent) for strangers — only present when there's real engagement.
     let engagement: Engagement?
@@ -387,6 +532,16 @@ struct EmailDetail: Codable, Sendable, Identifiable {
         var accessibilityLabel: String {
             showsImportance ? L("engagement.combined.a11y", replyCountLabel, importanceLabel) : replyCountLabel
         }
+    }
+
+    /// The ahead-of-time draft worth opening the composer with — nil when the
+    /// server sent none or only whitespace, so the composer falls back to
+    /// drafting on demand.
+    var preparedDraft: String? {
+        guard let draft = proactiveDraft?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !draft.isEmpty
+        else { return nil }
+        return draft
     }
 
     /// Body, falling back to the snippet when the body is empty (as the web does).
@@ -510,27 +665,17 @@ struct PendingActionsResponse: Codable, Sendable {
         let reasoning: String?
         let createdAt: String?
 
-        /// "Send email" rather than "send_email" — the tool name is an internal
-        /// identifier and reads like one. Unknown tools degrade to a
-        /// de-underscored form instead of being hidden: an action the user
-        /// can't identify is still an action they must be able to decline.
-        var title: String {
-            toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
-        }
+        /// "메일 보내기" / "Send email" rather than "send_email" — the tool
+        /// name is an internal identifier. Localized from the web's own
+        /// `tool.label.*` map (`ToolLabels`).
+        var title: String { ToolLabels.title(for: toolName) }
+
+        /// Approving this sends mail, which can't be taken back (the web's
+        /// MAIL_SENDING_TOOLS).
+        var sendsMail: Bool { ToolLabels.mailSending.contains(toolName) }
     }
 
     let actions: [Action]
-}
-
-/// One glanceable line for the TODAY column — "2 done · 1 awaiting approval".
-/// nil when the agent did nothing today (the block hides entirely; an empty
-/// receipt is noise, not signal). Pure.
-func agentActivityLine(_ totals: TodayActions.Totals) -> String? {
-    var parts: [String] = []
-    if totals.executed > 0 { parts.append("\(totals.executed) done") }
-    if totals.pending > 0 { parts.append("\(totals.pending) awaiting approval") }
-    if totals.rejected > 0 { parts.append("\(totals.rejected) declined") }
-    return parts.isEmpty ? nil : parts.joined(separator: " · ")
 }
 
 // MARK: - Assistant (chat)
@@ -538,6 +683,52 @@ func agentActivityLine(_ totals: TodayActions.Totals) -> String? {
 /// POST /api/chat/conversations → the conversation the desktop lazily creates.
 struct ChatConversation: Codable, Sendable {
     let id: String
+}
+
+/// `GET /api/chat/conversations`, newest first.
+struct ChatConversationList: Decodable, Sendable {
+    let conversations: [ChatConversation]
+}
+
+/// `GET /api/chat/conversations/:id/messages`, oldest first. Only the user's
+/// and the assistant's text turns become bubbles; tool and system rows, and
+/// empty contents, are not part of the visible thread.
+struct ChatHistory: Decodable, Sendable {
+    struct Item: Decodable, Sendable {
+        /// The stored turn's `metadata`. Only the cap code is read: a turn the
+        /// daily cost cap stopped was stored with the server's English reply.
+        struct Metadata: Decodable, Sendable { let turnErrorCode: String? }
+
+        let role: String
+        let content: String?
+        let metadata: Metadata?
+
+        private enum CodingKeys: String, CodingKey { case role, content, metadata }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            role = try container.decode(String.self, forKey: .role)
+            content = try container.decodeIfPresent(String.self, forKey: .content)
+            // Free-form JSON server-side: a shape this app does not expect must
+            // not cost the whole thread.
+            metadata = try? container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        }
+
+        var bubble: ChatMessage? {
+            if role.uppercased() == "ASSISTANT", let cap = ChatCapNotice(errorCode: metadata?.turnErrorCode) {
+                return ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)
+            }
+            guard let text = content?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return nil }
+            // The server's enum is USER / ASSISTANT / SYSTEM.
+            switch role.uppercased() {
+            case "USER": return ChatMessage(role: .user, text: text)
+            case "ASSISTANT": return ChatMessage(role: .assistant, text: text)
+            default: return nil
+            }
+        }
+    }
+    let messages: [Item]
 }
 
 /// A calendar event the agent drafted from the conversation — the user
@@ -565,6 +756,9 @@ struct ChatTurnResponse: Codable, Sendable {
     let reply: String
     let error: String?
     let eventDraft: EventDraft?
+    /// "DAILY_COST_CAP_FREE" / "DAILY_COST_CAP" when the daily AI cost cap
+    /// stopped the turn (`ChatCapNotice`). Absent from older servers.
+    let errorCode: String?
 }
 
 /// One bubble in the desktop's in-memory thread. An assistant bubble may carry
@@ -575,17 +769,32 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     let role: Role
     let text: String
     var eventDraft: EventDraft?
+    /// A plan refusal: the bubble carries the upgrade link-out.
+    let offersUpgrade: Bool
 
-    init(role: Role, text: String, eventDraft: EventDraft? = nil) {
+    init(role: Role, text: String, eventDraft: EventDraft? = nil, offersUpgrade: Bool = false) {
         self.role = role
         self.text = text
         self.eventDraft = eventDraft
+        self.offersUpgrade = offersUpgrade
     }
+}
+
+/// The bubbles one agent turn adds. At the daily cost cap that is a single
+/// localized line (the server's reply and error are English and say the same
+/// thing twice); otherwise the reply, plus the server's error when it sent one.
+func chatTurnBubbles(_ turn: ChatTurnResponse) -> [ChatMessage] {
+    if let cap = ChatCapNotice(errorCode: turn.errorCode) {
+        return [ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)]
+    }
+    let reply = ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft)
+    guard let error = turn.error else { return [reply] }
+    return [reply, ChatMessage(role: .failure, text: error)]
 }
 
 /// "Title · 15:00–16:00 · Location" — one-line confirm-card label. Time falls
 /// away on malformed ISO (never a crash); location only when present. Pure.
-func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = .current) -> String {
+func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = DisplayTimeZone.calendar) -> String {
     var parts = [draft.title]
     let time = eventTimeLabel(
         startISO: draft.startTime, endISO: draft.endTime, allDay: false, calendar: calendar)
@@ -700,6 +909,10 @@ struct InboxOption: Codable, Sendable, Identifiable, Hashable {
     /// "GOOGLE" | "NAVER" | … — the server sends it, older builds ignored it.
     /// Optional so a response without the field still decodes.
     let provider: String?
+    /// "work" | "personal" | "mixed" — what this mailbox is FOR, declared by
+    /// the user (feeds the analysis prompts). Nil = never answered, or an
+    /// older server. Optional decode keeps both directions compatible.
+    let purpose: String?
 
     /// Selector value ("primary" for the nil-id primary row) — matches the
     /// web InboxSelector's value scheme and the API's `inbox=` param.
@@ -749,22 +962,64 @@ func providerLabel(_ provider: String?) -> String {
 }
 
 /// Whether an IMAP connect form may be submitted: an address that looks like
-/// one, and a non-empty app password. Deliberately permissive on the address
-/// (the server verifies with a real LOGIN) but it must not be blank or carry
-/// a second recipient. Pure for the harness.
+/// one, and an app password within the server's 4…200 characters. Permissive
+/// on the address (the server verifies with a real LOGIN) but it must not be
+/// blank, carry a second recipient, or hold what the server's format refuses
+/// (':' and '\\' never reach a row id; 200 characters at most). Pure.
 func canSubmitImapConnect(email: String, password: String) -> Bool {
     let mail = email.trimmingCharacters(in: .whitespacesAndNewlines)
     let pass = password.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !pass.isEmpty, pass.count >= 4 else { return false }
-    guard !mail.contains(","), !mail.contains(" ") else { return false }
-    let parts = mail.split(separator: "@")
-    guard parts.count == 2, !parts[0].isEmpty, parts[1].contains(".") else { return false }
-    return true
+    guard pass.count >= imapPasswordMin, password.count <= imapFieldMax else { return false }
+    guard mail.count <= imapFieldMax else { return false }
+    let refused: Set<Character> = [",", " ", ":", "\\", "\t", "\n"]
+    guard !mail.contains(where: { refused.contains($0) }) else { return false }
+    let parts = mail.split(separator: "@", omittingEmptySubsequences: false)
+    guard parts.count == 2, !parts[0].isEmpty else { return false }
+    let domain = parts[1]
+    return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".")
 }
+
+/// The server's connect schema bounds (routes/imap-connect.ts connectBodySchema).
+private let imapPasswordMin = 4
+private let imapFieldMax = 200
 
 /// GET /api/email/inboxes response envelope.
 struct InboxesResponse: Codable, Sendable {
     let inboxes: [InboxOption]
+    /// The user's declared company email domains — a sender on one is 회사
+    /// as a recorded fact. Optional decode: an older server omits it.
+    let companyDomains: [String]?
+    /// The user's own words about what matters ("investor mail first") —
+    /// read by the lane judge and the analysis. Optional decode.
+    let priorities: String?
+}
+
+/// Consumer mail providers — never a company, never prefilled as one.
+/// Mirrors PUBLIC_MAIL_DOMAINS in the API's company-domains.ts; the server
+/// re-validates, this list only decides what to SUGGEST.
+let publicMailDomains: Set<String> = [
+    "gmail.com", "googlemail.com", "naver.com", "daum.net", "hanmail.net", "kakao.com",
+    "nate.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com",
+    "yahoo.co.jp", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com",
+    "qq.com", "163.com", "126.com",
+]
+
+/// The account's own domain as the prefill for the company-domain question
+/// — nil for public providers (no guess to offer). Pure.
+func suggestedCompanyDomain(for email: String?) -> String? {
+    guard let email, let at = email.lastIndex(of: "@") else { return nil }
+    let domain = email[email.index(after: at)...].trimmingCharacters(in: .whitespaces).lowercased()
+    guard domain.contains("."), !publicMailDomains.contains(domain) else { return nil }
+    return domain
+}
+
+/// What the user typed in the domains field → the list the API validates.
+/// Splits on commas, whitespace and newlines; the server does the real
+/// validation (hostname shape, public providers, cap). Pure.
+func parseCompanyDomainsInput(_ text: String) -> [String] {
+    text.split(whereSeparator: { $0 == "," || $0.isWhitespace || $0.isNewline })
+        .map { String($0) }
+        .filter { !$0.isEmpty }
 }
 
 /// `inbox=` query value for a mail-list fetch: "all" (or blank) sends nothing —
@@ -787,15 +1042,51 @@ func emailSearchPath(query: String, selectedInbox: String) -> String {
 }
 
 /// Firewall queue path with the optional per-inbox scope: "all" (or blank)
-/// sends nothing — the server treats an absent `inbox=` as every inbox
+/// sends no `inbox=` — the server treats an absent `inbox=` as every inbox
 /// (routes/firewall.ts mirrors routes/email.ts's param). Encoded like
-/// emailSearchPath so hyphenated linked ids survive the round trip. Pure.
-func firewallPath(selected: String) -> String {
-    let base = "/api/inbox/firewall"
-    guard let inbox = inboxQueryParam(selected: selected),
-          let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
-    else { return base }
-    return base + "?inbox=\(enc)"
+/// emailSearchPath so hyphenated linked ids survive the round trip.
+/// `lang` is the app UI language: the server renders template tier reasons in
+/// it instead of the stored notification language. Pure.
+func firewallPath(selected: String, lang: String) -> String {
+    var query = [langQueryItem(lang)]
+    if let inbox = inboxQueryParam(selected: selected),
+       let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+        query.insert("inbox=\(enc)", at: 0)
+    }
+    return "/api/inbox/firewall?" + query.joined(separator: "&")
+}
+
+/// Email detail path. `lang` is the app UI language, so server-composed lines
+/// (the needs-reply reason) match the screen. Pure.
+func emailDetailPath(id: String, lang: String) -> String {
+    "/api/email/\(id)?" + langQueryItem(lang)
+}
+
+/// `lang=<code>` for the reader routes; the code is one of AppLanguage's raw
+/// values, encoded anyway so a malformed one can never break the query.
+func langQueryItem(_ lang: String) -> String {
+    "lang=" + (lang.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "en")
+}
+
+/// Folder listing path with the per-inbox scope. Unlike firewallPath, "all"
+/// is sent EXPLICITLY: a folder's server default is the primary account
+/// (older builds only ever read that), and `inbox=all` is what asks it to
+/// merge every connected account. Pure for testing.
+func mailboxPath(box: MailboxKind, selectedInbox: String, pageToken: String? = nil) -> String {
+    let scope = selectedInbox.isEmpty ? "all" : selectedInbox
+    var query = URLComponents()
+    query.queryItems =
+        [URLQueryItem(name: "inbox", value: scope)]
+        + (pageToken.map { [URLQueryItem(name: "pageToken", value: $0)] } ?? [])
+    return "/api/email/mailbox/\(box.rawValue)?\(query.percentEncodedQuery ?? "")"
+}
+
+/// Single-message follow-ups (open, delete the draft) go back to the account
+/// the row came from. A row from an older server carries no `inbox` and
+/// reads as the primary — the only account that server ever listed.
+func mailboxItemQuery(inbox: String?) -> String {
+    let scope = (inbox ?? "primary").addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+    return "?inbox=\(scope ?? "primary")"
 }
 
 /// `GET /api/ops/readiness` — the per-account truth the app can show the user
@@ -952,7 +1243,7 @@ struct BriefingStructure: Codable, Sendable, Hashable {
     let attention: [Attention]
 }
 
-/// One-line preview of the briefing note for the TODAY column: strip markdown
+/// One-line preview of the briefing note for Today: strip markdown
 /// bold, collapse whitespace/newlines to single spaces, cap length. nil when
 /// there's nothing to show. Pure for testing.
 func briefingPreview(_ content: String?) -> String? {
@@ -976,6 +1267,27 @@ struct CalendarEventWire: Codable, Sendable, Identifiable, Hashable {
     let location: String?
     let meetingLink: String?
     let allDay: Bool
+    /// `true` on a linked calendar's event, a read-only mirror the server refuses
+    /// to edit or delete (409; step C7). Absent on every other row and on an older
+    /// server, so it is optional: a row without it still decodes, and is editable.
+    var readOnly: Bool?
+    /// The linked account's email (`sourceLabel`), on a linked event only.
+    var sourceLabel: String?
+}
+
+/// False for a linked calendar's event: Klorn holds read access there only, and the
+/// next sync would undo an edit or bring a deleted event back. Edit and delete are
+/// not offered (the server answers 409 anyway).
+func calendarEventIsEditable(_ event: CalendarEventWire) -> Bool {
+    event.readOnly != true
+}
+
+/// The small source label beside a read-only event: the linked account's email,
+/// else "Linked". Nil for an editable event, which has no source to call out.
+func calendarEventSourceLabel(_ event: CalendarEventWire) -> String? {
+    guard !calendarEventIsEditable(event) else { return nil }
+    let email = event.sourceLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return email.isEmpty ? L("cal.source.linked") : email
 }
 
 /// GET /api/calendar?days=N → { events } (routes/calendar.ts list). Same wire
@@ -984,60 +1296,13 @@ struct CalendarListResponse: Codable, Sendable {
     let events: [CalendarEventWire]
 }
 
-/// One day of the UPCOMING agenda (tomorrow → +7 days): label + its events.
-struct AgendaDay: Sendable, Identifiable, Hashable {
-    let label: String  // "Tomorrow", then weekday names — unique in a 7-day window
-    let events: [CalendarEventWire]
-    var id: String { label }
-}
-
-/// Group events into the 7 days AFTER today — today is excluded (the TODAY
-/// rows above the section already show it). Days with no events are omitted;
-/// events keep start order; a malformed startTime drops that event, never a
-/// crash. Calendar injectable so the harness pins the boundaries in UTC.
-func upcomingAgenda(
-    now: Date,
-    events: [CalendarEventWire],
-    calendar: Calendar = .current
-) -> [AgendaDay] {
-    let withMillis = ISO8601DateFormatter()
-    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let plain = ISO8601DateFormatter()  // tolerate writers that omit millis
-    guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)),
-          let windowEnd = calendar.date(byAdding: .day, value: 7, to: tomorrow)
-    else { return [] }
-    let dated: [(day: Date, start: Date, event: CalendarEventWire)] = events.compactMap { event in
-        guard let start = withMillis.date(from: event.startTime)
-            ?? plain.date(from: event.startTime),
-            start >= tomorrow, start < windowEnd
-        else { return nil }
-        return (calendar.startOfDay(for: start), start, event)
-    }
-    let groups = Dictionary(grouping: dated, by: \.day)
-    return groups.keys.sorted().map { day in
-        AgendaDay(
-            label: agendaDayLabel(day: day, tomorrow: tomorrow, calendar: calendar),
-            events: groups[day, default: []].sorted { $0.start < $1.start }.map(\.event))
-    }
-}
-
-/// "Tomorrow" for the first agenda day, else the weekday name — unique within
-/// the 7-day window. Pure.
-func agendaDayLabel(day: Date, tomorrow: Date, calendar: Calendar) -> String {
-    if calendar.isDate(day, inSameDayAs: tomorrow) { return L("calendar.tomorrow") }
-    let symbols = calendar.weekdaySymbols
-    let index = calendar.component(.weekday, from: day) - 1
-    guard symbols.indices.contains(index) else { return "" }
-    return symbols[index]
-}
-
 // MARK: - Calendar grid math (real calendar views, 2026-08-26)
 
 /// Local-day bucket key ("2026-08-26"). LOCAL calendar deliberately: an event
 /// at 26일 01:00 KST is a 26일 event to the user even though its UTC instant
 /// is the 25th — bucketing by ISO prefix put events on the wrong day once
 /// already (weekly-report dayKey trap, 2026-08-22).
-func localDayKey(_ date: Date, calendar: Calendar = .current) -> String {
+func localDayKey(_ date: Date, calendar: Calendar = DisplayTimeZone.calendar) -> String {
     let c = calendar.dateComponents([.year, .month, .day], from: date)
     return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
 }
@@ -1047,7 +1312,7 @@ func localDayKey(_ date: Date, calendar: Calendar = .current) -> String {
 /// firstWeekday (Sunday-first in ko/en_US, Monday-first in de/fr). Count is
 /// always a multiple of 7; dates outside the month are included (drawn dim).
 /// Pure for the harness.
-func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Date] {
+func monthGridDays(year: Int, month: Int, calendar: Calendar = DisplayTimeZone.calendar) -> [Date] {
     var comps = DateComponents()
     comps.year = year
     comps.month = month
@@ -1079,22 +1344,165 @@ func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Dat
     return days
 }
 
-/// Events bucketed by local day. A malformed startTime drops that event —
-/// never a crash; a multi-day event buckets on its start day (v1 scope:
-/// spanning bars are a later refinement, stated not hidden).
-func eventsByDay(
-    _ events: [CalendarEventWire], calendar: Calendar = .current
-) -> [String: [CalendarEventWire]] {
+/// The seven dates of the week containing `date`, from the calendar's own
+/// firstWeekday (Sunday-first ko/en_US, Monday-first de/fr). Pure.
+func weekDays(containing date: Date, calendar: Calendar = DisplayTimeZone.calendar) -> [Date] {
+    let weekday = calendar.component(.weekday, from: date)
+    let offset = (weekday - calendar.firstWeekday + 7) % 7
+    guard let start = calendar.date(
+        byAdding: .day, value: -offset, to: calendar.startOfDay(for: date))
+    else { return [] }
+    return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+}
+
+/// A spanning event is drawn on at most this many days — a malformed or
+/// absurd end date must not turn one row into thousands of chips.
+let maxSpannedDays = 60
+
+/// Every day an event covers, start day first (2026-09-10: a multi-day
+/// event used to bucket on its start day only). Timed events span the LOCAL
+/// days of [start, end) — an end exactly at local midnight adds no day.
+/// All-day rows are DATE-based (Google: end exclusive) and are read as UTC
+/// dates, so a KST reader never gets a phantom extra day from the 09:00
+/// local instant. Malformed start → no days (the event is dropped, never a
+/// crash); malformed end → the start day alone.
+func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> [String] {
     let withMillis = ISO8601DateFormatter()
     withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
+    func parse(_ iso: String) -> Date? { withMillis.date(from: iso) ?? plain.date(from: iso) }
+    guard let start = parse(event.startTime) else { return [] }
+    var cal = calendar
+    if event.allDay, let utc = TimeZone(identifier: "UTC") { cal.timeZone = utc }
+    guard let end = parse(event.endTime), end > start else {
+        return [localDayKey(start, calendar: cal)]
+    }
+    var keys: [String] = []
+    var day = cal.startOfDay(for: start)
+    while day < end, keys.count < maxSpannedDays {
+        keys.append(localDayKey(day, calendar: cal))
+        guard let next = cal.date(byAdding: .day, value: 1, to: day) else { break }
+        day = next
+    }
+    return keys
+}
+
+/// The day an event starts on — what a chip on a later day is "continued"
+/// against. nil when the start is malformed.
+func eventStartDayKey(_ event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> String? {
+    eventDayKeys(event, calendar: calendar).first
+}
+
+/// The order a day's events are drawn in: all-day rows first (they frame
+/// the day), then by start time. Stable for equal keys. Pure.
+func sortedForDay(_ events: [CalendarEventWire]) -> [CalendarEventWire] {
+    events.sorted { ($0.allDay ? 0 : 1, $0.startTime) < ($1.allDay ? 0 : 1, $1.startTime) }
+}
+
+/// Events bucketed by day — a spanning event appears under EVERY day it
+/// covers (see eventDayKeys). A malformed startTime drops that event.
+func eventsByDay(
+    _ events: [CalendarEventWire], calendar: Calendar = DisplayTimeZone.calendar
+) -> [String: [CalendarEventWire]] {
     var out: [String: [CalendarEventWire]] = [:]
     for event in events {
-        guard let start = withMillis.date(from: event.startTime)
-            ?? plain.date(from: event.startTime) else { continue }
-        out[localDayKey(start, calendar: calendar), default: []].append(event)
+        for key in eventDayKeys(event, calendar: calendar) {
+            out[key, default: []].append(event)
+        }
     }
     return out
+}
+
+// MARK: - Calendar editing (2026-09-11)
+
+/// What the editor holds. Timed: two instants. All-day: the LOCAL days the
+/// user picked, `end` INCLUSIVE (the last day shown) — the wire's exclusive
+/// end is made in calendarEventPayload.
+struct CalendarEventDraft: Equatable, Sendable {
+    var title: String
+    var allDay: Bool
+    var start: Date
+    var end: Date
+    var location: String
+}
+
+/// POST /api/calendar and PATCH /api/calendar/:id body.
+struct CalendarEventPayload: Encodable, Equatable, Sendable {
+    let title: String
+    let startTime: String
+    let endTime: String
+    let location: String
+    let allDay: Bool
+}
+
+/// Wire body for a draft. Timed → UTC instants. All-day → the picked LOCAL
+/// dates as UTC-midnight ISO with an EXCLUSIVE end (the API and Google read
+/// all-day times as dates off the string): a one-day event on the 24th is
+/// 24T00:00Z … 25T00:00Z. Pure.
+func calendarEventPayload(
+    _ draft: CalendarEventDraft, calendar: Calendar = DisplayTimeZone.calendar
+) -> CalendarEventPayload {
+    let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let location = draft.location.trimmingCharacters(in: .whitespacesAndNewlines)
+    if draft.allDay {
+        let lastDay = calendar.startOfDay(for: max(draft.end, draft.start))
+        let endExclusive = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay
+        return CalendarEventPayload(
+            title: title,
+            startTime: "\(localDayKey(draft.start, calendar: calendar))T00:00:00.000Z",
+            endTime: "\(localDayKey(endExclusive, calendar: calendar))T00:00:00.000Z",
+            location: location, allDay: true)
+    }
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return CalendarEventPayload(
+        title: title, startTime: iso.string(from: draft.start), endTime: iso.string(from: draft.end),
+        location: location, allDay: false)
+}
+
+/// Saveable: a title, and a timed end after the start (all-day: the last
+/// day is not before the first). Pure.
+func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = DisplayTimeZone.calendar) -> Bool {
+    guard !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+    if draft.allDay {
+        return calendar.startOfDay(for: draft.end) >= calendar.startOfDay(for: draft.start)
+    }
+    return draft.end > draft.start
+}
+
+/// A draft from an existing event, for editing. All-day: the wire's UTC
+/// dates become local days, and the exclusive end becomes the inclusive
+/// last day the editor shows. nil when a time is malformed. Pure.
+func calendarDraft(from event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> CalendarEventDraft? {
+    let withMillis = ISO8601DateFormatter()
+    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let plain = ISO8601DateFormatter()
+    func parse(_ iso: String) -> Date? { withMillis.date(from: iso) ?? plain.date(from: iso) }
+    guard let start = parse(event.startTime), let end = parse(event.endTime) else { return nil }
+    if event.allDay, let utcZone = TimeZone(identifier: "UTC") {
+        var utc = calendar
+        utc.timeZone = utcZone
+        let startDay = calendar.date(from: utc.dateComponents([.year, .month, .day], from: start)) ?? start
+        let endExclusive = calendar.date(from: utc.dateComponents([.year, .month, .day], from: end)) ?? end
+        let lastDay = calendar.date(byAdding: .day, value: -1, to: endExclusive) ?? endExclusive
+        return CalendarEventDraft(
+            title: event.title, allDay: true, start: startDay, end: max(lastDay, startDay),
+            location: event.location ?? "")
+    }
+    return CalendarEventDraft(
+        title: event.title, allDay: false, start: start, end: end, location: event.location ?? "")
+}
+
+/// A fresh draft on a day: the next full hour today, 09:00 on any other
+/// day, one hour long. Pure.
+func newCalendarDraft(on day: Date, now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> CalendarEventDraft {
+    var comps = calendar.dateComponents([.year, .month, .day], from: day)
+    comps.hour = calendar.isDate(day, inSameDayAs: now)
+        ? min(calendar.component(.hour, from: now) + 1, 23) : 9
+    comps.minute = 0
+    let start = calendar.date(from: comps) ?? day
+    let end = calendar.date(byAdding: .hour, value: 1, to: start) ?? start
+    return CalendarEventDraft(title: "", allDay: false, start: start, end: end, location: "")
 }
 
 /// GET /api/calendar/today/summary.
@@ -1112,14 +1520,17 @@ func eventTimeLabel(
     startISO: String,
     endISO: String,
     allDay: Bool,
-    calendar: Calendar = .current
+    calendar: Calendar = DisplayTimeZone.calendar
 ) -> String {
     if allDay { return L("calendar.allDay") }
-    let parser = ISO8601DateFormatter()
-    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let start = parser.date(from: startISO), let end = parser.date(from: endISO) else {
-        return ""
-    }
+    // Both ISO shapes: the API's toISOString() carries millis, hand-written
+    // rows (fixtures, older clients) do not — a missing time label on a
+    // timed event is a real information gap, not a style choice.
+    let withMillis = ISO8601DateFormatter()
+    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let plain = ISO8601DateFormatter()
+    func parse(_ iso: String) -> Date? { withMillis.date(from: iso) ?? plain.date(from: iso) }
+    guard let start = parse(startISO), let end = parse(endISO) else { return "" }
     func hhmm(_ date: Date) -> String {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
@@ -1133,11 +1544,14 @@ func eventTimeLabel(
 /// today → clock time, this year → month + day, older → adds the year.
 /// Malformed ISO degrades to an empty string (row shows no time), never a
 /// crash. Calendar + locale injectable so the harness pins the math in UTC.
+/// `relativeDays` (offscreen preview renders only, see `MailClock`) swaps the
+/// past week's month + day for "Yesterday" or the weekday.
 func mailTimeLabel(
     iso: String?,
     now: Date,
-    calendar: Calendar = .current,
-    locale: Locale = L10n.activeLocale
+    calendar: Calendar = DisplayTimeZone.calendar,
+    locale: Locale = L10n.activeLocale,
+    relativeDays: Bool = false
 ) -> String {
     guard let iso else { return "" }
     let withMillis = ISO8601DateFormatter()
@@ -1151,6 +1565,9 @@ func mailTimeLabel(
     formatter.locale = locale
     if calendar.isDate(date, inSameDayAs: now) {
         formatter.setLocalizedDateFormatFromTemplate("HHmm")
+    } else if relativeDays,
+              let day = relativeDayLabel(date, now: now, calendar: calendar, locale: locale) {
+        return day
     } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
     } else {
@@ -1175,6 +1592,8 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
     case customer
     case investor
     case system
+    /// Receipts / invoices / payment notices (the summarize pass's billing).
+    case billing
     // Gmail's tabs.
     case promotions
     case social
@@ -1182,6 +1601,9 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
     case forums
     /// A sender the user has never replied to (and no category claim).
     case firstContact
+    /// The reply axis (2026-09-14): a reply is owed and none went out
+    /// through Klorn. Reads `replyState`, not the relationship signal.
+    case needsReply
 
     var id: String { rawValue }
 
@@ -1192,11 +1614,13 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
         case .customer: L("chip.customer")
         case .investor: L("chip.investor")
         case .system: L("chip.system")
+        case .billing: L("chip.billing")
         case .promotions: L("chip.promotions")
         case .social: L("chip.social")
         case .updates: L("chip.updates")
         case .forums: L("chip.forums")
         case .firstContact: L("chip.first")
+        case .needsReply: L("chip.needsReply")
         }
     }
 
@@ -1207,11 +1631,13 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
         case .customer: "person.crop.circle.badge.checkmark"
         case .investor: "chart.line.uptrend.xyaxis"
         case .system: "gearshape"
+        case .billing: "creditcard"
         case .promotions: "tag"
         case .social: "person.2"
         case .updates: "bell"
         case .forums: "bubble.left.and.bubble.right"
         case .firstContact: "hand.wave"
+        case .needsReply: "arrowshape.turn.up.left"
         }
     }
 
@@ -1219,16 +1645,17 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
     /// row's recorded signal, the same fact the chip renders, so the filter
     /// can never disagree with what the row says about itself. Pure for the
     /// harness.
-    func matches(_ signal: RowSignal?) -> Bool {
+    func matches(_ signal: RowSignal?, replyState: String? = nil) -> Bool {
         switch self {
         case .personal:
             // Anything without a category claim (judge or Gmail).
             if case .category = signal { return false }
             return true
-        case .company, .customer, .investor, .system,
+        case .company, .customer, .investor, .system, .billing,
              .promotions, .social, .updates, .forums:
             return signal == .category(rawValue)
         case .firstContact: return signal == .first
+        case .needsReply: return replyState == "needsReply"
         }
     }
 }
@@ -1238,7 +1665,7 @@ extension FirewallResponse {
     /// filtering share this so the sidebar number always equals what a click
     /// shows (both run over the fetched window, never a separate DB count).
     func items(matching filter: LabelFilter) -> [FirewallItem] {
-        itemsByTime.filter { filter.matches($0.email?.signal) }
+        itemsByTime.filter { filter.matches($0.email?.signal, replyState: $0.email?.replyState) }
     }
 }
 
@@ -1274,13 +1701,49 @@ struct MailboxItem: Codable, Sendable, Identifiable, Hashable {
     let snippet: String
     let receivedAt: String
     let isRead: Bool
+    /// "primary" or a linked inbox id — which account issued this Gmail id,
+    /// so opening / deleting goes back to the same account. Optional: an
+    /// older server omits it, and that reads as the primary.
+    let inbox: String?
 
     var id: String { gmailId }
+}
+
+/// One thread I am waiting on — the latest thing I sent, unanswered
+/// (GET /api/email/waiting-on, mirrors WaitingOnItemWire).
+struct WaitingOnItem: Codable, Sendable, Identifiable, Hashable {
+    let gmailId: String
+    let threadId: String
+    let to: String
+    let subject: String
+    /// ISO — when I sent it.
+    let sentAt: String
+    let daysWaiting: Int
+    /// "primary" | linked inbox id — where the live read must go.
+    let inbox: String
+
+    var id: String { gmailId }
+
+    /// The live-read row for this thread: my sent message, opened through
+    /// the same folder path the Sent list uses.
+    var asMailboxItem: MailboxItem {
+        MailboxItem(
+            gmailId: gmailId, threadId: threadId, subject: subject, from: "", to: to,
+            snippet: "", receivedAt: sentAt, isRead: true, inbox: inbox)
+    }
+}
+
+struct WaitingOnResponse: Codable, Sendable {
+    let items: [WaitingOnItem]
+    let minDays: Int
 }
 
 struct MailboxListResponse: Codable, Sendable {
     struct Payload: Codable, Sendable {
         let items: [MailboxItem]
+        /// Opaque Gmail cursor for the next page; nil on the final page (and
+        /// on older servers, which simply omit it — no "load more" then).
+        let nextPageToken: String?
         let demo: Bool
     }
 
@@ -1343,11 +1806,11 @@ func showAllLabel(pendingCount: Int) -> String? {
     pendingCount > 0 ? "Show all \(pendingCount + 1)" : nil
 }
 
-// MARK: - Reply options (PushCard quick reply)
+// MARK: - Reply options (reading-pane quick reply)
 
 /// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.
 /// Mirrors packages/contract reply-options.ts — the array order (accept /
-/// decline / info) is wire contract: the card binds keys 1/2/3 positionally.
+/// decline / info) is wire contract: the reading pane binds keys 1/2/3 positionally.
 struct ReplyOption: Codable, Sendable, Hashable {
     let tone: String
     let body: String
@@ -1371,22 +1834,6 @@ struct ReplyOptionsResponse: Codable, Sendable {
     let options: [ReplyOption]
 }
 
-/// Email body for the expanded card's inline reader: trimmed, nil when blank
-/// (no empty scroll box), and capped so one card can't grow unbounded on a
-/// huge message. Pure for testing.
-func cardBodyText(_ body: String?) -> String? {
-    let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if trimmed.isEmpty { return nil }
-    return String(trimmed.prefix(4000))
-}
-
-/// The snooze options the PushCard offers — the full SnoozeOption set, in
-/// display order. A single source of truth shared with the reading pane so the
-/// two surfaces never drift.
-enum PushCardSnooze {
-    static let options: [SnoozeOption] = SnoozeOption.allCases
-}
-
 // MARK: - Snooze options
 
 /// User-selectable snooze targets for a PUSH item; each resolves to a concrete
@@ -1408,7 +1855,7 @@ enum SnoozeOption: String, CaseIterable, Identifiable, Sendable {
 
     /// The concrete resurface time — always strictly in the future. An option whose
     /// natural time has already passed today rolls to its next sensible occurrence.
-    func resurface(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+    func resurface(from now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> Date {
         switch self {
         case .oneHour:
             return calendar.date(byAdding: .hour, value: 1, to: now) ?? now
@@ -1440,4 +1887,43 @@ struct DesktopNonce: Codable, Sendable {
 struct DesktopTokenResponse: Codable, Sendable {
     let status: String
     let token: String?
+}
+
+/// Tool identifiers → the words the UI shows, in the UI language (audit M3:
+/// "Send Email" was English inside the Korean app). The keys and their
+/// translations are the web's `tool.label.*` set
+/// (packages/web/src/lib/locales), so both clients say the same thing.
+enum ToolLabels {
+    /// Tools with a `tool.label.<name>` string in every lproj.
+    static let known: Set<String> = [
+        "send_email", "draft_reply", "reply_to_email", "archive_email", "delete_email",
+        "mark_read", "create_event", "delete_event", "schedule_meeting", "create_contact",
+        "update_contact", "delete_contact", "create_note", "delete_note", "create_task",
+        "delete_task", "record_skill", "execute_skill", "classify_emails",
+    ]
+
+    /// Server spellings of the same action.
+    static let aliases: [String: String] = [
+        "create_calendar_event": "create_event",
+        "trash_email": "delete_email",
+        "create_draft": "draft_reply",
+        "draft_email": "draft_reply",
+    ]
+
+    /// Approving these sends mail now.
+    static let mailSending: Set<String> = ["send_email", "reply_to_email"]
+
+    static func key(for toolName: String) -> String? {
+        let name = aliases[toolName] ?? toolName
+        return known.contains(name) ? "tool.label.\(name)" : nil
+    }
+
+    /// Unknown tools degrade to a de-underscored form instead of being
+    /// hidden: an action the user can't identify is still an action they
+    /// must be able to decline.
+    static func title(for toolName: String) -> String {
+        if let key = key(for: toolName) { return L(key) }
+        let words = toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
+        return words.isEmpty ? L("tool.label.unknown") : words
+    }
 }

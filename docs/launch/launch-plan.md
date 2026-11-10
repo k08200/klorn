@@ -2,7 +2,7 @@
 
 Founder-stated goals: demo video first; Google OAuth verification so anyone
 can log in and use it; multi-account (2–3 inboxes) with 2+ accounts paid;
-pricing $7.99 or $8.99; more providers (iCloud, Naver, …); mobile "coming
+pricing $29.99 (was $8.99); more providers (iCloud, Naver, …); mobile "coming
 soon"; then promotion. This file sequences that against the actual state of
 the repo and adds the missing pieces. Decisions marked LOCKED are the
 founder's; PENDING ones block only their own step, nothing upstream.
@@ -69,16 +69,22 @@ Google token.
 
 ## P2 — Monetization
 
-- Multi-account = paid is ALREADY the shipped shape (link/connect routes are
-  requireEntitled; entitlement inert while PAYWALL_ENABLED=false). LOCKED.
-- Price DECIDED 2026-08-10: `$8.99`/mo web, `$9.99`/mo native. LOCKED. The
+- Multi-account = paid. LOCKED. Refined 2026-10-15 (founder, LOCKED): the FIRST
+  mail account is free whatever the provider (Google, iCloud, Naver, Outlook);
+  connecting a SECOND one needs Pro (`multi_account`). Every connect route asks
+  `packages/api/src/billing/mail-account-entitlement.ts`; inert while
+  PAYWALL_ENABLED=false.
+- Price RAISED 2026-10-14: `$29.99`/mo web, `$34.99`/mo native (was `$8.99`/`$9.99`,
+  decided 2026-08-10). The category sits at $30 and no one had subscribed yet. The
   single source of truth is `packages/web/src/lib/pricing.ts`; an annual tier
   (~$79/yr) is still open. Paddle live checkout was verified end-to-end with a
   real transaction on 2026-08-22.
 - [ ] Create the RevenueCat (mobile) price objects; verify webhook plan sync
       end-to-end. The Paddle (web) side is done.
 - [ ] PAYWALL flip per docs/launch/paywall-flip-runbook.md (trial stays 7d
-      card-required). Flip AFTER beta cohort feedback, not with it.
+      card-required). Since 2026-10-24 every signup starts on FREE, and the
+      beta cohort was settled on 2026-10-28 (runbook §3a), so the flip no
+      longer waits on cohort feedback; its timing is the founder's call.
 
 ## P2b — Unit economics at 100 users (measured 2026-08-10)
 
@@ -94,7 +100,7 @@ $0.30 / $2.50 per 1M (the rate the cost ledger actually meters).
 | Briefings | 100 | ~$0.19 |
 | **Total** | | **≈ $7/day ≈ $210/mo** |
 
-Against $8.99 × 100 = $899/mo that is **~23% of revenue** — viable, and the
+Against $29.99 × 100 = $2,999/mo that is **~7% of revenue** — viable, and the
 margin improves as the fallback chain (cheap paid SKUs) absorbs spillover.
 
 **Two findings, both actionable:**

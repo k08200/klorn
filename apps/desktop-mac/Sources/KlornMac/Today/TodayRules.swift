@@ -1,0 +1,146 @@
+import Foundation
+
+/// One lane as Today shows it.
+struct TodayLane: Equatable, Sendable {
+    enum Style: Equatable, Sendable {
+        /// Rows are listed (PUSH, MEETING, and QUEUE's top rows).
+        case rows
+        /// The lane chip only; the rows are one click away in Mail (INFO).
+        case collapsed
+    }
+
+    let tier: Tier
+    let style: Style
+    /// The lane's open count from the server summary; for PUSH inside
+    /// Today's window, the windowed rows' count (what the lane lists).
+    let count: Int
+    let rows: [FirewallItem]
+    /// PUSH only: open cards older than Today's window, left to Mail's lane.
+    var older: Int = 0
+
+    /// Open items the lane holds beyond the rows listed here.
+    var remaining: Int { max(count - rows.count, 0) }
+}
+
+/// Today's header line (founder decision 2026-10-24): counts only for the
+/// lanes that need the user, and one quiet figure for what waits in Mail.
+struct TodayHeaderSummary: Equatable, Sendable {
+    struct Need: Equatable, Sendable {
+        let tier: Tier
+        let count: Int
+    }
+
+    /// PUSH then MEETING, each only when it holds something.
+    let needs: [Need]
+    /// PUSH and MEETING are both empty: "Nothing needs you right now".
+    let calm: Bool
+    /// QUEUE + INFO open threads; 0 shows nothing. SILENT is never counted.
+    let waiting: Int
+}
+
+/// What the Today screen can be: the states every mail surface shares (M6).
+typealias TodayState = SurfaceState
+
+/// Pure composition rules for Today (productization plan §1), pinned by the
+/// self-check.
+enum TodayRules {
+    /// QUEUE shows this many rows; the rest is a link to Mail.
+    static let queueRowLimit = 5
+    /// PUSH and MEETING are expanded. The cap only stops a runaway lane
+    /// from pushing the rest of the day off screen; the remainder is a link.
+    static let expandedRowLimit = 12
+
+    static func state(
+        phase: AppModel.Phase, hasQueue: Bool, loadError: String?, offline: Bool = false
+    ) -> TodayState {
+        SurfaceStateRules.state(
+            phase: phase, hasQueue: hasQueue, loadError: loadError, offline: offline)
+    }
+
+    /// The lanes Today lists, loudest first. SILENT is never part of it, and
+    /// a lane with nothing open is left out.
+    static func lanes(_ queue: FirewallResponse) -> [TodayLane] {
+        let plan: [(Tier, TodayLane.Style, Int)] = [
+            (.push, .rows, expandedRowLimit),
+            (.meeting, .rows, expandedRowLimit),
+            (.queue, .rows, queueRowLimit),
+            (.info, .collapsed, 0),
+        ]
+        return plan.compactMap { tier, style, limit in
+            if tier == .push, let window = queue.todayPush {
+                return windowedPush(queue, window: window, limit: limit)
+            }
+            let items = queue.items(for: tier)
+            // The summary is the lane's true size; the fetched window can be
+            // shorter, never trust it to be longer than what is listed.
+            let count = max(queue.summary.count(for: tier), items.count)
+            guard count > 0 else { return nil }
+            return TodayLane(tier: tier, style: style, count: count, rows: Array(items.prefix(limit)))
+        }
+    }
+
+    /// PUSH inside Today's window (founder decision 2026-10-23): only the
+    /// cards the server named, and the count is those rows, so the Today
+    /// header and the PUSH group agree. Older PUSH stays in Mail; the lane stays (calm, with
+    /// a link) while any older card exists, and leaves when there is none.
+    private static func windowedPush(
+        _ queue: FirewallResponse, window: TodayPushWindow, limit: Int
+    ) -> TodayLane? {
+        let items = queue.items(for: .push)
+        let inWindow = Set(window.ids)
+        let rows = items.filter { inWindow.contains($0.id) }
+        let laneTotal = max(queue.summary.count(for: .push), items.count)
+        let older = max(laneTotal - rows.count, 0)
+        guard !rows.isEmpty || older > 0 else { return nil }
+        return TodayLane(
+            tier: .push, style: .rows, count: rows.count, rows: Array(rows.prefix(limit)), older: older)
+    }
+
+    /// The header line from the lanes Today lists: PUSH is already Today's
+    /// windowed count, so the header and the PUSH group agree.
+    static func headerSummary(_ lanes: [TodayLane]) -> TodayHeaderSummary {
+        func count(_ tier: Tier) -> Int { lanes.first { $0.tier == tier }?.count ?? 0 }
+        let needs = [Tier.push, .meeting]
+            .map { TodayHeaderSummary.Need(tier: $0, count: count($0)) }
+            .filter { $0.count > 0 }
+        return TodayHeaderSummary(
+            needs: needs, calm: needs.isEmpty, waiting: count(.queue) + count(.info))
+    }
+
+    /// "N waiting in Mail", singular only for exactly one.
+    static func waitingLine(_ count: Int) -> String {
+        count == 1 ? L("today.waiting.one") : L("today.waiting.many", count)
+    }
+
+    /// The assistant strip's one line: the structured headline, else the
+    /// first line of the plain briefing.
+    static func briefingLine(structure: BriefingStructure?, briefing: String?) -> String? {
+        if let headline = structure?.headline, !headline.isEmpty { return headline }
+        let first = briefing?
+            .split(whereSeparator: \.isNewline).first
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        return first.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// The detail beside the Today title: the weekday and date, except in
+    /// an offscreen preview render, where a fixed fixture date would read as
+    /// stale on the landing captures. The title alone ("Today") stays.
+    static func headerDetail(now: Date, renderingOffscreen: Bool, locale: Locale) -> String? {
+        guard !renderingOffscreen else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = DisplayTimeZone.current
+        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+        return formatter.string(from: now)
+    }
+
+    /// Today's events in reading order: the one happening now, then the rest.
+    static func events(_ today: TodaySummary?) -> [(event: CalendarEventWire, isNow: Bool)] {
+        guard let today else { return [] }
+        let current = today.current.map { [(event: $0, isNow: true)] } ?? []
+        let upcoming = today.upcoming
+            .filter { $0.id != today.current?.id }
+            .map { (event: $0, isNow: false) }
+        return current + upcoming
+    }
+}

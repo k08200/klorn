@@ -12,6 +12,7 @@
  */
 
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { asString, asStringArray } from "../llm/llm-coerce.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
@@ -76,7 +77,10 @@ export async function getSenderDossier(
   const candidates = await prisma.emailMessage.findMany({
     where: {
       userId,
-      OR: [{ from: { contains: senderEmail } }, { to: { contains: senderEmail } }],
+      OR: [
+        { from: { contains: escapeLikePattern(senderEmail) } },
+        { to: { contains: escapeLikePattern(senderEmail) } },
+      ],
     },
     orderBy: { receivedAt: "desc" },
     take: CANDIDATE_LIMIT,

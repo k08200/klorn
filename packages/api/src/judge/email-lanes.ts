@@ -6,10 +6,16 @@
  * AttentionItem gets no lane rather than a guessed one.
  */
 
-import type { LiveTier } from "@klorn/contract";
+import type { EmailLaneCounts, LiveTier } from "@klorn/contract";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { likeContainsPattern } from "../db-like.js";
+import { withStatementTimeout } from "../db-statement-timeout.js";
 import { captureError } from "../sentry.js";
-import { normalizeTier } from "./tiers.js";
+import { toLiveTier } from "./tiers.js";
+import { heldTodaySql } from "./v3/held-today.js";
+import { V3_ITEM_SELECT, type V3ItemRow } from "./v3/item-wire.js";
+import { RANKED_GROUPED_ORDER, rankedOrderSql, rankKeyColumnsSql } from "./v3/ranked-sql.js";
 
 /**
  * Map each email id on a list page to its normalized lane. Deliberately no
@@ -28,15 +34,538 @@ export async function listLaneTiersByEmail(
     })) as Array<{ sourceId: string; tier: string | null }>;
     const laneBySourceId = new Map<string, LiveTier>();
     for (const row of rows) {
-      const tier = normalizeTier(row.tier);
       // AUTO is retired v1 vocabulary and must never reach a user-facing
-      // chip; QUEUE is the vocabulary's visible default, the same fallback
-      // normalizeTier applies to unknown values.
-      laneBySourceId.set(row.sourceId, tier === "AUTO" ? "QUEUE" : tier);
+      // chip; toLiveTier folds it into QUEUE, the visible default.
+      laneBySourceId.set(row.sourceId, toLiveTier(row.tier));
     }
     return laneBySourceId;
   } catch (err) {
     captureError(err, { tags: { scope: "email.lane_lookup" }, extra: { userId } });
     return new Map();
   }
+}
+
+/** A list row's lane and its stored (unresolved) reason. */
+export interface LaneInfo {
+  tier: LiveTier;
+  /** AttentionItem.tierReason as stored: a static key or free text. Display-only. */
+  reason: string | null;
+}
+
+/**
+ * The chip lookup plus each row's stored lane reason, in the same single
+ * batched query. Same fail-soft contract as listLaneTiersByEmail: a failure
+ * yields an empty map (no chip, no reason), never a 500.
+ */
+export async function listLaneInfoByEmail(
+  userId: string,
+  emailIds: string[],
+): Promise<Map<string, LaneInfo>> {
+  if (emailIds.length === 0) return new Map();
+  try {
+    const rows = (await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: emailIds } },
+      select: { sourceId: true, tier: true, tierReason: true },
+    })) as Array<{ sourceId: string; tier: string | null; tierReason?: string | null }>;
+    return new Map(
+      rows.map((row) => [
+        row.sourceId,
+        { tier: toLiveTier(row.tier), reason: row.tierReason ?? null },
+      ]),
+    );
+  } catch (err) {
+    captureError(err, { tags: { scope: "email.lane_lookup" }, extra: { userId } });
+    return new Map();
+  }
+}
+
+/**
+ * Each mail's stored v3 decision columns (v3/item-wire.ts maps them), for a
+ * user under the policy. Same fail-soft contract as the chip lookup: a failure
+ * yields an empty map (no v3 block), never a 500.
+ */
+export async function listV3RowsByEmail(
+  userId: string,
+  emailIds: string[],
+): Promise<Map<string, V3ItemRow>> {
+  if (emailIds.length === 0) return new Map();
+  try {
+    const rows = await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: emailIds } },
+      select: { sourceId: true, ...V3_ITEM_SELECT },
+    });
+    return new Map(rows.map(({ sourceId, ...row }) => [sourceId, row]));
+  } catch (err) {
+    captureError(err, { tags: { scope: "email.v3_lookup" }, extra: { userId } });
+    return new Map();
+  }
+}
+
+/** What Mail's lane control can ask for: one live lane, or every lane. */
+export const LANE_FILTERS = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT", "ALL"] as const;
+export type LaneFilter = (typeof LANE_FILTERS)[number];
+
+/** A `?tier=` value as a lane filter; null when it is not one (retired AUTO / CALL included). */
+export function parseLaneFilter(value: unknown): LaneFilter | null {
+  return (LANE_FILTERS as readonly unknown[]).includes(value) ? (value as LaneFilter) : null;
+}
+
+/**
+ * Stored `AttentionItem.tier` values per live lane, mirroring `toLiveTier`:
+ * CALL reads as PUSH, and everything not listed here — QUEUE, the retired
+ * AUTO, null, an unknown string — reads as QUEUE.
+ */
+const STORED_TIERS: Record<Exclude<LiveTier, "QUEUE">, readonly string[]> = {
+  PUSH: ["PUSH", "CALL"],
+  MEETING: ["MEETING"],
+  INFO: ["INFO"],
+  SILENT: ["SILENT"],
+};
+const NON_QUEUE_STORED_TIERS = Object.values(STORED_TIERS).flat();
+
+/**
+ * Which of the caller's accounts a lane query is scoped to. `unknown` is an id
+ * that is not one of the caller's linked inboxes: it matches nothing, and the
+ * callers answer it with an explicit empty result without querying mail.
+ */
+export type InboxScope =
+  | { kind: "all" }
+  | { kind: "primary" }
+  | { kind: "linked"; id: string }
+  | { kind: "unknown" };
+
+/** Resolve the list API's `inbox` value, checking a linked id against its owner. */
+export async function resolveInboxScope(
+  userId: string,
+  inbox: string | undefined,
+): Promise<InboxScope> {
+  if (!inbox || inbox === "all") return { kind: "all" };
+  if (inbox === "primary") return { kind: "primary" };
+  const account = await prisma.linkedInboxAccount.findFirst({
+    where: { id: inbox, userId },
+    select: { id: true },
+  });
+  return account ? { kind: "linked", id: account.id } : { kind: "unknown" };
+}
+
+function inboxSql(scope: InboxScope): Prisma.Sql {
+  if (scope.kind === "primary") return Prisma.sql`AND e."linkedInboxAccountId" IS NULL`;
+  if (scope.kind === "linked") return Prisma.sql`AND e."linkedInboxAccountId" = ${scope.id}`;
+  return Prisma.empty;
+}
+
+/** The mail's own AttentionItem: same owner on both sides, at most one row. */
+const LANE_JOIN_ON = Prisma.sql`a."sourceId" = e."id" AND a."userId" = e."userId" AND a."source" = 'EMAIL'`;
+
+/**
+ * Join and predicate for one lane. QUEUE is the visible default, so it also
+ * holds mail the judge has not reached (no AttentionItem row): a LEFT JOIN
+ * keeps those rows, and they carry no lane on the wire. Every other lane is
+ * judged mail only.
+ */
+function laneSql(lane: LiveTier): { join: Prisma.Sql; predicate: Prisma.Sql } {
+  if (lane === "QUEUE") {
+    return {
+      join: Prisma.sql`LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}`,
+      predicate: Prisma.sql`AND (a."id" IS NULL OR a."tier" IS NULL OR a."tier" NOT IN (${Prisma.join(NON_QUEUE_STORED_TIERS)}))`,
+    };
+  }
+  return {
+    join: Prisma.sql`INNER JOIN "AttentionItem" a ON ${LANE_JOIN_ON}`,
+    predicate: Prisma.sql`AND a."tier" IN (${Prisma.join([...STORED_TIERS[lane]])})`,
+  };
+}
+
+/** The legacy `filter` values a lane page can be narrowed by. */
+// A Map, not an object: `filter` comes from the query string, and an object
+// lookup would also answer for inherited keys ("constructor", "__proto__").
+const LANE_PAGE_FILTERS: ReadonlyMap<string, Prisma.Sql> = new Map([
+  ["unread", Prisma.sql`AND e."isRead" = false`],
+  ["urgent", Prisma.sql`AND e."priority" = 'URGENT'`],
+  ["reply-needed", Prisma.sql`AND e."needsReply" = true`],
+  [
+    "attachments",
+    Prisma.sql`AND EXISTS (SELECT 1 FROM "EmailAttachment" x WHERE x."emailId" = e."id")`,
+  ],
+]);
+
+/** False for a `filter` the lane page cannot apply (candidates); absent is fine. */
+export function isLanePageFilter(filter: string | undefined): boolean {
+  return !filter || LANE_PAGE_FILTERS.has(filter);
+}
+
+/** The same fields as the list's Prisma search (emailSearchOr in routes/email.ts). */
+function searchSql(search: string | undefined): Prisma.Sql {
+  if (!search) return Prisma.empty;
+  const like = likeContainsPattern(search);
+  return Prisma.sql`AND (
+    e."subject" ILIKE ${like} OR e."from" ILIKE ${like} OR e."snippet" ILIKE ${like}
+    OR e."body" ILIKE ${like} OR e."summary" ILIKE ${like}
+    OR EXISTS (
+      SELECT 1 FROM "EmailAttachment" x
+      WHERE x."emailId" = e."id"
+        AND (x."filename" ILIKE ${like} OR x."summary" ILIKE ${like} OR x."contentText" ILIKE ${like})
+    )
+  )`;
+}
+
+/**
+ * Mail the user already handled: its attention item is DISMISSED (Done), or
+ * SNOOZED (Later) with a wake-up time still ahead. A snooze whose time has
+ * passed shows again before the scheduler's resurrect sweep flips it to OPEN.
+ * The same-owner, EMAIL-source lookup as LANE_JOIN_ON, served by the
+ * (userId, source, sourceId) unique index — one probe per candidate row inside
+ * the page query, never a query per email. `snoozedUntil` is a UTC timestamp
+ * without a zone (how Prisma stores DateTime), so it is compared with UTC now.
+ * RESOLVED is deliberately not excluded: only Done and Later are "handled" here.
+ */
+const HANDLED_EXCLUSION = Prisma.sql`AND NOT EXISTS (
+    SELECT 1 FROM "AttentionItem" h
+    WHERE h."sourceId" = e."id" AND h."userId" = e."userId" AND h."source" = 'EMAIL'
+      AND (
+        h."status" = 'DISMISSED'
+        OR (h."status" = 'SNOOZED' AND h."snoozedUntil" > (now() AT TIME ZONE 'UTC'))
+      )
+  )`;
+
+export interface LanePageQuery {
+  userId: string;
+  /** One live lane, or ALL (no lane join; used by `hideHandled` on the All view). */
+  lane: LaneFilter;
+  scope: InboxScope;
+  filter?: string;
+  category?: string;
+  search?: string;
+  /** Opt-in (`GET /api/email?hideHandled=1`): leave out DISMISSED / still-SNOOZED mail. */
+  hideHandled?: boolean;
+  /**
+   * Opt-in (`GET /api/email?window=today`, Today's PUSH block only): mail
+   * received at or after this time. EmailMessage.receivedAt is required, so
+   * no fallback is needed here. Absent = no time bound (every Mail lane view).
+   */
+  receivedSince?: Date;
+  /**
+   * Opt-in (`GET /api/email?tier=QUEUE&window=held`, Today's "Held back"
+   * group, users under the v3 policy only): QUEUE mail the interrupt budget
+   * held at or after this time and that still shows the hold
+   * (v3/held-today.ts). Absent = no held bound.
+   */
+  heldSince?: Date;
+  /**
+   * Attention engine v3, for a user under the policy: the QUEUE lane in ranked
+   * order as of this time (v3/ranked-sql.ts). Ignored for every other lane.
+   * Absent = newest first, as today.
+   */
+  rankedAt?: Date;
+  skip: number;
+  take: number;
+}
+
+/**
+ * One page of a lane: mail ids newest first, and how many there are in all.
+ *
+ * The lane lives on AttentionItem, which has no Prisma relation to
+ * EmailMessage, so the page is a join rather than an id list — no cap on how
+ * far back a lane reaches, and `total` is the same count the lane control
+ * shows. Every value is a bound parameter and the user id is on both sides of
+ * the join. Unlike the chip lookup above this is control flow: a failure
+ * throws, so the caller never serves an unfiltered list as if it were the lane.
+ */
+export async function pageEmailIdsInLane(
+  query: LanePageQuery,
+): Promise<{ ids: string[]; total: number }> {
+  if (query.scope.kind === "unknown") return { ids: [], total: 0 };
+  const from = laneFromSql(query);
+  const rankedAt = rankedTime(query);
+  if (rankedAt) return rankedLanePage(query, from, rankedAt);
+  const [rows, totals] = await Promise.all([
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      ORDER BY e."receivedAt" DESC, e."id" DESC
+      LIMIT ${query.take} OFFSET ${query.skip}`),
+    prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS total
+      ${from}`),
+  ]);
+  return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+}
+
+/**
+ * The ranked QUEUE page. No index serves the ranked order, so it sorts the
+ * whole lane: like the thread page it runs under the statement timeout, and a
+ * slow sort throws QueryTimeoutError (the route answers a retryable 503).
+ */
+async function rankedLanePage(
+  query: LanePageQuery,
+  from: Prisma.Sql,
+  rankedAt: Date,
+): Promise<{ ids: string[]; total: number }> {
+  return withStatementTimeout(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      ORDER BY ${rankedOrderSql(rankedAt)}
+      LIMIT ${query.take} OFFSET ${query.skip}`);
+    const totals = await tx.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS total
+      ${from}`);
+    return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+  });
+}
+
+/**
+ * A message's thread, unique per account: the provider thread id is only
+ * unique inside one mailbox, so the account is part of the key, and a message
+ * without a thread id is its own thread.
+ */
+const THREAD_KEY = Prisma.sql`(COALESCE(e."linkedInboxAccountId", '') || ':' || COALESCE(e."threadId", e."id"))`;
+
+/**
+ * One page of a view grouped by thread (`GET /api/email?threads=1` with a
+ * lane): per thread, its newest message in the view (receivedAt, then id) and
+ * how many of its messages the view holds. Threads are ordered newest first
+ * by that representative row; `total` is the number of threads in the view.
+ * Same FROM / WHERE as pageEmailIdsInLane, so every lane, account, filter,
+ * category, search and hideHandled narrowing applies before grouping. The
+ * window count runs before DISTINCT ON picks the representative.
+ *
+ * `total` rides the page itself as `COUNT(*) OVER ()` over the grouped rows
+ * (window functions run before LIMIT), so the common case is one scan, not a
+ * second COUNT(DISTINCT). Only a page past the end — no row to carry the
+ * total — falls back to the distinct count, and only when it is not the first
+ * page (an empty first page is a total of 0). Both statements run under
+ * withStatementTimeout: a slow scan throws QueryTimeoutError. Every value is a
+ * bound parameter; any other failure throws, like the ungrouped page.
+ */
+export async function pageThreadsInLane(
+  query: LanePageQuery,
+): Promise<{ rows: Array<{ id: string; threadCount: number }>; total: number }> {
+  if (query.scope.kind === "unknown") return { rows: [], total: 0 };
+  const from = laneFromSql(query);
+  const rankedAt = rankedTime(query);
+  // Ranked: a thread ranks by its newest message in the view (the row DISTINCT
+  // ON keeps), so its rank keys ride the grouped row.
+  const rankKeys = rankedAt ? rankKeyColumnsSql(rankedAt) : Prisma.empty;
+  const order = rankedAt ? RANKED_GROUPED_ORDER : Prisma.sql`"receivedAt" DESC, id DESC`;
+  return withStatementTimeout(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string; threadCount: number; total: number }>>(
+      Prisma.sql`
+      WITH grouped AS (
+        SELECT DISTINCT ON (${THREAD_KEY})
+               e."id" AS id,
+               e."receivedAt" AS "receivedAt",
+               (COUNT(*) OVER (PARTITION BY ${THREAD_KEY}))::int AS "threadCount"
+               ${rankKeys}
+        ${from}
+        ORDER BY ${THREAD_KEY}, e."receivedAt" DESC, e."id" DESC
+      )
+      SELECT id, "threadCount", (COUNT(*) OVER ())::int AS total FROM grouped
+      ORDER BY ${order}
+      LIMIT ${query.take} OFFSET ${query.skip}`,
+    );
+    const page = rows.map((row) => ({ id: row.id, threadCount: Number(row.threadCount) }));
+    if (rows.length > 0) return { rows: page, total: Number(rows[0].total) };
+    if (query.skip === 0) return { rows: page, total: 0 };
+    const totals = await tx.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      SELECT COUNT(DISTINCT ${THREAD_KEY})::int AS total
+      ${from}`);
+    return { rows: page, total: Number(totals[0]?.total ?? 0) };
+  });
+}
+
+/** What a list view is made of: the FROM / WHERE both the page and the reader's neighbours read. */
+type LaneViewQuery = Pick<
+  LanePageQuery,
+  | "userId"
+  | "scope"
+  | "filter"
+  | "category"
+  | "search"
+  | "hideHandled"
+  | "receivedSince"
+  | "heldSince"
+  | "rankedAt"
+> & {
+  /** One live lane, or ALL for every lane (no join at all). */
+  lane: LaneFilter;
+};
+
+function laneFromSql(query: LaneViewQuery): Prisma.Sql {
+  const { join, predicate } =
+    query.lane === "ALL" ? { join: Prisma.empty, predicate: Prisma.empty } : laneSql(query.lane);
+  return Prisma.sql`FROM "EmailMessage" e
+    ${join}
+    WHERE e."userId" = ${query.userId}
+      ${predicate}
+      ${inboxSql(query.scope)}
+      ${(query.filter && LANE_PAGE_FILTERS.get(query.filter)) || Prisma.empty}
+      ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
+      ${searchSql(query.search)}
+      ${query.hideHandled ? HANDLED_EXCLUSION : Prisma.empty}
+      ${query.receivedSince ? Prisma.sql`AND e."receivedAt" >= ${query.receivedSince}` : Prisma.empty}
+      ${query.heldSince ? heldTodaySql(query.heldSince) : Prisma.empty}`;
+}
+
+export interface LaneNeighbourQuery extends LaneViewQuery {
+  /** The mail the reader is on. It need not be in the view (it may just have been moved out). */
+  emailId: string;
+}
+
+/**
+ * The mail just above (newer) and just below (older) `emailId` in a list
+ * view — the reader's previous / next (MAIL_V2). Same FROM, WHERE and order as
+ * the page above, so walking "next" visits exactly the rows the list shows, in
+ * that order. The anchor is read inside the query by id AND owner: a mail that
+ * is not the caller's has no neighbours. Every value is a bound parameter.
+ */
+export async function neighbourEmailIdsInLane(
+  query: LaneNeighbourQuery,
+): Promise<{ newerId: string | null; olderId: string | null }> {
+  if (query.scope.kind === "unknown") return { newerId: null, olderId: null };
+  const rankedAt = rankedTime(query);
+  if (rankedAt) return rankedNeighbours(query, rankedAt);
+  const from = laneFromSql(query);
+  const anchor = Prisma.sql`(SELECT c."receivedAt", c."id" FROM "EmailMessage" c
+    WHERE c."id" = ${query.emailId} AND c."userId" = ${query.userId})`;
+  const [older, newer] = await Promise.all([
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      AND (e."receivedAt", e."id") < ${anchor}
+      ORDER BY e."receivedAt" DESC, e."id" DESC
+      LIMIT 1`),
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      AND (e."receivedAt", e."id") > ${anchor}
+      ORDER BY e."receivedAt" ASC, e."id" ASC
+      LIMIT 1`),
+  ]);
+  return { newerId: newer[0]?.id ?? null, olderId: older[0]?.id ?? null };
+}
+
+/** The ranking time when this view is the ranked QUEUE; undefined otherwise. */
+function rankedTime(query: Pick<LaneViewQuery, "lane" | "rankedAt">): Date | undefined {
+  return query.lane === "QUEUE" ? query.rankedAt : undefined;
+}
+
+/**
+ * The reader's previous / next in the ranked QUEUE. Ranked order has no
+ * keyset, so rows are numbered in that order and the anchor's neighbours are
+ * the rows numbered one above and one below. It runs under the statement
+ * timeout (QueryTimeoutError → a retryable 503). The anchor joins the numbering
+ * even when it is no longer in the view (it may just have been moved out), so
+ * walking on still works. Read by id AND owner, like the time-ordered path.
+ */
+async function rankedNeighbours(
+  query: LaneNeighbourQuery,
+  rankedAt: Date,
+): Promise<{ newerId: string | null; olderId: string | null }> {
+  // Numbering sorts the whole lane: bounded like the ranked page.
+  const rows = await withStatementTimeout((tx) =>
+    tx.$queryRaw<Array<{ id: string; offset: number }>>(Prisma.sql`
+    WITH candidates AS (
+      SELECT e."id" AS id ${laneFromSql(query)}
+      UNION
+      SELECT c."id" FROM "EmailMessage" c
+      WHERE c."id" = ${query.emailId} AND c."userId" = ${query.userId}
+    ),
+    numbered AS (
+      SELECT e."id" AS id, ROW_NUMBER() OVER (ORDER BY ${rankedOrderSql(rankedAt)}) AS rn
+      FROM candidates
+      JOIN "EmailMessage" e ON e."id" = candidates.id AND e."userId" = ${query.userId}
+      LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}
+    ),
+    anchor AS (SELECT rn FROM numbered WHERE id = ${query.emailId})
+    SELECT n.id AS id, (n.rn - anchor.rn)::int AS "offset"
+    FROM numbered n, anchor
+    WHERE n.rn IN (anchor.rn - 1, anchor.rn + 1)`),
+  );
+  return {
+    newerId: rows.find((r) => Number(r.offset) === -1)?.id ?? null,
+    olderId: rows.find((r) => Number(r.offset) === 1)?.id ?? null,
+  };
+}
+
+export function emptyLaneCounts(): EmailLaneCounts {
+  return {
+    PUSH: { total: 0, unread: 0, threads: 0 },
+    MEETING: { total: 0, unread: 0, threads: 0 },
+    QUEUE: { total: 0, unread: 0, threads: 0 },
+    INFO: { total: 0, unread: 0, threads: 0 },
+    SILENT: { total: 0, unread: 0, threads: 0 },
+  };
+}
+
+/**
+ * Fold count rows into the five live lanes. `total` / `unread` add up across
+ * rows; `threads` is a distinct count, so it only adds up correctly when each
+ * row is already one folded lane (as countEmailsByLane's query returns) — a
+ * thread spread over two stored tiers of one lane would otherwise count twice.
+ */
+export function foldLaneCounts(
+  rows: ReadonlyArray<{ tier: string | null; total: number; unread: number; threads?: number }>,
+): EmailLaneCounts {
+  const counts = emptyLaneCounts();
+  for (const row of rows) {
+    const lane = toLiveTier(row.tier);
+    counts[lane] = {
+      total: counts[lane].total + Number(row.total),
+      unread: counts[lane].unread + Number(row.unread),
+      threads: counts[lane].threads + Number(row.threads ?? 0),
+    };
+  }
+  return counts;
+}
+
+/**
+ * a."tier" as its live lane in SQL, exactly as toLiveTier / laneSql read it:
+ * the STORED_TIERS lists name the non-QUEUE lanes, and everything else — null
+ * (no AttentionItem, or no tier), the retired AUTO, QUEUE, an unknown string —
+ * falls to QUEUE. Grouping by this (not by the stored value) lets a distinct
+ * thread count be taken per folded lane.
+ */
+const LIVE_LANE_SQL = Prisma.sql`CASE ${Prisma.join(
+  Object.entries(STORED_TIERS).map(
+    ([lane, stored]) => Prisma.sql`WHEN a."tier" IN (${Prisma.join([...stored])}) THEN ${lane}`,
+  ),
+  " ",
+)} ELSE ${"QUEUE"} END`;
+
+/**
+ * Mail per lane (total and unread) in one grouped query, scoped to the caller
+ * and, optionally, to one of their accounts. It starts from the mail and joins
+ * the lane on, so every mail is counted exactly once: one the judge has not
+ * reached reads as QUEUE — the lanes therefore sum to All, and each lane's
+ * total is its list's total. Rows are grouped by the folded lane (LIVE_LANE_SQL)
+ * so `threads` counts each thread once per lane even when its messages carry
+ * different stored tiers of that lane (null + AUTO + QUEUE). Every value is a
+ * bound parameter; the user id on both sides of the join is the ownership guard.
+ * The scan runs under withStatementTimeout: a slow one throws QueryTimeoutError.
+ */
+export async function countEmailsByLane(
+  userId: string,
+  scope: InboxScope,
+): Promise<EmailLaneCounts> {
+  if (scope.kind === "unknown") return emptyLaneCounts();
+  const rows = await withStatementTimeout((tx) =>
+    tx.$queryRaw<
+      Array<{ tier: string | null; total: number; unread: number; threads: number }>
+    >(Prisma.sql`
+    SELECT lane AS tier,
+           COUNT(*)::int AS total,
+           (COUNT(*) FILTER (WHERE "isRead" = false))::int AS unread,
+           COUNT(DISTINCT thread_key)::int AS threads
+    FROM (
+      SELECT ${LIVE_LANE_SQL} AS lane, e."isRead" AS "isRead", ${THREAD_KEY} AS thread_key
+      FROM "EmailMessage" e
+      LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}
+      WHERE e."userId" = ${userId}
+        ${inboxSql(scope)}
+    ) folded
+    GROUP BY lane
+  `),
+  );
+  return foldLaneCounts(rows);
 }

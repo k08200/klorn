@@ -9,6 +9,7 @@
  */
 
 import type { Server } from "node:http";
+import type { DesktopAlertKind, DesktopMailToast } from "@klorn/contract";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   isDemoAccessEnabled,
@@ -16,12 +17,18 @@ import {
   sessionRevokedForToken,
   verifyToken,
 } from "./auth.js";
+import {
+  desktopPresence,
+  parseWsClientApp,
+  parseWsClientType,
+  type WsClientType,
+} from "./notify/desktop-presence.js";
 
 interface WsClient {
   ws: WebSocket;
   userId: string;
   clientId: string;
-  type: "web" | "desktop" | "widget";
+  type: WsClientType;
   connectedAt: number;
 }
 
@@ -73,7 +80,10 @@ export function initWebSocket(server: Server): WebSocketServer {
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
-    const clientType = (url.searchParams.get("type") || "web") as WsClient["type"];
+    // Validated, not cast: the value lands in clientId, logs and broadcasts.
+    const clientType = parseWsClientType(url.searchParams.get("type"));
+    const desktopApp =
+      clientType === "desktop" ? parseWsClientApp(url.searchParams.get("app")) : null;
 
     // Authenticate. The JWT rides the Sec-WebSocket-Protocol subprotocol —
     // never the URL, so the credential stays out of proxy/LB access logs. The
@@ -128,6 +138,7 @@ export function initWebSocket(server: Server): WebSocketServer {
     };
 
     clients.set(clientId, client);
+    if (desktopApp) desktopPresence.connected(userId, clientId, desktopApp, Date.now());
     console.log(`[WS] Client connected: ${clientId} (${clientType})`);
 
     // Send welcome message with client info
@@ -162,6 +173,7 @@ export function initWebSocket(server: Server): WebSocketServer {
 
     ws.on("close", () => {
       clients.delete(clientId);
+      desktopPresence.disconnected(userId, clientId, Date.now());
       console.log(`[WS] Client disconnected: ${clientId}`);
 
       // Broadcast to other clients
@@ -177,6 +189,7 @@ export function initWebSocket(server: Server): WebSocketServer {
       // independent, so the user isn't fully unnotified, but ops must see it).
       console.warn(`[WS] socket error for ${clientId}:`, err.message);
       clients.delete(clientId);
+      desktopPresence.disconnected(userId, clientId, Date.now());
     });
   });
 
@@ -267,6 +280,10 @@ export function pushNotification(
     createdAt?: string;
     conversationId?: string;
     link?: string;
+    /** OS-banner tag for the desktop shell — see notify/desktop-alert.ts. */
+    alert?: DesktopAlertKind;
+    /** The desktop shell's toast for a one-mail interrupt (decision N1). */
+    mail?: DesktopMailToast;
   },
 ) {
   broadcastToUser(userId, {

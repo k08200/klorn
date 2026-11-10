@@ -4,7 +4,7 @@ import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { forwardRef, useId } from "react";
 
 const baseStyles =
-  "w-full bg-surface-panel border border-line rounded-lg px-4 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25 transition-colors";
+  "w-full bg-surface-panel border border-line rounded-control px-4 py-2.5 text-role-body text-ink placeholder-ink-dim focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25 transition-colors";
 
 const errorStyles =
   "border-danger-solid focus-visible:border-danger-solid focus-visible:ring-danger-solid/30";
@@ -20,15 +20,23 @@ function useControlId(id: string | undefined, label: string | undefined): string
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /**
+   * Changes with each failed attempt, so the same message is announced again
+   * (a role="alert" whose text does not change is not re-read).
+   */
+  errorAttempt?: number;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className = "", id, ...props }, ref) => {
+  ({ label, error, errorAttempt, className = "", id, ...props }, ref) => {
     const inputId = useControlId(id, label);
     return (
       <div>
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-medium text-ink-mid mb-1.5">
+          <label
+            htmlFor={inputId}
+            className="block text-role-caption font-medium text-ink-mid mb-1.5"
+          >
             {label}
           </label>
         )}
@@ -41,7 +49,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-state-danger-ink mt-1" role="alert">
+          <p
+            key={errorAttempt}
+            id={`${inputId}-error`}
+            className="text-role-caption text-state-danger-ink mt-1"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -62,7 +75,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div>
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-medium text-ink-mid mb-1.5">
+          <label
+            htmlFor={inputId}
+            className="block text-role-caption font-medium text-ink-mid mb-1.5"
+          >
             {label}
           </label>
         )}
@@ -75,7 +91,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-state-danger-ink mt-1" role="alert">
+          <p
+            id={`${inputId}-error`}
+            className="text-role-caption text-state-danger-ink mt-1"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -96,7 +116,10 @@ export function Select({ label, error, children, className = "", id, ...props }:
   return (
     <div>
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-medium text-ink-mid mb-1.5">
+        <label
+          htmlFor={inputId}
+          className="block text-role-caption font-medium text-ink-mid mb-1.5"
+        >
           {label}
         </label>
       )}
@@ -110,7 +133,11 @@ export function Select({ label, error, children, className = "", id, ...props }:
         {children}
       </select>
       {error && (
-        <p id={`${inputId}-error`} className="text-xs text-state-danger-ink mt-1" role="alert">
+        <p
+          id={`${inputId}-error`}
+          className="text-role-caption text-state-danger-ink mt-1"
+          role="alert"
+        >
           {error}
         </p>
       )}

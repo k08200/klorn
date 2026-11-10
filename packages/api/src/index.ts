@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
+import { reportPendingGoogleRevokes } from "./auth/google-grant-revoke.js";
 import {
   ensureDemoUser,
   getUserId,
@@ -10,35 +11,66 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
-import { icloudInboxEnabled, outlookInboxEnabled } from "./config.js";
+import { ADVERTISED_PRO_PRICE_WEB } from "./billing/advertised-price.js";
+import { checkPaddlePriceMatchesAdvertised } from "./billing/paddle-price-check.js";
+import {
+  caldavCalendarEnabled,
+  deviceCalendarEnabled,
+  driveEnabled,
+  genericImapEnabled,
+  icloudInboxEnabled,
+  klornMailboxEnabled,
+  outlookInboxEnabled,
+} from "./config.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
-import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
+import { db, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
+import { exportDriveFiles } from "./drive/drive-export.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
+import {
+  getPublicJudgeHealth,
+  type PublicJudgeHealth,
+  warnRetiredJudgeHealthEnv,
+} from "./judge/judge-fallback-check.js";
+import { reportJudgeModelResolution, reportJudgeServing } from "./llm/judge-model-gate.js";
+import { JUDGE_MODEL, JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
-import { purgeUserData } from "./purge-user-data.js";
+import { getProviderChain } from "./providers/index.js";
 import { adminRoutes } from "./routes/admin.js";
+import { alertEndpointRoutes } from "./routes/alert-endpoints.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
 import { authRoutes } from "./routes/auth.js";
 import { automationRoutes } from "./routes/automations.js";
 import { billingRoutes } from "./routes/billing.js";
+import { caldavCalendarRoutes } from "./routes/caldav-calendar.js";
 import { calendarRoutes } from "./routes/calendar.js";
 import { chatConversationRoutes } from "./routes/chat-conversations.js";
 import { chatRoutes } from "./routes/chat-pending-actions.js";
+import { reportRolloutCohort } from "./routes/cohort-gate.js";
 import { commitmentRoutes } from "./routes/commitments.js";
 import { cronRoutes } from "./routes/cron.js";
+import { deviceCalendarRoutes } from "./routes/device-calendar.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
+import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { firewallRoutes } from "./routes/firewall.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
+import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "./routes/google-drive-link.js";
 import { imapConnectRoutes } from "./routes/imap-connect.js";
 import { inboxRoutes } from "./routes/inbox.js";
+import {
+  klornDriveRoutes,
+  klornDriveRoutesEnabled,
+  warnIfKlornDriveQuotaMissing,
+} from "./routes/klorn-drive.js";
+import { klornMailboxInboundRoutes } from "./routes/klorn-mailbox-inbound.js";
+import { linkCompleteRoutes } from "./routes/link-complete.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { notificationRoutes } from "./routes/notifications.js";
@@ -49,6 +81,7 @@ import { phoneRoutes } from "./routes/phone.js";
 import { playbookRoutes } from "./routes/playbooks.js";
 import { playgroundRoutes } from "./routes/playground.js";
 import { pmfRoutes } from "./routes/pmf.js";
+import { providersAvailableRoutes } from "./routes/providers-available.js";
 import { receiptRoutes } from "./routes/receipt.js";
 import { screenerRoutes } from "./routes/screener.js";
 import { skillRoutes } from "./routes/skills.js";
@@ -59,9 +92,19 @@ import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { webhookRoutes } from "./routes/webhook.js";
 import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
-import { isRateLimitAllowedIp, parseAllowedCidrs } from "./security/scanner-allowlist.js";
+import {
+  describeClientAddressConfig,
+  resolveClientAddressConfig,
+} from "./security/client-address.js";
+import { rateLimitOptions } from "./security/rate-limit-identity.js";
+import { serializeRequestForLog } from "./security/request-log.js";
+import { parseAllowedCidrs } from "./security/scanner-allowlist.js";
 import { captureError, flushSentry, initSentry } from "./sentry.js";
+import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
+import { checkObjectStorageAtStartup } from "./storage/runtime.js";
+import { purgeAllUserData } from "./user-deletion.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
+import { registerWorkContextHook } from "./work-context.js";
 
 // Initialize Sentry FIRST so every captureError() across the app actually
 // reports. Without this call `initialized` stays false and every captureError
@@ -70,17 +113,25 @@ import { getClientCount, initWebSocket } from "./websocket.js";
 initSentry();
 
 const app = Fastify({
-  // trustProxy: resolve the real client IP from X-Forwarded-For. The platform
-  // (Render) sits behind a load balancer, so without this every request's
-  // `request.ip` is the LB's internal IP — which collapses all per-IP rate
-  // limits (incl. the public /api/playground limit) into one shared bucket.
+  // trustProxy makes request.protocol / request.host follow X-Forwarded-Proto
+  // / -Host. It also makes request.ip the leftmost X-Forwarded-For entry, which
+  // the client writes, so nothing reads request.ip: the client address comes
+  // from security/client-address.ts (a guard test enforces it).
   trustProxy: true,
   logger: {
+    serializers: { req: serializeRequestForLog },
     // Defense-in-depth: even though Fastify's default serializer doesn't log
     // bodies, redact key-bearing fields so a future serializer change or a
     // rawBody dump can never leak a credential into the log drain.
     redact: {
-      paths: ["req.body.apiKey", "req.body.password", "req.body.token", "req.rawBody"],
+      paths: [
+        "req.body.apiKey",
+        "req.body.anthropicApiKey",
+        "req.body.geminiApiKey",
+        "req.body.password",
+        "req.body.token",
+        "req.rawBody",
+      ],
       censor: "[REDACTED]",
     },
   },
@@ -92,6 +143,9 @@ attachPerfMonitor(app);
 // Global error handler: never reflect a 5xx's raw message to the client
 // (Fastify's default does). 4xx pass through; 5xx are logged + generic.
 app.setErrorHandler(handleError);
+// Every request is a unit of work with its own start time; the data-wipe fence
+// rejects writes from work that began before the account's wipe finished.
+registerWorkContextHook(app);
 
 // Security response headers (X-Content-Type-Options: nosniff, HSTS,
 // Referrer-Policy, frameguard, etc.). CSP is disabled: this is a JSON API plus
@@ -182,7 +236,12 @@ await app.register(cors, {
   credentials: true,
 });
 
-// Global rate limiting — 100 requests per minute per IP
+// Global rate limiting — 100 requests per minute per client address
+// (security/rate-limit-identity.ts).
+// The address comes from security/client-address.ts (CLIENT_IP_SOURCE). Resolve
+// it once here so a bad value fails the boot instead of every request.
+const clientAddressConfig = resolveClientAddressConfig(process.env);
+console.info(`[security] client address ${describeClientAddressConfig(clientAddressConfig)}`);
 // Parsed once at boot: an authorized-scan exemption should not re-parse an env
 // string on every request, and a mid-run change should require a restart.
 const scannerAllowRules = parseAllowedCidrs(process.env.RATE_LIMIT_ALLOW_IPS);
@@ -192,45 +251,7 @@ if (scannerAllowRules.length > 0) {
   );
 }
 
-await app.register(rateLimit, {
-  max: 100,
-  timeWindow: "1 minute",
-  // Rate-limit key must be an UNSPOOFABLE client identity. request.ip derives
-  // from X-Forwarded-For (trustProxy), which a client can forge to rotate past
-  // every per-IP limit (confirmed 2026-07-21). We sit behind Cloudflare, which
-  // sets CF-Connecting-IP to the verified client IP and overwrites any
-  // client-supplied value — use it, falling back to the raw socket address
-  // (also unspoofable), never X-Forwarded-For.
-  keyGenerator: (req) => {
-    const cf = req.headers["cf-connecting-ip"];
-    if (typeof cf === "string" && cf.length > 0) return cf;
-    return req.socket?.remoteAddress ?? "unknown";
-  },
-  allowList: (req: {
-    url?: string;
-    headers?: Record<string, unknown>;
-    socket?: { remoteAddress?: string };
-  }) => {
-    const url = req.url ?? "";
-    // Authorized security scan: a CASA DAST fires thousands of requests from a
-    // few source ranges and would otherwise be throttled into an incomplete
-    // report. Empty unless RATE_LIMIT_ALLOW_IPS names the assessor's ranges,
-    // and it reads the same Cloudflare-verified address the limiter keys on —
-    // never X-Forwarded-For, which a client can forge.
-    if (scannerAllowRules.length > 0) {
-      const cf = req.headers?.["cf-connecting-ip"];
-      const clientIp = typeof cf === "string" && cf.length > 0 ? cf : req.socket?.remoteAddress;
-      if (isRateLimitAllowedIp(clientIp, scannerAllowRules)) return true;
-    }
-    // OAuth callback: Google redirects here after consent; rate-limiting it
-    // would break the login flow for users on slow networks or retry loops.
-    if (url.startsWith("/api/auth/google/callback")) return true;
-    // Gmail Pub/Sub push traffic comes from Google's shared infra; under heavy
-    // mail load it would otherwise trip the per-IP limit and back up delivery.
-    if (url.startsWith("/api/gmail/push")) return true;
-    return false;
-  },
-});
+await app.register(rateLimit, rateLimitOptions(scannerAllowRules));
 
 // Raw body support for Stripe webhook signature verification
 app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
@@ -250,8 +271,14 @@ await app.register(webhookRoutes, { prefix: "/api/webhook" });
 await app.register(chatRoutes, { prefix: "/api/chat" });
 await app.register(chatConversationRoutes, { prefix: "/api/chat" });
 await app.register(authRoutes, { prefix: "/api/auth" });
+// POST /api/auth/link/complete: finishes every account-link OAuth flow (Google
+// connect/calendar/inbox, Outlook inbox/calendar) for the session that started
+// it. Its Outlook flows re-check their flags at completion (defaults: the same
+// OUTLOOK_INBOX_ENABLED / OUTLOOK_CALENDAR_ENABLED gates as the routes below).
+await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
 await app.register(briefingRoutes, { prefix: "/api/briefing" });
 await app.register(notificationRoutes, { prefix: "/api/notifications" });
+await app.register(alertEndpointRoutes, { prefix: "/api/notifications/alert-endpoints" });
 await app.register(opsRoutes, { prefix: "/api/ops" });
 await app.register(cronRoutes, { prefix: "/api/cron" });
 await app.register(diagnosticsRoutes, { prefix: "/api/diagnostics" });
@@ -279,10 +306,45 @@ await app.register(imapConnectRoutes(IMAP_PROVIDERS.NAVER), { prefix: "/api/nave
 await app.register(imapConnectRoutes(IMAP_PROVIDERS.ICLOUD, { gate: icloudInboxEnabled }), {
   prefix: "/api/icloud-imap",
 });
+// Step B4: generic IMAP with a user-supplied host — dark until GENERIC_IMAP_ENABLED
+// (same cloaked 404 while off; the flag is not to be flipped before the SSRF review).
+await app.register(imapConnectRoutes(IMAP_PROVIDERS.IMAP, { gate: genericImapEnabled }), {
+  prefix: "/api/generic-imap",
+});
 // Phase 3: dark until OUTLOOK_INBOX_ENABLED — same 404 gate as iCloud.
 await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
   prefix: "/api/auth/outlook",
 });
+// Step C3: iCloud and Naver calendars over CalDAV, dark until CALDAV_CALENDAR_ENABLED
+// (every route answers the default 404 while off).
+await app.register(caldavCalendarRoutes({ gate: caldavCalendarEnabled }), {
+  prefix: "/api/caldav-calendar",
+});
+// Step C6: calendars the desktop app uploads from the device (EventKit), one opted-in
+// calendar at a time — dark until DEVICE_CALENDAR_ENABLED (the default 404 while off,
+// which the Mac app reads as "hide the setting").
+await app.register(deviceCalendarRoutes({ gate: deviceCalendarEnabled }), {
+  prefix: "/api/device-calendar",
+});
+// The drive's read-only metadata routes (step D2) — dark until DRIVE_ENABLED.
+await app.register(driveRoutes({ gate: driveEnabled }), { prefix: "/api/drive" });
+// The Klorn drive (step D3): upload, folders, download, rename/move, delete —
+// dark until DRIVE_ENABLED, KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are on.
+await app.register(klornDriveRoutes({ gate: klornDriveRoutesEnabled }), { prefix: "/api/drive" });
+// Google Drive link and unlink (step D5b) — dark until DRIVE_ENABLED and
+// GOOGLE_DRIVE_ENABLED are both on. The consent's callback is routes/auth.ts's.
+await app.register(googleDriveLinkRoutes({ gate: googleDriveRoutesEnabled }), {
+  prefix: "/api/drive/google",
+});
+// The Klorn mailbox's inbound webhook (step E1b): Resend Inbound's email.received,
+// dark until KLORN_MAILBOX_ENABLED. Its own plugin, so the gate cannot reach the
+// Stripe and Paddle webhooks.
+await app.register(klornMailboxInboundRoutes({ gate: klornMailboxEnabled }), {
+  prefix: "/api/mailbox",
+});
+// Which account types this deployment can connect, for the first run's provider
+// grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
+await app.register(providersAvailableRoutes, { prefix: "/api/providers" });
 // Social LOGIN providers beyond Google — dark until APPLE_LOGIN_ENABLED /
 // NAVER_LOGIN_ENABLED flip; every route answers the cloaked 404 while off
 // (same CASA surface freeze as the dark IMAP providers above).
@@ -301,6 +363,8 @@ await app.register(phoneRoutes, { prefix: "/api/phone" });
 // answer-ready the moment the listener binds.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { healthResponse } from "./ops/health-response.js";
+import { newWork } from "./work-context.js";
 
 const PKG_VERSION: string | null = (() => {
   try {
@@ -313,35 +377,48 @@ const PKG_VERSION: string | null = (() => {
   }
 })();
 
-app.get("/api/health", async () => {
-  let dbOk = false;
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    dbOk = true;
-  } catch {
-    // DB unreachable
-  }
-  return {
-    status: dbOk ? "ok" : "degraded",
-    db: dbOk ? "connected" : "unreachable",
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
+function probeHealth() {
+  return healthResponse(() => prisma.$queryRaw`SELECT 1`, {
     version: PKG_VERSION ?? null,
     commit:
       process.env.RENDER_GIT_COMMIT ||
       process.env.GIT_COMMIT_SHA ||
       process.env.VERCEL_GIT_COMMIT_SHA ||
       null,
-  };
+    now: new Date(),
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+}
+
+// Liveness: 200 while the process serves requests; `db` in the body says
+// whether the database answered. See ops/health-response.ts.
+app.get("/api/health", async (_request, reply) => {
+  const { body } = await probeHealth();
+  return reply.code(200).send(body);
+});
+
+// Readiness: 503 while the database probe fails, for status-code monitors.
+app.get("/api/health/ready", async (_request, reply) => {
+  const { ready, body } = await probeHealth();
+  return reply.code(ready ? 200 : 503).send(body);
 });
 
 // Scheduler liveness for external monitors (UptimeRobot etc). 503 when any
 // in-process scheduler loop has gone silent past its staleness threshold —
 // the failure mode where the dyno slept or an import failed and briefings
 // just stopped (see routes/cron.ts). Public like /api/health: exposes only
-// scheduler names and tick times, no user data.
+// scheduler names and tick times, no user data — plus the LLM judge's coarse
+// fallback status + ratio (#1572), never error text.
 app.get("/api/health/schedulers", async (_request, reply) => {
-  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled() });
+  // The judge read is a cached in-memory value, but it must never turn the
+  // liveness endpoint into a 500: on any throw the field is simply omitted.
+  let judge: PublicJudgeHealth | undefined;
+  try {
+    judge = getPublicJudgeHealth();
+  } catch (err) {
+    console.warn("[JUDGE-HEALTH] public judge health read failed:", err);
+  }
+  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled(), judge });
   reply.code(report.statusCode);
   return report.body;
 });
@@ -356,6 +433,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
     reminders,
     conversations,
     calendarEvents,
+    driveFiles,
     notifications,
     automationConfig,
     agentLogs,
@@ -369,6 +447,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
       include: { messages: { orderBy: { createdAt: "asc" } } },
     }),
     prisma.calendarEvent.findMany({ where: { userId } }),
+    exportDriveFiles(userId),
     prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.automationConfig.findUnique({ where: { userId } }),
     db.agentLog.findMany({
@@ -384,6 +463,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
     reminders,
     conversations,
     calendarEvents,
+    driveFiles,
     notifications,
     automationConfig,
     agentLogs,
@@ -391,18 +471,21 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
   };
 });
 
-app.delete("/api/user/me/data", { preHandler: requireAuth }, async (request, reply) => {
+// A wipe is heavy (long transactions) and never needs repeating quickly.
+const WIPE_DATA_ROUTE = {
+  preHandler: requireAuth,
+  config: { rateLimit: { max: 3, timeWindow: "1 hour" } },
+};
+
+app.delete("/api/user/me/data", WIPE_DATA_ROUTE, async (request, reply) => {
   const userId = getUserId(request);
-  // Exhaustive user-data wipe (keeps the account row). See purge-user-data.ts —
-  // the list is CASA/Google "delete my data" critical and regression-tested.
-  // Pool-sized maxWait (#845 P2028 class) + a 60s timeout of its own: a full
-  // purge of a large account is many deletes and must not die at the 5s
-  // interactive default on a compliance-critical endpoint.
-  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
-    ...INTERACTIVE_TX_OPTIONS,
-    timeout: 60_000,
-  });
-  return reply.code(204).send();
+  // Exhaustive user-data wipe (keeps the account row), fenced against work
+  // already running for the user. See user-deletion.ts. 202: access is gone and
+  // the purge did not commit yet; the data-wipe sweep finishes it.
+  const outcome = await purgeAllUserData(userId);
+  return outcome === "purged"
+    ? reply.code(204).send()
+    : reply.code(202).send({ status: "pending" });
 });
 
 app.get("/api/notion/status", async () => ({
@@ -488,6 +571,33 @@ app.addHook("onClose", async () => {
 });
 
 // --- Server Startup ---
+// Before anything else: report what the judge is actually running. The pin is
+// validated at module load (openai.ts) — a model our committed eval records as
+// failing the urgent-recall gate is refused and replaced unless the operator
+// opted in explicitly. This line is what makes either outcome visible; the
+// 2026-09 incident ran for three weeks precisely because nothing announced it.
+reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
+// ...and the models that really serve it: every provider in the chain swaps a
+// pin it cannot route for its own default (ANTHROPIC_MODEL,
+// GEMINI_FALLBACK_MODEL), which the pin check above never sees — including the
+// failover lanes, which serve the judge exactly when the lead is down.
+reportJudgeServing(JUDGE_MODEL, getProviderChain());
+// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1572): say so once.
+warnRetiredJudgeHealthEnv();
+
+// What Paddle actually bills lives outside this repo, on a price object any
+// dashboard user can edit. Twice now it has silently stopped matching the
+// pages: 2026-08-12 ($7.99 advertised, $8.99 charged) and 2026-10-15 (pages
+// at $8.99, Paddle edited to $29.99 — customers billed ABOVE the quoted
+// price, found out from a passing remark). Nothing announced either one.
+//
+// Deliberately not awaited: this is an outbound call to a third party and it
+// must not sit in front of the server accepting connections. It warns and
+// returns; it never throws and never blocks startup.
+void checkPaddlePriceMatchesAdvertised({ advertised: ADVERTISED_PRO_PRICE_WEB }).catch((err) => {
+  console.warn(`[PADDLE] price check failed unexpectedly: ${(err as Error).message}`);
+});
+
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we
 // exit so Render restarts the process — this is safer than a permanent 503
@@ -541,6 +651,14 @@ try {
   const httpServer = app.server;
   initWebSocket(httpServer);
 
+  // Object storage (step D1 of docs/providers/unified-platform-plan.md). A
+  // no-op while OBJECT_STORAGE_ENABLED is off: nothing is read or connected.
+  // When on, it validates the OBJECT_STORAGE_* variables and lists one key, and
+  // reports a bad config or an unreachable bucket by name ([STORAGE] lines and
+  // Sentry). It never stops the boot: storage is auxiliary to mail, and every
+  // storage call fails closed until the config is fixed. It never rejects.
+  void checkObjectStorageAtStartup();
+
   // Emergency kill switch for ALL background LLM-driven loops. Set
   // BACKGROUND_AGENTS_DISABLED=true on Render when prod is bleeding to
   // upstream provider billing — the HTTP server still answers requests,
@@ -559,6 +677,18 @@ try {
       "[STARTUP] BACKGROUND_AGENTS_DISABLED is set — skipping all schedulers and background agents. The HTTP API still serves; no LLM calls from this container.",
     );
   }
+
+  // Account purges that are pending but cannot run (object storage off, or no
+  // schedulers) are reported once, by count (step D3). Never rejects.
+  void checkStoragePurgesAtStartup({ backgroundDisabled: BG_DISABLED });
+  // The Klorn drive refuses every upload without KLORN_DRIVE_QUOTA_BYTES (P3).
+  warnIfKlornDriveQuotaMissing();
+  reportRolloutCohort([
+    "DRIVE_ENABLED",
+    "KLORN_DRIVE_ENABLED",
+    "GOOGLE_DRIVE_ENABLED",
+    "DRIVE_SUMMARIES_ENABLED",
+  ]);
 
   // Start autonomous background agent
   if (!BG_DISABLED) startBackgroundAgent();
@@ -656,13 +786,94 @@ try {
       });
   }
 
+  // Pending account purges in object storage (step D3; hourly). While
+  // OBJECT_STORAGE_ENABLED is off a tick runs no purge and only counts pending
+  // records, to report them once.
+  if (!BG_DISABLED) {
+    import("./storage/purge-sweep.js")
+      .then(({ startStoragePurgeScheduler }) => {
+        startStoragePurgeScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] storage-purge sweep failed to start:", err);
+        captureError(err, { tags: { context: "startup:storage-purge" } });
+      });
+  }
+
+  // The data-wipe fence's snapshot of recent wipes (every 30 s), which the
+  // write check reads instead of the database. Always on: the check runs on
+  // every fenced write, background agents or not.
+  import("./privacy/data-wipe-fence.js")
+    .then(({ startDataWipeRefresh }) => {
+      startDataWipeRefresh();
+    })
+    .catch((err) => {
+      console.error("[STARTUP] data-wipe snapshot refresh failed to start:", err);
+      captureError(err, { tags: { context: "startup:data-wipe-refresh" } });
+    });
+
+  // Primary grants' Google addresses, for the revoke's shared-grant check
+  // (every 6 hours); see auth/google-address-backfill.ts.
+  if (!BG_DISABLED) {
+    import("./auth/google-address-backfill.js")
+      .then(({ startGoogleAddressBackfill }) => {
+        startGoogleAddressBackfill();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] Google address backfill failed to start:", err);
+        captureError(err, { tags: { context: "startup:google-address-backfill" } });
+      });
+  }
+
+  // Data wipes whose purge did not commit (every 10 minutes); see
+  // privacy/data-wipe-sweep.ts.
+  if (!BG_DISABLED) {
+    import("./privacy/data-wipe-sweep.js")
+      .then(({ startDataWipeSweep }) => {
+        startDataWipeSweep();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] data-wipe sweep failed to start:", err);
+        captureError(err, { tags: { context: "startup:data-wipe" } });
+      });
+  }
+
+  // Drive file summaries (step D4; every 5 minutes). While DRIVE_SUMMARIES_ENABLED
+  // or DRIVE_ENABLED is off a sweep reads nothing and runs nothing.
+  if (!BG_DISABLED) {
+    import("./drive/summary-job.js")
+      .then(({ startDriveSummaryScheduler }) => {
+        startDriveSummaryScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] drive-summary job failed to start:", err);
+        captureError(err, { tags: { context: "startup:drive-summary" } });
+      });
+  }
+
+  // Google Drive metadata refresh (step D5d; hourly). While DRIVE_ENABLED or
+  // GOOGLE_DRIVE_ENABLED is off a sweep reads nothing and calls nothing.
+  if (!BG_DISABLED) {
+    import("./drive/google-drive-refresh-job.js")
+      .then(({ startDriveGoogleRefreshScheduler }) => {
+        startDriveGoogleRefreshScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] drive-google-refresh job failed to start:", err);
+        captureError(err, { tags: { context: "startup:drive-google-refresh" } });
+      });
+  }
+
   // Self-ping to prevent Render free tier from sleeping after 15 min inactivity
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL) {
     const KEEP_ALIVE_MS = 10 * 60 * 1000; // every 10 minutes
-    setInterval(() => {
-      fetch(`${RENDER_URL}/api/health`).catch(() => {});
-    }, KEEP_ALIVE_MS);
+    setInterval(
+      newWork(() => {
+        fetch(`${RENDER_URL}/api/health`).catch(() => {});
+      }),
+      KEEP_ALIVE_MS,
+    );
   }
 } catch (err) {
   // Say WHY before dying. This block used to swallow the error and exit
@@ -694,8 +905,12 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     console.log(`[SHUTDOWN] ${signal} received — draining connections`);
     const hardExit = setTimeout(() => process.exit(1), 10_000);
     hardExit.unref();
+    // Google revoke retries live only in memory (auth/google-grant-revoke.ts):
+    // say which ones this exit cuts off, and give Sentry a moment to ship it.
+    const pendingRevokes = reportPendingGoogleRevokes();
     app
       .close()
+      .then(() => (pendingRevokes > 0 ? flushSentry(2_000) : undefined))
       .then(() => process.exit(0))
       .catch(() => process.exit(1));
   });

@@ -28,16 +28,15 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- iPad: all four orientations and no UIRequiresFullScreen, so Split
+	     View, Slide Over and Stage Manager are available (TARGETED_DEVICE_FAMILY
+	     "1,2" in the project). The layout adapts in src/layout/size-class.ts. -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -59,8 +58,8 @@
 		<string>remote-notification</string>
 	</array>
 	<!-- OAuth deep-link relay (login-CSRF fix): lets the app receive the
-	     ai.klorn.app://oauth-callback redirect. Dormant until the web build sets
-	     NEXT_PUBLIC_NATIVE_OAUTH_SCHEME. See apps/mobile/OAUTH_RELAY.md. -->
+	     ai.klorn.app://oauth-callback redirect. The bundled app always signs in
+	     through it (src/auth/oauth.ts). See apps/mobile/OAUTH_RELAY.md. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

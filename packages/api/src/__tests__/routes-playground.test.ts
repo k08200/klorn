@@ -18,7 +18,7 @@ vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
 
 import { playgroundRoutes } from "../routes/playground.js";
 
-const SECRET_KEY = "sk-or-v1-supersecret-do-not-leak-1234567890";
+const SECRET_KEY = "sk-ant-api03-supersecret-do-not-leak-1234567890";
 
 async function buildApp() {
   const app = Fastify();
@@ -66,9 +66,9 @@ describe("POST /api/playground/classify", () => {
         from: "VC <partner@fund.com>",
         subject: "Can we talk today?",
         snippet: "Need a decision by EOD.",
-        provider: "openrouter",
+        provider: "anthropic",
         apiKey: SECRET_KEY,
-        model: "meta-llama/llama-3.3-70b-instruct:free",
+        model: "claude-haiku-5-5",
       },
     });
     expect(res.statusCode).toBe(200);
@@ -81,7 +81,7 @@ describe("POST /api/playground/classify", () => {
     await app.close();
   });
 
-  it("threads the visitor's key into the classifier as openrouter credentials", async () => {
+  it("threads the visitor's key into the classifier as anthropic credentials", async () => {
     judgeEmail.mockResolvedValue({
       tier: "QUEUE",
       reason: "x",
@@ -96,18 +96,20 @@ describe("POST /api/playground/classify", () => {
         from: "a@b.com",
         subject: "hi",
         apiKey: SECRET_KEY,
-        provider: "openrouter",
-        model: "qwen/qwen3-next-80b-a3b-instruct:free",
+        provider: "anthropic",
+        model: "claude-sonnet-5-5",
       },
     });
     const credentials = judgeEmail.mock.calls[0][3];
-    expect(credentials.openRouterApiKey).toBe(SECRET_KEY);
+    expect(credentials.anthropicApiKey).toBe(SECRET_KEY);
     expect(credentials.geminiApiKey).toBeFalsy();
+    expect(credentials.openAiApiKey).toBeFalsy();
+    expect(credentials.playgroundOnly).toBe(true);
     // No userId — playground calls must bypass the per-user cost ledger.
     expect(judgeEmail.mock.calls[0][1]).toBeUndefined();
-    // The visitor's model choice is forwarded so a :free key isn't forced
-    // onto the paid default JUDGE_MODEL.
-    expect(judgeEmail.mock.calls[0][4]).toBe("qwen/qwen3-next-80b-a3b-instruct:free");
+    // The visitor's model choice is forwarded instead of the server's
+    // JUDGE_MODEL — the visitor pays for whatever they pick.
+    expect(judgeEmail.mock.calls[0][4]).toBe("claude-sonnet-5-5");
     await app.close();
   });
 
@@ -126,7 +128,7 @@ describe("POST /api/playground/classify", () => {
     });
     const credentials = judgeEmail.mock.calls[0][3];
     expect(credentials.openAiApiKey).toBe(SECRET_KEY);
-    expect(credentials.openRouterApiKey).toBeFalsy();
+    expect(credentials.anthropicApiKey).toBeFalsy();
     expect(credentials.geminiApiKey).toBeFalsy();
     await app.close();
   });
@@ -146,7 +148,40 @@ describe("POST /api/playground/classify", () => {
     });
     const credentials = judgeEmail.mock.calls[0][3];
     expect(credentials.geminiApiKey).toBe(SECRET_KEY);
-    expect(credentials.openRouterApiKey).toBeFalsy();
+    expect(credentials.anthropicApiKey).toBeFalsy();
+    await app.close();
+  });
+
+  it("defaults to the anthropic slot when no provider is named", async () => {
+    judgeEmail.mockResolvedValue({
+      tier: "QUEUE",
+      reason: "x",
+      features: { confidence: 0.5, senderTrust: 0.5, reversibility: 0.5, urgency: 0.2 },
+      source: "llm",
+    });
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: "/api/playground/classify",
+      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY },
+    });
+    const credentials = judgeEmail.mock.calls[0][3];
+    expect(credentials.anthropicApiKey).toBe(SECRET_KEY);
+    expect(credentials.geminiApiKey).toBeFalsy();
+    expect(credentials.openAiApiKey).toBeFalsy();
+    await app.close();
+  });
+
+  it("rejects the retired openrouter provider before any classification", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/playground/classify",
+      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "openrouter" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(judgeEmail).not.toHaveBeenCalled();
+    expect(JSON.stringify(res.json())).not.toContain(SECRET_KEY);
     await app.close();
   });
 
@@ -156,7 +191,7 @@ describe("POST /api/playground/classify", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/playground/classify",
-      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "openrouter" },
+      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "anthropic" },
     });
     expect(res.statusCode).toBe(502);
     expect(res.json().error).toMatch(/key|model|retry/i);
@@ -177,7 +212,7 @@ describe("POST /api/playground/classify", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/playground/classify",
-      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "openrouter" },
+      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "anthropic" },
     });
     expect(res.statusCode).toBe(502);
     expect(res.json().error).toMatch(/model didn't run|invalid|key/i);
@@ -195,7 +230,7 @@ describe("POST /api/playground/classify", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/playground/classify",
-      payload: { from: "promo@x.com", subject: "SALE", apiKey: SECRET_KEY, provider: "openrouter" },
+      payload: { from: "promo@x.com", subject: "SALE", apiKey: SECRET_KEY, provider: "anthropic" },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().tier).toBe("SILENT");
@@ -214,7 +249,7 @@ describe("POST /api/playground/classify", () => {
     await app.inject({
       method: "POST",
       url: "/api/playground/classify",
-      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "openrouter" },
+      payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "anthropic" },
     });
     const credentials = judgeEmail.mock.calls[0][3];
     expect(credentials.quotaScope).toBe("playground");

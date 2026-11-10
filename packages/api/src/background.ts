@@ -12,11 +12,17 @@
  * Notifications are persisted to PostgreSQL (Notification model).
  */
 
+import type { DesktopAlertKind } from "@klorn/contract";
+import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "./db.js";
+import { escapeLikePattern } from "./db-like.js";
+import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
+import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
+import { newWork } from "./work-context.js";
 
 // In-memory cache only used to skip redundant DB queries within same process lifetime.
 // Actual dedup is DB-based (survives server restarts).
@@ -31,8 +37,14 @@ let meetingCheckInFlight = false;
 
 async function addNotification(
   userId: string,
-  notif: { type: string; title: string; message: string; link?: string },
-) {
+  notif: {
+    type: string;
+    title: string;
+    message: string;
+    link?: string;
+    alert?: DesktopAlertKind;
+  },
+): Promise<{ id: string }> {
   // Persist to DB
   const data: Record<string, unknown> = {
     userId,
@@ -56,7 +68,9 @@ async function addNotification(
     message: notif.message,
     link: notif.link,
     createdAt: entry.createdAt.toISOString(),
+    ...(notif.alert ? { alert: notif.alert } : {}),
   });
+  return { id: entry.id };
 }
 
 export interface NotificationDTO {
@@ -77,7 +91,12 @@ export async function getNotifications(
   userId: string,
   options?: { unreadOnly?: boolean; limit?: number },
 ): Promise<NotificationDTO[]> {
-  const where: { userId: string; isRead?: boolean } = { userId };
+  // Hidden claims (in-flight or cleared unattended-reply locks) are not bell
+  // entries.
+  const where: { userId: string; type: { not: string }; isRead?: boolean } = {
+    userId,
+    type: { not: HIDDEN_CLAIM_TYPE },
+  };
   if (options?.unreadOnly) where.isRead = false;
 
   const rows = await (
@@ -131,8 +150,27 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   });
 }
 
+/** Bell rows that clearing hides instead of deleting: reply locks and interrupt slots. */
+const KEPT_NOTIFICATION_ROWS = {
+  OR: [...REPLY_CLAIM_ROWS.OR, { dedupeKey: { startsWith: INTERRUPT_SLOT_ROOT } }],
+};
+
 export async function clearNotifications(userId: string): Promise<void> {
-  await prisma.notification.deleteMany({ where: { userId } });
+  // Unattended-reply claims (`auto-reply:` / legacy `auto-mode-reply:`) are
+  // at-most-once LOCKS: deleting one lets a still-OPEN failed item be
+  // re-drafted and re-sent. Delete everything else; hide the claims instead
+  // (read + hidden type), so the bell is visually cleared and the lock stays.
+  // Interrupt-budget slots (`interrupt:<day>:<n>`, attention engine v3) are
+  // kept the same way: deleting one would hand the day's spent budget back.
+  // The explicit `dedupeKey: null` branch matters: SQL `NOT (col LIKE ..)` is
+  // NULL, not true, for a NULL column, so ordinary rows would otherwise survive.
+  await prisma.notification.deleteMany({
+    where: { userId, OR: [{ dedupeKey: null }, { NOT: KEPT_NOTIFICATION_ROWS.OR }] },
+  });
+  await prisma.notification.updateMany({
+    where: { userId, ...KEPT_NOTIFICATION_ROWS, type: { not: HIDDEN_CLAIM_TYPE } },
+    data: { type: HIDDEN_CLAIM_TYPE, isRead: true },
+  });
   // Drop the mirrored queue entries — without this, the queue keeps showing
   // FOLLOWUP rows pointing at notifications that no longer exist.
   await prisma.attentionItem.deleteMany({ where: { userId, source: "NOTIFICATION" } });
@@ -176,7 +214,7 @@ async function checkUpcomingMeetings() {
               where: {
                 userId,
                 type: "meeting",
-                message: { contains: meeting.id },
+                message: { contains: escapeLikePattern(meeting.id) },
                 createdAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
               },
             });
@@ -190,11 +228,14 @@ async function checkUpcomingMeetings() {
               ? `Join link: ${meeting.meetingLink} [${meeting.id}]`
               : `${meeting.summary} starts soon [${meeting.id}]`;
 
-            await addNotification(userId, {
+            const bellRow = await addNotification(userId, {
               type: "meeting",
               title: `Meeting in ${Math.ceil(minutesUntil)} min: ${meeting.summary}`,
               message: msg,
               link: meeting.meetingLink || "/briefing",
+              // Meeting starting soon → OS banner in the desktop shell, under
+              // the same "meeting" gate as the web push below.
+              ...(await desktopAlertTag(userId, "meeting")),
             });
 
             // Also send browser push with meeting link. AWAIT it: the call is
@@ -211,8 +252,13 @@ async function checkUpcomingMeetings() {
                   title: `Meeting in ${Math.ceil(minutesUntil)} min`,
                   body: meeting.summary,
                   url: meeting.meetingLink || "/briefing",
+                  // Web push tags its OS notification with the bell row, as
+                  // an open tab does, so the meeting shows once.
+                  bellNotificationId: bellRow.id,
                 },
                 "meeting",
+                // A meeting starting: an interrupt caller (push-bucket.ts).
+                { bucket: "interrupt" },
               );
             } catch (err) {
               console.warn("[BACKGROUND] meeting push failed", err);
@@ -250,13 +296,16 @@ export function startBackgroundAgent() {
   registerScheduler("background-agent", 60_000);
 
   // Run immediately once
-  checkUpcomingMeetings();
+  newWork(checkUpcomingMeetings)();
 
   // Then every 60 seconds — only meeting checks (task checks moved to autonomous-agent.ts)
-  intervalId = setInterval(async () => {
-    recordSchedulerTick("background-agent");
-    await checkUpcomingMeetings();
-  }, 60_000);
+  intervalId = setInterval(
+    newWork(async () => {
+      recordSchedulerTick("background-agent");
+      await checkUpcomingMeetings();
+    }),
+    60_000,
+  );
 }
 
 export function stopBackgroundAgent() {

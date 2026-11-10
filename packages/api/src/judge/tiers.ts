@@ -20,6 +20,8 @@
  * to QUEUE by an unknown-value fallback.
  */
 
+import type { LiveTier } from "@klorn/contract";
+
 export const TIERS = ["SILENT", "INFO", "QUEUE", "MEETING", "PUSH", "AUTO"] as const;
 
 export type Tier = (typeof TIERS)[number];
@@ -35,6 +37,17 @@ export function normalizeTier(value: string | null | undefined, _strict = false)
   if (value === "CALL") return "PUSH";
   if (value && TIER_SET.has(value)) return value as Tier;
   return "QUEUE";
+}
+
+/**
+ * normalizeTier for user-facing surfaces: additionally folds the retired v1
+ * AUTO lane into QUEUE, the vocabulary's visible default (the same fold the
+ * TIER_V2 backfill applies). Use this wherever a lane is shown to a person —
+ * the firewall board, mail-row chips — so AUTO never renders as a lane.
+ */
+export function toLiveTier(value: string | null | undefined): LiveTier {
+  const tier = normalizeTier(value);
+  return tier === "AUTO" ? "QUEUE" : tier;
 }
 
 export function isTier(value: unknown): value is Tier {

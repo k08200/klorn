@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type FakeCall = (params: unknown, model: string) => Promise<unknown>;
 
 interface FakeProvider {
-  name: "openrouter" | "gemini";
+  name: "anthropic" | "gemini";
   quotaKey: string;
   defaultModel: string;
   supportsTools: boolean;
@@ -32,18 +32,18 @@ vi.mock("../providers/index.js", () => ({
 const recorded: Array<Record<string, unknown>> = [];
 // Hoisted so we can assert the servedByUserKey flag createCompletion forwards.
 const trueUpSpy = vi.hoisted(() => vi.fn(async () => {}));
-// Model-aware pre-bill stub: a `:free` slug estimates 0 (free models cost
-// nothing to pre-bill), a paid slug estimates a positive cent. This lets the
-// vision `:free`→paid retry assert that the closure pre-bills the model that
-// ACTUALLY served (the paid slug), not the requested `:free` one (which would
-// estimate 0 — the bug this guards).
-const PAID_PREBILL_CENTS = 7;
+// Model-aware pre-bill stub: the model a provider resolves to (Gemini's
+// `gemini-2.5-flash`) estimates differently from any other id. This lets the
+// vision path assert that the ledger row pre-bills the model that ACTUALLY
+// dispatched, not the requested `params.model`.
+const SERVED_MODEL_PREBILL_CENTS = 3;
+const OTHER_MODEL_PREBILL_CENTS = 7;
 vi.mock("../billing/llm-usage.js", () => ({
   recordLlmUsage: vi.fn(async (input: Record<string, unknown>) => {
     recorded.push(input);
   }),
   estimatePrebillCents: vi.fn((model: string) =>
-    model.endsWith(":free") || model === "openrouter/free" ? 0 : PAID_PREBILL_CENTS,
+    model === "gemini-2.5-flash" ? SERVED_MODEL_PREBILL_CENTS : OTHER_MODEL_PREBILL_CENTS,
   ),
   trueUpCostLedgers: trueUpSpy,
 }));
@@ -67,7 +67,7 @@ vi.mock("../db.js", () => ({
 }));
 
 function makeProvider(
-  name: "openrouter" | "gemini",
+  name: "anthropic" | "gemini",
   quotaKey: string,
   call: FakeCall,
 ): FakeProvider {
@@ -75,7 +75,7 @@ function makeProvider(
     name,
     quotaKey,
     defaultModel: "fake-default",
-    supportsTools: name === "openrouter",
+    supportsTools: name === "anthropic",
     client: null,
     resolveModel: (m: string) => (name === "gemini" ? "gemini-2.5-flash" : m),
     call,
@@ -89,7 +89,7 @@ const COMPLETION = {
 };
 
 const PARAMS: ChatCompletionCreateParamsNonStreaming = {
-  model: "google/gemma-4-31b-it:free",
+  model: "claude-haiku-5-5",
   messages: [{ role: "user", content: "hi" }],
 };
 
@@ -103,7 +103,7 @@ beforeEach(async () => {
 
 describe("createCompletion — usage ledger threading", () => {
   it("records the first provider+model when the first call succeeds", async () => {
-    chain.push(makeProvider("openrouter", "openrouter:env", async () => COMPLETION));
+    chain.push(makeProvider("anthropic", "anthropic:env", async () => COMPLETION));
     const { createCompletion } = await import("../llm/openai.js");
 
     const result = await createCompletion(PARAMS);
@@ -111,8 +111,8 @@ describe("createCompletion — usage ledger threading", () => {
     expect(result).toBe(COMPLETION);
     expect(recorded).toHaveLength(1);
     expect(recorded[0]).toMatchObject({
-      provider: "openrouter",
-      model: "google/gemma-4-31b-it:free",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
       userId: null,
       source: "foreground",
       usage: COMPLETION.usage,
@@ -121,7 +121,7 @@ describe("createCompletion — usage ledger threading", () => {
 
   it("records the FAILOVER provider+model, not the requested one", async () => {
     chain.push(
-      makeProvider("openrouter", "openrouter:env-failing", async () => {
+      makeProvider("anthropic", "anthropic:env", async () => {
         throw { status: 429, message: "Key limit exceeded" };
       }),
       makeProvider("gemini", "gemini:env", async () => COMPLETION),
@@ -143,22 +143,22 @@ describe("createCompletion — usage ledger threading", () => {
     async function* stream() {
       yield { choices: [{ delta: { content: "ok" } }] };
     }
-    chain.push(makeProvider("openrouter", "openrouter:env-stream", async () => stream()));
+    chain.push(makeProvider("anthropic", "anthropic:env", async () => stream()));
     const { createCompletion } = await import("../llm/openai.js");
 
     await createCompletion({ ...PARAMS, stream: true });
 
     expect(recorded).toHaveLength(1);
     expect(recorded[0]).toMatchObject({
-      provider: "openrouter",
-      model: "google/gemma-4-31b-it:free",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
       usage: null,
     });
   });
 
   it("records nothing when every provider fails", async () => {
     chain.push(
-      makeProvider("openrouter", "openrouter:env-dead", async () => {
+      makeProvider("anthropic", "anthropic:env", async () => {
         throw { status: 429, message: "Key limit exceeded" };
       }),
     );
@@ -171,7 +171,7 @@ describe("createCompletion — usage ledger threading", () => {
   it("flags servedByUserKey on the true-up when the user's OWN key served the call", async () => {
     // BYOK happy path: the served provider is user-owned, so the true-up is
     // told to charge Klorn's ledgers nothing.
-    const userProvider = makeProvider("openrouter", "openrouter:user:u9", async () => COMPLETION);
+    const userProvider = makeProvider("anthropic", "anthropic:user:u9", async () => COMPLETION);
     userProvider.ownedByUser = true;
     chain.push(userProvider);
     const { createCompletion } = await import("../llm/openai.js");
@@ -188,7 +188,7 @@ describe("createCompletion — usage ledger threading", () => {
     // This is the cost-hole guard, end to end: a failed user key can't make
     // env spend invisible. Only the SUCCESSFUL provider reaches the true-up.
     chain.push(
-      makeProvider("openrouter", "openrouter:user:u9", async () => {
+      makeProvider("anthropic", "anthropic:user:u9", async () => {
         throw { status: 429, message: "Key limit exceeded" };
       }),
       makeProvider("gemini", "gemini:env", async () => COMPLETION),
@@ -240,85 +240,49 @@ describe("createVisionCompletion — usage ledger threading", () => {
     expect(recorded[0]).toMatchObject({ source: "foreground" });
   });
 
-  it("retries the paid slug when the :free vision SKU is 404 (OpenRouter-only chain)", async () => {
-    // Real incident: VISION_MODEL defaults to google/gemini-2.5-flash:free and
-    // OpenRouter 404s that SKU ("This model is unavailable for free — use this
-    // slug instead: google/gemini-2.5-flash"). The fix strips :free and retries
-    // the paid slug on the SAME provider instead of hard-failing → VISION_FAILED.
+  it("pre-bills the model the vision provider ACTUALLY dispatched, not params.model", async () => {
+    // Vision runs on VISION_MODEL resolved per provider, never on the caller's
+    // params.model. The ledger row's pre-bill must price that dispatched model
+    // — pricing params.model would record a cost for a model that never ran.
     const seen: string[] = [];
     chain.push(
-      makeProvider("openrouter", "openrouter:env-vision", async (_p, model) => {
+      makeProvider("gemini", "gemini:env", async (_p, model) => {
         seen.push(model);
-        if (model.endsWith(":free")) {
-          throw new Error(
-            "404 This model is unavailable for free. The paid version is available now - use this slug instead: google/gemini-2.5-flash",
-          );
-        }
         return COMPLETION;
       }),
     );
-    const { createVisionCompletion, VISION_MODEL } = await import("../llm/openai.js");
-    // Test premise: the default vision SKU is the :free one that 404s.
-    expect(VISION_MODEL.endsWith(":free")).toBe(true);
-    const paid = VISION_MODEL.replace(/:free$/, "");
-
-    const result = await createVisionCompletion(PARAMS, { userId: "user-5" });
-
-    expect(result).toBe(COMPLETION);
-    // First the :free SKU (404), then the stripped paid slug (served).
-    expect(seen).toEqual([VISION_MODEL, paid]);
-    // Ledger records the model that actually served — the paid slug.
-    expect(recorded).toHaveLength(1);
-    expect(recorded[0]).toMatchObject({ provider: "openrouter", model: paid });
-    // Pre-bill must reflect the PAID model that served, not the requested
-    // `:free` slug (which estimates 0). The closure was reading params.model
-    // (still `:free` on the retry) → a paid call billed at 0; it must read the
-    // resolved/dispatched model instead.
-    expect(recorded[0]?.estimatedCostCents).toBe(PAID_PREBILL_CENTS);
-  });
-
-  it("falls through to the next provider when the paid retry throws a generic error", async () => {
-    // After a :free 404 → paid retry, if the paid retry fails with a NON-budget,
-    // NON-availability error (e.g. a transient 5xx / unknown error), the vision
-    // call must not hard-fail the whole request — a healthy next provider (env
-    // Gemini, separate quota) should still serve it, mirroring createCompletion's
-    // graceful degradation. A bare `throw err2` here would escape the for-loop
-    // and fail every image OCR outright.
-    const userOR = makeProvider("openrouter", "openrouter:user:u7", async (_p, model) => {
-      if (model.endsWith(":free")) {
-        throw new Error("404 This model is unavailable for free");
-      }
-      throw new Error("boom: transient upstream error"); // generic, non-budget
-    });
-    userOR.ownedByUser = true;
-    chain.push(
-      userOR,
-      makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
-    );
     const { createVisionCompletion } = await import("../llm/openai.js");
 
-    const result = await createVisionCompletion(PARAMS, { userId: "u7" });
+    const result = await createVisionCompletion(
+      { ...PARAMS, model: "some/requested-model" },
+      { userId: "user-5" },
+    );
 
     expect(result).toBe(COMPLETION);
-    // Only the SUCCESSFUL provider (env Gemini) reaches the ledger.
+    expect(seen).toEqual(["gemini-2.5-flash"]);
     expect(recorded).toHaveLength(1);
     expect(recorded[0]).toMatchObject({ provider: "gemini", model: "gemini-2.5-flash" });
+    expect(recorded[0]?.estimatedCostCents).toBe(SERVED_MODEL_PREBILL_CENTS);
+    expect(trueUpSpy.mock.calls[0]?.[0]).toMatchObject({
+      model: "gemini-2.5-flash",
+      prebilledCents: SERVED_MODEL_PREBILL_CENTS,
+      servedByUserKey: false,
+    });
   });
 
-  it("falls through to env Gemini when a BYOK key's :free 404 → paid retry has no credit", async () => {
-    // BYOK OpenRouter key leads the chain (userOwned first). Its :free SKU 404s,
-    // the paid retry 402s (no credit) → we fail over to env Gemini's native key
-    // (separate quota) so a keyless/credit-less path still degrades gracefully.
-    const userOR = makeProvider("openrouter", "openrouter:user:u6", async (_p, model) => {
-      if (model.endsWith(":free")) {
-        throw new Error("404 This model is unavailable for free");
-      }
+  it("falls through to env Gemini when a BYOK key has no credit (402)", async () => {
+    // The user's own Anthropic key leads the chain (user-owned first) but 402s
+    // → we fail over to env Gemini's native key (separate quota) so a
+    // credit-less key still degrades gracefully. Klorn paid for that call, so
+    // the true-up must bill it: servedByUserKey false, nothing pre-billed
+    // (the gate skipped the pre-bill because a user key was in the chain).
+    const userKey = makeProvider("anthropic", "anthropic:user:u6", async () => {
       throw { status: 402, message: "insufficient credits" };
     });
-    userOR.ownedByUser = true;
+    userKey.ownedByUser = true;
     chain.push(
-      userOR,
-      makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
+      userKey,
+      makeProvider("gemini", "gemini:env", async () => COMPLETION),
     );
     const { createVisionCompletion } = await import("../llm/openai.js");
 
@@ -327,5 +291,10 @@ describe("createVisionCompletion — usage ledger threading", () => {
     expect(result).toBe(COMPLETION);
     expect(recorded).toHaveLength(1);
     expect(recorded[0]).toMatchObject({ provider: "gemini", model: "gemini-2.5-flash" });
+    expect(trueUpSpy).toHaveBeenCalledTimes(1);
+    expect(trueUpSpy.mock.calls[0]?.[0]).toMatchObject({
+      servedByUserKey: false,
+      prebilledCents: 0,
+    });
   });
 });

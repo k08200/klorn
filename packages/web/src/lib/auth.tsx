@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiFetch, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "./api";
 import { storedAttribution } from "./attribution";
+import { forgetHome, homePath, LEGACY_HOME, rememberHome, signInDestination } from "./home";
+import { browserSessionStorage, hasPendingHandle } from "./link-complete";
 import { clearSensitiveStorage, revokeServerSession } from "./logout-cleanup";
+import type { TimeZoneMode } from "./time-zone";
+import { useTimeZoneAutoSync } from "./time-zone-sync";
 import { trackAppOpenOnce } from "./track";
 
 interface User {
@@ -26,11 +30,35 @@ interface User {
   // disable their subscribe button instead of firing a checkout that 400s
   // (e.g. a native-IAP-only launch). Undefined (older API) = assume available.
   webCheckoutAvailable?: boolean;
-  // IANA timezone (e.g., "Asia/Seoul"). Always present — defaults server-side
-  // to "Asia/Seoul" when the column is null. Used for date/time rendering so
-  // the UI doesn't silently fall back to the browser timezone, which on iOS
-  // PWA can disagree with the user's actual locale (e.g., shows UTC).
+  // The account's stored IANA zone (AutomationConfig.timezone) — the zone
+  // server-side features schedule in. Never render with it directly: use
+  // useDisplayTimeZone() (lib/use-time-zone.ts), which honours timezoneMode.
   timezone: string;
+  // "MANUAL" = pinned in Settings; "AUTO" = no saved choice, render in the
+  // device zone and sync it to `timezone`. Undefined (older API) = AUTO.
+  timezoneMode?: TimeZoneMode;
+  // Server-driven client flag: the API's KEYBOARD_TRIAGE (productization plan
+  // P4). True turns on the hotkey registry beyond Cmd+K / B / /, the `?` sheet
+  // and optimistic lane moves with undo. Undefined (older API) = off.
+  keyboardTriage?: boolean;
+  // Server-driven client flag: the API's MAIL_V2 (productization plan P5).
+  // True renders /email as the lane-first list. Undefined (older API) = off.
+  mailV2?: boolean;
+  // Server-driven client flag: the API's UNIFIED_HOME (productization plan
+  // P6). True makes Today (/today) the home and switches the nav to Today ·
+  // Mail · Calendar · Assistant. Undefined (older API) = off.
+  unifiedHome?: boolean;
+  // Server-driven client flag: the API's ONBOARDING_V2 (productization plan
+  // P8). True renders /onboarding as the multi-provider first run. Undefined
+  // (older API) = off.
+  onboardingV2?: boolean;
+  // Server-driven client flag (productization plan P12, FD-7): true while the
+  // drive and at least one of its sources are on. Shows the Files tab and
+  // Today's recent files. Undefined (older API) = off.
+  files?: boolean;
+  // Server-driven client flag: the API's TEAM_MODE_ENABLED (P12). True offers
+  // "When is everyone free?" to a user with a saved team. Undefined = off.
+  teamMode?: boolean;
 }
 
 interface AuthContextType {
@@ -47,10 +75,15 @@ interface AuthContextType {
   // Naver IMAP instead of Gmail is not bounced out of the app. null = unknown.
   hasMailSource: boolean | null;
   initSync: InitSyncState;
+  /** Run the primary account's sign-in sync again (the first run's retry). */
+  retryInitSync: () => void;
+  /** `redirectTo` omitted = the user's home (Today under UNIFIED_HOME); the same for register. */
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (email: string, password: string, name?: string, redirectTo?: string) => Promise<void>;
   loginWithToken: (token: string) => Promise<void>;
   logout: () => void;
+  /** Mirror a saved time zone preference into the signed-in user. */
+  applyTimeZone: (zone: string, mode: TimeZoneMode) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -145,6 +178,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
         .then((data) => {
           setUser(data.user);
+          // UNIFIED_HOME: keep the home hint for the callers that route before
+          // this answer exists (the root redirect, the native sign-in).
+          rememberHome(data.user);
           setGoogleConnected(data.user.googleConnected ?? false);
           setGoogleNeedsReconnect(data.user.googleNeedsReconnect ?? false);
           // Older API without the field: fall back to googleConnected so the
@@ -174,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [runInitialSync]);
 
   const login = useCallback(
-    async (email: string, password: string, redirectTo = "/inbox") => {
+    async (email: string, password: string, redirectTo?: string) => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -183,7 +219,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.token);
       setUser(data.user);
       setAuthError(null);
-      router.push(redirectTo);
+      rememberHome(data.user);
+      router.push(signInDestination(redirectTo, data.user));
 
       // Trigger bootstrap sync. If Google is not connected yet, the card can show that clearly.
       runInitialSync(data.token);
@@ -192,7 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string, name?: string, redirectTo = "/onboarding") => {
+    async (email: string, password: string, name?: string, redirectTo?: string) => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
@@ -209,7 +246,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setGoogleConnected(false);
       setGoogleNeedsReconnect(false);
       setHasMailSource(false); // fresh account — nothing attached yet
-      router.push(redirectTo);
+      rememberHome(data.user);
+      router.push(signInDestination(redirectTo, data.user));
     },
     [router],
   );
@@ -219,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStoredAuthToken(newToken);
       setToken(newToken);
       let connected = false;
+      let home = LEGACY_HOME;
       try {
         const data = await apiFetch<{
           user: User & { googleConnected?: boolean; hasAnyMailSource?: boolean };
@@ -227,6 +266,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         setUser(data.user);
         setAuthError(null);
+        rememberHome(data.user);
+        home = homePath(data.user);
         connected = data.user.googleConnected ?? false;
         setGoogleConnected(connected);
         setHasMailSource(data.user.hasAnyMailSource ?? connected);
@@ -236,19 +277,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
 
+      // A social sign-in cannot carry /login's `?next=` through the provider
+      // round trip, so an account link that is waiting in this tab for a
+      // session (/link/complete kept its handle) is resumed here instead.
+      const resumeLink = hasPendingHandle(browserSessionStorage(), Date.now());
       // Login is identity-only (incremental auth): a fresh Google sign-in has
       // no Gmail/Calendar grant yet, so syncing would just 403. Send those
       // users straight to onboarding's Connect step instead of bouncing
       // /inbox → AuthGuard → /onboarding.
       if (connected) {
         runInitialSync(newToken);
-        window.location.href = "/inbox";
+        window.location.href = resumeLink ? "/link/complete" : home;
       } else {
-        window.location.href = "/onboarding";
+        window.location.href = resumeLink ? "/link/complete" : "/onboarding";
       }
     },
     [runInitialSync],
   );
+
+  const retryInitSync = useCallback(() => {
+    if (token) runInitialSync(token);
+  }, [token, runInitialSync]);
 
   const logout = useCallback(() => {
     // Order matters: revoke server-side BEFORE clearing the token (the call
@@ -256,6 +305,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     revokeServerSession();
     clearStoredAuthToken();
     clearSensitiveStorage();
+    // UNIFIED_HOME: the home hint belongs to the session that is ending.
+    forgetHome();
     setToken(null);
     setUser(null);
     setAuthError(null);
@@ -264,6 +315,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setInitSync(INIT_SYNC_IDLE);
     router.push("/login");
   }, [router]);
+
+  const applyTimeZone = useCallback((zone: string, mode: TimeZoneMode) => {
+    setUser((current) => (current ? { ...current, timezone: zone, timezoneMode: mode } : current));
+  }, []);
+  useTimeZoneAutoSync(user, applyTimeZone);
 
   return (
     <AuthContext.Provider
@@ -276,10 +332,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         googleNeedsReconnect,
         hasMailSource,
         initSync,
+        retryInitSync,
         login,
         register,
         loginWithToken,
         logout,
+        applyTimeZone,
       }}
     >
       {children}

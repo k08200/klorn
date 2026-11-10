@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
+import { ADVERTISED_PRO_PRICE_WEB } from "../billing/advertised-price.js";
 import { verifyPaddleSignature } from "../billing/paddle.js";
+import { checkPaddlePriceEvent } from "../billing/paddle-price-check.js";
 import { PLANS, stripe } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
@@ -103,7 +105,13 @@ export async function webhookRoutes(app: FastifyInstance) {
             }
             if (sub.status === "past_due" || sub.status === "unpaid") {
               const msg = `Your subscription is ${sub.status}. Please update your payment method to restore access.`;
-              await notifyUser(user.id, "billing", "Payment Issue", msg, "/settings");
+              await notifyUser(
+                user.id,
+                "billing",
+                "Payment Issue",
+                msg,
+                "/settings/account-billing",
+              );
             }
           }
           break;
@@ -125,7 +133,7 @@ export async function webhookRoutes(app: FastifyInstance) {
               "billing",
               "Subscription Cancelled",
               "Your subscription has been cancelled. You've been moved to the Free plan.",
-              "/settings",
+              "/settings/account-billing",
             );
           }
           break;
@@ -144,7 +152,7 @@ export async function webhookRoutes(app: FastifyInstance) {
               "billing",
               "Payment Failed",
               "Your latest payment failed. Please update your payment method to keep your plan active.",
-              "/settings",
+              "/settings/account-billing",
             );
           } else {
             // A payment failure for a customer we can't map to a user is a real
@@ -306,7 +314,7 @@ export async function webhookRoutes(app: FastifyInstance) {
                 "billing",
                 "Subscription Cancelled",
                 "Your subscription has been cancelled. You've been moved to the Free plan.",
-                "/settings",
+                "/settings/account-billing",
               );
             } else if (data.status === "past_due" || data.status === "paused") {
               await notifyUser(
@@ -314,7 +322,7 @@ export async function webhookRoutes(app: FastifyInstance) {
                 "billing",
                 "Payment Issue",
                 "Your subscription payment failed. Please update your payment method to restore access.",
-                "/settings",
+                "/settings/account-billing",
               );
             }
           }
@@ -330,11 +338,28 @@ export async function webhookRoutes(app: FastifyInstance) {
             "billing",
             "Payment Failed",
             "Your latest payment failed. Please update your payment method to keep your plan active.",
-            "/settings",
+            "/settings/account-billing",
           );
         }
+      } else {
+        // A price edited in the Paddle dashboard emits price.updated, and the
+        // event carries the price object inline — no API call, no key
+        // permission, no deploy needed. This is the path that matters: both
+        // pricing incidents (2026-08-12, 2026-10-15) were dashboard edits with
+        // no deploy, so a boot-time check would not have fired for either
+        // until some unrelated restart. Never throws; a reporting problem must
+        // not turn a webhook into a 500 and make Paddle retry it.
+        try {
+          checkPaddlePriceEvent({
+            eventType: body.event_type,
+            data: body.data,
+            advertised: ADVERTISED_PRO_PRICE_WEB,
+          });
+        } catch (err) {
+          captureError(err, { tags: { scope: "paddle.webhook.price_check" } });
+        }
       }
-      // Other event types (product/price/etc) are acknowledged and ignored.
+      // Other event types are acknowledged and ignored.
 
       await prisma.webhookEvent.create({ data: { id: body.event_id } }).catch((err) => {
         if ((err as { code?: string })?.code !== "P2002") {
@@ -399,7 +424,7 @@ export async function webhookRoutes(app: FastifyInstance) {
             "billing",
             "Payment Issue",
             "Your subscription payment failed. Please update your payment method to keep your plan.",
-            "/settings",
+            "/settings/account-billing",
           );
         }
       }

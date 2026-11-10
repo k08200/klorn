@@ -13,16 +13,12 @@ Klorn does the opposite. Each inbound email gets exactly **one** classification 
 
 **[Read the doctrine](docs/doctrine/deterministic-floor.md) before the code — that's the actual product.**
 
-[![Klorn — 31-second demo](website/media/klorn-demo-poster.jpg)](website/media/klorn-demo.mp4)
+[![Klorn on Mac — Today: mail by lane across accounts, with the day's calendar beside it (demo data)](website/media/app-2026-10/today-light-1200.webp)](https://klorn.ai)
 
-▶️ **[31-second demo](website/media/klorn-demo.mp4)** · 🎬 **[14-second promo](website/media/klorn-promo.mp4)** · 🌐 **[Live demo on klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
+🌐 **[klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
 
-> Both videos were recorded on 2026-08-10, before the five-lane flip, so their
-> captions still show the retired four-tier vocabulary. The generators are
-> corrected and guarded; re-rendering needs a live recording against the demo
-> account (`scripts/demo-video/README.md`). **[klorn.ai](https://klorn.ai) shows
-> the current five lanes**, and its app screenshots are drawn straight from the
-> shipping SwiftUI views by `KlornMac --render-previews`.
+> The screenshot is demo data, drawn straight from the shipping SwiftUI views by
+> `KlornMac --render-previews`.
 
 ## The five lanes
 
@@ -54,21 +50,25 @@ The LLM does **not** pick the tier. On every email it scores four features betwe
 
 What falls out of that split:
 
-- **Price stops predicting accuracy.** When the model only has to read four signals consistently, frontier reasoning depth buys much less than you would expect. Re-measured 2026-08-26 on the committed 56-email gate set ([`eval/judge-eval-set.json`](packages/api/eval/judge-eval-set.json)) — same prompt, same rule, one run per model:
+- **Price stops predicting accuracy.** When the model only has to read four signals consistently, frontier reasoning depth buys much less than you would expect. Measured 2026-09-04 on the committed 56-email gate set ([`eval/judge-eval-set.json`](packages/api/eval/judge-eval-set.json)) — ten current models, same prompt, same rule, **three runs each** at the provider-default temperature production uses; runs where any item fell back to the keyword path were discarded, not averaged:
 
-  | model | overall | urgent recall | silenced precision | $/M input | gate |
-  |---|---|---|---|---|---|
-  | `openai/gpt-5.4` | 100.0% (56/56) | 13/13 | 100% | $2.50 | pass |
-  | `google/gemini-3.5-flash` | 98.2% (55/56) | 13/13 | 100% | $1.50 | pass |
-  | `google/gemini-2.5-flash` — *default pin* | 96.4% (54/56) | 13/13 | 92.3% | $0.30 | pass |
-  | `x-ai/grok-4.3` | 94.6% (53/56) | 12/13 | 100% | $1.25 | pass |
-  | `anthropic/claude-opus-4.8` | 91.1% (51/56) | 10/13 | 100% | $5.00 | **fail** |
-  | `anthropic/claude-sonnet-5` | 80.4% (45/56) | 5/13 | 100% | $2.00 | **fail** |
+  | model | runs | correct / 56 | range | urgent / 13 | gate | $/M input |
+  |---|---|---|---|---|---|---|
+  | `openai/gpt-5.4` | 3 | 56 · 56 · 56 | **100.0** | 13 · 13 · 13 | 3/3 | $2.50 |
+  | `google/gemini-3.5-flash` | 3 | 55 · 55 · 55 | 98.2 | 13 · 13 · 13 | 3/3 | $1.50 |
+  | `openai/gpt-5.6-terra` | 2 | 55 · 55 | 98.2 | 13 · 13 | 2/2 | $2.00 |
+  | `x-ai/grok-4.6` | 1* | 55 | 98.2 | 12 | 1/1 | $2.00 |
+  | `google/gemini-3.7-flash` | 3 | 55 · 55 · 54 | 96.4–98.2 | 13 · 13 · 12 | 3/3 | $0.75 |
+  | `openai/gpt-5.6-luna` | 2 | 53 · 55 | 94.6–98.2 | 12 · 12 | 2/2 | **$0.20** |
+  | `google/gemini-2.5-flash` — *default pin at measurement time* | 3 | 54 · 54 · 54 | 96.4 | 13 · 13 · 13 | 3/3 | $0.30 |
+  | `x-ai/grok-4.3` | 2 | 54 · 54 | 96.4 | 12 · 12 | 2/2 | $1.25 |
+  | `anthropic/claude-opus-4.8` | 2 | 50 · 49 | 87.5–89.3 | 9 · 8 | **0/2** | $5.00 |
+  | `anthropic/claude-sonnet-5` | 2 | 48 · 45 | 80.4–85.7 | 7 · 5 | **0/2** | $2.00 |
 
-  The most expensive model in the table places fifth, and the spread *among* frontier models (19.6 points) is more than five times the gap between the best of them and the 8×-cheaper default pin (3.6 points). Gate floors are overall ≥80%, urgent recall ≥90%, silenced precision ≥90% ([`eval-floors.ts`](packages/api/src/eval-floors.ts)). Run it yourself: `JUDGE_MODEL=<id> pnpm eval:judge`.
+  \* two grok-4.6 runs were lost to upstream timeouts of over 90 minutes and are reported as lost, not averaged in. Read this as **tiers, not ranks**: the four models at 98.2 are a tie — one email on 56 items is not a gap — while the top (gpt-5.4, 56/56 every run) and the failing tier (both Anthropic models, below the urgent-recall floor every run) are stable across runs. The $5.00 model never passes the gate; the $0.20 model reaches the top tier. At measurement time the default pin was `gemini-2.5-flash`, because 54/56 three times at $0.30 is the stability a per-email judge needs, not because 96.4 is the best number in the table. The default is now Claude Haiku 5.5 (`claude-haiku-5-5`; production has served the judge with it since 2026-10-30), measured separately through the native Anthropic provider, where it passed the gate in 4 of 5 runs — see [Native Anthropic provider](packages/api/eval/README.md#native-anthropic-provider-2026-10-30--claude-55-family-pr-1543). The ids in this table are OpenRouter ids, measured before OpenRouter was removed from Klorn on 2026-11-01. Gate floors: overall ≥80%, urgent recall ≥90%, silenced precision ≥90% ([`eval-floors.ts`](packages/api/src/eval-floors.ts)). Run it yourself: `JUDGE_MODEL=<id> pnpm --filter @klorn/api eval:judge`.
 - **A failing model tells you *why* it failed.** Of the eight urgent emails `claude-sonnet-5` missed, seven failed the `confidence` threshold rather than the `urgency` one — it scored urgency 0.80–1.00 (correct) against confidence 0.55–0.60, under the 0.70 bar both must clear in [`tier-policy.ts`](packages/api/src/judge/tier-policy.ts). It read the mail correctly and then declined to say it was sure. That diagnosis is only available because the threshold is a number in a file you can open; where the model picks the tier directly, the same result reads as "this one is worse at email" and there is nothing to do about it.
-- **Measured on real mail, not just synthetic — and that set's labels have gone stale.** A second committed set ([`eval/real-eval-set.json`](packages/api/eval/real-eval-set.json)) holds 53 real, hand-labeled, PII-scrubbed emails with per-sender context snapshots from the production learning loop. Re-measured 2026-08-26 on the default pin: **46/53 (86.8%) overall, 95.5% precision on silenced mail** (3 runs, identical every time). This README previously claimed 94.3% here, and the arithmetic of the gap is worth being precise about: **4 of the 7 misses are `QUEUE` → `INFO`**, and `INFO` did not exist as a lane when the set was labelled — the label vocabulary cannot express it, so those items are scored wrong by construction. 46 + 4 = 50 = exactly the old 94.3%. So the drop is an ontology change, not a quality regression; but the honest number today is the one that reproduces, and 94.3% no longer does. Two of those four (a Google application confirmation, a Reddit digest) look like textbook `INFO`; the two GitHub address-verification items are genuinely arguable, since a verification link is an action. The other three misses are real: one `QUEUE` → `SILENT`, one `QUEUE` → `PUSH`, one `PUSH` → `QUEUE`. **The set needs re-labelling against the five-lane ontology before any headline number from it is quotable.** (Standing caveats: one inbox's ground truth so far, and the urgent lane has only 4 labelled samples, so its floor stays report-only until support grows. Full measurement history: [`eval/README.md`](packages/api/eval/README.md).)
-- **The floor held through every one of them.** Across all six models above — a 19.6-point accuracy spread including two outright gate failures — **zero** urgent emails were classified `SILENT`. Every miss degraded to `QUEUE`, where you still see it. That is what the split buys: not a better classifier, a bounded worst case.
+- **Measured on real mail, not just synthetic — and that set's labels have gone stale.** A second committed set ([`eval/real-eval-set.json`](packages/api/eval/real-eval-set.json)) holds 53 real, hand-labeled, PII-scrubbed emails with per-sender context snapshots from the production learning loop. Re-measured 2026-08-26 on the then-default pin (`gemini-2.5-flash`): **46/53 (86.8%) overall, 95.5% precision on silenced mail** (3 runs, identical every time). This README previously claimed 94.3% here, and the arithmetic of the gap is worth being precise about: **4 of the 7 misses are `QUEUE` → `INFO`**, and `INFO` did not exist as a lane when the set was labelled — the label vocabulary cannot express it, so those items are scored wrong by construction. 46 + 4 = 50 = exactly the old 94.3%. So the drop is an ontology change, not a quality regression; but the honest number today is the one that reproduces, and 94.3% no longer does. Two of those four (a Google application confirmation, a Reddit digest) look like textbook `INFO`; the two GitHub address-verification items are genuinely arguable, since a verification link is an action. The other three misses are real: one `QUEUE` → `SILENT`, one `QUEUE` → `PUSH`, one `PUSH` → `QUEUE`. **The set needs re-labelling against the five-lane ontology before any headline number from it is quotable.** (Standing caveats: one inbox's ground truth so far, and the urgent lane has only 4 labelled samples, so its floor stays report-only until support grows. Full measurement history: [`eval/README.md`](packages/api/eval/README.md).)
+- **The floor held through every one of them.** Across all 23 clean runs of the ten models above — a 15–20-point accuracy spread including two models that fail the gate every time — **zero** urgent emails were classified `SILENT`. Every miss degraded to `QUEUE`, where you still see it. That is what the split buys: not a better classifier, a bounded worst case.
 - **It fails open, safely — and heals.** If the LLM is down or rate-limited, a keyword fallback produces the same four features with zero model calls: **82.1% overall (46/56)** on the same set, with urgent recall down to 46.2% (6/13). Degraded mode costs you the *interrupt*, never the message — all seven missed urgent items landed in `QUEUE` and none in `SILENT`. When the provider recovers, a bounded background sweep re-judges the degraded verdicts through the real pipeline — decisions you already touched are never rewritten.
 
 Every classification is **content-hash-bound**: the exact bytes the scorer read (`from`, `subject`, `snippet`, `labels`) are sha256'd at decision time and stored with the row. The read path re-hashes and throws `AttentionHashMismatchError` on mismatch, so a later enrichment can't silently invalidate a tier ([PR #468](https://github.com/k08200/klorn/pull/468)).
@@ -136,7 +136,7 @@ Klorn's first screen is not a chat or an inbox — it's a decision queue. Scatte
 | API | Fastify, TypeScript, Prisma |
 | DB | PostgreSQL |
 | Auth | JWT, bcrypt, Google OAuth |
-| AI | OpenAI-compatible (local-first), OpenRouter / Gemini failover |
+| AI | Claude API (Anthropic) by default; Gemini or any OpenAI-compatible endpoint (local-first) for self-host |
 | Realtime | WebSocket, Web Push |
 | Billing | Paddle (web, live) · RevenueCat (mobile) · Stripe (legacy accounts) |
 | Monorepo | pnpm workspaces |
@@ -155,19 +155,14 @@ docs/           doctrine, screenshots, operational notes
 
 ## MCP
 
-Klorn's inbox is an MCP server. Create a key in **Settings → MCP API keys**, then point any Streamable HTTP MCP client (Claude Desktop/Code, Cursor, …) at it:
+Klorn's inbox is an MCP server. Create a key in **Settings → MCP API keys**, put it in `KLORN_API_KEY`, then add the server. Claude Code:
 
-```json
-{
-  "mcpServers": {
-    "klorn": {
-      "type": "http",
-      "url": "https://<your-klorn-api>/api/mcp",
-      "headers": { "Authorization": "Bearer klorn_sk_…" }
-    }
-  }
-}
+```bash
+claude mcp add --transport http klorn --scope user https://api.klorn.ai/api/mcp \
+  --header "Authorization: Bearer $KLORN_API_KEY"
 ```
+
+Self-hosted: use your API origin plus `/api/mcp`. Setup for Codex CLI, Cursor, Gemini CLI and the xAI API, plus limits and what is not supported yet: [docs/mcp/connect-clients.md](docs/mcp/connect-clients.md).
 
 The toolset is the assistant chat's locked-down set — list/read/classify/briefing and other read-or-low-risk tools (generate_briefing may trigger the day's briefing notification, deduped to one per day). Nothing reachable over MCP can send, delete, or archive mail, and the API key works **only** on this endpoint: it is never accepted by the rest of the API. One caution: tool results contain your actual mail — to the agent you connect, inbound email becomes live context, so treat message content as untrusted data in that agent's own rules.
 
@@ -251,7 +246,7 @@ Open `packages/api/.env` and at minimum set:
 
 ```bash
 DATABASE_URL="postgresql://klorn:klorn-local-dev@localhost:5432/klorn"
-OPENROUTER_API_KEY=""  # https://openrouter.ai/keys — a free key works (or go fully local, below)
+ANTHROPIC_API_KEY=""  # https://platform.claude.com/settings/keys (or go fully local, below)
 WEB_URL="http://localhost:8001"
 PORT=8000
 ```
@@ -373,8 +368,8 @@ Docker Compose ports: Web `3000`, API `3001`, PostgreSQL `5432`.
 pnpm --filter @klorn/web build
 pnpm --filter @klorn/api build
 pnpm --filter @klorn/api test
-pnpm eval:judge   # classifier vs the synthetic gate set (judge-eval-set.json)
-pnpm eval:real    # classifier vs the 53 hand-labelled real emails (86.8%; labels predate INFO/MEETING)
+pnpm --filter @klorn/api eval:judge   # classifier vs the synthetic gate set (judge-eval-set.json)
+pnpm --filter @klorn/api eval:real    # classifier vs the 53 hand-labelled real emails (86.8%; labels predate INFO/MEETING)
 packages/api/node_modules/.bin/biome check packages/
 ```
 
@@ -413,7 +408,13 @@ When touching core UX, verify at least:
 
 ## Contributing
 
-Issues and pull requests are welcome. For anything non-trivial, open an issue first to discuss the approach. Run `pnpm -r test` and `biome check packages/` before submitting. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+Issues and pull requests are welcome. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)**: it covers local setup without a Google account, the checks CI runs, and the PR format.
+
+- Newcomer-sized work: [`good first issue`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+- Bigger pieces: [`help wanted`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22)
+- Questions: [Discussions → Q&A](https://github.com/k08200/klorn/discussions/categories/q-a)
+
+For anything non-trivial, open an issue first to discuss the approach. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

@@ -3,6 +3,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { snapshotUserProviderCooldowns } from "../llm/model-fallback.js";
 import { getBriefingStatus } from "../pim/briefing-status.js";
+import { countCalendarRows } from "../pim/calendar-read.js";
 
 type CheckStatus = "ok" | "warning" | "error";
 
@@ -86,6 +87,7 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
     recentEmails,
     todayEvents,
     briefing,
+    byokKeys,
   ] = await Promise.all([
     checkDatabase(),
     prisma.device.count({ where: { userId } }),
@@ -111,8 +113,14 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
       take: 5,
     }),
     prisma.emailMessage.count({ where: { userId } }),
-    prisma.calendarEvent.count({ where: { userId, startTime: { gte: startOfDay(now) } } }),
+    // One invite in the primary and a linked calendar is two rows (C2): counted once.
+    countCalendarRows({ userId, when: { startTime: { gte: startOfDay(now) } } }),
     getBriefingStatus(userId, { now }),
+    // Which BYOK lanes exist for this user (presence only — never the key).
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { anthropicApiKey: true, geminiApiKey: true },
+    }),
   ]);
 
   return {
@@ -130,7 +138,10 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
     recentEmails,
     todayEvents,
     briefing,
-    aiProviders: snapshotUserProviderCooldowns(userId),
+    aiProviders: snapshotUserProviderCooldowns(userId, {
+      anthropic: Boolean(byokKeys?.anthropicApiKey),
+      gemini: Boolean(byokKeys?.geminiApiKey),
+    }),
     now,
   };
 }
@@ -215,7 +226,7 @@ function googleCheck(data: ReadinessData): ReadinessCheck {
  */
 function envProviderSummary(): string {
   const present = [
-    process.env.OPENROUTER_API_KEY ? "openrouter" : null,
+    process.env.ANTHROPIC_API_KEY ? "anthropic" : null,
     process.env.GEMINI_API_KEY ? "gemini" : null,
     process.env.OPENAI_COMPAT_BASE_URL ? "openai-compat" : null,
   ].filter((name): name is string => name !== null);

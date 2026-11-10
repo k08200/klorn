@@ -79,8 +79,8 @@ test.describe("Login — provider lane", () => {
     await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Continue with Apple" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Continue with Naver" })).toBeVisible();
-    // Open signup means the sign-up tab exists and no access wall is shown.
-    await expect(page.getByRole("button", { name: "Sign up" })).toBeVisible();
+    // Open signup means the create-account switch exists and no access wall is shown.
+    await expect(page.getByRole("button", { name: "Create an account" })).toBeVisible();
     await expect(page.getByText("Klorn is invite-only.")).toBeHidden();
   });
 
@@ -167,7 +167,7 @@ test.describe("Login — invite-only deployment", () => {
     await expect(page.getByRole("link", { name: "Request early access" })).toBeVisible();
     await expect(page.getByText("Already approved? Sign in below.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign up" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Create an account" })).toHaveCount(0);
   });
 });
 
@@ -199,15 +199,15 @@ test.describe("Login — contrast floors", () => {
       expect(ratio).toBeGreaterThanOrEqual(AA_TEXT);
     });
 
-    test(`copy under the card clears AA in ${scheme}`, async ({ page }) => {
+    test(`footer links clear AA in ${scheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await mockAuthProbes(page, { signupOpen: true, providers: ["google"] });
       await page.goto("/login");
-      await expect(page.getByRole("link", { name: "Back to home" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Privacy" })).toBeVisible();
 
       const ratio = await contrastOf(
         page,
-        `[...document.querySelectorAll("a")].find((a) => /Back to home/.test(a.textContent))`,
+        `[...document.querySelectorAll("a")].find((a) => a.textContent.trim() === "Privacy")`,
       );
       expect(ratio).toBeGreaterThanOrEqual(AA_TEXT);
     });
@@ -216,46 +216,13 @@ test.describe("Login — contrast floors", () => {
       await page.emulateMedia({ colorScheme: scheme });
       await mockAuthProbes(page, { signupOpen: true, providers: ["google"] });
       await page.goto("/login");
-      await expect(page.getByRole("button", { name: "Switch to sign-up" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Create an account" })).toBeVisible();
 
       const ratio = await contrastOf(
         page,
-        `[...document.querySelectorAll("button")].find((b) => /Switch to sign-up/.test(b.textContent))`,
+        `[...document.querySelectorAll("button")].find((b) => /Create an account/.test(b.textContent))`,
       );
       expect(ratio).toBeGreaterThanOrEqual(AA_TEXT);
-    });
-
-    test(`the selected mode tab reads as raised in ${scheme}`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme });
-      await mockAuthProbes(page, { signupOpen: true, providers: ["google"] });
-      await page.goto("/login");
-      const active = page.getByRole("button", { name: "Log in" });
-      await expect(active).toBeVisible();
-
-      // surface-panel is lighter than surface-raised in light but DARKER in
-      // dark, which sank the selected tab into its own well. The selected tab
-      // must always sit further from the page background than the well.
-      const {
-        tab,
-        well,
-        page: pageBg,
-      } = await active.evaluate((el) => {
-        const lum = (c: string) => {
-          const m = c.match(/[\d.]+/g)!.map(Number);
-          const f = (v: number) => {
-            v /= 255;
-            return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-          };
-          return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]);
-        };
-        return {
-          tab: lum(getComputedStyle(el).backgroundColor),
-          well: lum(getComputedStyle(el.parentElement!).backgroundColor),
-          page: lum(getComputedStyle(document.body).backgroundColor),
-        };
-      });
-      const away = (v: number) => Math.abs(v - pageBg);
-      expect(away(tab)).toBeGreaterThan(away(well));
     });
 
     test(`the focus ring clears the non-text floor in ${scheme}`, async ({ page }) => {
@@ -288,17 +255,15 @@ test.describe("Login — contrast floors", () => {
       expect(ring.contrast).toBeGreaterThanOrEqual(3);
     });
 
-    test(`the card eyebrow clears AA in ${scheme}`, async ({ page }) => {
+    test(`the form title clears AA in ${scheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await mockAuthProbes(page, { signupOpen: true, providers: ["google"] });
       await page.goto("/login");
-      await expect(page.getByText("Welcome back", { exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Sign in to Klorn" })).toBeVisible();
 
-      // ink-dim is a label colour against a panel; against the page backdrop
-      // it measured 2.45:1, and the eyebrow sits outside the card.
       const ratio = await contrastOf(
         page,
-        `[...document.querySelectorAll("p")].find((el) => el.textContent.trim() === "Welcome back")`,
+        `[...document.querySelectorAll("h2")].find((el) => el.textContent.trim() === "Sign in to Klorn")`,
       );
       expect(ratio).toBeGreaterThanOrEqual(AA_TEXT);
     });

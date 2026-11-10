@@ -46,6 +46,7 @@ Org creation is a paid-tier capability (entitlement flag, OFF by default at laun
 
 ### Delivery plan (when started)
 
+0. PR-0 (added 2026-09-28): admin onboarding for company accounts. Defined as F0 in `../providers/unified-platform-plan.md`.
 1. PR-A: schema + org/invite routes + accept flow (web), audit log. No UI surface beyond accept.
 2. PR-B: AvailabilityGrant + availability resolver behind the existing `team_availability` tool (org teams appear next to personal teams).
 3. PR-C: desktop/web org management UI + shared teams.

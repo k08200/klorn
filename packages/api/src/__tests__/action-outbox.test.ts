@@ -145,6 +145,27 @@ beforeEach(() => {
 });
 
 describe("deriveIdempotencyKey", () => {
+  // Golden vectors captured from the implementation BEFORE stableStringify was
+  // moved to a shared module: persisted idempotency keys must never change.
+  it("derives byte-identical keys to the pre-refactor implementation", () => {
+    expect(
+      deriveIdempotencyKey("pa-1", "send_email", { to: "x@y.z", subject: "Hi", body: "B" }),
+    ).toBe("e759a595a2dae46c214b069602de5d07a966bc053514fa5cc42526205c5006c9");
+    expect(
+      deriveIdempotencyKey("pa-2", "create_event", {
+        title: "Lunch 🙂",
+        attendees: ["b@x.io", "a@x.io"],
+        meta: { z: 1, a: [null, true, { k: "v" }] },
+      }),
+    ).toBe("3b67c192c52f9a597be5dff9427670525900a1b5aaf8288fb4353f2109fea87c");
+    expect(deriveIdempotencyKey("pa-3", "mark_read", {})).toBe(
+      "2c9466def6c30f09c2cfbc975955a2ae21ebb07cc8a4bee6b6ee115b5215decb",
+    );
+    expect(deriveIdempotencyKey("pa-4", "mark_read", null)).toBe(
+      "7cd60773e71cb3e53b403b9e95532a07650b808396a2e4bd457d5f32fcd727b3",
+    );
+  });
+
   it("is stable regardless of arg key order", () => {
     const a = deriveIdempotencyKey("pa-1", "send_email", { to: "x@y.z", subject: "Hi", body: "B" });
     const b = deriveIdempotencyKey("pa-1", "send_email", { body: "B", to: "x@y.z", subject: "Hi" });
@@ -212,6 +233,48 @@ describe("claimAndRunOutboxRow", () => {
     expect(pushNotification).toHaveBeenCalled();
     // APPROVED fires at completion (mutually exclusive with FAILED on dead).
     expect(recordFeedback).toHaveBeenCalledWith(expect.objectContaining({ signal: "APPROVED" }));
+  });
+
+  it("stores and returns a tool result without <untrusted_content> tags (the web renders it as text)", async () => {
+    const row = seedRow();
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({
+        skipped: true,
+        message:
+          'exists: <untrusted_content source="calendar:summary">Lunch</untrusted_content> (2026-10-03)',
+        existingEventId: "ev-1",
+      }),
+    );
+    const outcome = await claimAndRunOutboxRow(row, NOW);
+    const clean = {
+      skipped: true,
+      message: "exists: Lunch (2026-10-03)",
+      existingEventId: "ev-1",
+    };
+    expect(outcome.kind).toBe("completed");
+    expect(JSON.parse((outcome as { result: string }).result)).toEqual(clean);
+    expect(JSON.parse(String(paStore.get("pa-1")?.result))).toEqual(clean);
+    expect(JSON.parse(String(outboxStore.get("ob-1")?.result))).toEqual(clean);
+    expect(JSON.stringify([...paStore.values(), ...outboxStore.values()])).not.toContain(
+      "untrusted_content",
+    );
+  });
+
+  it("leaves a tool result with no wrapper exactly as it was", async () => {
+    const row = seedRow();
+    executeToolCall.mockResolvedValue('{"ok":true,"n":1}');
+    const outcome = await claimAndRunOutboxRow(row, NOW);
+    expect(outcome).toEqual({ kind: "completed", result: '{"ok":true,"n":1}' });
+  });
+
+  it("stores a dead-letter error without wrapper tags too", async () => {
+    const row = seedRow();
+    executeToolCall.mockRejectedValue(
+      new Error('missing <untrusted_content source="email:subject">x</untrusted_content>'),
+    );
+    await claimAndRunOutboxRow(row, NOW);
+    expect(String(paStore.get("pa-1")?.result)).not.toContain("untrusted_content");
+    expect(String(outboxStore.get("ob-1")?.lastError)).not.toContain("untrusted_content");
   });
 
   it("treats a swallowed non-floor tool error ({error}) as a failure, not success", async () => {

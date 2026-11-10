@@ -20,28 +20,77 @@
  * poc-judge.
  */
 
-import type { FirewallItem, FirewallResponse } from "@klorn/contract";
-import type { FastifyInstance } from "fastify";
+import type {
+  AttentionByEmailDismissResponse,
+  AttentionByEmailErrorResponse,
+  AttentionByEmailSnoozeResponse,
+  FirewallItem,
+  FirewallResponse,
+  LaneOverrideByEmailResponse,
+  LaneOverrideErrorResponse,
+  LaneOverrideResponse,
+  LaneOverrideUndoResponse,
+  LiveTier,
+} from "@klorn/contract";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
+import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
+import { dismissEmailAttention, snoozeEmailAttention } from "../judge/attention-by-email.js";
 import { dismissAttentionItem } from "../judge/attention-dismiss.js";
-import { checkAttentionInputHash, registerHashMismatch } from "../judge/attention-input-hash.js";
-import { confirmAttentionTier, overrideAttentionTier } from "../judge/attention-override.js";
+import {
+  type AttentionHashInput,
+  attentionHashInputOf,
+  checkAttentionInputHash,
+  computeAttentionInputHash,
+  registerHashMismatch,
+} from "../judge/attention-input-hash.js";
+import {
+  type AttentionOverrideResult,
+  confirmAttentionTier,
+  findEmailAttentionItemId,
+  overrideAttentionTier,
+  undoAttentionOverride,
+} from "../judge/attention-override.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
-import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
+import {
+  collapseEmailThreads,
+  countEmailThreads,
+  emailThreadKey,
+} from "../judge/firewall-thread-collapse.js";
 import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
-import { manualOverrideReason, normalizeTier, type Tier } from "../judge/tiers.js";
+import { manualOverrideReason, type Tier, toLiveTier } from "../judge/tiers.js";
+import {
+  isInTodayPushWindow,
+  TODAY_PUSH_WINDOW_HOURS,
+  todayPushCutoff,
+} from "../judge/today-push-window.js";
+import { noteAttentionItemOutcome, noteEmailOutcome } from "../judge/user-outcome.js";
+import { FIREWALL_V3_SELECT, firewallV3Row, withV3Lanes } from "../judge/v3/firewall-v3.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { v3TodayFields } from "../judge/v3/read-fields.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
+import { isInternalSender } from "../mail/company-domains.js";
+import { boundedFromValue } from "../mail/email-address.js";
+import {
+  accountFactsOf,
+  accountFactsSelect,
+  attachmentLookupWhere,
+  type LinkedAccountFact,
+} from "../mail/firewall-account-facts.js";
 import { ensureFreshGmailWatch } from "../mail/gmail.js";
+import { draftReadyFor, replyStateOf } from "../mail/reply-state.js";
+import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
-import { getUserNotificationLanguage } from "../notify/notification-strings.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { captureError } from "../sentry.js";
+import { darkRouteGate } from "./dark-route-gate.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored
 // EmailMessage row. Other tools (create_event, send_email, etc.) carry
@@ -69,6 +118,113 @@ const overrideBodySchema = {
       type: "string",
       enum: OVERRIDABLE_TIERS,
     },
+  },
+} as const;
+
+// The by-email override is new with KEYBOARD_TRIAGE, so it never offers the
+// retired AUTO lane the legacy body above still accepts.
+const LIVE_LANES = ["SILENT", "INFO", "QUEUE", "MEETING", "PUSH"] as const;
+// Compile-time completeness against the wire contract: a lane added to
+// LiveTier fails this line until LIVE_LANES names it.
+const _allLiveLanes: Record<LiveTier, (typeof LIVE_LANES)[number]> = {
+  SILENT: "SILENT",
+  INFO: "INFO",
+  QUEUE: "QUEUE",
+  MEETING: "MEETING",
+  PUSH: "PUSH",
+};
+void _allLiveLanes;
+
+const liveLaneBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["tier"],
+  properties: { tier: { type: "string", enum: LIVE_LANES } },
+} as const;
+
+const undoBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["undoToken"],
+  properties: { undoToken: { type: "string", minLength: 1, maxLength: 64 } },
+} as const;
+
+const snoozeBodySchema = {
+  type: "object",
+  required: ["snoozeUntil"],
+  properties: { snoozeUntil: { type: "string", minLength: 1, maxLength: 64 } },
+} as const;
+
+const EMAIL_NOT_FOUND_MESSAGE = "Email not found.";
+
+const idParamSchema = (name: string) =>
+  ({
+    type: "object",
+    required: [name],
+    properties: { [name]: { type: "string", minLength: 1, maxLength: 128 } },
+  }) as const;
+
+/** By-email override wire shape: the undo handle is there while the flag is on. */
+function overrideWire(
+  result: Extract<AttentionOverrideResult, { ok: true }>,
+): LaneOverrideResponse {
+  return result.undo
+    ? {
+        ok: true,
+        tier: result.tier,
+        undoToken: result.undo.token,
+        undoExpiresAt: result.undo.expiresAt,
+      }
+    : { ok: true, tier: result.tier };
+}
+
+// While KEYBOARD_TRIAGE is off the two new routes answer Fastify's own 404,
+// before auth and validation, so they cannot be told from an unknown route.
+const triageGate = darkRouteGate(keyboardTriageEnabled);
+
+// Fast keyboard triage is a few writes a second at most; this only stops a
+// scripted override/undo loop from churning the ledger.
+const LANE_WRITE_RATE_LIMIT = { max: 120, timeWindow: "1 minute" } as const;
+
+/**
+ * Per-USER limit for the two lane-write routes. The app-wide limiter keys on
+ * the client IP (index.ts), and so would a route `config.rateLimit`; a user
+ * behind a shared address must not spend other users' budget, and one user on
+ * many addresses must not multiply theirs. A route-level preHandler runs after
+ * the plugin's requireAuth, so the user id is known. No limiter without the
+ * rate-limit plugin (route tests). The app-wide per-IP limit (100/min) still
+ * applies on top of this one.
+ */
+function laneWriteLimiter(app: FastifyInstance) {
+  const limiter = app.hasDecorator("createRateLimit")
+    ? app.createRateLimit({
+        ...LANE_WRITE_RATE_LIMIT,
+        keyGenerator: (request: FastifyRequest) => `lane-write:user:${getUserId(request)}`,
+      })
+    : null;
+  return async function laneWriteLimit(request: FastifyRequest, reply: FastifyReply) {
+    if (!limiter || reply.sent) return;
+    const state = await limiter(request);
+    if (state.isAllowed || !state.isExceeded) return;
+    reply.header("retry-after", String(state.ttlInSeconds));
+    const body: LaneOverrideErrorResponse = {
+      ok: false,
+      code: "rate_limited",
+      message: "Too many lane changes. Try again shortly.",
+    };
+    return reply.code(429).send(body);
+  };
+}
+
+const OVERRIDE_CONFLICT_MESSAGE = "This mail changed while it was being moved. Try again.";
+
+const UNDO_REFUSALS = {
+  not_found: { status: 404, code: "not_found", message: "Attention item not found." },
+  expired: { status: 409, code: "undo_expired", message: "This move can no longer be undone." },
+  conflict: {
+    status: 409,
+    code: "undo_conflict",
+    message: "This mail was reclassified since; nothing was undone.",
   },
 } as const;
 
@@ -103,13 +259,53 @@ export function _resetHashMismatchDedupeForTests(): void {
 }
 
 /**
+ * Stale-hash heal for an item whose lane must survive: one an MCP agent set
+ * (step A2b) or a human overrode. A stale hash is almost always a read-state
+ * flip (UNREAD is one of the four hashed fields), and of the hashed inputs only
+ * the labels change after delivery — from and subject are never rewritten on an
+ * existing row, and the snippet only by the IMAP raw-MIME heal (refreshBody in
+ * persistGmailEmail), whose rows were judged on undecoded text and are meant to
+ * be re-judged — so nothing here invalidates a decision a human or agent made.
+ * Re-judging would replace the tier and reset the flag (a live bug for human
+ * overrides); refreshing just the hash stops the mismatch and leaves the tier,
+ * its reason, the flag and the stamp alone.
+ *
+ * Guarded in its WHERE on the item still being open and still carrying the stamp
+ * or the flag. Returns the rows it matched: 0 means the stamp or flag was cleared
+ * in the meantime (or the item closed), and the caller then re-judges.
+ */
+async function refreshHashKeepingLane(
+  userId: string,
+  row: AttentionHashInput & { id: string },
+): Promise<number> {
+  const { count } = await prisma.attentionItem.updateMany({
+    where: {
+      userId,
+      source: "EMAIL",
+      sourceId: row.id,
+      status: "OPEN",
+      OR: [{ agentTierSetAt: { not: null } }, { isManualOverride: true }],
+    },
+    data: {
+      inputHash: computeAttentionInputHash(attentionHashInputOf(row)),
+      inputHashAt: new Date(),
+    },
+  });
+  return count;
+}
+
+/**
  * Self-heal a stale decision: re-fetch the full row and re-judge it, which
  * rewrites inputHash over the CURRENT bytes (attention-mirror upsert). The
  * doctrine answer to a failed read-side verification is a fresh decision,
  * not a repeated alert (checkAttentionInputHash's own doc says to pair it
  * with a background re-classify). Fire-and-forget; failures are captured.
  */
-function healStaleAttentionItem(userId: string, emailDbId: string): void {
+function healStaleAttentionItem(
+  userId: string,
+  emailDbId: string,
+  options: { keepLane: boolean },
+): void {
   void (async () => {
     try {
       const row = await prisma.emailMessage.findFirst({
@@ -129,6 +325,8 @@ function healStaleAttentionItem(userId: string, emailDbId: string): void {
         },
       });
       if (!row) return;
+      // An agent lane or a human override must survive: refresh the hash only.
+      if (options.keepLane && (await refreshHashKeepingLane(userId, row)) > 0) return;
       // Lazy import: the judge pulls a heavy transitive graph (providers,
       // gmail) that the hot read path — and its tests — must not load.
       // toJudgeableEmailRow derives the bulk-mail signal from the stored
@@ -136,7 +334,17 @@ function healStaleAttentionItem(userId: string, emailDbId: string): void {
       const { judgeAndMirrorEmail, toJudgeableEmailRow } = await import(
         "../judge/email-firewall.js"
       );
-      await judgeAndMirrorEmail(userId, toJudgeableEmailRow(row));
+      // rejudge: the item exists, so the write is guarded against a decision
+      // made while the judge runs (attention-mirror EmailUpsertOptions).
+      await judgeAndMirrorEmail(userId, toJudgeableEmailRow(row), undefined, undefined, {
+        rejudge: true,
+      });
+      // A human override or an agent lane may have landed while the judge ran: the
+      // guarded write then refused ("preserved") and never refreshed the hash, and the
+      // per-process mismatch dedupe would leave the row hashStale until a restart.
+      // This matches only a row carrying the flag or the stamp, so after a normal
+      // re-judge it is a no-op.
+      await refreshHashKeepingLane(userId, row);
     } catch (err) {
       captureError(err, { tags: { scope: "firewall.hashRejudge" }, extra: { emailDbId } });
     }
@@ -156,10 +364,13 @@ const firewallListQuerySchema = {
   additionalProperties: false,
   properties: {
     inbox: { type: "string", maxLength: 500 },
+    // The client's UI language for the reasons (request-language.ts).
+    lang: LANG_QUERY_PROPERTY,
   },
 } as const;
 
 export async function firewallRoutes(app: FastifyInstance) {
+  const laneWriteLimit = laneWriteLimiter(app);
   app.addHook("preHandler", requireAuth);
   // Usable free tier: the firewall graph/classification view is core, read-only
   // value — admit any non-hard-walled user (free included). No-op pre-launch.
@@ -274,7 +485,7 @@ export async function firewallRoutes(app: FastifyInstance) {
     for (const { from } of recent) {
       const email = senderEmail(from).toLowerCase();
       if (!email || email === selfEmail) continue;
-      const m = from.match(/^\s*"?([^"<]+?)"?\s*</);
+      const m = boundedFromValue(from).match(/^\s*"?([^"<]+?)"?\s*</);
       const name = m ? m[1].trim() : null;
       const cur = senders.get(email) ?? { email, name, count: 0 };
       cur.count += 1;
@@ -343,13 +554,14 @@ export async function firewallRoutes(app: FastifyInstance) {
   app.get(
     "/",
     { schema: { querystring: firewallListQuerySchema } },
-    async (request): Promise<FirewallResponse> => {
+    async (request, reply): Promise<FirewallResponse> => {
       const userId = getUserId(request);
       // Deterministic reasons are stored as keys (tier-reason-strings.ts) and
       // rendered here, so switching language re-reads existing rows instead of
       // leaving them frozen in the language they were written in. Resolved once
-      // per request, not per row.
-      const reasonLanguage = await getUserNotificationLanguage(userId);
+      // per request, not per row, in the client's UI language when it names one
+      // (lang → Accept-Language → stored notification language → en).
+      const reasonLanguage = await readerLanguageFor(request, reply, userId);
       // Per-inbox scope (mirrors routes/email.ts's `inbox=` param): absent/"all"
       // → every inbox (100% backward compatible); "primary" → primary-account
       // mail plus items with no email at all (GitHub etc. — the primary is the
@@ -357,6 +569,9 @@ export async function firewallRoutes(app: FastifyInstance) {
       // on every query below is the IDOR guard — a foreign or malformed id can
       // only ever match the caller's own rows (zero).
       const { inbox } = request.query as { inbox?: string };
+      // Attention engine v3, for a user under the policy only: QUEUE in ranked
+      // order, a v3 block per item, and Today's fields.
+      const policyUser = isJudgeV3PolicyEnabled(userId);
 
       // Activity-driven self-heal: the firewall view is the app's front door,
       // so opening it re-registers an expired Gmail watch even when the
@@ -389,13 +604,23 @@ export async function firewallRoutes(app: FastifyInstance) {
               tierReason: string | null;
               priority: number;
               surfacedAt: Date;
+              createdAt: Date;
               inputHash: string | null;
+              agentTierSetAt: Date | null;
+              isManualOverride: boolean;
+              // Selected only for a user under policy v3 (FIREWALL_V3_SELECT).
+              heldAt?: Date | null;
+              v3PolicyVersion?: string | null;
+              v3Decision?: unknown;
+              v3Due?: Date | null;
+              v3Importance?: number | null;
             }>
           >;
         }
       ).findMany({
         where: { userId, status: "OPEN" },
         select: {
+          ...(policyUser ? FIREWALL_V3_SELECT : {}),
           id: true,
           source: true,
           sourceId: true,
@@ -405,7 +630,10 @@ export async function firewallRoutes(app: FastifyInstance) {
           tierReason: true,
           priority: true,
           surfacedAt: true,
+          createdAt: true,
           inputHash: true,
+          agentTierSetAt: true,
+          isManualOverride: true,
         },
         // Window by RECENCY, rank by priority below. Windowing by priority was
         // the board-freeze bug: email items are never auto-resolved, so once
@@ -462,7 +690,11 @@ export async function firewallRoutes(app: FastifyInstance) {
                 snippet: true,
                 receivedAt: true,
                 category: true,
-                linkedInboxAccountId: true,
+                needsReply: true,
+                repliedAt: true,
+                proactiveDraft: true,
+                // The mailbox (also the `inbox=` scope) and the read flag.
+                ...accountFactsSelect,
               },
             })
           : Promise.resolve([] as never[]),
@@ -480,17 +712,63 @@ export async function firewallRoutes(app: FastifyInstance) {
                 labels: true,
                 receivedAt: true,
                 category: true,
+                needsReply: true,
+                repliedAt: true,
+                proactiveDraft: true,
                 // Gmail thread id — used to collapse a multi-message conversation
                 // (N EmailMessage rows) to a single firewall card. See below.
                 threadId: true,
-                // Which mailbox the message lives on — drives the `inbox=` scope.
-                linkedInboxAccountId: true,
+                // Which mailbox the message lives on — drives the `inbox=` scope
+                // — plus the read flag.
+                ...accountFactsSelect,
               },
             })
           : Promise.resolve([] as never[]),
       ]);
       const emailByGmailId = new Map(emailRowsByGmailId.map((e) => [e.gmailId, e]));
       const emailById = new Map(emailRowsById.map((e) => [e.id, e]));
+
+      // The source badge and the attachment glyph: two lookups for the whole
+      // page, run together, each bounded by this page's ids and by userId (a
+      // stale or foreign id resolves to nothing). No linked mail → no account
+      // lookup; no mail → neither. FAIL-OPEN like the chips below — a failed
+      // read means no badge / no glyph claim, never a 500.
+      const pageEmails = [...emailRowsByGmailId, ...emailRowsById];
+      const linkedIds = new Set<string>();
+      for (const e of pageEmails) {
+        if (e.linkedInboxAccountId) linkedIds.add(e.linkedInboxAccountId);
+      }
+      const pageEmailIds = [...new Set(pageEmails.map((e) => e.id))];
+      const loadLinkedAccounts = async (): Promise<Map<string, LinkedAccountFact> | null> => {
+        if (!linkedIds.size) return new Map();
+        try {
+          const accountRows = await prisma.linkedInboxAccount.findMany({
+            where: { userId, id: { in: [...linkedIds] } },
+            select: { id: true, provider: true, email: true },
+          });
+          return new Map(accountRows.map((a) => [a.id, { provider: a.provider, email: a.email }]));
+        } catch (err) {
+          captureError(err, { tags: { scope: "firewall.linkedAccounts" } });
+          return null;
+        }
+      };
+      const loadMailWithAttachment = async (): Promise<Set<string> | null> => {
+        if (!pageEmailIds.length) return new Set();
+        try {
+          const groups = await prisma.emailAttachment.groupBy({
+            by: ["emailId"],
+            where: attachmentLookupWhere(userId, pageEmailIds),
+          });
+          return new Set(groups.map((g) => g.emailId));
+        } catch (err) {
+          captureError(err, { tags: { scope: "firewall.attachments" } });
+          return null;
+        }
+      };
+      const [linkedAccounts, withAttachment] = await Promise.all([
+        loadLinkedAccounts(),
+        loadMailWithAttachment(),
+      ]);
 
       // Batch-fetch trust scores for every distinct sender address surfaced
       // by this page. One round-trip; the bulk helper returns a Map keyed by
@@ -526,6 +804,35 @@ export async function firewallRoutes(app: FastifyInstance) {
           captureError(err, { tags: { scope: "firewall.rowSignals" } });
         }
       }
+
+      // Declared company domains → the 회사 chip is a recorded fact (the
+      // sender's domain), never a guess. FAIL-OPEN like the reply lookup:
+      // a failed read means no chip, never a 500.
+      // The same read carries the user's own address: the primary account's
+      // label on the source badge.
+      let companyDomains: string[] = [];
+      let primaryEmail: string | null = null;
+      try {
+        const owner = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { companyDomains: true, email: true },
+        });
+        companyDomains = owner?.companyDomains ?? [];
+        primaryEmail = owner?.email ?? null;
+      } catch (err) {
+        captureError(err, { tags: { scope: "firewall.companyDomains" } });
+      }
+
+      // The user's own corrections ("this sender is a customer") — the top
+      // of the evidence ladder. Same fail-open contract as the lookups above.
+      let userLabels = new Map<string, UserLabelCategory>();
+      try {
+        userLabels = await senderLabelsFor(userId, [...senderAddrs]);
+      } catch (err) {
+        captureError(err, { tags: { scope: "firewall.senderLabels" } });
+      }
+
+      const accountContext = { primaryEmail, linked: linkedAccounts, withAttachment };
 
       const tiers: Record<Tier, FirewallItem[]> = {
         SILENT: [],
@@ -565,15 +872,46 @@ export async function firewallRoutes(app: FastifyInstance) {
       // highest-priority (newest on ties) message. Without this, a reschedule
       // thread or a repeated "Deployment failed" shows once per message, each with
       // a different judge-authored tierReason (the duplicate seen in dogfooding).
-      const dedupedItems = collapseEmailThreads(
-        scopedItems,
-        (row) => emailById.get(row.sourceId)?.threadId ?? null,
-      );
+      // The thread key is account-scoped, like the web's `threads=1` grouping,
+      // so the card's threadCount (messages of the thread in this scoped list)
+      // matches what the web shows for the same thread.
+      const threadKeyOf = (row: (typeof items)[number]) =>
+        emailThreadKey(emailById.get(row.sourceId));
+      const dedupedItems = collapseEmailThreads(scopedItems, threadKeyOf);
+      const threadCounts = countEmailThreads(scopedItems, threadKeyOf);
 
+      const now = new Date();
+      const todayPushIds: string[] = [];
+      // Today's window is judged per THREAD, like the web's grouped PUSH page
+      // (messages are filtered before grouping): a collapsed card is in when
+      // any PUSH message of its thread is, so an old kept card with a fresh
+      // sibling still shows. A row's time is its mail's receivedAt, else the
+      // item's createdAt (no mail behind it).
+      const windowTimeOf = (row: (typeof items)[number]): Date | string =>
+        emailById.get(row.sourceId)?.receivedAt ?? row.createdAt;
+      const pushThreadInWindow = new Set<string>();
+      for (const row of scopedItems) {
+        const key = row.source === "EMAIL" ? threadKeyOf(row) : null;
+        if (
+          key &&
+          toLiveTier(row.tier) === "PUSH" &&
+          isInTodayPushWindow(windowTimeOf(row), row.createdAt, now)
+        ) {
+          pushThreadInWindow.add(key);
+        }
+      }
+      const inTodayPushWindow = (row: (typeof items)[number], item: FirewallItem): boolean => {
+        const key = row.source === "EMAIL" ? threadKeyOf(row) : null;
+        if (key) return pushThreadInWindow.has(key);
+        return isInTodayPushWindow(item.email?.receivedAt, row.createdAt, now);
+      };
+      const rowById = new Map(dedupedItems.map((row) => [row.id, row]));
       for (const row of dedupedItems) {
-        // normalizeTier maps legacy CALL rows → PUSH (not QUEUE) and any
-        // unknown/null tier → QUEUE. See tiers.ts.
-        const tier = normalizeTier(row.tier);
+        // toLiveTier maps legacy CALL rows → PUSH (not QUEUE), the retired
+        // v1 AUTO lane → QUEUE, and any unknown/null tier → QUEUE. The AUTO
+        // bucket stays on the wire (always empty) because the desktop decodes
+        // it as a required field. See tiers.ts.
+        const tier = toLiveTier(row.tier);
         const item: FirewallItem = {
           id: row.id,
           source: row.source,
@@ -584,6 +922,8 @@ export async function firewallRoutes(app: FastifyInstance) {
           tierReason: resolveTierReason(row.tierReason, reasonLanguage),
           priority: row.priority,
           surfacedAt: row.surfacedAt.toISOString(),
+          // Only when an MCP agent set the lane; the key is absent otherwise.
+          ...(row.agentTierSetAt ? { agentSet: true as const } : {}),
         };
 
         // Enrich PENDING_ACTION items with tool context + maybe email
@@ -605,7 +945,12 @@ export async function firewallRoutes(app: FastifyInstance) {
                   from: email.from ?? null,
                   snippet: email.snippet ?? null,
                   receivedAt: email.receivedAt?.toISOString() ?? null,
+                  replyState: replyStateOf(email),
+                  draftReady: draftReadyFor(email),
+                  ...accountFactsOf(email, accountContext),
                   signal: rowSignalFor({
+                    userLabel: addr ? (userLabels.get(addr) ?? null) : null,
+                    internal: isInternalSender(email.from, companyDomains),
                     judgeCategory: email.category,
                     category: null,
                     repliedCount: addr && repliedMap ? (repliedMap.get(addr) ?? 0) : null,
@@ -636,12 +981,7 @@ export async function firewallRoutes(app: FastifyInstance) {
             // input after classification — the cached tier is stale. Soft mode
             // (checkAttentionInputHash, not verify) so the page still renders,
             // and clients see hashStale=true to either re-classify or warn.
-            const hashCheck = checkAttentionInputHash(row.inputHash, {
-              from: email.from,
-              subject: email.subject,
-              snippet: email.snippet,
-              labels: email.labels,
-            });
+            const hashCheck = checkAttentionInputHash(row.inputHash, attentionHashInputOf(email));
             if (!hashCheck.ok) {
               item.hashStale = true;
               // Alert + heal exactly ONCE per (row, storedHash). Repeats stay
@@ -664,7 +1004,9 @@ export async function firewallRoutes(app: FastifyInstance) {
                     },
                   },
                 );
-                healStaleAttentionItem(userId, email.id);
+                healStaleAttentionItem(userId, email.id, {
+                  keepLane: row.agentTierSetAt != null || row.isManualOverride,
+                });
               }
             }
 
@@ -676,7 +1018,13 @@ export async function firewallRoutes(app: FastifyInstance) {
               from: email.from ?? null,
               snippet: email.snippet ?? null,
               receivedAt: email.receivedAt?.toISOString() ?? null,
+              replyState: replyStateOf(email),
+              draftReady: draftReadyFor(email),
+              ...accountFactsOf(email, accountContext),
+              threadCount: threadCounts.get(emailThreadKey(email) ?? "") ?? 1,
               signal: rowSignalFor({
+                userLabel: addr ? (userLabels.get(addr) ?? null) : null,
+                internal: isInternalSender(email.from, companyDomains),
                 judgeCategory: email.category,
                 category: gmailCategoryOf(email.labels),
                 repliedCount: addr && repliedMap ? (repliedMap.get(addr) ?? 0) : null,
@@ -695,10 +1043,32 @@ export async function firewallRoutes(app: FastifyInstance) {
         }
 
         tiers[tier].push(item);
+        if (tier === "PUSH" && inTodayPushWindow(row, item)) {
+          todayPushIds.push(item.id);
+        }
       }
 
+      const lanes = policyUser
+        ? withV3Lanes(tiers, {
+            rowOf: (itemId) => firewallV3Row(rowById.get(itemId)),
+            receivedAtOf: (itemId) => {
+              const row = rowById.get(itemId);
+              return (row && emailById.get(row.sourceId)?.receivedAt) ?? row?.createdAt ?? now;
+            },
+            now,
+          })
+        : tiers;
+      const today = policyUser ? await v3TodayFields(userId, inbox, now) : {};
       return {
-        tiers,
+        tiers: lanes,
+        ...today,
+        // Today's PUSH block (today-push-window.ts): which PUSH cards it lists.
+        // Additive; the lanes and the summary above stay whole for Mail.
+        todayPush: {
+          windowHours: TODAY_PUSH_WINDOW_HOURS,
+          since: todayPushCutoff(now).toISOString(),
+          ids: todayPushIds,
+        },
         summary: {
           SILENT: tiers.SILENT.length,
           INFO: tiers.INFO.length,
@@ -738,6 +1108,9 @@ export async function firewallRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const { tier } = request.body;
 
+      // Not reversible: no client of this route (firewall board, onboarding
+      // review, desktop) reads an undo token. The undo lives on the by-email
+      // route the mail list and reader use.
       const result = await overrideAttentionTier(userId, id, tier);
       if (!result.ok) {
         reply.code(404);
@@ -745,6 +1118,65 @@ export async function firewallRoutes(app: FastifyInstance) {
       }
 
       return { ok: true, tier: result.tier };
+    },
+  );
+
+  // POST /api/inbox/firewall/:id/undo — reverse the user's most recent manual
+  // override on this item (KEYBOARD_TRIAGE). Restores the lane and the learning
+  // state the override changed; see undoAttentionOverride for the invariants.
+  // Idempotent. 409 undo_expired / undo_conflict change nothing.
+  app.post<{ Params: { id: string }; Body: { undoToken: string } }>(
+    "/:id/undo",
+    {
+      onRequest: triageGate,
+      preHandler: laneWriteLimit,
+      schema: { params: idParamSchema("id"), body: undoBodySchema },
+    },
+    async (request, reply): Promise<LaneOverrideUndoResponse | LaneOverrideErrorResponse> => {
+      const result = await undoAttentionOverride(
+        getUserId(request),
+        request.params.id,
+        request.body.undoToken,
+      );
+      if (result.ok) return { ok: true, tier: result.tier, alreadyUndone: result.alreadyUndone };
+      const refusal = UNDO_REFUSALS[result.reason];
+      reply.code(refusal.status);
+      return { ok: false, code: refusal.code, message: refusal.message };
+    },
+  );
+
+  // POST /api/inbox/firewall/email/:emailId — the same manual override, keyed
+  // by the EmailMessage id the mail list and reader hold (KEYBOARD_TRIAGE). A
+  // lane move is a reclassification, never a mailbox action, so nothing here
+  // touches a provider: the item is found by the user's own email row, whichever
+  // inbox (primary or linked) it arrived in. Returns the attention item id the
+  // undo route needs.
+  app.post<{ Params: { emailId: string }; Body: { tier: (typeof LIVE_LANES)[number] } }>(
+    "/email/:emailId",
+    {
+      onRequest: triageGate,
+      preHandler: laneWriteLimit,
+      schema: { params: idParamSchema("emailId"), body: liveLaneBodySchema },
+    },
+    async (request, reply): Promise<LaneOverrideByEmailResponse | LaneOverrideErrorResponse> => {
+      const userId = getUserId(request);
+      const itemId = await findEmailAttentionItemId(userId, request.params.emailId);
+      const result = itemId
+        ? await overrideAttentionTier(userId, itemId, request.body.tier, { reversible: true })
+        : ({ ok: false, reason: "not_found" } as const);
+      if (!itemId || !result.ok) {
+        if (result.ok || result.reason === "not_found") {
+          reply.code(404);
+          return {
+            ok: false,
+            code: "not_found",
+            message: "This mail has not been classified yet.",
+          };
+        }
+        reply.code(409);
+        return { ok: false, code: "override_conflict", message: OVERRIDE_CONFLICT_MESSAGE };
+      }
+      return { ...overrideWire(result), itemId };
     },
   );
 
@@ -822,6 +1254,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         return { ok: false, message: "Attention item not found." };
       }
 
+      noteAttentionItemOutcome(userId, id, "SNOOZED");
       return { ok: true, snoozedUntil: snoozeDate.toISOString() };
     },
   );
@@ -851,7 +1284,71 @@ export async function firewallRoutes(app: FastifyInstance) {
         return { ok: false, message: "Attention item not found." };
       }
 
+      noteAttentionItemOutcome(userId, id, "DISMISSED");
       return { ok: true };
+    },
+  );
+
+  // POST /api/inbox/firewall/email/:emailId/dismiss and /snooze — Done and Later
+  // keyed by the EmailMessage id the mail list and reader hold (the bundled
+  // mobile app's Mail list has no attention id for mail outside the board's
+  // newest-200 window). The caller's own email row is resolved first, from any
+  // of their inboxes, then its attention item, and the id-keyed functions above
+  // do the write. Mail with nothing open to clear answers 200 alreadyClear and
+  // nothing is created — see attention-by-email.ts for the full table. Not
+  // flagged: they re-key two live, unflagged mutations and no web or Mac client
+  // calls them, so nothing an existing client does changes.
+  app.post<{ Params: { emailId: string } }>(
+    "/email/:emailId/dismiss",
+    { schema: { params: idParamSchema("emailId") } },
+    async (
+      request,
+      reply,
+    ): Promise<AttentionByEmailDismissResponse | AttentionByEmailErrorResponse> => {
+      const userId = getUserId(request);
+      const result = await dismissEmailAttention(userId, request.params.emailId);
+      if (!result.ok) {
+        reply.code(404);
+        return { ok: false, code: "not_found", message: EMAIL_NOT_FOUND_MESSAGE };
+      }
+      // ok means the mail is the caller's own row (resolved by id), so the
+      // param is its EmailMessage id. alreadyClear changed nothing: no stamp.
+      if (!result.alreadyClear) noteEmailOutcome(userId, request.params.emailId, "DISMISSED");
+      return { ok: true, itemId: result.itemId, alreadyClear: result.alreadyClear };
+    },
+  );
+
+  app.post<{ Params: { emailId: string }; Body: { snoozeUntil: string } }>(
+    "/email/:emailId/snooze",
+    { schema: { params: idParamSchema("emailId"), body: snoozeBodySchema } },
+    async (
+      request,
+      reply,
+    ): Promise<AttentionByEmailSnoozeResponse | AttentionByEmailErrorResponse> => {
+      const snoozeDate = new Date(request.body.snoozeUntil);
+      if (!Number.isFinite(snoozeDate.getTime()) || snoozeDate <= new Date()) {
+        reply.code(400);
+        return {
+          ok: false,
+          code: "invalid_snooze_until",
+          message: "snoozeUntil must be a future ISO datetime.",
+        };
+      }
+      const userId = getUserId(request);
+      const result = await snoozeEmailAttention(userId, request.params.emailId, snoozeDate);
+      if (!result.ok) {
+        reply.code(404);
+        return { ok: false, code: "not_found", message: EMAIL_NOT_FOUND_MESSAGE };
+      }
+      if (!result.alreadyClear) noteEmailOutcome(userId, request.params.emailId, "SNOOZED");
+      return result.alreadyClear
+        ? { ok: true, itemId: result.itemId, alreadyClear: true }
+        : {
+            ok: true,
+            itemId: result.itemId,
+            alreadyClear: false,
+            snoozedUntil: snoozeDate.toISOString(),
+          };
     },
   );
 }

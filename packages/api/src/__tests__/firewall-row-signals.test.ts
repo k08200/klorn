@@ -19,6 +19,17 @@ describe("judgeSignalOf", () => {
     expect(judgeSignalOf("system")).toBe("system");
   });
 
+  it("maps the vocabulary the summarize pass ACTUALLY stores", () => {
+    // EmailMessage.category is written by email-summarize (billing | meeting |
+    // engineering | conversation | automated | newsletter | personal |
+    // business | other) — the classifier's 8-word vocabulary reaches the DB
+    // only via the agent tool. The first mapping shipped against the wrong
+    // list, so 회사/고객/투자자 chips could never appear on real rows.
+    expect(judgeSignalOf("billing")).toBe("billing");
+    expect(judgeSignalOf("engineering")).toBe("system");
+    expect(judgeSignalOf("newsletter")).toBe("promotions");
+  });
+
   it("folds automated into promotions — one bulk-mail category, not two", () => {
     expect(judgeSignalOf("automated")).toBe("promotions");
   });
@@ -27,6 +38,10 @@ describe("judgeSignalOf", () => {
     expect(judgeSignalOf("meeting")).toBeNull();
     expect(judgeSignalOf("conversation")).toBeNull();
     expect(judgeSignalOf("other")).toBeNull();
+    // personal/business stay unclaimed: the summarize pass can't tell 회사
+    // from 고객, and a wrong claim is worse than none.
+    expect(judgeSignalOf("personal")).toBeNull();
+    expect(judgeSignalOf("business")).toBeNull();
     expect(judgeSignalOf(null)).toBeNull();
     expect(judgeSignalOf("garbage-from-old-rows")).toBeNull();
   });
@@ -46,6 +61,42 @@ describe("gmailCategoryOf", () => {
 });
 
 describe("rowSignalFor", () => {
+  it("the user's own label outranks even the company domain, and says so", () => {
+    // "This colleague's address is actually our investor" — the user said so.
+    expect(
+      rowSignalFor({
+        userLabel: "investor",
+        internal: true,
+        judgeCategory: "billing",
+        category: "updates",
+        repliedCount: 9,
+      }),
+    ).toEqual({ kind: "category", category: "investor", byUser: true });
+    // Derived chips never claim byUser.
+    expect(
+      rowSignalFor({ userLabel: null, internal: true, category: null, repliedCount: 0 }),
+    ).toEqual({
+      kind: "category",
+      category: "internal",
+    });
+  });
+
+  it("a declared company domain outranks everything — it is a recorded fact about WHO", () => {
+    // A colleague forwarding a receipt: 회사 (declared), not 청구 (judged).
+    expect(
+      rowSignalFor({
+        internal: true,
+        judgeCategory: "billing",
+        category: "updates",
+        repliedCount: 0,
+      }),
+    ).toEqual({ kind: "category", category: "internal" });
+    // Not on a company domain: the rest of the ladder is untouched.
+    expect(
+      rowSignalFor({ internal: false, judgeCategory: "billing", category: null, repliedCount: 0 }),
+    ).toEqual({ kind: "category", category: "billing" });
+  });
+
   it("the judge's verdict outranks Gmail's tab — 회사 beats a stray label", () => {
     expect(
       rowSignalFor({ judgeCategory: "internal", category: "updates", repliedCount: 6 }),

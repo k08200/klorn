@@ -6,8 +6,11 @@ import { useEffect } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch, startLinkInbox } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
+import { pendingConnect } from "../lib/onboarding-return";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
+import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
 import { useToast } from "./toast";
 
 interface LinkedAccount {
@@ -39,64 +42,75 @@ function formatLastSynced(iso: string | null): string {
 }
 
 /**
- * "Connected inboxes" — link a SECONDARY Google account (e.g. work Gmail) as a
- * full inbox so the firewall classifies its mail too. Pro feature: for a
- * non-entitled user we show the upsell instead of the connect button. Must
- * render inside a <Suspense> (uses useSearchParams).
+ * "Connected inboxes" — link another Google account (e.g. work Gmail) as a
+ * full inbox so the firewall classifies its mail too. The first mail account
+ * is free whatever the provider, a second one is Pro: the server's canConnect
+ * decides between the connect button and the Pro note. Must render inside a
+ * <Suspense> (uses useSearchParams).
  */
 export function LinkedInboxesSection() {
   const { user } = useAuth();
-  // `entitled` is server-computed and always true while the paywall is off, so
-  // this gate is inert pre-launch.
+  // Fallback only, for an API that does not answer canConnect yet.
   const entitled = user?.entitled !== false;
+  const { t } = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const { data: accounts = [] } = useQuery({
+  // canConnect: may a NEW mail account be connected now (always true while
+  // the paywall is off).
+  const { data: listing } = useQuery({
     queryKey: queryKeys.inbox.linkedAccounts(),
-    queryFn: async () => {
+    queryFn: async (): Promise<{ accounts: LinkedAccount[]; canConnect: boolean }> => {
       try {
-        const res = await apiFetch<{ accounts: LinkedAccount[] }>(
+        const res = await apiFetch<{ accounts: LinkedAccount[]; canConnect?: boolean }>(
           "/api/auth/google/linked-inboxes",
         );
-        return res.accounts ?? [];
+        return { accounts: res.accounts ?? [], canConnect: res.canConnect ?? entitled };
       } catch {
-        // 403 (not entitled) or not connected — show the connect prompt, no list.
-        return [] as LinkedAccount[];
+        // Transient failure — show the connect prompt; the server still gates it.
+        return { accounts: [], canConnect: entitled };
       }
     },
   });
+  const accounts = listing?.accounts ?? [];
+  const canConnect = listing?.canConnect ?? entitled;
 
   // Toast the OAuth redirect result (?inbox=success|failed|unverified) once,
   // then strip the param so a refresh doesn't re-toast.
   useEffect(() => {
     const linked = searchParams.get("inbox");
     if (!linked) return;
+    // The first run started this connect (ONBOARDING_V2): it reports the
+    // result itself and OnboardingReturn is taking the visitor back there, so
+    // this section must not toast or route to Settings underneath it.
+    if (pendingConnect()) return;
     if (linked === "success") {
-      toast("Inbox connected. Klorn will start classifying its mail.", "success");
+      toast(t("linkedInboxes.toast.connected"), "success");
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.linkedAccounts() });
     } else if (linked === "unverified") {
-      toast("That Google account's email isn't verified — couldn't link it.", "error");
+      toast(t("linkedAccounts.toast.unverified"), "error");
     } else if (linked === "self") {
-      toast("That's already your primary inbox — no need to link it.", "error");
+      toast(t("linkedInboxes.toast.self"), "error");
+    } else if (linked === "pro") {
+      toast(t("mailAccount.proGate.title"), "error");
     } else {
-      toast("Couldn't connect that inbox. Try again.", "error");
+      toast(t("linkedInboxes.toast.connectFailed"), "error");
     }
-    router.replace("/settings");
-  }, [searchParams, toast, queryClient, router]);
+    router.replace("/settings/accounts");
+  }, [searchParams, toast, queryClient, router, t]);
 
   const disconnect = useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/auth/google/linked-inboxes/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.linkedAccounts() });
-      toast("Inbox disconnected.", "success");
+      toast(t("linkedInboxes.toast.disconnected"), "success");
     },
     onError: (err) => {
       captureClientError(err, { scope: "inbox.linked.disconnect" });
-      toast("Couldn't disconnect. Try again.", "error");
+      toast(t("linkedAccounts.toast.disconnectFailed"), "error");
     },
   });
 
@@ -105,35 +119,38 @@ export function LinkedInboxesSection() {
   const connect = useMutation({
     mutationFn: () => startLinkInbox(),
     onError: (err) => {
+      const msg = err instanceof Error ? err.message : "";
+      if (isEntitlementRefusal(msg)) {
+        toast(t("mailAccount.proGate.title"), "error");
+        return;
+      }
       captureClientError(err, { scope: "inbox.linked.connect" });
-      toast("Connecting another inbox needs a Pro subscription.", "error");
+      toast(t("linkedInboxes.toast.signInFailed"), "error");
     },
   });
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <h2 className="text-base font-semibold text-ink">Connected inboxes</h2>
-      <p className="mt-1 text-xs text-ink-mid">
-        An inbox is one connected mail account. Add a second Google account (e.g. work) so Klorn
-        runs the same {TIER_COUNT}-lane firewall across all your mail, not just your primary
-        account.
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
+      <h2 className="text-role-head text-ink">{t("linkedInboxes.title")}</h2>
+      <p className="mt-1 text-role-body text-ink-mid">
+        {t("linkedInboxes.body", { count: String(TIER_COUNT) })}
       </p>
 
       {accounts.length > 0 && (
-        <ul className="mt-3 divide-y divide-line-soft rounded-xl border border-line-soft bg-surface-raised/70">
+        <ul className="mt-3 divide-y divide-line-soft rounded-control border border-line-soft bg-surface-raised/70">
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+              className="flex items-center justify-between gap-3 px-3 py-2.5 text-role-body"
             >
               <div className="min-w-0">
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect ? (
-                  <span className="block truncate text-[11px] text-state-warn-ink">
-                    Reconnect needed — access was revoked
+                  <span className="block truncate text-role-caption text-state-warn-ink">
+                    {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 ) : (
-                  <span className="block truncate text-[11px] text-ink-dim">
+                  <span className="block truncate text-role-caption text-ink-dim">
                     {formatLastSynced(account.lastSyncedAt)}
                   </span>
                 )}
@@ -144,18 +161,18 @@ export function LinkedInboxesSection() {
                     type="button"
                     onClick={() => connect.mutate()}
                     disabled={connect.isPending}
-                    className="ease-strong rounded-md border border-state-warn-line bg-state-warn-bg px-2 py-1 text-xs font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
+                    className="ease-strong rounded-chip border border-state-warn-line bg-state-warn-bg px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
-                    Reconnect
+                    {t("common.reconnect")}
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => disconnect.mutate(account.id)}
                   disabled={disconnect.isPending}
-                  className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
+                  className="ease-strong rounded-chip border border-state-danger-line bg-state-danger-bg px-2 py-1 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
-                  Disconnect
+                  {t("settings.disconnect")}
                 </button>
               </div>
             </li>
@@ -163,25 +180,18 @@ export function LinkedInboxesSection() {
         </ul>
       )}
 
-      {entitled ? (
+      {canConnect ? (
         <button
           type="button"
           onClick={() => connect.mutate()}
           disabled={connect.isPending}
-          className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+          className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-control bg-accent-solid px-4 py-2 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
         >
-          Connect another inbox
+          {t("linkedInboxes.connect")}
         </button>
       ) : (
-        <div className="mt-3 rounded-xl border border-state-info-line bg-state-info-bg p-4">
-          <p className="text-sm text-ink">
-            Multiple inboxes is a <span className="font-semibold text-accent-deep">Pro</span>{" "}
-            feature.
-          </p>
-          <p className="mt-1 text-xs text-ink-mid">
-            Free covers your primary Google account. Upgrade in the Subscription section to run the
-            firewall across a second inbox.
-          </p>
+        <div className="mt-3">
+          <MailAccountProGate />
         </div>
       )}
     </section>

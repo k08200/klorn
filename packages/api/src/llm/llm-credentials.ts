@@ -6,7 +6,7 @@ import { captureError } from "../sentry.js";
 import { isCuratedModel } from "./model-catalog.js";
 
 type UserWithKeys = {
-  openRouterApiKey?: string | null;
+  anthropicApiKey?: string | null;
   geminiApiKey?: string | null;
   chatModel?: string | null;
   plan?: string | null;
@@ -49,14 +49,14 @@ function safeDecrypt(
 export async function getUserLlmCredentials(userId: string): Promise<ProviderCredentials> {
   let user: UserWithKeys | null;
   try {
-    // select only the two BYOK columns — this runs on the firewall hot path, so
+    // select only the BYOK columns — this runs on the firewall hot path, so
     // don't pull the whole row (tokens, hashes) per lookup; the narrow select
     // also makes the type precise (no cast) and would fail to compile if either
     // column were ever removed.
     user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        openRouterApiKey: true,
+        anthropicApiKey: true,
         geminiApiKey: true,
         chatModel: true,
         plan: true,
@@ -87,7 +87,9 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
     return { userModel: chosenModel };
   }
 
-  const openRouterApiKey = safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId);
+  const anthropicApiKey = safeDecrypt(user.anthropicApiKey, "anthropicApiKey", userId);
+  // Legacy slot: no new Gemini keys are accepted, but a stored one keeps
+  // serving until the user clears it.
   const geminiApiKey = safeDecrypt(user.geminiApiKey, "geminiApiKey", userId);
-  return { openRouterApiKey, geminiApiKey, quotaScope: userId, userModel: chosenModel };
+  return { anthropicApiKey, geminiApiKey, quotaScope: userId, userModel: chosenModel };
 }

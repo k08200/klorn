@@ -7,8 +7,10 @@ android {
         applicationId "ai.klorn.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI passes these from the release tag and run number (mobile-release.yml);
+        // local builds fall back to 1 / "1.0".
+        versionCode((project.findProperty("klornVersionCode") ?: "1") as Integer)
+        versionName(project.findProperty("klornVersionName") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +18,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing comes only from the environment (the upload keystore is a
+    // CI secret, decoded to a temp file for the one build that needs it). With
+    // no KLORN_KEYSTORE_FILE the release build stays unsigned, as before.
+    signingConfigs {
+        release {
+            def ks = System.getenv("KLORN_KEYSTORE_FILE")
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv("KLORN_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KLORN_KEY_ALIAS")
+                keyPassword System.getenv("KLORN_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv("KLORN_KEYSTORE_FILE")) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -36,6 +55,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // push/KlornMessagingService.java extends the push plugin's FirebaseMessagingService.
+    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

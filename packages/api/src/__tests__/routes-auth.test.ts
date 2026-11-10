@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
 import { getLoginAuthUrl, getOAuth2Client } from "../mail/gmail.js";
 import { isAllowedNativeScheme } from "../routes/auth.js";
@@ -62,10 +62,16 @@ type StoredUser = {
   resetTokenExp?: Date | null;
   sessionsInvalidatedAt?: Date | null;
   betaProGrantedAt?: Date | null;
+  // Stands in for the `include: { automationConfig }` relation on /me.
+  automationConfig?: { timezone: string } | null;
 };
 const userStore = new Map<string, StoredUser>();
 const userByEmail = new Map<string, string>();
 let nextUserId = 1;
+
+// The background rehash is a cost-12 bcryptjs hash (pure JS): ~250 ms idle,
+// over vi.waitFor's 1 s default when the full suite runs in parallel.
+const REHASH_WAIT = { timeout: 15_000, interval: 50 };
 
 type StoredWaitlist = { email: string; status: string };
 const waitlistByEmail = new Map<string, StoredWaitlist>();
@@ -158,14 +164,7 @@ vi.mock("../db.js", () => {
           return { count };
         },
       ),
-      count: vi.fn(async ({ where }: { where?: { betaProGrantedAt?: { not: null } } } = {}) => {
-        if (where?.betaProGrantedAt?.not === null) {
-          let n = 0;
-          for (const u of userStore.values()) if (u.betaProGrantedAt) n += 1;
-          return n;
-        }
-        return userStore.size;
-      }),
+      count: vi.fn(async () => userStore.size),
     },
     userToken: { findFirst: vi.fn(async () => null) },
     // /me's hasAnyMailSource counts linked/IMAP inboxes alongside the Google
@@ -246,7 +245,11 @@ describe("GET /api/auth/google/callback — error handling", () => {
 
   it("redirects social login with a generic error, never the raw provider error", async () => {
     makeTokenExchangeThrow();
-    const state = signToken({ userId: "n1", email: "__google_login__" });
+    const state = signToken({
+      userId: "n1",
+      email: "__google_login__",
+      lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    });
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -635,7 +638,8 @@ describe("POST /api/auth/register — beta gate", () => {
     await app.close();
   });
 
-  it("creates a PRO account when BETA_GATE_ENABLED and waitlist entry is APPROVED", async () => {
+  it("lets an APPROVED waitlist entry register — on FREE, like everyone else", async () => {
+    // Approval opens the door; it does not comp the account. Pro is paid.
     process.env.BETA_GATE_ENABLED = "true";
     waitlistByEmail.set("approved@example.com", {
       email: "approved@example.com",
@@ -648,7 +652,8 @@ describe("POST /api/auth/register — beta gate", () => {
       payload: { email: "approved@example.com", password: "correcthorsebatterystaple" },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json().user.plan).toBe("PRO");
+    expect(res.json().user.plan).toBe("FREE");
+    expect(userStore.get(res.json().user.id)?.betaProGrantedAt ?? null).toBeNull();
     await app.close();
   });
 
@@ -665,112 +670,60 @@ describe("POST /api/auth/register — beta gate", () => {
   });
 });
 
-describe("POST /api/auth/register — beta auto pro", () => {
+describe("POST /api/auth/register — a new account starts on FREE", () => {
+  // Founder decision 2026-10-24: no signup is comped. Pro comes only from a
+  // paid (or card-backed trial) subscription, or an admin setting the plan.
+  // The retired BETA_AUTO_PRO_* flags must have no effect even if still set.
   beforeEach(resetStores);
 
-  it("grants PRO and stamps betaProGrantedAt for the first signup under the cap", async () => {
-    process.env.BETA_AUTO_PRO_ENABLED = "true";
-    process.env.BETA_AUTO_PRO_LIMIT = "2";
+  async function register(email: string) {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "first@example.com", password: "correcthorsebatterystaple" },
+      payload: { email, password: "correcthorsebatterystaple" },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().user.plan).toBe("PRO");
-    const stored = userStore.get(res.json().user.id);
-    expect(stored?.betaProGrantedAt).toBeInstanceOf(Date);
     await app.close();
-  });
+    expect(res.statusCode).toBe(201);
+    return { body: res.json(), stored: userStore.get(res.json().user.id) };
+  }
 
-  it("silently falls back to FREE once the cap is reached", async () => {
+  it("ignores BETA_AUTO_PRO_ENABLED=true while under its old cap", async () => {
     process.env.BETA_AUTO_PRO_ENABLED = "true";
-    process.env.BETA_AUTO_PRO_LIMIT = "1";
-    const app = await buildApp();
-    const a = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { email: "early@example.com", password: "correcthorsebatterystaple" },
-    });
-    expect(a.statusCode).toBe(201);
-    expect(a.json().user.plan).toBe("PRO");
-
-    const b = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { email: "late@example.com", password: "correcthorsebatterystaple" },
-    });
-    expect(b.statusCode).toBe(201);
-    expect(b.json().user.plan).toBe("FREE");
-    const lateUser = userStore.get(b.json().user.id);
-    expect(lateUser?.betaProGrantedAt ?? null).toBeNull();
-    await app.close();
-  });
-
-  it("defaults the cap to 50 when BETA_AUTO_PRO_LIMIT is unset", async () => {
-    process.env.BETA_AUTO_PRO_ENABLED = "true";
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { email: "default@example.com", password: "correcthorsebatterystaple" },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().user.plan).toBe("PRO");
-    await app.close();
-  });
-
-  it("does not grant when BETA_AUTO_PRO_ENABLED is unset (regression check)", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { email: "plain@example.com", password: "correcthorsebatterystaple" },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().user.plan).toBe("FREE");
-    const stored = userStore.get(res.json().user.id);
+    process.env.BETA_AUTO_PRO_LIMIT = "50";
+    const { body, stored } = await register("first@example.com");
+    expect(body.user.plan).toBe("FREE");
+    expect(stored?.plan).toBe("FREE");
     expect(stored?.betaProGrantedAt ?? null).toBeNull();
-    await app.close();
   });
 
-  it("does not consume the auto-pro cap when BETA_GATE_ENABLED takes priority", async () => {
-    // Both flags on: gate path should win, auto-pro path must not even count.
+  it("ignores BETA_AUTO_PRO_ENABLED=true with the cap unset", async () => {
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    const { body, stored } = await register("default@example.com");
+    expect(body.user.plan).toBe("FREE");
+    expect(stored?.betaProGrantedAt ?? null).toBeNull();
+  });
+
+  it("stays FREE with both the gate and auto-pro on and an APPROVED entry", async () => {
     process.env.BETA_GATE_ENABLED = "true";
     process.env.BETA_AUTO_PRO_ENABLED = "true";
-    process.env.BETA_AUTO_PRO_LIMIT = "1";
+    process.env.BETA_AUTO_PRO_LIMIT = "50";
     waitlistByEmail.set("approved@example.com", {
       email: "approved@example.com",
       status: "APPROVED",
     });
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { email: "approved@example.com", password: "correcthorsebatterystaple" },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().user.plan).toBe("PRO");
-    // Gate-path PRO should NOT stamp betaProGrantedAt — that column is the
-    // auto-pro cap counter.
-    const stored = userStore.get(res.json().user.id);
+    const { body, stored } = await register("approved@example.com");
+    expect(body.user.plan).toBe("FREE");
     expect(stored?.betaProGrantedAt ?? null).toBeNull();
-    await app.close();
   });
 
-  it("treats BETA_AUTO_PRO_LIMIT=0 as effectively disabled", async () => {
+  it("does not count existing beta-PRO accounts to decide a new signup's plan", async () => {
     process.env.BETA_AUTO_PRO_ENABLED = "true";
-    process.env.BETA_AUTO_PRO_LIMIT = "0";
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { email: "zero@example.com", password: "correcthorsebatterystaple" },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().user.plan).toBe("FREE");
-    await app.close();
+    const { prisma } = await import("../db.js");
+    const countSpy = vi.mocked(prisma.user.count);
+    countSpy.mockClear();
+    await register("plain@example.com");
+    expect(countSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -798,6 +751,31 @@ describe("POST /api/auth/login", () => {
     const body = res.json();
     expect(body.user.email).toBe("bob@example.com");
     expect(verifyToken(body.token).email).toBe("bob@example.com");
+    await app.close();
+  });
+
+  it("records the device session's address from the trusted source, not a client-sent X-Forwarded-For", async () => {
+    // trustProxy as in index.ts, so request.ip is the forgeable value it is in prod.
+    const { authRoutes } = await import("../routes/auth.js");
+    const app = Fastify({ trustProxy: true });
+    await app.register(authRoutes, { prefix: "/api/auth" });
+    await registerUser(app, "dave@example.com", "correcthorsebattery");
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.device.create).mockClear();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "dave@example.com", password: "correcthorsebattery" },
+      headers: { "x-forwarded-for": "198.51.100.66" },
+      remoteAddress: "192.0.2.20",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const created = vi.mocked(prisma.device.create).mock.calls.at(-1)?.[0] as {
+      data: { ipAddress: string | null };
+    };
+    expect(created.data.ipAddress).toBe("192.0.2.20");
     await app.close();
   });
 
@@ -858,10 +836,30 @@ describe("POST /api/auth/login", () => {
 // The per-IP rate limit cannot see a botnet rotating source addresses
 // against one account; this window is keyed on the normalized email.
 describe("POST /api/auth/login — per-account lockout", () => {
+  // The throttle is under test here, not bcrypt. Up to 32 real cost-12 compares
+  // per test (bcryptjs is pure JS, ~250 ms each) took ~9 s idle and passed the
+  // 60 s timeout at load average ~30. The stand-in still holds each request on
+  // a timer, as the real compare holds it for its rounds: resolved at once, the
+  // wave's requests ran one after another and a check-then-record gap after
+  // the compare went unseen. Every account here registers with
+  // REGISTERED_PASSWORD.
+  const REGISTERED_PASSWORD = "correcthorsebattery";
+  const COMPARE_HOLD_MS = 10;
+  let compareSpy: MockInstance | undefined;
+
   beforeEach(async () => {
     resetStores();
     const { _resetLoginThrottleForTests } = await import("../security/login-throttle.js");
     _resetLoginThrottleForTests();
+    const bcrypt = (await import("bcryptjs")).default;
+    compareSpy = vi.spyOn(bcrypt, "compare").mockImplementation(async (password: string) => {
+      await new Promise((resolve) => setTimeout(resolve, COMPARE_HOLD_MS));
+      return password === REGISTERED_PASSWORD;
+    });
+  });
+
+  afterEach(() => {
+    compareSpy?.mockRestore();
   });
 
   async function failLogin(app: Awaited<ReturnType<typeof buildApp>>, email: string) {
@@ -878,7 +876,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "victim@example.com", password: "correcthorsebattery" },
+      payload: { email: "victim@example.com", password: REGISTERED_PASSWORD },
     });
 
     for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES; i++) {
@@ -889,7 +887,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const locked = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "victim@example.com", password: "correcthorsebattery" },
+      payload: { email: "victim@example.com", password: REGISTERED_PASSWORD },
     });
     expect(locked.statusCode).toBe(429);
     // Mirrors the per-IP limiter's shape — no account-existence oracle.
@@ -917,7 +915,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "bystander@example.com", password: "correcthorsebattery" },
+      payload: { email: "bystander@example.com", password: REGISTERED_PASSWORD },
     });
 
     for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES; i++) {
@@ -926,7 +924,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "bystander@example.com", password: "correcthorsebattery" },
+      payload: { email: "bystander@example.com", password: REGISTERED_PASSWORD },
     });
     expect(res.statusCode).toBe(200);
     await app.close();
@@ -938,7 +936,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "resetme@example.com", password: "correcthorsebattery" },
+      payload: { email: "resetme@example.com", password: REGISTERED_PASSWORD },
     });
 
     for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES - 1; i++) {
@@ -947,7 +945,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const ok = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "resetme@example.com", password: "correcthorsebattery" },
+      payload: { email: "resetme@example.com", password: REGISTERED_PASSWORD },
     });
     expect(ok.statusCode).toBe(200);
 
@@ -957,7 +955,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const okAgain = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "resetme@example.com", password: "correcthorsebattery" },
+      payload: { email: "resetme@example.com", password: REGISTERED_PASSWORD },
     });
     expect(okAgain.statusCode).toBe(200);
     await app.close();
@@ -981,7 +979,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "victim@example.com", password: "correcthorsebattery" },
+      payload: { email: "victim@example.com", password: REGISTERED_PASSWORD },
     });
 
     const WAVE_OVERSHOOT = 20;
@@ -996,6 +994,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     // so exactly MAX guesses reach verification — never more.
     expect(unauthorized).toBe(LOGIN_THROTTLE_MAX_FAILURES);
     expect(throttled).toBe(WAVE_OVERSHOOT);
+    expect(compareSpy).toHaveBeenCalledTimes(LOGIN_THROTTLE_MAX_FAILURES);
     await app.close();
   });
 });
@@ -1033,7 +1032,7 @@ describe("POST /api/auth/login — legacy hash upgrade", () => {
     const { prisma } = await import("../db.js");
     await vi.waitFor(() => {
       expect(prisma.user.updateMany).toHaveBeenCalled();
-    });
+    }, REHASH_WAIT);
     const call = vi.mocked(prisma.user.updateMany).mock.calls.at(-1)?.[0] as {
       where: { id: string; passwordHash: string };
       data: { passwordHash: string };
@@ -1097,7 +1096,7 @@ describe("POST /api/auth/login — legacy hash upgrade", () => {
 
     await vi.waitFor(() => {
       expect(prisma.user.updateMany).toHaveBeenCalled();
-    });
+    }, REHASH_WAIT);
     // The in-flight guard admits exactly one background hash; the two other
     // logins must skip instead of stacking additional cost-12 work.
     await new Promise((r) => setTimeout(r, 100));
@@ -1204,6 +1203,160 @@ describe("GET /api/auth/me", () => {
     expect(body.user.email).toBe("me@example.com");
     expect(body.user.id).toBe("user-1");
     expect(body.user).toHaveProperty("googleConnected");
+    await app.close();
+  });
+
+  it("reports the user's stored timezone (AutomationConfig.timezone), not a constant", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "tz@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.timezone;
+
+    // No config row yet: the product default.
+    expect(await me()).toBe("Asia/Seoul");
+
+    const stored = userStore.get("user-1");
+    if (!stored) throw new Error("registered user missing");
+    userStore.set("user-1", { ...stored, automationConfig: { timezone: "America/Los_Angeles" } });
+    expect(await me()).toBe("America/Los_Angeles");
+
+    // A garbage stored value never reaches the client's Intl calls.
+    userStore.set("user-1", { ...stored, automationConfig: { timezone: "Not/AZone" } });
+    expect(await me()).toBe("Asia/Seoul");
+    await app.close();
+  });
+
+  it("reports UNIFIED_HOME as user.unifiedHome, false unless the flag is on", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "home@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.unifiedHome;
+
+    delete process.env.UNIFIED_HOME;
+    expect(await me()).toBe(false);
+    process.env.UNIFIED_HOME = "true";
+    try {
+      expect(await me()).toBe(true);
+    } finally {
+      delete process.env.UNIFIED_HOME;
+    }
+    await app.close();
+  });
+
+  it("reports user.files only while the drive and one of its sources are on (FD-7)", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "files@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.files;
+    const flags = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED", "OBJECT_STORAGE_ENABLED"] as const;
+    const clear = () => {
+      for (const flag of flags) delete process.env[flag];
+    };
+
+    clear();
+    try {
+      expect(await me()).toBe(false);
+      // The drive alone has no source to show: Files stays hidden.
+      process.env.DRIVE_ENABLED = "true";
+      expect(await me()).toBe(false);
+      // A source's flag without the drive's: still hidden.
+      delete process.env.DRIVE_ENABLED;
+      process.env.KLORN_DRIVE_ENABLED = "true";
+      process.env.OBJECT_STORAGE_ENABLED = "true";
+      expect(await me()).toBe(false);
+      process.env.DRIVE_ENABLED = "true";
+      expect(await me()).toBe(true);
+    } finally {
+      clear();
+    }
+    await app.close();
+  });
+
+  it("reports TEAM_MODE_ENABLED as user.teamMode, false unless the flag is on", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "team-mode@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.teamMode;
+
+    delete process.env.TEAM_MODE_ENABLED;
+    expect(await me()).toBe(false);
+    process.env.TEAM_MODE_ENABLED = "true";
+    try {
+      expect(await me()).toBe(true);
+    } finally {
+      delete process.env.TEAM_MODE_ENABLED;
+    }
+    await app.close();
+  });
+
+  it("reports ONBOARDING_V2 as user.onboardingV2 on /me, login and register, false unless on", async () => {
+    const app = await buildApp();
+    const register = async (email: string) =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/auth/register",
+          payload: { email, password: "testpassword123" },
+        })
+      ).json();
+    const login = async () =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "first-run@example.com", password: "testpassword123" },
+        })
+      ).json();
+
+    delete process.env.ONBOARDING_V2;
+    const registered = await register("first-run@example.com");
+    const me = async () =>
+      (
+        await app.inject({
+          method: "GET",
+          url: "/api/auth/me",
+          headers: authHeader(registered.token),
+        })
+      ).json().user.onboardingV2;
+    expect(registered.user.onboardingV2).toBe(false);
+    expect((await login()).user.onboardingV2).toBe(false);
+    expect(await me()).toBe(false);
+
+    process.env.ONBOARDING_V2 = "true";
+    try {
+      expect((await register("first-run-2@example.com")).user.onboardingV2).toBe(true);
+      expect((await login()).user.onboardingV2).toBe(true);
+      expect(await me()).toBe(true);
+    } finally {
+      delete process.env.ONBOARDING_V2;
+    }
+    await app.close();
+  });
+
+  it("login carries user.unifiedHome so the first landing is the right home", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "landing@example.com");
+    const login = async () =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "landing@example.com", password: "testpassword123" },
+        })
+      ).json();
+
+    delete process.env.UNIFIED_HOME;
+    expect((await login()).user.unifiedHome).toBe(false);
+    process.env.UNIFIED_HOME = "true";
+    try {
+      expect((await login()).user.unifiedHome).toBe(true);
+    } finally {
+      delete process.env.UNIFIED_HOME;
+    }
     await app.close();
   });
 

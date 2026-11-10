@@ -58,7 +58,27 @@ export function parseListUnsubscribe(
   return { mailto, url, oneClick };
 }
 
-const MAILTO_ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const WHITESPACE_RE = /\s/;
+
+/**
+ * One plausible address: no whitespace, exactly one "@" with something before
+ * it, and a dot inside the domain (not its first or last character). Same rule
+ * as the former /^[^\s@]+@[^\s@]+\.[^\s@]+$/, without its backtracking: the
+ * target is sender-controlled, and that regex was quadratic on a domain of dots.
+ */
+export function isPlausibleMailtoAddress(text: string): boolean {
+  if (WHITESPACE_RE.test(text)) return false;
+  const at = text.indexOf("@");
+  if (at <= 0 || text.indexOf("@", at + 1) !== -1) return false;
+  return text.slice(at + 2, -1).includes(".");
+}
+
+// The subject and body of a stored mailto: come from the sender of the mail. A
+// real unsubscribe request is a few words or a short token; anything past these
+// is not sent (the caller falls back to the link) so a sender cannot have the
+// user's own account mail a large payload to an address of their choosing.
+export const MAX_MAILTO_SUBJECT_LENGTH = 250;
+export const MAX_MAILTO_BODY_LENGTH = 1_000;
 
 export interface MailtoTarget {
   to: string;
@@ -68,8 +88,9 @@ export interface MailtoTarget {
 
 /**
  * Resolve a stored mailto: target into a sendable message. Null when the
- * URI does not carry one plausible address — the caller falls back to the
- * browser link rather than sending mail to a sender-controlled junk string.
+ * URI does not carry one plausible address, or a subject or body over the caps
+ * above — the caller falls back to the browser link rather than sending mail to
+ * a sender-controlled junk string.
  */
 export function parseMailtoTarget(mailto: string): MailtoTarget | null {
   if (!mailto.toLowerCase().startsWith("mailto:")) return null;
@@ -85,9 +106,12 @@ export function parseMailtoTarget(mailto: string): MailtoTarget | null {
   } catch {
     return null;
   }
-  if (!MAILTO_ADDRESS_RE.test(to)) return null;
+  if (!isPlausibleMailtoAddress(to)) return null;
   const subject = url.searchParams.get("subject")?.trim() || "unsubscribe";
   const body = url.searchParams.get("body")?.trim() || "unsubscribe";
+  if (subject.length > MAX_MAILTO_SUBJECT_LENGTH || body.length > MAX_MAILTO_BODY_LENGTH) {
+    return null;
+  }
   return { to, subject, body };
 }
 

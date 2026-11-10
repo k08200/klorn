@@ -1,24 +1,25 @@
-# Weekly judge canary (#769) — run-over-run drift + margin-erosion tripwire.
+# Weekly judge canary (#769) — the always-on judge check on an unchanged codebase.
 #
 # The PR-gate eval (eval.yml) only fires when a PR touches judge files, so it
-# cannot see two failure modes on an UNCHANGED codebase:
-#   1. provider-side model drift silently moving verdicts, and
-#   2. floors still cleared every run but by a shrinking margin.
-# This canary re-scores the committed eval set weekly and compares per-item
-# verdicts + per-floor margins against the previous run's baseline
-# (scripts/canary-compare.ts). Any verdict flip on an identical item fails the
-# workflow — on a fixed set with a temperature-0 judge, a flip means the
-# decision boundary itself moved.
+# cannot see a provider-side change or outage while the code stands still.
+# Every Monday this canary:
+#   1. ALARMS when the synthetic gate set misses a floor on both runs of
+#      scripts/judge-gate.sh, or when the instrument is degraded (at least one
+#      item fell to the keyword fallback, which cannot emit PUSH), and
+#   2. REPORTS per-item verdict flips + per-floor margins on the real set
+#      against last week's baseline (scripts/canary-compare.ts).
 #
-# Cost: one eval run per week (~50 LLM calls on the pinned judge model) — the
-# same as a single PR-gate run. The 2026-06-17 canary removal (#537) argued
-# the PR gate already covered this; #769 (founder) identified the two signals
-# above that it cannot cover, which is exactly what this workflow measures.
+# Since 2026-10-31 the judge is Claude Haiku 5.5 (native Anthropic provider,
+# as in prod). It takes no temperature, so the same items flip between runs of
+# the same code (real set: 39/53 locally vs 38/53 in CI, eval/README.md). A
+# flip no longer means the decision boundary moved, so flips are a readout,
+# not an alarm, and the floors on the gate set carry the alarm instead.
 #
-# Baseline lifecycle: stored via actions/cache (rolling key). On a STABLE run
-# the baseline refreshes; on an ALARM run it is kept, so the alarm repeats
-# weekly until the drift is investigated. To accept a new normal, run this
-# workflow manually with accept-baseline=true.
+# Cost: usually one gate-set run (56 items) + one real-set run (53) per week,
+# ~110 Haiku calls at ≈ $0.0002 each; each re-run or retry adds one set.
+#
+# Baseline lifecycle: stored via actions/cache (rolling key) and refreshed on
+# every scored run — with flips report-only there is nothing to hold it for.
 
 name: Judge canary
 
@@ -26,11 +27,6 @@ on:
   schedule:
     - cron: "0 1 * * 1" # Mondays 01:00 UTC
   workflow_dispatch:
-    inputs:
-      accept-baseline:
-        description: "Save this run's verdicts as the new baseline even if flips were detected"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -43,10 +39,15 @@ concurrency:
 
 jobs:
   canary:
-    name: Weekly drift canary (verdict flips + floor margins)
+    name: Weekly judge canary (gate floors + provider reachability)
     runs-on: ubuntu-latest
+    # The Anthropic secrets are set per step, only on the steps that call the
+    # API — never on checkout, setup or install.
     env:
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Anthropic only, so an outage reads as INSTRUMENT DEGRADED (exit 3)
+      # instead of another model's score.
+      LLM_PROVIDER_ORDER: anthropic
+      JUDGE_MODEL: claude-haiku-5-5
       # There is no DB in this job; the Prisma client is constructed at
       # import time and just needs a syntactically valid URL.
       DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
@@ -60,18 +61,25 @@ jobs:
       # Match prod's flag state (#653) and the PR-gate eval (eval.yml).
       JUDGE_INCLUDE_BODY: "true"
     steps:
-      - name: Check for provider key
+      # Fail closed: this workflow only runs on schedule/dispatch (no fork
+      # PRs), so a missing secret means the tripwire is disarmed, not skipped.
+      - name: Check for Anthropic key
         id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          if [ -n "$OPENROUTER_API_KEY" ]; then
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No provider key — skipping the judge canary."
+            echo "::error::No ANTHROPIC_API_KEY secret — the weekly judge canary cannot run."
+            exit 1
           fi
 
       - uses: actions/checkout@v7
         if: steps.key.outputs.present == 'true'
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         if: steps.key.outputs.present == 'true'
@@ -89,9 +97,26 @@ jobs:
         if: steps.key.outputs.present == 'true'
         run: cd packages/api && npx prisma generate
 
+      # The alarm: the gate set's floors, decided the same way as the PR gate
+      # (one re-run on a floor failure, one retry on an outage). The exit code
+      # tells the verdict and the alarm issue which failure it was.
+      - name: Gate floors on the synthetic set
+        if: steps.key.outputs.present == 'true'
+        id: floors
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+        continue-on-error: true
+        run: |
+          cd packages/api
+          set +e
+          bash scripts/judge-gate.sh eval/judge-eval-set.json
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit $code
+
       - name: Restore previous baseline
         if: steps.key.outputs.present == 'true'
-        id: baseline
         uses: actions/cache/restore@v4
         with:
           path: canary-baseline.json
@@ -101,15 +126,15 @@ jobs:
           restore-keys: |
             judge-canary-baseline-
 
-      - name: Score the eval set
+      # Readout only. The real set breaches per-tier floors by design (PUSH
+      # n=4, report-only until support ≥10 — see eval/README.md), and a floor
+      # breach exits 2 but still writes --out. Exit 3 (INSTRUMENT DEGRADED)
+      # writes no --out, so fallback verdicts never become a baseline.
+      - name: Score the real set (report-only)
         if: steps.key.outputs.present == 'true'
-        id: eval
-        # The gate can exit 2 (floor breach) and still write --out; keep going
-        # so the flip comparison and the final verdict step see the full picture.
-        # Exit 3 = INSTRUMENT DEGRADED (#879): fallback-poisoned verdicts are
-        # never written (no --out), so they can't become a baseline or fake a
-        # flip alarm — retry once after a pause, then let the missing-output
-        # check below surface the outage.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
         continue-on-error: true
         run: |
           cd packages/api
@@ -128,13 +153,13 @@ jobs:
           fi
           exit $code
 
-      - name: Compare against baseline
+      - name: Compare against baseline (report-only)
         if: steps.key.outputs.present == 'true'
         id: compare
         continue-on-error: true
         run: |
           if [ ! -f canary-current.json ]; then
-            echo "::error::eval produced no output — cannot compare"
+            echo "::warning::The real set produced no output — nothing to compare."
             exit 1
           fi
           if [ ! -f canary-baseline.json ]; then
@@ -144,10 +169,6 @@ jobs:
           cd packages/api && npx tsx scripts/canary-compare.ts \
             --prev=../../canary-baseline.json --curr=../../canary-current.json
 
-      # The real set currently breaches per-tier floors by design (PUSH n=4,
-      # report-only until support ≥10 — see eval/README.md), so the canary's
-      # signal is FLIPS ONLY: a floor breach exits 2 but still writes --out,
-      # and the run counts as scored as long as the output file exists.
       - name: Check score output
         if: steps.key.outputs.present == 'true'
         id: scored
@@ -159,19 +180,11 @@ jobs:
           fi
 
       - name: Save new baseline
-        # Refresh on a stable run (or an explicit accept); keep the old
-        # baseline on an alarm so the flip keeps firing until investigated.
-        if: >-
-          steps.key.outputs.present == 'true' &&
-          steps.scored.outputs.ok == 'true' &&
-          (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
+        if: steps.key.outputs.present == 'true' && steps.scored.outputs.ok == 'true'
         run: cp canary-current.json canary-baseline.json
 
       - name: Persist baseline to cache
-        if: >-
-          steps.key.outputs.present == 'true' &&
-          steps.scored.outputs.ok == 'true' &&
-          (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
+        if: steps.key.outputs.present == 'true' && steps.scored.outputs.ok == 'true'
         uses: actions/cache/save@v4
         with:
           path: canary-baseline.json
@@ -179,23 +192,33 @@ jobs:
 
       - name: Verdict
         if: steps.key.outputs.present == 'true'
+        env:
+          FLOORS_CODE: ${{ steps.floors.outputs.code }}
+          SCORED: ${{ steps.scored.outputs.ok }}
+          COMPARE: ${{ steps.compare.outcome }}
         run: |
-          if [ "${{ steps.scored.outputs.ok }}" != "true" ]; then
-            echo "::error::Judge canary: the scoring run produced no output — see the 'Score the eval set' step."
-            exit 1
+          if [ "$SCORED" != "true" ]; then
+            echo "::warning::The real-set readout produced no output — see the 'Score the real set' step."
+          elif [ "$COMPARE" != "success" ]; then
+            echo "::notice::The real-set comparison found verdict flips or could not compare (report-only: the judge takes no temperature) — see the 'Compare against baseline' step."
           fi
-          if [ "${{ steps.eval.outcome }}" != "success" ]; then
-            echo "::warning::Per-tier floors not met on the real set (expected while PUSH support < 10 — report-only). Flip detection ran regardless."
-          fi
-          if [ "${{ steps.compare.outcome }}" != "success" ]; then
-            if [ "${{ github.event.inputs.accept-baseline }}" = "true" ]; then
-              echo "::warning::Flips detected but accept-baseline=true — new baseline saved."
-              exit 0
-            fi
-            echo "::error::Judge canary: verdict flips against last week's baseline — see the 'Compare against baseline' step."
-            exit 1
-          fi
-          echo "Canary scored — no flips, baseline refreshed."
+          case "$FLOORS_CODE" in
+            0)
+              echo "Canary green — the gate set clears every floor."
+              ;;
+            3)
+              echo "::error::Judge canary: instrument degraded on both attempts — at least one item fell to the keyword fallback (provider error, credit, rate limit). See the 'Gate floors on the synthetic set' step."
+              exit 1
+              ;;
+            2)
+              echo "::error::Judge canary: the gate set missed a floor on both runs — see the 'Gate floors on the synthetic set' step."
+              exit 1
+              ;;
+            *)
+              echo "::error::Judge canary: the gate step exited '${FLOORS_CODE}' — see the 'Gate floors on the synthetic set' step."
+              exit 1
+              ;;
+          esac
 
       # A tripwire nobody sees is not a tripwire. The 2026-07-26 provider
       # failure sat red for a week: this canary is the only always-on detector
@@ -204,21 +227,26 @@ jobs:
       # commenting on it, so the alarm accumulates in a single thread instead
       # of spawning a new issue every Monday.
       - name: Open or refresh the alarm issue
-        if: failure() && steps.key.outputs.present == 'true'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SCORED: ${{ steps.scored.outputs.ok }}
+          KEY_PRESENT: ${{ steps.key.outputs.present }}
+          FLOORS_CODE: ${{ steps.floors.outputs.code }}
         run: |
-          if [ "$SCORED" = "true" ]; then
-            reason="verdict flips against last week's baseline — the decision boundary moved on an unchanged codebase"
+          if [ "$KEY_PRESENT" != "true" ]; then
+            reason="the ANTHROPIC_API_KEY repo secret is missing, so the canary could not run at all"
+          elif [ "$FLOORS_CODE" = "2" ]; then
+            reason="the synthetic gate set missed a floor (overall ≥80%, PUSH recall ≥90%, SILENT precision ≥90%) on both runs, on an unchanged codebase"
+          elif [ "$FLOORS_CODE" = "3" ]; then
+            reason="instrument degraded — at least one item fell to the keyword fallback on both attempts, so the scores measure the fallback, not the judge"
           else
-            reason="instrument degraded — the judge never reached the LLM provider, so every item fell to the keyword fallback"
+            reason="a workflow step outside the scoring failed (gate step exit '${FLOORS_CODE:-not reached}')"
           fi
           body=$(printf '%s\n\n%s\n\n%s\n' \
             "Weekly judge canary failed: ${reason}." \
             "Run: ${RUN_URL}" \
-            "The keyword fallback caps confidence at 0.55 and the PUSH rule floor is 0.7 (packages/api/src/judge/tier-policy.ts), so while the instrument is degraded PUSH cannot be emitted at all — for the canary and for prod. First check the provider key (credit balance, rate limit, validity), then re-run this workflow.")
+            "The keyword fallback caps confidence at 0.55 and the PUSH rule floor is 0.7 (packages/api/src/judge/tier-policy.ts), so while the instrument is degraded PUSH cannot be emitted at all — for the canary and for prod. First check the Anthropic key (credit balance, workspace spend limit, rate limit, validity), then re-run this workflow.")
           gh label create judge-canary --color B60205 --description "Weekly judge canary alarm" 2>/dev/null || true
           # `run:` executes under `bash -e`: an empty/failed lookup must not
           # abort the step before the issue is filed.

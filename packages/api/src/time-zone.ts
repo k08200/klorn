@@ -20,6 +20,41 @@ export function normalizeTimeZone(value: unknown): string {
   }
 }
 
+/** Longest IANA name is ~32 chars; anything far past that is not a zone. */
+const MAX_TIME_ZONE_LENGTH = 64;
+/** IANA names are letters/digits/`_`/`-`/`+` segments joined by `/`, never a bare offset. */
+const IANA_SHAPE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/;
+
+/**
+ * Strict validation for a client-supplied zone (PATCH /api/automations).
+ * Unlike normalizeTimeZone (a read-side fallback), this returns null for
+ * anything that is not a real IANA zone so the route can reject it with 400
+ * instead of silently storing the product default. Raw offsets ("+09:00") are
+ * refused even though newer Intl accepts them: they carry no DST rules.
+ */
+export function parseTimeZoneInput(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const tz = value.trim();
+  if (tz.length === 0 || tz.length > MAX_TIME_ZONE_LENGTH || !IANA_SHAPE.test(tz)) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz }).format(new Date());
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
+export type TimeZoneMode = "AUTO" | "MANUAL";
+
+/**
+ * AutomationConfig.timezoneMode: null (no saved choice) and anything unknown
+ * read as AUTO — the client follows the device zone and keeps `timezone`
+ * synced to it. MANUAL means the user picked `timezone` in Settings.
+ */
+export function normalizeTimeZoneMode(value: unknown): TimeZoneMode {
+  return value === "MANUAL" ? "MANUAL" : "AUTO";
+}
+
 /**
  * "+09:00" / "-04:00" — the ISO offset string for `timeZone` at `date`.
  * Used wherever a zone-aware offset must be shown/instructed (e.g.
@@ -93,12 +128,35 @@ export function localDayUtcRange(
 function localDateTimeToUtc(dateKey: string, hhmm: string, timeZone: string): Date {
   const [year, month, day] = dateKey.split("-").map((part) => Number.parseInt(part, 10));
   const [hour, minute] = hhmm.split(":").map((part) => Number.parseInt(part, 10));
-  const localAsUtcMs = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  return new Date(wallClockToUtcMs(Date.UTC(year, month - 1, day, hour, minute, 0, 0), timeZone));
+}
 
+/**
+ * The instant a wall-clock time is in `timeZone`. `localAsUtcMs` is the wall clock
+ * written as if it were UTC (`Date.UTC(y, m, d, h, mi, s)`).
+ *
+ * The zone's offset has to be the one in force at the REAL instant, which is not
+ * known until the answer is. Reading the offset at `localAsUtcMs` itself is an
+ * hour off in the hours either side of a DST transition (the offset is sampled
+ * 8 hours too early in Los Angeles, 2 hours too late in Berlin, and a transition
+ * can sit in between): a Singapore holiday read in Los Angeles landed a day early
+ * after the fall-back. So: take the offset at the as-if-UTC instant, convert,
+ * take the offset at the result, and convert again if it moved. Two passes settle
+ * every time that exists. A time that does not exist (inside a spring-forward gap)
+ * never settles, and is read with the earlier offset, which puts it after the gap
+ * (02:30 becomes 03:30). An ambiguous time (fall back) reads as its first
+ * occurrence in a negative-offset zone and may read as either in a positive one;
+ * it is always a valid instant for that wall clock.
+ */
+export function wallClockToUtcMs(localAsUtcMs: number, timeZone: string): number {
   const firstOffset = getTimeZoneOffsetMs(new Date(localAsUtcMs), timeZone);
-  const firstUtc = localAsUtcMs - firstOffset;
-  const secondOffset = getTimeZoneOffsetMs(new Date(firstUtc), timeZone);
-  return new Date(localAsUtcMs - secondOffset);
+  const firstGuess = localAsUtcMs - firstOffset;
+  const secondOffset = getTimeZoneOffsetMs(new Date(firstGuess), timeZone);
+  if (secondOffset === firstOffset) return firstGuess;
+  const secondGuess = localAsUtcMs - secondOffset;
+  const thirdOffset = getTimeZoneOffsetMs(new Date(secondGuess), timeZone);
+  if (thirdOffset === secondOffset) return secondGuess;
+  return localAsUtcMs - Math.min(secondOffset, thirdOffset);
 }
 
 function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
@@ -115,7 +173,18 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   return localAsUtcMs - date.getTime();
 }
 
-function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
+/**
+ * One formatter per zone: building an Intl.DateTimeFormat costs tens of
+ * microseconds, which a recurring-calendar expansion (step C3) paid several times
+ * per occurrence. Formatting is stateless, so a shared formatter returns exactly
+ * what a fresh one did. Bounded: past the cap a zone simply gets a fresh formatter.
+ */
+const MAX_CACHED_FORMATTERS = 1000;
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  const cached = formatters.get(timeZone);
+  if (cached) return cached;
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour12: false,
@@ -126,6 +195,12 @@ function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
     minute: "2-digit",
     second: "2-digit",
   });
+  if (formatters.size < MAX_CACHED_FORMATTERS) formatters.set(timeZone, formatter);
+  return formatter;
+}
+
+function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
+  const formatter = formatterFor(timeZone);
   const parts = Object.fromEntries(
     formatter.formatToParts(date).map((part) => [part.type, part.value]),
   );

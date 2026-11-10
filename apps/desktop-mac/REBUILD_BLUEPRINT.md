@@ -1,3 +1,5 @@
+> **Superseded in part (2026-10-02):** §2/§4 HUD-only full view replaced by a standard main window — see `docs/design/productization-plan.md` §macOS architecture.
+
 # desktop-mac Rebuild Blueprint — Ambient Interrupt HUD
 
 > Status: DESIGN (not yet implemented). Author date: 2026-07-07.
