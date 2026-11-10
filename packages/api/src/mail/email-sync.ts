@@ -35,6 +35,7 @@ import {
   fetchGmailHistory,
   type GmailRawEmail,
 } from "./gmail-fetch.js";
+import { noteProviderArchives, type RemovedMail } from "./provider-archives.js";
 
 // Reconcile refreshes read/star status with one messages.get per stored email.
 // Bound concurrency so a few-hundred-email mailbox doesn't serialize hundreds of
@@ -461,6 +462,19 @@ export async function reconcileLinkedInboxes(
 }
 
 /**
+ * The stored rows no longer in the INBOX listing, for the large-INBOX path.
+ * Same spam-lane exclusion as the NOT IN query: spam rows are never listed.
+ */
+function leftInboxOf(
+  stored: readonly (RemovedMail & { labels: string[] | null })[],
+  inboxIds: ReadonlySet<string>,
+): RemovedMail[] {
+  return stored
+    .filter((e) => !inboxIds.has(e.gmailId) && !(e.labels ?? []).includes("SPAM"))
+    .map(({ id, gmailId, receivedAt }) => ({ id, gmailId, receivedAt }));
+}
+
+/**
  * Core reconcile for ONE inbox scope: the primary account (linkedInboxAccountId =
  * null) or a single linked secondary inbox. `gmail` is THAT account's client;
  * every DB query is scoped to `{ userId, linkedInboxAccountId }`, so a reconcile
@@ -518,6 +532,7 @@ async function reconcileInboxScope(
   // match `gmailId notIn inboxIdList` and be wrongly wiped without this guard.
   const scope = { userId, linkedInboxAccountId } as const;
   let removed = 0;
+  let leftInbox: RemovedMail[] = [];
   if (inboxIdList.length <= INBOX_PARAM_CAP) {
     // Resolve the attention items of the rows we're about to delete BEFORE the
     // delete, so an archived/trashed email leaves the attention queue instead of
@@ -533,8 +548,9 @@ async function reconcileInboxScope(
     };
     const stale = await prisma.emailMessage.findMany({
       where: staleWhere,
-      select: { id: true },
+      select: { id: true, gmailId: true, receivedAt: true },
     });
+    leftInbox = stale;
     await resolveAttentionForEmails(
       userId,
       stale.map((r) => r.id),
@@ -544,12 +560,10 @@ async function reconcileInboxScope(
   } else {
     const stored = await prisma.emailMessage.findMany({
       where: scope,
-      select: { id: true, gmailId: true, labels: true },
+      select: { id: true, gmailId: true, labels: true, receivedAt: true },
     });
-    // Same spam-lane exclusion as the NOT IN branch above.
-    const staleIds = stored
-      .filter((e) => !inboxIds.has(e.gmailId) && !(e.labels ?? []).includes("SPAM"))
-      .map((e) => e.id);
+    leftInbox = leftInboxOf(stored, inboxIds);
+    const staleIds = leftInbox.map((e) => e.id);
     await resolveAttentionForEmails(userId, staleIds);
     for (let i = 0; i < staleIds.length; i += INBOX_PARAM_CAP) {
       const res = await prisma.emailMessage.deleteMany({
@@ -568,6 +582,9 @@ async function reconcileInboxScope(
       `[EMAIL-SYNC] Reconciled: removed ${removed} stale emails for user ${userId} (${label})`,
     );
   }
+  // Mail that left the INBOX outside Klorn (Klorn's own archive/trash already
+  // deleted its row): the user cleared it in Gmail. Never throws.
+  if (leftInbox.length > 0) await noteProviderArchives(userId, gmail, leftInbox);
 
   // Refresh read/star status for the most recent N rows (bounded). After the
   // delete above, every remaining row in THIS scope is in INBOX, so the
