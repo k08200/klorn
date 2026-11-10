@@ -9,8 +9,8 @@
 import { describe, expect, it } from "vitest";
 import type { StoredFacts } from "../judge/v3/facts-store.js";
 import type { FactsV1, RelationshipSnapshot } from "../judge/v3/policy-types.js";
-import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
-import { type ReplayRow, replayPolicy } from "../judge/v3/replay.js";
+import { NEW_SENDER, UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
+import { type ReplayRow, replayPolicy, rowsNeedingRelationship } from "../judge/v3/replay.js";
 
 const T0 = new Date("2026-10-30T01:00:00.000Z"); // 10:00 in Seoul
 const HOUR = 3_600_000;
@@ -265,5 +265,36 @@ describe("replayPolicy", () => {
     });
     expect(report.parity.v3Keyword.SILENT).toBe(1);
     expect(report.transitions).toEqual({ "SILENT→SILENT": 1, "QUEUE→QUEUE": 1 });
+  });
+});
+
+describe("rowsNeedingRelationship (v3.2 first-contact gate)", () => {
+  const invite = {
+    from: "Jane <jane@acme.com>",
+    subject: "Can we reschedule?",
+    snippet: "",
+    labels: [],
+  };
+  const known: RelationshipSnapshot = { ...NEW_SENDER, sentCount: 3 };
+  const rows = [
+    // v2 QUEUE: the gate holding it is no change, yet a known sender would lift it.
+    row("queue-invite", { email: invite }),
+    row("push-invite", { v2Tier: "PUSH", email: invite }),
+    row("loaded", { email: invite, relationship: known }),
+    row("plain"),
+  ];
+
+  it("selects the rows the gate would hold as a new sender and that have no relationship", () => {
+    const opts = { facts: "keyword" as const, policyVersion: "v3.2" as const };
+    expect(rowsNeedingRelationship(rows, opts)).toEqual(["queue-invite", "push-invite"]);
+    expect(rowsNeedingRelationship(rows, { ...opts, policyVersion: "v3.1" })).toEqual([]);
+  });
+
+  it("decides a loaded new sender as held and a loaded known sender as v3.1 does", () => {
+    const opts = { budget: null, facts: "keyword" as const, policyVersion: "v3.2" as const };
+    const asNew = replayPolicy([row("x", { email: invite, relationship: NEW_SENDER })], opts);
+    expect(asNew.lanes.v3PreBudget.MEETING).toBe(0);
+    const asKnown = replayPolicy([row("x", { email: invite, relationship: known })], opts);
+    expect(asKnown.changes).toEqual([expect.objectContaining({ id: "x", v3: "MEETING" })]);
   });
 });
