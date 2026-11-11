@@ -276,3 +276,47 @@ describe("gmail-push routes", () => {
     await app.close();
   });
 });
+
+describe("gmail-push sync single flight", () => {
+  afterEach(() => {
+    delete process.env.GMAIL_PUSH_TOKEN;
+  });
+
+  it("does not start a second sync while that inbox is syncing, and re-runs once after", async () => {
+    process.env.GMAIL_PUSH_TOKEN = "secret";
+    const { prisma } = await import("../db.js");
+    const { syncEmails } = await import("../mail/email-sync.js");
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: "user-flight" } as never);
+    let release: () => void = () => {};
+    const firstSync = new Promise<void>((r) => {
+      release = r;
+    });
+    const sync = vi.mocked(syncEmails);
+    sync.mockClear();
+    sync.mockImplementation(async () => {
+      if (sync.mock.calls.length === 1) await firstSync;
+      return { synced: 0, newCount: 0, source: "gmail" } as never;
+    });
+
+    const app = await buildApp();
+    const data = Buffer.from(
+      JSON.stringify({ emailAddress: "flight@example.com", historyId: "1" }),
+    ).toString("base64");
+    const push = () =>
+      app.inject({
+        method: "POST",
+        url: "/api/gmail/push",
+        headers: { authorization: "Bearer secret" },
+        payload: { message: { data } },
+      });
+
+    for (let i = 0; i < 3; i++) expect((await push()).statusCode).toBe(204);
+    expect(sync).toHaveBeenCalledTimes(1);
+
+    release();
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sync).toHaveBeenCalledTimes(2);
+    await app.close();
+  });
+});
