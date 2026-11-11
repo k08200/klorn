@@ -96,6 +96,13 @@ enum TodayRules {
             tier: .push, style: .rows, count: rows.count, rows: Array(rows.prefix(limit)), older: older)
     }
 
+    /// Today's "Needs you now" count: the PUSH group's count as Today lists
+    /// it (inside the server's 72 h window when it sends one). The Dock
+    /// badge reads this, so the badge and Today never disagree. Pure.
+    static func needsYouNowCount(_ queue: FirewallResponse) -> Int {
+        lanes(queue).first { $0.tier == .push }?.count ?? 0
+    }
+
     /// The header line from the lanes Today lists: PUSH is already Today's
     /// windowed count, so the header and the PUSH group agree.
     static func headerSummary(_ lanes: [TodayLane]) -> TodayHeaderSummary {
