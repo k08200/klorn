@@ -532,11 +532,12 @@ export function calendarHideDeclinedEnabled(): boolean {
 // (primary and linked) at most once per 6 hours, lists the last 30 days and counts
 // each ended meeting once per contact: counts and UTC days only, never an attendee
 // list (founder decision 2026-11-01).
-// Read at sync time with the same lenient truthy parse.
-export function calendarCoattendanceEnabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.CALENDAR_COATTENDANCE_ENABLED ?? "").trim().toLowerCase(),
-  );
+// Accepts the rollout cohort (flagMode above): "cohort" collects, and the judge
+// reads, only for ROLLOUT_COHORT_USER_IDS. Checked per user wherever per-user work
+// runs (the queue, the pass, the judge's reader gate). Read per call.
+export const CALENDAR_COATTENDANCE_FLAG = "CALENDAR_COATTENDANCE_ENABLED";
+export function calendarCoattendanceOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [CALENDAR_COATTENDANCE_FLAG]);
 }
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
 // of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and

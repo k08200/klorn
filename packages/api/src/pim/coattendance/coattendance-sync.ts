@@ -41,7 +41,7 @@
  * classes, codes and statuses, never a message. Never throws.
  */
 
-import { calendarCoattendanceEnabled } from "../../config.js";
+import { calendarCoattendanceOpenTo } from "../../config.js";
 import { isDataWipeFenceError } from "../../privacy/data-wipe-fence.js";
 import { captureError } from "../../sentry.js";
 import { withTimeout } from "../../with-timeout.js";
@@ -304,7 +304,7 @@ export async function runCoAttendancePass(
   now: Date = new Date(),
   limits: { readonly listTimeoutMs?: number } = {},
 ): Promise<CoAttendancePassResult | null> {
-  if (!calendarCoattendanceEnabled()) return null;
+  if (!calendarCoattendanceOpenTo(userId)) return null;
   const until = retryAfter.get(userId);
   if ((until !== undefined && now.getTime() < until) || inFlight.has(userId)) return null;
   inFlight.add(userId);

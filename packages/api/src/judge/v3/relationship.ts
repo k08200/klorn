@@ -255,6 +255,20 @@ export const UNKNOWN_RELATIONSHIP: RelationshipSnapshot = {
   coAttendanceCountedThrough: null,
 };
 
+/**
+ * What the loader returns for a sender never seen before, with sent mail and
+ * the calendar synced: zero history, no label. Evals and replay use it for a
+ * first-contact sender (policy v3.2).
+ */
+export const NEW_SENDER: RelationshipSnapshot = {
+  ...UNKNOWN_RELATIONSHIP,
+  sentCount: 0,
+  vip: false,
+  dismissCount: 0,
+  inboundCount: 0,
+  meetingCount: 0,
+};
+
 const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
 function isNullableNumber(v: unknown): v is number | null {

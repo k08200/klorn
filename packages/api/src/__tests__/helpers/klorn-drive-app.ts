@@ -9,9 +9,12 @@
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance, type LightMyRequestResponse } from "fastify";
 import { vi } from "vitest";
+import { deriveClientAddress } from "../../security/client-address.js";
 import { MemoryObjectStore } from "../../storage/memory-store.js";
 import { setObjectStoreForTests } from "../../storage/runtime.js";
 import { createFakeDb, type FakeDb, fakePrismaClient, type Row } from "./fake-db.js";
+
+const BEHIND_CLOUDFLARE = { source: "cf-connecting-ip", trustedProxyHops: 1 } as const;
 
 export const PREFIX = "/api/drive";
 export const FLAGS = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED", "OBJECT_STORAGE_ENABLED"] as const;
@@ -106,13 +109,11 @@ export async function buildKlornDriveApp(
   const { driveEnabled } = await import("../../config.js");
   const app = Fastify();
   if (options.withRateLimit) {
+    // The client address as the hosted API reads it (CLIENT_IP_SOURCE=cf-connecting-ip).
     await app.register(rateLimit, {
       max: 100_000,
       timeWindow: "1 minute",
-      keyGenerator: (req) => {
-        const cf = req.headers["cf-connecting-ip"];
-        return typeof cf === "string" && cf.length > 0 ? cf : req.ip;
-      },
+      keyGenerator: (req) => deriveClientAddress(req, BEHIND_CLOUDFLARE),
     });
   }
   await app.register(driveRoutes({ gate: driveEnabled }), { prefix: PREFIX });

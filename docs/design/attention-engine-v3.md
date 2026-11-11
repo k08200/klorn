@@ -78,7 +78,7 @@ Code: `packages/api/src/judge/v3/` (`facts-schema.ts` is the canonical type and 
   - no zone given → the sent time's offset (else the user's timezone).
 - **Date validity.** ISO-8601 with an explicit offset only; a date more than 60 days before or 400 days after the mail is dropped as a misreading.
 - **The Date header is mail-controlled.** Only its parsed value (a local time with offset, and only when it is within 2 days of receipt) reaches the prompt, never its text. RFC 5322 allows comments in it.
-- **Invites.** Only an attached calendar file (text/calendar, `.ics`) sets `event.hasInvite`. Mail text cannot: an "Invitation: … @ …" subject, or the model reading one, is attacker-writable. `event.conflict` is null until the calendar read lands.
+- **Invites.** Only an attached calendar file (text/calendar, `.ics`) sets `event.hasInvite`. Mail text cannot: an "Invitation: … @ …" subject, or the model reading one, is attacker-writable. `hasInvite` does not gate MEETING, though: the model's reading of the text still makes an event, and an event not sent in bulk is MEETING (§3(5), rule 2). `event.conflict` is null until the calendar read lands.
 - **Spam label.** It fixes no fact field, because Gmail misfiles real mail and SPAM_INTAKE exists to rescue it. It travels as the header signal `spam`, and policy keeps spam out of PUSH and MEETING.
 - **Header signals.** The detector results (list mail, automated sender, spam, Gmail category, calendar file, recipient counts and position) are stored with the facts. They are booleans and counts, never mail text, and replay can read them.
 - **What the model sees.** Mail fields are wrapped as untrusted. Invisible format characters (zero-width, bidi, Unicode tag characters) are dropped first. Recipients go as counts, never third-party addresses.
@@ -146,14 +146,14 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
   - `coAttendanceNext14d` is **deprecated and always null**, because no upcoming attendee data is stored. It stays in the shape so stored rows replay unchanged. A stored snapshot written before these fields existed reads them as null (`parseRelationshipSnapshot`).
   - The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
 
-Co-attendance store (`pim/coattendance/`, behind `CALENDAR_COATTENDANCE_ENABLED`, off by default). Founder decision 2026-11-01: keep per-contact counts, never attendee lists.
+Co-attendance store (`pim/coattendance/`, behind `CALENDAR_COATTENDANCE_ENABLED`, off by default, accepts `cohort`: the queue, the pass and the reader's gate below then cover only `ROLLOUT_COHORT_USER_IDS`; a user taken out of the cohort keeps their counts and markers unpruned until they are back in scope or their data is wiped). Founder decision 2026-11-01: keep per-contact counts, never attendee lists.
 
 - **Counts.** `ContactCoAttendance` has one row per (userId, contactEmail) with raw counts, no weights: `meetingCount` (ended meetings the user took part in, with the contact invited and not declining), `smallMeetingCount` (of those, at most 5 such people; rooms and decliners excluded), `firstMetAt` and `lastMetAt` (the UTC day the earliest and latest counted meeting ended). It counts past meetings; the "next 14 days" feature above is not served by it. No column of it or of `CoAttendanceMeeting` (a SHA-256 of each counted meeting's identity and its end day, kept about a month so a meeting in two of the user's calendars counts once) is finer than a UTC day or records when a row was written.
 - **One pass per user, each finished UTC day once.** A background job the scheduler queues (never a request, never inside a user's per-tick budget) lists every Google calendar source of the user together (the primary, and each GOOGLE linked calendar not awaiting a re-link while linked sync is on): the days after the user's watermark `User.coAttendanceCountedThrough` through yesterday (the first pass, and the first after a data wipe, which resets the watermark: the last 30 days). The watermark's contract: every finished UTC day up to and including it has been evaluated for every included source. All sources' meetings that ended on one UTC day are written in one transaction, so rows that share a Postgres transaction id (`xmin`) reveal no more than `lastMetAt` already does. Only a day over a cap (25 meetings or 200 distinct contacts) is split, into the fewest balanced slices in marker-key order (26 meetings: 13 + 13), so each part is a key-ordered slice of that day and never one meeting alone. Each day transaction takes a per-user advisory lock and re-reads the day's markers: a one-slice day that has any is complete and skipped; a split day is resumed, writing only its unmarked meetings. The watermark advances (compare-and-swap; a pass that loses it stops) only through the last day every source listed in full (a cut listing counts through the day before its last listed start; a failed one covers nothing). A day at or before the watermark is never evaluated again.
 - **Counting rules.** A meeting counts once its whole UTC end-day has finished, if it is not cancelled or all-day, has at most 50 invitees with a complete guest list, and the user organised, accepted or is tentative; an event without the user's entry counts only if the calendar says they organised it. Rooms Google flags as resources, the user's own addresses and anyone who declined are never counted.
 - **Coverage, per source** (on `UserToken` for the primary, on `LinkedCalendarAccount` for a linked calendar): `coAttendanceObservedSince` is the first full day the source was covered by an advance of the watermark (a newly linked source: the day after the watermark); a source left out of an advance loses it, and after a gap (the watermark older than the day before the window) coverage restarts at the window's first day for every source. `coAttendanceLastPassAt` is written on every pass in which that source's own listing succeeded in full through the days being evaluated, whether the watermark advanced or there was nothing new to count in them, and never for a failed or cut listing. A pass that finds no new day to evaluate lists nothing and writes nothing; a new day appears every day, so a running job refreshes it daily. Reconnecting or re-linking clears both.
 - **The reader's gate (P2's contract).** A missing `ContactCoAttendance` row means 0 only when ALL of these hold; otherwise every co-attendance field is null:
-  1. the flag is ON;
+  1. the flag is ON for the user (`true`, or `cohort` with the user in `ROLLOUT_COHORT_USER_IDS`);
   2. `User.coAttendanceCountedThrough` ≥ utcDay(now) − 2 days;
   3. the user has at least one Google calendar source, and EVERY one (the primary `UserToken`, provider google, and each `LinkedCalendarAccount` with provider GOOGLE, as the store's own `readCoverage` lists them) has `coAttendanceObservedSince` ≤ utcDay(now) − 30 days, that is full-window coverage; a source that joins later reads null for up to 30 days;
   4. no Google source has `needsReconnect`;
@@ -188,7 +188,7 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
 
 ### (5) Policy v3.0: exact rules, budget, ranking (P3)
 
-The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries the `policyVersion` that decided it. The live version is **v3.1**, and v3.0 stays in `policy.ts` for replay and for items it already decided. The rules below are v3.0; "Policy v3.1" after them lists what changed.
+The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries the `policyVersion` that decided it. The live version is **v3.1**, and v3.0 stays in `policy.ts` for replay and for items it already decided. v3.2 is opt-in (`JUDGE_V3_POLICY_VERSION=v3.2`). The rules below are v3.0; "Policy v3.1" and "Policy v3.2" after them list what changed.
 
 **Evaluation.** The result is the lane before the budget. The first match wins:
 
@@ -227,7 +227,22 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
     - an attacker with their own DMARC-passing domain who first gets three mails into the inbox over 30 days;
     - a genuine brand mail that carries attacker text.
 
-    The model's `phishing_suspect` is the defence there. Before the flip, measure its recall on an adversarial set; the eval sets hold no phishing mail yet.
+    The model's `phishing_suspect` is the defence there. Measured on 2026-11-08 with `scripts/v3-phishing-eval.ts` on `eval/phishing-eval-set.json`: 45 synthetic mails, 30 phishing and 15 genuine look-alikes, all addressed to the user. It runs the production extractor with the To header. List headers and calendar parts are absent.
+    - Haiku 5.5, 3 runs (every answer served by `claude-haiku-5-5`, no item without facts):
+      - It flagged the same 28 of 30 phishing mails in every run (84 of 90 judgements) and none of the 15 genuine ones (0 of 45).
+      - The flagged mails include a prompt injection, a thread hijack and a genuine service carrying attacker text.
+      - That no flagged mail reached PUSH or MEETING holds by construction: the policy vetoes on the flag. Only the flag rate is measured.
+    - The extractor runs at temperature 0, so the unit is the mail, not the run. The set is synthetic and small, and phish-026 to 030 were added after Haiku flagged all of 001 to 025. Read it as a floor test, not a real-world recall estimate.
+    - Both misses are mails with no sign of spoofing:
+      - phish-028, an overdue invoice to "settle today" from the attacker's own clean domain, PUSHes through the due-soon ask;
+      - phish-029, a call invite with a malicious join link, rings as MEETING.
+      - A DMARC pass changes neither, because the ask and event paths do not read it.
+    - Opus 5.5, 1 run, before the script recorded the served model: 26 of 29 flagged, with one empty answer (26 of 30 if that mail counts as missed), and 0 of 15 genuine mails flagged.
+      - It also missed phish-018, a fake "payment declined".
+      - That mail PUSHes through the ask path, or through trusted risk when the sender is a known correspondent.
+    - Not measured: v2 on this set. An urgent pay request from a person likely PUSHes under v2 as well.
+    - Closing this hole is a founder decision and a new `policyVersion`. v3.2 (below) holds a first-contact sender's pay ask or event in QUEUE.
+      - The open item on requiring trust for an `.ics`-only MEETING (below) would not cover phish-029. It has no calendar part: live, the event comes from the model's reading of the text (`facts-merge.ts`, `hasInvite` false), and that still makes a MEETING.
 - **A notification may interrupt through a due-soon ask**, unless the deterministic automated-sender signal is on (no-reply, notifications@) or its From failed DMARC (a forged brand notification). A person-kind ask could already interrupt in v3.0, so this widens the kinds, not the senders. Newsletter, promotion and receipt never interrupt through an ask.
 - **SILENT is clear marketing only** (the LOCKED narrow-SILENT rule): `kind` promotion. Newsletters and other bulk mail are filed in INFO, still visible. This replaces rule 6, and rule 5 gains newsletter and bulk, checked after a transaction record and the INFO kinds, so their reasons are unchanged.
 - The phishing floor now also covers PUSH. The ask and risk paths already veto it, and the floor keeps the invariant independent of rule order.
@@ -263,9 +278,82 @@ Against v2 on the same runs, recomputed on 2026-11-07 with `v3-bench-report.ts -
 
 - Gate PUSH precision is 100% and real PUSH recall 75.0% in every row.
 - v3.1 does not yet meet the replay part of the P3 bar (§5):
-  - Gate PUSH recall is below v2. Half of v3.1's 24 misses are eval-046, which only risk trust can PUSH and the cold-start eval cannot show. If it were PUSHed, v3.1 would reach 92.3% on both rows: above v2 pooled, level with v2 on Haiku.
-  - Real SILENT precision on Haiku is 82.4% against 100%: 6 SILENT calls in 3 runs that the founder labelled otherwise. They are not traced to items here.
+  - Gate PUSH recall is below v2. All 24 of v3.1's misses are two mails, each missed in all 12 runs (traced 2026-11-08):
+    - eval-046, a card "verify unusual transaction" alert. Only risk trust can PUSH it, and the cold-start eval has no sender history. v2 PUSHes it in every run because v2 has no sender trust, which would also let it PUSH a phishing alert.
+    - eval-036, "due diligence docs due Friday". The ask is outside the ±24h window (rule 3), so it stays in QUEUE.
+    - v2's 19 misses: eval-036 in 9 runs, eval-039 in 6, eval-044 in 3, eval-037 in 1.
+    - If eval-046's sender were known, as a card issuer the user has heard from for a month is live, v3.1 would reach 144/156 pooled (v2 137/156) and 36/39 on Haiku (v2 36/39).
+  - Real SILENT precision on Haiku is 82.4% against 100%. All 6 errors are two Namecheap mails the founder labelled QUEUE, "Welcome to Namecheap" and a CEO letter. Haiku extracts `kind: promotion` for both in every run; Fable does the same for the CEO letter.
+    - This is an extraction error, not a rule. The tempting rule fix, SILENT only for promotion addressed in bulk, would move 84 correct SILENT calls to INFO on the real set and 96 on the gate set, because the eval mails carry no list headers.
   - PUSH precision is at or above v2 on both sets.
+
+**Policy v3.2 (2026-11-10, opt-in; v3.1 stays the default).** `JUDGE_V3_POLICY_VERSION=v3.2` selects it, read per call like the v3.0 rollback. It is v3.1 plus two changes. Nothing in production runs it until that variable is set, and `JUDGE_V3_POLICY` is still OFF.
+- **First-contact floor.** From a sender with no established contact, a PUSH or MEETING whose mail carries a pay ask (`asks[].kind` pay) or an event goes to QUEUE.
+  - The deciding reason is `first_contact {payAsk, event}`. The reasons of the interrupt it would have made follow it.
+  - It runs after the phishing and spam floors, whose reason decides when they also apply. Pins and manual overrides are not gated.
+  - Established contact is any of these `RelationshipSnapshot` fields (§3(2)), each a bar the policy already trusts elsewhere:
+    - `vip` (an investor/customer label, or a sender pinned to PUSH);
+    - `sentCount` ≥ 2, the slot reserve's bar (Klorn's unattended sends do not count; one "who is this?" reply is not a relationship);
+    - the history bar of v3.1's risk trust (without its DMARC-pass requirement): at least 3 earlier mails, the first at least 30 days before (the loader leaves out the mail being judged). One earlier mail is not enough, because the same phish sent twice would be;
+    - `meetingCount` ≥ 1 (a past meeting the user accepted or organised; an invite the attacker sends does not count).
+  - `sameOrgDomain` is not contact (security review). An attacker with a free account at the user's own mail provider shares the domain whenever that provider is missing from the public-domain list.
+  - A null field is no evidence (fails closed). History behind a From that failed DMARC is no evidence either, because it matches by address, which a forger copies.
+  - No snapshot at all skips the gate. Live LLM facts always come with one (`live-facts.ts`); only the model-down keyword fallback has none, and there v3.2 keeps v2 parity like v3.1 (doc principle 9; `v3-keyword-parity.test.ts`).
+  - A first-contact mail with neither keeps its lane: a stranger's due-soon reply ask still PUSHes.
+  - Holes it leaves:
+    - a correspondent who is compromised;
+    - an attacker who first gets three mails delivered over 30 days, or gets the user to write to them twice;
+    - a pay request phrased as another ask kind;
+    - legacy sent rows with a null `origin`, which may hold an old auto-reply to the attacker;
+    - a spoofed From when there is no DMARC verdict. Only Gmail ingest and Klorn's own inbound record one, so on Outlook and IMAP a forged known address carries that address's history.
+  - The gate's two halves are separate rule parameters (`firstContactGate: {payAsk, event}`), so a pay-only version is a one-line change.
+- **The due-soon window is a per-version parameter** (`dueWindow`). v3.2 keeps ±24h: the wider fixed windows change nothing on any eval set, and the only variant that does, a business-week window, needs the user's time zone and PUSHes a genuine look-alike labelled QUEUE (below).
+- `replay:policy --policy-version=v3.2` loads a relationship, once per user and sender, for every row the gate would hold if the sender were new (`rowsNeedingRelationship`), since live loads one with every LLM decision. That snapshot is the sender's history as of now, not as of the mail, and has no DMARC verdict, so the replay understates how often the gate fires. With `--facts=stored` the stored, as-of-judge relationship decides instead.
+
+Measured on 2026-11-10 with `scripts/v3-policy-variants.ts --dir=<P1 runs> --phishing=<report>`: P1's 60 stored runs (no LLM call) and a fresh audited phishing run on the final code (Haiku 5.5, 3 runs, all 135 answers served by `claude-haiku-5-5`, $0.04). The eval mails carry no relationship, so each sender scenario is an assumption, not a measurement:
+- cold start: no history and no verdict, the snapshot the loader returns for a new sender. Under v3.2 every sender is then a first contact. This is the worst case for the gate.
+- known sender: every sender has mailed the user 3 times over 30+ days, no DMARC verdict. The gate never fires, and v3.1's risk trust cannot.
+- "+ eval-046 trusted": eval-046's sender is also a known correspondent whose From passed DMARC, so v3.1's risk trust PUSHes it. That is the "sender known" reading of the P3 bar.
+
+Gate set, 4 models × 3 runs (Haiku 5.5 alone in brackets):
+
+| | senders | PUSH recall | PUSH precision | SILENT precision | MEETING recall | overall |
+|---|---|---|---|---|---|---|
+| v2 | — | 87.8% (137/156) [92.3%] | 100% [100%] | 100% (141/141) [100%] | 100% (48/48) | 89.4% [91.1%] |
+| v3.1 | cold start | 84.6% (132/156) [84.6%] | 100% [100%] | 99.1% (108/109) [100%] | 100% (48/48) | 83.3% [83.9%] |
+| v3.1 | cold start + eval-046 trusted | 92.3% (144/156) [92.3%] | 100% [100%] | 99.1% [100%] | 100% | 85.1% [85.7%] |
+| v3.2 | cold start | 61.5% (96/156) [61.5%] | 100% [100%] | 99.1% [100%] | 0% (0/48) | 72.2% [71.4%] |
+| v3.2 | cold start + eval-046 trusted | 69.2% (108/156) [69.2%] | 100% [100%] | 99.1% [100%] | 0% (0/48) | 74.0% [73.2%] |
+| v3.2 | known sender | 84.6% (132/156) [84.6%] | 100% [100%] | 99.1% [100%] | 100% | 83.3% [83.9%] |
+| v3.2 | known sender + eval-046 trusted | 92.3% (144/156) [92.3%] | 100% [100%] | 99.1% [100%] | 100% | 85.1% [85.7%] |
+| v3.2, pay asks only | any of the four | as v3.1 in the same scenario | | | | |
+
+- The gate's whole cost under cold start is the event half: 7 mails in all 12 runs, every one an event and none a pay ask. They are eval-037, eval-038 and eval-041 (urgent invites labelled PUSH, 36 rows) and eval-029, eval-051, eval-052 and eval-053 (labelled MEETING, 48 rows). The pay-ask half costs nothing in any scenario.
+- With senders known, v3.2 equals v3.1: the gate demotes nothing.
+- How many real invites and pay asks come from first-contact senders cannot be read from these sets. It needs `replay:policy --facts=keyword --policy-version=v3.2` (or `--facts=stored` once shadow has run) against the founder's mailbox, compared with v3.1.
+
+Real set: every v3.2 variant scores as v3.1 in every scenario (PUSH precision 100%, SILENT precision 93.0% pooled and 82.4% on Haiku, overall 58.0% pooled; v2 as in "Against v2"). The gate has nothing to demote there: the set has no MEETING label, and its PUSH hits come from the sender-prior front, before facts. No stored real-set fact has a due between 24 hours and 7 days.
+
+Phishing set (fresh run): 28 of 30 flagged in every run, 0 of 15 genuine mails flagged.
+
+| | senders | phishing mail that interrupts | genuine look-alikes on their label |
+|---|---|---|---|
+| v3.1 | cold start, or own-domain DMARC pass | 6 (phish-028 ×3, phish-029 ×3) | 45/45 |
+| v3.2 | cold start, or own-domain DMARC pass | 0 | 42/45: benign-003, a calendar invite labelled MEETING, goes to QUEUE ×3 |
+| v3.2, pay asks only | cold start, or own-domain DMARC pass | 3 (phish-029 ×3) | 45/45 |
+| v3.1 and v3.2 | known correspondent, DMARC pass | 6 (phish-028 ×3, phish-029 ×3) | 36/45: benign-001, 005 and 009 PUSH through trusted risk, as in v3.1 |
+
+Due window (v3.2 rules otherwise; ±48h and ±72h move both sides, the business-week variants keep the 24h overdue side):
+- ±48h and ±72h: no change on the gate, real or phishing set.
+- Through the end of the business week (Friday 24:00 UTC; a weekend decision takes the next one), and through the end of the next one: +12 gate PUSH rows (eval-036 "due Friday", received Monday) with gate and real PUSH precision unchanged. On the phishing set, benign-013 ("Benefits enrollment closes Friday", labelled QUEUE) PUSHes in 3 of 3 runs (2 of 3 in an earlier audited run of the same code path). With eval-046 trusted and senders known, gate PUSH recall reaches 156/156.
+- The policy has no user time zone, so a business-week window would need one wired into the live decision before it could ship.
+
+What v3.2 answers and leaves:
+- It answers the phishing hole of §3(5) on this set: phish-028 and phish-029 no longer interrupt from a first contact. A known correspondent's do, as in v3.1.
+- Founder decision 1 (the first-contact gate) is now a choice among measured options: v3.2 as built (pay asks and events), pay asks only (closes phish-028 at no measured cost, leaves phish-029), or neither. The event half's real cost is the open number above.
+- Founder decision 2 (the eval-046 bar) is unchanged by v3.2: v3.1 and v3.2 reach 144/156 against v2's 137/156 only when eval-046's sender is trusted and, for v3.2, the other senders are known.
+- Founder decision 3 (the window): fixed windows up to ±72h buy nothing measured. A business-week window would close eval-036 at the cost of benign-013 and a time-zone change.
+- Not changed: the Namecheap extraction error (real SILENT precision on Haiku 82.4%). A prompt fix changes facts for every version and every stored row, so it was not attempted here.
 
 Floors:
 - `ambiguous` never lands in SILENT or INFO. It goes to QUEUE, like v2's low-confidence rule.
@@ -404,7 +492,7 @@ It reports:
   - The Reader's neighbours are picked by row number in that order. They work even after the open mail has moved out of the view.
   - No index serves the ranked order, so the ranked page and the neighbours sort the whole lane. They run under the lane statement timeout (a retryable 503, like the thread page). The ranked page also shares the thread page's per-user rate limit.
 - Each item gets `v3: { policyVersion, rank, held, due, threadTurn, reasons }`, on lane pages, firewall items and the Reader context:
-  - `policyVersion` is the policy version that decided ("v3.0", "v3.1"), and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane. It is null when v3 never decided the item, for example mail judged before the flip;
+  - `policyVersion` is the policy version that decided ("v3.0", "v3.1", "v3.2"), and "v2" when the v2 lane stood because LLM facts were missing. In that case `reasons` is empty and the existing `tierReason` explains the lane. It is null when v3 never decided the item, for example mail judged before the flip;
   - `rank` is the 1-based position in the view as ranked. On a QUEUE lane page it is skip + index + 1 after that page's own filter, search and category. On the firewall it is the index in the QUEUE lane of the list (the 200 most recent OPEN items). So the same mail can carry different ranks on the two surfaces. It is null in any other view, All included. A page of All cannot know a mail's QUEUE position without ranking the whole lane. Ranks are computed at each request (`rankedAt`); clients re-apply them on focus or refresh;
   - `held` is true when the budget held this PUSH and the item still shows it. That means `heldAt` is within the last 24 hours, the lane is QUEUE, the item is OPEN, and no human or agent lane is on it. Held items from known senders take the first ranks, by importance and then in the order they were held. A stranger's held mail reports `held` but ranks by score;
   - `due` is an ISO 8601 UTC timestamp. Clients format it in the display zone, and null hides the chip;
@@ -423,7 +511,7 @@ It reports:
 - The Today fields are fail-soft: if their read fails they are left out, and the rest of the response stands.
 - Each reason is `{ code, fact, evidence, evidenceIn: "subject" | "body" | null, params }`.
   - `reasons[0]` decides the lane; the rest support it. Reasons contain no prose and no model names; clients localise from `code` and `params`.
-  - Codes: pinned, manual_override, sender_pattern, learned_rule, event, risk, ask_due_soon, addressed_to_me, ask, thread_turn_mine, transaction_action, kind, transaction_record, bulk, default_queue, ambiguous, spam_floor, held_budget, relationship.
+  - Codes: pinned, manual_override, sender_pattern, learned_rule, event, risk, ask_due_soon, addressed_to_me, ask, thread_turn_mine, transaction_action, kind, transaction_record, bulk, default_queue, ambiguous, spam_floor, held_budget, relationship, first_contact (v3.2).
   - Params by code:
     - `addressed_to_me` {addressedTo}
     - `risk` {risk, trusted}
@@ -432,12 +520,13 @@ It reports:
     - `kind` {kind}
     - `transaction_*` {transactionKind}
     - `held_budget` {budget}
+    - `first_contact` {payAsk, event}: which of the two made the gate hold it
     - `relationship`: the known features only. These are counts and dates, never content.
 - Today responses add `interruptBudget: { limit, used, day }` (`limit` is null for no limit; `day` is `YYYY-MM-DD`), plus `queueTotal` and `rankedAt` (ISO). Clients re-apply ranks only on focus or refresh.
   - The Today responses are `GET /api/email?window=today` and `GET /api/inbox/firewall`. A ranked QUEUE lane page also carries `rankedAt`.
   - `used` counts the day's slot rows, hidden ones included. `queueTotal` is the QUEUE lane's count for the same inbox scope.
 - Open, and not in v3.0:
-  - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event. It shares the interrupt bucket of the per-user push rate limit (6 per 10 minutes, 20 per hour; ambient pushes count in a bucket of their own) with PUSH, the urgent keyword sweep, meeting alerts and reminders the user set. The caller picks the bucket, not the category: only those callers ask for interrupt (pinned by `push-interrupt-callers-guard.test.ts`), and every agent-originated push (autonomous-agent `notify_user`, proactive actions) rings ambient even when its category is `email_urgent` or `meeting`, so an LLM-chosen notification cannot use up this room. The skipReason of a refused push names the bucket (`rate_limited_interrupt:…` / `rate_limited_ambient:…`). A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
+  - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event, and so does the model's reading of mail text (phish-029, §3(5) "Policy v3.1"). It shares the interrupt bucket of the per-user push rate limit (6 per 10 minutes, 20 per hour; ambient pushes count in a bucket of their own) with PUSH, the urgent keyword sweep, meeting alerts and reminders the user set. The caller picks the bucket, not the category: only those callers ask for interrupt (pinned by `push-interrupt-callers-guard.test.ts`), and every agent-originated push (autonomous-agent `notify_user`, proactive actions) rings ambient even when its category is `email_urgent` or `meeting`, so an LLM-chosen notification cannot use up this room. The skipReason of a refused push names the bucket (`rate_limited_interrupt:…` / `rate_limited_ambient:…`). A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
   - Floods that never claim a slot (security review). A PUSH that will not ring (quiet hours, preferences) stays in the PUSH lane and spends nothing. Many urgent-looking stranger mails in quiet hours, or held overflow outside them, all list ahead of ordinary QUEUE. Ranking orders held items by importance, so a trusted sender's held alert stays above a stranger's. Since P3 PR2b a stranger's held mail does not rank first at all (ranking above). Collapsing several held mails from one sender into one Today card is left to the client surfaces.
   - In ranking, "held" means `heldAt` is set, the lane is still QUEUE, and no human or agent lane is on the item. A manual override or an agent `set_tier` leaves `heldAt` in place, so readers must check all three.
   - Widening risk-only PUSH trust beyond VIP. Now that `SentMessage.origin` exists (#1591), "the user wrote to them" can become a signal: user-origin sends only, once legacy null rows have aged out or been classified. This would be a new `policyVersion`, decided on replay data.
@@ -487,12 +576,21 @@ It reports:
   - 0 of 5,908 email decisions in 90 days carry an outcome. `stampDecisionOutcome` still has no callers (P0).
   - In 30 days, 10 of 1,700 decisions (those joined to their mail) were followed by the user's reply in the thread, none of them shown as PUSH or SILENT.
   - `EmailMessage.isRead` has no time, and in the same 30 days 88% of mail shown as SILENT reads as read, so "opened later" cannot be derived from it.
+
+  Since #1651 (deployed 2026-11-09) the ledger stamps engagement:
+  - Each kind has its own column, first action wins: `openedAt`, `repliedAt`, `archivedAt`, `dismissedAt`, `snoozedAt`, `starredAt`, `unsubscribedAt`. `outcome` keeps its meaning (overrides and confirms).
+  - `pnpm --filter @klorn/api lane-quality` reports, per lane and per `decidedBy`, the share opened, the share replied within 24h, and the other actions. It does not split by policy version. A v3-against-v2 read joins `AttentionItem.v3PolicyVersion`.
+  - On 2026-11-10 at 07:57 UTC, about 27 hours after the deploy, no ledger row carried a stamp yet. 81 email decisions had been made in that time.
 - **P3 bar (changed 2026-11-07).** The outcome metrics move to the Review phase. P3 is done when:
   1. **Replay:** on the eval sets, v3 ≥ v2 on PUSH recall, PUSH precision and SILENT precision, pooled over models and for the production model on its own. Overall accuracy and QUEUE/INFO swaps are reported, not gated, because the founder's labels disagree on newsletters (§3(5)).
-  2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The report lists up to 20 disagreements per run; narrow `--days` or `--user` to see the rest. The counts go in the flip PR.
+  2. **Shadow:** shadow has run on the cohort for at least 7 days. The founder has reviewed the disagreements from `pnpm v3-shadow-report`, PUSH and SILENT first, and judges v3 at least as right as v2 on them. The shadow report lists only the newest 20 disagreements. For the full list, run `replay:policy --facts=stored --max-changes=<n>`: one line per changed mail with its id, v2 → v3 lanes and reason codes. `--show-subjects` adds subjects to the terminal output only. The counts go in the flip PR.
   3. The adversarial phishing measurement that §3(5) requires before the flip is done.
 
-  Status on 2026-11-07: replay not met (§3(5), "Against v2"); shadow not started (0 AttentionFacts rows).
+  Status on 2026-11-10:
+  - Replay: not met (§3(5), "Against v2"). Traced to two rules (sender trust, the 24h window) and one extraction error. v3.2 does not meet it either: under cold start its gate PUSH recall is 61.5%, and with senders known it equals v3.1 (§3(5), "Policy v3.2").
+  - Phishing: measured (§3(5) "Policy v3.1"). Two mails with no sign of spoofing interrupt under v3.1. Under v3.2 neither does from a first-contact sender.
+  - Shadow: not started (0 AttentionFacts rows, still 0 on 2026-11-10).
+  - Outcome metrics (Review phase): engagement stamps are wired (#1651); none recorded on 2026-11-10.
 - **Model upgrade procedure:** run the fact eval on the candidate, compare, flip the provider order. No threshold work.
 
 ## 6. Phases
@@ -501,7 +599,7 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 
 | Phase | Scope | Done when | Flag |
 |---|---|---|---|
-| P0 | Outcome stamping (not wired yet: `stampDecisionOutcome` has no callers on 2026-11-07) and exposing the relationship features from existing tables | per-lane open/reply data accumulates; relationship snapshot available to the judge | none (measurement) |
+| P0 | Outcome stamping (engagement stamps wired by #1651 on 2026-11-09; none recorded on 2026-11-10) and exposing the relationship features from existing tables | per-lane open/reply data accumulates; relationship snapshot available to the judge | none (measurement) |
 | P1 | Re-benchmark **current** models (Haiku/Sonnet/Opus 5.5, Fable 5.1, current Gemini/GPT available to us) × {v2 score prompt, v3 fact prompt} on the gate set + real set | numbers answer whether v2 is calibration-coupled and whether v3 narrows the spread between models | none (eval only, synthetic/consented data) |
 | P2 | Fact extractor (schema v1) + evidence verification + persistence, run in **shadow** | fact eval ≥ the agreed bar; shadow running on prod with a disagreement report | `JUDGE_V3_SHADOW` |
 | P3 | Policy v3 (lanes from facts) + QUEUE ranking + PUSH interrupt budget | replay shows v3 ≥ v2 on PUSH and SILENT, and the founder has reviewed the shadow disagreements (§5, "P3 bar") | `JUDGE_V3_POLICY` (founder flip) |

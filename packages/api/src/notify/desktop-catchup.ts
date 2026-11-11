@@ -11,22 +11,19 @@
  *     never toasts late);
  *   - shaped like every other mail notification (decision N1,
  *     mail-push-content.ts).
+ * The last two are open-push-mail.ts, shared with the server's quiet-hours
+ * summary (quiet-hours-summary.ts).
  * The same gate a live frame passes decides: a category opt-out returns
  * nothing, quiet hours return `held` so the shell waits and asks again later.
  * The shell keeps the once-per-id ledger and decides one toast vs. a summary
  * (packages/web lib/native/desktop-push-catchup.ts).
  */
 
-import type { DesktopCatchUpResponse, DesktopMissedMail } from "@klorn/contract";
+import type { DesktopCatchUpResponse } from "@klorn/contract";
 import { prisma } from "../db.js";
-import { resolveTierReason } from "../judge/tier-reason-strings.js";
-import { mailPushContent } from "./mail-push-content.js";
 import { evaluateNotificationGate } from "./notification-prefs.js";
-import {
-  getUserNotificationLanguage,
-  notificationCopy,
-  URGENT_EMAIL_TITLES,
-} from "./notification-strings.js";
+import { getUserNotificationLanguage, notificationCopy } from "./notification-strings.js";
+import { openPushMail, unreadUrgentMailRows } from "./open-push-mail.js";
 
 /** Only PUSH mail from the last 72 hours is caught up (decision N6). */
 export const DESKTOP_CATCHUP_WINDOW_MS = 72 * 60 * 60 * 1000;
@@ -34,8 +31,6 @@ export const DESKTOP_CATCHUP_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const DESKTOP_CATCHUP_MAX_IDS = 30;
 const ID_MAX = 64;
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-/** Lanes that ring as PUSH; "CALL" is the retired v1 name normalizeTier folds. */
-const PUSH_TIERS = ["PUSH", "CALL"];
 
 /** The bell row ids in `?ids=a,b,c`, or null when the list is malformed. */
 export function parseCatchUpIds(raw: unknown): string[] | null {
@@ -63,51 +58,19 @@ export async function desktopCatchUp(
 
   const rows = await prisma.notification.findMany({
     where: {
-      userId,
+      ...unreadUrgentMailRows(userId),
       id: { in: [...ids] },
-      type: "email",
-      title: { in: [...URGENT_EMAIL_TITLES] },
-      isRead: false,
-      sourceEmailId: { not: null },
       createdAt: { gte: new Date(now.getTime() - DESKTOP_CATCHUP_WINDOW_MS) },
     },
     select: { id: true, sourceEmailId: true, createdAt: true },
   });
-  const emailIds = [...new Set(rows.flatMap((r) => (r.sourceEmailId ? [r.sourceEmailId] : [])))];
-  if (emailIds.length === 0) return { held: false, summaryTitle, items: [] };
-
-  const [openItems, emails] = await Promise.all([
-    prisma.attentionItem.findMany({
-      where: {
-        userId,
-        source: "EMAIL",
-        sourceId: { in: emailIds },
-        status: "OPEN",
-        tier: { in: PUSH_TIERS },
-      },
-      select: { sourceId: true, tierReason: true },
-    }),
-    prisma.emailMessage.findMany({
-      where: { userId, id: { in: emailIds } },
-      select: { id: true, from: true, subject: true },
-    }),
-  ]);
-  const reasonByEmail = new Map(openItems.map((i) => [i.sourceId, i.tierReason]));
-  const emailById = new Map(emails.map((e) => [e.id, e]));
-
-  const items: DesktopMissedMail[] = [];
-  for (const row of rows) {
-    const emailId = row.sourceEmailId;
-    const email = emailId ? emailById.get(emailId) : undefined;
-    if (!emailId || !email || !reasonByEmail.has(emailId)) continue;
-    const content = mailPushContent({
-      from: email.from ?? "",
-      subject: email.subject,
-      reason: resolveTierReason(reasonByEmail.get(emailId) ?? null, language),
-      language,
-    });
-    items.push({ id: row.id, emailId, createdAt: row.createdAt.toISOString(), ...content });
-  }
-  items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const mail = await openPushMail(userId, rows, language);
+  const items = mail.map((m) => ({
+    id: m.bellId,
+    emailId: m.emailId,
+    title: m.title,
+    body: m.body,
+    createdAt: m.createdAt.toISOString(),
+  }));
   return { held: false, summaryTitle, items };
 }

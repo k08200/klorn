@@ -16,15 +16,16 @@ import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { authenticateApiKey } from "../mcp/api-keys.js";
 import { buildMcpServer } from "../mcp/server.js";
+import { clientAddress } from "../security/client-address.js";
 import { captureError } from "../sentry.js";
 
 /**
  * Per-key buckets ONLY for syntactically valid klorn_sk_ tokens — anything
  * else (garbage bearers, no header) collapses into one bucket per UNSPOOFABLE
  * ip. Two prior findings live here: hashing an arbitrary header would hand a
- * fresh bucket to every rotated garbage value, and request.ip derives from
- * X-Forwarded-For under trustProxy — the forgeable source the global limiter
- * already refuses (2026-07-21 incident).
+ * fresh bucket to every rotated garbage value, and the address must come from
+ * security/client-address.ts, never a forwarding header the client can write
+ * (2026-07-21 incident).
  */
 export function mcpRateLimitKey(request: FastifyRequest): string {
   const auth = request.headers.authorization;
@@ -33,8 +34,7 @@ export function mcpRateLimitKey(request: FastifyRequest): string {
     // Hash so the raw key never sits in the limiter's in-memory store.
     return `mcp:${crypto.createHash("sha256").update(token).digest("hex").slice(0, 32)}`;
   }
-  const cfIp = request.headers["cf-connecting-ip"];
-  return `mcp:invalid:${typeof cfIp === "string" && cfIp ? cfIp : (request.socket.remoteAddress ?? "unknown")}`;
+  return `mcp:invalid:${clientAddress(request)}`;
 }
 
 const RATE_LIMIT = {

@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "November 1, 2026";
+const updatedAt = "November 11, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -151,6 +151,24 @@ export default function PrivacyPage() {
                 description.
               </li>
               <li>
+                If meeting counts are turned on for your account (they are off by default), counts
+                from your past Google Calendar meetings: timed meetings with no more than 50 people
+                on the guest list, on the main calendar of your connected Google account and of each
+                Google calendar you link. After each UTC day ends, Klorn takes the meetings that
+                ended that day which you organised or had accepted (even tentatively) by then, and
+                for each person invited to them who did not decline, keeps their email address with
+                how many such meetings there have been, how many had five or fewer people taking
+                part, and the UTC day on which the first and the last ended. These counts add up
+                over time and are kept until you delete your data. To count each meeting only once,
+                Klorn also keeps a one-way fingerprint of it with the UTC day it ended; it is
+                removed about a month after the meeting while counting stays on, and deleted with
+                your data. Neither stores an attendee list, a meeting title, or a start or end time.
+                Klorn uses the counts only to classify mail from that person (for example, someone
+                you have met is not treated as a first-time contact) and to measure that
+                classification, so a sender&apos;s counts may be saved with the record of how their
+                email was classified.
+              </li>
+              <li>
                 Product data you create in Klorn, including tasks, reminders, notes, commitments,
                 approved actions, feedback, notifications, and chat messages.
               </li>
@@ -167,6 +185,16 @@ export default function PrivacyPage() {
               </li>
               <li>
                 Usage, token, error, and delivery logs needed to operate and improve the beta.
+              </li>
+              <li>
+                For each email Klorn classifies, when you first opened it or marked it read, replied
+                to it, archived or deleted it, dismissed, snoozed or starred it, or unsubscribed
+                from its sender in Klorn. If you reply to it or move it out of your inbox in Gmail
+                itself, Klorn&apos;s mail sync also records when that happened (for a move, when
+                sync noticed it), kept separate from what you do in Klorn. Only the time of each is
+                recorded, with no message content. These times are used only to measure how well
+                Klorn&apos;s lane choices match what you do with your mail; they are stored with
+                your account and deleted with your data.
               </li>
             </ul>
           </Section>
@@ -337,14 +365,17 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <code className="text-ink">calendar.events</code> — read upcoming events to surface
-                meetings, link commitment due dates, and prepare meeting context. Edits require user
-                approval.
+                meetings, link commitment due dates, and prepare meeting context, and, if meeting
+                counts are on for your account, read the invitee lists of your meetings from the
+                past 30 days to count how often you met each person. Edits require user approval.
               </li>
               <li>
                 <code className="text-ink">calendar.readonly</code> — check availability across all
-                your calendars to detect scheduling conflicts. When you link a secondary Google
-                account for calendar visibility, this read-only scope is the only calendar access
-                requested for it.
+                your calendars to detect scheduling conflicts, and, if meeting counts are on for
+                your account, read the invitee lists of a linked Google calendar&apos;s meetings
+                from the past 30 days to count how often you met each person. When you link a
+                secondary Google account for calendar visibility, this read-only scope is the only
+                calendar access requested for it.
               </li>
               <li>
                 <code className="text-ink">openid</code>,{" "}

@@ -25,6 +25,7 @@ import {
   laneFromFactsV3,
   POLICY_VERSION,
   type PolicyVersion,
+  TRUSTED_MIN_SENT,
   V2_POLICY_VERSION,
 } from "./policy.js";
 import type { FactsV1, RelationshipSnapshot, ThreadTurn } from "./policy-types.js";
@@ -71,7 +72,7 @@ export { V2_POLICY_VERSION } from "./policy.js";
 export interface LiveDecision {
   /** The lane before the interrupt budget. */
   lane: LiveTier;
-  /** The policy version that decided ("v3.0", "v3.1"); "v2" when the v2 lane stood for missing facts. */
+  /** The policy version that decided ("v3.0", "v3.1", "v3.2"); "v2" when the v2 lane stood for missing facts. */
   policyVersion: PolicyVersion | typeof V2_POLICY_VERSION;
   /** reasons[0] decides the lane; empty for "v2". */
   reasons: PolicyReason[];
@@ -106,11 +107,8 @@ export const PRECEDENCE_SOURCES: Readonly<Record<string, ReasonCode>> = {
 
 const KEYWORD_FALLBACK_SOURCE = "keyword-fallback";
 
-/**
- * Sends to a sender before they count as someone the user writes to. One reply
- * (a "who is this?") is not a relationship.
- */
-export const TRUSTED_MIN_SENT = 2;
+/** Defined with policy v3.2's first-contact bar, which shares it. */
+export { TRUSTED_MIN_SENT } from "./policy.js";
 
 /**
  * Trusted for the slot reserve: a VIP, or someone the user has written to at

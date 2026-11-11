@@ -9,6 +9,7 @@
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deriveClientAddress } from "../security/client-address.js";
 import { createFakeDb, type FakeDb, type Row } from "./helpers/fake-db.js";
 
 const dbHolder = vi.hoisted(() => ({ current: null as unknown }));
@@ -62,6 +63,8 @@ function seed(rows: Row[]): void {
   dbHolder.current = db;
 }
 
+const BEHIND_CLOUDFLARE = { source: "cf-connecting-ip", trustedProxyHops: 1 } as const;
+
 async function buildApp(
   opts: { withRateLimit?: boolean; providerEnabled?: DriveProviderEnabledMap } = {},
 ) {
@@ -71,14 +74,11 @@ async function buildApp(
   const { driveEnabled } = await import("../config.js");
   const app = Fastify();
   if (opts.withRateLimit) {
-    // The client address as index.ts reads it: Cloudflare's header, else the socket.
+    // The client address as the hosted API reads it (CLIENT_IP_SOURCE=cf-connecting-ip).
     await app.register(rateLimit, {
       max: 100_000,
       timeWindow: "1 minute",
-      keyGenerator: (req) => {
-        const cf = req.headers["cf-connecting-ip"];
-        return typeof cf === "string" && cf.length > 0 ? cf : req.ip;
-      },
+      keyGenerator: (req) => deriveClientAddress(req, BEHIND_CLOUDFLARE),
     });
   }
   await app.register(driveRoutes({ gate: driveEnabled, providerEnabled: opts.providerEnabled }), {

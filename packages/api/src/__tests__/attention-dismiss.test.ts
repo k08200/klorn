@@ -54,6 +54,16 @@ describe("dismissAttentionItem", () => {
     expect(call.data.resolvedAt).toBeInstanceOf(Date);
   });
 
+  it("clears the aging stamp: a dismiss is the user's decision, not the sweep's", async () => {
+    findFirst.mockResolvedValue({ id: "i1" });
+    update.mockResolvedValue({});
+
+    await dismissAttentionItem("u1", "i1");
+
+    const call = update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(call.data).toHaveProperty("resolvedReason", null);
+  });
+
   it("records a DISMISSED learning signal for the dismissed item", async () => {
     findFirst.mockResolvedValue({ id: "i1" });
     update.mockResolvedValue({});

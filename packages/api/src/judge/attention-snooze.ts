@@ -32,7 +32,15 @@ export async function snoozeAttentionItem(
       where: { id: itemId },
       // Clear lastAmplifiedAt so a resurfaced item doesn't inherit stale decay/
       // escalation state (mirrors the PENDING_ACTION snooze in chat-pending-actions.ts).
-      data: { status: "SNOOZED", snoozedUntil: snoozeUntil, lastAmplifiedAt: null },
+      // Clear resolvedReason too: snooze takes a row out of RESOLVED, and an
+      // aging stamp left on it would let an aging rollback reopen it after some
+      // other path resolves it again (dismiss clears it the same way).
+      data: {
+        status: "SNOOZED",
+        snoozedUntil: snoozeUntil,
+        lastAmplifiedAt: null,
+        resolvedReason: null,
+      },
     },
   );
 

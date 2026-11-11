@@ -33,7 +33,7 @@ describe("snoozeAttentionItem", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("snoozes an owned item to SNOOZED with cleared amplification", async () => {
+  it("snoozes an owned item to SNOOZED with cleared amplification and resolution reason", async () => {
     findFirst.mockResolvedValue({ id: "i1" });
     update.mockResolvedValue({});
     const until = new Date(Date.now() + 3_600_000);
@@ -41,9 +41,17 @@ describe("snoozeAttentionItem", () => {
     const res = await snoozeAttentionItem("u1", "i1", until);
 
     expect(res).toEqual({ ok: true });
+    // resolvedReason is cleared because snooze leaves RESOLVED: an aging stamp
+    // must not ride along and make a later rollback reopen an item some other
+    // path resolved.
     expect(update).toHaveBeenCalledWith({
       where: { id: "i1" },
-      data: { status: "SNOOZED", snoozedUntil: until, lastAmplifiedAt: null },
+      data: {
+        status: "SNOOZED",
+        snoozedUntil: until,
+        lastAmplifiedAt: null,
+        resolvedReason: null,
+      },
     });
   });
 });

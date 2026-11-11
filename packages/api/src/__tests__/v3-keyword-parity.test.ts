@@ -70,6 +70,19 @@ const rows = [...corpus()].map((email) => {
 });
 
 describe("keyword facts → policy v3 parity with the v2 keyword fallback", () => {
+  it("v3.2 keeps v3.1's keyword parity: with no relationship the first-contact gate does not apply", () => {
+    for (const r of rows) {
+      const v32 = laneFromFactsV3({
+        facts: r.facts,
+        relationship: null,
+        spam: r.spam,
+        decidedAt: RECEIVED,
+        version: "v3.2",
+      });
+      expect(v32.lane).toBe(r.decision.lane);
+    }
+  });
+
   it("covers the full signal cross product", () => {
     expect(rows.length).toBe(
       FROMS.length * SUBJECTS.length * SNIPPETS.length * LABEL_SETS.length * 2 * BODIES.length,

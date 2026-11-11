@@ -7,15 +7,15 @@
  * twice. Each source's listing is bounded inside the pass. Never throws.
  */
 
-import { calendarCoattendanceEnabled } from "../../config.js";
+import { calendarCoattendanceOpenTo } from "../../config.js";
 import { type CoAttendanceOptions, runCoAttendancePass } from "./coattendance-sync.js";
 
 let queue: Promise<void> = Promise.resolve();
 const queued = new Set<string>();
 
-/** Queue a user's pass behind the others and return at once. Flag off: nothing. */
+/** Queue a user's pass behind the others and return at once. Flag off for them: nothing. */
 export function enqueueCoAttendance(userId: string, options: CoAttendanceOptions): void {
-  if (!calendarCoattendanceEnabled() || queued.has(userId)) return;
+  if (!calendarCoattendanceOpenTo(userId) || queued.has(userId)) return;
   queued.add(userId);
   queue = queue
     .then(async () => {

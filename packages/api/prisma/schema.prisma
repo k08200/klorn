@@ -1867,6 +1867,12 @@ model AttentionItem {
 
   surfacedAt      DateTime  @default(now())
   resolvedAt      DateTime?
+  // Which system rule resolved the row, so a sweep's resolutions can be found
+  // and undone. Today only the aging sweep writes it (judge/attention-aging.ts:
+  // "aging:acted" | "aging:silent" | "aging:queue"). NULL = resolved by any
+  // other path, or not resolved. Meaningful only while status is RESOLVED;
+  // snooze and dismiss, the user paths out of RESOLVED, clear it.
+  resolvedReason  String?
   snoozedUntil    DateTime?
   lastAmplifiedAt DateTime?
 
@@ -2004,6 +2010,18 @@ model DecisionLabel {
   snoozedAt      DateTime?
   starredAt      DateTime?
   unsubscribedAt DateTime?
+
+  // The same signals when the user acted in the mail provider itself (Gmail
+  // today), seen by sync rather than by a Klorn route: a reply found by the
+  // Sent-folder scan (sentAt of the user's own send in the thread), or the mail
+  // leaving the INBOX outside Klorn (found by the reconcile, time observed).
+  // Own columns so the report can tell Klorn from provider engagement and
+  // neither source ever overwrites the other; first wins per column
+  // (stampProviderEngagement). Mail Klorn sent or archived is excluded at the
+  // source (send-time origin, mirror row deleted first) except in a short race;
+  // the report counts a provider stamp only where Klorn recorded none.
+  providerRepliedAt  DateTime?
+  providerArchivedAt DateTime?
 
   judgedAt DateTime @default(now())
 
@@ -2196,7 +2214,7 @@ model SendReceipt {
   payloadHash       String // sha256 hex, = receipt.payloadHash
   receipt           Json // the full ActionReceipt (v, action, inputHash, payloadHash, target, approvedAt, approvedBy)
   inbox             String // "primary" | LinkedInboxAccount id — the account the mail left from
-  emailId           String? // reply: the EmailMessage answered (no FK: the receipt outlives the row)
+  emailId           String? // the EmailMessage answered: reply, or send with inReplyToEmailId (no FK: the receipt outlives the row)
   status            String    @default("PENDING") // PENDING | SENT | REFUSED | UNKNOWN
   providerMessageId String?
   createdAt         DateTime  @default(now())

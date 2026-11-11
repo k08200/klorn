@@ -12,6 +12,68 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Classification and learning
+- Provider-side engagement on the decision ledger (#1664):
+  - `DecisionLabel` records when the user replied to a judged mail from
+    Gmail itself (`providerRepliedAt`, from the Sent-folder scan) or moved
+    it out of the Gmail inbox outside Klorn (`providerArchivedAt`, from the
+    INBOX reconcile). These are kept apart from the Klorn-side stamps and
+    are first-wins. Mail Klorn sent or archived does not count. Reading in
+    Gmail is not recorded.
+  - The `lane-quality` report adds a table with these signals where Klorn
+    recorded none, plus counts from either source.
+  - Migration `20261110000000_decision_label_provider_engagement` is
+    additive. Gmail only; Outlook and IMAP are not covered yet.
+- Attention Engine v3 policy v3.2, opt-in (#1670): `JUDGE_V3_POLICY_VERSION=v3.2`
+  selects it. v3.1 stays the default, and `JUDGE_V3_POLICY` is off by
+  default, so nothing changes until both are set.
+  - From a sender with no established contact, a PUSH or MEETING whose mail
+    carries a pay ask or an event goes to QUEUE with the reason
+    `first_contact`. Established contact is a VIP label or PUSH pin, two
+    sends from the user, three mails from the sender over 30+ days, or a
+    shared meeting.
+  - The due-soon window is a per-version parameter. v3.2 keeps ±24h.
+  - `replay:policy --policy-version=v3.2` loads the sender relationship for
+    the rows the gate could hold. `v3-phishing-eval.ts --policy-versions=`
+    scores several versions over the same facts. `v3-policy-variants.ts`
+    replays stored eval facts under candidate rules, with no LLM calls.
+  - Measurements and open decisions are in
+    `docs/design/attention-engine-v3.md` §3(5), "Policy v3.2".
+
+### Changed
+- **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail
+  that rang no web push, Telegram, Android or iOS push because of quiet hours
+  now rings once after they end, as the Mac and Windows apps already do. One
+  held mail rings as itself; two or more ring one summary, "N urgent emails
+  during quiet hours", that names up to three senders and opens Today. Mail
+  that was read, handled or moved off PUSH meanwhile is left out. The ring uses
+  the ambient push bucket. Set `PUSH_QUIET_HOLD_DISABLED=true` to drop held
+  pushes as before.
+- `CALENDAR_COATTENDANCE_ENABLED` accepts `cohort`, like
+  `SENT_HISTORY_BACKFILL_ENABLED`: co-attendance is then counted, and read by
+  the judge, only for the users in `ROLLOUT_COHORT_USER_IDS`. `true` still
+  means everyone.
+- `GET /api/admin/flags` lists `CALENDAR_COATTENDANCE_ENABLED` and
+  `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`) (#1666).
+- The privacy policy discloses calendar co-attendance for accounts where
+  `CALENDAR_COATTENDANCE_ENABLED` is on: the per-contact counts and UTC days
+  kept, the month-long meeting fingerprint, retention, and use in
+  classification. The `calendar.events` and `calendar.readonly` scope entries
+  say so too (#1607).
+
+### Fixed
+- **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**
+  - A spam-lane item still in Gmail's Spam folder is no longer resolved as
+    "left the inbox". It resolves once its mail leaves Spam without returning
+    to the inbox (for example to the trash), or the mail is gone.
+  - Every resolution the sweep makes is stamped in the new
+    `AttentionItem.resolvedReason` column (`aging:acted`, `aging:silent`,
+    `aging:queue`), so its resolutions can be found and reopened. Dismissing
+    or snoozing an item clears the stamp.
+  - The acted-elsewhere check pages through every open item instead of
+    re-reading the same oldest 500 each hour. A failed page no longer skips
+    that hour's age-out (#1663).
+
 ## [0.4.0] — 2026-11-08
 
 First server release since 0.3.0 (2026-06-09). It covers every PR merged since
@@ -66,10 +128,23 @@ does nothing until you set the environment variable it names.
   an unset `CORS_ORIGINS` trusts only `https://klorn.ai` and
   `https://www.klorn.ai`. The self-host compose file defaults it to
   `http://localhost:3000` (#931).
-- **The rate-limit client IP no longer comes from `X-Forwarded-For`.** It comes
-  from `CF-Connecting-IP`, or from the socket address when that header is
-  absent. Behind a reverse proxy that is not Cloudflare, all clients can share
-  one bucket (#932).
+- **Behind a reverse proxy, set `CLIENT_IP_SOURCE`.** One helper now derives
+  the client address for rate limits, the `RATE_LIMIT_ALLOW_IPS` exemption,
+  device sessions, playground demo slots and the request log.
+  `request.ip` (the leftmost `X-Forwarded-For` entry) is no longer used.
+  - `socket`: the TCP peer. This is the default.
+  - `cf-connecting-ip`: the header, used only when it holds one valid IP.
+    This is the default when `RENDER=true`.
+  - `x-forwarded-for`: the entry `TRUSTED_PROXY_HOPS` positions from the
+    right (default 1, allowed 1–10).
+  - An invalid value stops the API at boot.
+  - Behind a proxy, set `CLIENT_IP_SOURCE=x-forwarded-for`, plus
+    `TRUSTED_PROXY_HOPS` if you run more than one proxy. If your proxy sets
+    `CF-Connecting-IP`, `cf-connecting-ip` works instead. Without either
+    setting, every client shares the proxy's bucket. The API logs a one-time
+    warning when forwarding headers arrive in `socket` mode.
+  - See `docs/self-hosting.md` ("Client address").
+  - (#932, #1655)
 - **Gmail Pub/Sub push:** OIDC tokens are now verified against Google's
   certificates. `GMAIL_PUSH_OIDC_AUDIENCE` is required whenever
   `GMAIL_PUSH_OIDC_EMAIL` is set (#496).
@@ -203,6 +278,14 @@ does nothing until you set the environment variable it names.
   - `GET /api/admin/judge-health`.
   - LLM usage ledger (`GET /api/admin/llm-usage`).
   - (#500, #508, #509, #536, #538, #539, #647)
+- Decision-ledger engagement (#1651):
+  - `DecisionLabel` records when a judged item was opened, replied to,
+    archived, dismissed, snoozed, starred or unsubscribed. Each is a
+    first-wins timestamp. `outcome` stays reserved for overrides and
+    confirms.
+  - `pnpm --filter @klorn/api lane-quality -- --since=<date>` reports these
+    per lane.
+  - Migration `20261108120000_decision_label_engagement` is additive.
 - Ontology:
   - Deterministic policy modules, exposed at `GET /api/admin/ontology` and on
     the `/admin/ontology` page.
@@ -426,9 +509,10 @@ does nothing until you set the environment variable it names.
 - **Other:**
   - The license changed from MIT to AGPL-3.0 (#493, #494, #731).
   - On self-host and native builds, `/` redirects to `/login` (#716, #719).
-  - Legal pages: Anthropic replaces OpenRouter as a subprocessor, and the pages
-    now cover the mobile apps, the digest opt-out and a minimum age of 16
-    (#1473, #1543, #1579, #1581, #1611).
+  - Legal pages: Anthropic replaces OpenRouter as a subprocessor. The pages
+    now also cover the mobile apps, the digest opt-out, per-email engagement
+    timestamps and a minimum age of 16 (#1473, #1543, #1579, #1581, #1611,
+    #1654).
 
 ### Removed
 - OpenRouter, its model-catalog tooling and the `model-canary.yml` workflow
@@ -467,6 +551,21 @@ does nothing until you set the environment variable it names.
   - Linked-inbox replies and sends now use the right account (#760, #766,
     #785).
   - The web "Later" action posted to a route that did not exist (#1643).
+  - An AI-draft reply sent from the web was not recorded against the mail it
+    answers (#1656).
+    - It now stamps REPLIED, shows the replied chip, records a `SentMessage`
+      with `origin: "user"`, and threads on the same account.
+    - API: `POST /api/email/send` (`SendEmailRequest`) accepts an optional
+      `inReplyToEmailId`, scoped to the caller.
+  - A web AI-draft reply to mail in a linked inbox was sent from the primary
+    account, without threading (#1658).
+    - With `inReplyToEmailId` and no account named, `/send` now sends from the
+      inbox the original arrived in. An explicit account still wins, and both
+      go through the same ownership check.
+    - It never falls back to the primary account: if that inbox has been
+      unlinked the request fails with 404, and if it cannot send (for example
+      a mailbox whose sending flag is off) it fails with 501. `POST
+      /api/email/:id/reply` already behaved this way.
 - Gmail attachments were duplicated on every re-sync (#1462). Duplicates
   created before this fix are not cleaned up.
 - The MEETING lane filled with bulk and system invites (#1497).
@@ -483,6 +582,13 @@ does nothing until you set the environment variable it names.
 
 ### Security
 - The api and web container images run as a non-root user (see Breaking).
+- The client address is derived in one place. A forwarding header is
+  trusted only when `CLIENT_IP_SOURCE` names it. Before this,
+  `CF-Connecting-IP` was trusted from any peer, and some paths read
+  `X-Forwarded-For` directly (#1655). See Breaking.
+- HTML numeric character references decode per spec: invalid code points
+  become U+FFFD instead of throwing. Commitment updates, deletes and path
+  loading are scoped to the caller (#1653).
 - Session revocation now applies to password reset and change, logout,
   WebSocket connections, and routes gated only by `getUserId()` (#549, #588,
   #614, #711).
