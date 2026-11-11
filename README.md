@@ -97,7 +97,7 @@ Three writeups walk through the architecture, with the tradeoffs and the honest 
 
 - **Not finished.** The cloud is live and billing is real, but the user base is early and the beta cohort is still forming. The [CHANGELOG](CHANGELOG.md) is honest about what's solid vs. what's stitched.
 - **Not a "chat with your inbox" thing.** There is no chat surface.
-- **Not unlimited.** Every hosted plan runs on a capped daily AI budget — see [pricing](https://klorn.ai/pricing/).
+- **Not unlimited.** Every hosted plan runs within a daily AI budget — see [pricing](https://klorn.ai/pricing/).
 - **Not feature-gated against open source.** [`docs/EDITIONS.md`](docs/EDITIONS.md) lists what Cloud will sell on top (managed hosting, verified Gmail scope, team workspaces) — the firewall doctrine and code stay in the repo on both editions.
 
 > **Why is a CI check red?** `Scope Budget` fails *on purpose*. It's a self-imposed ratchet that trips when a change grows the route / page / schema surface past a fixed budget, forcing a conscious "yes, this scope is worth it" instead of silent sprawl. A red Scope Budget is by design, not a broken build — every other check (lint, types, tests, build, security, eval) is green.
