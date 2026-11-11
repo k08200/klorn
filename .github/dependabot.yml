@@ -33,6 +33,14 @@ updates:
       # work. Raise this bound in the same change that moves the runtime.
       - dependency-name: "@types/node"
         versions: [">=23"]
+      # Next 16 needs a planned migration (#1701): `next lint` removed,
+      # Turbopack default, dev output under <distDir>/dev (our .next-dev
+      # split and predev manifest stubs), tsconfig/next-env.d.ts rewrites, a
+      # higher browser floor, and a rendered smoke of the key routes on a
+      # preview, which CI does not run. Minor/patch updates still flow; remove
+      # this entry when the migration lands.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
     # One PR per batch of routine bumps — review load stays flat. Security
     # updates are never grouped by Dependabot and still arrive individually.
     groups:
