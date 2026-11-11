@@ -59,8 +59,6 @@ import {
   backfillEmailAttentionItems,
   checkAutoReplyRules,
   generateSmartReply,
-  reconcileEmails,
-  reconcileLinkedInboxes,
   summarizeUnsummarizedEmails,
   syncEmails,
   syncLinkedInboxesForUser,
@@ -69,6 +67,7 @@ import {
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
+import { startDetachedReconcile } from "./mail/reconcile-job.js";
 import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
@@ -122,9 +121,10 @@ let schedulerInFlight = false;
 const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
 const WATCH_RENEWAL_INTERVAL_MS = SCHEDULER_WATCH_RENEWAL_INTERVAL_MS;
 
-// Wall-clock bound on ONE user's per-tick work (calendar/email sync, reconcile,
-// etc.). The scheduler processes users serially and awaits per-user work that
-// calls Gmail via googleapis with no request timeout — a single hung call
+// Wall-clock bound on ONE user's per-tick work (calendar/email sync, etc.; the
+// INBOX reconcile runs detached, see mail/reconcile-job.ts). The scheduler
+// processes users serially and awaits per-user work that calls Gmail via
+// googleapis with no request timeout — a single hung call
 // (network partition / Google-side stall) would otherwise stall the ENTIRE tick
 // until an OS-level TCP timeout, starving every later user (fleet-wide outage
 // from one bad account). Bounding each user isolates that hang so the loop moves
@@ -1353,9 +1353,9 @@ async function syncLinkedOnlyMailbox(userId: string): Promise<void> {
 
 /**
  * Runs ONE user's per-tick automation work (briefing, calendar sync, email
- * sync + classify + auto-reply, reconcile, urgent notify, proactive, phone
- * escalation) — the exact body that previously lived inline in the
- * `for (const config of configs)` loop, extracted verbatim so it can be bounded
+ * sync + classify + auto-reply, starting the detached reconcile, urgent
+ * notify, proactive, phone escalation) — the exact body that previously lived
+ * inline in the `for (const config of configs)` loop, extracted verbatim so it can be bounded
  * by {@link withTimeout}. Each sub-step keeps its own try/catch; a hang or an
  * unexpected escape is isolated by the caller's timeout wrapper.
  */
@@ -1799,36 +1799,21 @@ async function runUserCycle(
           });
         }
 
-        // Reconcile DB with Gmail (remove deleted/archived emails).
-        // Runs at most once every 30 minutes per user, independent of
-        // wall-clock minute so a slipped tick doesn't skip the window.
-        if (isReconcileDue(config.userId)) {
+        // Reconcile DB with Gmail (remove deleted/archived emails), primary and
+        // (behind MULTI_INBOX_SYNC_ENABLED, like the sync fan-out above) linked.
+        // At most once every 30 minutes per user, independent of wall-clock
+        // minute so a slipped tick doesn't skip the window. Detached on
+        // purpose (mail/reconcile-job.ts): it lists the whole INBOX and
+        // re-reads up to 500 messages per inbox, which for a mailbox of a few
+        // thousand messages takes longer than this cycle's whole budget. Due
+        // only once it starts, so a user turned away at the concurrency cap is
+        // tried again next tick.
+        if (
+          isReconcileDue(config.userId) &&
+          startDetachedReconcile(config.userId, { includeLinked: MULTI_INBOX_SYNC_ENABLED }) !==
+            null
+        ) {
           lastReconcileAt.set(config.userId, Date.now());
-          try {
-            await reconcileEmails(config.userId);
-          } catch (err) {
-            console.error(`[AUTOMATION] Reconcile failed for ${config.userId}:`, err);
-            captureError(err, {
-              tags: { scope: "automation.reconcile", userId: config.userId },
-            });
-          }
-          // Reconcile linked secondary inboxes too (each against its own
-          // client). Gated + isolated from the primary reconcile so a
-          // linked failure never masks a primary success. Off unless the
-          // flag is on, matching the sync fan-out above.
-          if (MULTI_INBOX_SYNC_ENABLED) {
-            try {
-              await reconcileLinkedInboxes(config.userId);
-            } catch (err) {
-              console.error(
-                `[AUTOMATION] Linked-inbox reconcile failed for ${config.userId}:`,
-                err,
-              );
-              captureError(err, {
-                tags: { scope: "automation.reconcile.linked", userId: config.userId },
-              });
-            }
-          }
         }
 
         // Check for urgent unread emails — notify only for NEW urgent emails
