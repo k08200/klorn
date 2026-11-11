@@ -117,7 +117,7 @@ jobs:
 
       - name: Restore previous baseline
         if: steps.key.outputs.present == 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: canary-baseline.json
           # The exact key never matches (run_id is unique); the prefix
@@ -185,7 +185,7 @@ jobs:
 
       - name: Persist baseline to cache
         if: steps.key.outputs.present == 'true' && steps.scored.outputs.ok == 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: canary-baseline.json
           key: judge-canary-baseline-${{ github.run_id }}
