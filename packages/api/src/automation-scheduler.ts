@@ -44,10 +44,7 @@ import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
-import {
-  findOpenEmailAttentionItemId,
-  sweepOverrideUndoSnapshots,
-} from "./judge/attention-override.js";
+import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
 import {
@@ -78,6 +75,7 @@ import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
+import { openPushItemIdsFailClosed } from "./notify/open-push-mail.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendQuietHoursSummaries } from "./notify/quiet-hours-summary.js";
@@ -1836,7 +1834,7 @@ async function runUserCycle(
         // under the daily interrupt budget is the only email interrupt
         // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
         // the budget, so it stands down for that user.
-        const urgentEmails = isJudgeV3PolicyEnabled(config.userId)
+        const keywordUrgent = isJudgeV3PolicyEnabled(config.userId)
           ? []
           : await prisma.emailMessage.findMany({
               where: {
@@ -1857,6 +1855,16 @@ async function runUserCycle(
                 linkedInboxAccountId: true,
               },
             });
+        // Lane contract (tier-ontology-v2.md): the keyword priority never
+        // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
+        // here: a safety net for PUSH mail the firewall push did not ring (its
+        // bell row's [gmailId] marker dedupes below). Mail the judge has not
+        // reached yet waits for the judge's own push.
+        const pushItemByEmail = await openPushItemIdsFailClosed(
+          config.userId,
+          keywordUrgent.map((e) => e.id),
+        );
+        const urgentEmails = keywordUrgent.filter((e) => pushItemByEmail.has(e.id));
         // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
         // history: rung once already, never again. Gmail rows read nothing more.
         // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
@@ -1928,14 +1936,9 @@ async function runUserCycle(
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
             // re-fire the web-push / SMS side-effects for the same batch.
             if (notification) {
-              // Best-effort AttentionItem lookup for the lead urgent email
-              // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
-              // Lets the Telegram channel attach tier-override buttons;
-              // null just means the message ships without them.
-              const attentionItemId = await findOpenEmailAttentionItemId(
-                config.userId,
-                newUrgent[0].id,
-              );
+              // The lead's open PUSH item (read with the lane above). Lets the
+              // Telegram channel attach tier-override buttons.
+              const attentionItemId = pushItemByEmail.get(newUrgent[0].id) ?? null;
 
               sendPushNotification(
                 config.userId,

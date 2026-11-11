@@ -62,6 +62,13 @@ calendar time.
   say so too (#1607).
 
 ### Fixed
+- **Only PUSH mail rings from the urgent sweep.** The urgent-priority sweep
+  rang "Urgent email" for any unread mail its keywords marked urgent, even when
+  the judge had put it in QUEUE, MEETING or SILENT. It now rings only mail
+  whose open item is in the PUSH lane, as a safety net for PUSH mail the
+  firewall push did not ring. Mail the judge has not reached yet waits for the
+  judge's own push. Users under policy v3 are unchanged: the sweep stays off
+  for them (#1687).
 - **One urgent mail rings once.** A mail that already rang as urgent mail
   (the firewall's PUSH, or the urgent-priority sweep) no longer rings a second
   time through the agent's own notification about it, and no second bell row
