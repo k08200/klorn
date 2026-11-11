@@ -2753,6 +2753,7 @@ const fr: Record<string, string> = {
   "playground.brand.section": "Bac à sable",
   "playground.nav.methodology": "Comment c'est noté",
   "playground.nav.pricing": "Tarifs",
+  "playground.nav.source": "Code source",
   "playground.nav.login": "Se connecter",
   "playground.nav.startFree": "Commencer gratuitement",
   "playground.title": "Voyez comment Klorn trie un e-mail.",
