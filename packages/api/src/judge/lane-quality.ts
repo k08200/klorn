@@ -55,8 +55,9 @@
  *    replied<24h there uses the earlier of the two reply times.
  *  - "Opened" means the reader showed the mail: the Mac app also shows the
  *    mail its arrow keys land on. A mail read only through the thread view
- *    (GET /api/email/thread/:threadId) is not counted. Mobile builds from before ?purpose=attachments
- *    count the Files tab's background reads (up to 8 mails) as opens.
+ *    (GET /api/email/thread/:threadId) is not counted. The mobile Files tab
+ *    tags its background reads ?purpose=attachments, so they never count; no
+ *    mobile build without that tag was ever released (checked 2026-11-11).
  *  - Archive and trash both count as archived. An undone archive keeps the
  *    stamp on the original row (the restored mail is a new row).
  */
