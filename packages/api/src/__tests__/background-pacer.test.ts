@@ -163,3 +163,131 @@ describe("backgroundPacer load() and tryRun()", () => {
     expect(peak).toBe(1);
   });
 });
+
+describe("backgroundPacer per-user lanes", () => {
+  const gate = () => {
+    let open: () => void = () => {};
+    const p = new Promise<void>((r) => {
+      open = r;
+    });
+    return { p, open };
+  };
+
+  it("serves a second user's call before the flooding user's backlog", async () => {
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    const order: string[] = [];
+    const g = gate();
+    const first = pacer.run(async () => {
+      await g.p;
+      order.push("a0");
+    }, "user-a");
+    const flood = Array.from({ length: 50 }, (_, i) =>
+      pacer.run(async () => {
+        order.push(`a${i + 1}`);
+      }, "user-a"),
+    );
+    const other = pacer.run(async () => {
+      order.push("b0");
+    }, "user-b");
+    await vi.waitFor(() => expect(pacer.load().waiting).toBe(51));
+
+    g.open();
+    await Promise.all([first, other, ...flood]);
+
+    expect(order.slice(0, 3)).toEqual(["a0", "b0", "a1"]);
+    expect(order).toHaveLength(52);
+  });
+
+  it("hands each freed slot to the waiting user served least recently", async () => {
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    const order: string[] = [];
+    const g = gate();
+    const held = pacer.run(() => g.p, "user-a");
+    const jobs = [
+      ["user-a", "a1"],
+      ["user-a", "a2"],
+      ["user-b", "b1"],
+      ["user-b", "b2"],
+      ["user-c", "c1"],
+    ].map(([lane, tag]) =>
+      pacer.run(async () => {
+        order.push(tag);
+      }, lane),
+    );
+    await vi.waitFor(() => expect(pacer.load().waiting).toBe(5));
+
+    g.open();
+    await Promise.all([held, ...jobs]);
+
+    // user-a just had a call run, so b and c go first; then strict rotation.
+    expect(order).toEqual(["b1", "c1", "a1", "b2", "a2"]);
+  });
+
+  it("keeps calls without a lane in one shared lane, in FIFO order", async () => {
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    const order: number[] = [];
+    const g = gate();
+    const held = pacer.run(() => g.p);
+    const jobs = [1, 2, 3].map((n) =>
+      pacer.run(async () => {
+        order.push(n);
+      }),
+    );
+    await vi.waitFor(() => expect(pacer.load().waiting).toBe(3));
+
+    g.open();
+    await Promise.all([held, ...jobs]);
+
+    expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("still never exceeds maxConcurrent across lanes", async () => {
+    const pacer = createBackgroundPacer({ maxConcurrent: 2, minIntervalMs: 0 });
+    let running = 0;
+    let peak = 0;
+    const gates = Array.from({ length: 6 }, gate);
+    const jobs = gates.map((g, i) =>
+      pacer.run(
+        async () => {
+          running++;
+          peak = Math.max(peak, running);
+          await g.p;
+          running--;
+        },
+        `user-${i % 3}`,
+      ),
+    );
+    await vi.waitFor(() => expect(pacer.load().active).toBe(2));
+    for (const g of gates) g.open();
+    await Promise.all(jobs);
+
+    expect(peak).toBe(2);
+    expect(pacer.load()).toEqual({ active: 0, waiting: 0, maxConcurrent: 2 });
+  });
+
+  it("keeps a backlogged user's share while other users call one at a time", async () => {
+    // Users who submit, await, then submit again are briefly idle between
+    // calls. Forgetting when an idle user was last served would put them back
+    // at the front every time and starve a user with a queued backlog.
+    const pacer = createBackgroundPacer({ maxConcurrent: 2, minIntervalMs: 0 });
+    let backlogServed = 0;
+    const backlog = Array.from({ length: 100 }, () =>
+      pacer.run(async () => {
+        backlogServed++;
+        await new Promise((r) => setImmediate(r));
+      }, "user-backlog"),
+    );
+    const loop = async (lane: string) => {
+      for (let i = 0; i < 100; i++) {
+        await pacer.run(async () => {
+          await new Promise((r) => setImmediate(r));
+        }, lane);
+      }
+    };
+    await Promise.all([loop("user-b"), loop("user-c"), loop("user-d")]);
+    const servedWhileOthersRan = backlogServed;
+    await Promise.all(backlog);
+
+    expect(servedWhileOthersRan).toBeGreaterThanOrEqual(50);
+  });
+});
