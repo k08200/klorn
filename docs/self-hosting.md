@@ -8,10 +8,11 @@ degraded one. Full feature parity with the hosted product.
 - **Your data stays yours.** Mail bodies, classifications, and OAuth tokens
   live in *your* Postgres, encrypted with *your* key. With a local LLM
   configured (below), email content never leaves your machine at all.
-- **No 100-account cap.** The hosted app is limited to 100 lifetime accounts
-  until CASA Tier 2 verification lands. When you self-host, **you create your
+- **Your own Google OAuth client.** When you self-host, **you create your
   own Google OAuth client** — you are the app's owner and (usually) its only
-  user, so no verification, no CASA audit, and no cap applies to you.
+  user, so you need neither Google's verification review nor a CASA
+  assessment. (The hosted app's client completed Google's OAuth verification
+  review on 2026-10-03.)
 - **AGPL keeps it honest.** You are free to run, modify, and redistribute. If
   you run a modified Klorn as a service for others, the AGPL requires
   offering them your modified source.

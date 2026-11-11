@@ -33,11 +33,12 @@ Turning it off opens sign-up to anyone:
 | `BETA_GATE_ENABLED=false` (or removed) | Open sign-up. The login page drops the invite wall on its own — no deploy needed, the page reads `/api/auth/signup-status`. |
 | `BETA_GATE_ENABLED=true` | Invite wall. Access request leads, providers move under "Already approved?". |
 
-**The cost of opening it.** The Google OAuth app is *In production, unverified*,
-which spends a **lifetime cap of 100 new users** that cannot be reset. The gate
-is what has been holding that line. Check the remaining slots in the Google
-Cloud console (project `gen-lang-client-0294713076`, number `19950762743`) before
-flipping, and watch them after. See `google-oauth-verification.md`.
+**The cost of opening it.** The Google OAuth app was *In production, unverified*
+until Google completed its verification review on 2026-10-03; while unverified it
+spent a **lifetime cap of 100 new users** that cannot be reset, and the gate is
+what held that line. Check the current user cap in the Google Cloud console
+(project `gen-lang-client-0294713076`, number `19950762743`) before flipping, and
+watch it after. See `google-oauth-verification.md`.
 
 Flipping the flag is a one-line env change; there is no code to deploy.
 

@@ -97,7 +97,7 @@ Three writeups walk through the architecture, with the tradeoffs and the honest 
 
 - **Not finished.** The cloud is live and billing is real, but the user base is early and the beta cohort is still forming. The [CHANGELOG](CHANGELOG.md) is honest about what's solid vs. what's stitched.
 - **Not a "chat with your inbox" thing.** There is no chat surface.
-- **Not unlimited.** The hosted cloud is capped at 100 accounts while Gmail scope verification is pending. Self-host has no cap.
+- **Not unlimited.** Every hosted plan runs on a capped daily AI budget — see [pricing](https://klorn.ai/pricing/).
 - **Not feature-gated against open source.** [`docs/EDITIONS.md`](docs/EDITIONS.md) lists what Cloud will sell on top (managed hosting, verified Gmail scope, team workspaces) — the firewall doctrine and code stay in the repo on both editions.
 
 > **Why is a CI check red?** `Scope Budget` fails *on purpose*. It's a self-imposed ratchet that trips when a change grows the route / page / schema surface past a fixed budget, forcing a conscious "yes, this scope is worth it" instead of silent sprawl. A red Scope Budget is by design, not a broken build — every other check (lint, types, tests, build, security, eval) is green.
@@ -106,9 +106,9 @@ Three writeups walk through the architecture, with the tradeoffs and the honest 
 
 **Sign in with Google at [klorn.ai](https://klorn.ai). That's the whole flow.** No waitlist, no approval step, nobody to email — the OAuth screen is in production, so any Google account can complete it.
 
-One limit, and it is a real one: **the first 100 accounts.** Klorn reads Gmail's restricted `gmail.modify` scope, and until CASA Tier 2 verification lands the app is capped at 100 lifetime users. Seats are first-come. When it fills, it fills.
+Klorn reads Gmail's restricted `gmail.modify` scope. Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance). The approved scopes, and what the review does not mean, are on the [security page](https://klorn.ai/security/).
 
-[Self-hosting](#local-development) has no cap at all — you register your own Google OAuth client, so the verification question is between you and Google, not you and us.
+[Self-hosting](#local-development) runs on your own Google OAuth client, so the verification question is between you and Google, not you and us.
 
 ## What we're building
 
