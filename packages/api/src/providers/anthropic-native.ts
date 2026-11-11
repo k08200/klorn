@@ -29,19 +29,20 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  AssistantMessageParam,
   ContentBlock,
   ContentBlockParam,
   DocumentBlockParam,
   ImageBlockParam,
   Message,
   MessageCreateParamsNonStreaming,
-  MessageParam,
   StopReason,
   TextBlockParam,
   Tool,
   ToolChoice,
   ToolUseBlock,
   Usage,
+  UserMessageParam,
 } from "@anthropic-ai/sdk/resources/messages";
 import type OpenAI from "openai";
 import type { AnthropicCallOptions } from "./anthropic-config.js";
@@ -186,7 +187,13 @@ function assistantBlocks(message: LooseMessage): ContentBlockParam[] {
   return [...textBlock(contentText(message.content)), ...toolUses];
 }
 
-function toTurn(message: LooseMessage): MessageParam | null {
+/**
+ * A user or assistant turn. SDK v1's MessageParam also admits a `system` role
+ * whose content takes text only; system prompts go in `system`, never here.
+ */
+type Turn = UserMessageParam | AssistantMessageParam;
+
+function toTurn(message: LooseMessage): Turn | null {
   switch (message.role) {
     case "system":
     case "developer":
@@ -210,13 +217,13 @@ function toTurn(message: LooseMessage): MessageParam | null {
 }
 
 /** Convert the conversation, merging consecutive same-role turns. */
-function toMessages(messages: LooseMessage[]): MessageParam[] {
-  return messages.reduce<MessageParam[]>((turns, message) => {
+function toMessages(messages: LooseMessage[]): Turn[] {
+  return messages.reduce<Turn[]>((turns, message) => {
     const turn = toTurn(message);
     if (!turn || (turn.content as ContentBlockParam[]).length === 0) return turns;
     const previous = turns.at(-1);
     if (previous?.role !== turn.role) return [...turns, turn];
-    const merged: MessageParam = {
+    const merged: Turn = {
       role: turn.role,
       content: [
         ...(previous.content as ContentBlockParam[]),
@@ -584,13 +591,22 @@ export function createAnthropicClient(
   return new Anthropic({
     apiKey,
     timeout: timeoutMs,
-    // Never let the SDK pick up ANTHROPIC_AUTH_TOKEN from the environment: a
-    // playground visitor's client would otherwise carry a server bearer token
-    // next to the visitor's own key. Klorn authenticates by apiKey only.
+    // Klorn authenticates by apiKey only. SDK v1 reads no credential from the
+    // environment once apiKey is passed; the explicit null keeps
+    // ANTHROPIC_AUTH_TOKEN out even if a caller ever passes no key.
     authToken: null,
     ...(maxRetries !== undefined ? { maxRetries } : {}),
     baseURL: "https://api.anthropic.com",
     logLevel: "warn",
+    // The SDK traces every call through the global tracer provider (Sentry
+    // registers one) and sends trace context with it. Given no option it reads
+    // ANTHROPIC_OPEN_TELEMETRY_* from the environment, where
+    // TRACES_CONTENT_MODE=content would put prompts and completions — mail — on
+    // the spans. Sentry's Anthropic integration defaults ANTHROPIC_OPEN_TELEMETRY
+    // to false, but only when unset and only once it has hooked the SDK; the
+    // explicit option holds regardless. Off until tracing these calls is
+    // decided on its own.
+    openTelemetry: { traces: false, propagation: false },
     // Personal and service-account keys that aren't scoped to one workspace
     // must name it on every request (platform.claude.com/docs/en/manage-claude/
     // authentication#select-a-workspace); workspace-scoped keys don't need it.
