@@ -114,7 +114,9 @@ describe("Sentry wiring (real SDK, captured envelopes)", () => {
         name: "GET /api/auth/google/callback",
         op: "http.server",
         forceTransaction: true,
-        attributes: { "url.full": `https://api.klorn.ai/api/auth/google/callback?code=${OAUTH_CODE}` },
+        attributes: {
+          "url.full": `https://api.klorn.ai/api/auth/google/callback?code=${OAUTH_CODE}`,
+        },
       },
       () => {
         Sentry.startSpan(
