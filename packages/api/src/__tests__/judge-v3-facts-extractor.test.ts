@@ -376,6 +376,22 @@ describe("extractFacts", () => {
     expect(r.facts?.asks).toHaveLength(1);
     expect(r.usage?.promptTokens).toBe(4000);
     expect(r.usage?.completionTokens).toBe(400);
+    // The recovered failure leaves no trace in issues and does not escalate.
+    expect(r.issues).toEqual([]);
+    expect(r.escalate).toBe(false);
+    expect(r.escalateReasons).toEqual([]);
+  });
+
+  it("retries an answer that is not JSON, after a transport retry, at most once more", async () => {
+    const complete = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("503"))
+      .mockResolvedValueOnce(completion("not json at all"))
+      .mockResolvedValueOnce(completion(llmAnswer()));
+    const r = await extractFacts(mail(), { complete });
+    expect(complete).toHaveBeenCalledTimes(3);
+    expect(r.source).toBe("llm");
+    expect(r.usage?.promptTokens).toBe(4000);
   });
 
   it("gives up after a second malformed answer, as before: no facts, llm_failed", async () => {

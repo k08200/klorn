@@ -44,8 +44,11 @@ export interface FactsExtraction {
   provider: string | null;
   /** The user's own (BYOK) key served the call. */
   servedByUserKey: boolean;
-  /** Tokens and estimated USD cost of the served call (0 when the user's key
-   * served); null when no call succeeded. For the shadow's cost-per-day metric. */
+  /** Tokens and estimated USD cost of the answers behind `facts`: both calls
+   * when a malformed answer was retried (0 when the user's key served). Null
+   * when there are no facts, even if a malformed answer was paid for: the cost
+   * ledger, which records every call, is the full count. For the shadow's
+   * cost-per-day metric. */
   usage: FactsUsage | null;
   /** Validator issues and failure notes; no mail text. */
   issues: string[];
