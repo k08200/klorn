@@ -19,6 +19,7 @@ import {
   recordSchedulerTick,
   registerScheduler,
 } from "../scheduler-heartbeat.js";
+import { createSchedulerLease } from "../scheduler-lease.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { isUserIdleForAgent } from "./agent-idle.js";
@@ -36,42 +37,12 @@ let firstRunTimer: ReturnType<typeof setTimeout> | null = null;
 // not overlap the next tick (duplicate concurrent LLM runs for the same users).
 let agentTickInFlight = false;
 
-// Distinct advisory-lock key from automation-scheduler's SCHEDULER_LOCK_KEY so
-// the two loops never block each other, while still ensuring only one dyno runs
-// the agent loop per tick once prod scales past a single dyno.
-const AGENT_LOCK_KEY = 0x4147_4e54; // "AGNT" reduced; arbitrary stable int
-
-async function tryAcquireAgentLock(): Promise<boolean> {
-  try {
-    const rows = await prisma.$queryRawUnsafe<{ locked: boolean }[]>(
-      `SELECT pg_try_advisory_lock($1) AS locked`,
-      AGENT_LOCK_KEY,
-    );
-    return rows[0]?.locked === true;
-  } catch (err) {
-    console.warn("[AGENT] advisory lock acquire failed:", err);
-    return false;
-  }
-}
-
-async function releaseAgentLock(): Promise<void> {
-  try {
-    // pg_advisory_unlock returns false (not an error) when this pooled
-    // connection doesn't hold the lock — surface it instead of swallowing, so a
-    // leaked lock is visible rather than a silent stall.
-    const rows = await prisma.$queryRawUnsafe<{ unlocked: boolean }[]>(
-      `SELECT pg_advisory_unlock($1) AS unlocked`,
-      AGENT_LOCK_KEY,
-    );
-    if (rows[0]?.unlocked !== true) {
-      console.warn(
-        "[AGENT] advisory unlock returned false — lock may have leaked to another connection",
-      );
-    }
-  } catch (err) {
-    console.warn("[AGENT] advisory unlock failed:", err);
-  }
-}
+// Cross-instance mutual exclusion (scheduler-lease.ts): its own lease row, so
+// this loop and the automation scheduler never block each other, while only one
+// instance runs the agent loop per tick when two overlap (a zero-downtime
+// deploy). A row lease, not a session advisory lock: that one leaked behind
+// Supavisor (lock and unlock on different pooled backends) on 2026-11-11.
+const agentLease = createSchedulerLease({ name: "autonomous-agent", logPrefix: "[AGENT]" });
 
 // Track last run per user to respect per-user interval. Module-local so the
 // schedule survives across ticks but resets on process restart, which is
@@ -135,8 +106,9 @@ async function expireStalePendingActions() {
 
 /**
  * Tick entry point. Wraps the actual work in two guards: an in-process latch so
- * a tick that outruns the interval never overlaps the next one, and a Postgres
- * advisory lock so only one dyno runs the loop per tick under N>1 dynos.
+ * a tick that outruns the interval never overlaps the next one, and the
+ * scheduler lease so only one instance runs the loop per tick. The lease logs a
+ * skipped tick itself (rate-limited).
  */
 async function runAutonomousAgent() {
   recordSchedulerTick("autonomous-agent");
@@ -146,16 +118,12 @@ async function runAutonomousAgent() {
   }
   agentTickInFlight = true;
   try {
-    const locked = await tryAcquireAgentLock();
-    if (!locked) {
-      console.log("[AGENT] Another worker holds the agent lock — skipping tick");
-      return;
-    }
-    try {
-      await runAgentTick();
-    } finally {
-      await releaseAgentLock();
-    }
+    await agentLease.runExclusive(runAgentTick);
+  } catch (err) {
+    // runAgentTick catches its own errors; this keeps anything that escapes
+    // from becoming an unhandled rejection of the interval callback.
+    console.error("[AGENT] Scheduler tick failed:", err);
+    captureError(err, { tags: { scope: "agent.scheduler" } });
   } finally {
     agentTickInFlight = false;
   }

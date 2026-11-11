@@ -99,6 +99,7 @@ import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.j
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
+import { createSchedulerLease } from "./scheduler-lease.js";
 import { captureError } from "./sentry.js";
 import {
   localDateKey,
@@ -111,11 +112,10 @@ import { withTimeout } from "./with-timeout.js";
 import { newWork } from "./work-context.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
-// Self-overlap guard: true while a tick is mid-flight. The pg advisory lock is
-// session-level and re-entrant on the same pooled connection, so it does NOT
-// stop the scheduler from overlapping ITSELF when a tick runs longer than the
-// interval — this boolean does. (dbHeartbeat + tryAcquireSchedulerLock both
-// swallow their own errors, so this is always cleared on the paths below.)
+// Self-overlap guard: true while a tick is mid-flight. The scheduler lease is
+// re-entrant for its holder (this process), so it does NOT stop the scheduler
+// from overlapping ITSELF when a tick runs longer than the interval — this
+// boolean does. Cleared in a finally, whatever the tick does.
 let schedulerInFlight = false;
 
 const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
@@ -137,56 +137,11 @@ const DB_HEARTBEAT_ENABLED = process.env.DB_HEARTBEAT_ENABLED === "true";
 const PROACTIVE_ACTIONS_ENABLED = process.env.PROACTIVE_ACTIONS_ENABLED === "true";
 const PHONE_ESCALATION_ENABLED = process.env.PHONE_ESCALATION_ENABLED === "true";
 
-// Stable 32-bit hash used as Postgres advisory lock key. Same int across
-// every worker that imports this module — distributed mutual exclusion.
-const SCHEDULER_LOCK_KEY = 0x4a47_454d; // "JIGE" + "M" reduced; arbitrary stable int
-
-/**
- * Postgres session advisory lock. Try-and-skip if another worker holds it.
- * `pg_try_advisory_lock` returns true if acquired, false otherwise.
- * Release with `pg_advisory_unlock` at the end of the tick.
- *
- * Caveat (session lock + connection pool): the lock is held by the specific
- * pooled connection that ran `pg_try_advisory_lock`. If a later
- * `pg_advisory_unlock` happens to run on a DIFFERENT pooled connection it
- * returns false and the lock leaks until that connection is recycled (Postgres
- * frees session locks when the connection closes). Prod runs a single dyno, so
- * the lock is effectively a no-op safety net there and a leak only ever costs a
- * skipped tick (now logged below, never silent). A fully leak-proof design needs
- * a dedicated single connection or a row-based lease; deferred until N>1 dynos
- * make it worth the redesign risk.
- */
-async function tryAcquireSchedulerLock(): Promise<boolean> {
-  try {
-    const rows = await prisma.$queryRawUnsafe<{ locked: boolean }[]>(
-      `SELECT pg_try_advisory_lock($1) AS locked`,
-      SCHEDULER_LOCK_KEY,
-    );
-    return rows[0]?.locked === true;
-  } catch (err) {
-    console.warn("[AUTOMATION] advisory lock acquire failed:", err);
-    return false;
-  }
-}
-
-async function releaseSchedulerLock(): Promise<void> {
-  try {
-    // `pg_advisory_unlock` returns false (NOT an error) when this connection
-    // does not hold the lock — the pooling caveat above. Surface it instead of
-    // swallowing it, so a leaked lock is visible rather than a silent stall.
-    const rows = await prisma.$queryRawUnsafe<{ unlocked: boolean }[]>(
-      `SELECT pg_advisory_unlock($1) AS unlocked`,
-      SCHEDULER_LOCK_KEY,
-    );
-    if (rows[0]?.unlocked !== true) {
-      console.warn(
-        "[AUTOMATION] advisory lock release returned false — lock was held on a different pooled connection and will self-heal on connection recycle",
-      );
-    }
-  } catch (err) {
-    console.warn("[AUTOMATION] advisory lock release failed:", err);
-  }
-}
+// Cross-instance mutual exclusion for the tick (scheduler-lease.ts): a row
+// lease, not a session advisory lock. The advisory lock leaked behind
+// Supavisor (lock and unlock on different pooled backends) and silently
+// skipped ticks for hours on 2026-11-11.
+const automationLease = createSchedulerLease({ name: "automation", logPrefix: "[AUTOMATION]" });
 
 // In-memory cache to skip redundant DB queries within same process lifetime.
 // Actual dedup is DB-based (survives server restarts).
@@ -931,25 +886,32 @@ async function runAutomations() {
   // Skip if this process is still running the previous tick (see schedulerInFlight).
   if (schedulerInFlight) return;
   schedulerInFlight = true;
-
-  await dbHeartbeat();
-
-  // Cross-worker mutual exclusion. If another container holds the lock,
-  // skip this tick entirely — prevents duplicate briefings, sync, and pushes
-  // when multiple Render dynos run in parallel.
-  const acquired = await tryAcquireSchedulerLock();
-  if (!acquired) {
+  try {
+    await dbHeartbeat();
+    // Cross-instance mutual exclusion. If another instance holds the lease,
+    // skip this tick entirely — prevents duplicate briefings, sync, and pushes
+    // while two instances overlap (a zero-downtime deploy). The lease logs a
+    // skipped tick itself (rate-limited), so a long run of them is never silent.
+    await automationLease.runExclusive(runAutomationTick);
+  } catch (err) {
+    // The tick catches its own errors; this keeps anything that escapes from
+    // becoming an unhandled rejection of the interval callback.
+    console.error("[AUTOMATION] Scheduler tick failed:", err);
+    captureError(err, { tags: { scope: "automation.scheduler" } });
+  } finally {
     schedulerInFlight = false;
-    return;
   }
+}
 
+/** One scheduler tick's work. Runs only while this process holds the lease. */
+async function runAutomationTick(): Promise<void> {
   try {
     // Drain the action-execution outbox first: retry transient failures from
     // the inline approve fast-path and reclaim rows orphaned by a crash.
     // Cheap (one indexed query for due rows) and runs under the scheduler
-    // lock, so no duplicate execution across dynos. A no-op when empty.
-    // Awaited so the drain finishes INSIDE the scheduler lock — otherwise a
-    // fire-and-forget drain can outlive the lock and run concurrently with the
+    // lease, so no duplicate execution across dynos. A no-op when empty.
+    // Awaited so the drain finishes INSIDE the scheduler lease — otherwise a
+    // fire-and-forget drain can outlive the lease and run concurrently with the
     // next tick's drain, double-executing approved actions.
     try {
       const { completed, retried, dead, reclaimed } = await drainActionOutbox();
@@ -960,7 +922,7 @@ async function runAutomations() {
       }
     } catch (err) {
       // Escalate: a systemic outbox failure must not look like a routine
-      // advisory-lock false-release. Contained so the rest of the tick runs.
+      // skipped tick. Contained so the rest of the tick runs.
       console.error("[OUTBOX] drain errored:", err);
       captureError(err, { tags: { scope: "automation.outbox-drain" } });
     }
@@ -1022,7 +984,7 @@ async function runAutomations() {
     // --- Hourly: judge fallback alarm (#1572) ---
     // Reads the last 24 h of judged-by sources from AttentionItem (one
     // aggregate query) and raises a deduped ops Notification when the LLM
-    // judge has been falling back to keywords. Runs under the scheduler lock;
+    // judge has been falling back to keywords. Runs under the scheduler lease;
     // the per-tick "automation" heartbeat above covers its liveness.
     if (Date.now() - lastJudgeFallbackCheckAt >= JUDGE_FALLBACK_CHECK_INTERVAL_MS) {
       lastJudgeFallbackCheckAt = Date.now();
@@ -1309,9 +1271,6 @@ async function runAutomations() {
   } catch (err) {
     console.error("[AUTOMATION] Scheduler error:", err);
     captureError(err, { tags: { scope: "automation.scheduler" } });
-  } finally {
-    await releaseSchedulerLock();
-    schedulerInFlight = false;
   }
 }
 
