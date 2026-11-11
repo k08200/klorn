@@ -5,9 +5,13 @@
 # NOT publish — publishing only happens when the run's ref is a tag.
 #
 # The installer is renamed to the stable name `Klorn-windows-setup.exe` so the
-# landing can link `releases/download/<tag>/Klorn-windows-setup.exe` (and later
-# `latest/download/...` once win tags own "latest") without chasing versioned
-# NSIS filenames.
+# landing can link `releases/download/<tag>/Klorn-windows-setup.exe` without
+# chasing versioned NSIS filenames.
+#
+# Windows releases are published with `--latest=false`: the repo's "Latest"
+# release must stay a Mac `desktop-v*` release, because the website's DMG link
+# (`releases/latest/download/...`) and the Mac app's update check
+# (`releases/latest`) both read it. A Windows tag becoming Latest breaks both.
 #
 # Unsigned on purpose for now: a Windows code-signing certificate is a separate
 # paid decision. SmartScreen will warn on first run; the release notes say so
@@ -201,4 +205,5 @@ jobs:
             "$RUNNER_TEMP/Klorn-windows-setup.exe#Klorn for Windows (unsigned NSIS installer)" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Klorn for Windows $TAG" \
-            --notes-file "$NOTES"
+            --notes-file "$NOTES" \
+            --latest=false
