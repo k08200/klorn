@@ -16,6 +16,12 @@ import * as Sentry from "@sentry/node";
 import Fastify from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildSentryInitOptions } from "../sentry.js";
+import {
+  initCapturingSentry,
+  SENTRY_FLUSH_MS as FLUSH_MS,
+  type SentryCapture,
+  TEST_SENTRY_DSN,
+} from "./helpers/sentry-capture.js";
 
 const GEMINI_KEY = `AIzaSy${"Q".repeat(33)}`;
 const OAUTH_CODE = "4/0AbOauthCodeThatMustNotLeak";
@@ -24,12 +30,12 @@ const SESSION_COOKIE = "opaque-session-cookie-51ab";
 const AUTH_EXTRA = "opaque-authorization-extra-77d2";
 const SECRETS = [GEMINI_KEY, OAUTH_CODE, VERIFIER, SESSION_COOKIE, AUTH_EXTRA];
 
-const FLUSH_MS = 5_000;
-const wire: string[] = [];
-const decoder = new TextDecoder();
+/** `<trace id>-<span id>-1`: an incoming trace whose sampling decision is "sampled". */
+const SAMPLED_TRACE_HEADER = "0123456789abcdef0123456789abcdef-0123456789abcdef-1";
+let capture: SentryCapture;
 
 function sent(): string {
-  return wire.join("\n");
+  return capture.sent();
 }
 
 function expectNoSecret(payload: string): void {
@@ -39,18 +45,11 @@ function expectNoSecret(payload: string): void {
 }
 
 beforeAll(() => {
-  Sentry.init({
-    ...buildSentryInitOptions("https://public@o0.ingest.sentry.io/0", "test"),
-    transport: (options) =>
-      Sentry.createTransport(options, async (request) => {
-        wire.push(typeof request.body === "string" ? request.body : decoder.decode(request.body));
-        return { statusCode: 200 };
-      }),
-  });
+  capture = initCapturingSentry(buildSentryInitOptions(TEST_SENTRY_DSN, "test"));
 });
 
 beforeEach(() => {
-  wire.length = 0;
+  capture.reset();
 });
 
 afterAll(async () => {
@@ -59,7 +58,7 @@ afterAll(async () => {
 
 describe("Sentry init options", () => {
   it("pins the static trace lifecycle the transaction and span hooks are written for", () => {
-    const options = buildSentryInitOptions("https://public@o0.ingest.sentry.io/0", "production");
+    const options = buildSentryInitOptions(TEST_SENTRY_DSN, "production");
     // Explicit, so SENTRY_TRACE_LIFECYCLE in the environment cannot switch it.
     expect(options.traceLifecycle).toBe("static");
     expect(options.beforeSendTransaction).toBeTypeOf("function");
@@ -67,15 +66,17 @@ describe("Sentry init options", () => {
   });
 
   it("keeps the v10 data-collection baseline instead of v11's permissive default", () => {
-    const options = buildSentryInitOptions("https://public@o0.ingest.sentry.io/0", "production");
+    const options = buildSentryInitOptions(TEST_SENTRY_DSN, "production");
     expect(options.dataCollection).toMatchObject({
       userInfo: false,
       cookies: false,
       httpBodies: [],
       genAI: { inputs: false, outputs: false },
+      mcp: { inputs: false, outputs: false },
       databaseQueryData: false,
       queues: false,
       graphQL: { document: false, variables: false },
+      stackFrameVariables: false,
     });
   });
 });
@@ -108,7 +109,9 @@ describe("Sentry wiring (real SDK, captured envelopes)", () => {
     // (dynamic sampling context, `trace.transaction`), which no `before*`
     // hook can reach, so a span must never be hand-named after a raw URL.
     // Nothing in this codebase creates spans; the real-request test below
-    // covers the SDK's own server span.
+    // covers the SDK's own server span. Only beforeSendSpan and
+    // beforeSendTransaction can scrub this payload, and each would do it
+    // alone; sentry-wiring-hooks.test.ts proves the span hook on its own.
     Sentry.startSpan(
       {
         name: "GET /api/auth/google/callback",
@@ -149,7 +152,15 @@ describe("Sentry wiring (real SDK, captured envelopes)", () => {
     const address = await app.listen({ port: 0, host: "127.0.0.1" });
     try {
       const response = await fetch(`${address}/boom?code=${OAUTH_CODE}&key=${GEMINI_KEY}`, {
-        headers: { "x-desktop-verifier": VERIFIER, cookie: `sid=${SESSION_COOKIE}` },
+        headers: {
+          "x-desktop-verifier": VERIFIER,
+          cookie: `sid=${SESSION_COOKIE}`,
+          // The in-process fetch is itself instrumented and would propagate
+          // an UNSAMPLED trace; the server continues it and drops its
+          // transaction, leaving nothing on the wire to check. Arrive as a
+          // sampled trace, like a request from a traced client.
+          "sentry-trace": SAMPLED_TRACE_HEADER,
+        },
       });
       expect(response.status).toBe(500);
     } finally {
@@ -158,9 +169,13 @@ describe("Sentry wiring (real SDK, captured envelopes)", () => {
     await Sentry.flush(FLUSH_MS);
 
     const payload = sent();
+    // The SDK's own server transaction was sent, carrying the request URL,
+    // headers and the Fastify handler span: the payload under test.
+    expect(payload).toContain('"op":"http.server"');
+    expect(payload).toContain("/boom");
     // error-handler.ts is the one place API errors are reported, through
-    // captureError and its filters (the data-wipe fence, 4xx). v11's Fastify
-    // integration would also report them on its own, unfiltered.
+    // captureError and its filters (the data-wipe fence, the cost cap, 4xx).
+    // v11's Fastify integration would also report them on its own, unfiltered.
     expect(payload).not.toContain("route-failure-marker");
     expectNoSecret(payload);
   });

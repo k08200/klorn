@@ -30,25 +30,35 @@ const ENV = process.env.NODE_ENV || "development";
 
 let initialized = false;
 
+/** The PII header/parameter name snippets v10 filtered without sendDefaultPii. */
+const PII_NAME_SNIPPETS = ["forwarded", "-ip", "remote-", "via", "-user"];
+
 /**
- * What the SDK may collect on its own. @sentry/node 11 collects user IP,
- * cookies, all headers and request/response bodies when `dataCollection` is
- * unset; v10 collected none of those without `sendDefaultPii`. This is the
- * v11 migration guide's "keep the v10 default" baseline, field for field.
+ * What the SDK may collect on its own. With `dataCollection` unset,
+ * @sentry/node 11 collects user IP, cookies, all headers, request/response
+ * bodies and GenAI/MCP inputs and outputs. v10 collected no IP, cookies or
+ * bodies and filtered PII headers. This is the v11 migration guide's "keep the
+ * v10 default" block (equal to or stricter than v10), plus two guards that
+ * block is silent on:
+ *   - `mcp`: falls back to `genAI` today, but src/mcp tool results are user mail.
+ *   - `stackFrameVariables`: inert while `includeLocalVariables` is unset; a
+ *     local variable can hold a decrypted token.
  */
 const V10_DATA_COLLECTION_BASELINE = {
   userInfo: false,
   cookies: false,
   httpHeaders: {
-    request: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
-    response: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+    request: { deny: PII_NAME_SNIPPETS },
+    response: { deny: PII_NAME_SNIPPETS },
   },
   httpBodies: [],
-  urlQueryParams: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+  urlQueryParams: { deny: PII_NAME_SNIPPETS },
   genAI: { inputs: false, outputs: false },
+  mcp: { inputs: false, outputs: false },
   databaseQueryData: false,
   queues: false,
   graphQL: { document: false, variables: false },
+  stackFrameVariables: false,
 } satisfies Sentry.NodeOptions["dataCollection"];
 
 /**
@@ -66,6 +76,10 @@ export function buildSentryInitOptions(dsn: string, env: string): Sentry.NodeOpt
     // copy secrets through untouched. Pin the transaction model these hooks
     // are written for. Set here, not left to the default, so a
     // SENTRY_TRACE_LIFECYCLE env var cannot switch it.
+    // Transitional: v11 deprecates the static lifecycle and
+    // `beforeSendTransaction`, and v12 removes them. Before taking v12 the
+    // transaction-level scrub (request, contexts, tags, extra) has to move
+    // into a streamed-span `beforeSendSpan` on `is_segment` spans.
     traceLifecycle: "static",
     dataCollection: V10_DATA_COLLECTION_BASELINE,
     integrations: [

@@ -21,11 +21,12 @@
  *
  * The `filterCollected*` calls (v11) apply Sentry's generic name denylist,
  * which does not know this codebase's parameter names; nothing here relies on
- * them. So the scrub has to happen at all four hooks, not just one. The
- * transaction and span hooks only run under the static trace lifecycle that
- * ../sentry.ts pins (v11's default span streaming skips
- * `beforeSendTransaction` and hands `beforeSendSpan` another shape);
- * sentry-wiring.test.ts proves the wiring against the real SDK. The functions
+ * them. So the scrub has to happen at all four hooks, not just one.
+ * `scrubSentryTransaction` and `scrubSentrySpan` expect the static
+ * transaction/span shapes, which only exist under the static trace lifecycle
+ * ../sentry.ts pins: v11's default span streaming never calls
+ * `beforeSendTransaction` and hands `beforeSendSpan` a `StreamedSpanJSON`.
+ * sentry-wiring*.test.ts prove the wiring against the real SDK. The functions
  * below are generic over the payload type so they can be handed straight to
  * `beforeBreadcrumb` / `beforeSendSpan` / `beforeSendTransaction` /
  * `beforeSend` without importing Sentry's types here — this module stays pure
