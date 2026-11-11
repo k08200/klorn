@@ -28,6 +28,20 @@ vi.mock("../providers/index.js", () => ({
   getProviderChain: vi.fn(() => chain),
 }));
 
+// Count stack reads: a paced call must label itself once, at the public entry,
+// not again on the re-entry (where only the pacer is on the stack).
+const callerSpy = vi.hoisted(() => ({ calls: 0 }));
+vi.mock("../llm/llm-caller.js", async (orig) => {
+  const real = await orig<typeof import("../llm/llm-caller.js")>();
+  return {
+    ...real,
+    llmCallerFeature: () => {
+      callerSpy.calls += 1;
+      return real.llmCallerFeature();
+    },
+  };
+});
+
 // Spy on the ledger — the real module is unit-tested separately.
 const recorded: Array<Record<string, unknown>> = [];
 // Hoisted so we can assert the servedByUserKey flag createCompletion forwards.
@@ -296,5 +310,77 @@ describe("createVisionCompletion — usage ledger threading", () => {
       servedByUserKey: false,
       prebilledCents: 0,
     });
+  });
+});
+
+describe("createCompletion — feature attribution", () => {
+  const THIS_MODULE = "__tests__/llm-usage-chokepoint.test";
+
+  it("records the calling module as the feature", async () => {
+    chain.push(makeProvider("anthropic", "anthropic:env", async () => COMPLETION));
+    const { createCompletion } = await import("../llm/openai.js");
+
+    await createCompletion(PARAMS);
+
+    expect(recorded[0]).toMatchObject({ feature: THIS_MODULE, ownedByUser: false });
+  });
+
+  it("an explicit feature wins over the calling module", async () => {
+    chain.push(makeProvider("anthropic", "anthropic:env", async () => COMPLETION));
+    const { createCompletion } = await import("../llm/openai.js");
+
+    await createCompletion(PARAMS, { feature: "judge" });
+
+    expect(recorded[0]).toMatchObject({ feature: "judge" });
+  });
+
+  it("keeps the caller's feature through the background pacer", async () => {
+    chain.push(makeProvider("anthropic", "anthropic:env", async () => COMPLETION));
+    const { createCompletion } = await import("../llm/openai.js");
+
+    callerSpy.calls = 0;
+    await createCompletion(PARAMS, { priority: "background" });
+
+    expect(recorded[0]).toMatchObject({ feature: THIS_MODULE });
+    expect(callerSpy.calls).toBe(1);
+  });
+
+  it("flags rows served on the user's own key", async () => {
+    chain.push({
+      ...makeProvider("anthropic", "anthropic:user", async () => COMPLETION),
+      ownedByUser: true,
+    });
+    const { createCompletion } = await import("../llm/openai.js");
+
+    await createCompletion(PARAMS, { userId: "user-9" });
+
+    expect(recorded[0]).toMatchObject({ ownedByUser: true, feature: THIS_MODULE });
+  });
+
+  it("records the calling module for vision calls too", async () => {
+    chain.push(makeProvider("anthropic", "anthropic:env", async () => COMPLETION));
+    const { createVisionCompletion } = await import("../llm/openai.js");
+
+    await createVisionCompletion(PARAMS, { userId: "user-2" });
+
+    expect(recorded[0]).toMatchObject({ feature: THIS_MODULE, ownedByUser: false });
+  });
+
+  it("records Klorn as the payer when the user's key fails and the shared key serves", async () => {
+    chain.push(
+      {
+        ...makeProvider("anthropic", "anthropic:user", async () => {
+          throw Object.assign(new Error("invalid x-api-key"), { status: 401 });
+        }),
+        ownedByUser: true,
+      },
+      makeProvider("anthropic", "anthropic:env", async () => COMPLETION),
+    );
+    const { createCompletion } = await import("../llm/openai.js");
+
+    await createCompletion(PARAMS, { userId: "user-9" });
+
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ ownedByUser: false });
   });
 });
