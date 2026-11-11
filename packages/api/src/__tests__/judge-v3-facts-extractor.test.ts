@@ -6,6 +6,7 @@ import {
   FACTS_BODY_CAP,
   validTimeZone,
 } from "../judge/v3/facts-prompt.js";
+import { MAIL_KINDS } from "../judge/v3/facts-schema.js";
 import { deterministicPreFacts } from "../judge/v3/pre-facts.js";
 
 const me = "me@acme.com";
@@ -151,6 +152,29 @@ describe("buildFactsPrompt", () => {
   it("passes deterministic signals as hints", () => {
     const p = buildFactsPrompt(mail(), deterministicPreFacts(mail()));
     expect(p.user).toMatch(/recipient is on To/i);
+  });
+
+  const kindLine = () =>
+    buildFactsPrompt(mail(), deterministicPreFacts(mail()))
+      .user.split("\n")
+      .find((l) => l.startsWith("- kind: ")) ?? "";
+  const kindDefinition = (kind: string) =>
+    new RegExp(`\\b${kind} \\(([^)]*)\\)`).exec(kindLine())?.[1] ?? "";
+
+  it("defines every mail kind of the schema on the kind line", () => {
+    for (const kind of MAIL_KINDS) {
+      expect(kindDefinition(kind).length).toBeGreaterThan(20);
+    }
+  });
+
+  it("files mail triggered by the recipient's own sign-up or order under notification, not promotion", () => {
+    expect(kindDefinition("notification")).toMatch(/welcome/i);
+    expect(kindDefinition("notification")).toMatch(/even when it also advertises/i);
+    expect(kindDefinition("promotion")).toMatch(/main purpose is to sell/i);
+  });
+
+  it("keeps the asks of a notification: the kind does not replace them", () => {
+    expect(kindLine()).toMatch(/does not replace asks/i);
   });
 });
 
