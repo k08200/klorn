@@ -30,22 +30,82 @@ const ENV = process.env.NODE_ENV || "development";
 
 let initialized = false;
 
-export function initSentry(): void {
-  if (!DSN || initialized) return;
+/** The PII header/parameter name snippets v10 filtered without sendDefaultPii. */
+const PII_NAME_SNIPPETS = ["forwarded", "-ip", "remote-", "via", "-user"];
 
-  Sentry.init({
-    dsn: DSN,
-    environment: ENV,
-    tracesSampleRate: ENV === "production" ? 0.1 : 1.0,
+/**
+ * What the SDK may collect on its own. With `dataCollection` unset,
+ * @sentry/node 11 collects user IP, cookies, all headers, request/response
+ * bodies and GenAI/MCP inputs and outputs. v10 collected no IP, cookies or
+ * bodies and filtered PII headers. This is the v11 migration guide's "keep the
+ * v10 default" block (equal to or stricter than v10), plus two guards that
+ * block is silent on:
+ *   - `mcp`: falls back to `genAI` today, but src/mcp tool results are user mail.
+ *   - `stackFrameVariables`: inert while `includeLocalVariables` is unset; a
+ *     local variable can hold a decrypted token.
+ */
+const V10_DATA_COLLECTION_BASELINE = {
+  userInfo: false,
+  cookies: false,
+  httpHeaders: {
+    request: { deny: PII_NAME_SNIPPETS },
+    response: { deny: PII_NAME_SNIPPETS },
+  },
+  httpBodies: [],
+  urlQueryParams: { deny: PII_NAME_SNIPPETS },
+  genAI: { inputs: false, outputs: false },
+  mcp: { inputs: false, outputs: false },
+  databaseQueryData: false,
+  queues: false,
+  graphQL: { document: false, variables: false },
+  stackFrameVariables: false,
+} satisfies Sentry.NodeOptions["dataCollection"];
+
+/**
+ * The options `initSentry` passes to `Sentry.init`. Exported so
+ * sentry-wiring.test.ts can run the real SDK with exactly these options.
+ */
+export function buildSentryInitOptions(dsn: string, env: string): Sentry.NodeOptions {
+  return {
+    dsn,
+    environment: env,
+    tracesSampleRate: env === "production" ? 0.1 : 1.0,
+    // @sentry/node 11 streams spans by default. In that mode
+    // `beforeSendTransaction` never runs, and `beforeSendSpan` receives a
+    // different shape (`name`/`attributes`), so the span scrub below would
+    // copy secrets through untouched. Pin the transaction model these hooks
+    // are written for. Set here, not left to the default, so a
+    // SENTRY_TRACE_LIFECYCLE env var cannot switch it.
+    // Transitional: v11 deprecates the static lifecycle and
+    // `beforeSendTransaction`, and v12 removes them. Before taking v12 the
+    // transaction-level scrub (request, contexts, tags, extra) has to move
+    // into a streamed-span `beforeSendSpan` on `is_segment` spans.
+    traceLifecycle: "static",
+    dataCollection: V10_DATA_COLLECTION_BASELINE,
+    integrations: [
+      // v11's Fastify integration (a default) reports route errors by itself.
+      // error-handler.ts already reports them through captureError, which
+      // skips data-wipe fence rejections and cost-cap refusals; keep that the
+      // only path, as in v10.
+      Sentry.fastifyIntegration({ shouldHandleError: () => false }),
+    ],
     // All four hooks, because a credential reaches Sentry by four routes and
     // scrubbing one of them is what let a BYOK Gemini key ride out on a
     // breadcrumb and a span while `beforeSend` looked clean. The logic lives
     // in security/sentry-scrub.ts so it can be tested without a DSN.
     beforeSend: (event) => scrubSentryErrorEvent(event),
     beforeBreadcrumb: (breadcrumb) => scrubSentryBreadcrumb(breadcrumb),
-    beforeSendSpan: (span) => scrubSentrySpan(span),
+    // A callback not wrapped in withStaticSpan is never invoked under the
+    // static lifecycle.
+    beforeSendSpan: Sentry.withStaticSpan((span) => scrubSentrySpan(span)),
     beforeSendTransaction: (event) => scrubSentryTransaction(event),
-  });
+  };
+}
+
+export function initSentry(): void {
+  if (!DSN || initialized) return;
+
+  Sentry.init(buildSentryInitOptions(DSN, ENV));
 
   initialized = true;
   console.log(`[SENTRY] Initialized (env=${ENV})`);
