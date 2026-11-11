@@ -281,7 +281,7 @@ export function isAgentContextEmpty(context: string): boolean {
 // uncoordinated debounce maps, so an actionable email arriving during a
 // scheduler tick for the same user would otherwise run the agent twice
 // concurrently — double LLM spend and a race on proposal dedup. In-process only;
-// the cross-dyno guard is the advisory lock in autonomous-agent-scheduler.ts.
+// the cross-dyno guard is the scheduler lease in autonomous-agent-scheduler.ts.
 const runningUsers = new Set<string>();
 
 export async function runAgentForUser(
