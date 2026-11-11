@@ -8,15 +8,35 @@
  * quiet-hours summary (quiet-hours-summary.ts), so both count the same mail.
  * The summary also skips mail already read (`skipReadMail`), as the Mac does;
  * the Windows catch-up does not ask for that and is unchanged.
+ *
+ * The urgent sweep (urgentSweepItemIdsFailClosed) rings open PUSH items too, and one
+ * more case these readers do not count: urgent mail the keyword fallback left in
+ * QUEUE because the judge's LLM did not run. A held push of such mail is therefore
+ * not caught up after quiet hours or by the Windows shell (as before #1687).
  */
 
 import { prisma } from "../db.js";
+import { NOT_AGENT_SET } from "../judge/agent-tier.js";
+import { isAutomatedSender } from "../judge/keyword-policy.js";
+import type { PocJudgement } from "../judge/poc-judge.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
+import { describeFailure } from "../mail/providers/action-failure.js";
+import { captureError } from "../sentry.js";
 import { mailPushContent } from "./mail-push-content.js";
 import { type NotificationLanguage, URGENT_EMAIL_TITLES } from "./notification-strings.js";
 
 /** Lanes that ring as PUSH; "CALL" is the retired v1 name normalizeTier folds. */
 const PUSH_TIERS = ["PUSH", "CALL"];
+
+/**
+ * The decision ledger's mark for the judge's no-LLM path (poc-judge.ts,
+ * keywordFallbackJudgement): the LLM did not judge the mail (outage, spend cap,
+ * unusable key), keywords did. The other non-LLM sources are not that path: the
+ * marketing fast-path, the user's pin and learned rule, and the sender prior run
+ * before the LLM whatever its health, and the prior and the learned rule defer
+ * urgent-looking mail to the LLM.
+ */
+const KEYWORD_FALLBACK: PocJudgement["source"] = "keyword-fallback";
 
 /** Urgent-mail bell rows (any language's title), unread, naming one mail. */
 export function unreadUrgentMailRows(userId: string) {
@@ -95,4 +115,122 @@ export async function openPushMail(
     });
   }
   return mail.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+type LaneLookup = "item" | "ledger";
+
+/** The lane lookups whose failure the urgent sweep has reported in this process. */
+const reportedLookupFailures = new Set<LaneLookup>();
+
+/**
+ * Report a failed lane lookup once per process and per lookup (as
+ * findReingestedHistoryFailClosed does), so a database incident is not one report
+ * per user per tick, and an early item-read blip does not hide a later ledger
+ * failure that silences the fallback ring.
+ */
+function reportLaneLookupFailure(lookup: LaneLookup, userId: string, err: unknown): void {
+  if (reportedLookupFailures.has(lookup)) return;
+  reportedLookupFailures.add(lookup);
+  // describeFailure: the error's class and code only, never a message that
+  // could quote the query's arguments.
+  console.warn(
+    `[urgent-sweep] ${lookup} lookup failed for ${userId}; mail it could not check does not ring this time: ${describeFailure(err)}`,
+  );
+  captureError(err, { tags: { scope: "automation.urgent-lane" }, extra: { userId, lookup } });
+}
+
+/** An urgent mail the sweep is considering: its id and its sender. */
+export interface UrgentSweepMail {
+  id: string;
+  from: string | null;
+}
+
+/**
+ * The mail among `mail` the urgent sweep (automation-scheduler.ts) may ring,
+ * mapped to its OPEN item's id. The keyword priority never outranks the judge's
+ * lane, so it is:
+ *  - mail whose OPEN item is PUSH: a safety net for PUSH mail the firewall push
+ *    did not ring;
+ *  - mail the keyword fallback put in QUEUE (DecisionLabel.decidedBy
+ *    "keyword-fallback"): the judge's LLM did not run for it (outage, spend cap,
+ *    unusable key), and the fallback cannot score an urgent mail from an
+ *    ordinary person to PUSH, so without this nothing would ring it. Only while
+ *    that lane is still the fallback's: no human override or confirmation
+ *    (isManualOverride, the ledger outcome) and no MCP agent move
+ *    (NOT_AGENT_SET). An LLM re-judge rewrites decidedBy (fallback-rejudge.ts),
+ *    and the mail stops counting. Never mail from an automated sender: the
+ *    fallback's own floor keeps that from interrupting (poc-judge.ts,
+ *    applyAutomatedSenderPushFloor), and the ledger records the source, not
+ *    the floor.
+ * MEETING, INFO and SILENT mail never rings here, whoever decided it. Mail the
+ * judge has not reached yet waits for the judge's own push (email-firewall.ts
+ * rings PUSH, and MEETING, when the item lands).
+ *
+ * One item read for the batch, plus one ledger read only when some of that mail
+ * sits in QUEUE. Fail closed: a failed item read counts no mail, a failed ledger
+ * read counts only the PUSH mail (the next sync reads again). Never thrown, so
+ * the rest of the user's tick still runs.
+ */
+export async function urgentSweepItemIdsFailClosed(
+  userId: string,
+  mail: readonly UrgentSweepMail[],
+): Promise<ReadonlyMap<string, string>> {
+  if (mail.length === 0) return new Map();
+  let items: Array<{ id: string; sourceId: string; tier: string | null }>;
+  try {
+    items = await prisma.attentionItem.findMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        sourceId: { in: mail.map((m) => m.id) },
+        status: "OPEN",
+        OR: [
+          { tier: { in: PUSH_TIERS } },
+          { tier: "QUEUE", isManualOverride: false, ...NOT_AGENT_SET },
+        ],
+      },
+      select: { id: true, sourceId: true, tier: true },
+    });
+  } catch (err) {
+    reportLaneLookupFailure("item", userId, err);
+    return new Map();
+  }
+
+  const humanSent = new Set(mail.filter((m) => !isAutomatedSender(m.from ?? "")).map((m) => m.id));
+  const pushItems = items.filter((item) => item.tier !== null && PUSH_TIERS.includes(item.tier));
+  const queueItems = items.filter((item) => item.tier === "QUEUE" && humanSent.has(item.sourceId));
+  const fallbackIds = await keywordFallbackSourceIds(
+    userId,
+    queueItems.map((item) => item.sourceId),
+  );
+  const ringable = [...pushItems, ...queueItems.filter((item) => fallbackIds.has(item.sourceId))];
+  return new Map(ringable.map((item) => [item.sourceId, item.id]));
+}
+
+/**
+ * The mail among `sourceIds` whose lane the keyword fallback set and nobody has
+ * judged since (ledger outcome still null, as fallback-rejudge.ts reads it). No
+ * read when there is nothing to look up. Fail closed: a failed read counts none.
+ */
+async function keywordFallbackSourceIds(
+  userId: string,
+  sourceIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (sourceIds.length === 0) return new Set();
+  try {
+    const labels = await prisma.decisionLabel.findMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        sourceId: { in: [...sourceIds] },
+        decidedBy: KEYWORD_FALLBACK,
+        outcome: null,
+      },
+      select: { sourceId: true },
+    });
+    return new Set(labels.map((row) => row.sourceId));
+  } catch (err) {
+    reportLaneLookupFailure("ledger", userId, err);
+    return new Set();
+  }
 }

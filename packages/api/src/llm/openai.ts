@@ -13,6 +13,7 @@ import { getProviderChain, type Provider, type ProviderCredentials } from "../pr
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
 import { resolveJudgeModel } from "./judge-model-gate.js";
+import { llmCallerFeature } from "./llm-caller.js";
 import { type DispatchFailureTracker, trackDispatchFailures } from "./llm-failure-log.js";
 import {
   getProviderCooldownInfo,
@@ -131,6 +132,13 @@ export interface CompletionOptions {
    */
   onServed?: (served: { provider: string; model: string; ownedByUser: boolean }) => void;
   /**
+   * The feature this call is charged to in the usage ledger
+   * (LlmUsageLog.feature). Leave it unset: the calling module is read from
+   * the stack (llm/llm-caller.ts). Pass it only when one module serves
+   * several features that must be told apart.
+   */
+  feature?: string;
+  /**
    * Skip rather than wait (background only): if the background pacer has no
    * slot free right now the call throws PacerBusyError instead of queueing,
    * and an RPM-window miss throws instead of parking. For optional work (the
@@ -143,6 +151,14 @@ export interface CompletionOptions {
    * Callers must never set this.
    */
   _paced?: boolean;
+  /**
+   * Internal: the per-user gates already ran before the call queued for the
+   * pacer (see createCompletionWithFailover), so the paced re-entry must not
+   * take a second call slot or pre-bill twice. Honored only together with
+   * `_paced`, and only for a pass createCompletion issued (single use); any
+   * other value is ignored and the gates run.
+   */
+  _gated?: { userKeyOnly: boolean };
 }
 
 /**
@@ -270,6 +286,84 @@ async function enforceCostGates(
     }
   }
   return { userKeyOnly: false };
+}
+
+/**
+ * The per-user gates every LLM call passes before it may spend: the call slot
+ * (per-minute fairness + daily count) and the cost gates.
+ *
+ * Call slot: trip before the call so a runaway loop doesn't burn upstream
+ * provider quota. Charged against the foreground bucket by default; background
+ * workers pass `priority: "background"` so they can never starve chat. A
+ * background call over the RPM window PARKS for a slot (bounded) instead of
+ * failing — instant failure demoted every email past the cap in a sync burst
+ * to the permanent keyword fallback. It parks before queueing for the pacer,
+ * so the wait never holds a shared slot.
+ *
+ * Cost gates: enforced BEFORE the call so we don't burn budget twice when a
+ * runaway loop has already crossed the cap. Covers the global ceiling (always)
+ * and the per-user cap (when a userId is present).
+ */
+async function passCallGates(
+  model: string,
+  options: CompletionOptions,
+  playgroundOnly: boolean,
+  userKeyAvailable: boolean,
+): Promise<{ userKeyOnly: boolean }> {
+  if (options.userId) {
+    await awaitUserCallSlot(options.userId, {
+      priority: options.priority ?? "foreground",
+      reserved: options.reserved,
+      ...(options.noWait ? { maxWaitMs: 0 } : {}),
+    });
+  }
+  return enforceCostGates(
+    model,
+    options.userId,
+    playgroundOnly,
+    userKeyAvailable,
+    options.reserved,
+  );
+}
+
+/**
+ * Gate passes this module issued for the paced re-entry. `_gated` is a plain
+ * options field, so it is honored only if it is an object issued here and not
+ * yet redeemed: a forged `{ _paced, _gated }` from a caller runs every gate.
+ */
+const issuedGatePasses = new WeakSet<object>();
+
+function issueGatePass(gate: { userKeyOnly: boolean }): { userKeyOnly: boolean } {
+  const pass = { userKeyOnly: gate.userKeyOnly };
+  issuedGatePasses.add(pass);
+  return pass;
+}
+
+/** One pass, one dispatch: returns the pass and spends it, or undefined. */
+function redeemGatePass(
+  pass: { userKeyOnly: boolean } | undefined,
+): { userKeyOnly: boolean } | undefined {
+  if (!pass || !issuedGatePasses.delete(pass)) return undefined;
+  return pass;
+}
+
+/**
+ * The paced dispatch of a call that was gated before it queued. A non-BYOK
+ * call was pre-billed at enqueue, so its gate result still holds. A BYOK call
+ * is never pre-billed: the ledger can cross the cap while it waits in the queue
+ * (env fallthroughs are charged at true-up), and past the cap a BYOK call must
+ * run on the user's own key alone (founder decision 2026-10-15). So re-read the
+ * cap for BYOK, without taking a second call slot or pre-billing.
+ */
+async function confirmGateAtDispatch(
+  gated: { userKeyOnly: boolean },
+  options: CompletionOptions,
+  userKeyAvailable: boolean,
+): Promise<{ userKeyOnly: boolean }> {
+  if (gated.userKeyOnly || !userKeyAvailable || !options.userId) return gated;
+  const { checkCostGate } = await import("../billing/cost-guard.js");
+  const gate = await checkCostGate(options.userId, { reserved: options.reserved });
+  return gate.allowed ? gated : { userKeyOnly: true };
 }
 
 /**
@@ -438,6 +532,18 @@ export function buildExhaustedError(
 }
 
 /**
+ * Names the calling module once, at the public entry, before any await: the
+ * synchronous stack still holds the caller here. The paced re-entry and any
+ * failover carry the options on, so the feature is never re-read from a
+ * stack that only shows the pacer.
+ */
+function withCallerFeature(options: CompletionOptions): CompletionOptions {
+  if (options.feature) return options;
+  const feature = llmCallerFeature();
+  return feature ? { ...options, feature } : options;
+}
+
+/**
  * Drop-in replacement for `openai.chat.completions.create()` with multi-provider
  * failover:
  *
@@ -465,7 +571,7 @@ export async function createCompletion(
 > {
   const failures = trackDispatchFailures();
   try {
-    return await createCompletionWithFailover(params, options, failures);
+    return await createCompletionWithFailover(params, withCallerFeature(options), failures);
   } catch (err) {
     failures.settleUnrecovered();
     throw err;
@@ -484,16 +590,20 @@ async function createCompletionWithFailover(
     | OpenAI.Chat.Completions.ChatCompletion
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
-  // Background-priority calls go through the global pacer FIRST: a burst
-  // (summarize sweep, batch judge) launched concurrently trips the provider's
-  // own per-minute quota, and the resulting cooldown lockout takes interactive
-  // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
-  if ((options.priority ?? "foreground") === "background" && !options._paced) {
+  const isBackground = (options.priority ?? "foreground") === "background";
+  // Fairness key for the background pacer: each user queues in their own lane;
+  // calls with no user share the pacer's default (system) lane.
+  const lane = options.userId;
+
+  // Optional background work (noWait) never queues: it claims a pacer slot now
+  // or is skipped. Its gates run inside the claimed slot, where nothing parks
+  // (noWait takes the call slot with maxWaitMs 0), so they cannot hold the slot.
+  if (isBackground && !options._paced && options.noWait) {
     const paced = { ...options, _paced: true };
-    const run = () =>
-      createCompletion(params as ChatCompletionCreateParamsNonStreaming, paced) as Promise<Result>;
-    if (!options.noWait) return backgroundLlmPacer.run(run);
-    const claimed = backgroundLlmPacer.tryRun(run);
+    const claimed = backgroundLlmPacer.tryRun(
+      () => createCompletion(params as ChatCompletionCreateParamsNonStreaming, paced),
+      lane,
+    ) as Promise<Result> | null;
     if (!claimed) throw new PacerBusyError();
     return claimed;
   }
@@ -520,30 +630,30 @@ async function createCompletionWithFailover(
     params = { ...params, model: options.credentials.userModel };
   }
 
-  // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
-  // doesn't burn upstream provider quota. Charged against the foreground
-  // bucket by default; background workers pass `priority: "background"` so
-  // they can never starve chat. A background call over the RPM window PARKS
-  // for a slot (bounded) instead of failing — instant failure demoted every
-  // email past the cap in a sync burst to the permanent keyword fallback.
-  if (options.userId) {
-    await awaitUserCallSlot(options.userId, {
-      priority: options.priority ?? "foreground",
-      reserved: options.reserved,
-      ...(options.noWait ? { maxWaitMs: 0 } : {}),
-    });
+  // Per-user gates run BEFORE a background call queues for the shared pacer.
+  // The pacer is one queue for every user: when these ran inside it, a call
+  // waiting out its user's per-minute window held one of the few global slots,
+  // and calls the daily caps would refuse anyway still took a launch slot each
+  // — one user's mail flood stalled every user's background work. Gated first,
+  // a queued call is already counted and pre-billed (so a flood cannot queue
+  // past the caps) and a refused call never touches the shared queue.
+  const gatePass = options._paced ? redeemGatePass(options._gated) : undefined;
+  const costGate = gatePass
+    ? await confirmGateAtDispatch(gatePass, options, userKeyAvailable)
+    : await passCallGates(params.model, options, playgroundOnly, userKeyAvailable);
+
+  // Background-priority calls dispatch through the global pacer: a burst
+  // (summarize sweep, batch judge) launched concurrently trips the provider's
+  // own per-minute quota, and the resulting cooldown lockout takes interactive
+  // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
+  if (isBackground && !options._paced) {
+    const paced = { ...options, _paced: true, _gated: issueGatePass(costGate) };
+    return backgroundLlmPacer.run(
+      () => createCompletion(params as ChatCompletionCreateParamsNonStreaming, paced),
+      lane,
+    ) as Promise<Result>;
   }
 
-  // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
-  // when a runaway loop has already crossed the cap. Covers the global
-  // ceiling (always) and the per-user cap (when a userId is present).
-  const costGate = await enforceCostGates(
-    params.model,
-    options.userId,
-    playgroundOnly,
-    userKeyAvailable,
-    options.reserved,
-  );
   // Past the per-user cap a BYOK call runs on the user's own key alone.
   const chain = costGate.userKeyOnly
     ? fullChain.filter((provider) => provider.ownedByUser === true)
@@ -562,6 +672,7 @@ async function createCompletionWithFailover(
     // gate exits early) — both spend no Klorn budget, so the usage log must not
     // show a cost they never incurred.
     estimatedCostCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
+    feature: options.feature ?? null,
   } as const;
 
   /**
@@ -603,6 +714,7 @@ async function createCompletionWithFailover(
       provider: provider.name,
       model,
       usage,
+      ownedByUser: provider.ownedByUser === true,
     });
     // Settle the cost ledgers against actual token counts (positive delta
     // only). Uses the model that actually served the request — failover may
@@ -730,7 +842,7 @@ export async function createVisionCompletion(
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const failures = trackDispatchFailures();
   try {
-    return await createVisionCompletionWithFailover(params, options, failures);
+    return await createVisionCompletionWithFailover(params, withCallerFeature(options), failures);
   } catch (err) {
     failures.settleUnrecovered();
     throw err;
@@ -823,6 +935,8 @@ async function createVisionCompletionWithFailover(
       provider: provider.name,
       model,
       usage: result.usage ?? null,
+      feature: options.feature ?? null,
+      ownedByUser: provider.ownedByUser === true,
     });
     void trueUpCostLedgers({
       userId: options.userId ?? null,

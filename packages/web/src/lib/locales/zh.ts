@@ -2532,6 +2532,7 @@ const zh: Record<string, string> = {
   "playground.brand.section": "体验场",
   "playground.nav.methodology": "评分方式",
   "playground.nav.pricing": "价格",
+  "playground.nav.source": "源代码",
   "playground.nav.login": "登录",
   "playground.nav.startFree": "免费开始",
   "playground.title": "看看 Klorn 如何分类一封邮件。",

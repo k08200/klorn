@@ -186,13 +186,26 @@ function override(key: string, fn: (...args: unknown[]) => unknown) {
 
 const argsOf = (key: string) => m.calls.filter((c) => c.key === key).map((c) => c.args[0]);
 
-/** The sweep's rows, the markers it reads, and the reset of the IMAP account. */
+/**
+ * The sweep's rows, the markers it reads, and the reset of the IMAP account. Every
+ * urgent row is an OPEN PUSH item here: the sweep rings only PUSH mail (its lane rule
+ * is covered by automation-urgent-sweep-lane.test.ts), and these cases are about
+ * history, keys and titles.
+ */
 function arrange(rows: UrgentRow[], autoReplyRows: Record<string, unknown>[] = []) {
   override("emailMessage.findMany", (arg) => {
     const where = (arg as { where?: Record<string, unknown> }).where ?? {};
     if (where.priority === "URGENT") return rows;
     if ((arg as { orderBy?: Record<string, unknown> }).orderBy?.syncedAt) return autoReplyRows;
     return [];
+  });
+  override("attentionItem.findMany", (arg) => {
+    const where = (arg as { where?: Record<string, unknown> }).where ?? {};
+    const ids = (where.sourceId as { in?: string[] } | undefined)?.in;
+    if (where.source !== "EMAIL" || !ids) return [];
+    return rows
+      .filter((row) => ids.includes(row.id))
+      .map((row) => ({ id: `item-${row.id}`, sourceId: row.id, tier: "PUSH" }));
   });
   override("linkedInboxAccount.findMany", (arg) => {
     const select = (arg as { select?: Record<string, unknown> }).select ?? {};

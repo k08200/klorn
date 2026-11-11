@@ -47,7 +47,7 @@
   <span class="nav-links" id="nav-menu" role="group" aria-label="Sections" data-site-nav><a href="/#accounts">Accounts</a><a href="/#lanes">Lanes</a><a href="/pricing/">Pricing</a><a href="/security/">Security</a><a href="/blog/">Blog</a></span>
   <a class="nav-login" href="https://app.klorn.ai/login">Log in</a>
   <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Download">Download</a>
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.3.0/Klorn-windows-setup.exe" data-win-label="Download">Download</a>
 </div></nav>
 
 <main id="main">
@@ -56,6 +56,7 @@
   <article>
   <h1>A cost cap has <em>two</em> failure directions.</h1>
   <p class="meta">2026-08-26 · postmortem-derived · LLM cost control</p>
+  <p><em>Update, November 2026: Klorn is moving from a user-facing stop to per-plan daily targets met by routing work to cheaper paths, and keeps the fail-closed meter described here as the anomaly brake that stops a runaway loop. The rules below still describe that meter.</em></p>
 
   <p class="thesis">Everyone builds LLM cost caps against one failure: runaway spend. But a cap that checks a ledger before every call has a second failure direction, and it's the one that actually bit me — when the <em>bookkeeping</em> over-records, a healthy service throttles itself to death against a ceiling it never really reached. Under-billing loses money. Over-billing loses uptime.</p>
 
@@ -72,7 +73,7 @@
   <p>What saved the incident from being a real outage is that the cap sits above a floor: with the LLM blocked, a deterministic keyword path still produces the same four features and mail keeps classifying — worse (82.1% on the committed set, urgent recall 46.2%), but visibly worse, with misses landing in the visible queue rather than vanishing. When the provider comes back, a bounded sweep re-judges what degraded. A cap you can hit without a degraded mode underneath is a self-inflicted denial of service with a billing UI.</p>
 
   <h2>Rule 4 — The user's ceiling is a promise; keep it boring</h2>
-  <p>Klorn's pitch includes "it stops rather than overspends," which means the cap can never be quietly widened to paper over a bookkeeping bug. The ceiling stays fixed; the engineering burden lands where it belongs — on making the meter honest. If your product makes the same promise, budget for the meter being the hard part.</p>
+  <p>Klorn's pitch included "it stops rather than overspends," which means the cap can never be quietly widened to paper over a bookkeeping bug. The ceiling stays fixed; the engineering burden lands where it belongs — on making the meter honest. If your product makes the same promise, budget for the meter being the hard part.</p>
 
   <p>Numbers in this post re-run from the repo (<code>pnpm eval:judge</code> with no provider key measures the degraded floor). The guard, its ledger and the rounding tests are AGPL: <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">github.com/k08200/klorn</a>.</p>
   <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Try Klorn free</a></div>

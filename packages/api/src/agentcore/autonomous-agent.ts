@@ -47,7 +47,7 @@ import { sendPushNotification } from "../notify/push.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
-import { gatherUserContext } from "./agent-context.js";
+import { type AgentContext, gatherAgentContext } from "./agent-context.js";
 import { recordDedupKey, wasRecentlyDeduped } from "./agent-dedup.js";
 import {
   areSimilarProposalIssues,
@@ -65,6 +65,7 @@ import {
   LEGACY_AGENT_NOTIFICATION_PREFIX,
   safeJson,
 } from "./agent-proposal-dedup.js";
+import { notifyRepeatsUrgentMail } from "./agent-urgent-overlap.js";
 import { proposalPushMailFields } from "./proposal-push-target.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 
@@ -260,7 +261,7 @@ function categoryForAgentNotification(category: unknown): NotifCategory {
 
 /**
  * True when the context has nothing worth a real LLM call: no tasks, no
- * calendar, no emails — OR gatherUserContext's own outer catch fired
+ * calendar, no emails — OR gatherAgentContext's own outer catch fired
  * (context === ""). Without the empty-string branch, a total context
  * failure fell through to a real, paid LLM call with a blank user message
  * instead of skipping the tick the way every other failure mode does.
@@ -317,7 +318,7 @@ export async function runAgentForUser(
     const { buildPlaybookHintForPrompt } = await import("./playbooks.js");
     const { buildRejectionHintForPrompt } = await import("../learning/rejection-hint.js");
     const [
-      context,
+      agentContext,
       feedback,
       memoryContext,
       proposalHistory,
@@ -328,11 +329,11 @@ export async function runAgentForUser(
       playbookHint,
       rejectionHint,
     ] = await Promise.all([
-      // gatherUserContext is internally fail-soft per query now (agent-context.ts),
+      // gatherAgentContext is internally fail-soft per query now (agent-context.ts),
       // but still add the same outer safety net as its 9 siblings here — a
       // future change adding a new non-fail-soft branch there shouldn't be
       // able to abort the whole agent cycle for this user again.
-      gatherUserContext(userId).catch(() => ""),
+      gatherAgentContext(userId).catch((): AgentContext => ({ text: "", emails: [] })),
       getAgentFeedback(userId),
       loadMemoriesForPrompt(userId).catch(() => ""),
       getProposalHistory(userId).catch(() => ""),
@@ -343,6 +344,8 @@ export async function runAgentForUser(
       buildPlaybookHintForPrompt(userId).catch(() => ""),
       buildRejectionHintForPrompt(userId).catch(() => ""),
     ]);
+    // contextEmails[N - 1] is the mail the prompt numbers "Email #N".
+    const { text: context, emails: contextEmails } = agentContext;
 
     if (isAgentContextEmpty(context)) {
       await logAgentAction(userId, "skip", "No tasks, calendar, or emails to analyze");
@@ -889,6 +892,13 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
             const dedupKeyHit = dedupKey && wasRecentlyDeduped(userId, dedupKey);
             const key = getNotifKey(args.title);
             const alreadyNotified = await hasRecentNotification(userId, key);
+            // One urgent mail rings once: the firewall / urgent sweep already
+            // rang this mail, so a second (ambient) ring and bell row for it
+            // only repeat that alert (agent-urgent-overlap.ts).
+            const repeatsUrgentMail =
+              !dedupKeyHit &&
+              !alreadyNotified &&
+              (await notifyRepeatsUrgentMail(userId, args, contextEmails));
 
             if (dedupKeyHit || alreadyNotified) {
               result = JSON.stringify({
@@ -898,6 +908,18 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   : "duplicate notification",
               });
               await logAgentAction(userId, "skip", `Dedup: "${args.title}" already sent`);
+            } else if (repeatsUrgentMail) {
+              result = JSON.stringify({
+                skipped: true,
+                reason: "the user was already alerted to this email as urgent mail",
+              });
+              await logAgentAction(
+                userId,
+                "skip",
+                `Already rang as urgent mail: "${args.title}"`,
+                "notify_user",
+                args.category,
+              );
             } else {
               // Mark as agent-generated notification
               const agentTitle = `${AGENT_NOTIFICATION_PREFIX} ${args.title}`;
