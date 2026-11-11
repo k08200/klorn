@@ -113,7 +113,7 @@ jobs:
           rm -f "$RUNNER_TEMP/upload.jks"
       # Kept on the run either way: Google requires the first bundle of a new
       # app to be uploaded by hand in the Play Console.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: env.HAS_SECRETS == 'true'
         with:
           name: klorn-android-release
