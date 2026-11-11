@@ -17,8 +17,8 @@ import Fastify from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildSentryInitOptions } from "../sentry.js";
 import {
-  initCapturingSentry,
   SENTRY_FLUSH_MS as FLUSH_MS,
+  initCapturingSentry,
   type SentryCapture,
   TEST_SENTRY_DSN,
 } from "./helpers/sentry-capture.js";
