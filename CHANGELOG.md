@@ -64,7 +64,7 @@ calendar time.
   names the mail it is about (`emailRef`, the `Email #N` number). An email
   notification that names no mail is dropped only when every mail in the
   agent's context already rang. Every other agent notification rings as
-  before, on the ambient bucket.
+  before, on the ambient bucket (#1682).
 - **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**
   - A spam-lane item still in Gmail's Spam folder is no longer resolved as
     "left the inbox". It resolves once its mail leaves Spam without returning
