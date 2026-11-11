@@ -5,17 +5,19 @@
  * user-supplied provider key travelling in a REQUEST URL reaches Sentry by two
  * other routes that `beforeSend` never sees:
  *
- *   - the outgoing-fetch BREADCRUMB, which stores the raw query string in
- *     `data["http.query"]` (@sentry/node-core
- *     build/cjs/utils/outgoingFetchRequest.js:152 — `data.url` is sanitized,
- *     `http.query` is not), and rides along on the next captured error;
+ *   - the outgoing-fetch BREADCRUMB, which stores the query string beside the
+ *     sanitized `data.url` (`http.query` in v10; `url.query` in @sentry/node
+ *     11.11.0 build/cjs/utils/outgoingFetchRequest.js:152, filtered only by
+ *     Sentry's generic name denylist), and rides along on the next captured
+ *     error;
  *   - the fetch SPAN, whose attributes include both `url.full` (the whole URL)
- *     and `url.query` (@sentry/node-core
- *     build/cjs/integrations/node-fetch/undici-instrumentation.js:108-110).
+ *     and `url.query` (@sentry/node 11.11.0
+ *     build/cjs/integrations/node-fetch/undici-instrumentation.js:99-102).
  *
  * These are synthetic events on purpose: no DSN, no network. They assert the
  * shape of what the hooks hand back, so the guard holds even if the only
- * producer of a `?key=` URL goes away.
+ * producer of a `?key=` URL goes away. sentry-wiring.test.ts is the other
+ * half: it proves the real SDK calls these hooks at all.
  */
 
 import { describe, expect, it } from "vitest";
@@ -227,9 +229,9 @@ describe("scrubSentryErrorEvent", () => {
  *
  * The big one is structural: @sentry/core runs `beforeSend` ONLY for error
  * events and `beforeSendTransaction` ONLY for transactions
- * (build/cjs/client.js:734 `isErrorEvent(processedEvent) && beforeSend`), while
- * `requestDataIntegration()` — a node-core default
- * (build/cjs/sdk/index.js:33) — attaches `event.request` to BOTH. So a
+ * (11.11.0 build/cjs/client.js:765 `isErrorEvent(processedEvent) && beforeSend`),
+ * while `requestDataIntegration()` — an @sentry/node default
+ * (build/cjs/sdk/index.js:37) — attaches `event.request` to BOTH. So a
  * transaction event carried the whole playground request body, cookies and
  * `Authorization` header straight past a `beforeSend` that looked airtight.
  */

@@ -7,18 +7,26 @@
  * `beforeSend` never touches, both enabled by default.
  *
  *   BREADCRUMB — the outgoing-fetch breadcrumb sanitizes `data.url` but then
- *   stores the raw query string alongside it:
- *     @sentry/node-core build/cjs/utils/outgoingFetchRequest.js
- *       data["http.query"] = parsedUrl.search;
- *   Breadcrumbs ride along on the next captured error, so any later
- *   `captureError` ships them — judge/poc-judge.ts is the realistic caller.
+ *   stores the query string alongside it:
+ *     @sentry/node build/cjs/utils/outgoingFetchRequest.js (11.11.0)
+ *       [attributes.URL_QUERY]: filterCollectedUrlQuery(getUrlQuery(parsedUrl.search))
+ *   (v10 stored it raw as `http.query`.) Breadcrumbs ride along on the next
+ *   captured error, so any later `captureError` ships them —
+ *   judge/poc-judge.ts is the realistic caller.
  *
  *   SPAN — the fetch span records the WHOLE url plus its query:
- *     @sentry/node-core build/cjs/integrations/node-fetch/undici-instrumentation.js
- *       [attributes.URL_FULL]: requestUrl.toString(),
- *       [attributes.URL_QUERY]: requestUrl.search,
+ *     @sentry/node build/cjs/integrations/node-fetch/undici-instrumentation.js
+ *       [attributes.URL_FULL]: filterCollectedUrl(requestUrl.toString()),
+ *       [attributes.URL_QUERY]: filterCollectedUrlQuery(getUrlQuery(requestUrl.search)),
  *
- * So the scrub has to happen at all four hooks, not just one. The functions
+ * The `filterCollected*` calls (v11) apply Sentry's generic name denylist,
+ * which does not know this codebase's parameter names; nothing here relies on
+ * them. So the scrub has to happen at all four hooks, not just one.
+ * `scrubSentryTransaction` and `scrubSentrySpan` expect the static
+ * transaction/span shapes, which only exist under the static trace lifecycle
+ * ../sentry.ts pins: v11's default span streaming never calls
+ * `beforeSendTransaction` and hands `beforeSendSpan` a `StreamedSpanJSON`.
+ * sentry-wiring*.test.ts prove the wiring against the real SDK. The functions
  * below are generic over the payload type so they can be handed straight to
  * `beforeBreadcrumb` / `beforeSendSpan` / `beforeSendTransaction` /
  * `beforeSend` without importing Sentry's types here — this module stays pure
@@ -80,9 +88,9 @@ interface ScrubbableRequest {
  * Fields that ride on BOTH event types and so must be scrubbed by both hooks.
  *
  * @sentry/core runs `beforeSend` only for error events and
- * `beforeSendTransaction` only for transactions (build/cjs/client.js:734),
- * while `requestDataIntegration()` — a node-core default
- * (build/cjs/sdk/index.js:33) — attaches `request` to both. Scrubbing these in
+ * `beforeSendTransaction` only for transactions (11.11.0
+ * build/cjs/client.js:765), while `requestDataIntegration()` — an @sentry/node
+ * default (build/cjs/sdk/index.js:37) — attaches `request` to both. Scrubbing these in
  * one hook only is how a transaction event shipped the whole playground
  * request body past a `beforeSend` that looked airtight.
  */
