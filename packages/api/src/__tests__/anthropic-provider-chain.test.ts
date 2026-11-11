@@ -163,7 +163,33 @@ describe("Anthropic provider end-to-end through the lazy adapter", () => {
     expect(res.choices[0].message.content).toBe("ok");
     expect(seen[0].url).toBe("https://api.anthropic.com/v1/messages");
     expect(seen[0].headers.get("anthropic-workspace-id")).toBe("wrkspc_01TEST");
-    expect(seen[0].headers.get("x-api-key")).toBe("an-key");
+  });
+
+  it("sends API version 2026-10-21 and the key as a bearer token (SDK v1)", async () => {
+    // Pinned so a proxy, log filter or key check keyed on X-Api-Key is
+    // revisited when the SDK's wire contract changes again.
+    const seen: Array<{ url: string; headers: Headers }> = [];
+    stubAnthropicFetch(seen);
+    const provider = (await import("../providers/index.js")).getProvider("anthropic");
+    await provider?.call(
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] } as never,
+      "claude-haiku-5-5",
+    );
+    expect(seen[0].headers.get("anthropic-version")).toBe("2026-10-21");
+    expect(seen[0].headers.get("authorization")).toBe("Bearer an-key");
+    expect(seen[0].headers.has("x-api-key")).toBe(false);
+  });
+
+  it("authenticates with the configured key only, never ANTHROPIC_AUTH_TOKEN from the environment", async () => {
+    vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "server-bearer-token");
+    const seen: Array<{ url: string; headers: Headers }> = [];
+    stubAnthropicFetch(seen);
+    const provider = (await import("../providers/index.js")).getProvider("anthropic");
+    await provider?.call(
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] } as never,
+      "claude-haiku-5-5",
+    );
+    expect(seen[0].headers.get("authorization")).toBe("Bearer an-key");
   });
 
   it("sends no workspace header when ANTHROPIC_WORKSPACE_ID is unset (workspace-scoped keys)", async () => {
