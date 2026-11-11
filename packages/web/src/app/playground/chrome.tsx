@@ -6,6 +6,12 @@ import { useT } from "@/lib/i18n";
 export const METHODOLOGY_URL = "https://klorn.ai/methodology/";
 const PRICING_URL = "https://klorn.ai/pricing/";
 const PRIVACY_URL = "https://klorn.ai/privacy/";
+/**
+ * The playground is where people who have not signed up meet Klorn, and for an
+ * AGPL project most of them want to read the code before an account. Until
+ * this link existed, nothing anywhere in packages/web pointed at the repo.
+ */
+const SOURCE_URL = "https://github.com/k08200/klorn";
 /** Sign-up is direct (no waitlist): the login screen creates the account. */
 export const START_URL = "/login";
 
@@ -50,6 +56,9 @@ export function PlaygroundHeader() {
         <a href={PRICING_URL} className={`${NAV_LINK} max-md:hidden`}>
           {t("playground.nav.pricing")}
         </a>
+        <a href={SOURCE_URL} className={`${NAV_LINK} max-md:hidden`}>
+          {t("playground.nav.source")}
+        </a>
         <Link href={START_URL} className={`${NAV_LINK} max-md:hidden`}>
           {t("playground.nav.login")}
         </Link>
@@ -68,6 +77,9 @@ export function PlaygroundFooter() {
     <footer className="flex flex-wrap justify-center gap-2 px-4 pb-8 md:hidden">
       <a href={METHODOLOGY_URL} className={NAV_LINK}>
         {t("playground.nav.methodology")}
+      </a>
+      <a href={SOURCE_URL} className={NAV_LINK}>
+        {t("playground.nav.source")}
       </a>
       <a href={PRIVACY_URL} className={NAV_LINK}>
         {t("playground.footer.privacy")}

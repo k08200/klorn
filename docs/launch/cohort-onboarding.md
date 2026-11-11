@@ -26,7 +26,8 @@ correction (`DecisionLabel.outcome`) → `decision-metrics` counts it.
    the email/password sign-up paths require an APPROVED `Waitlist` row
    (`routes/auth.ts` — the Google path redirects `?error=invite_only` otherwise).
 
-   ⚠️ The OAuth audience is **In production**, unverified (verified 2026-08-04) — leave it
+   ⚠️ The OAuth audience is **In production** (checked 2026-08-04; Google's verification
+   review completed 2026-10-03) — leave it
    there. Reverting to Testing would expire every authorization **7 days after consent**,
    sending the whole cohort back through the unverified-app screen weekly, which destroys
    exactly the sustained usage this phase exists to produce.
@@ -36,7 +37,8 @@ correction (`DecisionLabel.outcome`) → `decision-metrics` counts it.
    Without it a single traffic spike burns all 100 slots permanently. Confirm it from
    outside the console: `GET /api/auth/signup-status` must return `{"open":false}`.
    The cap lifts only when restricted-scope verification clears (see
-   `google-oauth-verification.md`).
+   `google-oauth-verification.md`) — that review completed 2026-10-03; confirm the
+   current user cap under Audience in the console.
 
 3. **Set `ADMIN_EMAILS` to your account** (`k0820086@gmail.com`) so you can watch the data:
    `decision-metrics` (per-user PUSH recall / over-suppression) and the override count.

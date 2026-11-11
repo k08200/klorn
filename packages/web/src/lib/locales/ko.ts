@@ -2672,6 +2672,7 @@ const ko: Record<string, string> = {
   "playground.brand.section": "플레이그라운드",
   "playground.nav.methodology": "채점 방식",
   "playground.nav.pricing": "요금",
+  "playground.nav.source": "소스 코드",
   "playground.nav.login": "로그인",
   "playground.nav.startFree": "무료로 시작",
   "playground.title": "메일 한 통이 어떻게 분류되는지 확인하세요.",

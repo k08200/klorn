@@ -1,6 +1,6 @@
 [package]
 name = "klorn-desktop-win"
-version = "0.2.0"
+version = "0.3.0"
 description = "Klorn for Windows — a thin shell around the hosted web app"
 edition = "2021"
 license = "AGPL-3.0-only"
