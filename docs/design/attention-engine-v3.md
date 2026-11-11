@@ -83,6 +83,8 @@ Code: `packages/api/src/judge/v3/` (`facts-schema.ts` is the canonical type and 
 - **Header signals.** The detector results (list mail, automated sender, spam, Gmail category, calendar file, recipient counts and position) are stored with the facts. They are booleans and counts, never mail text, and replay can read them.
 - **What the model sees.** Mail fields are wrapped as untrusted. Invisible format characters (zero-width, bidi, Unicode tag characters) are dropped first. Recipients go as counts, never third-party addresses.
 - **Relayed asks.** A system notification that relays a person's request or assignment ("X assigned you issue Y", "X requested your review") is an ask, quoting the relayed words.
+- **Kinds.** The prompt defines every `kind` on one line (`facts-prompt.ts`). Welcome, onboarding and follow-up mail sent because the user signed up or ordered is `notification` even when it also advertises; `promotion` is mail whose main purpose is to sell. The kind does not replace asks: a notification that relays a request keeps it. Measured in §3(5) "Facts prompt: kind definitions".
+- **Malformed answer.** An answer that is not JSON or not a fact set is asked for once more with the same request (Haiku's tool output sometimes breaks, and at temperature 0 the break does not always repeat). A well-formed answer is never retried. Both calls are billed. When the retry parses, the stored usage covers both calls. When no answer parses, no usage is stored: the cost ledger is the full count.
 - **No LLM answer.** The extractor stores no facts (`factsSource = "none"`), only the certain pre-facts and the signals. The keyword fallback belongs to the policy layer (P3 `keywordFactsV1`), which owns parity with today's keyword lanes.
 
 Open for facts v1.1 (not changed here): `risk` and `transaction.actionRequired` carry no evidence. A mail can claim `security_alert` without a quote, so policy v3 must not let risk alone interrupt without another signal. A `riskEvidence` field is the proposed fix.
@@ -375,7 +377,27 @@ What v3.2 answers and leaves:
 - Founder decision 1 (the first-contact gate) is now a choice among measured options: v3.2 as built (pay asks and events), pay asks only (closes phish-028 at no measured cost, leaves phish-029), or neither. The event half's real cost is the open number above.
 - Founder decision 2 (the eval-046 bar) is unchanged by v3.2: v3.1 and v3.2 reach 144/156 against v2's 137/156 only when eval-046's sender is trusted and, for v3.2, the other senders are known.
 - Founder decision 3 (the window): fixed windows up to ±72h buy nothing measured. A business-week window would close eval-036 at the cost of benign-013 and a time-zone change.
-- Not changed: the Namecheap extraction error (real SILENT precision on Haiku 82.4%). A prompt fix changes facts for every version and every stored row, so it was not attempted here.
+- Not changed here: the Namecheap extraction error. It is addressed in the facts prompt below.
+
+**Facts prompt: kind definitions (2026-11-11).** The production prompt listed the kinds without definitions. Haiku extracted two Namecheap mails labelled QUEUE as `kind: promotion` in every run, so v3.1 filed them SILENT: "Welcome to Namecheap" and the CEO's follow-up after a first order.
+- The P1 bench prompt already had one-line definitions ("promotion (marketing or sales)") and made the same error, so the fix adds a boundary. Mail sent because the user signed up or ordered is `notification`; `promotion` is mail whose main purpose is to sell (§3(1) "Kinds").
+- The longer prompt raised malformed tool answers on the phishing set from 0/270 to 10/270. Those answers leaked a tool tag or stopped after `asks`, and the same request sent again usually parsed. One retry on a malformed answer (§3(1) "Malformed answer") brought it back to 0/135.
+- Measured with the production extractor, Haiku 5.5, 3 runs per set, v3.1, cold start, same setup as "Which extractor these replays measured". Small sample: temperature 0, so runs are not independent draws.
+
+| | gate PUSH recall | gate PUSH precision | gate SILENT precision | gate MEETING | real SILENT precision | real overall | phishing: unparsed / flagged / genuine flagged | phishing interrupts v3.1 / v3.2 cold / v3.2 known |
+|---|---|---|---|---|---|---|---|---|
+| main (e1c022bc) | 66.7% (26/39) | 100% | 100% (27/27) | 9/12 | 77.8% (21/27) | 85/159 | 0/135 / 84/90 / 0/45 | 6 / 0 / 6 |
+| definitions, no retry | 76.9% (30/39) | 100% | 100% (27/27) | 9/12 | 100% (21/21) | 93/159 | 5/135 / 81/87 / 0/43 | 6 / 0 / 6 |
+| definitions + retry (shipped) | 76.9% (30/39) | 100% (30/30) | 100% (27/27) | 11/12 | 100% (21/21) | 91/159 | 0/135 / 84/90 / 0/45 | 6 / 0 / 6 |
+
+- Real-set LLM `promotion` answers went from 6 to 0. SILENT recall did not change (21/63 on real): every real SILENT hit comes from the marketing fast path.
+- The gate gains are:
+  - eval-037 "Quick call today?" PUSHes in every run;
+  - eval-039 PUSHes in every run. On main it carried `phishing_suspect` in 1 run.
+- Gate PUSH recall is still below v2's 92.3% for Haiku. The remaining misses are eval-036 (the 24h window), eval-046 (sender trust) and eval-044, which Haiku extracts as bulk and ambiguous.
+- Side effect: the bulk "hit reply" feedback lines of two mails labelled QUEUE now sometimes extract as reply asks, which files them QUEUE (the Resend product update; the Namecheap CEO letter in some runs).
+- In the gate and real runs no answer was malformed, so no retry fired there (one call per item). The real-overall difference between the last two rows is run-to-run variation of the same configuration.
+- Facts rows are not re-versioned (`factsVersion` stays 1): the schema is unchanged, and rows extracted before and after the deploy are told apart by `extractedAt`.
 
 Floors:
 - `ambiguous` never lands in SILENT or INFO. It goes to QUEUE, like v2's low-confidence rule.
