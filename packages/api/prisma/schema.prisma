@@ -2782,6 +2782,15 @@ model LlmUsageLog {
   totalTokens        Int      @default(0)
   usageMissing       Boolean  @default(false) // provider returned no usage (e.g. streaming)
   estimatedCostCents Int      @default(0) // what the pre-bill gate charged for this call
+  // Actual cost from the token counts (cache reads/writes priced), in
+  // micro-cents (1¢ = 10,000) so sub-cent calls do not round to 0. This is
+  // what the call cost, whoever paid: see ownedByUser.
+  costMicroCents     Int      @default(0)
+  // Module that made the call ("mail/email-summarize"), read from the stack
+  // by llm/llm-caller.ts unless the call site passed a feature. null = unknown.
+  feature            String?
+  // Served on the user's own provider key (BYOK): Klorn did not pay for it.
+  ownedByUser        Boolean  @default(false)
   source             String   @default("foreground") // "foreground" | "background"
   createdAt          DateTime @default(now())
 
