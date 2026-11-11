@@ -25,6 +25,14 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@prisma/client"
         update-types: ["version-update:semver-major"]
+      # @types/node must describe the Node the code runs on, and that is 22
+      # everywhere: render.yaml NODE_VERSION, Dockerfile.api/.web node:22-slim,
+      # CI setup-node. Types for a newer major type-check calls to APIs Node 22
+      # does not have, so a real runtime break compiles cleanly (#1678 offered
+      # 26). api/web currently sit on ^25 — realigning them to ^22 is separate
+      # work. Raise this bound in the same change that moves the runtime.
+      - dependency-name: "@types/node"
+        versions: [">=23"]
     # One PR per batch of routine bumps — review load stays flat. Security
     # updates are never grouped by Dependabot and still arrive individually.
     groups:
