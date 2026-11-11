@@ -32,7 +32,7 @@
     "eval:judge:context": "tsx scripts/poc-accuracy.ts --in=eval/judge-context-eval-set.json --compare-context --concurrency=1 --delay=4500"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.133.0",
+    "@anthropic-ai/sdk": "1.6.0",
     "@fastify/cors": "^11.4.1",
     "@fastify/formbody": "^9.0.1",
     "@fastify/helmet": "^13.2.0",
