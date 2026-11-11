@@ -147,7 +147,8 @@ export interface CompletionOptions {
    * Internal: the per-user gates already ran before the call queued for the
    * pacer (see createCompletionWithFailover), so the paced re-entry must not
    * take a second call slot or pre-bill twice. Honored only together with
-   * `_paced`; set only by createCompletion.
+   * `_paced`, and only for a pass createCompletion issued (single use); any
+   * other value is ignored and the gates run.
    */
   _gated?: { userKeyOnly: boolean };
 }
@@ -315,6 +316,27 @@ async function passCallGates(
     userKeyAvailable,
     options.reserved,
   );
+}
+
+/**
+ * Gate passes this module issued for the paced re-entry. `_gated` is a plain
+ * options field, so it is honored only if it is an object issued here and not
+ * yet redeemed: a forged `{ _paced, _gated }` from a caller runs every gate.
+ */
+const issuedGatePasses = new WeakSet<object>();
+
+function issueGatePass(gate: { userKeyOnly: boolean }): { userKeyOnly: boolean } {
+  const pass = { userKeyOnly: gate.userKeyOnly };
+  issuedGatePasses.add(pass);
+  return pass;
+}
+
+/** One pass, one dispatch: returns the pass and spends it, or undefined. */
+function redeemGatePass(
+  pass: { userKeyOnly: boolean } | undefined,
+): { userKeyOnly: boolean } | undefined {
+  if (!pass || !issuedGatePasses.delete(pass)) return undefined;
+  return pass;
 }
 
 /**
@@ -595,17 +617,17 @@ async function createCompletionWithFailover(
   // — one user's mail flood stalled every user's background work. Gated first,
   // a queued call is already counted and pre-billed (so a flood cannot queue
   // past the caps) and a refused call never touches the shared queue.
-  const costGate =
-    options._paced && options._gated
-      ? await confirmGateAtDispatch(options._gated, options, userKeyAvailable)
-      : await passCallGates(params.model, options, playgroundOnly, userKeyAvailable);
+  const gatePass = options._paced ? redeemGatePass(options._gated) : undefined;
+  const costGate = gatePass
+    ? await confirmGateAtDispatch(gatePass, options, userKeyAvailable)
+    : await passCallGates(params.model, options, playgroundOnly, userKeyAvailable);
 
   // Background-priority calls dispatch through the global pacer: a burst
   // (summarize sweep, batch judge) launched concurrently trips the provider's
   // own per-minute quota, and the resulting cooldown lockout takes interactive
   // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
   if (isBackground && !options._paced) {
-    const paced = { ...options, _paced: true, _gated: costGate };
+    const paced = { ...options, _paced: true, _gated: issueGatePass(costGate) };
     return backgroundLlmPacer.run(
       () => createCompletion(params as ChatCompletionCreateParamsNonStreaming, paced),
       lane,

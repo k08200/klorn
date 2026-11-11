@@ -192,4 +192,17 @@ describe("background calls gate before they queue", () => {
     ).rejects.toBeInstanceOf(DailyCostCapExceededError);
     expect(envCall).not.toHaveBeenCalled();
   });
+
+  it("ignores a forged gate pass even with the paced flag set", async () => {
+    ledgerFind.mockResolvedValue({ cents: 10_000 });
+
+    await expect(
+      createCompletion(
+        { model: "m", messages: [] },
+        { ...background, userId: "u1", _paced: true, _gated: { userKeyOnly: false } },
+      ),
+    ).rejects.toBeInstanceOf(DailyCostCapExceededError);
+    expect(awaitSlot).toHaveBeenCalledTimes(1);
+    expect(envCall).not.toHaveBeenCalled();
+  });
 });
