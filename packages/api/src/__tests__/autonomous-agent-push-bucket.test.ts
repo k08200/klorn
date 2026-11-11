@@ -57,7 +57,10 @@ vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => ({ userModel: null })),
 }));
 vi.mock("../agentcore/agent-context.js", () => ({
-  gatherUserContext: vi.fn(async () => "## Open Tasks (1)\n- [HIGH] Send the deck to Minsu"),
+  gatherAgentContext: vi.fn(async () => ({
+    text: "## Open Tasks (1)\n- [HIGH] Send the deck to Minsu",
+    emails: [],
+  })),
 }));
 vi.mock("../billing/token-usage.js", () => ({ trackTokenUsage: vi.fn(async () => undefined) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
