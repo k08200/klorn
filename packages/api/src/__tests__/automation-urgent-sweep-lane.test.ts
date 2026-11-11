@@ -12,6 +12,13 @@
  * judge has not reached yet waits for the judge's own push (the firewall rings it when
  * the item lands). Users under policy v3 stand down from the sweep as before.
  *
+ * One exception keeps the pre-#1687 net for a judge outage: when the LLM did not judge
+ * the mail (DecisionLabel.decidedBy = "keyword-fallback") and the fallback put it in
+ * QUEUE, which is where an urgent mail from an ordinary person lands (poc-judge.ts calls
+ * that "a missed interrupt"), the keyword priority still rings it, unless a human or an
+ * MCP agent has moved or confirmed the lane since. Like the firewall push, the sweep
+ * rings only mail received in the last 6 hours (FIREWALL_PUSH_RECENCY_MS).
+ *
  * Harness: the urgent-sweep history test's (automation-urgent-sweep-history.test.ts),
  * one real tick of `startAutomationScheduler` over a prisma whose every call resolves
  * empty unless a test overrides it. AttentionItem reads are answered by filtering a
@@ -169,6 +176,17 @@ interface Item {
   sourceId: string;
   status: "OPEN" | "RESOLVED" | "DISMISSED" | "SNOOZED";
   tier: string | null;
+  isManualOverride: boolean;
+  agentTierSetAt: Date | null;
+}
+
+/** The decision ledger row of a mail (DecisionLabel): which path set its lane. */
+interface Label {
+  userId: string;
+  source: string;
+  sourceId: string;
+  decidedBy: string | null;
+  outcome: string | null;
 }
 
 const urgent = (id: string, gmailId: string): UrgentRow => ({
@@ -182,14 +200,42 @@ const urgent = (id: string, gmailId: string): UrgentRow => ({
   linkedInboxAccountId: null,
 });
 
-const item = (emailId: string, tier: string | null, status: Item["status"] = "OPEN"): Item => ({
+const item = (
+  emailId: string,
+  tier: string | null,
+  status: Item["status"] = "OPEN",
+  moved: Partial<Pick<Item, "isManualOverride" | "agentTierSetAt">> = {},
+): Item => ({
   id: `item-${emailId}`,
   userId: USER,
   source: "EMAIL",
   sourceId: emailId,
   status,
   tier,
+  isManualOverride: false,
+  agentTierSetAt: null,
+  ...moved,
 });
+
+const label = (
+  emailId: string,
+  decidedBy: string | null,
+  outcome: string | null = null,
+): Label => ({
+  userId: USER,
+  source: "EMAIL",
+  sourceId: emailId,
+  decidedBy,
+  outcome,
+});
+
+/** An urgent mail received `ageMs` ago and synced just now. */
+const receivedAgo = (row: UrgentRow, ageMs: number): UrgentRow => ({
+  ...row,
+  receivedAt: new Date(NOW.getTime() - ageMs),
+});
+
+const HOUR_MS = 60 * 60 * 1000;
 
 function override(key: string, fn: (...args: unknown[]) => unknown) {
   m.overrides.set(key, fn);
@@ -197,14 +243,41 @@ function override(key: string, fn: (...args: unknown[]) => unknown) {
 
 const argsOf = (key: string) => m.calls.filter((c) => c.key === key).map((c) => c.args[0]);
 
-/** A where value as Prisma reads it: a literal, or `{ in: [...] }`. */
+/** A where value as Prisma reads it: a literal, `{ in: [...] }` or `{ gte: Date }`. */
 function matches(value: unknown, condition: unknown): boolean {
   if (condition === undefined) return true;
   if (condition && typeof condition === "object" && "in" in condition) {
     return (condition as { in: unknown[] }).in.includes(value);
   }
+  if (condition && typeof condition === "object" && "gte" in condition) {
+    const floor = (condition as { gte: Date }).gte;
+    return value instanceof Date && value.getTime() >= floor.getTime();
+  }
   return value === condition;
 }
+
+/** A row against the named columns of a where clause, and one of its `OR` branches if any. */
+function rowMatches<Row>(
+  row: Row,
+  where: Record<string, unknown>,
+  columns: readonly (keyof Row)[],
+) {
+  const all = (clause: Record<string, unknown>) =>
+    columns.every((column) => matches(row[column], clause[column as string]));
+  const branches = (where.OR as Array<Record<string, unknown>> | undefined) ?? [{}];
+  return all(where) && branches.some(all);
+}
+
+const ITEM_COLUMNS = [
+  "userId",
+  "source",
+  "sourceId",
+  "status",
+  "tier",
+  "isManualOverride",
+  "agentTierSetAt",
+] as const;
+const LABEL_COLUMNS = ["userId", "source", "sourceId", "decidedBy", "outcome"] as const;
 
 /**
  * The firewall items of mail, answered as the database would for a lookup by mail id
@@ -215,15 +288,17 @@ function itemsTable(items: readonly Item[]) {
   return (arg: unknown) => {
     const where = (arg as { where?: Record<string, unknown> }).where ?? {};
     if (where.source !== "EMAIL" || !where.sourceId) return [];
-    return items.filter(
-      (row) =>
-        matches(row.userId, where.userId) &&
-        matches(row.source, where.source) &&
-        matches(row.sourceId, where.sourceId) &&
-        matches(row.status, where.status) &&
-        matches(row.tier, where.tier),
-    );
+    return items.filter((row) => rowMatches(row, where, ITEM_COLUMNS));
   };
+}
+
+/** The decision ledger rows of mail, answered the same way for a lookup by mail id. */
+function arrangeLedger(labels: readonly Label[]) {
+  override("decisionLabel.findMany", (arg) => {
+    const where = (arg as { where?: Record<string, unknown> }).where ?? {};
+    if (where.source !== "EMAIL" || !where.sourceId) return [];
+    return labels.filter((row) => rowMatches(row, where, LABEL_COLUMNS));
+  });
 }
 
 /** The urgent mail the sweep reads, their firewall items, and the bell rows already written. */
@@ -234,7 +309,10 @@ function arrange(
 ) {
   override("emailMessage.findMany", (arg) => {
     const where = (arg as { where?: Record<string, unknown> }).where ?? {};
-    return where.priority === "URGENT" ? rows : [];
+    if (where.priority !== "URGENT") return [];
+    // Every row was synced in the sweep's last hour; the receipt time is checked
+    // as the database would.
+    return rows.filter((row) => matches(row.receivedAt, where.receivedAt));
   });
   override("attentionItem.findMany", itemsTable(items));
   override("attentionItem.findFirst", (arg) => itemsTable(items)(arg)[0] ?? null);
@@ -344,6 +422,17 @@ describe("the urgent sweep rings only for mail the judge put in the PUSH lane", 
     expect(pushes[0][3]).toEqual({ bucket: "interrupt" });
   });
 
+  it.each([
+    ["a human", { isManualOverride: true }],
+    ["an MCP agent", { agentTierSetAt: new Date(NOW.getTime() - 60_000) }],
+  ] as const)("a PUSH mail %s put there still rings", async (_who, moved) => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "PUSH", "OPEN", moved)]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toHaveLength(1);
+  });
+
   it("a mail with the retired v1 name for PUSH (CALL) still rings", async () => {
     arrange([urgent("mail-1", "18abc")], [item("mail-1", "CALL")]);
 
@@ -443,7 +532,250 @@ describe("the urgent sweep rings only for mail the judge put in the PUSH lane", 
   });
 });
 
+describe("a judge outage: urgent mail the keyword fallback put in QUEUE still rings", () => {
+  it("a keyword-fallback QUEUE mail rings once, as an interrupt naming its item", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "QUEUE")]);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    const rows = urgentRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sourceEmailId).toBe("mail-1");
+    expect(String(rows[0].message)).toMatch(/\[18abc\]$/);
+    const pushes = urgentPushes();
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0][1]).toMatchObject({ attentionItemId: "item-mail-1" });
+    expect(pushes[0][3]).toEqual({ bucket: "interrupt" });
+  });
+
+  it("a keyword-fallback QUEUE mail already rung does not ring again", async () => {
+    const mail = urgent("mail-1", "18abc");
+    arrange(
+      [mail],
+      [item("mail-1", "QUEUE")],
+      [
+        {
+          type: "email",
+          title: "Urgent email",
+          message: "Kim: Subject mail-1 [18abc]",
+          createdAt: new Date(NOW.getTime() - 5 * 60_000),
+        },
+      ],
+    );
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+    expect(urgentPushes()).toEqual([]);
+  });
+
+  it.each([
+    "llm",
+    "fast-path",
+    "sender-prior",
+    "pinned-rule",
+    "learned-rule",
+    null,
+  ])("a QUEUE mail decided by %s does not ring", async (decidedBy) => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "QUEUE")]);
+    arrangeLedger([label("mail-1", decidedBy)]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+    expect(urgentPushes()).toEqual([]);
+  });
+
+  it.each([
+    "SILENT",
+    "INFO",
+    "MEETING",
+  ])("a keyword-fallback mail in %s does not ring", async (tier) => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", tier)]);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+    expect(urgentPushes()).toEqual([]);
+  });
+
+  it("a keyword-fallback QUEUE mail a human moved there does not ring", async () => {
+    arrange(
+      [urgent("mail-1", "18abc")],
+      [item("mail-1", "QUEUE", "OPEN", { isManualOverride: true })],
+    );
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a keyword-fallback QUEUE mail an MCP agent moved there does not ring", async () => {
+    arrange(
+      [urgent("mail-1", "18abc")],
+      [item("mail-1", "QUEUE", "OPEN", { agentTierSetAt: new Date(NOW.getTime() - 60_000) })],
+    );
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a keyword-fallback QUEUE mail whose lane the user confirmed does not ring", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "QUEUE")]);
+    arrangeLedger([label("mail-1", "keyword-fallback", "CONFIRM:QUEUE")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a keyword-fallback QUEUE item that is no longer OPEN does not ring", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "QUEUE", "SNOOZED")]);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a keyword-fallback ledger row with no item yet does not ring", async () => {
+    arrange([urgent("mail-1", "18abc")], []);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a mixed batch rings PUSH and keyword-fallback QUEUE mail in one item read and one ledger read", async () => {
+    arrange(
+      [urgent("push", "18aaa"), urgent("fallback", "18bbb"), urgent("llm-queue", "18ccc")],
+      [item("push", "PUSH"), item("fallback", "QUEUE"), item("llm-queue", "QUEUE")],
+    );
+    arrangeLedger([label("fallback", "keyword-fallback"), label("llm-queue", "llm")]);
+
+    await runOneTick();
+
+    const rows = urgentRows();
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].message)).toMatch(/\[18aaa,18bbb\]$/);
+    const emailReads = (key: string) =>
+      argsOf(key).filter(
+        (a) => (a as { where?: Record<string, unknown> }).where?.source === "EMAIL",
+      );
+    expect(emailReads("attentionItem.findMany")).toHaveLength(1);
+    expect(emailReads("decisionLabel.findMany")).toHaveLength(1);
+  });
+
+  it("does not read the ledger when no urgent mail sits in QUEUE", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "PUSH")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toHaveLength(1);
+    expect(argsOf("decisionLabel.findMany")).toEqual([]);
+  });
+
+  it("a keyword-fallback QUEUE mail from an automated sender does not ring (its floor never interrupts)", async () => {
+    const mail = { ...urgent("mail-1", "18abc"), from: "GitHub <notifications@github.com>" };
+    arrange([mail], [item("mail-1", "QUEUE")]);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+    expect(argsOf("decisionLabel.findMany")).toEqual([]);
+  });
+
+  it("a PUSH mail from an automated sender (a pin or rule put it there) still rings", async () => {
+    const mail = { ...urgent("mail-1", "18abc"), from: "GitHub <notifications@github.com>" };
+    arrange([mail], [item("mail-1", "PUSH")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toHaveLength(1);
+  });
+
+  it("another user's keyword-fallback ledger row does not count", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "QUEUE")]);
+    arrangeLedger([{ ...label("mail-1", "keyword-fallback"), userId: "user-2" }]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a failed ledger lookup still rings PUSH mail, rings no QUEUE mail, and is reported", async () => {
+    arrange(
+      [urgent("push", "18aaa"), urgent("fallback", "18bbb")],
+      [item("push", "PUSH"), item("fallback", "QUEUE")],
+    );
+    override("decisionLabel.findMany", () => {
+      throw new Error("db down");
+    });
+
+    await runOneTick();
+
+    const rows = urgentRows();
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].message)).toMatch(/\[18aaa\]$/);
+    expect(syncFailed()).toEqual([]);
+    expect(m.captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: expect.objectContaining({ scope: "automation.urgent-lane" }),
+      }),
+    );
+  });
+});
+
+describe("the sweep rings only mail received in the firewall push's recency window", () => {
+  it("a PUSH mail received more than 6 hours ago, synced just now, does not ring", async () => {
+    arrange([receivedAgo(urgent("mail-1", "18abc"), 6 * HOUR_MS + 1000)], [item("mail-1", "PUSH")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+    expect(urgentPushes()).toEqual([]);
+  });
+
+  it("a keyword-fallback QUEUE mail received more than 6 hours ago does not ring", async () => {
+    arrange([receivedAgo(urgent("mail-1", "18abc"), 7 * HOUR_MS)], [item("mail-1", "QUEUE")]);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+  });
+
+  it("a PUSH mail received exactly 6 hours ago still rings, as the firewall push would", async () => {
+    arrange([receivedAgo(urgent("mail-1", "18abc"), 6 * HOUR_MS)], [item("mail-1", "PUSH")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toHaveLength(1);
+  });
+});
+
 describe("policy v3: the sweep still stands down", () => {
+  it("rings nothing for a policy user even when the keyword fallback put the mail in QUEUE", async () => {
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "QUEUE")]);
+    arrangeLedger([label("mail-1", "keyword-fallback")]);
+
+    await runOneTick();
+
+    expect(urgentRows()).toEqual([]);
+    expect(urgentPushes()).toEqual([]);
+  });
+
   it("rings nothing for a policy user even when the mail is PUSH", async () => {
     process.env.JUDGE_V3_POLICY = "true";
     process.env.JUDGE_V3_SHADOW = "true";

@@ -46,6 +46,7 @@ import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
+import { FIREWALL_PUSH_RECENCY_MS } from "./judge/firewall-push.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
 import {
   effectiveAutoReplyGuideline,
@@ -75,7 +76,7 @@ import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
-import { openPushItemIdsFailClosed } from "./notify/open-push-mail.js";
+import { urgentSweepItemIdsFailClosed } from "./notify/open-push-mail.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendQuietHoursSummaries } from "./notify/quiet-hours-summary.js";
@@ -899,8 +900,10 @@ export async function ensureUrgentEmailNotification(
  * ONE mail; a batch keeps opening the briefing. No pendingActionId here (no
  * draft lookup on the sweep's hot path). `bellNotificationId` names the row,
  * so the web push's OS tag matches the one an open tab uses for it. A push
- * about one mail also names its lane (PUSH) and the user's language, so it
- * offers the same action buttons as the firewall ring (decision N1).
+ * about one mail also carries lane PUSH and the user's language, so it offers
+ * the same action buttons as the firewall ring (decision N1). The sweep rings
+ * only interrupts, so PUSH is the action set even for the QUEUE mail the keyword
+ * fallback left (urgentSweepItemIdsFailClosed).
  */
 export function urgentMailPushPayload(input: {
   notificationId: string;
@@ -1830,6 +1833,8 @@ async function runUserCycle(
 
         // Check for urgent unread emails — notify only for NEW urgent emails
         // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
+        // and, like the firewall push, received in its recency window: a late sync
+        // or backfill that surfaces old mail does not ring it as urgent now.
         // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
         // under the daily interrupt budget is the only email interrupt
         // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
@@ -1842,6 +1847,7 @@ async function runUserCycle(
                 priority: "URGENT",
                 isRead: false,
                 syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+                receivedAt: { gte: new Date(Date.now() - FIREWALL_PUSH_RECENCY_MS) },
               },
               orderBy: { receivedAt: "desc" },
               select: {
@@ -1858,13 +1864,13 @@ async function runUserCycle(
         // Lane contract (tier-ontology-v2.md): the keyword priority never
         // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
         // here: a safety net for PUSH mail the firewall push did not ring (its
-        // bell row's [gmailId] marker dedupes below). Mail the judge has not
-        // reached yet waits for the judge's own push.
-        const pushItemByEmail = await openPushItemIdsFailClosed(
-          config.userId,
-          keywordUrgent.map((e) => e.id),
-        );
-        const urgentEmails = keywordUrgent.filter((e) => pushItemByEmail.has(e.id));
+        // bell row's [gmailId] marker dedupes below). When the judge's LLM did
+        // not run (outage, spend cap, unusable key) the keyword fallback cannot
+        // reach PUSH for an ordinary sender, so mail it left in QUEUE (and nobody
+        // moved since) rings here too. Mail the judge has not reached yet waits
+        // for the judge's own push.
+        const ringItemByEmail = await urgentSweepItemIdsFailClosed(config.userId, keywordUrgent);
+        const urgentEmails = keywordUrgent.filter((e) => ringItemByEmail.has(e.id));
         // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
         // history: rung once already, never again. Gmail rows read nothing more.
         // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
@@ -1936,9 +1942,9 @@ async function runUserCycle(
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
             // re-fire the web-push / SMS side-effects for the same batch.
             if (notification) {
-              // The lead's open PUSH item (read with the lane above). Lets the
+              // The lead's open item (read with the lane above). Lets the
               // Telegram channel attach tier-override buttons.
-              const attentionItemId = pushItemByEmail.get(newUrgent[0].id) ?? null;
+              const attentionItemId = ringItemByEmail.get(newUrgent[0].id) ?? null;
 
               sendPushNotification(
                 config.userId,
