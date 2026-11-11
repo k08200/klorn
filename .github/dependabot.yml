@@ -16,6 +16,15 @@ updates:
     # 2026-08-13, PR #1081). Bump both together, manually.
     ignore:
       - dependency-name: "@biomejs/biome"
+      # Prisma 7 needs a planned migration (driver adapter, prisma.config.ts,
+      # migrate diff flags, P2010 error shapes, pg pool/TLS defaults), and the
+      # CLI and client must move together. A lone client major bump (#1289)
+      # fails `prisma generate`. Minor/patch updates still flow; remove these
+      # two entries when the migration lands.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
     # One PR per batch of routine bumps — review load stays flat. Security
     # updates are never grouped by Dependabot and still arrive individually.
     groups:
