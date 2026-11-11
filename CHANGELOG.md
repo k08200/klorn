@@ -57,6 +57,14 @@ calendar time.
   `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`) (#1666).
 
 ### Fixed
+- **One urgent mail rings once.** A mail that already rang as urgent mail
+  (the firewall's PUSH, or the urgent-priority sweep) no longer rings a second
+  time through the agent's own notification about it, and no second bell row
+  is written. The agent's context marks such mail, and its `notify_user` tool
+  names the mail it is about (`emailRef`, the `Email #N` number). An email
+  notification that names no mail is dropped only when every mail in the
+  agent's context already rang. Every other agent notification rings as
+  before, on the ambient bucket.
 - **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**
   - A spam-lane item still in Gmail's Spam folder is no longer resolved as
     "left the inbox". It resolves once its mail leaves Spam without returning
