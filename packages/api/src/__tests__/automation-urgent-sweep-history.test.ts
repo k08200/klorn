@@ -205,7 +205,7 @@ function arrange(rows: UrgentRow[], autoReplyRows: Record<string, unknown>[] = [
     if (where.source !== "EMAIL" || !ids) return [];
     return rows
       .filter((row) => ids.includes(row.id))
-      .map((row) => ({ id: `item-${row.id}`, sourceId: row.id }));
+      .map((row) => ({ id: `item-${row.id}`, sourceId: row.id, tier: "PUSH" }));
   });
   override("linkedInboxAccount.findMany", (arg) => {
     const select = (arg as { select?: Record<string, unknown> }).select ?? {};
