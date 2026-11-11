@@ -44,8 +44,11 @@ export interface FactsExtraction {
   provider: string | null;
   /** The user's own (BYOK) key served the call. */
   servedByUserKey: boolean;
-  /** Tokens and estimated USD cost of the served call (0 when the user's key
-   * served); null when no call succeeded. For the shadow's cost-per-day metric. */
+  /** Tokens and estimated USD cost of the answers behind `facts`: both calls
+   * when a malformed answer was retried (0 when the user's key served). Null
+   * when there are no facts, even if a malformed answer was paid for: the cost
+   * ledger, which records every call, is the full count. For the shadow's
+   * cost-per-day metric. */
   usage: FactsUsage | null;
   /** Validator issues and failure notes; no mail text. */
   issues: string[];
@@ -95,8 +98,16 @@ export interface ExtractFactsOptions {
   abandoned?: () => boolean;
 }
 
-/** Transport attempts. A malformed answer is not retried: at temperature 0 it repeats. */
+/** Transport attempts per answer. */
 const FACTS_LLM_ATTEMPTS = 2;
+/**
+ * Extra answers asked for after a malformed one (not JSON, or not a fact set).
+ * Temperature 0 does not make the break always repeat: Haiku's forced-tool
+ * output sometimes leaks a tool tag or stops after `asks`, and the same request
+ * sent again usually parses (eval 2026-11-11). A well-formed answer is never
+ * retried.
+ */
+const MALFORMED_ANSWER_RETRIES = 1;
 /** Output budget: a full fact set is a few hundred tokens; leave headroom. */
 const FACTS_MAX_TOKENS = 1500;
 /** A longer answer is degenerate (and parseLlmJson is slow on huge whitespace runs). */
@@ -240,6 +251,43 @@ function parseAnswer(raw: string, failures: string[]): ReturnType<typeof parseFa
   return parsed;
 }
 
+function addUsage(a: FactsUsage | null, b: FactsUsage | null): FactsUsage | null {
+  if (!a || !b) return a ?? b;
+  return {
+    promptTokens: a.promptTokens + b.promptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    costUsd: a.costUsd + b.costUsd,
+  };
+}
+
+interface ParsedAnswer {
+  answer: ModelAnswer;
+  parsed: ReturnType<typeof parseFactsV1> & { facts: FactsV1 };
+}
+
+/**
+ * A parsed fact set, or null. A malformed answer is asked for again
+ * (MALFORMED_ANSWER_RETRIES) with the same request; `usage` then covers every
+ * answer received, like the cost ledger, which records each call.
+ */
+async function fetchParsedAnswer(
+  prompt: FactsPrompt,
+  options: ExtractFactsOptions,
+  failures: string[],
+): Promise<ParsedAnswer | null> {
+  let usage: FactsUsage | null = null;
+  for (let retry = 0; retry <= MALFORMED_ANSWER_RETRIES; retry++) {
+    if (retry > 0 && options.abandoned?.()) return null;
+    const answer = await fetchAnswer(prompt, options, failures);
+    if (!answer) return null;
+    usage = addUsage(usage, answer.usage);
+    const parsed = parseAnswer(answer.raw, failures);
+    if (parsed?.facts)
+      return { answer: { ...answer, usage }, parsed: { ...parsed, facts: parsed.facts } };
+  }
+  return null;
+}
+
 function noFacts(pre: PreFacts, issues: string[]): FactsExtraction {
   return {
     facts: null,
@@ -293,9 +341,9 @@ export async function extractFacts(
   const pre = deterministicPreFacts(input);
   const prompt = buildFactsPrompt(input, pre);
   const failures: string[] = [];
-  const answer = await fetchAnswer(prompt, options, failures);
-  const parsed = answer ? parseAnswer(answer.raw, failures) : null;
-  if (!answer || !parsed?.facts) return noFacts(pre, failures);
+  const result = await fetchParsedAnswer(prompt, options, failures);
+  if (!result) return noFacts(pre, failures);
+  const { answer, parsed } = result;
 
   const verified = verifyFactsEvidence(parsed.facts, prompt.haystack);
   const dated = enforceDateWindow(verified.facts, input.receivedAt);
