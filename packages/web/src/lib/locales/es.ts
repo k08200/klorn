@@ -2731,6 +2731,7 @@ const es: Record<string, string> = {
   "playground.brand.section": "Laboratorio",
   "playground.nav.methodology": "Cómo se puntúa",
   "playground.nav.pricing": "Precios",
+  "playground.nav.source": "Código",
   "playground.nav.login": "Iniciar sesión",
   "playground.nav.startFree": "Empezar gratis",
   "playground.title": "Mira cómo Klorn clasifica un correo.",

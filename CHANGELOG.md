@@ -62,6 +62,30 @@ calendar time.
   say so too (#1607).
 
 ### Fixed
+- **Only PUSH mail rings from the urgent sweep.** The urgent-priority sweep
+  rang "Urgent email" for any unread mail its keywords marked urgent, even when
+  the judge had put it in QUEUE, MEETING or SILENT. It now rings only mail
+  whose open item is in the PUSH lane, as a safety net for PUSH mail the
+  firewall push did not ring. Mail the judge has not reached yet waits for the
+  judge's own push. Users under policy v3 are unchanged: the sweep stays off
+  for them (#1687).
+- **Urgent mail still rings when the judge's AI could not run.** During an
+  outage, a spending cap or an unusable key, the judge falls back to keywords,
+  and an urgent mail from an ordinary person lands in QUEUE, where #1687's
+  PUSH-only rule left it silent. The urgent-priority sweep now rings such mail
+  again: QUEUE mail the keyword fallback placed, as long as no one has moved or
+  confirmed its lane and the sender is not automated. MEETING, INFO and SILENT
+  mail still never ring from the sweep. The sweep also now rings only mail
+  received in the last 6 hours, as the firewall push does, so mail synced late
+  no longer rings as urgent (#1690).
+- **One urgent mail rings once.** A mail that already rang as urgent mail
+  (the firewall's PUSH, or the urgent-priority sweep) no longer rings a second
+  time through the agent's own notification about it, and no second bell row
+  is written. The agent's context marks such mail, and its `notify_user` tool
+  names the mail it is about (`emailRef`, the `Email #N` number). An email
+  notification that names no mail is dropped only when every mail in the
+  agent's context already rang. Every other agent notification rings as
+  before, on the ambient bucket (#1682).
 - **Item aging (`ATTENTION_AGING_ENABLED`, off by default):**
   - A spam-lane item still in Gmail's Spam folder is no longer resolved as
     "left the inbox". It resolves once its mail leaves Spam without returning

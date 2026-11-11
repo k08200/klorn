@@ -15,7 +15,7 @@ Most AI email tools are **compose-first**: they help you write and process more 
 | Unattended sending | Only in an explicit AUTO mode, only for eligible mail, under user-written guidelines; every send writes a receipt pinning a payload hash. Default is approval-gated | n/a (client) | n/a (client) | Drafts in your voice for review |
 | Meetings | Calendar cross-check on scheduling mail: proposed slot, conflicts, sender availability, and slots verified free for both sides | Calendar features in client | Calendar in client | — |
 | Source & hosting | **Open source (AGPLv3), self-hostable end to end** | Closed | Closed | Closed |
-| AI spend control | Hard daily budget cap — the app stops rather than overspends | Subscription | Subscription tiers | Subscription |
+| AI spend control | Daily AI budget per plan — a runaway loop is stopped, not billed | Subscription | Subscription tiers | Subscription |
 | Agent access | The inbox is an MCP server: read-only tools (list, read, classify, briefing) behind a dedicated API key; nothing over MCP can send, delete or archive | — | — | — |
 | Platforms | macOS app, web, Windows beta; Gmail (OAuth) + Naver (IMAP), multiple inboxes | macOS/iOS/web | Web/mobile | Works atop Gmail/Outlook |
 

@@ -69,6 +69,38 @@ export interface RecordLlmUsageInput {
    * with usageMissing=true so coverage gaps stay visible.
    */
   usage: ProviderUsage | null | undefined;
+  /** Module that made the call (llm/llm-caller.ts); null/absent = unknown. */
+  feature?: string | null;
+  /** Served on the user's own provider key (BYOK): not Klorn's spend. */
+  ownedByUser?: boolean;
+}
+
+/**
+ * A feature label is a module path ("mail/email-summarize"). Anything else is
+ * dropped to null so free text can never reach the column or the report keys.
+ */
+const FEATURE_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_./-]{0,79}$/;
+
+function cleanFeature(feature: string | null | undefined): string | null {
+  return feature && FEATURE_PATTERN.test(feature) && !feature.includes("..") ? feature : null;
+}
+
+/** Micro-cents per US dollar (1¢ = 10,000 micro-cents, the GlobalCostLedger unit). */
+const MICRO_CENTS_PER_USD = 1_000_000;
+
+/**
+ * What a call actually cost, from its token counts, in micro-cents. Cache
+ * reads and writes are priced at their own rates. 0 when usage is missing.
+ */
+function actualCostMicroCents(model: string, usage: ProviderUsage | null): number {
+  if (!usage) return 0;
+  const usd = estimateModelCostUsd(
+    model,
+    usage.prompt_tokens ?? 0,
+    usage.completion_tokens ?? 0,
+    promptCacheUsageOf(usage),
+  );
+  return Math.max(0, Math.round(usd * MICRO_CENTS_PER_USD));
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -200,6 +232,9 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
         model: input.model,
         source: input.source,
         estimatedCostCents: Math.max(0, Math.round(input.estimatedCostCents)),
+        costMicroCents: actualCostMicroCents(input.model, usage),
+        feature: cleanFeature(input.feature),
+        ownedByUser: input.ownedByUser === true,
         promptTokens,
         cachedPromptTokens,
         completionTokens,

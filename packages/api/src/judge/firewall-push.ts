@@ -32,8 +32,9 @@ import type { BellRow } from "./v3/push-budget-gate.js";
 // A push for a PUSH-tier email only fires for genuinely recent mail. The
 // backfill sweep re-judges emails that arrived while the dyno slept; tiering
 // a days-old email in the firewall is right, but firing a stale "urgent" push
-// for it is not.
-const FIREWALL_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
+// for it is not. The urgent sweep (automation-scheduler.ts) reads the same
+// window, so neither path rings stale mail.
+export const FIREWALL_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
 const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 // The bell row shares its title (notificationCopy().urgentMailTitle, in the
 // user's notification language) with the urgent-priority sweep
@@ -42,6 +43,10 @@ const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 // that is both keyword-URGENT and judge-PUSH gets exactly one push. The dedupe
 // reads match URGENT_EMAIL_TITLES (every language plus the legacy English
 // title), so a language switch or this change's deploy never re-rings a mail.
+// The sweep rings mail whose open item is PUSH (urgentSweepItemIdsFailClosed): a
+// safety net for PUSH mail this path did not ring. The one other lane it rings is
+// QUEUE mail the keyword fallback placed when the judge's LLM did not run, which
+// this path never rings. MEETING rings only from this path.
 
 /**
  * The earliest notification that may count as "already pushed" for this email. The
