@@ -1,6 +1,6 @@
 {
   "name": "@klorn/api",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "AGPL-3.0-only",
   "private": true,
   "description": "Klorn API server",
@@ -22,6 +22,7 @@
     "eval:facts": "tsx scripts/v3-fact-eval.ts",
     "label:own-mail": "tsx scripts/v3-label-own-mail.ts",
     "throughput": "tsx scripts/throughput.ts",
+    "lane-quality": "tsx scripts/lane-quality.ts",
     "prune:push-logs": "tsx scripts/prune-push-logs.ts",
     "cleanup:commitment-noise": "tsx scripts/cleanup-commitment-noise.ts",
     "eval:judge": "tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=1 --delay=4500",
@@ -35,7 +36,7 @@
     "@fastify/formbody": "^8.0.2",
     "@fastify/helmet": "^13.1.0",
     "@fastify/multipart": "^10.1.0",
-    "@fastify/rate-limit": "^10.2.1",
+    "@fastify/rate-limit": "^11.2.2",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@prisma/client": "^6.8.2",
     "@sentry/node": "^10.70.0",
@@ -44,18 +45,18 @@
     "aws4fetch": "1.0.20",
     "bcryptjs": "^3.0.3",
     "fastify": "^5.12.7",
-    "firebase-admin": "^14.2.0",
+    "firebase-admin": "^14.5.0",
     "googleapis": "^171.4.0",
     "ical.js": "2.2.1",
     "imapflow": "^1.7.0",
     "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.3",
-    "nodemailer": "^10.0.13",
-    "openai": "^6.29.0",
+    "nodemailer": "^10.1.4",
+    "openai": "^7.8.0",
     "postcss": "8.5.26",
     "resend": "^6.20.0",
     "sanitize-html": "^2.18.0",
-    "stripe": "^18.1.0",
+    "stripe": "^22.6.2",
     "twilio": "^6.1.0",
     "web-push": "^3.6.7",
     "ws": "^8.21.3"
@@ -70,7 +71,7 @@
     "prisma": "^6.8.2",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "type": "module"
 }

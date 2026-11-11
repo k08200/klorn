@@ -114,7 +114,7 @@ const BUDGET_STOP_ERRORS = new Set(["DailyCostCapExceededError", "UserRateLimite
 const PACER_BUSY_ERROR = "PacerBusyError";
 
 function hasOwnKey(c: ProviderCredentials): boolean {
-  return Boolean(c.openRouterApiKey || c.geminiApiKey || c.openAiApiKey || c.anthropicApiKey);
+  return Boolean(c.anthropicApiKey || c.geminiApiKey || c.openAiApiKey);
 }
 
 export const prismaShadowDeps: ShadowDeps = {
@@ -154,7 +154,12 @@ export const prismaShadowDeps: ShadowDeps = {
   now: () => new Date(),
 };
 
-async function buildInput(userId: string, mail: ShadowMail, deps: ShadowDeps) {
+/** The extractor's input for a mail: shared by the shadow and the live path. */
+export async function buildFactsMailInput(
+  userId: string,
+  mail: ShadowMail,
+  deps: Pick<ShadowDeps, "userContext" | "repliedAfter">,
+) {
   const ctx = await deps.userContext(userId);
   const userRepliedAfter = mail.threadId
     ? await deps.repliedAfter(userId, mail.threadId, mail.receivedAt)
@@ -188,7 +193,7 @@ async function extractAndStore(
   v2Tier: string | null,
   deps: ShadowDeps,
 ): Promise<"stored"> {
-  const { input, userAddresses } = await buildInput(userId, mail, deps);
+  const { input, userAddresses } = await buildFactsMailInput(userId, mail, deps);
   // noWait: the model call claims a pacer slot at once or throws PacerBusyError;
   // it never queues behind (or in front of) the judge.
   const extraction = await deps.extract(input, { userId, noWait: true });

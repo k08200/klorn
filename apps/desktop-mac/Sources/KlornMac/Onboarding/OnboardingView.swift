@@ -99,6 +99,6 @@ struct LaneExplainer: View {
                 .padding(.top, Theme.s3)
         }
         .padding(.horizontal, Theme.s4).padding(.vertical, Theme.s3)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
     }
 }

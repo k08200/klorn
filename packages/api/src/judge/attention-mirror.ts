@@ -30,6 +30,7 @@ import { CLEAR_OVERRIDE_UNDO } from "./attention-override.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
+import { type V3ItemFields, v3Columns } from "./v3/live-item.js";
 
 // Typed wrapper around attentionItem.upsert. The where uses the userId-scoped
 // compound unique (userId, source, sourceId) so an upsert can never collide
@@ -880,6 +881,11 @@ export interface EmailUpsertOptions {
    * leaves this off and keeps the plain upsert.
    */
   rejudge?: boolean;
+  /**
+   * Attention engine v3 live decision columns (judge/v3/live-item.ts), set for
+   * users under JUDGE_V3_POLICY. Absent: those columns are not touched.
+   */
+  v3?: V3ItemFields;
 }
 
 /** What a judgement refreshes on an existing email item and sets on a new one. */
@@ -931,7 +937,7 @@ function emailCreateFields(email: EmailLike, fields: EmailRefreshFields) {
 
 async function writeEmailItem(
   email: EmailLike,
-  fields: EmailRefreshFields,
+  fields: EmailRefreshFields & Partial<ReturnType<typeof v3Columns>>,
   rejudge: boolean,
 ): Promise<EmailUpsertOutcome> {
   if (rejudge) {
@@ -981,12 +987,15 @@ export async function upsertAttentionForEmailJudgement(
   // Content-addressed classification — see attention-input-hash.ts.
   // Same bytes that fed the classifier are the bytes we hash so any
   // post-decision mutation invalidates the cached tier at read time.
-  const fields = emailRefreshFields(
-    email,
-    judgement,
-    computeAttentionInputHash(attentionHashInputOf(email)),
-    new Date(),
-  );
+  const fields = {
+    ...emailRefreshFields(
+      email,
+      judgement,
+      computeAttentionInputHash(attentionHashInputOf(email)),
+      new Date(),
+    ),
+    ...(options.v3 ? v3Columns(options.v3) : {}),
+  };
 
   let outcome: EmailUpsertOutcome;
   try {

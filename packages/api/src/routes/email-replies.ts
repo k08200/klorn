@@ -14,6 +14,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import type { CallPriority } from "../billing/quota-limiter.js";
 import { prisma } from "../db.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
 import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
@@ -36,6 +37,7 @@ import type { SendMailResult } from "../mail/providers/types.js";
 import { pickInReplyTo } from "../mail/reply-headers.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
 import { markEmailReplied } from "../mail/reply-state.js";
+import { resolveReplyThreading } from "../mail/reply-threading.js";
 import {
   openSendReceipt,
   outcomeOfSend,
@@ -650,15 +652,10 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         : `Re: ${dbEmail.subject}`;
 
       // RFC822 Message-ID isn't stored — fetch it live so In-Reply-To/References
-      // are correct. References = original chain + original Message-ID (RFC 5322).
-      // A message from a linked secondary inbox lives on THAT account (#757).
+      // are correct (reply-threading.ts). A message from a linked secondary inbox
+      // lives on THAT account (#757).
       const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
-      const { messageId, references } = await actions.getReplyHeaders(
-        uid,
-        dbEmail.gmailId,
-        dbEmail.linkedInboxAccountId,
-      );
-      const referencesChain = [references, messageId].filter(Boolean).join(" ") || undefined;
+      const threading = await resolveReplyThreading(actions, uid, dbEmail);
 
       // Deterministic floor (MANUAL_SEND_RECEIPTS_ENABLED): the receipt binds the
       // recipient and subject derived above and the body the user confirmed, and
@@ -687,14 +684,11 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       if (receipt) await verifySendOrRefuse(receipt, uid, { to, subject, body });
       let result: SendMailResult;
       try {
+        // OUTLOOK threads natively from the original's id (step B0b), taken from the
+        // row looked up above and never from the URL.
         result = await actions.sendEmail(uid, to, subject, body, [], {
-          threadId: dbEmail.threadId,
+          ...threading,
           linkedInboxAccountId: dbEmail.linkedInboxAccountId,
-          inReplyTo: messageId,
-          references: referencesChain,
-          // OUTLOOK threads natively from the original's id (step B0b), taken from the
-          // row looked up above and never from the URL.
-          ...replyTargetFor(actions, dbEmail.gmailId),
         });
       } catch (err) {
         // A throw may come after the mail left: the receipt says "unknown", never "refused".
@@ -717,6 +711,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       await recordContactEngagement(uid, to, "outbound");
       // The row's reply chip flips to "replied" — a recorded fact.
       await markEmailReplied(uid, dbEmail.id);
+      noteEmailOutcome(uid, dbEmail.id, "REPLIED");
       // And the thread joins "waiting on" until they answer (sent-messages.ts).
       if (result.messageId) {
         await recordSentMessage(uid, {
@@ -739,7 +734,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       return {
         ...result,
         to,
-        threaded: result.threaded === true || pickInReplyTo(messageId) !== undefined,
+        threaded: result.threaded === true || pickInReplyTo(threading.inReplyTo) !== undefined,
         ...(receipt ? { receipt: sendReceiptWire(receipt) } : {}),
       };
     },

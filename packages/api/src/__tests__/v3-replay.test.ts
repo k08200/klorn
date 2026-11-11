@@ -1,14 +1,16 @@
 /**
  * Policy replay core (docs/design/attention-engine-v3.md §5): lane
- * distribution and per-item diff vs v2, precedence kept, stored facts
- * preferred over keyword facts, and the interrupt budget simulated per user
- * per local day.
+ * distribution and per-item diff vs v2, precedence kept, each row decided by
+ * the live rule (stored LLM facts, else the v2 lane, else keyword facts when
+ * v2 itself fell back to keywords), and the interrupt budget simulated per
+ * user per local day.
  */
 
 import { describe, expect, it } from "vitest";
-import type { FactsV1 } from "../judge/v3/policy-types.js";
-import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
-import { type ReplayRow, replayPolicy } from "../judge/v3/replay.js";
+import type { StoredFacts } from "../judge/v3/facts-store.js";
+import type { FactsV1, RelationshipSnapshot } from "../judge/v3/policy-types.js";
+import { NEW_SENDER, UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
+import { type ReplayRow, replayPolicy, rowsNeedingRelationship } from "../judge/v3/replay.js";
 
 const T0 = new Date("2026-10-30T01:00:00.000Z"); // 10:00 in Seoul
 const HOUR = 3_600_000;
@@ -23,6 +25,14 @@ const urgentFacts = (due: Date): FactsV1 => ({
   risk: [],
   kind: "work_thread",
   ambiguous: false,
+});
+
+const llmRow = (facts: FactsV1, relationship: RelationshipSnapshot | null = null): StoredFacts => ({
+  factsSource: "llm",
+  facts,
+  pre: null,
+  signals: null,
+  relationship,
 });
 
 function row(id: string, over: Partial<ReplayRow> = {}): ReplayRow {
@@ -41,20 +51,98 @@ function row(id: string, over: Partial<ReplayRow> = {}): ReplayRow {
 }
 
 describe("replayPolicy", () => {
-  it("uses stored facts when present and keyword facts otherwise", () => {
+  it("decides each row by the live rule: stored LLM facts, else the v2 lane or keyword facts", () => {
+    const meeting = {
+      from: "Jane <jane@acme.com>",
+      subject: "Can we reschedule?",
+      snippet: "",
+      labels: [],
+    };
     const report = replayPolicy(
-      [row("a", { stored: { facts: urgentFacts(at(2)), relationship: null } }), row("b")],
+      [
+        row("a", { stored: llmRow(urgentFacts(at(2))) }),
+        // No stored facts and a model v2 lane: the v2 lane stands.
+        row("b", { v2Tier: "INFO" }),
+        // v2 itself fell back to keywords: keyword facts decide.
+        row("c", { v2Tier: "QUEUE", v2Source: "keyword-fallback", email: meeting }),
+        // A "none" row (the extractor failed) is no LLM facts either.
+        row("d", {
+          v2Tier: "SILENT",
+          stored: {
+            factsSource: "none",
+            facts: null,
+            pre: null,
+            signals: null,
+            relationship: null,
+          },
+        }),
+      ],
       { budget: 5 },
     );
-    expect(report.factsSource).toEqual({ stored: 1, keyword: 1 });
+    expect(report.factsMode).toBe("stored");
+    expect(report.storedFacts).toEqual({ rows: 2, llm: 1 });
+    expect(report.basis).toEqual({ llm: 1, keyword: 1, v2: 2 });
     expect(report.lanes.v3.PUSH).toBe(1);
     expect(report.changes).toEqual([
-      expect.objectContaining({ id: "a", v2: "QUEUE", v3: "PUSH", factsSource: "stored" }),
+      expect.objectContaining({ id: "a", v2: "QUEUE", v3: "PUSH", basis: "llm" }),
+      expect.objectContaining({ id: "c", v2: "QUEUE", v3: "MEETING", basis: "keyword" }),
     ]);
   });
 
+  it("re-runs a named policy version, the parity block included", () => {
+    const newsletter = {
+      from: "Digest <digest@news.example>",
+      subject: "Our newsletter is here",
+      snippet: "",
+      labels: [],
+    };
+    const stored: StoredFacts = {
+      factsSource: "llm",
+      facts: { ...urgentFacts(at(2)), asks: [], kind: "newsletter", addressedTo: "bulk" },
+      pre: null,
+      signals: null,
+      relationship: null,
+    };
+    const rows = [row("n", { v2Tier: "SILENT", email: newsletter, stored })];
+    const v30 = replayPolicy(rows, { budget: 5, policyVersion: "v3.0" });
+    expect(v30.policyVersion).toBe("v3.0");
+    expect(v30.lanes.v3PreBudget.SILENT).toBe(1);
+    expect(v30.parity.divergences).not.toHaveProperty(["narrowSilent: SILENT→INFO"]);
+    const v31 = replayPolicy(rows, { budget: 5 });
+    expect(v31.policyVersion).toBe("v3.1");
+    expect(v31.lanes.v3PreBudget.INFO).toBe(1);
+    expect(v31.parity.divergences).toHaveProperty(["narrowSilent: SILENT→INFO"], 1);
+  });
+
+  it("keyword mode gives every row keyword facts (the model-down estimate)", () => {
+    const report = replayPolicy([row("a", { stored: llmRow(urgentFacts(at(2))) }), row("b")], {
+      budget: 5,
+      facts: "keyword",
+    });
+    expect(report.factsMode).toBe("keyword");
+    expect(report.basis).toEqual({ llm: 0, keyword: 2, v2: 0 });
+  });
+
+  it("keeps strangers to their share of the budget (trusted reserve)", () => {
+    const stranger = (id: string, h: number) =>
+      row(id, { receivedAt: at(h), stored: llmRow(urgentFacts(at(h + 1))) });
+    const report = replayPolicy(
+      [
+        ...[0, 1, 2, 3, 4].map((h) => stranger(`s${h}`, h)),
+        row("known", {
+          receivedAt: at(5),
+          stored: llmRow(urgentFacts(at(6)), { ...UNKNOWN_RELATIONSHIP, sentCount: 2 }),
+        }),
+      ],
+      { budget: 5 },
+    );
+    // 2 of 5 reserved: three strangers get in, and so does the known sender.
+    expect(report.budget).toMatchObject({ candidates: 6, admitted: 4, held: 2 });
+    expect(report.budget.heldIds).not.toContain("known");
+  });
+
   it("keeps the v2 lane for overrides, pins, the fast-path, sender priors and learned rules", () => {
-    const stored = { facts: urgentFacts(at(1)), relationship: null };
+    const stored = llmRow(urgentFacts(at(1)));
     const report = replayPolicy(
       [
         row("override", { v2Tier: "SILENT", manualOverride: true, stored }),
@@ -75,7 +163,7 @@ describe("replayPolicy", () => {
       row(id, {
         userId,
         receivedAt: at(h),
-        stored: { facts: urgentFacts(at(h + 1)), relationship: rel(sentCount) },
+        stored: llmRow(urgentFacts(at(h + 1)), rel(sentCount)),
       });
     const report = replayPolicy(
       [
@@ -105,8 +193,34 @@ describe("replayPolicy", () => {
     expect(heldChange?.reasonCodes.slice(0, 2)).toEqual(["held_budget", "ask_due_soon"]);
   });
 
+  it("counts a held invite as the MEETING it rings as under v3.1, as live", () => {
+    const known = { ...UNKNOWN_RELATIONSHIP, sentCount: 5 };
+    const invite = { proposedTimes: [], hasInvite: true, conflict: null };
+    const rows = [
+      row("first", {
+        v2Tier: "PUSH",
+        receivedAt: at(0),
+        stored: llmRow(urgentFacts(at(1)), known),
+      }),
+      row("invite", {
+        v2Tier: "MEETING",
+        receivedAt: at(1),
+        stored: llmRow({ ...urgentFacts(at(2)), event: invite }, known),
+      }),
+    ];
+    const v31 = replayPolicy(rows, { budget: 1 });
+    expect(v31.budget).toMatchObject({ candidates: 2, admitted: 1, held: 1, meetingFallback: 1 });
+    expect(v31.budget.heldIds).toEqual([]);
+    expect(v31.lanes.v3).toMatchObject({ PUSH: 1, MEETING: 1, QUEUE: 0 });
+    expect(v31.changes.map((c) => c.id)).not.toContain("invite");
+
+    const v30 = replayPolicy(rows, { budget: 1, policyVersion: "v3.0" });
+    expect(v30.budget).toMatchObject({ candidates: 1, held: 0, meetingFallback: 0 });
+    expect(v30.lanes.v3).toMatchObject({ PUSH: 1, MEETING: 1 });
+  });
+
   it("does not budget pinned senders or manual overrides, as on the live push path", () => {
-    const stored = { facts: urgentFacts(at(1)), relationship: null };
+    const stored = llmRow(urgentFacts(at(1)));
     const report = replayPolicy(
       [
         row("pin", { v2Tier: "PUSH", v2Source: "pinned-rule", stored }),
@@ -121,9 +235,7 @@ describe("replayPolicy", () => {
 
   it("budgets nothing with no limit", () => {
     const report = replayPolicy(
-      [1, 2, 3].map((i) =>
-        row(`p${i}`, { stored: { facts: urgentFacts(at(1)), relationship: null } }),
-      ),
+      [1, 2, 3].map((i) => row(`p${i}`, { stored: llmRow(urgentFacts(at(1)), null) })),
       { budget: null },
     );
     expect(report.budget).toMatchObject({ held: 0, userDaysOverBudget: 0 });
@@ -153,5 +265,36 @@ describe("replayPolicy", () => {
     });
     expect(report.parity.v3Keyword.SILENT).toBe(1);
     expect(report.transitions).toEqual({ "SILENT→SILENT": 1, "QUEUE→QUEUE": 1 });
+  });
+});
+
+describe("rowsNeedingRelationship (v3.2 first-contact gate)", () => {
+  const invite = {
+    from: "Jane <jane@acme.com>",
+    subject: "Can we reschedule?",
+    snippet: "",
+    labels: [],
+  };
+  const known: RelationshipSnapshot = { ...NEW_SENDER, sentCount: 3 };
+  const rows = [
+    // v2 QUEUE: the gate holding it is no change, yet a known sender would lift it.
+    row("queue-invite", { email: invite }),
+    row("push-invite", { v2Tier: "PUSH", email: invite }),
+    row("loaded", { email: invite, relationship: known }),
+    row("plain"),
+  ];
+
+  it("selects the rows the gate would hold as a new sender and that have no relationship", () => {
+    const opts = { facts: "keyword" as const, policyVersion: "v3.2" as const };
+    expect(rowsNeedingRelationship(rows, opts)).toEqual(["queue-invite", "push-invite"]);
+    expect(rowsNeedingRelationship(rows, { ...opts, policyVersion: "v3.1" })).toEqual([]);
+  });
+
+  it("decides a loaded new sender as held and a loaded known sender as v3.1 does", () => {
+    const opts = { budget: null, facts: "keyword" as const, policyVersion: "v3.2" as const };
+    const asNew = replayPolicy([row("x", { email: invite, relationship: NEW_SENDER })], opts);
+    expect(asNew.lanes.v3PreBudget.MEETING).toBe(0);
+    const asKnown = replayPolicy([row("x", { email: invite, relationship: known })], opts);
+    expect(asKnown.changes).toEqual([expect.objectContaining({ id: "x", v3: "MEETING" })]);
   });
 });

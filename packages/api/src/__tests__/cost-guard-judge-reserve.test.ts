@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * The judge must not be starved by the rest of the product.
  *
- * 2026-10-15: an OpenRouter top-up brought the LLM back at 22:07. By 22:28 the
+ * 2026-10-15: a provider credit top-up brought the LLM back at 22:07. By 22:28 the
  * founder's account had spent 101¢ against a 100¢ daily cap — almost all of it
  * chat/agent traffic on claude-sonnet-5 ($2.00/M against gemini-2.5-flash's
  * $0.30/M). The cost guard then blocked every paid call for the rest of the
@@ -185,6 +185,22 @@ describe("the judge is actually wired to the reserve", () => {
     }
   });
 
+  it("the v3 live facts path claims the reserve, the sampled shadow never does", async () => {
+    const { readFileSync } = await import("node:fs");
+    const live = readFileSync(new URL("../judge/v3/live-facts.ts", import.meta.url), "utf8");
+    const shadow = readFileSync(new URL("../judge/v3/shadow.ts", import.meta.url), "utf8");
+    expect(live).toMatch(/reserved:\s*true/);
+    expect(shadow).not.toMatch(/reserved:/);
+    // Re-judge and backlog loops read stored facts; they must never call the live path.
+    for (const file of ["../judge/fallback-rejudge.ts", "../judge/rejudge-open-items.ts"]) {
+      const src = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect({ file, callsLive: /extractFactsForDecision/.test(src) }).toEqual({
+        file,
+        callsLive: false,
+      });
+    }
+  });
+
   it("no other surface claims the reserve", async () => {
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
     const { join } = await import("node:path");
@@ -201,6 +217,10 @@ describe("the judge is actually wired to the reserve", () => {
         if (!entry.endsWith(".ts")) continue;
         // The judge may claim it; openai.ts and cost-guard.ts define it.
         if (path.includes("judge/poc-judge.ts")) continue;
+        // With JUDGE_V3_POLICY on, the v3 facts call IS part of the judge for
+        // that user (docs/design/attention-engine-v3.md §3(5), Flags → Cost):
+        // new mail only, never re-judge or backlog (asserted below).
+        if (path.includes("judge/v3/live-facts.ts")) continue;
         if (path.includes("llm/openai.ts") || path.includes("billing/cost-guard.ts")) continue;
         if (/reserved:\s*true/.test(readFileSync(path, "utf8"))) offenders.push(path);
       }

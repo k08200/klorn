@@ -387,6 +387,10 @@ export const fr: Messages = {
   "settings.quiet.hint": "Aucune notification sur cette plage",
   "settings.quiet.from": "De",
   "settings.quiet.to": "À",
+  "settings.budget.title": "Interruptions par jour",
+  "settings.budget.hint":
+    "Au-delà, le courrier urgent attend dans Queue sans sonner. Les expéditeurs épinglés sur Push et les réunions ne comptent pas.",
+  "settings.budget.none": "Sans limite",
   "settings.notifyLanguage.title": "Langue des notifications",
   "settings.notifyLanguage.label": "Écrire les notifications en",
   "settings.notifyLanguage.hint":
@@ -760,13 +764,14 @@ export const fr: Messages = {
   "push.denied":
     "Les notifications sont désactivées. Vous pouvez les activer dans les réglages de l'appareil.",
   "push.snoozed": "Reporté d'une heure.",
+  "push.snoozedToday": "Reporté à plus tard aujourd'hui.",
   "push.done": "Marqué comme traité.",
-  "push.action.later": "Dans 1 heure",
+  "push.notUrgent": "Déplacé dans QUEUE.",
+  "push.action.later": "Plus tard",
+  "push.action.notUrgent": "Pas urgent",
   "push.action.done": "Traité",
-  "push.action.review": "Examiner",
   "push.channel.push": "E-mails PUSH",
-  "push.channel.pushBody":
-    "Seulement les e-mails qui ont besoin de vous maintenant, avec Dans 1 heure et Traité sur la notification.",
+  "push.channel.pushBody": "Seulement les e-mails qui ont besoin de vous maintenant, avec Plus tard, Pas urgent et Traité sur la notification.",
   "push.channel.other": "Autres notifications",
   "push.cover.draftReady": "brouillon de réponse prêt",
   "push.cover.snoozeFailed": "Impossible de reporter. Il est de retour dans la liste.",

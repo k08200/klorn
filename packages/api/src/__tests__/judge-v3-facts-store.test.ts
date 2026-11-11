@@ -63,6 +63,11 @@ const rel: RelationshipSnapshot = {
   repliedThreadCount: 1,
   userInitiatedThreadCount: 0,
   firstSeenAt: "2026-06-04T00:00:00.000Z",
+  meetingCount: 2,
+  smallMeetingCount: 1,
+  lastMetAt: "2026-10-20T00:00:00.000Z",
+  coAttendanceObservedSince: "2026-10-02T00:00:00.000Z",
+  coAttendanceCountedThrough: "2026-11-03T00:00:00.000Z",
 };
 
 const at = new Date("2026-10-31T01:00:00Z");
@@ -190,6 +195,29 @@ describe("saveAttentionFacts", () => {
     );
     const [arg] = upsert.mock.calls[0] as unknown as [{ update: Record<string, unknown> }];
     expect(arg.update.relationship).toBe(Prisma.DbNull);
+  });
+});
+
+describe("saveAttentionFacts: a no-LLM row never replaces LLM facts", () => {
+  it("writes a none row only when the row is new (update is empty)", async () => {
+    const upsert = vi.fn(async () => ({}));
+    await saveAttentionFacts(
+      {
+        userId: "u1",
+        source: "EMAIL",
+        sourceId: "e1",
+        extraction: extraction({ facts: null, source: "none", model: null, provider: null }),
+        relationship: null,
+        v2Tier: "QUEUE",
+        extractedAt: at,
+      },
+      { attentionFacts: { upsert } } as never,
+    );
+    const [arg] = upsert.mock.calls[0] as unknown as [
+      { create: Record<string, unknown>; update: Record<string, unknown> },
+    ];
+    expect(arg.create.factsSource).toBe("none");
+    expect(arg.update).toEqual({});
   });
 });
 

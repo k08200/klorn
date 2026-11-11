@@ -40,6 +40,7 @@ import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
 import { getProviderChain } from "./providers/index.js";
 import { adminRoutes } from "./routes/admin.js";
+import { alertEndpointRoutes } from "./routes/alert-endpoints.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
 import { authRoutes } from "./routes/auth.js";
@@ -91,7 +92,13 @@ import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { webhookRoutes } from "./routes/webhook.js";
 import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
-import { isRateLimitAllowedIp, parseAllowedCidrs } from "./security/scanner-allowlist.js";
+import {
+  describeClientAddressConfig,
+  resolveClientAddressConfig,
+} from "./security/client-address.js";
+import { rateLimitOptions } from "./security/rate-limit-identity.js";
+import { serializeRequestForLog } from "./security/request-log.js";
+import { parseAllowedCidrs } from "./security/scanner-allowlist.js";
 import { captureError, flushSentry, initSentry } from "./sentry.js";
 import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
 import { checkObjectStorageAtStartup } from "./storage/runtime.js";
@@ -106,17 +113,25 @@ import { registerWorkContextHook } from "./work-context.js";
 initSentry();
 
 const app = Fastify({
-  // trustProxy: resolve the real client IP from X-Forwarded-For. The platform
-  // (Render) sits behind a load balancer, so without this every request's
-  // `request.ip` is the LB's internal IP — which collapses all per-IP rate
-  // limits (incl. the public /api/playground limit) into one shared bucket.
+  // trustProxy makes request.protocol / request.host follow X-Forwarded-Proto
+  // / -Host. It also makes request.ip the leftmost X-Forwarded-For entry, which
+  // the client writes, so nothing reads request.ip: the client address comes
+  // from security/client-address.ts (a guard test enforces it).
   trustProxy: true,
   logger: {
+    serializers: { req: serializeRequestForLog },
     // Defense-in-depth: even though Fastify's default serializer doesn't log
     // bodies, redact key-bearing fields so a future serializer change or a
     // rawBody dump can never leak a credential into the log drain.
     redact: {
-      paths: ["req.body.apiKey", "req.body.password", "req.body.token", "req.rawBody"],
+      paths: [
+        "req.body.apiKey",
+        "req.body.anthropicApiKey",
+        "req.body.geminiApiKey",
+        "req.body.password",
+        "req.body.token",
+        "req.rawBody",
+      ],
       censor: "[REDACTED]",
     },
   },
@@ -221,7 +236,12 @@ await app.register(cors, {
   credentials: true,
 });
 
-// Global rate limiting — 100 requests per minute per IP
+// Global rate limiting — 100 requests per minute per client address
+// (security/rate-limit-identity.ts).
+// The address comes from security/client-address.ts (CLIENT_IP_SOURCE). Resolve
+// it once here so a bad value fails the boot instead of every request.
+const clientAddressConfig = resolveClientAddressConfig(process.env);
+console.info(`[security] client address ${describeClientAddressConfig(clientAddressConfig)}`);
 // Parsed once at boot: an authorized-scan exemption should not re-parse an env
 // string on every request, and a mid-run change should require a restart.
 const scannerAllowRules = parseAllowedCidrs(process.env.RATE_LIMIT_ALLOW_IPS);
@@ -231,45 +251,7 @@ if (scannerAllowRules.length > 0) {
   );
 }
 
-await app.register(rateLimit, {
-  max: 100,
-  timeWindow: "1 minute",
-  // Rate-limit key must be an UNSPOOFABLE client identity. request.ip derives
-  // from X-Forwarded-For (trustProxy), which a client can forge to rotate past
-  // every per-IP limit (confirmed 2026-07-21). We sit behind Cloudflare, which
-  // sets CF-Connecting-IP to the verified client IP and overwrites any
-  // client-supplied value — use it, falling back to the raw socket address
-  // (also unspoofable), never X-Forwarded-For.
-  keyGenerator: (req) => {
-    const cf = req.headers["cf-connecting-ip"];
-    if (typeof cf === "string" && cf.length > 0) return cf;
-    return req.socket?.remoteAddress ?? "unknown";
-  },
-  allowList: (req: {
-    url?: string;
-    headers?: Record<string, unknown>;
-    socket?: { remoteAddress?: string };
-  }) => {
-    const url = req.url ?? "";
-    // Authorized security scan: a CASA DAST fires thousands of requests from a
-    // few source ranges and would otherwise be throttled into an incomplete
-    // report. Empty unless RATE_LIMIT_ALLOW_IPS names the assessor's ranges,
-    // and it reads the same Cloudflare-verified address the limiter keys on —
-    // never X-Forwarded-For, which a client can forge.
-    if (scannerAllowRules.length > 0) {
-      const cf = req.headers?.["cf-connecting-ip"];
-      const clientIp = typeof cf === "string" && cf.length > 0 ? cf : req.socket?.remoteAddress;
-      if (isRateLimitAllowedIp(clientIp, scannerAllowRules)) return true;
-    }
-    // OAuth callback: Google redirects here after consent; rate-limiting it
-    // would break the login flow for users on slow networks or retry loops.
-    if (url.startsWith("/api/auth/google/callback")) return true;
-    // Gmail Pub/Sub push traffic comes from Google's shared infra; under heavy
-    // mail load it would otherwise trip the per-IP limit and back up delivery.
-    if (url.startsWith("/api/gmail/push")) return true;
-    return false;
-  },
-});
+await app.register(rateLimit, rateLimitOptions(scannerAllowRules));
 
 // Raw body support for Stripe webhook signature verification
 app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
@@ -296,6 +278,7 @@ await app.register(authRoutes, { prefix: "/api/auth" });
 await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
 await app.register(briefingRoutes, { prefix: "/api/briefing" });
 await app.register(notificationRoutes, { prefix: "/api/notifications" });
+await app.register(alertEndpointRoutes, { prefix: "/api/notifications/alert-endpoints" });
 await app.register(opsRoutes, { prefix: "/api/ops" });
 await app.register(cronRoutes, { prefix: "/api/cron" });
 await app.register(diagnosticsRoutes, { prefix: "/api/diagnostics" });
@@ -425,7 +408,7 @@ app.get("/api/health/ready", async (_request, reply) => {
 // the failure mode where the dyno slept or an import failed and briefings
 // just stopped (see routes/cron.ts). Public like /api/health: exposes only
 // scheduler names and tick times, no user data — plus the LLM judge's coarse
-// fallback status + ratio (#1319), never error text.
+// fallback status + ratio (#1572), never error text.
 app.get("/api/health/schedulers", async (_request, reply) => {
   // The judge read is a cached in-memory value, but it must never turn the
   // liveness endpoint into a 500: on any throw the field is simply omitted.
@@ -594,12 +577,12 @@ app.addHook("onClose", async () => {
 // opted in explicitly. This line is what makes either outcome visible; the
 // 2026-09 incident ran for three weeks precisely because nothing announced it.
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
-// ...and the models that really serve it: every non-OpenRouter provider in the
-// chain swaps a pin it cannot route for its own default (ANTHROPIC_MODEL,
+// ...and the models that really serve it: every provider in the chain swaps a
+// pin it cannot route for its own default (ANTHROPIC_MODEL,
 // GEMINI_FALLBACK_MODEL), which the pin check above never sees — including the
 // failover lanes, which serve the judge exactly when the lead is down.
 reportJudgeServing(JUDGE_MODEL, getProviderChain());
-// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
+// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1572): say so once.
 warnRetiredJudgeHealthEnv();
 
 // What Paddle actually bills lives outside this repo, on a price object any

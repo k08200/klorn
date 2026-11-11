@@ -140,7 +140,7 @@ export interface SchedulerHealthReport {
     schedulers?: SchedulerHealthEntry[];
     missing?: string[];
     /**
-     * LLM judge fallback status (#1319), from the last DB-backed check. This
+     * LLM judge fallback status (#1572), from the last DB-backed check. This
      * endpoint is PUBLIC, so only a coarse status + aggregate ratio (null below
      * the minimum sample) — no error text, no volumes. The top error lives on
      * the admin-only GET /api/admin/judge-health. Informational: it does not

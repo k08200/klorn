@@ -75,20 +75,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 // --- Notification actions (long-press a Klorn notification) ---
-// The server picks a category with `aps.category` on a mail push
-// (packages/api/src/notify/push-apns.ts buildApnsBody; the identifiers are
-// packages/contract/src/push.ts ApnsMailCategory — keep them identical):
-//   KLORN_PUSH_MAIL_DRAFT — a reply draft / approval exists (pendingActionId)
-//   KLORN_PUSH_MAIL       — any other mail push (emailId, attentionItemId?)
+// Decision N1 (2026-11-08). The server picks a category with `aps.category`
+// on a mail push (packages/api/src/notify/push-apns.ts buildApnsBody; the
+// identifiers are packages/contract/src/push.ts ApnsMailCategory — keep them
+// identical), at most 4 actions, in this order:
+//   KLORN_PUSH_MAIL_DRAFT — Send draft · Later · Not urgent · Done
+//   KLORN_PUSH_MAIL       — Reply · Later · Not urgent · Done
+//   KLORN_PUSH_MEETING    — Later (Join needs a verified meeting link; a mail has none)
 // The app's JS handles each action id (src/push/route.ts):
-//   KLORN_SEND  — "Send draft": requires the device to be unlocked AND opens
-//                 the app on the approval card, where sending is one more
-//                 explicit tap. Nothing is ever sent from the lock screen.
-//   KLORN_LATER — "In 1 hour": snoozes the mail by its email id (no UI).
-//   KLORN_DONE  — "Done": marks the mail done by its email id (no UI).
+//   KLORN_SEND       — "Send draft": requires the device to be unlocked AND
+//                      opens the app on the approval card, where sending is
+//                      one more explicit tap. Nothing is sent from the lock screen.
+//   KLORN_REPLY      — "Reply": opens the app on the mail. Sending stays manual.
+//   KLORN_LATER      — "Later": snoozes the mail until later today (no UI).
+//   KLORN_NOT_URGENT — "Not urgent": moves the mail to QUEUE (no UI).
+//   KLORN_DONE       — "Done": marks the mail done by its email id (no UI).
+// There is no Silent action: a misclick there costs too much.
 enum KlornNotificationCategories {
     static let pushWithDraft = "KLORN_PUSH_MAIL_DRAFT"
     static let push = "KLORN_PUSH_MAIL"
+    static let meeting = "KLORN_PUSH_MEETING"
 
     static func register() {
         let t = titles()
@@ -97,34 +103,42 @@ enum KlornNotificationCategories {
             title: t.send,
             options: [.authenticationRequired, .foreground]
         )
+        let reply = UNNotificationAction(identifier: "KLORN_REPLY", title: t.reply, options: [.foreground])
         let later = UNNotificationAction(identifier: "KLORN_LATER", title: t.later, options: [])
+        let notUrgent = UNNotificationAction(identifier: "KLORN_NOT_URGENT", title: t.notUrgent, options: [])
         let done = UNNotificationAction(identifier: "KLORN_DONE", title: t.done, options: [])
         let withDraft = UNNotificationCategory(
             identifier: pushWithDraft,
-            actions: [send, later, done],
+            actions: [send, later, notUrgent, done],
             intentIdentifiers: [],
             options: []
         )
         let plain = UNNotificationCategory(
             identifier: push,
-            actions: [later, done],
+            actions: [reply, later, notUrgent, done],
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([withDraft, plain])
+        let meetingMail = UNNotificationCategory(
+            identifier: meeting,
+            actions: [later],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([withDraft, plain, meetingMail])
     }
 
     /// The action titles in the device's language (the app's 7 languages, English otherwise).
-    private static func titles() -> (send: String, later: String, done: String) {
+    private static func titles() -> (send: String, reply: String, later: String, notUrgent: String, done: String) {
         let lang = Locale.preferredLanguages.first.map { String($0.prefix(2)) } ?? "en"
         switch lang {
-        case "ko": return ("초안 보내기", "1시간 뒤에", "처리 완료")
-        case "ja": return ("下書きを送信", "1時間後に", "処理済み")
-        case "zh": return ("发送草稿", "1 小时后", "已处理")
-        case "es": return ("Enviar borrador", "En 1 hora", "Hecho")
-        case "fr": return ("Envoyer le brouillon", "Dans 1 heure", "Traité")
-        case "de": return ("Entwurf senden", "In 1 Stunde", "Erledigt")
-        default: return ("Send draft", "In 1 hour", "Done")
+        case "ko": return ("초안 보내기", "답장", "나중에", "급하지 않음", "처리 완료")
+        case "ja": return ("下書きを送信", "返信", "あとで", "急ぎではない", "処理済み")
+        case "zh": return ("发送草稿", "回复", "稍后", "不紧急", "已处理")
+        case "es": return ("Enviar borrador", "Responder", "Más tarde", "No urgente", "Hecho")
+        case "fr": return ("Envoyer le brouillon", "Répondre", "Plus tard", "Pas urgent", "Traité")
+        case "de": return ("Entwurf senden", "Antworten", "Später", "Nicht dringend", "Erledigt")
+        default: return ("Send draft", "Reply", "Later", "Not urgent", "Done")
         }
     }
 }

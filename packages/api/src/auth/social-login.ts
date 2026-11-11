@@ -3,7 +3,6 @@ import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import {
-  evaluateBetaAutoPro,
   isDemoUser,
   normalizeEmail,
   parseDeviceName,
@@ -145,7 +144,6 @@ export async function completeSocialLogin(
           return { redirect: `${webUrl}/login?error=invite_only` };
         }
       }
-      const betaAutoProGrant = await evaluateBetaAutoPro();
       const created = await withDbRetry(
         () =>
           prisma.user.create({
@@ -157,8 +155,8 @@ export async function completeSocialLogin(
               // (resolveSocialLoginAction rejects the rest), so this mirrors
               // the Google branch's pre-verified stance exactly.
               emailVerified: true,
-              ...(betaGateEnabled && { plan: "PRO" as const }),
-              ...(betaAutoProGrant ?? {}),
+              // Every signup starts on FREE, the schema default (founder
+              // decision 2026-10-24, signup-plan-guard.test.ts).
               identities: {
                 create: { provider: identity.provider, subject: identity.subject, email },
               },

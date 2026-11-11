@@ -292,8 +292,8 @@ struct PrioritiesEditor: View {
                 .scrollContentBackground(.hidden)
                 .padding(6)
                 .frame(minHeight: 84, maxHeight: 140)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
                 .accessibilityLabel(L("priorities.title"))
             if text.isEmpty {
                 Text(L("priorities.placeholder"))

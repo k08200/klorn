@@ -37,6 +37,7 @@ const m = vi.hoisted(() => ({
   archive: vi.fn(),
   mailActionsFor: vi.fn(),
   attentionUpdateMany: vi.fn(async () => ({ count: 0 })),
+  labelUpdateMany: vi.fn(async (_args: unknown) => ({ count: 1 })),
 }));
 
 function matchValue(value: unknown, cond: unknown): boolean {
@@ -111,6 +112,7 @@ vi.mock("../db.js", () => {
       }),
     },
     attentionItem: { updateMany: m.attentionUpdateMany },
+    decisionLabel: { updateMany: m.labelUpdateMany },
     linkedInboxAccount: {
       findMany: vi.fn(async () => [{ id: "acct-work", email: "me@work.example" }]),
     },
@@ -190,6 +192,8 @@ beforeEach(() => {
   m.archive.mockReset();
   m.archive.mockResolvedValue({ success: true });
   m.attentionUpdateMany.mockClear();
+  m.labelUpdateMany.mockReset();
+  m.labelUpdateMany.mockResolvedValue({ count: 1 });
   m.mailActionsFor.mockReset();
   m.mailActionsFor.mockImplementation(async () => ({
     provider: "GOOGLE",
@@ -511,5 +515,67 @@ describe("POST /api/email/subscriptions/unsubscribe", () => {
     expect(res.statusCode).toBe(502);
     expect(m.archive).not.toHaveBeenCalled();
     expect(store.rows).toHaveLength(1);
+  });
+});
+
+describe("POST /api/email/subscriptions/unsubscribe — decision ledger", () => {
+  const post = async (payload: Record<string, unknown>) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `${PREFIX}/subscriptions/unsubscribe`,
+      headers: auth(),
+      payload,
+    });
+    await app.close();
+    await new Promise((r) => setTimeout(r, 0));
+    return res;
+  };
+
+  it("stamps UNSUBSCRIBED once, on the mail the unsubscribe used, and not the sender-wide archive", async () => {
+    store.rows = [row({ listUnsubscribeOneClick: true }), row({})];
+    const [newest] = store.rows;
+    const res = await post({
+      sender: "news@acme.example",
+      linkedInboxAccountId: null,
+      archive: true,
+    });
+
+    expect(res.json()).toMatchObject({ done: true, archived: 2 });
+    expect(m.labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "user-1", source: "EMAIL", sourceId: newest.id, unsubscribedAt: null },
+        data: { unsubscribedAt: expect.any(Date) },
+      },
+    ]);
+  });
+
+  it("stamps nothing when only a browser link was handed back", async () => {
+    store.rows = [row({})];
+    const res = await post({ sender: "news@acme.example", linkedInboxAccountId: null });
+
+    expect(res.json()).toMatchObject({ method: "link", done: false });
+    expect(m.labelUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("stamps nothing when the unsubscribe fails", async () => {
+    store.rows = [
+      row({ listUnsubscribeUrl: null, listUnsubscribeMailto: "mailto:u@acme.example" }),
+    ];
+    m.sendEmail.mockResolvedValue({ error: "Gmail not connected." });
+    const res = await post({ sender: "news@acme.example", linkedInboxAccountId: null });
+
+    expect(res.statusCode).toBe(502);
+    expect(m.labelUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("answers exactly the same when the ledger write fails", async () => {
+    store.rows = [row({ listUnsubscribeOneClick: true })];
+    const ok = await post({ sender: "news@acme.example", linkedInboxAccountId: null });
+    m.labelUpdateMany.mockRejectedValue(new Error("ledger down"));
+    const failed = await post({ sender: "news@acme.example", linkedInboxAccountId: null });
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
   });
 });

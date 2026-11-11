@@ -48,6 +48,20 @@ describe("collectFeatureFlags", () => {
     expect(off.configured.OBJECT_STORAGE_BUCKET).toBe(false);
   });
 
+  it.each([
+    "CALENDAR_COATTENDANCE_ENABLED",
+    "SENT_HISTORY_BACKFILL_ENABLED",
+  ])("lists the per-user data flag %s: true for true or cohort, false otherwise", (key) => {
+    const at = (value?: string) =>
+      collectFeatureFlags((value === undefined ? {} : { [key]: value }) as NodeJS.ProcessEnv)
+        .dynamic;
+    expect(at()).toHaveProperty(key, false);
+    expect(at("false")).toHaveProperty(key, false);
+    expect(at("true")).toHaveProperty(key, true);
+    expect(at(" On ")).toHaveProperty(key, true);
+    expect(at("cohort")).toHaveProperty(key, true);
+  });
+
   it("reports the import-time linked-inbox auto-reply flag", () => {
     // Import-time: the value tracks the config.ts const frozen at module load,
     // not the env passed in — asserting presence is what's meaningful here.

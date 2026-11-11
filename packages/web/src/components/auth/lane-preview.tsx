@@ -34,8 +34,8 @@ export default function LanePreview() {
     <figure aria-label={t("auth.preview.label")} className="w-full max-w-lg">
       <div className="overflow-hidden rounded-card border border-line bg-surface-panel shadow-menu">
         <div className="flex h-11 items-center justify-between border-b border-line px-4">
-          <span className="text-label text-ink">{t("nav.mail")}</span>
-          <span className="rounded-full border border-line px-2 py-0.5 text-caption text-ink-mid">
+          <span className="text-role-label text-ink">{t("nav.mail")}</span>
+          <span className="rounded-full border border-line px-2 py-0.5 text-role-caption text-ink-mid">
             {t("auth.preview.demo")}
           </span>
         </div>
@@ -48,19 +48,19 @@ export default function LanePreview() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <SourceBadge provider={row.source} />
-                  <span className="truncate text-label text-ink">
+                  <span className="truncate text-role-label text-ink">
                     {t(`auth.preview.${row.key}.from`)}
                   </span>
                   {row.time && (
-                    <span className="ml-auto shrink-0 text-caption tabular-nums text-ink-dim">
+                    <span className="ml-auto shrink-0 text-role-caption tabular-nums text-ink-dim">
                       {row.time}
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 truncate text-body text-ink-soft">
+                <p className="mt-0.5 truncate text-role-body text-ink-soft">
                   {t(`auth.preview.${row.key}.subject`)}
                 </p>
-                <p className="mt-1 text-caption text-ink-mid">
+                <p className="mt-1 text-role-caption text-ink-mid">
                   {t(`auth.preview.${row.key}.reason`)}
                 </p>
               </div>
@@ -68,7 +68,7 @@ export default function LanePreview() {
           ))}
         </ul>
       </div>
-      <figcaption className="mt-5 max-w-md text-body text-pretty text-ink-mid">
+      <figcaption className="mt-5 max-w-md text-role-body text-pretty text-ink-mid">
         {t("auth.preview.caption")}
       </figcaption>
     </figure>

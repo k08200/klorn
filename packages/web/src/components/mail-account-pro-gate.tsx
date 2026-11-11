@@ -15,12 +15,12 @@ export { isEntitlementRefusal } from "../lib/entitlement";
 export function MailAccountProGate() {
   const { t } = useT();
   return (
-    <div className="rounded-xl border border-state-info-line bg-state-info-bg p-4">
-      <p className="text-sm text-ink">{t("mailAccount.proGate.title")}</p>
-      <p className="mt-1 text-xs text-ink-mid">{t("mailAccount.proGate.body")}</p>
+    <div className="rounded-control border border-state-info-line bg-state-info-bg p-4">
+      <p className="text-role-body text-ink">{t("mailAccount.proGate.title")}</p>
+      <p className="mt-1 text-role-caption text-ink-mid">{t("mailAccount.proGate.body")}</p>
       <Link
         href="/billing"
-        className="focus-ring mt-2 inline-flex min-h-11 items-center rounded-control text-sm font-medium text-accent-deep underline"
+        className="focus-ring mt-2 inline-flex min-h-11 items-center rounded-control text-role-label text-accent-deep underline"
       >
         {t("mailAccount.proGate.upgrade")}
       </Link>

@@ -237,8 +237,8 @@ extension PreviewRender {
             InboxAccountsSection(model: model)
                 .padding(22)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+                .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
                 .padding(14)
         } && ok
         shot("assistant", model) { $0.showAssistantPane(.approvals) }

@@ -20,12 +20,12 @@ export function ProFeatureNotice({
   return (
     <div
       role="status"
-      className={`rounded-xl border border-state-info-line bg-state-info-bg px-3 py-2 ${className}`}
+      className={`rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 ${className}`}
     >
-      <p className="text-sm text-ink">{t(messageKey)}</p>
+      <p className="text-role-body text-ink">{t(messageKey)}</p>
       <Link
         href="/billing"
-        className="focus-ring inline-flex min-h-11 items-center rounded-control text-sm font-medium text-accent-deep underline"
+        className="focus-ring inline-flex min-h-11 items-center rounded-control text-role-label text-accent-deep underline"
       >
         {t("proFeature.upgrade")}
       </Link>

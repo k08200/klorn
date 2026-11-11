@@ -1,10 +1,10 @@
 /**
- * Judge fallback alarm — DB-backed (#1319).
+ * Judge fallback alarm — DB-backed (#1572).
  *
- * From 2026-09-05 every judge LLM call failed (OpenRouter credits, most likely)
- * and PUSH went from ~54/month to 0 for four weeks with no alert. An in-memory
- * window cannot catch that at prod volume (~3 emails/hour) and is wiped by
- * every deploy, so this check reads what the judge already persists: the
+ * From 2026-09-05 every judge LLM call failed (provider credits, most likely)
+ * and PUSH went to 0 for four weeks with no alert. An in-memory window cannot
+ * catch that at production volume and is wiped by every deploy, so this check
+ * reads what the judge already persists: the
  * "Judged by" fact attention-mirror stamps into AttentionItem.evidence on every
  * email judgement, timestamped by `inputHashAt` (attention-mirror.ts,
  * emailRefreshFields). One aggregate query, counts only, over the last 24 h.
@@ -32,8 +32,8 @@
  * urgency >= 0.7 AND confidence >= 0.7 (tier-policy.ts). Classification keeps
  * running; accuracy does not.
  * Check, in order:
- *   1. The alarm's "top error". `402 credits exhausted (openrouter)` → top up
- *      OpenRouter credits / raise the key's credit limit. `401 auth rejected`
+ *   1. The alarm's "top error". `402 credits exhausted (anthropic)` → top up
+ *      the Anthropic prepaid balance / raise the spend limit. `401 auth rejected`
  *      → the env key was revoked or rotated. `429 rate limited` → key limit.
  *      "unknown (restarted since)" → this process has not seen a failed call
  *      since boot (or a different instance served the judge); go to step 2.
@@ -146,7 +146,7 @@ export function warnRetiredJudgeHealthEnv(): void {
   if (warnedRetiredEnv || !process.env.JUDGE_HEALTH_WINDOW) return;
   warnedRetiredEnv = true;
   console.warn(
-    "[JUDGE-HEALTH] JUDGE_HEALTH_WINDOW is set but no longer used: the fallback alarm reads the last 24 h of judgments from the DB (#1319). Remove it; JUDGE_HEALTH_FALLBACK_RATE and JUDGE_HEALTH_MIN_SAMPLE still apply.",
+    "[JUDGE-HEALTH] JUDGE_HEALTH_WINDOW is set but no longer used: the fallback alarm reads the last 24 h of judgments from the DB (#1572). Remove it; JUDGE_HEALTH_FALLBACK_RATE and JUDGE_HEALTH_MIN_SAMPLE still apply.",
   );
 }
 

@@ -86,8 +86,16 @@ With Reduce Motion on, transitions are instant and nothing slides.
 | head    | 17 | 15 | 17 | 600 |
 | body    | 15 | 13 | 16 | 400 |
 | label   | 13 | 12 | 14 | 500 |
+| meta    | 13 | 12 | 14 (`--role-label`) | 400 |
 | caption | 12 | 11 | 13 | 400 |
 | mono    | 13 Geist Mono | 12 SF Mono | 13 | 400 |
+
+`label` is identity and controls (senders, buttons, chips); `meta` is
+secondary metadata at the same size, regular weight (sender · time rows,
+snippets, one-line reasons). Never write label with its weight overridden
+(`text-role-label font-normal`, `Typo.label.weight(.regular)`): both are
+guarded. Phone roles are sizes only (weight is set per CSS rule), so the phone
+has no separate meta variable.
 
 Faces: Geist + Pretendard (Hangul) on web, Windows and phones; SF on Mac.
 Phones follow the OS text size (Dynamic Type / font scale) up to 200%.
@@ -108,10 +116,13 @@ Phones follow the OS text size (Dynamic Type / font scale) up to 200%.
 | type | `text-role-page` … `text-role-mono` |
 
 The legacy type steps (`text-display` / `text-title` / `text-head` /
-`text-body`, 28/20/15/14) and the legacy ink steps (`ink-strong` …
-`ink-dim`) remain for page call sites until their wave. The ui primitives
-(button, input, menu, sheet, toast, segmented control, listbox, lane chip)
-already use the role utilities.
+`text-body` / `text-label` / `text-caption`, 28/20/15/14/13/12) are retired:
+every web call site uses the role utilities, the tokens are gone from
+`globals.css`, and the `legacy-type` rule in
+`.github/scripts/check-design-tokens.mjs` keeps them out. Its `label-as-meta`
+rule (zero allowance) fails on `text-role-label` + `font-normal` in one class
+expression — use `text-role-meta`. The legacy ink
+steps (`ink-strong` … `ink-dim`) remain for page call sites until their wave.
 
 ### Phone — `apps/mobile/src/styles/tokens.css`
 
@@ -135,10 +146,11 @@ already use the role utilities.
 | radius | `Theme.Radius.chip` 6 · `.control` 10 · `.card` 16 · `.sheet` 24 (rungs `sm/md/lg/xl`) |
 | depth | `.elevation(.menu)` / `.elevation(.sheet)`, `Theme.hairlineOpacity` |
 | motion | `Theme.Motion.state` / `.move` / `.sheet`, `Theme.Motion.fluid(_:)` |
-| type | `Theme.TypeSize.*` (pure) → `Theme.Typo.page` / `title` / `head` / `body` / `label` / `caption` / `mono` |
+| type | `Theme.TypeSize.*` (pure) → `Theme.Typo.page` / `title` / `head` / `body` / `label` / `meta` / `caption` / `mono` |
 
-Known gap: Mac buttons and fields still use `Radius.sm` (6). v2 says control
-= 10. They move with the Mac screen wave.
+Every Mac call site names a role (buttons and fields are `.control`); the
+rungs and raw numbers stay in Theme.swift, held there by the self-check's
+radius guard.
 
 ## Device classes
 

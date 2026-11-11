@@ -10,16 +10,19 @@ import type { InboxOption } from "@klorn/contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CalendarEventWire,
+  coverMeter,
   dayRangeInZone,
   eventBarColor,
   eventPhase,
   eventSourceProvider,
   findConflicts,
+  heldBack,
   laneBlock,
   nowMarkerIndex,
   olderOutsideWindow,
   orderEvents,
   todayHeaderSummary,
+  todayHeldQuery,
   todayLaneCount,
   todayLaneQuery,
   todayWaitingKey,
@@ -491,5 +494,75 @@ describe("Today's calm header (founder decision 2026-10-24)", () => {
     expect(todayWaitingKey(1)).toBe("today.strip.waiting.one");
     expect(todayWaitingKey(2)).toBe("today.strip.waiting.many");
     expect(todayWaitingKey(920)).toBe("today.strip.waiting.many");
+  });
+});
+
+describe("cover screen interruption meter (Fold cover, < 360px)", () => {
+  // Shown only when the Today read already carries the v3 budget (flag OFF
+  // today): an absent field or "no limit" renders nothing — never a guess.
+  it("is nothing when the read carries no budget", () => {
+    expect(coverMeter(undefined)).toBeNull();
+    expect(coverMeter(null)).toBeNull();
+  });
+
+  it("is nothing when the budget has no limit", () => {
+    expect(coverMeter({ limit: null, used: 3, day: "2026-11-07" })).toBeNull();
+  });
+
+  it("is nothing for a malformed budget", () => {
+    expect(coverMeter({ limit: 0, used: 0, day: "2026-11-07" })).toBeNull();
+    expect(coverMeter({ limit: 5, used: -1, day: "2026-11-07" })).toBeNull();
+    expect(coverMeter({ limit: Number.NaN, used: 1, day: "2026-11-07" })).toBeNull();
+  });
+
+  it("reports the server's own used and limit", () => {
+    expect(coverMeter({ limit: 5, used: 2, day: "2026-11-07" })).toEqual({
+      used: 2,
+      limit: 5,
+      ratio: 0.4,
+    });
+  });
+
+  it("caps the bar at full when the day ran over, but keeps the real count", () => {
+    expect(coverMeter({ limit: 5, used: 7, day: "2026-11-07" })).toEqual({
+      used: 7,
+      limit: 5,
+      ratio: 1,
+    });
+  });
+});
+
+describe("Held back group (founder design N2, 2026-11-08)", () => {
+  // Under the v3 policy only: the PUSH read carries the budget, and the held
+  // read lists what the budget held today. Anything else draws nothing.
+  const BUDGET = { limit: 5, used: 5, day: "2026-11-08" };
+  const rows = ["a", "b", "c"];
+
+  it("asks the QUEUE lane page for today's holds, one row per thread", () => {
+    expect(todayHeldQuery()).toBe("&threads=1&window=held");
+  });
+
+  it("is nothing without the budget (flag off: no capability, no read)", () => {
+    expect(heldBack(undefined, rows, 3)).toBeNull();
+    expect(heldBack(null, rows, 3)).toBeNull();
+  });
+
+  it("is nothing when nothing was held or the read has not landed", () => {
+    expect(heldBack(BUDGET, [], 0)).toBeNull();
+    expect(heldBack(BUDGET, null, null)).toBeNull();
+  });
+
+  it("counts the server's thread total and cuts the shown cards", () => {
+    expect(heldBack(BUDGET, rows, 3)).toEqual({ count: 3, shown: rows, more: 0 });
+    const many = Array.from({ length: 12 }, (_, i) => `m${i}`);
+    expect(heldBack(BUDGET, many, 12)).toEqual({
+      count: 12,
+      shown: many.slice(0, 8),
+      more: 4,
+    });
+  });
+
+  it("never counts fewer than the rows it shows", () => {
+    expect(heldBack(BUDGET, rows, 1)).toEqual({ count: 3, shown: rows, more: 0 });
   });
 });

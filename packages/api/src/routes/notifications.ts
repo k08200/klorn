@@ -10,11 +10,18 @@ import { verifyTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
+import { noteEmailOutcome } from "../judge/user-outcome.js";
+import { parseClientPlatform } from "../notify/alert-endpoints.js";
+import { desktopAlertState } from "../notify/desktop-alert.js";
+import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
 import { sendDevicePush } from "../notify/push-device.js";
+import { remindLaterFromPush } from "../notify/push-later.js";
+import { verifyPushLaterToken } from "../notify/push-later-token.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
+import { captureError } from "../sentry.js";
 
 const listNotificationsQuerySchema = {
   type: "object",
@@ -22,6 +29,14 @@ const listNotificationsQuerySchema = {
   properties: {
     unread: { type: "string", maxLength: 500 },
     limit: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+const desktopCatchUpQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    ids: { type: "string", maxLength: 2000 },
   },
 } as const;
 
@@ -56,8 +71,9 @@ export async function notificationRoutes(app: FastifyInstance) {
   );
 
   // POST /api/notifications/push/tier-override — public, capability-authenticated
-  // one-tap retier from a push notification action button ("Later" → QUEUE,
-  // "Mute" → SILENT). The signed token (NOT a session cookie — the service
+  // one-tap retier. Web pushes carried it as "Later" → QUEUE / "Mute" → SILENT
+  // until decision N1 (2026-11-08) replaced those buttons with Reply / Later
+  // (POST /push/later); it stays for tokens already delivered (7-day TTL). The signed token (NOT a session cookie — the service
   // worker has none) is the authorization; it is scoped to exactly one
   // (userId, itemId). Only the safe, reversible tiers are accepted here, so a
   // capability can never escalate an item to PUSH/AUTO.
@@ -86,6 +102,32 @@ export async function notificationRoutes(app: FastifyInstance) {
     },
   );
 
+  // POST /api/notifications/push/later — public, capability-authenticated
+  // "Later" from a web push action (decision N1): the mail's later-today
+  // reminder. The signed token names exactly one (user, email); the service
+  // checks the mail is that user's own, and a repeat sets no second reminder.
+  app.post(
+    "/push/later",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { token } = (request.body || {}) as { token?: unknown };
+      if (typeof token !== "string" || token.length === 0) {
+        return reply.code(400).send({ error: "Invalid later request" });
+      }
+      const grant = verifyPushLaterToken(token);
+      if (!grant) {
+        return reply.code(401).send({ error: "Invalid or expired token" });
+      }
+      const result = await remindLaterFromPush(grant);
+      if (!result.ok) {
+        return reply.code(404).send({ error: "Email not found" });
+      }
+      // The user tapped Later on the notification: same signal as in-app Later.
+      noteEmailOutcome(grant.userId, grant.emailId, "SNOOZED");
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
   app.addHook("preHandler", async (request, reply) => {
     const path = request.url.split("?")[0] ?? "";
     if (
@@ -95,6 +137,10 @@ export async function notificationRoutes(app: FastifyInstance) {
       // signed capability token in the body, not a session (the SW has none).
       path.startsWith("/push/tier-override") ||
       path.startsWith("/api/notifications/push/tier-override") ||
+      // "Later" from a notification action: the signed push-later token in the
+      // body is the credential, as for the tier override.
+      path === "/push/later" ||
+      path === "/api/notifications/push/later" ||
       // The SW's pushsubscriptionchange handler has no auth token; the
       // rotate route authenticates by matching the OLD endpoint (a
       // high-entropy capability URL) against an existing row instead.
@@ -121,6 +167,23 @@ export async function notificationRoutes(app: FastifyInstance) {
     };
   });
 
+  // GET /api/notifications/desktop-catchup?ids=a,b — Windows desktop shell:
+  // of these bell rows, the urgent mails missed while it was closed that still
+  // deserve a toast (decision N6, notify/desktop-catchup.ts).
+  app.get(
+    "/desktop-catchup",
+    {
+      schema: { querystring: desktopCatchUpQuerySchema },
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const ids = parseCatchUpIds((request.query as { ids?: unknown }).ids ?? "");
+      if (!ids) return reply.code(400).send({ error: "Invalid ids" });
+      return desktopCatchUp(userId, ids);
+    },
+  );
+
   // PATCH /api/notifications/:id/read — Mark single notification as read
   app.patch("/:id/read", async (request, reply) => {
     const userId = getUserId(request);
@@ -144,6 +207,24 @@ export async function notificationRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     await clearNotifications(userId);
     return reply.code(204).send();
+  });
+
+  // GET /api/notifications/alert-state — may a desktop banner interrupt now?
+  // The native Mac app polls for mail and meetings, so it never sees the
+  // `alert` tag the Windows shell reads off real-time frames. It asks here
+  // before posting a banner and gets the same gate (category opt-outs, quiet
+  // hours in the user's zone, focus rule): { alerts: { push, meeting } }, each
+  // { allowed: true } or { allowed: false, reason }. The client falls open on
+  // any failure, so a 503 here never silences an urgent mail.
+  app.get("/alert-state", async (request, reply) => {
+    const userId = getUserId(request);
+    try {
+      return { alerts: await desktopAlertState(userId) };
+    } catch (err) {
+      console.error(`[NOTIFY] alert-state gate failed for user ${userId}:`, err);
+      captureError(err, { tags: { scope: "notify.alert-state" }, extra: { userId } });
+      return reply.code(503).send({ error: "Alert state unavailable" });
+    }
   });
 
   // GET /api/notifications/vapid-key — Get public VAPID key for push subscription
@@ -223,6 +304,9 @@ export async function notificationRoutes(app: FastifyInstance) {
       });
     }
 
+    // Label for settings → "Where you get alerts": derived browser/OS only.
+    const { browser, os } = parseClientPlatform(request.headers["user-agent"]);
+
     await prisma.pushSubscription.upsert({
       where: { endpoint },
       create: {
@@ -232,6 +316,8 @@ export async function notificationRoutes(app: FastifyInstance) {
         auth: keys.auth,
         origin: normalizedOrigin,
         deviceId,
+        browser,
+        os,
       },
       update: {
         userId,
@@ -239,6 +325,8 @@ export async function notificationRoutes(app: FastifyInstance) {
         auth: keys.auth,
         origin: normalizedOrigin,
         deviceId,
+        browser,
+        os,
       },
     });
     console.log(`[PUSH-SUB] Successfully registered push subscription for user ${userId}`);

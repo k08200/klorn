@@ -135,17 +135,17 @@ export function ConnectStep(props: ConnectStepProps) {
       <h1
         id="onboarding-connect-title"
         tabIndex={-1}
-        className="text-display text-ink outline-none"
+        className="text-role-page text-ink outline-none"
       >
         {t("onboardingV2.connect.title")}
       </h1>
-      <p className="mt-2 max-w-xl text-body text-ink-mid">{t("onboardingV2.connect.body")}</p>
+      <p className="mt-2 max-w-xl text-role-body text-ink-mid">{t("onboardingV2.connect.body")}</p>
 
       <div className="mt-6 flex flex-col gap-3">
         {googleNeedsReconnect && (
           <p
             role="status"
-            className="rounded-control border border-notice-border bg-notice-bg px-4 py-3 text-body text-notice-ink"
+            className="rounded-control border border-notice-border bg-notice-bg px-4 py-3 text-role-body text-notice-ink"
           >
             <span className="font-semibold text-notice-ink-strong">
               {t("reconnect.googleExpiredTitle")}
@@ -158,7 +158,7 @@ export function ConnectStep(props: ConnectStepProps) {
         {startError && (
           <p
             role="alert"
-            className="rounded-control border border-state-danger-line bg-state-danger-bg px-4 py-3 text-body text-state-danger-ink"
+            className="rounded-control border border-state-danger-line bg-state-danger-bg px-4 py-3 text-role-body text-state-danger-ink"
           >
             {startError}
           </p>
@@ -184,7 +184,7 @@ export function ConnectStep(props: ConnectStepProps) {
         ))}
       </ProviderGrid>
 
-      <p className="mt-4 text-caption text-ink-muted">{t("onboardingV2.connect.lanesNote")}</p>
+      <p className="mt-4 text-role-caption text-ink-muted">{t("onboardingV2.connect.lanesNote")}</p>
 
       <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Button variant="ghost" onClick={onSkip}>
@@ -192,7 +192,7 @@ export function ConnectStep(props: ConnectStepProps) {
         </Button>
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
           {!connected && (
-            <p id="onboarding-continue-hint" className="text-caption text-ink-muted">
+            <p id="onboarding-continue-hint" className="text-role-caption text-ink-muted">
               {t("onboardingV2.connect.continueHint")}
             </p>
           )}
@@ -253,7 +253,9 @@ function ProviderGrid({ loading, failed, onRetry, children }: ProviderGridProps)
         role="alert"
         className="mt-4 flex flex-wrap items-center gap-3 rounded-control border border-line bg-surface-panel px-4 py-3"
       >
-        <p className="min-w-0 flex-1 text-body text-ink">{t("onboardingV2.connect.loadError")}</p>
+        <p className="min-w-0 flex-1 text-role-body text-ink">
+          {t("onboardingV2.connect.loadError")}
+        </p>
         <Button variant="secondary" size="sm" onClick={onRetry}>
           {t("onboardingV2.retry")}
         </Button>

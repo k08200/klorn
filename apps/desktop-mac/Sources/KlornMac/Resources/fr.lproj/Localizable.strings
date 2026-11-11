@@ -124,11 +124,13 @@
 "prefs.section.about" = "À PROPOS";
 
 "prefs.banners" = "Afficher les bannières macOS sur ce Mac";
-"prefs.banners.detail" = "Une bannière pour chaque nouveau courriel PUSH, avec seulement l'expéditeur et l'objet. Interrupteur général local : désactivé, il coupe toutes les bannières ici quelles que soient les catégories ci-dessus ; le nombre de PUSH dans la fenêtre principale continue d'être mis à jour.";
+"prefs.banners.detail" = "Une bannière pour chaque nouveau courriel PUSH ou MEETING, avec seulement l'expéditeur et l'objet. Interrupteur général local : désactivé, il coupe toutes les bannières ici quelles que soient les catégories ci-dessus ; le nombre de PUSH dans la fenêtre principale continue d'être mis à jour.";
 "prefs.banners.denied" = "macOS bloque les notifications de Klorn. Autorisez-les dans Réglages Système ▸ Notifications.";
 "prefs.banners.openSystemSettings" = "Ouvrir Réglages Système";
 "prefs.section.support" = "APP ET ASSISTANCE";
 "push.announce" = "Nouveau courriel PUSH : %d";
+"push.announce.meeting" = "Nouveau courriel MEETING : %d";
+"push.heldSummary.title" = "%d e-mails urgents pendant les heures calmes";
 "prefs.launchAtLogin" = "Lancer Klorn à l'ouverture de session";
 "prefs.launchAtLogin.unavailable.label" = "Lancer à l'ouverture";
 "prefs.launchAtLogin.unavailable.value" = "Application packagée uniquement";
@@ -188,7 +190,7 @@
 "auto.preset.detail" = "L'essentiel seulement : le courrier qui attend une réponse, plus ce qui est à l'agenda. Le reste reste dans la barre, sans bannière.";
 
 "auto.notify.emailUrgent" = "E-mail urgent";
-"auto.notify.emailUrgent.detail" = "Courrier classé PUSH par Klorn — quelqu'un vous attend.";
+"auto.notify.emailUrgent.detail" = "Courrier classé PUSH ou MEETING par Klorn — quelqu'un vous attend.";
 "auto.notify.meeting" = "Réunions";
 "auto.notify.meeting.detail" = "Événements sur le point de commencer.";
 "auto.notify.taskDue" = "Échéances";

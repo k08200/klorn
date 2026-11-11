@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 describe("wrapUntrusted", () => {
   it("wraps content with source-tagged markers", () => {
@@ -83,11 +84,12 @@ describe("wrapUntrusted", () => {
       `<${"​".repeat(40_000)}x`,
     ];
     for (const input of inputs) {
-      const started = performance.now();
-      wrapUntrusted(input, "email:body");
-      stripUntrusted(input);
+      const ms = fastestCpuMs(() => {
+        wrapUntrusted(input, "email:body");
+        stripUntrusted(input);
+      });
       // Unbounded versions take seconds here; a linear pass takes milliseconds.
-      expect(performance.now() - started).toBeLessThan(1_000);
+      expect(ms).toBeLessThan(1_000);
     }
   });
 

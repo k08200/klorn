@@ -68,6 +68,10 @@ import {
   TODAY_PUSH_WINDOW_HOURS,
   todayPushCutoff,
 } from "../judge/today-push-window.js";
+import { noteAttentionItemOutcome, noteEmailOutcome } from "../judge/user-outcome.js";
+import { FIREWALL_V3_SELECT, firewallV3Row, withV3Lanes } from "../judge/v3/firewall-v3.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
+import { v3TodayFields } from "../judge/v3/read-fields.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
@@ -565,6 +569,9 @@ export async function firewallRoutes(app: FastifyInstance) {
       // on every query below is the IDOR guard — a foreign or malformed id can
       // only ever match the caller's own rows (zero).
       const { inbox } = request.query as { inbox?: string };
+      // Attention engine v3, for a user under the policy only: QUEUE in ranked
+      // order, a v3 block per item, and Today's fields.
+      const policyUser = isJudgeV3PolicyEnabled(userId);
 
       // Activity-driven self-heal: the firewall view is the app's front door,
       // so opening it re-registers an expired Gmail watch even when the
@@ -601,12 +608,19 @@ export async function firewallRoutes(app: FastifyInstance) {
               inputHash: string | null;
               agentTierSetAt: Date | null;
               isManualOverride: boolean;
+              // Selected only for a user under policy v3 (FIREWALL_V3_SELECT).
+              heldAt?: Date | null;
+              v3PolicyVersion?: string | null;
+              v3Decision?: unknown;
+              v3Due?: Date | null;
+              v3Importance?: number | null;
             }>
           >;
         }
       ).findMany({
         where: { userId, status: "OPEN" },
         select: {
+          ...(policyUser ? FIREWALL_V3_SELECT : {}),
           id: true,
           source: true,
           sourceId: true,
@@ -891,6 +905,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         if (key) return pushThreadInWindow.has(key);
         return isInTodayPushWindow(item.email?.receivedAt, row.createdAt, now);
       };
+      const rowById = new Map(dedupedItems.map((row) => [row.id, row]));
       for (const row of dedupedItems) {
         // toLiveTier maps legacy CALL rows → PUSH (not QUEUE), the retired
         // v1 AUTO lane → QUEUE, and any unknown/null tier → QUEUE. The AUTO
@@ -1033,8 +1048,20 @@ export async function firewallRoutes(app: FastifyInstance) {
         }
       }
 
+      const lanes = policyUser
+        ? withV3Lanes(tiers, {
+            rowOf: (itemId) => firewallV3Row(rowById.get(itemId)),
+            receivedAtOf: (itemId) => {
+              const row = rowById.get(itemId);
+              return (row && emailById.get(row.sourceId)?.receivedAt) ?? row?.createdAt ?? now;
+            },
+            now,
+          })
+        : tiers;
+      const today = policyUser ? await v3TodayFields(userId, inbox, now) : {};
       return {
-        tiers,
+        tiers: lanes,
+        ...today,
         // Today's PUSH block (today-push-window.ts): which PUSH cards it lists.
         // Additive; the lanes and the summary above stay whole for Mail.
         todayPush: {
@@ -1227,6 +1254,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         return { ok: false, message: "Attention item not found." };
       }
 
+      noteAttentionItemOutcome(userId, id, "SNOOZED");
       return { ok: true, snoozedUntil: snoozeDate.toISOString() };
     },
   );
@@ -1256,6 +1284,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         return { ok: false, message: "Attention item not found." };
       }
 
+      noteAttentionItemOutcome(userId, id, "DISMISSED");
       return { ok: true };
     },
   );
@@ -1276,11 +1305,15 @@ export async function firewallRoutes(app: FastifyInstance) {
       request,
       reply,
     ): Promise<AttentionByEmailDismissResponse | AttentionByEmailErrorResponse> => {
-      const result = await dismissEmailAttention(getUserId(request), request.params.emailId);
+      const userId = getUserId(request);
+      const result = await dismissEmailAttention(userId, request.params.emailId);
       if (!result.ok) {
         reply.code(404);
         return { ok: false, code: "not_found", message: EMAIL_NOT_FOUND_MESSAGE };
       }
+      // ok means the mail is the caller's own row (resolved by id), so the
+      // param is its EmailMessage id. alreadyClear changed nothing: no stamp.
+      if (!result.alreadyClear) noteEmailOutcome(userId, request.params.emailId, "DISMISSED");
       return { ok: true, itemId: result.itemId, alreadyClear: result.alreadyClear };
     },
   );
@@ -1301,15 +1334,13 @@ export async function firewallRoutes(app: FastifyInstance) {
           message: "snoozeUntil must be a future ISO datetime.",
         };
       }
-      const result = await snoozeEmailAttention(
-        getUserId(request),
-        request.params.emailId,
-        snoozeDate,
-      );
+      const userId = getUserId(request);
+      const result = await snoozeEmailAttention(userId, request.params.emailId, snoozeDate);
       if (!result.ok) {
         reply.code(404);
         return { ok: false, code: "not_found", message: EMAIL_NOT_FOUND_MESSAGE };
       }
+      if (!result.alreadyClear) noteEmailOutcome(userId, request.params.emailId, "SNOOZED");
       return result.alreadyClear
         ? { ok: true, itemId: result.itemId, alreadyClear: true }
         : {

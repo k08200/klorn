@@ -162,7 +162,7 @@ struct CalendarScreen: View {
                             .foregroundStyle(item == scope ? Theme.text : Theme.textDim)
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(item == scope ? Theme.surfaceHover : .clear,
-                                        in: RoundedRectangle(cornerRadius: 6))
+                                        in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
                     }
                 }
                 .padding(2)
@@ -397,7 +397,7 @@ struct CalendarScreen: View {
                 }
             }
             .padding(10)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -79,7 +79,10 @@ describe("isByokEntitlementRefusal", () => {
   });
 
   it("does not match a rejected key or another 403", () => {
-    const rejected = JSON.stringify({ error: "That OpenRouter key was rejected by the provider." });
+    const rejected = JSON.stringify({
+      error:
+        "That Anthropic key was rejected by the provider — check it at platform.claude.com/settings/keys and try again.",
+    });
     expect(isByokEntitlementRefusal(apiError(400, rejected))).toBe(false);
     expect(isByokEntitlementRefusal(apiError(403, JSON.stringify({ error: "Forbidden" })))).toBe(
       false,

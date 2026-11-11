@@ -64,9 +64,9 @@ export function FileRow({ file, timeZone, onOpenFolder }: FileRowProps) {
         <FileGlyph folder={file.isFolder} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body text-ink">{file.name}</span>
+        <span className="truncate text-role-body text-ink">{file.name}</span>
         {(status ?? meta) && (
-          <span id={metaId} className="text-caption text-ink-muted">
+          <span id={metaId} className="text-role-caption text-ink-muted">
             {status ?? meta}
           </span>
         )}
@@ -160,7 +160,7 @@ function DownloadRow({
         <p
           id={errorId}
           role="alert"
-          className="pb-2 text-caption text-state-danger-ink [word-break:keep-all]"
+          className="pb-2 text-role-caption text-state-danger-ink [word-break:keep-all]"
         >
           {t(download.errorKey, { name: file.name })}
         </p>

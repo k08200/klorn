@@ -264,8 +264,8 @@ private struct TodayMailRow: View {
 extension View {
     /// A Today group: the raised surface with a hairline, no shadow.
     func todayPanel() -> some View {
-        background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.md).strokeBorder(Theme.line))
+        background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
     }
 }

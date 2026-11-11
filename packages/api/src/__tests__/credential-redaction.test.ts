@@ -45,7 +45,7 @@ describe("redactCredentialShapes", () => {
     expect(redactCredentialShapes("sk-admin-AbCd1234EfGh5678")).not.toContain("AbCd1234");
   });
 
-  it("redacts an OpenRouter sk-or-v1 key", () => {
+  it("redacts an sk-or-v1 key — an old proxy key pasted into a BYOK field", () => {
     const out = redactCredentialShapes("sk-or-v1-supersecret-do-not-leak-1234567890");
     expect(out).not.toContain("supersecret");
   });
@@ -205,7 +205,7 @@ describe("redactCredentialQueryParams — parameter names", () => {
       "api_token",
       "private_key",
       "X-Amz-Signature",
-      "openRouterApiKey",
+      "anthropicApiKey",
       "client_credentials",
     ]) {
       const out = redactCredentialQueryParams(`https://x.test/v1?${name}=${OPAQUE}`);

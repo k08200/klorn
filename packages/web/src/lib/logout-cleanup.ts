@@ -9,6 +9,8 @@ import { API_BASE, getStoredAuthToken } from "./api";
  */
 const SENSITIVE_STORAGE_KEYS = [
   "klorn-playground-key",
+  // The OpenRouter tab is retired (2026-11-01); its slots stay listed so a key
+  // saved by an older build is still wiped at sign-out.
   "klorn-playground-key-openrouter",
   "klorn-playground-key-gemini",
   "klorn-playground-key-openai",

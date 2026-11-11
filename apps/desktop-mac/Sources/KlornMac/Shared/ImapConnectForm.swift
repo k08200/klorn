@@ -73,8 +73,8 @@ struct ImapConnectForm: View {
         }
         .padding(Theme.s4)
         .frame(maxWidth: 440, alignment: .topLeading)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.md).strokeBorder(Theme.line, lineWidth: Theme.hairline))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line, lineWidth: Theme.hairline))
         .onChange(of: email) { failure = nil }
         .onChange(of: password) { failure = nil }
         .onDisappear {
@@ -140,8 +140,8 @@ struct ImapConnectForm: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: 22)
                     .padding(.horizontal, 6)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.field))
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
             } else if secure {
                 SecureField(placeholder, text: text)
                     .textFieldStyle(.roundedBorder)

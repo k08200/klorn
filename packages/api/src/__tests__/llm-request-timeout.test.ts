@@ -21,17 +21,53 @@ function timeoutOf(provider: { client: unknown } | null | undefined): number | u
 }
 
 describe("LLM client request timeout", () => {
+  type ProvidersModule = Awaited<ReturnType<typeof loadProviders>>;
+
+  // The only provider exposing an OpenAI SDK client on the cloud side is a
+  // playground visitor's direct OpenAI key.
+  function openAiVisitor(mod: ProvidersModule) {
+    return mod.getProviderChain({ openAiApiKey: "sk-user", playgroundOnly: true })[0];
+  }
+
   it("gives cloud clients a 60 s timeout, not the SDK's 10 minutes", async () => {
-    const { getProvider, getProviderChain } = await loadProviders({
-      OPENROUTER_API_KEY: "env-key",
+    const mod = await loadProviders({
+      ANTHROPIC_API_KEY: undefined,
+      GEMINI_API_KEY: undefined,
       OPENAI_COMPAT_BASE_URL: undefined,
       LLM_REQUEST_TIMEOUT_MS: undefined,
     });
 
-    expect(timeoutOf(getProvider("openrouter"))).toBe(60_000);
-    const chain = getProviderChain({ openRouterApiKey: "user-key", openAiApiKey: "sk-user" });
-    for (const provider of chain.filter((p) => p.client)) {
-      expect(timeoutOf(provider), provider.name).toBe(60_000);
+    const visitor = openAiVisitor(mod);
+    expect(visitor.name).toBe("openai");
+    expect(timeoutOf(visitor)).toBe(60_000);
+  });
+
+  it("builds the Anthropic SDK client (env and user key) with the 60 s cloud timeout", async () => {
+    const createAnthropicClient = vi.fn(() => ({}));
+    vi.doMock("../providers/anthropic-native.js", () => ({
+      createAnthropicClient,
+      createAnthropicCompletion: vi.fn(async () => ({ choices: [] })),
+      streamAnthropicCompletion: vi.fn(),
+    }));
+    try {
+      const { getProviderChain } = await loadProviders({
+        ANTHROPIC_API_KEY: "sk-ant-env",
+        GEMINI_API_KEY: undefined,
+        OPENAI_COMPAT_BASE_URL: undefined,
+        LLM_REQUEST_TIMEOUT_MS: undefined,
+      });
+      const chain = getProviderChain({ anthropicApiKey: "sk-ant-user", quotaScope: "u1" });
+      expect(chain.map((p) => p.quotaKey)).toEqual(["anthropic:user:u1", "anthropic:env"]);
+      for (const provider of chain) {
+        await provider.call({ messages: [] } as never, "claude-haiku-5-5");
+      }
+
+      expect(createAnthropicClient).toHaveBeenCalledTimes(2);
+      for (const args of createAnthropicClient.mock.calls as unknown[][]) {
+        expect(args[1]).toBe(60_000);
+      }
+    } finally {
+      vi.doUnmock("../providers/anthropic-native.js");
     }
   });
 
@@ -45,18 +81,17 @@ describe("LLM client request timeout", () => {
 
   it("lets LLM_REQUEST_TIMEOUT_MS override both, and ignores an unusable value", async () => {
     const tuned = await loadProviders({
-      OPENROUTER_API_KEY: "env-key",
       OPENAI_COMPAT_BASE_URL: "http://localhost:11434/v1",
       LLM_REQUEST_TIMEOUT_MS: "20000",
     });
-    expect(timeoutOf(tuned.getProvider("openrouter"))).toBe(20_000);
+    expect(timeoutOf(openAiVisitor(tuned))).toBe(20_000);
     expect(timeoutOf(tuned.getProvider("openai-compat"))).toBe(20_000);
 
     const bad = await loadProviders({
-      OPENROUTER_API_KEY: "env-key",
+      OPENAI_COMPAT_BASE_URL: undefined,
       LLM_REQUEST_TIMEOUT_MS: "soon",
     });
-    expect(timeoutOf(bad.getProvider("openrouter"))).toBe(60_000);
+    expect(timeoutOf(openAiVisitor(bad))).toBe(60_000);
   });
 });
 

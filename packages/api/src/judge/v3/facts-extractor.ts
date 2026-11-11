@@ -89,6 +89,10 @@ export interface ExtractFactsOptions {
   complete?: Complete;
   /** Skip instead of waiting for a pacer/RPM slot (the shadow); throws PacerBusyError. */
   noWait?: boolean;
+  /** Draw on the judge's reserved budget: only when the facts call IS the judge (live path). */
+  reserved?: boolean;
+  /** Checked before a retry: true once nobody waits for the answer (live path past its deadline). */
+  abandoned?: () => boolean;
 }
 
 /** Transport attempts. A malformed answer is not retried: at temperature 0 it repeats. */
@@ -173,6 +177,9 @@ async function callModel(prompt: FactsPrompt, options: ExtractFactsOptions): Pro
     // so it always goes through the pacer.
     priority: "background",
     ...(options.userId ? { userId: options.userId } : {}),
+    // Passed through, never claimed here: only the live path (live-facts.ts)
+    // may ask for the judge's reserve.
+    ...(options.userId && options.reserved ? { reserved: options.reserved } : {}),
     ...(options.credentials ? { credentials: options.credentials } : {}),
     ...(options.noWait ? { noWait: true } : {}),
     onServed: (s) => {
@@ -200,6 +207,8 @@ async function fetchAnswer(
   failures: string[],
 ): Promise<ModelAnswer | null> {
   for (let attempt = 1; attempt <= FACTS_LLM_ATTEMPTS; attempt++) {
+    // No second (reserved) call for an answer nobody is waiting for.
+    if (attempt > 1 && options.abandoned?.()) return null;
     try {
       return await callModel(prompt, options);
     } catch (err) {

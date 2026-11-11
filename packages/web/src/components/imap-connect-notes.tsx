@@ -6,7 +6,7 @@ import { useT } from "../lib/i18n";
 export function FirstSyncNote({ started }: { started: boolean }) {
   const { t } = useT();
   return (
-    <p role="status" className="text-xs text-ink-mid">
+    <p role="status" className="text-role-caption text-ink-mid">
       {started ? t("imapConnect.firstSync.started") : t("imapConnect.firstSync.delayed")}
     </p>
   );

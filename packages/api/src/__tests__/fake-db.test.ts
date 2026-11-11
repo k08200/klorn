@@ -173,6 +173,48 @@ describe("upsert", () => {
   });
 });
 
+describe("createMany", () => {
+  const create = {
+    userId: "u1",
+    source: "EMAIL",
+    sourceId: "s1",
+    type: "REPLY_NEEDED",
+    title: "t",
+  };
+
+  it("inserts every row and answers the count", async () => {
+    const d = db([]);
+    const made = await items(d).createMany({ data: [create, { ...create, sourceId: "s2" }] });
+    expect(made).toEqual({ count: 2 });
+    expect(d.tables.attentionItem).toHaveLength(2);
+  });
+
+  it("with skipDuplicates, skips a row that clashes on a unique key, as ON CONFLICT DO NOTHING", async () => {
+    const d = db();
+    const made = await items(d).createMany({
+      data: [create, { ...create, sourceId: "s2" }, { ...create, sourceId: "s2" }],
+      skipDuplicates: true,
+    });
+    expect(made).toEqual({ count: 1 });
+    expect(d.tables.attentionItem.map((r) => r.sourceId).sort()).toEqual(["s1", "s2"]);
+  });
+
+  it("createManyAndReturn answers only the rows it inserted, projected by select", async () => {
+    const d = db();
+    const made = await items(d).createManyAndReturn({
+      data: [create, { ...create, sourceId: "s2" }],
+      skipDuplicates: true,
+      select: { sourceId: true },
+    });
+    expect(made).toEqual([{ sourceId: "s2" }]);
+  });
+
+  it("without skipDuplicates, throws on a clash, and checks columns like create", async () => {
+    await expect(items().createMany({ data: [create] })).rejects.toThrow(/unique constraint/);
+    await expect(items(db([])).createMany({ data: [{ ...create, nope: 1 }] })).rejects.toThrow();
+  });
+});
+
 describe("atomic increment, as Prisma's `{ increment: n }` on a number column", () => {
   it("adds to the stored value on update and on an upsert's update", async () => {
     const d = createFakeDb({ driveSummaryUsage: [] });

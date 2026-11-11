@@ -21,7 +21,7 @@ function browserStore(): Storage | null {
 
 /** Provider choice + the visitor's key, stored only when they opt in. */
 export function useProviderKey() {
-  const [provider, setProvider] = useState<PlaygroundProvider>("openrouter");
+  const [provider, setProvider] = useState<PlaygroundProvider>("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [remember, setRemember] = useState(false);
 
@@ -36,7 +36,7 @@ export function useProviderKey() {
   const hydrate = useCallback((): PlaygroundProvider => {
     const store = browserStore();
     if (store) dropUnconsentedKeys(store);
-    const p = store ? loadProvider(store) : "openrouter";
+    const p = store ? loadProvider(store) : "anthropic";
     setProvider(p);
     loadFor(p);
     return p;

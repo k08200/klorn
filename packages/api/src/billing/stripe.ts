@@ -6,8 +6,15 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.warn("STRIPE_SECRET_KEY not set — billing endpoints will fail");
 }
 
+// The Stripe API version this integration was written against. stripe-node's
+// types only accept the version each SDK major pins (v22: 2026-08-26.dahlia),
+// but the SDK sends whatever is configured here as the Stripe-Version header.
+// Keeping it pinned means an SDK bump never silently moves the API version;
+// moving it is its own change, checked against the Stripe API changelog.
+const STRIPE_API_VERSION = "2025-08-27.basil" as Stripe.LatestApiVersion;
+
 export const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-08-27.basil" })
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : (null as unknown as Stripe);
 
 export const PLANS = {
@@ -17,7 +24,10 @@ export const PLANS = {
     testLimit: 10,
     messageLimit: 50,
     tokenLimit: 500_000,
-    deviceLimit: 1,
+    // Same as Pro (founder decision 2026-11-07): web + Mac + phone at once.
+    // With 1, signing in anywhere else — including the web /billing page the
+    // Mac upgrade link opens — logged the other session out.
+    deviceLimit: 3,
   },
   PRO: {
     name: "Pro",

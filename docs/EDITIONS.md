@@ -14,7 +14,7 @@ running it; the bytes you trust are the same either way.
 | Deterministic action floor ([PR #480](https://github.com/k08200/klorn/pull/480), [#481](https://github.com/k08200/klorn/pull/481)) | ✅ | ✅ |
 | Calibration CLI (Day 14+7 retention measurement) | ✅ | ✅ |
 | Self-host on your Postgres + your infra | ✅ | — |
-| Bring-your-own LLM key (OpenRouter, Gemini, ...) | ✅ | ✅ |
+| Bring-your-own Anthropic (Claude) key | ✅ | ✅ |
 | Managed hosting + uptime SLA | — | ✅ |
 | Google-verified Gmail OAuth scope (no consent warning) | — | ✅ |
 | Team / multi-account workspaces | — | ✅ (roadmap) |

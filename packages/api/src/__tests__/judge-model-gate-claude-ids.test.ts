@@ -3,11 +3,11 @@
  * spelled, and must look at the model that ACTUALLY serves the judge.
  *
  * Two holes the native Anthropic provider would otherwise open:
- *  1. Spelling. The failing list is keyed by OpenRouter ids
+ *  1. Spelling. The failing list is keyed by vendor-prefixed ids
  *     (`anthropic/claude-sonnet-5`). The native provider takes native ids
  *     (`claude-sonnet-5`), which would not match — JUDGE_MODEL=claude-sonnet-5
  *     would run the very model that took PUSH to zero for three weeks, silently.
- *  2. Substitution by the provider. A non-OpenRouter provider leading the chain
+ *  2. Substitution by the provider. Any provider leading the chain
  *     serves a pin it cannot route with its OWN default (Gemini does this;
  *     Anthropic does too, via ANTHROPIC_MODEL). The boot check on JUDGE_MODEL
  *     alone would then validate a model that never runs.
@@ -52,11 +52,16 @@ describe("servedJudgeModel", () => {
     resolveModel: (m: string) => (m.startsWith("claude-") ? m : "claude-haiku-5-5"),
   };
 
-  it("is the pin itself when OpenRouter leads (it routes the caller's id as-is)", () => {
-    expect(
-      servedJudgeModel("google/gemini-2.5-flash", { name: "openrouter", resolveModel: () => "x" }),
-    ).toBe("google/gemini-2.5-flash");
+  it("is the pin itself when there is no provider", () => {
     expect(servedJudgeModel("google/gemini-2.5-flash", undefined)).toBe("google/gemini-2.5-flash");
+  });
+
+  it("asks every provider, with no name-based pass-through", () => {
+    // The retired proxy lane used to be special-cased by name; a provider
+    // with any name now answers through its own resolveModel.
+    expect(
+      servedJudgeModel("google/gemini-2.5-flash", { name: "gemini", resolveModel: () => "x" }),
+    ).toBe("x");
   });
 
   it("is what the leading provider resolves the pin to otherwise", () => {
@@ -67,7 +72,8 @@ describe("servedJudgeModel", () => {
 
 describe("reportJudgeServing (every provider in the chain)", () => {
   const anthropic = (served: string) => ({ name: "anthropic", resolveModel: () => served });
-  const openrouter = { name: "openrouter", resolveModel: (m: string) => m };
+  // A lane that serves the pin exactly as configured.
+  const asConfigured = { name: "gemini", resolveModel: (m: string) => m };
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -90,13 +96,13 @@ describe("reportJudgeServing (every provider in the chain)", () => {
 
   it("is loud about a gate-failing model on a FAILOVER lane, not just the head", () => {
     const { error } = spies();
-    reportJudgeServing("google/gemini-2.5-flash", [openrouter, anthropic("claude-sonnet-5")]);
+    reportJudgeServing("google/gemini-2.5-flash", [asConfigured, anthropic("claude-sonnet-5")]);
     expect(error.mock.calls.join(" ")).toMatch(/claude-sonnet-5.*fails the gate/);
   });
 
   it("only notes an unmeasured swap on a failover lane", () => {
     const { log, warn, error } = spies();
-    reportJudgeServing("google/gemini-2.5-flash", [openrouter, anthropic("claude-haiku-9-9")]);
+    reportJudgeServing("google/gemini-2.5-flash", [asConfigured, anthropic("claude-haiku-9-9")]);
     expect(log.mock.calls.join(" ")).toMatch(/failover.*claude-haiku-9-9/);
     expect(warn).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
@@ -104,7 +110,7 @@ describe("reportJudgeServing (every provider in the chain)", () => {
 
   it("stays silent when every provider serves the pin as configured", () => {
     const { log, warn, error } = spies();
-    reportJudgeServing("google/gemini-2.5-flash", [openrouter]);
+    reportJudgeServing("google/gemini-2.5-flash", [asConfigured]);
     expect(log).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();

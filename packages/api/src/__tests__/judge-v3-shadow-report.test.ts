@@ -35,6 +35,18 @@ describe("report lanes come from policy v3 (laneFromFactsV3)", () => {
     expect(laneForRow(urgent, { spam: true }, null, at)).not.toBe("PUSH");
   });
 
+  it("passes the stored DMARC verdict, so v3.1's risk trust scores as on the live path", () => {
+    const f = facts({ risk: ["payment_failed"], kind: "notification" });
+    const rel = {
+      vip: false,
+      inboundCount: 12,
+      firstSeenAt: new Date(at.getTime() - 400 * 24 * 3_600_000).toISOString(),
+    } as never;
+    expect(laneForRow(f, { senderAuthenticated: true }, rel, at)).toBe("PUSH");
+    expect(laneForRow(f, {}, rel, at)).toBe("QUEUE");
+    expect(laneForRow(f, { senderAuthenticated: false }, rel, at)).toBe("QUEUE");
+  });
+
   it("matches laneFromFactsV3 exactly for the same inputs (no private mapping left)", () => {
     const f = facts({ risk: ["payment_failed"], kind: "notification" });
     const rel = { vip: true } as never;

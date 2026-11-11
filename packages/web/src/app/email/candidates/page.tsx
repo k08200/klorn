@@ -308,17 +308,15 @@ function CandidateIntakeView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {t("mail.filterCandidates")}
-          </h1>
-          <p className="mt-2 text-sm text-ink-mid">{t("candidates.subtitle")}</p>
+          <h1 className="text-role-page text-ink">{t("mail.filterCandidates")}</h1>
+          <p className="mt-2 text-role-body text-ink-mid">{t("candidates.subtitle")}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => load(status, attention, true)}
             disabled={refreshing}
-            className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
           >
             {refreshing ? t("candidates.refreshing") : t("candidates.rescan")}
           </button>
@@ -326,13 +324,13 @@ function CandidateIntakeView() {
             type="button"
             onClick={exportCsv}
             disabled={exporting}
-            className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
           >
             {exporting ? t("candidates.exporting") : t("candidates.exportCsv")}
           </button>
           <Link
             href="/email"
-            className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
           >
             {t("candidates.emailListLink")}
           </Link>
@@ -361,7 +359,7 @@ function CandidateIntakeView() {
       </div>
 
       {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
-        <div className="mb-3 rounded-xl border border-state-info-line bg-state-info-bg px-3 py-2 text-caption text-state-info-ink">
+        <div className="mb-3 rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 text-role-caption text-state-info-ink">
           {t("candidates.correctionSummary", {
             total: String(quality.correctionSummary.total),
             categories: String(quality.correctionSummary.categoryCorrectionCount),
@@ -379,7 +377,7 @@ function CandidateIntakeView() {
       )}
 
       <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
-        <span className="mr-0.5 shrink-0 text-caption font-medium uppercase tracking-wider text-ink-dim">
+        <span className="mr-0.5 shrink-0 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("candidates.filterStatusLabel")}
         </span>
         {STATUS_FILTERS.map((filter) => {
@@ -389,7 +387,7 @@ function CandidateIntakeView() {
               key={filter.status}
               type="button"
               onClick={() => setStatus(filter.status)}
-              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
                 active
                   ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                   : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
@@ -403,7 +401,7 @@ function CandidateIntakeView() {
       </div>
 
       <div className="-mx-4 mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
-        <span className="mr-0.5 shrink-0 text-caption font-medium uppercase tracking-wider text-ink-dim">
+        <span className="mr-0.5 shrink-0 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("candidates.filterFocusLabel")}
         </span>
         {ATTENTION_FILTERS.map((filter) => {
@@ -413,7 +411,7 @@ function CandidateIntakeView() {
               key={filter.value}
               type="button"
               onClick={() => setAttention(filter.value)}
-              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
                 active
                   ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                   : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
@@ -427,12 +425,12 @@ function CandidateIntakeView() {
       </div>
 
       {!loading && candidates.length > 0 && (
-        <div className="panel-elevated mt-3 flex flex-col gap-2 rounded-xl border border-line/70 bg-surface-panel p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="panel-elevated mt-3 flex flex-col gap-2 rounded-card border border-line/70 bg-surface-panel p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={toggleAllVisible}
-              className="ease-strong rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+              className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
             >
               {selectedCount > 0
                 ? t("candidates.bulk.selectedCount", { count: String(selectedCount) })
@@ -442,7 +440,7 @@ function CandidateIntakeView() {
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="ease-strong rounded-lg px-3 py-1.5 text-xs text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] focus-ring"
+                className="ease-strong rounded-control px-3 py-1.5 text-role-caption text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] focus-ring"
               >
                 {t("candidates.bulk.clear")}
               </button>
@@ -482,9 +480,9 @@ function CandidateIntakeView() {
       {error && <ErrorAlert className="mt-3">{error}</ErrorAlert>}
 
       {!loading && !error && candidates.length === 0 && (
-        <div className="panel-elevated mt-4 rounded-2xl border border-line/70 bg-surface-panel p-6 text-center">
-          <p className="text-sm text-ink-mid">{t("candidates.empty.title")}</p>
-          <p className="mt-1 text-xs text-ink-dim">{t("candidates.empty.description")}</p>
+        <div className="panel-elevated mt-4 rounded-card border border-line/70 bg-surface-panel p-6 text-center">
+          <p className="text-role-body text-ink-mid">{t("candidates.empty.title")}</p>
+          <p className="mt-1 text-role-caption text-ink-dim">{t("candidates.empty.description")}</p>
         </div>
       )}
 
@@ -514,9 +512,9 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
   // "Add your own key" is a Pro remedy: a FREE user is told where it lives instead.
   const locked = byokLocked(user);
   return (
-    <div className="mb-3 overflow-hidden rounded-lg border border-state-warn-line bg-state-warn-bg">
+    <div className="mb-3 overflow-hidden rounded-control border border-state-warn-line bg-state-warn-bg">
       <div className="flex items-center gap-3 px-3 py-2">
-        <p className="min-w-0 flex-1 truncate text-xs text-amber-800">
+        <p className="min-w-0 flex-1 truncate text-role-caption text-amber-800">
           {t("candidates.qualityIssues.prefix")}
           <span className="font-semibold tabular-nums">{count}</span>{" "}
           {count === 1
@@ -535,7 +533,7 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="ease-strong shrink-0 rounded-md px-2 py-1 text-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97] focus-ring"
+          className="ease-strong shrink-0 rounded-chip px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97] focus-ring"
         >
           {expanded ? t("candidates.qualityIssues.hide") : t("candidates.qualityIssues.details")}
         </button>
@@ -546,7 +544,7 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
             <li key={issue.attachmentId}>
               <Link
                 href={`/email/${issue.emailId}`}
-                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-caption transition duration-150 hover:bg-state-warn-bg focus-ring"
+                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-role-caption transition duration-150 hover:bg-state-warn-bg focus-ring"
               >
                 <span className="truncate font-medium text-ink-soft">{issue.filename}</span>
                 <span className="min-w-0 truncate text-ink-dim">{issue.reason}</span>
@@ -565,7 +563,7 @@ function QueueStat({ label, value }: { label: string; value: number | string }) 
   const isZero = value === 0 || value === "0";
   return (
     <span
-      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-panel/70 px-3 text-caption font-medium tabular-nums ${
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-panel/70 px-3 text-role-caption font-medium tabular-nums ${
         isZero ? "text-ink-dim opacity-60" : "text-ink-mid"
       }`}
     >
@@ -591,7 +589,7 @@ function BulkStatusButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="ease-strong rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring"
+      className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring"
     >
       {label}
     </button>
@@ -614,7 +612,7 @@ function CandidateCard({
   const displayName = candidate.name || senderName(candidate.email.from);
   return (
     <article
-      className={`panel-elevated relative overflow-hidden rounded-2xl border bg-surface-panel p-4 transition duration-150 ease-out ${
+      className={`panel-elevated relative overflow-hidden rounded-card border bg-surface-panel p-4 transition duration-150 ease-out ${
         selected
           ? "border-accent-muted ring-2 ring-accent/20"
           : "border-line/70 hover:border-state-info-line"
@@ -633,32 +631,34 @@ function CandidateCard({
         />
         <span
           aria-hidden="true"
-          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(displayName)}`}
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(displayName)}`}
         >
           {senderInitials(displayName)}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+            <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
               {candidateStatusLabel(t, candidate.status)}
             </span>
-            <span className="text-caption tabular-nums text-ink-dim">
+            <span className="text-role-caption tabular-nums text-ink-dim">
               {Math.round(candidate.confidence * 100)}%
             </span>
             {candidate.duplicateCount > 1 && (
-              <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+              <span className="shrink-0 rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
                 {t("candidates.card.duplicateBadge", { count: String(candidate.duplicateCount) })}
               </span>
             )}
           </div>
-          <h2 className="mt-1.5 truncate text-sm font-semibold text-ink">{title}</h2>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-mid">{candidate.summary}</p>
+          <h2 className="mt-1.5 truncate text-role-head text-ink">{title}</h2>
+          <p className="mt-1 line-clamp-2 text-role-caption leading-5 text-ink-mid">
+            {candidate.summary}
+          </p>
         </div>
-        <time className="shrink-0 text-caption tabular-nums text-ink-dim">
+        <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
           {formatRelative(candidate.email.receivedAt)}
         </time>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-caption text-ink-dim">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-role-caption text-ink-dim">
         {candidate.contact && (
           <span className="truncate">
             {t("candidates.card.contactPrefix", { contact: candidate.contact })}
@@ -668,7 +668,7 @@ function CandidateCard({
           {t("emailDetail.attachment.fileCount", { count: String(candidate.evidenceFiles.length) })}
         </span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
-          <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-caption font-medium tabular-nums text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+          <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-medium tabular-nums text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
             {t("candidates.card.sourceCheckCount", {
               count: String(
                 candidate.evidenceFiles.filter((file) => file.needsManualReview).length,
@@ -677,7 +677,7 @@ function CandidateCard({
           </span>
         )}
         {candidate.duplicateCount > 1 && (
-          <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-medium text-ink-mid ring-1 ring-inset ring-line">
+          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-medium text-ink-mid ring-1 ring-inset ring-line">
             {t("candidates.card.duplicateMatch", {
               reasons: candidate.duplicateReasons
                 .map((reason) => candidateDuplicateLabel(t, reason))
@@ -686,33 +686,33 @@ function CandidateCard({
           </span>
         )}
         {candidate.missingFields.length > 0 && (
-          <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-medium tabular-nums text-ink-mid ring-1 ring-inset ring-line">
+          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-medium tabular-nums text-ink-mid ring-1 ring-inset ring-line">
             {formatMissingBadge(t, candidate.missingFields)}
           </span>
         )}
       </div>
-      <div className="mt-3 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
-        <p className="truncate text-xs text-ink-muted">
+      <div className="mt-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+        <p className="truncate text-role-caption text-ink-muted">
           {candidate.email.subject || t("common.untitled")}
         </p>
-        <p className="mt-1 truncate text-caption text-ink-dim">
+        <p className="mt-1 truncate text-role-caption text-ink-dim">
           {senderName(candidate.email.from)}
         </p>
       </div>
       {candidate.notes && (
-        <p className="mt-2 line-clamp-2 text-caption leading-5 text-ink-dim">
+        <p className="mt-2 line-clamp-2 text-role-caption leading-5 text-ink-dim">
           {t("candidates.card.notesPrefix", { notes: candidate.notes })}
         </p>
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
-        className="ease-strong mt-3 inline-flex h-8 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+        className="ease-strong mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         {t("candidates.card.detailsLink")}
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
-        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-dim transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-dim transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         {t("nav.email")}
       </Link>

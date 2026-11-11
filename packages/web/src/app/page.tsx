@@ -15,7 +15,7 @@ export default function RootPage() {
       <RootRedirect />
       <Loading />
       <noscript>
-        <p className="px-6 py-4 text-center text-sm text-ink-dim">
+        <p className="px-6 py-4 text-center text-role-body text-ink-dim">
           JavaScript is required to open the app. Visit{" "}
           <a href="https://klorn.ai" className="underline">
             klorn.ai

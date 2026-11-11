@@ -140,11 +140,11 @@ struct SolidButtonStyle: ButtonStyle {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: compact ? 24 : 32)
             .background(
                 prominent ? Theme.accentSolid : Theme.surfaceRaised,
-                in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                in: RoundedRectangle(cornerRadius: Theme.Radius.control))
             .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .strokeBorder(prominent ? Color.clear : Theme.line))
-            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control))
             .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.5)
     }
 }

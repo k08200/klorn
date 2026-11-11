@@ -32,12 +32,22 @@ function floatEnv(name: string, fallback: number): number {
 }
 
 // ── Push notifications ────────────────────────────────────────────────
-// Caps how often a single user's phone can ring across a sliding window.
-// Originally tuned 2026-04-21 after the notification-flood incident.
+// Caps how often a single user's phone can ring across a sliding window, in two
+// independent buckets (notify/push-bucket.ts) that share the two windows.
 export const PUSH_WINDOW_10MIN_MS = intEnv("PUSH_WINDOW_10MIN_MS", 10 * 60 * 1000);
 export const PUSH_WINDOW_60MIN_MS = intEnv("PUSH_WINDOW_60MIN_MS", 60 * 60 * 1000);
-export const PUSH_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
-export const PUSH_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
+// Ambient (briefings, proposals, every agent-originated push, system): the caps
+// tuned 2026-04-21 after the notification-flood incident. The env names predate
+// the split and are kept so an existing override still applies.
+export const PUSH_AMBIENT_CAP_10MIN = intEnv("PUSH_CAP_10MIN", 3);
+export const PUSH_AMBIENT_CAP_60MIN = intEnv("PUSH_CAP_60MIN", 6);
+// Interrupt (firewall PUSH/MEETING mail, urgent sweep, meeting alerts, user-set
+// reminders; the caller asks for it): its own caps, so ambient traffic can
+// never use them up. Room for a real burst (a meeting alert plus a few urgent
+// mails in one sweep), but still a cap: a classifier flood (2026-10-19, 28 of
+// 30 LinkedIn invites tiered MEETING) must not ring the phone 30 times.
+export const PUSH_INTERRUPT_CAP_10MIN = intEnv("PUSH_INTERRUPT_CAP_10MIN", 6);
+export const PUSH_INTERRUPT_CAP_60MIN = intEnv("PUSH_INTERRUPT_CAP_60MIN", 20);
 
 // ── Proactive actions (rule-based, no LLM) ────────────────────────────
 export const UNANSWERED_THRESHOLD_HOURS = intEnv("PROACTIVE_UNANSWERED_HOURS", 48);
@@ -515,6 +525,20 @@ export function calendarHideDeclinedEnabled(): boolean {
     (process.env.CALENDAR_HIDE_DECLINED_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Per-contact calendar co-attendance (pim/coattendance/, attention engine v3
+// §3(2)). OFF by default (repo doctrine). While unset/false the sync lists no past
+// events and writes nothing to ContactCoAttendance or CoAttendanceMeeting. When on,
+// the scheduler queues a background job that, for each Google calendar source
+// (primary and linked) at most once per 6 hours, lists the last 30 days and counts
+// each ended meeting once per contact: counts and UTC days only, never an attendee
+// list (founder decision 2026-11-01).
+// Accepts the rollout cohort (flagMode above): "cohort" collects, and the judge
+// reads, only for ROLLOUT_COHORT_USER_IDS. Checked per user wherever per-user work
+// runs (the queue, the pass, the judge's reader gate). Read per call.
+export const CALENDAR_COATTENDANCE_FLAG = "CALENDAR_COATTENDANCE_ENABLED";
+export function calendarCoattendanceOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [CALENDAR_COATTENDANCE_FLAG]);
+}
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
 // of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
 // independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,
@@ -725,8 +749,9 @@ export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);
 
 // ── Autonomous agent ──────────────────────────────────────────────────
 // Scheduler tick. Used to be 1 min, which meant 24 dogfood users × 5–10 LLM
-// calls/cycle = 7k–14k calls/hour, blowing through the free OpenRouter daily
-// cap of 50 within minutes. 10 min is a 10× reduction at the scheduler level.
+// calls/cycle = 7k–14k calls/hour, blowing through the then-provider's free
+// daily cap of 50 within minutes. 10 min is a 10× reduction at the scheduler
+// level.
 export const AGENT_CHECK_INTERVAL_MS = intEnv("AGENT_CHECK_INTERVAL_MS", 10 * 60_000);
 // Hard cap on tool calls per cycle. Used to be 10 which let one cycle fire
 // 10 follow-up completions; 3 is enough for "read inbox → classify → propose"
@@ -832,9 +857,9 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
   30 * 60 * 1000,
 );
 // LLM per-user rate limit (token bucket). Protects against runaway loops and
-// avoids tripping upstream provider RPM caps. Numbers chosen for OpenRouter
-// free tier (20 RPM upstream) — we cap each user well below so background
-// agents can still progress under load.
+// avoids tripping upstream provider RPM caps. Numbers were chosen for a 20 RPM
+// upstream free tier — we cap each user well below so background agents can
+// still progress under load.
 export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
 
 // Of the shared RPM window, this many slots are reserved for foreground chat —

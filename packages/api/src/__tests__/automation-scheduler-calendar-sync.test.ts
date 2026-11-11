@@ -58,19 +58,13 @@ vi.mock("../billing/stripe.js", async (importOriginal) => ({
 // would reach the network.
 vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: vi.fn(async () => {}) }));
 vi.mock("../pim/weekly-report.js", () => ({ sendWeeklySignalReports: vi.fn(async () => {}) }));
-vi.mock("../llm/openrouter-catalog-check.js", () => ({
-  runOpenRouterCatalogCheck: vi.fn(async () => {}),
-}));
-vi.mock("../llm/openrouter-key-health.js", () => ({
-  runOpenRouterKeyCheck: vi.fn(async () => {}),
-}));
 vi.mock("../judge/calibration-snapshot.js", () => ({
   runDailyCalibrationSnapshots: vi.fn(async () => {}),
 }));
 vi.mock("../learning/ontology-proposals-store.js", () => ({
   recomputeOntologyProposalsSafe: vi.fn(async () => {}),
 }));
-// The hourly judge fallback alarm (#1319) reads the DB with $queryRaw; this
+// The hourly judge fallback alarm (#1572) reads the DB with $queryRaw; this
 // file's prisma mock has no such method, so it is replaced by a spy.
 vi.mock("../judge/judge-fallback-check.js", () => ({
   runJudgeFallbackCheck: m.runJudgeFallbackCheck,

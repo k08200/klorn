@@ -13,8 +13,9 @@
  *   2. Web Push is usable on this platform. Desktop and Android browsers deliver
  *      Web Push from a normal tab (no install required), so we offer it there.
  *      iOS is the exception: it delivers Web Push only from an installed PWA and
- *      pushManager.subscribe() throws in a Safari tab, so iOS browser users are
- *      routed to PwaPrompts' Add-to-Home-Screen card instead of this banner.
+ *      pushManager.subscribe() throws in a Safari tab, so iOS Safari users get
+ *      IosInstallHint's Add-to-Home-Screen card, and this banner once they open
+ *      the installed app (lib/alert-devices.ts shouldOfferPushBanner).
  *   3. Browser supports Notification + PushManager.
  *   4. Notification.permission === "default" (not granted, not denied).
  *   5. The browser has no existing pushManager subscription.
@@ -23,6 +24,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { shouldOfferPushBanner } from "../lib/alert-devices";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { isNativePlatform } from "../lib/native/capacitor";
@@ -104,21 +106,21 @@ export default function PushOnboardingBanner() {
     <div
       role="dialog"
       aria-label={t("pushBanner.label")}
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-2xl shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-control shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
     >
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
+      <div className="w-10 h-10 rounded-control bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">{t("pushBanner.title")}</p>
-        <p className="text-xs text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
-        {error && <p className="text-xs text-state-danger-ink mt-1.5">{error}</p>}
+        <p className="text-role-body font-medium text-ink">{t("pushBanner.title")}</p>
+        <p className="text-role-caption text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
+        {error && <p className="text-role-caption text-state-danger-ink mt-1.5">{error}</p>}
         <div className="flex gap-2 mt-2.5">
           <button
             type="button"
             onClick={enable}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-lg transition"
+            className="px-3 py-1.5 text-role-caption font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-control transition"
           >
             {submitting ? t("pushBanner.enabling") : t("pushBanner.enable")}
           </button>
@@ -126,7 +128,7 @@ export default function PushOnboardingBanner() {
             type="button"
             onClick={dismiss}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium text-ink-mid hover:text-ink transition"
+            className="px-3 py-1.5 text-role-caption font-medium text-ink-mid hover:text-ink transition"
           >
             {t("pwa.update.later")}
           </button>
@@ -150,19 +152,21 @@ async function isEligible(): Promise<boolean> {
   if (!("Notification" in window) || !("PushManager" in window)) return false;
   if (!("serviceWorker" in navigator)) return false;
 
-  // Native shell delivers push via FCM/APNs (registerNativePush), not Web Push.
-  if (isNativePlatform()) return false;
-
-  // Web Push works in a plain browser tab on desktop and Android, so offer it
-  // there. iOS is the exception: it delivers Web Push only from an installed
-  // PWA and pushManager.subscribe() throws in a Safari tab, so iOS browser
-  // users are handled by PwaPrompts' Add-to-Home-Screen card instead.
-  const inPwa =
-    window.matchMedia?.("(display-mode: standalone)").matches ||
+  // Native shell delivers push via FCM/APNs; an iPhone Safari tab cannot
+  // subscribe and gets the home-screen card (IosInstallHint) instead; the
+  // installed iPhone app, Android and desktop browsers get this banner.
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)").matches === true ||
     (navigator as { standalone?: boolean }).standalone === true;
-  const isIos =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as { MSStream?: unknown }).MSStream;
-  if (isIos && !inPwa) return false;
+  if (
+    !shouldOfferPushBanner({
+      userAgent: navigator.userAgent,
+      standalone,
+      native: isNativePlatform(),
+    })
+  ) {
+    return false;
+  }
 
   if (Notification.permission !== "default") return false;
 

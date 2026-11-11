@@ -70,7 +70,7 @@ struct TodaySkeleton: View {
     }
 
     private func bar(width: CGFloat, height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: Theme.Radius.sm).fill(Theme.surfaceHover).frame(width: width, height: height)
+        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover).frame(width: width, height: height)
     }
 }
 
@@ -88,7 +88,7 @@ struct TodayRailSkeleton: View {
         VStack(alignment: .leading, spacing: Theme.s3) {
             Text(title).font(Theme.Typo.head).foregroundStyle(Theme.textDim)
             ForEach(0..<lines, id: \.self) { line in
-                RoundedRectangle(cornerRadius: Theme.Radius.sm).fill(Theme.surfaceHover)
+                RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                     .frame(width: line.isMultiple(of: 2) ? 200 : 150, height: 10)
             }
         }

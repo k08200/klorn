@@ -10,16 +10,33 @@
  *
  * Rules (counted per file, comments stripped):
  *
- *   arbitrary-font-size  `text-[11px]` and friends — use text-display / title /
- *                        head / body / label / caption.
+ *   arbitrary-font-size  `text-[11px]` and friends — use a type role:
+ *                        text-role-page / title / head / body / label /
+ *                        caption / mono.
  *   raw-palette          a raw Tailwind palette colour in a utility
  *                        (`bg-slate-100`, `text-amber-700/80`, …) — use the
  *                        semantic surface / ink / line / state / tier tokens,
  *                        which carry the light/dark pair and the measured
  *                        contrast. Raw literals are how the dark theme broke.
  *   raw-button           a raw `<button` in app/** pages — use ui/button.
+ *   raw-radius           a raw Tailwind radius (`rounded-md`, `rounded-t-2xl`,
+ *                        `rounded-[4px]`, …) outside components/ui — use a
+ *                        radius role: rounded-chip / control / card / sheet
+ *                        (docs/design/design-language-v2.md § Radius).
+ *                        `rounded-full` (capsules) is not a radius token.
+ *   raw-type             a raw Tailwind text size (`text-sm`, `md:text-xs`,
+ *                        `text-2xl`, …) outside components/ui — use a type
+ *                        role: text-role-page / title / head / body / label /
+ *                        caption / mono (docs/design/design-language-v2.md
+ *                        § Type roles). Pick by meaning, not nearest pixel.
  *   retired-auto-lane    `tier-auto` — the retired v1 AUTO lane's tokens stay
  *                        only for legacy Record<Tier, …> visuals.
+ *   legacy-type          the retired P1 type steps (`text-display`, `text-title`,
+ *                        `text-head`, `text-body`, `text-label`,
+ *                        `text-caption`, any variant prefix), everywhere
+ *                        including components/ui. Their tokens are gone from
+ *                        globals.css, so one would render unstyled. Zero
+ *                        allowance — use the matching text-role-* by meaning.
  *   retired-elevation    `shadow-l2` / `shadow-l3` — Design Language v2 keeps
  *                        exactly two shadows, `shadow-menu` and `shadow-sheet`
  *                        (docs/design/design-language-v2.md). Zero allowance.
@@ -27,6 +44,11 @@
  *                        replaced (caption 12, label 13). Zero allowance: this
  *                        rule takes no baseline, so a retired size can never
  *                        come back, even in a file that once had one.
+ *   label-as-meta        `text-role-label` + `font-normal` in one class
+ *                        expression (one string, or one cn()/clsx() call) —
+ *                        secondary metadata (sender · time, one-line reasons)
+ *                        is `text-role-meta` (13/400), not the button-label
+ *                        role with its weight overridden. Zero allowance.
  *
  * Baseline: .github/scripts/design-tokens-baseline.json holds the per-file
  * count of each rule at the time it was taken. A file may never exceed its
@@ -64,7 +86,7 @@ const RULES = [
     id: "arbitrary-font-size",
     re: /(?<![\w-])text-\[\d+(?:\.\d+)?px\]/g,
     applies: () => true,
-    hint: "use a type role: text-display / title / head / body / label / caption",
+    hint: "use a type role: text-role-page / title / head / body / label / meta / caption / mono",
   },
   {
     id: "raw-palette",
@@ -79,11 +101,30 @@ const RULES = [
     hint: "use the Button primitive from @/components/ui/button",
   },
   {
+    id: "raw-radius",
+    re: /(?<![\w-])rounded-(?:[trblse]{1,2}-)?(?:sm|md|lg|xl|2xl|3xl|\[[^\]\s]+\])(?![\w-])/g,
+    applies: (file) => !file.startsWith(`${WEB}/components/ui/`),
+    hint: "use a radius role: rounded-chip (6) / control (10) / card (16) / sheet (24)",
+  },
+  {
+    id: "raw-type",
+    re: /(?<![\w-])text-(?:xs|sm|base|lg|xl|[2-9]xl)(?![\w-])/g,
+    applies: (file) => !file.startsWith(`${WEB}/components/ui/`),
+    hint: "use a type role: text-role-page / title / head / body / label / meta / caption / mono",
+  },
+  {
+    id: "legacy-type",
+    re: /(?<![\w-])text-(?:display|title|head|body|label|caption)(?![\w-])/g,
+    applies: () => true,
+    zeroAllowance: true,
+    hint: "retired P1 type step — use text-role-page / title / head / body / label / caption",
+  },
+  {
     id: "retired-text-size",
     re: /(?<![\w-])text-\[(?:[0-9]|1[0-3])(?:\.\d+)?px\]/g,
     applies: () => true,
     zeroAllowance: true,
-    hint: "retired size — text-caption (12) or text-label (13)",
+    hint: "retired size — text-role-caption (12) or text-role-label (13)",
   },
   {
     id: "retired-elevation",
@@ -91,6 +132,13 @@ const RULES = [
     applies: () => true,
     zeroAllowance: true,
     hint: "use shadow-menu (popovers, menus, toasts) or shadow-sheet (sheets, dialogs)",
+  },
+  {
+    id: "label-as-meta",
+    find: findLabelAsMeta,
+    applies: () => true,
+    zeroAllowance: true,
+    hint: "secondary metadata is text-role-meta (13/400) — not text-role-label + font-normal",
   },
   {
     id: "retired-auto-lane",
@@ -112,6 +160,46 @@ function stripComments(src) {
   );
 }
 
+/**
+ * `text-role-label` and `font-normal` in one class expression: the button
+ * label role borrowed for metadata with its weight overridden. One hit per
+ * class expression — a cn()/clsx()/cva()/twMerge() call (all its arguments,
+ * across lines) or, outside those, one string literal (a template literal
+ * includes its ${…} branches). Both classes unprefixed: `md:font-normal` is a
+ * responsive change, not the meta role.
+ */
+const LABEL_CLASS = /(?<![\w:-])text-role-label(?![\w-])/;
+const NORMAL_CLASS = /(?<![\w:-])font-normal(?![\w-])/;
+const CLASS_CALL = /(?<![\w.$])(?:cn|clsx|cva|twMerge)\(/g;
+const STRING_LITERAL = /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`/g;
+
+function callEnd(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "(") depth++;
+    else if (src[i] === ")" && --depth === 0) return i + 1;
+  }
+  return src.length;
+}
+
+function findLabelAsMeta(src) {
+  const spans = [...src.matchAll(CLASS_CALL)].map((m) => {
+    const open = m.index + m[0].length - 1;
+    return { index: m.index, end: callEnd(src, open) };
+  });
+  const inCall = (i) => spans.some((s) => i >= s.index && i < s.end);
+  const literals = [...src.matchAll(STRING_LITERAL)]
+    .filter((m) => !inCall(m.index))
+    .map((m) => ({ index: m.index, end: m.index + m[0].length }));
+  return [...spans, ...literals]
+    .filter(({ index, end }) => {
+      const text = src.slice(index, end);
+      return LABEL_CLASS.test(text) && NORMAL_CLASS.test(text);
+    })
+    .sort((a, b) => a.index - b.index)
+    .map(({ index }) => ({ index, 0: "text-role-label … font-normal" }));
+}
+
 function sources(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     // Normalise to forward slashes so baseline keys match on every OS.
@@ -129,7 +217,7 @@ function countAll() {
     const src = stripComments(readFileSync(file, "utf8"));
     for (const rule of RULES) {
       if (!rule.applies(file)) continue;
-      const hits = [...src.matchAll(rule.re)];
+      const hits = rule.find ? rule.find(src) : [...src.matchAll(rule.re)];
       if (!hits.length) continue;
       counts[rule.id][file] = hits.length;
       const line = src.slice(0, hits[hits.length - 1].index).split("\n").length;

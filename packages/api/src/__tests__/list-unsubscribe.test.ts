@@ -172,3 +172,34 @@ describe("scheme priority", () => {
     expect(out.oneClick).toBe(true);
   });
 });
+
+describe("isPlausibleMailtoAddress (linear: the target is sender-controlled)", () => {
+  it("keeps the old rule: one @, no whitespace, a dot inside the domain", async () => {
+    const { isPlausibleMailtoAddress } = await import("../mail/list-unsubscribe.js");
+    for (const ok of ["a@b.c", "unsub+x@lists.acme.com", "a@b..c", "a.b@c.d.e"]) {
+      expect(isPlausibleMailtoAddress(ok)).toBe(true);
+    }
+    for (const bad of [
+      "",
+      "a@b",
+      "@b.c",
+      "a@.c",
+      "a@b.",
+      "a@@b.c",
+      "a@b@c.d",
+      "a b@c.d",
+      "a@b.c ",
+    ]) {
+      expect(isPlausibleMailtoAddress(bad)).toBe(false);
+    }
+  });
+
+  it("stays linear on a crafted domain of dots", async () => {
+    const { isPlausibleMailtoAddress, parseMailtoTarget } = await import(
+      "../mail/list-unsubscribe.js"
+    );
+    const { expectLinear, repeatTo } = await import("./helpers/linear-timing.js");
+    expectLinear((n) => repeatTo(n, ".", "a@", "@"), isPlausibleMailtoAddress);
+    expectLinear((n) => repeatTo(n, ".", "mailto:a@", "@"), parseMailtoTarget);
+  });
+});

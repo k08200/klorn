@@ -1,9 +1,12 @@
 /**
- * Playground redesign (2026-10-30) — the pure rules behind the page:
- *   - the model menu is exactly the founder-approved list (option A, LOCKED),
- *     no dead ids, one measured claim, native ids that the API's own provider
- *     adapters accept;
- *   - a key is stored only with consent and stale auto-saved keys are dropped;
+ * Playground model menu and storage rules — the pure rules behind the page:
+ *   - the model menu is exactly the founder-approved list (option A, LOCKED,
+ *     2026-10-30), per native provider tab since the Claude-only switch
+ *     (2026-11-01): no proxy tab, no proxy-only models, one measured claim on
+ *     the model Klorn's judge runs, native ids the API's own provider adapters
+ *     pass through unchanged;
+ *   - a key is stored only with consent, stale auto-saved keys are dropped,
+ *     and a retired provider's key is dropped even with consent;
  *   - "decided the lane" comes from the server's rule name, never a guess.
  */
 
@@ -14,7 +17,9 @@ import {
   forgetKey,
   keyStorageFor,
   LEGACY_KEY_STORAGE,
+  loadProvider,
   loadRememberedKey,
+  RETIRED_PROVIDER_SLOTS,
   rememberKey,
   rememberMarkerFor,
 } from "../../../web/src/app/playground/key-storage";
@@ -25,88 +30,70 @@ import {
   KLORN_MODEL_ID,
   modelFitsProvider,
   modelsFor,
-  OPENROUTER_MODELS,
-  toNativeModelId,
+  PLAYGROUND_MODELS,
+  PLAYGROUND_PROVIDERS,
 } from "../../../web/src/app/playground/models";
+import { RECOMMENDED_JUDGE_MODEL } from "../llm/judge-model-gate.js";
 import { toAnthropicModelId } from "../providers/anthropic-config.js";
 import { PLAYGROUND_MODEL_ID_PATTERN } from "../routes/playground.js";
 
+const allModels = () => PLAYGROUND_PROVIDERS.flatMap((p) => modelsFor(p));
+
 describe("playground model list", () => {
-  it("is exactly the approved OpenRouter list, in order", () => {
-    expect(OPENROUTER_MODELS.map((m) => m.id)).toEqual([
-      "google/gemini-2.5-flash",
-      "anthropic/claude-fable-5.1",
-      "anthropic/claude-opus-5.5",
-      "anthropic/claude-sonnet-5.5",
-      "anthropic/claude-haiku-5.5",
-      "google/gemini-4-argon",
-      "google/gemini-3.8-flash",
-      "openai/gpt-6.1-terra",
-      "openai/gpt-6.1-sol",
-      "openai/gpt-6-luna",
-      "x-ai/grok-4.7",
-    ]);
+  it("offers exactly the native provider tabs, Anthropic first", () => {
+    expect(PLAYGROUND_PROVIDERS).toEqual(["anthropic", "openai", "gemini"]);
   });
 
-  it("carries no retired or :free ids", () => {
-    const ids = [
-      ...OPENROUTER_MODELS.map((m) => m.id),
-      ...["anthropic", "openai", "gemini"].flatMap((p) =>
-        modelsFor(p as "openai").map((m) => m.id),
-      ),
-    ];
-    for (const id of ids) {
-      expect(id).not.toMatch(/:free|llama|qwen|gpt-oss|nemotron|claude-3|gpt-4o/);
-    }
-  });
-
-  it("makes exactly one measured claim: the model Klorn uses, 54/56", () => {
-    const measured = OPENROUTER_MODELS.filter((m) => m.measured);
-    expect(measured).toEqual([
-      expect.objectContaining({ id: KLORN_MODEL_ID, measured: { correct: 54, total: 56 } }),
-    ]);
-  });
-
-  it("defaults to the Klorn model where the tab can run it", () => {
-    expect(defaultModelFor("openrouter")).toBe("google/gemini-2.5-flash");
-    expect(defaultModelFor("gemini")).toBe("gemini-2.5-flash");
-    expect(defaultModelFor("anthropic")).toBe("claude-haiku-5-5");
-    expect(defaultModelFor("openai")).toBe("gpt-6-luna");
-  });
-
-  it("native Anthropic ids are what the API's own adapter produces", () => {
-    const native = modelsFor("anthropic").map((m) => m.id);
-    expect(native).toEqual([
+  it("is exactly the approved list per tab, in order", () => {
+    expect(modelsFor("anthropic").map((m) => m.id)).toEqual([
+      "claude-haiku-5-5",
       "claude-fable-5-1",
       "claude-opus-5-5",
       "claude-sonnet-5-5",
-      "claude-haiku-5-5",
     ]);
-    for (const m of OPENROUTER_MODELS.filter((x) => x.group === "anthropic")) {
-      expect(toNativeModelId("anthropic", m.id)).toBe(toAnthropicModelId(m.id, "fallback"));
-    }
-  });
-
-  it("native OpenAI and Google ids drop the vendor prefix like buildOpenAI/buildGemini", () => {
     expect(modelsFor("openai").map((m) => m.id)).toEqual([
       "gpt-6.1-terra",
       "gpt-6.1-sol",
       "gpt-6-luna",
     ]);
-    expect(modelsFor("gemini").map((m) => m.id)).toEqual([
-      "gemini-2.5-flash",
-      "gemini-4-argon",
-      "gemini-3.8-flash",
+    expect(modelsFor("gemini").map((m) => m.id)).toEqual(["gemini-4-argon", "gemini-3.8-flash"]);
+  });
+
+  it("carries no retired, :free or proxy-only ids", () => {
+    for (const { id } of allModels()) {
+      expect(id).not.toMatch(/:free|llama|qwen|gpt-oss|nemotron|claude-3|gpt-4o|grok|x-ai|\//);
+    }
+  });
+
+  it("makes exactly one measured claim: the model Klorn's judge runs, 52–55/56 over 5 runs", () => {
+    expect(KLORN_MODEL_ID).toBe("claude-haiku-5-5");
+    expect(KLORN_MODEL_ID).toBe(RECOMMENDED_JUDGE_MODEL);
+    const measured = allModels().filter((m) => m.measured);
+    expect(measured).toEqual([
+      expect.objectContaining({
+        id: KLORN_MODEL_ID,
+        measured: { low: 52, high: 55, total: 56, runs: 5 },
+      }),
     ]);
+  });
+
+  it("defaults to the Klorn model on its tab, the cheapest listed model elsewhere", () => {
+    expect(defaultModelFor("anthropic")).toBe("claude-haiku-5-5");
+    expect(defaultModelFor("openai")).toBe("gpt-6-luna");
+    expect(defaultModelFor("gemini")).toBe("gemini-3.8-flash");
+  });
+
+  it("native Anthropic ids pass through the API's own adapter unchanged", () => {
+    for (const m of modelsFor("anthropic")) {
+      expect(toAnthropicModelId(m.id, "fallback")).toBe(m.id);
+    }
   });
 
   it("every listed id passes the same shape the API enforces", () => {
     const api = new RegExp(PLAYGROUND_MODEL_ID_PATTERN);
-    for (const p of ["openrouter", "anthropic", "openai", "gemini"] as const) {
-      for (const m of modelsFor(p)) {
-        expect(isValidModelId(m.id)).toBe(true);
-        expect(api.test(m.id)).toBe(true);
-      }
+    for (const m of allModels()) {
+      expect(isValidModelId(m.id)).toBe(true);
+      expect(api.test(m.id)).toBe(true);
     }
     for (const bad of ["bad id", "google/..", "a..b", "x?y=1"]) {
       expect(isValidModelId(bad)).toBe(false);
@@ -116,21 +103,24 @@ describe("playground model list", () => {
 
   it("native tabs only accept their own family (no silent substitution)", () => {
     expect(modelFitsProvider("anthropic", "claude-opus-5-5")).toBe(true);
-    expect(modelFitsProvider("anthropic", "google/gemini-2.5-flash")).toBe(false);
+    expect(modelFitsProvider("anthropic", "gemini-3.8-flash")).toBe(false);
     expect(modelFitsProvider("gemini", "gemini-4-argon")).toBe(true);
     expect(modelFitsProvider("gemini", "claude-haiku-5-5")).toBe(false);
-    expect(modelFitsProvider("openrouter", "x-ai/grok-4.7")).toBe(true);
-    for (const p of ["anthropic", "openai", "gemini"] as const) {
+    for (const p of PLAYGROUND_PROVIDERS) {
       for (const m of modelsFor(p)) expect(modelFitsProvider(p, m.id)).toBe(true);
     }
   });
 
   it("formats list prices per 1M tokens", () => {
-    const by = (id: string) => OPENROUTER_MODELS.find((m) => m.id === id)!;
-    expect(formatPrice(by("google/gemini-2.5-flash"))).toBe("$0.30 / $2.50");
-    expect(formatPrice(by("google/gemini-3.8-flash"))).toBe("$0.83 / $4.13");
-    expect(formatPrice(by("anthropic/claude-fable-5.1"))).toBe("$10 / $50");
-    expect(formatPrice(by("openai/gpt-6-luna"))).toBe("$0.10 / $0.50");
+    const by = (id: string) => allModels().find((m) => m.id === id)!;
+    expect(formatPrice(by("claude-haiku-5-5"))).toBe("$0.10 / $0.50");
+    expect(formatPrice(by("gemini-3.8-flash"))).toBe("$0.83 / $4.13");
+    expect(formatPrice(by("claude-fable-5-1"))).toBe("$10 / $50");
+    expect(formatPrice(by("gpt-6-luna"))).toBe("$0.10 / $0.50");
+  });
+
+  it("modelsFor is the per-tab catalog", () => {
+    for (const p of PLAYGROUND_PROVIDERS) expect(modelsFor(p)).toBe(PLAYGROUND_MODELS[p]);
   });
 });
 
@@ -157,10 +147,29 @@ describe("playground key storage (opt-in only)", () => {
 
   it("drops a key the old page auto-saved without consent", () => {
     const store = memoryStore();
-    store.setItem(keyStorageFor("openrouter"), "auto-saved");
+    store.setItem(keyStorageFor("openai"), "auto-saved");
     store.setItem(LEGACY_KEY_STORAGE, "older-auto-saved");
-    expect(loadRememberedKey(store, "openrouter")).toBeNull();
+    expect(loadRememberedKey(store, "openai")).toBeNull();
     expect(store.map.size).toBe(0);
+  });
+
+  it("drops a retired provider's key on load even when it was remembered", () => {
+    const store = memoryStore();
+    for (const retired of RETIRED_PROVIDER_SLOTS) {
+      store.setItem(keyStorageFor(retired), "remembered-by-an-older-build");
+      store.setItem(rememberMarkerFor(retired), "1");
+    }
+    dropUnconsentedKeys(store);
+    expect(store.map.size).toBe(0);
+  });
+
+  it("restores a saved provider tab, and falls back to Anthropic for anything else", () => {
+    const store = memoryStore();
+    expect(loadProvider(store)).toBe("anthropic");
+    store.setItem("klorn-playground-provider", "gemini");
+    expect(loadProvider(store)).toBe("gemini");
+    store.setItem("klorn-playground-provider", RETIRED_PROVIDER_SLOTS[0] ?? "retired");
+    expect(loadProvider(store)).toBe("anthropic");
   });
 
   it("remembering an empty key stores nothing", () => {

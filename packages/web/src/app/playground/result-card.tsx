@@ -35,7 +35,7 @@ function Meter({
   const name = t(`playground.feature.${feature}`);
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex justify-between gap-3 text-label">
+      <div className="flex justify-between gap-3 text-role-label">
         <span className={decided ? "font-semibold text-ink" : "font-medium text-ink"}>
           {name}
           {decided && (
@@ -61,7 +61,7 @@ function Meter({
           style={{ width: `${Math.round(v * 100)}%` }}
         />
       </div>
-      <div className="flex justify-between gap-3 text-caption text-ink-mid">
+      <div className="flex justify-between gap-3 text-role-caption text-ink-mid">
         <span>{t(`playground.feature.${feature}.low`)}</span>
         <span className="text-right">{t(`playground.feature.${feature}.high`)}</span>
       </div>
@@ -82,10 +82,12 @@ function WhyBlock({
   const laneName = useLaneName();
   return (
     <div className="flex flex-col gap-3.5">
-      <h3 className="text-caption font-semibold uppercase tracking-wide text-ink-mid">
+      <h3 className="text-role-caption font-semibold uppercase tracking-wide text-ink-mid">
         {t("playground.why.heading", { lane: laneName(lane) })}
       </h3>
-      {explanation.noteKey && <p className="text-body text-ink-soft">{t(explanation.noteKey)}</p>}
+      {explanation.noteKey && (
+        <p className="text-role-body text-ink-soft">{t(explanation.noteKey)}</p>
+      )}
       {FEATURE_ORDER.map((feature) => (
         <Meter
           key={feature}
@@ -113,14 +115,14 @@ function WrongLane({ result, lane }: { result: SortedResult; lane: LiveTier }) {
 
   if (state.status === "sent") {
     return (
-      <p role="status" className="text-label text-ink-soft">
+      <p role="status" className="text-role-label text-ink-soft">
         {t("playground.wrong.thanks", { lane: laneName(state.tier) })}
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-label text-ink-soft">{t("playground.wrong.prompt")}</span>
+      <span className="text-role-label text-ink-soft">{t("playground.wrong.prompt")}</span>
       <div className="flex flex-wrap gap-2">
         {others.map((tier) => (
           <Button
@@ -136,7 +138,7 @@ function WrongLane({ result, lane }: { result: SortedResult; lane: LiveTier }) {
         ))}
       </div>
       {state.status === "error" && (
-        <p role="alert" className="text-caption text-state-danger-ink">
+        <p role="alert" className="text-role-caption text-state-danger-ink">
           {t("playground.wrong.error")}
         </p>
       )}
@@ -159,7 +161,7 @@ export const ResultCard = forwardRef<HTMLHeadingElement, ResultCardProps>(functi
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <LaneChip tier={lane} />
-        <span className="text-caption text-ink-mid">
+        <span className="text-role-caption text-ink-mid">
           {t("playground.meta", {
             model: shortModelName(result.model),
             seconds: result.seconds.toFixed(1),
@@ -170,18 +172,18 @@ export const ResultCard = forwardRef<HTMLHeadingElement, ResultCardProps>(functi
         <h2
           ref={headingRef}
           tabIndex={-1}
-          className="text-title tracking-tight text-ink outline-none md:text-display"
+          className="text-role-title tracking-tight text-ink outline-none md:text-role-page"
         >
           {t(`playground.headline.${lane}`)}
         </h2>
-        {result.reason && <p className="mt-2 text-body text-ink-soft">{result.reason}</p>}
+        {result.reason && <p className="mt-2 text-role-body text-ink-soft">{result.reason}</p>}
       </div>
       <WhyBlock result={result} lane={lane} explanation={explanation} />
       <div className="flex flex-col gap-1 rounded-card bg-surface-raised px-4 py-3.5">
-        <span className="text-caption font-semibold uppercase tracking-wide text-ink-mid">
+        <span className="text-role-caption font-semibold uppercase tracking-wide text-ink-mid">
           {t("playground.inKlorn.heading")}
         </span>
-        <span className="text-body text-ink">{t(`playground.inKlorn.${lane}`)}</span>
+        <span className="text-role-body text-ink">{t(`playground.inKlorn.${lane}`)}</span>
       </div>
       <WrongLane key={`${result.tier}-${result.seconds}`} result={result} lane={lane} />
       <CtaRow />
@@ -193,7 +195,7 @@ function CtaRow() {
   const { t } = useT();
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-      <span className="text-body text-ink-soft">{t("playground.cta.text")}</span>
+      <span className="text-role-body text-ink-soft">{t("playground.cta.text")}</span>
       <Link href={START_URL} className={PRIMARY_LINK}>
         {t("playground.nav.startFree")}
       </Link>

@@ -71,6 +71,13 @@ export const GATE_FAILING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
  * in the same change.
  */
 export const GATE_PASSING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
+  "google/gemini-2.5-flash": {
+    accuracy: "96.4%",
+    urgentRecall: "13, 13 and 13 of 13",
+    gate: "3/3",
+    mechanism:
+      "the hosted judge pin before the Claude switch; 54/56 on all three runs (2026-09-04)",
+  },
   "anthropic/claude-haiku-5.5": {
     accuracy: "92.9–98.2%",
     urgentRecall: "13, 12, 13, 13 and 11 of 13",
@@ -81,16 +88,17 @@ export const GATE_PASSING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
 };
 
 /**
- * The pin to recommend when the configured one fails. Measured 54/56 on all
- * three runs with 13/13 urgent recall at $0.30/M — the cheapest model in the
- * bake-off that passed every run.
+ * The pin to recommend when the configured one fails: the model hosted Klorn
+ * runs (Claude API only, founder decision 2026-11-01). Measured through the
+ * native Anthropic provider (eval/README.md, 2026-10-30): 55 · 54 · 54 · 55 · 52
+ * of 56 over five runs, urgent recall 13 · 12 · 13 · 13 · 11 of 13, gate 4/5.
  */
-export const RECOMMENDED_JUDGE_MODEL = "google/gemini-2.5-flash";
+export const RECOMMENDED_JUDGE_MODEL = "claude-haiku-5-5";
 
 /**
  * Compare model ids the way an operator means them.
  *
- * OpenRouter ids carry variant suffixes (`:free`, `:beta`, `:nitro`) that
+ * Proxy-style ids carry variant suffixes (`:free`, `:beta`, `:nitro`) that
  * select routing, not a different set of weights, so `claude-sonnet-5:beta`
  * has the same calibration problem as `claude-sonnet-5` and must match. Case
  * and surrounding whitespace are normalised for the same reason: an env var
@@ -108,9 +116,9 @@ export function normalizeModelId(raw: string): string {
 
 /**
  * One spelling per Claude model, so the native provider's ids
- * (`claude-opus-4-8`, `claude-haiku-4-5-20251001`) match the OpenRouter ids
- * the bake-off recorded (`anthropic/claude-opus-4.8`). Without this a native
- * pin of a gate-failing model would sail past the check.
+ * (`claude-opus-4-8`, `claude-haiku-4-5-20251001`) match the vendor-prefixed
+ * ids the bake-off recorded (`anthropic/claude-opus-4.8`). Without this a
+ * native pin of a gate-failing model would sail past the check.
  */
 function canonicalClaudeId(id: string): string | null {
   const bare = id.startsWith("anthropic/") ? id.slice("anthropic/".length) : id;
@@ -222,7 +230,7 @@ export function gateFailureMessage(resolution: JudgeModelResolution): string {
   ];
   if (resolution.substituted) {
     lines.push(
-      `  To make this explicit, set JUDGE_MODEL=${RECOMMENDED_JUDGE_MODEL} (54/56 on all three runs, 13/13 urgent, $0.30/M).`,
+      `  To make this explicit, set JUDGE_MODEL=${RECOMMENDED_JUDGE_MODEL} (52–55/56 over five runs, gate 4/5, eval/README.md 2026-10-30).`,
       `  To keep ${configured} anyway, set ${ALLOW_GATE_FAILURE_ENV}=true — or re-run 'pnpm eval:judge' and update eval/README.md if this measurement is stale.`,
     );
   } else {
@@ -242,15 +250,13 @@ export interface JudgeChainHead {
 /**
  * The model that will actually serve the judge pin on the leading provider.
  *
- * OpenRouter routes the caller's id as-is (createCompletion passes it through
- * on the first provider). Every other provider translates a pin into its own
- * namespace and serves what it cannot route with its own default — so with
- * Anthropic leading the chain, JUDGE_MODEL=google/gemini-2.5-flash is served
- * by ANTHROPIC_MODEL. Validating only the pin would check a model that never
- * runs.
+ * Every provider translates a pin into its own namespace and serves what it
+ * cannot route with its own default — so with Anthropic leading the chain,
+ * JUDGE_MODEL=google/gemini-2.5-flash is served by ANTHROPIC_MODEL. Validating
+ * only the pin would check a model that never runs.
  */
 export function servedJudgeModel(pin: string, head: JudgeChainHead | undefined): string {
-  if (!head || head.name === "openrouter") return pin;
+  if (!head) return pin;
   return head.resolveModel(pin);
 }
 

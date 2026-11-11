@@ -110,7 +110,7 @@ export function ApiKeysSection() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-mid">{t("settings.apiKeys.intro")}</p>
+      <p className="text-role-body text-ink-mid">{t("settings.apiKeys.intro")}</p>
 
       <ApiKeyCreateForm
         name={name}
@@ -124,9 +124,11 @@ export function ApiKeysSection() {
       {proGated && <ProFeatureNotice />}
 
       {freshKey && (
-        <div className="space-y-2 rounded-xl border border-line bg-surface-raised p-3">
-          <p className="text-xs font-medium text-ink-mid">{t("settings.apiKeys.createdNotice")}</p>
-          <code className="block select-all break-all rounded-lg bg-surface-panel px-2 py-1.5 text-xs text-ink">
+        <div className="space-y-2 rounded-control border border-line bg-surface-raised p-3">
+          <p className="text-role-caption font-medium text-ink-mid">
+            {t("settings.apiKeys.createdNotice")}
+          </p>
+          <code className="block select-all break-all rounded-control bg-surface-panel px-2 py-1.5 text-role-mono text-ink">
             {freshKey.key}
           </code>
           <div className="flex gap-2">
@@ -145,7 +147,7 @@ export function ApiKeysSection() {
       )}
 
       {keys.length === 0 ? (
-        <p className="text-sm text-ink-dim">{t("settings.apiKeys.empty")}</p>
+        <p className="text-role-body text-ink-dim">{t("settings.apiKeys.empty")}</p>
       ) : (
         <ul className="divide-y divide-line-soft">
           {keys.map((key) => (

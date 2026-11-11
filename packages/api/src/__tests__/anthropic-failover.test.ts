@@ -10,7 +10,7 @@
  *    balance stays empty;
  *  - 529 overloaded is capacity, not a fault: move on, no cooldown (the SDK
  *    already retried it with backoff).
- * A rejected env key (401) still fails loudly, exactly like OpenRouter's.
+ * A rejected env key (401) still fails loudly, like any other env provider's.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

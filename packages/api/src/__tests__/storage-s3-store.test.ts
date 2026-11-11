@@ -590,6 +590,21 @@ describe("parseListObjectsXml", () => {
     expect(parseListObjectsXml(xml).keys).toEqual(["a&b<c>\"'AB&lt;"]);
   });
 
+  it("refuses a key with a character reference XML does not allow", () => {
+    // Past U+10FFFF, zero and surrogates are not XML characters. The answer is
+    // malformed, so it fails as an upstream StorageError, never a RangeError.
+    for (const ref of ["&#x110000;", "&#99999999;", "&#0;", "&#xD800;", `&#${"9".repeat(400)};`]) {
+      const xml = `<ListBucketResult><Contents><Key>a${ref}</Key></Contents></ListBucketResult>`;
+      expect(() => parseListObjectsXml(xml)).toThrow(StorageError);
+    }
+  });
+
+  it("leaves a name only the object prototype knows as written", () => {
+    const xml =
+      "<ListBucketResult><Contents><Key>a&constructor;b&toString;</Key></Contents></ListBucketResult>";
+    expect(parseListObjectsXml(xml).keys).toEqual(["a&constructor;b&toString;"]);
+  });
+
   it("refuses an answer that is not a list result", () => {
     expect(() => parseListObjectsXml("<html>login</html>")).toThrow(StorageError);
     expect(() => parseListObjectsXml("")).toThrow(StorageError);

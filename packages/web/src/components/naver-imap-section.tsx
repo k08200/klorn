@@ -160,16 +160,16 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       className={
         embedded
           ? undefined
-          : "panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5"
+          : "panel-elevated rounded-card border border-line/70 bg-surface-panel p-5"
       }
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+          <h2 className="flex items-center gap-2 text-role-head text-ink">
             {t("imap.naver.title")}
             <BetaChip />
           </h2>
-          <p className="mt-1 text-xs text-ink-mid">
+          <p className="mt-1 text-role-body text-ink-mid">
             {t("imap.naver.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
@@ -177,14 +177,14 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
+        <div className="text-role-caption text-ink-dim">{t("common.loading")}</div>
       ) : status?.connected ? (
         <div className="space-y-3">
-          <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3 text-role-body text-ink">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
-                <p className="text-caption text-ink-dim">
+                <p className="text-role-caption text-ink-dim">
                   {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString(locale) : "—"}
                 </p>
@@ -202,7 +202,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
           </div>
           {firstSync !== null && <FirstSyncNote started={firstSync} />}
           {error && (
-            <p role="alert" className="text-xs text-state-danger-ink">
+            <p role="alert" className="text-role-caption text-state-danger-ink">
               {error}
             </p>
           )}
@@ -232,7 +232,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               required
               autoComplete="off"
             />
-            <p className="mt-1 text-caption text-ink-mid">
+            <p className="mt-1 text-role-caption text-ink-mid">
               {t("imap.naver.help.before")}{" "}
               <a
                 href={PASSWORD_HELP_URL}
@@ -245,7 +245,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               {t("imap.naver.help.after")}
             </p>
           </div>
-          <details className="text-xs text-ink-mid">
+          <details className="text-role-caption text-ink-mid">
             <summary className="cursor-pointer">{t("imap.naver.advancedHost")}</summary>
             <div className="mt-2">
               <Input

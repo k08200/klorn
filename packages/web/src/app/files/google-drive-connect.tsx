@@ -211,10 +211,10 @@ export function GoogleDriveConnect() {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 id="files-google-heading" className="text-body font-semibold text-ink">
+          <h2 id="files-google-heading" className="text-role-body font-semibold text-ink">
             {t("files.google.title")}
           </h2>
-          <p className="text-body text-ink-muted">{t("files.google.body")}</p>
+          <p className="text-role-body text-ink-muted">{t("files.google.body")}</p>
         </div>
         <Button
           variant="secondary"
@@ -231,9 +231,9 @@ export function GoogleDriveConnect() {
           {list.map((account) => (
             <li key={account.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-body text-ink">{account.email}</span>
+                <span className="truncate text-role-body text-ink">{account.email}</span>
                 {account.needsReconnect && (
-                  <span className="text-body text-ink-muted">
+                  <span className="text-role-body text-ink-muted">
                     {t("files.google.needsReconnect")}
                   </span>
                 )}

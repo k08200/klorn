@@ -1,7 +1,8 @@
 /**
  * Loads the rows behind a relationship snapshot (relationship.ts) for one
  * sender: the user's sent mail, the sender's mail, the user's sends in the
- * sender's threads, first contact, dismiss count, PIN_TIER and sender label.
+ * sender's threads, first contact, dismiss count, PIN_TIER, sender label and
+ * past calendar co-attendance (behind its gate, relationship-coattendance.ts).
  * Every query is scoped by userId (one user's ego network, never a cross-user
  * graph) and bounded. A failed lookup degrades that field to null (unknown);
  * it never throws, because the snapshot is context for the shadow, not a gate.
@@ -21,6 +22,13 @@ import {
   UNKNOWN_RELATIONSHIP,
   writtenTo,
 } from "./relationship.js";
+import {
+  type CoAttendanceDeps,
+  loadCoAttendance,
+  readCoAttendanceCoverage,
+  readCoAttendanceOwnAddresses,
+  readCoAttendanceRow,
+} from "./relationship-coattendance.js";
 
 /**
  * Sends that count as "the user wrote to them" (doc §3(2), #1591/#1592):
@@ -49,7 +57,7 @@ export interface InboundCandidate extends InboundRow {
   fromAddress: string | null;
 }
 
-export interface RelationshipLoaderDeps {
+export interface RelationshipLoaderDeps extends CoAttendanceDeps {
   hasAnySent(userId: string): Promise<boolean>;
   /** Sent rows whose To may contain the address, newest first (exact match after). */
   sentRowsMentioning(userId: string, address: string): Promise<SentRow[]>;
@@ -126,6 +134,9 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   async senderCategory(userId, address) {
     return (await senderLabelsFor(userId, [address])).get(address) ?? null;
   },
+  coAttendanceCoverage: readCoAttendanceCoverage,
+  coAttendanceRow: readCoAttendanceRow,
+  coAttendanceOwnAddresses: readCoAttendanceOwnAddresses,
 };
 
 export interface RelationshipLoadInput {
@@ -136,6 +147,8 @@ export interface RelationshipLoadInput {
   senderAuthenticated?: boolean | null;
   /** The mail being judged: excluded so a first-time sender reads as never seen. */
   excludeEmailId?: string;
+  /** When the snapshot is taken (the co-attendance gate's "today"); default: now. */
+  now?: Date;
 }
 
 /** undefined when the lookup failed: the snapshot then reports the field as null. */
@@ -211,13 +224,18 @@ export async function loadRelationshipSnapshot(
   const sender = senderMailbox(input.senderAddress);
   if (!sender) return { ...UNKNOWN_RELATIONSHIP };
   const { userId } = input;
-  const [sentData, inboundData, dismissCount, pinnedTier, senderCategory] = await Promise.all([
-    loadSent(userId, sender, deps),
-    loadInbound(userId, sender, deps, input.excludeEmailId),
-    settle(() => deps.dismissCount(userId, sender), "dismiss"),
-    settle(() => deps.pinnedTier(userId, sender), "pin"),
-    settle(() => deps.senderCategory(userId, sender), "label"),
-  ]);
+  const [sentData, inboundData, dismissCount, pinnedTier, senderCategory, coAttendance] =
+    await Promise.all([
+      loadSent(userId, sender, deps),
+      loadInbound(userId, sender, deps, input.excludeEmailId),
+      settle(() => deps.dismissCount(userId, sender), "dismiss"),
+      settle(() => deps.pinnedTier(userId, sender), "pin"),
+      settle(() => deps.senderCategory(userId, sender), "label"),
+      settle(
+        () => loadCoAttendance(deps, userId, sender, input.now ?? new Date()),
+        "co-attendance",
+      ),
+    ]);
   const userSent = await loadThreadSends(
     userId,
     sentData.sent !== null,
@@ -236,5 +254,6 @@ export async function loadRelationshipSnapshot(
     dismissCount: dismissCount ?? null,
     pinnedTier,
     senderCategory,
+    coAttendance,
   });
 }

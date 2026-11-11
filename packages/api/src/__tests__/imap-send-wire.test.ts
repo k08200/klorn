@@ -61,7 +61,9 @@ const { imapSendActions } = await import("../mail/providers/imap-send.js");
 const { resetImapSessionState, TASK_TOTAL_TIMEOUT_MS } = await import(
   "../mail/providers/imap-session.js"
 );
-const { classifySmtpFailure, openSmtpSession } = await import("../mail/smtp-transport.js");
+const { classifySmtpFailure, openSmtpSession, SMTP_CONNECTION_TIMEOUT_MS } = await import(
+  "../mail/smtp-transport.js"
+);
 
 const UNCONFIRMED =
   "Naver did not confirm delivery. The message may or may not have been sent; check your Sent folder before trying again.";
@@ -419,7 +421,10 @@ describe("an abort before nodemailer has connected is not undone", () => {
     expect(classifySmtpFailure(error, session.connected)).toBe("not-sent");
   });
 
-  it("a DNS stall that runs into the 60 s deadline: the late answer cannot connect", async () => {
+  // nodemailer >= 10.1.0 counts the DNS lookup against connectionTimeout, so a
+  // stalled resolver fails inside nodemailer's own connect deadline, before any
+  // TCP connection exists: provably "not sent", and well before the task deadline.
+  it("a DNS stall runs into the connect deadline: 'not sent', and the late answer cannot connect", async () => {
     const server = await startServer("ok", "starttls");
     pointRegistryAt(server.port, "starttls", "localhost");
     const dnsStall = stallDns();
@@ -428,8 +433,9 @@ describe("an abort before nodemailer has connected is not undone", () => {
     const result = send();
     await until(() => dnsStall.stalled() > 0, "nodemailer to start resolving the hostname");
 
-    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS);
-    expect(await result).toEqual({ error: UNCONFIRMED });
+    expect(SMTP_CONNECTION_TIMEOUT_MS).toBeLessThan(TASK_TOTAL_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(SMTP_CONNECTION_TIMEOUT_MS);
+    expect(await result).toEqual({ error: NOT_SENT });
 
     dnsStall.release(); // the resolver finally answers: nodemailer goes on to connect()
     await realSleep(400);

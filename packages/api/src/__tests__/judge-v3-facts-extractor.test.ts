@@ -372,6 +372,25 @@ describe("extractFacts", () => {
     expect(complete).toHaveBeenCalledTimes(1);
   });
 
+  it("draws on the judge reserve only when asked and only with a userId", async () => {
+    const complete = vi.fn(async () => completion(llmAnswer()));
+    await extractFacts(mail(), { complete, userId: "u1", reserved: true });
+    await extractFacts(mail(), { complete, reserved: true });
+    await extractFacts(mail(), { complete, userId: "u1" });
+    const r = (i: number) =>
+      (complete.mock.calls[i] as unknown as [unknown, { reserved?: boolean }])[1].reserved;
+    expect(r(0)).toBe(true);
+    expect(r(1)).toBeUndefined();
+    expect(r(2)).toBeUndefined();
+  });
+
+  it("does not retry once the caller has abandoned the answer", async () => {
+    const complete = vi.fn().mockRejectedValueOnce(new Error("503"));
+    const r = await extractFacts(mail(), { complete, abandoned: () => true });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(r.source).toBe("none");
+  });
+
   it("passes noWait through to the completion only when asked", async () => {
     const complete = vi.fn(async () => completion(llmAnswer()));
     await extractFacts(mail(), { complete, noWait: true });

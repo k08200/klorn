@@ -17,12 +17,18 @@ import { PLAYGROUND_PROVIDERS, type PlaygroundProvider } from "./models";
 export const PROVIDER_STORAGE = "klorn-playground-provider";
 /** The pre-per-provider single slot; only ever deleted now. */
 export const LEGACY_KEY_STORAGE = "klorn-playground-key";
+/**
+ * Provider tabs the playground no longer offers (OpenRouter, retired
+ * 2026-11-01). A key a visitor remembered there can no longer be used, so it
+ * is deleted on load even with its consent marker.
+ */
+export const RETIRED_PROVIDER_SLOTS: readonly string[] = ["openrouter"];
 
-export function keyStorageFor(provider: PlaygroundProvider): string {
+export function keyStorageFor(provider: PlaygroundProvider | string): string {
   return `klorn-playground-key-${provider}`;
 }
 
-export function rememberMarkerFor(provider: PlaygroundProvider): string {
+export function rememberMarkerFor(provider: PlaygroundProvider | string): string {
   return `klorn-playground-remember-${provider}`;
 }
 
@@ -49,10 +55,17 @@ export function loadRememberedKey(store: KeyStore, provider: PlaygroundProvider)
   });
 }
 
-/** On page load: delete every provider's key that has no consent marker. */
+/**
+ * On page load: delete every provider's key that has no consent marker, and
+ * every retired provider's key whatever its marker says.
+ */
 export function dropUnconsentedKeys(store: KeyStore): void {
   safely(undefined, () => {
     store.removeItem(LEGACY_KEY_STORAGE);
+    for (const retired of RETIRED_PROVIDER_SLOTS) {
+      store.removeItem(keyStorageFor(retired));
+      store.removeItem(rememberMarkerFor(retired));
+    }
     for (const provider of PLAYGROUND_PROVIDERS) {
       if (store.getItem(rememberMarkerFor(provider)) === "1") continue;
       store.removeItem(keyStorageFor(provider));
@@ -82,7 +95,7 @@ export function forgetKey(store: KeyStore, provider: PlaygroundProvider): void {
 
 export function loadProvider(store: KeyStore): PlaygroundProvider {
   const saved = safely<string | null>(null, () => store.getItem(PROVIDER_STORAGE));
-  return saved === "anthropic" || saved === "openai" || saved === "gemini" ? saved : "openrouter";
+  return saved === "openai" || saved === "gemini" ? saved : "anthropic";
 }
 
 export function saveProvider(store: KeyStore, provider: PlaygroundProvider): void {

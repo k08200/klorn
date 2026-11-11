@@ -45,7 +45,7 @@ export default function PlaygroundPage() {
   });
   const [activeSample, setActiveSample] = useState<PlaygroundSample["id"] | null>(first.id);
   const keys = useProviderKey();
-  const [choice, setChoice] = useState(defaultModelFor("openrouter"));
+  const [choice, setChoice] = useState(defaultModelFor("anthropic"));
   const [customModel, setCustomModel] = useState("");
   const { loading, result, error, setError, classify, reset } = useClassify();
   const resultRef = useRef<HTMLElement>(null);
@@ -117,8 +117,8 @@ export default function PlaygroundPage() {
       <PlaygroundHeader />
       <main id="main" className="mx-auto max-w-310 px-4 pb-16 pt-8 md:px-12 md:pt-12">
         <div className="mb-6 max-w-180 md:mb-8">
-          <h1 className="text-display tracking-tight text-ink">{t("playground.title")}</h1>
-          <p className="mt-3 text-body text-ink-soft md:text-head md:font-normal">
+          <h1 className="text-role-page text-ink">{t("playground.title")}</h1>
+          <p className="mt-3 text-role-body text-ink-soft md:text-role-head md:font-normal">
             <span className="md:hidden">{t("playground.leadShort")}</span>
             <span className="max-md:hidden">{t("playground.lead")}</span>
           </p>
@@ -170,7 +170,7 @@ export default function PlaygroundPage() {
                   })}
                 </span>
                 {error.detail && (
-                  <span className="mt-1 block break-words font-mono text-caption">
+                  <span className="mt-1 block break-words font-mono text-role-caption">
                     {t("playground.error.upstream", { detail: error.detail })}
                   </span>
                 )}

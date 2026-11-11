@@ -82,7 +82,7 @@ vi.mock("../learning/trust-score.js", () => ({
 vi.mock("../pim/commitments.js", () => ({
   listCommitments: vi.fn(async () => []),
   getCommitment: vi.fn(async () => OWNED_COMMITMENT),
-  updateCommitment: vi.fn(async (_id: string, patch: Record<string, unknown>) => ({
+  updateCommitment: vi.fn(async (_id: string, _userId: string, patch: Record<string, unknown>) => ({
     ...OWNED_COMMITMENT,
     ...patch,
   })),

@@ -25,7 +25,7 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
       <div className={`${PANEL} p-5 space-y-4`}>
         {fields === "identity" && (
           <div>
-            <label htmlFor="profile-name" className="block text-sm text-ink-mid mb-1">
+            <label htmlFor="profile-name" className="block text-role-label text-ink-mid mb-1">
               {t("settings.displayName")}
             </label>
             <input
@@ -34,14 +34,14 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
               value={profile.name}
               onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
               placeholder={t("settings.namePlaceholder")}
-              className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
+              className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-role-body focus:outline-none focus:border-accent-muted transition placeholder-ink-dim"
             />
           </div>
         )}
         {fields === "locale" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="profile-lang" className="block text-sm text-ink-mid mb-1">
+              <label htmlFor="profile-lang" className="block text-role-label text-ink-mid mb-1">
                 {t("settings.language")}
               </label>
               <select
@@ -53,7 +53,7 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
                     language: e.target.value as UserProfile["language"],
                   }))
                 }
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition"
+                className="w-full bg-surface-raised border border-line rounded-control px-4 py-2.5 text-role-body focus:outline-none focus:border-accent-muted transition"
               >
                 {/* Language names name themselves — "English"/"한국어" do not
                       change with the picked UI locale. */}
@@ -78,7 +78,7 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
             onClick={() => saveProfile(fields)}
             className={
               profileSaved
-                ? "ease-strong inline-flex min-h-10 items-center justify-center rounded-lg border border-state-ok-line bg-state-ok-bg px-4 text-sm font-medium text-state-ok-ink transition duration-150 active:scale-[0.97]"
+                ? "ease-strong inline-flex min-h-10 items-center justify-center rounded-control border border-state-ok-line bg-state-ok-bg px-4 text-role-label text-state-ok-ink transition duration-150 active:scale-[0.97]"
                 : PRIMARY_BTN
             }
           >

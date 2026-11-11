@@ -70,6 +70,19 @@ const rows = [...corpus()].map((email) => {
 });
 
 describe("keyword facts → policy v3 parity with the v2 keyword fallback", () => {
+  it("v3.2 keeps v3.1's keyword parity: with no relationship the first-contact gate does not apply", () => {
+    for (const r of rows) {
+      const v32 = laneFromFactsV3({
+        facts: r.facts,
+        relationship: null,
+        spam: r.spam,
+        decidedAt: RECEIVED,
+        version: "v3.2",
+      });
+      expect(v32.lane).toBe(r.decision.lane);
+    }
+  });
+
   it("covers the full signal cross product", () => {
     expect(rows.length).toBe(
       FROMS.length * SUBJECTS.length * SNIPPETS.length * LABEL_SETS.length * 2 * BODIES.length,
@@ -103,12 +116,12 @@ describe("keyword facts → policy v3 parity with the v2 keyword fallback", () =
     // Pinned: the doc's divergence table (§3(5) "Fallback parity") must match.
     expect(counts).toEqual({
       "bulkScheduling: MEETING→QUEUE": 218,
-      "bulkScheduling: MEETING→INFO": 102,
-      "bulkScheduling: MEETING→SILENT": 52,
-      "bulkScheduling: QUEUE→INFO": 51,
-      "bulkScheduling: QUEUE→SILENT": 26,
+      "bulkScheduling: MEETING→INFO": 154,
+      "bulkScheduling: QUEUE→INFO": 77,
       "machineListFiled: QUEUE→INFO": 117,
       "listNeverInterrupts: PUSH→QUEUE": 52,
+      "pushBeforeMeeting: MEETING→PUSH": 68,
+      "narrowSilent: SILENT→INFO": 132,
     });
   });
 

@@ -31,7 +31,7 @@ export function SelectionBar({
   if (count === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-control border border-line bg-surface-panel py-1 pl-3 pr-1">
-      <p className="mr-auto text-label tabular-nums text-ink">
+      <p className="mr-auto text-role-label tabular-nums text-ink">
         {t("mailV2.bulk.selected", { count: String(count) })}
       </p>
       <Button variant="ghost" size="sm" disabled={readOnly} onClick={onMarkRead}>

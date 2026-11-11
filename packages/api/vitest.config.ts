@@ -3,6 +3,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     testTimeout: 60_000,
+    // Setup hooks get the same room as tests: a beforeEach that builds an app
+    // imports most of the api, and vitest's 10 s default failed two such hooks
+    // (buildKlornDriveApp) at load average ~26 while their tests passed.
+    hookTimeout: 60_000,
     // One process per test file (vitest's default, pinned): the linear-scan
     // guards time runs with process.cpuUsage, which a threads pool would share
     // across files. See src/__tests__/helpers/linear-timing.ts.
@@ -14,6 +18,11 @@ export default defineConfig({
       // site that ignores its `tx` handle passes every test and then reads zero
       // rows on the day the role switches. Tests are where that is catchable.
       RLS_ENFORCEMENT: "on",
+      // Client-address tests assume the default source (the TCP peer); a shell
+      // that exports any of these must not flip them. Empty means unset.
+      CLIENT_IP_SOURCE: "",
+      TRUSTED_PROXY_HOPS: "",
+      RENDER: "",
     },
     // Scope vitest to api unit/integration suites only. Without `include`,
     // vitest walks up the monorepo and picks up Playwright e2e specs from

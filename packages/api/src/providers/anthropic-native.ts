@@ -31,6 +31,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
   ContentBlockParam,
+  DocumentBlockParam,
   ImageBlockParam,
   Message,
   MessageCreateParamsNonStreaming,
@@ -115,18 +116,35 @@ function textBlock(text: string): TextBlockParam[] {
   return text.length > 0 ? [{ type: "text", text }] : [];
 }
 
+/** Base64 of "%PDF-": a PDF is recognised by its bytes, not only its label. */
+const PDF_MAGIC_BASE64 = "JVBERi0";
+
 /**
- * Inline (data:) images only. A remote URL is never forwarded: Anthropic would
- * fetch it, which turns a mail-derived URL into a tracking pixel or leaks a
- * signed link. MIME parameters (`;name=…`) are tolerated.
+ * Inline (data:) images and PDFs only. A remote URL is never forwarded:
+ * Anthropic would fetch it, which turns a mail-derived URL into a tracking
+ * pixel or leaks a signed link. MIME parameters (`;name=…`) are tolerated.
+ * PDFs become a `document` block — the only form in which Claude reads them —
+ * including ones a mail client labelled `application/octet-stream`.
  */
-function imageBlock(url: string): ImageBlockParam | null {
-  const data = url.match(/^data:(image\/[a-z0-9.+-]+)(?:;[^,;]*)*;base64,(.+)$/i);
-  if (!data) return null;
-  return {
-    type: "image",
-    source: { type: "base64", media_type: data[1].toLowerCase() as "image/png", data: data[2] },
-  };
+function attachmentBlock(url: string): ImageBlockParam | DocumentBlockParam | null {
+  const inline = url.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)(?:;[^,;]*)*;base64,(.+)$/i);
+  if (!inline) return null;
+  const mime = inline[1].toLowerCase();
+  const data = inline[2];
+  // Bytes first: no real image starts with "%PDF-", so a PDF mislabelled
+  // image/* still reads as a document instead of failing as a bad image.
+  if (data.startsWith(PDF_MAGIC_BASE64) || mime.includes("pdf")) {
+    return { type: "document", source: { type: "base64", media_type: "application/pdf", data } };
+  }
+  if (mime.startsWith("image/")) {
+    // "image/jpg" is common in mail headers; Anthropic accepts only "image/jpeg".
+    const mediaType = mime === "image/jpg" ? "image/jpeg" : mime;
+    return {
+      type: "image",
+      source: { type: "base64", media_type: mediaType as "image/png", data },
+    };
+  }
+  return null;
 }
 
 function userBlocks(content: unknown): ContentBlockParam[] {
@@ -137,7 +155,7 @@ function userBlocks(content: unknown): ContentBlockParam[] {
     const url = isRecord(part.image_url) ? part.image_url.url : undefined;
     if (part.type === "image_url" && typeof url === "string") {
       // Say an image was dropped rather than let the model invent its content.
-      return [imageBlock(url) ?? { type: "text", text: "[image omitted]" }];
+      return [attachmentBlock(url) ?? { type: "text", text: "[image omitted]" }];
     }
     return [];
   });

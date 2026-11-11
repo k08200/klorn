@@ -171,16 +171,16 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
       className={
         embedded
           ? undefined
-          : "panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5"
+          : "panel-elevated mb-8 rounded-card border border-line/70 bg-surface-panel p-5"
       }
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+          <h2 className="flex items-center gap-2 text-role-head text-ink">
             {t("imap.icloud.title")}
             <BetaChip />
           </h2>
-          <p className="mt-1 text-xs text-ink-mid">
+          <p className="mt-1 text-role-body text-ink-mid">
             {t("imap.icloud.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
@@ -188,14 +188,14 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
+        <div className="text-role-caption text-ink-dim">{t("common.loading")}</div>
       ) : status?.connected ? (
         <div className="space-y-3">
-          <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3 text-role-body text-ink">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
-                <p className="text-caption text-ink-dim">
+                <p className="text-role-caption text-ink-dim">
                   {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString(locale) : "—"}
                 </p>
@@ -213,7 +213,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
           </div>
           {firstSync !== null && <FirstSyncNote started={firstSync} />}
           {error && (
-            <p role="alert" className="text-xs text-state-danger-ink">
+            <p role="alert" className="text-role-caption text-state-danger-ink">
               {error}
             </p>
           )}
@@ -243,7 +243,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
               required
               autoComplete="off"
             />
-            <p className="mt-1 text-caption text-ink-mid">
+            <p className="mt-1 text-role-caption text-ink-mid">
               {t("imap.icloud.help.before")}{" "}
               <a
                 href={APP_PASSWORD_HELP_URL}

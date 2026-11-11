@@ -64,12 +64,12 @@ function ForgotPasswordForm() {
         title={t("resetPassword.checkEmail.title")}
         description={t("resetPassword.checkEmail.description")}
       >
-        <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
+        <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-role-body text-ink-mid">
           {t("resetPassword.checkEmail.body")}
         </p>
         <Link
           href="/login"
-          className="mt-6 focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
+          className="mt-6 focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
         >
           {t("resetPassword.openLogin")}
         </Link>
@@ -151,7 +151,7 @@ function NewPasswordForm({ token }: { token: string }) {
       >
         <Link
           href="/login"
-          className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
+          className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
         >
           {t("auth.signIn")}
         </Link>
@@ -219,7 +219,7 @@ function BackToSignIn() {
     <p className="mt-6 text-center">
       <Link
         href="/login"
-        className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-label text-accent-deep underline-offset-2 hover:underline"
+        className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-role-label text-accent-deep underline-offset-2 hover:underline"
       >
         {t("auth.backToLogin")}
       </Link>

@@ -57,6 +57,28 @@ function isValidTimeZone(timeZone: string): boolean {
   }
 }
 
+/** Upper bound for a user's own daily budget (AutomationConfig.interruptBudget). */
+export const MAX_USER_INTERRUPT_BUDGET = 50;
+
+/** A per-user budget value the settings API accepts: an integer 1..50. */
+export function isValidUserInterruptBudget(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= MAX_USER_INTERRUPT_BUDGET
+  );
+}
+
+/** The user's own budget when set and valid; otherwise the system default. */
+export function resolveUserInterruptBudget(
+  userValue: number | null,
+  env: NodeJS.ProcessEnv,
+  onInvalid?: (raw: string) => void,
+): number | null {
+  return isValidUserInterruptBudget(userValue) ? userValue : resolveInterruptBudget(env, onInvalid);
+}
+
 /**
  * Every slot key starts with this. Clearing the bell must hide these rows, not
  * delete them (background.ts clearNotifications): deleting one would hand the
@@ -67,20 +89,40 @@ export const interruptSlotPrefix = (dayKey: string): string => `${INTERRUPT_SLOT
 export const interruptSlotKey = (dayKey: string, slot: number): string =>
   `${interruptSlotPrefix(dayKey)}${slot}`;
 
+/**
+ * Share of the day's slots reserved for trusted senders (doc §3(5)): a VIP, or
+ * someone the user has written to. Strangers claim only above the reserve, so
+ * urgent-looking mail from people the user never wrote to cannot spend the
+ * whole day's budget.
+ */
+export const TRUSTED_SLOT_SHARE = 0.4;
+
+/**
+ * Slots 1..n reserved for trusted senders: 40% rounded down, and at least one
+ * from a limit of 2 up, so a user who picks a small budget still keeps one
+ * slot strangers cannot take. A limit of 1, or no limit, has no reserve.
+ */
+export function reservedTrustedSlots(limit: number | null): number {
+  if (limit === null || limit < 2) return 0;
+  return Math.max(1, Math.floor(limit * TRUSTED_SLOT_SHARE));
+}
+
 export interface BudgetCandidate {
   id: string;
   importance: number;
   receivedAt: Date;
+  /** A trusted sender may use the reserved slots. */
+  trusted: boolean;
 }
 
 /**
- * Batch admission (replay, and any future batch path): candidates are
- * admitted by importance, then arrival, then id, until the day's budget is
- * spent. Pure; returns ids.
+ * Batch admission (replay): candidates are admitted by importance, then
+ * arrival, then id, until the day's budget is spent; strangers stop at their
+ * share. Pure; returns ids.
  */
 export function allocateInterruptBudget(
   candidates: readonly BudgetCandidate[],
-  budget: { used: number; limit: number | null },
+  budget: { limit: number | null },
 ): { admitted: string[]; held: string[] } {
   const ordered = [...candidates].sort(
     (a, b) =>
@@ -88,11 +130,22 @@ export function allocateInterruptBudget(
       a.receivedAt.getTime() - b.receivedAt.getTime() ||
       (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   );
-  const free = budget.limit === null ? ordered.length : Math.max(0, budget.limit - budget.used);
-  return {
-    admitted: ordered.slice(0, free).map((c) => c.id),
-    held: ordered.slice(free).map((c) => c.id),
-  };
+  const { limit } = budget;
+  if (limit === null) return { admitted: ordered.map((c) => c.id), held: [] };
+  const strangerCap = limit - reservedTrustedSlots(limit);
+  const admitted: string[] = [];
+  const held: string[] = [];
+  let strangers = 0;
+  for (const c of ordered) {
+    const fits = admitted.length < limit && (c.trusted || strangers < strangerCap);
+    if (!fits) {
+      held.push(c.id);
+      continue;
+    }
+    admitted.push(c.id);
+    if (!c.trusted) strangers++;
+  }
+  return { admitted, held };
 }
 
 export type SlotClaim =
@@ -100,29 +153,56 @@ export type SlotClaim =
   | { status: "held"; used: number };
 
 export interface SlotStore {
-  /** Count of existing keys with this prefix for the user. */
-  countUsed: (prefix: string) => Promise<number>;
+  /** Slot numbers already used for the day (parsed from the keys with this prefix). */
+  usedSlots: (prefix: string) => Promise<number[]>;
   /** Insert the key; "taken" when the unique index already holds it. */
   tryCreate: (dedupeKey: string) => Promise<"created" | "taken">;
 }
 
 /**
- * Claim the next free interrupt slot for the day. Starts after the slots
- * already used and walks forward on a unique-index conflict, so a racing
- * claimer just takes the next number. Bounded: with a limit it stops at the
- * limit; without one it re-counts after a bounded number of conflicts.
+ * Claim a free interrupt slot for the day. With a limit, slots are 1..limit:
+ * a trusted sender takes the lowest free one, a stranger only one above the
+ * trusted reserve. The day's used count is checked first, so a limit lowered
+ * mid-day still holds. A unique-index conflict means a racing claimer took that
+ * slot, so the claim moves on to the next; at most `limit` attempts. Without
+ * a limit it takes the next number after the highest used one.
  */
 export async function claimInterruptSlot(
-  input: { dayKey: string; limit: number | null } & SlotStore,
+  input: { dayKey: string; limit: number | null; trusted: boolean } & SlotStore,
 ): Promise<SlotClaim> {
   const prefix = interruptSlotPrefix(input.dayKey);
-  let slot = (await input.countUsed(prefix)) + 1;
-  for (let attempts = 0; attempts < MAX_CLAIM_ATTEMPTS; attempts++) {
-    if (input.limit !== null && slot > input.limit) return { status: "held", used: input.limit };
-    if ((await input.tryCreate(interruptSlotKey(input.dayKey, slot))) === "created") {
-      return { status: "admitted", dedupeKey: interruptSlotKey(input.dayKey, slot), used: slot };
+  const used = new Set((await input.usedSlots(prefix)).filter((n) => Number.isInteger(n) && n > 0));
+  if (input.limit === null) return claimUnlimited(input, used);
+  const reserve = reservedTrustedSlots(input.limit);
+  // Counted, not only bounded by slot number: a limit lowered mid-day leaves
+  // used slots above the new limit, and they still count.
+  if (used.size >= input.limit) return { status: "held", used: used.size };
+  if (!input.trusted && [...used].filter((n) => n > reserve).length >= input.limit - reserve) {
+    return { status: "held", used: used.size };
+  }
+  const lowest = input.trusted ? 1 : reserve + 1;
+  for (let slot = lowest; slot <= input.limit; slot++) {
+    if (used.has(slot)) continue;
+    const key = interruptSlotKey(input.dayKey, slot);
+    if ((await input.tryCreate(key)) === "created") {
+      return { status: "admitted", dedupeKey: key, used: used.size + 1 };
     }
-    slot++;
+    used.add(slot);
+  }
+  return { status: "held", used: used.size };
+}
+
+async function claimUnlimited(
+  input: { dayKey: string } & SlotStore,
+  used: Set<number>,
+): Promise<SlotClaim> {
+  let slot = Math.max(0, ...used) + 1;
+  for (let attempts = 0; attempts < MAX_CLAIM_ATTEMPTS; attempts++, slot++) {
+    const key = interruptSlotKey(input.dayKey, slot);
+    if ((await input.tryCreate(key)) === "created") {
+      return { status: "admitted", dedupeKey: key, used: used.size + 1 };
+    }
+    used.add(slot);
   }
   throw new Error(`interrupt budget: no slot claimed after ${MAX_CLAIM_ATTEMPTS} attempts`);
 }

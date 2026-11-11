@@ -57,19 +57,17 @@ function ReceiptView() {
       <header className="mb-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-              {t("receipt.title")}
-            </h1>
-            <p className="mt-2 text-sm text-ink-mid">{receipt.summary.narrative}</p>
+            <h1 className="text-role-page text-ink">{t("receipt.title")}</h1>
+            <p className="mt-2 text-role-body text-ink-mid">{receipt.summary.narrative}</p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <p className="hidden text-xs text-ink-dim sm:block">
+            <p className="hidden text-role-caption text-ink-dim sm:block">
               {formatReceiptDate(receipt.date)}
             </p>
             <button
               type="button"
               onClick={() => receiptQuery.refetch()}
-              className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
+              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
             >
               {t("receipt.refresh")}
             </button>
@@ -77,7 +75,7 @@ function ReceiptView() {
         </div>
 
         {/* Summary row — one elevated panel */}
-        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
           <SummaryMetric
             label={t("receipt.metric.signalsSeen")}
             value={receipt.summary.totalSeen}
@@ -115,7 +113,7 @@ function ReceiptView() {
                 type="button"
                 onClick={() => requestUndo(item.id)}
                 disabled={isUndoing(item.id)}
-                className="text-caption text-ink-dim transition duration-150 hover:text-accent-deeper disabled:opacity-50 focus-ring min-h-9 min-w-9"
+                className="text-role-caption text-ink-dim transition duration-150 hover:text-accent-deeper disabled:opacity-50 focus-ring min-h-9 min-w-9"
               >
                 {isUndoing(item.id) ? t("receipt.undo.creating") : t("receipt.undo.request")}
               </button>
@@ -162,9 +160,9 @@ function ReceiptView() {
         )}
 
         {receipt.summary.totalSeen === 0 && (
-          <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-8 text-center">
-            <p className="text-sm text-ink-mid">{t("receipt.empty.title")}</p>
-            <p className="mt-1 text-xs text-ink-mid">{t("receipt.empty.description")}</p>
+          <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-8 text-center">
+            <p className="text-role-body text-ink-mid">{t("receipt.empty.title")}</p>
+            <p className="mt-1 text-role-caption text-ink-mid">{t("receipt.empty.description")}</p>
           </div>
         )}
       </div>
@@ -172,7 +170,7 @@ function ReceiptView() {
       <div className="mt-8 flex justify-center">
         <Link
           href="/inbox"
-          className="text-sm text-ink-dim transition duration-150 hover:text-ink-muted"
+          className="text-role-body text-ink-dim transition duration-150 hover:text-ink-muted"
         >
           {t("receipt.backToQueue")}
         </Link>
@@ -204,12 +202,12 @@ function ReceiptSection({
     <section aria-label={title}>
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <h2 className={`text-sm font-semibold ${labelClass}`}>{title}</h2>
-          <p className="text-xs text-ink-mid">{description}</p>
+          <h2 className={`text-role-head font-semibold ${labelClass}`}>{title}</h2>
+          <p className="text-role-caption text-ink-mid">{description}</p>
         </div>
-        <span className="text-caption tabular-nums text-ink-dim">{items.length}</span>
+        <span className="text-role-caption tabular-nums text-ink-dim">{items.length}</span>
       </div>
-      <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+      <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
         <ul className="divide-y divide-line-soft">
           {items.map((item) => (
             <li key={item.id} className="row-wash relative">
@@ -222,16 +220,16 @@ function ReceiptSection({
               <div className="px-4 py-3 pl-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{item.title}</p>
+                    <p className="truncate text-role-body font-medium text-ink">{item.title}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <SourceBadge source={item.source} type={item.type} />
                       {item.tierReason && (
-                        <span className="text-caption text-ink-mid">{item.tierReason}</span>
+                        <span className="text-role-caption text-ink-mid">{item.tierReason}</span>
                       )}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-caption tabular-nums text-ink-dim">
+                    <span className="text-role-caption tabular-nums text-ink-dim">
                       {formatTime(item.surfacedAt, timeZone)}
                     </span>
                     {renderExtra?.(item)}
@@ -250,8 +248,8 @@ function ReceiptSection({
 function SummaryMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="border-r border-line-soft px-4 py-3 last:border-r-0">
-      <p className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</p>
-      <p className="mt-1 text-caption text-ink-dim">{label}</p>
+      <p className={`text-role-title font-semibold tabular-nums ${color}`}>{value}</p>
+      <p className="mt-1 text-role-caption text-ink-dim">{label}</p>
     </div>
   );
 }
@@ -260,7 +258,7 @@ function SourceBadge({ source, type }: { source: string; type: string }) {
   const { t } = useT();
   const label = sourceLabel(t, source, type);
   return (
-    <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
@@ -270,14 +268,14 @@ function PushStatusBadge({ status, clickedAt }: { status: string; clickedAt: str
   const { t } = useT();
   if (clickedAt) {
     return (
-      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
+      <span className="rounded-chip bg-emerald-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
         {t("receipt.status.opened")}
       </span>
     );
   }
   if (status === "SENT") {
     return (
-      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+      <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
         {t("receipt.status.sent")}
       </span>
     );

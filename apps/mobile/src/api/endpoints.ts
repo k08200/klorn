@@ -463,9 +463,16 @@ export function endpoints(api: ApiClient) {
         form.append("file", file, name);
         return api.post<DriveUploadResponse>("/api/drive/files", form);
       },
-      /** routes/email.ts GET /:id — the attachments of one mail (Files' mail source). */
+      /**
+       * routes/email.ts GET /:id — the attachments of one mail (Files' mail
+       * source). `purpose` tells the API this background read is not the user
+       * opening the mail, so it isn't counted as an open.
+       */
       attachmentsOf: (emailId: string, o?: RequestOptions) =>
-        api.get<AttachmentMailWire>(`/api/email/${encodeURIComponent(emailId)}`, o),
+        api.get<AttachmentMailWire>(
+          `/api/email/${encodeURIComponent(emailId)}${query({ purpose: "attachments" })}`,
+          o,
+        ),
       /** routes/email.ts GET /?filter=attachments — mail that carries attachments. */
       attachmentMail: (page = 1, o?: RequestOptions) =>
         api.get<EmailListResponse>(`/api/email${query({ filter: "attachments", page })}`, o),

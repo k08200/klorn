@@ -47,7 +47,7 @@ export function AgentModeLine() {
   return (
     <Link
       href={SETTINGS_HREF}
-      className="focus-ring -mx-3 flex min-h-11 items-center gap-2 rounded-control px-3 text-body transition-colors duration-120 ease-fluid hover:bg-surface-hover"
+      className="focus-ring -mx-3 flex min-h-11 items-center gap-2 rounded-control px-3 text-role-body transition-colors duration-120 ease-fluid hover:bg-surface-hover"
     >
       <span className="min-w-0 flex-1 text-ink-muted [word-break:keep-all]">
         {t("assistantHub.mode.label")} <span className="font-medium text-ink">{t(keys.name)}</span>

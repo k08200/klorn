@@ -47,6 +47,7 @@ import {
 } from "../mail/decoded-address-header.js";
 import { extractEmailAddress, isPlainAddress, splitAddressList } from "../mail/email-address.js";
 import { MAX_STORED_CC_LENGTH } from "../mail/imap-envelope.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
 
@@ -266,15 +267,13 @@ describe("property: the stored mailbox is the raw one, or nothing", () => {
 
 describe("bounded work on hostile header sizes", () => {
   // Structural first: what the parser and the list scan are asked to do. A
-  // wall-clock bound only backs that up, generously, on inputs (20 MB) that the
+  // CPU-time bound only backs that up, generously, on inputs (20 MB) that the
   // unbounded code took well over a second on, so a loaded runner cannot flake it.
   const BACKSTOP_MS = 1_500;
   const TWENTY_MB = 20 * 1024 * 1024;
-  const elapsed = (run: () => unknown) => {
-    const started = performance.now();
-    run();
-    return performance.now() - started;
-  };
+  // One run, not the fastest of five: the work counters and the results list
+  // asserted next to each bound collect from every call.
+  const elapsed = (run: () => unknown) => fastestCpuMs(run, 1);
 
   beforeEach(() => {
     work.parseAddress = 0;

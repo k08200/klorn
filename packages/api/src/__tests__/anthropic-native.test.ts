@@ -70,7 +70,7 @@ describe("toAnthropicModelId", () => {
     );
   });
 
-  it("translates OpenRouter-namespaced Claude ids to native ids", () => {
+  it("translates vendor-prefixed (anthropic/…) Claude ids to native ids", () => {
     expect(toAnthropicModelId("anthropic/claude-haiku-4.5", "fallback")).toBe("claude-haiku-4-5");
     expect(toAnthropicModelId("anthropic/claude-sonnet-5", "fallback")).toBe("claude-sonnet-5");
     expect(toAnthropicModelId("anthropic/claude-sonnet-5.5:beta", "fallback")).toBe(
@@ -409,6 +409,110 @@ describe("buildAnthropicRequest", () => {
           { type: "text", text: "[image omitted]" },
         ],
       },
+    ]);
+  });
+
+  // The OCR route (routes/email-attachments.ts) sends a PDF attachment as a
+  // data: URL in an image_url part. Anthropic reads PDFs only as a `document`
+  // block; before this, every PDF reached Claude as "[image omitted]" and the
+  // OCR "succeeded" with nothing in it.
+  it("sends an inline PDF as a document block, however the MIME type is spelled", () => {
+    const pdfBase64 = Buffer.from("%PDF-1.7 minimal").toString("base64");
+    const { body } = buildAnthropicRequest(
+      {
+        model: "x",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: `data:application/pdf;base64,${pdfBase64}` } },
+              {
+                type: "image_url",
+                image_url: { url: `data:application/pdf;name=cv.pdf;base64,${pdfBase64}` },
+              },
+              // Mail clients often label a PDF as octet-stream; the bytes decide.
+              {
+                type: "image_url",
+                image_url: { url: `data:application/octet-stream;base64,${pdfBase64}` },
+              },
+            ],
+          },
+        ],
+      } as Loose,
+      "claude-haiku-5-5",
+      CACHE_5M,
+    );
+    const pdf = {
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
+    };
+    expect(body.messages).toEqual([{ role: "user", content: [pdf, pdf, pdf] }]);
+  });
+
+  it("routes by label alone, by bytes alone, and normalises image/jpg", () => {
+    const notMagic = "AAAA"; // label-only cases: the bytes are not "%PDF-"
+    const pdfBytes = Buffer.from("%PDF-1.4 x").toString("base64");
+    const part = (url: string) => ({ type: "image_url", image_url: { url } });
+    const { body } = buildAnthropicRequest(
+      {
+        model: "x",
+        messages: [
+          {
+            role: "user",
+            content: [
+              part(`data:application/x-pdf;base64,${notMagic}`),
+              part(`data:Application/PDF;base64,${notMagic}`),
+              part(`data:image/pdf;base64,${pdfBytes}`),
+              part(`data:image/jpg;base64,${notMagic}`),
+              // A remote PDF is never fetched, same as a remote image.
+              part("https://example.com/contract.pdf"),
+            ],
+          },
+        ],
+      } as Loose,
+      "claude-haiku-5-5",
+      CACHE_5M,
+    );
+    const doc = (data: string) => ({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data },
+    });
+    expect(body.messages).toEqual([
+      {
+        role: "user",
+        content: [
+          doc(notMagic),
+          doc(notMagic),
+          doc(pdfBytes),
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: notMagic } },
+          { type: "text", text: "[image omitted]" },
+        ],
+      },
+    ]);
+  });
+
+  it("still omits inline data that is neither an image nor a PDF", () => {
+    const zipBase64 = Buffer.from("PK\u0003\u0004zip").toString("base64");
+    const { body } = buildAnthropicRequest(
+      {
+        model: "x",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:application/octet-stream;base64,${zipBase64}` },
+              },
+            ],
+          },
+        ],
+      } as Loose,
+      "claude-haiku-5-5",
+      CACHE_5M,
+    );
+    expect(body.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "[image omitted]" }] },
     ]);
   });
 

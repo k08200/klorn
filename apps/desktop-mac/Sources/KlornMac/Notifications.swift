@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import UserNotifications
 
-// MARK: - Which PUSH mail gets a banner
+// MARK: - Which mail gets a banner (PUSH and MEETING lanes)
 
 /// What has already been announced, for one account, across launches.
 ///
@@ -20,8 +20,21 @@ struct PushLedger: Codable, Equatable, Sendable {
     /// another account is never reused — that account starts a new baseline.
     var owner: String?
     var baselineEstablished: Bool
-    /// Announced (or baselined) item ids, oldest first, capped at `cap`.
+    /// Announced (or baselined, or dropped, or held for the quiet-hours
+    /// catch-up) item ids, oldest first, capped at `cap`: no plan offers them
+    /// again. One record for both lanes, so a mail re-tiered PUSH → MEETING is
+    /// not announced twice.
     var notified: [String]
+    /// The MEETING lane's own baseline (2026-11-07, when MEETING mail started
+    /// getting banners). nil on a ledger saved before then: its baseline only
+    /// covered PUSH, so the MEETING mail already sitting in the lane is
+    /// recorded silently on the first sync after the update instead of
+    /// arriving as a burst.
+    var meetingBaselineEstablished: Bool? = nil
+    /// PUSH mail held during quiet hours, oldest first, waiting for the
+    /// catch-up (`HeldBanners`). Also in `notified`, so it is never planned
+    /// again. nil on a ledger saved before it (none held).
+    var held: [String]? = nil
 
     /// Ids kept. Far above any PUSH lane's size, so trimming only ever drops
     /// ids that left the lane long ago.
@@ -54,18 +67,29 @@ struct PushLedger: Codable, Equatable, Sendable {
     struct Plan: Equatable {
         let toNotify: [FirewallItem]
         let next: PushLedger
+        /// Every new PUSH mail of this sync, past the per-sync cap (empty on a
+        /// baseline): what quiet hours hold for the catch-up.
+        var unseenPush: [FirewallItem] = []
     }
 
-    /// Plan the banners for the PUSH lane as it is now. Pure.
-    func plan(pushItems: [FirewallItem]) -> Plan {
+    /// Plan the banners for the PUSH and MEETING lanes as they are now: ids
+    /// not seen before, each once (PUSH first, a mail in both lanes counted
+    /// once), at most `maxBannersPerSync` together. Pure.
+    func plan(pushItems: [FirewallItem], meetingItems: [FirewallItem] = []) -> Plan {
         let known = Set(notified)
         var seenNow = Set<String>()
-        let unseen = pushItems.filter { !known.contains($0.id) && seenNow.insert($0.id).inserted }
+        let isNew = { (item: FirewallItem) in !known.contains(item.id) && seenNow.insert(item.id).inserted }
+        let unseenPush = pushItems.filter(isNew)
+        let unseenMeeting = meetingItems.filter(isNew)
         var next = self
-        next.notified = Array((notified + unseen.map(\.id)).suffix(Self.cap))
+        next.notified = Array((notified + (unseenPush + unseenMeeting).map(\.id)).suffix(Self.cap))
         next.baselineEstablished = true
+        next.meetingBaselineEstablished = true
         guard baselineEstablished else { return Plan(toNotify: [], next: next) }
-        return Plan(toNotify: Array(unseen.prefix(Self.maxBannersPerSync)), next: next)
+        let meetingDue = meetingBaselineEstablished == true ? unseenMeeting : []
+        return Plan(
+            toNotify: Array((unseenPush + meetingDue).prefix(Self.maxBannersPerSync)), next: next,
+            unseenPush: unseenPush)
     }
 }
 
@@ -131,6 +155,9 @@ struct PushBanner: Equatable, Sendable {
     let identifier: String
     let title: String
     let body: String
+    /// The lane name on a MEETING-mail banner, so it reads differently from
+    /// PUSH at a glance. nil (no line) for PUSH and meeting-soon banners.
+    var subtitle: String? = nil
 
     static func make(for item: FirewallItem) -> PushBanner {
         let sender = senderDisplayName(item.email?.from.map(decodeHTMLEntities))
@@ -138,7 +165,22 @@ struct PushBanner: Equatable, Sendable {
         return PushBanner(
             identifier: PushNotifier.notificationIdentifier(for: item.id),
             title: sender.isEmpty ? "Klorn" : sender,
-            body: subject)
+            body: subject,
+            subtitle: item.tier == .meeting ? Tier.meeting.label : nil)
+    }
+}
+
+/// The mail a sync may announce: the PUSH and MEETING lanes, the two the server
+/// rings on web, mobile and Windows (packages/api judge/email-firewall.ts
+/// `ringForFirewallEmail`). Pure.
+struct BannerMail: Equatable, Sendable {
+    let push: [FirewallItem]
+    let meeting: [FirewallItem]
+
+    var isEmpty: Bool { push.isEmpty && meeting.isEmpty }
+
+    static func from(_ response: FirewallResponse) -> BannerMail {
+        BannerMail(push: response.items(for: .push), meeting: response.items(for: .meeting))
     }
 }
 
@@ -233,6 +275,7 @@ final class SystemPushNotifier: PushNotifying {
         }
         let content = UNMutableNotificationContent()
         content.title = banner.title
+        if let subtitle = banner.subtitle { content.subtitle = subtitle }
         content.body = banner.body
         content.sound = .default
         content.threadIdentifier = PushNotifier.threadIdentifier
@@ -280,8 +323,9 @@ enum NotificationCenterCalls {
     }
 }
 
-/// Announces newly arrived PUSH mail: a VoiceOver announcement always, and a
-/// banner per item while the Settings ▸ Notifications switch is on. The
+/// Announces newly arrived PUSH and MEETING mail: a VoiceOver announcement
+/// always, and a banner per item while the Settings ▸ Notifications switch is
+/// on. The
 /// banner is informational only — lanes classify, nothing here acts on mail.
 @MainActor
 final class PushAlerter {
@@ -298,7 +342,7 @@ final class PushAlerter {
     func handleNewPush(_ items: [FirewallItem]) -> [PushBanner] {
         guard !items.isEmpty else { return [] }
         // WCAG 4.1.3 Status Messages: fires whatever the banner switch says.
-        announce(Self.pushAnnouncement(newCount: items.count))
+        announce(Self.announcement(for: items))
         guard model.settings.notificationsEnabled else { return [] }
         let banners = items.map(PushBanner.make(for:))
         banners.forEach { model.pushNotifier.post($0) }
@@ -316,9 +360,33 @@ final class PushAlerter {
         return true
     }
 
+    /// Urgent mail held during quiet hours, two or more: ONE summary banner
+    /// (`HeldBanners.summaryBanner`) while the banner switch is on, and its
+    /// title for VoiceOver either way. Returns what was posted, for the harness.
+    @discardableResult
+    func handleHeldSummary(_ items: [FirewallItem]) -> PushBanner? {
+        guard !items.isEmpty else { return nil }
+        let banner = HeldBanners.summaryBanner(for: items)
+        announce(banner.title)
+        guard model.settings.notificationsEnabled else { return nil }
+        model.pushNotifier.post(banner)
+        return banner
+    }
+
     /// VoiceOver announcement for newly arrived PUSH. Pure for testing.
     nonisolated static func pushAnnouncement(newCount n: Int) -> String {
         L("push.announce", n)
+    }
+
+    /// The announcement for one sync's new mail: each lane with its own count,
+    /// PUSH first. Pure for testing.
+    nonisolated static func announcement(for items: [FirewallItem]) -> String {
+        let meeting = items.filter { $0.tier == .meeting }.count
+        let push = items.count - meeting
+        return [push > 0 ? pushAnnouncement(newCount: push) : nil,
+                meeting > 0 ? L("push.announce.meeting", meeting) : nil]
+            .compactMap { $0 }
+            .joined(separator: " ")
     }
 
     static func voiceOver(_ message: String) {
@@ -333,6 +401,9 @@ enum PushNotifier {
     nonisolated static let identifierPrefix = "klorn-push-"
     /// Meeting banners: the event id appended verbatim, like PUSH.
     nonisolated static let meetingPrefix = "klorn-meeting-"
+    /// The quiet-hours summary: the newest held item's id appended, so each
+    /// summary is its own notification. Never parsed back into an item.
+    nonisolated static let summaryPrefix = "klorn-held-"
     /// Groups Klorn's banners into one stack in Notification Center.
     nonisolated static let threadIdentifier = "klorn-push"
 
@@ -345,6 +416,10 @@ enum PushNotifier {
 
     nonisolated static func meetingIdentifier(for eventID: String) -> String {
         meetingPrefix + eventID
+    }
+
+    nonisolated static func summaryIdentifier(for itemID: String) -> String {
+        summaryPrefix + itemID
     }
 
     /// Recover the item id a banner was posted for. Returns nil for anything we
@@ -372,6 +447,7 @@ enum PushNotifier {
         if identifier.hasPrefix(meetingPrefix) {
             return .openMeeting(eventID: String(identifier.dropFirst(meetingPrefix.count)))
         }
+        if identifier.hasPrefix(summaryPrefix) { return .openToday }
         guard let id = itemID(fromNotificationIdentifier: identifier) else { return .ignore }
         return isKnownItem(id) ? .open(itemID: id) : .openApp
     }
@@ -389,4 +465,7 @@ enum NotificationTapAction: Equatable {
     case openApp
     /// A meeting banner: open the main window on Calendar.
     case openMeeting(eventID: String)
+    /// The quiet-hours summary: open the main window on Today, where the
+    /// PUSH mail it counts is listed (as the Windows summary opens Today).
+    case openToday
 }

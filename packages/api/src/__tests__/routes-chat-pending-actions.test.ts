@@ -60,6 +60,11 @@ type Row = {
   createdAt: Date;
 };
 
+const ledger = vi.hoisted(() => ({
+  emailFindFirst: vi.fn(),
+  labelUpdateMany: vi.fn(),
+}));
+
 let row: Row;
 let staleReads: boolean;
 const updateManyCalls: Array<Record<string, unknown>> = [];
@@ -119,6 +124,9 @@ vi.mock("../db.js", () => {
     conversation: { findUnique: vi.fn(async () => null), update: vi.fn(async () => ({})) },
     automationConfig: { findUnique: vi.fn(async () => null), upsert: vi.fn(async () => ({})) },
     attentionItem: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    // An approved reply stamps REPLIED (judge/user-outcome.ts noteReplyIfSent).
+    emailMessage: { findFirst: ledger.emailFindFirst },
+    decisionLabel: { updateMany: ledger.labelUpdateMany },
     // The approve route claims the PA and enqueues in one transaction; the
     // mock runs the callback against the same prisma object (no real txn).
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
@@ -156,6 +164,10 @@ beforeEach(() => {
   executeToolCallSpy.mockReset();
   executeToolCallSpy.mockResolvedValue("ok");
   recordFeedbackSpy.mockClear();
+  ledger.emailFindFirst.mockReset();
+  ledger.emailFindFirst.mockResolvedValue({ id: "email-1" });
+  ledger.labelUpdateMany.mockReset();
+  ledger.labelUpdateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("POST /api/chat/pending-actions/:actionId/reject — reject with feedback", () => {
@@ -327,5 +339,82 @@ describe("POST /api/chat/pending-actions/:actionId/approve — execution idempot
     expect(row.status).toBe("EXECUTED"); // claimed, not FAILED
     expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
     await app.close();
+  });
+});
+
+describe("POST /api/chat/pending-actions/:actionId/approve — decision ledger", () => {
+  const REPLY_ARGS = {
+    to: "boss@corp.example",
+    subject: "Re: Q4",
+    body: "Sounds good.",
+    in_reply_to_email_id: "gmail-77",
+  };
+  const approve = async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/pending-actions/pa-1/approve",
+      payload: {},
+    });
+    await app.close();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    return res;
+  };
+
+  it("stamps REPLIED once on the answered mail when the approved reply went out", async () => {
+    row = makeRow({ toolName: "send_email", toolArgs: REPLY_ARGS });
+    const before = new Date();
+    const res = await approve();
+
+    expect(res.statusCode).toBe(200);
+    // Proof the send happened: markEmailReplied set repliedAt during this approval.
+    const where = ledger.emailFindFirst.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      userId: "test-user-id",
+      OR: [{ id: "gmail-77" }, { gmailId: "gmail-77" }],
+    });
+    expect(where.repliedAt.gte.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(ledger.labelUpdateMany.mock.calls.map((c) => c[0])).toEqual([
+      {
+        where: { userId: "test-user-id", source: "EMAIL", sourceId: "email-1", repliedAt: null },
+        data: { repliedAt: expect.any(Date) },
+      },
+    ]);
+  });
+
+  it("stamps nothing when the send left no fresh repliedAt (refused by the provider)", async () => {
+    row = makeRow({ toolName: "send_email", toolArgs: REPLY_ARGS });
+    ledger.emailFindFirst.mockResolvedValue(null);
+    await approve();
+    expect(ledger.labelUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("looks nothing up for a new mail or a non-mail action", async () => {
+    const { in_reply_to_email_id: _drop, ...newMail } = REPLY_ARGS;
+    row = makeRow({ toolName: "send_email", toolArgs: newMail });
+    await approve();
+    row = makeRow();
+    await approve();
+    expect(ledger.emailFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("stamps nothing while the send is only queued for retry", async () => {
+    row = makeRow({ toolName: "send_email", toolArgs: REPLY_ARGS });
+    executeToolCallSpy.mockRejectedValueOnce(new Error("503 upstream unavailable"));
+    const res = await approve();
+    expect(res.json()).toMatchObject({ queued: true });
+    expect(ledger.emailFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("answers exactly the same when the ledger write fails", async () => {
+    row = makeRow({ toolName: "send_email", toolArgs: REPLY_ARGS });
+    const ok = await approve();
+    row = makeRow({ toolName: "send_email", toolArgs: REPLY_ARGS });
+    ledger.labelUpdateMany.mockRejectedValue(new Error("ledger down"));
+    const failed = await approve();
+
+    expect(failed.statusCode).toBe(ok.statusCode);
+    expect(failed.body).toBe(ok.body);
   });
 });

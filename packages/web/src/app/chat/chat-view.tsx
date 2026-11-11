@@ -28,9 +28,9 @@ const SUGGESTION_KEYS = [
 
 /** The reader's own message. The legacy page keeps its classes byte for byte. */
 const LEGACY_USER_BUBBLE =
-  "max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
+  "max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-4 py-2.5 text-role-body text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
 const HUB_USER_BUBBLE =
-  "max-w-[85%] rounded-card rounded-br-chip bg-accent-solid px-4 py-2.5 text-body text-accent-solid-ink";
+  "max-w-[85%] rounded-card rounded-br-chip bg-accent-solid px-4 py-2.5 text-role-body text-accent-solid-ink";
 
 /**
  * `hub` is the Assistant hub's Chat page (productization plan P7): the same
@@ -71,25 +71,21 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
     >
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1
-            className={
-              hub
-                ? "text-display text-ink"
-                : "text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink"
-            }
-          >
+          <h1 className={hub ? "text-role-page text-ink" : "text-role-page text-ink"}>
             {hub ? t("nav.v2.chat") : t("nav.assistant")}
           </h1>
           {/* The hub page's empty thread already says what to ask. */}
           {!hub && (
-            <p className="mt-2 text-sm text-ink-mid">Ask about your mail, calendar, and briefing</p>
+            <p className="mt-2 text-role-body text-ink-mid">
+              Ask about your mail, calendar, and briefing
+            </p>
           )}
         </div>
         <button
           type="button"
           onClick={newChat}
           disabled={!activeId || sending}
-          className="focus-ring ease-strong inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-40 md:min-h-9"
+          className="focus-ring ease-strong inline-flex min-h-[44px] shrink-0 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-40 md:min-h-9"
         >
           {t("chat.newChat")}
         </button>
@@ -100,14 +96,14 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
           <LoadingState rows={3} rowHeight="h-12" label={t("chat.loadingConversation")} />
         ) : messages.length === 0 && !pendingText ? (
           <div className="mt-8 space-y-3">
-            <p className="text-sm text-ink-mid">{t("chat.emptyState")}</p>
+            <p className="text-role-body text-ink-mid">{t("chat.emptyState")}</p>
             <ul className="space-y-2">
               {SUGGESTION_KEYS.map((key) => (
                 <li key={key}>
                   <button
                     type="button"
                     onClick={() => send(t(key))}
-                    className="focus-ring ease-strong row-wash min-h-[44px] w-full rounded-xl border border-line bg-surface-panel/70 px-4 py-2.5 text-left text-sm text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:text-ink active:scale-[0.99]"
+                    className="focus-ring ease-strong row-wash min-h-[44px] w-full rounded-control border border-line bg-surface-panel/70 px-4 py-2.5 text-left text-role-body text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:text-ink active:scale-[0.99]"
                   >
                     {t(key)}
                   </button>
@@ -131,11 +127,11 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
               <div role="status" className="flex items-center gap-2.5">
                 <span
                   aria-hidden="true"
-                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
                 >
                   K
                 </span>
-                <p className="text-sm text-ink-mid">{t("chat.thinking")}</p>
+                <p className="text-role-body text-ink-mid">{t("chat.thinking")}</p>
               </div>
             )}
           </>
@@ -155,7 +151,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
           send(input);
         }}
       >
-        <div className="panel-elevated flex min-h-[44px] flex-1 items-center gap-2 rounded-2xl border border-line/70 bg-surface-panel px-3.5 py-2 transition duration-150 ease-out focus-within:border-accent-muted/70 focus-within:ring-2 focus-within:ring-accent/15">
+        <div className="panel-elevated flex min-h-[44px] flex-1 items-center gap-2 rounded-control border border-line/70 bg-surface-panel px-3.5 py-2 transition duration-150 ease-out focus-within:border-accent-muted/70 focus-within:ring-2 focus-within:ring-accent/15">
           <textarea
             ref={inputRef}
             value={input}
@@ -171,7 +167,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
             placeholder={t("chat.inputPlaceholder")}
             aria-label={hub ? t("today.ask.label") : "Message the assistant"}
             // The hub's composer avoids iOS zoom-on-focus (16px on touch, P10).
-            className={`max-h-32 flex-1 resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-dim${
+            className={`max-h-32 flex-1 resize-none bg-transparent text-role-body text-ink outline-none placeholder:text-ink-dim${
               hub ? " pointer-coarse:text-field" : ""
             }`}
           />
@@ -184,7 +180,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
         <button
           type="submit"
           disabled={!input.trim() || sending}
-          className="focus-ring glow-primary ease-strong inline-flex min-h-[44px] items-center rounded-xl bg-accent-solid px-4 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+          className="focus-ring glow-primary ease-strong inline-flex min-h-[44px] items-center rounded-control bg-accent-solid px-4 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t("chat.send")}
         </button>
@@ -217,11 +213,11 @@ function MessageBubble({
     <div className="flex justify-start gap-2.5 transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
       <span
         aria-hidden="true"
-        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
       >
         K
       </span>
-      <div className="max-w-[85%] rounded-2xl rounded-tl-md border border-line/70 bg-surface-panel px-4 py-2.5 text-sm text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      <div className="max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-4 py-2.5 text-role-body text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         {capCode ? (
           <DailyCapLine code={capCode} />
         ) : (

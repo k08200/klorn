@@ -4,12 +4,17 @@
  * offline and with no LLM call. Pure: the CLI (scripts/replay-policy.ts) loads
  * rows and prints this report.
  *
- * Per row:
- *  - facts: the stored facts (AttentionFacts, P2) when present, else keyword facts;
+ * Per row, the live rule (live-decision.ts), so replay shows what the live
+ * path would do:
  *  - precedence: a manual override, a pin, the marketing fast-path, a sender
- *    prior or a learned rule keeps the v2 lane, as in the live judge;
+ *    prior or a learned rule keeps the v2 lane;
+ *  - facts: stored LLM facts (AttentionFacts) go to the policy; without them
+ *    the v2 lane stands, or keyword facts when v2 itself fell back to
+ *    keywords. `facts: "keyword"` gives every row keyword facts instead (the
+ *    model-down estimate);
  *  - interrupt budget: PUSH lanes are admitted per user per local day by
- *    importance, then arrival; the rest are held in QUEUE.
+ *    importance, then arrival, strangers up to their share; the rest are held
+ *    in QUEUE.
  * Parity re-checks principle 9 on real mail: keyword facts through v3 against
  * the real v2 keyword fallback.
  */
@@ -19,23 +24,22 @@ import type { ClassifiableEmail } from "../email-classifier.js";
 import { isAutomatedSender, isClearMarketing } from "../keyword-policy.js";
 import { hasSpamLabel, keywordFallbackJudgement } from "../poc-judge.js";
 import { toLiveTier } from "../tiers.js";
-import { importancePrior } from "./importance.js";
+import type { StoredFacts } from "./facts-store.js";
 import { allocateInterruptBudget, localDayKey } from "./interrupt-budget.js";
 import { keywordFactsV1 } from "./keyword-facts.js";
+import {
+  basisFromStored,
+  decideLiveLane,
+  type FactsBasis,
+  type LiveDecision,
+} from "./live-decision.js";
 import { classifyParityDivergence, parityViolation } from "./parity.js";
-import { laneFromFactsV3, POLICY_VERSION, type PolicyDecision } from "./policy.js";
-import type { FactsV1, RelationshipSnapshot } from "./policy-types.js";
-import { type ReasonCode, reason } from "./reasons.js";
+import { laneFromFactsV3, POLICY_VERSION, type PolicyVersion, policyRules } from "./policy.js";
+import type { RelationshipSnapshot } from "./policy-types.js";
+import type { ReasonCode } from "./reasons.js";
+import { NEW_SENDER } from "./relationship.js";
 
 export const LIVE_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"];
-
-/** v2 judge sources that short-circuit before facts, mapped to their reason code. */
-const PRECEDENCE_SOURCES: Readonly<Record<string, ReasonCode>> = {
-  "pinned-rule": "pinned",
-  "fast-path": "kind",
-  "sender-prior": "sender_pattern",
-  "learned-rule": "learned_rule",
-};
 
 export interface ReplayRow {
   id: string;
@@ -49,8 +53,17 @@ export interface ReplayRow {
   v2Source: string | null;
   manualOverride: boolean;
   email: ClassifiableEmail;
-  stored: { facts: FactsV1; relationship: RelationshipSnapshot | null } | null;
+  /** The stored AttentionFacts row, read back (facts-store.ts parseStoredFacts). */
+  stored: StoredFacts | null;
+  /**
+   * The sender's relationship when no stored row carries one, loaded by the CLI
+   * as the live path loads it for a budgeted PUSH (trust for the slot reserve).
+   */
+  relationship?: RelationshipSnapshot | null;
 }
+
+/** "stored": the live rule per row. "keyword": keyword facts for every row. */
+export type ReplayFactsMode = "stored" | "keyword";
 
 export type LaneCounts = Record<LiveTier, number>;
 
@@ -62,14 +75,19 @@ export interface ReplayChange {
   v3: LiveTier;
   held: boolean;
   reasonCodes: ReasonCode[];
-  factsSource: "stored" | "keyword";
+  /** What decided: LLM facts, keyword facts, or the v2 lane. */
+  basis: LiveDecision["basis"];
 }
 
 export interface ReplayReport {
   policyVersion: string;
   items: number;
   users: number;
-  factsSource: { stored: number; keyword: number };
+  factsMode: ReplayFactsMode;
+  /** Rows with a stored facts row, and with LLM facts in it. */
+  storedFacts: { rows: number; llm: number };
+  /** What decided each row: LLM facts, keyword facts, or the v2 lane. */
+  basis: Record<LiveDecision["basis"], number>;
   precedenceKept: number;
   lanes: { v2: LaneCounts; v3PreBudget: LaneCounts; v3: LaneCounts };
   transitions: Record<string, number>;
@@ -77,8 +95,11 @@ export interface ReplayReport {
     limit: number | null;
     candidates: number;
     admitted: number;
+    /** PUSH candidates that got no slot: held in QUEUE, or rung as the fallback MEETING. */
     held: number;
-    /** Ids held by the budget (also the ones whose v2 lane was already QUEUE). */
+    /** Of `held`, the invites that ring as MEETING instead (v3.1, as live). */
+    meetingFallback: number;
+    /** Ids held in QUEUE by the budget (also the ones whose v2 lane was already QUEUE). */
     heldIds: string[];
     userDaysWithCandidates: number;
     maxCandidatesPerUserDay: number;
@@ -101,61 +122,83 @@ const bump = <K extends string>(rec: Record<K, number>, key: K): void => {
 
 interface Decided {
   row: ReplayRow;
-  decision: PolicyDecision;
-  importance: number;
-  precedence: boolean;
-  /** Spends the interrupt budget when PUSH: not a pin, not a manual override (as live). */
-  budgeted: boolean;
+  decision: LiveDecision;
 }
 
 export function replayPolicy(
   rows: readonly ReplayRow[],
-  opts: { budget: number | null },
+  opts: { budget: number | null; facts?: ReplayFactsMode; policyVersion?: PolicyVersion },
 ): ReplayReport {
-  const decided = rows.map(decideRow);
+  const factsMode = opts.facts ?? "stored";
+  const version = opts.policyVersion ?? POLICY_VERSION;
+  const decided = rows.map((row) => decideRow(row, factsMode, version));
   const heldIds = simulateBudget(decided, opts.budget);
+  const basis = { llm: 0, keyword: 0, v2: 0 };
+  for (const d of decided) basis[d.decision.basis]++;
   return {
-    policyVersion: POLICY_VERSION,
+    policyVersion: version,
     items: rows.length,
     users: new Set(rows.map((r) => r.userId)).size,
-    factsSource: {
-      stored: rows.filter((r) => r.stored).length,
-      keyword: rows.filter((r) => !r.stored).length,
+    factsMode,
+    storedFacts: {
+      rows: rows.filter((r) => r.stored).length,
+      llm: rows.filter((r) => r.stored?.factsSource === "llm" && r.stored.facts).length,
     },
-    precedenceKept: decided.filter((d) => d.precedence).length,
+    basis,
+    precedenceKept: decided.filter((d) => d.decision.precedence).length,
     lanes: laneTotals(decided, heldIds),
     transitions: transitionsOf(decided, heldIds),
     budget: budgetSummary(decided, heldIds, opts.budget),
-    parity: parityOf(rows),
+    parity: parityOf(rows, version),
     changes: changesOf(decided, heldIds),
   };
 }
 
-function decideRow(row: ReplayRow): Decided {
-  const facts = row.stored?.facts ?? keywordFactsV1(row.email, row.receivedAt);
-  const relationship = row.stored?.relationship ?? null;
-  const importance = importancePrior(relationship, row.receivedAt);
-  const precedenceCode = row.v2Source ? PRECEDENCE_SOURCES[row.v2Source] : undefined;
-  if (precedenceCode && row.v2Source !== "pinned-rule") {
-    const decision: PolicyDecision = {
-      lane: row.v2Tier,
-      reasons: [reason(precedenceCode, { params: { tier: row.v2Tier } })],
-      policyVersion: POLICY_VERSION,
-      pushCandidate: false,
-    };
-    return { row, decision, importance, precedence: true, budgeted: true };
-  }
-  const decision = laneFromFactsV3({
-    facts,
-    relationship,
-    pinnedTier: row.v2Source === "pinned-rule" ? row.v2Tier : null,
-    manualOverrideTier: row.manualOverride ? row.v2Tier : null,
-    spam: hasSpamLabel(row.email.labels),
-    automatedSender: isAutomatedSender(row.email.from || ""),
+/**
+ * Rows the replay must load a relationship for before it can decide them under
+ * `version`: no stored or loaded relationship, and the first-contact gate would
+ * hold them if the sender were new. Without a relationship the gate does not
+ * apply (the keyword fallback's v2 parity), so these rows would read as known.
+ * Selected from decisions, not from changes: a v2 QUEUE row the gate holds is
+ * no change, yet a known sender would lift it.
+ */
+export function rowsNeedingRelationship(
+  rows: readonly ReplayRow[],
+  opts: { facts?: ReplayFactsMode; policyVersion?: PolicyVersion },
+): string[] {
+  const version = opts.policyVersion ?? POLICY_VERSION;
+  const gate = policyRules(version).firstContactGate;
+  if (!gate.payAsk && !gate.event) return [];
+  const mode = opts.facts ?? "stored";
+  return rows
+    .filter((row) => !(row.stored?.relationship ?? row.relationship))
+    .filter((row) => {
+      const asNew = decideRow({ ...row, relationship: NEW_SENDER }, mode, version);
+      return asNew.decision.reasons[0]?.code === "first_contact";
+    })
+    .map((row) => row.id);
+}
+
+function decideRow(row: ReplayRow, mode: ReplayFactsMode, version: PolicyVersion): Decided {
+  const relationship = row.stored?.relationship ?? row.relationship ?? null;
+  const basis: FactsBasis =
+    mode === "keyword"
+      ? { kind: "keyword", pre: row.stored?.pre ?? null, relationship }
+      : { ...basisFromStored(row.stored), relationship };
+  const auth = row.stored?.signals?.senderAuthenticated;
+  const decision = decideLiveLane({
+    v2Tier: row.v2Tier,
+    v2Source: row.v2Source,
+    manualOverride: row.manualOverride,
+    email: row.email,
+    receivedAt: row.receivedAt,
+    basis,
+    // Replay decides each mail as ingest would have, at its arrival.
     decidedAt: row.receivedAt,
+    policyVersion: version,
+    senderAuthenticated: typeof auth === "boolean" ? auth : undefined,
   });
-  const precedence = row.manualOverride || row.v2Source === "pinned-rule";
-  return { row, decision, importance, precedence, budgeted: !precedence };
+  return { row, decision };
 }
 
 /**
@@ -166,7 +209,7 @@ function decideRow(row: ReplayRow): Decided {
 function simulateBudget(decided: readonly Decided[], limit: number | null): Set<string> {
   const byUserDay = new Map<string, Decided[]>();
   for (const d of decided) {
-    if (d.decision.lane !== "PUSH" || !d.budgeted) continue;
+    if (d.decision.lane !== "PUSH" || !d.decision.budgeted) continue;
     const key = `${d.row.userId}|${localDayKey(d.row.receivedAt, d.row.timeZone).dayKey}`;
     byUserDay.set(key, [...(byUserDay.get(key) ?? []), d]);
   }
@@ -174,16 +217,31 @@ function simulateBudget(decided: readonly Decided[], limit: number | null): Set<
   for (const group of byUserDay.values()) {
     const candidates = group.map((d) => ({
       id: d.row.id,
-      importance: d.importance,
+      importance: d.decision.importance,
       receivedAt: d.row.receivedAt,
+      trusted: d.decision.trusted,
     }));
-    for (const id of allocateInterruptBudget(candidates, { used: 0, limit }).held) held.add(id);
+    for (const id of allocateInterruptBudget(candidates, { limit }).held) held.add(id);
   }
   return held;
 }
 
-const finalLane = (d: Decided, held: Set<string>): LiveTier =>
-  held.has(d.row.id) ? "QUEUE" : d.decision.lane;
+/** No slot: held in QUEUE, unless an invite rings as the fallback MEETING (as live). */
+const ringsAsMeeting = (d: Decided, held: Set<string>): boolean =>
+  held.has(d.row.id) && d.decision.meetingFallback !== null;
+const heldInQueue = (d: Decided, held: Set<string>): boolean =>
+  held.has(d.row.id) && d.decision.meetingFallback === null;
+
+const finalLane = (d: Decided, held: Set<string>): LiveTier => {
+  if (heldInQueue(d, held)) return "QUEUE";
+  return ringsAsMeeting(d, held) ? "MEETING" : d.decision.lane;
+};
+
+function finalReasonCodes(d: Decided, held: Set<string>): ReasonCode[] {
+  if (heldInQueue(d, held)) return ["held_budget", ...d.decision.reasons.map((r) => r.code)];
+  const reasons = ringsAsMeeting(d, held) ? d.decision.meetingFallback : null;
+  return (reasons ?? d.decision.reasons).map((r) => r.code);
+}
 
 function laneTotals(decided: readonly Decided[], held: Set<string>): ReplayReport["lanes"] {
   const lanes = { v2: emptyCounts(), v3PreBudget: emptyCounts(), v3: emptyCounts() };
@@ -208,7 +266,7 @@ function budgetSummary(
 ): ReplayReport["budget"] {
   const perUserDay = new Map<string, number>();
   for (const d of decided) {
-    if (d.decision.lane !== "PUSH" || !d.budgeted) continue;
+    if (d.decision.lane !== "PUSH" || !d.decision.budgeted) continue;
     const key = `${d.row.userId}|${localDayKey(d.row.receivedAt, d.row.timeZone).dayKey}`;
     perUserDay.set(key, (perUserDay.get(key) ?? 0) + 1);
   }
@@ -219,14 +277,15 @@ function budgetSummary(
     candidates,
     admitted: candidates - held.size,
     held: held.size,
-    heldIds: decided.filter((d) => held.has(d.row.id)).map((d) => d.row.id),
+    meetingFallback: decided.filter((d) => ringsAsMeeting(d, held)).length,
+    heldIds: decided.filter((d) => heldInQueue(d, held)).map((d) => d.row.id),
     userDaysWithCandidates: counts.length,
     maxCandidatesPerUserDay: counts.length ? Math.max(...counts) : 0,
     userDaysOverBudget: limit === null ? 0 : counts.filter((n) => n > limit).length,
   };
 }
 
-function parityOf(rows: readonly ReplayRow[]): ReplayReport["parity"] {
+function parityOf(rows: readonly ReplayRow[], version: PolicyVersion): ReplayReport["parity"] {
   const parity: ReplayReport["parity"] = {
     compared: 0,
     v2Keyword: emptyCounts(),
@@ -240,7 +299,13 @@ function parityOf(rows: readonly ReplayRow[]): ReplayReport["parity"] {
     const v2 = isClearMarketing(row.email)
       ? "SILENT"
       : toLiveTier(keywordFallbackJudgement(row.email).tier);
-    const v3 = laneFromFactsV3({ facts, relationship: null, spam, decidedAt: row.receivedAt });
+    const v3 = laneFromFactsV3({
+      facts,
+      relationship: null,
+      spam,
+      decidedAt: row.receivedAt,
+      version,
+    });
     parity.compared++;
     bump(parity.v2Keyword, v2);
     bump(parity.v3Keyword, v3.lane);
@@ -267,10 +332,8 @@ function changesOf(decided: readonly Decided[], held: Set<string>): ReplayChange
       receivedAt: d.row.receivedAt.toISOString(),
       v2: d.row.v2Tier,
       v3: finalLane(d, held),
-      held: held.has(d.row.id),
-      reasonCodes: held.has(d.row.id)
-        ? ["held_budget", ...d.decision.reasons.map((r) => r.code)]
-        : d.decision.reasons.map((r) => r.code),
-      factsSource: d.row.stored ? "stored" : "keyword",
+      held: heldInQueue(d, held),
+      reasonCodes: finalReasonCodes(d, held),
+      basis: d.decision.basis,
     }));
 }

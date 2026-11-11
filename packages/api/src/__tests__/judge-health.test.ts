@@ -12,7 +12,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("judge health — recordJudgeSource is the heartbeat feed only (#1319)", () => {
+describe("judge health — recordJudgeSource is the heartbeat feed only (#1572)", () => {
   it("never alarms on its own, however many fallbacks it sees — the DB-backed check does", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     for (let i = 0; i < 500; i++) recordJudgeSource("keyword-fallback");

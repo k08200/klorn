@@ -52,9 +52,9 @@ describe("Today lane blocks carry no count (founder decision 2026-10-24)", () =>
   it("keeps the overflow link, in caption ink", () => {
     expect(MAIL).toMatch(/today\.mail\.moreInLane/);
     const more = component(BLOCK, "LaneMoreLink");
-    expect(more).toMatch(/text-caption/);
+    expect(more).toMatch(/text-role-caption/);
     expect(more).toMatch(/text-ink-muted/);
-    expect(more).not.toMatch(/text-label/);
+    expect(more).not.toMatch(/text-role-label/);
     expect(more).not.toMatch(/text-ink-soft/);
   });
 

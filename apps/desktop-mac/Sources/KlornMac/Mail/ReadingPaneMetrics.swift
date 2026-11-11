@@ -26,6 +26,6 @@ struct ReadingPaneMetrics {
         caption2Semibold: Theme.Typo.caption.weight(.semibold),
         sender: Theme.Typo.body.weight(.medium), senderInk: Theme.text,
         warning: Theme.warningInk, danger: Theme.danger, success: Theme.success,
-        editorRadius: Theme.Radius.md, cardRadius: Theme.Radius.md, inset: Theme.s6,
+        editorRadius: Theme.Radius.control, cardRadius: Theme.Radius.card, inset: Theme.s6,
         bandVertical: Theme.s3, stripVertical: Theme.s2)
 }

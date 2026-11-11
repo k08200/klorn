@@ -62,7 +62,6 @@ describe("POST /api/playground/classify — anthropic + decidedBy", () => {
     expect(res.statusCode).toBe(200);
     const credentials = judgeEmail.mock.calls[0][3];
     expect(credentials.anthropicApiKey).toBe(ANTHROPIC_KEY);
-    expect(credentials.openRouterApiKey).toBeFalsy();
     expect(credentials.geminiApiKey).toBeFalsy();
     expect(credentials.openAiApiKey).toBeFalsy();
     expect(credentials.playgroundOnly).toBe(true);
@@ -109,12 +108,27 @@ describe("POST /api/playground/classify — anthropic + decidedBy", () => {
   ])("accepts a well-formed model id %s", async (model) => {
     judgeEmail.mockResolvedValue(okJudgement);
     const app = await buildApp();
+    // The openai tab takes any family, so only the id SHAPE is under test
+    // (the anthropic/gemini tabs also refuse other vendors' ids).
     const res = await app.inject({
       method: "POST",
       url: "/api/playground/classify",
-      payload: { from: "a@b.com", subject: "hi", apiKey: ANTHROPIC_KEY, model },
+      payload: { from: "a@b.com", subject: "hi", apiKey: ANTHROPIC_KEY, provider: "openai", model },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("refuses another vendor's model on the default (anthropic) tab instead of substituting", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/playground/classify",
+      payload: { from: "a@b.com", subject: "hi", apiKey: ANTHROPIC_KEY, model: "gemini-3.8-flash" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "model_provider_mismatch" });
+    expect(judgeEmail).not.toHaveBeenCalled();
     await app.close();
   });
 
