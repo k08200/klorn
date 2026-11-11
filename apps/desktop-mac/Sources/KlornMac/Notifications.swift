@@ -35,6 +35,9 @@ struct PushLedger: Codable, Equatable, Sendable {
     /// catch-up (`HeldBanners`). Also in `notified`, so it is never planned
     /// again. nil on a ledger saved before it (none held).
     var held: [String]? = nil
+    /// Some of `held` arrived while Klorn was quit (N6): the catch-up's
+    /// summary reads "while Klorn was closed". nil when nothing is held.
+    var heldWhileClosed: Bool? = nil
 
     /// Ids kept. Far above any PUSH lane's size, so trimming only ever drops
     /// ids that left the lane long ago.
@@ -364,9 +367,9 @@ final class PushAlerter {
     /// (`HeldBanners.summaryBanner`) while the banner switch is on, and its
     /// title for VoiceOver either way. Returns what was posted, for the harness.
     @discardableResult
-    func handleHeldSummary(_ items: [FirewallItem]) -> PushBanner? {
+    func handleHeldSummary(_ items: [FirewallItem], kind: HeldBanners.SummaryKind = .quietHours) -> PushBanner? {
         guard !items.isEmpty else { return nil }
-        let banner = HeldBanners.summaryBanner(for: items)
+        let banner = HeldBanners.summaryBanner(for: items, kind: kind)
         announce(banner.title)
         guard model.settings.notificationsEnabled else { return nil }
         model.pushNotifier.post(banner)
