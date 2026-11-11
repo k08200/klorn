@@ -155,8 +155,15 @@ export const NOTIFY_TOOL = {
           description:
             "Stable identifier for the underlying issue so repeated notifications about the same thing get suppressed. Use the format `<topic>:<entity_id>` — e.g. `email_followup:<emailId>`, `task_overdue:<taskId>`, `meeting_prep:<eventId>`, `deadline_cluster:<YYYY-MM-DD>`. Same dedupKey = same underlying issue, even if the title wording changes.",
         },
+        emailRef: {
+          type: "integer",
+          description:
+            "The email under Recent Emails this notification is about: its number N from the `Email #N` heading. 0 when it is not about one of those emails. An email marked ALREADY PUSHED AS URGENT has already alerted the user, so a notification about it is not sent.",
+        },
       },
-      required: ["title", "message", "priority", "category"],
+      // emailRef is required so the model decides every time (0 = no listed
+      // email); the server still treats a missing or unusable value as no ref.
+      required: ["title", "message", "priority", "category", "emailRef"],
     },
   },
 };

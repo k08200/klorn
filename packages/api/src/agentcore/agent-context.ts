@@ -17,7 +17,8 @@
  *   - Upcoming Calendar (next 7 days)
  *   - Pending Reminders (if any)
  *   - Recent Notes (if any)
- *   - Recent Emails (no-reply filtered out)
+ *   - Recent Emails (no-reply filtered out; a mail that already rang the user
+ *     as urgent mail is marked, see agent-urgent-overlap.ts)
  *   - Unread Notifications count
  *   - Key Contacts (if any)
  *   - What User Recently Asked Klorn (if any)
@@ -44,6 +45,7 @@ import {
   formatRecentProposalSuppressions,
   getRecentProposalSuppressions,
 } from "./agent-proposal-dedup.js";
+import { type AgentContextEmail, urgentRungEmailIds } from "./agent-urgent-overlap.js";
 
 const MAX_CONTEXT_ITEMS = AGENT_MAX_CONTEXT_ITEMS;
 
@@ -93,8 +95,22 @@ function logContextBranchFailure(branch: string, err: unknown, userId: string): 
   captureError(err, { tags: { scope: `agent-context.${branch}` }, extra: { userId } });
 }
 
-/** Gather full user context for LLM reasoning. */
+/**
+ * The agent's context: the prompt text, and the mails it numbers "Email #N"
+ * (emails[N - 1]) so the run can tell which mail a notify_user names.
+ */
+export interface AgentContext {
+  text: string;
+  emails: readonly AgentContextEmail[];
+}
+
+/** Gather full user context for LLM reasoning (the text only). */
 export async function gatherUserContext(userId: string): Promise<string> {
+  return (await gatherAgentContext(userId)).text;
+}
+
+/** Gather full user context for LLM reasoning, with the numbered context mails. */
+export async function gatherAgentContext(userId: string): Promise<AgentContext> {
   const now = new Date();
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -203,6 +219,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
           actionItems: true,
           isRead: true,
           receivedAt: true,
+          createdAt: true,
         },
       })
       .catch((err) => {
@@ -223,6 +240,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
           actionItems: unknown;
           isRead: boolean;
           receivedAt: Date;
+          createdAt: Date;
         }>;
       }),
     // Key contacts for cross-domain reasoning (link email sender to contact).
@@ -310,7 +328,9 @@ export async function gatherUserContext(userId: string): Promise<string> {
     recentProposalSuppressions,
   );
   const visibleReminders = suppressedReminders.visible.slice(0, MAX_CONTEXT_ITEMS);
-  const suppressedEmails = filterSuppressedContextItems(
+  // Explicit T: the getText parameter below names only the text fields, and
+  // the rows must keep id/gmailId/createdAt for the numbered context mails.
+  const suppressedEmails = filterSuppressedContextItems<(typeof emails)[number]>(
     emails || [],
     (e: {
       from: string;
@@ -410,6 +430,19 @@ export async function gatherUserContext(userId: string): Promise<string> {
       !isNoReplyAddress(e.from) && e.category !== "notification" && e.category !== "security",
   );
 
+  // The mails the model sees as "Email #N", in that order. One that already
+  // rang the user as urgent mail is marked so the model leaves it to that ring;
+  // the notify_user handler enforces it either way (agent-urgent-overlap.ts).
+  const contextEmails: AgentContextEmail[] = replyableEmails.map((e) => ({
+    id: e.id,
+    gmailId: e.gmailId,
+    createdAt: e.createdAt,
+  }));
+  const alreadyRang = await urgentRungEmailIds(userId, contextEmails).catch((err) => {
+    logContextBranchFailure("urgentMailRows", err, userId);
+    return new Set<string>();
+  });
+
   if (replyableEmails.length > 0) {
     const emailLines = (
       replyableEmails as Array<{
@@ -441,13 +474,16 @@ export async function gatherUserContext(userId: string): Promise<string> {
         ? `\n  Actions: ${wrapUntrusted(actionsText, "email:actions")}`
         : "";
       const read = e.isRead ? "" : " 📩 UNREAD";
+      const rang = alreadyRang.has(e.id)
+        ? " 🔔 ALREADY PUSHED AS URGENT (do not notify_user about it)"
+        : "";
       const receivedLocal = e.receivedAt.toLocaleString("en-US", {
         timeZone: userZone,
         hour: "2-digit",
         minute: "2-digit",
       });
       const fromWrapped = wrapUntrusted(e.from, "email:from");
-      return `### Email #${idx + 1} (received: ${receivedLocal})${read}\n  From: ${fromWrapped}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
+      return `### Email #${idx + 1} (received: ${receivedLocal})${read}${rang}\n  From: ${fromWrapped}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
     });
     sections.push(
       `## Recent Emails (${replyableEmails.length})\nIMPORTANT: Each email below is a SEPARATE item. Different subjects or different body content = DIFFERENT meetings/requests. Do NOT merge them.\n${emailLines.join("\n\n")}`,
@@ -629,5 +665,5 @@ export async function gatherUserContext(userId: string): Promise<string> {
   // across the agent's 5-minute ticks (see NOTE at the top of this list).
   sections.push(`## Current Time\nLocal (${userZone}): ${localStr}\nUTC: ${now.toISOString()}`);
 
-  return sections.join("\n\n");
+  return { text: sections.join("\n\n"), emails: contextEmails };
 }
