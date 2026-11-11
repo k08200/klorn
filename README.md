@@ -42,7 +42,7 @@ Automation is deliberately **not** a lane. Each answerable email carries an `aut
 | Acting on your behalf | Approval-gated; unattended replies only in AUTO mode under your written guidelines, each send with a receipt pinned to a payload hash | Often acts first, reports later | Never acts |
 | When it's wrong | Move the row — the correction is training signal (77.4% cold → 86.8% warm on real labelled mail) | Varies | You rewrite the rule |
 | Source & hosting | AGPLv3, self-hostable end to end | Closed SaaS | Built into the client |
-| AI spend | Hard daily budget cap — it stops rather than overspends | Metered | None |
+| AI spend | Daily AI budget per plan — a runaway loop is stopped, not billed | Metered | None |
 
 ## How it decides — and why the model choice is a measurement, not a bet
 
