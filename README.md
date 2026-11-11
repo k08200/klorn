@@ -42,7 +42,7 @@ Automation is deliberately **not** a lane. Each answerable email carries an `aut
 | Acting on your behalf | Approval-gated; unattended replies only in AUTO mode under your written guidelines, each send with a receipt pinned to a payload hash | Often acts first, reports later | Never acts |
 | When it's wrong | Move the row — the correction is training signal (77.4% cold → 86.8% warm on real labelled mail) | Varies | You rewrite the rule |
 | Source & hosting | AGPLv3, self-hostable end to end | Closed SaaS | Built into the client |
-| AI spend | Hard daily budget cap — it stops rather than overspends | Metered | None |
+| AI spend | Daily AI budget per plan — a runaway loop is stopped, not billed | Metered | None |
 
 ## How it decides — and why the model choice is a measurement, not a bet
 
@@ -97,7 +97,7 @@ Three writeups walk through the architecture, with the tradeoffs and the honest 
 
 - **Not finished.** The cloud is live and billing is real, but the user base is early and the beta cohort is still forming. The [CHANGELOG](CHANGELOG.md) is honest about what's solid vs. what's stitched.
 - **Not a "chat with your inbox" thing.** There is no chat surface.
-- **Not unlimited.** Every hosted plan runs on a capped daily AI budget — see [pricing](https://klorn.ai/pricing/).
+- **Not unlimited.** Every hosted plan runs within a daily AI budget — see [pricing](https://klorn.ai/pricing/).
 - **Not feature-gated against open source.** [`docs/EDITIONS.md`](docs/EDITIONS.md) lists what Cloud will sell on top (managed hosting, verified Gmail scope, team workspaces) — the firewall doctrine and code stay in the repo on both editions.
 
 > **Why is a CI check red?** `Scope Budget` fails *on purpose*. It's a self-imposed ratchet that trips when a change grows the route / page / schema surface past a fixed budget, forcing a conscious "yes, this scope is worth it" instead of silent sprawl. A red Scope Budget is by design, not a broken build — every other check (lint, types, tests, build, security, eval) is green.
