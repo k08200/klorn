@@ -2695,6 +2695,7 @@ const ja: Record<string, string> = {
   "playground.brand.section": "プレイグラウンド",
   "playground.nav.methodology": "スコアの仕組み",
   "playground.nav.pricing": "料金",
+  "playground.nav.source": "ソースコード",
   "playground.nav.login": "ログイン",
   "playground.nav.startFree": "無料で始める",
   "playground.title": "メール1通がどう振り分けられるか確認できます。",

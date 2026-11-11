@@ -56,14 +56,14 @@ Google token.
 
 ## P1 — Login-for-everyone gate (deadline-driven)
 
-- [ ] CASA: the 4 outstanding founder actions (docs/launch — see CASA prescan
-      notes, 2026-08-04), then TAC DAST (scans prod BEFORE 2026-10-05), then
-      Letter of Assessment. Until LoA: provider flags stay OFF (frozen).
+- [x] CASA: TAC Security's CASA Tier 2 assessment (result: In Compliance), then
+      Google's OAuth verification review, completed 2026-10-03. Provider flag
+      flips are a separate founder decision.
 - [ ] Azure app registration (personal + work/school), redirect
       `https://klorn-api.onrender.com/api/auth/outlook/callback`, delegated
       Mail.Read/ReadWrite/Send + offline_access; put MS_CLIENT_ID/SECRET/
-      REDIRECT_URI in Render. (Parallel to CASA; Outlook flag flip still
-      waits for LoA.)
+      REDIRECT_URI in Render. (The CASA dependency cleared 2026-10-03; the
+      Outlook flag flip is a separate decision.)
 - [ ] Beta gate policy: BETA_GATE_ENABLED is the only line between "verified
       app" and "anyone logs in" — decide open criteria (cohort size, waitlist).
 

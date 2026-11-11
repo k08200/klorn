@@ -55,6 +55,11 @@ calendar time.
   means everyone.
 - `GET /api/admin/flags` lists `CALENDAR_COATTENDANCE_ENABLED` and
   `SENT_HISTORY_BACKFILL_ENABLED` (true for `true` or `cohort`) (#1666).
+- The privacy policy discloses calendar co-attendance for accounts where
+  `CALENDAR_COATTENDANCE_ENABLED` is on: the per-contact counts and UTC days
+  kept, the month-long meeting fingerprint, retention, and use in
+  classification. The `calendar.events` and `calendar.readonly` scope entries
+  say so too (#1607).
 
 ### Fixed
 - **One urgent mail rings once.** A mail that already rang as urgent mail
