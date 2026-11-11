@@ -27,6 +27,7 @@ import { prisma } from "../db.js";
 import { verifyGoogleOidcToken } from "../google-oidc.js";
 import { syncEmails } from "../mail/email-sync.js";
 import { getAuthedInboxClient, registerGmailWatch, stopGmailWatch } from "../mail/gmail.js";
+import { createSingleFlight } from "../mail/sync-single-flight.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
@@ -91,6 +92,12 @@ interface GmailPushPayload {
   emailAddress: string;
   historyId: string | number;
 }
+
+// One sync per inbox at a time: pushes that land mid-sync fold into a single
+// re-run instead of each starting its own concurrent sync (see
+// sync-single-flight.ts). Keyed per inbox, so a user's linked inboxes still
+// sync independently.
+const pushSyncs = createSingleFlight<Awaited<ReturnType<typeof syncEmails>>>();
 
 export async function gmailPushRoutes(app: FastifyInstance) {
   // ── Public Pub/Sub push target ────────────────────────────────────────
@@ -165,7 +172,11 @@ export async function gmailPushRoutes(app: FastifyInstance) {
       select: { id: true },
     });
     if (user) {
-      runSyncAndNotify(user.id, syncEmails(user.id, 30));
+      const uid = user.id;
+      runSyncAndNotify(
+        uid,
+        pushSyncs.run(`user:${uid}`, () => syncEmails(uid, 30)),
+      );
       return reply.code(204).send();
     }
 
@@ -189,7 +200,9 @@ export async function gmailPushRoutes(app: FastifyInstance) {
         if (client) {
           runSyncAndNotify(
             linked.userId,
-            syncEmails(linked.userId, 30, undefined, { id: linked.id, email, client }),
+            pushSyncs.run(`linked:${linked.id}`, () =>
+              syncEmails(linked.userId, 30, undefined, { id: linked.id, email, client }),
+            ),
           );
         } else {
           // Known linked inbox but its token is unusable (revoked/undecryptable):

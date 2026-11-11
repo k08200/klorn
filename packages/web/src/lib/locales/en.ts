@@ -2680,6 +2680,7 @@ const en: Record<string, string> = {
   "playground.brand.section": "Playground",
   "playground.nav.methodology": "How it's scored",
   "playground.nav.pricing": "Pricing",
+  "playground.nav.source": "Source",
   "playground.nav.login": "Log in",
   "playground.nav.startFree": "Start free",
   "playground.title": "See how Klorn sorts one email.",

@@ -8,10 +8,15 @@
  * quiet-hours summary (quiet-hours-summary.ts), so both count the same mail.
  * The summary also skips mail already read (`skipReadMail`), as the Mac does;
  * the Windows catch-up does not ask for that and is unchanged.
+ *
+ * The urgent sweep reads the same lane rule (openPushItemIdsFailClosed): it rings
+ * only mail that is an open PUSH item.
  */
 
 import { prisma } from "../db.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
+import { describeFailure } from "../mail/providers/action-failure.js";
+import { captureError } from "../sentry.js";
 import { mailPushContent } from "./mail-push-content.js";
 import { type NotificationLanguage, URGENT_EMAIL_TITLES } from "./notification-strings.js";
 
@@ -95,4 +100,51 @@ export async function openPushMail(
     });
   }
   return mail.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+/** Whether openPushItemIdsFailClosed has reported a failed lookup in this process. */
+let laneLookupFailureReported = false;
+
+/**
+ * The mail among `emailIds` that is an OPEN PUSH item now, mapped to that item's
+ * id, in one query. The urgent sweep (automation-scheduler.ts) rings only this
+ * mail: the keyword priority never outranks the judge's lane, so mail the judge
+ * put in another lane never rings from the sweep, and mail the judge has not
+ * reached yet waits for the judge's own push (email-firewall.ts rings PUSH, and
+ * MEETING, when the item lands).
+ *
+ * Fail closed: on a failed lookup no mail counts (nothing rings; the next sync
+ * reads again). The failure is never thrown, so the rest of the user's tick still
+ * runs, and it is reported once per process (as findReingestedHistoryFailClosed
+ * does), so a database incident is not one report per user per tick.
+ */
+export async function openPushItemIdsFailClosed(
+  userId: string,
+  emailIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (emailIds.length === 0) return new Map();
+  try {
+    const items = await prisma.attentionItem.findMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        sourceId: { in: [...emailIds] },
+        status: "OPEN",
+        tier: { in: PUSH_TIERS },
+      },
+      select: { id: true, sourceId: true },
+    });
+    return new Map(items.map((item) => [item.sourceId, item.id]));
+  } catch (err) {
+    if (!laneLookupFailureReported) {
+      laneLookupFailureReported = true;
+      // describeFailure: the error's class and code only, never a message that
+      // could quote the query's arguments.
+      console.warn(
+        `[urgent-sweep] lane lookup failed for ${userId}; no urgent mail rings this time: ${describeFailure(err)}`,
+      );
+      captureError(err, { tags: { scope: "automation.urgent-lane" }, extra: { userId } });
+    }
+    return new Map();
+  }
 }

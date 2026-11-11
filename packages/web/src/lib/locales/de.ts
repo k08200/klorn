@@ -2787,6 +2787,7 @@ const de: Record<string, string> = {
   "playground.brand.section": "Testumgebung",
   "playground.nav.methodology": "So wird bewertet",
   "playground.nav.pricing": "Preise",
+  "playground.nav.source": "Quellcode",
   "playground.nav.login": "Anmelden",
   "playground.nav.startFree": "Kostenlos starten",
   "playground.title": "So sortiert Klorn eine E-Mail.",

@@ -239,6 +239,71 @@ describe("quota-limiter", () => {
       expect((caught as UserRateLimitedError).reason).toBe("daily");
     });
 
+    it("a burst far past one park window drains in arrival order with no refusals", async () => {
+      // A sync can hand one user dozens of background calls at the same
+      // instant (one judge call per new email). Each waits its turn behind the
+      // user's earlier calls, and its park deadline starts at that turn, so a
+      // burst is an ordered drain rather than a mass refusal into the
+      // permanent keyword fallback.
+      const burst = 100;
+      const admitted: number[] = [];
+      const refused: number[] = [];
+      const slots = Array.from({ length: burst }, (_, i) =>
+        awaitUserCallSlot("u1", { priority: "background" }).then(
+          () => {
+            admitted.push(i);
+          },
+          () => {
+            refused.push(i);
+          },
+        ),
+      );
+      for (let t = 0; t < 12; t++) await vi.advanceTimersByTimeAsync(61_000);
+      await Promise.all(slots);
+
+      expect(refused).toEqual([]);
+      expect(admitted).toEqual(Array.from({ length: burst }, (_, i) => i));
+    });
+
+    it("one user's burst does not delay another user's background slot", async () => {
+      fillRpmWindow("u1");
+      const parked = awaitUserCallSlot("u1", { priority: "background" });
+      let otherAdmitted = false;
+      const other = awaitUserCallSlot("u2", { priority: "background" }).then(() => {
+        otherAdmitted = true;
+      });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(otherAdmitted).toBe(true);
+      await other;
+      await vi.advanceTimersByTimeAsync(61_000);
+      await parked;
+    });
+
+    it("refuses at once a call the daily cap could never admit behind the turns already waiting", async () => {
+      const used = LLM_USER_BACKGROUND_DAILY_CAP - 3;
+      for (let i = 0; i < used; i++) {
+        checkAndRecordUserCall("u1", { priority: "background" });
+        if (i % BG_RPM_CEILING === BG_RPM_CEILING - 1) vi.advanceTimersByTime(61_000);
+      }
+      vi.advanceTimersByTime(61_000);
+      fillRpmWindow("u1");
+      const waiting = [0, 1, 2].map(() =>
+        awaitUserCallSlot("u1", { priority: "background" }).catch((err: unknown) => err),
+      );
+
+      let caught: unknown;
+      try {
+        await awaitUserCallSlot("u1", { priority: "background" });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(UserRateLimitedError);
+      expect((caught as UserRateLimitedError).reason).toBe("daily");
+
+      await vi.advanceTimersByTimeAsync(5 * 61_000);
+      for (const outcome of await Promise.all(waiting)) expect(outcome).toBeUndefined();
+    });
+
     it("foreground calls never queue — chat fails fast for responsive UX", async () => {
       fillRpmWindow("u1");
       await expect(

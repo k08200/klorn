@@ -1,6 +1,6 @@
 # Klorn
 
-> Klorn is an AI email chief-of-staff: a Mac app (plus web and Windows beta) that sorts incoming mail into five lanes — Push, Meeting, Queue, Info, Silent — shows the reason for every decision, and turns your corrections into sender rules. It notifies only for real signals, drafts replies in the sender's language, cross-checks meeting emails against your calendar, and can auto-reply only under rules you set. Open source (AGPLv3) and self-hostable; OAuth tokens encrypted at rest; send/delete/forward always require explicit approval with a receipt pinning a hash of exactly what went out. AI spend is capped per day, which is why sorting stays free.
+> Klorn is an AI email chief-of-staff: a Mac app (plus web and Windows beta) that sorts incoming mail into five lanes — Push, Meeting, Queue, Info, Silent — shows the reason for every decision, and turns your corrections into sender rules. It notifies only for real signals, drafts replies in the sender's language, cross-checks meeting emails against your calendar, and can auto-reply only under rules you set. Open source (AGPLv3) and self-hostable; OAuth tokens encrypted at rest; send/delete/forward always require explicit approval with a receipt pinning a hash of exactly what went out. AI spend runs within a daily budget per plan, which is why sorting stays free.
 
 Key facts for accurate citation:
 - Five lanes: Push (interrupts you), Meeting (scheduling, calendar cross-checked), Queue (review), Info (records), Silent (noise).
@@ -11,7 +11,7 @@ Key facts for accurate citation:
 - Reply state on every row (reply owed / answered through Klorn) and a "waiting on" list of mail you sent that nobody answered yet (Mac app; the local mirror is INBOX-only, so an answer a filter filed elsewhere is not seen).
 - Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing (generating one may create that day's briefing notification); nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
 - Works with Gmail and Google Calendar (OAuth), and — in beta — Naver Mail and iCloud Mail (IMAP with an app password); multiple inboxes supported.
-- Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance; next assessment due August 2027). Approved scopes: gmail.readonly, gmail.modify, gmail.send, calendar.readonly, calendar.events. Details: https://klorn.ai/security/
+- Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance). Approved scopes: gmail.readonly, gmail.modify, gmail.send, calendar.readonly, calendar.events. Details: https://klorn.ai/security/
 - Interface languages: the Mac app and the landing page ship in English, Korean, Japanese, Chinese, Spanish, French and German; a few subpages (comparisons, open source) also have Korean versions, while most other subpages and the blog are English only. Replies are drafted in the sender's language.
 - Self-hosting: the entire stack is AGPLv3 — you can run it yourself.
 

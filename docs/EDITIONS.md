@@ -9,7 +9,7 @@ running it; the bytes you trust are the same either way.
 
 | Capability | Open Source (AGPLv3) | Klorn Cloud |
 |---|:---:|:---:|
-| Attention firewall classifier (SILENT / QUEUE / PUSH / AUTO) | ✅ | ✅ |
+| Attention firewall classifier (PUSH / MEETING / QUEUE / INFO / SILENT) | ✅ | ✅ |
 | Content-hash binding ([PR #468](https://github.com/k08200/klorn/pull/468)) | ✅ | ✅ |
 | Deterministic action floor ([PR #480](https://github.com/k08200/klorn/pull/480), [#481](https://github.com/k08200/klorn/pull/481)) | ✅ | ✅ |
 | Calibration CLI (Day 14+7 retention measurement) | ✅ | ✅ |
@@ -17,7 +17,8 @@ running it; the bytes you trust are the same either way.
 | Bring-your-own Anthropic (Claude) key | ✅ | ✅ |
 | Managed hosting + uptime SLA | — | ✅ |
 | Google-verified Gmail OAuth scope (no consent warning) | — | ✅ |
-| Team / multi-account workspaces | — | ✅ (roadmap) |
+| Team workspaces (members, scheduling across the team) | ✅ (roadmap) | ✅ (roadmap) |
+| Hosted team seats and billing | — | ✅ (roadmap) |
 | Priority support, incident response | — | ✅ |
 
 ## What "operational, not behavioural" means
@@ -27,11 +28,14 @@ binding, the same receipt enforcement on `send_email`. The two
 codebases don't diverge.
 
 What you do NOT get on self-host:
-- Google CASA-verified Gmail scope (you'll see the unverified-app warning
-  during OAuth until you submit your own clone for verification)
+- Klorn's own Google OAuth client, which completed Google's OAuth
+  verification review on 2026-10-03 (on your own client you'll see the
+  unverified-app warning during OAuth until you submit it for verification)
 - Managed Postgres, uptime, observability
-- Team-mode collaboration surfaces (not yet shipped on Cloud either —
-  this is the roadmap line, not a behind-paywall feature today)
+- Hosted team seats and seat billing. The team features themselves
+  (members, scheduling across the team) ship in the AGPL core like
+  everything else; Cloud sells running them, not the code (decided
+  2026-11-11, see `docs/design/pricing-tiers.md`)
 
 ## Cloud access (today)
 
@@ -39,14 +43,14 @@ Sign in with Google at [klorn.ai](https://klorn.ai). The OAuth screen is
 in **production**, so there is no test-user list, no approval step, and
 nobody to email first.
 
-The cap is the real constraint: Klorn uses Gmail's restricted
-`gmail.modify` scope, and until CASA Tier 2 verification lands the app
-is limited to **100 lifetime accounts**, first-come. Verification
-removes the cap; it does not change how you sign in.
+Klorn uses Gmail's restricted `gmail.modify` scope. Google completed its
+OAuth verification review for Klorn on 2026-10-03, after an independent
+CASA Tier 2 assessment by TAC Security (result: In Compliance). The review
+did not change how you sign in.
 
 Support: `k0820086@gmail.com`.
 
-Self-host bypasses this gate entirely. You bring your own OAuth client
+Self-host does not depend on that review. You bring your own OAuth client
 ID/secret, register them in your own Cloud Console, and the verification
 question is between you and Google.
 
@@ -78,8 +82,7 @@ those users the source under AGPL §13. That's the line.
 
 Commercial license available for organizations that need to host a
 modified Klorn behind a non-AGPL contract — typically: managed Gmail
-verification, vendor-supported deployments, or proprietary team
-features. Contact: k0820086@gmail.com.
+verification or vendor-supported deployments. Contact: k0820086@gmail.com.
 
 ## What's NOT on the boundary
 

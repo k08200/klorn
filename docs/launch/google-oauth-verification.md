@@ -25,12 +25,14 @@ trusting any console screen; the project picker defaults elsewhere.
 Console path: **Google Auth Platform → Audience** (older consoles:
 **APIs & Services → OAuth consent screen**).
 
-## Audience mode while the review is pending
+## Audience mode
 
-The audience is **In production**, unverified — verified 2026-08-04, and it must stay
-that way. Do not press "Back to testing":
+Google completed the verification review on 2026-10-03; the "In production,
+unverified" column below is the pre-approval state, kept for the record. The audience
+is **In production** (checked 2026-08-04), and it must stay that way. Do not press
+"Back to testing":
 
-| | Testing | In production, unverified (current) | Verified |
+| | Testing | In production, unverified (until 2026-10-03) | Verified |
 |---|---|---|---|
 | Authorization lifetime | **expires 7 days after consent** | normal | normal |
 | Who can sign in | only emails listed as test users (max 100) | anyone | anyone |
@@ -38,9 +40,10 @@ that way. Do not press "Back to testing":
 | Unverified-app warning | yes, on every re-consent | yes, once | no |
 
 Testing mode would be unusable for a real cohort: the 7-day expiry sends every tester
-back through the unverified-app consent screen weekly. The cost of production is the
-lifetime cap, which is why `BETA_GATE_ENABLED` stays **on** — the waitlist is the only
-thing stopping a traffic spike from permanently burning all 100 slots. Probe the gate
+back through the unverified-app consent screen weekly. Before approval, the cost of
+production was the lifetime cap (check the current user cap under Audience in the
+console; this section has not re-checked it since the approval), which is why
+`BETA_GATE_ENABLED` stays **on** — the waitlist is the only thing stopping a traffic spike from permanently burning all 100 slots. Probe the gate
 without console access: `GET /api/auth/signup-status` returns `{"open":false}` when it
 is armed.
 
