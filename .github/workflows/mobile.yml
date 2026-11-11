@@ -68,7 +68,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
       # Capacitor 8's Android libraries compile to Java 21.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
