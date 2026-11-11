@@ -42,6 +42,9 @@ const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 // that is both keyword-URGENT and judge-PUSH gets exactly one push. The dedupe
 // reads match URGENT_EMAIL_TITLES (every language plus the legacy English
 // title), so a language switch or this change's deploy never re-rings a mail.
+// The sweep rings only mail whose open item is PUSH (openPushItemIdsFailClosed):
+// it is a safety net for PUSH mail this path did not ring, and never rings mail
+// the judge put in another lane. MEETING rings only from this path.
 
 /**
  * The earliest notification that may count as "already pushed" for this email. The
