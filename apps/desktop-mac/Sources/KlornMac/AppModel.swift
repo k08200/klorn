@@ -14,7 +14,9 @@ final class AppModel {
 
     private(set) var phase: Phase
     var signInError: String?
-    private(set) var queue: FirewallResponse?
+    private(set) var queue: FirewallResponse? {
+        didSet { reportNeedsYouNowIfChanged() }
+    }
     private(set) var loadError: String? {
         didSet { if loadError == nil { loadOffline = false } }
     }
@@ -32,12 +34,34 @@ final class AppModel {
     /// first, once the server allows banners again (`HeldBanners`): ONE
     /// summary banner. A lone held mail goes to `onNewPush` instead.
     var onHeldSummary: (([FirewallItem]) -> Void)?
+    /// Called with two or more PUSH mails that arrived while Klorn was quit,
+    /// newest first, on the first pass after launch the server allows: ONE
+    /// summary banner (decision N6). A lone missed mail goes to `onNewPush`.
+    var onClosedSummary: (([FirewallItem]) -> Void)?
+    /// Called with Today's "Needs you now" count whenever it changes (the
+    /// Dock badge, N4). Always on the main actor.
+    @ObservationIgnored var onNeedsYouNowChanged: ((Int) -> Void)?
+    /// Today's "Needs you now" count (`TodayRules.needsYouNowCount`), 0
+    /// without a queue.
+    var needsYouNowCount: Int { queue.map(TodayRules.needsYouNowCount) ?? 0 }
+    /// The count last reported to `onNeedsYouNowChanged`.
+    @ObservationIgnored private var reportedNeedsYouNow = 0
+
+    private func reportNeedsYouNowIfChanged() {
+        let count = needsYouNowCount
+        guard count != reportedNeedsYouNow else { return }
+        reportedNeedsYouNow = count
+        onNeedsYouNowChanged?(count)
+    }
     /// "Now" for mail banners: the catch-up's 72 h window and its ask-again
     /// wait. A seam so the self-check runs on a fixed clock.
     @ObservationIgnored var bannerClock: () -> Date = { Date() }
     /// Until when held mail alone does not ask the server again, after it
     /// answered "quiet hours" (`HeldBanners.askAgainSeconds`). Per process.
     @ObservationIgnored private var heldAskAgainAt = Date.distantPast
+    /// True until this process's first banner pass: that pass catches up the
+    /// PUSH mail that arrived while Klorn was quit (N6, `HeldBanners`).
+    @ObservationIgnored private var launchCatchUpPending = true
 
     /// User preferences (persisted). Observed by the Preferences panel and read
     /// by the controller before posting an OS banner.
@@ -1620,6 +1644,41 @@ final class AppModel {
     var showPurposePrompt = false
     private static let purposePromptDismissedKey = "klorn.purposePromptDismissed"
 
+    // MARK: "Open at login" question (N5, 2026-11-11)
+
+    /// The one-time "Keep Klorn running in the background?" sheet
+    /// (`LoginItemPrompt`).
+    var showLoginItemPrompt = false
+    /// macOS refused the login item from the sheet; shown in it.
+    var loginItemPromptError: String?
+    /// The login item and the "asked" record, behind a seam for the self-check.
+    @ObservationIgnored var loginItemPrompt = LoginItemPromptEnvironment.live
+
+    /// The sheet's two buttons (and Esc). Either answer is final: the
+    /// question never shows again. "Open at login" registers the login item;
+    /// when macOS refuses, the sheet stays up with the reason.
+    func answerLoginItemPrompt(openAtLogin: Bool) {
+        // `register` logs the OS error; the sheet says it in the app's language.
+        if openAtLogin, loginItemPrompt.register() != nil {
+            loginItemPromptError = L("loginPrompt.failed")
+            return
+        }
+        loginItemPrompt.markAsked()
+        loginItemPromptError = nil
+        showLoginItemPrompt = false
+    }
+
+    /// Show the "Open at login" question if `LoginItemPrompt` says so, given
+    /// macOS's answer before and after this session's permission request.
+    private func offerLoginItemIfNeeded(before: NotificationPermission, after: NotificationPermission) {
+        guard phase == .signedIn, !showLoginItemPrompt else { return }
+        guard LoginItemPrompt.shouldShow(
+            asked: loginItemPrompt.asked(), availability: loginItemPrompt.availability(),
+            enabled: loginItemPrompt.isEnabled(), before: before, after: after)
+        else { return }
+        showLoginItemPrompt = true
+    }
+
     /// Chosen on the SIGNED-OUT screen, before OAuth (founder 2026-09-01:
     /// "로그인 하면서 고르게"). Applied to the primary inbox as soon as the
     /// sign-in lands and the inbox list confirms it; then cleared. Selecting
@@ -2520,6 +2579,8 @@ final class AppModel {
             flag("diagnosticsInFlight", \.diagnosticsInFlight),
             text("diagnosticsError", \.diagnosticsError),
             flag("showPurposePrompt", \.showPurposePrompt),
+            flag("showLoginItemPrompt", \.showLoginItemPrompt),
+            text("loginItemPromptError", \.loginItemPromptError),
             field("purposePromptTarget", \.purposePromptTarget, nil, isClean: { $0 == nil }),
             flag("purposePromptStartsAtDomains", \.purposePromptStartsAtDomains),
             flag("purposePromptStartsAtPriorities", \.purposePromptStartsAtPriorities),
@@ -2898,6 +2959,11 @@ final class AppModel {
     /// - any other hold (the category off on the server, or "Urgent email"
     ///   off on this Mac): dropped, held mail included;
     /// - no answer: new mail posts (fail-open); held mail waits.
+    /// The first pass after launch (decision N6): the new PUSH mail from the
+    /// last 72 h, still open, arrived while Klorn was quit. One comes back as
+    /// its own banner, two or more as ONE "N urgent emails while Klorn was
+    /// closed" summary (`onClosedSummary`), not one banner each; quiet hours
+    /// hold it like any other PUSH mail. Later passes announce one by one.
     /// Held mail opened meanwhile, gone from the PUSH lane or older than 72 h
     /// leaves the held list on every pass. Mail recorded by a session that
     /// ended during the wait is not announced (sign-out clears the ledger
@@ -2909,13 +2975,19 @@ final class AppModel {
         let now = bannerClock()
         let ledger = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
         let plan = ledger.plan(pushItems: mail.push, meetingItems: mail.meeting)
+        // The first pass after launch (not a new account's silent baseline):
+        // its new PUSH mail arrived while Klorn was quit.
+        let isLaunchPass = launchCatchUpPending && ledger.baselineEstablished
+        launchCatchUpPending = false
         // Parsed only when something is held or new (most polls: neither).
         let eligible = ledger.heldIDs.isEmpty && plan.unseenPush.isEmpty
             ? [] : HeldBanners.eligible(mail.push, opened: openedEmailIds, now: now)
+        let (missed, fresh) = isLaunchPass
+            ? HeldBanners.launchSplit(plan: plan, eligible: eligible) : ([], plan.toNotify)
         let planned = plan.next.keepingHeld(Set(eligible.map(\.id)))
         if planned != ledger { pushLedgerStore.save(planned) }
         let catchUpDue = !planned.heldIDs.isEmpty && now >= heldAskAgainAt
-        guard !plan.toNotify.isEmpty || catchUpDue else { return }
+        guard !fresh.isEmpty || !missed.isEmpty || catchUpDue else { return }
         // Respect the user's "Urgent mail" category. Seen-tracking still runs on
         // the muted path so re-enabling the category doesn't dump a backlog of
         // interrupts for mail that arrived while it was off.
@@ -2930,13 +3002,18 @@ final class AppModel {
         let current = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
         let outcome = HeldBanners.resolve(
             verdict: verdict, ledger: current,
-            fresh: plan.toNotify, unseenPush: plan.unseenPush, eligible: eligible)
+            fresh: fresh, unseenPush: plan.unseenPush, eligible: eligible, missed: missed)
         if outcome.next != current { pushLedgerStore.save(outcome.next) }
         if verdict == .quietHours { heldAskAgainAt = now.addingTimeInterval(HeldBanners.askAgainSeconds) }
         if let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) {
             Log.app.info("mail banners held by the server: \(reason, privacy: .public)")
         }
-        if !outcome.summary.isEmpty { onHeldSummary?(outcome.summary) }
+        if !outcome.summary.isEmpty {
+            switch outcome.summaryKind {
+            case .quietHours: onHeldSummary?(outcome.summary)
+            case .whileClosed: onClosedSummary?(outcome.summary)
+            }
+        }
         if !outcome.post.isEmpty { onNewPush?(outcome.post) }
     }
 
@@ -2989,7 +3066,9 @@ final class AppModel {
             shownByUser: windowShownByUser)
         else { return }
         didRequestNotifyAuth = true
+        let before = await pushNotifier.permission()
         notificationPermission = await pushNotifier.requestAuthorization()
+        offerLoginItemIfNeeded(before: before, after: notificationPermission)
     }
 
     /// Once signed in: request notification permission (when allowed) and start the

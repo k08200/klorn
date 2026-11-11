@@ -4,7 +4,7 @@ import SwiftUI
 /// lane guide, the event editor and the connect-time question, each a native
 /// sheet on the window instead of a scrim overlay.
 enum MainSheet: String, Identifiable, CaseIterable {
-    case tierGuide, eventEditor, purposePrompt
+    case tierGuide, eventEditor, purposePrompt, loginItemPrompt
 
     var id: String { rawValue }
 }
@@ -13,13 +13,16 @@ enum MainSheet: String, Identifiable, CaseIterable {
 enum MainSheetRules {
     /// A window shows one sheet at a time. The order is the overlays' old
     /// z-order, top first: the guide, then the editor the user just asked
-    /// for, then the connect-time question.
+    /// for, then the connect-time question, then the one-time "Open at
+    /// login" question (N5), which waits behind all of them.
     static func active(
-        showTierGuide: Bool, showEventEditor: Bool, showPurposePrompt: Bool
+        showTierGuide: Bool, showEventEditor: Bool, showPurposePrompt: Bool,
+        showLoginItemPrompt: Bool = false
     ) -> MainSheet? {
         if showTierGuide { return .tierGuide }
         if showEventEditor { return .eventEditor }
         if showPurposePrompt { return .purposePrompt }
+        if showLoginItemPrompt { return .loginItemPrompt }
         return nil
     }
 
@@ -34,9 +37,10 @@ enum MainSheetRules {
     /// sheet is up or waiting behind another one. The compose window is not
     /// a sheet and blocks nothing.
     static func blocksSurface(
-        showTierGuide: Bool, showEventEditor: Bool, showPurposePrompt: Bool
+        showTierGuide: Bool, showEventEditor: Bool, showPurposePrompt: Bool,
+        showLoginItemPrompt: Bool = false
     ) -> Bool {
-        showTierGuide || showEventEditor || showPurposePrompt
+        showTierGuide || showEventEditor || showPurposePrompt || showLoginItemPrompt
     }
 }
 
@@ -72,6 +76,7 @@ struct MainSheetContent: View {
         case .tierGuide: TierGuide { model.dismissTierGuide() }
         case .eventEditor: CalendarEventEditor()
         case .purposePrompt: PurposePrompt()
+        case .loginItemPrompt: LoginItemPromptCard()
         }
     }
 }
@@ -81,7 +86,7 @@ extension AppModel {
     var activeMainSheet: MainSheet? {
         MainSheetRules.active(
             showTierGuide: showTierGuide, showEventEditor: showEventEditor,
-            showPurposePrompt: showPurposePrompt)
+            showPurposePrompt: showPurposePrompt, showLoginItemPrompt: showLoginItemPrompt)
     }
 
     /// Dismiss one sheet through the same path its overlay's scrim used.
@@ -90,6 +95,8 @@ extension AppModel {
         case .tierGuide: dismissTierGuide()
         case .eventEditor: dismissEventEditor()
         case .purposePrompt: dismissPurposePrompt()
+        // Esc on the "Open at login" question is "Not now".
+        case .loginItemPrompt: answerLoginItemPrompt(openAtLogin: false)
         }
     }
 }
@@ -104,5 +111,37 @@ struct MainSheetRoot: View {
             .environment(model)
             // L() is not observable; rebuild on a language change.
             .id(model.settings.languageRevision)
+    }
+}
+
+/// The one-time "Open at login" question (N5): "Open at login" is the
+/// default button (Return), "Not now" the cancel button (Esc). Nothing is
+/// enabled unless the user picks "Open at login".
+struct LoginItemPromptCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.s3) {
+            Text(L("loginPrompt.title"))
+                .font(Theme.Typo.title).foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(L("loginPrompt.body"))
+                .font(Theme.Typo.body).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error = model.loginItemPromptError {
+                Text(error)
+                    .font(Theme.Typo.caption).foregroundStyle(Theme.warningInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: Theme.s2) {
+                Spacer()
+                Button(L("loginPrompt.notNow")) { model.answerLoginItemPrompt(openAtLogin: false) }
+                    .keyboardShortcut(.cancelAction)
+                Button(L("loginPrompt.openAtLogin")) { model.answerLoginItemPrompt(openAtLogin: true) }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(PrimaryButtonStyle())
+            }
+        }
+        .modalCard(width: 420)
     }
 }
