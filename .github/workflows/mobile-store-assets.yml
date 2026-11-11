@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Render
         run: npx playwright test --config store-pack/capture/playwright.store.config.ts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: klorn-store-assets
           path: apps/mobile/test-results/store-shots/
