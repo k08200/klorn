@@ -51,6 +51,12 @@ function dailyCap(priority: CallPriority): number {
   return priority === "foreground" ? LLM_USER_FOREGROUND_DAILY_CAP : LLM_USER_BACKGROUND_DAILY_CAP;
 }
 
+/** The daily count a call may reach, including the lane judge's headroom. */
+function dailyCapFor(priority: CallPriority, reserved: boolean | undefined): number {
+  const judgeHeadroom = reserved === true && JUDGE_BUDGET_RESERVE_CENTS > 0;
+  return dailyCap(priority) * (judgeHeadroom ? JUDGE_COUNT_HEADROOM : 1);
+}
+
 /**
  * RPM admission limit per priority. The window itself is shared (upstream
  * protection), but background may never consume the last
@@ -132,8 +138,7 @@ export function checkAndRecordUserCall(
   // stays bounded — a mail flood, or a free/local model the cost cap cannot
   // see, cannot make it unlimited. Reserve off leaves the count exactly as it
   // was.
-  const judgeHeadroom = options.reserved === true && JUDGE_BUDGET_RESERVE_CENTS > 0;
-  const cap = dailyCap(priority) * (judgeHeadroom ? JUDGE_COUNT_HEADROOM : 1);
+  const cap = dailyCapFor(priority, options.reserved);
   if (w.daily[priority] + cost > cap) {
     throw new UserRateLimitedError("daily", Math.max(0, w.dailyResetAt - now), priority);
   }
@@ -156,7 +161,8 @@ export interface AwaitSlotOptions {
   /** A new-mail judge call: see checkAndRecordUserCall. */
   reserved?: boolean;
   /**
-   * Max total time a background call may wait for an RPM slot.
+   * Max time a background call may park for an RPM slot, counted from its turn
+   * (a user's earlier background calls go first, see awaitUserCallSlot).
    * Defaults to LLM_BACKGROUND_RPM_MAX_WAIT_MS; 0 means fail fast.
    */
   maxWaitMs?: number;
@@ -188,6 +194,52 @@ export async function awaitUserCallSlot(
     checkAndRecordUserCall(userId, options);
     return;
   }
+  // A user's parking background calls take turns, oldest first, and each
+  // call's wait deadline starts at its turn. Without the turn order a burst
+  // (one judge call per new email, all arriving at once) parked together, every
+  // call on its own clock from the same instant, and everything past what the
+  // per-minute window admits within one deadline was refused into the
+  // permanent keyword fallback. Turns are per user, so one user's burst never
+  // delays another user's slot. A turn that throws still hands over.
+  // A call that the daily count could never admit behind the turns already
+  // waiting is refused now, instead of holding its work in memory until its
+  // turn comes round only to be refused then.
+  const cost = options.cost ?? 1;
+  const ahead = pendingTurns.get(userId) ?? 0;
+  const w = getWindow(userId, Date.now());
+  if (w.daily.background + ahead + cost > dailyCapFor("background", options.reserved)) {
+    throw new UserRateLimitedError("daily", Math.max(0, w.dailyResetAt - Date.now()), priority);
+  }
+  pendingTurns.set(userId, ahead + cost);
+  const previous = backgroundTurns.get(userId) ?? Promise.resolve();
+  let finishTurn: () => void = () => {};
+  const turn = new Promise<void>((resolve) => {
+    finishTurn = resolve;
+  });
+  const tail = previous.then(() => turn);
+  backgroundTurns.set(userId, tail);
+  try {
+    await previous;
+    await parkForSlot(userId, options, maxWaitMs);
+  } finally {
+    finishTurn();
+    if (backgroundTurns.get(userId) === tail) backgroundTurns.delete(userId);
+    const left = (pendingTurns.get(userId) ?? cost) - cost;
+    if (left > 0) pendingTurns.set(userId, left);
+    else pendingTurns.delete(userId);
+  }
+}
+
+/** Per user: settles when the last queued background turn has finished. */
+const backgroundTurns = new Map<string, Promise<void>>();
+/** Per user: call cost of background turns queued or in progress. */
+const pendingTurns = new Map<string, number>();
+
+async function parkForSlot(
+  userId: string,
+  options: AwaitSlotOptions,
+  maxWaitMs: number,
+): Promise<void> {
   const deadline = Date.now() + maxWaitMs;
   for (;;) {
     try {
@@ -238,4 +290,6 @@ export function getUserUsage(userId: string): UserUsageSnapshot {
 /** Test/admin helper: drop all in-memory windows */
 export function _resetAllUserWindowsForTests(): void {
   windows.clear();
+  backgroundTurns.clear();
+  pendingTurns.clear();
 }
