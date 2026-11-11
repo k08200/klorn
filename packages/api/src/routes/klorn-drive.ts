@@ -251,6 +251,12 @@ async function readUpload(
       part.file.once("error", () => {
         parserFailed = true;
       });
+      // The parser can fail the stream before the part reaches this loop (a
+      // body that ends mid-file is parsed in one go), and since
+      // @fastify/multipart 10.1.7 it destroys it with busboy's own error, which
+      // carries no code. That error event has already fired, so the listener
+      // above never sees it.
+      if (part.file.errored) parserFailed = true;
       stored = await storeFilePart(part, userId, fields, providerEnabled);
     }
     if (stored === null) throw new KlornDriveError("invalid-upload");
