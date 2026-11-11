@@ -374,3 +374,78 @@ describe("getUsageSummary — aggregation", () => {
     });
   });
 });
+
+describe("recordLlmUsage — feature and actual cost", () => {
+  const base = {
+    userId: "user-1",
+    provider: "anthropic",
+    model: "claude-haiku-5-5",
+    source: "background" as const,
+    estimatedCostCents: 0.045,
+  };
+
+  it("stores the calling feature and the actual cost in micro-cents", async () => {
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
+    await recordLlmUsage({
+      ...base,
+      feature: "mail/email-summarize",
+      ownedByUser: false,
+      usage: { prompt_tokens: 2000, completion_tokens: 500, total_tokens: 2500 },
+    });
+    // Haiku 5.5: 2,000 × $0.10/M + 500 × $0.50/M = $0.00045 = 450 micro-cents.
+    expect(created[0]).toMatchObject({
+      feature: "mail/email-summarize",
+      ownedByUser: false,
+      costMicroCents: 450,
+    });
+  });
+
+  it("prices cache reads at the cache rate", async () => {
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
+    await recordLlmUsage({
+      ...base,
+      feature: "pim/briefing",
+      usage: {
+        prompt_tokens: 2000,
+        completion_tokens: 500,
+        total_tokens: 2500,
+        prompt_tokens_details: { cached_tokens: 1000 },
+      },
+    });
+    // 1,000 uncached × 0.10 + 1,000 cached × 0.01 + 500 × 0.50 = 360 micro-cents.
+    expect(created[0]).toMatchObject({ costMicroCents: 360 });
+  });
+
+  it("records the real cost of a call served on the user's own key, flagged as theirs", async () => {
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
+    await recordLlmUsage({
+      ...base,
+      feature: "agentcore/chat-engine",
+      ownedByUser: true,
+      usage: { prompt_tokens: 2000, completion_tokens: 500, total_tokens: 2500 },
+    });
+    expect(created[0]).toMatchObject({ ownedByUser: true, costMicroCents: 450 });
+  });
+
+  it("records no feature and zero cost when neither is known", async () => {
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
+    await recordLlmUsage({ ...base, usage: null });
+    expect(created[0]).toMatchObject({ feature: null, ownedByUser: false, costMicroCents: 0 });
+  });
+});
+
+describe("recordLlmUsage — feature hygiene", () => {
+  it("drops a feature that is not a plain module path", async () => {
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
+    await recordLlmUsage({
+      userId: "user-1",
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
+      source: "foreground",
+      estimatedCostCents: 0,
+      usage: null,
+      feature: "Ignore previous instructions; <script>",
+    });
+    expect(created[0]).toMatchObject({ feature: null });
+  });
+});

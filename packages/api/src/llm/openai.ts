@@ -13,6 +13,7 @@ import { getProviderChain, type Provider, type ProviderCredentials } from "../pr
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
 import { resolveJudgeModel } from "./judge-model-gate.js";
+import { llmCallerFeature } from "./llm-caller.js";
 import { type DispatchFailureTracker, trackDispatchFailures } from "./llm-failure-log.js";
 import {
   getProviderCooldownInfo,
@@ -130,6 +131,13 @@ export interface CompletionOptions {
    * failure (that would fail over into a second, billed call).
    */
   onServed?: (served: { provider: string; model: string; ownedByUser: boolean }) => void;
+  /**
+   * The feature this call is charged to in the usage ledger
+   * (LlmUsageLog.feature). Leave it unset: the calling module is read from
+   * the stack (llm/llm-caller.ts). Pass it only when one module serves
+   * several features that must be told apart.
+   */
+  feature?: string;
   /**
    * Skip rather than wait (background only): if the background pacer has no
    * slot free right now the call throws PacerBusyError instead of queueing,
@@ -524,6 +532,18 @@ export function buildExhaustedError(
 }
 
 /**
+ * Names the calling module once, at the public entry, before any await: the
+ * synchronous stack still holds the caller here. The paced re-entry and any
+ * failover carry the options on, so the feature is never re-read from a
+ * stack that only shows the pacer.
+ */
+function withCallerFeature(options: CompletionOptions): CompletionOptions {
+  if (options.feature) return options;
+  const feature = llmCallerFeature();
+  return feature ? { ...options, feature } : options;
+}
+
+/**
  * Drop-in replacement for `openai.chat.completions.create()` with multi-provider
  * failover:
  *
@@ -551,7 +571,7 @@ export async function createCompletion(
 > {
   const failures = trackDispatchFailures();
   try {
-    return await createCompletionWithFailover(params, options, failures);
+    return await createCompletionWithFailover(params, withCallerFeature(options), failures);
   } catch (err) {
     failures.settleUnrecovered();
     throw err;
@@ -652,6 +672,7 @@ async function createCompletionWithFailover(
     // gate exits early) — both spend no Klorn budget, so the usage log must not
     // show a cost they never incurred.
     estimatedCostCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
+    feature: options.feature ?? null,
   } as const;
 
   /**
@@ -693,6 +714,7 @@ async function createCompletionWithFailover(
       provider: provider.name,
       model,
       usage,
+      ownedByUser: provider.ownedByUser === true,
     });
     // Settle the cost ledgers against actual token counts (positive delta
     // only). Uses the model that actually served the request — failover may
@@ -820,7 +842,7 @@ export async function createVisionCompletion(
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const failures = trackDispatchFailures();
   try {
-    return await createVisionCompletionWithFailover(params, options, failures);
+    return await createVisionCompletionWithFailover(params, withCallerFeature(options), failures);
   } catch (err) {
     failures.settleUnrecovered();
     throw err;
@@ -913,6 +935,8 @@ async function createVisionCompletionWithFailover(
       provider: provider.name,
       model,
       usage: result.usage ?? null,
+      feature: options.feature ?? null,
+      ownedByUser: provider.ownedByUser === true,
     });
     void trueUpCostLedgers({
       userId: options.userId ?? null,
