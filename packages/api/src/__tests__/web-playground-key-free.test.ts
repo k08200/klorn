@@ -29,6 +29,10 @@ const judgeEmail = vi.hoisted(() => vi.fn());
 const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
 
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
+// The route pins the demo to the server's judge model, so it imports this
+// module; stub the constant alone rather than loading the provider registry
+// (and Prisma's .env autoload) into an offline unit test.
+vi.mock("../llm/openai.js", () => ({ JUDGE_MODEL: "claude-haiku-5-5" }));
 vi.mock("../config.js", () => ({
   get PLAYGROUND_NO_KEY_DEMO_ENABLED() {
     return configState.demoEnabled;
