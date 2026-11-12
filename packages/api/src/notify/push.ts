@@ -132,6 +132,15 @@ export interface PushSendSummary {
   attempted: number;
   accepted: number;
   failed: number;
+  /**
+   * When the push got past every hold gate (noise policy, category preferences
+   * and quiet hours, the agent-proposal cooldown, the rate limit) and went to
+   * the user's channels: the "ring" (the rate limiter's PushRingEvent instant).
+   * Null when a gate held it. A skip after the gates (no browser subscription,
+   * no VAPID keys) is about reach, not a hold, so it still carries the time.
+   * IP24 stamps it on the decision ledger (DecisionLabel.rangAt).
+   */
+  dispatchedAt: Date | null;
 }
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
@@ -292,6 +301,9 @@ export async function sendPushNotification(
     );
     return skipped("rate_limited");
   }
+  // Every hold gate passed: from here on the push rings on whatever channels
+  // the user has. Each return below carries this instant.
+  const dispatchedAt = new Date();
 
   // Secondary channel: Telegram (best-effort). Runs AFTER the shared gates
   // above so it inherits exactly the same suppression decisions as web push,
@@ -351,7 +363,7 @@ export async function sendPushNotification(
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     console.log(`[PUSH] Skipped — VAPID keys not configured`);
     await recordSkipped(userId, payload.title, category, "missing_vapid_keys");
-    return skipped("missing_vapid_keys");
+    return { ...skipped("missing_vapid_keys"), dispatchedAt };
   }
 
   const allSubscriptions = (await prisma.pushSubscription.findMany({
@@ -385,7 +397,7 @@ export async function sendPushNotification(
     const reason = parked > 0 ? "subscriptions_need_resubscribe" : "no_subscriptions";
     console.log(`[PUSH] No live push subscriptions for user ${userId} — browser push skipped`);
     await recordSkipped(userId, payload.title, category, reason);
-    return skipped(reason);
+    return { ...skipped(reason), dispatchedAt };
   }
   // Category only, never payload.title (== "Klorn — {sender}" for mail) — this
   // fires on every successful send, so it is the highest-volume leak of the
@@ -414,6 +426,7 @@ export async function sendPushNotification(
     attempted,
     accepted,
     failed,
+    dispatchedAt,
   };
 }
 
@@ -639,8 +652,17 @@ export function getVapidPublicKey(): string {
   return VAPID_PUBLIC_KEY;
 }
 
+/** A push held at a gate (or not sent at all): nothing was dispatched. */
 function skipped(reason: string): PushSendSummary {
-  return { status: "skipped", reason, subscriptions: 0, attempted: 0, accepted: 0, failed: 0 };
+  return {
+    status: "skipped",
+    reason,
+    subscriptions: 0,
+    attempted: 0,
+    accepted: 0,
+    failed: 0,
+    dispatchedAt: null,
+  };
 }
 
 async function recordSkipped(

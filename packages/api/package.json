@@ -24,6 +24,7 @@
     "label:own-mail": "tsx scripts/v3-label-own-mail.ts",
     "throughput": "tsx scripts/throughput.ts",
     "lane-quality": "tsx scripts/lane-quality.ts",
+    "ip24-report": "tsx scripts/ip24-report.ts",
     "prune:push-logs": "tsx scripts/prune-push-logs.ts",
     "cleanup:commitment-noise": "tsx scripts/cleanup-commitment-noise.ts",
     "backfill:commitment-due": "tsx scripts/backfill-commitment-due-at.ts",

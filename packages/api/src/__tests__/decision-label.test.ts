@@ -27,6 +27,7 @@ import {
   recordEmailDecision,
   stampDecisionOutcome,
   stampDecisionOutcomes,
+  stampDecisionRang,
   stampProviderEngagement,
 } from "../judge/decision-label.js";
 import { captureError } from "../sentry.js";
@@ -267,6 +268,49 @@ describe("stampProviderEngagement (what the user did in Gmail itself)", () => {
   it("never throws, logs on failure", async () => {
     decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
     await expect(stampProviderEngagement("user-1", "ARCHIVED", ["e1"], AT)).resolves.toBe(0);
+    expect(captureError).toHaveBeenCalled();
+  });
+});
+
+describe("recordEmailDecision — Gmail's IMPORTANT marker at judge time (IP24 baseline)", () => {
+  it("snapshots gmailImportant when the row is created and never rewrites it on a re-judge", async () => {
+    await recordEmailDecision({ ...DECISION, gmailImportant: true });
+
+    const args = decisionLabel.upsert.mock.calls[0][0];
+    expect(args.create.gmailImportant).toBe(true);
+    // Gmail adds IMPORTANT after the user replies; a re-judge reads those later
+    // labels, so the snapshot must stay what Gmail showed at the first judgement.
+    expect(args.update).not.toHaveProperty("gmailImportant");
+  });
+
+  it("stores null (unknown) when the caller has no Gmail snapshot", async () => {
+    await recordEmailDecision(DECISION);
+
+    expect(decisionLabel.upsert.mock.calls[0][0].create.gmailImportant).toBeNull();
+  });
+});
+
+describe("stampDecisionRang (the interrupt actually fired)", () => {
+  const AT = new Date("2026-11-12T08:00:00Z");
+
+  it("stamps rangAt on the user's EMAIL rows, first ring wins", async () => {
+    await stampDecisionRang("user-1", ["e1", "e2"], AT);
+
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+    expect(decisionLabel.updateMany.mock.calls[0][0]).toEqual({
+      where: { userId: "user-1", source: "EMAIL", sourceId: { in: ["e1", "e2"] }, rangAt: null },
+      data: { rangAt: AT },
+    });
+  });
+
+  it("skips the query for an empty list", async () => {
+    await stampDecisionRang("user-1", [], AT);
+    expect(decisionLabel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("never throws, logs on failure", async () => {
+    decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
+    await expect(stampDecisionRang("user-1", ["e1"], AT)).resolves.toBeUndefined();
     expect(captureError).toHaveBeenCalled();
   });
 });
