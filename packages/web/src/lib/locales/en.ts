@@ -2685,8 +2685,8 @@ const en: Record<string, string> = {
   "playground.nav.startFree": "Start free",
   "playground.title": "See how Klorn sorts one email.",
   "playground.lead":
-    "Paste a message, pick a model and bring its key. Klorn's real judge puts it in one of five lanes and shows the four scores behind it.",
-  "playground.leadShort": "Your model, your key, Klorn's real judge.",
+    "Paste a message. Klorn's real judge puts it in one of five lanes and shows the four scores behind it. No key, no login.",
+  "playground.leadShort": "No key, no login — Klorn's real judge.",
   "playground.form.label": "Email and model",
   "playground.samples.heading": "Try a sample",
   "playground.samples.investor": "Investor",
@@ -2725,6 +2725,9 @@ const en: Record<string, string> = {
   "playground.key.none": "No key yet?",
   "playground.key.create": "Create one at {provider}",
   "playground.key.billing": "Each sort is billed to your own {provider} account.",
+  "playground.demo.note":
+    "No key needed. This runs on Klorn's own account, on {model} — the model Klorn's judge runs.",
+  "playground.byok.toggle": "Use my own API key",
   "playground.submit": "Sort this email",
   "playground.submitting": "Sorting…",
   "playground.result.label": "Result",
@@ -2783,6 +2786,17 @@ const en: Record<string, string> = {
   "playground.meta": "{model} · {seconds} s",
   "playground.error.title": "Couldn't sort this email",
   "playground.error.noKey": "Add your {provider} API key first.",
+  "playground.error.keyTooShort":
+    "That {provider} API key looks too short — check you pasted all of it.",
+  "playground.error.demoOff":
+    "Free sorts are off right now. Add your own API key to sort this email.",
+  "playground.error.demoBudget":
+    "Klorn's free sorts for today are used up. Add your own API key to sort this email now.",
+  "playground.error.demoRateLimited":
+    "You've used your free sorts for the moment. Add your own API key, or try again in a minute.",
+  "playground.error.demoFailed":
+    "Klorn's own model didn't answer. Try again shortly, or add your own API key.",
+  "playground.error.demoTimeout": "That took too long — {seconds} seconds. Try sorting it again.",
   "playground.error.noEmail": "Add a sender and a subject first.",
   "playground.error.rateLimited": "Too many tries — wait a minute, then sort again.",
   "playground.error.timeout":

@@ -2758,8 +2758,8 @@ const fr: Record<string, string> = {
   "playground.nav.startFree": "Commencer gratuitement",
   "playground.title": "Voyez comment Klorn trie un e-mail.",
   "playground.lead":
-    "Collez un message, choisissez un modèle et utilisez votre clé. Le vrai juge de Klorn le place dans l'une des cinq voies et affiche les quatre scores derrière ce choix.",
-  "playground.leadShort": "Votre modèle, votre clé, le vrai juge de Klorn.",
+    "Collez un message. Le vrai juge de Klorn le place dans l'une des cinq voies et affiche les quatre scores derrière ce choix. Sans clé, sans compte.",
+  "playground.leadShort": "Sans clé, sans compte — le vrai juge de Klorn.",
   "playground.form.label": "E-mail et modèle",
   "playground.samples.heading": "Essayer un exemple",
   "playground.samples.investor": "Investisseur",
@@ -2800,6 +2800,9 @@ const fr: Record<string, string> = {
   "playground.key.none": "Pas encore de clé ?",
   "playground.key.create": "En créer une chez {provider}",
   "playground.key.billing": "Chaque tri est facturé sur votre propre compte {provider}.",
+  "playground.demo.note":
+    "Aucune clé nécessaire. Le tri s'exécute sur le compte de Klorn, avec {model}, le modèle qu'utilise le juge de Klorn.",
+  "playground.byok.toggle": "Utiliser ma propre clé API",
   "playground.submit": "Trier cet e-mail",
   "playground.submitting": "Tri en cours…",
   "playground.result.label": "Résultat",
@@ -2860,6 +2863,17 @@ const fr: Record<string, string> = {
   "playground.meta": "{model} · {seconds} sec",
   "playground.error.title": "Impossible de trier cet e-mail",
   "playground.error.noKey": "Ajoutez d'abord votre clé API {provider}.",
+  "playground.error.keyTooShort":
+    "Cette clé API {provider} semble trop courte : vérifiez que vous l'avez collée en entier.",
+  "playground.error.demoOff":
+    "Les tris gratuits sont désactivés pour le moment. Ajoutez votre propre clé API.",
+  "playground.error.demoBudget":
+    "Les tris gratuits de Klorn pour aujourd'hui sont épuisés. Ajoutez votre propre clé API pour trier maintenant.",
+  "playground.error.demoRateLimited":
+    "Vous avez épuisé les tris gratuits pour le moment. Ajoutez votre propre clé API, ou réessayez dans une minute.",
+  "playground.error.demoFailed":
+    "Le modèle de Klorn n'a pas répondu. Réessayez dans un instant, ou ajoutez votre propre clé API.",
+  "playground.error.demoTimeout": "Cela a dépassé {seconds} secondes. Relancez le tri.",
   "playground.error.noEmail": "Ajoutez d'abord un expéditeur et un objet.",
   "playground.error.rateLimited": "Trop d'essais : attendez une minute, puis relancez le tri.",
   "playground.error.timeout":

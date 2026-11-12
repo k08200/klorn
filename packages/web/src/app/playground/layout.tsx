@@ -3,7 +3,10 @@ import type { ReactNode } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 
 const TITLE = "Klorn Playground — see how Klorn sorts one email";
-const DESCRIPTION = `Try Klorn's ${TIER_COUNT}-lane email firewall without signing in. Paste an email, bring your own model key, and see which lane Klorn's real judge puts it in — and the four scores that decided it.`;
+// No key in the pitch: the share card is what an external post previews, and
+// the sort is free by default now (#1686). Bringing a key is still offered on
+// the page, as the alternative rather than the price of entry.
+const DESCRIPTION = `Try Klorn's ${TIER_COUNT}-lane email firewall without signing in — no API key needed. Paste an email and see which lane Klorn's real judge puts it in, and the four scores that decided it.`;
 
 // Own OpenGraph/Twitter card so a shared /playground link previews as the demo
 // (not the generic homepage it would inherit from the root layout). metadataBase

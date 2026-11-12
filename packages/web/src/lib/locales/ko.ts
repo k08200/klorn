@@ -2677,8 +2677,8 @@ const ko: Record<string, string> = {
   "playground.nav.startFree": "무료로 시작",
   "playground.title": "메일 한 통이 어떻게 분류되는지 확인하세요.",
   "playground.lead":
-    "메일을 붙여넣고, 모델을 고르고, 본인 키를 입력하세요. Klorn의 실제 판정기가 5개 레인 중 하나로 분류하고, 그 뒤에 있는 점수 4개를 보여줍니다.",
-  "playground.leadShort": "내 모델, 내 키, Klorn의 실제 판정기.",
+    "메일을 붙여넣으면 Klorn의 실제 판정기가 5개 레인 중 하나로 분류하고, 그 뒤에 있는 점수 4개를 보여줍니다. 키도 로그인도 필요 없습니다.",
+  "playground.leadShort": "키도 로그인도 없이, Klorn의 실제 판정기.",
   "playground.form.label": "메일과 모델",
   "playground.samples.heading": "샘플로 시험",
   "playground.samples.investor": "투자자",
@@ -2718,6 +2718,9 @@ const ko: Record<string, string> = {
   "playground.key.none": "키가 아직 없나요?",
   "playground.key.create": "{provider}에서 발급",
   "playground.key.billing": "분류할 때마다 본인의 {provider} 계정에 청구됩니다.",
+  "playground.demo.note":
+    "키가 필요 없습니다. Klorn 계정으로, Klorn 판정기가 쓰는 모델 {model}로 실행됩니다.",
+  "playground.byok.toggle": "내 API 키 사용",
   "playground.submit": "이 메일 분류",
   "playground.submitting": "분류 중…",
   "playground.result.label": "결과",
@@ -2774,6 +2777,16 @@ const ko: Record<string, string> = {
   "playground.meta": "{model} · {seconds}초",
   "playground.error.title": "이 메일을 분류하지 못했습니다",
   "playground.error.noKey": "먼저 {provider} API 키를 입력하세요.",
+  "playground.error.keyTooShort":
+    "{provider} API 키가 너무 짧습니다. 전체를 붙여넣었는지 확인하세요.",
+  "playground.error.demoOff": "무료 분류가 지금은 꺼져 있습니다. 본인 API 키를 입력하세요.",
+  "playground.error.demoBudget":
+    "오늘 쓸 수 있는 Klorn 무료 분류를 모두 썼습니다. 지금 분류하려면 본인 API 키를 입력하세요.",
+  "playground.error.demoRateLimited":
+    "지금은 무료 분류를 다 썼습니다. 본인 API 키를 입력하거나, 1분 뒤에 다시 시도하세요.",
+  "playground.error.demoFailed":
+    "Klorn 모델이 응답하지 않았습니다. 잠시 후 다시 시도하거나, 본인 API 키를 입력하세요.",
+  "playground.error.demoTimeout": "{seconds}초가 넘도록 응답이 없었습니다. 다시 분류해 보세요.",
   "playground.error.noEmail": "먼저 보낸 사람과 제목을 입력하세요.",
   "playground.error.rateLimited": "시도 횟수가 너무 많습니다. 1분 뒤에 다시 분류하세요.",
   "playground.error.timeout":
