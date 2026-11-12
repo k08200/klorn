@@ -11,6 +11,10 @@ const upsertCalls: Array<{ userId: string; input: Record<string, unknown> }> = [
 vi.mock("../db.js", () => ({
   prisma: { commitment: { findUnique: vi.fn(async () => null) } },
 }));
+// Deadline wording triggers the user's zone lookup; these tests are about gating.
+vi.mock("../user-timezone.js", () => ({
+  getUserTimeZone: vi.fn(() => Promise.resolve("Asia/Seoul")),
+}));
 vi.mock("../pim/commitments.js", () => ({
   upsertCommitment: vi.fn(async (userId: string, input: Record<string, unknown>) => {
     upsertCalls.push({ userId, input });

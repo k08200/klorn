@@ -4,8 +4,8 @@
  * The job here is *narrow*: scan a piece of text (email body, chat message,
  * note) and surface lines that look like a promise. We do not try to fully
  * structure them — that's the LLM stage. Output is a candidate with the
- * matched span, who appears to owe (USER / COUNTERPARTY / UNKNOWN) and a
- * weak due-date hint when the phrasing carried one.
+ * matched span, who appears to owe (USER / COUNTERPARTY / UNKNOWN) and the
+ * deadline wording when the phrasing carried one (commitment-due.ts).
  *
  * Patterns deliberately err on the side of false positives. The downstream
  * LLM extraction (next PR) decides whether the candidate is real and writes
@@ -17,11 +17,12 @@
  */
 
 import type { CommitmentOwner } from "@prisma/client";
+import { findDuePhrase } from "./commitment-due.js";
 
 export interface CommitmentCandidate {
   text: string; // matched sentence/clause
   owner: CommitmentOwner; // who owes the action
-  dueHint: string | null; // raw phrasing of the due window, if any
+  dueHint: string | null; // the deadline wording as written, if any (findDuePhrase)
   pattern: string; // which rule fired (debug aid)
   startIndex: number; // offset within the input — for downstream snippeting
 }
@@ -33,25 +34,6 @@ interface Rule {
   pattern: RegExp;
   owner: CommitmentOwner;
 }
-
-// Common Korean date-window cues — used to extract dueHint from a matched
-// sentence. Order matters: longer phrases checked first so "다음 주 월요일"
-// wins over "다음 주".
-const KO_DUE_HINTS = [
-  /(이번\s*달|이번\s*주|다음\s*달|다음\s*주|다음\s*주\s*[월화수목금토일]요일)/,
-  /(오늘|내일|모레|글피)/,
-  /(\d{1,2}\s*월\s*\d{1,2}\s*일)/,
-  /(\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?)/,
-  /(주말|평일|월말|금주\s*내|금주\s*안|금일\s*내)/,
-];
-
-const EN_DUE_HINTS = [
-  /(by\s+(?:end\s+of\s+(?:the\s+)?(?:day|week|month)|EOD|EOW|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+\w+))/i,
-  /(within\s+\d+\s+(?:hours?|days?|weeks?))/i,
-  /(in\s+\d+\s+(?:hours?|days?|weeks?))/i,
-  /(this\s+(?:morning|afternoon|evening|week|month))/i,
-  /(next\s+(?:week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))/i,
-];
 
 // Korean — first-person commitment (USER owes). Matches modal endings that
 // signal intent: -ㄹ게요, -할게요, -보낼게요, -드릴게요, -하겠습니다, -할 예정.
@@ -110,18 +92,6 @@ const ALL_RULES: Rule[] = [
   ...EN_USER_RULES,
   ...EN_COUNTERPARTY_RULES,
 ];
-
-function findDueHint(text: string): string | null {
-  for (const re of KO_DUE_HINTS) {
-    const match = text.match(re);
-    if (match?.[1]) return match[1].trim();
-  }
-  for (const re of EN_DUE_HINTS) {
-    const match = text.match(re);
-    if (match?.[1]) return match[1].trim();
-  }
-  return null;
-}
 
 function dedupeCandidates(candidates: CommitmentCandidate[]): CommitmentCandidate[] {
   // Two candidates are duplicates if their matched text is identical (case
@@ -193,7 +163,7 @@ export function extractCommitmentCandidates(
         collected.push({
           text: matched,
           owner: rule.owner,
-          dueHint: findDueHint(matched),
+          dueHint: null, // filled below, only for the candidates that survive
           pattern: rule.name,
           startIndex: match.index,
         });
@@ -205,5 +175,9 @@ export function extractCommitmentCandidates(
   }
 
   collected.sort((a, b) => a.startIndex - b.startIndex);
-  return dedupeCandidates(collected).slice(0, limit);
+  // The deadline scan runs ~40 patterns, so it runs after dedupe + cap, not
+  // per raw match: a long body with thousands of matches pays it only `limit` times.
+  return dedupeCandidates(collected)
+    .slice(0, limit)
+    .map((candidate) => ({ ...candidate, dueHint: findDuePhrase(candidate.text) }));
 }
