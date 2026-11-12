@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * The two quieter lists that share the Approvals page (productization plan
- * §1: Screener and Commitments move to Approvals). Both are optional reading
- * next to the approvals themselves, so each renders nothing when it is empty.
+ * The quieter lists that share the Approvals page (productization plan §1:
+ * Screener and Commitments move to Approvals). Both are optional reading next
+ * to the approvals themselves, so each renders nothing when it is empty. The
+ * Commitments list lives in commitments-section.tsx; the heading is shared.
  */
 
 import { useState } from "react";
-import type { CommitmentItem } from "../../../components/commitment-card";
 import Button from "../../../components/ui/button";
 import { useT } from "../../../lib/i18n";
 import { formatRelativeIntl } from "../../../lib/text";
 import type { PendingSender, ScreenerVerdict } from "../../../lib/use-screener";
 
-function SectionHeading({ id, title, count }: { id: string; title: string; count: number }) {
+export function SectionHeading({ id, title, count }: { id: string; title: string; count: number }) {
   return (
     <div className="flex min-h-11 items-center gap-2 border-b border-line">
       <h2 id={id} className="text-role-head text-ink">
@@ -22,63 +22,6 @@ function SectionHeading({ id, title, count }: { id: string; title: string; count
       <span className="flex-1" />
       <p className="text-role-label tabular-nums text-ink-soft">{count}</p>
     </div>
-  );
-}
-
-const KIND_KEYS: ReadonlyMap<CommitmentItem["kind"], string> = new Map([
-  ["DELIVERABLE", "assistantHub.commitments.kind.deliverable"],
-  ["FOLLOW_UP", "assistantHub.commitments.kind.followUp"],
-  ["DECISION", "assistantHub.commitments.kind.decision"],
-  ["MEETING", "assistantHub.commitments.kind.meeting"],
-  ["REVIEW", "assistantHub.commitments.kind.review"],
-]);
-
-/** Promises found in mail. A read surface: nothing here is approved or sent. */
-export function CommitmentsSection({ commitments }: { commitments: CommitmentItem[] }) {
-  const { t, locale } = useT();
-  if (commitments.length === 0) return null;
-  return (
-    <section aria-labelledby="hub-commitments">
-      <SectionHeading
-        id="hub-commitments"
-        title={t("assistantHub.commitments.title")}
-        count={commitments.length}
-      />
-      <p className="pt-2 text-role-caption text-ink-muted [word-break:keep-all]">
-        {t("assistantHub.commitments.hint")}
-      </p>
-      <ul>
-        {commitments.map((commitment) => {
-          const mine = commitment.owner === "USER";
-          const kindKey = KIND_KEYS.get(commitment.kind);
-          const meta = [
-            kindKey ? t(kindKey) : null,
-            commitment.dueText
-              ? t("assistantHub.commitments.due", { when: commitment.dueText })
-              : null,
-            formatRelativeIntl(commitment.createdAt, locale, t("assistantHub.justNow")),
-          ].filter(Boolean);
-          return (
-            <li key={commitment.id} className="border-b border-line-soft py-3 last:border-b-0">
-              <p
-                className={`text-role-caption font-medium ${mine ? "text-state-warn-ink" : "text-state-info-ink"}`}
-              >
-                {t(mine ? "assistantHub.commitments.mine" : "assistantHub.commitments.theirs")}
-              </p>
-              <p className="mt-0.5 break-words text-role-body font-medium text-ink-strong">
-                {commitment.title}
-              </p>
-              {commitment.description && (
-                <p className="mt-0.5 line-clamp-2 break-words text-role-body text-ink-soft">
-                  {commitment.description}
-                </p>
-              )}
-              <p className="mt-0.5 text-role-caption text-ink-muted">{meta.join(" · ")}</p>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
 

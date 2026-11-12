@@ -22,24 +22,26 @@ import { BlockError } from "../../today/block";
 import { HubHeader, RefreshGlyph } from "../hub-frame";
 import { AgentModeLine } from "./agent-mode-line";
 import { ApprovalCard } from "./approval-card";
+import { CommitmentsSection } from "./commitments-section";
 import { type ApprovalModel, approvalModel } from "./model";
 import { RejectSheet } from "./reject-sheet";
-import { CommitmentsSection, ScreenerSection } from "./side-sections";
+import { ScreenerSection } from "./side-sections";
 import { useApprovalDecisions } from "./use-approval-decisions";
-import { useApprovals, useOpenCommitments } from "./use-approvals";
+import { useApprovals } from "./use-approvals";
+import { useCommitmentLedger } from "./use-commitments";
 
 const MAIL_HREF = "/email";
 
 export function ApprovalsView() {
   const { t } = useT();
   const approvals = useApprovals();
-  const commitments = useOpenCommitments();
+  const commitments = useCommitmentLedger();
   const screener = useScreener();
   const senders = screener.pending ?? [];
   const models = useMemo(() => approvals.actions.map(approvalModel), [approvals.actions]);
   const decisions = useApprovalDecisions(models, approvals);
   const settled = !approvals.loading && !approvals.failed;
-  const hasSide = senders.length > 0 || commitments.length > 0;
+  const hasSide = senders.length > 0 || commitments.rows.length > 0 || commitments.failed;
 
   return (
     <div className="pb-8">
@@ -87,7 +89,7 @@ export function ApprovalsView() {
               deciding={screener.deciding}
               onDecide={screener.decide}
             />
-            <CommitmentsSection commitments={commitments} />
+            <CommitmentsSection ledger={commitments} />
           </div>
         )}
       </div>
