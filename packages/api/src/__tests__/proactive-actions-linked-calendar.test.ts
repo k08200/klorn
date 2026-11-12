@@ -168,7 +168,7 @@ describe("proactive actions — kill switch (C2)", () => {
   });
 });
 
-describe("weekly review count and tomorrow list — linked calendar copies (C7)", () => {
+describe("weekly review count and tomorrow's first meeting — linked calendar copies (C7)", () => {
   afterEach(() => {
     delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
   });
@@ -216,39 +216,26 @@ describe("weekly review count and tomorrow list — linked calendar copies (C7)"
     expect(message).toContain("3 meetings attended");
   });
 
-  it("lists tomorrow's meetings once per invite and caps the list at 5 after the dedupe", async () => {
+  it("names tomorrow's first meeting once when the invite sits in two calendars", async () => {
     process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
-    const titles = ["A", "B", "C", "D", "E", "F"];
-    m.tomorrowEvents = titles.flatMap((t, i) => [
-      tomorrowEvent(t, 1 + i, "acct-1"),
-      tomorrowEvent(t, 1 + i, null),
-    ]);
+    // 23:00Z on Jan 5 is 08:00 KST on Jan 6: an early start, so the review
+    // sends on the meeting alone (evening-review.ts).
+    m.tomorrowEvents = [tomorrowEvent("A", 23, "acct-1"), tomorrowEvent("A", 23, null)];
 
-    const message = await notificationAt(EVENING_18_KST, /End of Day/);
+    const message = await notificationAt(EVENING_18_KST, /Early start/);
 
-    const line = message.split("\n").find((l) => l.startsWith("Tomorrow's meetings:")) ?? "";
-    const listed = line.replace("Tomorrow's meetings: ", "").split(", ");
-    expect(listed).toHaveLength(5);
-    // Each item is "<time> <title>", e.g. "10:00 AM A".
-    expect(listed.map((item) => item.replace(/^\d{2}:\d{2} [AP]M /, ""))).toEqual([
-      "A",
-      "B",
-      "C",
-      "D",
-      "E",
-    ]);
+    expect(message).toBe("Tomorrow starts at 8:00 AM: A");
   });
 
-  it("lists the same meetings with the flag on or off when there is nothing to merge (identical to main)", async () => {
-    m.tomorrowEvents = [tomorrowEvent("Standup", 1, null), tomorrowEvent("Review", 3, null)];
+  it("names the same meeting with the flag on or off when there is nothing to merge (identical to main)", async () => {
+    m.tomorrowEvents = [tomorrowEvent("Standup", 23, null)];
 
-    const off = await notificationAt(EVENING_18_KST, /End of Day/);
+    const off = await notificationAt(EVENING_18_KST, /Early start/);
     m.notifications = [];
     process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
-    const on = await notificationAt(EVENING_18_KST, /End of Day/);
+    const on = await notificationAt(EVENING_18_KST, /Early start/);
 
     expect(on).toBe(off);
     expect(off).toContain("Standup");
-    expect(off).toContain("Review");
   });
 });

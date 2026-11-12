@@ -6,7 +6,7 @@
  * 2. Pre-meeting briefing → push notification 1 hour before
  * 3. Overdue task alerts → push notification
  * 4. Weekly review → summary notification every Monday
- * 5. End-of-day review → evening summary of what was done + tomorrow's priorities
+ * 5. End-of-day review → evening push only when mail, commitments or tomorrow's early start need it
  * 6. Deadline countdown → D-3 warning for upcoming task deadlines
  * 7. Contact context → enrich email notifications with sender history
  * 8. Follow-up draft suggestion → suggest sending a follow-up for unanswered emails
@@ -28,10 +28,11 @@ import { escapeLikePattern } from "../db-like.js";
 import { parseAddress } from "../mail/email-address.js";
 import { senderName } from "../notify/notification-format.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
+import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendPushNotification } from "../notify/push.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
-import { countCalendarRows, readCalendarRows } from "../pim/calendar-read.js";
+import { countCalendarRows } from "../pim/calendar-read.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import {
@@ -42,9 +43,7 @@ import {
   normalizeTimeZone,
 } from "../time-zone.js";
 import { pushNotification } from "../websocket.js";
-
-/** How many of tomorrow's meetings the end-of-day summary names. */
-const TOMORROW_MEETINGS_LIMIT = 5;
+import { composeEveningReview, gatherEveningReviewInput } from "./evening-review.js";
 
 /** The user's configured IANA timezone (defaults to the product default). */
 async function getUserTimeZone(userId: string): Promise<string> {
@@ -236,64 +235,31 @@ async function checkWeeklyReview(userId: string, tz: string): Promise<void> {
   await notify(userId, "review", "Weekly Review", message, "/briefing");
 }
 
-// ─── NEW: End-of-day review (6pm) ──────────────────────────────────────
+// ─── End-of-day review (EOD_HOUR, user-local) ──────────────────────────
 
-/** Evening summary: what was done today + what's coming tomorrow */
+/**
+ * Evening review at EOD_HOUR in the user's timezone — sent only when something
+ * is still open (evening-review.ts). An empty evening sends nothing; the dedupe
+ * below still holds it to one review per local day.
+ */
 async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
   const now = new Date();
-  // Fire at EOD_HOUR in the USER's timezone, not the server's UTC hour.
   if (!isLocalTimeWithin(now, tz, EOD_HOUR)) return;
 
-  // Day boundaries in the USER's timezone (not server-UTC) so "today" and
-  // "tomorrow" match the user's calendar day — otherwise a KST user's summary
-  // counts tasks from 09:00 KST (server midnight) and misses the morning.
-  const { gte: todayStart, lt: tomorrow } = localDayUtcRange(now, tz);
-  const tomorrowEnd = localDayUtcRange(new Date(tomorrow.getTime() + 12 * 60 * 60 * 1000), tz).lt;
-
-  // Dedup
+  const todayStart = localDayUtcRange(now, tz).gte;
   const existing = await prisma.notification.findFirst({
     where: { userId, type: "eod_review", createdAt: { gte: todayStart } },
   });
   if (existing) return;
 
-  const [completedToday, tomorrowTasks, tomorrowMeetings] = await Promise.all([
-    prisma.task.count({
-      where: { userId, status: "DONE", updatedAt: { gte: todayStart } },
-    }),
-    prisma.task.findMany({
-      where: { userId, status: { not: "DONE" }, dueDate: { gte: tomorrow, lt: tomorrowEnd } },
-      select: { title: true },
-      take: 5,
-    }),
-    // Each invite once, and the cap of 5 applies after the dedupe (C7).
-    readCalendarRows({
-      userId,
-      when: { startTime: { gte: tomorrow, lt: tomorrowEnd } },
-      limit: TOMORROW_MEETINGS_LIMIT,
-    }),
+  const [input, lang] = await Promise.all([
+    gatherEveningReviewInput(userId, tz, now),
+    getUserNotificationLanguage(userId),
   ]);
+  const review = composeEveningReview(input, lang, tz);
+  if (!review) return;
 
-  const parts: string[] = [`Today: ${completedToday} task(s) completed.`];
-
-  if (tomorrowTasks.length > 0) {
-    parts.push(`Tomorrow's tasks: ${tomorrowTasks.map((t) => t.title).join(", ")}`);
-  }
-  if (tomorrowMeetings.length > 0) {
-    const meetingList = tomorrowMeetings.map((m) => {
-      const time = m.startTime.toLocaleTimeString("en-US", {
-        timeZone: tz,
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      return `${time} ${m.title}`;
-    });
-    parts.push(`Tomorrow's meetings: ${meetingList.join(", ")}`);
-  }
-  if (tomorrowTasks.length === 0 && tomorrowMeetings.length === 0) {
-    parts.push("Tomorrow looks clear.");
-  }
-
-  await notify(userId, "eod_review", "End of Day Summary", parts.join("\n"), "/briefing");
+  await notify(userId, "eod_review", review.title, review.message, "/briefing");
 }
 
 // ─── NEW: Deadline countdown (D-3) ─────────────────────────────────────
