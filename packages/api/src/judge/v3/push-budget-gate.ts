@@ -46,6 +46,8 @@ export interface BellRow {
   /** EmailMessage.id of a one-mail interrupt: the desktop catch-up reads it
    *  back (GET /api/notifications/desktop-catchup). */
   sourceEmailId?: string;
+  /** The app path a click on the row opens (notify/email-bell.ts mailOpenPath). */
+  link?: string;
 }
 
 type WrittenRow = { id: string; createdAt: Date };

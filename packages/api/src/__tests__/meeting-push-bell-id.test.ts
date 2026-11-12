@@ -20,6 +20,7 @@ vi.mock("../db.js", () => ({
     userToken: { findMany: vi.fn(async () => [{ userId: "u1" }]) },
     automationConfig: { findUnique: vi.fn(async () => null) },
     notification: { findFirst: vi.fn(async () => null), create: mocks.notificationCreate },
+    calendarEvent: { findUnique: vi.fn(async () => null) },
   },
 }));
 vi.mock("../pim/meeting.js", () => ({ getUpcomingMeetings: mocks.getUpcomingMeetings }));
@@ -67,7 +68,8 @@ describe("meeting-starting-soon push", () => {
     expect(payload).toEqual({
       title: "Meeting in 3 min",
       body: "Standup",
-      url: "/briefing",
+      // No synced row for the event yet: the calendar, never an off-app link.
+      url: "/calendar",
       bellNotificationId: frame.id,
     });
   });

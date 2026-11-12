@@ -258,6 +258,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   // SHOULD block the slot. attention-calendar-visibility.ts asks only which of a
   // list of event ids are visible (C4: the kill switch for mirrored attention items).
   const UNAFFECTED = [
+    "background.ts", // the meeting push's target: the user's primary row for one Google event id
     "agentcore/tool-executor.ts",
     "pim/attention-calendar-visibility.ts",
     "notify/notification-prefs.ts",

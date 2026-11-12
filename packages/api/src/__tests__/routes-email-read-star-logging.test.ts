@@ -58,6 +58,8 @@ vi.mock("../mail/providers/dispatch.js", () => ({
 }));
 vi.mock("../mail/email-sync.js", () => ({ syncEmailByGmailId: vi.fn() }));
 vi.mock("../analytics.js", () => ({ recordEvent: vi.fn() }));
+// The bell-row write on mark-read (notify/email-bell.ts) is not under test here.
+vi.mock("../notify/email-bell.js", () => ({ noteEmailBellRowsRead: vi.fn() }));
 vi.mock("../learning/contact-engagement.js", () => ({
   recordContactEngagement: vi.fn(async () => {}),
 }));

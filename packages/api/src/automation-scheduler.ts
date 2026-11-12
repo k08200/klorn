@@ -72,6 +72,7 @@ import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { mailOpenPath } from "./notify/mail-path.js";
 import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
@@ -826,7 +827,9 @@ export async function ensureUrgentEmailNotification(
         dedupeKey: urgentDedupeKey(lead),
         title,
         message: dbMessage,
-        ...(mail ? { sourceEmailId: mail.emailId } : {}),
+        // A batch of one opens its mail from the bell; a batch of several has
+        // no single mail to open, and the bell opens the mail list.
+        ...(mail ? { sourceEmailId: mail.emailId, link: mailOpenPath(mail.emailId) } : {}),
       },
       select: { id: true, createdAt: true },
     });
@@ -844,7 +847,7 @@ export async function ensureUrgentEmailNotification(
     // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
     // OS banner in the desktop shell, under the Web Push gate.
     ...(await desktopAlertTag(userId, "push")),
-    ...(mail ? { mail } : {}),
+    ...(mail ? { mail, link: mailOpenPath(mail.emailId) } : {}),
   });
   return notification;
 }
