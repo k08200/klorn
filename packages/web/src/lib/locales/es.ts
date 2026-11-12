@@ -2834,7 +2834,7 @@ const es: Record<string, string> = {
   "playground.key.create": "Crea una en {provider}",
   "playground.key.billing": "Cada clasificación se factura a tu propia cuenta de {provider}.",
   "playground.demo.note":
-    "No necesitas clave. Esto se ejecuta en la cuenta de Klorn, con {model}, el modelo que usa el juez de Klorn.",
+    "No necesitas clave. Esto se ejecuta en la cuenta de Klorn, con el mismo modelo que usa el juez de Klorn.",
   "playground.byok.toggle": "Usar mi propia clave de API",
   "playground.submit": "Clasificar este correo",
   "playground.submitting": "Clasificando…",

@@ -2771,7 +2771,7 @@ const ko: Record<string, string> = {
   "playground.key.create": "{provider}에서 발급",
   "playground.key.billing": "분류할 때마다 본인의 {provider} 계정에 청구됩니다.",
   "playground.demo.note":
-    "키가 필요 없습니다. Klorn 계정으로, Klorn 판정기가 쓰는 모델 {model}로 실행됩니다.",
+    "키가 필요 없습니다. Klorn 계정으로, Klorn 판정기가 쓰는 모델로 실행됩니다.",
   "playground.byok.toggle": "내 API 키 사용",
   "playground.submit": "이 메일 분류",
   "playground.submitting": "분류 중…",

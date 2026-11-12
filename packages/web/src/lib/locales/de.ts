@@ -2889,7 +2889,7 @@ const de: Record<string, string> = {
   "playground.key.create": "Bei {provider} erstellen",
   "playground.key.billing": "Jede Sortierung wird deinem eigenen {provider}-Konto berechnet.",
   "playground.demo.note":
-    "Kein Schlüssel nötig. Das läuft auf Klorns eigenem Konto, mit {model} — dem Modell, das Klorns Judge nutzt.",
+    "Kein Schlüssel nötig. Das läuft auf Klorns eigenem Konto, mit demselben Modell, das Klorns Judge nutzt.",
   "playground.byok.toggle": "Eigenen API-Schlüssel verwenden",
   "playground.submit": "E-Mail sortieren",
   "playground.submitting": "Sortiere…",

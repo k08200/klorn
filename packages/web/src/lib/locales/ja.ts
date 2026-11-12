@@ -2795,7 +2795,7 @@ const ja: Record<string, string> = {
   "playground.key.create": "{provider} で作成",
   "playground.key.billing": "分類のたびに、ご自身の {provider} アカウントに請求されます。",
   "playground.demo.note":
-    "キーは不要です。Klorn のアカウントで、Klorn の判定器が使うモデル {model} で実行されます。",
+    "キーは不要です。Klorn のアカウントで、Klorn の判定器が使うモデルで実行されます。",
   "playground.byok.toggle": "自分の API キーを使う",
   "playground.submit": "このメールを分類",
   "playground.submitting": "分類中…",

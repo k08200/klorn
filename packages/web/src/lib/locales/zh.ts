@@ -2628,7 +2628,7 @@ const zh: Record<string, string> = {
   "playground.key.create": "前往 {provider} 创建",
   "playground.key.billing": "每次分类都会计入你自己的 {provider} 账户。",
   "playground.demo.note":
-    "无需密钥。这次分类用 Klorn 自己的账户运行，模型是 Klorn 判定器所用的 {model}。",
+    "无需密钥。这次分类用 Klorn 自己的账户运行，模型与 Klorn 判定器所用的相同。",
   "playground.byok.toggle": "使用我自己的 API 密钥",
   "playground.submit": "分类这封邮件",
   "playground.submitting": "分类中…",

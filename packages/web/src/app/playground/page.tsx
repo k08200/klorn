@@ -26,7 +26,6 @@ import { ModelField, OTHER_MODEL } from "./model-field";
 import {
   defaultModelFor,
   isValidModelId,
-  KLORN_MODEL_ID,
   modelFitsProvider,
   type PlaygroundProvider,
   PROVIDER_LABEL,
@@ -187,9 +186,7 @@ export default function PlaygroundPage() {
             <div className="h-px bg-line" />
             <div className="flex flex-col gap-2">
               {!byok && (
-                <p className="text-role-caption text-ink-mid">
-                  {t("playground.demo.note", { model: KLORN_MODEL_ID })}
-                </p>
+                <p className="text-role-caption text-ink-mid">{t("playground.demo.note")}</p>
               )}
               {/*
                 A two-state switch, not a disclosure: it decides whose account
