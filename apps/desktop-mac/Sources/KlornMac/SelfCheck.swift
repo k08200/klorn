@@ -1568,6 +1568,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await notifyBadgeLoginSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Notification drops: overflow, permission, fail-closed gate, unread badge (2026-11-12):")
     for (name, ok) in await notificationDropsSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Notification receipts: shown / clicked to the server (2026-11-12):")
+    for (name, ok) in await notificationReceiptSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Files and team free-time (P12):")
     for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Locale-native preview fixtures (landing captures):")
