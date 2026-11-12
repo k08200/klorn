@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   clientAddress,
+  clientAddressBucket,
   deriveClientAddress,
   describeClientAddressConfig,
   resolveClientAddressConfig,
@@ -152,6 +153,61 @@ describe("deriveClientAddress — x-forwarded-for", () => {
     expect(
       deriveClientAddress(req({ "x-forwarded-for": "192.0.2.44, garbage" }), XFF_ONE_HOP),
     ).toBe("10.0.0.1");
+  });
+});
+
+describe("clientAddressBucket", () => {
+  const CF_ENV = { CLIENT_IP_SOURCE: "cf-connecting-ip" } as const;
+
+  function viaEdge(ip: string) {
+    return req({ "cf-connecting-ip": ip });
+  }
+
+  it("groups an IPv6 client by its /64, the unit an address is allocated in", () => {
+    const one = clientAddressBucket(viaEdge("2001:db8:1234:5678::1"), CF_ENV);
+    const other = clientAddressBucket(viaEdge("2001:db8:1234:5678::dead:beef"), CF_ENV);
+    expect(one).toBe(other);
+    expect(one).toBe("2001:db8:1234:5678");
+  });
+
+  it("keeps a different /64 in a different bucket", () => {
+    const a = clientAddressBucket(viaEdge("2001:db8:1234:5678::1"), CF_ENV);
+    const b = clientAddressBucket(viaEdge("2001:db8:1234:5679::1"), CF_ENV);
+    expect(a).not.toBe(b);
+  });
+
+  it("writes one bucket for a /64 however the address is abbreviated", () => {
+    // Same /64, three spellings: zero-compressed, zero-padded, upper case.
+    const compressed = clientAddressBucket(viaEdge("2001:db8::1"), CF_ENV);
+    const padded = clientAddressBucket(viaEdge("2001:0db8:0000:0000:0000:0000:0000:0001"), CF_ENV);
+    const upper = clientAddressBucket(viaEdge("2001:DB8::2"), CF_ENV);
+    expect(compressed).toBe("2001:db8:0:0");
+    expect(padded).toBe(compressed);
+    expect(upper).toBe(compressed);
+  });
+
+  it.each([
+    ["a leading run of zero groups", "::1", "0:0:0:0"],
+    ["a trailing run of zero groups", "fe80::", "fe80:0:0:0"],
+    ["a full eight-group address", "2001:db8:1:2:3:4:5:6", "2001:db8:1:2"],
+  ] as const)("handles %s", (_label, address, bucket) => {
+    expect(clientAddressBucket(viaEdge(address), CF_ENV)).toBe(bucket);
+  });
+
+  it("leaves an IPv4 client keyed on its own address", () => {
+    // One IPv4 address is one host; grouping would punish a shared NAT.
+    expect(clientAddressBucket(viaEdge("203.0.113.7"), CF_ENV)).toBe("203.0.113.7");
+    expect(clientAddressBucket(viaEdge("::ffff:203.0.113.7"), CF_ENV)).toBe("203.0.113.7");
+  });
+
+  it("passes the unknown marker through instead of bucketing it", () => {
+    expect(clientAddressBucket({ headers: {} }, { CLIENT_IP_SOURCE: "socket" })).toBe("unknown");
+  });
+
+  it("reads the same configured source as clientAddress", () => {
+    // A client-sent header must not pick the bucket either.
+    const spoofed = req({ "cf-connecting-ip": "2001:db8:aaaa:bbbb::1" }, "2001:db8:1:2::9");
+    expect(clientAddressBucket(spoofed, { CLIENT_IP_SOURCE: "socket" })).toBe("2001:db8:1:2");
   });
 });
 
