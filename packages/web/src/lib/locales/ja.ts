@@ -2754,8 +2754,8 @@ const ja: Record<string, string> = {
   "playground.nav.startFree": "無料で始める",
   "playground.title": "メール1通がどう振り分けられるか確認できます。",
   "playground.lead":
-    "メールを貼り付け、モデルを選び、ご自身のキーを入力します。Klorn の実際の判定器が5つのレーンのどれかに振り分け、その背景にある4つのスコアを表示します。",
-  "playground.leadShort": "自分のモデル、自分のキー、Klorn の実際の判定器。",
+    "メールを貼り付けるだけで、Klorn の実際の判定器が5つのレーンのどれかに振り分け、その背景にある4つのスコアを表示します。キーもログインも不要です。",
+  "playground.leadShort": "キーもログインも不要、Klorn の実際の判定器。",
   "playground.form.label": "メールとモデル",
   "playground.samples.heading": "サンプルを試す",
   "playground.samples.investor": "投資家",
@@ -2794,6 +2794,9 @@ const ja: Record<string, string> = {
   "playground.key.none": "キーをお持ちでない場合は",
   "playground.key.create": "{provider} で作成",
   "playground.key.billing": "分類のたびに、ご自身の {provider} アカウントに請求されます。",
+  "playground.demo.note":
+    "キーは不要です。Klorn のアカウントで、Klorn の判定器が使うモデル {model} で実行されます。",
+  "playground.byok.toggle": "自分の API キーを使う",
   "playground.submit": "このメールを分類",
   "playground.submitting": "分類中…",
   "playground.result.label": "結果",
@@ -2853,6 +2856,17 @@ const ja: Record<string, string> = {
   "playground.meta": "{model} · {seconds} 秒",
   "playground.error.title": "このメールを分類できませんでした",
   "playground.error.noKey": "先に {provider} の API キーを入力してください。",
+  "playground.error.keyTooShort":
+    "{provider} の API キーが短すぎます。全体を貼り付けたか確認してください。",
+  "playground.error.demoOff": "無料分類は現在オフです。ご自身の API キーを入力してください。",
+  "playground.error.demoBudget":
+    "本日分の Klorn 無料分類をすべて使いました。いま分類するには、ご自身の API キーを入力してください。",
+  "playground.error.demoRateLimited":
+    "いまは無料分類を使い切りました。ご自身の API キーを入力するか、1分ほど待ってからお試しください。",
+  "playground.error.demoFailed":
+    "Klorn のモデルが応答しませんでした。少し待ってから再試行するか、ご自身の API キーを入力してください。",
+  "playground.error.demoTimeout":
+    "{seconds} 秒を超えても応答がありませんでした。もう一度分類してください。",
   "playground.error.noEmail": "先に差出人と件名を入力してください。",
   "playground.error.rateLimited":
     "試行回数が多すぎます。1分ほど待ってから、もう一度分類してください。",
