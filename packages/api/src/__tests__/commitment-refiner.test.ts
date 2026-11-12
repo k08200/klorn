@@ -128,4 +128,98 @@ describe("commitment LLM refinement", () => {
 
     expect(out?.isCommitment).toBeNull();
   });
+
+  it("drops an LLM dueAt that carries no UTC offset", async () => {
+    // "2026-11-13T15:00:00" would be read in the SERVER's zone, not the user's.
+    process.env.COMMITMENT_LLM_REFINEMENT = "1";
+    mocks.createCompletion.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              isCommitment: true,
+              dueText: "내일 오후 3시",
+              dueAt: "2026-11-13T15:00:00",
+              confidence: 0.8,
+            }),
+          },
+        },
+      ],
+    });
+
+    const out = await maybeRefineCommitmentCandidateWithLlm({
+      candidate,
+      sourceType: "EMAIL",
+      sourceText: candidate.text,
+    });
+
+    expect(out?.dueText).toBe("내일 오후 3시");
+    expect(out?.dueAt).toBeNull();
+  });
+
+  it("drops an LLM dueAt on a date that does not exist", async () => {
+    process.env.COMMITMENT_LLM_REFINEMENT = "1";
+    mocks.createCompletion.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ isCommitment: true, dueAt: "2026-02-30T10:00:00Z" }),
+          },
+        },
+      ],
+    });
+
+    const out = await maybeRefineCommitmentCandidateWithLlm({
+      candidate,
+      sourceType: "EMAIL",
+      sourceText: candidate.text,
+    });
+
+    expect(out?.dueAt).toBeNull();
+  });
+
+  it("keeps an offset-qualified LLM dueAt", async () => {
+    process.env.COMMITMENT_LLM_REFINEMENT = "1";
+    mocks.createCompletion.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ isCommitment: true, dueAt: "2026-11-13T15:00:00+09:00" }),
+          },
+        },
+      ],
+    });
+
+    const out = await maybeRefineCommitmentCandidateWithLlm({
+      candidate,
+      sourceType: "EMAIL",
+      sourceText: candidate.text,
+    });
+
+    expect(out?.dueAt?.toISOString()).toBe("2026-11-13T06:00:00.000Z");
+  });
+
+  it("wraps the mail-derived due hint as untrusted and forbids meridiem guesses", async () => {
+    process.env.COMMITMENT_LLM_REFINEMENT = "1";
+    mocks.createCompletion.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ isCommitment: true }) } }],
+    });
+
+    await maybeRefineCommitmentCandidateWithLlm({
+      candidate: { ...candidate, dueHint: "내일 8시" },
+      sourceType: "EMAIL",
+      sourceText: candidate.text,
+    });
+
+    const request = mocks.createCompletion.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+    const system = request.messages.find((message) => message.role === "system")?.content ?? "";
+    expect(user).toContain(
+      '<untrusted_content source="commitment:dueHint">내일 8시</untrusted_content>',
+    );
+    expect(system).toMatch(/8시/);
+    expect(system).toMatch(/offset/i);
+  });
 });
