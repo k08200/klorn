@@ -47,3 +47,46 @@ enum LoginItem {
         }
     }
 }
+
+// MARK: - First-run "Open at login" prompt (N5, 2026-11-11)
+
+/// Asks once whether Klorn may open at login, so urgent-mail banners keep
+/// working after a restart (the Windows shell asks the same, PR #1644). Shown
+/// once notifications are first authorized after sign-in, or right after
+/// sign-in when macOS already had an answer. Never enables anything by
+/// itself: only the "Open at login" button registers the login item.
+enum LoginItemPrompt {
+    /// Set once the prompt was answered: it never shows again.
+    static let askedKey = "klorn.loginItemPrompt.asked"
+
+    /// Whether to show the prompt now. `before` is macOS's answer before
+    /// this session's permission request, `after` the answer it returned.
+    /// Pure.
+    nonisolated static func shouldShow(
+        asked: Bool, availability: LoginItem.Availability, enabled: Bool,
+        before: NotificationPermission, after: NotificationPermission
+    ) -> Bool {
+        guard !asked, availability == .available, !enabled else { return false }
+        let decidedBefore = before == .authorized || before == .denied
+        return after == .authorized || decidedBefore
+    }
+}
+
+/// What the prompt reads and does, behind a seam so the self-check never
+/// touches the real login item or the app's preferences.
+@MainActor
+struct LoginItemPromptEnvironment {
+    var asked: () -> Bool
+    var markAsked: () -> Void
+    var availability: () -> LoginItem.Availability
+    var isEnabled: () -> Bool
+    /// Registers the login item; a user-facing error, or nil on success.
+    var register: () -> String?
+
+    static let live = LoginItemPromptEnvironment(
+        asked: { UserDefaults.standard.bool(forKey: LoginItemPrompt.askedKey) },
+        markAsked: { UserDefaults.standard.set(true, forKey: LoginItemPrompt.askedKey) },
+        availability: { LoginItem.availability(hasBundleId: Bundle.main.bundleIdentifier != nil) },
+        isEnabled: { LoginItem.isEnabled },
+        register: { LoginItem.setEnabled(true) })
+}

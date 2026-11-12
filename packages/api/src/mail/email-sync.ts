@@ -485,6 +485,13 @@ async function reconcileInboxScope(
   gmail: gmail_v1.Gmail,
   linkedInboxAccountId: string | null,
 ): Promise<{ removed: number; updated: number }> {
+  // Rows synced after this instant are never stale, whatever the listing says.
+  // The listing pages newest-first and can run for minutes, and reconcile runs
+  // detached from the scheduler's per-user cycle (reconcile-job.ts), so a sync
+  // (the next tick's, or Gmail push) can store mail that arrived after page 1
+  // was read. Such mail is missing from the listing, and once the history
+  // watermark has moved past it nothing would fetch it again.
+  const listedFrom = new Date();
   // Get ALL current INBOX message IDs from Gmail (lightweight list call)
   const inboxIds = new Set<string>();
   let pageToken: string | undefined;
@@ -531,6 +538,7 @@ async function reconcileInboxScope(
   // from this account's INBOX, so rows tagged to a DIFFERENT account would all
   // match `gmailId notIn inboxIdList` and be wrongly wiped without this guard.
   const scope = { userId, linkedInboxAccountId } as const;
+  const syncedBeforeListing = { syncedAt: { lt: listedFrom } };
   let removed = 0;
   let leftInbox: RemovedMail[] = [];
   if (inboxIdList.length <= INBOX_PARAM_CAP) {
@@ -545,6 +553,7 @@ async function reconcileInboxScope(
       ...scope,
       gmailId: { notIn: inboxIdList },
       NOT: { labels: { has: "SPAM" } },
+      ...syncedBeforeListing,
     };
     const stale = await prisma.emailMessage.findMany({
       where: staleWhere,
@@ -559,7 +568,7 @@ async function reconcileInboxScope(
     removed = res.count;
   } else {
     const stored = await prisma.emailMessage.findMany({
-      where: scope,
+      where: { ...scope, ...syncedBeforeListing },
       select: { id: true, gmailId: true, labels: true, receivedAt: true },
     });
     leftInbox = leftInboxOf(stored, inboxIds);

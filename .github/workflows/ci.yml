@@ -67,6 +67,10 @@ jobs:
           version: "2.4.12"
       - name: Run Biome lint (errors only)
         run: biome check --diagnostic-level=error packages/
+      # Vercel's Ignored Build Step for klorn-web (packages/web/vercel.json):
+      # a wrong skip leaves production on stale web code, so it is tested.
+      - name: Vercel ignored build step
+        run: node --test packages/web/scripts/vercel-ignore-build.test.mjs
       # website/ ships two full parallel landings (EN + KO) with no shared
       # template — structural edits must land in both. Fails on skeleton drift.
       - name: Website EN/KO lockstep

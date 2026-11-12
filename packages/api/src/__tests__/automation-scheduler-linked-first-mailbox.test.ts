@@ -87,6 +87,21 @@ vi.mock("../judge/judge-health.js", async (importOriginal) => ({
   runJudgeHeartbeatCheck: vi.fn(async () => {}),
 }));
 
+// The scheduler lease is proven on its own (scheduler-lease*.test.ts); here it
+// always grants the tick and records its release, which marks the tick's end.
+vi.mock("../scheduler-lease.js", () => ({
+  createSchedulerLease: () => ({
+    runExclusive: async (work: () => Promise<void>) => {
+      try {
+        await work();
+      } finally {
+        m.calls.push({ key: "lease:released", args: [] });
+      }
+      return true;
+    },
+  }),
+}));
+
 /** A prisma whose every table method resolves to a harmless empty value. */
 vi.mock("../db.js", () => {
   const EMPTY: Record<string, unknown> = {
@@ -118,15 +133,6 @@ vi.mock("../db.js", () => {
     {},
     {
       get: (_target, name: string) => {
-        if (name === "$queryRawUnsafe") {
-          return (sql: string) => {
-            m.calls.push({
-              key: `$queryRawUnsafe:${sql.includes("unlock") ? "unlock" : "lock"}`,
-              args: [],
-            });
-            return Promise.resolve([{ locked: true, unlocked: true }]);
-          };
-        }
         if (name === "$queryRaw") return () => Promise.resolve([]);
         if (name === "$transaction") {
           return (arg: unknown) =>
@@ -151,13 +157,13 @@ function override(key: string, fn: (...args: unknown[]) => unknown) {
   m.overrides.set(key, fn);
 }
 
-/** Run exactly one scheduler tick and wait for it to release its lock. */
+/** Run exactly one scheduler tick and wait for it to release its lease. */
 async function runOneTick() {
   vi.resetModules();
   const scheduler = await import("../automation-scheduler.js");
   scheduler.startAutomationScheduler();
   const deadline = performance.now() + 4000;
-  while (!m.calls.some((c) => c.key === "$queryRawUnsafe:unlock")) {
+  while (!m.calls.some((c) => c.key === "lease:released")) {
     if (performance.now() > deadline) throw new Error("scheduler tick did not finish");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }

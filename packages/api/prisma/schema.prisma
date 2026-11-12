@@ -2756,6 +2756,20 @@ model WebhookEvent {
   @@index([processedAt])
 }
 
+// One row per in-process scheduler loop ("automation", "autonomous-agent"): a
+// tick runs only while its process holds the row's lease, so two instances
+// (a zero-downtime deploy's overlap) never run the same tick. Replaces session
+// advisory locks, which leak behind a connection pooler. Written by raw SQL only
+// (scheduler-lease.ts), each acquire / renew / release one atomic statement
+// timed by the database clock in UTC. "holderId" is NULL when released.
+model SchedulerLease {
+  name       String    @id
+  holderId   String?
+  acquiredAt DateTime?
+  expiresAt  DateTime
+  updatedAt  DateTime
+}
+
 // ─── LLM usage log ─────────────────────────────────────────────────────────
 // Ground-truth token accounting: one row per successful provider call,
 // written at the createCompletion/createVisionCompletion chokepoints

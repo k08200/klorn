@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // reconcileEmails used to load the user's ENTIRE EmailMessage table into Node to
 // diff it against the Gmail INBOX every tick (unbounded memory), and an empty
@@ -89,6 +89,7 @@ describe("reconcileEmails", () => {
         linkedInboxAccountId: null,
         gmailId: { notIn: ["a", "b"] },
         NOT: { labels: { has: "SPAM" } },
+        syncedAt: { lt: expect.any(Date) },
       },
     });
     expect(result.removed).toBe(3);
@@ -154,6 +155,67 @@ describe("reconcileEmails", () => {
       }),
     );
     expect(result.removed).toBe(1);
+  });
+
+  describe("mail synced while the INBOX listing runs", () => {
+    // The listing pages through the whole INBOX newest-first and can take
+    // minutes; reconcile runs detached from the scheduler's per-user cycle, so a
+    // sync (the next tick's, or Gmail push) can store new mail meanwhile. Mail
+    // that arrived after page 1 is not in the listing, and nothing re-fetches it
+    // once the history watermark has moved past it, so it must never count as
+    // stale.
+    const LISTING_STARTED = new Date("2026-11-11T11:07:00.000Z");
+    const LISTING_ENDED = new Date("2026-11-11T11:09:00.000Z");
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(LISTING_STARTED);
+      m.listMock.mockImplementation(async () => {
+        vi.setSystemTime(LISTING_ENDED);
+        return inboxListing(["a", "b"]);
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      // The clock-moving listing above must not outlive this block.
+      m.listMock.mockReset();
+    });
+
+    it("counts as stale only rows synced before the listing started", async () => {
+      await reconcileEmails("user-1");
+
+      const staleWhere = {
+        userId: "user-1",
+        linkedInboxAccountId: null,
+        gmailId: { notIn: ["a", "b"] },
+        NOT: { labels: { has: "SPAM" } },
+        syncedAt: { lt: LISTING_STARTED },
+      };
+      expect(m.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: staleWhere }));
+      expect(m.deleteMany).toHaveBeenCalledWith({ where: staleWhere });
+    });
+
+    it("applies the same cut-off on the large-INBOX path", async () => {
+      const bigInbox = Array.from({ length: 10_001 }, (_, i) => `m${i}`);
+      m.listMock.mockImplementation(async () => {
+        vi.setSystemTime(LISTING_ENDED);
+        return inboxListing(bigInbox);
+      });
+
+      await reconcileEmails("user-1");
+
+      expect(m.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: "user-1",
+            linkedInboxAccountId: null,
+            syncedAt: { lt: LISTING_STARTED },
+          },
+          select: expect.objectContaining({ gmailId: true, labels: true }),
+        }),
+      );
+    });
   });
 
   it("resolves the attention items of archived/trashed emails so they don't orphan as stale PUSH", async () => {
@@ -265,6 +327,7 @@ describe("reconcileLinkedInboxes", () => {
         linkedInboxAccountId: "link-1",
         gmailId: { notIn: ["a", "b"] },
         NOT: { labels: { has: "SPAM" } },
+        syncedAt: { lt: expect.any(Date) },
       },
     });
     expect(result.removed).toBe(2);
@@ -293,6 +356,7 @@ describe("reconcileLinkedInboxes", () => {
         linkedInboxAccountId: "link-ok",
         gmailId: { notIn: ["a"] },
         NOT: { labels: { has: "SPAM" } },
+        syncedAt: { lt: expect.any(Date) },
       },
     });
     expect(result.removed).toBe(1);
