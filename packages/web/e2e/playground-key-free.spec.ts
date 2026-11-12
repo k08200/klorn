@@ -16,7 +16,16 @@ import en from "../src/lib/locales/en";
  * that no refusal is a dead end.
  *
  * The API is mocked, so nothing else needs to be up and no model is called:
+ *   pnpm exec playwright install chromium   # once; see below
  *   E2E_BASE_URL=http://localhost:8123 pnpm exec playwright test e2e/playground-key-free.spec.ts
+ *
+ * Without the browser installed every test here fails in ~1ms with
+ * `browserType.launch: Executable doesn't exist`, which reads like a broken
+ * import rather than a missing binary — check that before the error.
+ *
+ * Point `E2E_BASE_URL` at a dev server in your own worktree on an unused port.
+ * The config's `reuseExistingServer: true` means the default port tests
+ * whatever tree is already listening there, which may not be yours.
  */
 
 const CLASSIFY = "**/api/playground/classify";
@@ -154,6 +163,17 @@ test.describe("playground: key-free is the default door", () => {
     // constant, which is only what render.yaml is *supposed* to pin.
     await expect(resultPane(page)).toContainText(SERVER_REPORTED_SHORT);
     await expect(resultPane(page)).not.toContainText(KLORN_MODEL_ID);
+  });
+
+  test("the stubbed model stays distinguishable from the fallback", () => {
+    // Guard for the two tests above, which are only meaningful while the
+    // stub and the page constant differ AFTER `shortModelName` drops the
+    // vendor prefix. `anthropic/claude-haiku-5-5` shortens to exactly
+    // KLORN_MODEL_ID, so a well-meant "make the stub match the app" edit
+    // would leave both arms green. This fails at that edit instead of
+    // letting the suite go quiet — a comment cannot do that.
+    expect(SERVER_REPORTED_SHORT).not.toBe(KLORN_MODEL_ID);
+    expect(SERVER_REPORTED_MODEL.split("/").pop()).toBe(SERVER_REPORTED_SHORT);
   });
 
   test("falls back to the build constant when the server reports no model", async ({ page }) => {

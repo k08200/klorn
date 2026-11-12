@@ -1,4 +1,4 @@
-import { isIP, isIPv4 } from "node:net";
+import { isIP, isIPv4, isIPv6 } from "node:net";
 
 /**
  * The client address behind every per-address decision: the HTTP rate limits,
@@ -48,6 +48,8 @@ const DEFAULT_PROXY_HOPS = 1;
 const MAX_PROXY_HOPS = 10;
 const UNKNOWN = "unknown";
 const IPV4_MAPPED_PREFIX = "::ffff:";
+/** 16-bit groups in a /64 — the prefix an IPv6 client is allocated. */
+const IPV6_PREFIX_GROUPS = 4;
 
 function isSource(value: string): value is ClientIpSource {
   return (SOURCES as readonly string[]).includes(value);
@@ -145,6 +147,43 @@ export function deriveClientAddress(
  */
 export function clientAddress(request: ClientAddressRequest, env: Env = process.env): string {
   return deriveClientAddress(request, resolveClientAddressConfig(env));
+}
+
+/** One group with its leading zeros dropped, so `0db8` and `db8` are one key. */
+function canonicalGroup(group: string): string {
+  return Number.parseInt(group, 16).toString(16);
+}
+
+/**
+ * The /64 an IPv6 address sits in; an IPv4 address (or the unknown marker)
+ * unchanged.
+ *
+ * Only the groups left of `::` can fall inside the prefix, because `::` stands
+ * for a run of zero groups — so whatever is still missing at the /64 boundary
+ * is zero, whatever follows it.
+ */
+function addressBucket(address: string): string {
+  if (!isIPv6(address)) return address;
+  const [head] = address.split("::");
+  const groups = head === "" ? [] : head.split(":");
+  const written = groups.slice(0, IPV6_PREFIX_GROUPS).map(canonicalGroup);
+  const elided = Array.from({ length: IPV6_PREFIX_GROUPS - written.length }, () => "0");
+  return [...written, ...elided].join(":");
+}
+
+/**
+ * The key a per-client meter should count on: an IPv6 client by its /64, an
+ * IPv4 client by its own address.
+ *
+ * `clientAddress` identifies one address, which is what a device-session
+ * record or a scan exemption wants. A meter that hands out a free, server-paid
+ * resource wants one *client*, and an IPv6 client is normally allocated a whole
+ * /64 — ~1.8e19 addresses it can rotate through at no cost. Counting those
+ * separately means a per-address cap bounds nothing. IPv4 is left alone: one
+ * address is one host there, and grouping would punish a shared NAT.
+ */
+export function clientAddressBucket(request: ClientAddressRequest, env: Env = process.env): string {
+  return addressBucket(clientAddress(request, env));
 }
 
 /**

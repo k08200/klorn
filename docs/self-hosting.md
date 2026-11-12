@@ -342,6 +342,14 @@ Caddy and nginx examples did): either keep that line and set
 `CLIENT_IP_SOURCE=x-forwarded-for`. Without either, every client shares the
 proxy's bucket, which is safe but strict.
 
+One meter counts differently: the key-free playground demo
+(`PLAYGROUND_NO_KEY_DEMO_ENABLED`, off by default) spends your own provider
+credit, so its 3/minute and 10/day caps count an IPv6 client by the `/64` it
+was allocated rather than by its single address — otherwise one allocation's
+~1.8e19 addresses each get their own quota and the caps bound nothing. IPv4
+clients are still counted per address. Everything else on this page keys on the
+one address `CLIENT_IP_SOURCE` chooses.
+
 ### Caddy
 
 ```caddyfile

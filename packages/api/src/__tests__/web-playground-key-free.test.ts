@@ -28,13 +28,20 @@ import { KLORN_MODEL_ID } from "../../../web/src/app/playground/models";
 import en from "../../../web/src/lib/locales/en";
 
 const judgeEmail = vi.hoisted(() => vi.fn());
-const SERVER_JUDGE_MODEL = vi.hoisted(() => "anthropic/claude-haiku-5-5");
 const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
 
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
-// Stub the constant alone: importing the real module would drag the provider
-// registry (and Prisma's .env autoload) into an offline unit test.
-vi.mock("../llm/openai.js", () => ({ JUDGE_MODEL: SERVER_JUDGE_MODEL }));
+// The route pins the demo to the server's judge model, so it imports this
+// module; stub the constant alone rather than loading the provider registry
+// (and Prisma's .env autoload) into an offline unit test.
+//
+// This literal is the one copy of the judge model id that can drift silently:
+// web-playground-models.test.ts asserts KLORN_MODEL_ID
+// (packages/web/src/app/playground/models.ts) equals RECOMMENDED_JUDGE_MODEL,
+// so those two fail loudly, but nothing checks this stub against them. Only the
+// request shape below depends on it, never the value, so a drifted stub weakens
+// the test rather than breaking it — keep it in step with models.ts by hand.
+vi.mock("../llm/openai.js", () => ({ JUDGE_MODEL: "claude-haiku-5-5" }));
 vi.mock("../config.js", () => ({
   get PLAYGROUND_NO_KEY_DEMO_ENABLED() {
     return configState.demoEnabled;
