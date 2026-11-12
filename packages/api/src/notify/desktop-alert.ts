@@ -51,7 +51,8 @@ export type DesktopAlertState = Record<DesktopAlertKind, NotificationGateResult>
 
 /** The gate `desktopAlertTag` applies, for every kind at one instant, with the
  *  reason when held. Unlike the tag it does not swallow a lookup error: the
- *  caller picks the fallback (the Mac posts anyway — fail-open). */
+ *  caller picks the fallback (the Mac holds the banner — fail closed — and
+ *  asks again on its next poll). */
 export async function desktopAlertState(
   userId: string,
   now: Date = new Date(),

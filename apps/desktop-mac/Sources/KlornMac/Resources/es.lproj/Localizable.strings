@@ -139,6 +139,8 @@
 "push.announce.meeting" = "Correo MEETING nuevo: %d";
 "push.heldSummary.title" = "%d correos urgentes durante las horas de silencio";
 "push.closedSummary.title" = "%d correos urgentes mientras Klorn estaba cerrado";
+"push.moreSummary.title" = "+%d más te necesitan";
+"push.delayedSummary.title" = "%d correos urgentes te necesitan";
 "prefs.launchAtLogin" = "Abrir Klorn al iniciar sesión";
 "prefs.launchAtLogin.unavailable.label" = "Abrir al iniciar sesión";
 "prefs.launchAtLogin.unavailable.value" = "Solo en la app empaquetada";

@@ -14,8 +14,9 @@ import Foundation
 //     naming up to three senders, which opens Today;
 //   - only mail still in the PUSH lane, not opened on this Mac, from the last
 //     72 hours (Windows' PUSH_CATCHUP_WINDOW_MS);
-//   - a category opt-out (`user_preferences`) drops; no answer posts new mail
-//     (fail-open) and keeps the held mail for a later pass;
+//   - a category opt-out (`user_preferences`) drops; no answer keeps the held
+//     mail for a later pass and, since 2026-11-12, holds new PUSH mail too
+//     (fail closed, SelfCheckNotificationDrops.swift);
 //   - MEETING-lane mail and the calendar's meeting-soon banner held by quiet
 //     hours stay dropped: N6 catches up PUSH mail only, and a reminder for a
 //     meeting that already started is useless.
@@ -202,7 +203,7 @@ func quietHoursSummarySelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         model.signOut()
     }
 
-    // MARK: fail-open
+    // MARK: no answer (fail closed since 2026-11-12)
     do {
         let rec = Recorder(t0)
         let model = S.model([S.firewall: lanes(push: ["p1"]),
@@ -211,8 +212,8 @@ func quietHoursSummarySelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         await model.loadQueue()
         Stub.set(S.firewall, lanes(push: ["p1", "p2"]))
         await model.loadQueue()
-        check("fail-open: with no answer from alert-state a new mail still posts at once",
-              rec.announced == [["p2"]] && held(model).isEmpty)
+        check("fail closed: with no answer from alert-state a new mail is held, not posted",
+              rec.announced.isEmpty && held(model) == ["p2"])
         model.signOut()
     }
     do {
@@ -379,7 +380,7 @@ func quietHoursSummarySelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         await model.loadQueue()
         check("quiet hours hold every new PUSH mail, past the \(PushLedger.maxBannersPerSync)-per-sync cap; the summary counts them all",
               allHeld && rec.summaries.first?.count == burst.count && rec.summaries.count == 1
-              && rec.announced.first?.count == PushLedger.maxBannersPerSync)
+              && rec.announced.first == next)
         model.signOut()
     }
 
@@ -408,13 +409,13 @@ func quietHoursSummarySelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     func wire(_ json: String) -> AlertStateWire? {
         try? JSONDecoder().decode(AlertStateWire.self, from: Data(json.utf8))
     }
-    check("verdicts: allowed, quiet hours (held), any other hold (dropped), no answer (unknown)",
+    check("verdicts: allowed, quiet hours (held), any other hold (dropped), no answer (unknown), no gate (allowed)",
           ServerAlertGate.verdict(.emailUrgent, state: wire(#"{"alerts":{"push":{"allowed":true}}}"#)) == .allowed
           && ServerAlertGate.verdict(.emailUrgent, state: wire(#"{"alerts":{"push":{"allowed":false,"reason":"quiet_hours"}}}"#)) == .quietHours
           && ServerAlertGate.verdict(.emailUrgent, state: wire(#"{"alerts":{"push":{"allowed":false,"reason":"user_preferences"}}}"#)) == .refused
           && ServerAlertGate.verdict(.emailUrgent, state: wire(#"{"alerts":{"push":{"allowed":false}}}"#)) == .refused
           && ServerAlertGate.verdict(.emailUrgent, state: nil) == .unknown
-          && ServerAlertGate.verdict(.emailUrgent, state: wire("{}")) == .unknown)
+          && ServerAlertGate.verdict(.emailUrgent, state: wire("{}")) == .allowed)
 
     // MARK: overlapping passes post one summary
     do {

@@ -12,13 +12,18 @@ import Foundation
 /// Records what would have been posted.
 @MainActor
 final class FakePushNotifier: PushNotifying {
+    /// macOS's current answer (`permission()`).
     var permissionAnswer: NotificationPermission = .authorized
+    /// What the user answers the prompt with; it becomes macOS's answer.
+    /// nil = the prompt changes nothing.
+    var requestAnswer: NotificationPermission?
     private(set) var posted: [PushBanner] = []
     private(set) var authorizationRequests = 0
     private(set) var clearCount = 0
 
     func requestAuthorization() async -> NotificationPermission {
         authorizationRequests += 1
+        if let requestAnswer { permissionAnswer = requestAnswer }
         return permissionAnswer
     }
     func permission() async -> NotificationPermission { permissionAnswer }
@@ -206,8 +211,8 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
               .plan(pushItems: [push("z")]).toNotify.isEmpty)
     let flood = (1...8).map { push("f\($0)") }
     let floodPlan = relaunched.plan(pushItems: flood)
-    check("a burst is capped at \(PushLedger.maxBannersPerSync) banners, and the rest are still recorded",
-          floodPlan.toNotify.count == PushLedger.maxBannersPerSync
+    check("a burst is planned whole (BannerBatch folds it past \(PushLedger.maxBannersPerSync)), and all of it is recorded",
+          floodPlan.toNotify.count == flood.count
           && flood.allSatisfy { floodPlan.next.notified.contains($0.id) })
     let huge = PushLedger(owner: "u1", baselineEstablished: true,
                           notified: (0..<PushLedger.cap).map { "old\($0)" })
@@ -277,7 +282,7 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           app.contains("model.onNewPush = { [weak alerter] items in alerter?.handleNewPush(items) }")
           && text("Notifications.swift").contains("model.pushNotifier.post($0)"))
     check("the permission request goes through the seam, once a session is active",
-          text("AppModel.swift").contains("notificationPermission = await pushNotifier.requestAuthorization()")
+          text("AppModel.swift").contains("after = await pushNotifier.requestAuthorization()")
           && users(of: "requestAuthorization(options:").sorted() == ["Notifications.swift"])
     check("UNUserNotificationCenter is touched only by the notifier and the tap delegate",
           users(of: "UNUserNotificationCenter.current()") == ["KlornApp.swift", "Notifications.swift"])
@@ -420,7 +425,7 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     // SelfCheckMeetingMailBanners.swift; this pins the local category gate.
     check("the meeting ledger is saved only after the banner is handled, and the Meetings category gates it",
           text("AppModel.swift").contains(
-              "if onMeetingSoon?(due) == true {\n            meetingAlertStore.save(announced.recording(due.id))")
+              "if onMeetingSoon?(due) == true {\n                meetingAlertStore.save(announced.recording(due.id))")
           && text("AppModel.swift").contains(
               "guard automation.allowsInterrupt(for: .meeting), let upcoming else { return }")
           && app.contains("model.onMeetingSoon = { [weak alerter] event in alerter?.handleMeetingSoon(event) ?? false }"))
@@ -456,24 +461,21 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
               waiting && opened && cold.pendingRevealItemID == nil && cold.mainNav.section == .mail)
         cold.signOut()
     }
-    // Permission: never on a login launch — only once the user has been shown
-    // a window they opened (main window activated, or onboarding finished).
-    check("the permission rule: signed in, not yet asked, and a window the user opened",
-          NotificationPermissionRules.shouldRequest(signedIn: true, alreadyRequested: false, shownByUser: true)
-          && !NotificationPermissionRules.shouldRequest(signedIn: true, alreadyRequested: false, shownByUser: false)
-          && !NotificationPermissionRules.shouldRequest(signedIn: true, alreadyRequested: true, shownByUser: true)
-          && !NotificationPermissionRules.shouldRequest(signedIn: false, alreadyRequested: false, shownByUser: true))
+    // Permission (since 2026-11-12): asked at the first sync whenever macOS
+    // has no answer, whatever the launch mode — the rule and the login-launch
+    // path are pinned in SelfCheckNotificationDrops.swift.
     do {
         let asking = AppModel(tokenStore: InMemoryTokenStore(token: "t"))
         let askFake = FakePushNotifier()
+        askFake.permissionAnswer = .notDetermined
+        askFake.requestAnswer = .authorized
         asking.pushNotifier = askFake
         await asking.requestNotificationPermissionIfNeeded()
-        let silentAtLogin = askFake.authorizationRequests == 0
+        await asking.requestNotificationPermissionIfNeeded()
         asking.windowShownByUser = true
         await asking.requestNotificationPermissionIfNeeded()
-        await asking.requestNotificationPermissionIfNeeded()
-        check("no permission prompt before a user-opened window (login launch); then exactly once",
-              silentAtLogin && askFake.authorizationRequests == 1)
+        check("an undecided permission is asked once a session, with or without a user-opened window",
+              askFake.authorizationRequests == 1 && asking.notificationPermission == .authorized)
     }
     let mainWindowSource = text("MainWindow.swift")
     check("only an activated main-window open marks the window as shown by the user",

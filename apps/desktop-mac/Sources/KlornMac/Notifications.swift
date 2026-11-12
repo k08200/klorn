@@ -20,10 +20,10 @@ struct PushLedger: Codable, Equatable, Sendable {
     /// another account is never reused — that account starts a new baseline.
     var owner: String?
     var baselineEstablished: Bool
-    /// Announced (or baselined, or dropped, or held for the quiet-hours
-    /// catch-up) item ids, oldest first, capped at `cap`: no plan offers them
-    /// again. One record for both lanes, so a mail re-tiered PUSH → MEETING is
-    /// not announced twice.
+    /// Announced (or baselined, or dropped, or held for the catch-up) item
+    /// ids, oldest first, capped at `cap`: no plan offers them again. One
+    /// record for both lanes, so a mail re-tiered PUSH → MEETING is not
+    /// announced twice.
     var notified: [String]
     /// The MEETING lane's own baseline (2026-11-07, when MEETING mail started
     /// getting banners). nil on a ledger saved before then: its baseline only
@@ -31,21 +31,27 @@ struct PushLedger: Codable, Equatable, Sendable {
     /// recorded silently on the first sync after the update instead of
     /// arriving as a burst.
     var meetingBaselineEstablished: Bool? = nil
-    /// PUSH mail held during quiet hours, oldest first, waiting for the
-    /// catch-up (`HeldBanners`). Also in `notified`, so it is never planned
-    /// again. nil on a ledger saved before it (none held).
+    /// PUSH mail held during quiet hours, or while the server's gate gave no
+    /// answer, oldest first, waiting for the catch-up (`HeldBanners`). Also
+    /// in `notified`, so it is never planned again. nil on a ledger saved
+    /// before it (none held).
     var held: [String]? = nil
     /// Some of `held` arrived while Klorn was quit (N6): the catch-up's
     /// summary reads "while Klorn was closed". nil when nothing is held.
     var heldWhileClosed: Bool? = nil
+    /// `held` was held because the server's gate gave no answer, and no
+    /// quiet-hours answer has confirmed it since (2026-11-12): the catch-up's
+    /// summary reads "N urgent emails need you", not "during quiet hours".
+    /// nil when nothing is held, or quiet hours were confirmed.
+    var heldUnconfirmed: Bool? = nil
 
     /// Ids kept. Far above any PUSH lane's size, so trimming only ever drops
     /// ids that left the lane long ago.
     static let cap = 2000
-    /// Banners posted for one sync at most. More than this at once (a long
-    /// time offline) is recorded as seen without a banner each — the lane
-    /// count in the main window covers the rest, and a wall of banners is
-    /// noise, not an interrupt.
+    /// Banners posted for one sync at most. More new mail than this at once
+    /// (a long time offline) is never dropped: `BannerBatch` posts the first
+    /// `maxBannersPerSync - 1` on their own and ONE "+N more need you" summary
+    /// for the rest — a wall of banners is noise, not an interrupt.
     static let maxBannersPerSync = 5
 
     static func fresh(owner: String?) -> PushLedger {
@@ -68,16 +74,18 @@ struct PushLedger: Codable, Equatable, Sendable {
     }
 
     struct Plan: Equatable {
+        /// Every new mail to announce, PUSH first (empty on a baseline).
         let toNotify: [FirewallItem]
         let next: PushLedger
-        /// Every new PUSH mail of this sync, past the per-sync cap (empty on a
-        /// baseline): what quiet hours hold for the catch-up.
+        /// Every new PUSH mail of this sync (empty on a baseline): what quiet
+        /// hours, or no answer from the server, hold for the catch-up.
         var unseenPush: [FirewallItem] = []
     }
 
     /// Plan the banners for the PUSH and MEETING lanes as they are now: ids
     /// not seen before, each once (PUSH first, a mail in both lanes counted
-    /// once), at most `maxBannersPerSync` together. Pure.
+    /// once). All of them: how many get a banner of their own is
+    /// `BannerBatch`'s call, so nothing is recorded without one. Pure.
     func plan(pushItems: [FirewallItem], meetingItems: [FirewallItem] = []) -> Plan {
         let known = Set(notified)
         var seenNow = Set<String>()
@@ -91,8 +99,7 @@ struct PushLedger: Codable, Equatable, Sendable {
         guard baselineEstablished else { return Plan(toNotify: [], next: next) }
         let meetingDue = meetingBaselineEstablished == true ? unseenMeeting : []
         return Plan(
-            toNotify: Array((unseenPush + meetingDue).prefix(Self.maxBannersPerSync)), next: next,
-            unseenPush: unseenPush)
+            toNotify: unseenPush + meetingDue, next: next, unseenPush: unseenPush)
     }
 }
 
@@ -212,13 +219,49 @@ enum MeetingBanner {
     }
 }
 
-/// When Klorn may ask macOS for banner permission: signed in, not yet asked
-/// this session, and only after the user has been shown a window they opened
-/// (the main window activated, or onboarding finished into it). Never on a
-/// launch at login, where a system dialog would appear unasked. Pure.
+/// When Klorn asks macOS for banner permission (2026-11-12): signed in, not
+/// yet asked this session, and macOS has no answer yet — whatever the launch
+/// mode. The first sync asks, so a Mac that only ever starts Klorn at login
+/// is asked too (before, it never was, and its banners were silently
+/// refused). Once the user allowed or denied, Klorn never asks again: macOS
+/// would not show the prompt anyway, and Settings ▸ Notifications points to
+/// System Settings when it was denied. Pure.
 enum NotificationPermissionRules {
-    static func shouldRequest(signedIn: Bool, alreadyRequested: Bool, shownByUser: Bool) -> Bool {
-        signedIn && !alreadyRequested && shownByUser
+    static func shouldRequest(signedIn: Bool, alreadyRequested: Bool, status: NotificationPermission) -> Bool {
+        signedIn && !alreadyRequested && status == .notDetermined
+    }
+}
+
+/// One sync's new mail as banners (2026-11-12). Up to
+/// `PushLedger.maxBannersPerSync` mails each get their own; past that, the
+/// first `maxBannersPerSync - 1` do and ONE "+N more need you" summary
+/// covers the rest, so a burst never drops mail silently and never stacks
+/// more than the cap. A tap on the summary opens Today, which lists the PUSH
+/// and MEETING mail it counts. Pure.
+enum BannerBatch {
+    /// `each` gets a banner per mail, `more` the one summary (empty or two
+    /// or more). Order kept: PUSH first, as planned.
+    static func split(_ items: [FirewallItem], cap: Int = PushLedger.maxBannersPerSync)
+        -> (each: [FirewallItem], more: [FirewallItem]) {
+        guard items.count > cap else { return (items, []) }
+        let shown = max(cap - 1, 0)
+        return (Array(items.prefix(shown)), Array(items.dropFirst(shown)))
+    }
+
+    /// The banners for `items`, in posting order: the mails, then the summary.
+    static func banners(for items: [FirewallItem]) -> [PushBanner] {
+        let (each, more) = split(items)
+        return each.map(PushBanner.make(for:)) + (more.isEmpty ? [] : [moreSummary(for: more)])
+    }
+
+    /// "+N more need you", naming up to three senders — no subject, so one
+    /// banner never lists several mails' contents.
+    static func moreSummary(for items: [FirewallItem]) -> PushBanner {
+        let senders = items.map { senderDisplayName($0.email?.from.map(decodeHTMLEntities)) }
+        return PushBanner(
+            identifier: PushNotifier.moreIdentifier(for: items.first?.id ?? ""),
+            title: L("push.moreSummary.title", items.count),
+            body: HeldBanners.formatSenders(senders))
     }
 }
 
@@ -340,14 +383,15 @@ final class PushAlerter {
         self.announce = announce
     }
 
-    /// Returns what was posted, for the harness.
+    /// Every item is announced; past the per-sync cap the rest share one
+    /// summary banner (`BannerBatch`). Returns what was posted, for the harness.
     @discardableResult
     func handleNewPush(_ items: [FirewallItem]) -> [PushBanner] {
         guard !items.isEmpty else { return [] }
         // WCAG 4.1.3 Status Messages: fires whatever the banner switch says.
         announce(Self.announcement(for: items))
         guard model.settings.notificationsEnabled else { return [] }
-        let banners = items.map(PushBanner.make(for:))
+        let banners = BannerBatch.banners(for: items)
         banners.forEach { model.pushNotifier.post($0) }
         return banners
     }
@@ -407,6 +451,10 @@ enum PushNotifier {
     /// The quiet-hours summary: the newest held item's id appended, so each
     /// summary is its own notification. Never parsed back into an item.
     nonisolated static let summaryPrefix = "klorn-held-"
+    /// The "+N more need you" summary of a burst (`BannerBatch`): the first
+    /// mail it counts appended, so each is its own notification. Never parsed
+    /// back into an item; a tap opens Today.
+    nonisolated static let morePrefix = "klorn-more-"
     /// Groups Klorn's banners into one stack in Notification Center.
     nonisolated static let threadIdentifier = "klorn-push"
 
@@ -423,6 +471,10 @@ enum PushNotifier {
 
     nonisolated static func summaryIdentifier(for itemID: String) -> String {
         summaryPrefix + itemID
+    }
+
+    nonisolated static func moreIdentifier(for itemID: String) -> String {
+        morePrefix + itemID
     }
 
     /// Recover the item id a banner was posted for. Returns nil for anything we
@@ -450,7 +502,7 @@ enum PushNotifier {
         if identifier.hasPrefix(meetingPrefix) {
             return .openMeeting(eventID: String(identifier.dropFirst(meetingPrefix.count)))
         }
-        if identifier.hasPrefix(summaryPrefix) { return .openToday }
+        if identifier.hasPrefix(summaryPrefix) || identifier.hasPrefix(morePrefix) { return .openToday }
         guard let id = itemID(fromNotificationIdentifier: identifier) else { return .ignore }
         return isKnownItem(id) ? .open(itemID: id) : .openApp
     }
@@ -468,7 +520,8 @@ enum NotificationTapAction: Equatable {
     case openApp
     /// A meeting banner: open the main window on Calendar.
     case openMeeting(eventID: String)
-    /// The quiet-hours summary: open the main window on Today, where the
-    /// PUSH mail it counts is listed (as the Windows summary opens Today).
+    /// A summary (held mail, or a burst's "+N more"): open the main window
+    /// on Today, where the mail it counts is listed (as the Windows summary
+    /// opens Today).
     case openToday
 }

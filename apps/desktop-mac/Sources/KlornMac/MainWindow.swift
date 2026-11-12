@@ -96,8 +96,10 @@ final class MainWindowController: NSObject, NSWindowDelegate, MainWindowPresenti
             // activate() is refused when not tied to the current input event).
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
-            // The user opened Klorn: now the banner permission may be asked
-            // (a login launch's unfocused window never gets here).
+            // The user opened Klorn: now the "Open at login" question may
+            // show (a login launch's unfocused window never gets here). The
+            // banner permission itself is asked at the first sync, whatever
+            // the launch mode; this only asks if that has not happened yet.
             model.windowShownByUser = true
             Task { await model.requestNotificationPermissionIfNeeded() }
         } else {

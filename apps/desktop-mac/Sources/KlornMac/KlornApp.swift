@@ -168,14 +168,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         model.onHeldSummary = { [weak alerter] items in alerter?.handleHeldSummary(items) }
         // Urgent mail that arrived while Klorn was quit: one summary too (N6).
         model.onClosedSummary = { [weak alerter] items in alerter?.handleHeldSummary(items, kind: .whileClosed) }
-        // The Dock badge: Today's "Needs you now" count (N4). Not an
-        // interrupt, so quiet hours leave it alone; the Settings switch hides it.
+        // Urgent mail held while the server's gate gave no answer: one summary.
+        model.onDelayedSummary = { [weak alerter] items in alerter?.handleHeldSummary(items, kind: .delayed) }
+        // The Dock badge: Today's "Needs you now" mail still unread (N4). Not
+        // an interrupt, so quiet hours leave it alone; the Settings switch hides it.
         let applyDockBadge = { [weak model] in
             guard let model else { return }
             NSApp.dockTile.badgeLabel = DockBadge.label(
-                count: model.needsYouNowCount, enabled: model.settings.showDockBadge)
+                count: model.dockBadgeCount, enabled: model.settings.showDockBadge)
         }
-        model.onNeedsYouNowChanged = { _ in applyDockBadge() }
+        model.onDockBadgeCountChanged = { _ in applyDockBadge() }
         model.settings.onDockBadgeChanged = { _ in applyDockBadge() }
         // Sign-out (and a rejected session, which signs out) drops the queue:
         // the count reports 0 and the badge goes.

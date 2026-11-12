@@ -8,8 +8,10 @@ import Foundation
 /// kinds). The Mac reads it right before posting a banner instead of
 /// re-deriving any of that locally.
 ///
-/// Every field is optional so an older server (no endpoint, or a body without
-/// `alerts`) decodes to "no verdict", which `ServerAlertGate` treats as allowed.
+/// Every field is optional: a server answer without a gate for a kind (an
+/// older body without `alerts`) gates nothing, and neither does a server
+/// without the endpoint (404, `noGate`). Only a read that got no answer —
+/// a network or server error, a timeout — is "no verdict" (`.unknown`).
 struct AlertStateWire: Decodable, Sendable, Equatable {
     struct Gate: Decodable, Sendable, Equatable {
         let allowed: Bool
@@ -29,6 +31,9 @@ struct AlertStateWire: Decodable, Sendable, Equatable {
     let alerts: Alerts?
 
     static let path = "/api/notifications/alert-state"
+    /// What a server without the endpoint (404: older than 2026-11-08, #1639)
+    /// answers in effect: it gates nothing.
+    static let noGate = AlertStateWire(alerts: nil)
 }
 
 /// Whether the server lets a banner of `kind` post now. Pure.
@@ -39,18 +44,22 @@ struct AlertStateWire: Decodable, Sendable, Equatable {
 ///   held — MEETING-lane mail, a meeting-soon banner, or any hold for another
 ///   reason (the category turned off) — is dropped: the ledger records it as
 ///   seen, and the mail stays in its lane in the main window.
-/// - No verdict (`state == nil` after a network or server error, a timeout,
-///   or an older server): the banner posts. Fail-open on purpose: a missed
-///   urgent mail is worse than a banner during quiet hours.
+/// - No verdict (`state == nil`: a network or server error, a timeout):
+///   nothing rings unverified (2026-11-12; it used to post — fail-open — so
+///   a slow read could ring through quiet hours). New PUSH mail is held like
+///   quiet-hours mail and comes back on the next pass the server answers
+///   (`HeldBanners`); new MEETING-lane mail is offered again on the next
+///   pass; a meeting reminder is offered again on the next tick until the
+///   meeting starts. No banner is lost to a failed read: the mail is in Today
+///   and Mail meanwhile, and the server's own Web Push and mobile pushes
+///   apply their gate independently.
+///   The Windows shell fails closed the same way (packages/api
+///   notify/desktop-alert.ts `desktopAlertTag`).
 enum ServerAlertGate {
-    /// How long the Mac waits for the verdict before posting anyway. Short:
-    /// the read sits inside the queue refresh, and a hung request must not
-    /// hold back the banner it was meant to gate.
+    /// How long the Mac waits for the verdict before treating it as no
+    /// answer. Short: the read sits inside the queue refresh, and a hung
+    /// request must not stall it.
     static let timeoutSeconds: TimeInterval = 4
-
-    static func allows(_ kind: InterruptKind, state: AlertStateWire?) -> Bool {
-        gate(kind, state: state)?.allowed ?? true
-    }
 
     /// The server's reason for a hold, for the log: one of the known values,
     /// anything else as "other". nil when allowed or unknown.
@@ -60,10 +69,22 @@ enum ServerAlertGate {
         return gate.reason.flatMap { known.contains($0) ? $0 : nil } ?? "other"
     }
 
-    /// The verdict for `kind`, as the quiet-hours catch-up (`HeldBanners`)
-    /// needs it. Pure.
+    /// The verdict for `kind`, given macOS's banner permission too: while
+    /// macOS has no answer (its prompt may be on screen), a banner posted now
+    /// is refused and lost, so an allowed banner waits as for no answer and
+    /// comes back once the user allows. Pure.
+    static func verdict(
+        _ kind: InterruptKind, state: AlertStateWire?, permission: NotificationPermission
+    ) -> AlertVerdict {
+        let server = verdict(kind, state: state)
+        return server == .allowed && permission == .notDetermined ? .unknown : server
+    }
+
+    /// The verdict for `kind`. No answer is `.unknown`; an answer with no
+    /// gate for `kind` gates nothing. Pure.
     static func verdict(_ kind: InterruptKind, state: AlertStateWire?) -> AlertVerdict {
-        guard let gate = gate(kind, state: state) else { return .unknown }
+        guard let state else { return .unknown }
+        guard let gate = gate(kind, state: state) else { return .allowed }
         if gate.allowed { return .allowed }
         return gate.reason == "quiet_hours" ? .quietHours : .refused  // wire-value
     }
@@ -83,7 +104,8 @@ enum AlertVerdict: Equatable, Sendable {
     case quietHours
     /// Held for any other reason (the category turned off): dropped.
     case refused
-    /// No answer (network or server error, a timeout, an older server): new
-    /// mail posts (fail-open); held mail waits for a real answer.
+    /// No answer (network or server error, a timeout): nothing posts. New
+    /// PUSH mail is held and, with mail already held, waits for a real
+    /// answer on the next pass.
     case unknown
 }

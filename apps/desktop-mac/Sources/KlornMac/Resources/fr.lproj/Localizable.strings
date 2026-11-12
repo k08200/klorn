@@ -139,6 +139,8 @@
 "push.announce.meeting" = "Nouveau courriel MEETING : %d";
 "push.heldSummary.title" = "%d e-mails urgents pendant les heures calmes";
 "push.closedSummary.title" = "%d e-mails urgents pendant que Klorn était fermé";
+"push.moreSummary.title" = "+%d autres ont besoin de vous";
+"push.delayedSummary.title" = "%d e-mails urgents ont besoin de vous";
 "prefs.launchAtLogin" = "Lancer Klorn à l'ouverture de session";
 "prefs.launchAtLogin.unavailable.label" = "Lancer à l'ouverture";
 "prefs.launchAtLogin.unavailable.value" = "Application packagée uniquement";

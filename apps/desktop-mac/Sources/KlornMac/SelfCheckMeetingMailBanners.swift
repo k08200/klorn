@@ -5,15 +5,17 @@ import Foundation
 // 1. MEETING-lane mail gets a banner. The server rings PUSH and MEETING mail
 //    alike on web, mobile and Windows (packages/api judge/email-firewall.ts
 //    `ringForFirewallEmail`); the Mac announced PUSH only, so a meeting invite
-//    was silent here alone. Same ledger: dedupe, the 5-per-sync cap and the
-//    silent first-sync baseline.
+//    was silent here alone. Same ledger: dedupe, the per-sync banner cap
+//    (one "+N more" summary past it since 2026-11-12) and the silent
+//    first-sync baseline.
 // 2. Banners follow the server's notification gate. Quiet hours and category
 //    opt-outs are evaluated on the server (notify/notification-prefs.ts) and
 //    read from GET /api/notifications/alert-state right before a banner posts.
 //    A held banner is dropped, as Web Push drops it (the mail stays in its
 //    lane) — except PUSH mail held by quiet hours, which since 2026-11-08 comes
-//    back as one catch-up (SelfCheckQuietHoursSummary.swift); a failed check
-//    posts anyway (fail-open: a missed urgent mail is the worse failure).
+//    back as one catch-up (SelfCheckQuietHoursSummary.swift). A failed check
+//    posted anyway until 2026-11-12; now nothing rings unverified and new
+//    PUSH mail waits for the next answer (SelfCheckNotificationDrops.swift).
 //
 // Network is the session stub (URLProtocol); nothing here posts a real banner.
 
@@ -95,6 +97,8 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     do {
         let failing = S.model([S.firewall: .init(body: lanes(push: ["p1"])),
                                alertState: .init(status: 500, body: #"{"error":"x"}"#)])
+        // A fixed clock: held mail must be inside the 72 h catch-up window.
+        failing.bannerClock = { ISO8601DateFormatter().date(from: "2026-11-07T09:00:00Z")! }
         var announced: [[String]] = []
         failing.onNewPush = { announced.append($0.map(\.id)) }
         await failing.loadQueue()
@@ -103,8 +107,9 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         Stub.set(alertState, .init(cancelled: true))
         Stub.set(S.firewall, .init(body: lanes(push: ["p1", "p2"], meeting: ["m1"])))
         await failing.loadQueue()
-        check("fail-open: a server error or no answer from alert-state still posts the banner",
-              announced == [["p2"], ["m1"]] && Stub.calls(alertState).count == 2)
+        check("fail closed: a server error or no answer from alert-state posts nothing, PUSH or MEETING",
+              announced.isEmpty && Stub.calls(alertState).count == 2
+              && failing.pushLedgerStore.load()?.heldIDs == ["p2"])
         failing.signOut()
     }
 
@@ -122,8 +127,8 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           settled.plan(pushItems: [push("x")], meetingItems: [meeting("x")]).toNotify.map(\.id) == ["x"])
     let both = settled.plan(pushItems: (1...4).map { push("p\($0)") },
                             meetingItems: (1...4).map { meeting("m\($0)") })
-    check("PUSH and MEETING share the \(PushLedger.maxBannersPerSync)-per-sync cap, PUSH first; the rest are recorded",
-          both.toNotify.map(\.id) == ["p1", "p2", "p3", "p4", "m1"]
+    check("PUSH and MEETING are planned together, PUSH first, and all recorded (BannerBatch applies the cap)",
+          both.toNotify.map(\.id) == ["p1", "p2", "p3", "p4", "m1", "m2", "m3", "m4"]
           && ["p4", "m4"].allSatisfy { both.next.notified.contains($0) })
     // A ledger saved by a build that bannered PUSH only: its baseline covers
     // PUSH, so the MEETING lane already sitting there must not burst on update.
@@ -177,12 +182,12 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("alert-state decodes, reason included",
           quietWire?.alerts?.push?.allowed == false && quietWire?.alerts?.push?.reason == "quiet_hours")
     check("mail banners follow the server's push verdict; meeting-soon banners its meeting verdict",
-          !ServerAlertGate.allows(.emailUrgent, state: quietWire)
-          && ServerAlertGate.allows(.meeting, state: quietWire))
-    check("fail-open: no answer, or an older server without the field, posts",
-          ServerAlertGate.allows(.emailUrgent, state: nil)
-          && ServerAlertGate.allows(.meeting, state: wire("{}"))
-          && ServerAlertGate.allows(.emailUrgent, state: wire(#"{"alerts":{}}"#)))
+          ServerAlertGate.verdict(.emailUrgent, state: quietWire) == .quietHours
+          && ServerAlertGate.verdict(.meeting, state: quietWire) == .allowed)
+    check("no answer is no verdict; an older server without the field gates nothing",
+          ServerAlertGate.verdict(.emailUrgent, state: nil) == .unknown
+          && ServerAlertGate.verdict(.meeting, state: wire("{}")) == .allowed
+          && ServerAlertGate.verdict(.emailUrgent, state: wire(#"{"alerts":{}}"#)) == .allowed)
 
     // MARK: meeting-soon banners (calendar) — same server gate
     let soonNow = ISO8601DateFormatter().date(from: "2026-11-07T09:02:00Z")!
@@ -219,7 +224,8 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         var shown: [String] = []
         down.onMeetingSoon = { shown.append($0.id); return true }
         await down.announceMeetingSoon(upcoming: [standup], now: soonNow, session: down.sessionGeneration)
-        check("fail-open: a meeting-soon banner posts when alert-state fails", shown == ["ev-1"])
+        check("fail closed: a meeting-soon banner does not post when alert-state fails, and is not recorded",
+              shown.isEmpty && down.meetingAlertStore.load() == nil)
         down.signOut()
     }
     do {
@@ -297,18 +303,17 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     do {
         let hung = S.model([S.firewall: .init(body: lanes(push: ["p1"]))], hold: [alertState])
         hung.alertStateTimeout = 0.3
+        hung.bannerClock = { ISO8601DateFormatter().date(from: "2026-11-07T09:00:00Z")! }
         var announced: [[String]] = []
         hung.onNewPush = { announced.append($0.map(\.id)) }
         await hung.loadQueue()
         Stub.set(S.firewall, .init(body: lanes(push: ["p1", "p2"])))
         let started = Date()
-        let sync = Task { await hung.loadQueue() }
-        let posted = await S.waitUntil { !announced.isEmpty }
+        await hung.loadQueue()
         let elapsed = Date().timeIntervalSince(started)
         Stub.release(alertState)
-        await sync.value
-        check("a hung gate read times out and posts (fail-open), not after URLSession's 60 s",
-              posted && announced == [["p2"]] && elapsed < 5
+        check("a hung gate read times out (not after URLSession's 60 s) and holds the mail",
+              announced.isEmpty && hung.pushLedgerStore.load()?.heldIDs == ["p2"] && elapsed < 5
               && ServerAlertGate.timeoutSeconds <= 5 && hung.alertStateTimeout == 0.3)
         hung.signOut()
     }
