@@ -98,7 +98,12 @@ export async function diagnosticsRoutes(app: FastifyInstance) {
     });
 
     const pushAttempts = await prisma.pushDeliveryLog.findMany({
-      where: { userId, category: "daily_briefing", createdAt: { gte: sevenDaysAgo } },
+      where: {
+        userId,
+        channel: "web",
+        category: "daily_briefing",
+        createdAt: { gte: sevenDaysAgo },
+      },
       select: { id: true, status: true, skipReason: true, createdAt: true, clickedAt: true },
       orderBy: { createdAt: "desc" },
       take: 5,

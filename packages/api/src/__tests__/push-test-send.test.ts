@@ -91,14 +91,18 @@ describe("sendTestPushToSubscription", () => {
 
   it("delivers despite quiet hours, muted categories, the noise policy and push buckets", async () => {
     const result = await sendTestPushToSubscription("user-1", "sub-1", COPY);
-    expect(result).toEqual({ status: "sent", delivered: true });
+    expect(result).toEqual({ status: "sent", delivered: true, deliveryId: "delivery-id" });
     expect(mocks.webPushSend).toHaveBeenCalledTimes(1);
     expect(mocks.gate).not.toHaveBeenCalled();
     expect(mocks.policy).not.toHaveBeenCalled();
     expect(mocks.rate).not.toHaveBeenCalled();
     const body = JSON.parse(mocks.webPushSend.mock.calls[0][1] as string);
     expect(body).toMatchObject(COPY);
-    expect(mocks.markPushAccepted).toHaveBeenCalledWith("delivery-id");
+    expect(mocks.markPushAccepted).toHaveBeenCalledWith(
+      "delivery-id",
+      expect.any(Date),
+      expect.any(Date),
+    );
   });
 
   it("logs the attempt against that subscription so its receipt counts", async () => {
@@ -132,6 +136,7 @@ describe("sendTestPushToSubscription", () => {
     expect(await sendTestPushToSubscription("user-1", "sub-1", COPY)).toEqual({
       status: "sent",
       delivered: false,
+      deliveryId: "delivery-id",
     });
     expect(mocks.remove).toHaveBeenCalledWith({ where: { id: "sub-1" } });
   });

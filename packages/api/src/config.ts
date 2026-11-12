@@ -599,6 +599,20 @@ export function keyboardTriageEnabled(): boolean {
 export function mailV2Enabled(): boolean {
   return ["true", "1", "yes", "on"].includes((process.env.MAIL_V2 ?? "").trim().toLowerCase());
 }
+// Zombie web-push eviction — OFF by default (repo doctrine). A subscription the
+// push service keeps accepting for, with no service-worker receipt over a long
+// run (notify/push-zombie.ts), is ALWAYS flagged `needsResubscribeAt` and the
+// web app offers to turn alerts back on. While OFF, pushes to it continue
+// (exactly as before); ON stops them, and "Send test" still reaches it so a
+// receipt can clear the flag. Read at request time, so a flip needs no redeploy.
+// Before flipping: with it ON, a user whose only subscription is flagged gets a
+// SKIPPED row instead of an unreceipted ACCEPTED one, so phone escalation
+// (PHONE_ESCALATION_ENABLED) no longer dials for their PUSH mail.
+export function pushZombieEvictionEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.PUSH_ZOMBIE_EVICTION ?? "").trim().toLowerCase(),
+  );
+}
 // Unified home (productization plan P6/P7) — OFF by default (repo doctrine).
 // ONE flag for both halves: the web client learns it from GET /api/auth/me and
 // the login/register responses (`user.unifiedHome`) and makes Today (`/today`)

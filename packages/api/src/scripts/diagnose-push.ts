@@ -97,7 +97,7 @@ async function main() {
   // 9. Push delivery receipts (last 24h)
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const deliveryLogs = await prisma.pushDeliveryLog.findMany({
-    where: { userId, createdAt: { gte: since } },
+    where: { userId, channel: "web", createdAt: { gte: since } },
     orderBy: { createdAt: "desc" },
     take: 50,
     select: {
