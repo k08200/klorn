@@ -94,6 +94,7 @@ import {
   normalizeTriagePriorities,
 } from "../mail/triage-priorities.js";
 import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
+import { noteEmailBellRowsRead } from "../notify/email-bell.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { createTask } from "../pim/tasks.js";
@@ -1374,12 +1375,14 @@ export async function emailRoutes(app: FastifyInstance) {
     });
 
     if (dbEmail) {
-      // Reading a mail changes nothing the user sees. Mark-as-read is explicit
-      // — many users rely on unread as a work queue — so it lives on
-      // PATCH /:id/read, never on this GET (link prefetchers fetch GETs). The
-      // one write here is the OPENED ledger stamp below: internal bookkeeping,
-      // reachable only with the user's Bearer token. A caller that fetches for
-      // another reason must pass ?purpose= so it isn't counted as an open.
+      // Reading a mail never changes the mail's own read state. Mark-as-read
+      // is explicit — many users rely on unread as a work queue — so it lives
+      // on PATCH /:id/read, never on this GET (link prefetchers fetch GETs).
+      // An open writes two things below, both reachable only with the user's
+      // Bearer token: the OPENED ledger stamp (internal bookkeeping) and the
+      // read flag of the user's bell rows about this mail — the alert has been
+      // answered once the mail is on screen. A caller that fetches for another
+      // reason must pass ?purpose= so it isn't counted as an open.
       const actionItems = parseJsonArray(dbEmail.actionItems);
       const attachments = await listEmailAttachments([dbEmail.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
@@ -1474,8 +1477,12 @@ export async function emailRoutes(app: FastifyInstance) {
         candidateIntake,
       };
       // Stamped only once the reply body is built, so a failure above never
-      // leaves an OPENED for a mail the user didn't get to see.
-      if (purpose === undefined) noteEmailOutcome(uid, dbEmail.id, "OPENED");
+      // leaves an OPENED (or a read bell row) for a mail the user didn't get
+      // to see.
+      if (purpose === undefined) {
+        noteEmailOutcome(uid, dbEmail.id, "OPENED");
+        noteEmailBellRowsRead(uid, dbEmail);
+      }
       return detail;
     }
 
