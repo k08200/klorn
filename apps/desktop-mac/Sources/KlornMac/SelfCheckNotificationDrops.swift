@@ -196,6 +196,30 @@ func notificationDropsSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         }
         check("once the user decided (allowed or denied) Klorn never asks again", neverAsked)
     }
+    do {
+        // A permission read still waiting when the user signs out must not
+        // spend the next session's Open-at-login offer.
+        final class Parked {
+            var continuation: CheckedContinuation<Void, Never>?
+        }
+        let (model, fake, _) = permissionModel(.authorized)
+        let parked = Parked()
+        fake.beforeAnswer = { await withCheckedContinuation { parked.continuation = $0 } }
+        model.windowShownByUser = true
+        let stale = Task { await model.requestNotificationPermissionIfNeeded() }
+        let waiting = await S.waitUntil { parked.continuation != nil }
+        model.signOut()
+        fake.beforeAnswer = nil
+        parked.continuation?.resume()
+        parked.continuation = nil
+        await stale.value
+        let quietWhileOut = !model.showLoginItemPrompt
+        model.beginSessionForCheck(token: "token-B")
+        await model.requestNotificationPermissionIfNeeded()
+        check("a permission read that outlives its session leaves the next session's Open-at-login offer alone",
+              waiting && quietWhileOut && model.showLoginItemPrompt)
+        model.signOut()
+    }
     check("the first sync is what asks: ensureActive, not only an activated window",
           text("AppModel.swift").contains("Task { await requestNotificationPermissionIfNeeded() }")
           && !text("Notifications.swift").contains("shownByUser"))

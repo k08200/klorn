@@ -26,7 +26,13 @@ final class FakePushNotifier: PushNotifying {
         if let requestAnswer { permissionAnswer = requestAnswer }
         return permissionAnswer
     }
-    func permission() async -> NotificationPermission { permissionAnswer }
+    /// Awaited before `permission()` answers: lets a check hold the read
+    /// open across a sign-out.
+    var beforeAnswer: (@MainActor () async -> Void)?
+    func permission() async -> NotificationPermission {
+        if let beforeAnswer { await beforeAnswer() }
+        return permissionAnswer
+    }
     func post(_ banner: PushBanner) { posted.append(banner) }
     func clearAll() { clearCount += 1 }
 }

@@ -1065,6 +1065,11 @@ final class AppModel {
         stopPolling()
         realtime?.stop()
         realtime = nil
+        // The permission record and the Open-at-login offer are per session,
+        // also when another account signs in over a live one.
+        didRequestNotifyAuth = false
+        permissionAnswers = nil
+        didOfferLoginItem = false
         // Whatever still showed the previous account outside the model.
         onSessionEnded?()
         phase = .signedIn
@@ -3104,18 +3109,22 @@ final class AppModel {
         guard phase == .signedIn else { return }
         if !didRequestNotifyAuth {
             didRequestNotifyAuth = true
-            // macOS's answer is per Mac, not per account: kept even if the
-            // session changed during the wait.
+            let session = sessionGeneration
             let before = await pushNotifier.permission()
             var after = before
-            if NotificationPermissionRules.shouldRequest(
+            if isCurrent(session), NotificationPermissionRules.shouldRequest(
                 signedIn: phase == .signedIn, alreadyRequested: false, status: before) {
                 after = await pushNotifier.requestAuthorization()
             }
+            // macOS's answer is per Mac: kept whatever the session.
             notificationPermission = after
+            // This session's record is not: a call that outlived its session
+            // leaves the next one's alone (sign-out and sign-in reset it).
+            guard isCurrent(session) else { return }
             permissionAnswers = (before, after)
         }
-        guard windowShownByUser, !didOfferLoginItem, let answers = permissionAnswers else { return }
+        guard phase == .signedIn, windowShownByUser, !didOfferLoginItem, let answers = permissionAnswers
+        else { return }
         didOfferLoginItem = true
         offerLoginItemIfNeeded(before: answers.before, after: answers.after)
     }
