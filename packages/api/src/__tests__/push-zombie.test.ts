@@ -95,6 +95,23 @@ describe("evaluateZombieSubscription", () => {
     expect(where.createdAt.gt).toEqual(new Date(0));
   });
 
+  it("never counts pushes from before the endpoint last changed", async () => {
+    const since = new Date(NOW - 10 * DAY);
+    await evaluateZombieSubscription("sub-1", new Date(NOW), since);
+    expect(mocks.logAggregate.mock.calls[0][0].where.createdAt.gt).toEqual(since);
+  });
+
+  it("undoes the flag when a receipt landed while it was being set", async () => {
+    mocks.logFindFirst
+      .mockResolvedValueOnce({ createdAt: new Date(NOW - 30 * DAY) })
+      .mockResolvedValueOnce({ createdAt: new Date(NOW - 1000) });
+    expect(await evaluateZombieSubscription("sub-1", new Date(NOW))).toBe(false);
+    expect(mocks.subUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "sub-1", needsResubscribeAt: { not: null } },
+      data: { needsResubscribeAt: null },
+    });
+  });
+
   it("flags the subscription once, keeping an earlier flag's time", async () => {
     expect(await evaluateZombieSubscription("sub-1", new Date(NOW))).toBe(true);
     expect(mocks.subUpdateMany).toHaveBeenCalledWith({

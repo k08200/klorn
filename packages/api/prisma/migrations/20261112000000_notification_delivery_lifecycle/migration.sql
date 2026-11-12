@@ -8,7 +8,8 @@
 --   actionedAt  an action button (Reply / Later) was used; action names it
 --   dedupeKey   idempotency for rows a client reports (desktop receipts)
 -- PushSubscription.needsResubscribeAt flags a zombie web-push subscription
--- (src/notify/push-zombie.ts).
+-- (src/notify/push-zombie.ts); endpointSince restarts its run when the
+-- endpoint changes.
 --
 -- EXPAND ONLY. Nullable columns add without a table rewrite, and so does
 -- "channel": a constant default is metadata-only since Postgres 11. The
@@ -31,4 +32,5 @@ ADD COLUMN "dedupeKey" TEXT;
 
 CREATE UNIQUE INDEX "PushDeliveryLog_dedupeKey_key" ON "PushDeliveryLog"("dedupeKey");
 
-ALTER TABLE "PushSubscription" ADD COLUMN "needsResubscribeAt" TIMESTAMP(3);
+ALTER TABLE "PushSubscription" ADD COLUMN "needsResubscribeAt" TIMESTAMP(3),
+ADD COLUMN "endpointSince" TIMESTAMP(3);

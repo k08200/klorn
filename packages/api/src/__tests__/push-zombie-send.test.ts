@@ -125,7 +125,15 @@ describe("web push lifecycle", () => {
   it("re-evaluates the zombie run after an accepted push when receipts are wired", async () => {
     const { sendPushNotification } = await loadPush("https://api.example.com");
     await sendPushNotification("user-1", PAYLOAD, "email_urgent");
-    expect(mocks.evaluateZombieSubscription).toHaveBeenCalledWith("sub-1");
+    expect(mocks.evaluateZombieSubscription).toHaveBeenCalledWith("sub-1", expect.any(Date), null);
+  });
+
+  it("passes when the endpoint last changed, so the run restarts from there", async () => {
+    const since = new Date("2026-11-01T00:00:00Z");
+    mocks.subFindMany.mockResolvedValue([{ ...sub("sub-1"), endpointSince: since }]);
+    const { sendPushNotification } = await loadPush("https://api.example.com");
+    await sendPushNotification("user-1", PAYLOAD, "email_urgent");
+    expect(mocks.evaluateZombieSubscription.mock.calls[0][2]).toEqual(since);
   });
 
   it("never evaluates without a receipt URL: every subscription would look dead", async () => {

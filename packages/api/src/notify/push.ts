@@ -112,6 +112,7 @@ interface PushSubscriptionRow {
   origin: string | null;
   failureCount: number;
   needsResubscribeAt?: Date | null;
+  endpointSince?: Date | null;
 }
 
 export interface PushSendOptions {
@@ -515,7 +516,7 @@ async function deliverToSubscription(
         data: { failureCount: 0, lastFailedAt: null },
       });
     }
-    await checkZombie(sub.id);
+    await checkZombie(sub.id, sub.endpointSince ?? null);
     return { attempted: true, delivered: true, deliveryId };
   }
 
@@ -558,10 +559,10 @@ async function deliverToSubscription(
  * carry a receipt URL — without one no receipt can ever arrive, and every
  * subscription would be flagged. Never fails the push.
  */
-async function checkZombie(subscriptionId: string): Promise<void> {
+async function checkZombie(subscriptionId: string, endpointSince: Date | null): Promise<void> {
   if (!PUSH_RECEIPT_BASE_URL) return;
   try {
-    await evaluateZombieSubscription(subscriptionId);
+    await evaluateZombieSubscription(subscriptionId, new Date(), endpointSince);
   } catch (err) {
     console.warn(`[PUSH] Zombie check failed for subscription ${subscriptionId}:`, err);
   }

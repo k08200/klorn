@@ -1247,6 +1247,11 @@ model PushSubscription {
   // replaces the endpoint; any receipt clears it. With PUSH_ZOMBIE_EVICTION on,
   // sends to a flagged row stop. NULL = not flagged.
   needsResubscribeAt DateTime?
+  // When this row's endpoint last changed (a rotation, or a deliberate
+  // re-subscribe from the web app). The zombie run counts only pushes after it:
+  // the old endpoint's silence is not evidence against the new one. NULL =
+  // since createdAt.
+  endpointSince      DateTime?
 
   @@index([userId])
   @@index([userId, deviceId])

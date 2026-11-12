@@ -605,6 +605,9 @@ export function mailV2Enabled(): boolean {
 // web app offers to turn alerts back on. While OFF, pushes to it continue
 // (exactly as before); ON stops them, and "Send test" still reaches it so a
 // receipt can clear the flag. Read at request time, so a flip needs no redeploy.
+// Before flipping: with it ON, a user whose only subscription is flagged gets a
+// SKIPPED row instead of an unreceipted ACCEPTED one, so phone escalation
+// (PHONE_ESCALATION_ENABLED) no longer dials for their PUSH mail.
 export function pushZombieEvictionEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.PUSH_ZOMBIE_EVICTION ?? "").trim().toLowerCase(),

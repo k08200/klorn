@@ -71,6 +71,7 @@ vi.mock("../db.js", () => ({
           return { count: 1 };
         },
       ),
+      groupBy: vi.fn(async () => []),
       findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
         const row = store.logs.find((log) => log.id === where.id);
         return row ? { subscriptionId: row.subscriptionId } : null;

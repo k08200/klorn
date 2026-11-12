@@ -191,8 +191,9 @@ describe("recordDesktopReceipt", () => {
       id: ID,
       now: NOW,
     });
+    // A linked calendar's event counts only while its sync is on (C2).
     expect(mocks.eventFindFirst).toHaveBeenCalledWith({
-      where: { id: ID, userId: "user-1" },
+      where: expect.objectContaining({ id: ID, userId: "user-1", sourceAccountId: null }),
       select: { id: true },
     });
   });
@@ -212,7 +213,7 @@ describe("recordDesktopReceipt", () => {
         {
           userId: "user-1",
           channel: "desktop_windows",
-          dedupeKey: `desktop:windows:notification:${ID}`,
+          dedupeKey: `desktop:user-1:windows:notification:${ID}`,
           notificationId: ID,
           category: "desktop_banner",
           title: "",
@@ -237,7 +238,7 @@ describe("recordDesktopReceipt", () => {
     });
     expect(mocks.createMany.mock.calls[0][0].data[0]).toMatchObject({
       channel: "desktop_mac",
-      dedupeKey: `desktop:mac:attention_item:${ID}`,
+      dedupeKey: `desktop:user-1:mac:attention_item:${ID}`,
       notificationId: null,
     });
   });
@@ -253,7 +254,11 @@ describe("recordDesktopReceipt", () => {
     });
     expect(mocks.updateMany).toHaveBeenCalledTimes(1);
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { dedupeKey: `desktop:mac:notification:${ID}`, userId: "user-1", receivedAt: null },
+      where: {
+        dedupeKey: `desktop:user-1:mac:notification:${ID}`,
+        userId: "user-1",
+        receivedAt: null,
+      },
       data: { receivedAt: NOW },
     });
   });

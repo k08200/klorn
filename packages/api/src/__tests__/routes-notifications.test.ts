@@ -138,6 +138,8 @@ async function buildApp() {
   return app;
 }
 
+const DELIVERY_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+
 describe("GET /api/notifications/desktop-catchup (decision N6)", () => {
   it("needs a session", async () => {
     const app = await buildApp();
@@ -249,7 +251,7 @@ describe("notification routes", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/api/notifications/push/receipts/delivery-1",
+      url: `/api/notifications/push/receipts/${DELIVERY_ID}`,
       payload: { event: "received" },
     });
     expect(res.statusCode).toBe(204);
@@ -261,12 +263,12 @@ describe("notification routes", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/api/notifications/push/receipts/delivery-1",
+      url: `/api/notifications/push/receipts/${DELIVERY_ID}`,
       payload: { event: "actioned", action: "later" },
     });
     expect(res.statusCode).toBe(204);
     expect(recordPushReceipt).toHaveBeenCalledWith(
-      "delivery-1",
+      DELIVERY_ID,
       "actioned",
       expect.any(Date),
       "later",
@@ -283,7 +285,7 @@ describe("notification routes", () => {
     ]) {
       const res = await app.inject({
         method: "POST",
-        url: "/api/notifications/push/receipts/delivery-1",
+        url: `/api/notifications/push/receipts/${DELIVERY_ID}`,
         payload,
       });
       expect(res.statusCode).toBe(400);
@@ -291,11 +293,25 @@ describe("notification routes", () => {
     await app.close();
   });
 
+  it("rejects a delivery id that is not a uuid before touching the database", async () => {
+    const { recordPushReceipt } = await import("../notify/push-delivery.js");
+    vi.mocked(recordPushReceipt).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/receipts/not-a-delivery",
+      payload: { event: "received" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(recordPushReceipt).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("rejects invalid push receipt events", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/api/notifications/push/receipts/delivery-1",
+      url: `/api/notifications/push/receipts/${DELIVERY_ID}`,
       payload: { event: "opened" },
     });
     expect(res.statusCode).toBe(400);
@@ -339,6 +355,36 @@ describe("notification routes", () => {
     expect(arg.create).toMatchObject({ browser: "chrome", os: "android" });
     expect(arg.update).toMatchObject({ browser: "chrome", os: "android" });
     expect(JSON.stringify(arg)).not.toContain("Pixel 8");
+    await app.close();
+  });
+
+  it("restarts the zombie run only on a deliberate re-subscribe, never a routine re-register", async () => {
+    const { prisma } = await import("../db.js");
+    const app = await buildApp();
+    const subscribe = (extra: Record<string, unknown>) =>
+      app.inject({
+        method: "POST",
+        url: "/api/notifications/push/subscribe",
+        headers: auth(),
+        payload: {
+          endpoint: "https://fcm.googleapis.com/fcm/send/same-endpoint",
+          keys: { p256dh: "key1", auth: "key2" },
+          origin: "https://app.klorn.ai",
+          ...extra,
+        },
+      });
+
+    vi.mocked(prisma.pushSubscription.upsert).mockClear();
+    expect((await subscribe({})).statusCode).toBe(201);
+    const routine = vi.mocked(prisma.pushSubscription.upsert).mock.calls[0][0].update;
+    expect(routine).not.toHaveProperty("needsResubscribeAt");
+    expect(routine).not.toHaveProperty("endpointSince");
+
+    vi.mocked(prisma.pushSubscription.upsert).mockClear();
+    expect((await subscribe({ resubscribed: true })).statusCode).toBe(201);
+    const deliberate = vi.mocked(prisma.pushSubscription.upsert).mock.calls[0][0].update;
+    expect(deliberate).toMatchObject({ needsResubscribeAt: null, failureCount: 0 });
+    expect(deliberate.endpointSince).toBeInstanceOf(Date);
     await app.close();
   });
 

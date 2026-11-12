@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(async () => ({ count: 1 })),
   findFirst: vi.fn(),
   findMany: vi.fn(async () => []),
+  groupBy: vi.fn(async () => []),
   clearZombieFlag: vi.fn(async () => {}),
 }));
 
@@ -19,6 +20,7 @@ vi.mock("../db.js", () => ({
       updateMany: mocks.updateMany,
       findFirst: mocks.findFirst,
       findMany: mocks.findMany,
+      groupBy: mocks.groupBy,
     },
   },
 }));
@@ -102,39 +104,57 @@ describe("recordPushReceipt", () => {
 });
 
 describe("getPushDeliveryStats", () => {
-  it("keeps the web push rates web-only and breaks every channel out by stage", async () => {
+  it("keeps the web push rates and recent list web-only and breaks every channel out by stage", async () => {
     const at = new Date("2026-11-11T12:00:00Z");
     const base = {
       subscriptionId: null,
+      channel: "web",
       category: "email_urgent",
       title: "t",
       skipReason: null,
       endpointHost: null,
       errorStatusCode: null,
       queuedAt: at,
+      acceptedAt: at,
       receivedAt: null,
       clickedAt: null,
       actionedAt: null,
       action: null,
       createdAt: at,
+      status: "ACCEPTED",
     };
     mocks.findMany.mockResolvedValue([
-      { ...base, id: "w1", channel: "web", status: "ACCEPTED", acceptedAt: at, receivedAt: at },
-      { ...base, id: "w2", channel: "web", status: "ACCEPTED", acceptedAt: at },
-      { ...base, id: "f1", channel: "fcm", status: "ACCEPTED", acceptedAt: at },
+      { ...base, id: "w1", receivedAt: at },
+      { ...base, id: "w2" },
+    ]);
+    const count = (all: number, c: Partial<Record<string, number>> = {}) => ({
+      _all: all,
+      acceptedAt: 0,
+      receivedAt: 0,
+      clickedAt: 0,
+      actionedAt: 0,
+      ...c,
+    });
+    mocks.groupBy.mockResolvedValue([
+      { channel: "web", status: "ACCEPTED", _count: count(2, { acceptedAt: 2, receivedAt: 1 }) },
+      { channel: "fcm", status: "ACCEPTED", _count: count(1, { acceptedAt: 1 }) },
+      { channel: "fcm", status: "FAILED", _count: count(2) },
       {
-        ...base,
-        id: "m1",
         channel: "desktop_mac",
         status: "REPORTED",
-        queuedAt: null,
-        acceptedAt: null,
-        receivedAt: at,
-        clickedAt: at,
+        _count: count(1, { receivedAt: 1, clickedAt: 1 }),
       },
     ]);
     const stats = await getPushDeliveryStats("user-1", { now: Date.parse("2026-11-12T00:00:00Z") });
+    expect(mocks.findMany.mock.calls[0][0].where).toMatchObject({
+      userId: "user-1",
+      channel: "web",
+    });
+    expect(mocks.groupBy.mock.calls[0][0].where).toMatchObject({ userId: "user-1" });
+    expect(mocks.groupBy.mock.calls[0][0].where).not.toHaveProperty("channel");
     expect(stats).toMatchObject({ total: 2, accepted: 2, received: 1, receiptRate: 0.5 });
+    expect(stats.recent.map((r) => r.id)).toEqual(["w1", "w2"]);
+    expect(stats.recent[0]).toMatchObject({ channel: "web", state: "device_received" });
     expect(stats.channels.web).toEqual({
       total: 2,
       sent: 2,
@@ -144,16 +164,12 @@ describe("getPushDeliveryStats", () => {
       opened: 0,
       actioned: 0,
     });
-    expect(stats.channels.fcm).toMatchObject({ total: 1, sent: 1, deviceReceived: 0 });
+    expect(stats.channels.fcm).toMatchObject({ total: 3, sent: 1, failed: 2, deviceReceived: 0 });
     expect(stats.channels.desktop_mac).toMatchObject({
       total: 1,
       sent: 0,
       deviceReceived: 1,
       opened: 1,
-    });
-    expect(stats.recent.find((r) => r.id === "m1")).toMatchObject({
-      channel: "desktop_mac",
-      state: "opened",
     });
   });
 });

@@ -48,8 +48,9 @@ export interface ChannelStageCounts {
 }
 
 /**
- * The top-level counts and rates are web push only, as they always were
- * (receiptRate is a service-worker rate); `channels` breaks every channel out.
+ * The top-level counts, rates and `recent` are web push only, as they always
+ * were (receiptRate is a service-worker rate); `channels` breaks every channel
+ * out by stage.
  */
 export interface PushDeliveryStats {
   since: string;
@@ -252,22 +253,29 @@ export async function getPushDeliveryStats(
   const hours = normalizeHours(opts.hours);
   const limit = normalizeLimit(opts.limit);
   const since = new Date((opts.now ?? Date.now()) - hours * 60 * 60 * 1000);
-  const rows = (await prisma.pushDeliveryLog.findMany({
-    where: { userId, createdAt: { gte: since } },
-    orderBy: { createdAt: "desc" },
-    take: Math.max(limit, 500),
-  })) as PushDeliveryLogRow[];
+  const [rows, groups] = await Promise.all([
+    prisma.pushDeliveryLog.findMany({
+      where: { userId, channel: "web", createdAt: { gte: since } },
+      orderBy: { createdAt: "desc" },
+      take: Math.max(limit, 500),
+    }) as Promise<PushDeliveryLogRow[]>,
+    prisma.pushDeliveryLog.groupBy({
+      by: ["channel", "status"],
+      where: { userId, createdAt: { gte: since } },
+      // _count of a column counts its non-null values: the rows that reached it.
+      _count: { _all: true, acceptedAt: true, receivedAt: true, clickedAt: true, actionedAt: true },
+    }),
+  ]);
 
-  const web = rows.filter((row) => channelOf(row) === "web");
-  const accepted = web.filter((row) => row.status === "ACCEPTED").length;
-  const failed = web.filter((row) => row.status === "FAILED").length;
-  const skipped = web.filter((row) => row.status === "SKIPPED").length;
-  const received = web.filter((row) => row.receivedAt).length;
-  const clicked = web.filter((row) => row.clickedAt).length;
+  const accepted = rows.filter((row) => row.status === "ACCEPTED").length;
+  const failed = rows.filter((row) => row.status === "FAILED").length;
+  const skipped = rows.filter((row) => row.status === "SKIPPED").length;
+  const received = rows.filter((row) => row.receivedAt).length;
+  const clicked = rows.filter((row) => row.clickedAt).length;
 
   return {
     since: since.toISOString(),
-    total: web.length,
+    total: rows.length,
     accepted,
     failed,
     skipped,
@@ -275,7 +283,7 @@ export async function getPushDeliveryStats(
     clicked,
     receiptRate: accepted > 0 ? roundRate(received / accepted) : null,
     clickRate: accepted > 0 ? roundRate(clicked / accepted) : null,
-    channels: countByChannel(rows),
+    channels: countByChannel(groups),
     recent: rows.slice(0, limit).map(toDTO),
   };
 }
@@ -284,21 +292,42 @@ function channelOf(row: PushDeliveryLogRow): string {
   return row.channel ?? "web";
 }
 
+interface ChannelStatusGroup {
+  channel: string;
+  status: string;
+  _count: {
+    _all: number;
+    acceptedAt: number;
+    receivedAt: number;
+    clickedAt: number;
+    actionedAt: number;
+  };
+}
+
 function countByChannel(
-  rows: PushDeliveryLogRow[],
+  groups: ChannelStatusGroup[],
 ): Partial<Record<DeliveryChannel, ChannelStageCounts>> {
   const out: Partial<Record<DeliveryChannel, ChannelStageCounts>> = {};
-  for (const channel of DELIVERY_CHANNELS) {
-    const mine = rows.filter((row) => channelOf(row) === channel);
-    if (mine.length === 0) continue;
+  for (const g of groups) {
+    if (!(DELIVERY_CHANNELS as readonly string[]).includes(g.channel)) continue;
+    const channel = g.channel as DeliveryChannel;
+    const prev = out[channel] ?? {
+      total: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      deviceReceived: 0,
+      opened: 0,
+      actioned: 0,
+    };
     out[channel] = {
-      total: mine.length,
-      sent: mine.filter((row) => row.acceptedAt).length,
-      failed: mine.filter((row) => row.status === "FAILED").length,
-      skipped: mine.filter((row) => row.status === "SKIPPED").length,
-      deviceReceived: mine.filter((row) => row.receivedAt).length,
-      opened: mine.filter((row) => row.clickedAt).length,
-      actioned: mine.filter((row) => row.actionedAt).length,
+      total: prev.total + g._count._all,
+      sent: prev.sent + g._count.acceptedAt,
+      failed: prev.failed + (g.status === "FAILED" ? g._count._all : 0),
+      skipped: prev.skipped + (g.status === "SKIPPED" ? g._count._all : 0),
+      deviceReceived: prev.deviceReceived + g._count.receivedAt,
+      opened: prev.opened + g._count.clickedAt,
+      actioned: prev.actioned + g._count.actionedAt,
     };
   }
   return out;

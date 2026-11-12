@@ -52,16 +52,12 @@ export function isZombieRun(input: {
 export async function evaluateZombieSubscription(
   subscriptionId: string,
   now: Date = new Date(),
+  endpointSince: Date | null = null,
 ): Promise<boolean> {
-  const lastReceipted = await prisma.pushDeliveryLog.findFirst({
-    where: {
-      subscriptionId,
-      channel: "web",
-      OR: [{ receivedAt: { not: null } }, { clickedAt: { not: null } }],
-    },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
+  const lastReceipted = await lastReceiptedAt(subscriptionId);
+  // The run starts after the last receipt, and never before the endpoint's
+  // current value existed (a rotation or re-subscribe restarts it).
+  const since = Math.max(lastReceipted?.getTime() ?? 0, endpointSince?.getTime() ?? 0);
   const run = await prisma.pushDeliveryLog.aggregate({
     where: {
       subscriptionId,
@@ -69,10 +65,7 @@ export async function evaluateZombieSubscription(
       status: "ACCEPTED",
       receivedAt: null,
       clickedAt: null,
-      createdAt: {
-        gt: lastReceipted?.createdAt ?? new Date(0),
-        lt: new Date(now.getTime() - RECEIPT_GRACE_MS),
-      },
+      createdAt: { gt: new Date(since), lt: new Date(now.getTime() - RECEIPT_GRACE_MS) },
     },
     _count: { _all: true },
     _min: { createdAt: true },
@@ -87,12 +80,31 @@ export async function evaluateZombieSubscription(
     where: { id: subscriptionId, needsResubscribeAt: null },
     data: { needsResubscribeAt: now },
   });
-  if (flagged.count > 0) {
-    console.log(
-      `[PUSH] Subscription ${subscriptionId} needs re-subscribe: ${run._count._all} accepted pushes with no receipt`,
-    );
+  if (flagged.count === 0) return true;
+  // A receipt that landed between the read above and the flag (a device
+  // draining queued pushes as it wakes) cleared nothing yet: undo the flag.
+  const after = await lastReceiptedAt(subscriptionId);
+  if (after && after.getTime() !== (lastReceipted?.getTime() ?? -1)) {
+    await clearZombieFlag(subscriptionId);
+    return false;
   }
+  console.log(
+    `[PUSH] Subscription ${subscriptionId} needs re-subscribe: ${run._count._all} accepted pushes with no receipt`,
+  );
   return true;
+}
+
+async function lastReceiptedAt(subscriptionId: string): Promise<Date | null> {
+  const row = await prisma.pushDeliveryLog.findFirst({
+    where: {
+      subscriptionId,
+      channel: "web",
+      OR: [{ receivedAt: { not: null } }, { clickedAt: { not: null } }],
+    },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  return row?.createdAt ?? null;
 }
 
 /** A receipt proves the subscription works again. */

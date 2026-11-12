@@ -8,7 +8,7 @@
  *     receipt, so the furthest stage they reach is "sent".
  *   - Desktop apps: the app reports shown / clicked / actioned for a banner
  *     (routes/desktop-receipts.ts). The row is created by the first report, at
- *     most once per (app, subject) via its dedupe key, and each stage is
+ *     most once per (user, app, subject) via its dedupe key, and each stage is
  *     stamped by its first observation only.
  *
  * Writers here never throw into a notification path: a log failure is logged
@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "../db.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import type { DesktopApp } from "./alert-endpoints.js";
 import {
   type DeliveryChannel,
@@ -119,7 +120,11 @@ async function ownsSubject(userId: string, kind: DesktopReceiptKind, id: string)
   const query = { where: { id, userId }, select: { id: true } } as const;
   if (kind === "notification") return prisma.notification.findFirst(query);
   if (kind === "attention_item") return prisma.attentionItem.findFirst(query);
-  return prisma.calendarEvent.findFirst(query);
+  // A linked calendar's event is visible only while its sync is on (C2).
+  return prisma.calendarEvent.findFirst({
+    where: { id, userId, ...calendarSourceScope() },
+    select: { id: true },
+  });
 }
 
 /**
@@ -133,7 +138,7 @@ export async function recordDesktopReceipt(
   const { userId, app, event, kind, id } = input;
   if (!(await ownsSubject(userId, kind, id))) return "not_found";
   const now = input.now ?? new Date();
-  const dedupeKey = `desktop:${app}:${kind}:${id}`;
+  const dedupeKey = `desktop:${userId}:${app}:${kind}:${id}`;
   await prisma.pushDeliveryLog.createMany({
     data: [
       {
