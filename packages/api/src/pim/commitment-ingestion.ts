@@ -3,17 +3,24 @@
  *
  * Step 3-B intentionally stays rule-based: extract commitment-shaped
  * candidates from newly ingested text and write low-confidence ledger rows.
- * The later LLM pass can refine title/kind/dueAt, but dogfooding needs the
- * signal to start flowing first.
+ * The optional LLM pass (COMMITMENT_LLM_REFINEMENT) can refine title/kind/
+ * owner, but dueAt never depends on it: the deadline wording is resolved
+ * deterministically against the message's received time in the user's zone
+ * (commitment-due.ts), and the LLM's date is only a fallback for wording the
+ * parser does not recognize.
  */
 
 import { createHash } from "node:crypto";
 import type { CommitmentKind, CommitmentSource } from "@prisma/client";
 import { prisma } from "../db.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
+import { normalizeTimeZone } from "../time-zone.js";
+import { getUserTimeZone } from "../user-timezone.js";
+import { type DueContext, pickDueAt } from "./commitment-due.js";
 import { type CommitmentCandidate, extractCommitmentCandidates } from "./commitment-extractor.js";
 import {
   type CommitmentRefinement,
+  isCommitmentLlmRefinementEnabled,
   maybeRefineCommitmentCandidateWithLlm,
 } from "./commitment-refiner.js";
 import { type CommitmentInput, upsertCommitment } from "./commitments.js";
@@ -28,8 +35,8 @@ export interface CommitmentIngestionInput {
   threadId?: string | null;
   text: string;
   contextTitle?: string | null;
-  referenceDate?: Date;
-  timeZone?: string;
+  referenceDate?: Date; // when the text was written (email: receivedAt); default now
+  timeZone?: string; // the user's IANA zone; looked up from AutomationConfig when absent
   maxCandidates?: number;
   senderEmail?: string | null; // email source: set to From address; used for trust score
   senderIsUser?: boolean; // email source: true when the user authored the message themselves
@@ -98,8 +105,10 @@ function buildCommitmentInput(
   candidate: CommitmentCandidate,
   refinement: CommitmentRefinement | null,
   dedupKey: string,
+  dueContext: DueContext,
 ): CommitmentInput {
   const owner = refinement?.owner ?? ownerForCandidate(input, candidate);
+  const dueText = refinement?.dueText ?? candidate.dueHint;
   return {
     title: compactText(refinement?.title ?? candidate.text),
     description: input.contextTitle ? compactText(input.contextTitle, 180) : null,
@@ -108,8 +117,8 @@ function buildCommitmentInput(
     counterpartyName: refinement?.counterpartyName ?? null,
     // Set counterpartyEmail from the email sender when the counterparty owns the commitment
     counterpartyEmail: owner === "COUNTERPARTY" ? (input.senderEmail ?? null) : null,
-    dueAt: refinement?.dueAt ?? null,
-    dueText: refinement?.dueText ?? candidate.dueHint,
+    dueAt: pickDueAt(dueText, refinement?.dueAt ?? null, dueContext),
+    dueText,
     sourceType: input.sourceType,
     sourceId: input.sourceId,
     threadId: input.threadId ?? null,
@@ -117,6 +126,23 @@ function buildCommitmentInput(
     confidence: refinement?.confidence ?? confidenceForCandidate(candidate),
     dedupKey,
   };
+}
+
+/**
+ * The zone deadlines are read in. Looked up only when something will read a
+ * date — a candidate with deadline wording, or the LLM pass — so the common
+ * no-deadline mail costs no extra query. A failed lookup rejects the whole
+ * ingestion (the caller reports it) rather than resolving in a wrong zone.
+ */
+function ingestionTimeZone(
+  input: CommitmentIngestionInput,
+  candidates: CommitmentCandidate[],
+): Promise<string> {
+  if (input.timeZone) return Promise.resolve(normalizeTimeZone(input.timeZone));
+  const readsDates =
+    candidates.some((candidate) => candidate.dueHint !== null) ||
+    (candidates.length > 0 && isCommitmentLlmRefinementEnabled());
+  return readsDates ? getUserTimeZone(input.userId) : Promise.resolve(normalizeTimeZone(undefined));
 }
 
 /**
@@ -144,6 +170,10 @@ export async function extractAndUpsertCommitmentsFromText(
   const candidates = extractCommitmentCandidates(input.text, {
     maxCandidates: input.maxCandidates ?? 5,
   });
+  const dueContext: DueContext = {
+    referenceDate: input.referenceDate ?? new Date(),
+    timeZone: await ingestionTimeZone(input, candidates),
+  };
 
   let commitmentsCreated = 0;
   let duplicatesSkipped = 0;
@@ -154,8 +184,8 @@ export async function extractAndUpsertCommitmentsFromText(
       sourceType: input.sourceType,
       sourceText: input.text,
       contextTitle: input.contextTitle,
-      referenceDate: input.referenceDate,
-      timeZone: input.timeZone,
+      referenceDate: dueContext.referenceDate,
+      timeZone: dueContext.timeZone,
       userId: input.userId,
     });
     if (refinement?.isCommitment === false) continue;
@@ -169,7 +199,7 @@ export async function extractAndUpsertCommitmentsFromText(
 
     await upsertCommitment(
       input.userId,
-      buildCommitmentInput(input, candidate, usableRefinement, dedupKey),
+      buildCommitmentInput(input, candidate, usableRefinement, dedupKey, dueContext),
     );
 
     if (existing) duplicatesSkipped++;
