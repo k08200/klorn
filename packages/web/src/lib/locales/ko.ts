@@ -1955,6 +1955,7 @@ const ko: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "틀림",
   "assistantHub.briefing.feedback.later": "나중에",
   "assistantHub.briefing.feedback.done": "완료",
+  "assistantHub.briefing.feedback.openMail": "메일 열기",
   "assistantHub.activity.subtitle": "오늘 Klorn이 한 일과 내린 판단",
   "assistantHub.activity.all": "전체",
   "assistantHub.activity.kind.handled": "처리함",

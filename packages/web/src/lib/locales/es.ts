@@ -2000,6 +2000,7 @@ const es: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "Incorrecto",
   "assistantHub.briefing.feedback.later": "Más tarde",
   "assistantHub.briefing.feedback.done": "Hecho",
+  "assistantHub.briefing.feedback.openMail": "Abrir correo",
   "assistantHub.activity.subtitle": "Lo que Klorn hizo y decidió hoy",
   "assistantHub.activity.all": "Todo",
   "assistantHub.activity.kind.handled": "Gestionado",

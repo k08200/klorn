@@ -17,6 +17,7 @@ import { useT } from "../../../lib/i18n";
 import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import {
   type BriefingFeedbackChoice,
+  type BriefingPick,
   type TopAction,
   useBriefingPage,
 } from "../../briefing/use-briefing";
@@ -143,9 +144,11 @@ function BriefingBody({ briefing }: { briefing: ReturnType<typeof useBriefingPag
       {briefing.noteId && briefing.topActions.length > 0 && (
         <TopFeedback
           actions={briefing.topActions}
+          picks={briefing.picks}
           chosen={briefing.feedback}
           savingRank={briefing.savingRank}
           onChoose={briefing.submitFeedback}
+          onOpenPick={briefing.recordPickOpen}
         />
       )}
     </>
@@ -179,12 +182,22 @@ const CHOICES: ReadonlyArray<{ choice: BriefingFeedbackChoice; labelKey: string 
 
 interface TopFeedbackProps {
   actions: TopAction[];
+  /** Verified picks by rank: a rank with one links to its mail. */
+  picks: BriefingPick[];
   chosen: Record<number, BriefingFeedbackChoice>;
   savingRank: number | null;
   onChoose: (action: TopAction, choice: BriefingFeedbackChoice) => void;
+  onOpenPick: (rank: number) => void;
 }
 
-function TopFeedback({ actions, chosen, savingRank, onChoose }: TopFeedbackProps) {
+function TopFeedback({
+  actions,
+  picks,
+  chosen,
+  savingRank,
+  onChoose,
+  onOpenPick,
+}: TopFeedbackProps) {
   const { t } = useT();
   return (
     <section aria-labelledby="hub-briefing-feedback">
@@ -203,6 +216,7 @@ function TopFeedback({ actions, chosen, savingRank, onChoose }: TopFeedbackProps
               <span className="tabular-nums text-ink-muted">{action.rank}. </span>
               {action.label}
             </p>
+            <PickLink pick={picks.find((p) => p.rank === action.rank)} onOpen={onOpenPick} />
             <fieldset disabled={savingRank === action.rank} className="mt-1 flex flex-wrap gap-2">
               <legend className="sr-only">
                 {t("assistantHub.briefing.feedback.legend", { item: action.label })}
@@ -227,6 +241,21 @@ function TopFeedback({ actions, chosen, savingRank, onChoose }: TopFeedbackProps
         ))}
       </ul>
     </section>
+  );
+}
+
+/** The pick's mail, one tap away; the open is recorded for the briefing's measurement. */
+function PickLink({ pick, onOpen }: { pick?: BriefingPick; onOpen: (rank: number) => void }) {
+  const { t } = useT();
+  if (!pick) return null;
+  return (
+    <Link
+      href={`/email/${encodeURIComponent(pick.emailId)}`}
+      className={LINK_CLASS}
+      onClick={() => onOpen(pick.rank)}
+    >
+      {t("assistantHub.briefing.feedback.openMail")}
+    </Link>
   );
 }
 

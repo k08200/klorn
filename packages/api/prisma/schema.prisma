@@ -686,6 +686,11 @@ model Note {
   // briefing-per-user-per-day row is deduped, atomically closing the TOCTOU
   // race in createDailyBriefingDelivery.
   dayKey    String?
+  /// Daily briefing only: the picks shown under "Top 3" — [{ rank, emailId,
+  /// action, reason, quote, openedAt }], each quote verified to be in its mail
+  /// (pim/briefing-picks.ts). openedAt is stamped when the user first opens
+  /// the mail from that pick. NULL for every other note.
+  picks     Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

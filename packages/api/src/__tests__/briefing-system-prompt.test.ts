@@ -14,15 +14,25 @@ describe("BRIEFING_SYSTEM_PROMPT", () => {
     expect(BRIEFING_SYSTEM_PROMPT).not.toBe(AGENT_SYSTEM_PROMPT);
   });
 
-  it("never mandates a tool call", () => {
+  it("never mandates the agent's tools", () => {
     expect(BRIEFING_SYSTEM_PROMPT).not.toMatch(/propose_action/i);
     expect(BRIEFING_SYSTEM_PROMPT).not.toMatch(/notify_user/i);
-    expect(BRIEFING_SYSTEM_PROMPT).toMatch(/never call tools/i);
   });
 
-  it("asks for prose briefing text", () => {
+  it("asks for the briefing as the JSON answer the server checks and renders", () => {
     expect(BRIEFING_SYSTEM_PROMPT).toMatch(/briefing/i);
-    expect(BRIEFING_SYSTEM_PROMPT).toMatch(/markdown|prose/i);
+    expect(BRIEFING_SYSTEM_PROMPT).toMatch(/one JSON object/i);
+    for (const key of ['"signal"', '"picks"', '"quote"', '"connected"', '"other"']) {
+      expect(BRIEFING_SYSTEM_PROMPT).toContain(key);
+    }
+  });
+
+  it("is static, so every user's briefing shares one cacheable prefix", () => {
+    // No date, no language, no user data: those go in the user message.
+    expect(BRIEFING_SYSTEM_PROMPT).not.toMatch(/\$\{|Today is|Korean only|English only/);
+    // The cache needs a prefix of at least 512 tokens on the 5.5 family
+    // (providers/anthropic-native.ts); ~4 characters per token.
+    expect(BRIEFING_SYSTEM_PROMPT.length).toBeGreaterThan(2600);
   });
 
   it("carries the standard untrusted-content rule, and never asks for the tags back", () => {

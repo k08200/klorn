@@ -2038,6 +2038,7 @@ const de: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "Falsch",
   "assistantHub.briefing.feedback.later": "Später",
   "assistantHub.briefing.feedback.done": "Erledigt",
+  "assistantHub.briefing.feedback.openMail": "Mail öffnen",
   "assistantHub.activity.subtitle": "Was Klorn heute getan und entschieden hat",
   "assistantHub.activity.all": "Alle",
   "assistantHub.activity.kind.handled": "Erledigt",

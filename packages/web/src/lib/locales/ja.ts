@@ -1960,6 +1960,7 @@ const ja: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "的外れ",
   "assistantHub.briefing.feedback.later": "後で",
   "assistantHub.briefing.feedback.done": "完了",
+  "assistantHub.briefing.feedback.openMail": "メールを開く",
   "assistantHub.activity.subtitle": "今日Klornが行ったことと判断したこと",
   "assistantHub.activity.all": "すべて",
   "assistantHub.activity.kind.handled": "処理済み",
