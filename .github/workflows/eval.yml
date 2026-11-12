@@ -16,7 +16,9 @@ name: Judge Eval
 # This complements the deterministic gate that always runs in CI tests
 # (src/__tests__/judge-eval-set.test.ts — fast-path + keyword fallback,
 # no keys needed). Fork PRs don't receive secrets, so this job degrades
-# to a skip-with-notice instead of a false failure.
+# to a skip-with-notice instead of a false failure. Dependabot runs don't
+# receive Actions secrets either, but there a green skip would read as a
+# passed gate on a dependency bump, so the job fails instead.
 
 on:
   workflow_dispatch:
@@ -37,6 +39,12 @@ on:
       - "packages/api/scripts/judge-gate.sh"
       - "packages/api/scripts/poc-accuracy.ts"
       - ".github/workflows/eval.yml"
+      # Dependency changes under the judge's call path. The SDK is pinned in
+      # packages/api/package.json, but its transitive deps and the root
+      # pnpm.overrides move in the lockfile alone. #1707 (SDK 0.133 → 1.6)
+      # touched only these two files and fired nothing.
+      - "packages/api/package.json"
+      - "pnpm-lock.yaml"
 
 permissions:
   contents: read
@@ -75,9 +83,15 @@ jobs:
         id: key
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ACTOR: ${{ github.actor }}
         run: |
           if [ -n "$ANTHROPIC_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
+          elif [ "$ACTOR" = "dependabot[bot]" ]; then
+            # Dependabot runs read Dependabot secrets, and none is set. A re-run
+            # keeps the dependabot[bot] actor, so it cannot fix this.
+            echo "::error::Dependabot runs get no ANTHROPIC_API_KEY, so the live judge gate did not run. Run it as a maintainer before merging: gh workflow run eval.yml --ref <this branch>, or a replacement PR (as #1708 did for #1707)."
+            exit 1
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No ANTHROPIC_API_KEY in this context (fork PR?) — skipping LLM eval. The deterministic eval gate still runs in the CI test job."
