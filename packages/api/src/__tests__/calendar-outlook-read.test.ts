@@ -455,7 +455,7 @@ describe("no calendar reader branches on a provider name", () => {
         "agentcore/agent-context.ts",
         "mail/meeting-context.ts",
         // They read through readCalendarRows / countCalendarRows rather than the table.
-        "pim/briefing.ts",
+        "pim/briefing-gather.ts",
         "pim/briefing-structure.ts",
         "pim/calendar.ts",
         "routes/ops.ts",

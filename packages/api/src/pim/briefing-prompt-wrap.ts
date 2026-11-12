@@ -1,6 +1,8 @@
 /**
- * Calendar text in the briefing PROMPT (step C7). An event's title, description
- * and location are external content: anyone who can send an invite writes them.
+ * External text in the briefing PROMPT (step C7, widened to every signal
+ * source). An event's title, description and location are external content:
+ * anyone who can send an invite writes them; a signal title from mail is the
+ * sender's subject.
  * The prompt gets them inside <untrusted_content>, like every other external
  * field the model reads. The rule-based view the user reads (the fallback, and
  * `listLocalBriefingEvents` itself) keeps the clean text, so this is applied to
@@ -53,16 +55,15 @@ export function wrapEventsForPrompt(data: unknown): unknown {
   };
 }
 
-function wrapTitle<T extends { title: string }>(item: T): T {
-  return { ...item, title: wrapUntrusted(item.title, SUMMARY) };
-}
+/** The wrapper label for a title from each source: all three are external or user-typed text. */
+const TITLE_SOURCE: Record<BriefingReference["source"], string> = {
+  calendar: SUMMARY,
+  email: "email:subject",
+  task: "task:title",
+};
 
-function wrapCalendarRef(ref: BriefingReference): BriefingReference {
-  return ref.source === "calendar" ? wrapTitle(ref) : ref;
-}
-
-function wrapSignalTitle<T extends BriefingDeadlineSignal | BriefingUrgencySignal>(item: T): T {
-  return item.source === "calendar" ? wrapTitle(item) : item;
+function wrapTitle<T extends { title: string; source: BriefingReference["source"] }>(item: T): T {
+  return { ...item, title: wrapUntrusted(item.title, TITLE_SOURCE[item.source]) };
 }
 
 /**
@@ -76,31 +77,42 @@ function wrapSharedTerms(reason: string): string {
 }
 
 function wrapCrossLink(link: BriefingCrossLink): BriefingCrossLink {
-  const wrapped = { ...link, reason: wrapSharedTerms(link.reason) };
-  return wrapped.event ? { ...wrapped, event: wrapTitle(wrapped.event) } : wrapped;
-}
-
-/**
- * An action that names a calendar event ("Prepare for: <title>") is wrapped as a
- * whole field. The title is never searched for inside other text: a title such as
- * "a" or "Prepare" would otherwise wrap unrelated words.
- */
-function wrapTopAction(action: BriefingTopAction): BriefingTopAction {
-  const reason = wrapSharedTerms(action.reason);
-  if (!action.refs.some((ref) => ref.source === "calendar")) return { ...action, reason };
   return {
-    ...action,
-    action: wrapUntrusted(action.action, SUMMARY),
-    reason,
-    refs: action.refs.map(wrapCalendarRef),
+    ...link,
+    reason: wrapSharedTerms(link.reason),
+    ...(link.email ? { email: wrapTitle(link.email) } : {}),
+    ...(link.task ? { task: wrapTitle(link.task) } : {}),
+    ...(link.event ? { event: wrapTitle(link.event) } : {}),
   };
 }
 
-/** The signals the prompt carries, with every calendar-sourced title wrapped. */
+/**
+ * An action that names a source item ("Prepare for: <title>", "Reply to:
+ * <subject>") is wrapped as a whole field, labelled by its first reference.
+ * The title is never searched for inside other text: a title such as "a" or
+ * "Prepare" would otherwise wrap unrelated words.
+ */
+function wrapTopAction(action: BriefingTopAction): BriefingTopAction {
+  const reason = wrapSharedTerms(action.reason);
+  const first = action.refs[0];
+  if (!first) return { ...action, reason };
+  return {
+    ...action,
+    action: wrapUntrusted(action.action, TITLE_SOURCE[first.source]),
+    reason,
+    refs: action.refs.map(wrapTitle),
+  };
+}
+
+/**
+ * The signals the prompt carries, with every title wrapped whatever its
+ * source: calendar text is written by whoever sends an invite, mail text by
+ * the sender, and task text can be created from either.
+ */
 export function wrapSignalsForPrompt(signals: BriefingSignals): BriefingSignals {
   return {
-    deadlines: signals.deadlines.map(wrapSignalTitle),
-    urgentItems: signals.urgentItems.map(wrapSignalTitle),
+    deadlines: signals.deadlines.map((d: BriefingDeadlineSignal) => wrapTitle(d)),
+    urgentItems: signals.urgentItems.map((u: BriefingUrgencySignal) => wrapTitle(u)),
     crossLinks: signals.crossLinks.map(wrapCrossLink),
     topActions: signals.topActions.map(wrapTopAction),
   };

@@ -342,7 +342,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "mcp/set-tier.ts",
     "notify/channel-delivery-log.ts", // one item by id and owner: its id only (desktop receipt)
     "notify/open-push-mail.ts", // OPEN PUSH EMAIL items of named mails: id + reason only
-    "pim/briefing.ts",
+    "pim/briefing-window.ts", // EMAIL items of window mail: tier only; OPEN PUSH: ids only
     "pim/focus-digest.ts", // a count of arrivals, no title
     "routes/commitments.ts",
     "routes/email-lanes.ts", // one mail's EMAIL item: lane and reason, no title

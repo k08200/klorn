@@ -24,8 +24,23 @@ export interface BriefingStructure {
   attention: Array<{ rank: number; action: string; reason: string }>;
 }
 
+/** A briefing pick: one mail, the quote verified to be in it, and its first open. */
+export interface BriefingPick {
+  rank: number;
+  emailId: string;
+  action: string;
+  reason: string;
+  quote: string;
+  openedAt: string | null;
+}
+
 interface BriefingResponse {
-  briefing: { id: string; content: string; createdAt: string } | null;
+  briefing: {
+    id: string;
+    content: string;
+    createdAt: string;
+    picks?: BriefingPick[];
+  } | null;
   structured?: BriefingStructure | null;
 }
 
@@ -181,6 +196,18 @@ export function useBriefingPage() {
       feedbackMutation.mutate({ action, choice });
     },
     topActions: content ? extractTopActions(content) : [],
+    picks: briefingQuery.data?.briefing?.picks ?? [],
+    /**
+     * Record that the user opened a pick's mail from the briefing. Fire and
+     * forget: the link navigates either way, and a lost record must never
+     * block opening the mail.
+     */
+    recordPickOpen: (rank: number) => {
+      if (!noteId) return;
+      apiFetch(`/api/briefing/${noteId}/picks/${rank}/open`, { method: "POST" }).catch((err) =>
+        captureClientError(err, { scope: "briefing.pick.open", noteId, rank }),
+      );
+    },
   };
 }
 

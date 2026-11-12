@@ -2040,6 +2040,7 @@ const fr: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "Faux",
   "assistantHub.briefing.feedback.later": "Plus tard",
   "assistantHub.briefing.feedback.done": "Fait",
+  "assistantHub.briefing.feedback.openMail": "Ouvrir le mail",
   "assistantHub.activity.subtitle": "Ce que Klorn a fait et décidé aujourd'hui",
   "assistantHub.activity.all": "Tout",
   "assistantHub.activity.kind.handled": "Traité",

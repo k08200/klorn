@@ -1873,6 +1873,7 @@ const zh: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "不对",
   "assistantHub.briefing.feedback.later": "稍后",
   "assistantHub.briefing.feedback.done": "已完成",
+  "assistantHub.briefing.feedback.openMail": "打开邮件",
   "assistantHub.activity.subtitle": "Klorn 今天做了什么、判断了什么",
   "assistantHub.activity.all": "全部",
   "assistantHub.activity.kind.handled": "已处理",

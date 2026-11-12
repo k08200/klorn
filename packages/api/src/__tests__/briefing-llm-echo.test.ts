@@ -32,6 +32,21 @@ vi.mock("../db.js", () => {
             if (name === "automationConfig" && method === "findUnique") {
               return { notificationLanguage: "en", timezone: "UTC" };
             }
+            // One new mail since the last briefing: not a quiet morning, so the
+            // model is asked.
+            if (name === "emailMessage" && method === "findMany") {
+              return [
+                {
+                  id: "e1",
+                  from: "a@example.com",
+                  subject: "Invoice",
+                  snippet: "due soon",
+                  receivedAt: new Date(),
+                  priority: "NORMAL",
+                  needsReply: false,
+                },
+              ];
+            }
             return method === "findMany" ? [] : method === "count" ? 0 : null;
           }),
       },

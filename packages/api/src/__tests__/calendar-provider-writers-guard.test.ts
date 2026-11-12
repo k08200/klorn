@@ -342,8 +342,8 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   describe("C7: the C2 gaps read through the one read path", () => {
     const VIA_READ_PATH = [
       "learning/interaction-graph.ts",
+      "pim/briefing-gather.ts",
       "pim/briefing-structure.ts",
-      "pim/briefing.ts",
       "routes/ops.ts",
     ];
 
@@ -381,7 +381,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       ["agentcore/agent-context.ts", /wrapUntrusted\(e\.title/],
       ["agentcore/tool-executor.ts", /wrapUntrusted\(dupCheck\.title/],
       ["mail/meeting-context.ts", /wrapUntrusted\(e\.title/],
-      ["pim/briefing.ts", /wrapEventsForPrompt\(/],
+      ["pim/briefing-gather.ts", /wrapEventsForPrompt\(/],
       ["pim/calendar-read-format.ts", /wrapUntrusted\(row\.title/],
     ];
     // Modules that read calendar rows and never touch an LLM, directly or by a

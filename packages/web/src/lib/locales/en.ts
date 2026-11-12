@@ -1990,6 +1990,7 @@ const en: Record<string, string> = {
   "assistantHub.briefing.feedback.wrong": "Wrong",
   "assistantHub.briefing.feedback.later": "Later",
   "assistantHub.briefing.feedback.done": "Done",
+  "assistantHub.briefing.feedback.openMail": "Open mail",
   "assistantHub.activity.subtitle": "What Klorn did and decided today",
   "assistantHub.activity.all": "All",
   "assistantHub.activity.kind.handled": "Handled",
