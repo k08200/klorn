@@ -19,10 +19,17 @@ const MAILS: ReadonlyMap<string, PickableMail> = new Map<string, PickableMail>([
     "m1",
     {
       emailId: "email-1",
-      texts: ["Contract review", "Could you send the signed contract by Friday 5 PM?", "Thanks, Sarah"],
+      texts: [
+        "Contract review",
+        "Could you send the signed contract by Friday 5 PM?",
+        "Thanks, Sarah",
+      ],
     },
   ],
-  ["m2", { emailId: "email-2", texts: ["Invoice #42", "Payment is due on Nov 30. Don&#39;t miss it."] }],
+  [
+    "m2",
+    { emailId: "email-2", texts: ["Invoice #42", "Payment is due on Nov 30. Don&#39;t miss it."] },
+  ],
   ["m3", { emailId: "email-3", texts: ["회의 일정", "내일 오전 10시까지 회신 부탁드립니다."] }],
   ["m4", { emailId: "email-4", texts: ["Lunch?", "Are you free for lunch next week?"] }],
   [

@@ -56,7 +56,9 @@ describe("wrapSignalsForPrompt", () => {
   it("leaves an action with no source reference alone", () => {
     const out = wrapSignalsForPrompt(
       signals({
-        topActions: [{ id: "t", rank: 1, score: 1, action: "Plan the week", reason: "r", refs: [] }],
+        topActions: [
+          { id: "t", rank: 1, score: 1, action: "Plan the week", reason: "r", refs: [] },
+        ],
       }),
     );
     expect(out.topActions[0]?.action).toBe("Plan the week");

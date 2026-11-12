@@ -147,7 +147,9 @@ describe("briefing picks routes", () => {
       headers: auth(),
     });
     expect(res.json()).toMatchObject({ first: false, openedAt: "2099-01-06T00:00:00.000Z" });
-    expect(store.updates[0]?.where).toMatchObject({ picks: { equals: [PICK, { rank: 2, emailId: "malformed" }] } });
+    expect(store.updates[0]?.where).toMatchObject({
+      picks: { equals: [PICK, { rank: 2, emailId: "malformed" }] },
+    });
   });
 
   it("404s for a rank without a pick and for another user's briefing", async () => {

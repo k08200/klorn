@@ -46,6 +46,7 @@ const PICK_OPEN_ATTEMPTS = 3;
 
 /** Output cap for the briefing call: the JSON answer is ~400 tokens. */
 const BRIEFING_MAX_TOKENS = 1500;
+
 export { BRIEFING_SYSTEM_PROMPT } from "./briefing-prompt.js";
 
 type BriefingFeedbackChoice = "useful" | "wrong" | "later" | "done";

@@ -274,7 +274,8 @@ export function renderBriefingAnswer(answer: BriefingAnswer, copy: BriefingCopy)
       `**${copy.top}**`,
       // Always the dash: the web client takes the label up to it.
       ...answer.picks.map(
-        (p) => `${p.rank}. ${p.action} — ${p.reason ? `${p.reason} ` : ""}*“${displayQuote(p.quote)}”*`,
+        (p) =>
+          `${p.rank}. ${p.action} — ${p.reason ? `${p.reason} ` : ""}*“${displayQuote(p.quote)}”*`,
       ),
     ]);
   }

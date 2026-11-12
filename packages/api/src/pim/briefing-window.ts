@@ -256,10 +256,7 @@ export interface BriefingCommitment {
 }
 
 /** Open, confident commitments overdue by up to two days or due within a day. */
-export function listBriefingCommitments(
-  userId: string,
-  now: Date,
-): Promise<BriefingCommitment[]> {
+export function listBriefingCommitments(userId: string, now: Date): Promise<BriefingCommitment[]> {
   return prisma.commitment.findMany({
     where: {
       userId,

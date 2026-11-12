@@ -310,7 +310,11 @@ describe("a quiet morning skips the model", () => {
 
   it("sees a task due soon past the prompt's 20-task cap", async () => {
     s.tasks = [
-      ...Array.from({ length: 25 }, (_, i) => ({ id: `t${i}`, title: `Later ${i}`, status: "TODO" })),
+      ...Array.from({ length: 25 }, (_, i) => ({
+        id: `t${i}`,
+        title: `Later ${i}`,
+        status: "TODO",
+      })),
       { id: "due", title: "File taxes", status: "TODO", dueDate: "2099-01-06T09:00:00Z" },
     ];
     await generateBriefing("u1", NOW);
@@ -320,7 +324,8 @@ describe("a quiet morning skips the model", () => {
   it("re-delivering an existing quiet note still does not push", async () => {
     s.existingNote = {
       id: "note-q",
-      content: "Nothing new since your last briefing, and nothing scheduled or due in the next day.",
+      content:
+        "Nothing new since your last briefing, and nothing scheduled or due in the next day.",
       createdAt: NOW,
     };
     await createDailyBriefingDelivery("u1");
