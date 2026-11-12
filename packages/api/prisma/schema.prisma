@@ -1241,6 +1241,18 @@ model PushSubscription {
   failureCount Int       @default(0)
   lastFailedAt DateTime?
 
+  // Zombie flag (notify/push-zombie.ts): set once the push service kept
+  // accepting pushes for this endpoint but the service worker confirmed none
+  // of them for long enough. The web app offers to turn alerts back on, which
+  // replaces the endpoint; any receipt clears it. With PUSH_ZOMBIE_EVICTION on,
+  // sends to a flagged row stop. NULL = not flagged.
+  needsResubscribeAt DateTime?
+  // When this row's endpoint last changed (a rotation, or a deliberate
+  // re-subscribe from the web app). The zombie run counts only pushes after it:
+  // the old endpoint's silence is not evidence against the new one. NULL =
+  // since createdAt.
+  endpointSince      DateTime?
+
   @@index([userId])
   @@index([userId, deviceId])
 }
@@ -1265,22 +1277,39 @@ model DevicePushToken {
   @@index([userId])
 }
 
+// One notification on one channel: the delivery lifecycle created → queued →
+// sent (acceptedAt) → device_received (receivedAt) → opened (clickedAt) →
+// actioned (actionedAt). Each stage is stamped only when observed
+// (notify/delivery-lifecycle.ts).
 model PushDeliveryLog {
   id              String    @id @default(uuid())
   userId          String
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // web | fcm | apns | telegram | desktop_mac | desktop_windows. Rows from
+  // before this column are all web push (no other channel wrote rows).
+  channel         String    @default("web")
   subscriptionId  String?
   notificationId  String?
   endpointHost    String?
   category        String    @default("system")
   title           String
-  status          String    @default("PENDING") // PENDING | ACCEPTED | FAILED | SKIPPED
+  // PENDING | ACCEPTED | FAILED | SKIPPED, and REPORTED for a desktop row (the
+  // app reported the banner; no server send was observed)
+  status          String    @default("PENDING")
   skipReason      String?
   errorStatusCode Int?
   errorBody       String?
+  queuedAt        DateTime?
   acceptedAt      DateTime?
   receivedAt      DateTime?
   clickedAt       DateTime?
+  actionedAt      DateTime?
+  // The action button used: reply | later
+  action          String?
+  // Idempotency key for rows a client reports (desktop receipts:
+  // "desktop:<app>:<kind>:<id>"). NULL for server-sent rows; NULLs are
+  // distinct in the unique index, so those never collide.
+  dedupeKey       String?   @unique
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -2350,6 +2379,16 @@ model Commitment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
+
+  // When the user confirmed a suggested (low-confidence, rule-mined) row. A
+  // row is "confirmed" when this is set or confidence >= 0.7
+  // (pim/commitment-confirmation.ts); only a confirmed row may interrupt.
+  confirmedAt DateTime?
+  // When a later reply in the thread suggested the promise was kept: the
+  // user's own send (owner USER, "likely done") or the counterparty writing
+  // again (owner COUNTERPARTY, "likely delivered"). The evidence's own time.
+  // A suggestion only: the user confirms DONE; nothing sets it automatically.
+  completionSuggestedAt DateTime?
 
   path CommitmentPath?
 

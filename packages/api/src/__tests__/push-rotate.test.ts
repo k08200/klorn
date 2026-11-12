@@ -114,9 +114,19 @@ describe("POST /api/notifications/push/rotate", () => {
     expect(subDeleteMany).toHaveBeenCalledWith({
       where: { endpoint: GOOD_ENDPOINT, id: { not: "sub-1" } },
     });
+    // A new endpoint is new evidence: the zombie run restarts and any flag or
+    // failure tally on the old endpoint is lifted (notify/push-zombie.ts).
     expect(subUpdate).toHaveBeenCalledWith({
       where: { id: "sub-1" },
-      data: { endpoint: GOOD_ENDPOINT, p256dh: "p256dh-new", auth: "auth-new" },
+      data: {
+        endpoint: GOOD_ENDPOINT,
+        p256dh: "p256dh-new",
+        auth: "auth-new",
+        endpointSince: expect.any(Date),
+        needsResubscribeAt: null,
+        failureCount: 0,
+        lastFailedAt: null,
+      },
     });
   });
 

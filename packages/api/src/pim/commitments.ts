@@ -41,6 +41,7 @@ export interface CommitmentUpdate {
   contactId?: string | null;
   dueAt?: Date | null;
   dueText?: string | null;
+  confirmedAt?: Date;
 }
 
 export async function listCommitments(

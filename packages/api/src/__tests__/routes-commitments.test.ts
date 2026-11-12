@@ -18,6 +18,9 @@ vi.mock("../judge/attention-mirror.js", () => ({
   deleteAttentionForCommitments: vi.fn(async () => undefined),
 }));
 vi.mock("../learning/feedback.js", () => ({ recordFeedback: vi.fn(async () => undefined) }));
+vi.mock("../pim/commitment-completion.js", () => ({
+  maybeRefreshCompletionSuggestions: vi.fn(async () => 0),
+}));
 vi.mock("../llm/openai.js", () => ({
   MODEL: "test-model",
   createCompletion: vi.fn(async () => ({ choices: [{ message: { content: "[]" } }] })),
@@ -30,6 +33,8 @@ type CommitmentRow = {
   description: string | null;
   status: string;
   dueAt: Date | null;
+  confidence?: number;
+  confirmedAt?: Date | null;
 };
 type PathRow = { id: string; commitmentId: string; steps: unknown; builtAt: Date; model: string };
 const commitments: CommitmentRow[] = [];
@@ -258,6 +263,86 @@ describe("commitment routes", () => {
       });
       expect(res.statusCode).toBe(400);
     }
+    await app.close();
+  });
+
+  it("says which rows are confirmed: ≥0.7 or the user's own Confirm", async () => {
+    seed({ id: "suggested", confidence: 0.45 });
+    seed({ id: "confirmed-by-user", confidence: 0.45, confirmedAt: new Date() });
+    seed({ id: "confident", confidence: 0.8 });
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/commitments", headers: auth() });
+    const byId = Object.fromEntries(
+      res.json().commitments.map((c: { id: string; confirmed: boolean }) => [c.id, c.confirmed]),
+    );
+    expect(byId).toEqual({ suggested: false, "confirmed-by-user": true, confident: true });
+    await app.close();
+  });
+
+  it("refreshes completion suggestions for the requesting user before listing open rows", async () => {
+    const { maybeRefreshCompletionSuggestions: refreshCompletionSuggestions } = await import(
+      "../pim/commitment-completion.js"
+    );
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/commitments?status=OPEN", headers: auth() });
+    expect(vi.mocked(refreshCompletionSuggestions)).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Number),
+    );
+    vi.mocked(refreshCompletionSuggestions).mockClear();
+    await app.inject({ method: "GET", url: "/api/commitments?status=DONE", headers: auth() });
+    expect(vi.mocked(refreshCompletionSuggestions)).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PATCH confirmed:true stamps confirmedAt once and leaves the status alone", async () => {
+    const c = seed({ userId: "user-1", status: "OPEN", confidence: 0.45 });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/commitments/${c.id}`,
+      headers: auth(),
+      payload: { confirmed: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe("OPEN");
+    const first = commitments[0]?.confirmedAt;
+    expect(first).toBeInstanceOf(Date);
+    await app.inject({
+      method: "PATCH",
+      url: `/api/commitments/${c.id}`,
+      headers: auth(),
+      payload: { confirmed: true },
+    });
+    expect(commitments[0]?.confirmedAt).toBe(first);
+    await app.close();
+  });
+
+  it("PATCH refuses confirmed:false (there is no un-confirm)", async () => {
+    const c = seed({ userId: "user-1", status: "OPEN" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/commitments/${c.id}`,
+      headers: auth(),
+      payload: { confirmed: false },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(commitments[0]?.confirmedAt).toBeUndefined();
+    await app.close();
+  });
+
+  it("PATCH confirmed:true on another user's commitment is refused and changes nothing", async () => {
+    const c = seed({ userId: "user-1", status: "OPEN", confidence: 0.45 });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/commitments/${c.id}`,
+      headers: auth(OTHER),
+      payload: { confirmed: true },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(commitments[0]?.confirmedAt).toBeUndefined();
     await app.close();
   });
 

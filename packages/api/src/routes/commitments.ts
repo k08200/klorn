@@ -11,6 +11,8 @@ import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.
 import { prisma } from "../db.js";
 import { recordFeedback } from "../learning/feedback.js";
 import { getTrustScoresBulk, updateTrustScore } from "../learning/trust-score.js";
+import { maybeRefreshCompletionSuggestions } from "../pim/commitment-completion.js";
+import { isConfirmedCommitment } from "../pim/commitment-confirmation.js";
 import {
   buildPath,
   getOrBuildPath,
@@ -49,6 +51,8 @@ const patchCommitmentBodySchema = {
     description: { type: ["string", "null"], maxLength: MAX_DESCRIPTION_LENGTH },
     status: { type: "string", maxLength: 50 },
     dueAt: { type: ["string", "null"], maxLength: 100 },
+    // Confirm a suggested row. One way only: there is no un-confirm.
+    confirmed: { type: "boolean", enum: [true] },
   },
 } as const;
 
@@ -69,6 +73,11 @@ export async function commitmentRoutes(app: FastifyInstance) {
         ? (status as "OPEN" | "DONE" | "DISMISSED" | "SNOOZED")
         : undefined;
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    // Stamp "likely done / delivered" on open rows a later reply suggests were
+    // kept, so this very list carries them. Once a minute per user; never throws.
+    if (filterStatus === undefined || filterStatus === "OPEN") {
+      await maybeRefreshCompletionSuggestions(userId, Date.now());
+    }
     const commitments = await listCommitments(userId, {
       status: filterStatus,
       limit:
@@ -107,6 +116,8 @@ export async function commitmentRoutes(app: FastifyInstance) {
       const trust = email ? (trustMap.get(email) ?? null) : null;
       return {
         ...row,
+        // Suggestion vs commitment, decided here so clients share one rule.
+        confirmed: isConfirmedCommitment(c),
         trustBadge: trust?.badge ?? null,
         trustLabel: trust?.label ?? null,
       };
@@ -140,6 +151,8 @@ export async function commitmentRoutes(app: FastifyInstance) {
       patch.description = body.description;
     if (typeof body.status === "string" && ALLOWED_STATUSES.has(body.status))
       patch.status = body.status;
+    // First confirmation stands: a repeat tap keeps the original time.
+    if (body.confirmed === true) patch.confirmedAt = existing.confirmedAt ?? new Date();
     if (body.dueAt === null) patch.dueAt = null;
     else if (typeof body.dueAt === "string") {
       const parsed = new Date(body.dueAt);

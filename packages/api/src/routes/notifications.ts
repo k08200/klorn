@@ -12,6 +12,7 @@ import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
 import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { parseClientPlatform } from "../notify/alert-endpoints.js";
+import { isReceiptAction } from "../notify/delivery-lifecycle.js";
 import { desktopAlertState } from "../notify/desktop-alert.js";
 import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
@@ -40,6 +41,13 @@ const desktopCatchUpQuerySchema = {
   },
 } as const;
 
+// Delivery ids are Prisma uuids: reject anything else before a query runs.
+const receiptParamsSchema = {
+  type: "object",
+  required: ["deliveryId"],
+  properties: { deliveryId: { type: "string", pattern: "^[0-9a-fA-F-]{36}$" } },
+} as const;
+
 const pushDeliveryStatsQuerySchema = {
   type: "object",
   additionalProperties: false,
@@ -58,14 +66,27 @@ export async function notificationRoutes(app: FastifyInstance) {
   // tier-override endpoint so a leaked id can't be used to hammer receipt writes.
   app.post(
     "/push/receipts/:deliveryId",
-    { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    {
+      schema: { params: receiptParamsSchema },
+      config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const { deliveryId } = request.params as { deliveryId: string };
-      const { event } = (request.body || {}) as { event?: "received" | "clicked" };
-      if (event !== "received" && event !== "clicked") {
+      const { event, action } = (request.body || {}) as { event?: unknown; action?: unknown };
+      if (event !== "received" && event !== "clicked" && event !== "actioned") {
         return reply.code(400).send({ error: "Invalid receipt event" });
       }
-      await recordPushReceipt(deliveryId, event);
+      // "actioned" names the action button used (Reply / Later); nothing else
+      // carries one. An older service worker still reports a button as "clicked".
+      if (event === "actioned" ? !isReceiptAction(action) : action !== undefined) {
+        return reply.code(400).send({ error: "Invalid receipt action" });
+      }
+      await recordPushReceipt(
+        deliveryId,
+        event,
+        new Date(),
+        event === "actioned" && isReceiptAction(action) ? action : undefined,
+      );
       return reply.code(204).send();
     },
   );
@@ -241,11 +262,13 @@ export async function notificationRoutes(app: FastifyInstance) {
       keys,
       origin: bodyOrigin,
       deviceId: rawDeviceId,
+      resubscribed,
     } = request.body as {
       endpoint: string;
       keys: { p256dh: string; auth: string };
       origin?: string;
       deviceId?: string;
+      resubscribed?: unknown;
     };
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
@@ -328,6 +351,18 @@ export async function notificationRoutes(app: FastifyInstance) {
         deviceId,
         browser,
         os,
+        // The web app's "turn alerts back on" (a click) says so: restart the
+        // zombie run and lift the flag even if the browser handed back the same
+        // endpoint. The routine re-registration on every app load does not, so
+        // it cannot wipe out the evidence (notify/push-zombie.ts).
+        ...(resubscribed === true
+          ? {
+              endpointSince: new Date(),
+              needsResubscribeAt: null,
+              failureCount: 0,
+              lastFailedAt: null,
+            }
+          : {}),
       },
     });
     console.log(`[PUSH-SUB] Successfully registered push subscription for user ${userId}`);
@@ -373,7 +408,18 @@ export async function notificationRoutes(app: FastifyInstance) {
     });
     await prisma.pushSubscription.update({
       where: { id: existing.id },
-      data: { endpoint, p256dh: keys.p256dh, auth: keys.auth },
+      // A new endpoint is new evidence: the zombie run (notify/push-zombie.ts)
+      // restarts from now and any flag on the old endpoint is lifted, as are
+      // its consecutive failures.
+      data: {
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        endpointSince: new Date(),
+        needsResubscribeAt: null,
+        failureCount: 0,
+        lastFailedAt: null,
+      },
     });
     console.log(`[PUSH-SUB] Rotated subscription for user ${existing.userId}`);
     return reply.code(204).send();

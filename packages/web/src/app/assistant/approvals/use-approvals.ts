@@ -19,7 +19,6 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommitmentItem } from "../../../components/commitment-card";
 import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
 import { isEntitlementRefusal } from "../../../lib/entitlement";
@@ -255,33 +254,4 @@ export function useApprovals() {
     settleReject: settle,
     undoReject,
   };
-}
-
-/**
- * Only extractions the judge is confident about — below this the rows read as
- * stray AI fragments (the legacy queue's rule, kept).
- */
-const COMMITMENT_MIN_CONFIDENCE = 0.7;
-const COMMITMENT_MAX_VISIBLE = 6;
-const COMMITMENT_FETCH_LIMIT = 8;
-
-/** Open commitments: the entry and request the legacy queue uses. */
-export function useOpenCommitments(): CommitmentItem[] {
-  const query = useQuery({
-    queryKey: queryKeys.inbox.commitments(),
-    queryFn: async () => {
-      try {
-        const data = await apiFetch<{ commitments: CommitmentItem[] }>(
-          `/api/commitments?status=OPEN&limit=${COMMITMENT_FETCH_LIMIT}`,
-        );
-        return Array.isArray(data.commitments) ? data.commitments : [];
-      } catch (err) {
-        captureClientError(err, { scope: "assistant.approvals.commitments" });
-        throw err;
-      }
-    },
-  });
-  return (query.data ?? [])
-    .filter((commitment) => commitment.confidence >= COMMITMENT_MIN_CONFIDENCE)
-    .slice(0, COMMITMENT_MAX_VISIBLE);
 }
