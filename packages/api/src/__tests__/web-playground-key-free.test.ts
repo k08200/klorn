@@ -22,13 +22,19 @@ import {
   type ClassifyRequest,
   classifyErrorFor,
   classifyRequestBody,
+  modelThatRan,
 } from "../../../web/src/app/playground/classify-wire";
+import { KLORN_MODEL_ID } from "../../../web/src/app/playground/models";
 import en from "../../../web/src/lib/locales/en";
 
 const judgeEmail = vi.hoisted(() => vi.fn());
+const SERVER_JUDGE_MODEL = vi.hoisted(() => "anthropic/claude-haiku-5-5");
 const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
 
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
+// Stub the constant alone: importing the real module would drag the provider
+// registry (and Prisma's .env autoload) into an offline unit test.
+vi.mock("../llm/openai.js", () => ({ JUDGE_MODEL: SERVER_JUDGE_MODEL }));
 vi.mock("../config.js", () => ({
   get PLAYGROUND_NO_KEY_DEMO_ENABLED() {
     return configState.demoEnabled;
@@ -229,6 +235,43 @@ describe("classifyErrorFor — the shapes that are not ours", () => {
   it("survives a body that is not an object at all", () => {
     expect(classifyErrorFor(502, null, "byok").key).toBe("playground.error.failed");
     expect(classifyErrorFor(429, "nope", "demo").key).toBe("playground.error.rateLimited");
+  });
+});
+
+/*
+ * Which model the card is allowed to name.
+ *
+ * The demo path's claim is the one that can go wrong: the server decides the
+ * model, and the page's own `KLORN_MODEL_ID` is only what render.yaml is
+ * supposed to pin. A Render dashboard value beats the blueprint and the judge
+ * gate substitutes a failing pin, neither of which edits this repo — so the
+ * page must prefer what the server reported and fall back to the constant only
+ * when there is nothing to prefer.
+ */
+describe("the model the card names", () => {
+  const demo: ClassifyRequest = { mode: "demo", from: "a@b.com", subject: "s", body: "" };
+  const byok: ClassifyRequest = {
+    mode: "byok",
+    from: "a@b.com",
+    subject: "s",
+    body: "",
+    provider: "anthropic",
+    apiKey: "sk-ant-xxxxxxxx",
+    model: " claude-opus-5-5 ",
+  };
+
+  it("takes the server's model on the demo path", () => {
+    expect(modelThatRan(demo, "google/gemini-2.5-flash")).toBe("google/gemini-2.5-flash");
+  });
+
+  it("falls back to the build constant when the server reports none", () => {
+    // A server older than the field, not a server running something else.
+    expect(modelThatRan(demo, undefined)).toBe(KLORN_MODEL_ID);
+    expect(modelThatRan(demo, "   ")).toBe(KLORN_MODEL_ID);
+  });
+
+  it("never lets the server rename a BYOK call the visitor paid for", () => {
+    expect(modelThatRan(byok, "claude-haiku-5-5")).toBe("claude-opus-5-5");
   });
 });
 

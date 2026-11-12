@@ -18,10 +18,10 @@ import {
   type ClassifyRequest,
   classifyErrorFor,
   classifyRequestBody,
+  modelThatRan,
   type WireError,
 } from "./classify-wire";
 import type { DecidedBy } from "./decided";
-import { KLORN_MODEL_ID } from "./models";
 
 export interface Features {
   confidence: number;
@@ -36,6 +36,12 @@ export interface ClassifyResult {
   features: Features;
   source: string;
   decidedBy?: DecidedBy;
+  /**
+   * The model the server actually ran, reported by the demo path. Absent on
+   * the BYOK path (we chose that model, so we already know it) and absent from
+   * any server older than this field — hence optional, with a fallback.
+   */
+  model?: string;
 }
 
 export interface SortedResult extends ClassifyResult {
@@ -53,15 +59,6 @@ function isResult(data: unknown): data is ClassifyResult {
   if (!data || typeof data !== "object") return false;
   const d = data as Partial<ClassifyResult>;
   return typeof d.tier === "string" && typeof d.features === "object" && d.features !== null;
-}
-
-/**
- * The model the result card names. On the demo path the server pins the call to
- * its own JUDGE_MODEL and ignores any model we send, so reporting the picker's
- * value would name a model that never ran.
- */
-function modelThatRan(request: ClassifyRequest): string {
-  return request.mode === "byok" ? request.model.trim() : KLORN_MODEL_ID;
 }
 
 export function useClassify() {
@@ -103,7 +100,7 @@ export function useClassify() {
       const seconds = Math.round((performance.now() - started) / 100) / 10;
       setResult({
         ...data,
-        model: modelThatRan(input),
+        model: modelThatRan(input, data.model),
         seconds,
         subject: input.subject.trim(),
       });
