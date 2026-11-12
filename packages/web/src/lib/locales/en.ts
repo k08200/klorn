@@ -439,6 +439,26 @@ const en: Record<string, string> = {
   "alertDevices.toast.rateLimited": "Too many tests. Try again in a few minutes.",
   "alertDevices.toast.removed": "Removed.",
   "alertDevices.toast.removeFailed": "Could not remove it. Try again.",
+  "alertDevices.status.needsResubscribe": "Alerts stopped arriving here",
+  "alertDevices.status.needsResubscribeElsewhere":
+    "Alerts stopped arriving · open Klorn on that device to turn them back on",
+  "alertDevices.resubscribe": "Turn back on",
+  "alertDevices.toast.testArrived": "Test alert arrived on the device.",
+  "alertDevices.toast.testNoReceipt":
+    "Test alert sent, but the device hasn't confirmed it. Check that notifications are allowed there.",
+  "alertHealth.noChannel.title": "Urgent mail can't reach you outside Klorn",
+  "alertHealth.noChannel.body":
+    "Nothing is set up to alert you while Klorn is closed. Turn on alerts in this browser, install Klorn for Mac or Windows, or link Telegram.",
+  "alertHealth.noChannel.action": "Set up alerts",
+  "alertHealth.noChannel.dismiss": "Not now",
+  "alertHealth.resubscribe.title": "Alerts stopped reaching this browser",
+  "alertHealth.resubscribe.body":
+    "Recent alerts were sent but never showed up here. Turn them back on to reconnect this browser.",
+  "alertHealth.resubscribe.action": "Turn alerts back on",
+  "alertHealth.resubscribe.working": "Turning on…",
+  "alertHealth.resubscribe.done": "Alerts are back on for this browser.",
+  "alertHealth.resubscribe.failed":
+    "Couldn't turn alerts back on. Check that this site may show notifications.",
   "alertDevices.phone.name": "Phone",
   "alertDevices.phone.notSetUp": "Not set up",
   "alertDevices.phone.setUp": "Set up",

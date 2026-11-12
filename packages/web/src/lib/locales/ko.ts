@@ -436,6 +436,26 @@ const ko: Record<string, string> = {
   "alertDevices.toast.rateLimited": "테스트를 너무 많이 보냈습니다. 몇 분 뒤 다시 시도하세요.",
   "alertDevices.toast.removed": "삭제했습니다.",
   "alertDevices.toast.removeFailed": "삭제하지 못했습니다. 다시 시도하세요.",
+  "alertDevices.status.needsResubscribe": "이 기기로 알림이 오지 않습니다",
+  "alertDevices.status.needsResubscribeElsewhere":
+    "알림이 오지 않습니다 · 해당 기기에서 Klorn을 열어 다시 켜세요",
+  "alertDevices.resubscribe": "다시 켜기",
+  "alertDevices.toast.testArrived": "테스트 알림이 기기에 도착했습니다.",
+  "alertDevices.toast.testNoReceipt":
+    "테스트 알림을 보냈지만 기기에서 확인되지 않았습니다. 해당 기기에서 알림이 허용되어 있는지 확인하세요.",
+  "alertHealth.noChannel.title": "Klorn 밖에서는 긴급 메일 알림을 받을 수 없습니다",
+  "alertHealth.noChannel.body":
+    "Klorn이 닫혀 있을 때 알려 줄 수단이 없습니다. 이 브라우저에서 알림을 켜거나, Mac 또는 Windows용 Klorn을 설치하거나, 텔레그램을 연결하세요.",
+  "alertHealth.noChannel.action": "알림 설정",
+  "alertHealth.noChannel.dismiss": "나중에",
+  "alertHealth.resubscribe.title": "이 브라우저로 알림이 오지 않습니다",
+  "alertHealth.resubscribe.body":
+    "최근 알림이 전송됐지만 여기에는 표시되지 않았습니다. 알림을 다시 켜서 이 브라우저를 다시 연결하세요.",
+  "alertHealth.resubscribe.action": "알림 다시 켜기",
+  "alertHealth.resubscribe.working": "켜는 중…",
+  "alertHealth.resubscribe.done": "이 브라우저의 알림을 다시 켰습니다.",
+  "alertHealth.resubscribe.failed":
+    "알림을 다시 켜지 못했습니다. 이 사이트의 알림 표시가 허용되어 있는지 확인하세요.",
   "alertDevices.phone.name": "휴대폰",
   "alertDevices.phone.notSetUp": "설정 안 됨",
   "alertDevices.phone.setUp": "설정",

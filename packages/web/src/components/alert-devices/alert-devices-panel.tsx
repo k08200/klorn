@@ -10,9 +10,14 @@ import {
   alertRowStatus,
   isPushEndpoint,
 } from "../../lib/alert-devices";
+import { hasReachedDevice, TEST_ARRIVAL_POLL } from "../../lib/alert-health";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
-import { getPushDeviceId, unregisterPushSubscription } from "../../lib/push";
+import {
+  getPushDeviceId,
+  resubscribeThisBrowser,
+  unregisterPushSubscription,
+} from "../../lib/push";
 import { formatRelativeIntl } from "../../lib/text";
 import { useToast } from "../toast";
 import Button from "../ui/button";
@@ -43,6 +48,23 @@ const STATUS_INK: Record<AlertTone, string> = {
 
 function rowKey(e: AlertEndpoint): string {
   return e.kind === "desktop" ? `desktop-${e.app}` : `${e.kind}-${e.id}`;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Poll a test's delivery until the device confirms it, or give up. */
+async function waitForDevice(deliveryId: string): Promise<boolean> {
+  for (let i = 0; i < TEST_ARRIVAL_POLL.attempts; i++) {
+    await sleep(TEST_ARRIVAL_POLL.intervalMs);
+    try {
+      const status = await apiFetch<{ state?: string }>(`${BASE}/deliveries/${deliveryId}`);
+      if (hasReachedDevice(status?.state)) return true;
+    } catch (err) {
+      console.warn("[ALERT-DEVICES] delivery status failed:", err);
+      return false;
+    }
+  }
+  return false;
 }
 
 /** Settings → Notifications → "Where you get alerts" (N8). */
@@ -86,21 +108,49 @@ export function AlertDevicesPanel() {
   const sendTest = async (e: Extract<AlertEndpoint, { kind: "web" | "native" }>) => {
     markBusy(rowKey(e), true);
     try {
-      const res = await apiFetch<{ sent: boolean }>(`${BASE}/${e.kind}/${e.id}/test`, {
-        method: "POST",
-      });
+      const res = await apiFetch<{ sent: boolean; deliveryId?: string }>(
+        `${BASE}/${e.kind}/${e.id}/test`,
+        { method: "POST" },
+      );
       toast(
         res.sent ? t("alertDevices.toast.testSent") : t("alertDevices.toast.testNotSent"),
         res.sent ? "success" : "error",
       );
       // A dead endpoint found by the test is evicted server-side; refresh.
       if (!res.sent) await load();
+      // Web push: watch the service worker confirm it (phones report no receipt).
+      if (res.sent && e.kind === "web" && res.deliveryId) {
+        const arrived = await waitForDevice(res.deliveryId);
+        toast(
+          arrived ? t("alertDevices.toast.testArrived") : t("alertDevices.toast.testNoReceipt"),
+          arrived ? "success" : "info",
+        );
+        await load();
+      }
     } catch (err) {
       const limited = err instanceof Error && err.message.startsWith("API 429");
       toast(
         limited ? t("alertDevices.toast.rateLimited") : t("alertDevices.toast.testNotSent"),
         "error",
       );
+    } finally {
+      markBusy(rowKey(e), false);
+    }
+  };
+
+  // This browser's zombie subscription: replace it (a click; no prompt, #1716).
+  const resubscribe = async (e: Extract<AlertEndpoint, { kind: "web" }>) => {
+    markBusy(rowKey(e), true);
+    try {
+      const result = await resubscribeThisBrowser();
+      toast(
+        result === "ok" ? t("alertHealth.resubscribe.done") : t("alertHealth.resubscribe.failed"),
+        result === "ok" ? "success" : "error",
+      );
+      await load();
+    } catch (err) {
+      console.error("[ALERT-DEVICES] re-subscribe failed:", err);
+      toast(t("alertHealth.resubscribe.failed"), "error");
     } finally {
       markBusy(rowKey(e), false);
     }
@@ -193,6 +243,16 @@ export function AlertDevicesPanel() {
                   </div>
                   {isPushEndpoint(e) && (
                     <div className="flex shrink-0 gap-2">
+                      {e.kind === "web" && e.current && e.needsResubscribe && (
+                        <Button
+                          size="sm"
+                          disabled={rowBusy}
+                          aria-describedby={nameId}
+                          onClick={() => void resubscribe(e)}
+                        >
+                          {t("alertDevices.resubscribe")}
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
                         size="sm"

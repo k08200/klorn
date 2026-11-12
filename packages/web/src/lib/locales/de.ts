@@ -461,6 +461,26 @@ const de: Record<string, string> = {
   "alertDevices.toast.rateLimited": "Zu viele Tests. Versuche es in ein paar Minuten erneut.",
   "alertDevices.toast.removed": "Entfernt.",
   "alertDevices.toast.removeFailed": "Entfernen fehlgeschlagen. Versuche es erneut.",
+  "alertDevices.status.needsResubscribe": "Benachrichtigungen kommen hier nicht mehr an",
+  "alertDevices.status.needsResubscribeElsewhere":
+    "Benachrichtigungen kommen nicht mehr an · öffne Klorn auf diesem Gerät, um sie wieder einzuschalten",
+  "alertDevices.resubscribe": "Wieder einschalten",
+  "alertDevices.toast.testArrived": "Die Testbenachrichtigung ist auf dem Gerät angekommen.",
+  "alertDevices.toast.testNoReceipt":
+    "Testbenachrichtigung gesendet, aber das Gerät hat sie nicht bestätigt. Prüfe, ob Benachrichtigungen dort erlaubt sind.",
+  "alertHealth.noChannel.title": "Dringende Mails erreichen dich außerhalb von Klorn nicht",
+  "alertHealth.noChannel.body":
+    "Nichts ist eingerichtet, um dich zu benachrichtigen, während Klorn geschlossen ist. Schalte Benachrichtigungen in diesem Browser ein, installiere Klorn für Mac oder Windows oder verknüpfe Telegram.",
+  "alertHealth.noChannel.action": "Benachrichtigungen einrichten",
+  "alertHealth.noChannel.dismiss": "Nicht jetzt",
+  "alertHealth.resubscribe.title": "Benachrichtigungen erreichen diesen Browser nicht mehr",
+  "alertHealth.resubscribe.body":
+    "Die letzten Benachrichtigungen wurden gesendet, sind hier aber nie erschienen. Schalte sie wieder ein, um diesen Browser neu zu verbinden.",
+  "alertHealth.resubscribe.action": "Benachrichtigungen wieder einschalten",
+  "alertHealth.resubscribe.working": "Wird eingeschaltet…",
+  "alertHealth.resubscribe.done": "Benachrichtigungen sind in diesem Browser wieder an.",
+  "alertHealth.resubscribe.failed":
+    "Benachrichtigungen konnten nicht wieder eingeschaltet werden. Prüfe, ob diese Website Benachrichtigungen anzeigen darf.",
   "alertDevices.phone.name": "Smartphone",
   "alertDevices.phone.notSetUp": "Nicht eingerichtet",
   "alertDevices.phone.setUp": "Einrichten",

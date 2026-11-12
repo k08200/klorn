@@ -417,6 +417,25 @@ const zh: Record<string, string> = {
   "alertDevices.toast.rateLimited": "测试次数过多。请几分钟后再试。",
   "alertDevices.toast.removed": "已移除。",
   "alertDevices.toast.removeFailed": "无法移除。请重试。",
+  "alertDevices.status.needsResubscribe": "提醒已无法送达此处",
+  "alertDevices.status.needsResubscribeElsewhere":
+    "提醒已无法送达 · 请在该设备上打开 Klorn 重新开启",
+  "alertDevices.resubscribe": "重新开启",
+  "alertDevices.toast.testArrived": "测试提醒已送达设备。",
+  "alertDevices.toast.testNoReceipt":
+    "测试提醒已发送，但设备尚未确认收到。请检查该设备是否允许通知。",
+  "alertHealth.noChannel.title": "在 Klorn 之外，紧急邮件无法提醒你",
+  "alertHealth.noChannel.body":
+    "Klorn 关闭时没有任何方式提醒你。请在此浏览器中开启提醒、安装 Mac 或 Windows 版 Klorn，或关联 Telegram。",
+  "alertHealth.noChannel.action": "设置提醒",
+  "alertHealth.noChannel.dismiss": "以后再说",
+  "alertHealth.resubscribe.title": "提醒已无法送达此浏览器",
+  "alertHealth.resubscribe.body":
+    "最近的提醒已发送，但从未在此显示。重新开启提醒以重新连接此浏览器。",
+  "alertHealth.resubscribe.action": "重新开启提醒",
+  "alertHealth.resubscribe.working": "正在开启…",
+  "alertHealth.resubscribe.done": "此浏览器的提醒已重新开启。",
+  "alertHealth.resubscribe.failed": "无法重新开启提醒。请检查此网站是否允许显示通知。",
   "alertDevices.phone.name": "手机",
   "alertDevices.phone.notSetUp": "未设置",
   "alertDevices.phone.setUp": "设置",

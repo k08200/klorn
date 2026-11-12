@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertDevicesPanel } from "../../../components/alert-devices/alert-devices-panel";
+import { AlertHealthBanner } from "../../../components/alert-health-banner";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import Switch from "../../../components/ui/switch";
@@ -153,6 +154,9 @@ export function NotificationsSection() {
 
   return (
     <section className="mb-8">
+      <div className="mb-4 empty:hidden">
+        <AlertHealthBanner place="settings" />
+      </div>
       <AlertDevicesPanel />
       <h2 className={SECTION_TITLE}>{t("settings.section.signalRhythm")}</h2>
       <div className={`${PANEL} divide-y divide-line-soft`}>
