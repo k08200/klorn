@@ -23,8 +23,9 @@ import { usdToFractionalCents } from "../billing/cents.js";
 import { DEMO_DAILY_BUDGET_CENTS, PLAYGROUND_NO_KEY_DEMO_ENABLED } from "../config.js";
 import { judgeEmail } from "../judge/poc-judge.js";
 import { TIERS } from "../judge/tiers.js";
+import { JUDGE_MODEL } from "../llm/openai.js";
 import type { ProviderCredentials } from "../providers/index.js";
-import { clientAddress } from "../security/client-address.js";
+import { clientAddressBucket } from "../security/client-address.js";
 import { redactCredentials } from "../security/credential-redaction.js";
 
 // Strip CR/LF/control chars from any user-supplied value before it reaches a
@@ -133,11 +134,16 @@ interface FeedbackBody {
 // A request WITHOUT an apiKey runs one classification on the server's own env
 // keys so a visitor sees value before connecting anything. Server money is at
 // stake on a zero-auth route, so three independent walls guard it:
-//   1. Per-IP rate limit (3/min AND 10/UTC-day, in-memory).
+//   1. Per-client rate limit (3/min AND 10/UTC-day, in-memory), keyed on the
+//      client's demo bucket — an IPv6 client by its /64, the prefix it is
+//      allocated, so rotating addresses inside one does not buy fresh slots.
 //   2. Global daily demo budget, pre-charged per call in fractional cents.
-//   3. Model pinned to the server default (JUDGE_MODEL); visitor-supplied
-//      provider/model fields are ignored on this path. Input length caps and
-//      the judge's strict classify-only JSON prompt are shared with BYOK.
+//   3. Model pinned to the server default (JUDGE_MODEL), passed EXPLICITLY:
+//      poc-judge reads a defined override as a caller-pinned model, which is
+//      what stops the escalation dial (JUDGE_ESCALATION_MODEL) from adding a
+//      second call this path's one-call pre-charge never budgeted for.
+//      Visitor-supplied provider/model fields are ignored. Input length caps
+//      and the judge's strict classify-only JSON prompt are shared with BYOK.
 // The whole path sits behind PLAYGROUND_NO_KEY_DEMO_ENABLED (OFF by default):
 // dark ⇒ key-free requests get 401 key_required, BYOK is untouched.
 
@@ -175,7 +181,7 @@ export function _resetPlaygroundDemoState(): void {
   demoBudget = { dayKey: "", usedFractionalCents: 0 };
 }
 
-/** Defense 1 — take one per-IP slot; false when the minute or day cap is hit. */
+/** Defense 1 — take one per-client slot; false when the minute or day cap is hit. */
 function takeDemoIpSlot(ip: string): boolean {
   const now = new Date();
   const minuteKey = Math.floor(now.getTime() / 60_000);
@@ -215,7 +221,7 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
     // Feature dark (the default): behave as the old key-required playground.
     return reply.code(401).send({ error: "key_required" });
   }
-  if (!takeDemoIpSlot(clientAddress(request))) {
+  if (!takeDemoIpSlot(clientAddressBucket(request))) {
     return reply.code(429).send({ error: "demo_rate_limited", byokAvailable: true });
   }
   if (!takeDemoBudget()) {
@@ -234,7 +240,7 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
       undefined, // no userId — same as BYOK, the per-user ledger is bypassed
       undefined,
       undefined, // no credentials — the server's env chain pays (global cost caps still apply)
-      undefined, // no model override — Defense 3: pinned to the JUDGE_MODEL default
+      JUDGE_MODEL, // Defense 3: pinned, and pinning is what suppresses escalation
       (message) => {
         llmError = scrubKeys(message);
       },
