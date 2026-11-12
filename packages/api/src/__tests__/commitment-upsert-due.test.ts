@@ -51,6 +51,25 @@ describe("upsertCommitment — re-ingesting the same promise", () => {
     expect(mocks.update.mock.calls[0][0].data.dueAt).toBe(FIRST_DUE);
   });
 
+  // Noise control: a promise the user dismissed (or confirmed, or that a reply
+  // marked likely done) is re-mined from every quoted reply in its thread. The
+  // re-ingestion update must leave the user's triage alone.
+  it("never rewrites the user's triage: status, confirmation, completion stamp", async () => {
+    mocks.findUnique.mockResolvedValueOnce({ ...existingRow(null), status: "DISMISSED" });
+
+    await upsertCommitment("u-1", {
+      title: "내일 보내드릴게요",
+      dueText: "내일",
+      dedupKey: "email:t-1:abc",
+    });
+
+    const data = mocks.update.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty("status");
+    expect(data).not.toHaveProperty("confirmedAt");
+    expect(data).not.toHaveProperty("completionSuggestedAt");
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
   it("fills a due date the row did not have yet", async () => {
     mocks.findUnique.mockResolvedValueOnce(existingRow(null));
 

@@ -12,8 +12,9 @@
  *  - mail received today that needs a reply, or PUSH-lane mail not yet read,
  *    in a thread the user has not answered since (in Klorn, in the provider,
  *    or by a Sent-folder row), and not archived or dismissed;
- *  - an open commitment the user owes (owner USER, extraction confidence at
- *    least MIN_COMMITMENT_CONFIDENCE) that is due today or overdue; overdue
+ *  - an open commitment the user owes (owner USER, confirmed: extraction confidence at
+ *    least MIN_COMMITMENT_CONFIDENCE or confirmed by the user in the ledger)
+ *    that is due today or overdue; overdue
  *    is bounded to OVERDUE_LOOKBACK_DAYS, since nothing closes a commitment
  *    when the user keeps it;
  *  - something the other side owes: an open counterparty commitment due
@@ -31,6 +32,7 @@ import { normalizeTier } from "../judge/tiers.js";
 import { senderName } from "../notify/notification-format.js";
 import type { NotificationLanguage } from "../notify/notification-strings.js";
 import { readCalendarRows } from "../pim/calendar-read.js";
+import { COMMITMENT_CONFIRMED_MIN_CONFIDENCE } from "../pim/commitment-confirmation.js";
 import { localDayUtcRange, localMinuteOfDay } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 
@@ -40,8 +42,8 @@ import { stripUntrusted } from "../untrusted.js";
  * otherwise ring every evening of the window.
  */
 const OVERDUE_LOOKBACK_DAYS = 2;
-/** Extraction confidence a commitment needs before it can ring the review. */
-const MIN_COMMITMENT_CONFIDENCE = 0.7;
+/** Extraction confidence a commitment needs before it can ring the review (unless confirmed). */
+const MIN_COMMITMENT_CONFIDENCE = COMMITMENT_CONFIRMED_MIN_CONFIDENCE;
 /** A timed block longer than this (out of office, travel) is not a meeting. */
 const MAX_MEETING_MS = 8 * 60 * 60 * 1000;
 /** A meeting tomorrow before this local minute sends the review on its own. */
@@ -388,7 +390,9 @@ async function openCommitments(
       userId,
       status: "OPEN",
       owner: { in: ["USER", "COUNTERPARTY"] },
-      confidence: { gte: MIN_COMMITMENT_CONFIDENCE },
+      // Confirmed only (pim/commitment-confirmation.ts): a rule-mined
+      // suggestion rings nothing until the user confirms it in the ledger.
+      OR: [{ confidence: { gte: MIN_COMMITMENT_CONFIDENCE } }, { confirmedAt: { not: null } }],
       dueAt: { gte: new Date(today.gte.getTime() - OVERDUE_LOOKBACK_DAYS * DAY_MS), lt: today.lt },
     },
     select: { title: true, dueAt: true, owner: true, counterpartyName: true, threadId: true },

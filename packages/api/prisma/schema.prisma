@@ -2380,6 +2380,16 @@ model Commitment {
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
+  // When the user confirmed a suggested (low-confidence, rule-mined) row. A
+  // row is "confirmed" when this is set or confidence >= 0.7
+  // (pim/commitment-confirmation.ts); only a confirmed row may interrupt.
+  confirmedAt DateTime?
+  // When a later reply in the thread suggested the promise was kept: the
+  // user's own send (owner USER, "likely done") or the counterparty writing
+  // again (owner COUNTERPARTY, "likely delivered"). The evidence's own time.
+  // A suggestion only: the user confirms DONE; nothing sets it automatically.
+  completionSuggestedAt DateTime?
+
   path CommitmentPath?
 
   @@unique([userId, dedupKey])

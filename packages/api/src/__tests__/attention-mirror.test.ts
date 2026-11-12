@@ -528,6 +528,114 @@ describe("upsertAttentionForCommitment", () => {
     expect(call.create.confidence).toBe(0.5);
   });
 
+  // A rule-mined suggestion (confidence 0.45/0.55, never confirmed) must not
+  // ring: the PUSH lane is what the Mac banners and Today's "Needs you now"
+  // read. Only a confirmed commitment (≥0.7 or the user's Confirm) interrupts.
+  describe("interrupt gate", () => {
+    type Call = { create: { tier: string; tierReason: string } };
+    const lastTier = () => (upsertSpy.mock.calls.at(-1)?.[0] as unknown as Call).create;
+    const base = {
+      userId: "u",
+      title: "send the deck",
+      description: null,
+      status: "OPEN",
+    };
+    const overdue = new Date(NOW - 24 * 60 * 60 * 1000);
+    const dueSoon = new Date(NOW + 4 * 60 * 60 * 1000);
+
+    it("keeps an overdue rule-mined suggestion out of PUSH", async () => {
+      await upsertAttentionForCommitment(
+        { ...base, id: "s-1", dueAt: overdue, confidence: 0.55 },
+        NOW,
+      );
+      expect(lastTier().tier).toBe("QUEUE");
+      expect(lastTier().tierReason).toBe("commitment.suggested");
+    });
+
+    it("keeps a due-within-24h rule-mined suggestion out of PUSH", async () => {
+      await upsertAttentionForCommitment(
+        { ...base, id: "s-2", dueAt: dueSoon, confidence: 0.55 },
+        NOW,
+      );
+      expect(lastTier().tier).not.toBe("PUSH");
+    });
+
+    it("keeps the lowest-confidence overdue suggestion silent", async () => {
+      await upsertAttentionForCommitment(
+        { ...base, id: "s-3", dueAt: overdue, confidence: 0.45 },
+        NOW,
+      );
+      expect(lastTier().tier).toBe("SILENT");
+    });
+
+    it("rings once the user confirmed the same suggestion", async () => {
+      await upsertAttentionForCommitment(
+        {
+          ...base,
+          id: "s-4",
+          dueAt: overdue,
+          confidence: 0.45,
+          confirmedAt: new Date(NOW - 60_000),
+        },
+        NOW,
+      );
+      expect(lastTier().tier).toBe("PUSH");
+    });
+
+    it("rings a high-confidence commitment that is due soon", async () => {
+      await upsertAttentionForCommitment(
+        { ...base, id: "s-5", dueAt: dueSoon, confidence: 0.9 },
+        NOW,
+      );
+      expect(lastTier().tier).toBe("PUSH");
+    });
+
+    // A "likely done" stamp is a hint the user settles, not a verdict: an
+    // acknowledgement reply ("sorry, next week") must not silence a confirmed
+    // promise. Only the user's Done/Dismiss takes it out of the lanes.
+    it("keeps a confirmed commitment's lane when a reply only suggests it is done", async () => {
+      await upsertAttentionForCommitment(
+        {
+          ...base,
+          id: "s-6",
+          dueAt: overdue,
+          confidence: 0.9,
+          completionSuggestedAt: new Date(NOW - 60_000),
+        },
+        NOW,
+      );
+      expect(lastTier().tier).toBe("PUSH");
+    });
+
+    it("ranks a suggestion below real work so it never leads the queue", async () => {
+      await upsertAttentionForCommitment(
+        { ...base, id: "s-7", dueAt: overdue, confidence: 0.55 },
+        NOW,
+      );
+      const call = upsertSpy.mock.calls.at(-1)?.[0] as unknown as { create: { priority: number } };
+      expect(call.create.priority).toBeLessThanOrEqual(40);
+    });
+
+    it("only ever stores reason keys the clients can render", async () => {
+      const { isStaticTierReasonKey } = await import("../judge/tier-reason-strings.js");
+      const cases = [
+        { dueAt: overdue, confidence: 0.55 },
+        { dueAt: dueSoon, confidence: 0.55 },
+        { dueAt: overdue, confidence: 0.45 },
+        { dueAt: null, confidence: 0.9 },
+        { dueAt: dueSoon, confidence: 0.9 },
+        { dueAt: new Date(NOW + 5 * 24 * 60 * 60 * 1000), confidence: 0.9 },
+        { dueAt: overdue, confidence: 0.9 },
+      ];
+      for (const [i, c] of cases.entries()) {
+        await upsertAttentionForCommitment({ ...base, id: `r-${i}`, ...c }, NOW);
+        const reason = lastTier().tierReason;
+        if (reason.startsWith("Silenced")) continue; // the adaptor's own sentence
+        expect(isStaticTierReasonKey(reason), reason).toBe(true);
+      }
+    });
+  });
+
   it("marks a DONE commitment as RESOLVED", async () => {
     await upsertAttentionForCommitment(
       {

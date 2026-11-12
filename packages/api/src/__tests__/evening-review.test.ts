@@ -343,9 +343,11 @@ describe("gatherEveningReviewInput — commitments and meetings", () => {
     expect(m.where.commitment?.[0]).toMatchObject({
       status: "OPEN",
       owner: { in: ["USER", "COUNTERPARTY"] },
-      confidence: { gte: 0.7 },
+      // Confirmed only: >= 0.7, or a suggestion the user confirmed in the ledger.
+      OR: [{ confidence: { gte: 0.7 } }, { confirmedAt: { not: null } }],
       dueAt: { gte: new Date("2099-01-02T15:00:00Z"), lt: new Date("2099-01-05T15:00:00Z") },
     });
+    expect(m.where.commitment?.[0]).not.toHaveProperty("confidence");
     expect(m.where.threadBrief?.[0]).toMatchObject({
       lastMessageAt: {
         gte: new Date("2099-01-04T15:00:00Z"),
