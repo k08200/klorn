@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { KLORN_MODEL_ID } from "../src/app/playground/models";
 import en from "../src/lib/locales/en";
 
 /**
@@ -31,8 +32,29 @@ interface CapturedBody {
   model?: string;
 }
 
-/** Answer every classify with one verdict; hand back the bodies we saw. */
-async function stubVerdict(page: Page): Promise<CapturedBody[]> {
+/**
+ * The model the stubbed server says it ran.
+ *
+ * It MUST stay different from the page's own `KLORN_MODEL_ID`
+ * (`src/app/playground/models.ts`) and must render differently after
+ * `shortModelName` strips the vendor prefix. The page falls back to that
+ * constant when the response carries no model, so a stub whose value matches
+ * it — including `anthropic/claude-haiku-5-5`, which shortens to exactly the
+ * constant — passes on either arm and stops testing anything. Do not "tidy"
+ * this to match the page.
+ */
+const SERVER_REPORTED_MODEL = "anthropic/claude-sonnet-5-5";
+const SERVER_REPORTED_SHORT = "claude-sonnet-5-5";
+
+/**
+ * Answer every classify with one verdict; hand back the bodies we saw.
+ *
+ * `model` is what the server reports it ran on. Pass `null` for a server that
+ * sends no model at all — an API deployed before the field existed, which is a
+ * real state and not only a historical one: Vercel and Render do not ship
+ * together, so a new client talks to the old API for a window on every deploy.
+ */
+async function stubVerdict(page: Page, model: string | null = SERVER_REPORTED_MODEL) {
   const bodies: CapturedBody[] = [];
   await page.route(CLASSIFY, async (route) => {
     bodies.push(route.request().postDataJSON() as CapturedBody);
@@ -44,6 +66,7 @@ async function stubVerdict(page: Page): Promise<CapturedBody[]> {
         features: { confidence: 0.6, senderTrust: 0.9, reversibility: 0.4, urgency: 0.9 },
         source: "llm",
         decidedBy: "default",
+        ...(model === null ? {} : { model }),
       },
     });
   });
@@ -126,8 +149,22 @@ test.describe("playground: key-free is the default door", () => {
     await sortButton(page).click();
 
     // Defense 3 pins the demo to the server's JUDGE_MODEL whatever the picker
-    // says, so naming anything else would be a model that never ran.
-    await expect(resultPane(page)).toContainText("claude-haiku-5-5");
+    // says, so naming anything else would be a model that never ran — and the
+    // page must take that name from the response, not from its own build-time
+    // constant, which is only what render.yaml is *supposed* to pin.
+    await expect(resultPane(page)).toContainText(SERVER_REPORTED_SHORT);
+    await expect(resultPane(page)).not.toContainText(KLORN_MODEL_ID);
+  });
+
+  test("falls back to the build constant when the server reports no model", async ({ page }) => {
+    // Deploy skew, not just an old server: web and api ship separately, so a
+    // new client meets the pre-field API on every release. An empty model name
+    // on the card is worse than a stale-but-correct one.
+    await stubVerdict(page, null);
+    await page.goto("/playground");
+    await sortButton(page).click();
+
+    await expect(resultPane(page)).toContainText(KLORN_MODEL_ID);
   });
 });
 

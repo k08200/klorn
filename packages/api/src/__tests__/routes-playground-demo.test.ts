@@ -19,6 +19,15 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const judgeEmail = vi.hoisted(() => vi.fn());
+/*
+ * The judge model the stubbed server runs.
+ *
+ * Load-bearing that this differs from the web page's own `KLORN_MODEL_ID`
+ * ("claude-haiku-5-5", packages/web/src/app/playground/models.ts): the route
+ * used to be free to report either, and the assertion that it reports the
+ * model it actually pinned only bites while the two spellings differ. Match
+ * them and a route that hardcodes the page's constant passes. Do not "tidy".
+ */
 const SERVER_JUDGE_MODEL = vi.hoisted(() => "anthropic/claude-haiku-5-5");
 const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
 
