@@ -14,6 +14,7 @@ final class AppSettings {
     static let loadRemoteImagesKey = "klorn.mail.loadRemoteImages"
     static let readingBandExpandedKey = "klorn.reading.bandExpanded"
     static let appearanceKey = "klorn.appearance"
+    static let dockBadgeKey = "klorn.dockBadge"
     /// Settings retired when the pill and the expanded panel were removed
     /// (founder decision 2026-10-15): the pill switch, show-in-Dock (Klorn is
     /// always in the Dock now), the panel's saved size, the first-launch
@@ -43,6 +44,18 @@ final class AppSettings {
     var notificationsEnabled: Bool {
         didSet { defaults.set(notificationsEnabled, forKey: Self.notificationsKey) }
     }
+
+    /// Whether the Dock icon shows Today's "Needs you now" count (N4). ON by
+    /// default. Quiet hours never hide it: a badge is not an interrupt.
+    var showDockBadge: Bool {
+        didSet {
+            defaults.set(showDockBadge, forKey: Self.dockBadgeKey)
+            onDockBadgeChanged?(showDockBadge)
+        }
+    }
+
+    /// Fired when "Show count on Dock icon" changes (wired at launch).
+    var onDockBadgeChanged: ((Bool) -> Void)?
 
     /// Whether HTML mail may fetch remote resources (images, styles). ON by
     /// default — the founder call is real rendering first — but turning it
@@ -111,11 +124,17 @@ final class AppSettings {
         self.defaults = defaults
         self.notificationsEnabled = Self.resolveNotifications(defaults.object(forKey: Self.notificationsKey))
         self.loadRemoteImages = Self.resolveLoadRemoteImages(defaults.object(forKey: Self.loadRemoteImagesKey))
+        self.showDockBadge = Self.resolveDockBadge(defaults.object(forKey: Self.dockBadgeKey))
         self.readingBandExpanded = defaults.object(forKey: Self.readingBandExpandedKey) as? Bool ?? false
         self.appearance = Self.resolveAppearance(defaults.object(forKey: Self.appearanceKey))
         self.mainWindowOpenAtQuit = defaults.object(forKey: Self.mainWindowOpenAtQuitKey) as? Bool ?? false
         self.shortcut = Self.resolveShortcut(defaults.object(forKey: Self.shortcutKey))
         Self.retiredKeys.forEach(defaults.removeObject(forKey:))
+    }
+
+    /// "Show count on Dock icon": ON unless the user turned it off. Pure.
+    nonisolated static func resolveDockBadge(_ stored: Any?) -> Bool {
+        (stored as? Bool) ?? true
     }
 
     /// Default ⌥⌘K when unset; otherwise restore the stored {keyCode,modifiers}.

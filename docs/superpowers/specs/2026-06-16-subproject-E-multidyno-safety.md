@@ -32,6 +32,15 @@ session mode, leaks (a release on the wrong backend wedges every future tick).
 **Fix:** `pg_advisory_xact_lock` inside a single `$transaction` (auto-releases at
 txn end, pgbouncer-safe), or a `SchedulerLock` mutex row with a heartbeat.
 
+> **Shipped 2026-11-11, ahead of the scaling gate:** the leak happened on the
+> single production instance, because Supavisor is itself a pooler. Session
+> locks stayed held by idle backends for hours and the automation scheduler
+> skipped ticks without a log. Fixed with a row lease ("SchedulerLease",
+> `packages/api/src/scheduler-lease.ts`) for the automation and the
+> autonomous-agent loops. A transaction-scoped lock was rejected because a tick
+> runs for up to minutes of network I/O, and holding a transaction open that
+> long pins a pooled connection.
+
 ### E2 — In-process dedup/debounce state
 Three module-level structures hold state that is per-process only:
 - `email-action-trigger.ts:25` — `const lastTriggerAt = new Map()` (agent-run

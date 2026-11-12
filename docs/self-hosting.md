@@ -76,8 +76,9 @@ The repo's [`render.yaml`](../render.yaml) is a Render Blueprint for the API:
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/k08200/klorn)
 
 The blueprint defines the **API service only** — you bring a Postgres and
-deploy the web app separately (Vercel free tier is the tested path, via the
-repo's [`vercel.json`](../vercel.json)).
+deploy the web app separately (Vercel free tier is the tested path, via
+[`packages/web/vercel.json`](../packages/web/vercel.json), with the Vercel
+project's Root Directory set to `packages/web`).
 
 1. **Create a Postgres first** (Render Postgres free tier, or
    [Neon](https://neon.tech) — for Neon use the PgBouncer options shown in

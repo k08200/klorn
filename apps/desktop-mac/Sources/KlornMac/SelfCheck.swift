@@ -1564,6 +1564,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await meetingMailBannerSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Quiet-hours summary, as on Windows (N6, 2026-11-08):")
     for (name, ok) in await quietHoursSummarySelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Dock badge, Open-at-login question, closed-app catch-up (N4–N6, 2026-11-11):")
+    for (name, ok) in await notifyBadgeLoginSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Files and team free-time (P12):")
     for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Locale-native preview fixtures (landing captures):")

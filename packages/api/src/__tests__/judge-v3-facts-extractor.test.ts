@@ -6,6 +6,7 @@ import {
   FACTS_BODY_CAP,
   validTimeZone,
 } from "../judge/v3/facts-prompt.js";
+import { MAIL_KINDS } from "../judge/v3/facts-schema.js";
 import { deterministicPreFacts } from "../judge/v3/pre-facts.js";
 
 const me = "me@acme.com";
@@ -151,6 +152,29 @@ describe("buildFactsPrompt", () => {
   it("passes deterministic signals as hints", () => {
     const p = buildFactsPrompt(mail(), deterministicPreFacts(mail()));
     expect(p.user).toMatch(/recipient is on To/i);
+  });
+
+  const kindLine = () =>
+    buildFactsPrompt(mail(), deterministicPreFacts(mail()))
+      .user.split("\n")
+      .find((l) => l.startsWith("- kind: ")) ?? "";
+  const kindDefinition = (kind: string) =>
+    new RegExp(`\\b${kind} \\(([^)]*)\\)`).exec(kindLine())?.[1] ?? "";
+
+  it("defines every mail kind of the schema on the kind line", () => {
+    for (const kind of MAIL_KINDS) {
+      expect(kindDefinition(kind).length).toBeGreaterThan(20);
+    }
+  });
+
+  it("files mail triggered by the recipient's own sign-up or order under notification, not promotion", () => {
+    expect(kindDefinition("notification")).toMatch(/welcome/i);
+    expect(kindDefinition("notification")).toMatch(/even when it also advertises/i);
+    expect(kindDefinition("promotion")).toMatch(/main purpose is to sell/i);
+  });
+
+  it("keeps the asks of a notification: the kind does not replace them", () => {
+    expect(kindLine()).toMatch(/does not replace asks/i);
   });
 });
 
@@ -338,11 +362,74 @@ describe("extractFacts", () => {
     expect(r.source).toBe("llm");
   });
 
-  it("does not retry a malformed answer (it repeats at temperature 0)", async () => {
+  it("retries a malformed answer once with the same request and counts both calls' usage", async () => {
+    // Haiku's forced-tool output sometimes stops after `asks` (eval 2026-11-11).
+    const cutOff = { asks: llmAnswer().asks };
+    const complete = vi
+      .fn()
+      .mockResolvedValueOnce(completion(cutOff))
+      .mockResolvedValueOnce(completion(llmAnswer()));
+    const r = await extractFacts(mail(), { complete });
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0]).toEqual(complete.mock.calls[0]?.[0]);
+    expect(r.source).toBe("llm");
+    expect(r.facts?.asks).toHaveLength(1);
+    expect(r.usage?.promptTokens).toBe(4000);
+    expect(r.usage?.completionTokens).toBe(400);
+    // The recovered failure leaves no trace in issues and does not escalate.
+    expect(r.issues).toEqual([]);
+    expect(r.escalate).toBe(false);
+    expect(r.escalateReasons).toEqual([]);
+  });
+
+  it("retries an answer that is not JSON, after a transport retry, at most once more", async () => {
+    const complete = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("503"))
+      .mockResolvedValueOnce(completion("not json at all"))
+      .mockResolvedValueOnce(completion(llmAnswer()));
+    const r = await extractFacts(mail(), { complete });
+    expect(complete).toHaveBeenCalledTimes(3);
+    expect(r.source).toBe("llm");
+    expect(r.usage?.promptTokens).toBe(4000);
+  });
+
+  it("gives up after a second malformed answer, as before: no facts, llm_failed", async () => {
     const complete = vi.fn(async () => completion("not json at all"));
     const r = await extractFacts(mail(), { complete });
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(r.source).toBe("none");
+    expect(r.facts).toBeNull();
+    expect(r.escalateReasons).toEqual(["llm_failed"]);
+  });
+
+  it("never retries a well-formed answer, even one whose ask fails the evidence check", async () => {
+    const valid = vi.fn(async () => completion(llmAnswer()));
+    await extractFacts(mail(), { complete: valid });
+    expect(valid).toHaveBeenCalledTimes(1);
+    const fabricated = llmAnswer({
+      asks: [{ kind: "pay", object: "wire", due: null, evidence: "please wire 5000 dollars now" }],
+    });
+    const unverified = vi.fn(async () => completion(fabricated));
+    const r = await extractFacts(mail(), { complete: unverified });
+    expect(unverified).toHaveBeenCalledTimes(1);
+    expect(r.source).toBe("llm");
+  });
+
+  it("does not retry a malformed answer once the caller has abandoned it", async () => {
+    const complete = vi.fn(async () => completion("not json at all"));
+    const r = await extractFacts(mail(), { complete, abandoned: () => true });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(r.source).toBe("none");
+  });
+
+  it("propagates a budget refusal on the malformed-answer retry", async () => {
+    const err = Object.assign(new Error("cap"), { name: "DailyCostCapExceededError" });
+    const complete = vi
+      .fn()
+      .mockResolvedValueOnce(completion("not json at all"))
+      .mockRejectedValueOnce(err);
+    await expect(extractFacts(mail(), { complete })).rejects.toBe(err);
   });
 
   it("does not retry when every provider is exhausted", async () => {

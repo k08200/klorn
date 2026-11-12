@@ -151,9 +151,9 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
       // skip the LLM call (idempotent, cost-saving; the AutoBE staleness gate).
       // This read is intentionally outside upsertSenderTrait's transaction: it
       // is a cost optimization, NOT a correctness gate. Concurrency is already
-      // prevented by the automation-scheduler advisory lock that serializes
-      // this job; the per-trait upsert transaction is the row-level safety net
-      // if that lock ever leaks (a duplicate then lands last-write-wins, never
+      // prevented by the automation-scheduler lease that serializes this job;
+      // the per-trait upsert transaction is the row-level safety net if two
+      // ticks ever overlap (a duplicate then lands last-write-wins, never
       // corrupt). A weaker-than-it-looks gate, by design.
       const stored = await prisma.senderTrait.findMany({
         where: { userId, sender },

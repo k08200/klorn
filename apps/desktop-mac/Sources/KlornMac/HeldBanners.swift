@@ -67,11 +67,12 @@ enum HeldBanners {
     /// a count title and the senders — no subject, so one banner never lists
     /// several mails' contents. A tap opens Today
     /// (`NotificationTapAction.openToday`). Pure.
-    static func summaryBanner(for items: [FirewallItem]) -> PushBanner {
+    static func summaryBanner(for items: [FirewallItem], kind: SummaryKind = .quietHours) -> PushBanner {
         let senders = items.map { senderDisplayName($0.email?.from.map(decodeHTMLEntities)) }
+        let title = kind == .whileClosed ? "push.closedSummary.title" : "push.heldSummary.title"
         return PushBanner(
             identifier: PushNotifier.summaryIdentifier(for: items.first?.id ?? ""),
-            title: L("push.heldSummary.title", items.count),
+            title: L(title, items.count),
             body: formatSenders(senders))
     }
 
@@ -99,6 +100,12 @@ enum HeldBanners {
         item.email?.receivedAt ?? item.surfacedAt
     }
 
+    /// Which summary a catch-up posts: mail held during quiet hours, or
+    /// mail that arrived while Klorn was quit (N6, 2026-11-11).
+    enum SummaryKind: Equatable, Sendable {
+        case quietHours, whileClosed
+    }
+
     struct Outcome: Equatable {
         /// Banners to post one per mail: this pass's new mail, plus a lone
         /// held mail (first). The catch-up adds at most one banner on top of
@@ -107,34 +114,70 @@ enum HeldBanners {
         /// Held mail for ONE summary banner: empty, or two or more.
         let summary: [FirewallItem]
         let next: PushLedger
+        /// What `summary` is about (its title).
+        var summaryKind: SummaryKind = .quietHours
     }
 
     /// What this pass posts once the server's verdict is in. `ledger` is the
     /// one read after the verdict (another pass may have changed it during
     /// the wait); `fresh` is the plan's banners, `unseenPush` every new PUSH
-    /// mail of this pass, `eligible` the lane's catch-up candidates. Pure.
+    /// mail of this pass, `eligible` the lane's catch-up candidates.
+    /// `missed` is set on the first pass after launch only: the eligible new
+    /// PUSH mail that arrived while Klorn was quit (N6). It is caught up like
+    /// held mail — one banner, or ONE "while Klorn was closed" summary — and
+    /// quiet hours hold it the same way. Pure.
     static func resolve(
         verdict: AlertVerdict, ledger: PushLedger,
-        fresh: [FirewallItem], unseenPush: [FirewallItem], eligible: [FirewallItem]
+        fresh: [FirewallItem], unseenPush: [FirewallItem], eligible: [FirewallItem],
+        missed: [FirewallItem] = []
     ) -> Outcome {
         switch verdict {
         case .quietHours:
             // The lane lists newest first; the held list is oldest first.
             let candidates = Set(eligible.map(\.id))
             let holdNow = arrival(unseenPush.filter { candidates.contains($0.id) }).reversed().map(\.id)
-            return Outcome(post: [], summary: [], next: ledger.holding(holdNow))
+            return Outcome(post: [], summary: [], next: ledger.holding(holdNow, whileClosed: !missed.isEmpty))
         case .refused:
             return Outcome(post: [], summary: [], next: ledger.clearingHeld())
         case .unknown:
-            return Outcome(post: fresh, summary: [], next: ledger)
+            // Fail-open for new mail: what was missed while quit is caught up
+            // now; mail held for quiet hours waits for an answer.
+            let caughtUp = catchUp(missed, fresh: fresh, kind: .whileClosed)
+            return Outcome(post: caughtUp.post, summary: caughtUp.summary, next: ledger,
+                           summaryKind: caughtUp.summaryKind)
         case .allowed:
             // Only what this pass shows leaves the list: an overlapping pass
             // may have held newer mail during the wait.
-            let waiting = due(eligible, held: ledger.heldIDs)
-            let next = ledger.keepingHeld(Set(ledger.heldIDs).subtracting(waiting.map(\.id)))
-            if waiting.count == 1 { return Outcome(post: waiting + fresh, summary: [], next: next) }
-            return Outcome(post: fresh, summary: waiting, next: next)
+            let held = due(eligible, held: ledger.heldIDs)
+            let next = ledger.keepingHeld(Set(ledger.heldIDs).subtracting(held.map(\.id)))
+            let heldIDs = Set(held.map(\.id))
+            let waiting = arrival(held + missed.filter { !heldIDs.contains($0.id) })
+            let closed = !missed.isEmpty || ledger.heldWhileClosed == true
+            let caughtUp = catchUp(waiting, fresh: fresh, kind: closed ? .whileClosed : .quietHours)
+            return Outcome(post: caughtUp.post, summary: caughtUp.summary, next: next,
+                           summaryKind: caughtUp.summaryKind)
         }
+    }
+
+    /// One catch-up: a lone mail is posted as itself (first), two or more
+    /// become ONE summary. Pure.
+    private static func catchUp(
+        _ waiting: [FirewallItem], fresh: [FirewallItem], kind: SummaryKind
+    ) -> (post: [FirewallItem], summary: [FirewallItem], summaryKind: SummaryKind) {
+        if waiting.count == 1 { return (waiting + fresh, [], kind) }
+        return (fresh, waiting, kind)
+    }
+
+    /// The first pass after launch, split (N6): `missed` is the eligible new
+    /// PUSH mail, newest first, for the catch-up; `fresh` keeps the plan's
+    /// other banners (MEETING mail) only. Pure.
+    static func launchSplit(
+        plan: PushLedger.Plan, eligible: [FirewallItem]
+    ) -> (missed: [FirewallItem], fresh: [FirewallItem]) {
+        let candidates = Set(eligible.map(\.id))
+        let unseen = Set(plan.unseenPush.map(\.id))
+        let missed = arrival(plan.unseenPush.filter { candidates.contains($0.id) })
+        return (missed, plan.toNotify.filter { !unseen.contains($0.id) })
     }
 }
 
@@ -143,13 +186,16 @@ extension PushLedger {
     var heldIDs: [String] { held ?? [] }
 
     /// This ledger with `ids` held too: ids already held keep their place,
-    /// at most `HeldBanners.maxHeld`, newest kept. Pure.
-    func holding(_ ids: [String]) -> PushLedger {
+    /// at most `HeldBanners.maxHeld`, newest kept. `whileClosed` marks that
+    /// some of them arrived while Klorn was quit, so the summary says so.
+    /// Pure.
+    func holding(_ ids: [String], whileClosed: Bool = false) -> PushLedger {
         let current = heldIDs
         let added = ids.filter { !current.contains($0) }
         guard !added.isEmpty else { return self }
         var next = self
         next.held = Array((current + added).suffix(HeldBanners.maxHeld))
+        if whileClosed { next.heldWhileClosed = true }
         return next
     }
 
@@ -159,6 +205,7 @@ extension PushLedger {
         guard kept != heldIDs else { return self }
         var next = self
         next.held = kept
+        if kept.isEmpty { next.heldWhileClosed = nil }
         return next
     }
 
@@ -167,6 +214,7 @@ extension PushLedger {
         guard !heldIDs.isEmpty else { return self }
         var next = self
         next.held = []
+        next.heldWhileClosed = nil
         return next
     }
 }

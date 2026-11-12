@@ -83,6 +83,21 @@ vi.mock("../judge/judge-health.js", async (importOriginal) => ({
   runJudgeHeartbeatCheck: vi.fn(async () => {}),
 }));
 
+// The scheduler lease is proven on its own (scheduler-lease*.test.ts); here it
+// always grants the tick and records its release, which marks the tick's end.
+vi.mock("../scheduler-lease.js", () => ({
+  createSchedulerLease: () => ({
+    runExclusive: async (work: () => Promise<void>) => {
+      try {
+        await work();
+      } finally {
+        m.calls.push({ key: "lease:released", args: [] });
+      }
+      return true;
+    },
+  }),
+}));
+
 /** A prisma whose every table method resolves to a harmless empty value. */
 vi.mock("../db.js", () => {
   const EMPTY: Record<string, unknown> = {
@@ -114,15 +129,6 @@ vi.mock("../db.js", () => {
     {},
     {
       get: (_target, name: string) => {
-        if (name === "$queryRawUnsafe") {
-          return (sql: string) => {
-            m.calls.push({
-              key: `$queryRawUnsafe:${sql.includes("unlock") ? "unlock" : "lock"}`,
-              args: [],
-            });
-            return Promise.resolve([{ locked: true, unlocked: true }]);
-          };
-        }
         if (name === "$queryRaw") return () => Promise.resolve([]);
         if (name === "$transaction") {
           return (arg: unknown) =>
@@ -186,13 +192,26 @@ function override(key: string, fn: (...args: unknown[]) => unknown) {
 
 const argsOf = (key: string) => m.calls.filter((c) => c.key === key).map((c) => c.args[0]);
 
-/** The sweep's rows, the markers it reads, and the reset of the IMAP account. */
+/**
+ * The sweep's rows, the markers it reads, and the reset of the IMAP account. Every
+ * urgent row is an OPEN PUSH item here: the sweep rings only PUSH mail (its lane rule
+ * is covered by automation-urgent-sweep-lane.test.ts), and these cases are about
+ * history, keys and titles.
+ */
 function arrange(rows: UrgentRow[], autoReplyRows: Record<string, unknown>[] = []) {
   override("emailMessage.findMany", (arg) => {
     const where = (arg as { where?: Record<string, unknown> }).where ?? {};
     if (where.priority === "URGENT") return rows;
     if ((arg as { orderBy?: Record<string, unknown> }).orderBy?.syncedAt) return autoReplyRows;
     return [];
+  });
+  override("attentionItem.findMany", (arg) => {
+    const where = (arg as { where?: Record<string, unknown> }).where ?? {};
+    const ids = (where.sourceId as { in?: string[] } | undefined)?.in;
+    if (where.source !== "EMAIL" || !ids) return [];
+    return rows
+      .filter((row) => ids.includes(row.id))
+      .map((row) => ({ id: `item-${row.id}`, sourceId: row.id, tier: "PUSH" }));
   });
   override("linkedInboxAccount.findMany", (arg) => {
     const select = (arg as { select?: Record<string, unknown> }).select ?? {};
@@ -207,13 +226,13 @@ function arrange(rows: UrgentRow[], autoReplyRows: Record<string, unknown>[] = [
   }));
 }
 
-/** Run exactly one scheduler tick and wait for it to release its lock. */
+/** Run exactly one scheduler tick and wait for it to release its lease. */
 async function runOneTick() {
   vi.resetModules();
   const scheduler = await import("../automation-scheduler.js");
   scheduler.startAutomationScheduler();
   const deadline = performance.now() + 4000;
-  while (!m.calls.some((c) => c.key === "$queryRawUnsafe:unlock")) {
+  while (!m.calls.some((c) => c.key === "lease:released")) {
     if (performance.now() > deadline) throw new Error("scheduler tick did not finish");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }

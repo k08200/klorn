@@ -112,6 +112,13 @@ struct PreferencesView: View {
                     .buttonStyle(.bordered).controlSize(.small)
                 }
             }
+            // The Dock count is not an interrupt: quiet hours leave it.
+            Toggle(isOn: $settings.showDockBadge) {
+                Text(L("prefs.dockBadge")).foregroundStyle(Theme.text)
+            }
+            .toggleStyle(.switch).tint(Theme.accent)
+            Text(L("prefs.dockBadge.detail"))
+                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
         }
         .task { await model.refreshNotificationPermission() }
     }

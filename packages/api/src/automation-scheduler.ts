@@ -44,11 +44,9 @@ import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
-import {
-  findOpenEmailAttentionItemId,
-  sweepOverrideUndoSnapshots,
-} from "./judge/attention-override.js";
+import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
+import { FIREWALL_PUSH_RECENCY_MS } from "./judge/firewall-push.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
 import {
   effectiveAutoReplyGuideline,
@@ -61,8 +59,6 @@ import {
   backfillEmailAttentionItems,
   checkAutoReplyRules,
   generateSmartReply,
-  reconcileEmails,
-  reconcileLinkedInboxes,
   summarizeUnsummarizedEmails,
   syncEmails,
   syncLinkedInboxesForUser,
@@ -71,6 +67,7 @@ import {
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
+import { startDetachedReconcile } from "./mail/reconcile-job.js";
 import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
@@ -78,6 +75,7 @@ import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
+import { urgentSweepItemIdsFailClosed } from "./notify/open-push-mail.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendQuietHoursSummaries } from "./notify/quiet-hours-summary.js";
@@ -101,6 +99,7 @@ import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.j
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
+import { createSchedulerLease } from "./scheduler-lease.js";
 import { captureError } from "./sentry.js";
 import {
   localDateKey,
@@ -113,19 +112,19 @@ import { withTimeout } from "./with-timeout.js";
 import { newWork } from "./work-context.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
-// Self-overlap guard: true while a tick is mid-flight. The pg advisory lock is
-// session-level and re-entrant on the same pooled connection, so it does NOT
-// stop the scheduler from overlapping ITSELF when a tick runs longer than the
-// interval — this boolean does. (dbHeartbeat + tryAcquireSchedulerLock both
-// swallow their own errors, so this is always cleared on the paths below.)
+// Self-overlap guard: true while a tick is mid-flight. The scheduler lease is
+// re-entrant for its holder (this process), so it does NOT stop the scheduler
+// from overlapping ITSELF when a tick runs longer than the interval — this
+// boolean does. Cleared in a finally, whatever the tick does.
 let schedulerInFlight = false;
 
 const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
 const WATCH_RENEWAL_INTERVAL_MS = SCHEDULER_WATCH_RENEWAL_INTERVAL_MS;
 
-// Wall-clock bound on ONE user's per-tick work (calendar/email sync, reconcile,
-// etc.). The scheduler processes users serially and awaits per-user work that
-// calls Gmail via googleapis with no request timeout — a single hung call
+// Wall-clock bound on ONE user's per-tick work (calendar/email sync, etc.; the
+// INBOX reconcile runs detached, see mail/reconcile-job.ts). The scheduler
+// processes users serially and awaits per-user work that calls Gmail via
+// googleapis with no request timeout — a single hung call
 // (network partition / Google-side stall) would otherwise stall the ENTIRE tick
 // until an OS-level TCP timeout, starving every later user (fleet-wide outage
 // from one bad account). Bounding each user isolates that hang so the loop moves
@@ -138,56 +137,11 @@ const DB_HEARTBEAT_ENABLED = process.env.DB_HEARTBEAT_ENABLED === "true";
 const PROACTIVE_ACTIONS_ENABLED = process.env.PROACTIVE_ACTIONS_ENABLED === "true";
 const PHONE_ESCALATION_ENABLED = process.env.PHONE_ESCALATION_ENABLED === "true";
 
-// Stable 32-bit hash used as Postgres advisory lock key. Same int across
-// every worker that imports this module — distributed mutual exclusion.
-const SCHEDULER_LOCK_KEY = 0x4a47_454d; // "JIGE" + "M" reduced; arbitrary stable int
-
-/**
- * Postgres session advisory lock. Try-and-skip if another worker holds it.
- * `pg_try_advisory_lock` returns true if acquired, false otherwise.
- * Release with `pg_advisory_unlock` at the end of the tick.
- *
- * Caveat (session lock + connection pool): the lock is held by the specific
- * pooled connection that ran `pg_try_advisory_lock`. If a later
- * `pg_advisory_unlock` happens to run on a DIFFERENT pooled connection it
- * returns false and the lock leaks until that connection is recycled (Postgres
- * frees session locks when the connection closes). Prod runs a single dyno, so
- * the lock is effectively a no-op safety net there and a leak only ever costs a
- * skipped tick (now logged below, never silent). A fully leak-proof design needs
- * a dedicated single connection or a row-based lease; deferred until N>1 dynos
- * make it worth the redesign risk.
- */
-async function tryAcquireSchedulerLock(): Promise<boolean> {
-  try {
-    const rows = await prisma.$queryRawUnsafe<{ locked: boolean }[]>(
-      `SELECT pg_try_advisory_lock($1) AS locked`,
-      SCHEDULER_LOCK_KEY,
-    );
-    return rows[0]?.locked === true;
-  } catch (err) {
-    console.warn("[AUTOMATION] advisory lock acquire failed:", err);
-    return false;
-  }
-}
-
-async function releaseSchedulerLock(): Promise<void> {
-  try {
-    // `pg_advisory_unlock` returns false (NOT an error) when this connection
-    // does not hold the lock — the pooling caveat above. Surface it instead of
-    // swallowing it, so a leaked lock is visible rather than a silent stall.
-    const rows = await prisma.$queryRawUnsafe<{ unlocked: boolean }[]>(
-      `SELECT pg_advisory_unlock($1) AS unlocked`,
-      SCHEDULER_LOCK_KEY,
-    );
-    if (rows[0]?.unlocked !== true) {
-      console.warn(
-        "[AUTOMATION] advisory lock release returned false — lock was held on a different pooled connection and will self-heal on connection recycle",
-      );
-    }
-  } catch (err) {
-    console.warn("[AUTOMATION] advisory lock release failed:", err);
-  }
-}
+// Cross-instance mutual exclusion for the tick (scheduler-lease.ts): a row
+// lease, not a session advisory lock. The advisory lock leaked behind
+// Supavisor (lock and unlock on different pooled backends) and silently
+// skipped ticks for hours on 2026-11-11.
+const automationLease = createSchedulerLease({ name: "automation", logPrefix: "[AUTOMATION]" });
 
 // In-memory cache to skip redundant DB queries within same process lifetime.
 // Actual dedup is DB-based (survives server restarts).
@@ -901,8 +855,10 @@ export async function ensureUrgentEmailNotification(
  * ONE mail; a batch keeps opening the briefing. No pendingActionId here (no
  * draft lookup on the sweep's hot path). `bellNotificationId` names the row,
  * so the web push's OS tag matches the one an open tab uses for it. A push
- * about one mail also names its lane (PUSH) and the user's language, so it
- * offers the same action buttons as the firewall ring (decision N1).
+ * about one mail also carries lane PUSH and the user's language, so it offers
+ * the same action buttons as the firewall ring (decision N1). The sweep rings
+ * only interrupts, so PUSH is the action set even for the QUEUE mail the keyword
+ * fallback left (urgentSweepItemIdsFailClosed).
  */
 export function urgentMailPushPayload(input: {
   notificationId: string;
@@ -930,25 +886,32 @@ async function runAutomations() {
   // Skip if this process is still running the previous tick (see schedulerInFlight).
   if (schedulerInFlight) return;
   schedulerInFlight = true;
-
-  await dbHeartbeat();
-
-  // Cross-worker mutual exclusion. If another container holds the lock,
-  // skip this tick entirely — prevents duplicate briefings, sync, and pushes
-  // when multiple Render dynos run in parallel.
-  const acquired = await tryAcquireSchedulerLock();
-  if (!acquired) {
+  try {
+    await dbHeartbeat();
+    // Cross-instance mutual exclusion. If another instance holds the lease,
+    // skip this tick entirely — prevents duplicate briefings, sync, and pushes
+    // while two instances overlap (a zero-downtime deploy). The lease logs a
+    // skipped tick itself (rate-limited), so a long run of them is never silent.
+    await automationLease.runExclusive(runAutomationTick);
+  } catch (err) {
+    // The tick catches its own errors; this keeps anything that escapes from
+    // becoming an unhandled rejection of the interval callback.
+    console.error("[AUTOMATION] Scheduler tick failed:", err);
+    captureError(err, { tags: { scope: "automation.scheduler" } });
+  } finally {
     schedulerInFlight = false;
-    return;
   }
+}
 
+/** One scheduler tick's work. Runs only while this process holds the lease. */
+async function runAutomationTick(): Promise<void> {
   try {
     // Drain the action-execution outbox first: retry transient failures from
     // the inline approve fast-path and reclaim rows orphaned by a crash.
     // Cheap (one indexed query for due rows) and runs under the scheduler
-    // lock, so no duplicate execution across dynos. A no-op when empty.
-    // Awaited so the drain finishes INSIDE the scheduler lock — otherwise a
-    // fire-and-forget drain can outlive the lock and run concurrently with the
+    // lease, so no duplicate execution across dynos. A no-op when empty.
+    // Awaited so the drain finishes INSIDE the scheduler lease — otherwise a
+    // fire-and-forget drain can outlive the lease and run concurrently with the
     // next tick's drain, double-executing approved actions.
     try {
       const { completed, retried, dead, reclaimed } = await drainActionOutbox();
@@ -959,7 +922,7 @@ async function runAutomations() {
       }
     } catch (err) {
       // Escalate: a systemic outbox failure must not look like a routine
-      // advisory-lock false-release. Contained so the rest of the tick runs.
+      // skipped tick. Contained so the rest of the tick runs.
       console.error("[OUTBOX] drain errored:", err);
       captureError(err, { tags: { scope: "automation.outbox-drain" } });
     }
@@ -1021,7 +984,7 @@ async function runAutomations() {
     // --- Hourly: judge fallback alarm (#1572) ---
     // Reads the last 24 h of judged-by sources from AttentionItem (one
     // aggregate query) and raises a deduped ops Notification when the LLM
-    // judge has been falling back to keywords. Runs under the scheduler lock;
+    // judge has been falling back to keywords. Runs under the scheduler lease;
     // the per-tick "automation" heartbeat above covers its liveness.
     if (Date.now() - lastJudgeFallbackCheckAt >= JUDGE_FALLBACK_CHECK_INTERVAL_MS) {
       lastJudgeFallbackCheckAt = Date.now();
@@ -1308,9 +1271,6 @@ async function runAutomations() {
   } catch (err) {
     console.error("[AUTOMATION] Scheduler error:", err);
     captureError(err, { tags: { scope: "automation.scheduler" } });
-  } finally {
-    await releaseSchedulerLock();
-    schedulerInFlight = false;
   }
 }
 
@@ -1352,9 +1312,9 @@ async function syncLinkedOnlyMailbox(userId: string): Promise<void> {
 
 /**
  * Runs ONE user's per-tick automation work (briefing, calendar sync, email
- * sync + classify + auto-reply, reconcile, urgent notify, proactive, phone
- * escalation) — the exact body that previously lived inline in the
- * `for (const config of configs)` loop, extracted verbatim so it can be bounded
+ * sync + classify + auto-reply, starting the detached reconcile, urgent
+ * notify, proactive, phone escalation) — the exact body that previously lived
+ * inline in the `for (const config of configs)` loop, extracted verbatim so it can be bounded
  * by {@link withTimeout}. Each sub-step keeps its own try/catch; a hang or an
  * unexpected escape is isolated by the caller's timeout wrapper.
  */
@@ -1798,45 +1758,32 @@ async function runUserCycle(
           });
         }
 
-        // Reconcile DB with Gmail (remove deleted/archived emails).
-        // Runs at most once every 30 minutes per user, independent of
-        // wall-clock minute so a slipped tick doesn't skip the window.
-        if (isReconcileDue(config.userId)) {
+        // Reconcile DB with Gmail (remove deleted/archived emails), primary and
+        // (behind MULTI_INBOX_SYNC_ENABLED, like the sync fan-out above) linked.
+        // At most once every 30 minutes per user, independent of wall-clock
+        // minute so a slipped tick doesn't skip the window. Detached on
+        // purpose (mail/reconcile-job.ts): it lists the whole INBOX and
+        // re-reads up to 500 messages per inbox, which for a mailbox of a few
+        // thousand messages takes longer than this cycle's whole budget. Due
+        // only once it starts, so a user turned away at the concurrency cap is
+        // tried again next tick.
+        if (
+          isReconcileDue(config.userId) &&
+          startDetachedReconcile(config.userId, { includeLinked: MULTI_INBOX_SYNC_ENABLED }) !==
+            null
+        ) {
           lastReconcileAt.set(config.userId, Date.now());
-          try {
-            await reconcileEmails(config.userId);
-          } catch (err) {
-            console.error(`[AUTOMATION] Reconcile failed for ${config.userId}:`, err);
-            captureError(err, {
-              tags: { scope: "automation.reconcile", userId: config.userId },
-            });
-          }
-          // Reconcile linked secondary inboxes too (each against its own
-          // client). Gated + isolated from the primary reconcile so a
-          // linked failure never masks a primary success. Off unless the
-          // flag is on, matching the sync fan-out above.
-          if (MULTI_INBOX_SYNC_ENABLED) {
-            try {
-              await reconcileLinkedInboxes(config.userId);
-            } catch (err) {
-              console.error(
-                `[AUTOMATION] Linked-inbox reconcile failed for ${config.userId}:`,
-                err,
-              );
-              captureError(err, {
-                tags: { scope: "automation.reconcile.linked", userId: config.userId },
-              });
-            }
-          }
         }
 
         // Check for urgent unread emails — notify only for NEW urgent emails
         // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
+        // and, like the firewall push, received in its recency window: a late sync
+        // or backfill that surfaces old mail does not ring it as urgent now.
         // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
         // under the daily interrupt budget is the only email interrupt
         // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
         // the budget, so it stands down for that user.
-        const urgentEmails = isJudgeV3PolicyEnabled(config.userId)
+        const keywordUrgent = isJudgeV3PolicyEnabled(config.userId)
           ? []
           : await prisma.emailMessage.findMany({
               where: {
@@ -1844,6 +1791,7 @@ async function runUserCycle(
                 priority: "URGENT",
                 isRead: false,
                 syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+                receivedAt: { gte: new Date(Date.now() - FIREWALL_PUSH_RECENCY_MS) },
               },
               orderBy: { receivedAt: "desc" },
               select: {
@@ -1857,6 +1805,16 @@ async function runUserCycle(
                 linkedInboxAccountId: true,
               },
             });
+        // Lane contract (tier-ontology-v2.md): the keyword priority never
+        // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
+        // here: a safety net for PUSH mail the firewall push did not ring (its
+        // bell row's [gmailId] marker dedupes below). When the judge's LLM did
+        // not run (outage, spend cap, unusable key) the keyword fallback cannot
+        // reach PUSH for an ordinary sender, so mail it left in QUEUE (and nobody
+        // moved since) rings here too. Mail the judge has not reached yet waits
+        // for the judge's own push.
+        const ringItemByEmail = await urgentSweepItemIdsFailClosed(config.userId, keywordUrgent);
+        const urgentEmails = keywordUrgent.filter((e) => ringItemByEmail.has(e.id));
         // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
         // history: rung once already, never again. Gmail rows read nothing more.
         // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
@@ -1928,14 +1886,9 @@ async function runUserCycle(
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
             // re-fire the web-push / SMS side-effects for the same batch.
             if (notification) {
-              // Best-effort AttentionItem lookup for the lead urgent email
-              // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
-              // Lets the Telegram channel attach tier-override buttons;
-              // null just means the message ships without them.
-              const attentionItemId = await findOpenEmailAttentionItemId(
-                config.userId,
-                newUrgent[0].id,
-              );
+              // The lead's open item (read with the lane above). Lets the
+              // Telegram channel attach tier-override buttons.
+              const attentionItemId = ringItemByEmail.get(newUrgent[0].id) ?? null;
 
               sendPushNotification(
                 config.userId,
