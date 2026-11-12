@@ -41,6 +41,9 @@ export type AlertEndpoint =
       createdAt: string;
       lastReceivedAt: string | null;
       health: "ok" | "new" | "stale";
+      /** A zombie: the push service accepts, this device confirms nothing.
+       *  Absent from an API that predates it. */
+      needsResubscribe?: boolean;
     }
   | { kind: "native"; id: string; platform: "android" | "ios"; registeredAt: string }
   | { kind: "desktop"; app: "mac" | "windows"; running: boolean; lastSeenAt: string };
@@ -120,6 +123,15 @@ export function alertRowStatus(e: AlertEndpoint): AlertRowStatus {
     return e.running
       ? { tone: "ok", key: "alertDevices.status.running", at: e.lastSeenAt }
       : { tone: "off", key: "alertDevices.status.notRunning", at: e.lastSeenAt };
+  }
+  if (e.needsResubscribe) {
+    return {
+      tone: "warn",
+      key: e.current
+        ? "alertDevices.status.needsResubscribe"
+        : "alertDevices.status.needsResubscribeElsewhere",
+      at: e.lastReceivedAt,
+    };
   }
   if (e.health === "ok") {
     return { tone: "ok", key: "alertDevices.status.delivered", at: e.lastReceivedAt };

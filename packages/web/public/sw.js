@@ -241,15 +241,22 @@ self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
   const url = appPath(data.url) || "/chat";
 
+  // An action button (Reply / Later) is "actioned" on the delivery lifecycle,
+  // a tap on the notification itself "clicked" (opened).
+  const receipt =
+    event.action === "later" || event.action === "reply"
+      ? sendPushReceipt(data, "actioned", event.action)
+      : sendPushReceipt(data, "clicked");
+
   if (event.action === "later") {
-    event.waitUntil(Promise.all([sendPushReceipt(data, "clicked"), remindLater(data, url)]));
+    event.waitUntil(Promise.all([receipt, remindLater(data, url)]));
     return;
   }
 
   // Reply: the reader on that mail with the reply composer focused. Sending
   // stays a deliberate tap in the app.
   const target = event.action === "reply" ? appPath(data.replyUrl) || url : url;
-  event.waitUntil(Promise.all([sendPushReceipt(data, "clicked"), openOrFocus(target)]));
+  event.waitUntil(Promise.all([receipt, openOrFocus(target)]));
 });
 
 // The capability token is only ever POSTed to this app's own origin or to the
@@ -272,12 +279,12 @@ async function isTrustedActionUrl(url) {
   }
 }
 
-function sendPushReceipt(data, event) {
+function sendPushReceipt(data, event, action) {
   if (!data || !data.deliveryId || !data.receiptUrl) return Promise.resolve();
   return fetch(data.receiptUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event }),
+    body: JSON.stringify(action ? { event, action } : { event }),
   }).catch((err) => {
     console.warn("[SW] Push receipt failed:", err);
   });

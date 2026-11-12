@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertDevicesPanel } from "../../../components/alert-devices/alert-devices-panel";
+import { AlertHealthBanner } from "../../../components/alert-health-banner";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import Switch from "../../../components/ui/switch";
@@ -20,6 +21,9 @@ export function NotificationsSection() {
   const config = useAutomationConfig();
   const displayZone = useDisplayTimeZone();
   const { pushStatus, enablePush, disablePush } = usePush();
+  // Bumped when the device list changes a channel; with the push toggle's
+  // status it keys the warning's re-read of the channel health.
+  const [healthVersion, setHealthVersion] = useState(0);
   const [dailyBriefingEnabled, setDailyBriefingEnabled] = useState(true);
   const [briefingTime, setBriefingTime] = useState("06:00");
   const [phoneEscalationEnabled, setPhoneEscalationEnabled] = useState(false);
@@ -153,7 +157,10 @@ export function NotificationsSection() {
 
   return (
     <section className="mb-8">
-      <AlertDevicesPanel />
+      <div className="mb-4 empty:hidden">
+        <AlertHealthBanner place="settings" refreshKey={`${healthVersion}:${pushStatus}`} />
+      </div>
+      <AlertDevicesPanel onChanged={() => setHealthVersion((v) => v + 1)} />
       <h2 className={SECTION_TITLE}>{t("settings.section.signalRhythm")}</h2>
       <div className={`${PANEL} divide-y divide-line-soft`}>
         <div className="p-5 space-y-4">

@@ -443,6 +443,28 @@ const ja: Record<string, string> = {
   "alertDevices.toast.rateLimited": "テストが多すぎます。数分後にもう一度お試しください。",
   "alertDevices.toast.removed": "削除しました。",
   "alertDevices.toast.removeFailed": "削除できませんでした。もう一度お試しください。",
+  "alertDevices.status.needsResubscribe": "このデバイスに通知が届かなくなりました",
+  "alertDevices.status.needsResubscribeElsewhere":
+    "通知が届かなくなりました · そのデバイスでKlornを開いて再度オンにしてください",
+  "alertDevices.resubscribe": "再度オンにする",
+  "alertDevices.toast.testArrived": "テスト通知がデバイスに届きました。",
+  "alertDevices.toast.testNoReceipt":
+    "テスト通知を送信しましたが、デバイスで確認されていません。そのデバイスで通知が許可されているか確認してください。",
+  "alertHealth.noChannel.title": "Klornの外では緊急メールの通知が届きません",
+  "alertHealth.noChannel.body":
+    "Klornを閉じている間に通知する手段が設定されていません。このブラウザで通知をオンにするか、Mac版またはWindows版Klornをインストールするか、Telegramを連携してください。",
+  "alertHealth.noChannel.action": "通知を設定",
+  "alertHealth.noChannel.dismiss": "後で",
+  "alertHealth.resubscribe.title": "このブラウザに通知が届かなくなりました",
+  "alertHealth.resubscribe.body":
+    "最近の通知は送信されましたが、ここには表示されませんでした。通知を再度オンにして、このブラウザを再接続してください。",
+  "alertHealth.resubscribe.action": "通知を再度オンにする",
+  "alertHealth.resubscribe.working": "オンにしています…",
+  "alertHealth.resubscribe.done": "このブラウザの通知を再度オンにしました。",
+  "alertHealth.resubscribe.failed":
+    "通知を再度オンにできませんでした。このサイトの通知が許可されているか確認してください。",
+  "alertHealth.resubscribe.error":
+    "通知を再度オンにできませんでした。しばらくしてからもう一度お試しください。",
   "alertDevices.phone.name": "スマートフォン",
   "alertDevices.phone.notSetUp": "未設定",
   "alertDevices.phone.setUp": "設定する",
