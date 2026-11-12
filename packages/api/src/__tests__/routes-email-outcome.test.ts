@@ -14,6 +14,7 @@ import { signToken } from "../auth.js";
 const emailFindFirst = vi.hoisted(() => vi.fn());
 const labelUpdateMany = vi.hoisted(() => vi.fn());
 const unsubscribeFromEmail = vi.hoisted(() => vi.fn());
+const noteEmailBellRowsRead = vi.hoisted(() => vi.fn());
 
 vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock("../learning/interaction-graph.js", async (importOriginal) => ({
   getCachedInteractionNode: vi.fn(async () => null),
 }));
 vi.mock("../mail/unsubscribe-action.js", () => ({ unsubscribeFromEmail }));
+vi.mock("../notify/email-bell.js", () => ({ noteEmailBellRowsRead }));
 vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn() }));
 vi.mock("../mail/meeting-context.js", () => ({ getMeetingContext: vi.fn(async () => null) }));
 vi.mock("../user-timezone.js", () => ({ getUserTimeZone: vi.fn(async () => "Asia/Seoul") }));
@@ -179,6 +181,33 @@ describe("GET /api/email/:id", () => {
     expect(failed.statusCode).toBe(200);
     expect(failed.body).toBe(ok.body);
     await vi.waitFor(() => expect(captureError).toHaveBeenCalled());
+  });
+});
+
+describe("GET /api/email/:id — the mail's bell rows", () => {
+  it("a reader open marks the user's bell rows about this mail read, once", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/g1", headers });
+
+    expect(res.statusCode).toBe(200);
+    expect(noteEmailBellRowsRead).toHaveBeenCalledTimes(1);
+    expect(noteEmailBellRowsRead).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ id: "e1", gmailId: "g1" }),
+    );
+  });
+
+  it("a fetch for another purpose is not an open: no bell row changes", async () => {
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/email/e1?purpose=attachments", headers });
+    expect(noteEmailBellRowsRead).not.toHaveBeenCalled();
+  });
+
+  it("a mail the user does not have changes nothing", async () => {
+    emailFindFirst.mockResolvedValue(null);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/email/other", headers });
+    expect(noteEmailBellRowsRead).not.toHaveBeenCalled();
   });
 });
 

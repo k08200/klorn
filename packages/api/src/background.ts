@@ -18,6 +18,7 @@ import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
@@ -176,6 +177,36 @@ export async function clearNotifications(userId: string): Promise<void> {
   await prisma.attentionItem.deleteMany({ where: { userId, source: "NOTIFICATION" } });
 }
 
+/** Where a meeting push opens when its event has no page to open. */
+const CALENDAR_PATH = "/calendar";
+
+/**
+ * Where the meeting-starting-soon push opens: the event's own page, which
+ * shows its join link. Never the join link itself: the service worker opens
+ * app paths only (sw.js appPath; an https url fell back to /chat), and the
+ * link comes from an invite anyone can send. The page is the user's own synced
+ * row for this Google event id; without one (not synced yet), or when the
+ * lookup fails, the push still rings and opens the calendar.
+ */
+async function meetingPushPath(userId: string, googleEventId: string): Promise<string> {
+  if (!googleEventId) return CALENDAR_PATH;
+  try {
+    const row = await prisma.calendarEvent.findUnique({
+      where: { userId_googleId: { userId, googleId: googleEventId } },
+      select: { id: true, sourceAccountId: true, provider: true },
+    });
+    // A row the event page would refuse (calendar-scope.ts) opens the calendar.
+    if (!row || !isCalendarRowVisible(row)) return CALENDAR_PATH;
+    return `${CALENDAR_PATH}/${encodeURIComponent(row.id)}`;
+  } catch (err) {
+    console.warn(
+      "[BACKGROUND] meeting event lookup failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return CALENDAR_PATH;
+  }
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: meeting check has inherent nested logic (users → meetings → dedup → notify)
 async function checkUpcomingMeetings() {
   if (meetingCheckInFlight) return;
@@ -228,6 +259,8 @@ async function checkUpcomingMeetings() {
               ? `Join link: ${meeting.meetingLink} [${meeting.id}]`
               : `${meeting.summary} starts soon [${meeting.id}]`;
 
+            // The bell row keeps the join link: the web bell validates it and
+            // opens it outside the app (lib/notification-target.ts).
             const bellRow = await addNotification(userId, {
               type: "meeting",
               title: `Meeting in ${Math.ceil(minutesUntil)} min: ${meeting.summary}`,
@@ -238,12 +271,13 @@ async function checkUpcomingMeetings() {
               ...(await desktopAlertTag(userId, "meeting")),
             });
 
-            // Also send browser push with meeting link. AWAIT it: the call is
-            // async (DB gate/rate-limit writes), so leaving it unawaited lets a
-            // rejection escape this try/catch onto a later microtask — with no
-            // unhandledRejection handler that can crash the dyno. Pass the
-            // "meeting" category so a user with notifyMeeting=false isn't pushed
-            // (the default "system" category bypasses that opt-out).
+            // Also send the device push, which opens the event's page. AWAIT
+            // it: the call is async (DB gate/rate-limit writes), so leaving it
+            // unawaited lets a rejection escape this try/catch onto a later
+            // microtask — with no unhandledRejection handler that can crash
+            // the dyno. Pass the "meeting" category so a user with
+            // notifyMeeting=false isn't pushed (the default "system" category
+            // bypasses that opt-out).
             try {
               const { sendPushNotification } = await import("./notify/push.js");
               await sendPushNotification(
@@ -251,7 +285,7 @@ async function checkUpcomingMeetings() {
                 {
                   title: `Meeting in ${Math.ceil(minutesUntil)} min`,
                   body: meeting.summary,
-                  url: meeting.meetingLink || "/briefing",
+                  url: await meetingPushPath(userId, meeting.id),
                   // Web push tags its OS notification with the bell row, as
                   // an open tab does, so the meeting shows once.
                   bellNotificationId: bellRow.id,
