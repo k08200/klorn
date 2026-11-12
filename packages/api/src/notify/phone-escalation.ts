@@ -295,9 +295,13 @@ export async function escalateUnackedPush(
   const cutoff = new Date(now.getTime() - escalationTimeoutMinutes() * MS_PER_MINUTE);
   const oldest = new Date(now.getTime() - ESCALATION_LOOKBACK_MINUTES * MS_PER_MINUTE);
 
+  // Web push rows only, in both queries: the other channels' rows (FCM / APNs /
+  // Telegram, desktop receipts — notify/delivery-lifecycle.ts) are not part of
+  // what decides a call, so what rings is exactly what it was.
   const unackedLogs = (await prisma.pushDeliveryLog.findMany({
     where: {
       userId,
+      channel: "web",
       status: "ACCEPTED",
       receivedAt: null,
       clickedAt: null,
@@ -323,6 +327,7 @@ export async function escalateUnackedPush(
   const receiptedLogs = (await prisma.pushDeliveryLog.findMany({
     where: {
       userId,
+      channel: "web",
       notificationId: { in: candidateIds },
       OR: [{ receivedAt: { not: null } }, { clickedAt: { not: null } }],
     },

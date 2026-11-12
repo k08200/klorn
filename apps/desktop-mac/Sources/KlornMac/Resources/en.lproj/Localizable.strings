@@ -139,6 +139,8 @@
 "push.announce.meeting" = "New MEETING mail: %d";
 "push.heldSummary.title" = "%d urgent emails during quiet hours";
 "push.closedSummary.title" = "%d urgent emails while Klorn was closed";
+"push.moreSummary.title" = "+%d more need you";
+"push.delayedSummary.title" = "%d urgent emails need you";
 "prefs.launchAtLogin" = "Start Klorn at login";
 "prefs.launchAtLogin.unavailable.label" = "Start at login";
 "prefs.launchAtLogin.unavailable.value" = "Packaged app only";

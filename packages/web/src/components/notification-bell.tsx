@@ -15,7 +15,7 @@ import {
   type NotificationGroup,
   unreadGroupCount,
 } from "../lib/notification-grouping";
-import { type NotificationLinkTarget, notificationLinkTarget } from "../lib/notification-target";
+import { notificationClickTarget } from "../lib/notification-target";
 import { formatRelative } from "../lib/text";
 import { ProFeatureNotice } from "./pro-feature-notice";
 import { RejectReasonDialog } from "./reject-reason-dialog";
@@ -353,32 +353,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
     }
   };
 
-  // Determine where clicking a notification should navigate.
-  // Week 1 removed /calendar, /tasks, /email, /notes — every fallback now
-  // points at a surviving surface so taps never 404.
-  const getNotificationTarget = (n: Notification): NotificationLinkTarget => {
-    // A stored link is untrusted (a meeting link can come from anyone's
-    // invite): only a same-origin path or a plain https URL is followed; any
-    // other link falls through to the type's own surface.
-    const linked = notificationLinkTarget(n.link);
-    if (linked) return linked;
-    const internal = (path: string): NotificationLinkTarget => ({ kind: "internal", path });
-    // A pending action the user still needs to approve/reject — Inbox is
-    // the one place that shows every unresolved item with action buttons.
-    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return internal("/inbox");
-    if (n.conversationId) return internal("/inbox");
-    const typeRoutes: Record<string, string> = {
-      briefing: "/briefing",
-      meeting: "/briefing",
-      calendar: "/briefing",
-      email: "/briefing",
-      task: "/inbox",
-      reminder: "/inbox",
-      insight: "/inbox",
-    };
-    return internal(typeRoutes[n.type] || "/inbox");
-  };
-
   const handleNotificationClick = (n: Notification) => {
     // Mark as read (fire-and-forget)
     if (!n.isRead) {
@@ -386,8 +360,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
       apiFetch(`/api/notifications/${n.id}/read`, { method: "PATCH" }).catch(() => {});
     }
 
-    // Navigate first, then close dropdown
-    const target = getNotificationTarget(n);
+    // Navigate first, then close dropdown. A stored link is untrusted (a
+    // meeting link can come from anyone's invite): lib/notification-target.ts
+    // follows only a same-origin path or a plain https URL.
+    const target = notificationClickTarget(n);
     if (target.kind === "external") {
       // Never the app tab: an https link (e.g. a meeting) opens on its own —
       // in the system browser inside the desktop/mobile wrappers, where a
@@ -482,9 +458,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
         </p>
         <div className="flex items-center gap-2 mt-1 ml-6">
           <span className="text-role-caption text-ink-mid">{formatRelative(n.createdAt)}</span>
-          {getNotificationTarget(n) && (
-            <span className="text-role-caption text-accent-deep">{t("common.open")}</span>
-          )}
+          {/* Every row opens somewhere (notificationClickTarget always answers). */}
+          <span className="text-role-caption text-accent-deep">{t("common.open")}</span>
         </div>
       </button>
       {n.pendingActionId && n.pendingActionStatus === "PENDING" && (

@@ -258,7 +258,9 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   // SHOULD block the slot. attention-calendar-visibility.ts asks only which of a
   // list of event ids are visible (C4: the kill switch for mirrored attention items).
   const UNAFFECTED = [
+    "background.ts", // the meeting push's target: the user's primary row for one Google event id
     "agentcore/tool-executor.ts",
+    "notify/channel-delivery-log.ts", // a desktop receipt's owner check: one row by id, its id only
     "pim/attention-calendar-visibility.ts",
     "notify/notification-prefs.ts",
     "pim/calendar-cancellation.ts", // removes the rows Google named as cancelled, scoped to one source
@@ -340,8 +342,8 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   describe("C7: the C2 gaps read through the one read path", () => {
     const VIA_READ_PATH = [
       "learning/interaction-graph.ts",
+      "pim/briefing-gather.ts",
       "pim/briefing-structure.ts",
-      "pim/briefing.ts",
       "routes/ops.ts",
     ];
 
@@ -351,13 +353,15 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       expect(file?.text).not.toMatch(/\bcalendarEvent\s*\.\s*\w+\s*\(/);
     });
 
-    it("the weekly review count and tomorrow list in proactive-actions use it too", () => {
+    it("the weekly review count in proactive-actions and the evening review's tomorrow meeting use it too", () => {
       const file = files.find((f) => f.path === "agentcore/proactive-actions.ts");
       expect(file?.text).toContain("countCalendarRows(");
-      expect(file?.text).toContain("readCalendarRows(");
       // What still reads the table directly there dedupes (back-to-back) or is
       // covered by the notification dedupe (upcoming meetings).
       expect(file?.text).not.toMatch(/calendarEvent\s*\.\s*count\(/);
+      const evening = files.find((f) => f.path === "agentcore/evening-review.ts");
+      expect(evening?.text).toContain("readCalendarRows(");
+      expect(evening?.text).not.toMatch(/\bcalendarEvent\s*\.\s*\w+\s*\(/);
     });
 
     it("list_events and the conflict check read through it, behind the flag", () => {
@@ -377,7 +381,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       ["agentcore/agent-context.ts", /wrapUntrusted\(e\.title/],
       ["agentcore/tool-executor.ts", /wrapUntrusted\(dupCheck\.title/],
       ["mail/meeting-context.ts", /wrapUntrusted\(e\.title/],
-      ["pim/briefing.ts", /wrapEventsForPrompt\(/],
+      ["pim/briefing-gather.ts", /wrapEventsForPrompt\(/],
       ["pim/calendar-read-format.ts", /wrapUntrusted\(row\.title/],
     ];
     // Modules that read calendar rows and never touch an LLM, directly or by a

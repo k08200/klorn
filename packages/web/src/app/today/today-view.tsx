@@ -15,6 +15,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AlertHealthBanner } from "../../components/alert-health-banner";
 import { PAGE_SHELL } from "../../components/page-shell";
 import EmptyState from "../../components/ui/empty-state";
 import { useAuth } from "../../lib/auth";
@@ -68,6 +69,7 @@ export function TodayView() {
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
       <TodayHeader time={time} accounts={accounts} showAccounts={!noSource} />
+      {!noSource && <AlertHealthBanner place="today" />}
       {noSource ? (
         <EmptyState
           headingLevel="h2"

@@ -3,9 +3,10 @@ import Foundation
 // Self-check for N4 (Dock badge), N5 ("Open at login" question) and N6
 // (closed-app catch-up), 2026-11-11, run by `KlornMac --self-check`.
 //
-// - N4: the Dock icon shows Today's "Needs you now" count (PUSH ≤ 72 h,
-//   open — the count Today lists), nil at 0, "99+" above 99; a Settings
-//   switch, ON by default; quiet hours never hide it; sign-out clears it.
+// - N4: the Dock icon shows Today's "Needs you now" mail (PUSH ≤ 72 h,
+//   open) still unread (since 2026-11-12, SelfCheckNotificationDrops.swift),
+//   nil at 0, "99+" above 99; a Settings switch, ON by default; quiet hours
+//   never hide it; sign-out clears it.
 // - N5: once, after sign-in, when notifications are first authorized (or
 //   macOS already had an answer), "Keep Klorn running in the background?";
 //   only "Open at login" registers the login item; never when it is already
@@ -85,14 +86,15 @@ func notifyBadgeLoginSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         let unwindowed = try? JSONDecoder().decode(
             FirewallResponse.self, from: Data(lanes(push: ["p1", "p2", "p3"]).body.utf8))
         let todayCount = { (q: FirewallResponse) in TodayRules.lanes(q).first { $0.tier == .push }?.count ?? 0 }
-        check("the badge count is Today's \"Needs you now\" count (the 72 h window when sent)",
-              windowed.map(TodayRules.needsYouNowCount) == 2 && windowed.map(todayCount) == 2
-              && unwindowed.map(TodayRules.needsYouNowCount) == 3 && unwindowed.map(todayCount) == 3)
+        let badge = { (q: FirewallResponse) in TodayRules.dockBadgeCount(q, opened: []) }
+        check("with no mail read, the badge count is Today's \"Needs you now\" count (the 72 h window when sent)",
+              windowed.map(badge) == 2 && windowed.map(todayCount) == 2
+              && unwindowed.map(badge) == 3 && unwindowed.map(todayCount) == 3)
     }
     do {
         let model = S.model([S.firewall: lanes(push: ["p1", "p2", "p3"], window: ["p1", "p2", "p3"])])
         var counts: [Int] = []
-        model.onNeedsYouNowChanged = { counts.append($0) }
+        model.onDockBadgeCountChanged = { counts.append($0) }
         await model.loadQueue()
         let afterLoad = counts
         Stub.set(S.firewall, lanes(push: ["p1", "p2"], window: ["p1", "p2"]))
@@ -100,12 +102,12 @@ func notifyBadgeLoginSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         await model.loadQueue()  // unchanged: no repeat
         model.signOut()
         check("the model reports the count when the list changes, once per change, and 0 at sign-out",
-              afterLoad == [3] && counts == [3, 2, 0] && model.needsYouNowCount == 0)
+              afterLoad == [3] && counts == [3, 2, 0] && model.dockBadgeCount == 0)
     }
     let app = text("KlornApp.swift")
     check("the app sets the Dock badge from the count and the switch (0 at sign-out clears it)",
           app.contains("NSApp.dockTile.badgeLabel = DockBadge.label(")
-          && app.contains("model.onNeedsYouNowChanged = { _ in applyDockBadge() }")
+          && app.contains("model.onDockBadgeCountChanged = { _ in applyDockBadge() }")
           && app.contains("model.settings.onDockBadgeChanged = { _ in applyDockBadge() }")
           && text("AppModel.swift").contains("tokenStore.clear()\n        queue = nil"))
     check("quiet hours never reach the badge (it reads no alert gate)",

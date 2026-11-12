@@ -34,3 +34,6 @@ packages/api/eval/.feature-cache.json
 *.dump
 *.sql.gz
 *-backup.sql
+
+# IP24 report output (packages/api ip24-report --out): per-user numbers, never commit
+ip24*.json

@@ -14,7 +14,16 @@ export interface CommitmentItem {
   dueAt: string | null;
   dueText: string | null;
   sourceType: string;
+  /** The source row's id — for EMAIL, the EmailMessage id (/email/:id). */
+  sourceId?: string | null;
+  /** Mail text the extraction came from. Untrusted: render as text only. */
+  evidenceText?: string | null;
   confidence: number;
+  /** Server-decided: confidence >= 0.7 or the user confirmed it. */
+  confirmed?: boolean;
+  confirmedAt?: string | null;
+  /** A later reply in the thread suggested it was kept (likely done / delivered). */
+  completionSuggestedAt?: string | null;
   createdAt: string;
   trustBadge?: "reliable" | "mostly_reliable" | "unreliable" | "unknown" | null;
   trustLabel?: string | null;

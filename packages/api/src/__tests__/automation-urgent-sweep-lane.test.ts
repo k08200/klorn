@@ -798,3 +798,46 @@ describe("policy v3: the sweep still stands down", () => {
     ).toBe(false);
   });
 });
+
+describe("a sweep ring stamps the ledger rows of the mail it named (IP24 rangAt)", () => {
+  const rangStamps = () =>
+    argsOf("decisionLabel.updateMany").filter(
+      (a) => (a as { data?: Record<string, unknown> }).data?.rangAt !== undefined,
+    );
+  /** Wait until the sweep's push settled, so its .then (the stamp) has run. */
+  const pushSettled = async () => {
+    await vi.waitFor(() => expect(urgentPushes()).toHaveLength(1));
+    const results = m.sendPushNotification.mock.results;
+    await results[results.length - 1]?.value;
+    await Promise.resolve();
+  };
+
+  it("stamps rangAt with the dispatch time once the gates let the ring through", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "PUSH")]);
+    const dispatchedAt = new Date(NOW.getTime() + 500);
+    m.sendPushNotification.mockResolvedValueOnce({ status: "sent", dispatchedAt } as never);
+
+    await runOneTick();
+    await vi.waitFor(() => expect(rangStamps()).toHaveLength(1));
+
+    expect(rangStamps()[0]).toEqual({
+      where: { userId: USER, source: "EMAIL", sourceId: { in: ["mail-1"] }, rangAt: null },
+      data: { rangAt: dispatchedAt },
+    });
+  });
+
+  it("does not stamp a ring held at a gate", async () => {
+    arrange([urgent("mail-1", "18abc")], [item("mail-1", "PUSH")]);
+    m.sendPushNotification.mockResolvedValueOnce({
+      status: "skipped",
+      reason: "quiet_hours",
+      dispatchedAt: null,
+    } as never);
+
+    await runOneTick();
+    await pushSettled();
+
+    expect(urgentPushes()).toHaveLength(1);
+    expect(rangStamps()).toEqual([]);
+  });
+});

@@ -23,11 +23,13 @@ import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { getSuppressionSet, isSuppressed } from "../learning/feedback-adaptor.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
+import { isConfirmedCommitment } from "../pim/commitment-confirmation.js";
 import { captureError } from "../sentry.js";
 import { CLEAR_AGENT_TIER, NOT_AGENT_SET } from "./agent-tier.js";
 import { attentionHashInputOf, computeAttentionInputHash } from "./attention-input-hash.js";
 import { CLEAR_OVERRIDE_UNDO } from "./attention-override.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
+import { gmailImportantSnapshot } from "./gmail-important-snapshot.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
 import { type V3ItemFields, v3Columns } from "./v3/live-item.js";
@@ -160,11 +162,36 @@ function tierForCalendarEvent(priority: number): { tier: Tier; tierReason: strin
   return { tier: "QUEUE", tierReason: "meeting.today" };
 }
 
+/** Below this a commitment never leaves the SILENT lane (the prior rule). */
+const COMMITMENT_MIN_SURFACE_CONFIDENCE = 0.5;
+
+/**
+ * Whether the commitment may interrupt (PUSH = Mac banner + Today's "Needs you
+ * now"). Only a confirmed commitment does: a rule-mined suggestion is something
+ * to confirm in the ledger, never a ping. A "likely done" stamp does not change
+ * this — it is a hint the user settles with Done, not a verdict.
+ */
+type CommitmentInterrupt = "allowed" | "suggestion";
+
+function interruptFor(c: CommitmentLike): CommitmentInterrupt {
+  return isConfirmedCommitment(c) ? "allowed" : "suggestion";
+}
+
+/** A suggestion ranks with the undated rows: below real work in every queue read. */
+const SUGGESTION_MAX_PRIORITY = 40;
+
 function tierForCommitment(
   type: "COMMITMENT_DUE" | "COMMITMENT_OVERDUE" | "COMMITMENT_UNCONFIRMED",
   priority: number,
   confidence: number,
+  interrupt: CommitmentInterrupt,
 ): { tier: Tier; tierReason: string } {
+  if (interrupt === "suggestion") {
+    if (type === "COMMITMENT_UNCONFIRMED" || confidence < COMMITMENT_MIN_SURFACE_CONFIDENCE) {
+      return { tier: "SILENT", tierReason: "commitment.needsDate" };
+    }
+    return { tier: "QUEUE", tierReason: "commitment.suggested" };
+  }
   if (type === "COMMITMENT_OVERDUE" && priority >= 80) {
     return {
       tier: "PUSH",
@@ -174,7 +201,7 @@ function tierForCommitment(
   if (type === "COMMITMENT_OVERDUE") {
     return { tier: "PUSH", tierReason: "commitment.overdue" };
   }
-  if (type === "COMMITMENT_UNCONFIRMED" || confidence < 0.5) {
+  if (type === "COMMITMENT_UNCONFIRMED" || confidence < COMMITMENT_MIN_SURFACE_CONFIDENCE) {
     return { tier: "SILENT", tierReason: "commitment.needsDate" };
   }
   if (priority >= 70) {
@@ -673,6 +700,8 @@ export interface CommitmentLike {
   dueText?: string | null;
   owner?: string | null;
   confidence: number;
+  confirmedAt?: Date | null;
+  completionSuggestedAt?: Date | null;
 }
 
 const COMMITMENT_NEAR_WINDOW_MS = 24 * 60 * 60 * 1000; // due "soon" = within 24h
@@ -721,8 +750,11 @@ export async function upsertAttentionForCommitment(
     c.status === "DONE" || c.status === "DISMISSED" ? "RESOLVED" : "OPEN";
   const isResolved = status !== "OPEN";
   const type = commitmentTypeFor(c, now);
-  const priority = priorityForCommitment(type, c, now);
-  let { tier, tierReason } = tierForCommitment(type, priority, c.confidence);
+  const interrupt = interruptFor(c);
+  const duePriority = priorityForCommitment(type, c, now);
+  const priority =
+    interrupt === "suggestion" ? Math.min(duePriority, SUGGESTION_MAX_PRIORITY) : duePriority;
+  let { tier, tierReason } = tierForCommitment(type, duePriority, c.confidence, interrupt);
   const suppressed = await getSuppressionSet(c.userId);
   if (isSuppressed(suppressed, "COMMITMENT", type, priority)) {
     tier = "SILENT";
@@ -847,6 +879,8 @@ export interface EmailLike {
   // an undefined default — null vs [] would invalidate every legacy row.
   labels: string[];
   receivedAt: Date;
+  /** Provider message id: tells Gmail mail apart for the IP24 snapshot. */
+  gmailId?: string;
 }
 
 function emailTitleFor(email: EmailLike): string {
@@ -1035,6 +1069,10 @@ export async function upsertAttentionForEmailJudgement(
       sender: email.from,
       decidedBy: judgement.source ?? null,
       engagementKind,
+      // Only a fresh first judgement snapshots Gmail's marker: a re-judge or a
+      // late backfill reads labels Gmail may have changed since (it adds
+      // IMPORTANT after a reply). Stored on create only (decision-label.ts).
+      gmailImportant: gmailImportantSnapshot(email, { rejudge: options.rejudge === true }),
     });
   }
   return outcome;

@@ -83,7 +83,8 @@ export async function receiptRoutes(app: FastifyInstance) {
 
     // Fetch push delivery logs for today to correlate outcomes
     const pushLogs = await prisma.pushDeliveryLog.findMany({
-      where: { userId, createdAt: { gte: todayStart, lt: todayEnd } },
+      // Web push only: one row per notification, as this map assumes.
+      where: { userId, channel: "web", createdAt: { gte: todayStart, lt: todayEnd } },
       select: { notificationId: true, status: true, clickedAt: true },
     });
     const pushByNotifId = new Map(pushLogs.map((p) => [p.notificationId, p]));

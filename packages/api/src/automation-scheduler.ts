@@ -45,6 +45,7 @@ import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
+import { stampDecisionRang } from "./judge/decision-label.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import { FIREWALL_PUSH_RECENCY_MS } from "./judge/firewall-push.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
@@ -72,6 +73,7 @@ import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { mailOpenPath } from "./notify/mail-path.js";
 import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
@@ -826,7 +828,9 @@ export async function ensureUrgentEmailNotification(
         dedupeKey: urgentDedupeKey(lead),
         title,
         message: dbMessage,
-        ...(mail ? { sourceEmailId: mail.emailId } : {}),
+        // A batch of one opens its mail from the bell; a batch of several has
+        // no single mail to open, and the bell opens the mail list.
+        ...(mail ? { sourceEmailId: mail.emailId, link: mailOpenPath(mail.emailId) } : {}),
       },
       select: { id: true, createdAt: true },
     });
@@ -844,7 +848,7 @@ export async function ensureUrgentEmailNotification(
     // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
     // OS banner in the desktop shell, under the Web Push gate.
     ...(await desktopAlertTag(userId, "push")),
-    ...(mail ? { mail } : {}),
+    ...(mail ? { mail, link: mailOpenPath(mail.emailId) } : {}),
   });
   return notification;
 }
@@ -1907,12 +1911,24 @@ async function runUserCycle(
                 // unhandled rejection from the push internals would
                 // otherwise crash the single dyno. Matches the candidate
                 // push path above.
-              ).catch((err) => {
-                console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
-                captureError(err, {
-                  tags: { scope: "automation.urgent-push", userId: config.userId },
+              )
+                // A ring past every hold gate is recorded on each named
+                // mail's ledger row (IP24; stampDecisionRang never throws).
+                .then((summary) =>
+                  summary.dispatchedAt
+                    ? stampDecisionRang(
+                        config.userId,
+                        newUrgent.map((e) => e.id),
+                        summary.dispatchedAt,
+                      )
+                    : undefined,
+                )
+                .catch((err) => {
+                  console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
+                  captureError(err, {
+                    tags: { scope: "automation.urgent-push", userId: config.userId },
+                  });
                 });
-              });
 
               // Admin-only SMS escalation. Gated inside sendSms (admin +
               // phone + daily cap). Best-effort: never throws, never

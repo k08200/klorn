@@ -60,16 +60,22 @@ vi.mock("../db.js", () => ({
           where,
           data,
         }: {
-          where: { id: string; receivedAt?: null };
+          where: { id: string; receivedAt?: null; clickedAt?: null };
           data: Partial<LogRow>;
         }) => {
           const row = store.logs.find((log) => log.id === where.id);
           if (!row) return { count: 0 };
           if (where.receivedAt === null && row.receivedAt !== null) return { count: 0 };
+          if (where.clickedAt === null && row.clickedAt !== null) return { count: 0 };
           Object.assign(row, data);
           return { count: 1 };
         },
       ),
+      groupBy: vi.fn(async () => []),
+      findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
+        const row = store.logs.find((log) => log.id === where.id);
+        return row ? { subscriptionId: row.subscriptionId } : null;
+      }),
       findMany: vi.fn(
         async ({
           where,
@@ -90,6 +96,8 @@ vi.mock("../db.js", () => ({
     },
   },
 }));
+
+vi.mock("../notify/push-zombie.js", () => ({ clearZombieFlag: vi.fn(async () => {}) }));
 
 import {
   createPushDeliveryAttempt,

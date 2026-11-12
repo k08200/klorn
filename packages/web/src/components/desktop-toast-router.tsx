@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { openPathIsSafe } from "../lib/native/desktop-alerts";
+import { installToastClickHandler, type ToastClickTarget } from "../lib/native/desktop-receipts";
 import { shellKind } from "../lib/native/shell";
 
 declare global {
-  interface Window {
+  interface Window extends ToastClickTarget {
     /** Set inside the Windows desktop shell only: the shell calls it when the
      *  user clicks a toast (apps/desktop-win banner.rs open_script). */
     __klornOpenToast?: (path: string) => void;
@@ -30,8 +31,11 @@ export default function DesktopToastRouter() {
       if (openPathIsSafe(path)) router.push(path);
     };
     window.__klornOpenToast = open;
+    // The click's receipt (shell banner.rs click_script → desktop-receipts.ts).
+    const uninstallClickReceipts = installToastClickHandler(window);
     return () => {
       if (window.__klornOpenToast === open) delete window.__klornOpenToast;
+      uninstallClickReceipts();
     };
   }, [router]);
 

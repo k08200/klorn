@@ -87,8 +87,7 @@ enum TodayRules {
         _ queue: FirewallResponse, window: TodayPushWindow, limit: Int
     ) -> TodayLane? {
         let items = queue.items(for: .push)
-        let inWindow = Set(window.ids)
-        let rows = items.filter { inWindow.contains($0.id) }
+        let rows = inWindow(items, window)
         let laneTotal = max(queue.summary.count(for: .push), items.count)
         let older = max(laneTotal - rows.count, 0)
         guard !rows.isEmpty || older > 0 else { return nil }
@@ -96,11 +95,26 @@ enum TodayRules {
             tier: .push, style: .rows, count: rows.count, rows: Array(rows.prefix(limit)), older: older)
     }
 
-    /// Today's "Needs you now" count: the PUSH group's count as Today lists
-    /// it (inside the server's 72 h window when it sends one). The Dock
-    /// badge reads this, so the badge and Today never disagree. Pure.
-    static func needsYouNowCount(_ queue: FirewallResponse) -> Int {
-        lanes(queue).first { $0.tier == .push }?.count ?? 0
+    private static func inWindow(_ items: [FirewallItem], _ window: TodayPushWindow) -> [FirewallItem] {
+        let ids = Set(window.ids)
+        return items.filter { ids.contains($0.id) }
+    }
+
+    /// The Dock badge (N4; unread since 2026-11-12): Today's "Needs you now"
+    /// PUSH mail — inside the server's 72 h window when it sends one, every
+    /// row, not only those listed — that is still unread: not read per the
+    /// server's flag, and not opened on this Mac since the fetch. A mail with
+    /// no read claim (an older server) counts until it is opened here; an
+    /// item that is not mail counts. So the badge drops when a mail is read,
+    /// here or elsewhere, while the mail stays listed in Today until it is
+    /// handled. Pure.
+    static func dockBadgeCount(_ queue: FirewallResponse, opened: Set<String>) -> Int {
+        let push = queue.items(for: .push)
+        let needsYou = queue.todayPush.map { inWindow(push, $0) } ?? push
+        return needsYou.filter { item in
+            guard let email = item.email else { return true }
+            return email.unread != false && !opened.contains(email.emailDbId)
+        }.count
     }
 
     /// The header line from the lanes Today lists: PUSH is already Today's

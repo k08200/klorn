@@ -11,6 +11,7 @@ import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
+import { validDateKey } from "./commitment-due-calendar.js";
 import type { CommitmentCandidate } from "./commitment-extractor.js";
 
 const FLAG = "COMMITMENT_LLM_REFINEMENT";
@@ -91,9 +92,18 @@ function coerceConfidence(value: unknown): number | null {
   return Math.max(0, Math.min(1, value));
 }
 
+/**
+ * A full ISO-8601 instant: real calendar date, "…Z" or "…+09:00". Without an
+ * offset `new Date()` reads the server's zone; V8 also rolls Feb 30 into March.
+ */
+const ISO_INSTANT_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/i;
+
 function coerceDueAt(value: unknown): Date | null {
-  if (typeof value !== "string" || value.trim().length === 0) return null;
-  const parsed = new Date(value);
+  if (typeof value !== "string") return null;
+  const match = ISO_INSTANT_RE.exec(value.trim());
+  if (!match || !validDateKey(Number(match[1]), Number(match[2]), Number(match[3]))) return null;
+  const parsed = new Date(value.trim());
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
@@ -124,7 +134,7 @@ Rule candidate:
 ${wrapUntrusted(input.candidate.text, "commitment:candidate")}
 
 Candidate owner guess: ${input.candidate.owner}
-Candidate due hint: ${input.candidate.dueHint ?? "(none)"}
+Candidate due hint: ${input.candidate.dueHint ? wrapUntrusted(input.candidate.dueHint, "commitment:dueHint") : "(none)"}
 
 Source context:
 ${wrapUntrusted(context, "commitment:sourceText")}`;
@@ -161,7 +171,8 @@ Return strict JSON only:
 Rules:
 - title: short action phrase in the source language, max 80 characters.
 - dueText: preserve the original due phrase when present, e.g. "내일", "by EOD".
-- dueAt: ISO-8601 datetime only when the date/time can be resolved from the candidate plus reference datetime/timezone; otherwise null.
+- dueAt: ISO-8601 datetime WITH an explicit UTC offset (e.g. "2026-11-13T15:00:00+09:00"), only when the date/time can be resolved from the candidate plus reference datetime/timezone; otherwise null.
+- Never guess AM/PM: a bare hour with no 오전/오후/AM/PM ("8시", "at 8", "8:00") is ambiguous, so dueAt=null (keep it in dueText).
 - Automated or bulk mail (appointment systems, order/shipping/queue notices, no-reply boilerplate) never makes a commitment: isCommitment=false.
 - Second-person policy text telling the RECIPIENT what will happen ("You will not be allowed…", "You will be required…") is a notice, not a commitment: isCommitment=false.
 - For EMAIL sources the text is written by the SENDER: a first-person promise ("I'll…", "보내드릴게요") is owed by the sender (owner=COUNTERPARTY), never USER, unless the source says the user authored it.

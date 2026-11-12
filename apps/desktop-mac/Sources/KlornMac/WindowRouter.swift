@@ -154,7 +154,8 @@ final class WindowRouter {
             openMainWindow()
             model.navigate(to: .calendar)
         case .openToday:
-            // The quiet-hours summary: Today lists the urgent mail it counts.
+            // A summary (held mail, or a burst's "+N more"): Today lists the
+            // mail it counts.
             openMainWindow()
             model.navigate(to: .today)
         }

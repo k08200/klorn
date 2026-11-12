@@ -20,6 +20,7 @@ type NotificationRow = {
 type PushLogRow = {
   id: string;
   userId: string;
+  channel?: string;
   notificationId: string | null;
   category: string;
   status: string;
@@ -86,13 +87,14 @@ vi.mock("../db.js", () => ({
           where,
           take,
         }: {
-          where: { userId: string; category: string; createdAt: Range };
+          where: { userId: string; channel?: string; category: string; createdAt: Range };
           take: number;
         }) =>
           store.pushLogs
             .filter(
               (row) =>
                 row.userId === where.userId &&
+                (!where.channel || (row.channel ?? "web") === where.channel) &&
                 row.category === where.category &&
                 inRange(row.createdAt, where.createdAt),
             )
@@ -199,6 +201,26 @@ describe("getBriefingStatus", () => {
       deliveryId: "push-1",
       receivedAt: "2026-04-28T09:01:05.000Z",
     });
+  });
+
+  // The briefing also writes FCM / APNs / Telegram rows now (notify/
+  // delivery-lifecycle.ts), usually AFTER the web row. The status reads the
+  // service worker receipt, so it must keep reading the web row.
+  it("reads the web push row even when a newer native row of the briefing exists", async () => {
+    addBriefing();
+    addNotification();
+    addPushLog({ receivedAt: new Date("2026-04-28T09:01:05.000Z") });
+    store.pushLogs.push({
+      ...store.pushLogs[0],
+      id: "push-fcm",
+      channel: "fcm",
+      receivedAt: null,
+      createdAt: new Date(store.pushLogs[0].createdAt.getTime() + 2000),
+    });
+
+    const status = await getBriefingStatus(USER_ID, { now: NOW });
+
+    expect(status.push).toMatchObject({ state: "received", deliveryId: "push-1" });
   });
 
   it("reports skipped push reasons", async () => {

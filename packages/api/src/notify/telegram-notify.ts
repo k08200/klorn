@@ -6,10 +6,10 @@
  * Telegram channel inherits exactly the same suppression decisions as web
  * push. Failures are contained here: this function never throws.
  *
- * Observability (v1 choice): a structured console line per outcome plus
- * Sentry capture on failure. We intentionally do NOT write PushDeliveryLog
- * rows — those feed web-push receipt/click rates and mixing channels would
- * skew the dogfooding stats. Revisit if Telegram graduates from v1.
+ * Observability: a structured console line per outcome plus Sentry capture on
+ * failure. The caller (push.ts) records each sent / failed attempt as a
+ * PushDeliveryLog row with channel "telegram"; the web-push receipt and click
+ * rates read web rows only, so the channels do not mix.
  */
 
 import { captureError } from "../sentry.js";

@@ -41,6 +41,7 @@ export interface CommitmentUpdate {
   contactId?: string | null;
   dueAt?: Date | null;
   dueText?: string | null;
+  confirmedAt?: Date;
 }
 
 export async function listCommitments(
@@ -78,7 +79,10 @@ export async function upsertCommitment(
         data: {
           title: input.title,
           description: input.description ?? existing.description,
-          dueAt: input.dueAt ?? existing.dueAt,
+          // The first resolved due date stands: a later reply quoting the same
+          // promise would re-read "내일" against its own date, and a date the
+          // user set by hand must not be overwritten by re-ingestion.
+          dueAt: existing.dueAt ?? input.dueAt ?? null,
           dueText: input.dueText ?? existing.dueText,
           confidence: input.confidence ?? existing.confidence,
           evidenceText: input.evidenceText ?? existing.evidenceText,

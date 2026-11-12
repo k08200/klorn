@@ -16,6 +16,7 @@ const db = vi.hoisted(() => ({
   emailUpdate: vi.fn(async () => ({})),
   linkedFindFirst: vi.fn(),
   labelUpdateMany: vi.fn(),
+  noteEmailBellRowsRead: vi.fn(),
 }));
 
 const gmail = vi.hoisted(() => ({
@@ -64,6 +65,7 @@ vi.mock("../mail/email-sync.js", () => ({
   syncEmailByGmailId: vi.fn(async () => ({ synced: true, emailId: "e1" })),
 }));
 vi.mock("../analytics.js", () => ({ recordEvent: vi.fn() }));
+vi.mock("../notify/email-bell.js", () => ({ noteEmailBellRowsRead: db.noteEmailBellRowsRead }));
 vi.mock("../learning/contact-engagement.js", () => ({
   recordContactEngagement: vi.fn(async () => {}),
 }));
@@ -222,5 +224,51 @@ describe("mutation routes stamp the decision ledger", () => {
 
     expect(res.statusCode).toBe(404);
     expect(await stamps()).toEqual([]);
+  });
+});
+
+describe("PATCH /api/email/:id/read settles the mail's bell rows", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.emailFindFirst.mockResolvedValue(PRIMARY_EMAIL);
+    db.labelUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("marking a mail read marks the user's bell rows about it read", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/e-google/read",
+      headers,
+      payload: { isRead: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.noteEmailBellRowsRead).toHaveBeenCalledTimes(1);
+    expect(db.noteEmailBellRowsRead).toHaveBeenCalledWith("user-1", PRIMARY_EMAIL);
+  });
+
+  it("mark-unread leaves the bell alone", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "PATCH",
+      url: "/api/email/e-google/read",
+      headers,
+      payload: { isRead: false },
+    });
+    expect(db.noteEmailBellRowsRead).not.toHaveBeenCalled();
+  });
+
+  it("a mail the user doesn't own changes nothing", async () => {
+    db.emailFindFirst.mockResolvedValue(null);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/not-mine/read",
+      headers,
+      payload: { isRead: true },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(db.noteEmailBellRowsRead).not.toHaveBeenCalled();
   });
 });

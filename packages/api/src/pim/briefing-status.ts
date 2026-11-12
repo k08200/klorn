@@ -107,6 +107,9 @@ async function findBriefingPushLog(
 ): Promise<PushLogRow | null> {
   const where = {
     userId,
+    // Web push only: the status reads a service-worker receipt, which the
+    // FCM / APNs / Telegram rows of the same briefing never carry.
+    channel: "web",
     category: "daily_briefing",
     createdAt: { gte: todayStart, lt: tomorrowStart },
   };

@@ -1566,6 +1566,10 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await quietHoursSummarySelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Dock badge, Open-at-login question, closed-app catch-up (N4–N6, 2026-11-11):")
     for (name, ok) in await notifyBadgeLoginSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Notification drops: overflow, permission, fail-closed gate, unread badge (2026-11-12):")
+    for (name, ok) in await notificationDropsSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Notification receipts: shown / clicked to the server (2026-11-12):")
+    for (name, ok) in await notificationReceiptSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Files and team free-time (P12):")
     for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Locale-native preview fixtures (landing captures):")
@@ -1617,7 +1621,7 @@ func runSelfChecks() async -> Bool {
     check("integer formats render", [
         L("commitments.a11y", 4), L("aiUsage.a11y", 7, 20), L("push.announce", 9),
         L("engagement.repliedTimes", 5), L("waiting.days", 3), L("waiting.hint", 2),
-        L("deviceCalendars.count", 3),
+        L("deviceCalendars.count", 3), L("push.moreSummary.title", 4), L("push.delayedSummary.title", 2),
     ].allSatisfy { $0.contains(where: \.isNumber) })
     check("string formats render", [
         L("briefing.a11y", "x"), L("commitments.markDone.a11y", "x"),

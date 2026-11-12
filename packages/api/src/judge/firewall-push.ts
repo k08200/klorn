@@ -14,6 +14,7 @@ import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
 import { findReingestedHistory } from "../mail/imap-history.js";
 import { isImapMessageId } from "../mail/imap-message-id.js";
+import { mailOpenPath } from "../notify/mail-path.js";
 import {
   type MailPushLane,
   mailPushContent,
@@ -25,6 +26,7 @@ import {
   notificationCopy,
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
+import { stampDecisionRang } from "./decision-label.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
 import { resolveTierReason } from "./tier-reason-strings.js";
 import type { BellRow } from "./v3/push-budget-gate.js";
@@ -187,8 +189,9 @@ async function findOpenMailItem(
 /**
  * The bell row, titled in the user's notification language. It carries the
  * [gmailId] dedup marker, read back by both this path and the urgent-priority
- * sweep, and the mail's id, read back by the Windows desktop catch-up
- * (decision N6).
+ * sweep, the mail's id, read back by the Windows desktop catch-up (decision
+ * N6) and by the reader routes that mark it read once the mail is opened
+ * (notify/email-bell.ts), and the link a bell click opens: the mail itself.
  */
 export function firewallBellRow(email: JudgeableEmailRow, language: NotificationLanguage): BellRow {
   return {
@@ -196,10 +199,15 @@ export function firewallBellRow(email: JudgeableEmailRow, language: Notification
     title: notificationCopy(language).urgentMailTitle,
     message: `${pushBody(email, language).body} [${email.gmailId}]`,
     sourceEmailId: email.id,
+    link: mailOpenPath(email.id),
   };
 }
 
-/** Ring for a bell row already written: the open clients, then device push. */
+/**
+ * Ring for a bell row already written: the open clients, then device push.
+ * When the push gets past every hold gate, the mail's ledger row records the
+ * ring (DecisionLabel.rangAt, the IP24 denominator).
+ */
 export async function deliverFirewallPush(
   userId: string,
   email: JudgeableEmailRow,
@@ -230,17 +238,19 @@ export async function deliverFirewallPush(
     title: notificationCopy(lang).urgentMailTitle,
     message: body,
     createdAt: notification.createdAt.toISOString(),
+    // The bell row a live frame adds opens the mail, as the stored row does.
+    link: mailOpenPath(email.id),
     // PUSH lane → OS banner in the desktop shell, under the Web Push gate,
     // with the same N1 content and a click that opens the mail.
     ...(await desktopAlertTag(userId, "push")),
     mail: { emailId: email.id, ...content },
   });
 
-  await sendPushNotification(
+  const summary = await sendPushNotification(
     userId,
     {
       ...content,
-      url: `/email/${encodeURIComponent(email.id)}`,
+      url: mailOpenPath(email.id),
       attentionItemId: item?.id,
       lane: item?.lane ?? "PUSH",
       language: lang,
@@ -256,6 +266,7 @@ export async function deliverFirewallPush(
     // callers (push-bucket.ts, push-interrupt-callers-guard.test.ts).
     { bucket: "interrupt" },
   );
+  if (summary.dispatchedAt) await stampDecisionRang(userId, [email.id], summary.dispatchedAt);
 }
 
 /**

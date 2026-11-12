@@ -122,8 +122,10 @@ drafts are refused for a session stamp that has ended, before any request.
   and PUSH mail that arrived while Klorn was quit *is* announced.
 - **No banners for old mail.** The first sync for an account is a silent
   baseline; another account's ledger is never reused; sign-out clears it.
-- **Burst cap.** At most 5 banners per sync; the rest are recorded as seen
-  (the lane count covers them).
+- **Burst cap.** At most 5 banners per sync, and nothing dropped: past 5
+  new mails, the first 4 post on their own and ONE "+N more need you"
+  summary (senders only) covers the rest; a tap opens Today
+  (`BannerBatch`). VoiceOver hears every mail.
 - **Content.** Title = sender display name, body = subject. No snippet, no
   body text, no action buttons. Clicking routes through
   `WindowRouter.handleNotificationTap`: the main window opens on that mail
@@ -138,12 +140,48 @@ drafts are refused for a session stamp that has ended, before any request.
 - **Cold-launch tap.** A banner tapped before the first sync opens the
   window at once and the mail as soon as the queue loads
   (`pendingRevealItemID`).
-- **Permission.** Requested once per session, only when signed in **and**
-  after the user was shown a window they opened (the main window activated,
-  which includes onboarding finishing into it) —
-  `NotificationPermissionRules`. A launch at login never raises the system
-  dialog. If macOS denied it, Settings ▸ Notifications shows a one-line hint
-  with *Open System Settings*.
+- **Permission.** Asked at the first sync of a session whenever macOS has no
+  answer yet (`.notDetermined`), whatever the launch mode — a Mac that only
+  ever starts Klorn at login is asked too — and never again once the user
+  allowed or denied (`NotificationPermissionRules`). The "Open at login"
+  question still waits for a window the user opened. If macOS denied it,
+  Settings ▸ Notifications shows a one-line hint with *Open System Settings*.
+- **Server gate, fail closed.** Right before a banner, the Mac reads
+  `GET /api/notifications/alert-state` (quiet hours, category opt-outs;
+  `ServerAlertGate`). With no answer within 4 s (network or server error,
+  timeout) nothing rings: new PUSH mail is held and comes back on the next
+  pass the server answers — its own banner, or ONE "N urgent emails need
+  you" summary (`HeldBanners`); new MEETING-lane mail is offered again on
+  the next pass; a meeting reminder is offered again each tick until the
+  meeting starts. The same applies while macOS's permission prompt is
+  unanswered (a banner posted then is refused). The mail is in Today and
+  Mail meanwhile. A server without the endpoint (404) gates nothing.
+- **Receipts.** The Mac tells the server what became of a banner
+  (`POST /api/notifications/desktop/receipts`, `NotificationReceipts.swift`):
+  `shown` when macOS accepted it (the `add` completion with no error),
+  `clicked` when the user opened it (the default action). A mail banner
+  reports as `attention_item`, a meeting-soon banner as `calendar_event`;
+  the held and "+N more" summaries stand for several mails and report
+  nothing. No action buttons, so no `actioned`. Fire-and-forget: one request
+  at a time, at most 30 a minute (the server allows 60 per user), a network
+  error or 5xx retried after 2 s and 10 s and then dropped, a 4xx never
+  retried, a 429 pauses the queue a minute.
+- **Dock badge.** Today's "Needs you now" PUSH mail (72 h window) that is
+  still unread — the server's read flag minus mail opened on this Mac
+  (`TodayRules.dockBadgeCount`). Quiet hours never hide it; Settings ▸
+  Notifications ▸ *Show count on Dock icon* does.
+- **Focus (not yet).** Banners post at the default (active) interruption
+  level, so a Focus mode silences them. `.timeSensitive` for PUSH/MEETING
+  needs the restricted `com.apple.developer.usernotifications.time-sensitive`
+  entitlement, which a Developer ID app may claim only with an embedded
+  Developer ID provisioning profile (Apple TN3125); claiming it without one
+  stops the app from launching. Founder steps: enable *Time Sensitive
+  Notifications* on the `ai.klorn.desktop` App ID; create a Developer ID
+  provisioning profile for it; store it as a repo secret; then a PR embeds it
+  at `Klorn.app/Contents/embedded.provisionprofile` and signs the Developer
+  ID build with an entitlements file that adds the key (the ad-hoc build
+  keeps `Klorn.entitlements` as is), runs the launch smoke on the signed app,
+  and sets `interruptionLevel = .timeSensitive` for PUSH/MEETING banners.
 - The ledger is written only when it changed.
 - An unbundled `swift run` has no notification center: banners are logged
   and skipped.

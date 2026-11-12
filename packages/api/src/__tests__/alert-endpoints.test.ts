@@ -141,6 +141,7 @@ describe("buildAlertEndpoints", () => {
       createdAt: created.toISOString(),
       lastReceivedAt: received.toISOString(),
       health: "ok",
+      needsResubscribe: false,
     });
     expect(endpoints[1]).toMatchObject({ id: "sub-2", current: false, health: "stale" });
   });

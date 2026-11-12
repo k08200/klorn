@@ -13,8 +13,15 @@
 import crypto from "node:crypto";
 import webPush from "web-push";
 import { recordEvent } from "../analytics.js";
+import { pushZombieEvictionEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { Semaphore } from "../semaphore.js";
+import {
+  type ChannelSendOutcome,
+  type NativeSendSummary,
+  nativeSendOutcome,
+  recordChannelSend,
+} from "./channel-delivery-log.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
 import { type MailPushLane, mailPushReplyPath, mailPushWebActions } from "./mail-push-content.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
@@ -31,6 +38,7 @@ import { sendDevicePush } from "./push-device.js";
 import { mintPushLaterToken } from "./push-later-token.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
+import { evaluateZombieSubscription } from "./push-zombie.js";
 import { ssrfSafeHttpsAgent } from "./ssrf-safe-agent.js";
 import { sendTelegramForPush } from "./telegram-notify.js";
 
@@ -103,6 +111,8 @@ interface PushSubscriptionRow {
   auth: string;
   origin: string | null;
   failureCount: number;
+  needsResubscribeAt?: Date | null;
+  endpointSince?: Date | null;
 }
 
 export interface PushSendOptions {
@@ -122,6 +132,15 @@ export interface PushSendSummary {
   attempted: number;
   accepted: number;
   failed: number;
+  /**
+   * When the push got past every hold gate (noise policy, category preferences
+   * and quiet hours, the agent-proposal cooldown, the rate limit) and went to
+   * the user's channels: the "ring" (the rate limiter's PushRingEvent instant).
+   * Null when a gate held it. A skip after the gates (no browser subscription,
+   * no VAPID keys) is about reach, not a hold, so it still carries the time.
+   * IP24 stamps it on the decision ledger (DecisionLabel.rangAt).
+   */
+  dispatchedAt: Date | null;
 }
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
@@ -282,6 +301,9 @@ export async function sendPushNotification(
     );
     return skipped("rate_limited");
   }
+  // Every hold gate passed: from here on the push rings on whatever channels
+  // the user has. Each return below carries this instant.
+  const dispatchedAt = new Date();
 
   // Secondary channel: Telegram (best-effort). Runs AFTER the shared gates
   // above so it inherits exactly the same suppression decisions as web push,
@@ -289,13 +311,26 @@ export async function sendPushNotification(
   // no browser subscriptions) still gets PUSH-tier interrupts. Contained:
   // sendTelegramForPush never throws by design, and the .catch is a second
   // belt so a bug there can never fail the web-push path.
-  await sendTelegramForPush(userId, channelPayload, category).catch((err) => {
+  const telegramQueuedAt = new Date();
+  const telegram = await sendTelegramForPush(userId, channelPayload, category).catch((err) => {
     // Defense-in-depth: sendTelegramForPush is designed never to throw and
     // logs/captures its own failures. If it ever does throw, this must not
     // sink the web-push path below — but don't swallow it silently either,
     // or a Telegram-only self-hoster loses every PUSH alert with no trace.
     console.warn(`[PUSH] Telegram secondary channel threw for ${userId}:`, err);
+    return "failed" as const;
   });
+  // Delivery lifecycle: a Telegram send that went out (or failed) is one
+  // channel attempt; "skipped" (not linked / not configured) is none.
+  if (telegram === "sent" || telegram === "failed") {
+    await recordChannelSend({
+      ...channelRecordBase(userId, channelPayload, category),
+      channel: "telegram",
+      outcome:
+        telegram === "sent" ? { status: "sent" } : { status: "failed", reason: "telegram_error" },
+      queuedAt: telegramQueuedAt,
+    });
+  }
 
   // Native mobile channels (Capacitor shell): FCM for Android, APNs for iOS.
   // Best-effort and in ADDITION to web push, running after the shared gates
@@ -306,19 +341,29 @@ export async function sendPushNotification(
   // WITHOUT awaiting so a slow/stalled APNs http2 handshake (fresh session +
   // 10s per-request timeout) never stacks latency onto the primary web-push
   // path below. Each has its own .catch, so no unhandled rejection escapes.
+  const nativeQueuedAt = new Date();
+  const recordNative = (channel: "fcm" | "apns") => (summary: NativeSendSummary | undefined) =>
+    recordNativeOutcome(channel, nativeSendOutcome(summary), {
+      ...channelRecordBase(userId, channelPayload, category),
+      queuedAt: nativeQueuedAt,
+    });
   void Promise.all([
-    sendDevicePush(userId, nativePayload, category).catch((err) => {
-      console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
-    }),
-    sendApnsPush(userId, nativePayload, category).catch((err) => {
-      console.warn(`[PUSH] APNs device channel threw for ${userId}:`, err);
-    }),
+    sendDevicePush(userId, nativePayload, category)
+      .then(recordNative("fcm"))
+      .catch((err) => {
+        console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
+      }),
+    sendApnsPush(userId, nativePayload, category)
+      .then(recordNative("apns"))
+      .catch((err) => {
+        console.warn(`[PUSH] APNs device channel threw for ${userId}:`, err);
+      }),
   ]);
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     console.log(`[PUSH] Skipped — VAPID keys not configured`);
     await recordSkipped(userId, payload.title, category, "missing_vapid_keys");
-    return skipped("missing_vapid_keys");
+    return { ...skipped("missing_vapid_keys"), dispatchedAt };
   }
 
   const allSubscriptions = (await prisma.pushSubscription.findMany({
@@ -337,17 +382,27 @@ export async function sendPushNotification(
     );
   }
 
-  if (subscriptions.length === 0) {
-    console.log(`[PUSH] No push subscriptions for user ${userId} — browser push skipped`);
-    await recordSkipped(userId, payload.title, category, "no_subscriptions");
-    return skipped("no_subscriptions");
+  // Zombie subscriptions (push-zombie.ts): flagged rows get no more pushes
+  // once PUSH_ZOMBIE_EVICTION is on. "Send test" does not come through here,
+  // so it still reaches them and a receipt can clear the flag.
+  const live = pushZombieEvictionEnabled()
+    ? subscriptions.filter((sub) => !sub.needsResubscribeAt)
+    : subscriptions;
+  const parked = subscriptions.length - live.length;
+  if (parked > 0) {
+    console.log(`[PUSH] Skipping ${parked} sub(s) for ${userId} that need re-subscribe`);
+  }
+
+  if (live.length === 0) {
+    const reason = parked > 0 ? "subscriptions_need_resubscribe" : "no_subscriptions";
+    console.log(`[PUSH] No live push subscriptions for user ${userId} — browser push skipped`);
+    await recordSkipped(userId, payload.title, category, reason);
+    return { ...skipped(reason), dispatchedAt };
   }
   // Category only, never payload.title (== "Klorn — {sender}" for mail) — this
   // fires on every successful send, so it is the highest-volume leak of the
   // three suppression-path lines already redacted above.
-  console.log(
-    `[PUSH] Sending to ${subscriptions.length} subscription(s) for ${userId} (${category})`,
-  );
+  console.log(`[PUSH] Sending to ${live.length} subscription(s) for ${userId} (${category})`);
 
   // Fan out with bounded concurrency (same Semaphore util gmail-fetch.ts uses).
   // sem.all preserves per-thunk isolation as long as no thunk throws — and
@@ -356,7 +411,7 @@ export async function sendPushNotification(
   // serial loop's `continue`.
   const sem = new Semaphore(PUSH_FANOUT_CONCURRENCY);
   const results = await sem.all(
-    subscriptions.map((sub) => () => deliverToSubscription(userId, sub, webPayload, category)),
+    live.map((sub) => () => deliverToSubscription(userId, sub, webPayload, category)),
   );
   const attempted = results.filter((r) => r.attempted).length;
   const accepted = results.filter((r) => r.delivered).length;
@@ -367,10 +422,11 @@ export async function sendPushNotification(
   if (accepted > 0) void recordEvent(userId, "push_sent", { category });
   return {
     status: "sent",
-    subscriptions: subscriptions.length,
+    subscriptions: live.length,
     attempted,
     accepted,
     failed,
+    dispatchedAt,
   };
 }
 
@@ -396,10 +452,10 @@ async function deliverToSubscription(
     bellNotificationId?: string;
   } & WebMailActionFields,
   category: NotifCategory,
-): Promise<{ attempted: boolean; delivered: boolean }> {
+): Promise<{ attempted: boolean; delivered: boolean; deliveryId: string | null }> {
   if (!isSafePushEndpoint(sub.endpoint)) {
     await recordSkipped(userId, payload.title, category, "unsafe_endpoint");
-    return { attempted: false, delivered: false };
+    return { attempted: false, delivered: false, deliveryId: null };
   }
   const deliveryId = await createPushDeliveryAttempt({
     userId,
@@ -423,6 +479,8 @@ async function deliverToSubscription(
   let lastError: unknown;
   let delivered = false;
   const maxAttempts = 1 + PUSH_RETRY_DELAYS_MS.length;
+  // Lifecycle "queued": the first attempt is handed to the push service now.
+  const queuedAt = new Date();
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -462,7 +520,7 @@ async function deliverToSubscription(
   }
 
   if (delivered) {
-    await markPushAccepted(deliveryId);
+    await markPushAccepted(deliveryId, new Date(), queuedAt);
     // Recovered: clear the consecutive-failure tally so a sub that had a
     // transient bad spell isn't evicted on a later push.
     if (sub.failureCount > 0) {
@@ -471,10 +529,11 @@ async function deliverToSubscription(
         data: { failureCount: 0, lastFailedAt: null },
       });
     }
-    return { attempted: true, delivered: true };
+    await checkZombie(sub.id, sub.endpointSince ?? null);
+    return { attempted: true, delivered: true, deliveryId };
   }
 
-  await markPushFailed(deliveryId, { statusCode: lastStatusCode, body: lastBody });
+  await markPushFailed(deliveryId, { statusCode: lastStatusCode, body: lastBody }, queuedAt);
   console.error(
     `[PUSH] Failed to send to subscription ${sub.id} after ${maxAttempts} attempts: status=${lastStatusCode}, body=${lastBody}, error=${lastError}`,
   );
@@ -504,13 +563,51 @@ async function deliverToSubscription(
       );
     }
   }
-  return { attempted: true, delivered: false };
+  return { attempted: true, delivered: false, deliveryId };
+}
+
+/**
+ * An accepted push extends this subscription's run of unconfirmed pushes:
+ * flag it when the run makes it a zombie (push-zombie.ts). Only when pushes
+ * carry a receipt URL — without one no receipt can ever arrive, and every
+ * subscription would be flagged. Never fails the push.
+ */
+async function checkZombie(subscriptionId: string, endpointSince: Date | null): Promise<void> {
+  if (!PUSH_RECEIPT_BASE_URL) return;
+  try {
+    await evaluateZombieSubscription(subscriptionId, new Date(), endpointSince);
+  } catch (err) {
+    console.warn(`[PUSH] Zombie check failed for subscription ${subscriptionId}:`, err);
+  }
+}
+
+/** The per-notification fields every FCM / APNs / Telegram row carries. */
+function channelRecordBase(
+  userId: string,
+  payload: { title: string; notificationId?: string },
+  category: NotifCategory,
+) {
+  return {
+    userId,
+    notificationId: payload.notificationId ?? null,
+    category,
+    title: payload.title,
+  };
+}
+
+async function recordNativeOutcome(
+  channel: "fcm" | "apns",
+  outcome: ChannelSendOutcome | null,
+  base: ReturnType<typeof channelRecordBase> & { queuedAt: Date },
+): Promise<void> {
+  if (!outcome) return;
+  await recordChannelSend({ ...base, channel, outcome });
 }
 
 export type TestPushResult =
   | { status: "not_found" }
   | { status: "skipped"; reason: string; delivered: false }
-  | { status: "sent"; delivered: boolean };
+  | { status: "sent"; delivered: boolean; deliveryId: string };
 
 /**
  * "Send test" on one row of settings → Where you get alerts (N8): one push to
@@ -544,10 +641,10 @@ export async function sendTestPushToSubscription(
     return { status: "skipped", reason: "origin_not_allowed", delivered: false };
   }
   const result = await deliverToSubscription(userId, sub, payload, "system");
-  if (!result.attempted) {
+  if (!result.attempted || !result.deliveryId) {
     return { status: "skipped", reason: "unsafe_endpoint", delivered: false };
   }
-  return { status: "sent", delivered: result.delivered };
+  return { status: "sent", delivered: result.delivered, deliveryId: result.deliveryId };
 }
 
 /** Get the public VAPID key for client-side subscription */
@@ -555,8 +652,17 @@ export function getVapidPublicKey(): string {
   return VAPID_PUBLIC_KEY;
 }
 
+/** A push held at a gate (or not sent at all): nothing was dispatched. */
 function skipped(reason: string): PushSendSummary {
-  return { status: "skipped", reason, subscriptions: 0, attempted: 0, accepted: 0, failed: 0 };
+  return {
+    status: "skipped",
+    reason,
+    subscriptions: 0,
+    attempted: 0,
+    accepted: 0,
+    failed: 0,
+    dispatchedAt: null,
+  };
 }
 
 async function recordSkipped(
@@ -617,6 +723,9 @@ async function hasRecentAgentProposalPush(userId: string): Promise<boolean> {
   const recent = await prisma.pushDeliveryLog.findFirst({
     where: {
       userId,
+      // Web push only, as before other channels wrote rows: an FCM row must
+      // not start a cooldown that web push alone would not have.
+      channel: "web",
       category: "agent_proposal",
       status: { in: ["PENDING", "ACCEPTED"] },
       createdAt: { gte: since },

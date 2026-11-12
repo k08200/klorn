@@ -11,7 +11,17 @@ const mocks = vi.hoisted(() => {
   const findUniqueMock = vi.fn(({ where }: { where: { userId_dedupKey: { dedupKey: string } } }) =>
     existingDedupKeys.has(where.userId_dedupKey.dedupKey) ? { id: "existing" } : null,
   );
-  return { existingDedupKeys, upsertCommitmentMock, findUniqueMock };
+  const getUserTimeZoneMock = vi.fn(async (_userId: string) => "America/New_York");
+  const refineMock = vi.fn(async (_input: unknown): Promise<unknown> => null);
+  const refinerEnabledMock = vi.fn(() => false);
+  return {
+    existingDedupKeys,
+    upsertCommitmentMock,
+    findUniqueMock,
+    getUserTimeZoneMock,
+    refineMock,
+    refinerEnabledMock,
+  };
 });
 
 vi.mock("../db.js", () => ({
@@ -26,6 +36,15 @@ vi.mock("../pim/commitments.js", () => ({
   upsertCommitment: mocks.upsertCommitmentMock,
 }));
 
+vi.mock("../user-timezone.js", () => ({
+  getUserTimeZone: mocks.getUserTimeZoneMock,
+}));
+
+vi.mock("../pim/commitment-refiner.js", () => ({
+  maybeRefineCommitmentCandidateWithLlm: mocks.refineMock,
+  isCommitmentLlmRefinementEnabled: mocks.refinerEnabledMock,
+}));
+
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 
 describe("extractAndUpsertCommitmentsFromText", () => {
@@ -33,6 +52,10 @@ describe("extractAndUpsertCommitmentsFromText", () => {
     mocks.existingDedupKeys.clear();
     mocks.upsertCommitmentMock.mockClear();
     mocks.findUniqueMock.mockClear();
+    mocks.getUserTimeZoneMock.mockClear();
+    mocks.refineMock.mockReset();
+    mocks.refineMock.mockResolvedValue(null);
+    mocks.refinerEnabledMock.mockReturnValue(false);
   });
 
   it("creates low-confidence commitments from rule-based candidates", async () => {
@@ -98,5 +121,104 @@ describe("extractAndUpsertCommitmentsFromText", () => {
       duplicatesSkipped: 0,
     });
     expect(mocks.upsertCommitmentMock).not.toHaveBeenCalled();
+  });
+
+  describe("due dates", () => {
+    // Thursday 2026-11-12, 10:00 in Seoul.
+    const receivedAt = new Date("2026-11-12T01:00:00.000Z");
+
+    function persisted(): { dueAt: Date | null; dueText: string | null } {
+      const input = mocks.upsertCommitmentMock.mock.calls[0][1] as {
+        dueAt: Date | null;
+        dueText: string | null;
+      };
+      return { dueAt: input.dueAt, dueText: input.dueText };
+    }
+
+    it("persists dueAt resolved against the received time in the given zone", async () => {
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "EMAIL",
+        sourceId: "email-1",
+        text: "자료는 내일 오후 3시까지 보내드릴게요.",
+        referenceDate: receivedAt,
+        timeZone: "Asia/Seoul",
+      });
+
+      const { dueAt, dueText } = persisted();
+      expect(dueText).toBe("내일 오후 3시");
+      expect(dueAt?.toISOString()).toBe("2026-11-13T06:00:00.000Z");
+      expect(mocks.getUserTimeZoneMock).not.toHaveBeenCalled();
+    });
+
+    it("reads the user's stored zone when the caller passes none", async () => {
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "EMAIL",
+        sourceId: "email-1",
+        text: "Thanks — I'll send the contract tomorrow.",
+        referenceDate: receivedAt, // Wednesday 20:00 in New York
+      });
+
+      expect(mocks.getUserTimeZoneMock).toHaveBeenCalledWith("user-1");
+      const { dueAt, dueText } = persisted();
+      expect(dueText).toBe("tomorrow");
+      expect(dueAt?.toISOString()).toBe("2026-11-13T04:59:00.000Z");
+    });
+
+    it("keeps the wording but leaves dueAt null for an ambiguous hour", async () => {
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "EMAIL",
+        sourceId: "email-1",
+        text: "내일 8시까지 보내드릴게요.",
+        referenceDate: receivedAt,
+        timeZone: "Asia/Seoul",
+      });
+
+      const { dueAt, dueText } = persisted();
+      expect(dueText).toBe("내일 8시");
+      expect(dueAt).toBeNull();
+    });
+
+    it("skips the zone lookup when no candidate states a deadline", async () => {
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "EMAIL",
+        sourceId: "email-1",
+        text: "I'll send the contract soon.",
+        referenceDate: receivedAt,
+      });
+
+      expect(mocks.getUserTimeZoneMock).not.toHaveBeenCalled();
+      expect(persisted()).toEqual({ dueAt: null, dueText: null });
+    });
+
+    it("lets the deterministic reading veto an LLM-guessed hour", async () => {
+      mocks.refinerEnabledMock.mockReturnValue(true);
+      mocks.refineMock.mockResolvedValue({
+        isCommitment: true,
+        title: "자료 보내기",
+        kind: "DELIVERABLE",
+        owner: "COUNTERPARTY",
+        counterpartyName: null,
+        dueText: "8시",
+        dueAt: new Date("2026-11-12T11:00:00.000Z"), // the 20:00 guess
+        confidence: 0.8,
+      });
+
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "EMAIL",
+        sourceId: "email-1",
+        text: "8시까지 보내드릴게요.",
+        referenceDate: receivedAt,
+      });
+
+      expect(mocks.refineMock).toHaveBeenCalledWith(
+        expect.objectContaining({ timeZone: "America/New_York", referenceDate: receivedAt }),
+      );
+      expect(persisted()).toEqual({ dueAt: null, dueText: "8시" });
+    });
   });
 });
