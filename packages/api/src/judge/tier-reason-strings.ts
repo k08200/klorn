@@ -137,6 +137,15 @@ export const STATIC_TIER_REASONS = {
     fr: "Engagement à honorer sous 24 heures",
     de: "Zusage in den nächsten 24 Stunden fällig",
   },
+  "commitment.suggested": {
+    en: "Suggested commitment — not yet confirmed, so it never interrupts",
+    ko: "추정된 약속 — 아직 확정 전이라 알림을 보내지 않습니다",
+    ja: "推定された約束 — 未確定のため通知しません",
+    zh: "推测的承诺 — 尚未确认，因此不会打扰你",
+    es: "Compromiso sugerido: aún sin confirmar, así que no te interrumpe",
+    fr: "Engagement suggéré — pas encore confirmé, il ne vous interrompt pas",
+    de: "Vermutete Zusage – noch nicht bestätigt, daher keine Unterbrechung",
+  },
   "commitment.tracked": {
     en: "Tracked commitment — added to review queue",
     ko: "추적 중인 약속 — 검토 큐에 추가함",
