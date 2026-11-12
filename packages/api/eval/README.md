@@ -56,6 +56,16 @@ Safety invariants (enforced on every run, even on misses):
   LLM and the correct one to ignore when you are deliberately measuring the
   fallback).
 
+> 2026-11-12: after the 2026-11-04 relabel (eval-018, eval-031 and eval-047,
+> QUEUE → INFO; see "Labels reconciled" below), the same no-LLM pipeline scores
+> **43/56 = 76.8%** against the current labels: SILENT 12/12, MEETING 4/4,
+> QUEUE 12/14, INFO 9/13, PUSH 6/13. The three relabelled receipts are the added
+> misses (predicted QUEUE), so the 82.1% above no longer reproduces. The seven
+> urgent misses still all land in QUEUE and none in SILENT. 76.8% is above the
+> 70% floor the deterministic test enforces. Measured at `8c119f25` with no provider key:
+> `pnpm exec tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=0`
+> (exit 3, INSTRUMENT DEGRADED, as intended).
+
 The deterministic floor is a **ratchet**: raise it when the fallback improves;
 never lower it to make a PR pass.
 
