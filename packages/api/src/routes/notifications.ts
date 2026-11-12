@@ -214,8 +214,9 @@ export async function notificationRoutes(app: FastifyInstance) {
   // `alert` tag the Windows shell reads off real-time frames. It asks here
   // before posting a banner and gets the same gate (category opt-outs, quiet
   // hours in the user's zone, focus rule): { alerts: { push, meeting } }, each
-  // { allowed: true } or { allowed: false, reason }. The client falls open on
-  // any failure, so a 503 here never silences an urgent mail.
+  // { allowed: true } or { allowed: false, reason }. On any failure the Mac
+  // fails closed: it rings nothing unverified and holds new PUSH mail until a
+  // later read answers, so a 503 here delays a banner but never loses the mail.
   app.get("/alert-state", async (request, reply) => {
     const userId = getUserId(request);
     try {

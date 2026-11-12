@@ -15,7 +15,7 @@ final class AppModel {
     private(set) var phase: Phase
     var signInError: String?
     private(set) var queue: FirewallResponse? {
-        didSet { reportNeedsYouNowIfChanged() }
+        didSet { reportDockBadgeCountIfChanged() }
     }
     private(set) var loadError: String? {
         didSet { if loadError == nil { loadOffline = false } }
@@ -38,20 +38,24 @@ final class AppModel {
     /// newest first, on the first pass after launch the server allows: ONE
     /// summary banner (decision N6). A lone missed mail goes to `onNewPush`.
     var onClosedSummary: (([FirewallItem]) -> Void)?
-    /// Called with Today's "Needs you now" count whenever it changes (the
-    /// Dock badge, N4). Always on the main actor.
-    @ObservationIgnored var onNeedsYouNowChanged: ((Int) -> Void)?
-    /// Today's "Needs you now" count (`TodayRules.needsYouNowCount`), 0
-    /// without a queue.
-    var needsYouNowCount: Int { queue.map(TodayRules.needsYouNowCount) ?? 0 }
-    /// The count last reported to `onNeedsYouNowChanged`.
-    @ObservationIgnored private var reportedNeedsYouNow = 0
+    /// Called with two or more PUSH mails held only because the server's
+    /// alert gate gave no answer, newest first, once it answers "allowed"
+    /// (2026-11-12): ONE "N urgent emails need you" summary.
+    var onDelayedSummary: (([FirewallItem]) -> Void)?
+    /// Called with the Dock badge count whenever it changes (N4). Always on
+    /// the main actor.
+    @ObservationIgnored var onDockBadgeCountChanged: ((Int) -> Void)?
+    /// The Dock badge count (`TodayRules.dockBadgeCount`): Today's "Needs
+    /// you now" mail still unread, 0 without a queue.
+    var dockBadgeCount: Int { queue.map { TodayRules.dockBadgeCount($0, opened: openedEmailIds) } ?? 0 }
+    /// The count last reported to `onDockBadgeCountChanged`.
+    @ObservationIgnored private var reportedDockBadgeCount = 0
 
-    private func reportNeedsYouNowIfChanged() {
-        let count = needsYouNowCount
-        guard count != reportedNeedsYouNow else { return }
-        reportedNeedsYouNow = count
-        onNeedsYouNowChanged?(count)
+    private func reportDockBadgeCountIfChanged() {
+        let count = dockBadgeCount
+        guard count != reportedDockBadgeCount else { return }
+        reportedDockBadgeCount = count
+        onDockBadgeCountChanged?(count)
     }
     /// "Now" for mail banners: the catch-up's 72 h window and its ask-again
     /// wait. A seam so the self-check runs on a fixed clock.
@@ -228,7 +232,14 @@ final class AppModel {
     /// AttentionItem ids the user dismissed locally; hidden until the server's
     /// async reconcile drops them from the queue (then pruned here).
     private var dismissed: Set<String> = []
+    /// macOS's permission was read (and asked for, when it had no answer)
+    /// this session.
     private var didRequestNotifyAuth = false
+    /// macOS's answer before and after this session's request; nil until
+    /// read. The "Open at login" question is decided from it.
+    @ObservationIgnored private var permissionAnswers: (before: NotificationPermission, after: NotificationPermission)?
+    /// The "Open at login" question was considered this session.
+    @ObservationIgnored private var didOfferLoginItem = false
     /// The notification center. A seam: the self-check injects a fake, so
     /// it never posts a banner or raises a permission prompt.
     @ObservationIgnored var pushNotifier: any PushNotifying = SystemPushNotifier()
@@ -236,7 +247,8 @@ final class AppModel {
     /// a one-line hint when it is `.denied`.
     private(set) var notificationPermission: NotificationPermission = .notDetermined
     /// The user has been shown a window they opened (the main window
-    /// activated). Gates the permission prompt: a login launch never sets it.
+    /// activated). Gates the "Open at login" question (a sheet in that
+    /// window): a login launch never sets it. Not the permission request.
     @ObservationIgnored var windowShownByUser = false
     /// A banner tapped before the first sync (cold launch): its item opens
     /// as soon as a queue arrives (`applyPendingReveal`).
@@ -352,7 +364,10 @@ final class AppModel {
     /// on the server, but the list only learns that on its next poll; rows
     /// drop the unread dot from this set in the meantime. An id leaves the
     /// set when its mark-read fails, so the server's flag is trusted again.
-    private(set) var openedEmailIds: Set<String> = []
+    /// The Dock badge follows it: opening a mail drops it from the count.
+    private(set) var openedEmailIds: Set<String> = [] {
+        didSet { reportDockBadgeCountIfChanged() }
+    }
 
     /// Mark a mail read on the server after the user opened it. Reading is a
     /// side-effect-free GET; this is the explicit write, fire-and-forget: a
@@ -1050,6 +1065,11 @@ final class AppModel {
         stopPolling()
         realtime?.stop()
         realtime = nil
+        // The permission record and the Open-at-login offer are per session,
+        // also when another account signs in over a live one.
+        didRequestNotifyAuth = false
+        permissionAnswers = nil
+        didOfferLoginItem = false
         // Whatever still showed the previous account outside the model.
         onSessionEnded?()
         phase = .signedIn
@@ -2424,6 +2444,8 @@ final class AppModel {
         dismissed = []
         clearSelection()
         didRequestNotifyAuth = false
+        permissionAnswers = nil
+        didOfferLoginItem = false
         pendingRevealItemID = nil
         // Read before the Keychain is cleared: the device-calendar removals owed at
         // sign-out are sent with this session's token.
@@ -2717,8 +2739,10 @@ final class AppModel {
     /// user's "Meetings" category here (a cheap pre-check, no request), then
     /// on the server's alert gate (quiet hours; see `ServerAlertGate`), read
     /// only when a banner is due. A held banner is recorded and dropped, as
-    /// Web Push drops it; a failed read posts (fail-open). Otherwise the ledger
-    /// is saved only once the banner was handled. Internal for the self-check.
+    /// Web Push drops it. No answer posts nothing and records nothing, so the
+    /// next tick offers it again while the meeting has not started (fail
+    /// closed). Otherwise the ledger is saved only once the banner was
+    /// handled. Internal for the self-check.
     func announceMeetingSoon(upcoming: [CalendarEventWire]?, now: Date, session: Int) async {
         guard automation.allowsInterrupt(for: .meeting), let upcoming else { return }
         let owner = SessionIdentity.userId(fromToken: tokenStore.load())
@@ -2728,30 +2752,37 @@ final class AppModel {
             leadMinutes: Self.meetingLeadMinutes, shown: Set(shown.notified))
         else { return }
         let state = await serverAlertState()
+        let permission = await pushNotifier.permission()
         guard isCurrent(session) else { return }
         // Re-read: another tick may have handled this meeting during the wait.
         let announced = PushLedger.resolve(stored: meetingAlertStore.load(), owner: owner)
         guard !announced.notified.contains(due.id) else { return }
-        guard ServerAlertGate.allows(.meeting, state: state) else {
+        switch ServerAlertGate.verdict(.meeting, state: state, permission: permission) {
+        case .allowed:
+            if onMeetingSoon?(due) == true {
+                meetingAlertStore.save(announced.recording(due.id))
+            }
+        case .quietHours, .refused:
             let reason = ServerAlertGate.heldReason(.meeting, state: state) ?? "other"
             Log.app.info("meeting banner held by the server: \(reason, privacy: .public)")
             meetingAlertStore.save(announced.recording(due.id))
-            return
-        }
-        if onMeetingSoon?(due) == true {
-            meetingAlertStore.save(announced.recording(due.id))
+        case .unknown:
+            Log.app.info("meeting banner waits: no answer from the alert gate or macOS")
         }
     }
 
     /// The server's "may Klorn interrupt now" verdict (`AlertStateWire`), read
     /// right before a banner posts. nil when it could not be read within
-    /// `alertStateTimeout` — the gate then posts (fail-open).
+    /// `alertStateTimeout` — nothing then rings (fail closed, see
+    /// `ServerAlertGate`). A server without the endpoint (404) gates nothing.
     private func serverAlertState() async -> AlertStateWire? {
         do {
             return try await api.get(
                 AlertStateWire.path, timeout: alertStateTimeout, as: AlertStateWire.self)
+        } catch APIError.http(404, _) {
+            return AlertStateWire.noGate
         } catch {
-            Log.app.debug("alert-state read failed, posting anyway: \(String(describing: error), privacy: .private)")
+            Log.app.debug("alert-state read failed, holding banners: \(String(describing: error), privacy: .private)")
             return nil
         }
     }
@@ -2958,7 +2989,14 @@ final class AppModel {
     ///   interrupt too;
     /// - any other hold (the category off on the server, or "Urgent email"
     ///   off on this Mac): dropped, held mail included;
-    /// - no answer: new mail posts (fail-open); held mail waits.
+    /// - no answer (2026-11-12, fail closed) — from the server, or from macOS
+    ///   while its permission prompt is unanswered: nothing posts; new PUSH
+    ///   mail is held like quiet-hours mail and asked about again on the next
+    ///   pass (no five-minute wait), coming back as its own banner or ONE "N
+    ///   urgent emails need you" summary (`onDelayedSummary`); new MEETING
+    ///   mail is offered again on the next pass.
+    /// Every new mail reaches `onNewPush`: `PushAlerter` folds a burst past
+    /// `PushLedger.maxBannersPerSync` into one summary (`BannerBatch`).
     /// The first pass after launch (decision N6): the new PUSH mail from the
     /// last 72 h, still open, arrived while Klorn was quit. One comes back as
     /// its own banner, two or more as ONE "N urgent emails while Klorn was
@@ -2996,8 +3034,9 @@ final class AppModel {
             return
         }
         let state = await serverAlertState()
+        let permission = await pushNotifier.permission()
         guard isCurrent(session) else { return }
-        let verdict = ServerAlertGate.verdict(.emailUrgent, state: state)
+        let verdict = ServerAlertGate.verdict(.emailUrgent, state: state, permission: permission)
         // Re-read: another tick may have held or caught up mail during the wait.
         let current = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
         let outcome = HeldBanners.resolve(
@@ -3007,11 +3046,14 @@ final class AppModel {
         if verdict == .quietHours { heldAskAgainAt = now.addingTimeInterval(HeldBanners.askAgainSeconds) }
         if let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) {
             Log.app.info("mail banners held by the server: \(reason, privacy: .public)")
+        } else if verdict == .unknown {
+            Log.app.info("mail banners held: no answer from the alert gate or macOS")
         }
         if !outcome.summary.isEmpty {
             switch outcome.summaryKind {
             case .quietHours: onHeldSummary?(outcome.summary)
             case .whileClosed: onClosedSummary?(outcome.summary)
+            case .delayed: onDelayedSummary?(outcome.summary)
             }
         }
         if !outcome.post.isEmpty { onNewPush?(outcome.post) }
@@ -3058,24 +3100,40 @@ final class AppModel {
         notificationPermission = await pushNotifier.permission()
     }
 
-    /// Ask macOS for banner permission once per session, under
-    /// `NotificationPermissionRules` (signed in + a window the user opened).
+    /// Once per session: read macOS's banner permission and, while it has no
+    /// answer, ask for it (`NotificationPermissionRules`) — at the first
+    /// sync, whatever the launch mode, so a launch at login asks too. Then,
+    /// once the user has been shown a window they opened, consider the "Open
+    /// at login" question (a sheet in that window) from those answers.
     func requestNotificationPermissionIfNeeded() async {
-        guard NotificationPermissionRules.shouldRequest(
-            signedIn: phase == .signedIn, alreadyRequested: didRequestNotifyAuth,
-            shownByUser: windowShownByUser)
+        guard phase == .signedIn else { return }
+        if !didRequestNotifyAuth {
+            didRequestNotifyAuth = true
+            let session = sessionGeneration
+            let before = await pushNotifier.permission()
+            var after = before
+            if isCurrent(session), NotificationPermissionRules.shouldRequest(
+                signedIn: phase == .signedIn, alreadyRequested: false, status: before) {
+                after = await pushNotifier.requestAuthorization()
+            }
+            // macOS's answer is per Mac: kept whatever the session.
+            notificationPermission = after
+            // This session's record is not: a call that outlived its session
+            // leaves the next one's alone (sign-out and sign-in reset it).
+            guard isCurrent(session) else { return }
+            permissionAnswers = (before, after)
+        }
+        guard phase == .signedIn, windowShownByUser, !didOfferLoginItem, let answers = permissionAnswers
         else { return }
-        didRequestNotifyAuth = true
-        let before = await pushNotifier.permission()
-        notificationPermission = await pushNotifier.requestAuthorization()
-        offerLoginItemIfNeeded(before: before, after: notificationPermission)
+        didOfferLoginItem = true
+        offerLoginItemIfNeeded(before: answers.before, after: answers.after)
     }
 
-    /// Once signed in: request notification permission (when allowed) and start the
-    /// background refresh loop. Idempotent.
+    /// Once signed in: request notification permission (when macOS has no
+    /// answer yet) and start the background refresh loop. Idempotent.
     private func ensureActive() {
         guard phase == .signedIn else { return }
-        // Asks only once a user-opened window was shown — never at login.
+        // The first sync asks, whatever the launch mode (2026-11-12).
         Task { await requestNotificationPermissionIfNeeded() }
         if pollTask == nil { startPolling() }
         startRealtime()

@@ -12,8 +12,10 @@ import Foundation
 /// - only PUSH mail still in the lane, not opened on this Mac, from the last
 ///   72 hours;
 /// - quiet hours hold; any other hold (the category turned off) drops, and so
-///   does the local Urgent-email switch; no answer from the server keeps the
-///   held mail for a later pass while new mail posts (fail-open).
+///   does the local Urgent-email switch; no answer from the server (or from
+///   macOS's permission prompt) holds new PUSH mail too (2026-11-12, fail
+///   closed: nothing rings unverified) and asks again on the next pass,
+///   without the quiet-hours wait.
 /// MEETING-lane mail and meeting-soon banners held by quiet hours stay dropped:
 /// N6 catches up PUSH mail only (the server's desktop catch-up reads the PUSH
 /// lane alone), and a reminder for a meeting that has started is useless.
@@ -69,7 +71,11 @@ enum HeldBanners {
     /// (`NotificationTapAction.openToday`). Pure.
     static func summaryBanner(for items: [FirewallItem], kind: SummaryKind = .quietHours) -> PushBanner {
         let senders = items.map { senderDisplayName($0.email?.from.map(decodeHTMLEntities)) }
-        let title = kind == .whileClosed ? "push.closedSummary.title" : "push.heldSummary.title"
+        let title = switch kind {
+        case .quietHours: "push.heldSummary.title"
+        case .whileClosed: "push.closedSummary.title"
+        case .delayed: "push.delayedSummary.title"
+        }
         return PushBanner(
             identifier: PushNotifier.summaryIdentifier(for: items.first?.id ?? ""),
             title: L(title, items.count),
@@ -100,10 +106,12 @@ enum HeldBanners {
         item.email?.receivedAt ?? item.surfacedAt
     }
 
-    /// Which summary a catch-up posts: mail held during quiet hours, or
-    /// mail that arrived while Klorn was quit (N6, 2026-11-11).
+    /// Which summary a catch-up posts: mail held during quiet hours, mail
+    /// that arrived while Klorn was quit (N6, 2026-11-11), or mail held only
+    /// because the server's gate gave no answer (2026-11-12): "N urgent
+    /// emails need you".
     enum SummaryKind: Equatable, Sendable {
-        case quietHours, whileClosed
+        case quietHours, whileClosed, delayed
     }
 
     struct Outcome: Equatable {
@@ -133,18 +141,20 @@ enum HeldBanners {
     ) -> Outcome {
         switch verdict {
         case .quietHours:
-            // The lane lists newest first; the held list is oldest first.
-            let candidates = Set(eligible.map(\.id))
-            let holdNow = arrival(unseenPush.filter { candidates.contains($0.id) }).reversed().map(\.id)
-            return Outcome(post: [], summary: [], next: ledger.holding(holdNow, whileClosed: !missed.isEmpty))
+            let next = ledger.holding(holdIDs(unseenPush, eligible: eligible), whileClosed: !missed.isEmpty)
+            return Outcome(post: [], summary: [], next: next.confirmingQuietHours())
         case .refused:
             return Outcome(post: [], summary: [], next: ledger.clearingHeld())
         case .unknown:
-            // Fail-open for new mail: what was missed while quit is caught up
-            // now; mail held for quiet hours waits for an answer.
-            let caughtUp = catchUp(missed, fresh: fresh, kind: .whileClosed)
-            return Outcome(post: caughtUp.post, summary: caughtUp.summary, next: ledger,
-                           summaryKind: caughtUp.summaryKind)
+            // Fail closed, losing nothing: new PUSH mail (missed while quit
+            // included) is held like quiet-hours mail and comes back on the
+            // next pass the server answers; new MEETING-lane mail is forgotten
+            // so the next pass plans it again; mail already held keeps waiting.
+            let push = Set(unseenPush.map(\.id))
+            let next = ledger
+                .holding(holdIDs(unseenPush, eligible: eligible), whileClosed: !missed.isEmpty, unconfirmed: true)
+                .forgetting(fresh.map(\.id).filter { !push.contains($0) })
+            return Outcome(post: [], summary: [], next: next)
         case .allowed:
             // Only what this pass shows leaves the list: an overlapping pass
             // may have held newer mail during the wait.
@@ -153,10 +163,19 @@ enum HeldBanners {
             let heldIDs = Set(held.map(\.id))
             let waiting = arrival(held + missed.filter { !heldIDs.contains($0.id) })
             let closed = !missed.isEmpty || ledger.heldWhileClosed == true
-            let caughtUp = catchUp(waiting, fresh: fresh, kind: closed ? .whileClosed : .quietHours)
+            let kind: SummaryKind = closed ? .whileClosed : ledger.heldUnconfirmed == true ? .delayed : .quietHours
+            let caughtUp = catchUp(waiting, fresh: fresh, kind: kind)
             return Outcome(post: caughtUp.post, summary: caughtUp.summary, next: next,
                            summaryKind: caughtUp.summaryKind)
         }
+    }
+
+    /// The new PUSH mail a hold keeps, oldest first (the lane lists newest
+    /// first): only what a catch-up may still show. The rest is recorded as
+    /// seen and stays in the lane. Pure.
+    private static func holdIDs(_ unseenPush: [FirewallItem], eligible: [FirewallItem]) -> [String] {
+        let candidates = Set(eligible.map(\.id))
+        return arrival(unseenPush.filter { candidates.contains($0.id) }).reversed().map(\.id)
     }
 
     /// One catch-up: a lone mail is posted as itself (first), two or more
@@ -188,14 +207,36 @@ extension PushLedger {
     /// This ledger with `ids` held too: ids already held keep their place,
     /// at most `HeldBanners.maxHeld`, newest kept. `whileClosed` marks that
     /// some of them arrived while Klorn was quit, so the summary says so.
+    /// `unconfirmed` marks a hold for no answer from the server: it sticks
+    /// only when nothing held so far waited through confirmed quiet hours.
     /// Pure.
-    func holding(_ ids: [String], whileClosed: Bool = false) -> PushLedger {
+    func holding(_ ids: [String], whileClosed: Bool = false, unconfirmed: Bool = false) -> PushLedger {
         let current = heldIDs
         let added = ids.filter { !current.contains($0) }
         guard !added.isEmpty else { return self }
         var next = self
         next.held = Array((current + added).suffix(HeldBanners.maxHeld))
         if whileClosed { next.heldWhileClosed = true }
+        if unconfirmed, current.isEmpty || heldUnconfirmed == true { next.heldUnconfirmed = true }
+        return next
+    }
+
+    /// This ledger with `ids` no longer recorded, so the next plan offers
+    /// them again (MEETING mail a pass could not verify). Pure.
+    func forgetting(_ ids: [String]) -> PushLedger {
+        let drop = Set(ids)
+        guard notified.contains(where: drop.contains) else { return self }
+        var next = self
+        next.notified = notified.filter { !drop.contains($0) }
+        return next
+    }
+
+    /// The server answered "quiet hours": everything held waited through
+    /// them, so the catch-up says so. Pure.
+    func confirmingQuietHours() -> PushLedger {
+        guard heldUnconfirmed != nil else { return self }
+        var next = self
+        next.heldUnconfirmed = nil
         return next
     }
 
@@ -205,7 +246,10 @@ extension PushLedger {
         guard kept != heldIDs else { return self }
         var next = self
         next.held = kept
-        if kept.isEmpty { next.heldWhileClosed = nil }
+        if kept.isEmpty {
+            next.heldWhileClosed = nil
+            next.heldUnconfirmed = nil
+        }
         return next
     }
 
@@ -215,6 +259,7 @@ extension PushLedger {
         var next = self
         next.held = []
         next.heldWhileClosed = nil
+        next.heldUnconfirmed = nil
         return next
     }
 }
