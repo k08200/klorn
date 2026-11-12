@@ -24,7 +24,7 @@ import {
   buildPrompt,
   buildQuietBriefing,
   gatherBriefingData,
-  isQuietMorning,
+  quietMorningKind,
   userBriefingContext,
 } from "./briefing-gather.js";
 import {
@@ -140,10 +140,11 @@ export default async function generateBriefing(
   const data = await gatherBriefingData(userId, ctx.todayKey, now);
   const copy = briefingCopy(ctx.lang);
 
-  if (isQuietMorning(data)) {
+  const quietKind = quietMorningKind(data);
+  if (quietKind) {
     return {
-      content: buildQuietBriefing(data.openPush, ctx.lang),
-      llm: { source: "skipped", reason: "nothing new, nothing scheduled or due", model: "" },
+      content: buildQuietBriefing(data.openPush, ctx.lang, quietKind),
+      llm: { source: "skipped", reason: `quiet morning (${quietKind})`, model: "" },
       picks: [],
       quiet: true,
     };

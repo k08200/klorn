@@ -244,26 +244,31 @@ export async function gatherBriefingData(
   };
 }
 
+export type QuietKind = "nothing-new" | "no-mail-connection";
+
 /**
- * A quiet morning: every source read, a previous briefing exists, the mail
- * connection is usable, no new non-SILENT mail since the last briefing (with
- * the whole window read), and nothing scheduled, committed or due within a
- * day. The briefing then skips the model and delivers the quiet card instead.
+ * A quiet morning: every source read, a previous briefing exists, no new
+ * non-SILENT mail since the last briefing (with the whole window read), and
+ * nothing scheduled, committed or due within a day. The briefing then skips
+ * the model and delivers the quiet card instead. Without a usable mail
+ * connection the card says so, rather than "nothing new".
  */
-export function isQuietMorning(data: BriefingData): boolean {
+export function quietMorningKind(data: BriefingData): QuietKind | null {
   const q = data.quiet;
-  if (!data.complete || !q.hasPrevious || !q.mailConnected || q.windowFull) return false;
-  if (data.newMailCount > 0 || data.commitments.length > 0) return false;
-  return !q.taskDueSoon && !q.eventSoon;
+  if (!data.complete || !q.hasPrevious || q.windowFull) return null;
+  if (data.newMailCount > 0 || data.commitments.length > 0) return null;
+  if (q.taskDueSoon || q.eventSoon) return null;
+  return q.mailConnected ? "nothing-new" : "no-mail-connection";
 }
 
 /** The quiet card: deterministic, no model call. Lists PUSH mail still open from before. */
 export function buildQuietBriefing(
   openPush: readonly BriefingMail[],
   lang: NotificationLanguage,
+  kind: QuietKind,
 ): string {
   const copy = briefingCopy(lang);
-  const lines = [copy.quietHeadline];
+  const lines = [kind === "nothing-new" ? copy.quietHeadline : copy.noMailHeadline];
   const open = openPush.slice(0, QUIET_OPEN_LIMIT);
   if (open.length > 0) {
     lines.push("", `**${copy.stillOpen}**`);

@@ -17,6 +17,8 @@ export interface BriefingCopy {
   other: string;
   /** The quiet card's first line: nothing new, nothing scheduled or due. */
   quietHeadline: string;
+  /** The same card when no mail account is connected: "nothing new" would be a guess. */
+  noMailHeadline: string;
   /** Header over PUSH mail that is still open from before. */
   stillOpen: string;
   /** Instruction to the model: the language to write in. */
@@ -31,6 +33,8 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     other: "Everything else",
     quietHeadline:
       "Nothing new since your last briefing, and nothing scheduled or due in the next day.",
+    noMailHeadline:
+      "No mail account is connected, and nothing is scheduled or due in the next day.",
     stillOpen: "Still open",
     languageLine: "Write every field in English.",
   },
@@ -40,6 +44,7 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     connected: "연결된 항목",
     other: "그 밖의 것",
     quietHeadline: "지난 브리핑 이후 새로 온 것이 없고, 하루 안에 잡힌 일정이나 마감도 없습니다.",
+    noMailHeadline: "연결된 메일 계정이 없고, 하루 안에 잡힌 일정이나 마감도 없습니다.",
     stillOpen: "아직 열려 있는 메일",
     languageLine:
       "Write every field in Korean (자연스러운 한국어). Keep product/tool names as-is. The quote stays in the mail's own language.",
@@ -51,6 +56,7 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     other: "その他",
     quietHeadline:
       "前回のブリーフィング以降、新しいものはありません。1日以内の予定や期限もありません。",
+    noMailHeadline: "接続されたメールアカウントがなく、1日以内の予定や期限もありません。",
     stillOpen: "まだ対応中のメール",
     languageLine:
       "Write every field in Japanese (自然な日本語). Keep product/tool names as-is. The quote stays in the mail's own language.",
@@ -61,6 +67,7 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     connected: "相关事项",
     other: "其他",
     quietHeadline: "自上次简报以来没有新内容，一天内也没有日程或截止事项。",
+    noMailHeadline: "没有已连接的邮箱账户，一天内也没有日程或截止事项。",
     stillOpen: "仍待处理的邮件",
     languageLine:
       "Write every field in Simplified Chinese. Keep product/tool names as-is. The quote stays in the mail's own language.",
@@ -72,6 +79,8 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     other: "Todo lo demás",
     quietHeadline:
       "Nada nuevo desde tu último resumen, y nada programado ni pendiente en el próximo día.",
+    noMailHeadline:
+      "No hay ninguna cuenta de correo conectada, y nada programado ni pendiente en el próximo día.",
     stillOpen: "Aún abiertos",
     languageLine:
       "Write every field in Spanish. Keep product/tool names as-is. The quote stays in the mail's own language.",
@@ -83,6 +92,8 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     other: "Tout le reste",
     quietHeadline:
       "Rien de nouveau depuis votre dernier briefing, et rien de prévu ni d'échéance dans la journée à venir.",
+    noMailHeadline:
+      "Aucun compte mail n'est connecté, et rien de prévu ni d'échéance dans la journée à venir.",
     stillOpen: "Encore ouverts",
     languageLine:
       "Write every field in French. Keep product/tool names as-is. The quote stays in the mail's own language.",
@@ -94,6 +105,8 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     other: "Alles andere",
     quietHeadline:
       "Nichts Neues seit deinem letzten Briefing, und in den nächsten 24 Stunden ist nichts geplant oder fällig.",
+    noMailHeadline:
+      "Kein Mailkonto ist verbunden, und in den nächsten 24 Stunden ist nichts geplant oder fällig.",
     stillOpen: "Noch offen",
     languageLine:
       "Write every field in German. Keep product/tool names as-is. The quote stays in the mail's own language.",
@@ -109,5 +122,7 @@ export function briefingCopy(lang: NotificationLanguage): BriefingCopy {
  * caller that finds the day's note announces it without a push too.
  */
 export function isQuietBriefing(content: string): boolean {
-  return Object.values(COPY).some((copy) => content.startsWith(copy.quietHeadline));
+  return Object.values(COPY).some(
+    (copy) => content.startsWith(copy.quietHeadline) || content.startsWith(copy.noMailHeadline),
+  );
 }

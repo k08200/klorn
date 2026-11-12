@@ -275,10 +275,17 @@ describe("a quiet morning skips the model", () => {
     expect(s.requests).toHaveLength(1);
   });
 
-  it("is not quiet without a usable mail connection: no new mail then means nothing", async () => {
+  it("without a usable mail connection the card says so, instead of 'nothing new'", async () => {
     s.googleTokens = 0;
-    await generateBriefing("u1", NOW);
-    expect(s.requests).toHaveLength(1);
+
+    const delivery = await createDailyBriefingDelivery("u1");
+
+    expect(s.requests).toHaveLength(0);
+    expect(delivery.briefing).toBe(
+      "No mail account is connected, and nothing is scheduled or due in the next day.",
+    );
+    expect(s.notifications[0]?.data).toMatchObject({ isRead: true });
+    expect(s.pushes).toHaveLength(0);
   });
 
   it("is not quiet when the window scan is full, even if everything read was SILENT", async () => {
