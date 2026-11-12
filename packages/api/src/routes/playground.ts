@@ -60,7 +60,12 @@ function modelFitsProvider(
   return true;
 }
 
-const classifyBodySchema = {
+/**
+ * Exported as a test seam: the web client mirrors `apiKey.minLength` in its own
+ * guard (web/src/app/playground/classify-wire.ts API_KEY_MIN_LENGTH), and a
+ * test pins the two together so they cannot drift apart.
+ */
+export const classifyBodySchema = {
   type: "object",
   additionalProperties: false,
   // apiKey is optional at the schema level: without it the request is routed

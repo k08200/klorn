@@ -1,17 +1,27 @@
 "use client";
 
 /**
- * The playground's two calls: classify (one paid inference on the visitor's
- * own key) and the "Wrong lane?" feedback. Errors come back as i18n keys plus
- * an optional upstream detail, so the page renders them in the visitor's
- * language; the server's own English message is never shown.
+ * The playground's two calls: classify — one inference, either on Klorn's own
+ * account (key-free demo) or on the visitor's key — and the "Wrong lane?"
+ * feedback. Errors come back as i18n keys plus an optional upstream detail, so
+ * the page renders them in the visitor's language; the server's own English
+ * message is never shown.
+ *
+ * The request body and the refusal mapping live in classify-wire.ts, pure and
+ * unit-tested; this hook is the React shell around them.
  */
 
 import type { LiveTier, Tier } from "@klorn/contract";
 import { useCallback, useState } from "react";
 import { API_BASE } from "@/lib/api";
+import {
+  type ClassifyRequest,
+  classifyErrorFor,
+  classifyRequestBody,
+  type WireError,
+} from "./classify-wire";
 import type { DecidedBy } from "./decided";
-import type { PlaygroundProvider } from "./models";
+import { KLORN_MODEL_ID } from "./models";
 
 export interface Features {
   confidence: number;
@@ -35,25 +45,9 @@ export interface SortedResult extends ClassifyResult {
   subject: string;
 }
 
-export interface PlaygroundError {
-  key: string;
-  detail?: string;
-}
-
-export interface ClassifyInput {
-  from: string;
-  subject: string;
-  body: string;
-  provider: PlaygroundProvider;
-  apiKey: string;
-  model: string;
-}
-
 /** Same ceiling the old page used: a stalled model fails fast, not forever. */
 export const CLASSIFY_TIMEOUT_SECONDS = 40;
 const CLASSIFY_TIMEOUT_MS = CLASSIFY_TIMEOUT_SECONDS * 1000;
-/** Upstream detail is shown verbatim (already key-scrubbed server-side); cap it. */
-const DETAIL_MAX = 300;
 
 function isResult(data: unknown): data is ClassifyResult {
   if (!data || typeof data !== "object") return false;
@@ -61,25 +55,26 @@ function isResult(data: unknown): data is ClassifyResult {
   return typeof d.tier === "string" && typeof d.features === "object" && d.features !== null;
 }
 
-async function errorFor(res: Response): Promise<PlaygroundError> {
-  if (res.status === 429) return { key: "playground.error.rateLimited" };
-  const data = (await res.json().catch(() => null)) as { detail?: unknown } | null;
-  const detail = typeof data?.detail === "string" ? data.detail.slice(0, DETAIL_MAX) : undefined;
-  if (res.status === 400) return { key: "playground.error.invalid" };
-  return { key: "playground.error.failed", detail };
+/**
+ * The model the result card names. On the demo path the server pins the call to
+ * its own JUDGE_MODEL and ignores any model we send, so reporting the picker's
+ * value would name a model that never ran.
+ */
+function modelThatRan(request: ClassifyRequest): string {
+  return request.mode === "byok" ? request.model.trim() : KLORN_MODEL_ID;
 }
 
 export function useClassify() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SortedResult | null>(null);
-  const [error, setError] = useState<PlaygroundError | null>(null);
+  const [error, setError] = useState<WireError | null>(null);
 
   const reset = useCallback(() => {
     setResult(null);
     setError(null);
   }, []);
 
-  const classify = useCallback(async (input: ClassifyInput): Promise<boolean> => {
+  const classify = useCallback(async (input: ClassifyRequest): Promise<boolean> => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -91,30 +86,39 @@ export function useClassify() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({
-          from: input.from.trim(),
-          subject: input.subject.trim(),
-          snippet: input.body.trim() || undefined,
-          provider: input.provider,
-          apiKey: input.apiKey.trim(),
-          model: input.model.trim() || undefined,
-        }),
+        body: JSON.stringify(classifyRequestBody(input)),
       });
       if (!res.ok) {
-        setError(await errorFor(res));
+        const data = (await res.json().catch(() => null)) as unknown;
+        setError(classifyErrorFor(res.status, data, input.mode));
         return false;
       }
       const data: unknown = await res.json();
       if (!isResult(data)) {
-        setError({ key: "playground.error.failed" });
+        // A 200 whose body is not a verdict is the same class of failure as a
+        // 5xx, so it reads by mode too.
+        setError(classifyErrorFor(res.status, null, input.mode));
         return false;
       }
       const seconds = Math.round((performance.now() - started) / 100) / 10;
-      setResult({ ...data, model: input.model.trim(), seconds, subject: input.subject.trim() });
+      setResult({
+        ...data,
+        model: modelThatRan(input),
+        seconds,
+        subject: input.subject.trim(),
+      });
       return true;
     } catch (err) {
       const timedOut = err instanceof DOMException && err.name === "AbortError";
-      setError({ key: timedOut ? "playground.error.timeout" : "playground.error.network" });
+      if (!timedOut) {
+        setError({ key: "playground.error.network" });
+      } else {
+        // The BYOK timeout copy says to pick a faster model; in demo mode there
+        // is no model to pick, so it would point at a control that isn't there.
+        setError({
+          key: input.mode === "demo" ? "playground.error.demoTimeout" : "playground.error.timeout",
+        });
+      }
       return false;
     } finally {
       clearTimeout(timer);

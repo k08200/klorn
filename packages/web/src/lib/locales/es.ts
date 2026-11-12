@@ -2791,8 +2791,8 @@ const es: Record<string, string> = {
   "playground.nav.startFree": "Empezar gratis",
   "playground.title": "Mira cómo Klorn clasifica un correo.",
   "playground.lead":
-    "Pega un mensaje, elige un modelo y usa tu propia clave. El juez real de Klorn lo coloca en uno de cinco carriles y muestra las cuatro puntuaciones detrás.",
-  "playground.leadShort": "Tu modelo, tu clave, el juez real de Klorn.",
+    "Pega un mensaje. El juez real de Klorn lo coloca en uno de cinco carriles y muestra las cuatro puntuaciones detrás. Sin clave y sin cuenta.",
+  "playground.leadShort": "Sin clave y sin cuenta: el juez real de Klorn.",
   "playground.form.label": "Correo y modelo",
   "playground.samples.heading": "Prueba un ejemplo",
   "playground.samples.investor": "Inversor",
@@ -2833,6 +2833,9 @@ const es: Record<string, string> = {
   "playground.key.none": "¿Aún sin clave?",
   "playground.key.create": "Crea una en {provider}",
   "playground.key.billing": "Cada clasificación se factura a tu propia cuenta de {provider}.",
+  "playground.demo.note":
+    "No necesitas clave. Esto se ejecuta en la cuenta de Klorn, con {model}, el modelo que usa el juez de Klorn.",
+  "playground.byok.toggle": "Usar mi propia clave de API",
   "playground.submit": "Clasificar este correo",
   "playground.submitting": "Clasificando…",
   "playground.result.label": "Resultado",
@@ -2893,6 +2896,17 @@ const es: Record<string, string> = {
   "playground.meta": "{model} · {seconds} seg",
   "playground.error.title": "No se pudo clasificar este correo",
   "playground.error.noKey": "Añade primero tu clave de API de {provider}.",
+  "playground.error.keyTooShort":
+    "Esa clave de API de {provider} parece demasiado corta: comprueba que la has pegado completa.",
+  "playground.error.demoOff":
+    "Las clasificaciones gratuitas están desactivadas ahora mismo. Añade tu propia clave de API.",
+  "playground.error.demoBudget":
+    "Las clasificaciones gratuitas de Klorn de hoy se han agotado. Añade tu propia clave de API para clasificar ahora.",
+  "playground.error.demoRateLimited":
+    "Has agotado las clasificaciones gratuitas por el momento. Añade tu propia clave de API o vuelve a intentarlo en un minuto.",
+  "playground.error.demoFailed":
+    "El modelo de Klorn no respondió. Inténtalo en un momento o añade tu propia clave de API.",
+  "playground.error.demoTimeout": "Ha tardado más de {seconds} segundos. Vuelve a clasificarlo.",
   "playground.error.noEmail": "Añade primero un remitente y un asunto.",
   "playground.error.rateLimited": "Demasiados intentos: espera un minuto y vuelve a clasificar.",
   "playground.error.timeout":

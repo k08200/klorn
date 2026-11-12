@@ -2847,8 +2847,8 @@ const de: Record<string, string> = {
   "playground.nav.startFree": "Kostenlos starten",
   "playground.title": "So sortiert Klorn eine E-Mail.",
   "playground.lead":
-    "Nachricht einfügen, Modell wählen, eigenen Schlüssel mitbringen. Klorns echter Judge ordnet sie einer von fünf Lanes zu und zeigt die vier Scores dahinter.",
-  "playground.leadShort": "Dein Modell, dein Schlüssel, Klorns echter Judge.",
+    "Nachricht einfügen. Klorns echter Judge ordnet sie einer von fünf Lanes zu und zeigt die vier Scores dahinter. Ohne Schlüssel, ohne Konto.",
+  "playground.leadShort": "Ohne Schlüssel, ohne Konto — Klorns echter Judge.",
   "playground.form.label": "E-Mail und Modell",
   "playground.samples.heading": "Beispiel ausprobieren",
   "playground.samples.investor": "Geldgeber",
@@ -2888,6 +2888,9 @@ const de: Record<string, string> = {
   "playground.key.none": "Noch kein Schlüssel?",
   "playground.key.create": "Bei {provider} erstellen",
   "playground.key.billing": "Jede Sortierung wird deinem eigenen {provider}-Konto berechnet.",
+  "playground.demo.note":
+    "Kein Schlüssel nötig. Das läuft auf Klorns eigenem Konto, mit {model} — dem Modell, das Klorns Judge nutzt.",
+  "playground.byok.toggle": "Eigenen API-Schlüssel verwenden",
   "playground.submit": "E-Mail sortieren",
   "playground.submitting": "Sortiere…",
   "playground.result.label": "Ergebnis",
@@ -2949,6 +2952,18 @@ const de: Record<string, string> = {
   "playground.meta": "{model} · {seconds} Sek.",
   "playground.error.title": "Diese E-Mail konnte nicht sortiert werden",
   "playground.error.noKey": "Gib zuerst deinen {provider}-API-Schlüssel ein.",
+  "playground.error.keyTooShort":
+    "Dieser {provider}-API-Schlüssel sieht zu kurz aus – prüfe, ob du ihn vollständig eingefügt hast.",
+  "playground.error.demoOff":
+    "Kostenlose Sortierungen sind derzeit aus. Gib deinen eigenen API-Schlüssel ein.",
+  "playground.error.demoBudget":
+    "Klorns kostenlose Sortierungen für heute sind aufgebraucht. Gib deinen eigenen API-Schlüssel ein, um jetzt zu sortieren.",
+  "playground.error.demoRateLimited":
+    "Du hast die kostenlosen Sortierungen vorerst aufgebraucht. Gib deinen eigenen API-Schlüssel ein oder versuche es in einer Minute erneut.",
+  "playground.error.demoFailed":
+    "Klorns eigenes Modell hat nicht geantwortet. Versuche es gleich noch einmal oder gib deinen eigenen API-Schlüssel ein.",
+  "playground.error.demoTimeout":
+    "Das hat länger als {seconds} Sekunden gedauert. Sortiere es noch einmal.",
   "playground.error.noEmail": "Gib zuerst Absender und Betreff ein.",
   "playground.error.rateLimited": "Zu viele Versuche. Warte eine Minute und sortiere dann erneut.",
   "playground.error.timeout":
