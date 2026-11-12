@@ -16,7 +16,7 @@
  *         server-side. Unchanged by #1686.
  */
 
-import type { PlaygroundProvider } from "./models";
+import { KLORN_MODEL_ID, type PlaygroundProvider } from "./models";
 
 export interface ClassifyDraft {
   from: string;
@@ -60,6 +60,23 @@ export function classifyRequestBody(request: ClassifyRequest): ClassifyWireBody 
     apiKey: request.apiKey.trim(),
     model: request.model.trim() || undefined,
   };
+}
+
+/**
+ * The model the result card names.
+ *
+ * BYOK picked its own model, so the request is the source. The demo path is
+ * the one that can lie: the server pins the call to its own JUDGE_MODEL and
+ * ignores whatever we send, and `KLORN_MODEL_ID` is only what render.yaml is
+ * *supposed* to pin — a Render dashboard value overrides the blueprint, and
+ * the judge gate substitutes a different model when the configured one fails
+ * our committed eval. Both happen without this repo changing. So the demo arm
+ * takes the server's reported model and keeps the constant as the fallback for
+ * a server that predates the field.
+ */
+export function modelThatRan(request: ClassifyRequest, reportedModel?: string): string {
+  if (request.mode === "byok") return request.model.trim();
+  return reportedModel?.trim() || KLORN_MODEL_ID;
 }
 
 export interface WireError {

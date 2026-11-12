@@ -2778,7 +2778,7 @@ const en: Record<string, string> = {
   "playground.key.create": "Create one at {provider}",
   "playground.key.billing": "Each sort is billed to your own {provider} account.",
   "playground.demo.note":
-    "No key needed. This runs on Klorn's own account, on {model} — the model Klorn's judge runs.",
+    "No key needed. This runs on Klorn's own account, on the same model Klorn's judge uses.",
   "playground.byok.toggle": "Use my own API key",
   "playground.submit": "Sort this email",
   "playground.submitting": "Sorting…",

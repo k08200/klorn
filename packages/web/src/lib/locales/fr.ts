@@ -2854,7 +2854,7 @@ const fr: Record<string, string> = {
   "playground.key.create": "En créer une chez {provider}",
   "playground.key.billing": "Chaque tri est facturé sur votre propre compte {provider}.",
   "playground.demo.note":
-    "Aucune clé nécessaire. Le tri s'exécute sur le compte de Klorn, avec {model}, le modèle qu'utilise le juge de Klorn.",
+    "Aucune clé nécessaire. Le tri s'exécute sur le compte de Klorn, avec le même modèle qu'utilise le juge de Klorn.",
   "playground.byok.toggle": "Utiliser ma propre clé API",
   "playground.submit": "Trier cet e-mail",
   "playground.submitting": "Tri en cours…",

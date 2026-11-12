@@ -262,6 +262,21 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
       features: result.features,
       source: result.source,
       decidedBy: result.decidedBy,
+      /*
+       * The model this call actually ran on.
+       *
+       * The result card names a model, and until this field existed the page
+       * printed its own build-time constant instead — so the one surface a
+       * stranger sees first asserted a model nobody had checked against the
+       * running server. Two things make that assertion wrong without touching
+       * this repo: a Render dashboard value overrides the blueprint's
+       * JUDGE_MODEL, and resolveJudgeModel substitutes the recommended pin
+       * when the configured one fails our committed gate. JUDGE_MODEL is the
+       * resolved value (llm/openai.ts), and it is the same constant passed as
+       * the override above, so the card can report what ran rather than what
+       * the web build assumed.
+       */
+      model: JUDGE_MODEL,
     });
   } catch (err) {
     const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));

@@ -23,9 +23,17 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const judgeEmail = vi.hoisted(() => vi.fn());
-const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
-
+/*
+ * The judge model the stubbed server runs.
+ *
+ * Load-bearing that this differs from the web page's own `KLORN_MODEL_ID`
+ * ("claude-haiku-5-5", packages/web/src/app/playground/models.ts): the route
+ * used to be free to report either, and the assertion that it reports the
+ * model it actually pinned only bites while the two spellings differ. Match
+ * them and a route that hardcodes the page's constant passes. Do not "tidy".
+ */
 const SERVER_JUDGE_MODEL = vi.hoisted(() => "anthropic/claude-haiku-5-5");
+const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
 
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
 // Stub the constant alone: importing the real module would drag the provider
@@ -40,6 +48,7 @@ vi.mock("../config.js", () => ({
   },
 }));
 
+import { JUDGE_MODEL } from "../llm/openai.js";
 import { _resetPlaygroundDemoState, playgroundRoutes } from "../routes/playground.js";
 
 const LLM_VERDICT = {
@@ -115,7 +124,24 @@ describe("no-key demo — flag gate", () => {
     const app = await buildApp();
     const res = await inject(app, DEMO_PAYLOAD);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(LLM_VERDICT);
+    expect(res.json()).toEqual({ ...LLM_VERDICT, model: JUDGE_MODEL });
+    await app.close();
+  });
+
+  /*
+   * The result card names a model. Before this field the page printed its own
+   * build-time constant, so the claim could only be checked by reading the
+   * server's boot log by hand. Asserting the reported model IS the one handed
+   * to the judge is what keeps the card honest across a dashboard override or
+   * a gate substitution — neither of which changes this repo.
+   */
+  it("reports the model it actually ran, not a name the page guessed", async () => {
+    const app = await buildApp();
+    const res = await inject(app, { ...DEMO_PAYLOAD, provider: "openai", model: "gpt-5-pro" });
+    expect(res.statusCode).toBe(200);
+    const reported = res.json().model;
+    expect(reported).toBe(JUDGE_MODEL);
+    expect(reported).not.toBe("gpt-5-pro"); // a visitor cannot steer the claim
     await app.close();
   });
 });
