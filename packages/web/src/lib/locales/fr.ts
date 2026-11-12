@@ -454,6 +454,28 @@ const fr: Record<string, string> = {
   "alertDevices.toast.rateLimited": "Trop de tests. Réessayez dans quelques minutes.",
   "alertDevices.toast.removed": "Retiré.",
   "alertDevices.toast.removeFailed": "Impossible de le retirer. Réessayez.",
+  "alertDevices.status.needsResubscribe": "Les alertes n’arrivent plus ici",
+  "alertDevices.status.needsResubscribeElsewhere":
+    "Les alertes n’arrivent plus · ouvrez Klorn sur cet appareil pour les réactiver",
+  "alertDevices.resubscribe": "Réactiver",
+  "alertDevices.toast.testArrived": "L’alerte d’essai est arrivée sur l’appareil.",
+  "alertDevices.toast.testNoReceipt":
+    "Alerte d’essai envoyée, mais l’appareil ne l’a pas confirmée. Vérifiez que les notifications y sont autorisées.",
+  "alertHealth.noChannel.title": "Le courrier urgent ne peut pas vous joindre en dehors de Klorn",
+  "alertHealth.noChannel.body":
+    "Rien n’est configuré pour vous alerter quand Klorn est fermé. Activez les alertes dans ce navigateur, installez Klorn pour Mac ou Windows, ou associez Telegram.",
+  "alertHealth.noChannel.action": "Configurer les alertes",
+  "alertHealth.noChannel.dismiss": "Plus tard",
+  "alertHealth.resubscribe.title": "Les alertes n’arrivent plus sur ce navigateur",
+  "alertHealth.resubscribe.body":
+    "Les alertes récentes ont été envoyées mais ne sont jamais apparues ici. Réactivez-les pour reconnecter ce navigateur.",
+  "alertHealth.resubscribe.action": "Réactiver les alertes",
+  "alertHealth.resubscribe.working": "Activation…",
+  "alertHealth.resubscribe.done": "Les alertes sont réactivées sur ce navigateur.",
+  "alertHealth.resubscribe.failed":
+    "Impossible de réactiver les alertes. Vérifiez que ce site peut afficher des notifications.",
+  "alertHealth.resubscribe.error":
+    "Impossible de réactiver les alertes. Réessayez dans un instant.",
   "alertDevices.phone.name": "Téléphone",
   "alertDevices.phone.notSetUp": "Non configuré",
   "alertDevices.phone.setUp": "Configurer",

@@ -69,13 +69,13 @@ async function pushThenClick(sw: Sw, payload: unknown, action = ""): Promise<voi
   await dispatch(sw, "notificationclick", { notification: { data: stored, close() {} }, action });
 }
 
-function receipts(sw: Sw): Array<{ url: string; event: string }> {
+function receipts(sw: Sw): Array<{ url: string; event: string; action?: string }> {
   return sw.fetch.mock.calls
     .filter(([url]) => url === RECEIPT_URL)
-    .map(([url, init]) => ({
-      url: String(url),
-      event: JSON.parse((init as { body: string }).body).event,
-    }));
+    .map(([url, init]) => {
+      const body = JSON.parse((init as { body: string }).body);
+      return { url: String(url), event: body.event, action: body.action };
+    });
 }
 
 const MAIL = {
@@ -111,10 +111,15 @@ describe("sw.js — click receipt", () => {
     expect(sw.openWindow).toHaveBeenCalledWith("/email/email-1");
   });
 
-  it.each(["reply", "later"])("the %s action posts 'clicked' too", async (action) => {
+  // An action button is the furthest lifecycle stage, "actioned", and names
+  // the action (notify/delivery-lifecycle.ts); the API stamps opened with it.
+  it.each(["reply", "later"])("the %s action posts 'actioned' with the action", async (action) => {
     const sw = loadServiceWorker();
     await pushThenClick(sw, MAIL, action);
-    expect(receipts(sw).map((r) => r.event)).toEqual(["received", "clicked"]);
+    expect(receipts(sw).map((r) => [r.event, r.action])).toEqual([
+      ["received", undefined],
+      ["actioned", action],
+    ]);
   });
 
   it("a push without a receipt URL posts nothing and still opens", async () => {

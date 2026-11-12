@@ -171,6 +171,8 @@ if (problems > 0) {
  * To cover a later step's keys, add its prefix here.
  */
 const COPY_GUARD_PREFIXES = [
+  // Channel health banner (Today / Settings, 2026-11-12).
+  "alertHealth.",
   "settings.apiKeys.permission.",
   "settings.apiKeys.activity.",
   // Assistant hub (productization plan P7).

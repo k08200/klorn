@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { PANEL, SECTION_TITLE } from "../../app/settings/_sections/shared";
 import {
   type AlertEndpoint,
@@ -10,10 +10,16 @@ import {
   alertRowStatus,
   isPushEndpoint,
 } from "../../lib/alert-devices";
+import { hasReachedDevice, TEST_ARRIVAL_POLL } from "../../lib/alert-health";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
-import { getPushDeviceId, unregisterPushSubscription } from "../../lib/push";
+import {
+  getPushDeviceId,
+  resubscribeThisBrowser,
+  unregisterPushSubscription,
+} from "../../lib/push";
 import { formatRelativeIntl } from "../../lib/text";
+import { resubscribeFailureKey } from "../alert-health-banner";
 import { useToast } from "../toast";
 import Button from "../ui/button";
 import { PhoneSetup } from "./phone-setup";
@@ -45,9 +51,38 @@ function rowKey(e: AlertEndpoint): string {
   return e.kind === "desktop" ? `desktop-${e.app}` : `${e.kind}-${e.id}`;
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Poll a test's delivery until the device confirms it, the panel goes away,
+ *  or it gives up. One failed read is tolerated; a second ends the wait. */
+async function waitForDevice(deliveryId: string, alive: () => boolean): Promise<boolean> {
+  let failures = 0;
+  for (let i = 0; i < TEST_ARRIVAL_POLL.attempts && alive(); i++) {
+    await sleep(TEST_ARRIVAL_POLL.intervalMs);
+    if (!alive()) return false;
+    try {
+      const status = await apiFetch<{ state?: string }>(`${BASE}/deliveries/${deliveryId}`);
+      if (hasReachedDevice(status?.state)) return true;
+    } catch (err) {
+      console.warn("[ALERT-DEVICES] delivery status failed:", err);
+      if (++failures > 1) return false;
+    }
+  }
+  return false;
+}
+
 /** Settings → Notifications → "Where you get alerts" (N8). */
-export function AlertDevicesPanel() {
+export function AlertDevicesPanel({ onChanged }: { onChanged?: () => void } = {}) {
   const { t, locale } = useT();
+  // A Send test keeps polling for up to ~16 s; it must not touch an unmounted panel.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const alive = () => mounted.current;
   const { toast } = useToast();
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -83,31 +118,73 @@ export function AlertDevicesPanel() {
 
   const ago = (at: string | null) => formatRelativeIntl(at, locale, t("alertDevices.justNow"));
 
+  const confirmArrival = async (deliveryId: string) => {
+    const arrived = await waitForDevice(deliveryId, alive);
+    if (!alive()) return;
+    toast(
+      arrived ? t("alertDevices.toast.testArrived") : t("alertDevices.toast.testNoReceipt"),
+      arrived ? "success" : "info",
+    );
+    await load();
+  };
+
+  const testFailed = (err: unknown) => {
+    const limited = err instanceof Error && err.message.startsWith("API 429");
+    toast(
+      limited ? t("alertDevices.toast.rateLimited") : t("alertDevices.toast.testNotSent"),
+      "error",
+    );
+  };
+
   const sendTest = async (e: Extract<AlertEndpoint, { kind: "web" | "native" }>) => {
-    markBusy(rowKey(e), true);
+    const key = `${rowKey(e)}:test`;
+    markBusy(key, true);
     try {
-      const res = await apiFetch<{ sent: boolean }>(`${BASE}/${e.kind}/${e.id}/test`, {
-        method: "POST",
-      });
+      const res = await apiFetch<{ sent: boolean; deliveryId?: string }>(
+        `${BASE}/${e.kind}/${e.id}/test`,
+        { method: "POST" },
+      );
       toast(
         res.sent ? t("alertDevices.toast.testSent") : t("alertDevices.toast.testNotSent"),
         res.sent ? "success" : "error",
       );
-      // A dead endpoint found by the test is evicted server-side; refresh.
-      if (!res.sent) await load();
+      if (!res.sent) {
+        // A dead endpoint found by the test is evicted server-side; refresh.
+        await load();
+      } else if (e.kind === "web" && res.deliveryId) {
+        // Web push: watch the service worker confirm it (phones report no receipt).
+        await confirmArrival(res.deliveryId);
+      }
     } catch (err) {
-      const limited = err instanceof Error && err.message.startsWith("API 429");
-      toast(
-        limited ? t("alertDevices.toast.rateLimited") : t("alertDevices.toast.testNotSent"),
-        "error",
-      );
+      testFailed(err);
     } finally {
-      markBusy(rowKey(e), false);
+      markBusy(key, false);
+    }
+  };
+
+  // This browser's zombie subscription: replace it (a click; no prompt, #1716).
+  const resubscribe = async (e: Extract<AlertEndpoint, { kind: "web" }>) => {
+    const key = `${rowKey(e)}:resub`;
+    markBusy(key, true);
+    try {
+      const result = await resubscribeThisBrowser();
+      toast(
+        result === "ok" ? t("alertHealth.resubscribe.done") : t(resubscribeFailureKey(result)),
+        result === "ok" ? "success" : "error",
+      );
+      await load();
+      onChanged?.();
+    } catch (err) {
+      console.error("[ALERT-DEVICES] re-subscribe failed:", err);
+      toast(t("alertHealth.resubscribe.error"), "error");
+    } finally {
+      markBusy(key, false);
     }
   };
 
   const remove = async (e: Extract<AlertEndpoint, { kind: "web" | "native" }>) => {
-    markBusy(rowKey(e), true);
+    const key = `${rowKey(e)}:remove`;
+    markBusy(key, true);
     try {
       if (e.kind === "web" && e.current) {
         // This browser: unsubscribe here too, or the settings page's
@@ -123,11 +200,12 @@ export function AlertDevicesPanel() {
       });
       toast(t("alertDevices.toast.removed"), "success");
       await load();
+      onChanged?.();
     } catch (err) {
       console.error("[ALERT-DEVICES] remove failed:", err);
       toast(t("alertDevices.toast.removeFailed"), "error");
     } finally {
-      markBusy(rowKey(e), false);
+      markBusy(key, false);
     }
   };
 
@@ -163,7 +241,7 @@ export function AlertDevicesPanel() {
               const name = alertEndpointName(e);
               const label = t(name.key, name.params);
               const status = alertRowStatus(e);
-              const rowBusy = busy.has(rowKey(e));
+              const rowBusy = [":test", ":resub", ":remove"].some((a) => busy.has(rowKey(e) + a));
               // The buttons say "Send test" / "Remove"; the row's name describes
               // which device, without changing their accessible names.
               const nameId = `${titleId}-${rowKey(e)}`;
@@ -192,7 +270,19 @@ export function AlertDevicesPanel() {
                     </p>
                   </div>
                   {isPushEndpoint(e) && (
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      {e.kind === "web" && e.current && e.needsResubscribe && (
+                        <Button
+                          size="sm"
+                          disabled={rowBusy}
+                          aria-describedby={nameId}
+                          onClick={() => void resubscribe(e)}
+                        >
+                          {busy.has(`${rowKey(e)}:resub`)
+                            ? t("alertHealth.resubscribe.working")
+                            : t("alertDevices.resubscribe")}
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
                         size="sm"
@@ -200,7 +290,9 @@ export function AlertDevicesPanel() {
                         aria-describedby={nameId}
                         onClick={() => void sendTest(e)}
                       >
-                        {rowBusy ? t("alertDevices.sending") : t("alertDevices.sendTest")}
+                        {busy.has(`${rowKey(e)}:test`)
+                          ? t("alertDevices.sending")
+                          : t("alertDevices.sendTest")}
                       </Button>
                       <Button
                         variant="ghost"
