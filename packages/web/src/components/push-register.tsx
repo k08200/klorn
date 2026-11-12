@@ -27,7 +27,11 @@ export default function PushRegister() {
     }
 
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
-    if (Notification.permission === "denied") return;
+    // Never prompt on page load: there is no user gesture here, and browsers
+    // ignore or auto-deny such a prompt (Chrome then quiets the site's prompts).
+    // The prompt comes from a click — the push onboarding banner's Enable or the
+    // Settings toggle. This only refreshes a subscription the user granted.
+    if (Notification.permission !== "granted") return;
     registerPush();
   }, []);
 
@@ -43,12 +47,6 @@ async function registerPush() {
     if (!headers.Authorization) return;
 
     const reg = await getSwRegistration();
-    const existing = await reg.pushManager.getSubscription();
-    if (!existing && Notification.permission === "default") {
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") return;
-    }
-
     const subscription = await getOrCreatePushSubscription(reg, publicKey);
     await registerSubscriptionWithServer(subscription);
     sendSwConfig(reg);

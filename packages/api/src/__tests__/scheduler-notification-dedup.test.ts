@@ -169,11 +169,14 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
       mail,
     );
     expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ sourceEmailId: "email-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ sourceEmailId: "email-1", link: "/email/email-1" }),
+      }),
     );
+    // The bell opens that mail, from the stored row and from the live frame.
     expect(vi.mocked(pushNotification)).toHaveBeenCalledWith(
       USER,
-      expect.objectContaining({ message: "body", mail }),
+      expect.objectContaining({ message: "body", mail, link: "/email/email-1" }),
     );
   });
 
@@ -190,7 +193,9 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     );
     const data = (vi.mocked(prisma.notification.create).mock.calls[0][0] as { data: object }).data;
     expect(data).not.toHaveProperty("sourceEmailId");
+    expect(data).not.toHaveProperty("link");
     expect(vi.mocked(pushNotification).mock.calls[0][1]).not.toHaveProperty("mail");
+    expect(vi.mocked(pushNotification).mock.calls[0][1]).not.toHaveProperty("link");
   });
 
   it("IMAP lead (B2b): the key names the row, so a new message reusing a re-keyed id is not a loser", async () => {

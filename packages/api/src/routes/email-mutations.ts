@@ -32,6 +32,7 @@ import {
   verifySendOrRefuse,
 } from "../mail/send-receipt.js";
 import { recordSentMessage } from "../mail/sent-messages.js";
+import { noteEmailBellRowsRead } from "../notify/email-bell.js";
 import { captureError } from "../sentry.js";
 import { safeAttachmentFilename } from "./email.js";
 import { completeUndo, findParkedInbox } from "./email-undo.js";
@@ -541,8 +542,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       data: { isRead: readVal },
     });
     // The Mac reader marks every mail it shows; mobile marks an unread one on
-    // open. Mark-unread is not an open.
-    if (readVal) noteEmailOutcome(uid, email.id, "OPENED");
+    // open. Mark-unread is not an open. A read mail's bell rows are read too.
+    if (readVal) {
+      noteEmailOutcome(uid, email.id, "OPENED");
+      noteEmailBellRowsRead(uid, email);
+    }
     return { success: true };
   });
 
