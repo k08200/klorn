@@ -35,8 +35,6 @@ const judgeEmail = vi.hoisted(() => vi.fn());
 const SERVER_JUDGE_MODEL = vi.hoisted(() => "anthropic/claude-haiku-5-5");
 const configState = vi.hoisted(() => ({ demoEnabled: false, demoBudgetCents: 50 }));
 
-const SERVER_JUDGE_MODEL = vi.hoisted(() => "anthropic/claude-haiku-5-5");
-
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
 // Stub the constant alone: importing the real module would drag the provider
 // registry (and Prisma's .env autoload) into an offline unit test.
