@@ -43,7 +43,11 @@ import {
   normalizeTimeZone,
 } from "../time-zone.js";
 import { pushNotification } from "../websocket.js";
-import { composeEveningReview, gatherEveningReviewInput } from "./evening-review.js";
+import {
+  composeEveningReview,
+  eveningReviewHasContent,
+  gatherEveningReviewInput,
+} from "./evening-review.js";
 
 /** The user's configured IANA timezone (defaults to the product default). */
 async function getUserTimeZone(userId: string): Promise<string> {
@@ -252,14 +256,12 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
   });
   if (existing) return;
 
-  const [input, lang] = await Promise.all([
-    gatherEveningReviewInput(userId, tz, now),
-    getUserNotificationLanguage(userId),
-  ]);
-  const review = composeEveningReview(input, lang, tz);
+  const input = await gatherEveningReviewInput(userId, tz, now);
+  if (!eveningReviewHasContent(input, tz)) return;
+  const review = composeEveningReview(input, await getUserNotificationLanguage(userId), tz);
   if (!review) return;
 
-  await notify(userId, "eod_review", review.title, review.message, "/briefing");
+  await notify(userId, "eod_review", review.title, review.message, "/briefing", review.pushBody);
 }
 
 // ─── NEW: Deadline countdown (D-3) ─────────────────────────────────────
@@ -429,13 +431,17 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
   );
 }
 
-/** Create DB notification + WebSocket push + browser push */
+/**
+ * Create DB notification + WebSocket push + browser push. `pushBody` is the
+ * device push's text when it should differ from the bell row's message.
+ */
 async function notify(
   userId: string,
   type: string,
   title: string,
   message: string,
   url: string,
+  pushBody?: string,
 ): Promise<void> {
   const notification = await prisma.notification.create({
     data: { userId, type, title, message, link: url },
@@ -454,7 +460,7 @@ async function notify(
   // internals would otherwise crash the single dyno.
   sendPushNotification(
     userId,
-    { title, body: message.slice(0, 200), url },
+    { title, body: (pushBody ?? message).slice(0, 200), url },
     categoryForType(type),
     // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
     // warning is not a meeting starting), so it cannot use up the interrupt
