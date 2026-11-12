@@ -97,11 +97,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let identifier = response.notification.request.identifier
+        // The click's receipt, worked out here from plain strings (none for a
+        // summary or another app's banner); reported fire-and-forget.
+        let receipt = NotificationReceiptRules.event(forAction: response.actionIdentifier)
+            .flatMap { NotificationReceiptRules.receipt(forIdentifier: identifier, event: $0) }
         // Hop the (main-actor) UI work off, then tell the system we're done.
         // The handler is called here rather than inside the Task because it is
         // not Sendable under every SDK we build against, and it only signals
         // "delivery handled" — opening the window does not need to precede it.
         Task { @MainActor [weak self] in
+            if let receipt { self?.model.receipts.report(receipt) }
             self?.router?.handleNotificationTap(identifier: identifier)
         }
         completionHandler()

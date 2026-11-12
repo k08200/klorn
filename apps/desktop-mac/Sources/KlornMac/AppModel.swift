@@ -242,7 +242,10 @@ final class AppModel {
     @ObservationIgnored private var didOfferLoginItem = false
     /// The notification center. A seam: the self-check injects a fake, so
     /// it never posts a banner or raises a permission prompt.
-    @ObservationIgnored var pushNotifier: any PushNotifying = SystemPushNotifier()
+    @ObservationIgnored var pushNotifier: any PushNotifying
+    /// Banner receipts to the server — `shown` from the notifier, `clicked`
+    /// from the tap handler (NotificationReceipts.swift).
+    @ObservationIgnored let receipts: NotificationReceiptReporter
     /// Whether macOS lets Klorn post banners; Settings ▸ Notifications shows
     /// a one-line hint when it is `.denied`.
     private(set) var notificationPermission: NotificationPermission = .notDetermined
@@ -343,6 +346,9 @@ final class AppModel {
             : InMemoryPushLedgerStore()
         self.api = api
         self.tokenStore = tokenStore
+        let receipts = NotificationReceiptReporter.live(api: api)
+        self.receipts = receipts
+        self.pushNotifier = SystemPushNotifier(receipts: receipts)
         self.deviceCalendars = DeviceCalendarBridge(
             api: api,
             currentUser: { SessionIdentity.userId(fromToken: tokenStore.load()) })

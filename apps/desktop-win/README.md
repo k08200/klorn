@@ -64,6 +64,24 @@ to Windows activating the app by its AppUserModelID (installed app only),
 which lands in the single-instance handler and shows the window without
 routing. Neither path is verified on a Windows machine yet.
 
+**Receipts.** The web app reports what became of a toast to
+`POST /api/notifications/desktop/receipts`
+(`packages/web/src/lib/native/desktop-receipts.ts`), keyed on the bell row id
+(`kind: "notification"`): `shown` when `show_banner` posted it (`true`; a
+shell built before receipts answers nothing for a posted toast, `false` means
+the OS refused permission), `clicked` when a click reaches `banner::on_action`
+— the page passed the row id as `receipt`, Rust checks it is a uuid and hands
+it back through `window.__klornToastClicked` (installed by
+`desktop-toast-router.tsx`). The catch-up summary stands for several rows and
+reports nothing. Fire-and-forget: one request at a time, at most 30 a minute
+(the server allows 60 per user), a network error or 5xx retried after 2 s and
+10 s and then dropped, a 4xx never retried, a 429 pauses the queue a minute.
+`shown` works with any installed shell (an older shell answers nothing even
+when the OS refused permission, which desktop Windows does not do); `clicked`
+needs a shell built from this change, has the click's Action Center limit
+above, and is not reported while the page's router is not mounted (the same
+case in which a click falls back to a plain navigation).
+
 **No Reply / Later buttons.** The plugin can add buttons on Windows, but they
 share the click's limit: from the Action Center they would silently do
 nothing, and Later would then never set its reminder. Reply / Later stay on
@@ -157,7 +175,7 @@ least privilege:
 | Permission | Why |
 |---|---|
 | `opener:allow-open-url` scoped to `https://**`, `mailto:*` | OAuth in the system browser |
-| `allow-show-banner` (the app's own command, `src/banner.rs`) | post a banner: title + body (control characters removed except one line break in the body, clamped to 120 / 240 characters in Rust) and the page a click opens (`/today` or `/email/<id>` only, checked in Rust); permission checked in Rust |
+| `allow-show-banner` (the app's own command, `src/banner.rs`) | post a banner: title + body (control characters removed except one line break in the body, clamped to 120 / 240 characters in Rust) the page a click opens (`/today` or `/email/<id>` only, checked in Rust) and the bell row id a click's receipt names (a uuid only, checked in Rust); permission checked in Rust |
 | `autostart:allow-enable`, `allow-disable`, `allow-is-enabled` | start at sign-in. No command takes an argument: the `Run` entry's program path and `--autostart` are fixed in `src/autostart.rs` |
 | `core:app/event/path/webview/window:default` | `core:default` spelled out minus `core:tray`, `core:menu`, `core:image`, `core:resources` |
 
@@ -178,14 +196,15 @@ post a toast, or switch Klorn's own start-at-sign-in on or off — it cannot
 choose what Windows runs. The only custom IPC input is `show_banner`'s
 strings, sanitized in Rust (and already validated and capped by
 `desktop-alerts.ts` on the web side); `open` can only name Today or one mail
-on app.klorn.ai.
+on app.klorn.ai, and `receipt` only a uuid (hex digits and dashes), so the
+click script it is spliced into cannot be broken out of.
 
 ## Build
 
 ```
 cd apps/desktop-win/src-tauri
 cargo check          # compiles on any OS
-cargo test           # banner sanitizing and click routes, tray labels, theme colour, sign-in launch flag
+cargo test           # banner sanitizing, click routes and receipt ids, tray labels, theme colour, sign-in launch flag
 cargo tauri build    # NSIS installer, Windows only
 ```
 

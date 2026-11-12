@@ -14,6 +14,12 @@
 //! moved to the Action Center (tauri-plugin-notification 2.7 desktop.rs). For
 //! that reason the toast has no Reply / Later buttons: from the Action Center
 //! they would silently do nothing.
+//!
+//! Receipts (POST /api/notifications/desktop/receipts): the page passes the
+//! bell row id as `receipt`; `show_banner` answers whether it posted the toast
+//! (the page then reports `shown`), and a click hands the id back to the page
+//! (`click_script`), which reports `clicked`. The shell itself sends nothing:
+//! the session lives in the page.
 
 use tauri::plugin::PermissionState;
 use tauri::{AppHandle, Manager, Runtime};
@@ -31,6 +37,10 @@ const TAP: &str = "tap";
 const TODAY_PATH: &str = "/today";
 const MAIL_PREFIX: &str = "/email/";
 const MAIL_ID_MAX: usize = 64;
+/// Key of the toast's extra payload that holds the bell row id a click reports.
+const RECEIPT_KEY: &str = "receipt";
+/// A bell row id: a uuid, the receipts endpoint's own `^[0-9a-fA-F-]{36}$`.
+const RECEIPT_ID_LEN: usize = 36;
 
 /// Plain text, control characters removed, clamped to `max` characters
 /// (not bytes, so Korean text is never cut mid-codepoint). Pure.
@@ -100,6 +110,31 @@ pub fn tap_route(action_id: &str, open: Option<&str>) -> Option<String> {
     open_path(open)
 }
 
+/// The bell row id a receipt names: exactly the endpoint's id shape, so it
+/// can never break out of the script it is spliced into. Pure.
+pub fn receipt_id(raw: Option<&str>) -> Option<String> {
+    let id = raw?;
+    let valid =
+        id.len() == RECEIPT_ID_LEN && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-');
+    valid.then(|| id.to_string())
+}
+
+/// The receipt to report for a reported action: only a click on the toast
+/// itself, with a valid id. Pure.
+pub fn tap_receipt(action_id: &str, receipt: Option<&str>) -> Option<String> {
+    if action_id != TAP {
+        return None;
+    }
+    receipt_id(receipt)
+}
+
+/// Script that hands a click's receipt to the web app
+/// (lib/native/desktop-receipts.ts installToastClickHandler); a no-op while it
+/// is not installed. `id` must come from `receipt_id` (no quotes possible).
+pub fn click_script(id: &str) -> String {
+    format!("window.__klornToastClicked && window.__klornToastClicked('{id}');")
+}
+
 /// Script that opens `path` in the running web app: the app's client-side
 /// router when it registered one (components/desktop-toast-router.tsx), else a
 /// plain navigation. `path` must come from `open_path` (no quotes possible).
@@ -115,24 +150,37 @@ pub fn on_action<R: Runtime>(app: &AppHandle<R>, performed: &ActionPerformed) {
         return;
     }
     tray::show_main(app);
-    let open = performed
-        .notification()
-        .and_then(|n| n.extra().get(OPEN_KEY))
-        .and_then(|v| v.as_str());
-    if let Some(path) = tap_route(performed.action_id(), open) {
-        if let Some(win) = app.get_webview_window("main") {
-            let _ = win.eval(open_script(&path));
-        }
+    let extra = |key: &str| {
+        performed
+            .notification()
+            .and_then(|n| n.extra().get(key))
+            .and_then(|v| v.as_str())
+    };
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    // The receipt first, so its request is already queued when the page
+    // routes. The hook is installed with the router (desktop-toast-router.tsx):
+    // while neither is mounted, the click is not reported and the open script
+    // falls back to a plain navigation.
+    if let Some(id) = tap_receipt(performed.action_id(), extra(RECEIPT_KEY)) {
+        let _ = win.eval(click_script(&id));
+    }
+    if let Some(path) = tap_route(performed.action_id(), extra(OPEN_KEY)) {
+        let _ = win.eval(open_script(&path));
     }
 }
 
+/// Posts the toast. `Ok(true)` once posted, `Ok(false)` when the OS refused
+/// permission (nothing shown, so no `shown` receipt).
 #[tauri::command]
 pub fn show_banner<R: Runtime>(
     app: AppHandle<R>,
     title: String,
     body: String,
     open: Option<String>,
-) -> Result<(), String> {
+    receipt: Option<String>,
+) -> Result<bool, String> {
     let notifier = app.notification();
     // Desktop reports Granted; ask anyway so a future platform that prompts
     // still asks on first need, never before.
@@ -142,14 +190,18 @@ pub fn show_banner<R: Runtime>(
         _ => notifier.request_permission().map_err(|e| e.to_string())?,
     };
     if state != PermissionState::Granted {
-        return Ok(());
+        return Ok(false);
     }
     let (title, body) = sanitize(&title, &body);
     let mut builder = notifier.builder().title(title).body(body);
     if let Some(path) = open_path(open.as_deref()) {
         builder = builder.extra(OPEN_KEY, path);
     }
-    builder.show().map_err(|e| e.to_string())
+    if let Some(id) = receipt_id(receipt.as_deref()) {
+        builder = builder.extra(RECEIPT_KEY, id);
+    }
+    builder.show().map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -219,6 +271,50 @@ mod tests {
         assert_eq!(
             open_script("/email/x1"),
             "window.__klornOpenToast ? window.__klornOpenToast('/email/x1') : window.location.assign('/email/x1');"
+        );
+    }
+
+    const ROW: &str = "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9b3c";
+
+    #[test]
+    fn a_receipt_id_is_only_a_bell_row_uuid() {
+        assert_eq!(receipt_id(Some(ROW)), Some(ROW.into()));
+        assert_eq!(
+            receipt_id(Some(&ROW.to_uppercase())),
+            Some(ROW.to_uppercase())
+        );
+        for bad in [
+            "",
+            "n1",
+            &format!("missed:{ROW}")[..],
+            &ROW[1..],
+            &format!("{ROW}0")[..],
+            "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9b3'",
+            "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9b3g",
+            "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9b3\n",
+            "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9b3\\",
+            "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9b3<",
+            // 36 bytes, 34 characters: never mistaken for a uuid.
+            "0b9f6c1e-4a51-4d1e-9c4f-2f7d1f0a9가",
+        ] {
+            assert_eq!(receipt_id(Some(bad)), None, "{bad}");
+        }
+        assert_eq!(receipt_id(None), None);
+    }
+
+    #[test]
+    fn only_a_click_on_the_toast_reports_its_receipt() {
+        assert_eq!(tap_receipt("tap", Some(ROW)), Some(ROW.into()));
+        assert_eq!(tap_receipt("reply", Some(ROW)), None);
+        assert_eq!(tap_receipt("tap", Some("n1")), None);
+        assert_eq!(tap_receipt("tap", None), None);
+    }
+
+    #[test]
+    fn the_click_script_reports_through_the_web_app_hook() {
+        assert_eq!(
+            click_script(ROW),
+            format!("window.__klornToastClicked && window.__klornToastClicked('{ROW}');")
         );
     }
 
