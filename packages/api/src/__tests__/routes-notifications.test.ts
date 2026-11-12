@@ -256,6 +256,41 @@ describe("notification routes", () => {
     await app.close();
   });
 
+  it("records an action button as actioned with its name", async () => {
+    const { recordPushReceipt } = await import("../notify/push-delivery.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/receipts/delivery-1",
+      payload: { event: "actioned", action: "later" },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(recordPushReceipt).toHaveBeenCalledWith(
+      "delivery-1",
+      "actioned",
+      expect.any(Date),
+      "later",
+    );
+    await app.close();
+  });
+
+  it("rejects actioned without a known action, and an action on any other event", async () => {
+    const app = await buildApp();
+    for (const payload of [
+      { event: "actioned" },
+      { event: "actioned", action: "mute" },
+      { event: "clicked", action: "later" },
+    ]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/notifications/push/receipts/delivery-1",
+        payload,
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    await app.close();
+  });
+
   it("rejects invalid push receipt events", async () => {
     const app = await buildApp();
     const res = await app.inject({

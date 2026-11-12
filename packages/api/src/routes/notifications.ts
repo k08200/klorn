@@ -12,6 +12,7 @@ import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
 import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { parseClientPlatform } from "../notify/alert-endpoints.js";
+import { isReceiptAction } from "../notify/delivery-lifecycle.js";
 import { desktopAlertState } from "../notify/desktop-alert.js";
 import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
@@ -61,11 +62,21 @@ export async function notificationRoutes(app: FastifyInstance) {
     { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const { deliveryId } = request.params as { deliveryId: string };
-      const { event } = (request.body || {}) as { event?: "received" | "clicked" };
-      if (event !== "received" && event !== "clicked") {
+      const { event, action } = (request.body || {}) as { event?: unknown; action?: unknown };
+      if (event !== "received" && event !== "clicked" && event !== "actioned") {
         return reply.code(400).send({ error: "Invalid receipt event" });
       }
-      await recordPushReceipt(deliveryId, event);
+      // "actioned" names the action button used (Reply / Later); nothing else
+      // carries one. An older service worker still reports a button as "clicked".
+      if (event === "actioned" ? !isReceiptAction(action) : action !== undefined) {
+        return reply.code(400).send({ error: "Invalid receipt action" });
+      }
+      await recordPushReceipt(
+        deliveryId,
+        event,
+        new Date(),
+        event === "actioned" && isReceiptAction(action) ? action : undefined,
+      );
       return reply.code(204).send();
     },
   );

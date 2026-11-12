@@ -18,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   sendDevicePush: vi.fn(),
   sendApnsPush: vi.fn(),
   presenceList: vi.fn(() => []),
+  recordChannelSend: vi.fn(async () => "row-9"),
+  getDeliveryStatus: vi.fn(),
+  userFindUnique: vi.fn(async () => ({ id: "user-1", telegramChatId: null })),
+  telegramConfigured: vi.fn(() => true),
 }));
 
 vi.mock("../db.js", () => {
@@ -33,7 +37,7 @@ vi.mock("../db.js", () => {
       deleteMany: mocks.tokenDeleteMany,
     },
     pushDeliveryLog: { groupBy: mocks.logGroupBy },
-    user: { findUnique: vi.fn(async () => ({ id: "user-1", notificationLanguage: "ko" })) },
+    user: { findUnique: mocks.userFindUnique },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       update: vi.fn(async () => ({})),
@@ -49,6 +53,15 @@ vi.mock("../notify/push-apns.js", () => ({ sendApnsPush: mocks.sendApnsPush }));
 vi.mock("../notify/desktop-presence.js", () => ({
   desktopPresence: { list: mocks.presenceList },
 }));
+vi.mock("../notify/channel-delivery-log.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../notify/channel-delivery-log.js")>();
+  return {
+    nativeSendOutcome: real.nativeSendOutcome,
+    recordChannelSend: mocks.recordChannelSend,
+    getDeliveryStatus: mocks.getDeliveryStatus,
+  };
+});
+vi.mock("../notify/telegram.js", () => ({ isTelegramConfigured: mocks.telegramConfigured }));
 vi.mock("../notify/notification-strings.js", () => ({
   getUserNotificationLanguage: vi.fn(async () => "ko"),
 }));
@@ -77,8 +90,11 @@ beforeEach(() => {
       browser: "chrome",
       os: "android",
       createdAt: new Date("2026-11-01T00:00:00Z"),
+      needsResubscribeAt: null,
     },
   ]);
+  mocks.userFindUnique.mockResolvedValue({ id: "user-1", telegramChatId: null });
+  mocks.telegramConfigured.mockReturnValue(true);
   mocks.tokenFindMany.mockResolvedValue([]);
   mocks.logGroupBy.mockResolvedValue([
     { subscriptionId: SUB_ID, _max: { receivedAt: new Date("2026-11-07T00:00:00Z") } },
@@ -110,6 +126,7 @@ describe("GET alert-endpoints", () => {
       os: "android",
       current: true,
       lastReceivedAt: "2026-11-07T00:00:00.000Z",
+      needsResubscribe: false,
     });
     expect(res.body).not.toContain("SECRET");
     expect(res.body).not.toContain("this-browser");
@@ -148,7 +165,11 @@ describe("GET alert-endpoints", () => {
 
 describe("POST web/:id/test", () => {
   it("sends one test to that subscription, in the user's language", async () => {
-    mocks.sendTestPushToSubscription.mockResolvedValue({ status: "sent", delivered: true });
+    mocks.sendTestPushToSubscription.mockResolvedValue({
+      status: "sent",
+      delivered: true,
+      deliveryId: "delivery-1",
+    });
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -156,7 +177,8 @@ describe("POST web/:id/test", () => {
       headers: auth,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ sent: true });
+    // The delivery id lets the client watch the test arrive (GET deliveries/:id).
+    expect(res.json()).toEqual({ sent: true, deliveryId: "delivery-1" });
     const [userId, subId, payload] = mocks.sendTestPushToSubscription.mock.calls[0];
     expect(userId).toBe("user-1");
     expect(subId).toBe(SUB_ID);
@@ -231,7 +253,15 @@ describe("POST native/:id/test", () => {
       url: `${BASE}/native/${TOK_ID}/test`,
       headers: auth,
     });
-    expect(res.json()).toEqual({ sent: true });
+    expect(res.json()).toEqual({ sent: true, deliveryId: "row-9" });
+    expect(mocks.recordChannelSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        channel: "fcm",
+        category: "system",
+        outcome: { status: "sent" },
+      }),
+    );
     expect(mocks.tokenFindFirst.mock.calls[0][0].where).toEqual({ id: TOK_ID, userId: "user-1" });
     expect(mocks.sendDevicePush.mock.calls[0][3]).toEqual({ tokenId: TOK_ID });
     expect(mocks.sendApnsPush).not.toHaveBeenCalled();
@@ -296,6 +326,123 @@ describe("DELETE", () => {
     const res = await app.inject({ method: "DELETE", url: `${BASE}/web/${SUB_ID}` });
     expect(res.statusCode).toBe(401);
     expect(mocks.subDeleteMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("GET deliveries/:id", () => {
+  const DELIVERY_ID = "99999999-8888-4777-8666-555555555555";
+
+  it("reports the lifecycle of the caller's own delivery", async () => {
+    mocks.getDeliveryStatus.mockResolvedValue({ id: DELIVERY_ID, state: "device_received" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `${BASE}/deliveries/${DELIVERY_ID}`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ id: DELIVERY_ID, state: "device_received" });
+    expect(mocks.getDeliveryStatus).toHaveBeenCalledWith("user-1", DELIVERY_ID);
+    await app.close();
+  });
+
+  it("answers 404 for a delivery that is not the caller's", async () => {
+    mocks.getDeliveryStatus.mockResolvedValue(null);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `${BASE}/deliveries/${DELIVERY_ID}`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("rejects a malformed id and an unauthenticated caller", async () => {
+    const app = await buildApp();
+    const bad = await app.inject({ method: "GET", url: `${BASE}/deliveries/x`, headers: auth });
+    expect(bad.statusCode).toBe(400);
+    const anon = await app.inject({ method: "GET", url: `${BASE}/deliveries/${DELIVERY_ID}` });
+    expect(anon.statusCode).toBe(401);
+    expect(mocks.getDeliveryStatus).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("GET health", () => {
+  it("rejects an unauthenticated caller", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: `${BASE}/health` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("reports every channel for the caller, with this browser's own state", async () => {
+    mocks.subFindMany.mockResolvedValue([
+      {
+        id: SUB_ID,
+        endpoint: "https://fcm.googleapis.com/fcm/send/SECRET",
+        deviceId: "this-browser",
+        browser: "chrome",
+        os: "macos",
+        createdAt: new Date("2026-10-01T00:00:00Z"),
+        needsResubscribeAt: new Date("2026-11-10T00:00:00Z"),
+      },
+    ]);
+    mocks.userFindUnique.mockResolvedValue({ id: "user-1", telegramChatId: "12345" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `${BASE}/health`,
+      headers: { ...auth, "x-push-device": "this-browser" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      webPush: { state: "needs_resubscribe", currentDevice: "needs_resubscribe" },
+      desktop: [],
+      telegram: { linked: true },
+      mobile: { registered: false },
+      working: true,
+    });
+    expect(res.body).not.toContain("SECRET");
+    expect(res.body).not.toContain("12345");
+    expect(mocks.subFindMany.mock.calls[0][0].where).toEqual({ userId: "user-1" });
+    expect(mocks.userFindUnique.mock.calls[0][0].where).toEqual({ id: "user-1" });
+    await app.close();
+  });
+
+  it("says no channel works when nothing can reach the person", async () => {
+    mocks.subFindMany.mockResolvedValue([]);
+    mocks.logGroupBy.mockResolvedValue([]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: `${BASE}/health`, headers: auth });
+    expect(res.json()).toMatchObject({ webPush: { state: "none" }, working: false });
+    await app.close();
+  });
+
+  it("does not count a linked Telegram chat when the server has no Telegram bot", async () => {
+    mocks.subFindMany.mockResolvedValue([]);
+    mocks.userFindUnique.mockResolvedValue({ id: "user-1", telegramChatId: "12345" });
+    mocks.telegramConfigured.mockReturnValue(false);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: `${BASE}/health`, headers: auth });
+    expect(res.json()).toMatchObject({ telegram: { linked: false }, working: false });
+    await app.close();
+  });
+
+  it("remembers a desktop app by its last banner receipt after the socket is gone", async () => {
+    mocks.subFindMany.mockResolvedValue([]);
+    const seen = new Date(Date.now() - 60 * 60 * 1000);
+    mocks.logGroupBy.mockImplementation(async (args: { by: string[] }) =>
+      args.by.includes("channel") ? [{ channel: "desktop_mac", _max: { updatedAt: seen } }] : [],
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: `${BASE}/health`, headers: auth });
+    expect(res.json()).toMatchObject({
+      desktop: [{ app: "mac", running: false, lastSeenAt: seen.toISOString() }],
+      working: true,
+    });
     await app.close();
   });
 });

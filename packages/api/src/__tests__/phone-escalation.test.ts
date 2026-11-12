@@ -17,6 +17,7 @@ interface EscalationRow {
 interface PushLogRow {
   id: string;
   userId: string;
+  channel?: string;
   notificationId: string | null;
   category: string;
   title: string;
@@ -120,6 +121,7 @@ vi.mock("../db.js", () => ({
         const a = args as {
           where: {
             userId: string;
+            channel?: string;
             status?: string;
             receivedAt?: null;
             clickedAt?: null;
@@ -135,6 +137,7 @@ vi.mock("../db.js", () => ({
           return pushLogs.filter(
             (log) =>
               log.userId === a.where.userId &&
+              (!a.where.channel || (log.channel ?? "web") === a.where.channel) &&
               log.notificationId !== null &&
               ids.includes(log.notificationId) &&
               (log.receivedAt !== null || log.clickedAt !== null),
@@ -143,6 +146,7 @@ vi.mock("../db.js", () => ({
         // Candidate sweep
         return pushLogs.filter((log) => {
           if (log.userId !== a.where.userId) return false;
+          if (a.where.channel && (log.channel ?? "web") !== a.where.channel) return false;
           if (a.where.status && log.status !== a.where.status) return false;
           if (a.where.receivedAt === null && log.receivedAt !== null) return false;
           if (a.where.clickedAt === null && log.clickedAt !== null) return false;
@@ -477,6 +481,33 @@ describe("escalateUnackedPush — candidate selection", () => {
     expect(result).toEqual({ candidates: 1, placed: 1 });
     expect(callCreates).toHaveLength(1);
     expect(String(callCreates[0]?.twiml)).toContain("Urgent mail from boss");
+  });
+
+  // Delivery rows now exist for other channels (notify/delivery-lifecycle.ts).
+  // Escalation keeps reading web push only, so what rings is unchanged.
+  it("never escalates on an FCM / APNs / Telegram row: those report no receipt", async () => {
+    seedPushLog({ id: "p1", notificationId: "n1", channel: "fcm" });
+    seedPushLog({ id: "p2", notificationId: "n2", channel: "telegram" });
+    notifications.set("n1", { id: "n1", title: "Urgent", isRead: false });
+    notifications.set("n2", { id: "n2", title: "Urgent", isRead: false });
+    const { escalateUnackedPush } = await loadModule();
+    const result = await escalateUnackedPush("u1");
+    expect(result).toEqual({ candidates: 0, placed: 0 });
+  });
+
+  it("is not suppressed by a desktop banner receipt (unchanged: web receipts only)", async () => {
+    seedPushLog({ id: "p1", notificationId: "n1" });
+    seedPushLog({
+      id: "d1",
+      notificationId: "n1",
+      channel: "desktop_mac",
+      status: "REPORTED",
+      receivedAt: new Date(),
+    });
+    notifications.set("n1", { id: "n1", title: "Urgent", isRead: false });
+    const { escalateUnackedPush } = await loadModule();
+    const result = await escalateUnackedPush("u1");
+    expect(result).toEqual({ candidates: 1, placed: 1 });
   });
 
   it("ignores pushes younger than the escalation timeout", async () => {
