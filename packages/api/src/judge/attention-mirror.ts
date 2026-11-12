@@ -29,6 +29,7 @@ import { CLEAR_AGENT_TIER, NOT_AGENT_SET } from "./agent-tier.js";
 import { attentionHashInputOf, computeAttentionInputHash } from "./attention-input-hash.js";
 import { CLEAR_OVERRIDE_UNDO } from "./attention-override.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
+import { gmailImportantSnapshot } from "./gmail-important-snapshot.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
 import { type V3ItemFields, v3Columns } from "./v3/live-item.js";
@@ -878,6 +879,8 @@ export interface EmailLike {
   // an undefined default — null vs [] would invalidate every legacy row.
   labels: string[];
   receivedAt: Date;
+  /** Provider message id: tells Gmail mail apart for the IP24 snapshot. */
+  gmailId?: string;
 }
 
 function emailTitleFor(email: EmailLike): string {
@@ -1066,6 +1069,10 @@ export async function upsertAttentionForEmailJudgement(
       sender: email.from,
       decidedBy: judgement.source ?? null,
       engagementKind,
+      // Only a fresh first judgement snapshots Gmail's marker: a re-judge or a
+      // late backfill reads labels Gmail may have changed since (it adds
+      // IMPORTANT after a reply). Stored on create only (decision-label.ts).
+      gmailImportant: gmailImportantSnapshot(email, { rejudge: options.rejudge === true }),
     });
   }
   return outcome;

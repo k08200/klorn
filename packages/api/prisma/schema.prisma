@@ -2057,6 +2057,22 @@ model DecisionLabel {
   providerRepliedAt  DateTime?
   providerArchivedAt DateTime?
 
+  // IP24 (interrupt precision within 24h; src/judge/ip24.ts). rangAt: when
+  // Klorn's interrupt for this mail got past every hold gate (noise policy,
+  // preferences and quiet hours, rate limit) and went to the user's channels:
+  // sendPushNotification's dispatchedAt, stamped by the firewall PUSH/MEETING
+  // push and the urgent sweep. Null = never rang (a held interrupt included).
+  // First ring wins (stampDecisionRang). Not a join to Notification /
+  // PushDeliveryLog: the bell row is written before the hold gates, firewall
+  // delivery rows carry no notificationId, and both are swept by retention.
+  rangAt         DateTime?
+  // Gmail's IMPORTANT marker on this inbox mail when the row was created, the
+  // IP24 baseline ("High priority only"). Written once, never on a re-judge:
+  // Gmail adds IMPORTANT after the user replies. Null = not Gmail mail (IMAP
+  // and Outlook map the user's own flag to IMPORTANT) or judged before this
+  // column existed.
+  gmailImportant Boolean?
+
   judgedAt DateTime @default(now())
 
   // One ledger row per surfaced decision per source row, scoped by user. A

@@ -45,6 +45,7 @@ import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
+import { stampDecisionRang } from "./judge/decision-label.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import { FIREWALL_PUSH_RECENCY_MS } from "./judge/firewall-push.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
@@ -1910,12 +1911,24 @@ async function runUserCycle(
                 // unhandled rejection from the push internals would
                 // otherwise crash the single dyno. Matches the candidate
                 // push path above.
-              ).catch((err) => {
-                console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
-                captureError(err, {
-                  tags: { scope: "automation.urgent-push", userId: config.userId },
+              )
+                // A ring past every hold gate is recorded on each named
+                // mail's ledger row (IP24; stampDecisionRang never throws).
+                .then((summary) =>
+                  summary.dispatchedAt
+                    ? stampDecisionRang(
+                        config.userId,
+                        newUrgent.map((e) => e.id),
+                        summary.dispatchedAt,
+                      )
+                    : undefined,
+                )
+                .catch((err) => {
+                  console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
+                  captureError(err, {
+                    tags: { scope: "automation.urgent-push", userId: config.userId },
+                  });
                 });
-              });
 
               // Admin-only SMS escalation. Gated inside sendSms (admin +
               // phone + daily cap). Best-effort: never throws, never

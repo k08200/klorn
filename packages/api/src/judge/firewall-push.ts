@@ -26,6 +26,7 @@ import {
   notificationCopy,
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
+import { stampDecisionRang } from "./decision-label.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
 import { resolveTierReason } from "./tier-reason-strings.js";
 import type { BellRow } from "./v3/push-budget-gate.js";
@@ -202,7 +203,11 @@ export function firewallBellRow(email: JudgeableEmailRow, language: Notification
   };
 }
 
-/** Ring for a bell row already written: the open clients, then device push. */
+/**
+ * Ring for a bell row already written: the open clients, then device push.
+ * When the push gets past every hold gate, the mail's ledger row records the
+ * ring (DecisionLabel.rangAt, the IP24 denominator).
+ */
 export async function deliverFirewallPush(
   userId: string,
   email: JudgeableEmailRow,
@@ -241,7 +246,7 @@ export async function deliverFirewallPush(
     mail: { emailId: email.id, ...content },
   });
 
-  await sendPushNotification(
+  const summary = await sendPushNotification(
     userId,
     {
       ...content,
@@ -261,6 +266,7 @@ export async function deliverFirewallPush(
     // callers (push-bucket.ts, push-interrupt-callers-guard.test.ts).
     { bucket: "interrupt" },
   );
+  if (summary.dispatchedAt) await stampDecisionRang(userId, [email.id], summary.dispatchedAt);
 }
 
 /**

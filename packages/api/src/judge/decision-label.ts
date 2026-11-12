@@ -46,6 +46,13 @@ export interface EmailDecision {
    * "PROPAGATED" | null). Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE.
    */
   engagementKind?: EngagementKind | null;
+  /**
+   * Gmail's IMPORTANT marker on the inbox mail at this judgement (the IP24
+   * baseline; gmail-important-snapshot.ts). Written only when the row is
+   * created: a re-judge reads labels Gmail may have changed after the user
+   * replied. Null / omitted = unknown (not Gmail mail).
+   */
+  gmailImportant?: boolean | null;
 }
 
 /**
@@ -114,6 +121,7 @@ export async function recordDecision(decision: DecisionInput): Promise<void> {
         source: decision.source,
         sourceId: decision.sourceId,
         ...fields,
+        gmailImportant: decision.gmailImportant ?? null,
       },
       update: fields,
     });
@@ -269,5 +277,28 @@ export async function stampProviderEngagement(
   } catch (err) {
     logRecorderError(`stamp-provider-${kind.toLowerCase()}`, sourceIds[0] ?? "", err);
     return 0;
+  }
+}
+
+/**
+ * Stamp when Klorn's interrupt for these mails actually fired: it got past
+ * every hold gate and went to the user's channels (sendPushNotification's
+ * dispatchedAt). EMAIL rows only (sourceId = EmailMessage.id), scoped to the
+ * user, first ring wins. The IP24 denominator (ip24.ts). Never throws; logs
+ * on failure.
+ */
+export async function stampDecisionRang(
+  userId: string,
+  sourceIds: readonly string[],
+  at: Date,
+): Promise<void> {
+  if (sourceIds.length === 0) return;
+  try {
+    await prisma.decisionLabel.updateMany({
+      where: { userId, source: "EMAIL", sourceId: { in: [...sourceIds] }, rangAt: null },
+      data: { rangAt: at },
+    });
+  } catch (err) {
+    logRecorderError("stamp-rang", sourceIds[0] ?? "", err);
   }
 }

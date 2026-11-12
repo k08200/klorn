@@ -41,6 +41,7 @@
 
 import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../db.js";
+import { stampDecisionRang } from "../judge/decision-label.js";
 import type { MailPushLane } from "./mail-push-content.js";
 import {
   type NotificationLanguage,
@@ -141,6 +142,15 @@ async function summarizeHeldMail(config: QuietConfigRow, now: Date): Promise<boo
     // Held mail is not news: ambient, never the interrupt bucket.
     { bucket: "ambient" },
   );
+  // The held mail rang now: its ledger rows record the ring (IP24). A summary
+  // the gates held again records nothing.
+  if (result.dispatchedAt) {
+    await stampDecisionRang(
+      userId,
+      held.map((m) => m.emailId),
+      result.dispatchedAt,
+    );
+  }
   if (result.status === "sent") return true;
   console.log(`[QUIET] summary not rung for user ${userId}: ${result.reason ?? "unknown"}`);
   if (result.reason === RATE_LIMITED) {

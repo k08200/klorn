@@ -517,6 +517,51 @@ describe("sendQuietHoursSummaries — what was held rings once after", () => {
     log.mockRestore();
   });
 
+  it("a summary past the hold gates records the ring on every held mail's ledger row (IP24)", async () => {
+    const judgedAt = new Date(WINDOW_START.getTime() + HOUR);
+    const ledger = (sourceId: string): Row => ({
+      id: `dl-${sourceId}`,
+      userId: USER,
+      source: "EMAIL",
+      sourceId,
+      shownTier: "PUSH",
+      features: {},
+      judgedAt,
+    });
+    seedTwoHeld({ decisionLabel: [ledger("e1"), ledger("e2")] });
+    const dispatchedAt = new Date(AFTER_END.getTime() + 1_000);
+    pushes.results.push({ status: "sent", dispatchedAt });
+
+    await sendQuietHoursSummaries(AFTER_END);
+
+    const rang = Object.fromEntries(
+      db.tables.decisionLabel.map((r) => [r.sourceId as string, r.rangAt ?? null]),
+    );
+    expect(rang).toEqual({ e1: dispatchedAt, e2: dispatchedAt });
+  });
+
+  it("a summary held at a gate records no ring", async () => {
+    seedTwoHeld({
+      decisionLabel: [
+        {
+          id: "dl-e1",
+          userId: USER,
+          source: "EMAIL",
+          sourceId: "e1",
+          shownTier: "PUSH",
+          features: {},
+        },
+      ],
+    });
+    pushes.results.push({ status: "skipped", reason: "user_preferences", dispatchedAt: null });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await sendQuietHoursSummaries(AFTER_END);
+
+    expect(db.tables.decisionLabel[0].rangAt ?? null).toBeNull();
+    log.mockRestore();
+  });
+
   it("rings again for the next night's window", async () => {
     seedTwoHeld();
     await sendQuietHoursSummaries(AFTER_END);
