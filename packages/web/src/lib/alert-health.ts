@@ -53,7 +53,9 @@ export type AlertHealthBanner = "resubscribe" | "no_channel" | null;
  *                already granted — a click replaces it (no prompt, #1716)
  *   no_channel   nothing off-app can reach the person
  * Settings passes `offerResubscribe: false`: its device list carries that
- * button on the row itself.
+ * button on the row itself. Nothing in the phone app (`native`): it reaches
+ * the person by native push. A dismissal dated in the future is ignored, so a
+ * wrong clock can never mute the warning for good.
  */
 export function alertHealthBanner(
   health: ChannelHealth | null,
@@ -63,9 +65,10 @@ export function alertHealthBanner(
     now: number;
     dismissible: boolean;
     offerResubscribe?: boolean;
+    native?: boolean;
   },
 ): AlertHealthBanner {
-  if (!health) return null;
+  if (!health || ctx.native) return null;
   if (
     ctx.offerResubscribe !== false &&
     health.webPush.currentDevice === "needs_resubscribe" &&
@@ -75,7 +78,10 @@ export function alertHealthBanner(
   }
   if (health.working) return null;
   const snoozed =
-    ctx.dismissible && ctx.dismissedAt !== null && ctx.now - ctx.dismissedAt < NO_CHANNEL_SNOOZE_MS;
+    ctx.dismissible &&
+    ctx.dismissedAt !== null &&
+    ctx.dismissedAt <= ctx.now &&
+    ctx.now - ctx.dismissedAt < NO_CHANNEL_SNOOZE_MS;
   return snoozed ? null : "no_channel";
 }
 

@@ -459,6 +459,7 @@ const en: Record<string, string> = {
   "alertHealth.resubscribe.done": "Alerts are back on for this browser.",
   "alertHealth.resubscribe.failed":
     "Couldn't turn alerts back on. Check that this site may show notifications.",
+  "alertHealth.resubscribe.error": "Couldn't turn alerts back on. Try again in a moment.",
   "alertDevices.phone.name": "Phone",
   "alertDevices.phone.notSetUp": "Not set up",
   "alertDevices.phone.setUp": "Set up",

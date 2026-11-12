@@ -474,6 +474,8 @@ const fr: Record<string, string> = {
   "alertHealth.resubscribe.done": "Les alertes sont réactivées sur ce navigateur.",
   "alertHealth.resubscribe.failed":
     "Impossible de réactiver les alertes. Vérifiez que ce site peut afficher des notifications.",
+  "alertHealth.resubscribe.error":
+    "Impossible de réactiver les alertes. Réessayez dans un instant.",
   "alertDevices.phone.name": "Téléphone",
   "alertDevices.phone.notSetUp": "Non configuré",
   "alertDevices.phone.setUp": "Configurer",

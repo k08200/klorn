@@ -100,15 +100,18 @@ export async function registerSubscriptionWithServer(
   if (!res.ok) throw new Error(`Server registration failed: ${res.status}`);
 }
 
-export type ResubscribeResult = "ok" | "permission" | "unsupported";
+export type ResubscribeResult = "ok" | "permission" | "unsupported" | "failed";
 
 /**
  * "Turn alerts back on" for a subscription the server flagged as a zombie
  * (pushes accepted, none confirmed by this browser). Drops this browser's
- * subscription and makes a fresh one, so the push service hands out a new
- * endpoint, and tells the server it was deliberate (`resubscribed`), which
- * lifts the flag. Run from a click. It never asks for permission (#1716): with
- * no granted permission it returns "permission" and changes nothing.
+ * subscription and makes a fresh one — subscribe() alone would hand back the
+ * same endpoint — and tells the server it was deliberate (`resubscribed`),
+ * which lifts the flag. Run from a click. It never asks for permission
+ * (#1716): with no granted permission it returns "permission" and changes
+ * nothing. Everything that can fail before the old subscription is dropped
+ * runs first; a failed subscribe after it is retried once, and is otherwise
+ * repaired by the next app load (PushRegister) — the old endpoint was dead.
  */
 export async function resubscribeThisBrowser(): Promise<ResubscribeResult> {
   if (typeof Notification === "undefined" || !("serviceWorker" in navigator)) {
@@ -118,13 +121,30 @@ export async function resubscribeThisBrowser(): Promise<ResubscribeResult> {
   const reg = await getSwRegistration();
   const vapidKey = await fetchVapidKey();
   if (!vapidKey || !reg.pushManager) return "unsupported";
-  const old = await reg.pushManager.getSubscription();
-  if (old) await old.unsubscribe();
-  const sub = await reg.pushManager.subscribe({
+  const options: PushSubscriptionOptionsInit = {
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
-  });
-  await registerSubscriptionWithServer(sub, { resubscribed: true });
+  };
+  const old = await reg.pushManager.getSubscription();
+  if (old) await old.unsubscribe();
+  let sub: PushSubscription;
+  try {
+    sub = await reg.pushManager.subscribe(options);
+  } catch (first) {
+    console.warn("[PUSH] re-subscribe failed once, retrying:", first);
+    try {
+      sub = await reg.pushManager.subscribe(options);
+    } catch (err) {
+      console.error("[PUSH] re-subscribe failed:", err);
+      return "failed";
+    }
+  }
+  try {
+    await registerSubscriptionWithServer(sub, { resubscribed: true });
+  } catch (err) {
+    console.error("[PUSH] re-subscribe registration failed:", err);
+    return "failed";
+  }
   sendSwConfig(reg);
   return "ok";
 }

@@ -469,6 +469,8 @@ const es: Record<string, string> = {
   "alertHealth.resubscribe.done": "Las alertas vuelven a estar activas en este navegador.",
   "alertHealth.resubscribe.failed":
     "No se pudieron reactivar las alertas. Comprueba que este sitio pueda mostrar notificaciones.",
+  "alertHealth.resubscribe.error":
+    "No se pudieron reactivar las alertas. Inténtalo de nuevo en un momento.",
   "alertDevices.phone.name": "Teléfono",
   "alertDevices.phone.notSetUp": "Sin configurar",
   "alertDevices.phone.setUp": "Configurar",

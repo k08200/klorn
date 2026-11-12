@@ -84,6 +84,14 @@ describe("alertHealthBanner", () => {
     ).toBe("no_channel");
   });
 
+  it("treats a dismissal dated in the future as no dismissal (a wrong clock never mutes it)", () => {
+    expect(alertHealthBanner(health(), { ...ctx, dismissedAt: NOW + 60_000 })).toBe("no_channel");
+  });
+
+  it("stays out of the phone app: it reaches the person by native push", () => {
+    expect(alertHealthBanner(health(), { ...ctx, native: true })).toBeNull();
+  });
+
   it("ignores a dismissal where the warning is not dismissible (Settings)", () => {
     expect(
       alertHealthBanner(health(), { ...ctx, dismissible: false, dismissedAt: NOW - 1000 }),
@@ -162,6 +170,12 @@ describe("re-subscribe flow (lib/push.ts)", () => {
     expect(body).toMatch(/Notification\.permission !== "granted"/);
   });
 
+  it("builds the key before dropping the old subscription, and retries the subscribe once", () => {
+    expect(body.indexOf("urlBase64ToUint8Array(")).toBeLessThan(body.indexOf(".unsubscribe()"));
+    expect(body.match(/pushManager\.subscribe\(/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(body).toMatch(/return "failed"/);
+  });
+
   it("drops the old subscription before making a new one, and tells the server", () => {
     expect(body.indexOf(".unsubscribe()")).toBeGreaterThan(-1);
     expect(body.indexOf(".unsubscribe()")).toBeLessThan(body.indexOf("pushManager.subscribe("));
@@ -191,6 +205,7 @@ describe("copy, all 7 locales", () => {
     "alertHealth.resubscribe.working",
     "alertHealth.resubscribe.done",
     "alertHealth.resubscribe.failed",
+    "alertHealth.resubscribe.error",
     "alertDevices.status.needsResubscribe",
     "alertDevices.status.needsResubscribeElsewhere",
     "alertDevices.resubscribe",

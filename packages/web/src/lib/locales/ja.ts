@@ -463,6 +463,8 @@ const ja: Record<string, string> = {
   "alertHealth.resubscribe.done": "このブラウザの通知を再度オンにしました。",
   "alertHealth.resubscribe.failed":
     "通知を再度オンにできませんでした。このサイトの通知が許可されているか確認してください。",
+  "alertHealth.resubscribe.error":
+    "通知を再度オンにできませんでした。しばらくしてからもう一度お試しください。",
   "alertDevices.phone.name": "スマートフォン",
   "alertDevices.phone.notSetUp": "未設定",
   "alertDevices.phone.setUp": "設定する",

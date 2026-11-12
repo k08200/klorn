@@ -481,6 +481,8 @@ const de: Record<string, string> = {
   "alertHealth.resubscribe.done": "Benachrichtigungen sind in diesem Browser wieder an.",
   "alertHealth.resubscribe.failed":
     "Benachrichtigungen konnten nicht wieder eingeschaltet werden. Prüfe, ob diese Website Benachrichtigungen anzeigen darf.",
+  "alertHealth.resubscribe.error":
+    "Benachrichtigungen konnten nicht wieder eingeschaltet werden. Versuche es gleich noch einmal.",
   "alertDevices.phone.name": "Smartphone",
   "alertDevices.phone.notSetUp": "Nicht eingerichtet",
   "alertDevices.phone.setUp": "Einrichten",

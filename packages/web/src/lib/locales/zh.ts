@@ -436,6 +436,7 @@ const zh: Record<string, string> = {
   "alertHealth.resubscribe.working": "正在开启…",
   "alertHealth.resubscribe.done": "此浏览器的提醒已重新开启。",
   "alertHealth.resubscribe.failed": "无法重新开启提醒。请检查此网站是否允许显示通知。",
+  "alertHealth.resubscribe.error": "无法重新开启提醒。请稍后再试。",
   "alertDevices.phone.name": "手机",
   "alertDevices.phone.notSetUp": "未设置",
   "alertDevices.phone.setUp": "设置",

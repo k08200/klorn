@@ -456,6 +456,7 @@ const ko: Record<string, string> = {
   "alertHealth.resubscribe.done": "이 브라우저의 알림을 다시 켰습니다.",
   "alertHealth.resubscribe.failed":
     "알림을 다시 켜지 못했습니다. 이 사이트의 알림 표시가 허용되어 있는지 확인하세요.",
+  "alertHealth.resubscribe.error": "알림을 다시 켜지 못했습니다. 잠시 후 다시 시도하세요.",
   "alertDevices.phone.name": "휴대폰",
   "alertDevices.phone.notSetUp": "설정 안 됨",
   "alertDevices.phone.setUp": "설정",

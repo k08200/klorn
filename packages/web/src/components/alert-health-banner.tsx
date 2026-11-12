@@ -13,7 +13,8 @@ import {
 } from "../lib/alert-health";
 import { apiFetch } from "../lib/api";
 import { useT } from "../lib/i18n";
-import { getPushDeviceId, resubscribeThisBrowser } from "../lib/push";
+import { isNativePlatform } from "../lib/native/capacitor";
+import { getPushDeviceId, type ResubscribeResult, resubscribeThisBrowser } from "../lib/push";
 import { useToast } from "./toast";
 import Button from "./ui/button";
 
@@ -25,6 +26,11 @@ function readDismissedAt(): number | null {
   } catch {
     return null;
   }
+}
+
+/** The toast for a "Turn alerts back on" that did not work. */
+export function resubscribeFailureKey(result: Exclude<ResubscribeResult, "ok">): string {
+  return result === "failed" ? "alertHealth.resubscribe.error" : "alertHealth.resubscribe.failed";
 }
 
 function currentPermission(): NotificationPermission | "unsupported" {
@@ -42,7 +48,14 @@ function currentPermission(): NotificationPermission | "unsupported" {
  * Renders nothing while loading, on any error, or against an API that does not
  * have the endpoint yet.
  */
-export function AlertHealthBanner({ place }: { place: "today" | "settings" }) {
+export function AlertHealthBanner({
+  place,
+  refreshKey = 0,
+}: {
+  place: "today" | "settings";
+  /** Change it to re-read the health after a change elsewhere on the page. */
+  refreshKey?: number | string;
+}) {
   const { t } = useT();
   const { toast } = useToast();
   const titleId = useId();
@@ -63,10 +76,11 @@ export function AlertHealthBanner({ place }: { place: "today" | "settings" }) {
     }
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey only re-triggers the read
   useEffect(() => {
     setDismissedAt(readDismissedAt());
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const kind: BannerKind = alertHealthBanner(health, {
     permission: currentPermission(),
@@ -74,6 +88,7 @@ export function AlertHealthBanner({ place }: { place: "today" | "settings" }) {
     now: Date.now(),
     dismissible: place === "today",
     offerResubscribe: place === "today",
+    native: isNativePlatform(),
   });
   if (!kind) return null;
 
@@ -95,7 +110,7 @@ export function AlertHealthBanner({ place }: { place: "today" | "settings" }) {
         toast(t("alertHealth.resubscribe.done"), "success");
         await load();
       } else {
-        toast(t("alertHealth.resubscribe.failed"), "error");
+        toast(t(resubscribeFailureKey(result)), "error");
       }
     } catch (err) {
       console.error("[ALERT-HEALTH] re-subscribe failed:", err);
