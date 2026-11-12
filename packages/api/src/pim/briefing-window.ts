@@ -232,7 +232,7 @@ export interface BriefingCommitment {
 }
 
 /** Open, confident commitments overdue by up to two days or due within a day. */
-export async function listBriefingCommitments(
+export function listBriefingCommitments(
   userId: string,
   now: Date,
 ): Promise<BriefingCommitment[]> {
