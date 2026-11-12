@@ -93,7 +93,8 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
     prisma.device.count({ where: { userId } }),
     prisma.pushSubscription.count({ where: { userId } }),
     prisma.pushDeliveryLog.findMany({
-      where: { userId, createdAt: { gte: since } },
+      // Web push only: the readiness counts are service-worker receipt counts.
+      where: { userId, channel: "web", createdAt: { gte: since } },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),

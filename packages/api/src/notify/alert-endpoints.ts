@@ -113,6 +113,7 @@ export interface WebSubscriptionRow {
   browser: string | null;
   os: string | null;
   createdAt: Date;
+  needsResubscribeAt?: Date | null;
 }
 
 export interface NativeTokenRow {
@@ -132,6 +133,9 @@ export type AlertEndpointDTO =
       createdAt: string;
       lastReceivedAt: string | null;
       health: WebPushHealth;
+      /** A zombie (notify/push-zombie.ts): the push service accepts, the
+       *  device confirms nothing. Turning alerts back on replaces it. */
+      needsResubscribe: boolean;
     }
   | { kind: "native"; id: string; platform: "android" | "ios"; registeredAt: string }
   | { kind: "desktop"; app: DesktopApp; running: boolean; lastSeenAt: string };
@@ -168,6 +172,7 @@ function toWebDto(
     createdAt: row.createdAt.toISOString(),
     lastReceivedAt: lastReceived ? lastReceived.toISOString() : null,
     health: webPushHealth({ createdAt: row.createdAt.getTime(), lastReceivedAt, now }),
+    needsResubscribe: Boolean(row.needsResubscribeAt),
   };
 }
 

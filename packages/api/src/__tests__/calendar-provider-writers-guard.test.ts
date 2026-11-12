@@ -260,6 +260,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   const UNAFFECTED = [
     "background.ts", // the meeting push's target: the user's primary row for one Google event id
     "agentcore/tool-executor.ts",
+    "notify/channel-delivery-log.ts", // a desktop receipt's owner check: one row by id, its id only
     "pim/attention-calendar-visibility.ts",
     "notify/notification-prefs.ts",
     "pim/calendar-cancellation.ts", // removes the rows Google named as cancelled, scoped to one source

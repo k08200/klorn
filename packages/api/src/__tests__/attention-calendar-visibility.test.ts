@@ -340,6 +340,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "learning/learned-rule-store.ts",
     "mail/proactive-drafts.ts", // OPEN PUSH email items, ids only
     "mcp/set-tier.ts",
+    "notify/channel-delivery-log.ts", // one item by id and owner: its id only (desktop receipt)
     "notify/open-push-mail.ts", // OPEN PUSH EMAIL items of named mails: id + reason only
     "pim/briefing.ts",
     "pim/focus-digest.ts", // a count of arrivals, no title
