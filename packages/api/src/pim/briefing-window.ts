@@ -17,6 +17,7 @@ import { prisma } from "../db.js";
 import { normalizeTier, toLiveTier } from "../judge/tiers.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { normalizeQuoteText, type PickableMail } from "./briefing-picks.js";
+import { COMMITMENT_CONFIRMED_MIN_CONFIDENCE } from "./commitment-confirmation.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -42,7 +43,6 @@ const TASK_TEXT_CHARS = 200;
 const COMMITMENT_LOOKBACK_MS = 2 * DAY_MS;
 const COMMITMENT_AHEAD_MS = DAY_MS;
 const COMMITMENT_LIMIT = 5;
-const MIN_COMMITMENT_CONFIDENCE = 0.7;
 const TASK_LIMIT = 20;
 const NOTE_LIMIT = 5;
 const NOTE_RECENCY_MS = 7 * DAY_MS;
@@ -255,13 +255,20 @@ export interface BriefingCommitment {
   counterpartyName: string | null;
 }
 
-/** Open, confident commitments overdue by up to two days or due within a day. */
+/**
+ * Open, confirmed commitments (confident extraction, or confirmed by the user
+ * in the ledger — never a bare rule-mined suggestion) overdue by up to two
+ * days or due within a day.
+ */
 export function listBriefingCommitments(userId: string, now: Date): Promise<BriefingCommitment[]> {
   return prisma.commitment.findMany({
     where: {
       userId,
       status: "OPEN",
-      confidence: { gte: MIN_COMMITMENT_CONFIDENCE },
+      OR: [
+        { confidence: { gte: COMMITMENT_CONFIRMED_MIN_CONFIDENCE } },
+        { confirmedAt: { not: null } },
+      ],
       dueAt: {
         gte: new Date(now.getTime() - COMMITMENT_LOOKBACK_MS),
         lt: new Date(now.getTime() + COMMITMENT_AHEAD_MS),

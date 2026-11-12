@@ -22,6 +22,7 @@ const s = vi.hoisted(() => ({
   googleTokens: 1,
   existingNote: null as { id: string; content: string; createdAt: Date } | null,
   openPushWhere: [] as Array<Record<string, unknown>>,
+  commitmentWhere: [] as Array<Record<string, unknown>>,
   llmContent: "" as string,
   requests: [] as Array<{
     messages: Array<{ role: string; content: string }>;
@@ -70,7 +71,12 @@ vi.mock("../db.js", () => {
       },
     },
     userToken: { count: () => s.googleTokens },
-    commitment: { findMany: () => s.commitments },
+    commitment: {
+      findMany: (args) => {
+        s.commitmentWhere.push(args.where as Record<string, unknown>);
+        return s.commitments;
+      },
+    },
     calendarEvent: { findMany: () => s.events },
     notification: {
       create: (args) => {
@@ -156,6 +162,7 @@ beforeEach(() => {
   s.googleTokens = 1;
   s.existingNote = null;
   s.openPushWhere = [];
+  s.commitmentWhere = [];
   s.llmContent = answer([]);
   s.requests = [];
   s.noteWhere = [];
@@ -261,6 +268,12 @@ describe("a quiet morning skips the model", () => {
     s.tasks = [{ id: "t", title: "File taxes", status: "TODO", dueDate: "2099-01-06T09:00:00Z" }];
     await generateBriefing("u1", NOW);
     expect(s.requests).toHaveLength(2);
+    // Confirmed commitments only, as the ledger and the evening review count them.
+    expect(s.commitmentWhere[0]).toMatchObject({
+      status: "OPEN",
+      OR: [{ confidence: { gte: 0.7 } }, { confirmedAt: { not: null } }],
+      dueAt: { gte: new Date("2099-01-03T21:30:00Z"), lt: new Date("2099-01-06T21:30:00Z") },
+    });
   });
 
   it("is not quiet when the mail read failed: unknown is not nothing", async () => {
