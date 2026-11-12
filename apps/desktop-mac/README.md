@@ -156,6 +156,16 @@ drafts are refused for a session stamp that has ended, before any request.
   meeting starts. The same applies while macOS's permission prompt is
   unanswered (a banner posted then is refused). The mail is in Today and
   Mail meanwhile. A server without the endpoint (404) gates nothing.
+- **Receipts.** The Mac tells the server what became of a banner
+  (`POST /api/notifications/desktop/receipts`, `NotificationReceipts.swift`):
+  `shown` when macOS accepted it (the `add` completion with no error),
+  `clicked` when the user opened it (the default action). A mail banner
+  reports as `attention_item`, a meeting-soon banner as `calendar_event`;
+  the held and "+N more" summaries stand for several mails and report
+  nothing. No action buttons, so no `actioned`. Fire-and-forget: one request
+  at a time, at most 30 a minute (the server allows 60 per user), a network
+  error or 5xx retried after 2 s and 10 s and then dropped, a 4xx never
+  retried, a 429 pauses the queue a minute.
 - **Dock badge.** Today's "Needs you now" PUSH mail (72 h window) that is
   still unread — the server's read flag minus mail opened on this Mac
   (`TodayRules.dockBadgeCount`). Quiet hours never hide it; Settings ▸

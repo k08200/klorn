@@ -297,6 +297,13 @@ protocol PushNotifying: AnyObject {
 @MainActor
 final class SystemPushNotifier: PushNotifying {
     private var isAvailable: Bool { PushNotifier.isAvailable }
+    /// Where a posted banner's `shown` receipt goes (NotificationReceipts.swift);
+    /// nil reports nothing.
+    private let receipts: NotificationReceiptReporter?
+
+    init(receipts: NotificationReceiptReporter? = nil) {
+        self.receipts = receipts
+    }
 
     func requestAuthorization() async -> NotificationPermission {
         guard isAvailable else { return .unavailable }
@@ -326,7 +333,7 @@ final class SystemPushNotifier: PushNotifying {
         content.sound = .default
         content.threadIdentifier = PushNotifier.threadIdentifier
         let request = UNNotificationRequest(identifier: banner.identifier, content: content, trigger: nil)
-        NotificationCenterCalls.add(request)
+        NotificationCenterCalls.add(request, receipts: receipts)
     }
 
     /// Sign-out: take this account's banners out of Notification Center —
@@ -360,11 +367,18 @@ enum NotificationCenterCalls {
         }
     }
 
-    nonisolated static func add(_ request: UNNotificationRequest) {
+    /// Posts `request`; once macOS accepted it (no error), its `shown`
+    /// receipt goes to `receipts` — none for a summary (NotificationReceiptRules).
+    /// The receipt is built here, before the callback, and both captures are
+    /// Sendable: nothing in the closure touches an actor.
+    nonisolated static func add(_ request: UNNotificationRequest, receipts: NotificationReceiptReporter?) {
+        let receipt = NotificationReceiptRules.receipt(forIdentifier: request.identifier, event: .shown)
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
                 Log.app.error("push banner not posted: \(String(describing: error), privacy: .private)")
+                return
             }
+            if let receipt { receipts?.report(receipt) }
         }
     }
 }

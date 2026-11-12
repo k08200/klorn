@@ -27,6 +27,7 @@ import {
   planPushCatchUp,
   pushCatchUpCandidates,
 } from "./desktop-push-catchup";
+import { receiptFor, reportDesktopReceipt } from "./desktop-receipts";
 import { shellKind, tauriInvoke } from "./shell";
 
 /** localStorage, not sessionStorage: the ledger must survive a restart so a
@@ -65,12 +66,25 @@ function writeLedger(ledger: AlertLedger): void {
 }
 
 async function postBanner(alert: DesktopAlert, context: string): Promise<void> {
+  // The bell row id rides along so a click can report it (banner.rs); the
+  // catch-up summary stands for several rows and has none (./desktop-receipts.ts).
+  const receipt = receiptFor("shown", alert.id);
+  let posted: unknown;
   try {
-    await tauriInvoke("show_banner", { title: alert.title, body: alert.body, open: alert.open });
+    posted = await tauriInvoke("show_banner", {
+      title: alert.title,
+      body: alert.body,
+      open: alert.open,
+      ...(receipt ? { receipt: receipt.id } : {}),
+    });
   } catch (err) {
     console.error("[DESKTOP-ALERT] banner failed:", err);
     captureClientError(err, { context, kind: alert.kind });
+    return;
   }
+  // `false`: the shell did not post it (no permission). A shell built before
+  // receipts answers nothing for a toast it posted.
+  if (receipt && posted !== false) reportDesktopReceipt("shown", receipt.id);
 }
 
 /** Banner one real-time notification frame if it is a server-tagged PUSH /
