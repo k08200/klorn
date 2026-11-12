@@ -18,6 +18,17 @@ const store = vi.hoisted(() => ({
     picks: unknown;
   }>,
   updates: [] as Array<{ where: Record<string, unknown>; data: { picks: unknown } }>,
+  /** Another open lands between this request's read and its write. */
+  conflictOnce: false,
+}));
+
+const PICK_REF = vi.hoisted(() => ({
+  rank: 1,
+  emailId: "email-1",
+  action: "Sign the contract",
+  reason: "Sarah waits",
+  quote: "by Friday",
+  openedAt: null as string | null,
 }));
 
 vi.mock("../llm/openai.js", () => ({ MODEL: "test-model", createCompletion: vi.fn() }));
@@ -40,6 +51,12 @@ vi.mock("../db.js", () => {
       updateMany: vi.fn(
         async (args: { where: { id: string; userId: string }; data: { picks: unknown } }) => {
           store.updates.push(args);
+          if (store.conflictOnce) {
+            store.conflictOnce = false;
+            const row = store.notes[0];
+            if (row) row.picks = [{ ...PICK_REF, openedAt: "2099-01-06T00:00:00.000Z" }];
+            return { count: 0 };
+          }
           for (const row of store.notes) {
             if (matches(row, args.where)) row.picks = args.data.picks;
           }
@@ -80,6 +97,7 @@ async function buildApp() {
 
 beforeEach(() => {
   store.updates = [];
+  store.conflictOnce = false;
   store.notes = [
     {
       id: "note-1",
@@ -109,7 +127,7 @@ describe("briefing picks routes", () => {
     });
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({ emailId: "email-1", first: true });
-    expect(store.updates[0]?.where).toEqual({ id: "note-1", userId: "user-1" });
+    expect(store.updates[0]?.where).toMatchObject({ id: "note-1", userId: "user-1" });
 
     const again = await app.inject({
       method: "POST",
@@ -118,6 +136,18 @@ describe("briefing picks routes", () => {
     });
     expect(again.json()).toMatchObject({ first: false, openedAt: first.json().openedAt });
     expect(store.updates).toHaveLength(1);
+  });
+
+  it("writes only over the picks it read: a concurrent open wins, and this one reports it", async () => {
+    store.conflictOnce = true;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/briefing/note-1/picks/1/open",
+      headers: auth(),
+    });
+    expect(res.json()).toMatchObject({ first: false, openedAt: "2099-01-06T00:00:00.000Z" });
+    expect(store.updates[0]?.where).toMatchObject({ picks: { equals: [PICK, { rank: 2, emailId: "malformed" }] } });
   });
 
   it("404s for a rank without a pick and for another user's briefing", async () => {

@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "../db.js";
-import { normalizeTier } from "../judge/tiers.js";
+import { normalizeTier, toLiveTier } from "../judge/tiers.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { normalizeQuoteText, type PickableMail } from "./briefing-picks.js";
 
@@ -24,15 +24,20 @@ const DAY_MS = 24 * HOUR_MS;
 export const BRIEFING_FALLBACK_WINDOW_MS = DAY_MS;
 /** The window never reaches further back than this, however old the last briefing. */
 const MAX_LOOKBACK_MS = 7 * DAY_MS;
-/** Rows read from the window before ranking. */
-const WINDOW_SCAN = 100;
+/** Rows read from the window before ranking. A full scan means "more than we read". */
+export const WINDOW_SCAN = 100;
 /** Mails the prompt carries, highest lane first. */
 export const PROMPT_MAIL_LIMIT = 25;
 /** Of those, how many carry a body excerpt to quote from. */
 const EXCERPT_MAILS = 8;
 const EXCERPT_CHARS = 600;
+/** Raw body characters normalized before the excerpt is cut. */
+const BODY_READ_CHARS = EXCERPT_CHARS * 4;
 /** Open PUSH mail from before the window, so it does not fall off the briefing. */
 const OPEN_PUSH_CAP = 5;
+/** Only PUSH mail surfaced this recently is "still open" (the Today Push 72-hour rule). */
+const OPEN_PUSH_MAX_AGE_MS = 72 * HOUR_MS;
+const TASK_TEXT_CHARS = 200;
 /** Commitments around today: overdue up to two days, or due within a day. */
 const COMMITMENT_LOOKBACK_MS = 2 * DAY_MS;
 const COMMITMENT_AHEAD_MS = DAY_MS;
@@ -66,7 +71,7 @@ export async function briefingWindowStart(
   userId: string,
   todayKey: string,
   now: Date,
-): Promise<Date> {
+): Promise<{ since: Date; hasPrevious: boolean }> {
   const previous = await prisma.note.findFirst({
     where: {
       userId,
@@ -78,8 +83,11 @@ export async function briefingWindowStart(
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
-  if (!previous) return new Date(now.getTime() - BRIEFING_FALLBACK_WINDOW_MS);
-  return new Date(Math.max(previous.createdAt.getTime(), now.getTime() - MAX_LOOKBACK_MS));
+  if (!previous) {
+    return { since: new Date(now.getTime() - BRIEFING_FALLBACK_WINDOW_MS), hasPrevious: false };
+  }
+  const since = new Date(Math.max(previous.createdAt.getTime(), now.getTime() - MAX_LOOKBACK_MS));
+  return { since, hasPrevious: true };
 }
 
 /** Prompt order: what interrupts first, noise last. Recency breaks ties. */
@@ -124,7 +132,10 @@ async function bodiesFor(userId: string, ids: string[]): Promise<Map<string, str
     select: { id: true, body: true },
   });
   return new Map(
-    rows.map((row) => [row.id, normalizeQuoteText(row.body ?? "").slice(0, EXCERPT_CHARS)]),
+    rows.map((row) => [
+      row.id,
+      normalizeQuoteText((row.body ?? "").slice(0, BODY_READ_CHARS)).slice(0, EXCERPT_CHARS),
+    ]),
   );
 }
 
@@ -163,9 +174,11 @@ async function withExcerpts(userId: string, mails: BriefingMail[]): Promise<Brie
 }
 
 /**
- * Mail received in [since, now], highest lane first, capped for the prompt.
- * `newCount` counts every window mail the firewall did not file as SILENT
- * (an unjudged mail counts): zero means nothing new arrived.
+ * Mail that arrived in [since, now] — by its Date header, or by when Klorn
+ * synced it, so mail synced late is not skipped — highest lane first, capped
+ * for the prompt. `newCount` counts every window mail the firewall did not
+ * file as SILENT (an unjudged mail counts): zero means nothing new arrived,
+ * as long as `scanned` is below WINDOW_SCAN.
  */
 export async function listWindowMail(
   userId: string,
@@ -173,7 +186,10 @@ export async function listWindowMail(
   now: Date,
 ): Promise<{ mails: BriefingMail[]; newCount: number; scanned: number }> {
   const rows = await prisma.emailMessage.findMany({
-    where: { userId, receivedAt: { gte: since, lte: now } },
+    where: {
+      userId,
+      OR: [{ receivedAt: { gte: since, lte: now } }, { createdAt: { gte: since, lte: now } }],
+    },
     orderBy: { receivedAt: "desc" },
     take: WINDOW_SCAN,
     select: MAIL_SELECT,
@@ -199,19 +215,27 @@ export async function listWindowMail(
  * Recency-cliff guard: still-OPEN PUSH mail from before the window (highest
  * priority first, capped), so it does not fall off the briefing the morning
  * after it arrived. status=OPEN: a resolved, dismissed or snoozed item never
- * comes back.
+ * comes back; and only for 72 hours, like Today's "Needs you now".
  */
 export async function listOpenPushMail(
   userId: string,
   exclude: ReadonlySet<string>,
+  now: Date,
 ): Promise<BriefingMail[]> {
   const items = await prisma.attentionItem.findMany({
-    where: { userId, source: "EMAIL", status: "OPEN", tier: "PUSH" },
+    where: {
+      userId,
+      source: "EMAIL",
+      status: "OPEN",
+      tier: { in: ["PUSH", "CALL"] },
+      surfacedAt: { gte: new Date(now.getTime() - OPEN_PUSH_MAX_AGE_MS) },
+      sourceId: { notIn: [...exclude] },
+    },
     orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
     take: OPEN_PUSH_CAP,
     select: { sourceId: true },
   });
-  const ids = items.map((i) => i.sourceId).filter((id) => !exclude.has(id));
+  const ids = items.map((i) => i.sourceId);
   if (ids.length === 0) return [];
   const rows = await prisma.emailMessage.findMany({
     where: { userId, id: { in: ids } },
@@ -280,6 +304,41 @@ export function openTasks<T extends TaskLike>(tasks: readonly T[]): T[] {
   return tasks.filter((t) => t.status !== "DONE").slice(0, TASK_LIMIT);
 }
 
+/**
+ * Whether the user has a mail connection the sync can use: a Google grant
+ * with a refresh token or an unexpired access token (the scheduler's own
+ * test, usableGoogleTokenWhere), or a linked inbox not waiting on a
+ * reconnect. Without one, "no new mail" means nothing.
+ */
+export async function hasUsableMailConnection(userId: string, now: Date): Promise<boolean> {
+  const [google, linked] = await Promise.all([
+    prisma.userToken.count({
+      where: {
+        userId,
+        provider: "google",
+        OR: [{ refreshToken: { not: null } }, { expiresAt: { gt: now } }],
+      },
+    }),
+    prisma.linkedInboxAccount.count({ where: { userId, needsReconnect: false } }),
+  ]);
+  return google + linked > 0;
+}
+
+/** Open tasks for the prompt: title and description are text anyone could have written. */
+export function promptTask(task: Record<string, unknown>): Record<string, unknown> {
+  const text = (key: string, source: string) =>
+    typeof task[key] === "string"
+      ? wrapUntrusted((task[key] as string).slice(0, TASK_TEXT_CHARS), source)
+      : null;
+  return {
+    title: text("title", "task:title"),
+    description: text("description", "task:description"),
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate,
+  };
+}
+
 /** An open task overdue or due within a day. */
 export function hasTaskDueSoon(tasks: readonly TaskLike[], now: Date): boolean {
   const horizon = now.getTime() + DAY_MS;
@@ -313,7 +372,7 @@ export function promptMail(mail: BriefingMail, ref: string): Record<string, unkn
     snippet: wrapUntrusted(mail.snippet, "email:snippet"),
     ...(mail.excerpt ? { excerpt: wrapUntrusted(mail.excerpt, "email:body") } : {}),
     receivedAt: mail.receivedAt.toISOString(),
-    lane: mail.tier ? normalizeTier(mail.tier) : "UNJUDGED",
+    lane: mail.tier ? toLiveTier(mail.tier) : "UNJUDGED",
     needsReply: mail.needsReply,
   };
 }
@@ -322,15 +381,21 @@ export function promptMail(mail: BriefingMail, ref: string): Record<string, unkn
 export function pickableMail(mail: BriefingMail): PickableMail {
   return {
     emailId: mail.emailId,
-    text: [mail.subject, mail.snippet, mail.excerpt].filter(Boolean).join("\n"),
+    texts: [mail.subject, mail.snippet, mail.excerpt].filter(Boolean),
   };
 }
+
+const OWNER_LABEL: Record<string, string> = {
+  USER: "the user owes",
+  COUNTERPARTY: "they owe the user",
+  TEAM: "shared",
+};
 
 /** Commitment text came from mail: the prompt carries it wrapped. */
 export function promptCommitment(c: BriefingCommitment): Record<string, unknown> {
   return {
     title: wrapUntrusted(c.title, "commitment:title"),
-    owner: c.owner === "COUNTERPARTY" ? "they owe the user" : "the user owes",
+    owner: OWNER_LABEL[c.owner] ?? "unclear",
     ...(c.counterpartyName ? { who: wrapUntrusted(c.counterpartyName, "commitment:who") } : {}),
     due: c.dueAt ? c.dueAt.toISOString() : null,
     ...(c.dueText ? { dueText: wrapUntrusted(c.dueText, "commitment:due") } : {}),

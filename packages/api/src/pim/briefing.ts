@@ -6,6 +6,7 @@
  * via cron.
  */
 
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
 import { prisma } from "../db.js";
@@ -39,6 +40,12 @@ import type { BriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
 
 export { listLocalBriefingEvents } from "./briefing-gather.js";
+
+/** Read-compare-write rounds for a pick open before giving up on contention. */
+const PICK_OPEN_ATTEMPTS = 3;
+
+/** Output cap for the briefing call: the JSON answer is ~400 tokens. */
+const BRIEFING_MAX_TOKENS = 1500;
 export { BRIEFING_SYSTEM_PROMPT } from "./briefing-prompt.js";
 
 type BriefingFeedbackChoice = "useful" | "wrong" | "later" | "done";
@@ -117,7 +124,8 @@ function readModelAnswer(
     parsed = parseLlmJson(raw);
   } catch {
     // A provider that ignored response_format and wrote prose: keep it (clean).
-    return raw.trimStart().startsWith("{") ? null : { content: stripUntrusted(raw), picks: [] };
+    // Broken JSON (cut off, or fenced and cut off) is not prose: fall back.
+    return /^\s*(?:\{|```)/.test(raw) ? null : { content: stripUntrusted(raw), picks: [] };
   }
   const answer = parseBriefingAnswer(parsed, refs);
   return answer ? { content: renderBriefingAnswer(answer, copy), picks: answer.picks } : null;
@@ -131,7 +139,7 @@ export default async function generateBriefing(
   const data = await gatherBriefingData(userId, ctx.todayKey, now);
   const copy = briefingCopy(ctx.lang);
 
-  if (isQuietMorning(data, now)) {
+  if (isQuietMorning(data)) {
     return {
       content: buildQuietBriefing(data.openPush, ctx.lang),
       llm: { source: "skipped", reason: "nothing new, nothing scheduled or due", model: "" },
@@ -152,6 +160,9 @@ export default async function generateBriefing(
     const response = await createCompletion(
       {
         model: MODEL,
+        // The answer is ~400 tokens of JSON; the cap bounds what reaches the
+        // server-side checks if a mail steers the model into rambling.
+        max_tokens: BRIEFING_MAX_TOKENS,
         response_format: {
           type: "json_schema",
           json_schema: { name: "briefing", schema: BRIEFING_ANSWER_SCHEMA },
@@ -597,29 +608,33 @@ export function briefingRoutes(app: FastifyInstance) {
   // POST /api/briefing/:id/picks/:rank/open — the user opened a pick's mail
   // from the briefing. Stamps the pick's openedAt once (first open wins), so
   // "picks shown" vs "picks opened" is countable per briefing. The client
-  // navigates to the mail itself; this only records the open.
+  // navigates to the mail itself; this only records the open. The write is
+  // conditional on the picks it read, so two opens at once cannot drop a stamp.
   app.post("/:id/picks/:rank/open", async (request, reply) => {
     const userId = getUserId(request);
     const { id, rank: rawRank } = request.params as { id: string; rank: string };
     const rank = parseRank(rawRank);
     if (!rank) return reply.code(400).send({ error: "rank must be 1, 2, or 3" });
 
-    const note = await prisma.note.findFirst({
-      where: { id, userId, title: { startsWith: "Daily Briefing" } },
-      select: { id: true, picks: true },
-    });
-    const picks = readStoredPicks(note?.picks);
-    const pick = picks.find((p) => p.rank === rank);
-    if (!note || !pick) return reply.code(404).send({ error: "Pick not found" });
-    if (pick.openedAt) return { emailId: pick.emailId, openedAt: pick.openedAt, first: false };
+    for (let attempt = 0; attempt < PICK_OPEN_ATTEMPTS; attempt++) {
+      const note = await prisma.note.findFirst({
+        where: { id, userId, title: { startsWith: "Daily Briefing" } },
+        select: { id: true, picks: true },
+      });
+      const picks = readStoredPicks(note?.picks);
+      const pick = picks.find((p) => p.rank === rank);
+      if (!note || !pick) return reply.code(404).send({ error: "Pick not found" });
+      if (pick.openedAt) return { emailId: pick.emailId, openedAt: pick.openedAt, first: false };
 
-    const openedAt = new Date().toISOString();
-    const next = picks.map((p) => (p.rank === rank ? { ...p, openedAt } : p));
-    await prisma.note.updateMany({
-      where: { id: note.id, userId },
-      data: { picks: picksColumn(next) },
-    });
-    return { emailId: pick.emailId, openedAt, first: true };
+      const openedAt = new Date().toISOString();
+      const next = picks.map((p) => (p.rank === rank ? { ...p, openedAt } : p));
+      const { count } = await prisma.note.updateMany({
+        where: { id: note.id, userId, picks: { equals: note.picks as Prisma.InputJsonValue } },
+        data: { picks: picksColumn(next) },
+      });
+      if (count === 1) return { emailId: pick.emailId, openedAt, first: true };
+    }
+    return reply.code(409).send({ error: "Briefing changed; try again" });
   });
 
   // GET /api/briefing/:id/top-actions/feedback — latest feedback per Top 3 rank

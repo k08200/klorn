@@ -14,7 +14,7 @@ import {
 import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { briefingCopy } from "./briefing-copy.js";
-import type { PickableMail } from "./briefing-picks.js";
+import { displaySafe, type PickableMail } from "./briefing-picks.js";
 import { buildBriefingUserPrompt } from "./briefing-prompt.js";
 import { wrapEventsForPrompt, wrapSignalsForPrompt } from "./briefing-prompt-wrap.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
@@ -23,6 +23,7 @@ import {
   type BriefingMail,
   briefingWindowStart,
   hasTaskDueSoon,
+  hasUsableMailConnection,
   listBriefingCommitments,
   listBriefingNotes,
   listOpenPushMail,
@@ -33,7 +34,9 @@ import {
   promptCommitment,
   promptMail,
   promptNote,
+  promptTask,
   signalMail,
+  WINDOW_SCAN,
 } from "./briefing-window.js";
 import { readCalendarRows } from "./calendar-read.js";
 import { listTasks } from "./tasks.js";
@@ -46,6 +49,7 @@ const EVENT_DESCRIPTION_CHARS = 300;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Still-open mail the quiet card lists. */
 const QUIET_OPEN_LIMIT = 3;
+const QUIET_SUBJECT_CHARS = 80;
 
 /**
  * Read upcoming events from the local calendar table that the Calendar page
@@ -118,7 +122,31 @@ export interface BriefingData {
   since: Date;
   /** False when any source failed to read: unknown is not "nothing new". */
   complete: boolean;
+  quiet: QuietFacts;
   signals: BriefingSignals;
+}
+
+/** What the quiet-morning rule reads beyond the prompt data, each from the full set. */
+interface QuietFacts {
+  /** A previous briefing exists: the first one always goes to the model. */
+  hasPrevious: boolean;
+  /** The window scan hit its cap: there may be more mail than was read. */
+  windowFull: boolean;
+  /** An open task is overdue or due within a day (all open tasks, not the prompt's 20). */
+  taskDueSoon: boolean;
+  /** An event is in progress or starts within a day, all-day events included. */
+  eventSoon: boolean;
+  /** The sync has a usable mail connection. */
+  mailConnected: boolean;
+}
+
+async function hasEventSoon(userId: string, now: Date): Promise<boolean> {
+  const rows = await readCalendarRows({
+    userId,
+    when: { startTime: { lt: new Date(now.getTime() + DAY_MS) }, endTime: { gt: now } },
+    limit: 1,
+  });
+  return rows.length > 0;
 }
 
 /** A best-effort read: a failure logs, marks the gather incomplete, and yields `empty`. */
@@ -147,14 +175,14 @@ export async function gatherBriefingData(
   now: Date = new Date(),
 ): Promise<BriefingData> {
   const failures: string[] = [];
-  const since = await readSource(
+  const { since, hasPrevious } = await readSource(
     userId,
     "window start",
     () => briefingWindowStart(userId, todayKey, now),
-    new Date(now.getTime() - DAY_MS),
+    { since: new Date(now.getTime() - DAY_MS), hasPrevious: false },
     failures,
   );
-  const [tasks, events, window, commitments, notes] = await Promise.all([
+  const [tasks, events, window, commitments, notes, eventSoon, mailConnected] = await Promise.all([
     readSource(userId, "tasks", () => listTasks(userId), { tasks: [] as unknown[] }, failures),
     readSource(
       userId,
@@ -172,17 +200,26 @@ export async function gatherBriefingData(
     ),
     readSource(userId, "commitments", () => listBriefingCommitments(userId, now), [], failures),
     readSource(userId, "notes", () => listBriefingNotes(userId, now), [], failures),
+    readSource(userId, "events soon", () => hasEventSoon(userId, now), true, failures),
+    readSource(
+      userId,
+      "mail connection",
+      () => hasUsableMailConnection(userId, now),
+      false,
+      failures,
+    ),
   ]);
   const openPush = await readSource(
     userId,
     "open PUSH",
-    () => listOpenPushMail(userId, new Set(window.mails.map((m) => m.emailId))),
+    () => listOpenPushMail(userId, new Set(window.mails.map((m) => m.emailId)), now),
     [],
     failures,
   );
 
+  const allTasks = (tasks.tasks ?? []) as Array<Record<string, unknown>>;
   const data = {
-    tasks: { tasks: openTasks((tasks.tasks ?? []) as Array<Record<string, unknown>>) },
+    tasks: { tasks: openTasks(allTasks) },
     events,
     emails: { emails: [...window.mails, ...openPush].map(signalMail) },
   };
@@ -196,23 +233,28 @@ export async function gatherBriefingData(
     omittedMail: Math.max(0, window.scanned - Math.min(window.scanned, PROMPT_MAIL_LIMIT)),
     since,
     complete: failures.length === 0,
+    quiet: {
+      hasPrevious,
+      windowFull: window.scanned >= WINDOW_SCAN,
+      taskDueSoon: hasTaskDueSoon(allTasks, now),
+      eventSoon,
+      mailConnected,
+    },
     signals: buildBriefingSignals(data, { now }),
   };
 }
 
 /**
- * A quiet morning: every source read, no new non-SILENT mail since the last
- * briefing, and nothing scheduled, committed or due in the next day. The
- * briefing then skips the model and delivers the quiet card instead.
+ * A quiet morning: every source read, a previous briefing exists, the mail
+ * connection is usable, no new non-SILENT mail since the last briefing (with
+ * the whole window read), and nothing scheduled, committed or due within a
+ * day. The briefing then skips the model and delivers the quiet card instead.
  */
-export function isQuietMorning(data: BriefingData, now: Date): boolean {
-  if (!data.complete || data.newMailCount > 0 || data.commitments.length > 0) return false;
-  if (hasTaskDueSoon(data.tasks.tasks as Array<Record<string, unknown>>, now)) return false;
-  const horizon = now.getTime() + DAY_MS;
-  return !data.events.events.some((event) => {
-    const start = (event as { start?: unknown }).start;
-    return typeof start === "string" && Date.parse(start) < horizon;
-  });
+export function isQuietMorning(data: BriefingData): boolean {
+  const q = data.quiet;
+  if (!data.complete || !q.hasPrevious || !q.mailConnected || q.windowFull) return false;
+  if (data.newMailCount > 0 || data.commitments.length > 0) return false;
+  return !q.taskDueSoon && !q.eventSoon;
 }
 
 /** The quiet card: deterministic, no model call. Lists PUSH mail still open from before. */
@@ -226,7 +268,8 @@ export function buildQuietBriefing(
   if (open.length > 0) {
     lines.push("", `**${copy.stillOpen}**`);
     for (const mail of open) {
-      lines.push(`- ${senderName(mail.from, lang)} — ${stripUntrusted(mail.subject)}`);
+      const subject = displaySafe(mail.subject, QUIET_SUBJECT_CHARS);
+      lines.push(`- ${displaySafe(senderName(mail.from, lang), QUIET_SUBJECT_CHARS)} — ${subject}`);
     }
   }
   return lines.join("\n");
@@ -289,7 +332,7 @@ export function buildPrompt(data: BriefingData, ctx: UserBriefingContext, now: D
     languageLine: briefingCopy(ctx.lang).languageLine,
     since: data.since.toISOString(),
     signals: wrapSignalsForPrompt(data.signals),
-    tasks: data.tasks,
+    tasks: data.tasks.tasks.map((task) => promptTask(task as Record<string, unknown>)),
     events: promptEvents(data.events),
     commitments: data.commitments.map(promptCommitment),
     emails: data.windowMail.map(refFor),

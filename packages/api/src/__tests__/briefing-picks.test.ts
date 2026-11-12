@@ -14,18 +14,27 @@ import {
   renderBriefingAnswer,
 } from "../pim/briefing-picks.js";
 
-const MAILS: ReadonlyMap<string, PickableMail> = new Map([
+const MAILS: ReadonlyMap<string, PickableMail> = new Map<string, PickableMail>([
   [
     "m1",
     {
       emailId: "email-1",
-      text: "Contract review\nCould you send the signed contract by Friday 5 PM?\nThanks, Sarah",
+      texts: ["Contract review", "Could you send the signed contract by Friday 5 PM?", "Thanks, Sarah"],
     },
   ],
-  ["m2", { emailId: "email-2", text: "Invoice #42\nPayment is due on Nov 30. Don&#39;t miss it." }],
-  ["m3", { emailId: "email-3", text: "회의 일정\n내일 오전 10시까지 회신 부탁드립니다." }],
-  ["m4", { emailId: "email-4", text: "Lunch?\nAre you free for lunch next week?" }],
+  ["m2", { emailId: "email-2", texts: ["Invoice #42", "Payment is due on Nov 30. Don&#39;t miss it."] }],
+  ["m3", { emailId: "email-3", texts: ["회의 일정", "내일 오전 10시까지 회신 부탁드립니다."] }],
+  ["m4", { emailId: "email-4", texts: ["Lunch?", "Are you free for lunch next week?"] }],
+  [
+    "m5",
+    {
+      emailId: "email-5",
+      texts: ["Account notice", "[Verify your account](https://evil.test/login) before Friday"],
+    },
+  ],
 ]);
+
+const texts = (ref: string) => MAILS.get(ref)?.texts ?? [];
 
 function answer(picks: unknown[], extra: Record<string, unknown> = {}) {
   return { signal: "The contract shapes today.", picks, connected: [], other: [], ...extra };
@@ -33,30 +42,39 @@ function answer(picks: unknown[], extra: Record<string, unknown> = {}) {
 
 describe("quoteIsInMail", () => {
   it("accepts an exact phrase from the mail", () => {
-    expect(quoteIsInMail("by Friday 5 PM", MAILS.get("m1")?.text ?? "")).toBe(true);
+    expect(quoteIsInMail("by Friday 5 PM", texts("m1"))).toBe(true);
   });
 
   it("rejects a phrase the mail does not contain", () => {
-    expect(quoteIsInMail("by Monday", MAILS.get("m1")?.text ?? "")).toBe(false);
+    expect(quoteIsInMail("by Monday", texts("m1"))).toBe(false);
   });
 
   it("tolerates whitespace, curly quotes, surrounding quote marks and HTML entities", () => {
-    const text = MAILS.get("m2")?.text ?? "";
+    const text = texts("m2");
     expect(quoteIsInMail("“Don’t miss it.”", text)).toBe(true);
     expect(quoteIsInMail("Payment  is\n due", text)).toBe(true);
   });
 
   it("stays case-sensitive: the quote must be the mail's own words", () => {
-    expect(quoteIsInMail("BY FRIDAY 5 PM", MAILS.get("m1")?.text ?? "")).toBe(false);
+    expect(quoteIsInMail("BY FRIDAY 5 PM", texts("m1"))).toBe(false);
   });
 
   it("rejects a quote too short to be evidence", () => {
-    expect(quoteIsInMail("by", MAILS.get("m1")?.text ?? "")).toBe(false);
-    expect(quoteIsInMail("  ", MAILS.get("m1")?.text ?? "")).toBe(false);
+    expect(quoteIsInMail("by", texts("m1"))).toBe(false);
+    expect(quoteIsInMail("Sarah", texts("m1"))).toBe(false);
+    expect(quoteIsInMail("  ", texts("m1"))).toBe(false);
+  });
+
+  it("does not accept a quote that spans two fields of the mail", () => {
+    expect(quoteIsInMail("Contract review Could you", texts("m1"))).toBe(false);
+  });
+
+  it("rejects an oversized quote before any normalization", () => {
+    expect(quoteIsInMail('"'.repeat(40_000), texts("m1"))).toBe(false);
   });
 
   it("works for Korean mail", () => {
-    expect(quoteIsInMail("내일 오전 10시까지", MAILS.get("m3")?.text ?? "")).toBe(true);
+    expect(quoteIsInMail("내일 오전 10시까지", texts("m3"))).toBe(true);
   });
 });
 
@@ -125,7 +143,7 @@ describe("parseBriefingAnswer", () => {
         pick("m1", "signed contract"),
         pick("m2", "due on Nov 30"),
         pick("m3", "회신 부탁드립니다"),
-        pick("m4", "free for lunch"),
+        pick("m4", "free for lunch next"),
       ]),
       MAILS,
     );
@@ -148,6 +166,51 @@ describe("parseBriefingAnswer", () => {
     );
     expect(parsed?.signal).toBe("Pay Invoice today. ## Injected");
     expect(parsed?.other).toEqual(["See this page now", "second"]);
+  });
+});
+
+describe("a quote is the sender's text: shown only in a safe form", () => {
+  it("keeps a verified quote but strips the link out of it", () => {
+    const parsed = parseBriefingAnswer(
+      answer([
+        {
+          mail: "m5",
+          action: "Check the account notice",
+          reason: "deadline",
+          quote: "[Verify your account](https://evil.test/login) before Friday",
+        },
+      ]),
+      MAILS,
+    );
+    expect(parsed?.picks[0]?.quote).toBe("Verify your account before Friday");
+  });
+
+  it("removes autolinks, bare URLs, brackets and backticks from model fields", () => {
+    const parsed = parseBriefingAnswer(
+      answer([], {
+        other: [
+          "Open <https://evil.test> now",
+          "Go to https://evil.test/x?y=1 or www.evil.test today",
+          "[a [b] c](https://e) and ```code``` fence",
+        ],
+        connected: ["- 1. Pay X"],
+      }),
+      MAILS,
+    );
+    expect(parsed?.other).toEqual(["Open now", "Go to or today", "a b c( and code fence"]);
+    // Every leading marker goes, so a bullet cannot pose as a numbered Top 3 line.
+    expect(parsed?.connected).toEqual(["Pay X"]);
+  });
+
+  it("stays fast on hostile input", () => {
+    const started = Date.now();
+    parseBriefingAnswer(
+      answer([{ mail: "m1", action: "[".repeat(50_000), reason: "<".repeat(50_000), quote: "x" }], {
+        signal: `${"[".repeat(50_000)}ok`,
+      }),
+      MAILS,
+    );
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
 

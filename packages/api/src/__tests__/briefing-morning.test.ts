@@ -19,6 +19,9 @@ const s = vi.hoisted(() => ({
   tasks: [] as Array<Record<string, unknown>>,
   language: "en",
   mailThrows: false,
+  googleTokens: 1,
+  existingNote: null as { id: string; content: string; createdAt: Date } | null,
+  openPushWhere: [] as Array<Record<string, unknown>>,
   llmContent: "" as string,
   requests: [] as Array<{
     messages: Array<{ role: string; content: string }>;
@@ -42,7 +45,7 @@ vi.mock("../db.js", () => {
         s.noteWhere.push(args.where as Record<string, unknown>);
         return s.previousBriefing;
       },
-      findUnique: () => null,
+      findUnique: () => s.existingNote,
       findMany: () => [],
       create: (args) => {
         s.noteCreates.push(args as { data: Record<string, unknown> });
@@ -59,8 +62,14 @@ vi.mock("../db.js", () => {
       },
     },
     attentionItem: {
-      findMany: (args) => ((args.where as { status?: string }).status ? [] : s.tiers),
+      findMany: (args) => {
+        const where = args.where as { status?: string };
+        if (!where.status) return s.tiers;
+        s.openPushWhere.push(where);
+        return [];
+      },
     },
+    userToken: { count: () => s.googleTokens },
     commitment: { findMany: () => s.commitments },
     calendarEvent: { findMany: () => s.events },
     notification: {
@@ -144,6 +153,9 @@ beforeEach(() => {
   s.tasks = [];
   s.language = "en";
   s.mailThrows = false;
+  s.googleTokens = 1;
+  s.existingNote = null;
+  s.openPushWhere = [];
   s.llmContent = answer([]);
   s.requests = [];
   s.noteWhere = [];
@@ -166,17 +178,19 @@ describe("the mail window", () => {
       NOT: { dayKey: "2099-01-06" },
       title: { startsWith: "Daily Briefing" },
     });
-    expect(s.mailWhere[0]).toMatchObject({
+    const since = new Date("2099-01-04T21:05:00Z");
+    // By the Date header, or by when Klorn synced it (mail synced late).
+    expect(s.mailWhere[0]).toEqual({
       userId: "u1",
-      receivedAt: { gte: new Date("2099-01-04T21:05:00Z"), lte: NOW },
+      OR: [{ receivedAt: { gte: since, lte: NOW } }, { createdAt: { gte: since, lte: NOW } }],
     });
   });
 
   it("falls back to the last 24 hours without a previous briefing", async () => {
     s.mails = [mail("a")];
     await generateBriefing("u1", NOW);
-    expect(s.mailWhere[0]).toMatchObject({
-      receivedAt: { gte: new Date("2099-01-04T21:30:00Z") },
+    expect(s.mailWhere[0]?.OR).toContainEqual({
+      receivedAt: { gte: new Date("2099-01-04T21:30:00Z"), lte: NOW },
     });
   });
 
@@ -184,13 +198,17 @@ describe("the mail window", () => {
     s.previousBriefing = { createdAt: new Date("2098-12-01T00:00:00Z") };
     s.mails = [mail("a")];
     await generateBriefing("u1", NOW);
-    expect(s.mailWhere[0]).toMatchObject({
-      receivedAt: { gte: new Date("2098-12-29T21:30:00Z") },
+    expect(s.mailWhere[0]?.OR).toContainEqual({
+      receivedAt: { gte: new Date("2098-12-29T21:30:00Z"), lte: NOW },
     });
   });
 });
 
 describe("a quiet morning skips the model", () => {
+  beforeEach(() => {
+    s.previousBriefing = { createdAt: new Date("2099-01-04T21:05:00Z") };
+  });
+
   it("delivers the quiet card without a model call and without a push", async () => {
     s.mails = [mail("newsletter")];
     s.tiers = [{ sourceId: "newsletter", tier: "SILENT" }];
@@ -249,6 +267,78 @@ describe("a quiet morning skips the model", () => {
     s.mailThrows = true;
     await generateBriefing("u1", NOW);
     expect(s.requests).toHaveLength(1);
+  });
+
+  it("is not quiet on the first briefing ever", async () => {
+    s.previousBriefing = null;
+    await generateBriefing("u1", NOW);
+    expect(s.requests).toHaveLength(1);
+  });
+
+  it("is not quiet without a usable mail connection: no new mail then means nothing", async () => {
+    s.googleTokens = 0;
+    await generateBriefing("u1", NOW);
+    expect(s.requests).toHaveLength(1);
+  });
+
+  it("is not quiet when the window scan is full, even if everything read was SILENT", async () => {
+    s.mails = Array.from({ length: 100 }, (_, i) => mail(`n${i}`));
+    s.tiers = s.mails.map((m) => ({ sourceId: String(m.id), tier: "SILENT" }));
+    await generateBriefing("u1", NOW);
+    expect(s.requests).toHaveLength(1);
+  });
+
+  it("is not quiet when an event is already in progress (an all-day event today)", async () => {
+    const dayStart = new Date("2099-01-05T15:00:00Z");
+    s.events = [
+      {
+        id: "holiday",
+        title: "Holiday",
+        description: null,
+        location: null,
+        startTime: dayStart,
+        endTime: new Date(dayStart.getTime() + 86_400_000),
+        allDay: true,
+        provider: "GOOGLE",
+        externalId: "h",
+        sourceAccountId: null,
+      },
+    ];
+    await generateBriefing("u1", NOW);
+    expect(s.requests).toHaveLength(1);
+  });
+
+  it("sees a task due soon past the prompt's 20-task cap", async () => {
+    s.tasks = [
+      ...Array.from({ length: 25 }, (_, i) => ({ id: `t${i}`, title: `Later ${i}`, status: "TODO" })),
+      { id: "due", title: "File taxes", status: "TODO", dueDate: "2099-01-06T09:00:00Z" },
+    ];
+    await generateBriefing("u1", NOW);
+    expect(s.requests).toHaveLength(1);
+  });
+
+  it("re-delivering an existing quiet note still does not push", async () => {
+    s.existingNote = {
+      id: "note-q",
+      content: "Nothing new since your last briefing, and nothing scheduled or due in the next day.",
+      createdAt: NOW,
+    };
+    await createDailyBriefingDelivery("u1");
+    expect(s.notifications[0]?.data).toMatchObject({ isRead: true });
+    expect(s.pushes).toHaveLength(0);
+    expect(s.requests).toHaveLength(0);
+  });
+
+  it("lists still-open PUSH mail from the last 72 hours only, outside the window", async () => {
+    s.mails = [mail("a")];
+    s.tiers = [{ sourceId: "a", tier: "SILENT" }];
+    await generateBriefing("u1", NOW);
+    expect(s.openPushWhere[0]).toMatchObject({
+      status: "OPEN",
+      tier: { in: ["PUSH", "CALL"] },
+      surfacedAt: { gte: new Date("2099-01-02T21:30:00Z") },
+      sourceId: { notIn: ["a"] },
+    });
   });
 });
 

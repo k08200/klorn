@@ -7,7 +7,7 @@
 -- the swap.
 --
 -- If it fails on lock_timeout, Prisma records the migration as failed: run
--- `prisma migrate resolve --rolled-back 20261112000000_note_briefing_picks`
+-- `prisma migrate resolve --rolled-back 20261112010000_note_briefing_picks`
 -- and redeploy.
 SET LOCAL lock_timeout = '5s';
 ALTER TABLE "Note" ADD COLUMN "picks" JSONB;

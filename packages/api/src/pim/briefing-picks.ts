@@ -20,8 +20,12 @@ import type { BriefingCopy } from "./briefing-copy.js";
 export const MAX_PICKS = 3;
 /** Entries read from the model's pick list before the cap: room for drops. */
 const PICK_CANDIDATES = 6;
-const MIN_QUOTE_CHARS = 3;
+/** A quote shorter than this is not evidence ("the", "Re:"); CJK packs more per character. */
+const MIN_QUOTE_CHARS = 6;
+const MIN_QUOTE_CHARS_CJK = 4;
 const MAX_QUOTE_CHARS = 200;
+/** Model output is cut to this multiple of a field's cap before any regex runs. */
+const RAW_SLICE_FACTOR = 4;
 const SIGNAL_MAX = 300;
 const ACTION_MAX = 160;
 const REASON_MAX = 200;
@@ -41,10 +45,13 @@ export interface BriefingPick {
   openedAt?: string | null;
 }
 
-/** A mail the model may pick: its id and the text a quote must come from. */
+/**
+ * A mail the model may pick: its id and the texts a quote must come from
+ * (subject, snippet, excerpt — each on its own, so a quote cannot span two).
+ */
 export interface PickableMail {
   emailId: string;
-  text: string;
+  texts: readonly string[];
 }
 
 export interface BriefingAnswer {
@@ -135,14 +142,30 @@ export function normalizeQuoteText(text: string): string {
     .trim();
 }
 
-const SURROUNDING_QUOTES = /^["'«»「」『』\s]+|["'«»「」『』\s]+$/g;
+const QUOTE_MARKS = new Set(['"', "'", "«", "»", "「", "」", "『", "』", " "]);
 
-/** True when `quote` (3-200 characters once trimmed) occurs in `mailText`. */
-export function quoteIsInMail(quote: string, mailText: string): boolean {
-  const needle = normalizeQuoteText(quote).replace(SURROUNDING_QUOTES, "");
+/** Surrounding quote marks and spaces removed, in linear time. */
+function trimQuoteMarks(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && QUOTE_MARKS.has(text[start] ?? "")) start++;
+  while (end > start && QUOTE_MARKS.has(text[end - 1] ?? "")) end--;
+  return text.slice(start, end);
+}
+
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+
+/**
+ * True when `quote` occurs in one of `texts` and is long enough to be
+ * evidence: at least 6 characters (4 with CJK or Hangul), at most 200.
+ */
+export function quoteIsInMail(quote: string, texts: readonly string[]): boolean {
+  if (quote.length > MAX_QUOTE_CHARS * RAW_SLICE_FACTOR) return false;
+  const needle = trimQuoteMarks(normalizeQuoteText(quote));
   const length = [...needle].length;
-  if (length < MIN_QUOTE_CHARS || length > MAX_QUOTE_CHARS) return false;
-  return normalizeQuoteText(mailText).includes(needle);
+  const min = CJK.test(needle) ? MIN_QUOTE_CHARS_CJK : MIN_QUOTE_CHARS;
+  if (length < min || length > MAX_QUOTE_CHARS) return false;
+  return texts.some((text) => normalizeQuoteText(text).includes(needle));
 }
 
 function clamp(text: string, max: number): string {
@@ -150,19 +173,33 @@ function clamp(text: string, max: number): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
 }
 
+const LIST_OR_HEADING_MARKER = /^(?:[-*•>]|#{1,6}|\d{1,3}[.)])\s+/;
+const MARKER_PASSES = 4;
+
 /**
- * One plain line from a model-written field: wrapper tags removed, markdown
- * links reduced to their text, line breaks and leading list or heading
- * markers removed, length capped.
+ * Text safe to show inside the briefing, whoever wrote it: wrapper tags, HTML
+ * or autolink brackets, URLs, link brackets and backticks removed, so no field
+ * can render as a link, a code block or markup; whitespace collapsed. Input is
+ * cut before any regex runs, and every pattern is bounded.
  */
-function plainLine(value: unknown, max: number): string {
-  if (typeof value !== "string") return "";
-  const flat = stripUntrusted(value)
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+export function displaySafe(value: string, max: number): string {
+  let text = stripUntrusted(value.slice(0, max * RAW_SLICE_FACTOR))
+    .replace(/!?\[([^[\]]{0,300})\]\([^()\s]{0,500}\)/g, "$1")
+    .replace(/<[^<>]{0,500}>/g, "")
+    .replace(/\b(?:https?|ftp|mailto|file|javascript|data):[^\s]{0,2000}/gi, "")
+    .replace(/\bwww\.[^\s]{1,2000}/gi, "")
+    .replace(/[[\]<>`]/g, "")
     .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^(?:[-*•>]|#{1,6}|\d+[.)])\s+/, "");
-  return clamp(flat, max);
+    .trim();
+  for (let pass = 0; pass < MARKER_PASSES && LIST_OR_HEADING_MARKER.test(text); pass++) {
+    text = text.replace(LIST_OR_HEADING_MARKER, "");
+  }
+  return clamp(text, max);
+}
+
+/** One plain line from a model-written field (displaySafe), or "" for a non-string. */
+function plainLine(value: unknown, max: number): string {
+  return typeof value === "string" ? displaySafe(value, max) : "";
 }
 
 function plainList(value: unknown, max: number): string[] {
@@ -188,14 +225,18 @@ function readPicks(value: unknown, mails: ReadonlyMap<string, PickableMail>): Br
     if (!mail || seen.has(mail.emailId)) continue;
     const action = plainLine(entry.action, ACTION_MAX);
     const quote = typeof entry.quote === "string" ? entry.quote : "";
-    if (!action || !quoteIsInMail(quote, mail.text)) continue;
+    if (!action || !quoteIsInMail(quote, mail.texts)) continue;
+    // Verified, but still the sender's words: shown only in its safe form, and
+    // a quote that is mostly a link or markup is not evidence worth showing.
+    const shown = displaySafe(trimQuoteMarks(normalizeQuoteText(quote)), MAX_QUOTE_CHARS);
+    if ([...shown].length < MIN_QUOTE_CHARS_CJK) continue;
     seen.add(mail.emailId);
     picks.push({
       rank: picks.length + 1,
       emailId: mail.emailId,
       action,
       reason: plainLine(entry.reason, REASON_MAX),
-      quote: normalizeQuoteText(quote).replace(SURROUNDING_QUOTES, ""),
+      quote: shown,
     });
   }
   return picks;
@@ -231,10 +272,10 @@ export function renderBriefingAnswer(answer: BriefingAnswer, copy: BriefingCopy)
   if (answer.picks.length > 0) {
     blocks.push([
       `**${copy.top}**`,
-      ...answer.picks.map((p) => {
-        const reason = p.reason ? ` — ${p.reason}` : "";
-        return `${p.rank}. ${p.action}${reason} *“${displayQuote(p.quote)}”*`;
-      }),
+      // Always the dash: the web client takes the label up to it.
+      ...answer.picks.map(
+        (p) => `${p.rank}. ${p.action} — ${p.reason ? `${p.reason} ` : ""}*“${displayQuote(p.quote)}”*`,
+      ),
     ]);
   }
   if (answer.connected.length > 0) {
