@@ -111,7 +111,7 @@ describe("attachment download through the row's own mailbox", () => {
     expect(res.rawPayload).toEqual(Buffer.from("%PDF"));
     // A Korean name used to throw in the header writer (500); it now rides in filename*.
     expect(res.headers["content-disposition"]).toBe(
-      `attachment; filename="___.pdf"; filename*=UTF-8''${encodeURIComponent("견적서.pdf")}`,
+      `attachment;filename="download.pdf";filename*=UTF-8''${encodeURIComponent("견적서.pdf")}`,
     );
     expect(resolveMailClient).not.toHaveBeenCalled();
   });

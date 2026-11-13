@@ -42,12 +42,8 @@ import {
   MAX_VISION_ATTACHMENT_BYTES,
   VISION_OCR_MAX_TOKENS,
 } from "../mail/vision-attachment-policy.js";
-import {
-  attachmentContentDisposition,
-  parseJsonArray,
-  parseJsonRecord,
-  safeAttachmentFilename,
-} from "./email.js";
+import { attachmentDisposition } from "../storage/download-name.js";
+import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -488,7 +484,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       reply
         .header("Content-Type", row.mimeType || "application/octet-stream")
         .header("Content-Length", String(buffer.length))
-        .header("Content-Disposition", attachmentContentDisposition(filename));
+        .header("Content-Disposition", attachmentDisposition(filename));
       return reply.send(buffer);
     },
   );
@@ -560,7 +556,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           .header("Content-Type", converted.mimeType)
           .header("Content-Length", String(converted.buffer.length))
           .header("X-Klorn-Conversion-Id", result.id)
-          .header("Content-Disposition", attachmentContentDisposition(filename));
+          .header("Content-Disposition", attachmentDisposition(filename));
         return reply.send(converted.buffer);
       } catch (err) {
         if (err instanceof FileConversionError) {

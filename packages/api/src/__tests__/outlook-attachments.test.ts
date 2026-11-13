@@ -11,7 +11,11 @@ const persistGmailEmail = vi.hoisted(() => vi.fn());
 const needsAttachmentScan = vi.hoisted(() => vi.fn());
 const extract = vi.hoisted(() => vi.fn());
 vi.mock("../judge/email-firewall.js", () => ({ persistGmailEmail }));
-vi.mock("../mail/attachment-scan-gate.js", () => ({ needsAttachmentScan }));
+vi.mock("../mail/attachment-scan-gate.js", () => ({
+  needsAttachmentScan,
+  wasAttachmentScanned: () => false,
+  rememberAttachmentScan: () => undefined,
+}));
 vi.mock("../mail/attachment-extract-isolated.js", () => ({
   extractAttachmentContentIsolated: extract,
 }));
@@ -217,6 +221,24 @@ describe("syncOutlookInbox attachments", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2); // the two delta pages only
     expect(needsAttachmentScan).toHaveBeenCalledTimes(1);
     for (const call of persistGmailEmail.mock.calls) expect(call[1].attachments).toEqual([]);
+  });
+
+  it("lists attachments when a stored delta link predates hasAttachments in $select", async () => {
+    fetchMock
+      .mockResolvedValueOnce(delta({}))
+      .mockResolvedValueOnce(json({ value: [ATTACHMENTS.value[3]] }));
+
+    await syncOutlookInbox({
+      userId: "u1",
+      email: "me@outlook.com",
+      accessToken: "at",
+      linkedInboxAccountId: "acc",
+      cursor: `${GRAPH}/me/mailFolders/inbox/messages/delta?$deltatoken=old`,
+    });
+
+    expect(persistGmailEmail.mock.calls[0]?.[1]?.attachments).toEqual([
+      expect.objectContaining({ partKey: "att-4" }),
+    ]);
   });
 
   it("persists the message without attachments when the list fails", async () => {

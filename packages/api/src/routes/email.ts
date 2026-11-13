@@ -658,26 +658,6 @@ export function safeAttachmentFilename(filename: string): string {
   return trimmed || "attachment";
 }
 
-/**
- * Content-Disposition for a download. A header value must be Latin-1 (Node throws
- * on anything else, a 500 for every Korean filename), so the quoted name is an
- * ASCII stand-in and the real one rides in RFC 5987 `filename*`.
- */
-export function attachmentContentDisposition(filename: string): string {
-  const safe = safeAttachmentFilename(filename);
-  const ascii = safe.replace(/[^\x20-\x7e]|\\/g, "_");
-  let encoded: string;
-  try {
-    encoded = encodeURIComponent(safe).replace(
-      /['()*]/g,
-      (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
-    );
-  } catch {
-    return `attachment; filename="${ascii}"`; // a lone surrogate cannot be encoded
-  }
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
-}
-
 const listEmailsQuerySchema = {
   type: "object",
   additionalProperties: false,

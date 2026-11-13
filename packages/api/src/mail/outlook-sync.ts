@@ -24,7 +24,11 @@
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
-import { needsAttachmentScan } from "./attachment-scan-gate.js";
+import {
+  needsAttachmentScan,
+  rememberAttachmentScan,
+  wasAttachmentScanned,
+} from "./attachment-scan-gate.js";
 import { formatMailbox } from "./email-address.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
 import { listOutlookAttachments } from "./outlook-attachments.js";
@@ -91,17 +95,25 @@ function formatAddress(addr: GraphEmailAddress | null | undefined): string {
  * The message's attachments, listed once per message: a delta re-delivers a
  * message whenever a flag changes, so only a new row (or one without attachment
  * rows yet) is listed. Never throws: a failure persists the message without
- * attachments, and the next delivery of it tries again.
+ * attachments; a later delivery of the same message (any change to it) retries.
  */
 async function attachmentsOf(
   args: OutlookSyncArgs,
   msg: GraphMessage & { id: string },
   stableId: string,
 ): Promise<RawEmailAttachment[]> {
-  if (msg.hasAttachments !== true) return [];
+  // Only an explicit false skips the list: a delta link stored before
+  // `hasAttachments` joined $select keeps the old selection, so it is absent there.
+  if (msg.hasAttachments === false) return [];
+  if (wasAttachmentScanned(args.userId, stableId)) return [];
   try {
-    if (!(await needsAttachmentScan(args.userId, stableId))) return [];
-    return await listOutlookAttachments(args.accessToken, msg.id);
+    if (!(await needsAttachmentScan(args.userId, stableId))) {
+      rememberAttachmentScan(args.userId, stableId);
+      return [];
+    }
+    const rows = await listOutlookAttachments(args.accessToken, msg.id);
+    if (rows.length === 0) rememberAttachmentScan(args.userId, stableId);
+    return rows;
   } catch (err) {
     console.warn(`[outlook-sync] attachments skipped for ${stableId}`, err);
     return [];

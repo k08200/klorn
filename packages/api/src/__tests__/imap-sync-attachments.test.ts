@@ -25,10 +25,16 @@ vi.mock("imapflow", () => ({ ImapFlow: FakeImapFlow }));
 
 const persistGmailEmail = vi.hoisted(() => vi.fn());
 const needsAttachmentScan = vi.hoisted(() => vi.fn());
+const wasAttachmentScanned = vi.hoisted(() => vi.fn());
+const rememberAttachmentScan = vi.hoisted(() => vi.fn());
 const extract = vi.hoisted(() => vi.fn());
 
 vi.mock("../judge/email-firewall.js", () => ({ persistGmailEmail }));
-vi.mock("../mail/attachment-scan-gate.js", () => ({ needsAttachmentScan }));
+vi.mock("../mail/attachment-scan-gate.js", () => ({
+  needsAttachmentScan,
+  wasAttachmentScanned,
+  rememberAttachmentScan,
+}));
 vi.mock("../mail/attachment-extract-isolated.js", () => ({
   extractAttachmentContentIsolated: extract,
 }));
@@ -97,6 +103,7 @@ describe("syncImapInbox → HTML body and attachments", () => {
     armMessage();
     persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
     needsAttachmentScan.mockResolvedValue(true);
+    wasAttachmentScanned.mockReturnValue(false);
     extract.mockResolvedValue({ text: "견적 금액 100만원", status: "readable" });
   });
 
@@ -134,6 +141,26 @@ describe("syncImapInbox → HTML body and attachments", () => {
 
     expect(extract).not.toHaveBeenCalled();
     expect(persisted()?.attachments).toEqual([]);
+    // ...and remembers it, so the next poll skips even the lookup.
+    expect(rememberAttachmentScan).toHaveBeenCalledWith("u1", "icloud-imap:me@icloud.com:7");
+  });
+
+  it("skips the lookup and the walk for a message this process already listed", async () => {
+    wasAttachmentScanned.mockReturnValue(true);
+
+    await sync();
+
+    expect(needsAttachmentScan).not.toHaveBeenCalled();
+    expect(extract).not.toHaveBeenCalled();
+    expect(persisted()).toMatchObject({
+      htmlBody: "<p>견적서 <b>첨부</b>합니다</p>",
+      attachments: [],
+    });
+  });
+
+  it("does not remember a message whose rows it hands to persist (stored rows answer next time)", async () => {
+    await sync();
+    expect(rememberAttachmentScan).not.toHaveBeenCalled();
   });
 
   it("still persists the message when the attachment lookup fails", async () => {

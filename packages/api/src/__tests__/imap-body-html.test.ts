@@ -123,6 +123,41 @@ describe("decodeImapBody", () => {
     });
   });
 
+  it("does not store HTML the size cap cut, but still reads its text", () => {
+    const html = `<p>${"word ".repeat(IMAP_DECODE_MAX_BYTES / 4)}</p>`;
+    const head = headers("Content-Type: text/html");
+
+    const decoded = decodeImapBody(head, Buffer.from(html));
+
+    expect(decoded.html).toBe("");
+    expect(decoded.text.startsWith("word word")).toBe(true);
+    // A user-chosen host's slice is cut wherever it ends.
+    expect(decodeImapBody(head, Buffer.from("<p>short</p>"), { complete: false }).html).toBe("");
+    expect(decodeImapBody(head, Buffer.from("<p>short</p>")).html).toBe("<p>short</p>");
+  });
+
+  it("treats an RFC 2231-named text part as an attachment, not the body", () => {
+    const mixed = [
+      "--mix",
+      "Content-Type: text/plain",
+      "",
+      "the body",
+      "--mix",
+      "Content-Type: text/html",
+      "Content-Disposition: inline; filename*=UTF-8''report.html",
+      "",
+      "<p>attached report</p>",
+      "--mix--",
+    ].join(CRLF);
+
+    const decoded = decodeImapBody(
+      headers('Content-Type: multipart/mixed; boundary="mix"'),
+      Buffer.from(mixed),
+    );
+
+    expect(decoded).toEqual({ text: "the body", html: "" });
+  });
+
   it("keeps decodeImapText's answer identical", () => {
     const head = headers('Content-Type: multipart/alternative; boundary="alt"');
     expect(decodeImapText(head, Buffer.from(ALTERNATIVE))).toBe(

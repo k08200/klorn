@@ -47,7 +47,7 @@ const MIXED_WITH_PDF = mime(
 );
 
 describe("collectImapAttachmentParts", () => {
-  it("lists a base64 PDF with its IMAP section, exact decoded size and bytes", () => {
+  it("lists a base64 PDF with its IMAP section and decoded bytes", () => {
     const parts = collectImapAttachmentParts(
       head('multipart/mixed; boundary="mix"'),
       MIXED_WITH_PDF,
@@ -59,7 +59,6 @@ describe("collectImapAttachmentParts", () => {
       section: "2",
       filename: "report.pdf",
       mimeType: "application/pdf",
-      size: PDF.length,
       contentId: null,
       inlineOnly: false,
     });
@@ -187,6 +186,22 @@ describe("collectImapAttachmentParts", () => {
     expect(parts(`attachment; filename="${quote}"`)).toBe(quote);
   });
 
+  it("never lets a Content-ID put a path into the synthesized inline name", () => {
+    const message = mime(
+      "--m",
+      "Content-Type: image/png",
+      "Content-ID: <../../etc/x@y>",
+      "",
+      "png",
+      "--m--",
+    );
+    const [part] = collectImapAttachmentParts(head('multipart/related; boundary="m"'), message, {
+      complete: true,
+    });
+    expect(part?.filename).toBe("x@y");
+    expect(part?.contentId).toBe("../../etc/x@y");
+  });
+
   it("strips path components, control and bidi characters from a filename", () => {
     expect(cleanAttachmentFilename("../../etc/passwd")).toBe("passwd");
     expect(cleanAttachmentFilename("..\\..\\boot.ini")).toBe("boot.ini");
@@ -206,17 +221,17 @@ describe("collectImapAttachmentParts", () => {
       Buffer.from(b64(PDF)),
       { complete: true },
     );
-    expect(parts.map((p) => [p.section, p.filename, p.size])).toEqual([
+    expect(parts.map((p) => [p.section, p.filename, p.decode()?.length])).toEqual([
       ["1", "only.pdf", PDF.length],
     ]);
   });
 
-  it("has no size or bytes for a part the fetch slice cut off", () => {
+  it("has no bytes for a part the fetch slice cut off", () => {
     const cut = Buffer.from(MIXED_WITH_PDF.toString("latin1").slice(0, -20));
     const [part] = collectImapAttachmentParts(head('multipart/mixed; boundary="mix"'), cut, {
       complete: false,
     });
-    expect(part).toMatchObject({ section: "2", filename: "report.pdf", size: null });
+    expect(part).toMatchObject({ section: "2", filename: "report.pdf" });
     expect(part?.decode()).toBeNull();
   });
 
@@ -241,6 +256,27 @@ describe("collectImapAttachmentParts", () => {
       });
       expect(ms).toBeLessThan(BUDGET_MS);
       expect(parts.length).toBeLessThanOrEqual(64);
+    });
+
+    it("a flood of delimiter look-alikes, nested eight boundaries deep", () => {
+      // Boundaries a, ab, abc, ...: every line of the body is a near miss at every level.
+      const boundaries = Array.from({ length: 8 }, (_, i) => "abcdefgh".slice(0, i + 1));
+      let body = `--${"abcdefghi"}${CRLF}`.repeat((24 * 1024 * 1024) / 13);
+      for (const boundary of [...boundaries].reverse()) {
+        const inner = boundaries.indexOf(boundary) + 1;
+        const childType =
+          inner < boundaries.length
+            ? `multipart/mixed; boundary="${boundaries[inner]}"`
+            : "text/plain";
+        body = `--${boundary}${CRLF}Content-Type: ${childType}${CRLF}${CRLF}${body}`;
+      }
+      const input = Buffer.from(body);
+      const ms = fastestCpuMs(() =>
+        collectImapAttachmentParts(head('multipart/mixed; boundary="a"'), input, {
+          complete: true,
+        }),
+      );
+      expect(ms).toBeLessThan(BUDGET_MS);
     });
 
     it("deep nesting and a huge filename*N continuation run", () => {

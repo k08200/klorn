@@ -42,7 +42,13 @@ import {
 } from "./imap-body.js";
 
 /** A fixed host returns the whole TEXT; past this the scan treats it as cut. */
-export const MAX_ATTACHMENT_SCAN_BYTES = 48 * 1024 * 1024;
+export const MAX_ATTACHMENT_SCAN_BYTES = 32 * 1024 * 1024;
+/**
+ * Delimiter look-alikes one walk may skip (splitMultipart). Each costs a native
+ * search; without a cap a body of `--<boundary>x` lines, nested eight deep, held
+ * the event loop for ~2 s at 20 MiB (security review, 2026-11-12).
+ */
+const MAX_DELIMITER_MISSES = 10_000;
 const MAX_CONTENT_ID_CHARS = 255;
 /** RFC 2231 `name*0`, `name*1`, …: segments read per parameter. */
 const MAX_PARAM_CONTINUATIONS = 64;
@@ -54,12 +60,13 @@ export interface ImapAttachmentPart {
   section: string;
   filename: string;
   mimeType: string;
-  /** Decoded bytes; null when the fetched slice cut the part. */
-  size: number | null;
   contentId: string | null;
   /** A filename-less cid: image: kept for rendering, never extracted. */
   inlineOnly: boolean;
-  /** The decoded bytes, or null when the fetched slice cut the part. */
+  /**
+   * The decoded bytes, or null when the fetched slice cut the part. Decoding is
+   * left to the caller (imapRawAttachments), after it knows the message needs it.
+   */
   decode(): Buffer | null;
 }
 
@@ -67,6 +74,7 @@ interface Walk {
   root: Buffer;
   complete: boolean;
   budget: { parts: number };
+  misses: { left: number };
   out: ImapAttachmentPart[];
 }
 
@@ -87,6 +95,7 @@ export function collectImapAttachmentParts(
       root,
       complete: opts.complete && text.length <= MAX_ATTACHMENT_SCAN_BYTES,
       budget: { parts: MAX_MIME_PARTS },
+      misses: { left: MAX_DELIMITER_MISSES },
       out: [],
     };
     const fields = parseHeaderLines(headers.subarray(0, MAX_HEADER_BYTES).toString("latin1"));
@@ -115,7 +124,7 @@ function visitMultipart(
   if (depth >= MAX_MIME_DEPTH) return;
   const boundary = contentTypeOf(fields).params.get("boundary");
   if (!boundary || boundary.length > MAX_BOUNDARY_CHARS) return;
-  const parts = splitMultipart(body, boundary);
+  const parts = splitMultipart(body, boundary, walk.misses);
   for (let i = 0; i < parts.length; i++) {
     if (walk.budget.parts <= 0) return;
     walk.budget.parts--;
@@ -147,7 +156,7 @@ function visitLeaf(
   if (inlineOnly && !mimeType.startsWith("image/")) return;
   const filename =
     named ||
-    (contentId ? `inline-${contentId}` : "") ||
+    (contentId ? cleanAttachmentFilename(`inline-${contentId}`) : "") ||
     (mimeType === "message/rfc822" ? RFC822_FALLBACK_NAME : "");
   if (!filename) return;
 
@@ -159,7 +168,6 @@ function visitLeaf(
     mimeType,
     contentId,
     inlineOnly,
-    size: cut ? null : decodedSize(content, encoding),
     decode: () => (cut ? null : decodeTransfer(content, encoding)),
   });
 }
@@ -167,29 +175,6 @@ function visitLeaf(
 /** The slice ended inside this part (both views share one buffer). */
 function endsAtCut(content: Buffer, root: Buffer): boolean {
   return content.byteOffset + content.length >= root.byteOffset + root.length;
-}
-
-function isBase64Char(byte: number): boolean {
-  return (
-    (byte >= 0x41 && byte <= 0x5a) || // A-Z
-    (byte >= 0x61 && byte <= 0x7a) || // a-z
-    (byte >= 0x30 && byte <= 0x39) || // 0-9
-    byte === 0x2b || // +
-    byte === 0x2f // /
-  );
-}
-
-/** Decoded length without decoding base64 (one pass); QP is decoded, others are as-is. */
-function decodedSize(content: Buffer, encoding: string): number {
-  if (encoding === "base64") {
-    let chars = 0;
-    for (let i = 0; i < content.length; i++) {
-      if (isBase64Char(content[i] as number)) chars++;
-    }
-    return Math.floor((chars * 3) / 4);
-  }
-  if (encoding === "quoted-printable") return decodeTransfer(content, encoding).length;
-  return content.length;
 }
 
 /** Gmail's Content-ID rule (gmail-fetch.ts extractContentId), plus a length cap. */
@@ -284,12 +269,10 @@ function rawHeaderText(value: string): string {
   }
 }
 
-async function readableText(part: ImapAttachmentPart): Promise<string | null> {
+async function readableText(part: ImapAttachmentPart, bytes: Buffer): Promise<string | null> {
   // Inline-only images are never extracted (Gmail: a sender-controlled LLM cost).
-  if (part.inlineOnly || part.size === null) return null;
-  if (!isReadableEmailAttachment(part.filename, part.mimeType, part.size)) return null;
-  const bytes = part.decode();
-  if (!bytes) return null;
+  if (part.inlineOnly) return null;
+  if (!isReadableEmailAttachment(part.filename, part.mimeType, bytes.length)) return null;
   try {
     return (await extractAttachmentContentIsolated(bytes, part.filename, part.mimeType)).text;
   } catch {
@@ -297,20 +280,25 @@ async function readableText(part: ImapAttachmentPart): Promise<string | null> {
   }
 }
 
-/** The parts as RawEmailAttachment rows, readable ones with their extracted text. */
+/**
+ * The parts as RawEmailAttachment rows: size is the decoded length (null for a
+ * part the slice cut), readable ones carry their extracted text. Each part is
+ * decoded (natively) only here, one at a time.
+ */
 export async function imapRawAttachments(
   parts: ImapAttachmentPart[],
 ): Promise<RawEmailAttachment[]> {
   const rows: RawEmailAttachment[] = [];
   for (const part of parts) {
+    const bytes = part.decode();
     rows.push({
       gmailAttachmentId: part.section,
       partKey: part.section,
       filename: part.filename,
       mimeType: part.mimeType,
-      size: part.size,
+      size: bytes ? bytes.length : null,
       contentId: part.contentId,
-      contentText: await readableText(part),
+      contentText: bytes ? await readableText(part, bytes) : null,
     });
   }
   return rows;
