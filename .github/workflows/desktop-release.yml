@@ -16,6 +16,15 @@
 #   MACOS_NOTARY_TEAM_ID              your Team ID (P89M32649C)
 #   MACOS_NOTARY_APP_PASSWORD         an app-specific password for that Apple ID
 #
+# Optional, Developer ID builds only — Time Sensitive notifications:
+#   MACOS_PROVISION_PROFILE_BASE64    base64 of the "Klorn Desktop Developer ID"
+#                                     provisioning profile (App ID ai.klorn.desktop)
+#   Set: the profile is checked, embedded at Contents/embedded.provisionprofile
+#   and the app signed with Klorn.developerid.entitlements (Time Sensitive). A
+#   profile that does not authorize those entitlements fails the release: the
+#   restricted entitlement without a matching profile stops the app launching.
+#   Not set: signed exactly as before (Klorn.entitlements), with a warning.
+#
 # The build is universal (arm64 + x86_64) via KLORN_ARCHS, so it runs on Intel
 # Macs as well as Apple Silicon. A host-arch build shipped an arm64-only binary
 # that could not launch on Intel at all.
@@ -67,12 +76,23 @@ jobs:
         id: signing
         env:
           CERT: ${{ secrets.MACOS_DEVELOPER_ID_CERT_P12_BASE64 }}
+          PROFILE: ${{ secrets.MACOS_PROVISION_PROFILE_BASE64 }}
         run: |
           if [ -n "$CERT" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+            if [ -n "$PROFILE" ]; then
+              echo "profile=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "profile=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::MACOS_PROVISION_PROFILE_BASE64 not set — signing without Time Sensitive notifications (banners post at the default level; a Focus mode silences them)."
+            fi
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "profile=false" >> "$GITHUB_OUTPUT"
             echo "::warning::No Developer ID secrets set — publishing an ad-hoc (non-notarized) build."
+            if [ -n "$PROFILE" ]; then
+              echo "::warning::MACOS_PROVISION_PROFILE_BASE64 is set but ignored: an ad-hoc build cannot use a Developer ID profile."
+            fi
           fi
 
       - name: Build Klorn.app (universal)
@@ -108,29 +128,6 @@ jobs:
         # instead of shipping an app that dies on its first menu.
         run: ./Klorn.app/Contents/MacOS/KlornMac --self-check
 
-      - name: Launch the PACKAGED app and keep it alive
-        working-directory: apps/desktop-mac
-        # The self-check above never runs the real launch path: it uses a fake
-        # notification center and no bundle identity. 0.4.80106 passed it and
-        # still crashed at every launch (Swift 6 isolation trap in a
-        # UNUserNotificationCenter callback). So start the assembled app the
-        # way a user does, give it 20 s, and fail the release if it died —
-        # printing the crash report so the cause is in the log.
-        run: |
-          ./Klorn.app/Contents/MacOS/KlornMac > "$RUNNER_TEMP/launch.log" 2>&1 &
-          APP_PID=$!
-          sleep 20
-          if kill -0 "$APP_PID" 2>/dev/null; then
-            echo "app still running after 20 s — launch OK"
-            kill "$APP_PID" || true
-            exit 0
-          fi
-          wait "$APP_PID"; STATUS=$?
-          echo "::error::the packaged app exited within 20 s of launch (status $STATUS)"
-          tail -n 50 "$RUNNER_TEMP/launch.log" || true
-          ls -t ~/Library/Logs/DiagnosticReports/KlornMac* 2>/dev/null | head -1 | xargs -I{} head -c 6000 {} || true
-          exit 1
-
       - name: Import Developer ID certificate
         if: steps.signing.outputs.enabled == 'true'
         env:
@@ -149,11 +146,39 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
           rm -f "$RUNNER_TEMP/cert.p12"
 
+      - name: Embed the Developer ID provisioning profile
+        if: steps.signing.outputs.profile == 'true'
+        working-directory: apps/desktop-mac
+        env:
+          PROFILE_BASE64: ${{ secrets.MACOS_PROVISION_PROFILE_BASE64 }}
+        run: |
+          # Time Sensitive notifications are a restricted entitlement: a
+          # Developer ID app may claim it only with a matching provisioning
+          # profile at Contents/embedded.provisionprofile, or it does not launch
+          # at all (Apple TN3125). Check the profile against exactly what will
+          # be signed (Klorn.developerid.entitlements, this bundle's identifier)
+          # BEFORE signing, and fail the release on any mismatch. The profile
+          # is never printed: it is decoded in a private temp dir removed on
+          # exit, and only the copy inside the bundle remains.
+          WORK="$(mktemp -d "$RUNNER_TEMP/profile.XXXXXX")"
+          trap 'rm -rf "$WORK"' EXIT
+          printf '%s' "$PROFILE_BASE64" | base64 --decode > "$WORK/klorn.provisionprofile" \
+            || { echo "::error::MACOS_PROVISION_PROFILE_BASE64 is not valid base64"; exit 1; }
+          security cms -D -i "$WORK/klorn.provisionprofile" -o "$WORK/profile.plist" 2>/dev/null \
+            || { echo "::error::MACOS_PROVISION_PROFILE_BASE64 is not a provisioning profile (security cms -D failed)"; exit 1; }
+          # Compiled once; the post-signing check and the launch smoke reuse it.
+          xcrun swiftc -O scripts/check-provision-profile.swift -o "$RUNNER_TEMP/check-provision-profile"
+          "$RUNNER_TEMP/check-provision-profile" "$WORK/profile.plist" \
+            Klorn.developerid.entitlements Klorn.app/Contents/Info.plist \
+            || { echo "::error::the provisioning profile does not authorize Klorn.developerid.entitlements — refusing to ship an app that cannot launch"; exit 1; }
+          cp "$WORK/klorn.provisionprofile" Klorn.app/Contents/embedded.provisionprofile
+
       - name: Sign with Developer ID (hardened runtime)
         if: steps.signing.outputs.enabled == 'true'
         working-directory: apps/desktop-mac
         env:
           SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          WITH_PROFILE: ${{ steps.signing.outputs.profile }}
         run: |
           # Re-sign the whole bundle with the Developer ID over make-app.sh's
           # ad-hoc signature. --options runtime (hardened runtime) + --timestamp
@@ -162,13 +187,34 @@ jobs:
           # covers its only executable — no inside-out walk needed.
           # Klorn.entitlements grants the hardened runtime calendar access (step C6,
           # EventKit); without it macOS refuses the device-calendar upload silently.
-          codesign --force --options runtime --timestamp --entitlements Klorn.entitlements \
+          # With the provisioning profile embedded (previous step), sign with
+          # Klorn.developerid.entitlements instead: the same, plus Time Sensitive
+          # and the App ID and team the profile authorizes. The profile is in the
+          # bundle before this, so the signature seals it.
+          ENTITLEMENTS="Klorn.entitlements"
+          if [ "$WITH_PROFILE" = "true" ]; then
+            [ -f Klorn.app/Contents/embedded.provisionprofile ] \
+              || { echo "::error::profile expected but not embedded — refusing to claim Time Sensitive without it"; exit 1; }
+            ENTITLEMENTS="Klorn.developerid.entitlements"
+          fi
+          echo "signing with $ENTITLEMENTS"
+          codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
             --sign "$SIGN_IDENTITY" Klorn.app
           codesign --verify --strict --verbose=2 Klorn.app
           # Fail early if the hardened runtime flag didn't take (notarization
           # would reject it minutes later with a vaguer error).
           codesign -d --verbose=2 Klorn.app 2>&1 | grep -q "flags=.*runtime" \
             || { echo "::error::hardened runtime flag missing after signing"; exit 1; }
+
+      - name: Check the signed app's provisioning
+        if: steps.signing.outputs.profile == 'true'
+        working-directory: apps/desktop-mac
+        # The same check against what was actually signed: the entitlements in
+        # the signature, the profile sealed in the bundle, and the leaf
+        # certificate, which the profile must list (a renewed Developer ID
+        # certificate needs a regenerated profile). Fails before notarization
+        # spends minutes on an app that cannot launch.
+        run: scripts/check-signed-app.sh Klorn.app --with-profile "$RUNNER_TEMP/check-provision-profile"
 
       - name: Notarize & staple
         if: steps.signing.outputs.enabled == 'true'
@@ -204,6 +250,44 @@ jobs:
           retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
           retry spctl --assess --type execute -vvv Klorn.app
           retry stapler validate Klorn.app
+
+      - name: Launch the FINAL app and keep it alive
+        working-directory: apps/desktop-mac
+        env:
+          WITH_PROFILE: ${{ steps.signing.outputs.profile }}
+        # The self-check never runs the real launch path: it uses a fake
+        # notification center and no bundle identity. 0.4.80106 passed it and
+        # still crashed at every launch (Swift 6 isolation trap in a
+        # UNUserNotificationCenter callback). So start the app exactly as it
+        # ships — signed, notarized and stapled when the secrets are set — the
+        # way a user does, give it 20 s, and fail the release if it died,
+        # printing the crash report so the cause is in the log. A restricted
+        # entitlement (Time Sensitive) that its embedded profile does not
+        # authorize is refused at exec, so staying alive is also the proof the
+        # profile works. First, assert the provisioning the build should have.
+        run: |
+          if [ "$WITH_PROFILE" = "true" ]; then
+            scripts/check-signed-app.sh Klorn.app --with-profile "$RUNNER_TEMP/check-provision-profile" \
+              || { echo "::error::the final app's provisioning profile does not authorize its entitlements"; exit 1; }
+          else
+            scripts/check-signed-app.sh Klorn.app --without-profile \
+              || { echo "::error::the final app claims Time Sensitive (or embeds a profile) it should not"; exit 1; }
+          fi
+          ./Klorn.app/Contents/MacOS/KlornMac > "$RUNNER_TEMP/launch.log" 2>&1 &
+          APP_PID=$!
+          sleep 20
+          if kill -0 "$APP_PID" 2>/dev/null; then
+            echo "app still running after 20 s — launch OK"
+            kill "$APP_PID" || true
+            exit 0
+          fi
+          # `|| STATUS=$?`: the step shell runs with -e, so a bare `wait` on a
+          # crashed app ended the step before the crash report was printed.
+          STATUS=0; wait "$APP_PID" || STATUS=$?
+          echo "::error::the final app exited within 20 s of launch (status $STATUS)"
+          tail -n 50 "$RUNNER_TEMP/launch.log" || true
+          ls -t ~/Library/Logs/DiagnosticReports/KlornMac* 2>/dev/null | head -1 | xargs -I{} head -c 6000 {} || true
+          exit 1
 
       # Both packages are built from the app AFTER it has been signed, notarized
       # and stapled, so each carries the ticket and opens offline.

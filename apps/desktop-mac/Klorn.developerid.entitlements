@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- The Developer ID release build only (desktop-release.yml, when the
+       MACOS_PROVISION_PROFILE_BASE64 secret is set): Klorn.entitlements plus
+       the three keys its embedded provisioning profile authorizes. Claiming
+       these WITHOUT Contents/embedded.provisionprofile stops the app from
+       launching (Apple TN3125), so the ad-hoc build and a release without the
+       profile sign with Klorn.entitlements instead. The values must equal the
+       profile's ("Klorn Desktop Developer ID", App ID ai.klorn.desktop);
+       scripts/check-provision-profile.swift fails the release otherwise. -->
+
+  <!-- From Klorn.entitlements: hardened runtime calendar access (step C6). -->
+  <key>com.apple.security.personal-information.calendars</key><true/>
+
+  <!-- Restricted, authorized by the embedded profile. -->
+  <key>com.apple.application-identifier</key><string>P89M32649C.ai.klorn.desktop</string>
+  <key>com.apple.developer.team-identifier</key><string>P89M32649C</string>
+  <key>com.apple.developer.usernotifications.time-sensitive</key><true/>
+</dict>
+</plist>
