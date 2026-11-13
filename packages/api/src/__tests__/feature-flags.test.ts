@@ -51,7 +51,8 @@ describe("collectFeatureFlags", () => {
   it.each([
     "CALENDAR_COATTENDANCE_ENABLED",
     "SENT_HISTORY_BACKFILL_ENABLED",
-  ])("lists the per-user data flag %s: true for true or cohort, false otherwise", (key) => {
+    "SMART_ACTIONS_ENABLED",
+  ])("lists the cohort-capable flag %s: true for true or cohort, false otherwise", (key) => {
     const at = (value?: string) =>
       collectFeatureFlags((value === undefined ? {} : { [key]: value }) as NodeJS.ProcessEnv)
         .dynamic;

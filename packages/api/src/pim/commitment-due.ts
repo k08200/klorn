@@ -106,11 +106,28 @@ function phrasesOf(source: string, hits: Hit[]): Hit[][] {
  * ("8시").
  */
 export function findDuePhrase(text: string): string | null {
+  return findDuePhrases(text)[0] ?? null;
+}
+
+/**
+ * Every deadline phrase in the text, in order — findDuePhrase's candidates, for
+ * a reader that picks among them (an event prefers the one naming a clock time).
+ */
+export function findDuePhrases(text: string): string[] {
+  return findDueSpans(text).map((span) => span.phrase);
+}
+
+/** findDuePhrases with where each phrase sits in `text` (start and end offsets). */
+export function findDueSpans(text: string): Array<{ phrase: string; start: number; end: number }> {
   const source = text.slice(0, MAX_SCAN_CHARS);
-  const phrase = phrasesOf(source, findHits(source)).find((run) =>
-    run.some((hit) => hit.rule.standalone !== false),
-  );
-  return phrase ? source.slice(phrase[0].start, phrase[phrase.length - 1].end).trim() : null;
+  return phrasesOf(source, findHits(source))
+    .filter((run) => run.some((hit) => hit.rule.standalone !== false))
+    .map((run) => {
+      const raw = source.slice(run[0].start, run[run.length - 1].end);
+      const phrase = raw.trim();
+      const start = run[0].start + (raw.length - raw.trimStart().length);
+      return { phrase, start, end: start + phrase.length };
+    });
 }
 
 /** undefined = no such part; null = parts that disagree or cannot be read. */
@@ -147,6 +164,44 @@ function isWithinHorizon(atMs: number, refMs: number): boolean {
   return atMs >= refMs && atMs <= refMs + MAX_HORIZON_MS;
 }
 
+/** The reference moment in the user's zone; null when it is not a real instant. */
+function localNowOf(ctx: DueContext): LocalNow | null {
+  const refMs = ctx.referenceDate.getTime();
+  if (!Number.isFinite(refMs)) return null;
+  const timeZone = normalizeTimeZone(ctx.timeZone);
+  return {
+    dateKey: localDateKey(ctx.referenceDate, timeZone),
+    dow: localDayOfWeek(ctx.referenceDate, timeZone),
+    refMs,
+    timeZone,
+  };
+}
+
+/** One recognized part of a phrase, read against the reference moment. */
+export interface DuePart {
+  kind: DueRule["kind"];
+  /** The wording the part was read from, as written. */
+  text: string;
+  /** day: `YYYY-MM-DD`; time: `HH:MM`; span: an instant (ms). null: recognized, not readable. */
+  value: string | number | null;
+}
+
+/**
+ * Each part of a phrase read on its own, overlaps dropped — for a reader that
+ * needs a day and a clock time apart rather than one deadline instant (an
+ * event's start, pim/event-when.ts). Empty when nothing is recognized or the
+ * reference moment is not a real instant.
+ */
+export function duePartsOf(phrase: string, ctx: DueContext): DuePart[] {
+  const now = localNowOf(ctx);
+  if (!now) return [];
+  return findHits(phrase.slice(0, MAX_PHRASE_CHARS)).map(({ rule, match }) => ({
+    kind: rule.kind,
+    text: match[0],
+    value: rule.kind === "time" ? rule.resolve(match) : rule.resolve(match, now),
+  }));
+}
+
 /** Read deadline wording against when it was written, in the user's zone. */
 export function resolveDueText(text: string, ctx: DueContext): DueResolution {
   const phrase = text.trim();
@@ -155,17 +210,10 @@ export function resolveDueText(text: string, ctx: DueContext): DueResolution {
   if (phrase.length > MAX_PHRASE_CHARS) return AMBIGUOUS;
   const hits = findHits(phrase);
   if (hits.length === 0) return UNRECOGNIZED;
-  const refMs = ctx.referenceDate.getTime();
-  if (!Number.isFinite(refMs)) return AMBIGUOUS;
-  const timeZone = normalizeTimeZone(ctx.timeZone);
-  const now: LocalNow = {
-    dateKey: localDateKey(ctx.referenceDate, timeZone),
-    dow: localDayOfWeek(ctx.referenceDate, timeZone),
-    refMs,
-    timeZone,
-  };
+  const now = localNowOf(ctx);
+  if (!now) return AMBIGUOUS;
   const atMs = combine(hits, now);
-  if (atMs === null || !isWithinHorizon(atMs, refMs)) return AMBIGUOUS;
+  if (atMs === null || !isWithinHorizon(atMs, now.refMs)) return AMBIGUOUS;
   return { status: "resolved", dueAt: new Date(atMs) };
 }
 

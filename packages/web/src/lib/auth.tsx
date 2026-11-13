@@ -59,6 +59,10 @@ interface User {
   // Server-driven client flag: the API's TEAM_MODE_ENABLED (P12). True offers
   // "When is everyone free?" to a user with a saved team. Undefined = off.
   teamMode?: boolean;
+  // Server-driven client flag: the API's SMART_ACTIONS_ENABLED, cohort-aware.
+  // True shows "Draft reply" / "Add to calendar" on the briefing picks and in
+  // the mail reader. Undefined (older API) = off.
+  smartActions?: boolean;
 }
 
 interface AuthContextType {

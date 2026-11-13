@@ -180,6 +180,8 @@ export interface CalendarCreateInput {
   readonly timeZone: string;
   /** Invitees; the provider emails them when non-empty. */
   readonly attendees?: readonly string[];
+  /** One popup reminder this many minutes before the start; the calendar's default when absent. */
+  readonly reminderMinutes?: number;
 }
 
 /** Both or neither of startTime/endTime - a provider needs a consistent pair. */

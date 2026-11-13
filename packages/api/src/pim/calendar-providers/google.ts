@@ -294,6 +294,14 @@ async function createEventVia(
         timeZone: input.timeZone,
       }),
       ...(attendees.length > 0 ? { attendees: attendees.map((email) => ({ email })) } : {}),
+      ...(input.reminderMinutes !== undefined
+        ? {
+            reminders: {
+              useDefault: false,
+              overrides: [{ method: "popup", minutes: input.reminderMinutes }],
+            },
+          }
+        : {}),
     },
     // Invitations go out only when the human-approved draft carries
     // attendees (team mode P2) - the assistant's tool path never passes them.

@@ -3,6 +3,7 @@
  *
  * Provides local calendar events stored in DB + optional Google Calendar sync.
  */
+import type { CalendarEvent } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
@@ -82,6 +83,83 @@ function parseIso(value: unknown): Date | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export interface UserCalendarEventInput {
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  meetingLink?: string;
+  color?: string;
+  allDay: boolean;
+  /** Already validated invitees; the provider emails them when non-empty. */
+  attendees: string[];
+  /** One popup reminder this many minutes before; only a synced Google event carries it. */
+  reminderMinutes?: number;
+}
+
+/**
+ * Write one event the user approved: to Google Calendar when connected, then
+ * the local row (GOOGLE with the id Google returned, LOCAL without), then its
+ * attention mirror. The single create path for POST /api/calendar and the
+ * smart action's "Add to calendar" (routes/smart-actions.ts) — both run only
+ * after the user tapped Save on a confirm card.
+ */
+export async function createUserCalendarEvent(
+  userId: string,
+  input: UserCalendarEventInput,
+): Promise<{ event: CalendarEvent; googleId: string | null }> {
+  const { title, description, startTime, endTime, location, meetingLink, color } = input;
+  // Try to sync to Google Calendar
+  let googleId: string | null = null;
+  try {
+    const result = await googleCreateEvent(
+      userId,
+      title,
+      startTime,
+      endTime,
+      description,
+      location,
+      input.attendees,
+      input.allDay,
+      input.reminderMinutes !== undefined ? { reminderMinutes: input.reminderMinutes } : {},
+    );
+    if ("eventId" in result && result.eventId) {
+      googleId = result.eventId;
+    }
+  } catch (err) {
+    const gaxiosErr = err as {
+      response?: { status?: number; data?: { error?: { message?: string } } };
+      message?: string;
+    };
+    console.error(
+      `[CALENDAR] Google sync on create failed (HTTP ${gaxiosErr.response?.status}):`,
+      gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
+    );
+  }
+
+  const event = await prisma.calendarEvent.create({
+    data: {
+      userId,
+      title,
+      description: description || null,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      location: location || null,
+      // Shown as a link and handed to the model: https only, else none.
+      meetingLink: safeMeetingLink(meetingLink),
+      color: color || null,
+      allDay: input.allDay,
+      googleId,
+      // C1 dual-write: a Google id makes the row GOOGLE, none makes it LOCAL.
+      // Never taken from the request body.
+      ...eventSourceForGoogleId(googleId),
+    },
+  });
+  await upsertAttentionForCalendarEvent(event);
+  return { event, googleId };
 }
 
 export async function calendarRoutes(app: FastifyInstance) {
@@ -212,53 +290,17 @@ export async function calendarRoutes(app: FastifyInstance) {
         ].slice(0, 20)
       : [];
 
-    // Try to sync to Google Calendar
-    let googleId: string | null = null;
-    try {
-      const result = await googleCreateEvent(
-        userId,
-        title,
-        startTime,
-        endTime,
-        description,
-        location,
-        attendees,
-        allDay === true,
-      );
-      if ("eventId" in result && result.eventId) {
-        googleId = result.eventId;
-      }
-    } catch (err) {
-      const gaxiosErr = err as {
-        response?: { status?: number; data?: { error?: { message?: string } } };
-        message?: string;
-      };
-      console.error(
-        `[CALENDAR] Google sync on create failed (HTTP ${gaxiosErr.response?.status}):`,
-        gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
-      );
-    }
-
-    const event = await prisma.calendarEvent.create({
-      data: {
-        userId,
-        title,
-        description: description || null,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        location: location || null,
-        // Shown as a link and handed to the model: https only, else none.
-        meetingLink: safeMeetingLink(meetingLink),
-        color: color || null,
-        allDay: allDay || false,
-        googleId,
-        // C1 dual-write: a Google id makes the row GOOGLE, none makes it LOCAL.
-        // Never taken from the request body.
-        ...eventSourceForGoogleId(googleId),
-      },
+    const { event } = await createUserCalendarEvent(userId, {
+      title,
+      description,
+      startTime,
+      endTime,
+      location,
+      meetingLink,
+      color,
+      allDay: allDay === true,
+      attendees,
     });
-    await upsertAttentionForCalendarEvent(event);
-
     return event;
   });
 
