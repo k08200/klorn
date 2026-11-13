@@ -70,45 +70,74 @@ const securityHeaders = [
     : []),
 ];
 
+// Static export for Cloudflare Pages (docs/deploy/cloudflare-pages.md). A
+// plain build is the Next server build Vercel deploys; KLORN_STATIC_EXPORT=1
+// (exactly "1") writes a static site to out/ instead. A static site cannot
+// run headers() or redirects(), so public/_headers and public/_redirects
+// carry them there, and scripts/cloudflare-pages.test.mjs keeps both files
+// identical to the rules below.
+const staticExport = process.env.KLORN_STATIC_EXPORT === "1";
+
 // Dev-only routes are named `page.dev.tsx` (e.g. app/dev/primitives). Only
 // non-production builds treat `dev.tsx` as a page extension, so in production
 // the route does not exist at all — a real 404 and no chunk in the build.
+//
+// Dynamic routes (`[id]`) have one page per build mode, picked the same way:
+// `page.dynamic.tsx` renders per request on the Next server, exactly as
+// before; `page.static.tsx` prerenders the single shell the static export
+// serves for every id (public/_redirects rewrites to it, and the page reads
+// the id from the URL — src/lib/route-param.ts).
 const DEFAULT_PAGE_EXTENSIONS = ["tsx", "ts", "jsx", "js"];
-const pageExtensions =
-  process.env.NODE_ENV === "production"
-    ? DEFAULT_PAGE_EXTENSIONS
-    : ["dev.tsx", ...DEFAULT_PAGE_EXTENSIONS];
+const pageExtensions = [
+  ...(process.env.NODE_ENV === "production" ? [] : ["dev.tsx"]),
+  staticExport ? "static.tsx" : "dynamic.tsx",
+  ...DEFAULT_PAGE_EXTENSIONS,
+];
+
+async function headers() {
+  // Authenticated app pages must not be cached by proxies/shared browsers —
+  // even though the HTML itself carries no PII (data is fetched client-side),
+  // CASA/DAST flags any cacheable authenticated route. Static assets keep
+  // their own immutable caching (this only matches these page prefixes).
+  const noStore = [{ key: "Cache-Control", value: "private, no-store" }];
+  const authedPrefixes =
+    "inbox|briefing|calendar|chat|email|graph|settings|billing|admin|onboarding|playground";
+  // Hashed build assets never change under the same URL. Next and Vercel
+  // already send this value for /_next/static; it is spelled out so the
+  // static export's _headers carries it too (Cloudflare Pages otherwise
+  // serves every asset with max-age=0 and the browser revalidates each one).
+  const immutable = [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }];
+  return [
+    { source: "/(.*)", headers: securityHeaders },
+    { source: `/:path(${authedPrefixes})`, headers: noStore },
+    { source: `/:path(${authedPrefixes})/:rest*`, headers: noStore },
+    // The static export serves those pages' RSC payload as /inbox.txt etc.
+    // (the Next server answers `/inbox` + `RSC: 1`, covered above).
+    { source: `/:path(${authedPrefixes}).txt`, headers: noStore },
+    { source: "/_next/static/:path*", headers: immutable },
+  ];
+}
+
+async function redirects() {
+  return [
+    { source: "/dashboard", destination: "/inbox", permanent: false },
+    { source: "/tasks", destination: "/inbox", permanent: false },
+    { source: "/notes", destination: "/files", permanent: false },
+    { source: "/contacts", destination: "/email/candidates", permanent: false },
+    { source: "/reminders", destination: "/inbox", permanent: false },
+    { source: "/skills", destination: "/settings/memory", permanent: false },
+    { source: "/notifications", destination: "/briefing", permanent: false },
+    { source: "/workspace", destination: "/files", permanent: false },
+  ];
+}
 
 const nextConfig: NextConfig = {
   pageExtensions,
-  distDir: process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
+  // An export writes its site into distDir, so the static build gets out/ and
+  // never overwrites the server build's .next.
+  distDir: staticExport ? "out" : process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
   outputFileTracingRoot: path.join(import.meta.dirname, "../../"),
-  async headers() {
-    // Authenticated app pages must not be cached by proxies/shared browsers —
-    // even though the HTML itself carries no PII (data is fetched client-side),
-    // CASA/DAST flags any cacheable authenticated route. Static assets keep
-    // their own immutable caching (this only matches these page prefixes).
-    const noStore = [{ key: "Cache-Control", value: "private, no-store" }];
-    const authedPrefixes =
-      "inbox|briefing|calendar|chat|email|graph|settings|billing|admin|onboarding|playground";
-    return [
-      { source: "/(.*)", headers: securityHeaders },
-      { source: `/:path(${authedPrefixes})`, headers: noStore },
-      { source: `/:path(${authedPrefixes})/:rest*`, headers: noStore },
-    ];
-  },
-  async redirects() {
-    return [
-      { source: "/dashboard", destination: "/inbox", permanent: false },
-      { source: "/tasks", destination: "/inbox", permanent: false },
-      { source: "/notes", destination: "/files", permanent: false },
-      { source: "/contacts", destination: "/email/candidates", permanent: false },
-      { source: "/reminders", destination: "/inbox", permanent: false },
-      { source: "/skills", destination: "/settings/memory", permanent: false },
-      { source: "/notifications", destination: "/briefing", permanent: false },
-      { source: "/workspace", destination: "/files", permanent: false },
-    ];
-  },
+  ...(staticExport ? { output: "export" as const } : { headers, redirects }),
   allowedDevOrigins: [
     "127.0.0.1",
     "127.0.0.1:8001",

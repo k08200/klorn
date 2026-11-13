@@ -8,6 +8,7 @@
     "prebuild": "node scripts/ensure-next-dev-manifests.mjs",
     "dev": "NEXT_DEV_DIST=1 next dev --port 8001",
     "build": "next build || (node scripts/ensure-next-dev-manifests.mjs && next build)",
+    "build:static": "KLORN_STATIC_EXPORT=1 next build && node scripts/check-static-export.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "next lint"

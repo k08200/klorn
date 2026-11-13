@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../../components/auth-guard";
 import ErrorAlert from "../../../../components/ui/error-alert";
@@ -9,6 +8,7 @@ import LoadingState from "../../../../components/ui/loading-state";
 import { apiFetch } from "../../../../lib/api";
 import { useT } from "../../../../lib/i18n";
 import { captureClientError } from "../../../../lib/sentry";
+import { useRouteParam } from "../../../../lib/use-route-param";
 
 type CandidateStatus =
   | "NEEDS_ANALYSIS"
@@ -91,8 +91,7 @@ export default function CandidateDetailPage() {
 function CandidateDetailView() {
   const { t } = useT();
   const STATUSES = buildStatuses(t);
-  const params = useParams<{ emailId: string }>();
-  const emailId = params?.emailId;
+  const emailId = useRouteParam("emailId", "/email/candidates/");
   const [email, setEmail] = useState<EmailDetail | null>(null);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);

@@ -1,0 +1,106 @@
+# Response headers for the static export on Cloudflare Pages
+# (docs/deploy/cloudflare-pages.md). This is next.config.ts headers() for a
+# production build, which a static site cannot run; it is the header set the
+# CASA Tier 2 DAST of app.klorn.ai was assessed against.
+#
+# DO NOT edit one side alone: change next.config.ts and this file together.
+# scripts/cloudflare-pages.test.mjs (CI) fails on any difference, and
+# scripts/check-static-export.mjs fails a static build whose own environment
+# (e.g. another NEXT_PUBLIC_API_URL) would need a different CSP.
+#
+# Syntax: https://developers.cloudflare.com/pages/configuration/headers/
+# (max 100 rules, 2,000 characters per line; "! Name" removes a header).
+# next.config.ts suppresses X-Powered-By with an empty value; the Cloudflare
+# equivalent is the detach below.
+
+# Every response.
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Access-Control-Allow-Origin: https://app.klorn.ai
+  Vary: Origin
+  ! X-Powered-By
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://*.paddle.com; style-src 'self' 'unsafe-inline' https://*.paddle.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://klorn-api.onrender.com wss://klorn-api.onrender.com https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.paddle.com; media-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src https://*.paddle.com https://*.paddle.io; frame-ancestors 'none'; upgrade-insecure-requests
+
+# Signed-in pages: never cached by a proxy or a shared browser. Next matches
+# /:path(inbox|...) and /:path(inbox|...)/:rest*; a Cloudflare splat does not
+# match the bare prefix, so each prefix has both forms.
+/inbox
+  Cache-Control: private, no-store
+/briefing
+  Cache-Control: private, no-store
+/calendar
+  Cache-Control: private, no-store
+/chat
+  Cache-Control: private, no-store
+/email
+  Cache-Control: private, no-store
+/graph
+  Cache-Control: private, no-store
+/settings
+  Cache-Control: private, no-store
+/billing
+  Cache-Control: private, no-store
+/admin
+  Cache-Control: private, no-store
+/onboarding
+  Cache-Control: private, no-store
+/playground
+  Cache-Control: private, no-store
+/inbox/*
+  Cache-Control: private, no-store
+/briefing/*
+  Cache-Control: private, no-store
+/calendar/*
+  Cache-Control: private, no-store
+/chat/*
+  Cache-Control: private, no-store
+/email/*
+  Cache-Control: private, no-store
+/graph/*
+  Cache-Control: private, no-store
+/settings/*
+  Cache-Control: private, no-store
+/billing/*
+  Cache-Control: private, no-store
+/admin/*
+  Cache-Control: private, no-store
+/onboarding/*
+  Cache-Control: private, no-store
+/playground/*
+  Cache-Control: private, no-store
+
+# Their RSC payloads on the static export (the Next server sends the same
+# payload for /inbox + RSC: 1, which the rules above already cover).
+/inbox.txt
+  Cache-Control: private, no-store
+/briefing.txt
+  Cache-Control: private, no-store
+/calendar.txt
+  Cache-Control: private, no-store
+/chat.txt
+  Cache-Control: private, no-store
+/email.txt
+  Cache-Control: private, no-store
+/graph.txt
+  Cache-Control: private, no-store
+/settings.txt
+  Cache-Control: private, no-store
+/billing.txt
+  Cache-Control: private, no-store
+/admin.txt
+  Cache-Control: private, no-store
+/onboarding.txt
+  Cache-Control: private, no-store
+/playground.txt
+  Cache-Control: private, no-store
+
+# Hashed build assets: the long-lived cache Next and Vercel already send.
+# Next's /_next/static/:path* is zero or more segments, hence both forms.
+/_next/static
+  Cache-Control: public, max-age=31536000, immutable
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
