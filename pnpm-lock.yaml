@@ -9,6 +9,7 @@ overrides:
   '@opentelemetry/core': '>=2.8.0 <3'
   axios: '>=1.20.0 <2'
   body-parser: '>=2.4.0 <3'
+  brace-expansion@^1.0.0: '>=1.1.21 <2'
   brace-expansion@^2.0.0: '>=2.1.7 <3'
   brace-expansion@^5.0.0: '>=5.0.12 <6'
   deepmerge-ts: '>=8.0.0 <9'
@@ -1863,8 +1864,8 @@ packages:
     resolution: {integrity: sha512-Ifk1KcLrxaGt1occQagQNFNNOqRt1LFuehEnHHzB8Z6cRgIxRU1TBaiIsUiCdA+gy5PL7Y1IX31DNKkRmxtXjQ==}
     engines: {node: '>=18'}
 
-  brace-expansion@1.1.12:
-    resolution: {integrity: sha512-9T9UjW3r0UW5c1Q7GTwllptXwhvYmEzFhzMfZ9H7FQWt+uZePjZPjBP/W1ZEyZ1twGWom5/56TF4lPcqjnDHcg==}
+  brace-expansion@1.1.22:
+    resolution: {integrity: sha512-CKLDTuSsN0+r1ThM0WkzzBI7dnPI6xEGfa/JnVYIK9JNBA1N1NyPwXVHor//NKD/y3sDxp764sZdLhFK7pH8XQ==}
 
   brace-expansion@5.0.13:
     resolution: {integrity: sha512-Vh3dmFbc4wZeox7M9I/0L9GfFd83Su4+yCck/OF9Gi/P/dAHn0RT7X4K9R7gMNMhDck3DvhR6QXsnQdjjgwNvQ==}
@@ -5695,7 +5696,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@1.1.12:
+  brace-expansion@1.1.22:
     dependencies:
       balanced-match: 1.0.2
       concat-map: 0.0.1
@@ -7330,7 +7331,7 @@ snapshots:
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 1.1.12
+      brace-expansion: 1.1.22
 
   minimist@1.2.8: {}
 
