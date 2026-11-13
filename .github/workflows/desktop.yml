@@ -16,14 +16,14 @@ on:
     paths:
       - "apps/desktop-mac/**"
       - ".github/workflows/desktop.yml"
-      # The self-check pins the release's signing order (SelfCheckTimeSensitive).
+      # test-check-provision-profile.sh checks the release's signing order.
       - ".github/workflows/desktop-release.yml"
   pull_request:
     branches: [main]
     paths:
       - "apps/desktop-mac/**"
       - ".github/workflows/desktop.yml"
-      # The self-check pins the release's signing order (SelfCheckTimeSensitive).
+      # test-check-provision-profile.sh checks the release's signing order.
       - ".github/workflows/desktop-release.yml"
 
 concurrency:

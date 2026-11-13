@@ -179,5 +179,34 @@ expect_app 1 "is embedded in a build that should carry none" \
 expect_app 1 "is not a provisioning profile" "an embedded file that is not a profile fails" \
   "$(dummy_app garbage "$ENTS" "$WORK/garbage.plist")" --with-profile "$CHECK"
 
+# The release workflow's order: the profile is embedded before the app is
+# signed (the signature must seal it), the Developer ID entitlements are used
+# only then, and the launch smoke checks the final app after notarization.
+WF=../../.github/workflows/desktop-release.yml
+line() { grep -n -F -- "$1" "$WF" | head -1 | cut -d: -f1; }
+EMBED=$(line "- name: Embed the Developer ID provisioning profile")
+SIGN=$(line "- name: Sign with Developer ID (hardened runtime)")
+CHECKED=$(line "- name: Check the signed app's provisioning")
+NOTARIZE=$(line "- name: Notarize & staple")
+SMOKE=$(line "- name: Launch the FINAL app and keep it alive")
+GATEKEEPER=$(line "- name: Verify Gatekeeper acceptance")
+ZIP=$(line "- name: Zip for the in-app updater")
+echo "desktop-release.yml:"
+if [ -n "$EMBED" ] && [ -n "$SIGN" ] && [ -n "$CHECKED" ] && [ -n "$NOTARIZE" ] \
+   && [ "$EMBED" -lt "$SIGN" ] && [ "$SIGN" -lt "$CHECKED" ] && [ "$CHECKED" -lt "$NOTARIZE" ] \
+   && grep -qF 'ENTITLEMENTS="Klorn.developerid.entitlements"' "$WF" \
+   && grep -qF 'Klorn.app/Contents/embedded.provisionprofile' "$WF"; then
+  PASS=$((PASS + 1)); echo "  ✓ embed, then sign with the Developer ID entitlements, then check, then notarize"
+else
+  FAILED=$((FAILED + 1)); echo "  ✗ embed, then sign with the Developer ID entitlements, then check, then notarize"
+fi
+if [ -n "$SMOKE" ] && [ -n "$GATEKEEPER" ] && [ -n "$ZIP" ] \
+   && [ "$GATEKEEPER" -lt "$SMOKE" ] && [ "$SMOKE" -lt "$ZIP" ] \
+   && [ "$(grep -c 'KlornMac > "$RUNNER_TEMP/launch.log"' "$WF")" = 1 ]; then
+  PASS=$((PASS + 1)); echo "  ✓ the one launch smoke runs on the final app: after Gatekeeper, before packaging"
+else
+  FAILED=$((FAILED + 1)); echo "  ✗ the one launch smoke runs on the final app: after Gatekeeper, before packaging"
+fi
+
 echo "$PASS passed, $FAILED failed"
 [ "$FAILED" -eq 0 ]

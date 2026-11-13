@@ -91,11 +91,12 @@ func timeSensitiveSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           && !TimeSensitiveEntitlement.claimed(nil)
           && !TimeSensitiveEntitlement.claimed("true" as CFString)
           && !TimeSensitiveEntitlement.claimed(1 as CFNumber))
-    // Read through Security's SecTask, synchronously, outside any actor: the
-    // value depends on how this binary was signed, so only the read is checked.
+    // Read through Security's SecTask, synchronously, outside any actor. The
+    // value depends on how this binary was signed (false for `swift run` and
+    // the ad-hoc bundle the release self-checks), so it is not asserted: the
+    // check is that the read completes, here and through the packaged app.
     let claimedHere = TimeSensitiveEntitlement.isClaimed
-    check("reading this build's own signature works without a notification center (here: \(claimedHere))",
-          claimedHere == TimeSensitiveEntitlement.isClaimed)
+    check("reading this build's own signature completes without a trap (here: \(claimedHere))", true)
 
     // MARK: the two entitlements files
 
@@ -119,15 +120,5 @@ func timeSensitiveSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           Set(developerID.keys) == Set(base.keys).union(profileKeys.keys)
           && base.allSatisfy { key, value in (developerID[key] as AnyObject?)?.isEqual(value) == true }
           && profileKeys.allSatisfy { key, value in (developerID[key] as AnyObject?)?.isEqual(value) == true })
-    let workflow = (try? String(
-        contentsOf: packageDir.deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent(".github/workflows/desktop-release.yml"),
-        encoding: .utf8)) ?? ""
-    let embed = workflow.range(of: "- name: Embed the Developer ID provisioning profile")
-    let sign = workflow.range(of: "- name: Sign with Developer ID (hardened runtime)")
-    check("the release embeds the profile before it signs, and signs with the Developer ID file only then",
-          embed != nil && sign != nil && embed!.lowerBound < sign!.lowerBound
-          && workflow.contains(#"ENTITLEMENTS="Klorn.developerid.entitlements""#)
-          && workflow.contains("Klorn.app/Contents/embedded.provisionprofile"))
     return results
 }

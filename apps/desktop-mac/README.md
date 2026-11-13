@@ -488,7 +488,8 @@ What the release does (`desktop-release.yml`), Developer ID builds only:
 
 The profile is not secret once shipped (it is inside every downloaded app),
 but the workflow never prints it. `scripts/test-check-provision-profile.sh`
-(run by `desktop.yml`) tests both scripts against fabricated profiles.
+(run by `desktop.yml`) tests both scripts against fabricated profiles, and the
+release's step order (embed → sign → check → notarize → launch smoke).
 
 **Renewal.** The profile expires in 2044, but it is bound to the Developer ID
 Application certificate it was generated with, and **that certificate
