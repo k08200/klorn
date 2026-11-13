@@ -2127,6 +2127,36 @@ const ja: Record<string, string> = {
   "linkComplete.continue": "続ける",
   // Component strings moved out of JSX (hard-coded string sweep, 2026-10-16).
   "common.reconnect": "再接続",
+  "accountHealth.title": "アカウントの状態",
+  "accountHealth.desc":
+    "接続中のすべてのメールアカウントについて、同期できているか、できていない場合に何をすべきかを表示します。",
+  "accountHealth.empty": "メールアカウントはまだ接続されていません。",
+  "accountHealth.loadFailed": "アカウントの状態を読み込めませんでした。",
+  "accountHealth.primary": "メイン",
+  "accountHealth.status.ok": "同期済み",
+  "accountHealth.status.pending": "最初の同期を待っています",
+  "accountHealth.status.error": "同期に失敗しました",
+  "accountHealth.status.reconnect": "再接続が必要です",
+  "accountHealth.sync.never": "まだ同期していません",
+  "accountHealth.sync.justNow": "たった今同期しました",
+  "accountHealth.sync.minutes": "{n}分前に同期",
+  "accountHealth.sync.hours": "{n}時間前に同期",
+  "accountHealth.sync.days": "{n}日前に同期",
+  "accountHealth.sync.direct": "メールを直接受信",
+  "accountHealth.error.auth":
+    "プロバイダが保存済みのサインインを拒否しました。再接続すると同期が再開されます。",
+  "accountHealth.error.authApple":
+    "Apple が App 用パスワードを受け付けなくなりました。Apple アカウントのパスワードを変更するとこうなります。新しい App 用パスワードを作成して再接続してください。",
+  "accountHealth.error.unreachable":
+    "メールサーバーに接続できませんでした。Klorn は再試行を続けます。",
+  "accountHealth.error.throttled":
+    "プロバイダから速度を落とすよう求められました。まもなく再試行します。",
+  "accountHealth.error.error": "前回の同期に失敗しました。Klorn は再試行を続けます。",
+  "accountHealth.action.reconnect": "再接続",
+  "accountHealth.reconnect.passwordLabel": "新しい App 用パスワード",
+  "accountHealth.reconnect.submit": "再接続",
+  "accountHealth.reconnect.failed":
+    "再接続できませんでした。App 用パスワードを確認して、もう一度お試しください。",
   "common.close": "閉じる",
   "common.dismiss": "閉じる",
   "common.tryAgain": "再試行",

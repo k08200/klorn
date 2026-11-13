@@ -830,6 +830,19 @@ export async function resolveMailClient(
 }
 
 /**
+ * The reconnect alert for a linked inbox whose `needsReconnect` flag the caller
+ * has just set itself (the IMAP poll, which flags conditionally on the stored
+ * password). Same once-a-day dedupe and best-effort contract as the mark-* paths.
+ */
+export async function notifyLinkedInboxReconnect(
+  userId: string,
+  linkedInboxAccountId: string,
+  provider: ReconnectProvider,
+): Promise<void> {
+  await notifyGmailReconnect(userId, linkedInboxAccountId, provider);
+}
+
+/**
  * Durably flag ONE linked inbox as needing a re-link (its token is revoked or
  * undecryptable). Scoped by {id, userId} so it can only touch the caller's own
  * linked account. Cleared on a successful token refresh or re-link. This is what

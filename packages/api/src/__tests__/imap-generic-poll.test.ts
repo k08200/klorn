@@ -150,7 +150,16 @@ describe("polling a generic IMAP row", () => {
 
     expect(fake.connect).not.toHaveBeenCalled();
     expect(fake.getMailboxLock).not.toHaveBeenCalled();
-    expect(fake.updateMany).not.toHaveBeenCalled(); // "synced just now" is not stamped
+    expect(stampCalls()).toHaveLength(0); // "synced just now" is not stamped
+    // Settings says why: the host is not reachable (a code, never the server's text).
+    expect(fake.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "row-1",
+        userId: "u1",
+        OR: [{ syncErrorCode: null }, { syncErrorCode: { not: "unreachable" } }],
+      },
+      data: { syncErrorCode: "unreachable", syncErrorAt: expect.any(Date) },
+    });
     expect(result).toMatchObject({ fetched: 0, inserted: 0, errors: 1 });
     // Reported once, by the account fan-out (not also by the sync: that was a duplicate).
     const scopes = fake.captureError.mock.calls.map(
@@ -228,7 +237,7 @@ describe("a generic poll whose login was rejected", () => {
     expect(result).toMatchObject({ errors: 1 });
     // Conditional on the credential the poll STARTED with: a relink since is not flagged.
     expect(fake.updateMany).toHaveBeenCalledWith({
-      where: { id: "row-1", userId: "u1", imapPasswordCipher: "v2:cipher" },
+      where: { id: "row-1", userId: "u1", imapPasswordCipher: "v2:cipher", needsReconnect: false },
       data: { needsReconnect: true },
     });
     expect(stampCalls()).toHaveLength(0);
@@ -402,7 +411,7 @@ describe("generic poll failures reach Sentry once per account and kind", () => {
   });
 });
 
-describe("Naver and iCloud polls are unchanged", () => {
+describe("Naver and iCloud: a revoked app password says reconnect after one poll", () => {
   const naverRow = () =>
     row({
       id: "row-n",
@@ -411,33 +420,40 @@ describe("Naver and iCloud polls are unchanged", () => {
       imapPasswordCipher: "v2:n",
     });
 
-  it("a rejected login is not flagged, not cooled down, and polled again; reported by both layers as before", async () => {
+  it("a rejected login is flagged at once, cooled down, recorded, and reported once", async () => {
     fake.findMany.mockResolvedValue([naverRow()]);
     fake.connect.mockRejectedValue(authRejected());
 
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
 
-    expect(flagCalls()).toHaveLength(0);
-    expect(isCredentialCoolingDown("row-n:v2:n")).toBe(false);
-    expect(fake.connect).toHaveBeenCalledTimes(2);
-    expect(captureScopes()).toEqual([
-      "naver-imap.sync",
-      "naver-imap.account-sync",
-      "naver-imap.sync",
-      "naver-imap.account-sync",
+    expect(flagCalls()).toEqual([
+      [
+        {
+          where: { id: "row-n", userId: "u1", imapPasswordCipher: "v2:n", needsReconnect: false },
+          data: { needsReconnect: true },
+        },
+      ],
     ]);
-    for (const call of fake.captureError.mock.calls) {
-      expect((call[1] as { extra: Record<string, unknown> }).extra).not.toHaveProperty(
-        "failureKind",
-      );
-    }
+    expect(fake.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { syncErrorCode: "auth", syncErrorAt: expect.any(Date) } }),
+    );
+    // The rejected password is not sent again on the next tick (shared 15-minute cooldown).
+    expect(isCredentialCoolingDown("row-n:v2:n")).toBe(true);
+    expect(fake.connect).toHaveBeenCalledTimes(1);
+    expect(captureScopes()).toEqual(["naver-imap.sync", "naver-imap.account-sync"]);
   });
 
-  it("a row flagged needsReconnect is still polled (Naver's behaviour is not changed here)", async () => {
+  it("a flagged row is still polled once the cooldown is over, and a success clears the flag", async () => {
     fake.findMany.mockResolvedValue([{ ...naverRow(), needsReconnect: true }]);
+    fake.getMailboxLock.mockResolvedValue({ release: fake.release });
+
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
+
     expect(fake.connect).toHaveBeenCalledTimes(1);
+    expect(stampCalls()[0]?.[0]).toMatchObject({
+      data: { needsReconnect: false, syncErrorCode: null },
+    });
   });
 });
 

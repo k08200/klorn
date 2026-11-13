@@ -60,7 +60,9 @@ beforeEach(() => {
 });
 
 describe("fetchStoredAttachmentBytes → IMAP", () => {
-  beforeEach(() => findFirst.mockResolvedValue({ provider: "ICLOUD" }));
+  beforeEach(() => {
+    findFirst.mockResolvedValue({ provider: "ICLOUD" });
+  });
 
   it("downloads BODY[section] of the row's UID, scoped to the caller's account", async () => {
     imapClient.download.mockResolvedValue({ content: Readable.from([Buffer.from("%PDF")]) });

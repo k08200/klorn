@@ -177,6 +177,8 @@ describe("syncOutlookAccountsForUser", () => {
       where: { id: "row-1", userId: "u1" },
       data: {
         lastSyncedAt: expect.any(Date),
+        syncErrorCode: null,
+        syncErrorAt: null,
         historyId: "https://graph.microsoft.com/v1.0/me/delta?token=new",
       },
     });

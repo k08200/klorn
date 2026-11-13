@@ -10,6 +10,7 @@
 // truth with the web inbox) — annotating the handlers below means a response
 // change that would desync server and client fails to compile.
 import type {
+  AccountHealthResponse,
   EmailListResponse,
   EmailThreadListResponse,
   InboxesResponse,
@@ -56,6 +57,7 @@ import {
 } from "../learning/trust-score.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
+import { listAccountHealth } from "../mail/account-health.js";
 import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
 import { extractEmailAddress } from "../mail/email-address.js";
@@ -1608,6 +1610,14 @@ export async function emailRoutes(app: FastifyInstance) {
   // unknown value (a rollback, a manual edit) reads as unset, never a crash.
   const asPurpose = (value: string | null | undefined): InboxPurpose | null =>
     value === "work" || value === "personal" || value === "mixed" ? value : null;
+
+  // GET /api/email/accounts/health — Settings -> Accounts -> Account health: every
+  // connected mail account (all providers, the Klorn address included) with its
+  // status, last successful sync and the action needed. Self-scoped, no secrets.
+  app.get(
+    "/accounts/health",
+    async (request): Promise<AccountHealthResponse> => listAccountHealth(getUserId(request)),
+  );
 
   app.get("/inboxes", async (request): Promise<InboxesResponse> => {
     const uid = getUserId(request);

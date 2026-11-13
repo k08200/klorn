@@ -221,8 +221,15 @@ async function saveGenericAccount(cfg: ImapProviderConfig, args: SaveArgs): Prom
     if (current) {
       const updated = await prisma.linkedInboxAccount.updateMany({
         where: { id: current.id, userId, provider: cfg.provider, imapHost: current.imapHost },
-        // A successful re-verify clears the reconnect prompt.
-        data: { imapHost, imapPasswordCipher, needsReconnect: false },
+        // A successful re-verify clears the reconnect prompt, and the failure
+        // recorded against the old password.
+        data: {
+          imapHost,
+          imapPasswordCipher,
+          needsReconnect: false,
+          syncErrorCode: null,
+          syncErrorAt: null,
+        },
       });
       return updated.count === 1 ? { ok: true, id: current.id } : { ok: false };
     }
@@ -255,8 +262,11 @@ async function saveFixedAccount(cfg: ImapProviderConfig, args: SaveArgs): Promis
     update: {
       imapHost,
       imapPasswordCipher: encryptToken(password),
-      // A successful re-verify clears the reconnect prompt.
+      // A successful re-verify clears the reconnect prompt, and the failure
+      // recorded against the old password.
       needsReconnect: false,
+      syncErrorCode: null,
+      syncErrorAt: null,
     },
   });
   return { ok: true, id: saved?.id };
@@ -313,6 +323,8 @@ export function imapConnectRoutes(
           createdAt: true,
           lastSyncedAt: true,
           needsReconnect: true,
+          syncErrorCode: true,
+          syncErrorAt: true,
         },
         orderBy: { createdAt: "asc" },
       });
@@ -333,6 +345,10 @@ export function imapConnectRoutes(
           connectedAt: r.createdAt.toISOString(),
           lastSyncedAt: r.lastSyncedAt?.toISOString() ?? null,
           needsReconnect: r.needsReconnect,
+          // Why the last poll failed ("auth" | "unreachable" | "error"), null after a
+          // successful one; the client words it (mail/sync-error-code.ts).
+          syncErrorCode: r.syncErrorCode,
+          syncErrorAt: r.syncErrorAt?.toISOString() ?? null,
         })),
       };
     });

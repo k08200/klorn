@@ -2206,6 +2206,37 @@ const de: Record<string, string> = {
   "linkComplete.continue": "Weiter",
   // Component strings moved out of JSX (hard-coded string sweep, 2026-10-16).
   "common.reconnect": "Erneut verbinden",
+  "accountHealth.title": "Kontostatus",
+  "accountHealth.desc":
+    "Jedes verbundene E-Mail-Konto, ob es synchronisiert wird und was zu tun ist, wenn nicht.",
+  "accountHealth.empty": "Noch keine E-Mail-Konten verbunden.",
+  "accountHealth.loadFailed": "Kontostatus konnte nicht geladen werden.",
+  "accountHealth.primary": "Hauptkonto",
+  "accountHealth.status.ok": "Synchronisiert",
+  "accountHealth.status.pending": "Wartet auf erste Synchronisierung",
+  "accountHealth.status.error": "Synchronisierung fehlgeschlagen",
+  "accountHealth.status.reconnect": "Erneut verbinden",
+  "accountHealth.sync.never": "Noch nicht synchronisiert",
+  "accountHealth.sync.justNow": "Gerade synchronisiert",
+  "accountHealth.sync.minutes": "Vor {n} Min. synchronisiert",
+  "accountHealth.sync.hours": "Vor {n} Std. synchronisiert",
+  "accountHealth.sync.days": "Vor {n} T. synchronisiert",
+  "accountHealth.sync.direct": "Empfängt E-Mails direkt",
+  "accountHealth.error.auth":
+    "Der Anbieter hat die gespeicherte Anmeldung abgelehnt. Verbinde das Konto erneut, um die Synchronisierung fortzusetzen.",
+  "accountHealth.error.authApple":
+    "Apple akzeptiert das app-spezifische Passwort nicht mehr. Das passiert, wenn sich das Passwort deines Apple Accounts ändert. Erstelle ein neues app-spezifisches Passwort und verbinde erneut.",
+  "accountHealth.error.unreachable":
+    "Klorn konnte den Mailserver nicht erreichen und versucht es weiter.",
+  "accountHealth.error.throttled":
+    "Der Anbieter hat Klorn gebeten, langsamer zu werden. Klorn versucht es gleich erneut.",
+  "accountHealth.error.error":
+    "Die letzte Synchronisierung ist fehlgeschlagen. Klorn versucht es weiter.",
+  "accountHealth.action.reconnect": "Erneut verbinden",
+  "accountHealth.reconnect.passwordLabel": "Neues app-spezifisches Passwort",
+  "accountHealth.reconnect.submit": "Erneut verbinden",
+  "accountHealth.reconnect.failed":
+    "Erneutes Verbinden fehlgeschlagen. Prüfe das app-spezifische Passwort und versuche es noch einmal.",
   "common.close": "Schließen",
   "common.dismiss": "Ausblenden",
   "common.tryAgain": "Erneut versuchen",

@@ -59,6 +59,8 @@ export interface OutlookSyncResult {
   cursor: string | null;
   /** 401/403 from Graph — the caller must flag the row for reconnect. */
   authFailed: boolean;
+  /** The delta fetch itself failed (429 or another HTTP error): not a successful check. */
+  failure?: "throttled" | "error";
 }
 
 interface GraphEmailAddress {
@@ -166,11 +168,13 @@ export async function syncOutlookInbox(args: OutlookSyncArgs): Promise<OutlookSy
       // tick (we deliberately did NOT advance result.cursor past `url`).
       console.warn(`[outlook-sync] throttled (429) for ${args.userId}; retrying next tick`);
       result.errors += 1;
+      result.failure = "throttled";
       return result;
     }
     if (!res.ok) {
       console.warn(`[outlook-sync] delta fetch failed for ${args.userId}: http ${res.status}`);
       result.errors += 1;
+      result.failure = "error";
       return result;
     }
     const body = (await res.json()) as GraphDeltaPage;

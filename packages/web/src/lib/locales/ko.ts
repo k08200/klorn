@@ -2118,6 +2118,35 @@ const ko: Record<string, string> = {
   "linkComplete.continue": "계속",
   // Component strings moved out of JSX (hard-coded string sweep, 2026-10-16).
   "common.reconnect": "다시 연결",
+  "accountHealth.title": "계정 상태",
+  "accountHealth.desc":
+    "연결된 모든 메일 계정의 동기화 여부와, 동기화되지 않을 때 할 일을 보여 줍니다.",
+  "accountHealth.empty": "아직 연결된 메일 계정이 없습니다.",
+  "accountHealth.loadFailed": "계정 상태를 불러오지 못했습니다.",
+  "accountHealth.primary": "기본",
+  "accountHealth.status.ok": "동기화됨",
+  "accountHealth.status.pending": "첫 동기화 대기 중",
+  "accountHealth.status.error": "동기화 실패",
+  "accountHealth.status.reconnect": "다시 연결 필요",
+  "accountHealth.sync.never": "아직 동기화되지 않음",
+  "accountHealth.sync.justNow": "방금 동기화됨",
+  "accountHealth.sync.minutes": "{n}분 전 동기화",
+  "accountHealth.sync.hours": "{n}시간 전 동기화",
+  "accountHealth.sync.days": "{n}일 전 동기화",
+  "accountHealth.sync.direct": "메일을 직접 받음",
+  "accountHealth.error.auth":
+    "제공업체가 저장된 로그인을 거부했습니다. 다시 연결하면 동기화가 재개됩니다.",
+  "accountHealth.error.authApple":
+    "Apple이 앱 암호를 더 이상 받지 않습니다. Apple 계정 암호를 바꾸면 이렇게 됩니다. 새 앱 암호를 만들어 다시 연결하세요.",
+  "accountHealth.error.unreachable":
+    "메일 서버에 연결하지 못했습니다. Klorn이 계속 다시 시도합니다.",
+  "accountHealth.error.throttled":
+    "제공업체가 요청 속도를 줄이라고 했습니다. 잠시 후 다시 시도합니다.",
+  "accountHealth.error.error": "마지막 동기화가 실패했습니다. Klorn이 계속 다시 시도합니다.",
+  "accountHealth.action.reconnect": "다시 연결",
+  "accountHealth.reconnect.passwordLabel": "새 앱 암호",
+  "accountHealth.reconnect.submit": "다시 연결",
+  "accountHealth.reconnect.failed": "다시 연결하지 못했습니다. 앱 암호를 확인하고 다시 시도하세요.",
   "common.close": "닫기",
   "common.dismiss": "닫기",
   "common.tryAgain": "다시 시도",

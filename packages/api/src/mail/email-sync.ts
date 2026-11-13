@@ -270,6 +270,32 @@ export async function syncEmails(
   // primary Google account (unchanged behavior).
   linkedInbox?: LinkedInbox,
 ): Promise<{ synced: number; newCount: number; source: "gmail" }> {
+  const result = await syncEmailsOnce(userId, maxResults, query, linkedInbox);
+  // The primary inbox's "last synced" for Account Health: a completed INBOX sync
+  // (every return above is one; failures throw). Linked inboxes stamp their own
+  // row in syncLinkedInboxesForUser; an ad-hoc search is not a sync.
+  if (!linkedInbox && !query) await stampPrimarySynced(userId);
+  return result;
+}
+
+/** Best-effort: a sync that worked must not fail on its status stamp. */
+async function stampPrimarySynced(userId: string): Promise<void> {
+  try {
+    await prisma.userToken.updateMany({
+      where: { userId, provider: "google" },
+      data: { lastSyncedAt: new Date() },
+    });
+  } catch (err) {
+    console.warn(`[EMAIL] could not stamp lastSyncedAt for ${userId}:`, err);
+  }
+}
+
+async function syncEmailsOnce(
+  userId: string,
+  maxResults: number,
+  query: string | undefined,
+  linkedInbox: LinkedInbox | undefined,
+): Promise<{ synced: number; newCount: number; source: "gmail" }> {
   // For a linked inbox, "self" (self-reply detection in the firewall) is that
   // inbox's own address, not the primary user's email.
   const userEmail = linkedInbox?.email ?? (await resolveUserEmail(userId));

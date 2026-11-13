@@ -17,6 +17,7 @@ import { captureError } from "../sentry.js";
 import { markLinkedInboxForReconnect } from "./gmail.js";
 import { syncOutlookInbox } from "./outlook-sync.js";
 import { resolveAccessToken } from "./outlook-token.js";
+import { recordSyncError, syncSucceededFields } from "./sync-error-code.js";
 
 export interface OutlookSyncAggregate {
   fetched: number;
@@ -45,6 +46,8 @@ export async function syncOutlookAccountsForUser(
     try {
       const accessToken = await resolveAccessToken(userId, row);
       if (!accessToken) {
+        // resolveAccessToken has flagged the row for reconnect where that applies.
+        await recordSyncError(userId, row.id, "auth");
         total.errors += 1;
         continue;
       }
@@ -63,14 +66,20 @@ export async function syncOutlookAccountsForUser(
         void markLinkedInboxForReconnect(userId, row.id, "OUTLOOK").catch((markErr) => {
           console.warn(`[outlook-accounts] reconnect mark failed for row ${row.id}:`, markErr);
         });
+        await recordSyncError(userId, row.id, "auth");
         total.errors += 1;
+        continue;
+      }
+      if (result.failure) {
+        // Throttled or failed: not a successful check, and the cursor stays put.
+        await recordSyncError(userId, row.id, result.failure);
         continue;
       }
       await prisma.linkedInboxAccount.updateMany({
         where: { id: row.id, userId },
         data: {
           // "Synced Xm ago" is the last successful CHECK, not last new mail.
-          lastSyncedAt: new Date(),
+          ...syncSucceededFields(),
           // Advance the delta cursor only when the sync learned a new link —
           // a throttled/failed tick keeps the old cursor and resumes.
           ...(result.cursor ? { historyId: result.cursor } : {}),
@@ -78,6 +87,7 @@ export async function syncOutlookAccountsForUser(
       });
     } catch (err) {
       total.errors += 1;
+      await recordSyncError(userId, row.id, "error");
       // console first — captureError is a no-op without a Sentry DSN.
       console.warn(`[outlook-accounts] sync failed for row ${row.id}:`, err);
       captureError(err, {

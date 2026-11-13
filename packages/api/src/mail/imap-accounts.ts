@@ -14,6 +14,7 @@
 import { decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
+import { notifyLinkedInboxReconnect } from "./gmail.js";
 import { checkImapRow } from "./imap-connection.js";
 import { parseImapMessageId } from "./imap-message-id.js";
 import { clearPollBackoff, isPollBackedOff, notePollBackoff } from "./imap-poll-backoff.js";
@@ -32,6 +33,7 @@ import {
   isImapAuthFailure,
   startCredentialCooldown,
 } from "./providers/imap-session.js";
+import { imapSyncErrorCode, recordSyncError, syncSucceededFields } from "./sync-error-code.js";
 
 export interface ImapSyncAggregate {
   fetched: number;
@@ -68,27 +70,58 @@ const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
   `${rowId}:${passwordCipher}`;
 
 /**
- * A generic row stays out of the poll while its login is known to be rejected (the
- * durable `needsReconnect` flag set below and cleared by a successful reconnect, or the
- * in-process cooldown it shares with the actions: a revoked password is not sent to
- * the host again on every tick) and while it is backed off after failing in another way
- * (imap-poll-backoff.ts: a stalling host costs a serial tick up to ~105 s).
+ * No row is polled while its login is cooling down after a rejection (the in-process
+ * cooldown it shares with the actions: a revoked password is not sent to the host
+ * again on every tick). A generic row also stays out while it carries the durable
+ * `needsReconnect` flag (cleared by a successful reconnect) and while it is backed off
+ * after failing in another way (imap-poll-backoff.ts: a stalling host costs a serial
+ * tick up to ~105 s). A fixed-host row (iCloud, Naver) keeps being polled, once per
+ * cooldown, while flagged: a login the provider refused only for a while heals on the
+ * next successful poll, which clears the flag.
  */
 function isPausedForPolling(
   row: { id: string; needsReconnect?: boolean | null },
   credentialKey: string,
+  userHost: boolean,
 ): boolean {
-  return (
-    row.needsReconnect === true || isCredentialCoolingDown(credentialKey) || isPollBackedOff(row.id)
-  );
+  if (isCredentialCoolingDown(credentialKey)) return true;
+  return userHost && (row.needsReconnect === true || isPollBackedOff(row.id));
 }
 
 /**
- * A generic poll failed. Log one capped line (the text came from a server the user
- * chose), stop sending a rejected password, and report to Sentry once per account and
- * failure kind instead of on every tick. Never throws.
+ * Flag a row whose login was rejected for reconnect, and alert the user once a day.
+ * Conditional on the cipher the poll began with: a user who relinked while this
+ * poll's login was being rejected has a NEW password, which must not be flagged.
+ * The alert goes out only when this poll set the flag. Never throws.
  */
-async function handleGenericPollFailure(
+async function flagForReconnect(
+  provider: ImapProviderConfig,
+  ids: { userId: string; rowId: string },
+  passwordCipher: string,
+): Promise<void> {
+  const { userId, rowId } = ids;
+  try {
+    const { count } = await prisma.linkedInboxAccount.updateMany({
+      where: { id: rowId, userId, imapPasswordCipher: passwordCipher, needsReconnect: false },
+      data: { needsReconnect: true },
+    });
+    if (count > 0) await notifyLinkedInboxReconnect(userId, rowId, provider.provider);
+  } catch (flagErr) {
+    console.warn(
+      `[${provider.logScope}] could not flag row ${rowId} for reconnect: ${sanitizeLogText(flagErr)}`,
+    );
+  }
+}
+
+/**
+ * A poll failed. Log it (one capped line for a generic host: the text came from a
+ * server the user chose), stop sending a rejected password and flag the row for
+ * reconnect at once (Apple revokes app-specific passwords when the account password
+ * changes: Settings says "reconnect" after this one poll), record why for Settings,
+ * and report to Sentry once per account and failure kind instead of on every tick.
+ * Never throws.
+ */
+async function handlePollFailure(
   err: unknown,
   ctx: {
     provider: ImapProviderConfig;
@@ -101,25 +134,22 @@ async function handleGenericPollFailure(
 ): Promise<void> {
   const { provider, userId, rowId, credentialKey, passwordCipher } = ctx;
   const scope = provider.logScope;
+  const userHost = provider.hostPolicy === "user-supplied";
   const kind = pollFailureKind(err);
-  console.warn(`[${scope}] sync failed for row ${rowId} (${kind}): ${sanitizeLogText(err)}`);
+  if (userHost) {
+    console.warn(`[${scope}] sync failed for row ${rowId} (${kind}): ${sanitizeLogText(err)}`);
+  } else {
+    // console first — captureError is a no-op without a Sentry DSN, and a
+    // silent per-account failure here would strand one mailbox invisibly.
+    console.warn(`[${scope}] sync failed for row ${rowId} (${kind}):`, err);
+  }
   if (!isImapAuthFailure(err)) {
-    notePollBackoff(rowId);
+    if (userHost) notePollBackoff(rowId);
   } else {
     startCredentialCooldown(provider, rowId, credentialKey);
-    try {
-      // Conditional on the cipher the poll began with: a user who relinked while this
-      // poll's login was being rejected has a NEW password, which must not be flagged.
-      await prisma.linkedInboxAccount.updateMany({
-        where: { id: rowId, userId, imapPasswordCipher: passwordCipher },
-        data: { needsReconnect: true },
-      });
-    } catch (flagErr) {
-      console.warn(
-        `[${scope}] could not flag row ${rowId} for reconnect: ${sanitizeLogText(flagErr)}`,
-      );
-    }
+    await flagForReconnect(provider, { userId, rowId }, passwordCipher);
   }
+  await recordSyncError(userId, rowId, imapSyncErrorCode(err));
   if (shouldReportPollFailure(rowId, kind)) {
     captureError(err, {
       tags: { scope: `${scope}.account-sync` },
@@ -172,14 +202,14 @@ export async function syncImapAccountsForUser(
       }
       continue;
     }
-    // Generic IMAP only (step B4): the poll must not re-send a rejected password.
+    // The poll must not re-send a rejected password on every tick.
     const userHost = provider.hostPolicy === "user-supplied";
     const credentialKey = credentialKeyOf(row.id, checked.passwordCipher);
     if (isPollInFlight(row.id)) {
       surfaceSkippedPoll(row.id, userId, scope); // its previous poll is still running
       continue;
     }
-    if (userHost && isPausedForPolling(row, credentialKey)) continue;
+    if (isPausedForPolling(row, credentialKey, userHost)) continue;
     beginPoll(row.id);
     try {
       const result = await syncImapInbox({
@@ -205,30 +235,21 @@ export async function syncImapAccountsForUser(
       // The host answered, held or not: a stall is over, whatever the poll then stored.
       if (userHost) clearPollBackoff(row.id);
       if (!result.held) {
+        // A login that works again clears a reconnect flag a refused login set.
         await prisma.linkedInboxAccount.updateMany({
           where: { id: row.id, userId },
-          data: { lastSyncedAt: new Date() },
+          data: { ...syncSucceededFields(), needsReconnect: false },
         });
-        if (userHost) clearPollFailure(row.id);
+        clearPollFailure(row.id);
       }
     } catch (err) {
       total.errors += 1;
-      if (userHost) {
-        await handleGenericPollFailure(err, {
-          provider,
-          userId,
-          rowId: row.id,
-          credentialKey,
-          passwordCipher: checked.passwordCipher,
-        });
-        continue;
-      }
-      // console first — captureError is a no-op without a Sentry DSN, and a
-      // silent per-account failure here would strand one mailbox invisibly.
-      console.warn(`[${scope}] sync failed for row ${row.id}:`, err);
-      captureError(err, {
-        tags: { scope: `${scope}.account-sync` },
-        extra: { userId, linkedInboxAccountId: row.id },
+      await handlePollFailure(err, {
+        provider,
+        userId,
+        rowId: row.id,
+        credentialKey,
+        passwordCipher: checked.passwordCipher,
       });
     } finally {
       endPoll(row.id);
