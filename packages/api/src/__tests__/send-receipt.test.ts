@@ -28,6 +28,7 @@ vi.mock("../sentry.js", () => ({ captureError }));
 
 const {
   openSendReceipt,
+  recordSendReceipt,
   assertSendMatchesReceipt,
   verifySendOrRefuse,
   settleSendReceipt,
@@ -61,6 +62,29 @@ describe("flag off", () => {
     vi.stubEnv("MANUAL_SEND_RECEIPTS_ENABLED", "");
     expect(await openSendReceipt(INPUT)).toBeNull();
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordSendReceipt (a send that must leave a receipt whatever the flag)", () => {
+  it("writes the same receipt with MANUAL_SEND_RECEIPTS_ENABLED off", async () => {
+    vi.stubEnv("MANUAL_SEND_RECEIPTS_ENABLED", "");
+    const handle = await recordSendReceipt({ ...INPUT, route: "smart-reply", emailId: "e1" });
+    const payloadHash = sendEmailPayloadHash({ to: INPUT.to, subject: "Hi", body: "Hello" });
+    expect(handle.receipt).toMatchObject({
+      action: "send_email",
+      payloadHash,
+      approvedBy: "user-1",
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ route: "smart-reply", emailId: "e1", status: "PENDING" }),
+      }),
+    );
+  });
+
+  it("propagates a failed write", async () => {
+    create.mockRejectedValue(new Error("db down"));
+    await expect(recordSendReceipt(INPUT)).rejects.toThrow("db down");
   });
 });
 

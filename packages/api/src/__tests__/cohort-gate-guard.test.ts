@@ -1,6 +1,6 @@
 /**
- * Every drive route checks the rollout cohort (L23) after authentication, so a
- * route added later cannot skip it. The one exception is unlinking a Google
+ * Every drive route and every smart-action route checks the rollout cohort
+ * (L23) after authentication, so a route added later cannot skip it. The one exception is unlinking a Google
  * account: auth only, so a user outside the cohort can always remove a grant.
  */
 
@@ -10,11 +10,12 @@ import { describe, expect, it, vi } from "vitest";
 const source = (path: string) =>
   readFileSync(new URL(`../routes/${path}`, import.meta.url), "utf8");
 
-describe("the drive routes and the cohort", () => {
+describe("the cohort-gated routes", () => {
   it.each([
     "drive.ts",
     "klorn-drive.ts",
     "google-drive-link.ts",
+    "smart-actions.ts",
   ])("%s checks the cohort right after requireAuth on every route", (file) => {
     const text = source(file);
     const chains = [...text.matchAll(/preHandler:\s*(\[[^\]]*\]|requireAuth)/g)].map((m) =>

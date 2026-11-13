@@ -8,6 +8,7 @@ import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
 import MailHtmlBody from "../../../components/mail-html-body";
 import { ProFeatureNotice } from "../../../components/pro-feature-notice";
+import { SmartActionsRow } from "../../../components/smart-actions/smart-actions-row";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
 import Button from "../../../components/ui/button";
@@ -827,6 +828,7 @@ function EmailDetailView() {
                   ) : null,
                 reply: (
                   <>
+                    <SmartActionsRow emailId={email.id} className="mb-3" />
                     {proGate === "reply" && <ProFeatureNotice className="mb-3" />}
                     <ReplyDraftBox
                       presets="collapsed"
@@ -1028,6 +1030,7 @@ function EmailDetailView() {
                 disabled={email.id.startsWith("demo-")}
                 onCreate={createEmailReminder}
               />
+              <SmartActionsRow emailId={email.id} className="mt-3" />
             </div>
           </header>
 

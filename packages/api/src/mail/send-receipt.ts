@@ -41,7 +41,8 @@ import { captureError } from "../sentry.js";
 
 export interface SendReceiptInput {
   userId: string;
-  route: "send" | "reply";
+  /** "smart-reply": the smart action's Send (routes/smart-actions.ts), receipt always on. */
+  route: "send" | "reply" | "smart-reply";
   to: string;
   subject: string;
   body: string;
@@ -81,6 +82,15 @@ export type SendReceiptOutcome =
  */
 export async function openSendReceipt(input: SendReceiptInput): Promise<SendReceiptHandle | null> {
   if (!manualSendReceiptsEnabled()) return null;
+  return recordSendReceipt(input);
+}
+
+/**
+ * Mint and persist the receipt whatever MANUAL_SEND_RECEIPTS_ENABLED says — for
+ * a send path that must never run without one (the smart action's Send). Throws
+ * when the write fails; the caller then refuses the send.
+ */
+export async function recordSendReceipt(input: SendReceiptInput): Promise<SendReceiptHandle> {
   const payloadHash = sendEmailPayloadHash({
     to: input.to,
     subject: input.subject,

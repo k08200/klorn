@@ -2259,7 +2259,7 @@ model SendReceipt {
   id                String    @id @default(uuid())
   userId            String
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  route             String // "send" | "reply"
+  route             String // "send" | "reply" | "smart-reply"
   action            String // FloorAction — "send_email"
   payloadHash       String // sha256 hex, = receipt.payloadHash
   receipt           Json // the full ActionReceipt (v, action, inputHash, payloadHash, target, approvedAt, approvedBy)

@@ -2860,6 +2860,50 @@ const en: Record<string, string> = {
     "That request wasn't accepted. Check the model id and the email fields.",
   "playground.error.upstream": "Provider said: {detail}",
   "playground.footer.privacy": "Privacy",
+  "smartActions.label": "Quick actions for this mail",
+  "smartActions.draftReply": "Draft reply",
+  "smartActions.addToCalendar": "Add to calendar",
+  "smartActions.reply.title": "Reply draft",
+  "smartActions.reply.drafting": "Drafting a reply…",
+  "smartActions.reply.draftError": "Couldn't draft a reply right now. Try again shortly.",
+  "smartActions.reply.to": "To: {to}",
+  "smartActions.reply.subject": "Subject: {subject}",
+  "smartActions.reply.sourceProactive":
+    "Klorn wrote this draft ahead of time. Read it and edit it before you send.",
+  "smartActions.reply.sourceGenerated":
+    "Klorn wrote this draft just now. Read it and edit it before you send.",
+  "smartActions.reply.bodyLabel": "Your reply",
+  "smartActions.reply.approval":
+    "Nothing goes out without your say-so — sends, permanent deletes and forwards wait for your approval, or for an auto-reply rule you set up yourself.",
+  "smartActions.reply.send": "Send",
+  "smartActions.reply.sending": "Sending…",
+  "smartActions.reply.sent": "Sent.",
+  "smartActions.reply.receipt": "Receipt {hash}",
+  "smartActions.reply.changed":
+    "Nothing was sent: the reply changed before it went out. Check it and send again.",
+  "smartActions.reply.unknown":
+    "The reply may already have been sent. Check your Sent folder before trying again.",
+  "smartActions.reply.error":
+    "Something went wrong sending the reply. Check your Sent folder before trying again.",
+  "smartActions.event.reading": "Reading the date from this mail…",
+  "smartActions.event.none": "This mail doesn't name a date or a time.",
+  "smartActions.event.error": "Couldn't read this mail's date right now. Try again shortly.",
+  "smartActions.event.quote": "From the mail",
+  "smartActions.event.askMeridiem": "The mail doesn't say AM or PM. Which is it?",
+  "smartActions.event.askTime": "The mail doesn't give a start time. Pick one.",
+  "smartActions.event.askDate": "The mail doesn't say which day. Pick one.",
+  "smartActions.event.askWhen": "The mail doesn't give a clear date and time. Pick both.",
+  "smartActions.event.am": "{time} AM",
+  "smartActions.event.pm": "{time} PM",
+  "smartActions.event.durationLabel": "Length (minutes)",
+  "smartActions.event.timeZone": "Times are in {zone}.",
+  "smartActions.event.duplicate": "Already on your calendar at this time: {title}",
+  "smartActions.event.addAnyway": "Add anyway",
+  "smartActions.event.reminder": "Remind me 30 min before",
+  "smartActions.event.reminderNotSet":
+    "The reminder needs a connected Google Calendar, so none was set.",
+  "smartActions.event.saveHint": "Fill in the title, day, start time and length to save.",
+  "smartActions.event.savedWhen": "{date} at {time} ({zone})",
 };
 
 export default en;

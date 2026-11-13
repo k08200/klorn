@@ -2976,6 +2976,54 @@ const de: Record<string, string> = {
     "Die Anfrage wurde nicht akzeptiert. Prüfe die Modell-ID und die E-Mail-Felder.",
   "playground.error.upstream": "Anbieter meldet: {detail}",
   "playground.footer.privacy": "Datenschutz",
+  "smartActions.label": "Schnellaktionen für diese E-Mail",
+  "smartActions.draftReply": "Antwort entwerfen",
+  "smartActions.addToCalendar": "Zum Kalender hinzufügen",
+  "smartActions.reply.title": "Antwortentwurf",
+  "smartActions.reply.drafting": "Antwort wird entworfen…",
+  "smartActions.reply.draftError":
+    "Gerade kann keine Antwort entworfen werden. Versuch es gleich noch einmal.",
+  "smartActions.reply.to": "An: {to}",
+  "smartActions.reply.subject": "Betreff: {subject}",
+  "smartActions.reply.sourceProactive":
+    "Klorn hat diesen Entwurf vorab geschrieben. Lies und bearbeite ihn, bevor du ihn sendest.",
+  "smartActions.reply.sourceGenerated":
+    "Klorn hat diesen Entwurf gerade geschrieben. Lies und bearbeite ihn, bevor du ihn sendest.",
+  "smartActions.reply.bodyLabel": "Deine Antwort",
+  "smartActions.reply.approval":
+    "Nichts geht ohne dein Okay raus — Senden, endgültiges Löschen und Weiterleiten warten auf deine Freigabe, oder auf eine Auto-Antwort-Regel, die du selbst angelegt hast.",
+  "smartActions.reply.send": "Senden",
+  "smartActions.reply.sending": "Wird gesendet…",
+  "smartActions.reply.sent": "Gesendet.",
+  "smartActions.reply.receipt": "Beleg {hash}",
+  "smartActions.reply.changed":
+    "Nichts wurde gesendet: Die Antwort hat sich vor dem Versand geändert. Prüfe sie und sende sie erneut.",
+  "smartActions.reply.unknown":
+    "Die Antwort ist vielleicht schon raus. Prüfe deinen Gesendet-Ordner, bevor du es erneut versuchst.",
+  "smartActions.reply.error":
+    "Beim Senden der Antwort ist etwas schiefgelaufen. Prüfe deinen Gesendet-Ordner, bevor du es erneut versuchst.",
+  "smartActions.event.reading": "Datum wird aus dieser E-Mail gelesen…",
+  "smartActions.event.none": "Diese E-Mail nennt kein Datum und keine Uhrzeit.",
+  "smartActions.event.error":
+    "Das Datum dieser E-Mail kann gerade nicht gelesen werden. Versuch es gleich noch einmal.",
+  "smartActions.event.quote": "Aus der E-Mail",
+  "smartActions.event.askMeridiem":
+    "Die E-Mail sagt nicht, ob vormittags oder nachmittags. Was stimmt?",
+  "smartActions.event.askTime": "Die E-Mail nennt keine Startzeit. Wähle eine.",
+  "smartActions.event.askDate": "Die E-Mail sagt nicht, an welchem Tag. Wähle einen.",
+  "smartActions.event.askWhen":
+    "Die E-Mail nennt kein klares Datum und keine klare Uhrzeit. Wähle beides.",
+  "smartActions.event.am": "{time} vormittags",
+  "smartActions.event.pm": "{time} nachmittags",
+  "smartActions.event.durationLabel": "Dauer (Minuten)",
+  "smartActions.event.timeZone": "Zeiten in {zone}.",
+  "smartActions.event.duplicate": "Zu dieser Zeit steht schon etwas in deinem Kalender: {title}",
+  "smartActions.event.addAnyway": "Trotzdem hinzufügen",
+  "smartActions.event.reminder": "30 Min. vorher erinnern",
+  "smartActions.event.reminderNotSet":
+    "Die Erinnerung braucht einen verbundenen Google Kalender, deshalb wurde keine gesetzt.",
+  "smartActions.event.saveHint": "Titel, Tag, Startzeit und Dauer ausfüllen, um zu speichern.",
+  "smartActions.event.savedWhen": "{date} um {time} ({zone})",
 };
 
 export default de;

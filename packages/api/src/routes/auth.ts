@@ -45,6 +45,7 @@ import {
   mailV2Enabled,
   naverLoginEnabled,
   onboardingV2Enabled,
+  smartActionsOpenTo,
   teamModeEnabled,
   unifiedHomeEnabled,
 } from "../config.js";
@@ -692,6 +693,11 @@ export function authRoutes(app: FastifyInstance) {
           // "When is everyone free?" only when this is true and the user has a
           // saved team. /api/teams answers 403 TEAM_REQUIRED while it is off.
           teamMode: teamModeEnabled(),
+          // Server-driven client flag (SMART_ACTIONS_ENABLED, cohort-aware): the
+          // web shows the briefing picks' and the reader's "Draft reply" / "Add
+          // to calendar" only when this is true — the same answer the
+          // /api/smart-actions routes give this user.
+          smartActions: smartActionsOpenTo(user.id),
         },
       });
     } catch {

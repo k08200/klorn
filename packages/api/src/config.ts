@@ -697,6 +697,20 @@ export function teamModeEnabled(): boolean {
   );
 }
 
+// Smart actions (routes/smart-actions.ts): "Draft reply → Send" and "Add to
+// calendar" one-tap flows from the briefing picks and the mail reader. OFF by
+// default (repo doctrine). Takes the rollout cohort (flagMode above): `cohort`
+// opens the routes and `user.smartActions` only to ROLLOUT_COHORT_USER_IDS.
+// While off every /api/smart-actions route answers the default 404, even
+// unauthenticated. Read per call, so a flip needs no redeploy.
+export const SMART_ACTIONS_FLAG = "SMART_ACTIONS_ENABLED";
+export function smartActionsLive(): boolean {
+  return flagMode(SMART_ACTIONS_FLAG) !== "off";
+}
+export function smartActionsOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [SMART_ACTIONS_FLAG]);
+}
+
 export function appleLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.APPLE_LOGIN_ENABLED ?? "").trim().toLowerCase(),
