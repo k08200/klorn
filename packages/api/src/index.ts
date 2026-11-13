@@ -86,6 +86,7 @@ import { providersAvailableRoutes } from "./routes/providers-available.js";
 import { receiptRoutes } from "./routes/receipt.js";
 import { screenerRoutes } from "./routes/screener.js";
 import { skillRoutes } from "./routes/skills.js";
+import { smartActionsRoutes } from "./routes/smart-actions.js";
 import { smsRoutes } from "./routes/sms.js";
 import { appleAuthProvider, naverAuthProvider, socialAuthRoutes } from "./routes/social-auth.js";
 import { teamRoutes } from "./routes/teams.js";
@@ -291,6 +292,7 @@ await app.register(playbookRoutes, { prefix: "/api/playbooks" });
 await app.register(commitmentRoutes, { prefix: "/api/commitments" });
 await app.register(feedbackRoutes, { prefix: "/api/feedback" });
 await app.register(calendarRoutes, { prefix: "/api/calendar" });
+await app.register(smartActionsRoutes, { prefix: "/api/smart-actions" });
 await app.register(emailRoutes, { prefix: "/api/email" });
 await app.register(apiKeyRoutes, { prefix: "/api/keys" });
 await app.register(mcpRoutes, { prefix: "/api/mcp" });
@@ -690,6 +692,7 @@ try {
     "KLORN_DRIVE_ENABLED",
     "GOOGLE_DRIVE_ENABLED",
     "DRIVE_SUMMARIES_ENABLED",
+    "SMART_ACTIONS_ENABLED",
   ]);
 
   // Start autonomous background agent

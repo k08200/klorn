@@ -26,6 +26,12 @@ export const queryKeys = {
     // D5c: the linked Google Drive accounts (dark: null).
     googleAccounts: () => ["drive", "google", "accounts"] as const,
   },
+  // Smart actions (SMART_ACTIONS_ENABLED): one draft and one proposal per mail.
+  smartActions: {
+    all: ["smart-actions"] as const,
+    replyDraft: (emailId: string) => ["smart-actions", "reply-draft", emailId] as const,
+    eventProposal: (emailId: string) => ["smart-actions", "event-proposal", emailId] as const,
+  },
   // Saved teams (team mode, P12).
   teams: {
     all: ["teams"] as const,

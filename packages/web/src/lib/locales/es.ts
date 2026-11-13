@@ -2919,6 +2919,53 @@ const es: Record<string, string> = {
     "No se aceptó la solicitud. Revisa el ID del modelo y los campos del correo.",
   "playground.error.upstream": "El proveedor dijo: {detail}",
   "playground.footer.privacy": "Privacidad",
+  "smartActions.label": "Acciones rápidas para este correo",
+  "smartActions.draftReply": "Redactar respuesta",
+  "smartActions.addToCalendar": "Añadir al calendario",
+  "smartActions.reply.title": "Borrador de respuesta",
+  "smartActions.reply.drafting": "Redactando una respuesta…",
+  "smartActions.reply.draftError":
+    "Ahora no se puede redactar una respuesta. Vuelve a intentarlo en un momento.",
+  "smartActions.reply.to": "Para: {to}",
+  "smartActions.reply.subject": "Asunto: {subject}",
+  "smartActions.reply.sourceProactive":
+    "Klorn escribió este borrador con antelación. Léelo y edítalo antes de enviarlo.",
+  "smartActions.reply.sourceGenerated":
+    "Klorn acaba de escribir este borrador. Léelo y edítalo antes de enviarlo.",
+  "smartActions.reply.bodyLabel": "Tu respuesta",
+  "smartActions.reply.approval":
+    "Nada sale sin tu permiso — envíos, borrados definitivos y reenvíos esperan tu aprobación, o una regla de respuesta automática que creaste tú.",
+  "smartActions.reply.send": "Enviar",
+  "smartActions.reply.sending": "Enviando…",
+  "smartActions.reply.sent": "Enviado.",
+  "smartActions.reply.receipt": "Recibo {hash}",
+  "smartActions.reply.changed":
+    "No se envió nada: la respuesta cambió antes de salir. Revísala y envíala de nuevo.",
+  "smartActions.reply.unknown":
+    "Puede que la respuesta ya se haya enviado. Revisa la carpeta de enviados antes de volver a intentarlo.",
+  "smartActions.reply.error":
+    "Algo falló al enviar la respuesta. Revisa la carpeta de enviados antes de volver a intentarlo.",
+  "smartActions.event.reading": "Leyendo la fecha de este correo…",
+  "smartActions.event.none": "Este correo no indica ninguna fecha ni hora.",
+  "smartActions.event.error":
+    "Ahora no se puede leer la fecha de este correo. Vuelve a intentarlo en un momento.",
+  "smartActions.event.quote": "Del correo",
+  "smartActions.event.askMeridiem": "El correo no dice si es a. m. o p. m. ¿Cuál es?",
+  "smartActions.event.askTime": "El correo no indica la hora de inicio. Elige una.",
+  "smartActions.event.askDate": "El correo no dice qué día. Elige uno.",
+  "smartActions.event.askWhen": "El correo no da una fecha y hora claras. Elige ambas.",
+  "smartActions.event.am": "{time} a. m.",
+  "smartActions.event.pm": "{time} p. m.",
+  "smartActions.event.durationLabel": "Duración (minutos)",
+  "smartActions.event.timeZone": "Horas en {zone}.",
+  "smartActions.event.duplicate": "Ya hay algo en tu calendario a esta hora: {title}",
+  "smartActions.event.addAnyway": "Añadir de todos modos",
+  "smartActions.event.reminder": "Avisarme 30 min antes",
+  "smartActions.event.reminderNotSet":
+    "El aviso necesita un Google Calendar conectado, así que no se configuró.",
+  "smartActions.event.saveHint":
+    "Completa el título, el día, la hora de inicio y la duración para guardar.",
+  "smartActions.event.savedWhen": "{date} a las {time} ({zone})",
 };
 
 export default es;

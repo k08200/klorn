@@ -124,6 +124,7 @@ export async function createEvent(
   location?: string,
   attendees?: string[],
   allDay = false,
+  options: { reminderMinutes?: number } = {},
 ) {
   const session = await connectPrimaryCalendar(userId);
   if (!session) return { error: "Google Calendar not connected." };
@@ -144,6 +145,9 @@ export async function createEvent(
       allDay,
       timeZone: userZone,
       attendees,
+      ...(options.reminderMinutes !== undefined
+        ? { reminderMinutes: options.reminderMinutes }
+        : {}),
     });
 
     // Canonical timestamps come back from the provider's response — these are

@@ -88,9 +88,9 @@ export async function parseEventText(
   try {
     parsed = parseLlmJson<Record<string, unknown>>(content);
   } catch (err) {
+    // Length only: the output can echo the utterance, which may be mail text.
     console.error(
-      `[PARSE-EVENT] malformed model output for user ${userId}:`,
-      content.slice(0, 200),
+      `[PARSE-EVENT] malformed model output for user ${userId} (${content.length} chars)`,
     );
     captureError(err, { tags: { scope: "parse_event.json", userId } });
     return null;

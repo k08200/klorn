@@ -2938,6 +2938,54 @@ const fr: Record<string, string> = {
     "Cette requête n'a pas été acceptée. Vérifiez l'identifiant du modèle et les champs de l'e-mail.",
   "playground.error.upstream": "Le fournisseur a répondu : {detail}",
   "playground.footer.privacy": "Confidentialité",
+  "smartActions.label": "Actions rapides pour ce message",
+  "smartActions.draftReply": "Rédiger une réponse",
+  "smartActions.addToCalendar": "Ajouter à l'agenda",
+  "smartActions.reply.title": "Brouillon de réponse",
+  "smartActions.reply.drafting": "Rédaction d'une réponse…",
+  "smartActions.reply.draftError":
+    "Impossible de rédiger une réponse pour le moment. Réessayez dans un instant.",
+  "smartActions.reply.to": "À : {to}",
+  "smartActions.reply.subject": "Objet : {subject}",
+  "smartActions.reply.sourceProactive":
+    "Klorn a écrit ce brouillon à l'avance. Lisez-le et modifiez-le avant d'envoyer.",
+  "smartActions.reply.sourceGenerated":
+    "Klorn vient d'écrire ce brouillon. Lisez-le et modifiez-le avant d'envoyer.",
+  "smartActions.reply.bodyLabel": "Votre réponse",
+  "smartActions.reply.approval":
+    "Rien ne part sans votre accord — envois, suppressions définitives et transferts attendent votre accord, ou une règle de réponse automatique que vous avez créée vous-même.",
+  "smartActions.reply.send": "Envoyer",
+  "smartActions.reply.sending": "Envoi…",
+  "smartActions.reply.sent": "Envoyé.",
+  "smartActions.reply.receipt": "Reçu {hash}",
+  "smartActions.reply.changed":
+    "Rien n'a été envoyé : la réponse a changé avant de partir. Vérifiez-la et renvoyez-la.",
+  "smartActions.reply.unknown":
+    "La réponse est peut-être déjà partie. Vérifiez vos messages envoyés avant de réessayer.",
+  "smartActions.reply.error":
+    "Un problème est survenu lors de l'envoi. Vérifiez vos messages envoyés avant de réessayer.",
+  "smartActions.event.reading": "Lecture de la date dans ce message…",
+  "smartActions.event.none": "Ce message n'indique ni date ni heure.",
+  "smartActions.event.error":
+    "Impossible de lire la date de ce message pour le moment. Réessayez dans un instant.",
+  "smartActions.event.quote": "Extrait du message",
+  "smartActions.event.askMeridiem": "Le message ne précise pas le matin ou l'après-midi. Lequel ?",
+  "smartActions.event.askTime": "Le message ne donne pas d'heure de début. Choisissez-en une.",
+  "smartActions.event.askDate": "Le message ne dit pas quel jour. Choisissez-en un.",
+  "smartActions.event.askWhen":
+    "Le message ne donne ni date ni heure claires. Choisissez les deux.",
+  "smartActions.event.am": "{time} du matin",
+  "smartActions.event.pm": "{time} de l'après-midi",
+  "smartActions.event.durationLabel": "Durée (minutes)",
+  "smartActions.event.timeZone": "Heures en {zone}.",
+  "smartActions.event.duplicate": "Déjà dans votre agenda à cette heure : {title}",
+  "smartActions.event.addAnyway": "Ajouter quand même",
+  "smartActions.event.reminder": "Me rappeler 30 min avant",
+  "smartActions.event.reminderNotSet":
+    "Le rappel nécessite un Google Agenda connecté ; aucun n'a été défini.",
+  "smartActions.event.saveHint":
+    "Renseignez le titre, le jour, l'heure de début et la durée pour enregistrer.",
+  "smartActions.event.savedWhen": "{date} à {time} ({zone})",
 };
 
 export default fr;

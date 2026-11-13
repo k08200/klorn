@@ -1293,6 +1293,32 @@ describe("GET /api/auth/me", () => {
     await app.close();
   });
 
+  it("reports SMART_ACTIONS_ENABLED as user.smartActions, cohort-aware, false unless open", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "smart-actions@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user as { id: string; smartActions: boolean };
+
+    delete process.env.SMART_ACTIONS_ENABLED;
+    const { id, smartActions } = await me();
+    expect(smartActions).toBe(false);
+    try {
+      process.env.SMART_ACTIONS_ENABLED = "cohort";
+      process.env.ROLLOUT_COHORT_USER_IDS = "someone-else";
+      expect((await me()).smartActions).toBe(false);
+      process.env.ROLLOUT_COHORT_USER_IDS = `someone-else,${id}`;
+      expect((await me()).smartActions).toBe(true);
+      process.env.SMART_ACTIONS_ENABLED = "true";
+      process.env.ROLLOUT_COHORT_USER_IDS = "";
+      expect((await me()).smartActions).toBe(true);
+    } finally {
+      delete process.env.SMART_ACTIONS_ENABLED;
+      delete process.env.ROLLOUT_COHORT_USER_IDS;
+    }
+    await app.close();
+  });
+
   it("reports ONBOARDING_V2 as user.onboardingV2 on /me, login and register, false unless on", async () => {
     const app = await buildApp();
     const register = async (email: string) =>
