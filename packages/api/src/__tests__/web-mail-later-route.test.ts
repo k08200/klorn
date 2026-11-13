@@ -38,7 +38,7 @@ describe("web Later → POST /api/email/:id/later", () => {
   });
 
   it("the reader and the legacy list use the shared postReminder", () => {
-    for (const path of ["app/email/[id]/page.tsx", "app/email/page.tsx"]) {
+    for (const path of ["app/email/[id]/email-detail-page.tsx", "app/email/page.tsx"]) {
       expect(read(path)).toMatch(/postReminder\(/);
     }
   });
@@ -47,7 +47,7 @@ describe("web Later → POST /api/email/:id/later", () => {
     for (const path of [
       "app/email/_v2/use-mail-actions.ts",
       "app/today/reply-later-card.tsx",
-      "app/email/[id]/page.tsx",
+      "app/email/[id]/email-detail-page.tsx",
       "app/email/page.tsx",
     ]) {
       const src = read(path);

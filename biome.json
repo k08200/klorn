@@ -106,6 +106,7 @@
       "!!**/dist",
       "!!**/.next",
       "!!**/.next-dev",
+      "!!packages/web/out",
       "!!**/prisma/migrations",
       "!!**/.turbo",
       "!!**/test-results"

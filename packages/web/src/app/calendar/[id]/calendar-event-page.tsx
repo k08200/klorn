@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { ProFeatureNotice } from "../../../components/pro-feature-notice";
@@ -11,6 +11,7 @@ import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { safeMeetingHref } from "../../../lib/meeting-link";
 import { captureClientError } from "../../../lib/sentry";
+import { useRouteParam } from "../../../lib/use-route-param";
 import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 
 type Readiness = "ready" | "watch" | "needs_review";
@@ -534,8 +535,7 @@ function CalendarEventDetail({ id }: { id: string }) {
 }
 
 export default function CalendarEventPage() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
+  const id = useRouteParam("id", "/calendar/");
   if (!id) return null;
   return (
     <AuthGuard>

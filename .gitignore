@@ -8,6 +8,8 @@ results/
 test-results/
 .next/
 .next-dev/
+# Static export for Cloudflare Pages (pnpm --filter @klorn/web build:static)
+packages/web/out/
 
 # Local Claude Code state (session settings/worktrees — never commit)
 .claude/

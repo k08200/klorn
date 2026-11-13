@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
@@ -22,6 +22,7 @@ import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
+import { useRouteParam } from "../../../lib/use-route-param";
 import { postReminder } from "../_v2/post-reminder";
 import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
@@ -190,12 +191,11 @@ export default function EmailDetailPage() {
 
 function EmailDetailView() {
   const { t, locale } = useT();
-  const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { confirm } = useConfirm();
-  const id = params?.id;
+  const id = useRouteParam("id", "/email/");
   const shouldMarkRead = searchParams?.get("markRead") === "true";
   const queue = normalizeEmailQueue(searchParams?.get("queue"));
   const undoNotice = parseUndoNotice(searchParams);

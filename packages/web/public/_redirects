@@ -1,0 +1,41 @@
+# Redirects and rewrites for the static export on Cloudflare Pages
+# (docs/deploy/cloudflare-pages.md). scripts/cloudflare-pages.test.mjs (CI)
+# fails on any drift from next.config.ts or from the routes in src/app.
+#
+# Syntax: https://developers.cloudflare.com/pages/configuration/redirects/
+# "source destination status"; first match wins; static rules match before
+# dynamic ones (max 2,000 static + 100 dynamic, 1,000 characters per line).
+# Cloudflare applies a rule even when a file exists at the source path.
+
+# next.config.ts redirects(): permanent: false is a 307 on Next, so 307 here.
+/dashboard /inbox 307
+/tasks /inbox 307
+/notes /files 307
+/contacts /email/candidates 307
+/reminders /inbox 307
+/skills /settings/memory 307
+/notifications /briefing 307
+/workspace /files 307
+
+# Real pages that sit beside a dynamic route. Without these, /email/:id below
+# would rewrite /email/candidates to the email shell. A 200 to itself serves
+# the page's own file. ".txt" is the RSC payload Next's client router fetches
+# for in-app navigation on a static export.
+/email/candidates /email/candidates 200
+/email/candidates.txt /email/candidates.txt 200
+/email/subscriptions /email/subscriptions 200
+/email/subscriptions.txt /email/subscriptions.txt 200
+
+# Dynamic routes: every id is served by the one shell prerendered under the
+# placeholder id "_" (src/lib/route-param.ts); the address bar keeps the real
+# id, which the page reads from the URL. RSC payload before the HTML rule. A
+# trailing slash 308s to the bare path, as on Next (":id" never holds a "/").
+/email/candidates/:emailId.txt /email/candidates/_.txt 200
+/email/candidates/:emailId /email/candidates/_ 200
+/email/candidates/:emailId/ /email/candidates/:emailId 308
+/calendar/:id.txt /calendar/_.txt 200
+/calendar/:id /calendar/_ 200
+/calendar/:id/ /calendar/:id 308
+/email/:id.txt /email/_.txt 200
+/email/:id /email/_ 200
+/email/:id/ /email/:id 308

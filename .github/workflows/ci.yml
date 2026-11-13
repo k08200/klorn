@@ -223,6 +223,12 @@ jobs:
       # 22 type stripping) and pins the policy with the switch unset and on.
       - name: Web CSP pinned (Google Picker switch)
         run: node packages/web/scripts/check-csp.mjs
+      # Cloudflare Pages serves public/_headers and public/_redirects in place
+      # of next.config.ts headers()/redirects(), which a static export cannot
+      # run (docs/deploy/cloudflare-pages.md). Loads the real config and fails
+      # on any drift — these are the headers the CASA DAST was assessed on.
+      - name: Web Cloudflare _headers/_redirects match next.config.ts
+        run: node --test packages/web/scripts/cloudflare-pages.test.mjs
       - name: Build all packages
         run: pnpm -r build
       # D5c: built without the switch, the web bundle holds no Google Picker
@@ -235,6 +241,21 @@ jobs:
             echo "The Google Picker was compiled in without NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on"
             exit 1
           fi
+      # The static export Cloudflare Pages deploys must keep building (it
+      # builds into packages/web/out, so the server build above is untouched).
+      # build:static ends with scripts/check-static-export.mjs (shells, 404,
+      # _headers/_redirects vs this environment's config); the test -f lines
+      # are the visible smoke.
+      - name: Web static export (Cloudflare Pages)
+        run: |
+          pnpm --filter @klorn/web build:static
+          test -f packages/web/out/index.html
+          test -f packages/web/out/404.html
+          test -f packages/web/out/email/_.html
+          test -f packages/web/out/calendar/_.html
+          test -f packages/web/out/email/candidates/_.html
+          test -f packages/web/out/_headers
+          test -f packages/web/out/_redirects
 
   # Guards prod: prod deploys via `prisma migrate deploy` (start.sh), so a
   # schema.prisma change with no matching migration silently ships nothing and

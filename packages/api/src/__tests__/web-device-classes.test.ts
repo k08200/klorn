@@ -200,7 +200,7 @@ describe("Fold cover screen (< 360px): Today is the Push-only 'Needs you now' vi
   });
 
   it("the reader honours ?focus=reply from any entry, not only the keyboard path", () => {
-    const READER_PAGE = read("app/email/[id]/page.tsx");
+    const READER_PAGE = read("app/email/[id]/email-detail-page.tsx");
     expect(READER_PAGE).toMatch(
       /const focusReplyOnOpen = searchParams\?\.get\("focus"\) === "reply";/,
     );

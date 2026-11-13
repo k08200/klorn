@@ -30,6 +30,19 @@ export function settingsSectionHref(id: SettingsSectionId): string {
 }
 
 /**
+ * Where `/settings` forwards to: the first section, carrying the query and
+ * fragment along so OAuth callbacks (`?google=…`, `?inbox=…`), stored
+ * notification links and pre-split `#anchor` links keep working. Takes
+ * `location.search` / `location.hash`; anything not shaped like them is
+ * dropped rather than appended to the path.
+ */
+export function settingsIndexTarget(search: string, hash: string): string {
+  const query = search.startsWith("?") ? search : "";
+  const fragment = hash.startsWith("#") ? hash : "";
+  return `${settingsSectionHref(DEFAULT_SETTINGS_SECTION)}${query}${fragment}`;
+}
+
+/**
  * `/settings#<anchor>` targets from before the split, mapped to the section
  * that now holds the element. The keys are the element ids the single page
  * exposed (they are unchanged, so the fragment still scrolls to the control)
