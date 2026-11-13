@@ -88,6 +88,9 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       // reader gate) and mail/sent-history-import.ts. True for "true" or "cohort".
       CALENDAR_COATTENDANCE_ENABLED: cohortCapableFlag(env, "CALENDAR_COATTENDANCE_ENABLED"),
       SENT_HISTORY_BACKFILL_ENABLED: cohortCapableFlag(env, "SENT_HISTORY_BACKFILL_ENABLED"),
+      // Read per request by config.ts smartActionsLive/smartActionsOpenTo
+      // (routes/smart-actions.ts, /me user.smartActions). True for "true" or "cohort".
+      SMART_ACTIONS_ENABLED: cohortCapableFlag(env, "SMART_ACTIONS_ENABLED"),
       // Attention engine v3 policy (P3): interrupt budget on PUSH notifications.
       // Founder flip only, after replay + shadow data. Requires JUDGE_V3_SHADOW.
       JUDGE_V3_POLICY: dynamicFlag(env, "JUDGE_V3_POLICY"),

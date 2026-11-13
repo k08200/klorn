@@ -2910,6 +2910,52 @@ const ja: Record<string, string> = {
     "リクエストが受け付けられませんでした。モデル ID とメールの入力欄を確認してください。",
   "playground.error.upstream": "プロバイダーの応答: {detail}",
   "playground.footer.privacy": "プライバシー",
+  "smartActions.label": "このメールのクイック操作",
+  "smartActions.draftReply": "返信の下書き",
+  "smartActions.addToCalendar": "カレンダーに追加",
+  "smartActions.reply.title": "返信の下書き",
+  "smartActions.reply.drafting": "返信を下書きしています…",
+  "smartActions.reply.draftError":
+    "今は返信を下書きできません。しばらくしてからもう一度お試しください。",
+  "smartActions.reply.to": "宛先: {to}",
+  "smartActions.reply.subject": "件名: {subject}",
+  "smartActions.reply.sourceProactive":
+    "Klorn が事前に書いた下書きです。送信する前に読んで直してください。",
+  "smartActions.reply.sourceGenerated":
+    "Klorn が今書いた下書きです。送信する前に読んで直してください。",
+  "smartActions.reply.bodyLabel": "返信の本文",
+  "smartActions.reply.approval":
+    "許可したものだけが送られます — 送信・完全削除・転送は承認を待ちます。自分で作った自動返信ルールも承認として扱われます。",
+  "smartActions.reply.send": "送信",
+  "smartActions.reply.sending": "送信中…",
+  "smartActions.reply.sent": "送信しました。",
+  "smartActions.reply.receipt": "受領記録 {hash}",
+  "smartActions.reply.changed":
+    "送信していません: 送る前に返信が変わりました。確認してもう一度送信してください。",
+  "smartActions.reply.unknown":
+    "返信はすでに送信されている可能性があります。もう一度試す前に送信済みフォルダを確認してください。",
+  "smartActions.reply.error":
+    "返信の送信中に問題が起きました。もう一度試す前に送信済みフォルダを確認してください。",
+  "smartActions.event.reading": "このメールから日付を読み取っています…",
+  "smartActions.event.none": "このメールには日付も時刻もありません。",
+  "smartActions.event.error":
+    "今はこのメールの日付を読み取れません。しばらくしてからもう一度お試しください。",
+  "smartActions.event.quote": "メールの原文",
+  "smartActions.event.askMeridiem": "メールに午前か午後か書かれていません。どちらですか？",
+  "smartActions.event.askTime": "メールに開始時刻がありません。選んでください。",
+  "smartActions.event.askDate": "メールに日付がありません。選んでください。",
+  "smartActions.event.askWhen": "メールの日付と時刻がはっきりしません。両方選んでください。",
+  "smartActions.event.am": "午前 {time}",
+  "smartActions.event.pm": "午後 {time}",
+  "smartActions.event.durationLabel": "長さ（分）",
+  "smartActions.event.timeZone": "タイムゾーン: {zone}",
+  "smartActions.event.duplicate": "この時間にはすでにカレンダーに予定があります: {title}",
+  "smartActions.event.addAnyway": "それでも追加",
+  "smartActions.event.reminder": "30分前に通知",
+  "smartActions.event.reminderNotSet":
+    "通知には Google カレンダーの接続が必要なため、設定しませんでした。",
+  "smartActions.event.saveHint": "保存するには、タイトル・日付・開始時刻・長さを入力してください。",
+  "smartActions.event.savedWhen": "{date} {time}（{zone}）",
 };
 
 export default ja;

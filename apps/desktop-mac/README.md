@@ -180,18 +180,20 @@ center of the Mac it runs on.
   still unread — the server's read flag minus mail opened on this Mac
   (`TodayRules.dockBadgeCount`). Quiet hours never hide it; Settings ▸
   Notifications ▸ *Show count on Dock icon* does.
-- **Focus (not yet).** Banners post at the default (active) interruption
-  level, so a Focus mode silences them. `.timeSensitive` for PUSH/MEETING
-  needs the restricted `com.apple.developer.usernotifications.time-sensitive`
-  entitlement, which a Developer ID app may claim only with an embedded
-  Developer ID provisioning profile (Apple TN3125); claiming it without one
-  stops the app from launching. Founder steps: enable *Time Sensitive
-  Notifications* on the `ai.klorn.desktop` App ID; create a Developer ID
-  provisioning profile for it; store it as a repo secret; then a PR embeds it
-  at `Klorn.app/Contents/embedded.provisionprofile` and signs the Developer
-  ID build with an entitlements file that adds the key (the ad-hoc build
-  keeps `Klorn.entitlements` as is), runs the launch smoke on the signed app,
-  and sets `interruptionLevel = .timeSensitive` for PUSH/MEETING banners.
+- **Time Sensitive (Focus).** A banner about one PUSH- or MEETING-lane
+  mail posts at `interruptionLevel = .timeSensitive`
+  (`BannerInterruption.forLane`), so it gets through a Focus mode or the
+  scheduled Summary when the user lets Klorn's Time Sensitive notifications
+  through. The "+N more", held, while-closed and delayed summaries, and
+  meeting reminders, keep the default (active) level. The level needs the
+  restricted `com.apple.developer.usernotifications.time-sensitive`
+  entitlement, which only the Developer ID release claims, authorized by the
+  provisioning profile embedded at `Klorn.app/Contents/embedded.provisionprofile`
+  (Apple TN3125: claimed without a matching profile, the app does not launch).
+  The app reads its own signature once (`TimeSensitiveEntitlement`, SecTask);
+  a build without the entitlement (`swift run`, ad-hoc, a release without the
+  profile) posts every banner at the default level instead of asking macOS
+  for one it may not grant. See *Time Sensitive provisioning* below.
 - The ledger is written only when it changed.
 - An unbundled `swift run` has no notification center: banners are logged
   and skipped.
@@ -411,7 +413,8 @@ The workflow runs with or without signing:
   `xattr -dr com.apple.quarantine /Applications/Klorn.app`. The release notes say so.
 - **Notarized** (recommended for a public download) — with the six secrets below
   present the release is Developer-ID signed + Apple-notarized + stapled, so it
-  opens with a plain double-click (no `xattr`).
+  opens with a plain double-click (no `xattr`). A seventh, optional secret adds
+  Time Sensitive notifications (*Time Sensitive provisioning*).
 
 ### One-time notarization setup
 
@@ -441,7 +444,11 @@ Everything below is done by whoever owns the Apple Developer account (Team
    gh secret set MACOS_NOTARY_TEAM_ID               # P89M32649C
    gh secret set MACOS_NOTARY_APP_PASSWORD          # the app-specific password from step 4
    ```
-6. **Cut a notarized release** — push a *new* tag (releases are immutable, so bump
+6. **Time Sensitive provisioning profile** (optional; see below):
+   ```bash
+   base64 -i "Klorn_Desktop_Developer_ID.provisionprofile" | gh secret set MACOS_PROVISION_PROFILE_BASE64
+   ```
+7. **Cut a notarized release** — push a *new* tag (releases are immutable, so bump
    rather than re-tag `desktop-v0.1.1`):
    ```bash
    git tag desktop-v0.1.2 && git push origin desktop-v0.1.2
@@ -450,6 +457,49 @@ Everything below is done by whoever owns the Apple Developer account (Team
    release. It becomes "Latest", so the landing "Download for Mac" button —
    which points at `releases/latest/download/Klorn.dmg` — serves it with no
    further change, and the download now opens on a plain double-click.
+
+### Time Sensitive provisioning
+
+Done on 2026-11-13: the explicit App ID `ai.klorn.desktop` ("Klorn Desktop")
+has the *Time Sensitive Notifications* capability, and the Developer ID
+provisioning profile **"Klorn Desktop Developer ID"** was generated for it
+(App ID `P89M32649C.ai.klorn.desktop`, team `P89M32649C`, Time Sensitive on).
+Its base64 goes in the repo secret **`MACOS_PROVISION_PROFILE_BASE64`**
+(step 6 above).
+
+What the release does (`desktop-release.yml`), Developer ID builds only:
+
+- **Secret set.** The profile is decoded (`security cms -D`) in a temp dir
+  and checked against exactly what will be signed
+  (`scripts/check-provision-profile.swift`): App ID = team + this bundle's
+  `CFBundleIdentifier`, the team, Time Sensitive granted, a Developer ID
+  profile (`ProvisionsAllDevices`), not expired, and every restricted
+  entitlement in `Klorn.developerid.entitlements` in its allowlist. Any
+  mismatch fails the release. Then it is embedded at
+  `Contents/embedded.provisionprofile` and the app is signed with
+  `Klorn.developerid.entitlements` (`Klorn.entitlements` plus the App ID,
+  team and Time Sensitive keys). After signing, and again on the final
+  notarized app before the 20 s launch smoke, `scripts/check-signed-app.sh`
+  checks the signature's entitlements against the embedded profile and that
+  the signing certificate is one the profile lists.
+- **Secret not set.** Signed exactly as before with `Klorn.entitlements`,
+  with a `::warning::`. The launch smoke asserts there is no profile and no
+  Time Sensitive claim. The ad-hoc build never claims it either.
+
+The profile is not secret once shipped (it is inside every downloaded app),
+but the workflow never prints it. `scripts/test-check-provision-profile.sh`
+(run by `desktop.yml`) tests both scripts against fabricated profiles, and the
+release's step order (embed → sign → check → notarize → launch smoke).
+
+**Renewal.** The profile expires in 2044, but it is bound to the Developer ID
+Application certificate it was generated with, and **that certificate
+expires 2027-02-01**. After renewing the certificate (and updating
+`MACOS_DEVELOPER_ID_CERT_P12_BASE64` / `MACOS_SIGN_IDENTITY`), regenerate the
+"Klorn Desktop Developer ID" profile with the new certificate and update
+`MACOS_PROVISION_PROFILE_BASE64`. With the old profile the release fails at
+"Check the signed app's provisioning" ("signed with a certificate the profile
+does not list"), before notarization. To ship without Time Sensitive in the
+meantime, delete the secret.
 
 ## Release assets — both are load-bearing
 

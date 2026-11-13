@@ -10,6 +10,7 @@
 import type { BriefingStatus } from "@klorn/contract";
 import Link from "next/link";
 import { Markdown } from "../../../components/markdown";
+import { SmartActionsRow } from "../../../components/smart-actions/smart-actions-row";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../../components/ui/skeleton";
@@ -217,6 +218,7 @@ function TopFeedback({
               {action.label}
             </p>
             <PickLink pick={picks.find((p) => p.rank === action.rank)} onOpen={onOpenPick} />
+            <PickSmartActions pick={picks.find((p) => p.rank === action.rank)} />
             <fieldset disabled={savingRank === action.rank} className="mt-1 flex flex-wrap gap-2">
               <legend className="sr-only">
                 {t("assistantHub.briefing.feedback.legend", { item: action.label })}
@@ -257,6 +259,12 @@ function PickLink({ pick, onOpen }: { pick?: BriefingPick; onOpen: (rank: number
       {t("assistantHub.briefing.feedback.openMail")}
     </Link>
   );
+}
+
+/** "Draft reply" / "Add to calendar" for the pick's mail (SMART_ACTIONS_ENABLED; else nothing). */
+function PickSmartActions({ pick }: { pick?: BriefingPick }) {
+  if (!pick) return null;
+  return <SmartActionsRow emailId={pick.emailId} className="mt-1" />;
 }
 
 function BriefingSkeleton({ label }: { label: string }) {

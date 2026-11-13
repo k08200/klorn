@@ -95,6 +95,32 @@ describe("createEvent — all-day", () => {
   });
 });
 
+describe("createEvent — reminder (smart action's reminder chip)", () => {
+  it("sends one popup override when a reminder is asked for", async () => {
+    await createEvent(
+      "user-1",
+      "Sync",
+      "2026-08-01T06:00:00.000Z",
+      "2026-08-01T07:00:00.000Z",
+      undefined,
+      undefined,
+      [],
+      false,
+      { reminderMinutes: 30 },
+    );
+    const body = m.eventsInsertMock.mock.calls[0][0].requestBody;
+    expect(body.reminders).toEqual({
+      useDefault: false,
+      overrides: [{ method: "popup", minutes: 30 }],
+    });
+  });
+
+  it("leaves the calendar's default reminders alone otherwise", async () => {
+    await createEvent("user-1", "Sync", "2026-08-01T06:00:00.000Z", "2026-08-01T07:00:00.000Z");
+    expect(m.eventsInsertMock.mock.calls[0][0].requestBody).not.toHaveProperty("reminders");
+  });
+});
+
 describe("updateEvent", () => {
   it("patches exactly the changed fields on the Google event, times as a consistent pair", async () => {
     const result = await updateEvent("user-1", "goog-1", {

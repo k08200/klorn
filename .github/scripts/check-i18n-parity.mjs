@@ -223,6 +223,8 @@ const COPY_GUARD_PREFIXES = [
   // FREE-tier upgrade notices and the assistant's daily-allowance line (2026-10-30).
   "proFeature.",
   "dailyCap.",
+  // Smart actions: Draft reply → Send, Add to calendar (SMART_ACTIONS_ENABLED).
+  "smartActions.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */

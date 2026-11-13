@@ -2878,6 +2878,49 @@ const ko: Record<string, string> = {
   "playground.error.invalid": "요청이 받아들여지지 않았습니다. 모델 ID와 메일 입력란을 확인하세요.",
   "playground.error.upstream": "프로바이더 응답: {detail}",
   "playground.footer.privacy": "개인정보처리방침",
+  "smartActions.label": "이 메일 빠른 작업",
+  "smartActions.draftReply": "답장 초안 쓰기",
+  "smartActions.addToCalendar": "캘린더에 추가",
+  "smartActions.reply.title": "답장 초안",
+  "smartActions.reply.drafting": "답장 초안을 쓰는 중…",
+  "smartActions.reply.draftError": "지금은 답장 초안을 쓸 수 없어요. 잠시 후 다시 시도해 주세요.",
+  "smartActions.reply.to": "받는 사람: {to}",
+  "smartActions.reply.subject": "제목: {subject}",
+  "smartActions.reply.sourceProactive":
+    "Klorn이 미리 써 둔 초안이에요. 보내기 전에 읽고 고쳐 주세요.",
+  "smartActions.reply.sourceGenerated": "Klorn이 방금 쓴 초안이에요. 보내기 전에 읽고 고쳐 주세요.",
+  "smartActions.reply.bodyLabel": "답장 내용",
+  "smartActions.reply.approval":
+    "내가 허락한 것만 나갑니다 — 보내기, 영구 삭제, 전달은 내 승인을 기다립니다. 내가 직접 만든 자동 답장 규칙도 승인으로 칩니다.",
+  "smartActions.reply.send": "보내기",
+  "smartActions.reply.sending": "보내는 중…",
+  "smartActions.reply.sent": "보냈어요.",
+  "smartActions.reply.receipt": "영수증 {hash}",
+  "smartActions.reply.changed":
+    "보내지 않았어요: 나가기 전에 답장이 바뀌었어요. 확인하고 다시 보내 주세요.",
+  "smartActions.reply.unknown":
+    "답장이 이미 나갔을 수 있어요. 다시 시도하기 전에 보낸편지함을 확인해 주세요.",
+  "smartActions.reply.error":
+    "답장을 보내는 중 문제가 생겼어요. 다시 시도하기 전에 보낸편지함을 확인해 주세요.",
+  "smartActions.event.reading": "이 메일에서 날짜를 읽는 중…",
+  "smartActions.event.none": "이 메일에는 날짜나 시간이 없어요.",
+  "smartActions.event.error": "지금은 이 메일의 날짜를 읽을 수 없어요. 잠시 후 다시 시도해 주세요.",
+  "smartActions.event.quote": "메일 원문",
+  "smartActions.event.askMeridiem": "메일에 오전인지 오후인지 나와 있지 않아요. 어느 쪽인가요?",
+  "smartActions.event.askTime": "메일에 시작 시간이 없어요. 골라 주세요.",
+  "smartActions.event.askDate": "메일에 날짜가 없어요. 골라 주세요.",
+  "smartActions.event.askWhen": "메일에 날짜와 시간이 분명하지 않아요. 둘 다 골라 주세요.",
+  "smartActions.event.am": "오전 {time}",
+  "smartActions.event.pm": "오후 {time}",
+  "smartActions.event.durationLabel": "길이(분)",
+  "smartActions.event.timeZone": "시간대: {zone}",
+  "smartActions.event.duplicate": "이 시간에 이미 캘린더에 있어요: {title}",
+  "smartActions.event.addAnyway": "그래도 추가",
+  "smartActions.event.reminder": "30분 전에 알림",
+  "smartActions.event.reminderNotSet":
+    "알림은 Google 캘린더가 연결되어 있어야 해서 설정하지 않았어요.",
+  "smartActions.event.saveHint": "저장하려면 제목, 날짜, 시작 시간, 길이를 채워 주세요.",
+  "smartActions.event.savedWhen": "{date} {time} ({zone})",
 };
 
 export default ko;
