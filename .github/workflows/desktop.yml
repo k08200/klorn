@@ -48,3 +48,16 @@ jobs:
       # before any GUI, so it's headless-safe). Non-zero exit = a check failed.
       - name: Self-check
         run: cd apps/desktop-mac && swift run KlornMac --self-check
+
+      # The same harness through the ASSEMBLED Klorn.app, as desktop-release.yml
+      # runs it. A bundle identity changes what runs (Bundle.main, the
+      # notification center): desktop-v0.4.80120's release failed there, after
+      # the tag, while this job was green. Debug and host arch only:
+      # make-app.sh reuses the build above, so this adds the assembly (~5 s)
+      # and one more harness run. It never launches the GUI (--self-check
+      # exits first).
+      - name: Self-check the PACKAGED app
+        run: |
+          cd apps/desktop-mac
+          scripts/make-app.sh debug
+          ./Klorn.app/Contents/MacOS/KlornMac --self-check

@@ -190,8 +190,21 @@ describe("clientAddressBucket", () => {
     ["a leading run of zero groups", "::1", "0:0:0:0"],
     ["a trailing run of zero groups", "fe80::", "fe80:0:0:0"],
     ["a full eight-group address", "2001:db8:1:2:3:4:5:6", "2001:db8:1:2"],
+    ["a run that ends inside the prefix", "2001::1:5:6:7:8", "2001:0:0:1"],
+    ["a dotted-quad tail after a run", "2001:db8:1::5:1.2.3.4", "2001:db8:1:0"],
   ] as const)("handles %s", (_label, address, bucket) => {
     expect(clientAddressBucket(viaEdge(address), CF_ENV)).toBe(bucket);
+  });
+
+  it("finds the /64 when `::` stops short of it", () => {
+    // RFC 5952 writes 2001:0:0:1:5:6:7:8 as 2001::1:5:6:7:8: the elided run
+    // ends inside the prefix, so the prefix's last group comes after `::`.
+    // Read as zero, one /64 split into two buckets (twice the quota) and
+    // neighbouring /64s merged into one.
+    const longInterfaceId = clientAddressBucket(viaEdge("2001::1:5:6:7:8"), CF_ENV);
+    const shortInterfaceId = clientAddressBucket(viaEdge("2001:0:0:1::1"), CF_ENV);
+    expect(longInterfaceId).toBe(shortInterfaceId);
+    expect(clientAddressBucket(viaEdge("2001::2:5:6:7:8"), CF_ENV)).not.toBe(longInterfaceId);
   });
 
   it("leaves an IPv4 client keyed on its own address", () => {
