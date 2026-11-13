@@ -2,6 +2,14 @@
 #
 # Trigger: push a tag like `desktop-v0.1.0` (or run manually via workflow_dispatch).
 #
+# Latest vs pre-release: a tag push always publishes a normal release, which
+# becomes "Latest". The in-app updater (UpdateCheck.latestReleaseAPI) and the
+# landing's DMG link both read `releases/latest`, so it reaches users at once.
+# A manual run with `prerelease: true` publishes with `--prerelease
+# --latest=false` instead: `releases/latest` ignores it, so nobody is offered it
+# until it is promoted (`gh release edit <tag> --prerelease=false --latest`).
+# A manual run creates its tag at the commit it built (`--target $GITHUB_SHA`).
+#
 # Signing/notarization is OPTIONAL — the job runs either way:
 #   • With the secrets below present → Developer-ID signed + Apple-notarized +
 #     stapled, so the download opens with a plain double-click.
@@ -49,6 +57,11 @@ on:
       tag:
         description: "Release tag to create (e.g. desktop-v0.1.0)"
         required: true
+      prerelease:
+        description: "Publish as a pre-release (not Latest): the in-app updater and the landing DMG link ignore it until promoted"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -71,6 +84,27 @@ jobs:
       - name: Resolve release tag
         id: meta
         run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check the dispatch tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        # A tag push is already a `desktop-v*` tag at the commit being built. A
+        # manual run types its tag by hand and the release step creates it, so
+        # check it here, before a 20-minute build: the updater only understands
+        # `desktop-vX.Y.Z` (UpdateCheck.compare), and an existing tag would get
+        # this run's binaries attached to some other commit.
+        run: |
+          if ! [[ "$TAG" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag '$TAG' is not desktop-vX.Y.Z — the in-app updater could never match it"
+            exit 1
+          fi
+          STATUS=0; git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null || STATUS=$?
+          case "$STATUS" in
+            2) echo "tag $TAG does not exist yet — the release step creates it at $GITHUB_SHA" ;;
+            0) echo "::error::tag $TAG already exists — a manual run creates its tag; pick a new version"; exit 1 ;;
+            *) echo "::error::could not query origin for tag $TAG (git ls-remote exit $STATUS)"; exit 1 ;;
+          esac
 
       - name: Detect signing secrets
         id: signing
@@ -337,9 +371,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SIGNED: ${{ steps.signing.outputs.enabled }}
           TAG: ${{ steps.meta.outputs.tag }}
+          EVENT: ${{ github.event_name }}
+          # Only a manual run can ask for a pre-release; a tag push is "false".
+          PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease }}
         run: |
+          # A tag push adds no flags: the release is created exactly as before
+          # and becomes Latest.
+          FLAGS=()
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            # The tag does not exist yet (checked above). Without --target, gh
+            # would create it from the default branch's HEAD at publish time,
+            # which is not this build's commit if main moved during the run.
+            FLAGS+=(--target "$GITHUB_SHA")
+          fi
+          if [ "$PRERELEASE" = "true" ]; then
+            # Not Latest, so `releases/latest` (the in-app updater, the landing
+            # DMG link) keeps serving the previous release until promotion.
+            FLAGS+=(--prerelease --latest=false)
+          fi
           NOTES="$RUNNER_TEMP/notes.md"
           {
+            if [ "$PRERELEASE" = "true" ]; then
+              echo "> **Pre-release for verification — not offered by the in-app updater until promoted.**"
+              echo
+            fi
             echo "Native macOS app — every connected mail account and calendar in one window, sorted into five lanes. Push mail and meetings about to start arrive as macOS notifications; \`⌥⌘K\` opens Klorn from anywhere."
             echo
             echo "## Install"
@@ -369,4 +424,5 @@ jobs:
             "$RUNNER_TEMP/Klorn-macos.zip#Same build, zipped (in-app updater channel)" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Klorn Desktop $TAG" \
-            --notes-file "$NOTES"
+            --notes-file "$NOTES" \
+            "${FLAGS[@]}"
