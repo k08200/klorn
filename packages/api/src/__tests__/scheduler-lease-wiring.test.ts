@@ -4,14 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // each under its own name, and a refused lease means the tick does no work at
 // all (the lease itself logs the skip, see scheduler-lease.test.ts).
 
-const m = vi.hoisted(() => ({
-  granted: false,
-  rejectWork: false,
-  leases: [] as string[],
-  attempts: [] as string[],
-  dbCalls: [] as string[],
-  drainActionOutbox: vi.fn(async () => ({ completed: 0, retried: 0, dead: 0, reclaimed: 0 })),
-}));
+const m = vi.hoisted(() => {
+  const detachedJobs: string[] = [];
+  return {
+    granted: false,
+    rejectWork: false,
+    leases: [] as string[],
+    attempts: [] as string[],
+    dbCalls: [] as string[],
+    /** Every granted tick's own promise, so a test can wait it out. */
+    ticks: [] as Promise<void>[],
+    /** The fire-and-forget jobs a granted tick started, once each has run. */
+    detachedJobs,
+    /** Stands in for a detached job: records that it ran and settles at once. */
+    job: (name: string) => async () => {
+      detachedJobs.push(name);
+    },
+    drainActionOutbox: vi.fn(async () => ({ completed: 0, retried: 0, dead: 0, reclaimed: 0 })),
+  };
+});
 
 vi.mock("../scheduler-lease.js", () => ({
   createSchedulerLease: ({ name }: { name: string }) => {
@@ -21,13 +32,34 @@ vi.mock("../scheduler-lease.js", () => ({
         m.attempts.push(name);
         if (m.rejectWork) throw new Error("escaped the tick");
         if (!m.granted) return false;
-        await work();
+        const tick = work();
+        m.ticks.push(tick);
+        await tick;
         return true;
       },
     };
   },
 }));
 vi.mock("../agentcore/action-outbox.js", () => ({ drainActionOutbox: m.drainActionOutbox }));
+// The jobs a first automation tick starts without awaiting, each behind a
+// dynamic import (on a Wednesday, flags off; the hourly checks wait out a boot
+// delay). The real ones load and run after the test has returned, and on CI
+// (2026-11-13) one logged after the file's environment was torn down, which
+// fails the run. These settle as soon as they are called, so the test can
+// wait for every one. A new detached job in runAutomationTick belongs here and
+// in DETACHED_AUTOMATION_JOBS below.
+vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: m.job("daily-digest") }));
+vi.mock("../judge/calibration-snapshot.js", () => ({
+  runDailyCalibrationSnapshots: m.job("calibration-snapshot"),
+}));
+vi.mock("../learning/ontology-proposals-store.js", () => ({
+  recomputeOntologyProposalsSafe: m.job("ontology-proposals"),
+}));
+// Also imported statically (email-firewall), so only the heartbeat is swapped.
+vi.mock("../judge/judge-health.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../judge/judge-health.js")>()),
+  runJudgeHeartbeatCheck: m.job("judge-heartbeat"),
+}));
 vi.mock("../providers/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../providers/index.js")>()),
   hasLlmProvider: () => true,
@@ -48,6 +80,18 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
+/**
+ * Midweek in every time zone (the tick reads local getDay()), so the Sunday
+ * and Monday jobs stay out of it.
+ */
+const FIXED_NOW = new Date("2026-11-11T12:00:00Z");
+const DETACHED_AUTOMATION_JOBS = [
+  "calibration-snapshot",
+  "daily-digest",
+  "judge-heartbeat",
+  "ontology-proposals",
+];
+
 async function until(condition: () => boolean): Promise<void> {
   for (let i = 0; i < 200 && !condition(); i++) await vi.advanceTimersByTimeAsync(10);
   expect(condition()).toBe(true);
@@ -55,12 +99,15 @@ async function until(condition: () => boolean): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.setSystemTime(FIXED_NOW);
   vi.resetModules();
   m.granted = false;
   m.rejectWork = false;
   m.leases.length = 0;
   m.attempts.length = 0;
   m.dbCalls.length = 0;
+  m.ticks.length = 0;
+  m.detachedJobs.length = 0;
   m.drainActionOutbox.mockClear();
   // A granted tick runs against the empty db mock above, and some of its jobs
   // say so; only the refused ticks' silence is asserted.
@@ -74,8 +121,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// The granted cases come last: a granted automation tick starts fire-and-forget
-// jobs whose table calls land after the test ends.
+// A granted case waits out its tick (and the automation tick's detached jobs)
+// before it returns, so no work from one test runs into the next or past the
+// file's teardown.
 describe("schedulers take each tick through the scheduler lease", () => {
   it("automation: a refused lease runs nothing", async () => {
     const scheduler = await import("../automation-scheduler.js");
@@ -145,6 +193,7 @@ describe("schedulers take each tick through the scheduler lease", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await until(() => m.dbCalls.includes("pendingAction.findMany"));
     scheduler.stopAutonomousAgent();
+    await Promise.all(m.ticks);
   });
 
   it("automation: a granted lease runs the tick inside it", async () => {
@@ -154,5 +203,11 @@ describe("schedulers take each tick through the scheduler lease", () => {
     scheduler.startAutomationScheduler();
     await until(() => m.drainActionOutbox.mock.calls.length > 0);
     scheduler.stopAutomationScheduler();
+
+    // Nothing the tick started may outlive the test: the tick itself, then the
+    // imports it left pending, then the jobs behind them.
+    await Promise.all(m.ticks);
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => expect([...m.detachedJobs].sort()).toEqual(DETACHED_AUTOMATION_JOBS));
   });
 });
