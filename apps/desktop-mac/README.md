@@ -416,6 +416,41 @@ The workflow runs with or without signing:
   opens with a plain double-click (no `xattr`). A seventh, optional secret adds
   Time Sensitive notifications (*Time Sensitive provisioning*).
 
+### Pre-release: verify a build before the updater offers it
+
+A tag push publishes a normal release that becomes **Latest** at once. The
+in-app updater (`UpdateCheck.latestReleaseAPI`,
+`api.github.com/repos/k08200/klorn/releases/latest`) and the landing's
+`releases/latest/download/Klorn.dmg` link both read Latest, and
+**`releases/latest` never returns a pre-release**. So for a risky build (a new
+entitlement, signing change, anything that could touch keychain access), cut it
+as a pre-release, install the DMG on your own Mac, and promote it only once it
+works:
+
+```bash
+# 1. Build + publish as a pre-release (run from main; do NOT push the tag yourself)
+gh workflow run desktop-release.yml -f tag=desktop-v0.4.NNNNN -f prerelease=true
+
+# 2. Download Klorn.dmg from the pre-release on the Releases page, install, test.
+
+# 3. Promote: it becomes Latest, and installed copies are offered the update
+gh release edit desktop-v0.4.NNNNN --prerelease=false --latest
+```
+
+- **The tag is created by the run, not by you.** A manual run builds the
+  dispatched ref (`main` by default) and the publish step creates
+  `desktop-v0.4.NNNNN` at exactly the commit it built (`gh release create
+  --target $GITHUB_SHA`). The run fails before building if the tag is not
+  `desktop-vX.Y.Z` or already exists. A tag created by the workflow's token does
+  not trigger the tag-push run, so there is no second, Latest release.
+- **Same build as a tag push.** The bundle version is `${TAG#desktop-v}` either
+  way, so `desktop-v0.4.NNNNN` ships as `0.4.NNNNN`; signing, notarization and
+  the launch smoke are identical. Only the release flags differ.
+- **Not promoting** leaves the previous release as Latest; delete the
+  pre-release (and its tag) to abandon it. The pre-release note line at the top
+  of the release body stays after promotion; edit it out on the release page.
+- `-f prerelease=false` (the default) behaves like a tag push: Latest at once.
+
 ### One-time notarization setup
 
 Everything below is done by whoever owns the Apple Developer account (Team
