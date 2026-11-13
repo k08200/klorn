@@ -48,6 +48,8 @@ const DEFAULT_PROXY_HOPS = 1;
 const MAX_PROXY_HOPS = 10;
 const UNKNOWN = "unknown";
 const IPV4_MAPPED_PREFIX = "::ffff:";
+/** 16-bit groups in a whole IPv6 address. */
+const IPV6_GROUPS = 8;
 /** 16-bit groups in a /64 — the prefix an IPv6 client is allocated. */
 const IPV6_PREFIX_GROUPS = 4;
 
@@ -155,20 +157,30 @@ function canonicalGroup(group: string): string {
 }
 
 /**
+ * The groups one side of `::` spells out. A dotted-quad tail is the last two
+ * groups; its value never reaches a /64, so only its width is kept.
+ */
+function spelledGroups(part: string | undefined): string[] {
+  if (part === undefined || part === "") return [];
+  return part.split(":").flatMap((group) => (group.includes(".") ? ["0", "0"] : [group]));
+}
+
+/**
  * The /64 an IPv6 address sits in; an IPv4 address (or the unknown marker)
  * unchanged.
  *
- * Only the groups left of `::` can fall inside the prefix, because `::` stands
- * for a run of zero groups — so whatever is still missing at the /64 boundary
- * is zero, whatever follows it.
+ * The address is expanded to all eight groups first: `::` can end inside the
+ * prefix (RFC 5952 writes 2001:0:0:1:5:6:7:8 as 2001::1:5:6:7:8), so groups
+ * right of it can belong to the /64 too.
  */
 function addressBucket(address: string): string {
   if (!isIPv6(address)) return address;
-  const [head] = address.split("::");
-  const groups = head === "" ? [] : head.split(":");
-  const written = groups.slice(0, IPV6_PREFIX_GROUPS).map(canonicalGroup);
-  const elided = Array.from({ length: IPV6_PREFIX_GROUPS - written.length }, () => "0");
-  return [...written, ...elided].join(":");
+  const [head, tail] = address.split("::");
+  const left = spelledGroups(head);
+  const right = spelledGroups(tail);
+  const elided = tail === undefined ? 0 : IPV6_GROUPS - left.length - right.length;
+  const groups = [...left, ...Array.from({ length: elided }, () => "0"), ...right];
+  return groups.slice(0, IPV6_PREFIX_GROUPS).map(canonicalGroup).join(":");
 }
 
 /**

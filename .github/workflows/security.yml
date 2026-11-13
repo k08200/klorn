@@ -2,7 +2,8 @@ name: Security
 
 # PR-facing security gate — one fast job (~15s). The slow, non-gating scans
 # (CodeQL, dependency audit) live in security-deep.yml on push-to-main + a
-# weekly cron so they never occupy a row in the PR checks list.
+# cron (audit daily, CodeQL weekly) so they never occupy a row in the PR
+# checks list.
 
 on:
   push:
