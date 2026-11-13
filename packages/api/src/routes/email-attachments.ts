@@ -14,6 +14,7 @@ import { prisma } from "../db.js";
 import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
+import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
 import {
   analyzeEmailAttachmentsForEmail,
   analyzePendingEmailAttachments,
@@ -41,7 +42,12 @@ import {
   MAX_VISION_ATTACHMENT_BYTES,
   VISION_OCR_MAX_TOKENS,
 } from "../mail/vision-attachment-policy.js";
-import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
+import {
+  attachmentContentDisposition,
+  parseJsonArray,
+  parseJsonRecord,
+  safeAttachmentFilename,
+} from "./email.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -472,27 +478,17 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       });
       if (!row) return reply.code(404).send({ error: "Attachment not found" });
 
-      // The source message may live on a linked secondary inbox (#761, same
-      // class as #757) — fetch its attachment from THAT account, not always primary.
-      const auth = await resolveMailClient(uid, row.email.linkedInboxAccountId);
-      if (!auth) return reply.code(409).send({ error: "Gmail not connected" });
-
-      const { google } = await import("googleapis");
-      const gmail = google.gmail({ version: "v1", auth });
-      const res = await gmail.users.messages.attachments.get({
-        userId: "me",
-        messageId: row.email.gmailId,
-        id: row.gmailAttachmentId,
-      });
-      const data = res.data.data;
-      if (!data) return reply.code(404).send({ error: "Attachment body not found" });
+      // From the mailbox the message came from: the linked inbox's own account
+      // (#761, same class as #757) and its own provider (Gmail, IMAP, Outlook).
+      const fetched = await fetchStoredAttachmentBytes(uid, row);
+      if (!fetched.ok) return reply.code(fetched.status).send({ error: fetched.error });
 
       const filename = safeAttachmentFilename(row.filename);
-      const buffer = Buffer.from(data, "base64url");
+      const buffer = fetched.bytes;
       reply
         .header("Content-Type", row.mimeType || "application/octet-stream")
         .header("Content-Length", String(buffer.length))
-        .header("Content-Disposition", `attachment; filename="${filename}"`);
+        .header("Content-Disposition", attachmentContentDisposition(filename));
       return reply.send(buffer);
     },
   );
@@ -527,23 +523,10 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       const needsOriginal = requiresOriginalAttachment(target);
       const prefersOriginal = target === "pdf" || target === "docx" || target === "xlsx";
       if (needsOriginal || prefersOriginal) {
-        // Same linked-inbox fix as the download route above (#761).
-        const auth = await resolveMailClient(uid, row.email.linkedInboxAccountId);
-        if (!auth && needsOriginal) return reply.code(409).send({ error: "Gmail not connected" });
-
-        if (auth) {
-          const { google } = await import("googleapis");
-          const gmail = google.gmail({ version: "v1", auth });
-          const res = await gmail.users.messages.attachments.get({
-            userId: "me",
-            messageId: row.email.gmailId,
-            id: row.gmailAttachmentId,
-          });
-          const data = res.data.data;
-          if (!data && needsOriginal)
-            return reply.code(404).send({ error: "Attachment body not found" });
-          sourceBuffer = data ? Buffer.from(data, "base64url") : undefined;
-        }
+        // Same mailbox-aware fetch as the download route above (#761).
+        const fetched = await fetchStoredAttachmentBytes(uid, row);
+        if (fetched.ok) sourceBuffer = fetched.bytes;
+        else if (needsOriginal) return reply.code(fetched.status).send({ error: fetched.error });
       }
 
       try {
@@ -577,7 +560,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           .header("Content-Type", converted.mimeType)
           .header("Content-Length", String(converted.buffer.length))
           .header("X-Klorn-Conversion-Id", result.id)
-          .header("Content-Disposition", `attachment; filename="${filename}"`);
+          .header("Content-Disposition", attachmentContentDisposition(filename));
         return reply.send(converted.buffer);
       } catch (err) {
         if (err instanceof FileConversionError) {

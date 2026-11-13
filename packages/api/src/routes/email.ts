@@ -56,6 +56,7 @@ import {
 } from "../learning/trust-score.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
+import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import {
@@ -80,7 +81,7 @@ import {
   syncLinkedInboxesForUser,
 } from "../mail/email-sync.js";
 import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mail/email-text.js";
-import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
+import { getLinkedInboxClients } from "../mail/gmail.js";
 import { NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
@@ -655,6 +656,26 @@ export function serializeReplyFeedback(row: {
 export function safeAttachmentFilename(filename: string): string {
   const trimmed = filename.replace(/[\r\n"]/g, "_").trim();
   return trimmed || "attachment";
+}
+
+/**
+ * Content-Disposition for a download. A header value must be Latin-1 (Node throws
+ * on anything else, a 500 for every Korean filename), so the quoted name is an
+ * ASCII stand-in and the real one rides in RFC 5987 `filename*`.
+ */
+export function attachmentContentDisposition(filename: string): string {
+  const safe = safeAttachmentFilename(filename);
+  const ascii = safe.replace(/[^\x20-\x7e]|\\/g, "_");
+  let encoded: string;
+  try {
+    encoded = encodeURIComponent(safe).replace(
+      /['()*]/g,
+      (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+  } catch {
+    return `attachment; filename="${ascii}"`; // a lone surrogate cannot be encoded
+  }
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 const listEmailsQuerySchema = {
@@ -1296,22 +1317,22 @@ export async function emailRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: "Inline image not found" });
       }
 
-      const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
-      if (!auth) return reply.code(404).send({ error: "Mail source not connected" });
       try {
-        const { google } = await import("googleapis");
-        const gmail = google.gmail({ version: "v1", auth });
-        const res = await gmail.users.messages.attachments.get({
-          userId: "me",
-          messageId: dbEmail.gmailId,
-          id: attachment.gmailAttachmentId,
+        // From the message's own mailbox: Gmail, IMAP (BODY[section]) or Outlook.
+        const fetched = await fetchStoredAttachmentBytes(uid, {
+          gmailAttachmentId: attachment.gmailAttachmentId,
+          partKey: attachment.partKey,
+          email: { gmailId: dbEmail.gmailId, linkedInboxAccountId: dbEmail.linkedInboxAccountId },
         });
-        const data = res.data.data;
-        if (!data) return reply.code(404).send({ error: "Inline image not found" });
+        if (!fetched.ok) {
+          const error =
+            fetched.status === 409 ? "Mail source not connected" : "Inline image not found";
+          return reply.code(404).send({ error });
+        }
         return reply
           .type(attachment.mimeType || "application/octet-stream")
           .header("cache-control", "private, max-age=3600")
-          .send(Buffer.from(data, "base64url"));
+          .send(fetched.bytes);
       } catch (err) {
         console.warn(`[EMAIL] inline image fetch failed for ${dbEmail.id}/${cid}:`, err);
         return reply.code(404).send({ error: "Inline image not found" });

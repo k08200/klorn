@@ -24,13 +24,16 @@
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
+import { needsAttachmentScan } from "./attachment-scan-gate.js";
 import { formatMailbox } from "./email-address.js";
+import type { RawEmailAttachment } from "./email-attachments.js";
+import { listOutlookAttachments } from "./outlook-attachments.js";
 
 const GRAPH_ORIGIN = "https://graph.microsoft.com/";
 const PAGE_SIZE = 50;
 const DEFAULT_MAX_PAGES = 4;
 const SELECT_FIELDS =
-  "id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,isRead,flag,body";
+  "id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,isRead,flag,body,hasAttachments";
 
 export interface OutlookSyncArgs {
   userId: string;
@@ -69,6 +72,8 @@ interface GraphMessage {
   isRead?: boolean | null;
   flag?: { flagStatus?: string | null } | null;
   body?: { content?: string | null } | null;
+  /** False for a message whose only attachments are inline (Graph semantics). */
+  hasAttachments?: boolean | null;
 }
 interface GraphDeltaPage {
   value?: GraphMessage[];
@@ -80,6 +85,27 @@ function formatAddress(addr: GraphEmailAddress | null | undefined): string {
   const a = addr?.emailAddress?.address?.trim() ?? "";
   const n = addr?.emailAddress?.name?.trim() ?? "";
   return formatMailbox(n === a ? "" : n, a);
+}
+
+/**
+ * The message's attachments, listed once per message: a delta re-delivers a
+ * message whenever a flag changes, so only a new row (or one without attachment
+ * rows yet) is listed. Never throws: a failure persists the message without
+ * attachments, and the next delivery of it tries again.
+ */
+async function attachmentsOf(
+  args: OutlookSyncArgs,
+  msg: GraphMessage & { id: string },
+  stableId: string,
+): Promise<RawEmailAttachment[]> {
+  if (msg.hasAttachments !== true) return [];
+  try {
+    if (!(await needsAttachmentScan(args.userId, stableId))) return [];
+    return await listOutlookAttachments(args.accessToken, msg.id);
+  } catch (err) {
+    console.warn(`[outlook-sync] attachments skipped for ${stableId}`, err);
+    return [];
+  }
 }
 
 function initialDeltaUrl(): string {
@@ -166,6 +192,7 @@ export async function syncOutlookInbox(args: OutlookSyncArgs): Promise<OutlookSy
       // same message reaching two linked Outlook mailboxes — in the
       // (userId, gmailId) dedup key.
       const stableId = `outlook:${args.email}:${msg.id}`;
+      const attachments = await attachmentsOf(args, { ...msg, id: msg.id }, stableId);
 
       try {
         const persisted = await persistGmailEmail(
@@ -184,7 +211,7 @@ export async function syncOutlookInbox(args: OutlookSyncArgs): Promise<OutlookSy
             isRead,
             isStarred,
             receivedAt,
-            attachments: [],
+            attachments,
           },
           {
             linkedInboxAccountId: args.linkedInboxAccountId,
