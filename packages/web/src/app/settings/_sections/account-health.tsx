@@ -15,7 +15,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ListSkeleton } from "../../../components/skeleton";
 import StatusChip from "../../../components/ui/status-chip";
 import {
+  ACCOUNT_HEALTH_REFRESH_EVENT,
   accountSectionId,
+  IMAP_STATUS_REFRESH_EVENT,
   lastSyncCopy,
   PROVIDER_LABEL,
   statusChip,
@@ -33,6 +35,7 @@ function AccountRow({ account, now }: { account: AccountHealthEntry; now: number
   const chip = statusChip(account.status);
   const sync = lastSyncCopy(account.lastSyncedAt, now, account.provider);
   const problem = syncProblemKey(account.status, account.errorCode, account.provider);
+  const section = accountSectionId(account.provider, account.kind);
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="min-w-0">
@@ -52,9 +55,10 @@ function AccountRow({ account, now }: { account: AccountHealthEntry; now: number
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <StatusChip status={chip.chip} label={t(chip.labelKey)} />
-        {account.action === "reconnect" && (
+        {account.action === "reconnect" && section && (
           <a
-            href={`#${accountSectionId(account.provider, account.kind)}`}
+            href={`#${section}`}
+            onClick={() => window.dispatchEvent(new Event(IMAP_STATUS_REFRESH_EVENT))}
             className={`${PRIMARY_BTN} min-h-11`}
           >
             {t("accountHealth.action.reconnect")}
@@ -87,7 +91,12 @@ export function AccountHealthSection() {
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(timer);
+    const refresh = () => void load();
+    window.addEventListener(ACCOUNT_HEALTH_REFRESH_EVENT, refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener(ACCOUNT_HEALTH_REFRESH_EVENT, refresh);
+    };
   }, [load]);
 
   return (
@@ -108,7 +117,7 @@ export function AccountHealthSection() {
         ) : accounts.length === 0 ? (
           <p className="p-4 text-role-body text-ink-mid">{t("accountHealth.empty")}</p>
         ) : (
-          <ul className="divide-y divide-line-soft" aria-live="polite">
+          <ul className="divide-y divide-line-soft">
             {accounts.map((account) => (
               <AccountRow key={account.id ?? "primary"} account={account} now={now} />
             ))}

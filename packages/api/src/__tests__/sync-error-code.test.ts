@@ -17,12 +17,25 @@ describe("imapSyncErrorCode", () => {
       "unreachable",
     );
     expect(imapSyncErrorCode(new Error("server said something odd"))).toBe("error");
+    // imapflow marks every refused LOGIN; a busy or rate-limiting server is not a revoked password.
+    const refused = (code?: string) =>
+      Object.assign(new Error("x"), { authenticationFailed: true, serverResponseCode: code });
+    expect(imapSyncErrorCode(refused("AUTHENTICATIONFAILED"))).toBe("auth");
+    expect(imapSyncErrorCode(refused())).toBe("auth");
+    expect(imapSyncErrorCode(refused("UNAVAILABLE"))).toBe("throttled");
+    expect(imapSyncErrorCode(refused("limit"))).toBe("throttled");
   });
 });
 
 describe("recordSyncError", () => {
   beforeEach(() => {
     updateMany.mockReset();
+  });
+
+  it("binds the write to the password the poll used, when given", async () => {
+    updateMany.mockResolvedValue({ count: 0 });
+    await recordSyncError("u1", "row-1", "auth", "v2:old");
+    expect(updateMany.mock.calls[0]?.[0]?.where).toMatchObject({ imapPasswordCipher: "v2:old" });
   });
 
   it("writes the code only when it changed, scoped by id AND user", async () => {

@@ -16,11 +16,39 @@ export const PROVIDER_LABEL: Record<InboxProvider, string> = {
   KLORN: "Klorn",
 };
 
-/** Where in Settings -> Accounts the account's own controls (reconnect) live. */
-export function accountSectionId(provider: InboxProvider, kind: "primary" | "linked"): string {
-  if (provider === "GOOGLE") return kind === "primary" ? "account-connections" : "account-google";
-  return `account-${provider.toLowerCase()}`;
+/**
+ * Where in Settings -> Accounts the account's own controls (reconnect) live; null
+ * for a provider without a card on the web (generic IMAP, the Klorn address).
+ */
+export function accountSectionId(
+  provider: InboxProvider,
+  kind: "primary" | "linked",
+): string | null {
+  switch (provider) {
+    case "GOOGLE":
+      return kind === "primary" ? "account-connections" : "account-google";
+    case "ICLOUD":
+    case "NAVER":
+    case "OUTLOOK":
+      return `account-${provider.toLowerCase()}`;
+    default:
+      return null;
+  }
 }
+
+/**
+ * The Account health list and the iCloud/Naver cards load separately; each asks
+ * the other to reload when it learns something (a reconnect, a click on Reconnect).
+ */
+export const ACCOUNT_HEALTH_REFRESH_EVENT = "klorn:account-health-refresh";
+export const IMAP_STATUS_REFRESH_EVENT = "klorn:imap-status-refresh";
+
+const KNOWN_ERROR_CODES: ReadonlySet<string> = new Set([
+  "auth",
+  "unreachable",
+  "throttled",
+  "error",
+]);
 
 /** StatusChip's three shapes: never color alone (WCAG 1.4.1), always a label. */
 export function statusChip(status: AccountHealthStatus): {
@@ -77,7 +105,10 @@ export function syncProblemKey(
     return provider === "ICLOUD" ? "accountHealth.error.authApple" : "accountHealth.error.auth";
   }
   if (status !== "error" || !errorCode) return null;
-  return `accountHealth.error.${errorCode}`;
+  // A code this client does not know (a newer server) reads as the generic failure.
+  return KNOWN_ERROR_CODES.has(errorCode)
+    ? `accountHealth.error.${errorCode}`
+    : "accountHealth.error.error";
 }
 
 /** An IMAP account as `/api/{kind}-imap/status` lists it. */

@@ -47,7 +47,6 @@ export async function syncOutlookAccountsForUser(
       const accessToken = await resolveAccessToken(userId, row);
       if (!accessToken) {
         // resolveAccessToken has flagged the row for reconnect where that applies.
-        await recordSyncError(userId, row.id, "auth");
         total.errors += 1;
         continue;
       }
@@ -71,8 +70,15 @@ export async function syncOutlookAccountsForUser(
         continue;
       }
       if (result.failure) {
-        // Throttled or failed: not a successful check, and the cursor stays put.
+        // Throttled or failed: not a successful check. Pages read before the failure
+        // still count: their link is kept, so the next tick resumes after them.
         await recordSyncError(userId, row.id, result.failure);
+        if (result.cursor) {
+          await prisma.linkedInboxAccount.updateMany({
+            where: { id: row.id, userId },
+            data: { historyId: result.cursor },
+          });
+        }
         continue;
       }
       await prisma.linkedInboxAccount.updateMany({

@@ -369,6 +369,8 @@ describe("flag ON: connect with a user-supplied host", () => {
         imapHost: "imap.fastmail.com:993",
         imapPasswordCipher: "cipher",
         needsReconnect: false,
+        syncErrorCode: null,
+        syncErrorAt: null,
       },
     });
     expect(db.create).not.toHaveBeenCalled();

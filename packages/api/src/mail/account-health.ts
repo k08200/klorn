@@ -5,8 +5,8 @@
  *
  * Sources: the primary Google grant (UserToken "google": a row without a refresh
  * token needs reconnecting; lastSyncedAt is stamped by email-sync.ts), and every
- * LinkedInboxAccount (needsReconnect, lastSyncedAt, syncErrorCode written by the
- * Google, IMAP and Outlook polls).
+ * LinkedInboxAccount (needsReconnect and lastSyncedAt from every poll; syncErrorCode
+ * from the IMAP and Outlook polls).
  */
 
 import type {

@@ -53,6 +53,8 @@ describe("syncProblemKey", () => {
     expect(syncProblemKey("error", "throttled", "OUTLOOK")).toBe("accountHealth.error.throttled");
     expect(syncProblemKey("ok", null, "GOOGLE")).toBeNull();
     expect(syncProblemKey("pending", null, "ICLOUD")).toBeNull();
+    // A code a newer server sends that this client does not know: the generic text.
+    expect(syncProblemKey("error", "quota" as never, "NAVER")).toBe("accountHealth.error.error");
   });
 });
 
@@ -89,6 +91,9 @@ describe("status", () => {
   it("links a reconnect to the account's own section in Settings -> Accounts", () => {
     expect(accountSectionId("ICLOUD", "linked")).toBe("account-icloud");
     expect(accountSectionId("GOOGLE", "primary")).toBe("account-connections");
+    // No web card to land on: no link (the reason text still says what happened).
+    expect(accountSectionId("IMAP", "linked")).toBeNull();
+    expect(accountSectionId("KLORN", "linked")).toBeNull();
     const page = readFileSync(
       join(__dirname, "../../../web/src/app/settings/_sections/accounts-section.tsx"),
       "utf8",

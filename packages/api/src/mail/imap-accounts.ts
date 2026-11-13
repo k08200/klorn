@@ -28,12 +28,13 @@ import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox, syncImapMessage } from "./imap-sync.js";
 import { canonicalUidValidity } from "./imap-uidvalidity.js";
 import { sanitizeLogText } from "./log-text.js";
+import { isCredentialCoolingDown, startCredentialCooldown } from "./providers/imap-session.js";
 import {
-  isCredentialCoolingDown,
-  isImapAuthFailure,
-  startCredentialCooldown,
-} from "./providers/imap-session.js";
-import { imapSyncErrorCode, recordSyncError, syncSucceededFields } from "./sync-error-code.js";
+  imapSyncErrorCode,
+  isCredentialRefusal,
+  recordSyncError,
+  syncSucceededFields,
+} from "./sync-error-code.js";
 
 export interface ImapSyncAggregate {
   fetched: number;
@@ -70,22 +71,21 @@ const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
   `${rowId}:${passwordCipher}`;
 
 /**
- * No row is polled while its login is cooling down after a rejection (the in-process
- * cooldown it shares with the actions: a revoked password is not sent to the host
- * again on every tick). A generic row also stays out while it carries the durable
- * `needsReconnect` flag (cleared by a successful reconnect) and while it is backed off
- * after failing in another way (imap-poll-backoff.ts: a stalling host costs a serial
- * tick up to ~105 s). A fixed-host row (iCloud, Naver) keeps being polled, once per
- * cooldown, while flagged: a login the provider refused only for a while heals on the
- * next successful poll, which clears the flag.
+ * A generic row stays out of the poll while its login is known to be rejected (the
+ * durable `needsReconnect` flag set below and cleared by a successful reconnect, or the
+ * in-process cooldown it shares with the actions: a revoked password is not sent to
+ * the host again on every tick) and while it is backed off after failing in another way
+ * (imap-poll-backoff.ts: a stalling host costs a serial tick up to ~105 s). A fixed-host
+ * row (iCloud, Naver) is polled every tick as before, flagged or not: a refusal is
+ * flagged on the poll that meets it, and a later successful poll clears the flag.
  */
 function isPausedForPolling(
   row: { id: string; needsReconnect?: boolean | null },
   credentialKey: string,
-  userHost: boolean,
 ): boolean {
-  if (isCredentialCoolingDown(credentialKey)) return true;
-  return userHost && (row.needsReconnect === true || isPollBackedOff(row.id));
+  return (
+    row.needsReconnect === true || isCredentialCoolingDown(credentialKey) || isPollBackedOff(row.id)
+  );
 }
 
 /**
@@ -115,8 +115,7 @@ async function flagForReconnect(
 
 /**
  * A poll failed. Log it (one capped line for a generic host: the text came from a
- * server the user chose), stop sending a rejected password and flag the row for
- * reconnect at once (Apple revokes app-specific passwords when the account password
+ * server the user chose), flag a row whose password was refused for reconnect at once (Apple revokes app-specific passwords when the account password
  * changes: Settings says "reconnect" after this one poll), record why for Settings,
  * and report to Sentry once per account and failure kind instead of on every tick.
  * Never throws.
@@ -143,13 +142,15 @@ async function handlePollFailure(
     // silent per-account failure here would strand one mailbox invisibly.
     console.warn(`[${scope}] sync failed for row ${rowId} (${kind}):`, err);
   }
-  if (!isImapAuthFailure(err)) {
+  if (!isCredentialRefusal(err)) {
     if (userHost) notePollBackoff(rowId);
   } else {
-    startCredentialCooldown(provider, rowId, credentialKey);
+    // The shared cooldown stops a generic host being sent the rejected password every
+    // tick; a fixed host keeps its every-tick poll (and its actions keep their own).
+    if (userHost) startCredentialCooldown(provider, rowId, credentialKey);
     await flagForReconnect(provider, { userId, rowId }, passwordCipher);
   }
-  await recordSyncError(userId, rowId, imapSyncErrorCode(err));
+  await recordSyncError(userId, rowId, imapSyncErrorCode(err), passwordCipher);
   if (shouldReportPollFailure(rowId, kind)) {
     captureError(err, {
       tags: { scope: `${scope}.account-sync` },
@@ -209,7 +210,7 @@ export async function syncImapAccountsForUser(
       surfaceSkippedPoll(row.id, userId, scope); // its previous poll is still running
       continue;
     }
-    if (isPausedForPolling(row, credentialKey, userHost)) continue;
+    if (userHost && isPausedForPolling(row, credentialKey)) continue;
     beginPoll(row.id);
     try {
       const result = await syncImapInbox({

@@ -156,6 +156,7 @@ describe("polling a generic IMAP row", () => {
       where: {
         id: "row-1",
         userId: "u1",
+        imapPasswordCipher: "v2:cipher",
         OR: [{ syncErrorCode: null }, { syncErrorCode: { not: "unreachable" } }],
       },
       data: { syncErrorCode: "unreachable", syncErrorAt: expect.any(Date) },
@@ -420,31 +421,54 @@ describe("Naver and iCloud: a revoked app password says reconnect after one poll
       imapPasswordCipher: "v2:n",
     });
 
-  it("a rejected login is flagged at once, cooled down, recorded, and reported once", async () => {
+  it("a refused password is flagged on the first poll, recorded, and reported once", async () => {
     fake.findMany.mockResolvedValue([naverRow()]);
     fake.connect.mockRejectedValue(authRejected());
 
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
 
-    expect(flagCalls()).toEqual([
-      [
-        {
-          where: { id: "row-n", userId: "u1", imapPasswordCipher: "v2:n", needsReconnect: false },
-          data: { needsReconnect: true },
-        },
-      ],
+    // Only while the row still holds the password the poll used, and not yet flagged.
+    expect(flagCalls()[0]).toEqual([
+      {
+        where: { id: "row-n", userId: "u1", imapPasswordCipher: "v2:n", needsReconnect: false },
+        data: { needsReconnect: true },
+      },
     ]);
     expect(fake.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { syncErrorCode: "auth", syncErrorAt: expect.any(Date) } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ imapPasswordCipher: "v2:n" }),
+        data: { syncErrorCode: "auth", syncErrorAt: expect.any(Date) },
+      }),
     );
-    // The rejected password is not sent again on the next tick (shared 15-minute cooldown).
-    expect(isCredentialCoolingDown("row-n:v2:n")).toBe(true);
-    expect(fake.connect).toHaveBeenCalledTimes(1);
-    expect(captureScopes()).toEqual(["naver-imap.sync", "naver-imap.account-sync"]);
+    // A fixed host keeps its every-tick poll (a later success clears the flag), and the
+    // poll does not lock the user's own actions out.
+    expect(fake.connect).toHaveBeenCalledTimes(2);
+    expect(isCredentialCoolingDown("row-n:v2:n")).toBe(false);
+    expect(captureScopes()).toEqual([
+      "naver-imap.sync",
+      "naver-imap.account-sync",
+      "naver-imap.sync",
+    ]);
   });
 
-  it("a flagged row is still polled once the cooldown is over, and a success clears the flag", async () => {
+  it("a login refused for the moment (RFC 5530 UNAVAILABLE) is not a revoked password", async () => {
+    fake.findMany.mockResolvedValue([naverRow()]);
+    fake.connect.mockRejectedValue(
+      Object.assign(authRejected(), { serverResponseCode: "UNAVAILABLE" }),
+    );
+
+    await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
+
+    expect(flagCalls()).toHaveLength(0);
+    expect(fake.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { syncErrorCode: "throttled", syncErrorAt: expect.any(Date) },
+      }),
+    );
+  });
+
+  it("a flagged row is still polled, and a success clears the flag", async () => {
     fake.findMany.mockResolvedValue([{ ...naverRow(), needsReconnect: true }]);
     fake.getMailboxLock.mockResolvedValue({ release: fake.release });
 

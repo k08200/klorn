@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import {
+  ACCOUNT_HEALTH_REFRESH_EVENT,
   type ImapStatusAccount,
   imapAccountStatus,
   lastSyncCopy,
@@ -55,8 +56,13 @@ export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountS
       }
       setPassword("");
       await onReconnected();
+      window.dispatchEvent(new Event(ACCOUNT_HEALTH_REFRESH_EVENT));
     } catch (err) {
-      captureClientError(err, { scope: `${kind}-imap.reconnect` });
+      // A refused password (4xx) is the user's to fix, not an error to report.
+      const message = err instanceof Error ? err.message : String(err);
+      if (!message.startsWith("API 4")) {
+        captureClientError(err, { scope: `${kind}-imap.reconnect` });
+      }
       setFailed(true);
     } finally {
       setSubmitting(false);
@@ -84,7 +90,7 @@ export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountS
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              autoComplete="off"
+              autoComplete="new-password"
             />
           </div>
           <Button type="submit" size="sm" disabled={submitting || !password} className="min-h-11">

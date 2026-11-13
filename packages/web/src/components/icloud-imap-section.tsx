@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
-import { type ImapStatusAccount, imapAccountStatus } from "../lib/account-health";
+import {
+  IMAP_STATUS_REFRESH_EVENT,
+  type ImapStatusAccount,
+  imapAccountStatus,
+} from "../lib/account-health";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
@@ -100,6 +104,10 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
 
   useEffect(() => {
     loadStatus();
+    // Account health's Reconnect link: the flag may be newer than this card.
+    const refresh = () => void loadStatus();
+    window.addEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
   }, [loadStatus]);
 
   const handleConnect = async (e: React.FormEvent) => {
