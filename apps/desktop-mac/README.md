@@ -114,7 +114,11 @@ drafts are refused for a session stamp that has ended, before any request.
 
 `AppModel.reconcilePush` → `onNewPush` → `PushAlerter` → `PushNotifying`
 (`SystemPushNotifier` in the app, a fake in the self-check), all in
-`Notifications.swift`.
+`Notifications.swift`. A model built with an injected token store (every
+self-check model) gets `NoPushNotifier`, which answers `.unavailable` as an
+unbundled `swift run` does: the harness gives the same result through the
+packaged Klorn.app, and never reads, prompts or clears the real notification
+center of the Mac it runs on.
 
 - **Dedupe across launches.** `PushLedger` records every announced (or
   baselined) PUSH id per account (JWT subject), persisted in UserDefaults
@@ -156,6 +160,12 @@ drafts are refused for a session stamp that has ended, before any request.
   meeting starts. The same applies while macOS's permission prompt is
   unanswered (a banner posted then is refused). The mail is in Today and
   Mail meanwhile. A server without the endpoint (404) gates nothing.
+- **VoiceOver does not wait for macOS.** When only macOS holds a banner back
+  (the server allows, its prompt is unanswered;
+  `ServerAlertGate.waitsForMacOSOnly`), VoiceOver hears the mail or meeting
+  at once, each once per wait (`PermissionWaitVoiceOver`), and the banner
+  keeps waiting; with the banner, once macOS answers, it is heard again.
+  Quiet hours and no answer from the server keep VoiceOver quiet, as before.
 - **Receipts.** The Mac tells the server what became of a banner
   (`POST /api/notifications/desktop/receipts`, `NotificationReceipts.swift`):
   `shown` when macOS accepted it (the `add` completion with no error),
@@ -473,8 +483,12 @@ parsing, and snooze-time logic are verified by a plain-Swift harness that runs
 here:
 
 ```bash
-swift run KlornMac --self-check    # exit 0 = all pass (33 checks)
+swift run KlornMac --self-check    # exit 0 = all pass
 ```
+
+CI (`desktop.yml`) also runs it through the assembled bundle
+(`scripts/make-app.sh debug`, then `./Klorn.app/Contents/MacOS/KlornMac
+--self-check`), as the release does: a bundle identity changes what runs.
 
 A full XCTest suite can be added when building under Xcode/CI.
 

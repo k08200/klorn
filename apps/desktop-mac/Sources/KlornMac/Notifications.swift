@@ -346,6 +346,21 @@ final class SystemPushNotifier: PushNotifying {
     }
 }
 
+/// The notifier of a model that is not the shipped app's (built with an
+/// injected token store: the self-check). It answers as an unbundled
+/// `swift run` does — `.unavailable`, nothing posted — so the harness gives
+/// the same result packaged or not. Through the assembled Klorn.app the real
+/// center would answer with the Mac's own permission (a CI runner's is never
+/// answered, which held every banner and failed desktop-v0.4.80120's
+/// release), and could prompt or clear that Mac's real Klorn banners.
+@MainActor
+final class NoPushNotifier: PushNotifying {
+    func requestAuthorization() async -> NotificationPermission { .unavailable }
+    func permission() async -> NotificationPermission { .unavailable }
+    func post(_ banner: PushBanner) {}
+    func clearAll() {}
+}
+
 /// UNUserNotificationCenter's callback APIs, called from outside any actor.
 ///
 /// Their completion handlers run on the notification center's own queue. A
@@ -432,6 +447,13 @@ final class PushAlerter {
         guard model.settings.notificationsEnabled else { return nil }
         model.pushNotifier.post(banner)
         return banner
+    }
+
+    /// VoiceOver alone, for mail or a meeting whose banner waits only for
+    /// macOS's permission prompt (`AppModel.onVoiceOverOnly`). WCAG 4.1.3:
+    /// whatever the banner switch, and whatever macOS says about banners.
+    func announceOnly(_ message: String) {
+        announce(message)
     }
 
     /// VoiceOver announcement for newly arrived PUSH. Pure for testing.

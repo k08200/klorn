@@ -22,7 +22,9 @@ API_URL="${2:-https://klorn-api.onrender.com}"
 # desktop-v* tag → "dev". The in-app update check compares this against the
 # newest release tag, so a hardcoded value would nag about updates forever
 # (or never); "dev" makes the check answer "unknown" on local builds.
-VERSION="${3:-$(git describe --tags --match 'desktop-v*' --abbrev=0 2>/dev/null | sed 's/^desktop-v//')}"
+# `|| true`: with no desktop-v* tag (a shallow CI checkout) git describe fails,
+# and under `set -e -o pipefail` that ended the script before the "dev" fallback.
+VERSION="${3:-$(git describe --tags --match 'desktop-v*' --abbrev=0 2>/dev/null | sed 's/^desktop-v//' || true)}"
 VERSION="${VERSION:-dev}"
 APP="Klorn.app"
 
