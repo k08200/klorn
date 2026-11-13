@@ -76,8 +76,18 @@ enum ServerAlertGate {
     static func verdict(
         _ kind: InterruptKind, state: AlertStateWire?, permission: NotificationPermission
     ) -> AlertVerdict {
-        let server = verdict(kind, state: state)
-        return server == .allowed && permission == .notDetermined ? .unknown : server
+        waitsForMacOSOnly(kind, state: state, permission: permission) ? .unknown : verdict(kind, state: state)
+    }
+
+    /// Whether only macOS holds a banner of `kind` back: the server allows
+    /// it and macOS's banner prompt has no answer yet. The banner waits
+    /// (`verdict(_:state:permission:)`); VoiceOver does not (2026-11-13) —
+    /// macOS's permission is about banners, and a user who denied them hears
+    /// every announcement anyway (`PermissionWaitVoiceOver`). Pure.
+    static func waitsForMacOSOnly(
+        _ kind: InterruptKind, state: AlertStateWire?, permission: NotificationPermission
+    ) -> Bool {
+        permission == .notDetermined && verdict(kind, state: state) == .allowed
     }
 
     /// The verdict for `kind`. No answer is `.unknown`; an answer with no
@@ -108,4 +118,26 @@ enum AlertVerdict: Equatable, Sendable {
     /// PUSH mail is held and, with mail already held, waits for a real
     /// answer on the next pass.
     case unknown
+}
+
+/// VoiceOver while macOS's banner prompt has no answer (2026-11-13).
+///
+/// Since 2026-11-12 a banner waits while macOS has not answered its prompt
+/// (a banner posted then is refused and lost). The VoiceOver announcement
+/// rode the same path, so a VoiceOver user heard no new urgent mail until
+/// they answered a question about banners, while a user who had denied
+/// banners heard all of it. Now, when only macOS holds a banner back
+/// (`ServerAlertGate.waitsForMacOSOnly`), VoiceOver hears the mail or meeting
+/// at once and the banner keeps waiting. A waiting mail or meeting is offered
+/// again on every pass, so each is heard once per wait; it is heard again,
+/// once, with its banner when macOS answers.
+enum PermissionWaitVoiceOver {
+    /// `items` not heard yet in this wait (by `key`, first occurrence kept),
+    /// and `heard` with them. Pure.
+    static func unheard<T>(_ items: [T], key: (T) -> String, heard: Set<String>)
+        -> (items: [T], heard: Set<String>) {
+        var next = heard
+        let fresh = items.filter { next.insert(key($0)).inserted }
+        return (fresh, next)
+    }
 }

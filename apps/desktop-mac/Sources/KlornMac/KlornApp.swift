@@ -175,6 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         model.onClosedSummary = { [weak alerter] items in alerter?.handleHeldSummary(items, kind: .whileClosed) }
         // Urgent mail held while the server's gate gave no answer: one summary.
         model.onDelayedSummary = { [weak alerter] items in alerter?.handleHeldSummary(items, kind: .delayed) }
+        // A banner waiting only for macOS's permission prompt: VoiceOver now.
+        model.onVoiceOverOnly = { [weak alerter] message in alerter?.announceOnly(message) }
         // The Dock badge: Today's "Needs you now" mail still unread (N4). Not
         // an interrupt, so quiet hours leave it alone; the Settings switch hides it.
         let applyDockBadge = { [weak model] in

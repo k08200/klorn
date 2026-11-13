@@ -42,6 +42,16 @@ final class AppModel {
     /// alert gate gave no answer, newest first, once it answers "allowed"
     /// (2026-11-12): ONE "N urgent emails need you" summary.
     var onDelayedSummary: (([FirewallItem]) -> Void)?
+    /// Called with a VoiceOver announcement for mail or a meeting whose
+    /// banner waits only for macOS's permission prompt (2026-11-13,
+    /// `PermissionWaitVoiceOver`): the banner comes once the user answers,
+    /// the announcement now. The AppDelegate wires this to `PushAlerter`.
+    @ObservationIgnored var onVoiceOverOnly: ((String) -> Void)?
+    /// What VoiceOver heard during the current wait for macOS's answer, by
+    /// banner identifier: a waiting mail or meeting is offered again each
+    /// pass and must be heard once. Emptied once macOS answers, and at
+    /// sign-out.
+    @ObservationIgnored private var heardWhileMacOSWaits = Set<String>()
     /// Called with the Dock badge count whenever it changes (N4). Always on
     /// the main actor.
     @ObservationIgnored var onDockBadgeCountChanged: ((Int) -> Void)?
@@ -348,7 +358,10 @@ final class AppModel {
         self.tokenStore = tokenStore
         let receipts = NotificationReceiptReporter.live(api: api)
         self.receipts = receipts
-        self.pushNotifier = SystemPushNotifier(receipts: receipts)
+        // The shipped app (Keychain token) posts real banners; a harness
+        // model answers as an unbundled run does, packaged or not
+        // (`NoPushNotifier`), and never touches this Mac's notifications.
+        self.pushNotifier = persists ? SystemPushNotifier(receipts: receipts) : NoPushNotifier()
         self.deviceCalendars = DeviceCalendarBridge(
             api: api,
             currentUser: { SessionIdentity.userId(fromToken: tokenStore.load()) })
@@ -2447,6 +2460,7 @@ final class AppModel {
         realtime = nil
         pushLedgerStore.clear()
         heldAskAgainAt = .distantPast
+        heardWhileMacOSWaits = []
         dismissed = []
         clearSelection()
         didRequestNotifyAuth = false
@@ -2763,6 +2777,12 @@ final class AppModel {
         // Re-read: another tick may have handled this meeting during the wait.
         let announced = PushLedger.resolve(stored: meetingAlertStore.load(), owner: owner)
         guard !announced.notified.contains(due.id) else { return }
+        noteMacOSAnswer(permission)
+        if ServerAlertGate.waitsForMacOSOnly(.meeting, state: state, permission: permission) {
+            voiceOverWhileMacOSWaits(
+                [due], key: { PushNotifier.meetingIdentifier(for: $0.id) },
+                message: { _ in MeetingBanner.make(for: due, now: now).title })
+        }
         switch ServerAlertGate.verdict(.meeting, state: state, permission: permission) {
         case .allowed:
             if onMeetingSoon?(due) == true {
@@ -2775,6 +2795,36 @@ final class AppModel {
         case .unknown:
             Log.app.info("meeting banner waits: no answer from the alert gate or macOS")
         }
+    }
+
+    /// macOS's banner permission as this pass read it: once macOS has an
+    /// answer, the wait VoiceOver covered is over.
+    private func noteMacOSAnswer(_ permission: NotificationPermission) {
+        if permission != .notDetermined { heardWhileMacOSWaits = [] }
+    }
+
+    /// VoiceOver for what waits only for macOS's prompt
+    /// (`PermissionWaitVoiceOver`): each once per wait, by banner identifier.
+    private func voiceOverWhileMacOSWaits<T>(
+        _ items: [T], key: (T) -> String, message: ([T]) -> String
+    ) {
+        let (unheard, heard) = PermissionWaitVoiceOver.unheard(items, key: key, heard: heardWhileMacOSWaits)
+        heardWhileMacOSWaits = heard
+        if !unheard.isEmpty { onVoiceOverOnly?(message(unheard)) }
+    }
+
+    /// The mail VoiceOver hears while only macOS holds its banners: what
+    /// would ring once macOS answers (`HeldBanners.resolve` as if allowed).
+    private func voiceOverForMailWaitingOnMacOS(
+        ledger: PushLedger, plan: PushLedger.Plan, fresh: [FirewallItem],
+        eligible: [FirewallItem], missed: [FirewallItem]
+    ) {
+        let due = HeldBanners.resolve(
+            verdict: .allowed, ledger: ledger,
+            fresh: fresh, unseenPush: plan.unseenPush, eligible: eligible, missed: missed)
+        voiceOverWhileMacOSWaits(
+            due.post + due.summary, key: { PushNotifier.notificationIdentifier(for: $0.id) },
+            message: { PushAlerter.announcement(for: $0) })
     }
 
     /// The server's "may Klorn interrupt now" verdict (`AlertStateWire`), read
@@ -3000,7 +3050,9 @@ final class AppModel {
     ///   mail is held like quiet-hours mail and asked about again on the next
     ///   pass (no five-minute wait), coming back as its own banner or ONE "N
     ///   urgent emails need you" summary (`onDelayedSummary`); new MEETING
-    ///   mail is offered again on the next pass.
+    ///   mail is offered again on the next pass. When only macOS holds it
+    ///   back (the server allows), VoiceOver hears what would ring now,
+    ///   once per wait (`onVoiceOverOnly`, 2026-11-13).
     /// Every new mail reaches `onNewPush`: `PushAlerter` folds a burst past
     /// `PushLedger.maxBannersPerSync` into one summary (`BannerBatch`).
     /// The first pass after launch (decision N6): the new PUSH mail from the
@@ -3049,6 +3101,10 @@ final class AppModel {
             verdict: verdict, ledger: current,
             fresh: fresh, unseenPush: plan.unseenPush, eligible: eligible, missed: missed)
         if outcome.next != current { pushLedgerStore.save(outcome.next) }
+        noteMacOSAnswer(permission)
+        if ServerAlertGate.waitsForMacOSOnly(.emailUrgent, state: state, permission: permission) {
+            voiceOverForMailWaitingOnMacOS(ledger: current, plan: plan, fresh: fresh, eligible: eligible, missed: missed)
+        }
         if verdict == .quietHours { heldAskAgainAt = now.addingTimeInterval(HeldBanners.askAgainSeconds) }
         if let reason = ServerAlertGate.heldReason(.emailUrgent, state: state) {
             Log.app.info("mail banners held by the server: \(reason, privacy: .public)")
