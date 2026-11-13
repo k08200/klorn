@@ -51,7 +51,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!loading && !user) {
       const query = typeof window !== "undefined" ? window.location.search.slice(1) : "";
       const next = `${pathname}${query ? `?${query}` : ""}`;
-      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      // Carry the reason when there WAS a session and it expired, so a
+      // protected page still explains the bounce. It used to come from the
+      // redirect inside apiFetch, which could not tell a protected page from
+      // a public one and so fired on /playground too (#1727).
+      const reason = authError === "session_expired" ? "error=session_expired&" : "";
+      router.replace(`/login?${reason}next=${encodeURIComponent(next)}`);
       return;
     }
     // User is signed in but NO mail source is attached (no Google grant, no

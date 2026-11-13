@@ -65,7 +65,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  authError: "api_unavailable" | null;
+  authError: "api_unavailable" | "session_expired" | null;
   googleConnected: boolean | null;
   /** Google was connected once and the grant is now unusable — reconnect. */
   googleNeedsReconnect: boolean;
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<"api_unavailable" | null>(null);
+  const [authError, setAuthError] = useState<"api_unavailable" | "session_expired" | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [googleNeedsReconnect, setGoogleNeedsReconnect] = useState(false);
   const [hasMailSource, setHasMailSource] = useState<boolean | null>(null);
@@ -173,9 +173,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           googleNeedsReconnect?: boolean;
           hasAnyMailSource?: boolean;
         };
-      }>("/api/auth/me", {
-        headers: { Authorization: `Bearer ${stored}` },
-      })
+      }>(
+        "/api/auth/me",
+        { headers: { Authorization: `Bearer ${stored}` } },
+        // This runs on EVERY route, public ones included, so a stale token
+        // must not bounce a visitor off /playground. The catch below clears
+        // it and AuthGuard handles the routes that need a session (#1727).
+        { redirectOnSessionExpiry: false },
+      )
         .then((data) => {
           setUser(data.user);
           // UNIFIED_HOME: keep the home hint for the callers that route before
@@ -199,6 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (isUnauthorized) {
             clearStoredAuthToken();
             setToken(null);
+            // Only AuthGuard reads this, so a public page is unaffected; it is
+            // what keeps "your session expired" on the protected routes that
+            // used to get it from the redirect inside apiFetch.
+            setAuthError("session_expired");
           } else {
             setAuthError("api_unavailable");
           }

@@ -53,6 +53,21 @@ export function clearStoredAuthToken(): void {
 // 401 on these endpoints means bad credentials, not session expiry — don't redirect.
 const AUTH_ENDPOINTS_NO_REDIRECT = ["/api/auth/login", "/api/auth/register"];
 
+export interface ApiFetchOptions {
+  /**
+   * Whether a 401 may pull the page out from under the caller (default: it may).
+   *
+   * Pass false when the call is a PROBE rather than something the visitor
+   * asked for — the bootstrap `/api/auth/me` that AuthProvider runs on every
+   * route, including public ones. A 401 there means the stored token is stale,
+   * not that a session the visitor was using has ended, and /playground has no
+   * session to expire: it is public by design and is the link in the launch
+   * posts. The caller clears the token instead, and AuthGuard decides what a
+   * missing session means for the routes that opted into protection (#1727).
+   */
+  redirectOnSessionExpiry?: boolean;
+}
+
 // Module-level flag prevents duplicate redirects when multiple requests fail in parallel.
 let isHandling401 = false;
 
@@ -65,7 +80,11 @@ function handleSessionExpired(): void {
   window.location.href = `/login?error=session_expired${nextParam}`;
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  options?: ApiFetchOptions,
+): Promise<T> {
   const token = getStoredAuthToken();
   // A multipart body (a Klorn drive upload) needs the browser's own
   // Content-Type, which carries the boundary; a JSON one would break it.
@@ -86,7 +105,12 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     headers,
   });
 
-  if (res.status === 401 && token && !AUTH_ENDPOINTS_NO_REDIRECT.some((p) => path.startsWith(p))) {
+  if (
+    res.status === 401 &&
+    token &&
+    options?.redirectOnSessionExpiry !== false &&
+    !AUTH_ENDPOINTS_NO_REDIRECT.some((p) => path.startsWith(p))
+  ) {
     handleSessionExpired();
   }
 
