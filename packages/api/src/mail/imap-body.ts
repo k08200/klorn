@@ -10,9 +10,11 @@
  *
  * The poll now also fetches the top-level Content-Type and
  * Content-Transfer-Encoding, and this reader walks the MIME tree from them to
- * the first text/plain part (else the first text/html), undoing the transfer
- * encoding and the charset (TextDecoder: EUC-KR for Naver, ISO-2022-JP, …).
- * Attachments, parts named like files, and message/rfc822 are skipped.
+ * the first text/plain part and the first text/html part, undoing the transfer
+ * encoding and the charset (TextDecoder: EUC-KR for Naver, ISO-2022-JP, …). The
+ * text is the plain part (else the HTML projected to text); the HTML part is the
+ * row's htmlBody. Attachments, parts named like files, and message/rfc822 are
+ * skipped here (imap-attachments.ts lists them).
  *
  * Why not a full MIME parser: sender-controlled input on the single API event
  * loop. postal-mime (measured 2026-10-16) is super-linear on a `<` flood in an
@@ -30,16 +32,16 @@ import { capStored } from "./imap-envelope.js";
 import { stripNul } from "./text-normalize.js";
 
 export const IMAP_DECODE_MAX_BYTES = 256 * 1024;
-const MAX_HEADER_BYTES = 8 * 1024;
+export const MAX_HEADER_BYTES = 8 * 1024;
 // Real trees nest deeper than four (mixed > signed > mixed > related >
 // alternative is five); each level rescans only its own part.
-const MAX_MIME_DEPTH = 8;
+export const MAX_MIME_DEPTH = 8;
 // Parts VISITED across the whole tree; each multipart level also lists at most
 // this many children.
-const MAX_MIME_PARTS = 64;
+export const MAX_MIME_PARTS = 64;
 // RFC 2046 caps a boundary at 70 characters; a longer, sender-chosen one would
 // make each delimiter search cost its length times the body.
-const MAX_BOUNDARY_CHARS = 70;
+export const MAX_BOUNDARY_CHARS = 70;
 // htmlToPlainText runs sanitize-html, whose cost grows faster than linearly in
 // nesting, and the poll decodes its whole 50-message window every cycle: an
 // HTML-only body is cut first (16K '<b>': 6 ms; 64K: up to ~110 ms). Long
@@ -66,6 +68,15 @@ interface MimeHeaders {
 interface FoundText {
   plain?: string;
   html?: string;
+  /** The HTML part ran into the end of a cut input: its text is usable, its markup is not stored. */
+  htmlCut?: boolean;
+}
+
+interface WalkState {
+  parts: number;
+  /** The decoded input, and whether it is only the start of the body. */
+  root: Buffer;
+  cut: boolean;
 }
 
 function rawText(text: Buffer): string {
@@ -73,7 +84,7 @@ function rawText(text: Buffer): string {
 }
 
 /** "name: value" lines, folded lines unfolded; lower-cased names, first one wins. */
-function parseHeaderLines(block: string): Map<string, string> {
+export function parseHeaderLines(block: string): Map<string, string> {
   const fields = new Map<string, string>();
   let name = "";
   let value = "";
@@ -96,7 +107,7 @@ function parseHeaderLines(block: string): Map<string, string> {
 }
 
 /** `type/sub; key=value; key="quoted"` → the type and its parameters. */
-function parseParams(value: string): { main: string; params: Map<string, string> } {
+export function parseParams(value: string): { main: string; params: Map<string, string> } {
   const segments: string[] = [];
   let start = 0;
   let quoted = false;
@@ -123,7 +134,10 @@ function parseParams(value: string): { main: string; params: Map<string, string>
 
 /** A part named like a file is an attachment, whatever its disposition says. */
 function isNamedPart(params: Map<string, string>, disposition: Map<string, string>): boolean {
-  return params.has("name") || disposition.has("filename") || disposition.has("name");
+  // RFC 2231 forms (`filename*=`, `filename*0*=`) name a file too (imap-attachments.ts).
+  const names = (map: Map<string, string>, base: string) =>
+    map.has(base) || map.has(`${base}*`) || map.has(`${base}*0`) || map.has(`${base}*0*`);
+  return names(params, "name") || names(disposition, "filename") || names(disposition, "name");
 }
 
 function toMimeHeaders(fields: Map<string, string>): MimeHeaders {
@@ -172,14 +186,14 @@ function decodeQuotedPrintable(input: Buffer): Buffer {
   return out.subarray(0, j);
 }
 
-function decodeTransfer(body: Buffer, encoding: string): Buffer {
+export function decodeTransfer(body: Buffer, encoding: string): Buffer {
   // Node's base64 decoder skips whitespace and stray characters in one pass.
   if (encoding === "base64") return Buffer.from(body.toString("latin1"), "base64");
   if (encoding === "quoted-printable") return decodeQuotedPrintable(body);
   return body;
 }
 
-function decodeCharset(bytes: Buffer, charset: string | undefined): string {
+export function decodeCharset(bytes: Buffer, charset: string | undefined): string {
   const label = (charset ?? "").trim().toLowerCase();
   try {
     return new TextDecoder(CHARSET_ALIASES.get(label) ?? (label || "utf-8")).decode(bytes);
@@ -193,7 +207,7 @@ function decodeCharset(bytes: Buffer, charset: string | undefined): string {
  * blank line is content without headers, unless it starts like a header line:
  * then the size cap cut it inside its headers and it has no content.
  */
-function splitHeaders(part: Buffer): { fields: Map<string, string>; content: Buffer } {
+export function splitHeaders(part: Buffer): { fields: Map<string, string>; content: Buffer } {
   if (part[0] === 0x0a) return { fields: new Map(), content: part.subarray(1) };
   if (part[0] === 0x0d && part[1] === 0x0a) return { fields: new Map(), content: part.subarray(2) };
   const crlf = part.indexOf("\r\n\r\n");
@@ -221,8 +235,17 @@ function endsDelimiter(body: Buffer, at: number): boolean {
   );
 }
 
-/** The parts between `--boundary` delimiter lines, at most MAX_MIME_PARTS of them. */
-function splitMultipart(body: Buffer, boundary: string): Buffer[] {
+/**
+ * The parts between `--boundary` delimiter lines, at most MAX_MIME_PARTS of them.
+ * `misses`, when given, caps the delimiter look-alikes skipped (shared by a whole
+ * walk): a body made of `--<boundary>x` lines costs one search each, so a large
+ * input must not be allowed an unbounded number of them.
+ */
+export function splitMultipart(
+  body: Buffer,
+  boundary: string,
+  misses?: { left: number },
+): Buffer[] {
   const delimiter = Buffer.from(`--${boundary}`, "latin1");
   const parts: Buffer[] = [];
   let partStart = -1;
@@ -231,8 +254,11 @@ function splitMultipart(body: Buffer, boundary: string): Buffer[] {
     const at = body.indexOf(delimiter, from);
     if (at === -1) break;
     from = at + delimiter.length;
-    if (at !== 0 && body[at - 1] !== 0x0a) continue; // not at a line start
-    if (!endsDelimiter(body, from)) continue; // a longer boundary that starts with this one
+    // Not at a line start, or a longer boundary that starts with this one.
+    if ((at !== 0 && body[at - 1] !== 0x0a) || !endsDelimiter(body, from)) {
+      if (misses && --misses.left <= 0) break;
+      continue;
+    }
     if (partStart !== -1) {
       let end = at;
       if (body[end - 1] === 0x0a) end--;
@@ -254,7 +280,7 @@ function readEntity(
   headers: MimeHeaders,
   body: Buffer,
   depth: number,
-  budget: { parts: number },
+  budget: WalkState,
 ): FoundText {
   if (headers.attachment) return {};
   const type = headers.contentType;
@@ -262,7 +288,9 @@ function readEntity(
     const bytes = decodeTransfer(body, headers.encoding);
     // NUL-stripped before the caller's emptiness check: a NUL-only part is empty.
     const text = stripNul(decodeCharset(bytes, headers.params.get("charset")));
-    return type === "text/plain" ? { plain: text } : { html: text };
+    if (type === "text/plain") return { plain: text };
+    const atEnd = body.byteOffset + body.length >= budget.root.byteOffset + budget.root.length;
+    return budget.cut && atEnd ? { html: text, htmlCut: true } : { html: text };
   }
   const boundary = headers.params.get("boundary");
   if (!type.startsWith("multipart/") || depth >= MAX_MIME_DEPTH) return {};
@@ -273,34 +301,62 @@ function readEntity(
     budget.parts--; // counted when visited, so siblings cannot starve a nested text part
     const { fields, content } = splitHeaders(part);
     const inner = readEntity(toMimeHeaders(fields), content, depth + 1, budget);
-    if (inner.plain?.trim()) return { plain: inner.plain };
-    if (found.html === undefined && inner.html !== undefined) found.html = inner.html;
+    // The first non-empty plain part and the first HTML part, in tree order: the
+    // walk goes on past the plain part to its HTML sibling (multipart/alternative).
+    if (found.plain === undefined && inner.plain?.trim()) found.plain = inner.plain;
+    if (found.html === undefined && inner.html !== undefined) {
+      found.html = inner.html;
+      if (inner.htmlCut) found.htmlCut = true;
+    }
+    if (found.plain !== undefined && found.html !== undefined) break;
   }
   return found;
 }
 
-/** Decoded plain text of an IMAP message body; the raw text if it cannot be decoded. */
-export function decodeImapText(headers: Buffer | undefined, text: Buffer | undefined): string {
-  if (!text || text.length === 0) return "";
-  if (!headers || headers.length === 0) return rawText(text);
+/** The decoded body of an IMAP message: its plain text, and its HTML part ("" when none). */
+export interface ImapBody {
+  text: string;
+  html: string;
+}
+
+/**
+ * Decoded plain text and HTML of an IMAP message body. The text is the raw text
+ * when the body cannot be decoded; the HTML is then "". The HTML is stored as the
+ * row's htmlBody and sanitized on read exactly like Gmail's (renderableEmailHtmlFor).
+ */
+export function decodeImapBody(
+  headers: Buffer | undefined,
+  text: Buffer | undefined,
+  // False when `text` is a slice of BODY[TEXT] (a user-chosen host).
+  opts: { complete?: boolean } = {},
+): ImapBody {
+  if (!text || text.length === 0) return { text: "", html: "" };
+  if (!headers || headers.length === 0) return { text: rawText(text), html: "" };
   try {
     const top = toMimeHeaders(
       parseHeaderLines(headers.subarray(0, MAX_HEADER_BYTES).toString("latin1")),
     );
+    const root = text.subarray(0, IMAP_DECODE_MAX_BYTES);
     // The top level is the message itself, never an attachment.
-    const found = readEntity(
-      { ...top, attachment: false },
-      text.subarray(0, IMAP_DECODE_MAX_BYTES),
-      0,
-      {
-        parts: MAX_MIME_PARTS,
-      },
-    );
+    const found = readEntity({ ...top, attachment: false }, root, 0, {
+      parts: MAX_MIME_PARTS,
+      root,
+      cut: opts.complete === false || text.length > IMAP_DECODE_MAX_BYTES,
+    });
+    const source = found.html?.trim() ? (found.html as string) : "";
+    // Cut markup is not stored: the reader then shows the plain body instead of a
+    // page that stops mid-way (renderableEmailHtmlFor prefers htmlBody).
+    const html = found.htmlCut ? "" : source;
     const plain = (found.plain ?? "").trim();
-    if (plain) return plain;
-    if (!found.html) return "";
-    return stripNul(htmlToPlainText(capStored(found.html, MAX_HTML_TO_TEXT_CHARS)));
+    if (plain) return { text: plain, html };
+    if (!source) return { text: "", html: "" };
+    return { text: stripNul(htmlToPlainText(capStored(source, MAX_HTML_TO_TEXT_CHARS))), html };
   } catch {
-    return rawText(text);
+    return { text: rawText(text), html: "" };
   }
+}
+
+/** Decoded plain text of an IMAP message body; the raw text if it cannot be decoded. */
+export function decodeImapText(headers: Buffer | undefined, text: Buffer | undefined): string {
+  return decodeImapBody(headers, text).text;
 }

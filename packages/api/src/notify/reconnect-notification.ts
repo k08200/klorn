@@ -28,6 +28,11 @@ import { sendPushNotification } from "./push.js";
 const PROVIDER_COPY = {
   GOOGLE: { slug: "google", label: "Gmail" },
   OUTLOOK: { slug: "outlook", label: "Outlook" },
+  // IMAP mailboxes: flagged by the poll when the provider refuses the stored
+  // app password (mail/imap-accounts.ts).
+  ICLOUD: { slug: "icloud", label: "iCloud Mail" },
+  NAVER: { slug: "naver", label: "Naver Mail" },
+  IMAP: { slug: "imap", label: "IMAP mailbox" },
 } as const;
 export type ReconnectProvider = keyof typeof PROVIDER_COPY;
 

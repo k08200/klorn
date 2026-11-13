@@ -2130,6 +2130,35 @@ const en: Record<string, string> = {
   "linkComplete.continue": "Continue",
   // Component strings moved out of JSX (hard-coded string sweep, 2026-10-16).
   "common.reconnect": "Reconnect",
+  "accountHealth.title": "Account health",
+  "accountHealth.desc":
+    "Every connected mail account, whether it is syncing, and what to do when it is not.",
+  "accountHealth.empty": "No mail accounts connected yet.",
+  "accountHealth.loadFailed": "Could not load account health.",
+  "accountHealth.primary": "Primary",
+  "accountHealth.status.ok": "Synced",
+  "accountHealth.status.pending": "Waiting for first sync",
+  "accountHealth.status.error": "Sync failed",
+  "accountHealth.status.reconnect": "Reconnect needed",
+  "accountHealth.sync.never": "Not synced yet",
+  "accountHealth.sync.justNow": "Synced just now",
+  "accountHealth.sync.minutes": "Synced {n} min ago",
+  "accountHealth.sync.hours": "Synced {n} h ago",
+  "accountHealth.sync.days": "Synced {n} d ago",
+  "accountHealth.sync.direct": "Receives mail directly",
+  "accountHealth.error.auth":
+    "The provider refused the saved sign-in. Reconnect to resume syncing.",
+  "accountHealth.error.authApple":
+    "Apple stopped accepting the app-specific password. This happens when your Apple Account password changes. Create a new app-specific password and reconnect.",
+  "accountHealth.error.unreachable": "Klorn could not reach the mail server. It will keep trying.",
+  "accountHealth.error.throttled":
+    "The provider asked Klorn to slow down. It will try again shortly.",
+  "accountHealth.error.error": "The last sync failed. Klorn will keep trying.",
+  "accountHealth.action.reconnect": "Reconnect",
+  "accountHealth.reconnect.passwordLabel": "New app-specific password",
+  "accountHealth.reconnect.submit": "Reconnect",
+  "accountHealth.reconnect.failed":
+    "Reconnect failed. Check the app-specific password and try again.",
   "common.close": "Close",
   "common.dismiss": "Dismiss",
   "common.tryAgain": "Try again",

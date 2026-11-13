@@ -170,6 +170,27 @@ describe("syncOutlookAccountsForUser", () => {
     expect(m.markLinkedInboxForReconnect).toHaveBeenCalledWith("u1", "row-1", "OUTLOOK");
   });
 
+  it("a throttled tick keeps the pages it read, without stamping a sync", async () => {
+    m.findMany.mockResolvedValue([outlookRow()]);
+    m.syncOutlookInbox.mockResolvedValue(
+      syncOk({ failure: "throttled", cursor: "https://graph.microsoft.com/v1.0/me/next?page=2" }),
+    );
+
+    await syncOutlookAccountsForUser("u1");
+
+    const writes = m.updateMany.mock.calls.map((call: unknown[]) => call[0]);
+    expect(writes).toContainEqual({
+      where: { id: "row-1", userId: "u1" },
+      data: { historyId: "https://graph.microsoft.com/v1.0/me/next?page=2" },
+    });
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        data: { syncErrorCode: "throttled", syncErrorAt: expect.any(Date) },
+      }),
+    );
+    for (const write of writes) expect(write.data).not.toHaveProperty("lastSyncedAt");
+  });
+
   it("stamps lastSyncedAt and advances historyId only when a cursor came back", async () => {
     m.findMany.mockResolvedValue([outlookRow()]);
     await syncOutlookAccountsForUser("u1");
@@ -177,6 +198,8 @@ describe("syncOutlookAccountsForUser", () => {
       where: { id: "row-1", userId: "u1" },
       data: {
         lastSyncedAt: expect.any(Date),
+        syncErrorCode: null,
+        syncErrorAt: null,
         historyId: "https://graph.microsoft.com/v1.0/me/delta?token=new",
       },
     });

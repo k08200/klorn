@@ -52,20 +52,24 @@ function normalizedFromAddress(from: string): string | null {
   return extractEmailAddress(from) || null;
 }
 
-/// The body and snippet to write on re-sync: only when asked and only when they
-/// changed, so a poll that re-touches its window does not churn TOAST rows.
+/// The body, snippet and HTML to write on re-sync: only when asked and only when
+/// they changed, so a poll that re-touches its window does not churn TOAST rows.
 function refreshedBodyFields(
-  existing: { body: string | null; snippet: string | null },
+  existing: { body: string | null; snippet: string | null; htmlBody?: string | null },
   email: GmailRawEmail,
   refresh: boolean,
-): { body?: string | null; snippet?: string } {
+): { body?: string | null; snippet?: string; htmlBody?: string } {
+  if (!refresh) return {};
+  // A row stored before the IMAP poll read HTML gets it once; a stored HTML
+  // body is never rewritten.
+  const html = !existing.htmlBody && email.htmlBody ? { htmlBody: email.htmlBody } : {};
   // The snippet decides, as a cheap compare: a poll that re-touches its window
   // never runs coercePlainBody on an unchanged row. Every raw-MIME row's
   // snippet differs from its decoded one (a boundary, base64, or a QP soft
   // break falls within the first 200 characters).
-  if (!refresh || email.snippet === existing.snippet) return {};
+  if (email.snippet === existing.snippet) return html;
   const body = coercePlainBody(email.body || null, email.htmlBody || null);
-  return { body, snippet: email.snippet };
+  return { body, snippet: email.snippet, ...html };
 }
 
 export async function persistGmailEmail(

@@ -29,10 +29,10 @@
  *     error-semantics.ts), and imap-moves.ts answers `{ error }` for every failure.
  *   - Never `{ unsupported }` from these three actions.
  *
- * Auth failures mirror the poller (imap-accounts.ts): logged, and NOT flagged
- * `needsReconnect`. The IMAP poller does not flag either; Phase 0b deferred
- * flagging and the Naver/iCloud reconnect copy as one change
- * (multi-provider-plan.md), so this step does not half-implement it.
+ * Auth failures are logged and NOT flagged `needsReconnect` here: the poller
+ * (imap-accounts.ts) owns that flag. It sets it on the first poll whose login is
+ * refused for the credentials, and a later successful poll clears it, so an action
+ * that meets a refusal leaves the verdict to the next poll.
  *
  * UIDVALIDITY (step B2): before a UID is touched, the live INBOX value must equal
  * the one the poller stored (imap-uidvalidity.ts). A mismatch, or no stored value,

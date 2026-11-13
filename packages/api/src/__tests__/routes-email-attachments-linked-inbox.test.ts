@@ -25,6 +25,8 @@ vi.mock("../db.js", () => {
   const prisma = {
     emailAttachment: { findFirst: attachmentFindFirst, findMany: attachmentFindMany },
     emailMessage: { findFirst: emailFindFirst },
+    // The download/convert routes ask which provider a linked inbox is (attachment-bytes.ts).
+    linkedInboxAccount: { findFirst: async () => ({ provider: "GOOGLE" }) },
   };
   return { prisma, db: prisma };
 });

@@ -2,11 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
+import {
+  IMAP_STATUS_REFRESH_EVENT,
+  type ImapStatusAccount,
+  imapAccountStatus,
+} from "../lib/account-health";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import { ImapAccountStatus } from "./imap-account-status";
 import { isGenericImapVerifyFailure } from "./imap-connect-error";
 import { FirstSyncNote } from "./imap-connect-notes";
 import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
@@ -23,6 +29,8 @@ interface NaverImapStatus {
   email: string | null;
   host: string | null;
   connectedAt: string | null;
+  /** Every connected mailbox, with its sync status (multi-account since Phase 0b). */
+  accounts?: ImapStatusAccount[];
 }
 
 interface ConnectResponse {
@@ -90,6 +98,10 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
 
   useEffect(() => {
     loadStatus();
+    // Account health's Reconnect link: the flag may be newer than this card.
+    const refresh = () => void loadStatus();
+    window.addEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
   }, [loadStatus]);
 
   const handleConnect = async (e: React.FormEvent) => {
@@ -155,6 +167,9 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
     }
   };
 
+  // The card shows the first mailbox (the legacy single-account fields).
+  const firstAccount = status?.accounts?.[0];
+
   return (
     <section
       className={
@@ -173,7 +188,20 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
             {t("imap.naver.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
-        {status?.connected && <StatusChip status="connected" />}
+        {status?.connected && (
+          <StatusChip
+            status={
+              firstAccount && imapAccountStatus(firstAccount) === "reconnect"
+                ? "failed"
+                : "connected"
+            }
+            label={
+              firstAccount && imapAccountStatus(firstAccount) === "reconnect"
+                ? t("accountHealth.status.reconnect")
+                : undefined
+            }
+          />
+        )}
       </header>
 
       {loading ? (
@@ -200,6 +228,9 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               </Button>
             </div>
           </div>
+          {firstAccount && (
+            <ImapAccountStatus kind="naver" account={firstAccount} onReconnected={loadStatus} />
+          )}
           {firstSync !== null && <FirstSyncNote started={firstSync} />}
           {error && (
             <p role="alert" className="text-role-caption text-state-danger-ink">

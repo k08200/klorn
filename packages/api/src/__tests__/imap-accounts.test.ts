@@ -182,9 +182,15 @@ describe("syncImapAccountsForUser", () => {
     m.findMany.mockResolvedValue([naverRow()]);
     const { syncImapAccountsForUser } = await import("../mail/imap-accounts.js");
     await syncImapAccountsForUser("u1", NAVER);
+    // A successful poll also clears the last failure and a reconnect flag (Account Health).
     expect(m.updateMany).toHaveBeenCalledWith({
       where: { id: "row-1", userId: "u1" },
-      data: { lastSyncedAt: expect.any(Date) },
+      data: {
+        lastSyncedAt: expect.any(Date),
+        syncErrorCode: null,
+        syncErrorAt: null,
+        needsReconnect: false,
+      },
     });
   });
 });

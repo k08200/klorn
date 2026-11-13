@@ -157,8 +157,11 @@ export async function finishOutlookInboxLink(userId: string, code: string): Prom
         accessToken: encryptToken(tokens.accessToken),
         refreshToken: encryptOptional(tokens.refreshToken),
         expiresAt: tokens.expiresAt,
-        // Re-linking a previously-revoked inbox clears the reconnect prompt.
+        // Re-linking a previously-revoked inbox clears the reconnect prompt,
+        // and the failure recorded against the old grant.
         needsReconnect: false,
+        syncErrorCode: null,
+        syncErrorAt: null,
       },
       create: {
         userId: userId,

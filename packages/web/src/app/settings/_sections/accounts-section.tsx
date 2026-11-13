@@ -21,6 +21,7 @@ import StatusChip from "../../../components/ui/status-chip";
 import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
+import { AccountHealthSection } from "./account-health";
 import { PANEL, PRIMARY_BTN, SECTION_TITLE } from "./shared";
 
 interface Integration {
@@ -176,8 +177,11 @@ export function AccountsSection() {
         <OnboardingReturn />
       </Suspense>
 
+      {/* Account health: every connected mail account, its sync and what to do. */}
+      <AccountHealthSection />
+
       {/* Integrations */}
-      <section className="mb-8">
+      <section id="account-connections" className="mb-8 scroll-mt-24">
         <h2 className={SECTION_TITLE}>{t("settings.section.connections")}</h2>
         <InAppBrowserNotice />
         <Suspense>
@@ -288,28 +292,32 @@ export function AccountsSection() {
       </section>
 
       {/* Connected Google inboxes (multi-account, Pro) */}
-      <section className="mb-8">
+      <section id="account-google" className="mb-8 scroll-mt-24">
         <Suspense>
           <LinkedInboxesSection />
         </Suspense>
       </section>
 
       {/* Naver Mail (IMAP) */}
-      <section className="mb-8">
+      <section id="account-naver" className="mb-8 scroll-mt-24">
         <NaverImapSection />
       </section>
 
       {/* iCloud Mail (IMAP, app-specific password) — renders nothing (no
             wrapper, no margin) while ICLOUD_INBOX_ENABLED is off server-side
             (the status probe 404s), so it carries its own mb-8 */}
-      <ICloudImapSection />
+      <div id="account-icloud" className="scroll-mt-24">
+        <ICloudImapSection />
+      </div>
 
       {/* Outlook inboxes (Graph OAuth) — renders nothing while
             OUTLOOK_INBOX_ENABLED is off server-side (the list probe 404s),
             so it carries its own mb-8. Needs Suspense (useSearchParams). */}
-      <Suspense>
-        <OutlookInboxesSection />
-      </Suspense>
+      <div id="account-outlook" className="scroll-mt-24">
+        <Suspense>
+          <OutlookInboxesSection />
+        </Suspense>
+      </div>
     </>
   );
 }

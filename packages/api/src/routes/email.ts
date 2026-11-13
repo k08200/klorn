@@ -10,6 +10,7 @@
 // truth with the web inbox) — annotating the handlers below means a response
 // change that would desync server and client fails to compile.
 import type {
+  AccountHealthResponse,
   EmailListResponse,
   EmailThreadListResponse,
   InboxesResponse,
@@ -56,6 +57,8 @@ import {
 } from "../learning/trust-score.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
+import { listAccountHealth } from "../mail/account-health.js";
+import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import {
@@ -80,7 +83,7 @@ import {
   syncLinkedInboxesForUser,
 } from "../mail/email-sync.js";
 import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mail/email-text.js";
-import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
+import { getLinkedInboxClients } from "../mail/gmail.js";
 import { NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
@@ -1296,22 +1299,22 @@ export async function emailRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: "Inline image not found" });
       }
 
-      const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
-      if (!auth) return reply.code(404).send({ error: "Mail source not connected" });
       try {
-        const { google } = await import("googleapis");
-        const gmail = google.gmail({ version: "v1", auth });
-        const res = await gmail.users.messages.attachments.get({
-          userId: "me",
-          messageId: dbEmail.gmailId,
-          id: attachment.gmailAttachmentId,
+        // From the message's own mailbox: Gmail, IMAP (BODY[section]) or Outlook.
+        const fetched = await fetchStoredAttachmentBytes(uid, {
+          gmailAttachmentId: attachment.gmailAttachmentId,
+          partKey: attachment.partKey,
+          email: { gmailId: dbEmail.gmailId, linkedInboxAccountId: dbEmail.linkedInboxAccountId },
         });
-        const data = res.data.data;
-        if (!data) return reply.code(404).send({ error: "Inline image not found" });
+        if (!fetched.ok) {
+          const error =
+            fetched.status === 409 ? "Mail source not connected" : "Inline image not found";
+          return reply.code(404).send({ error });
+        }
         return reply
           .type(attachment.mimeType || "application/octet-stream")
           .header("cache-control", "private, max-age=3600")
-          .send(Buffer.from(data, "base64url"));
+          .send(fetched.bytes);
       } catch (err) {
         console.warn(`[EMAIL] inline image fetch failed for ${dbEmail.id}/${cid}:`, err);
         return reply.code(404).send({ error: "Inline image not found" });
@@ -1607,6 +1610,14 @@ export async function emailRoutes(app: FastifyInstance) {
   // unknown value (a rollback, a manual edit) reads as unset, never a crash.
   const asPurpose = (value: string | null | undefined): InboxPurpose | null =>
     value === "work" || value === "personal" || value === "mixed" ? value : null;
+
+  // GET /api/email/accounts/health — Settings -> Accounts -> Account health: every
+  // connected mail account (all providers, the Klorn address included) with its
+  // status, last successful sync and the action needed. Self-scoped, no secrets.
+  app.get(
+    "/accounts/health",
+    async (request): Promise<AccountHealthResponse> => listAccountHealth(getUserId(request)),
+  );
 
   app.get("/inboxes", async (request): Promise<InboxesResponse> => {
     const uid = getUserId(request);

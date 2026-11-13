@@ -2186,6 +2186,36 @@ const fr: Record<string, string> = {
   "linkComplete.continue": "Continuer",
   // Component strings moved out of JSX (hard-coded string sweep, 2026-10-16).
   "common.reconnect": "Reconnecter",
+  "accountHealth.title": "État des comptes",
+  "accountHealth.desc":
+    "Chaque compte de messagerie connecté, s'il se synchronise, et que faire sinon.",
+  "accountHealth.empty": "Aucun compte de messagerie connecté pour l'instant.",
+  "accountHealth.loadFailed": "Impossible de charger l'état des comptes.",
+  "accountHealth.primary": "Principal",
+  "accountHealth.status.ok": "Synchronisé",
+  "accountHealth.status.pending": "En attente de la première synchronisation",
+  "accountHealth.status.error": "Échec de la synchronisation",
+  "accountHealth.status.reconnect": "Reconnexion nécessaire",
+  "accountHealth.sync.never": "Pas encore synchronisé",
+  "accountHealth.sync.justNow": "Synchronisé à l'instant",
+  "accountHealth.sync.minutes": "Synchronisé il y a {n} min",
+  "accountHealth.sync.hours": "Synchronisé il y a {n} h",
+  "accountHealth.sync.days": "Synchronisé il y a {n} j",
+  "accountHealth.sync.direct": "Reçoit les e-mails directement",
+  "accountHealth.error.auth":
+    "Le fournisseur a refusé la connexion enregistrée. Reconnectez le compte pour reprendre la synchronisation.",
+  "accountHealth.error.authApple":
+    "Apple n'accepte plus le mot de passe pour app. Cela arrive quand le mot de passe de votre compte Apple change. Créez un nouveau mot de passe pour app et reconnectez le compte.",
+  "accountHealth.error.unreachable":
+    "Klorn n'a pas pu joindre le serveur de messagerie et continue d'essayer.",
+  "accountHealth.error.throttled":
+    "Le fournisseur a demandé à Klorn de ralentir. Nouvel essai sous peu.",
+  "accountHealth.error.error": "La dernière synchronisation a échoué. Klorn continue d'essayer.",
+  "accountHealth.action.reconnect": "Reconnecter",
+  "accountHealth.reconnect.passwordLabel": "Nouveau mot de passe pour app",
+  "accountHealth.reconnect.submit": "Reconnecter",
+  "accountHealth.reconnect.failed":
+    "La reconnexion a échoué. Vérifiez le mot de passe pour app et réessayez.",
   "common.close": "Fermer",
   "common.dismiss": "Ignorer",
   "common.tryAgain": "Réessayer",

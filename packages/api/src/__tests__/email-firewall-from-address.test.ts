@@ -149,6 +149,34 @@ describe("persistGmailEmail refreshBody (IMAP re-poll)", () => {
     expect(data).not.toHaveProperty("snippet");
   });
 
+  it("fills a missing htmlBody once (iCloud rows stored before HTML was read)", async () => {
+    findUnique.mockResolvedValue({ id: "row-1", body: "t", snippet: "s", htmlBody: null });
+
+    await persistGmailEmail(
+      "u1",
+      rawEmail({ body: "t", snippet: "s", htmlBody: "<p>t</p>" }) as never,
+      { refreshBody: true },
+    );
+
+    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({ htmlBody: "<p>t</p>" });
+  });
+
+  it("never rewrites a stored htmlBody, nor fills it without the option", async () => {
+    findUnique.mockResolvedValue({ id: "row-1", body: "t", snippet: "s", htmlBody: "<p>old</p>" });
+    await persistGmailEmail(
+      "u1",
+      rawEmail({ body: "t", snippet: "s", htmlBody: "<p>new</p>" }) as never,
+      { refreshBody: true },
+    );
+    findUnique.mockResolvedValue({ id: "row-1", body: "t", snippet: "s", htmlBody: null });
+    await persistGmailEmail(
+      "u1",
+      rawEmail({ body: "t", snippet: "s", htmlBody: "<p>t</p>" }) as never,
+    );
+
+    for (const call of update.mock.calls) expect(call[0]?.data).not.toHaveProperty("htmlBody");
+  });
+
   it("never touches the body of an existing row without the option (Gmail path)", async () => {
     findUnique.mockResolvedValue({ id: "row-1", body: "old", snippet: "old" });
 

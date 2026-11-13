@@ -598,6 +598,8 @@ describe("drive text reaches an LLM only wrapped", () => {
     // D5c: what is read of a Google file, and how it maps.
     "drive/providers/google-files.ts",
     "drive/providers/google.ts",
+    // Mail attachment names reuse the drive's file-name cleaner; no drive rows, no LLM.
+    "mail/attachment-names.ts",
     "drive/providers/types.ts",
     "drive/providers/unsupported.ts",
     "drive/summary-bytes.ts",

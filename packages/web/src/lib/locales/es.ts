@@ -2168,6 +2168,36 @@ const es: Record<string, string> = {
   "linkComplete.continue": "Continuar",
   // Component strings moved out of JSX (hard-coded string sweep, 2026-10-16).
   "common.reconnect": "Volver a conectar",
+  "accountHealth.title": "Estado de las cuentas",
+  "accountHealth.desc":
+    "Cada cuenta de correo conectada, si se está sincronizando y qué hacer cuando no.",
+  "accountHealth.empty": "Todavía no hay cuentas de correo conectadas.",
+  "accountHealth.loadFailed": "No se pudo cargar el estado de las cuentas.",
+  "accountHealth.primary": "Principal",
+  "accountHealth.status.ok": "Sincronizada",
+  "accountHealth.status.pending": "Esperando la primera sincronización",
+  "accountHealth.status.error": "Error de sincronización",
+  "accountHealth.status.reconnect": "Hay que volver a conectar",
+  "accountHealth.sync.never": "Aún sin sincronizar",
+  "accountHealth.sync.justNow": "Sincronizada hace un momento",
+  "accountHealth.sync.minutes": "Sincronizada hace {n} min",
+  "accountHealth.sync.hours": "Sincronizada hace {n} h",
+  "accountHealth.sync.days": "Sincronizada hace {n} d",
+  "accountHealth.sync.direct": "Recibe el correo directamente",
+  "accountHealth.error.auth":
+    "El proveedor rechazó el inicio de sesión guardado. Vuelve a conectar la cuenta para reanudar la sincronización.",
+  "accountHealth.error.authApple":
+    "Apple ya no acepta la contraseña específica para apps. Esto ocurre cuando cambia la contraseña de tu cuenta de Apple. Crea una nueva contraseña específica para apps y vuelve a conectar.",
+  "accountHealth.error.unreachable":
+    "Klorn no pudo conectar con el servidor de correo y seguirá intentándolo.",
+  "accountHealth.error.throttled":
+    "El proveedor pidió a Klorn que fuera más despacio. Volverá a intentarlo en breve.",
+  "accountHealth.error.error": "La última sincronización falló. Klorn seguirá intentándolo.",
+  "accountHealth.action.reconnect": "Volver a conectar",
+  "accountHealth.reconnect.passwordLabel": "Nueva contraseña específica para apps",
+  "accountHealth.reconnect.submit": "Volver a conectar",
+  "accountHealth.reconnect.failed":
+    "No se pudo volver a conectar. Revisa la contraseña específica para apps e inténtalo de nuevo.",
   "common.close": "Cerrar",
   "common.dismiss": "Descartar",
   "common.tryAgain": "Reintentar",

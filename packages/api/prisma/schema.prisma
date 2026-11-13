@@ -369,6 +369,9 @@ model UserToken {
   // Last-synced Gmail historyId watermark for incremental (History API) sync.
   // Null = never baselined; the next sync snapshots then records the current id.
   historyId                 String?
+  // When the primary inbox last synced without error (mail/email-sync.ts). Only
+  // the "google" row is stamped; Account Health reads it.
+  lastSyncedAt              DateTime?
   // The Google account this grant belongs to, lowercased (Gmail's profile
   // address). Google revokes a grant for the whole account, so a revoke must
   // first know whether another Klorn account holds a grant for the same one
@@ -571,6 +574,11 @@ model LinkedInboxAccount {
   // same co-opt precedent as gmailId holding provider message ids).
   historyId                 String?
   lastSyncedAt              DateTime?
+  // Why the last poll of this mailbox failed, as a short code the clients put
+  // into words ("auth" | "unreachable" | "throttled" | "error"; mail/sync-error-code.ts),
+  // and when. Cleared by the next successful poll. Null = the last poll succeeded.
+  syncErrorCode             String?
+  syncErrorAt               DateTime?
   // Same as UserToken.sentHistoryImportedAt, for this linked GOOGLE inbox.
   sentHistoryImportedAt     DateTime?
   // Set true when this linked inbox's token is found revoked/undecryptable so the

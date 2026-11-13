@@ -24,9 +24,22 @@
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
+import {
+  needsAttachmentScan,
+  rememberAttachmentScan,
+  wasAttachmentScanned,
+} from "./attachment-scan-gate.js";
 import { formatMailbox } from "./email-address.js";
-import { fetchCapReached, textBodyPart } from "./generic-imap-bounds.js";
-import { decodeImapText } from "./imap-body.js";
+import type { RawEmailAttachment } from "./email-attachments.js";
+import { fetchCapReached, GENERIC_TEXT_FETCH_BYTES, textBodyPart } from "./generic-imap-bounds.js";
+import { collectImapAttachmentParts, imapRawAttachments } from "./imap-attachments.js";
+import {
+  decodeImapBody,
+  type ImapBody,
+  MAX_HEADER_BYTES,
+  parseHeaderLines,
+  parseParams,
+} from "./imap-body.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
 import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
@@ -155,9 +168,15 @@ type PersistCall = [
  * Turn one fetched message into the arguments of the shared persist call. Used by
  * the poll and by the targeted re-sync after an undo, so both write a row the same
  * way. Pure: the poll runs it outside its per-message error handling, as it always
- * has. `bodyText` is the decoded body (decodeImapText: linear, never throws).
+ * has. `decoded` is the decoded body (decodeImapBody: linear, never throws).
  */
-function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string): PersistCall {
+function toPersistCall(
+  args: SyncArgs,
+  msg: ImapFetchMessage,
+  decoded: ImapBody,
+  attachments: RawEmailAttachment[],
+): PersistCall {
+  const bodyText = decoded.text;
   const env = msg.envelope ?? {};
   const from = formatAddress(env.from?.[0] ?? undefined);
   const to = formatAddress(env.to?.[0] ?? undefined);
@@ -193,12 +212,13 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string):
       subject,
       snippet: snippet ?? "",
       body: capStored(bodyText, MAX_STORED_BODY_CHARS),
-      htmlBody: "",
+      // Sanitized on read like Gmail's (routes/email.ts renderableEmailHtmlFor).
+      htmlBody: decoded.html,
       labels,
       isRead,
       isStarred,
       receivedAt,
-      attachments: [],
+      attachments,
     },
     {
       linkedInboxAccountId: args.linkedInboxAccountId ?? null,
@@ -214,6 +234,55 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string):
       refreshBody: Boolean(msg.headers?.length && textBodyOf(msg)?.length),
     },
   ];
+}
+
+/** Whether TEXT came back whole: a user-chosen host's slice may end mid-part. */
+function bodyCompleteness(args: SyncArgs, msg: ImapFetchMessage): { complete: boolean } {
+  if (args.provider.hostPolicy !== "user-supplied") return { complete: true };
+  return { complete: (textBodyOf(msg)?.length ?? 0) < GENERIC_TEXT_FETCH_BYTES };
+}
+
+/** A single-part text message (no file name) cannot carry an attachment. */
+function mayHaveAttachments(headers: Buffer | undefined): boolean {
+  if (!headers?.length) return false;
+  const fields = parseHeaderLines(headers.subarray(0, MAX_HEADER_BYTES).toString("latin1"));
+  const { main, params } = parseParams(fields.get("content-type") ?? "text/plain");
+  return !main.startsWith("text/") || [...params.keys()].some((key) => key.startsWith("name"));
+}
+
+/**
+ * The message's attachments in Gmail's model, listed once per message: the walk,
+ * the lookup and the extraction run only for a message this process has not
+ * listed yet whose row is new or has no attachment rows (needsAttachmentScan),
+ * so the window the poll re-reads every cycle is not walked again. Never throws:
+ * a failure persists the message without attachments, and the next poll retries.
+ */
+async function attachmentsOf(
+  args: SyncArgs,
+  msg: ImapFetchMessage,
+  stableId: string,
+): Promise<RawEmailAttachment[]> {
+  if (!mayHaveAttachments(msg.headers)) return [];
+  if (wasAttachmentScanned(args.userId, stableId)) return [];
+  try {
+    if (!(await needsAttachmentScan(args.userId, stableId))) {
+      rememberAttachmentScan(args.userId, stableId);
+      return [];
+    }
+    // A user-chosen host returns a slice of TEXT (generic-imap-bounds.ts), and a
+    // server that sends more than it was asked for is held to the slice.
+    const userHost = args.provider.hostPolicy === "user-supplied";
+    const whole = textBodyOf(msg);
+    const text = userHost ? whole?.subarray(0, GENERIC_TEXT_FETCH_BYTES) : whole;
+    const complete = !userHost || (whole?.length ?? 0) < GENERIC_TEXT_FETCH_BYTES;
+    const parts = collectImapAttachmentParts(msg.headers, text, { complete });
+    // Remembered only when there is nothing to store: stored rows answer the lookup.
+    if (parts.length === 0) rememberAttachmentScan(args.userId, stableId);
+    return await imapRawAttachments(parts);
+  } catch (err) {
+    console.warn(`[${args.provider.logScope}] attachments skipped for ${stableId}`, err);
+    return [];
+  }
 }
 
 /**
@@ -288,8 +357,9 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         // or another provider's UIDs — in the same EmailMessage table.
         const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 
-        const bodyText = decodeImapText(msg.headers, textBodyOf(msg));
-        const persistCall = toPersistCall(args, msg, bodyText);
+        const decoded = decodeImapBody(msg.headers, textBodyOf(msg), bodyCompleteness(args, msg));
+        const attachments = await attachmentsOf(args, msg, stableId);
+        const persistCall = toPersistCall(args, msg, decoded, attachments);
 
         try {
           const persisted = await persistGmailEmail(args.userId, ...persistCall);
@@ -400,8 +470,10 @@ export async function syncImapMessage(args: SyncMessageArgs): Promise<{ emailId:
         { uid: true },
       )) {
         const msg = raw as ImapFetchMessage;
-        const bodyText = decodeImapText(msg.headers, textBodyOf(msg));
-        const persistCall = toPersistCall(args, msg, bodyText);
+        const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
+        const attachments = await attachmentsOf(args, msg, stableId);
+        const decoded = decodeImapBody(msg.headers, textBodyOf(msg), bodyCompleteness(args, msg));
+        const persistCall = toPersistCall(args, msg, decoded, attachments);
         const persisted = await persistGmailEmail(args.userId, ...persistCall);
         return { emailId: persisted.emailId };
       }

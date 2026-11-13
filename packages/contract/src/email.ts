@@ -287,6 +287,38 @@ export interface InboxesResponse {
   priorities: string | null;
 }
 
+/** Why a mailbox's last poll failed. The client puts it into words. */
+export type MailSyncErrorCode = "auth" | "unreachable" | "throttled" | "error";
+
+/**
+ * - `ok`: the last poll succeeded (or the mailbox is not polled: the Klorn address).
+ * - `pending`: connected, not synced yet.
+ * - `error`: the last poll failed; `errorCode` says why. Klorn keeps trying.
+ * - `reconnect`: the provider refused the stored credentials; only the user can fix it.
+ */
+export type AccountHealthStatus = "ok" | "pending" | "error" | "reconnect";
+
+/** One connected mail account in Settings -> Accounts -> Account health. */
+export interface AccountHealthEntry {
+  /** Null for the primary Google inbox; else the linked account id. */
+  id: string | null;
+  email: string | null;
+  provider: InboxProvider;
+  kind: "primary" | "linked";
+  status: AccountHealthStatus;
+  /** ISO time of the last successful sync; null when never (or not polled). */
+  lastSyncedAt: string | null;
+  errorCode: MailSyncErrorCode | null;
+  errorAt: string | null;
+  /** What the user needs to do, or null when nothing. */
+  action: "reconnect" | null;
+}
+
+/** `GET /api/email/accounts/health` */
+export interface AccountHealthResponse {
+  accounts: AccountHealthEntry[];
+}
+
 export interface EmailThreadRow {
   threadId: string;
   subject: string;

@@ -29,7 +29,12 @@ vi.mock("../resolve-user-email.js", () => ({
 }));
 
 const userTokenFindFirst = vi.fn(async () => ({ historyId: null }) as { historyId: string | null });
-const userTokenUpdateMany = vi.fn(async () => ({ count: 1 }));
+const userTokenUpdateMany = vi.fn(async (_args: { data: Record<string, unknown> }) => ({
+  count: 1,
+}));
+/** The calls that moved the primary's Gmail watermark (not its lastSyncedAt stamp). */
+const watermarkWrites = () =>
+  userTokenUpdateMany.mock.calls.filter(([args]) => "historyId" in args.data);
 const linkedFindFirst = vi.fn(
   async () => ({ historyId: null }) as { historyId: string | null } | null,
 );
@@ -103,7 +108,7 @@ describe("syncEmails — first sync (no stored watermark)", () => {
 
     await syncEmails("user-1", 30);
 
-    expect(userTokenUpdateMany).not.toHaveBeenCalled();
+    expect(watermarkWrites()).toEqual([]);
   });
 });
 
@@ -135,14 +140,15 @@ describe("syncEmails — incremental sync (stored watermark)", () => {
       order.push("persist");
       return { emailId: "e1", isNew: true };
     });
-    userTokenUpdateMany.mockImplementation(async () => {
-      order.push("advance");
+    userTokenUpdateMany.mockImplementation(async (args: { data: Record<string, unknown> }) => {
+      order.push("historyId" in args.data ? "advance" : "stamp");
       return { count: 1 };
     });
 
     await syncEmails("user-1", 30);
 
-    expect(order).toEqual(["persist", "advance"]);
+    // The primary's lastSyncedAt (Account Health) is stamped once the sync completed.
+    expect(order).toEqual(["persist", "advance", "stamp"]);
     expect(userTokenUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { historyId: "1040" } }),
     );
@@ -175,7 +181,7 @@ describe("syncEmails — incremental sync (stored watermark)", () => {
 
     await syncEmails("user-1", 30);
 
-    expect(userTokenUpdateMany).not.toHaveBeenCalled();
+    expect(watermarkWrites()).toEqual([]);
   });
 
   it("throws 'Gmail not connected' when fetchGmailHistory returns null (auth failure)", async () => {
