@@ -3,21 +3,38 @@ name: Security Deep
 # The slow scans. Neither job has a pull_request trigger — keeping them here
 # means zero "skipped" rows in every PR's checks list, and a new advisory
 # published upstream should not block unrelated PRs. But the audit IS blocking
-# on main + the weekly cron: a red run is the signal that a production
+# on main + the schedule: a red run is the signal that a production
 # dependency has a known vulnerability (Dependabot then raises the fix PR).
 # CodeQL stays upload-only to the Security tab.
+#
+# The audit runs every day (CodeQL weekly): an advisory can land against a
+# lockfile nobody has touched. Nobody reads a push or cron run's result,
+# though — the audit sat red on main from 2026-11-10 to 2026-11-13 unseen. So
+# when the audit job fails on main, the `alert` job files ONE issue, titled
+# "Dependency audit failing on main" and labelled `security`. While it is
+# open, the daily run adds one comment a day (pushes add none: the open issue
+# already says it). It carries the run link only, no advisory text. A red
+# audit job is usually an advisory, but an install or registry outage also
+# turns it red; the run log tells which.
+#
+# How a maintainer sees it: the issue is assigned to the repository owner, so
+# GitHub notifies them (web, and email if their notification settings allow)
+# and it is listed under Issues → "Assigned to you". All open ones:
+# Issues filtered by `is:open label:security`. Close the issue once the
+# audit is green on main; the next failure then opens a fresh one.
 
 on:
   push:
     branches: [main]
   schedule:
-    # Run weekly on Monday at 09:00 UTC
+    # Monday 09:00 UTC: the audit and CodeQL.
     - cron: "0 9 * * 1"
+    # Every other day 09:00 UTC: the audit only (see the codeql job's `if`).
+    - cron: "0 9 * * 0,2-6"
   workflow_dispatch:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   audit:
@@ -45,6 +62,8 @@ jobs:
 
   codeql:
     name: CodeQL Analysis
+    # Weekly is enough for CodeQL; the daily cron is for the audit.
+    if: github.event.schedule != '0 9 * * 0,2-6'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,3 +84,66 @@ jobs:
           # Upload results to Security tab only, no PR comments
           upload: always
           add-snippets: false
+
+  alert:
+    name: Alert on audit failure
+    needs: audit
+    # main only: a dispatch on another branch must not file an issue.
+    if: failure() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    # Serialised, so two failing runs at once (a push and the cron) cannot both
+    # find no open issue and open two.
+    concurrency:
+      group: security-audit-alert
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      EVENT: ${{ github.event_name }}
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Open or update the audit issue
+        run: |
+          set -euo pipefail
+          title="Dependency audit failing on main"
+
+          # Label names are unique case-insensitively on GitHub.
+          has_label="$(gh label list --limit 1000 --json name \
+            --jq 'map(select(.name | ascii_downcase == "security")) | length')"
+          if [ "$has_label" = "0" ]; then
+            gh label create security --color B60205 \
+              --description "Raised by CI: a security check failing on main"
+          fi
+
+          number="$(gh issue list --state open --label security --limit 100 --json number,title \
+            | jq -r --arg title "$title" 'map(select(.title == $title))[0].number // empty')"
+          if [ -n "$number" ]; then
+            if [ "$EVENT" = "schedule" ]; then
+              gh issue comment "$number" --body "Still failing: $RUN_URL ($EVENT, \`$SHA\`)."
+              echo "Commented on #$number"
+            else
+              echo "#$number is already open; only the daily run comments on it."
+            fi
+            exit 0
+          fi
+
+          body="The Security Deep dependency audit job (\`pnpm audit --prod\`) failed on main.
+
+          - Run: $RUN_URL
+          - Trigger: $EVENT at \`$SHA\`
+
+          The run log says why: usually a published advisory, sometimes an install or
+          registry outage. For an advisory, Dependabot usually raises the fix PR; with no
+          fixed release yet, add an \`overrides\` entry with an upper bound. Close this
+          issue once the audit is green on main; until then, the daily run comments here."
+          url="$(gh issue create --title "$title" --label security --body "$body")"
+          echo "Opened $url"
+          # Best effort: an organisation owner cannot be assigned, and REST
+          # drops an assignee it cannot add rather than failing the call.
+          gh api --method POST "repos/$GH_REPO/issues/${url##*/}/assignees" \
+            -f "assignees[]=$OWNER" --silent \
+            || echo "::warning::Could not assign $OWNER to $url"

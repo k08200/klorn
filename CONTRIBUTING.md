@@ -38,6 +38,7 @@ first.** It is the actual product; the code is downstream of it.
 | `size/S` | A few hours; one or two files |
 | `size/M` | About a day; several files |
 | `size/L` | Several days; discuss the approach in the issue first |
+| `security` | Opened by CI when the dependency audit fails on main (`.github/workflows/security-deep.yml`), usually a published advisory against a dependency; assigned to the repository owner. Not for reporting vulnerabilities: see Security below |
 
 ## Before you open a PR
 
