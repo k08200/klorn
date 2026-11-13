@@ -16,11 +16,15 @@ on:
     paths:
       - "apps/desktop-mac/**"
       - ".github/workflows/desktop.yml"
+      # test-check-provision-profile.sh checks the release's signing order.
+      - ".github/workflows/desktop-release.yml"
   pull_request:
     branches: [main]
     paths:
       - "apps/desktop-mac/**"
       - ".github/workflows/desktop.yml"
+      # test-check-provision-profile.sh checks the release's signing order.
+      - ".github/workflows/desktop-release.yml"
 
 concurrency:
   group: desktop-${{ github.ref }}
@@ -61,3 +65,9 @@ jobs:
           cd apps/desktop-mac
           scripts/make-app.sh debug
           ./Klorn.app/Contents/MacOS/KlornMac --self-check
+
+      # The release's provisioning checks (Time Sensitive needs a matching
+      # Developer ID profile, or the app does not launch), against fabricated
+      # profiles and ad-hoc dummy bundles: never the real profile, no secrets.
+      - name: Provisioning-profile checks
+        run: apps/desktop-mac/scripts/test-check-provision-profile.sh

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Security
 import SwiftUI
 import UserNotifications
 
@@ -168,6 +169,9 @@ struct PushBanner: Equatable, Sendable {
     /// The lane name on a MEETING-mail banner, so it reads differently from
     /// PUSH at a glance. nil (no line) for PUSH and meeting-soon banners.
     var subtitle: String? = nil
+    /// Time Sensitive for one PUSH or MEETING mail; the default level for
+    /// summaries and meeting reminders (`BannerInterruption`).
+    var interruption: BannerInterruption = .standard
 
     static func make(for item: FirewallItem) -> PushBanner {
         let sender = senderDisplayName(item.email?.from.map(decodeHTMLEntities))
@@ -176,7 +180,56 @@ struct PushBanner: Equatable, Sendable {
             identifier: PushNotifier.notificationIdentifier(for: item.id),
             title: sender.isEmpty ? "Klorn" : sender,
             body: subject,
-            subtitle: item.tier == .meeting ? Tier.meeting.label : nil)
+            subtitle: item.tier == .meeting ? Tier.meeting.label : nil,
+            interruption: .forLane(item.tier))
+    }
+}
+
+/// How hard a banner may interrupt (2026-11-13). A banner about one PUSH- or
+/// MEETING-lane mail, the two lanes the server rings for
+/// (`ringForFirewallEmail`), is Time Sensitive: it gets through a Focus mode
+/// and the scheduled Summary when the user allows that for Klorn. The
+/// "+N more", held, while-closed and delayed summaries, and meeting reminders,
+/// keep the default level. Pure.
+enum BannerInterruption: Equatable, Sendable {
+    case standard
+    case timeSensitive
+
+    static func forLane(_ tier: Tier) -> BannerInterruption {
+        switch tier {
+        case .push, .meeting: .timeSensitive
+        case .queue, .info, .silent: .standard
+        }
+    }
+
+    /// The level to post at. Time Sensitive needs a restricted entitlement
+    /// that only the Developer ID release claims (`TimeSensitiveEntitlement`);
+    /// any other build posts at the default level rather than rely on what
+    /// macOS does with an unentitled request. `interruptionLevel` is macOS
+    /// 12+; the package's floor is macOS 14, so the compiler is the guard.
+    func level(entitled: Bool) -> UNNotificationInterruptionLevel {
+        self == .timeSensitive && entitled ? .timeSensitive : .active
+    }
+}
+
+/// Whether this build claims Time Sensitive notifications, read once from
+/// its own code signature (Security's SecTask: synchronous, no notification
+/// center, no actor). Only the Developer ID release does, authorized by the
+/// provisioning profile embedded at Contents/embedded.provisionprofile
+/// (desktop-release.yml); `swift run`, the ad-hoc build and a release without
+/// the profile do not.
+enum TimeSensitiveEntitlement {
+    nonisolated static let key = "com.apple.developer.usernotifications.time-sensitive"
+
+    nonisolated static let isClaimed: Bool = {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        return claimed(SecTaskCopyValueForEntitlement(task, key as CFString, nil))
+    }()
+
+    /// A claim is a boolean true; absent, false or any other type is none. Pure.
+    nonisolated static func claimed(_ value: CFTypeRef?) -> Bool {
+        guard let value, CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
+        return (value as? Bool) == true
     }
 }
 
@@ -326,14 +379,22 @@ final class SystemPushNotifier: PushNotifying {
             Log.app.debug("push banner skipped (unbundled run): \(banner.identifier, privacy: .public)")
             return
         }
+        let content = Self.content(for: banner, entitled: TimeSensitiveEntitlement.isClaimed)
+        let request = UNNotificationRequest(identifier: banner.identifier, content: content, trigger: nil)
+        NotificationCenterCalls.add(request, receipts: receipts)
+    }
+
+    /// What a banner posts: no notification center involved, so the
+    /// self-check inspects it. `entitled`: this build claims Time Sensitive.
+    nonisolated static func content(for banner: PushBanner, entitled: Bool) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = banner.title
         if let subtitle = banner.subtitle { content.subtitle = subtitle }
         content.body = banner.body
         content.sound = .default
         content.threadIdentifier = PushNotifier.threadIdentifier
-        let request = UNNotificationRequest(identifier: banner.identifier, content: content, trigger: nil)
-        NotificationCenterCalls.add(request, receipts: receipts)
+        content.interruptionLevel = banner.interruption.level(entitled: entitled)
+        return content
     }
 
     /// Sign-out: take this account's banners out of Notification Center —

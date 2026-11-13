@@ -23,8 +23,8 @@ import Foundation
 // 4. Dock badge. It counted Today's PUSH mail whether read or not. Now it
 //    counts the unread ones: the server's flag, minus mail opened here.
 //
-// (5. Focus: a Time Sensitive banner needs a restricted entitlement and a
-// Developer ID provisioning profile — founder steps in the README, no code.)
+// (5. Focus: Time Sensitive banners for PUSH and MEETING mail, Developer ID
+// build only — SelfCheckTimeSensitive.swift, 2026-11-13.)
 //
 // Network is the session stub; nothing here posts a real banner, raises a
 // real permission prompt or touches the Dock tile.
