@@ -2968,6 +2968,20 @@ const en: Record<string, string> = {
     "The reminder needs a connected Google Calendar, so none was set.",
   "smartActions.event.saveHint": "Fill in the title, day, start time and length to save.",
   "smartActions.event.savedWhen": "{date} at {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Export as markdown",
+  "vaultExport.desc":
+    "Export your Klorn data as markdown: lanes, senders, commitments and one note per mail, ready to open in Obsidian or any editor.",
+  "vaultExport.button": "Download .zip",
+  "vaultExport.includeText": "Include mail text",
+  "vaultExport.includeText.desc":
+    "Adds the text of each mail Klorn still keeps. Without it, notes hold the subject, preview and Klorn's decision.",
+  "vaultExport.done": "Markdown export downloaded.",
+  "vaultExport.error.cooldown": "You exported recently. Try again in {minutes} min.",
+  "vaultExport.error.inProgress": "An export is already running. Wait for it to finish.",
+  "vaultExport.error.busy": "Exports are busy right now. Try again in a minute.",
+  "vaultExport.error.unavailable": "Markdown export isn't available for this account.",
+  "vaultExport.error.failed": "Markdown export failed. Try again.",
 };
 
 export default en;

@@ -3051,6 +3051,21 @@ const fr: Record<string, string> = {
   "smartActions.event.saveHint":
     "Renseignez le titre, le jour, l'heure de début et la durée pour enregistrer.",
   "smartActions.event.savedWhen": "{date} à {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Exporter en Markdown",
+  "vaultExport.desc":
+    "Exportez vos données Klorn en Markdown : voies, expéditeurs, engagements et une note par e-mail, prêtes à ouvrir dans Obsidian ou tout éditeur.",
+  "vaultExport.button": "Télécharger le .zip",
+  "vaultExport.includeText": "Inclure le texte des e-mails",
+  "vaultExport.includeText.desc":
+    "Ajoute le texte de chaque e-mail que Klorn conserve encore. Sans cette option, les notes contiennent l'objet, l'aperçu et la décision de Klorn.",
+  "vaultExport.done": "Export Markdown téléchargé.",
+  "vaultExport.error.cooldown": "Vous avez exporté récemment. Réessayez dans {minutes} min.",
+  "vaultExport.error.inProgress": "Un export est déjà en cours. Attendez qu'il se termine.",
+  "vaultExport.error.busy":
+    "Les exports sont très demandés en ce moment. Réessayez dans une minute.",
+  "vaultExport.error.unavailable": "L'export Markdown n'est pas disponible pour ce compte.",
+  "vaultExport.error.failed": "L'export Markdown a échoué. Réessayez.",
 };
 
 export default fr;

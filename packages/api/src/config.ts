@@ -718,6 +718,20 @@ export function smartActionsOpenTo(userId: string): boolean {
   return featureOpenTo(userId, [SMART_ACTIONS_FLAG]);
 }
 
+// Klorn Vault (routes/vault-export.ts): the user's own lanes, senders,
+// commitments and one note per mail as an Obsidian-compatible markdown zip,
+// streamed and stored nowhere. OFF by default (repo doctrine). Takes the rollout
+// cohort (flagMode above): `cohort` opens the route and `user.vaultExport` only
+// to ROLLOUT_COHORT_USER_IDS. While off the route answers the default 404, even
+// unauthenticated. Read per call, so a flip needs no redeploy.
+export const VAULT_EXPORT_FLAG = "VAULT_EXPORT_ENABLED";
+export function vaultExportLive(): boolean {
+  return flagMode(VAULT_EXPORT_FLAG) !== "off";
+}
+export function vaultExportOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [VAULT_EXPORT_FLAG]);
+}
+
 export function appleLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.APPLE_LOGIN_ENABLED ?? "").trim().toLowerCase(),

@@ -48,6 +48,7 @@ import {
   smartActionsOpenTo,
   teamModeEnabled,
   unifiedHomeEnabled,
+  vaultExportOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
@@ -698,6 +699,10 @@ export function authRoutes(app: FastifyInstance) {
           // to calendar" only when this is true — the same answer the
           // /api/smart-actions routes give this user.
           smartActions: smartActionsOpenTo(user.id),
+          // Server-driven client flag (VAULT_EXPORT_ENABLED, cohort-aware): the
+          // web offers "Export as markdown" in Settings only when this is true
+          // — the same answer GET /api/user/me/vault/export gives this user.
+          vaultExport: vaultExportOpenTo(user.id),
         },
       });
     } catch {
