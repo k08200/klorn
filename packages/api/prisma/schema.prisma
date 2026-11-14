@@ -157,6 +157,8 @@ model User {
   contactDossiers            ContactDossier[]
   threadBriefs               ThreadBrief[]
   teams                      Team[]
+  orgMembership              OrgMembership?
+  availabilityGrant          AvailabilityGrant?
   commitments                Commitment[]
   feedbackEvents             FeedbackEvent[]
   decisionLabels             DecisionLabel[]
@@ -2751,6 +2753,115 @@ model Team {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, name])
+}
+
+/// Klorn Teams v1 (docs/design/pricing-tiers.md "Team (company) plan",
+/// docs/design/team-mode-v3.md). An organization is a scheduling and billing
+/// object. It holds no mail, and no organization role reads a member's mail,
+/// attention items or commitments (src/org/privacy.ts lists what it can see).
+/// Seat entitlement is derived from OrgMembership at read time
+/// (src/org/effective-tier.ts) and is never written to User.plan.
+model Organization {
+  id                   String              @id @default(uuid())
+  name                 String              @db.VarChar(80)
+  slug                 String              @unique @db.VarChar(48)
+  /// Lowercase domains the company sends from. Stored only: feeding them to
+  /// members' judge is a later step (pricing-tiers.md launch feature 6).
+  companyDomains       String[]            @default([])
+  /// Admin ceiling: no unattended reply leaves any member's account.
+  autoReplyDisabled    Boolean             @default(false)
+  /// Admin ceiling: the highest agent mode a member runs. null = no cap;
+  /// "OFF" | "SHADOW" | "SUGGEST" (src/org/ceilings.ts).
+  agentModeCap         String?             @db.VarChar(16)
+  /// Seat billing (Paddle, quantity-based). Written only by the team
+  /// subscription webhook; seatsPurchased is the subscription quantity.
+  seatsPurchased       Int                 @default(0)
+  billingInterval      String?             @db.VarChar(8)
+  subscriptionStatus   String?             @db.VarChar(16)
+  paddleCustomerId     String?
+  paddleSubscriptionId String?             @unique
+  subscriptionEventAt  DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  memberships          OrgMembership[]
+  invites              OrgInvite[]
+  availabilityGrants   AvailabilityGrant[]
+  auditEvents          OrgAuditEvent[]
+}
+
+/// Never ADMIN: that name means a Klorn operator in User.role.
+enum OrgRole {
+  OWNER
+  MEMBER
+}
+
+/// One organization per account in v1 (userId is unique). Exactly one OWNER
+/// per organization; ownership moves only by transfer.
+model OrgMembership {
+  id       String       @id @default(uuid())
+  orgId    String
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId   String       @unique
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     OrgRole      @default(MEMBER)
+  joinedAt DateTime     @default(now())
+
+  @@index([orgId, joinedAt])
+}
+
+/// An invitation by email. Only the SHA-256 of the token is stored; the raw
+/// token exists in the invite mail alone. Single use (acceptedAt is set by a
+/// conditional update), expires, and binds to the invited address.
+model OrgInvite {
+  id           String       @id @default(uuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Lowercase address the invite is bound to.
+  email        String       @db.VarChar(320)
+  tokenHash    String       @unique @db.Char(64)
+  invitedById  String?
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@index([orgId, createdAt])
+}
+
+enum AvailabilityScope {
+  NONE
+  FREEBUSY
+}
+
+/// A member's consent to share free/busy (start and end times only) with
+/// their organization. Default NONE; revocable; read on every query.
+model AvailabilityGrant {
+  userId    String            @id
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId     String
+  org       Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scope     AvailabilityScope @default(NONE)
+  updatedAt DateTime          @updatedAt
+
+  @@index([orgId])
+}
+
+/// Audit log of admin actions and cross-member free/busy reads. Actor and
+/// target ids are plain ids (no foreign key) so a row outlives the account it
+/// names. detail holds no mail data: window bounds, an invited address, a
+/// changed setting.
+model OrgAuditEvent {
+  id           String       @id @default(uuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actorUserId  String?
+  action       String       @db.VarChar(48)
+  targetUserId String?
+  detail       Json?
+  createdAt    DateTime     @default(now())
+
+  @@index([orgId, createdAt])
 }
 
 /// Team-of-one memory: per-sender relationship context distilled from the

@@ -1,4 +1,5 @@
 import { mintReceipt, sendEmailPayloadHash } from "../judge/attention-floor.js";
+import { AutoReplyBlockedByOrgError, orgCeilingsFor } from "../org/ceilings.js";
 import { executeToolCall } from "./tool-executor.js";
 
 // A single RFC-ish email address: no whitespace, comma, semicolon, or angle
@@ -91,6 +92,10 @@ export async function sendAutoReplyViaFloor(
   // routing metadata only, deliberately outside the hashed payload bytes.
   inReplyToEmailId?: string,
 ): Promise<void> {
+  // An organization ceiling (org/ceilings.ts) is re-checked at the floor: the
+  // pre-LLM guard already skipped this reply, unless the owner turned
+  // auto-reply off while the draft was being written.
+  if ((await orgCeilingsFor(userId)).autoReplyDisabled) throw new AutoReplyBlockedByOrgError();
   const recipient = to.trim();
   if (!SINGLE_EMAIL_RE.test(recipient)) {
     // Refuse rather than send: a non-single-address recipient means the From

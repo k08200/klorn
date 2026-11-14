@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
+import { effectiveTier } from "../org/effective-tier.js";
 import { captureError } from "../sentry.js";
 import { isEntitled, isHardPaywalled } from "./stripe.js";
 
@@ -18,7 +19,10 @@ async function loadPlanRole(
       where: { id: userId },
       select: { plan: true, role: true },
     });
-    return { plan: user?.plan ?? "FREE", role: user?.role ?? undefined };
+    // A Klorn Teams seat counts: the tier is derived from membership at read
+    // time (org/effective-tier.ts) and never written to User.plan.
+    const plan = await effectiveTier({ id: userId, plan: user?.plan ?? "FREE" });
+    return { plan, role: user?.role ?? undefined };
   } catch (err) {
     // Fail CLOSED (re-throw → Fastify 500): an access guard must not admit a
     // request when it can't determine entitlement. Surface it so a DB fault on

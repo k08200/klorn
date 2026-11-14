@@ -14,7 +14,7 @@
 
 import type OpenAI from "openai";
 import { trackTokenUsage } from "../billing/token-usage.js";
-import { teamModeEnabled } from "../config.js";
+import { teamAvailabilityOpenTo } from "../config.js";
 import { costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { AGENT_MODEL, createCompletion, type DailyCostCapCode } from "../llm/openai.js";
@@ -127,9 +127,9 @@ export async function runChatTurn(opts: {
   const chatTools = ALL_TOOLS.filter(
     (t) =>
       CHAT_TOOL_NAMES.has(t.function.name) &&
-      // Team mode ships dark until team pricing exists — don't advertise a
-      // tool the executor will refuse.
-      (t.function.name !== "team_availability" || teamModeEnabled()),
+      // Team mode and Klorn Teams ship dark — don't advertise a tool the
+      // executor will refuse.
+      (t.function.name !== "team_availability" || teamAvailabilityOpenTo(userId)),
   );
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

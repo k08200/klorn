@@ -269,6 +269,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",
     "pim/team-availability.ts",
+    "org/org-availability.ts", // a co-member's busy times under their free/busy grant
   ];
   // Returns every row on purpose.
   const EXPORTS_EVERYTHING = [
@@ -393,6 +394,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       "pim/inbox-summary.ts",
       "pim/meeting-prep-pack.ts",
       "pim/team-availability.ts",
+      "org/org-availability.ts",
       "learning/interaction-graph.ts",
     ];
     // Modules that reach LLM-adjacent code, with the exact specifiers they use and why

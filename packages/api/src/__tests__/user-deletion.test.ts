@@ -28,6 +28,9 @@ vi.mock("../db.js", () => ({
 
 const purgeUserObjects = vi.hoisted(() => vi.fn());
 vi.mock("../storage/runtime.js", () => ({ purgeUserObjects }));
+// Organization ownership handover (org/account-deletion.ts) has its own proof
+// in orgs-pg.test.ts; this file's prisma mock has no org tables.
+vi.mock("../org/account-deletion.js", () => ({ handOverOrgBeforeAccountDeletion: vi.fn() }));
 
 const purgeUserData = vi.hoisted(() => vi.fn());
 const revokeUserAccess = vi.hoisted(() => vi.fn());
