@@ -64,7 +64,7 @@ Then `npx cap sync`.
 
 ### 2. Set the client env
 
-In the web build (Vercel) env for the native/SHELL build:
+In the web build (Cloudflare Pages, `klorn-web`) env for the native/SHELL build:
 
 ```
 NEXT_PUBLIC_NATIVE_OAUTH_SCHEME=ai.klorn.app
