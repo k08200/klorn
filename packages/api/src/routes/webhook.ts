@@ -3,11 +3,14 @@ import type Stripe from "stripe";
 import { ADVERTISED_PRO_PRICE_WEB } from "../billing/advertised-price.js";
 import { verifyPaddleSignature } from "../billing/paddle.js";
 import { checkPaddlePriceEvent } from "../billing/paddle-price-check.js";
-import { isTeamSubscriptionEvent } from "../billing/paddle-team.js";
 import { PLANS, stripe } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
-import { applyTeamSubscriptionEvent } from "../org/seat-billing.js";
+import {
+  applyTeamSubscriptionEvent,
+  isTeamSubscription,
+  teamOwnerForTransaction,
+} from "../org/seat-billing.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 import { pushNotification } from "../websocket.js";
@@ -207,6 +210,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           status?: string;
           customer_id?: string;
           custom_data?: { userId?: string; orgId?: string; kind?: string } | null;
+          subscription_id?: string | null;
           items?: Array<{ price?: { id?: string } | null; quantity?: number }> | null;
           billing_cycle?: { interval?: string; frequency?: number } | null;
           next_billed_at?: string | null;
@@ -222,7 +226,11 @@ export async function webhookRoutes(app: FastifyInstance) {
       });
       if (alreadyProcessed) return { received: true };
 
-      if (body.event_type.startsWith("subscription.") && isTeamSubscriptionEvent(body.data)) {
+      const teamPaymentOwner =
+        body.event_type === "transaction.payment_failed"
+          ? await teamOwnerForTransaction(body.data)
+          : false;
+      if (body.event_type.startsWith("subscription.") && (await isTeamSubscription(body.data))) {
         // Klorn Teams seats (org/seat-billing.ts): the organization's seats and
         // status. Taken before the Pro path, which maps an event to a user and
         // writes User.plan — a team subscription must never reach it, even
@@ -340,6 +348,19 @@ export async function webhookRoutes(app: FastifyInstance) {
               );
             }
           }
+        }
+      } else if (teamPaymentOwner !== false) {
+        // A team seat payment failed: the organization's owner hears about it
+        // (a Pro subscriber with the same Paddle customer must not be told
+        // their own plan is at risk).
+        if (teamPaymentOwner) {
+          await notifyUser(
+            teamPaymentOwner,
+            "billing",
+            "Team payment failed",
+            "The latest payment for your team's seats failed. Update the payment method to keep the seats.",
+            "/settings/team",
+          );
         }
       } else if (body.event_type === "transaction.payment_failed") {
         const customerId = body.data.customer_id;

@@ -300,6 +300,94 @@ describePg("team subscription webhook (real Postgres)", () => {
     expect(await prisma.organization.findUnique({ where: { id: orgId } })).not.toBeNull();
   });
 
+  it("keeps a team event that lost its custom data off the Pro path", async () => {
+    const { owner, orgId } = await ownedOrg();
+    const customer = `ctm_shared_${randomUUID()}`;
+    await prisma.user.update({
+      where: { id: owner.userId },
+      data: { plan: "PRO", paddleCustomerId: customer },
+    });
+    await prisma.organization.update({
+      where: { id: orgId },
+      data: { paddleSubscriptionId: "sub_team_7", subscriptionStatus: "active", seatsPurchased: 3 },
+    });
+    delete process.env.PADDLE_TEAM_PRICE_ID_MONTHLY;
+    const res = await webhook(
+      teamEvent(null, {
+        id: "sub_team_7",
+        status: "canceled",
+        customer_id: customer,
+        items: [{ price: { id: "pri_rotated" }, quantity: 3 }],
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(org.subscriptionStatus).toBe("canceled");
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: owner.userId } });
+    expect(user.plan).toBe("PRO");
+  });
+
+  it("refuses a second subscription for an organization with a live one", async () => {
+    const { orgId } = await ownedOrg();
+    await webhook(teamEvent(orgId, { id: "sub_team_8" }));
+    await webhook(teamEvent(orgId, { id: "sub_team_9", status: "canceled" }));
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(org).toMatchObject({ paddleSubscriptionId: "sub_team_8", subscriptionStatus: "active" });
+    expect(captured.length).toBe(1);
+  });
+
+  it("refuses a team event on a non-team price, even with team custom data", async () => {
+    const { orgId } = await ownedOrg();
+    await webhook(
+      teamEvent(orgId, { id: "sub_team_10", items: [{ price: { id: "pri_pro" }, quantity: 1 }] }),
+    );
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(org).toMatchObject({ seatsPurchased: 0, subscriptionStatus: null });
+  });
+
+  it("refuses an unusable seat quantity and keeps the seats", async () => {
+    const { orgId } = await ownedOrg();
+    await webhook(teamEvent(orgId, { id: "sub_team_11" }));
+    await webhook(
+      teamEvent(orgId, {
+        id: "sub_team_11",
+        items: [{ price: { id: "pri_team_month" }, quantity: -2 }],
+      }),
+    );
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(org.seatsPurchased).toBe(5);
+  });
+
+  it("keeps a past-due organization from closing, and cancels it when its last member goes", async () => {
+    process.env.PADDLE_API_KEY = "test-key";
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ data: {} }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { owner, orgId } = await ownedOrg();
+    await webhook(teamEvent(orgId, { id: "sub_team_12", status: "past_due" }));
+    const leave = await call(owner, "POST", "/api/orgs/current/leave");
+    expect(leave.json()).toMatchObject({ code: "SUBSCRIPTION_ACTIVE" });
+    await deleteUserAndAllData(owner.userId);
+    const [path] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(path).toContain("/subscriptions/sub_team_12/cancel");
+  });
+
+  it("tells the organization owner, not the Pro account, when a team payment fails", async () => {
+    const { owner, orgId } = await ownedOrg();
+    await webhook(teamEvent(orgId, { id: "sub_team_13" }));
+    const res = await webhook({
+      event_id: `evt_${randomUUID()}`,
+      event_type: "transaction.payment_failed",
+      occurred_at: new Date().toISOString(),
+      data: { id: "txn_1", customer_id: "ctm_team_1", subscription_id: "sub_team_13" },
+    });
+    expect(res.statusCode).toBe(200);
+    const note = await prisma.notification.findFirst({
+      where: { userId: owner.userId, type: "billing" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(note?.title).toBe("Team payment failed");
+  });
+
   it("reports a team event it cannot map, and writes no account", async () => {
     const before = await prisma.user.count({ where: { plan: "PRO" } });
     const res = await webhook(teamEvent(randomUUID(), { id: "sub_team_5" }));

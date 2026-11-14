@@ -13,6 +13,7 @@ import {
   teamBillingInterval,
   teamCheckoutIntervals,
   teamPriceIdFor,
+  teamPriceIds,
   teamSeatQuantity,
 } from "../billing/paddle-team.js";
 
@@ -20,6 +21,7 @@ const ORIGINAL_ENV = { ...process.env };
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 
 beforeEach(() => {
+  delete process.env.PADDLE_PRO_PRICE_ID;
   delete process.env.PADDLE_TEAM_PRICE_ID_MONTHLY;
   delete process.env.PADDLE_TEAM_PRICE_ID_ANNUAL;
   delete process.env.PADDLE_API_KEY;
@@ -127,12 +129,39 @@ describe("recognising a team subscription event", () => {
     expect(teamBillingInterval({ billing_cycle: { interval: "week" } })).toBeNull();
   });
 
-  it("falls back to every item's quantity when the team price env changed", () => {
+  it("counts every item only for the organization's own subscription (price rotated)", () => {
     const data = {
       custom_data: { orgId: ORG_ID, kind: "team_seats" },
       items: [{ price: { id: "pri_old_team" }, quantity: 4 }],
     };
-    expect(teamSeatQuantity(data)).toBe(4);
+    expect(teamSeatQuantity(data)).toBeNull();
+    expect(teamSeatQuantity(data, { anyPrice: true })).toBe(4);
     expect(teamSeatQuantity({ custom_data: { kind: "team_seats" } })).toBeNull();
+  });
+
+  it("refuses a quantity that is not a whole number from 1 to 10,000", () => {
+    process.env.PADDLE_TEAM_PRICE_ID_MONTHLY = "pri_team_month";
+    const item = (quantity: number) => ({ items: [{ price: { id: "pri_team_month" }, quantity }] });
+    for (const bad of [0, -2, 2.5, 10_001, Number.MAX_SAFE_INTEGER]) {
+      expect(teamSeatQuantity(item(bad)), String(bad)).toBeNull();
+    }
+    expect(
+      teamSeatQuantity({
+        items: [
+          { price: { id: "pri_team_month" }, quantity: 5 },
+          { price: { id: "pri_team_month" }, quantity: -2 },
+        ],
+      }),
+    ).toBeNull();
+    expect(teamSeatQuantity(item(150))).toBe(150);
+  });
+
+  it("never treats the Pro price as a team price", () => {
+    process.env.PADDLE_PRO_PRICE_ID = "pri_same";
+    process.env.PADDLE_TEAM_PRICE_ID_MONTHLY = "pri_same";
+    expect(teamPriceIds().size).toBe(0);
+    expect(isTeamSubscriptionEvent({ items: [{ price: { id: "pri_same" }, quantity: 1 }] })).toBe(
+      false,
+    );
   });
 });

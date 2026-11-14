@@ -60,28 +60,53 @@ export interface TeamSubscriptionData {
   billing_cycle?: { interval?: string; frequency?: number } | null;
 }
 
-function teamPriceIds(): Set<string> {
-  return new Set(TEAM_INTERVALS.map(teamPriceIdFor).filter((id): id is string => id !== null));
+/** Per item, Paddle quantities outside this are refused rather than stored. */
+const MAX_ITEM_QUANTITY = 10_000;
+
+/** The configured team prices — never the Pro price, even if set to the same id. */
+export function teamPriceIds(): Set<string> {
+  const pro = (process.env.PADDLE_PRO_PRICE_ID ?? "").trim();
+  return new Set(
+    TEAM_INTERVALS.map(teamPriceIdFor).filter((id): id is string => id !== null && id !== pro),
+  );
 }
 
-export function isTeamSubscriptionEvent(data: TeamSubscriptionData): boolean {
-  if (data.custom_data?.kind === TEAM_SEATS_KIND) return true;
+/** True when an item of the event is on a team price. */
+export function hasTeamPrice(data: TeamSubscriptionData): boolean {
   const prices = teamPriceIds();
   return (data.items ?? []).some((item) => prices.has(item.price?.id ?? ""));
 }
 
-/** Seats bought: the team items' quantity (every item's, when no team price matches). */
-export function teamSeatQuantity(data: TeamSubscriptionData): number | null {
-  const items = data.items ?? [];
-  if (items.length === 0) return null;
+/** Claimed as a team event by the checkout's custom data, or on a team price. */
+export function isTeamSubscriptionEvent(data: TeamSubscriptionData): boolean {
+  return data.custom_data?.kind === TEAM_SEATS_KIND || hasTeamPrice(data);
+}
+
+function itemQuantity(item: { quantity?: number }): number | null {
+  const q = item.quantity;
+  return Number.isInteger(q) && (q as number) >= 1 && (q as number) <= MAX_ITEM_QUANTITY
+    ? (q as number)
+    : null;
+}
+
+/**
+ * Seats bought: the quantity on the team-price items — or on every item when
+ * `anyPrice` (the organization's own stored subscription, after a price
+ * rotation). null when there is none, or any counted quantity is not a whole
+ * number from 1 to 10,000: such an event is not applied.
+ */
+export function teamSeatQuantity(
+  data: TeamSubscriptionData,
+  opts: { anyPrice?: boolean } = {},
+): number | null {
   const prices = teamPriceIds();
-  const team = items.filter((item) => prices.has(item.price?.id ?? ""));
-  const counted = team.length > 0 ? team : items;
-  const total = counted.reduce(
-    (sum, item) => sum + (Number.isInteger(item.quantity) ? (item.quantity as number) : 0),
-    0,
+  const items = (data.items ?? []).filter(
+    (item) => opts.anyPrice === true || prices.has(item.price?.id ?? ""),
   );
-  return total > 0 ? total : null;
+  if (items.length === 0) return null;
+  const quantities = items.map(itemQuantity);
+  if (quantities.some((q) => q === null)) return null;
+  return (quantities as number[]).reduce((sum, q) => sum + q, 0);
 }
 
 export function teamBillingInterval(data: TeamSubscriptionData): TeamInterval | null {

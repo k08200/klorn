@@ -18,7 +18,7 @@ import { cancelPaddleSubscription } from "../billing/paddle.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { recordOrgAudit } from "./audit.js";
-import { seatsActive } from "./effective-tier.js";
+import { subscriptionBills } from "./effective-tier.js";
 import { isOrgError } from "./org-error.js";
 import { type OrgTx, withOrgLock } from "./org-lock.js";
 
@@ -51,9 +51,14 @@ async function handOver(tx: OrgTx, userId: string, orgId: string): Promise<strin
     where: { id: orgId },
     select: { subscriptionStatus: true, paddleSubscriptionId: true },
   });
-  if (seatsActive(org?.subscriptionStatus) && org?.paddleSubscriptionId) {
+  if (subscriptionBills(org?.subscriptionStatus)) {
     // Kept until Paddle's cancellation webhook lands on it.
-    return org.paddleSubscriptionId;
+    if (org?.paddleSubscriptionId) return org.paddleSubscriptionId;
+    captureError(new Error("billing organization lost its last member with no subscription id"), {
+      tags: { scope: "org.account-deletion" },
+      extra: { orgId },
+    });
+    return null;
   }
   await tx.organization.delete({ where: { id: orgId }, select: { id: true } });
   return null;

@@ -6,7 +6,7 @@
  */
 
 import { recordOrgAudit } from "./audit.js";
-import { seatsActive } from "./effective-tier.js";
+import { subscriptionBills } from "./effective-tier.js";
 import { OrgError } from "./org-error.js";
 import { membershipInTx, type OrgTx, ownerInTx, withOrgLock } from "./org-lock.js";
 import { currentOrgView, requireMembership } from "./org-members.js";
@@ -61,7 +61,7 @@ async function closeOrganization(tx: OrgTx, orgId: string) {
     where: { id: orgId },
     select: { subscriptionStatus: true },
   });
-  if (seatsActive(org?.subscriptionStatus)) {
+  if (subscriptionBills(org?.subscriptionStatus)) {
     throw new OrgError(
       409,
       "SUBSCRIPTION_ACTIVE",
