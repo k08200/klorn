@@ -27,6 +27,10 @@ import { JUDGE_MODEL } from "../llm/openai.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { clientAddressBucket } from "../security/client-address.js";
 import { redactCredentials } from "../security/credential-redaction.js";
+import {
+  createDemoClientLedger,
+  DEMO_CLIENT_LEDGER_MAX_ENTRIES,
+} from "./playground-demo-ledger.js";
 
 // Strip CR/LF/control chars from any user-supplied value before it reaches a
 // log line, so a crafted model/source field can't forge or split log entries.
@@ -157,18 +161,17 @@ const DEMO_IP_PER_DAY = 10;
 // call so the budget fails closed.
 const DEMO_CLASSIFY_EST_USD = 0.0004;
 const DEMO_CLASSIFY_COST_FRACTIONAL_CENTS = usdToFractionalCents(DEMO_CLASSIFY_EST_USD);
-// Bound the per-IP map so a botnet of unique IPs can't grow it forever; stale
-// (previous-day) entries are evicted once the map crosses this size.
-const DEMO_IP_MAP_MAX_ENTRIES = 10_000;
-
-interface DemoIpUsage {
-  minuteKey: number;
-  minuteCount: number;
-  dayKey: string;
-  dayCount: number;
-}
-
-const demoIpUsage = new Map<string, DemoIpUsage>();
+// Wall 1's ledger, bounded (playground-demo-ledger.ts): previous-day entries
+// expire, and at the cap the least recently seen client is dropped. The cap
+// (50,000, ~10.6 MB measured) is 40x the 1,250 calls a day the default budget
+// pays for, so without a flood of unique addresses no client is ever dropped
+// within its day and the 3/min, 10/day counts above hold exactly. Under such a
+// flood a dropped client can only regain slots, and wall 2 still caps the spend.
+const demoIpUsage = createDemoClientLedger({
+  perMinute: DEMO_IP_PER_MINUTE,
+  perDay: DEMO_IP_PER_DAY,
+  maxEntries: DEMO_CLIENT_LEDGER_MAX_ENTRIES,
+});
 let demoBudget = { dayKey: "", usedFractionalCents: 0 };
 
 function utcDayKey(now: Date): string {
@@ -182,26 +185,8 @@ export function _resetPlaygroundDemoState(): void {
 }
 
 /** Defense 1 — take one per-client slot; false when the minute or day cap is hit. */
-function takeDemoIpSlot(ip: string): boolean {
-  const now = new Date();
-  const minuteKey = Math.floor(now.getTime() / 60_000);
-  const dayKey = utcDayKey(now);
-  const prev = demoIpUsage.get(ip);
-  const minuteCount = prev && prev.minuteKey === minuteKey ? prev.minuteCount : 0;
-  const dayCount = prev && prev.dayKey === dayKey ? prev.dayCount : 0;
-  if (minuteCount >= DEMO_IP_PER_MINUTE || dayCount >= DEMO_IP_PER_DAY) return false;
-  if (demoIpUsage.size >= DEMO_IP_MAP_MAX_ENTRIES) {
-    for (const [key, usage] of demoIpUsage) {
-      if (usage.dayKey !== dayKey) demoIpUsage.delete(key);
-    }
-  }
-  demoIpUsage.set(ip, {
-    minuteKey,
-    minuteCount: minuteCount + 1,
-    dayKey,
-    dayCount: dayCount + 1,
-  });
-  return true;
+function takeDemoIpSlot(bucket: string): boolean {
+  return demoIpUsage.take(bucket, new Date());
 }
 
 /** Defense 2 — pre-charge one call against the global daily demo budget. */
