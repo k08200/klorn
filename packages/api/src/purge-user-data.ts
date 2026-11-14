@@ -110,6 +110,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // SendReceipt: the floor receipt of each manual send — recipient (receipt
   // target) and payload hash, written while MANUAL_SEND_RECEIPTS_ENABLED is on.
   await tx.sendReceipt.deleteMany(scope);
+  // SendClaim: an in-flight smart-action Send's claim (mail id + payload hash),
+  // normally gone once its receipt is written; a dead request's row stays until taken over.
+  await tx.sendClaim.deleteMany(scope);
   // ImapMovedMessage: where trash/archive parked the user's Naver and iCloud mail
   // (folder, UID, subject and Message-ID of each message).
   await tx.imapMovedMessage.deleteMany(scope);

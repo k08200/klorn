@@ -133,6 +133,8 @@ export const UNFENCED_MODELS: Record<string, string> = {
   PmfResponse: "a survey answer the user typed, not derived from mail",
   StoragePurge: "the stored-object purge queue, written by the wipe itself",
   DataWipe: "the fence's own record",
+  SendClaim:
+    "an in-flight Send's claim (mail id + payload hash), released once its receipt is written; that receipt insert is fenced",
 };
 
 /** Fenced tables without a userId: the owner is the parent row's. */
