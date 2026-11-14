@@ -146,6 +146,12 @@ export interface ProviderMeeting {
    * (as an instant), else its event id. '' when the provider sent neither.
    */
   readonly identity: string;
+  /**
+   * The provider's event id (Google `id`, already in the listing's field mask), so a
+   * reader can find the CalendarEvent row of the same source (externalId). Optional:
+   * co-attendance counting keys on `identity` and never reads it.
+   */
+  readonly eventId?: string | null;
   readonly cancelled: boolean;
   readonly allDay: boolean;
   readonly startTime: Date | null;

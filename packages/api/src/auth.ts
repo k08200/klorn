@@ -6,6 +6,7 @@ import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
 import { localEventSource } from "./pim/calendar-rows.js";
+import { captureError } from "./sentry.js";
 
 /**
  * The signing secret for every JWT. Falls back to a hardcoded string that is
@@ -151,7 +152,29 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
-/** Extract userId from Authorization header or fall back to "demo-user" */
+/**
+ * Thrown by getUserId when the request carries no valid session token. Its
+ * 401 statusCode makes the global error handler answer 401 with the standard
+ * `{ error }` envelope — a plain Error surfaced as a 500, which told a client
+ * "the server broke, retry" instead of "sign in" and paged Sentry for nothing.
+ */
+export class AuthenticationRequiredError extends Error {
+  readonly statusCode = 401;
+
+  constructor() {
+    super("Authentication required");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
+/**
+ * Extract userId from the Authorization header (JWT signature + expiry only)
+ * or fall back to "demo-user" where demo access is enabled.
+ *
+ * It does NOT check that the session is still active — that is requireAuth's
+ * job, and the route-auth guard (security/route-auth-guard.ts) puts it in
+ * front of every route that is not explicitly exempt.
+ */
 export function getUserId(request: FastifyRequest): string {
   const auth = request.headers.authorization;
   if (auth?.startsWith("Bearer ")) {
@@ -168,7 +191,89 @@ export function getUserId(request: FastifyRequest): string {
   if (isDemoAccessEnabled()) {
     return "demo-user";
   }
-  throw new Error("Authentication required");
+  throw new AuthenticationRequiredError();
+}
+
+/**
+ * The session requireAuth already verified for an in-flight request. The
+ * route-auth guard runs requireAuth at onRequest, and many routes declare it
+ * again as a preHandler; the second call reuses the first verdict instead of
+ * repeating the database round trip. Keyed weakly by the request object, so an
+ * entry lives exactly as long as its request — nothing to bound or expire.
+ */
+const verifiedSessions = new WeakMap<FastifyRequest, { token: string; userId: string }>();
+
+/**
+ * The `code` of the 503 a session check answers when the database could not
+ * decide it. Clients treat it as "retry", never as "signed out".
+ */
+export const SESSION_CHECK_UNAVAILABLE_CODE = "SESSION_CHECK_UNAVAILABLE";
+const SESSION_CHECK_RETRY_AFTER_SECONDS = 5;
+
+const SESSION_ENDED = {
+  error: "Session expired. Please log in again.",
+  code: "DEVICE_KICKED",
+} as const;
+
+/**
+ * What the session's database checks settled to. A session is "active" only
+ * when EVERY check answered and none ended it; a check that threw leaves it
+ * "unavailable" (undecided), unless another check definitively ended it.
+ */
+type SessionVerdict =
+  | { kind: "active" }
+  | { kind: "ended" }
+  | { kind: "unavailable"; error: unknown };
+
+function settleSessionChecks(
+  results: ReadonlyArray<PromiseSettledResult<boolean>>,
+): SessionVerdict {
+  // Each check resolves true when the session is still live by its rule.
+  if (results.some((r) => r.status === "fulfilled" && !r.value)) return { kind: "ended" };
+  const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed) return { kind: "unavailable", error: failed.reason };
+  return { kind: "active" };
+}
+
+/**
+ * At most one Sentry report per this interval per process: in a database
+ * outage every authenticated request fails the session check, and one event
+ * says as much as thousands. Every failure is still logged.
+ */
+const SESSION_CHECK_REPORT_INTERVAL_MS = 30_000;
+let lastSessionCheckReportAt = Number.NEGATIVE_INFINITY;
+
+function reportSessionCheckFailure(err: unknown): void {
+  const now = Date.now();
+  if (now - lastSessionCheckReportAt < SESSION_CHECK_REPORT_INTERVAL_MS) return;
+  lastSessionCheckReportAt = now;
+  captureError(err, { tags: { scope: "auth.session-check" } });
+}
+
+/**
+ * The database could not answer a session check (pool timeout, dropped
+ * connection). The session was never shown to be ended, so this is not a 401 —
+ * a 401 signs the client out. A retryable 503 that lets nothing through: the
+ * client retries and keeps its session. Logged and reported; the error text
+ * never reaches the caller.
+ */
+function sendSessionCheckUnavailable(request: FastifyRequest, reply: FastifyReply, err: unknown) {
+  request.log.error({ err }, "session check failed: database unavailable");
+  reportSessionCheckFailure(err);
+  return reply.code(503).header("Retry-After", String(SESSION_CHECK_RETRY_AFTER_SECONDS)).send({
+    error: "Couldn't verify your session right now. Please try again.",
+    code: SESSION_CHECK_UNAVAILABLE_CODE,
+    retryable: true,
+  });
+}
+
+/** The token's payload, or null when its signature or expiry fails. */
+function verifiedPayload(rawToken: string): JwtPayload | null {
+  try {
+    return verifyToken(rawToken);
+  } catch {
+    return null;
+  }
 }
 
 /** Fastify preHandler that requires authentication */
@@ -178,24 +283,28 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(401).send({ error: "Authentication required" });
   }
   const rawToken = auth.slice(7);
-  try {
-    const payload = verifyToken(rawToken);
-    // Verify the session is still active: device not kicked by another login,
-    // AND the token was not issued before a global revocation (password reset).
-    const [deviceValid, revoked] = await Promise.all([
-      isDeviceSessionValid(rawToken),
-      sessionRevokedForToken(payload),
-    ]);
-    if (!deviceValid || revoked) {
-      return reply
-        .code(401)
-        .send({ error: "Session expired. Please log in again.", code: "DEVICE_KICKED" });
-    }
-    // Attach to request for downstream handlers
-    (request as unknown as { userId: string }).userId = payload.userId;
-  } catch {
-    return reply.code(401).send({ error: "Invalid or expired token" });
+  const verified = verifiedSessions.get(request);
+  if (verified?.token === rawToken) {
+    (request as unknown as { userId: string }).userId = verified.userId;
+    return;
   }
+  const payload = verifiedPayload(rawToken);
+  if (!payload) return reply.code(401).send({ error: "Invalid or expired token" });
+  // Verify the session is still active: device not kicked by another login,
+  // AND the token was not issued before a global revocation (password reset).
+  const verdict = settleSessionChecks(
+    await Promise.allSettled([
+      isDeviceSessionValid(rawToken),
+      sessionRevokedForToken(payload).then((revoked) => !revoked),
+    ]),
+  );
+  if (verdict.kind === "ended") return reply.code(401).send(SESSION_ENDED);
+  if (verdict.kind === "unavailable") {
+    return sendSessionCheckUnavailable(request, reply, verdict.error);
+  }
+  // Attach to request for downstream handlers
+  (request as unknown as { userId: string }).userId = payload.userId;
+  verifiedSessions.set(request, { token: rawToken, userId: payload.userId });
 }
 
 /** Fastify preHandler that requires ADMIN role */
@@ -204,31 +313,33 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
   if (!auth?.startsWith("Bearer ")) {
     return reply.code(401).send({ error: "Authentication required" });
   }
-  try {
-    const rawToken = auth.slice(7);
-    const payload = verifyToken(rawToken);
-    const [user, deviceValid] = await Promise.all([
-      prisma.user.findUnique({ where: { id: payload.userId } }),
+  const rawToken = auth.slice(7);
+  const payload = verifiedPayload(rawToken);
+  if (!payload) return reply.code(401).send({ error: "Invalid or expired token" });
+  // A native promise: it runs the query once, and is read twice below.
+  const userLookup = Promise.resolve(prisma.user.findUnique({ where: { id: payload.userId } }));
+  // Admin tokens get the same session-revocation guarantees as requireAuth:
+  // a kicked device or a token predating a password reset must lose access.
+  const verdict = settleSessionChecks(
+    await Promise.allSettled([
       isDeviceSessionValid(rawToken),
-    ]);
-    // Admin tokens get the same session-revocation guarantees as requireAuth:
-    // a kicked device or a token predating a password reset must lose access.
-    if (!deviceValid || isTokenRevokedByEpoch(payload, user?.sessionsInvalidatedAt)) {
-      return reply
-        .code(401)
-        .send({ error: "Session expired. Please log in again.", code: "DEVICE_KICKED" });
-    }
-    // An ADMIN_EMAILS address counts only once verified — the same rule as the
-    // /me promotion: register hands out a session before verification, so an
-    // unverified row on an unclaimed admin address must not reach admin routes.
-    const isEnvAdmin = user?.emailVerified === true && isAdminEmail(user.email);
-    if (!user || (user.role !== "ADMIN" && !isEnvAdmin)) {
-      return reply.code(403).send({ error: "Admin access required" });
-    }
-    (request as unknown as { userId: string }).userId = payload.userId;
-  } catch {
-    return reply.code(401).send({ error: "Invalid or expired token" });
+      userLookup.then((row) => !isTokenRevokedByEpoch(payload, row?.sessionsInvalidatedAt)),
+    ]),
+  );
+  if (verdict.kind === "ended") return reply.code(401).send(SESSION_ENDED);
+  if (verdict.kind === "unavailable") {
+    return sendSessionCheckUnavailable(request, reply, verdict.error);
   }
+  // Settled "active" means the lookup above resolved; this await reads its value.
+  const user = await userLookup;
+  // An ADMIN_EMAILS address counts only once verified — the same rule as the
+  // /me promotion: register hands out a session before verification, so an
+  // unverified row on an unclaimed admin address must not reach admin routes.
+  const isEnvAdmin = user?.emailVerified === true && isAdminEmail(user.email);
+  if (!user || (user.role !== "ADMIN" && !isEnvAdmin)) {
+    return reply.code(403).send({ error: "Admin access required" });
+  }
+  (request as unknown as { userId: string }).userId = payload.userId;
 }
 
 /** Hash a JWT token to store in the Device table */

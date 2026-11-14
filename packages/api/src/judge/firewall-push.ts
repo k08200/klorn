@@ -9,6 +9,7 @@
  * cycle.
  */
 
+import type { NotificationReason } from "@klorn/contract";
 import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
@@ -21,6 +22,11 @@ import {
   senderDisplayName,
 } from "../notify/mail-push-content.js";
 import {
+  REASON_ITEM_SELECT,
+  type ReasonItemRow,
+  reasonsForMail,
+} from "../notify/notification-reason.js";
+import {
   getUserNotificationLanguage,
   type NotificationLanguage,
   notificationCopy,
@@ -28,7 +34,7 @@ import {
 } from "../notify/notification-strings.js";
 import { stampDecisionRang } from "./decision-label.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
-import { resolveTierReason } from "./tier-reason-strings.js";
+import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
 import type { BellRow } from "./v3/push-budget-gate.js";
 
 // A push for a PUSH-tier email only fires for genuinely recent mail. The
@@ -139,9 +145,10 @@ export async function firewallPushGatesPass(
 }
 
 /**
- * The bell row / live frame message. Sender and subject stay as the mail wrote
- * them; only Klorn's stand-in is translated. Unchanged by decision N1: the bell
- * row message carries the dedupe marker.
+ * The bell row / live frame message. Subject as the mail wrote it, the
+ * sender's display name (or bare address) as senderDisplayName reads it; only
+ * Klorn's stand-in is translated. Its shape is unchanged by decision N1: the
+ * bell row message carries the dedupe marker.
  */
 function pushBody(email: JudgeableEmailRow, language: NotificationLanguage): { body: string } {
   const sender = senderDisplayName(email.from);
@@ -152,34 +159,63 @@ function pushBody(email: JudgeableEmailRow, language: NotificationLanguage): { b
 interface OpenMailItem {
   id: string;
   lane: MailPushLane;
-  reason: string | null;
+  reason: NotificationReason | null;
 }
 
 /**
  * The mail's open firewall item: its id (native deep link, Telegram buttons),
  * its lane (MEETING picks the meeting action set; anything else rings as PUSH)
- * and the judge's reason as the app shows it (a stored key resolved in the
- * user's language). Null when no open item exists: the push still rings.
+ * and why it rang (notify/notification-reason.ts): the verified quote for a
+ * user under policy v3, else the judge's reason in the user's language. Null
+ * when no open item exists: the push still rings.
  */
 async function findOpenMailItem(
   userId: string,
-  emailDbId: string,
+  email: JudgeableEmailRow,
   language: NotificationLanguage,
 ): Promise<OpenMailItem | null> {
+  let row: ({ id: string } & ReasonItemRow) | null;
   try {
-    const row = await prisma.attentionItem.findFirst({
-      where: { userId, source: "EMAIL", sourceId: emailDbId, status: "OPEN" },
-      select: { id: true, tier: true, tierReason: true },
+    row = await prisma.attentionItem.findFirst({
+      where: { userId, source: "EMAIL", sourceId: email.id, status: "OPEN" },
+      select: { id: true, ...REASON_ITEM_SELECT },
     });
-    if (!row) return null;
-    return {
-      id: row.id,
-      lane: row.tier === "MEETING" ? "MEETING" : "PUSH",
-      reason: resolveTierReason(row.tierReason, language),
-    };
   } catch (err) {
     console.warn(
       "[PUSH] open firewall item lookup failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+  if (!row) return null;
+  return {
+    id: row.id,
+    lane: row.tier === "MEETING" ? "MEETING" : "PUSH",
+    reason: await mailReason(userId, email, row, language),
+  };
+}
+
+/**
+ * Why it rang. Its own failure (a body read for a policy-v3 quote check)
+ * costs only the reason line: the lane and item id still go out.
+ */
+async function mailReason(
+  userId: string,
+  email: JudgeableEmailRow,
+  item: ReasonItemRow,
+  language: NotificationLanguage,
+): Promise<NotificationReason | null> {
+  try {
+    const reasons = await reasonsForMail(
+      userId,
+      [{ id: email.id, subject: email.subject, body: email.body, snippet: email.snippet }],
+      new Map([[email.id, item]]),
+      { language, now: new Date(), policyUser: isJudgeV3PolicyEnabled(userId) },
+    );
+    return reasons.get(email.id) ?? null;
+  } catch (err) {
+    console.warn(
+      "[PUSH] firewall reason lookup failed:",
       err instanceof Error ? err.message : String(err),
     );
     return null;
@@ -224,7 +260,7 @@ export async function deliverFirewallPush(
 
   // Decision N1: sender-only title, subject + the judge's reason, opens the
   // mail, and the lane + language pick the action set on every channel.
-  const item = await findOpenMailItem(userId, email.id, lang);
+  const item = await findOpenMailItem(userId, email, lang);
   const content = mailPushContent({
     from: email.from,
     subject: email.subject,

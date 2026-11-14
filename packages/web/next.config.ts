@@ -70,9 +70,10 @@ const securityHeaders = [
     : []),
 ];
 
-// Static export for Cloudflare Pages (docs/deploy/cloudflare-pages.md). A
-// plain build is the Next server build Vercel deploys; KLORN_STATIC_EXPORT=1
-// (exactly "1") writes a static site to out/ instead. A static site cannot
+// Static export for Cloudflare Pages (docs/deploy/cloudflare-pages.md), which
+// serves production. A plain build is the Next server build (`next start`,
+// Dockerfile.web) that self-hosters run; KLORN_STATIC_EXPORT=1 (exactly "1")
+// writes a static site to out/ instead. A static site cannot
 // run headers() or redirects(), so public/_headers and public/_redirects
 // carry them there, and scripts/cloudflare-pages.test.mjs keeps both files
 // identical to the rules below.

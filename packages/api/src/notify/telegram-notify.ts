@@ -74,10 +74,11 @@ export async function sendTelegramForPush(
     const openUrl = absoluteWebUrl(payload.url);
     if (openUrl) keyboard.push([{ text: "Open Klorn", url: openUrl }]);
 
+    // The text carries mail-authored subject and reason lines: no previews.
     const result = await sendTelegramMessage(
       chatId,
       text,
-      keyboard.length ? { inlineKeyboard: keyboard } : undefined,
+      keyboard.length ? { inlineKeyboard: keyboard, noLinkPreview: true } : { noLinkPreview: true },
     );
     if (!result.ok) {
       console.warn(

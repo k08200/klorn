@@ -12,7 +12,7 @@
  * Notifications are persisted to PostgreSQL (Notification model).
  */
 
-import type { DesktopAlertKind } from "@klorn/contract";
+import type { DesktopAlertKind, NotificationCenterFields, NotificationRow } from "@klorn/contract";
 import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
@@ -74,19 +74,8 @@ async function addNotification(
   return { id: entry.id };
 }
 
-export interface NotificationDTO {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  link: string | null;
-  conversationId: string | null;
-  sourceEmailId: string | null;
-  pendingActionId: string | null;
-  pendingActionStatus: string | null;
-  createdAt: string;
-}
+/** A bell row as stored: @klorn/contract NotificationRow without the notification center fields. */
+export type NotificationDTO = Omit<NotificationRow, keyof NotificationCenterFields>;
 
 export async function getNotifications(
   userId: string,

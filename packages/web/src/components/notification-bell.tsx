@@ -1,8 +1,19 @@
 "use client";
 
+import type { NotificationBudget, NotificationListResponse } from "@klorn/contract";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
+import { postReminder } from "../app/email/_v2/post-reminder";
+import { REMINDER_LABEL_KEYS, type ReminderKey } from "../app/email/_v2/reminders";
 import { apiFetch } from "../lib/api";
 import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
@@ -10,57 +21,31 @@ import { deliverInPageAlert } from "../lib/in-page-notify";
 import { openExternal, shellKind } from "../lib/native/shell";
 import { catchUpDesktopAlerts, deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
-  getTypeLabel,
-  groupNotifications,
-  type NotificationGroup,
-  unreadGroupCount,
-} from "../lib/notification-grouping";
+  bellBadgeCount,
+  type CenterNotification,
+  groupForCenter,
+  parseNotifBudget,
+} from "../lib/notification-center";
 import { notificationClickTarget } from "../lib/notification-target";
-import { formatRelative } from "../lib/text";
+import { AlertStrip } from "./notification-center/alert-strip";
+import { NotificationRow, type RowBusy } from "./notification-center/notification-row";
+import { MoreGlyph } from "./notification-center/type-icon";
+import { useDeliveredTo } from "./notification-center/use-delivered-to";
 import { ProFeatureNotice } from "./pro-feature-notice";
 import { RejectReasonDialog } from "./reject-reason-dialog";
 import { useToast } from "./toast";
 import { useWebSocket } from "./use-websocket";
 
-interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: string;
-  conversationId?: string | null;
-  sourceEmailId?: string | null;
-  pendingActionId?: string | null;
-  pendingActionStatus?: string | null;
-  link?: string | null;
-}
+type Notification = CenterNotification;
 
-const typeIcon: Record<string, string> = {
-  reminder: "🔔",
-  calendar: "📅",
-  email: "📧",
-  task: "✅",
-  meeting: "🎥",
-  briefing: "📋",
-  insight: "🤖",
-};
-
-function isAgentNotification(title: string): boolean {
-  const legacyPrefix = "[EV" + "E]";
-  return title.startsWith("[Klorn]") || title.startsWith("[Eve]") || title.startsWith(legacyPrefix);
-}
-
-function notificationTitle(title: string): string {
-  const legacyPrefix = "[EV" + "E]";
-  if (title.startsWith("[Klorn]")) return title.slice(8).trim();
-  if (title.startsWith("[Eve]")) return title.slice(5).trim();
-  if (title.startsWith(legacyPrefix)) return title.slice(5).trim();
-  return title;
-}
+const LATER_KEY: ReminderKey = "later-today";
+const ROW_SELECTOR = "[data-nc-row]";
 
 export default function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [budget, setBudget] = useState<NotificationBudget | null>(null);
+  // The header's overflow menu (holds "Clear").
+  const [menuOpen, setMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [flash, setFlash] = useState(false);
   // Notification awaiting the reject-with-reason dialog; null when closed.
@@ -142,9 +127,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
         setOpen(false);
       }
     };
+    // Esc closes the overflow menu first, then the panel, and hands focus
+    // back to the bell.
     const escHandler = (e: KeyboardEvent) => {
-      if (rejectTarget) return;
-      if (e.key === "Escape") setOpen(false);
+      if (rejectTarget || e.key !== "Escape") return;
+      if (menuOpen) {
+        setMenuOpen(false);
+        return;
+      }
+      setOpen(false);
+      bellRef.current?.focus();
     };
     document.addEventListener("mousedown", handler);
     document.addEventListener("keydown", escHandler);
@@ -152,7 +144,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("keydown", escHandler);
     };
-  }, [open, rejectTarget]);
+  }, [open, rejectTarget, menuOpen]);
 
   // Bridge service-worker push events into the same refresh bus the WS uses:
   // when a push lands while the socket is down/backgrounded, the SW posts
@@ -218,9 +210,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
   // hadn't recorded yet, so a resume is visibly signalled.
   const fetchNotifications = useCallback(
     (opts?: { flashOnNew?: boolean }) => {
-      apiFetch<{ notifications: Notification[] }>("/api/notifications?limit=30")
+      apiFetch<NotificationListResponse>("/api/notifications?limit=30")
         .then((d) => {
           const notifs = d.notifications || [];
+          // The list-level daily alert budget (contract NotificationListResponse
+          // `budget`) shows only when the server sends it (v3 users with a limit).
+          setBudget(parseNotifBudget(d));
           // Anything not yet in seenIds arrived while we were away. On the first
           // load every id is unseen, so the initializedRef guard suppresses the
           // flash for that paint only.
@@ -287,17 +282,32 @@ export default function NotificationBell({ userId }: { userId: string }) {
   }, [connected, reconcile]);
 
   const [actionLoading, setActionLoading] = useState(false);
-  // Per-notification approve/reject loading state so buttons on other rows stay interactive
-  const [pendingActionLoading, setPendingActionLoading] = useState<
-    Record<string, "approve" | "reject" | null>
-  >({});
+  // Per-row busy state so actions on other rows stay interactive.
+  const [rowBusy, setRowBusy] = useState<Record<string, RowBusy>>({});
   // Approving executes the action, which is Pro: a FREE user's 403 shows the notice.
   const [approveProGated, setApproveProGated] = useState(false);
+  const titleId = useId();
+  const menuId = useId();
 
-  const handleApprovePendingAction = async (notif: Notification, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
-    setPendingActionLoading((prev) => ({ ...prev, [notif.id]: "approve" }));
+  const setBusy = (id: string, busy: RowBusy) => setRowBusy((prev) => ({ ...prev, [id]: busy }));
+
+  const markRead = (n: Notification) => {
+    if (n.isRead) return;
+    setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+    apiFetch(`/api/notifications/${n.id}/read`, { method: "PATCH" }).catch((err: unknown) =>
+      console.error("[notification-bell] mark read failed", err),
+    );
+  };
+
+  const closePanel = useCallback((restoreFocus: boolean) => {
+    setMenuOpen(false);
+    setOpen(false);
+    if (restoreFocus) bellRef.current?.focus();
+  }, []);
+
+  const handleApprovePendingAction = async (notif: Notification) => {
+    if (!notif.pendingActionId || rowBusy[notif.id]) return;
+    setBusy(notif.id, "approve");
     setApproveProGated(false);
     try {
       await apiFetch(`/api/chat/pending-actions/${notif.pendingActionId}/approve`, {
@@ -316,24 +326,22 @@ export default function NotificationBell({ userId }: { userId: string }) {
         return;
       }
       console.error("[notification-bell] approve failed", err);
-      // Let the user retry — don't silently swallow
       toast(t("notif.toast.approveFailed"), "error");
     } finally {
-      setPendingActionLoading((prev) => ({ ...prev, [notif.id]: null }));
+      setBusy(notif.id, null);
     }
   };
 
   // Opens the reject-with-reason dialog; the actual API call happens in
   // performRejectPendingAction once the user confirms (reason optional).
-  const handleRejectPendingAction = (notif: Notification, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
+  const handleRejectPendingAction = (notif: Notification) => {
+    if (!notif.pendingActionId || rowBusy[notif.id]) return;
     setRejectTarget(notif);
   };
 
   const performRejectPendingAction = async (notif: Notification, reason: string | null) => {
-    if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
-    setPendingActionLoading((prev) => ({ ...prev, [notif.id]: "reject" }));
+    if (!notif.pendingActionId || rowBusy[notif.id]) return;
+    setBusy(notif.id, "reject");
     try {
       await apiFetch(`/api/chat/pending-actions/${notif.pendingActionId}/reject`, {
         method: "POST",
@@ -349,37 +357,61 @@ export default function NotificationBell({ userId }: { userId: string }) {
       console.error("[notification-bell] reject failed", err);
       toast(t("notif.toast.rejectFailed"), "error");
     } finally {
-      setPendingActionLoading((prev) => ({ ...prev, [notif.id]: null }));
+      setBusy(notif.id, null);
+    }
+  };
+
+  const openExternalUrl = (url: string) => {
+    // Never the app tab: an https link (e.g. a meeting) opens on its own —
+    // in the system browser inside the desktop/mobile wrappers, where a
+    // plain window.open may stay in the WebView or do nothing.
+    if (shellKind() !== null) {
+      openExternal(url).catch((err) =>
+        console.error("[notifications] could not open external link:", err),
+      );
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   };
 
   const handleNotificationClick = (n: Notification) => {
-    // Mark as read (fire-and-forget)
-    if (!n.isRead) {
-      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
-      apiFetch(`/api/notifications/${n.id}/read`, { method: "PATCH" }).catch(() => {});
-    }
-
-    // Navigate first, then close dropdown. A stored link is untrusted (a
-    // meeting link can come from anyone's invite): lib/notification-target.ts
-    // follows only a same-origin path or a plain https URL.
+    markRead(n);
+    // A stored link is untrusted (a meeting link can come from anyone's
+    // invite): lib/notification-target.ts follows only a same-origin path or
+    // a plain https URL.
     const target = notificationClickTarget(n);
-    if (target.kind === "external") {
-      // Never the app tab: an https link (e.g. a meeting) opens on its own —
-      // in the system browser inside the desktop/mobile wrappers, where a
-      // plain window.open may stay in the WebView or do nothing.
-      if (shellKind() !== null) {
-        openExternal(target.url).catch((err) =>
-          console.error("[notifications] could not open external link:", err),
-        );
-      } else {
-        window.open(target.url, "_blank", "noopener,noreferrer");
-      }
-    } else {
-      router.push(target.path);
+    if (target.kind === "external") openExternalUrl(target.url);
+    else router.push(target.path);
+    // Close after navigation starts (defer to avoid portal unmount racing with router)
+    setTimeout(() => closePanel(false), 0);
+  };
+
+  const handleReply = (n: Notification) => {
+    if (!n.sourceEmailId) return;
+    markRead(n);
+    router.push(`/email/${encodeURIComponent(n.sourceEmailId)}?focus=reply`);
+    setTimeout(() => closePanel(false), 0);
+  };
+
+  const handleJoin = (n: Notification, url: string) => {
+    markRead(n);
+    openExternalUrl(url);
+  };
+
+  // The mail's existing Later (POST /api/email/:id/later), same as the reader.
+  const handleLater = async (n: Notification) => {
+    if (!n.sourceEmailId || rowBusy[n.id]) return;
+    setBusy(n.id, "later");
+    try {
+      await postReminder(n.sourceEmailId, LATER_KEY);
+      markRead(n);
+      toast(t("mailV2.list.remind.set", { when: t(REMINDER_LABEL_KEYS[LATER_KEY]) }), "success");
+    } catch (err) {
+      console.error("[notification-bell] later failed", err);
+      toast(t("mailV2.list.remind.failed"), "error");
+    } finally {
+      setBusy(n.id, null);
     }
-    // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
-    setTimeout(() => setOpen(false), 0);
   };
 
   const markAllRead = async () => {
@@ -395,11 +427,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
   };
 
   const clearAll = async () => {
+    setMenuOpen(false);
     setActionLoading(true);
     try {
       await apiFetch("/api/notifications", { method: "DELETE" });
       setNotifications([]);
-      setOpen(false);
+      closePanel(true);
     } catch {
       fetchNotifications();
     } finally {
@@ -407,139 +440,50 @@ export default function NotificationBell({ userId }: { userId: string }) {
     }
   };
 
-  const groups = useMemo(() => groupNotifications(notifications), [notifications]);
-  const unreadCount = unreadGroupCount(groups);
-  const tabCount = connectedClients.filter((c) => c.type === "web").length;
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const toggleGroup = (key: string) =>
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+  const groups = useMemo(() => groupForCenter(notifications), [notifications]);
+  const badgeCount = bellBadgeCount(notifications);
+  const unreadTotal = notifications.filter((n) => !n.isRead).length;
+  const deliveredLabels = useDeliveredTo(open, notifications);
+
+  // Focus moves into the panel when it opens: the first row, else the panel.
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => {
+      const panel = dropdownRef.current;
+      const first = panel?.querySelector<HTMLElement>(ROW_SELECTOR);
+      (first ?? panel)?.focus();
     });
+    return () => cancelAnimationFrame(id);
+  }, [open]);
 
-  const renderItem = (n: Notification) => (
-    // Plain container — the tappable summary is a real <button> sibling of the
-    // Approve/Reject buttons, so no interactive element nests inside another
-    // (the previous role="button" div wrapped the action buttons, which is an
-    // invalid nested-interactive pattern for AT).
-    <div
-      key={n.id}
-      className={`border-b border-line ${
-        !n.isRead ? "bg-accent-light/5" : ""
-      } ${isAgentNotification(n.title) ? "border-l-2 border-l-accent-light/60" : ""}`}
-    >
-      {/* The row itself is a real button (Enter + Space activate). Action buttons
-          live in a sibling block below so we never nest interactive-in-interactive. */}
-      <button
-        type="button"
-        onClick={() => handleNotificationClick(n)}
-        className="focus-ring block w-full min-h-11 cursor-pointer px-4 py-3.5 md:py-3 text-left transition hover:bg-surface-hover"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm">
-            {isAgentNotification(n.title) ? "🤖" : typeIcon[n.type] || "📌"}
-          </span>
-          <span
-            className={`text-role-body truncate ${!n.isRead ? "font-semibold" : "text-ink-mid"} ${isAgentNotification(n.title) ? "text-accent-deep" : ""}`}
-          >
-            {notificationTitle(n.title)}
-          </span>
-          {isAgentNotification(n.title) && (
-            <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1 py-0.5 rounded shrink-0">
-              Klorn
-            </span>
-          )}
-          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 ml-auto" />}
-        </div>
-        <p className="text-role-meta md:text-role-caption text-ink-mid mt-1 line-clamp-2 ml-6">
-          {n.message}
-        </p>
-        <div className="flex items-center gap-2 mt-1 ml-6">
-          <span className="text-role-caption text-ink-mid">{formatRelative(n.createdAt)}</span>
-          {/* Every row opens somewhere (notificationClickTarget always answers). */}
-          <span className="text-role-caption text-accent-deep">{t("common.open")}</span>
-        </div>
-      </button>
-      {n.pendingActionId && n.pendingActionStatus === "PENDING" && (
-        <div className="flex items-center gap-2 px-4 pb-3 ml-6">
-          <button
-            type="button"
-            onClick={(e) => handleApprovePendingAction(n, e)}
-            disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-role-label md:text-role-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink transition min-w-[72px] md:min-w-0"
-          >
-            {pendingActionLoading[n.id] === "approve" ? "..." : t("notif.approve")}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleRejectPendingAction(n, e)}
-            disabled={!!pendingActionLoading[n.id]}
-            className="focus-ring text-role-label md:text-role-caption px-4 py-2 md:px-2.5 md:py-1 rounded-control md:rounded-chip bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft transition min-w-[72px] md:min-w-0"
-          >
-            {pendingActionLoading[n.id] === "reject" ? "..." : t("notif.reject")}
-          </button>
-        </div>
-      )}
-      {n.pendingActionId && n.pendingActionStatus && n.pendingActionStatus !== "PENDING" && (
-        <div className="px-4 pb-2 ml-6">
-          <span className="text-role-caption text-ink-mid">
-            {n.pendingActionStatus === "EXECUTED"
-              ? t("notif.status.done")
-              : n.pendingActionStatus === "REJECTED"
-                ? t("notif.status.rejected")
-                : n.pendingActionStatus}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderGroupHeader = (group: NotificationGroup<Notification>, expanded: boolean) => {
-    const label = `${group.isAgent ? "Klorn " : ""}${getTypeLabel(group.type)}`;
-    return (
-      <button
-        key={`${group.key}_header`}
-        type="button"
-        onClick={() => toggleGroup(group.key)}
-        className={`focus-ring w-full min-h-11 text-left px-4 py-3 border-b border-line hover:bg-surface-hover transition ${
-          group.unreadCount > 0 ? "bg-accent-light/5" : ""
-        } ${group.isAgent ? "border-l-2 border-l-accent-light/60" : ""}`}
-        aria-expanded={expanded}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm">{group.isAgent ? "🤖" : typeIcon[group.type] || "📌"}</span>
-          <span
-            className={`text-role-body ${group.unreadCount > 0 ? "font-semibold" : "text-ink-mid"} ${group.isAgent ? "text-accent-deep" : ""}`}
-          >
-            {label} {group.items.length}
-          </span>
-          {group.unreadCount > 0 && (
-            <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded shrink-0">
-              {t("notif.group.new", { count: String(group.unreadCount) })}
-            </span>
-          )}
-          <span className="text-role-caption text-ink-dim ml-auto shrink-0">
-            {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
-          </span>
-        </div>
-        <p className="text-role-meta md:text-role-caption text-ink-mid mt-1 line-clamp-1 ml-6">
-          {notificationTitle(group.latestItem.title)}
-        </p>
-        <p className="text-role-caption text-ink-mid mt-1 ml-6">
-          {t("notif.group.latest", { time: formatRelative(group.latestItem.createdAt) })}
-        </p>
-      </button>
-    );
+  // Arrow keys / Home / End walk the rows; Tab still reaches every action.
+  const onPanelKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+    const rows = Array.from(dropdownRef.current?.querySelectorAll<HTMLElement>(ROW_SELECTOR) ?? []);
+    if (rows.length === 0) return;
+    e.preventDefault();
+    const current = rows.indexOf(document.activeElement as HTMLElement);
+    const last = rows.length - 1;
+    const next =
+      e.key === "Home"
+        ? 0
+        : e.key === "End"
+          ? last
+          : e.key === "ArrowDown"
+            ? Math.min(current + 1, last)
+            : Math.max(current - 1, 0);
+    rows[next]?.focus();
   };
+
+  const headerButton =
+    "focus-ring inline-flex items-center rounded-chip px-1.5 text-role-caption transition disabled:opacity-40 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center";
 
   return (
     <div className="relative flex items-center gap-2" ref={containerRef}>
       {/* Connection indicator */}
       <span
-        className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-400" : "bg-slate-300"}`}
-        title={connected ? `Connected${tabCount > 1 ? ` (${tabCount} tabs)` : ""}` : "Disconnected"}
+        className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-state-ok-ink" : "bg-ink-dim"}`}
+        title={connected ? "Connected" : "Disconnected"}
       />
 
       <button
@@ -547,7 +491,13 @@ export default function NotificationBell({ userId }: { userId: string }) {
         type="button"
         onClick={() => setOpen(!open)}
         className={`focus-ring relative inline-flex items-center justify-center rounded-chip text-ink-mid hover:text-ink transition p-1 pointer-coarse:size-11 ${flash ? "animate-bounce" : ""}`}
-        aria-label={t("notif.title")}
+        aria-label={
+          badgeCount > 0
+            ? `${t("notif.title")} · ${t("notifCenter.unread", { count: String(badgeCount) })}`
+            : t("notif.title")
+        }
+        aria-expanded={open}
+        aria-haspopup="dialog"
       >
         <svg
           width="18"
@@ -563,94 +513,129 @@ export default function NotificationBell({ userId }: { userId: string }) {
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-role-caption font-bold rounded-full w-4 h-4 flex items-center justify-center">
-            {unreadCount > 9 ? "9+" : unreadCount}
+        {badgeCount > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-role-caption font-bold rounded-full w-4 h-4 flex items-center justify-center"
+          >
+            {badgeCount > 9 ? "9+" : badgeCount}
           </span>
         )}
       </button>
 
       {open &&
         createPortal(
+          // biome-ignore lint/a11y/noStaticElementInteractions: the dialog container routes arrow keys to its rows
           <div
             ref={dropdownRef}
+            role="dialog"
+            aria-labelledby={titleId}
+            tabIndex={-1}
+            onKeyDown={onPanelKeyDown}
             style={
               isMobile
-                ? {
-                    position: "fixed",
-                    top: dropdownPos.top,
-                    left: 8,
-                    right: 8,
-                    zIndex: 9999,
-                  }
-                : {
-                    position: "fixed",
-                    top: dropdownPos.top,
-                    left: dropdownPos.left,
-                    zIndex: 9999,
-                  }
+                ? { position: "fixed", top: dropdownPos.top, left: 8, right: 8, zIndex: 9999 }
+                : { position: "fixed", top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }
             }
-            className="rail:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] rail:max-h-[28rem]"
+            className="rail:w-[min(26.25rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-card shadow-sheet overflow-hidden flex flex-col max-h-[min(80vh,calc(100vh-6rem))] rail:max-h-[45rem] outline-none"
           >
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
-              <div className="flex items-center gap-2">
-                <span className="text-role-body font-medium">{t("notif.title")}</span>
-                {connected && (
-                  <span className="text-role-caption text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
-                    {t("mail.live")}
-                  </span>
-                )}
-                {unreadCount > 0 && (
-                  <span className="text-role-caption text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {unreadCount > 0 && (
+            <div className="flex items-center gap-2.5 px-4 py-3">
+              <h2 id={titleId} className="text-role-body font-semibold text-ink">
+                {t("notif.title")}
+              </h2>
+              {unreadTotal > 0 && (
+                <span className="text-role-caption text-ink-muted">
+                  {t("notifCenter.unread", { count: String(unreadTotal) })}
+                </span>
+              )}
+              <span className="ml-auto" />
+              {budget && (
+                <span className="rounded-chip border border-line px-2 py-0.5 text-role-caption text-ink-muted">
+                  {t("notifCenter.budget", {
+                    used: String(budget.used),
+                    limit: String(budget.limit),
+                  })}
+                </span>
+              )}
+              {unreadTotal > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  disabled={actionLoading}
+                  className={`${headerButton} text-accent-deep hover:underline`}
+                >
+                  {t("notifCenter.markAllRead")}
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={markAllRead}
-                    disabled={actionLoading}
-                    className="text-role-caption text-ink-dim hover:text-accent-deep transition disabled:opacity-40"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    aria-label={t("notifCenter.more")}
+                    aria-expanded={menuOpen}
+                    aria-controls={menuOpen ? menuId : undefined}
+                    className={`${headerButton} h-6.5 text-ink-soft hover:bg-surface-hover`}
                   >
-                    {actionLoading ? "..." : t("notif.markAllRead")}
+                    <MoreGlyph />
                   </button>
-                )}
-                {notifications.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAll}
-                    disabled={actionLoading}
-                    className="text-role-caption text-ink-dim hover:text-state-danger-ink transition disabled:opacity-40"
-                  >
-                    {actionLoading ? "..." : t("common.clear")}
-                  </button>
-                )}
-              </div>
+                  {menuOpen && (
+                    <div
+                      id={menuId}
+                      className="absolute right-0 top-full z-20 mt-1 min-w-32 rounded-control border border-line bg-surface-panel p-1 shadow-menu"
+                    >
+                      <button
+                        type="button"
+                        onClick={clearAll}
+                        disabled={actionLoading}
+                        className="focus-ring flex w-full min-h-9 items-center rounded-chip px-2.5 text-left text-role-meta text-state-danger-ink hover:bg-surface-hover pointer-coarse:min-h-11"
+                      >
+                        {t("common.clear")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain">
               {approveProGated && <ProFeatureNotice className="m-3" />}
               {notifications.length === 0 ? (
-                <p className="text-center text-ink-dim text-role-body py-6">{t("notif.empty")}</p>
+                <p className="border-t border-line py-8 text-center text-role-body text-ink-dim">
+                  {t("notif.empty")}
+                </p>
               ) : (
                 groups.map((group) => {
-                  if (group.items.length === 1) return renderItem(group.items[0]);
-                  const expanded = expandedGroups.has(group.key);
+                  const label = t(`notifCenter.group.${group.key}`);
                   return (
-                    <div key={group.key}>
-                      {renderGroupHeader(group, expanded)}
-                      {expanded && group.items.map(renderItem)}
-                    </div>
+                    <section key={group.key} aria-labelledby={`${titleId}-${group.key}`}>
+                      <h3
+                        id={`${titleId}-${group.key}`}
+                        className="px-4 pt-3 pb-1.5 text-role-caption font-semibold uppercase tracking-[0.06em] text-ink-muted"
+                      >
+                        {label} · {group.items.length}
+                      </h3>
+                      <ul>
+                        {group.items.map((n) => (
+                          <NotificationRow
+                            key={n.id}
+                            n={n}
+                            busy={rowBusy[n.id] ?? null}
+                            deliveredLabel={deliveredLabels[n.id]}
+                            onOpen={handleNotificationClick}
+                            onReply={handleReply}
+                            onLater={(x) => void handleLater(x)}
+                            onJoin={handleJoin}
+                            onApprove={(x) => void handleApprovePendingAction(x)}
+                            onReject={handleRejectPendingAction}
+                          />
+                        ))}
+                      </ul>
+                    </section>
                   );
                 })
               )}
             </div>
-            {tabCount > 1 && (
-              <div className="px-4 py-2 border-t border-line text-role-caption text-ink-dim">
-                {t("notif.tabsConnected", { count: String(tabCount) })}
-              </div>
-            )}
+            <AlertStrip onNavigate={() => closePanel(false)} />
           </div>,
           document.body,
         )}

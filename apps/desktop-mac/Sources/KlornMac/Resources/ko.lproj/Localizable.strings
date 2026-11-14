@@ -832,3 +832,49 @@
 "theme.toggle.label" = "화면 모드";
 "theme.toggle.toLight" = "라이트 모드로 전환";
 "theme.toggle.toDark" = "다크 모드로 전환";
+
+/* Notification center (NC2-A) */
+"nc.title" = "알림";
+"nc.unread" = "안 읽음 %d";
+"nc.markAllRead" = "모두 읽음";
+"nc.loading" = "알림을 불러오는 중…";
+"nc.empty" = "아직 알림이 없어요";
+"nc.failed" = "알림을 불러오지 못했어요";
+"nc.retry" = "다시 시도";
+"nc.group.count" = "%@ · %d";
+"nc.group.now" = "지금 확인";
+"nc.group.today" = "오늘 놓치면 안 됨";
+"nc.group.reply" = "답장 필요";
+"nc.group.later" = "나중에";
+"nc.group.done" = "처리 완료";
+"nc.channels.title" = "알림 받는 곳";
+"nc.channels.settings" = "설정";
+"nc.channel.macApp" = "Mac 앱";
+"nc.channel.windowsApp" = "Windows 앱";
+"nc.channel.browser" = "브라우저";
+"nc.channel.phone" = "폰";
+"nc.channel.running" = "실행 중";
+"nc.channel.notRunning" = "꺼짐";
+"nc.channel.ok" = "정상";
+"nc.channel.stale" = "확인 필요";
+"nc.channel.resubscribe" = "다시 켜야 함";
+"nc.channel.connected" = "연결됨";
+"nc.channel.notConnected" = "연결 안 됨";
+"nc.badge.overflow" = "99+";
+"nc.reason.quote" = "“%@”";
+"nc.reason.judgment" = "Klorn 판단 · %@";
+"nc.meta.delivered" = "받은 곳 %@";
+"nc.meta.held" = "조용한 시간이라 보류됨";
+"nc.action.reply" = "답장";
+"nc.action.later" = "나중에";
+"nc.action.join" = "참여";
+"nc.action.open" = "열기";
+"nc.row.a11y" = "%@, %@";
+"nc.toolbar.label" = "알림";
+"nc.toolbar.help" = "알림 보기/숨기기";
+"nc.toolbar.a11y.unread" = "알림, 안 읽음 %d개";
+
+/* Notification center: the day's interrupt budget (used/limit), header chip */
+"nc.budget" = "오늘 알림 %d/%d";
+/* A mail banner with an empty subject: the server's mailPushContent stand-in (notification-strings.ts noSubject) */
+"banner.noSubject" = "(제목 없음)";

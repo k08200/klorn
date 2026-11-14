@@ -184,7 +184,7 @@ See [`apps/desktop-mac/README.md`](apps/desktop-mac/README.md) for the full guid
 
 Self-host is the primary way to run Klorn today: full feature parity, your own Google OAuth client (no test-user cap, no verification needed — it's your account on your client), your own Postgres, your own LLM keys or a fully local model. Two paths:
 
-- **Deploy to Render** — the repo's [`render.yaml`](render.yaml) blueprint deploys the API; pair it with a free Postgres and a Vercel web deploy.
+- **Deploy to Render** — the repo's [`render.yaml`](render.yaml) blueprint deploys the API; pair it with a free Postgres and a separate web deploy ([self-hosting guide](docs/self-hosting.md)).
 
   [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/k08200/klorn)
 
@@ -379,7 +379,7 @@ Cost reality: every escalation call costs real money — roughly **$0.02–0.06 
 
 ## Deployment notes
 
-- **Vercel Web**: set `NEXT_PUBLIC_API_URL` to the deployed API URL.
+- **Web**: set `NEXT_PUBLIC_API_URL` to the deployed API URL.
 - **API**: set `DATABASE_URL`, `JWT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `WEB_URL`, and `CORS_ORIGINS` for the target environment.
 - The Google OAuth redirect URI must point to the API's `/api/auth/google/callback`.
 - For Neon or other serverless Postgres, use the PgBouncer connection options from `.env.example`.

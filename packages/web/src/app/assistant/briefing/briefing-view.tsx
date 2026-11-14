@@ -25,6 +25,7 @@ import {
 import { BlockError } from "../../today/block";
 import { HubHeader } from "../hub-frame";
 import { DayShape } from "./day-shape";
+import { MeetingPrepSection } from "./meeting-prep-section";
 
 const SETTINGS_HREF = "/settings/notifications";
 const LINK_CLASS =
@@ -119,6 +120,7 @@ export function BriefingView() {
 /** The briefing itself — or, before the first one exists, when it arrives. */
 function BriefingBody({ briefing }: { briefing: ReturnType<typeof useBriefingPage> }) {
   const { t } = useT();
+  const timeZone = useDisplayTimeZone();
   const { content, status, structured, generating } = briefing;
   if (!content) {
     return (
@@ -139,6 +141,7 @@ function BriefingBody({ briefing }: { briefing: ReturnType<typeof useBriefingPag
   return (
     <>
       {structured && <DayShape structure={structured} />}
+      <MeetingPrepSection block={briefing.meetingPrep} timeZone={timeZone} />
       <article className="rounded-card border border-line p-4 md:p-5">
         <Markdown content={content} />
       </article>

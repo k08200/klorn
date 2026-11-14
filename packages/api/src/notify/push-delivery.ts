@@ -24,6 +24,8 @@ export interface PushDeliveryAttemptInput {
   subscriptionId?: string | null;
   endpoint?: string | null;
   notificationId?: string | null;
+  /** The bell row this push rang for (notification-center.ts delivery view). */
+  bellNotificationId?: string | null;
   category: string;
   title: string;
 }
@@ -148,6 +150,7 @@ export async function createPushDeliveryAttempt(input: PushDeliveryAttemptInput)
       userId: input.userId,
       subscriptionId: input.subscriptionId ?? null,
       notificationId: input.notificationId ?? null,
+      ...(input.bellNotificationId ? { bellNotificationId: input.bellNotificationId } : {}),
       endpointHost: endpointHost(input.endpoint),
       category: input.category,
       title: input.title,

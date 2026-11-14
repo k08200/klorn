@@ -1296,36 +1296,42 @@ model DevicePushToken {
 // actioned (actionedAt). Each stage is stamped only when observed
 // (notify/delivery-lifecycle.ts).
 model PushDeliveryLog {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(uuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // web | fcm | apns | telegram | desktop_mac | desktop_windows. Rows from
   // before this column are all web push (no other channel wrote rows).
-  channel         String    @default("web")
-  subscriptionId  String?
-  notificationId  String?
-  endpointHost    String?
-  category        String    @default("system")
-  title           String
+  channel            String    @default("web")
+  subscriptionId     String?
+  notificationId     String?
+  // The bell row (Notification id) a push rang for, on every channel's row.
+  // Not notificationId: that stays NULL for firewall (mail) pushes because
+  // phone escalation keys on it. Read only by the notification center's
+  // delivery view (notify/notification-center.ts); NULL for rows written
+  // before 2026-11-14 and for pushes without a bell row.
+  bellNotificationId String?
+  endpointHost       String?
+  category           String    @default("system")
+  title              String
   // PENDING | ACCEPTED | FAILED | SKIPPED, and REPORTED for a desktop row (the
   // app reported the banner; no server send was observed)
-  status          String    @default("PENDING")
-  skipReason      String?
-  errorStatusCode Int?
-  errorBody       String?
-  queuedAt        DateTime?
-  acceptedAt      DateTime?
-  receivedAt      DateTime?
-  clickedAt       DateTime?
-  actionedAt      DateTime?
+  status             String    @default("PENDING")
+  skipReason         String?
+  errorStatusCode    Int?
+  errorBody          String?
+  queuedAt           DateTime?
+  acceptedAt         DateTime?
+  receivedAt         DateTime?
+  clickedAt          DateTime?
+  actionedAt         DateTime?
   // The action button used: reply | later
-  action          String?
+  action             String?
   // Idempotency key for rows a client reports (desktop receipts:
   // "desktop:<app>:<kind>:<id>"). NULL for server-sent rows; NULLs are
   // distinct in the unique index, so those never collide.
-  dedupeKey       String?   @unique
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  dedupeKey          String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([userId, createdAt])
   @@index([userId, status, createdAt])

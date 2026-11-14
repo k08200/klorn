@@ -70,10 +70,16 @@ export interface ReplySendInput {
   expectedPayloadHash?: string;
 }
 
+/**
+ * Why the same bytes to the same mail were not sent again: an earlier send of
+ * them is still going out, went out, or could not tell whether it went.
+ */
+export type RepeatState = "in_progress" | "sent" | "outcome_unknown";
+
 export type ReplySendOutcome =
   | { kind: "not_found" }
   | { kind: "payload_mismatch" }
-  | { kind: "repeat" }
+  | { kind: "repeat"; state: RepeatState }
   | { kind: "receipt_unavailable" }
   | { kind: "outcome_unknown" }
   | { kind: "unsupported"; error: string }
@@ -83,8 +89,34 @@ export type ReplySendOutcome =
 /** How long the same reply to the same mail counts as a repeat, not a new send. */
 export const REPEAT_SEND_WINDOW_MS = 10 * 60_000;
 
-/** A receipt for these exact bytes to this mail, not refused, within the window. */
-async function sentMomentsAgo(userId: string, emailId: string, payloadHash: string) {
+/**
+ * How long a PENDING receipt counts as a send still in flight. Its provider call
+ * runs between the receipt insert and the settle; one still PENDING after this
+ * never settled (the settle failed, or the process died after the provider
+ * call) and reads as "may have gone out" (send-receipt.ts settleSendReceipt).
+ */
+export const PENDING_IN_FLIGHT_MS = 2 * 60_000;
+
+/**
+ * A receipt as a repeat: only SENT is "sent". PENDING is in flight while young,
+ * then unknown; UNKNOWN is a send the provider could not confirm either way.
+ */
+function repeatStateOf(prior: { status: string; createdAt: Date }): RepeatState {
+  if (prior.status === "SENT") return "sent";
+  if (prior.status !== "PENDING") return "outcome_unknown";
+  const inFlight = Date.now() - prior.createdAt.getTime() < PENDING_IN_FLIGHT_MS;
+  return inFlight ? "in_progress" : "outcome_unknown";
+}
+
+/**
+ * The latest receipt for these exact bytes to this mail, not refused, within
+ * the window, as a repeat state; null when there is none.
+ */
+async function priorSendMomentsAgo(
+  userId: string,
+  emailId: string,
+  payloadHash: string,
+): Promise<RepeatState | null> {
   const prior = await prisma.sendReceipt.findFirst({
     where: {
       userId,
@@ -93,9 +125,10 @@ async function sentMomentsAgo(userId: string, emailId: string, payloadHash: stri
       status: { in: ["PENDING", "SENT", "UNKNOWN"] },
       createdAt: { gte: new Date(Date.now() - REPEAT_SEND_WINDOW_MS) },
     },
-    select: { id: true },
+    orderBy: { createdAt: "desc" },
+    select: { status: true, createdAt: true },
   });
-  return prior !== null;
+  return prior ? repeatStateOf(prior) : null;
 }
 
 async function openReceipt(
@@ -155,10 +188,14 @@ async function writeClaimedReceipt(
     });
     return { kind: "receipt_unavailable" };
   }
-  // Another request is sending these bytes to this mail right now.
-  if (!claim) return { kind: "repeat" };
+  // Another request holds the claim for these bytes to this mail: nothing of
+  // theirs has gone out yet, so this is "still sending", never "already sent".
+  // (A holder that died reads the same until its claim goes stale,
+  // SEND_CLAIM_STALE_MS; nothing was sent then either.)
+  if (!claim) return { kind: "repeat", state: "in_progress" };
   try {
-    if (await sentMomentsAgo(input.userId, key.emailId, payloadHash)) return { kind: "repeat" };
+    const prior = await priorSendMomentsAgo(input.userId, key.emailId, payloadHash);
+    if (prior) return { kind: "repeat", state: prior };
     return await writeReceipt(input, receiptInput);
   } finally {
     await releaseSend(claim);
@@ -196,8 +233,9 @@ export async function sendReplyToEmail(input: ReplySendInput): Promise<ReplySend
   // (a double tap, a second tab, a retry after "may have been sent") are a repeat.
   // This early read skips the provider calls below; the decisive check runs
   // again under the claim, right before the receipt is written.
-  if (input.receipt === "required" && (await sentMomentsAgo(uid, dbEmail.id, payloadHash))) {
-    return { kind: "repeat" };
+  if (input.receipt === "required") {
+    const prior = await priorSendMomentsAgo(uid, dbEmail.id, payloadHash);
+    if (prior) return { kind: "repeat", state: prior };
   }
 
   // RFC822 Message-ID isn't stored — fetch it live so In-Reply-To/References

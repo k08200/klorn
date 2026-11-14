@@ -124,7 +124,7 @@ issue and no app change will fix it.
    shared secret in the Authorization header.
 3. Set `REVENUECAT_WEBHOOK_AUTH` (same secret) on Render.
 4. Set `NEXT_PUBLIC_REVENUECAT_IOS_KEY` / `NEXT_PUBLIC_REVENUECAT_ANDROID_KEY`
-   (public SDK keys) on Vercel. Until these exist, native shows
+   (public SDK keys) on Cloudflare Pages (`klorn-web`). Until these exist, native shows
    "Subscription coming soon" — that is expected pre-flip behavior.
 
 ## 2. Pre-flip verification (still with paywall off)
@@ -181,7 +181,7 @@ final real-card round-trip (covered by 11 unit tests in
 (separate from sandbox): new live product/price, live API key, live webhook
 secret, live client token. Then swap env: on Render **remove** `PADDLE_ENV`
 (or set it non-sandbox) and replace the three `PADDLE_*` values with live ones;
-on Vercel set `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` to the `live_…` token and
+on Cloudflare Pages (`klorn-web`) set `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` to the `live_…` token and
 `NEXT_PUBLIC_PADDLE_ENV=production`, then redeploy the web project (public env
 is inlined at build time — an env change alone does nothing until a redeploy).
 

@@ -22,6 +22,7 @@
 
 import { prisma } from "../db.js";
 import { displayNameOf, isPlainAddress, parseAddress } from "../mail/email-address.js";
+import { orgDomainOf } from "../mail/public-mail-domains.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
 import { captureError } from "../sentry.js";
 import { remember } from "./memory.js";
@@ -42,70 +43,6 @@ const PROPAGATION_DISCOUNT = 0.4;
 // or be a social-engineering pretext) must never lift trust for every stranger
 // at that domain — propagation is meant to model working with an *organization*.
 const PROPAGATION_MIN_ENGAGED = 2;
-
-/**
- * Consumer mail providers where a shared domain means nothing — millions of
- * strangers share "gmail.com". Propagation is skipped for these so a single
- * engaged gmail contact can't lift trust for the entire internet. Only true
- * organizational domains propagate. Lowercase, exact-match on the domain.
- */
-const PUBLIC_EMAIL_DOMAINS = new Set<string>([
-  "gmail.com",
-  "googlemail.com",
-  "outlook.com",
-  "hotmail.com",
-  "hotmail.co.uk",
-  "live.com",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "yahoo.co.jp",
-  "ymail.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "aol.com",
-  "proton.me",
-  "protonmail.com",
-  "pm.me",
-  "gmx.com",
-  "gmx.net",
-  "gmx.de",
-  "web.de",
-  "mail.com",
-  "zoho.com",
-  "fastmail.com",
-  "yandex.com",
-  "yandex.ru",
-  "mail.ru",
-  "qq.com",
-  "163.com",
-  "126.com",
-  "139.com",
-  "sina.com",
-  "sohu.com",
-  "rediffmail.com",
-  "naver.com",
-  "daum.net",
-  "hanmail.net",
-  "nate.com",
-  "kakao.com",
-]);
-
-/**
- * Organizational domain of an address, or null when it's a public mail provider
- * (or unparseable). Only org domains are eligible for importance propagation.
- */
-function orgDomainOf(addr: string): string | null {
-  const at = addr.lastIndexOf("@");
-  if (at < 0) return null;
-  const domain = addr
-    .slice(at + 1)
-    .trim()
-    .toLowerCase();
-  if (!domain.includes(".") || PUBLIC_EMAIL_DOMAINS.has(domain)) return null;
-  return domain;
-}
 
 /** Round to 2 decimals — keeps stored propagated priors compact and stable. */
 function round2(n: number): number {

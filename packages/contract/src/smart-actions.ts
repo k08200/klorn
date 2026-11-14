@@ -21,8 +21,9 @@ export interface SmartReplyDraftWire {
  * POST /emails/:id/reply. `payloadHash` is sendEmailPayloadHash of the
  * { to, subject, body } on screen; any difference from what would go out
  * refuses the send with 412 before anything is written or sent. The same bytes
- * to the same mail within 10 minutes are a repeat: 409, not sent again (a 409
- * may also be the provider refusing the send).
+ * to the same mail within 10 minutes are a repeat: 409 with a
+ * SmartReplyRepeatRefusal, not sent again (a 409 without a `code` is the
+ * provider refusing the send).
  */
 export interface SmartReplySendRequest {
   body: string;
@@ -34,6 +35,20 @@ export interface SmartReplySendResponse {
   to: string;
   threaded: boolean;
   receipt: SendReceiptWire;
+}
+
+/**
+ * Why a repeat was not sent again. SEND_IN_PROGRESS: an earlier Send of these
+ * bytes to this mail is still going out (it holds the send claim, or its
+ * receipt is not settled yet). ALREADY_SENT: one went out moments ago.
+ * SEND_OUTCOME_UNKNOWN: one moments ago could not tell whether it went.
+ */
+export type SmartReplyRepeatCode = "SEND_IN_PROGRESS" | "ALREADY_SENT" | "SEND_OUTCOME_UNKNOWN";
+
+/** POST /emails/:id/reply's 409 body for a repeat. */
+export interface SmartReplyRepeatRefusal {
+  error: string;
+  code: SmartReplyRepeatCode;
 }
 
 /** What the confirm card must ask before Save; never a guessed value. */

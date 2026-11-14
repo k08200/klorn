@@ -160,8 +160,9 @@ final class InMemoryPushLedgerStore: PushLedgerStoring {
 
 // MARK: - Posting banners
 
-/// What one banner says. Sender and subject only: no body text, so a
-/// banner on a shared screen never shows the mail's contents. Pure.
+/// What one banner says. Sender, subject and the judge's reason
+/// (`MailBannerContent`): never the mail's body text, so a banner on a
+/// shared screen never shows the mail's contents. Pure.
 struct PushBanner: Equatable, Sendable {
     let identifier: String
     let title: String
@@ -173,15 +174,29 @@ struct PushBanner: Equatable, Sendable {
     /// summaries and meeting reminders (`BannerInterruption`).
     var interruption: BannerInterruption = .standard
 
-    static func make(for item: FirewallItem) -> PushBanner {
-        let sender = senderDisplayName(item.email?.from.map(decodeHTMLEntities))
-        let subject = decodeHTMLEntities(item.email?.subject ?? item.title)
+    /// `row`: the bell row for this mail (`NotificationCenterStore.row(forEmail:)`),
+    /// when the store already holds it. Its verified quote is the reason line
+    /// the server rang with (NC1); without one, the judge's reason on the item.
+    static func make(for item: FirewallItem, row: NotificationWire? = nil) -> PushBanner {
+        let content = MailBannerContent.compose(
+            from: item.email?.from.map(decodeHTMLEntities),
+            subject: decodeHTMLEntities(item.email?.subject ?? item.title),
+            reason: bannerReason(item: item, row: row))
         return PushBanner(
             identifier: PushNotifier.notificationIdentifier(for: item.id),
-            title: sender.isEmpty ? "Klorn" : sender,
-            body: subject,
+            title: content.title,
+            body: content.body,
             subtitle: item.tier == .meeting ? Tier.meeting.label : nil,
             interruption: .forLane(item.tier))
+    }
+
+    /// The bell row's reason when it carries a verified quote; otherwise the
+    /// item's tier reason as an unverified one (never a quote). Pure.
+    static func bannerReason(item: FirewallItem, row: NotificationWire?) -> NotificationReason? {
+        if let reason = row?.reason, reason.verified, let quote = reason.quote, !quote.isEmpty { return reason }
+        return rowTierReason(item.tierReason).map {
+            NotificationReason(text: $0, verified: false, quote: nil, quoteIn: nil)
+        }
     }
 }
 
@@ -302,9 +317,11 @@ enum BannerBatch {
     }
 
     /// The banners for `items`, in posting order: the mails, then the summary.
-    static func banners(for items: [FirewallItem]) -> [PushBanner] {
+    static func banners(
+        for items: [FirewallItem], row: (FirewallItem) -> NotificationWire? = { _ in nil }
+    ) -> [PushBanner] {
         let (each, more) = split(items)
-        return each.map(PushBanner.make(for:)) + (more.isEmpty ? [] : [moreSummary(for: more)])
+        return each.map { PushBanner.make(for: $0, row: row($0)) } + (more.isEmpty ? [] : [moreSummary(for: more)])
     }
 
     /// "+N more need you", naming up to three senders — no subject, so one
@@ -481,7 +498,11 @@ final class PushAlerter {
         // WCAG 4.1.3 Status Messages: fires whatever the banner switch says.
         announce(Self.announcement(for: items))
         guard model.settings.notificationsEnabled else { return [] }
-        let banners = BannerBatch.banners(for: items)
+        // The bell rows already in memory: no network on the banner path.
+        // An empty store asks for its rows in the background, for the next one.
+        let bell = model.notificationCenter
+        if bell.rows.isEmpty { bell.nudge() }
+        let banners = BannerBatch.banners(for: items) { bell.row(forEmail: $0.email?.emailDbId) }
         banners.forEach { model.pushNotifier.post($0) }
         return banners
     }

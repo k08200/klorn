@@ -8,7 +8,9 @@
 
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
-import { getUserId } from "../auth.js";
+import { getUserId, requireAuth } from "../auth.js";
+import { meetingPrepRoutes } from "../context/meeting-prep-routes.js";
+import { meetingPrepForUser } from "../context/meeting-prep-surface.js";
 import { prisma } from "../db.js";
 import { recordFeedback } from "../learning/feedback.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
@@ -576,8 +578,13 @@ export function briefingRoutes(app: FastifyInstance) {
   });
 
   // GET /api/briefing/today — Latest briefing stored today (or null)
-  app.get("/today", async (request) => {
+  // requireAuth (session revocation, idle timeout): the payload carries mail
+  // subjects and, with meeting prep, meeting titles and commitments.
+  app.get("/today", { preHandler: requireAuth }, async (request) => {
     const userId = getUserId(request);
+    // Meeting prep for the next 24 hours (CONTEXT_MEETING_PREP_ENABLED), built
+    // at read time alongside the rest; fail-open, and absent when off.
+    const prepWork = meetingPrepForUser(userId, new Date());
     const today = await todayRangeForUser(userId);
 
     const row = await prisma.note.findFirst({
@@ -604,8 +611,11 @@ export function briefingRoutes(app: FastifyInstance) {
       );
     }
 
-    return { briefing: note, structured };
+    const meetingPrep = await prepWork;
+    return { briefing: note, structured, ...(meetingPrep ? { meetingPrep } : {}) };
   });
+
+  meetingPrepRoutes(app);
 
   // POST /api/briefing/:id/picks/:rank/open — the user opened a pick's mail
   // from the briefing. Stamps the pick's openedAt once (first open wins), so

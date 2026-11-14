@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
-    "@capacitor/cli": "^8.5.3",
+    "@capacitor/cli": "^8.6.0",
     "@playwright/test": "1.56.1",
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",

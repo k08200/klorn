@@ -70,6 +70,16 @@ describe("sendTelegramForPush", () => {
     expect(text).toContain("Acme contract needs a reply");
   });
 
+  it("asks Telegram for no link preview: the text quotes a mail (NC1)", async () => {
+    await sendTelegramForPush(
+      "user-1",
+      { title: "T", body: "see https://e.vil/x" },
+      "email_urgent",
+    );
+    const [, , opts] = vi.mocked(sendTelegramMessage).mock.calls[0];
+    expect(opts?.noLinkPreview).toBe(true);
+  });
+
   it("adds tier-override buttons when an attention item id is provided", async () => {
     await sendTelegramForPush(
       "user-1",

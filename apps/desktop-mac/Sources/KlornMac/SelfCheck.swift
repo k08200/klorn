@@ -1572,6 +1572,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await permissionWaitSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Time Sensitive banners: PUSH and MEETING mail, Developer ID build only (2026-11-13):")
     for (name, ok) in await timeSensitiveSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    for (name, ok) in await notificationCenterSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    for (name, ok) in await notificationContractSelfChecks() { check(name, ok) }
     print("Notification receipts: shown / clicked to the server (2026-11-12):")
     for (name, ok) in await notificationReceiptSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Files and team free-time (P12):")
@@ -1744,7 +1746,9 @@ func runSelfChecks() async -> Bool {
         pattern: #""[A-Z][a-z]+(?: [A-Za-z,'’]+){1,}\.?""#)
     var proseOffenders: [String] = []
     // The preview harness files hold fixture DATA (demo mail), not UI copy.
-    let proseExempt: Set<String> = ["SelfCheck.swift", "SelfCheckDetailPass.swift"]
+    // The contract fixtures are the server's own words: its test mail text,
+    // copied verbatim, and its 404 bodies.
+    let proseExempt: Set<String> = ["SelfCheck.swift", "SelfCheckDetailPass.swift", "SelfCheckNotificationContract.swift"]
     for url in swiftFiles
     where !proseExempt.contains(url.lastPathComponent)
         && !url.lastPathComponent.hasPrefix("PreviewRender")

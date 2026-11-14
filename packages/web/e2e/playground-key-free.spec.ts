@@ -60,8 +60,9 @@ const SERVER_REPORTED_SHORT = "claude-sonnet-5-5";
  *
  * `model` is what the server reports it ran on. Pass `null` for a server that
  * sends no model at all — an API deployed before the field existed, which is a
- * real state and not only a historical one: Vercel and Render do not ship
- * together, so a new client talks to the old API for a window on every deploy.
+ * real state and not only a historical one: Cloudflare Pages and Render do not
+ * ship together, so a new client talks to the old API for a window on every
+ * deploy.
  */
 async function stubVerdict(page: Page, model: string | null = SERVER_REPORTED_MODEL) {
   const bodies: CapturedBody[] = [];
