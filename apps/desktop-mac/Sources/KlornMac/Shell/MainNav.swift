@@ -239,7 +239,9 @@ func sourceName(provider: String?) -> String {
     case "YAHOO": "Yahoo"
     case "AOL": "AOL"
     case "FASTMAIL": "Fastmail"
-    case "ZOHO", "ZOHOPRO": "Zoho"
+    case "ZOHO": "Zoho"
+    // The connect form's name, so the two Zoho kinds are told apart.
+    case "ZOHOPRO": L("account.zohopro.name")
     case "IMAP": "IMAP"
     case nil, "KLORN": "Klorn"
     default: L("source.generic")

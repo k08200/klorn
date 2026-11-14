@@ -74,10 +74,8 @@ enum ImapMailProvider: String, CaseIterable, Identifiable, Sendable {
     var connectLabel: String { sentence("connect") }
     var formTitle: String { sentence("title") }
     var emailLabel: String { label("email") }
-    var passwordLabel: String {
-        // Zoho takes the account password unless two-factor is on.
-        self == .zoho || self == .zohopro ? L("account.preset.password.either") : label("password")
-    }
+    /// Always an app password: Klorn never asks for an account password.
+    var passwordLabel: String { label("password") }
     var passwordHint: String { L("account.\(slug).password.hint") }
     var bodyText: String? {
         switch self {

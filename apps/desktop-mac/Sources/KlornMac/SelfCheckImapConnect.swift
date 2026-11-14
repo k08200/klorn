@@ -77,7 +77,15 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
                   && sourceName(provider: p.rawValue) != L("source.generic")
           }
               && sourceMonogram(provider: "KAKAO") != sourceMonogram(provider: "KLORN")
-              && providerLabel("ZOHO") != providerLabel("ZOHOPRO"))
+              && providerLabel("ZOHO") != providerLabel("ZOHOPRO")
+              && sourceName(provider: "ZOHOPRO") == ImapMailProvider.zohopro.presetName)
+    check("every preset asks for an app password, never the account password",
+          ImapMailProvider.allCases.filter(\.usesPresetCopy).allSatisfy {
+              $0.passwordLabel == L("account.preset.password")
+          }
+              && !files.contains { url in
+                  ((try? String(contentsOf: url, encoding: .utf8)) ?? "").contains("password" + ".either")
+              })
 
     // MARK: 2. request shape
     let body = (try? ImapConnectRequest.body(email: "  \(fakeEmail)\n", password: fakePassword)) ?? Data()
@@ -252,7 +260,6 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         "account.icloud.error.unavailable", "account.naver.error.unavailable",
         "account.imap.error.insecure", "account.imap.submit",
         "account.preset.body", "account.preset.email", "account.preset.password",
-        "account.preset.password.either",
     ]
     // The preset sentences take the preset's name as their one %@ (a string:
     // a %d here would be the pointer-read crash).

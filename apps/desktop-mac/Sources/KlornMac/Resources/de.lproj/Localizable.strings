@@ -416,7 +416,6 @@
 "account.preset.body" = "Dieses Postfach wird per IMAP verbunden (beta). Klorn sortiert jede neue Nachricht in dieselben Spuren wie Gmail.";
 "account.preset.email" = "E-Mail-Adresse";
 "account.preset.password" = "App-Passwort";
-"account.preset.password.either" = "Passwort oder App-Passwort";
 "account.preset.help.link" = "Hilfe zu %@ öffnen";
 "account.preset.error.authFailed" = "%@ hat die Anmeldung abgelehnt. Folge den Schritten oben und versuche es dann erneut.";
 "account.preset.error.unavailable" = "%@ ist auf diesem Server noch nicht verfügbar.";
@@ -432,8 +431,8 @@
 "account.yahoo.password.hint" = "Erstelle in den Sicherheitseinstellungen deines Yahoo-Kontos ein App-Passwort und gib es hier ein – nicht dein Anmeldepasswort.";
 "account.aol.password.hint" = "Erstelle in den Sicherheitseinstellungen deines AOL-Kontos ein App-Passwort und gib es hier ein – nicht dein Anmeldepasswort.";
 "account.fastmail.password.hint" = "Erstelle in den Fastmail-Einstellungen ein App-Passwort mit IMAP- und SMTP-Zugriff und gib es hier ein – nicht dein Anmeldepasswort.";
-"account.zoho.password.hint" = "Für private und kostenlose Zoho-Mail-Konten. Schalte den IMAP-Zugriff in den Zoho-Mail-Einstellungen ein. Ist die Zwei-Faktor-Authentifizierung aktiv, erstelle ein anwendungsspezifisches Passwort und gib es statt deines Passworts ein.";
-"account.zohopro.password.hint" = "Für kostenpflichtige Zoho-Mail-Organisationskonten mit eigener Domain. Schalte den IMAP-Zugriff in den Zoho-Mail-Einstellungen ein (eventuell muss der Admin deiner Organisation ihn erlauben). Ist die Zwei-Faktor-Authentifizierung aktiv, erstelle ein anwendungsspezifisches Passwort und gib es statt deines Passworts ein.";
+"account.zoho.password.hint" = "Schalte den IMAP-Zugriff in den Zoho-Mail-Einstellungen und die Zwei-Faktor-Authentifizierung ein und erstelle dann ein anwendungsspezifisches Passwort, das du hier eingibst – nicht dein Anmeldepasswort.";
+"account.zohopro.password.hint" = "Für kostenpflichtige Zoho-Mail-Organisationskonten mit eigener Domain. Schalte den IMAP-Zugriff in den Zoho-Mail-Einstellungen (eventuell muss der Admin deiner Organisation ihn erlauben) und die Zwei-Faktor-Authentifizierung ein und erstelle dann ein anwendungsspezifisches Passwort, das du hier eingibst – nicht dein Anmeldepasswort.";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "ANTWORTMODUS";

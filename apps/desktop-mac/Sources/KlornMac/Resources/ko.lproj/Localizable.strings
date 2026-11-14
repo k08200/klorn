@@ -416,7 +416,6 @@
 "account.preset.body" = "이 메일함은 IMAP으로 연결됩니다(beta). 새 메일은 Gmail과 같은 레인으로 분류됩니다.";
 "account.preset.email" = "이메일 주소";
 "account.preset.password" = "앱 비밀번호";
-"account.preset.password.either" = "비밀번호 또는 앱 비밀번호";
 "account.preset.help.link" = "%@ 도움말 열기";
 "account.preset.error.authFailed" = "%@에서 로그인을 거부했습니다. 위 안내대로 설정한 뒤 다시 시도하세요.";
 "account.preset.error.unavailable" = "이 서버에서는 아직 %@ 메일함을 연결할 수 없습니다.";
@@ -432,8 +431,8 @@
 "account.yahoo.password.hint" = "Yahoo 계정 보안 설정에서 앱 비밀번호를 만들어 입력하세요. 로그인 비밀번호는 쓸 수 없습니다.";
 "account.aol.password.hint" = "AOL 계정 보안 설정에서 앱 비밀번호를 만들어 입력하세요. 로그인 비밀번호는 쓸 수 없습니다.";
 "account.fastmail.password.hint" = "Fastmail 설정에서 IMAP·SMTP 접근 권한이 있는 앱 비밀번호를 만들어 입력하세요. 로그인 비밀번호는 쓸 수 없습니다.";
-"account.zoho.password.hint" = "개인·무료 Zoho Mail 계정용입니다. Zoho Mail 설정에서 IMAP 접근을 켜세요. 2단계 인증을 쓰고 있다면 비밀번호 대신 애플리케이션 전용 비밀번호를 만들어 입력하세요.";
-"account.zohopro.password.hint" = "자체 도메인을 쓰는 유료 Zoho Mail 조직 계정용입니다. Zoho Mail 설정에서 IMAP 접근을 켜세요(조직 관리자의 허용이 필요할 수 있습니다). 2단계 인증을 쓰고 있다면 비밀번호 대신 애플리케이션 전용 비밀번호를 만들어 입력하세요.";
+"account.zoho.password.hint" = "Zoho Mail 설정에서 IMAP 접근과 2단계 인증을 켠 뒤, 애플리케이션 전용 비밀번호를 만들어 입력하세요. 로그인 비밀번호는 쓸 수 없습니다.";
+"account.zohopro.password.hint" = "자체 도메인을 쓰는 유료 Zoho Mail 조직 계정용입니다. Zoho Mail 설정에서 IMAP 접근(조직 관리자의 허용이 필요할 수 있습니다)과 2단계 인증을 켠 뒤, 애플리케이션 전용 비밀번호를 만들어 입력하세요. 로그인 비밀번호는 쓸 수 없습니다.";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "답장 모드";

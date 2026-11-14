@@ -416,7 +416,6 @@
 "account.preset.body" = "このメールボックスはIMAPで接続します（beta）。新着メールはGmailと同じレーンに振り分けられます。";
 "account.preset.email" = "メールアドレス";
 "account.preset.password" = "アプリパスワード";
-"account.preset.password.either" = "パスワードまたはアプリパスワード";
 "account.preset.help.link" = "%@のヘルプを開く";
 "account.preset.error.authFailed" = "%@がサインインを拒否しました。上の手順に従ってから、もう一度お試しください。";
 "account.preset.error.unavailable" = "このサーバーでは%@メールはまだ利用できません。";
@@ -432,8 +431,8 @@
 "account.yahoo.password.hint" = "Yahooアカウントのセキュリティ設定でアプリパスワードを作成して入力してください。ログインパスワードは使えません。";
 "account.aol.password.hint" = "AOLアカウントのセキュリティ設定でアプリパスワードを作成して入力してください。ログインパスワードは使えません。";
 "account.fastmail.password.hint" = "Fastmailの設定でIMAPとSMTPのアクセス権を持つアプリパスワードを作成して入力してください。ログインパスワードは使えません。";
-"account.zoho.password.hint" = "個人および無料のZoho Mailアカウント用です。Zoho Mailの設定でIMAPアクセスをオンにしてください。2要素認証を使っている場合は、パスワードの代わりにアプリケーション固有のパスワードを作成して入力してください。";
-"account.zohopro.password.hint" = "独自ドメインの有料Zoho Mail組織アカウント用です。Zoho Mailの設定でIMAPアクセスをオンにしてください（組織の管理者の許可が必要な場合があります）。2要素認証を使っている場合は、パスワードの代わりにアプリケーション固有のパスワードを作成して入力してください。";
+"account.zoho.password.hint" = "Zoho Mailの設定でIMAPアクセスと2要素認証をオンにしてから、アプリケーション固有のパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.zohopro.password.hint" = "独自ドメインの有料Zoho Mail組織アカウント用です。Zoho Mailの設定でIMAPアクセス（組織の管理者の許可が必要な場合があります）と2要素認証をオンにしてから、アプリケーション固有のパスワードを作成して入力してください。ログインパスワードは使えません。";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "返信モード";
