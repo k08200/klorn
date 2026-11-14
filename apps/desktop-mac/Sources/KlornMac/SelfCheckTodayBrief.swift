@@ -116,12 +116,12 @@ func todayBriefSelfChecks() -> [(String, Bool)] {
 
     // MARK: the card count cap (6 + "N more")
     let eight = (1...8).map { briefFixtureItem("p\($0)") }
-    let lane = TodayLane(tier: .push, style: .rows, count: 8, rows: eight)
+    let lane = TodayLane(tier: .push, count: 8, rows: eight)
     let capped = TodayBriefRules.cards(lane)
     check("cards: at most six, the rest is one \"N more\" link",
           capped.shown.map(\.id) == ["p1", "p2", "p3", "p4", "p5", "p6"] && capped.more == 2)
     // The lane's own row cap (12) never hides the true count.
-    let truncated = TodayLane(tier: .push, style: .rows, count: 15, rows: Array(eight.prefix(4)))
+    let truncated = TodayLane(tier: .push, count: 15, rows: Array(eight.prefix(4)))
     check("cards: the more count is the lane's count, not just the listed rows",
           TodayBriefRules.cards(truncated).shown.count == 4 && TodayBriefRules.cards(truncated).more == 11)
     check("cards: no lane, no cards", TodayBriefRules.cards(nil) == .init(shown: [], more: 0))

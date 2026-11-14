@@ -2,15 +2,7 @@ import Foundation
 
 /// One lane as Today shows it.
 struct TodayLane: Equatable, Sendable {
-    enum Style: Equatable, Sendable {
-        /// Rows are listed (PUSH, MEETING, and QUEUE's top rows).
-        case rows
-        /// The lane chip only; the rows are one click away in Mail (INFO).
-        case collapsed
-    }
-
     let tier: Tier
-    let style: Style
     /// The lane's open count from the server summary; for PUSH inside
     /// Today's window, the windowed rows' count (what the lane lists).
     let count: Int
@@ -28,10 +20,11 @@ typealias TodayState = SurfaceState
 /// Pure composition rules for Today (productization plan §1), pinned by the
 /// self-check.
 enum TodayRules {
-    /// QUEUE shows this many rows; the rest is a link to Mail.
-    static let queueRowLimit = 5
-    /// PUSH and MEETING are expanded. The cap only stops a runaway lane
-    /// from pushing the rest of the day off screen; the remainder is a link.
+    /// MEETING, QUEUE and INFO show this many rows, then "See all (N)"
+    /// (founder, 2026-11-13: the day must fit without scrolling).
+    static let compactRowLimit = 3
+    /// PUSH is expanded (as cards). The cap only stops a runaway lane from
+    /// pushing the rest of the day off screen; the remainder is a link.
     static let expandedRowLimit = 12
 
     static func state(
@@ -44,13 +37,13 @@ enum TodayRules {
     /// The lanes Today lists, loudest first. SILENT is never part of it, and
     /// a lane with nothing open is left out.
     static func lanes(_ queue: FirewallResponse) -> [TodayLane] {
-        let plan: [(Tier, TodayLane.Style, Int)] = [
-            (.push, .rows, expandedRowLimit),
-            (.meeting, .rows, expandedRowLimit),
-            (.queue, .rows, queueRowLimit),
-            (.info, .collapsed, 0),
+        let plan: [(Tier, Int)] = [
+            (.push, expandedRowLimit),
+            (.meeting, compactRowLimit),
+            (.queue, compactRowLimit),
+            (.info, compactRowLimit),
         ]
-        return plan.compactMap { tier, style, limit in
+        return plan.compactMap { tier, limit in
             if tier == .push, let window = queue.todayPush {
                 return windowedPush(queue, window: window, limit: limit)
             }
@@ -59,7 +52,7 @@ enum TodayRules {
             // shorter, never trust it to be longer than what is listed.
             let count = max(queue.summary.count(for: tier), items.count)
             guard count > 0 else { return nil }
-            return TodayLane(tier: tier, style: style, count: count, rows: Array(items.prefix(limit)))
+            return TodayLane(tier: tier, count: count, rows: Array(items.prefix(limit)))
         }
     }
 
@@ -76,7 +69,7 @@ enum TodayRules {
         let older = max(laneTotal - rows.count, 0)
         guard !rows.isEmpty || older > 0 else { return nil }
         return TodayLane(
-            tier: .push, style: .rows, count: rows.count, rows: Array(rows.prefix(limit)), older: older)
+            tier: .push, count: rows.count, rows: Array(rows.prefix(limit)), older: older)
     }
 
     private static func inWindow(_ items: [FirewallItem], _ window: TodayPushWindow) -> [FirewallItem] {

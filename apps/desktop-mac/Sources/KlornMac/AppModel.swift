@@ -2717,6 +2717,20 @@ final class AppModel {
         }
     }
 
+    /// The sidebar's "Check for updates" (DMG feedback, 2026-11-13): the same
+    /// release check (through the `updateCheck` seam) on demand, no debounce.
+    /// A newer build is remembered like the timed check's.
+    func checkForUpdateNow() async -> UpdateCheck.Outcome {
+        lastUpdateCheck = Date()
+        let outcome = await updateCheck()
+        switch outcome {
+        case .updateAvailable(let version): updateAvailable = version
+        case .upToDate: updateAvailable = nil
+        case .unknown: break  // a failed check proves nothing either way
+        }
+        return outcome
+    }
+
     /// Per-account readiness, on demand. "왜 메일이 안 와" was answered by
     /// guesswork three times running; this makes the app state the facts.
     private(set) var diagnostics: [ReadinessCheck] = []

@@ -813,9 +813,22 @@
 "today.lane.note.meeting" = "Sobre tu calendario";
 "today.lane.note.queue" = "Sin aviso";
 "today.lane.note.info" = "Para consulta";
-"today.seeAll" = "Ver todo";
 "today.schedule" = "Agenda de hoy";
 "today.search" = "Buscar correo";
 "today.card.a11y" = "%1$@ de %2$@, %3$@";
 "nav.accounts.all" = "Todas las cuentas";
 "nav.accounts.showOnly.a11y" = "Mostrar solo %@";
+
+/* DMG feedback (2026-11-13): Today column, sidebar update, theme toggle */
+"today.seeAllCount" = "Ver todo (%d)";
+"today.free.title" = "Tiempo libre";
+"today.free.after" = "Después de las %@";
+"today.free.none" = "No queda tiempo libre hoy.";
+"today.timeline.next" = "Siguiente";
+"update.sidebar.install" = "Instalar nueva versión · v%@";
+"update.sidebar.upToDate" = "Actualizado";
+"update.sidebar.checkFailed" = "No se pudo comprobar · Reintentar";
+"update.sidebar.installFailed" = "No se pudo instalar · Reintentar";
+"theme.toggle.label" = "Apariencia";
+"theme.toggle.toLight" = "Cambiar a modo claro";
+"theme.toggle.toDark" = "Cambiar a modo oscuro";

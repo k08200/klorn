@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// A lane other than PUSH on Today (MEETING, QUEUE's top rows, INFO as a
-/// header only): a caps header with "See all", then compact rows. The lane
-/// grouping is `TodayRules.lanes`; only the look changed (M1).
+/// A lane other than PUSH on Today (MEETING, QUEUE, INFO): a caps header,
+/// at most three compact rows, then "See all (N)". The lane grouping is
+/// `TodayRules.lanes`.
 struct TodayLaneSection: View {
     @Environment(AppModel.self) private var model
     let lane: TodayLane
@@ -18,27 +18,26 @@ struct TodayLaneSection: View {
     }
 
     var body: some View {
+        let compact = TodayLaneRules.compact(lane)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                // No count (founder decision 2026-10-24): the headline counts
-                // what is waiting; the lane opens in Mail.
-                TodayCaps(text: "\(lane.tier.label) · \(note)")
-                    .accessibilityLabel(lane.tier.label)
-                Spacer(minLength: Theme.s2)
-                Button { model.go(to: .tier(lane.tier)) } label: {
-                    Text(L("today.seeAll")).font(Theme.Typo.label).foregroundStyle(Theme.todayInk2)
-                        .frame(minHeight: TodayLayout.linkHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(lane.tier.blurb)
+            // No count in the header (founder decision 2026-10-24): the
+            // headline counts what is waiting. The count is on the link.
+            TodayCaps(text: "\(lane.tier.label) · \(note)")
+                .accessibilityLabel(lane.tier.label)
+                .frame(minHeight: TodayLayout.linkHeight, alignment: .leading)
+            ForEach(compact.rows, id: \.id) { item in
+                TodayCompactRow(item: item, now: now, open: { open(item) })
+                Rectangle().fill(Theme.todayLine).frame(height: Theme.hairline)
             }
-            if lane.style == .rows {
-                ForEach(lane.rows, id: \.id) { item in
-                    TodayCompactRow(item: item, now: now, open: { open(item) })
-                    Rectangle().fill(Theme.todayLine).frame(height: Theme.hairline)
-                }
+            // Three rows, then the lane in Mail (founder, 2026-11-13).
+            Button { model.go(to: .tier(lane.tier)) } label: {
+                Text(L("today.seeAllCount", compact.seeAllCount))
+                    .font(Theme.Typo.label).foregroundStyle(Theme.todayInk2)
+                    .frame(minHeight: TodayLayout.linkHeight)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help(lane.tier.blurb)
         }
     }
 }

@@ -201,6 +201,10 @@ extension PreviewRender {
         return CGSize(width: max(MainWindowRules.minSize.width, CGFloat(width)), height: 800)
     }
 
+    /// A unified compact title bar's height, for the feedback shots: what
+    /// the real window keeps above the shell.
+    static let feedbackTitlebarHeight: CGFloat = 38
+
     static func renderMainWindow(dir: URL, dark: Bool, actions: ShellActions) -> Bool {
         let size = mainWindowSize
         let date = ISO8601DateFormatter().date(from: "2026-07-29T08:30:00Z") ?? Date()
@@ -276,6 +280,42 @@ extension PreviewRender {
         shot("today-stale", navModel(
             firewallJSON: navFirewallJSON,
             loadError: PreviewRender.timeoutError))
+        // DMG feedback (2026-11-13): the founder's window sizes, with and
+        // without the assistant panel, under a title-bar-high chrome strip
+        // (the toolbar itself is AppKit and not drawn offscreen).
+        // With the panel the window floor is 880 + 360 (`syncAssistantPanel`
+        // widens a narrower window), so the narrow panel shot is 1240.
+        for (width, panel) in [(CGFloat(1440), false), (1440, true), (1100, false), (1240, true)] {
+            do {
+                let name = "fb-today-\(Int(width))" + (panel ? "-panel" : "")
+                let model = navModel(firewallJSON: navFirewallJSON)
+                model.navigate(to: .today)
+                model.showAssistantPanel = panel
+                ok = writeShot(
+                    name, size: CGSize(width: width, height: 900), align: .top, model: model, dir: dir,
+                    dark: dark
+                ) {
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: feedbackTitlebarHeight)
+                        shell()
+                    }
+                    .background(Theme.chromeGradient(identity: nil))
+                } && ok
+            }
+        }
+        let mailPanel = navModel(firewallJSON: navFirewallJSON)
+        mailPanel.listMode = NavRules.defaultMailMode
+        mailPanel.showAssistantPanel = true
+        ok = writeShot(
+            "fb-mail-1440-panel", size: CGSize(width: 1440, height: 900), align: .top, model: mailPanel,
+            dir: dir, dark: dark
+        ) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: feedbackTitlebarHeight)
+                shell()
+            }
+            .background(Theme.chromeGradient(identity: nil))
+        } && ok
         // P12: Files and Teams free-time on the same fixtures.
         ok = renderFiles(
             dir: dir, dark: dark, base: { navModel(firewallJSON: navFirewallJSON) }, actions: actions) && ok

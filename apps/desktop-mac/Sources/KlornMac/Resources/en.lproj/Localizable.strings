@@ -813,9 +813,22 @@
 "today.lane.note.meeting" = "About your calendar";
 "today.lane.note.queue" = "Doesn't notify";
 "today.lane.note.info" = "For reference";
-"today.seeAll" = "See all";
 "today.schedule" = "Today's schedule";
 "today.search" = "Search mail";
 "today.card.a11y" = "%1$@ from %2$@, %3$@";
 "nav.accounts.all" = "All accounts";
 "nav.accounts.showOnly.a11y" = "Show only %@";
+
+/* DMG feedback (2026-11-13): Today column, sidebar update, theme toggle */
+"today.seeAllCount" = "See all (%d)";
+"today.free.title" = "Free time";
+"today.free.after" = "After %@";
+"today.free.none" = "No free time left today.";
+"today.timeline.next" = "Next";
+"update.sidebar.install" = "Install new version · v%@";
+"update.sidebar.upToDate" = "Up to date";
+"update.sidebar.checkFailed" = "Couldn't check · Retry";
+"update.sidebar.installFailed" = "Couldn't install · Retry";
+"theme.toggle.label" = "Appearance";
+"theme.toggle.toLight" = "Switch to Light Mode";
+"theme.toggle.toDark" = "Switch to Dark Mode";
