@@ -628,20 +628,10 @@
 "today.signingIn.detail" = "Complete the sign-in in your browser. This window updates when it is done.";
 "today.failed.title" = "Couldn't load your mail";
 "today.retry" = "Try again";
-"today.clear.title" = "Nothing is waiting on you";
-"today.clear.detail" = "New mail shows up here as Klorn sorts it.";
-"today.lane.more" = "%d more in Mail";
-"today.header.lane" = "%1$d %2$@";
-"today.waiting.one" = "1 waiting in Mail";
-"today.waiting.many" = "%d waiting in Mail";
 "today.lane.push.older" = "See older %@ mail";
 "today.row.a11y" = "%1$@: %2$@";
-"today.open" = "Open";
 "today.calendar.empty" = "Nothing on the calendar today.";
 "today.assistant.noBriefing" = "No briefing yet today.";
-"today.approvals.waiting" = "Approvals waiting: %d";
-"today.approvals.none" = "No approvals waiting.";
-"today.ask.a11y" = "Ask the assistant";
 "today.signIn.restart" = "Start over";
 "a11y.position" = "%1$d of %2$d";
 
@@ -808,3 +798,24 @@
 "prefs.group.support" = "Support";
 "prefs.group.about" = "About";
 "prefs.group.mail" = "Mail";
+
+/* Editorial Today and account chrome (M1/M2, 2026-11-13) */
+"today.headline.none" = "Nothing is waiting on you right now";
+"today.headline.one" = "%d email is waiting on you";
+"today.headline.many" = "%d emails are waiting on you";
+"today.cards.more" = "%d more";
+"today.cards.reply" = "Reply";
+"today.cards.later" = "Later";
+"today.cards.later.help" = "Snooze this mail";
+"today.cards.reply.help" = "Open the mail and draft a reply to review before sending";
+"today.kicker.meetings" = "Meetings %d";
+"today.kicker.free" = "Free %dh";
+"today.lane.note.meeting" = "About your calendar";
+"today.lane.note.queue" = "Doesn't notify";
+"today.lane.note.info" = "For reference";
+"today.seeAll" = "See all";
+"today.schedule" = "Today's schedule";
+"today.search" = "Search mail";
+"today.card.a11y" = "%1$@ from %2$@, %3$@";
+"nav.accounts.all" = "All accounts";
+"nav.accounts.showOnly.a11y" = "Show only %@";

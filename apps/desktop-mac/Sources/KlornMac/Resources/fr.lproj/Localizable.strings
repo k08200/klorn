@@ -628,20 +628,10 @@
 "today.signingIn.detail" = "Terminez la connexion dans votre navigateur. Cette fenêtre se met à jour ensuite.";
 "today.failed.title" = "Impossible de charger le courrier";
 "today.retry" = "Réessayer";
-"today.clear.title" = "Rien ne vous attend";
-"today.clear.detail" = "Le nouveau courrier apparaît ici dès que Klorn l'a trié.";
-"today.lane.more" = "%d de plus dans Courrier";
-"today.header.lane" = "%1$d %2$@";
-"today.waiting.one" = "1 en attente dans Courrier";
-"today.waiting.many" = "%d en attente dans Courrier";
 "today.lane.push.older" = "Voir les anciens courriers %@";
 "today.row.a11y" = "%1$@ : %2$@";
-"today.open" = "Ouvrir";
 "today.calendar.empty" = "Rien au calendrier aujourd'hui.";
 "today.assistant.noBriefing" = "Pas encore de brief aujourd'hui.";
-"today.approvals.waiting" = "Approbations en attente : %d";
-"today.approvals.none" = "Aucune approbation en attente.";
-"today.ask.a11y" = "Demander à l'assistant";
 "today.signIn.restart" = "Recommencer";
 "a11y.position" = "%1$d sur %2$d";
 
@@ -808,3 +798,24 @@
 "prefs.group.support" = "Assistance";
 "prefs.group.about" = "À propos";
 "prefs.group.mail" = "Courrier";
+
+/* Editorial Today and account chrome (M1/M2, 2026-11-13) */
+"today.headline.none" = "Rien ne vous attend pour l'instant";
+"today.headline.one" = "%d e-mail vous attend";
+"today.headline.many" = "%d e-mails vous attendent";
+"today.cards.more" = "%d de plus";
+"today.cards.reply" = "Répondre";
+"today.cards.later" = "Plus tard";
+"today.cards.later.help" = "Reporter cet e-mail";
+"today.cards.reply.help" = "Ouvre l'e-mail et rédige une réponse à relire avant l'envoi";
+"today.kicker.meetings" = "Réunions %d";
+"today.kicker.free" = "Libre %d h";
+"today.lane.note.meeting" = "Liés à votre agenda";
+"today.lane.note.queue" = "Sans notification";
+"today.lane.note.info" = "Pour information";
+"today.seeAll" = "Tout voir";
+"today.schedule" = "Agenda du jour";
+"today.search" = "Rechercher des e-mails";
+"today.card.a11y" = "%1$@ de %2$@, %3$@";
+"nav.accounts.all" = "Tous les comptes";
+"nav.accounts.showOnly.a11y" = "Afficher seulement %@";

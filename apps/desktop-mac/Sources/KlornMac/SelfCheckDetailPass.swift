@@ -153,14 +153,15 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && same(Theme.accentComponents, Theme.accentSolidLight) && !same(Theme.accentComponents, sky)
             && !text("Theme.swift").contains("0.055, green: 0.647")))
 
-    // States: one anchor, a skeleton shaped like the day, the rail kept on error.
+    // States: one anchor, a skeleton shaped like the day. The rail is gone
+    // with the editorial Today (M1, 2026-11-13): one column in every state.
     let today = text("Today/TodayScreen.swift")
     results.append((
-        "Today states anchor at top + 96, the skeleton has lanes and a rail, the error keeps the rail",
+        "Today states anchor at top + 96, the skeleton has the lanes, one column in every state",
         TodayLayout.stateAnchorTop == 96
             && TodayLayout.skeletonLanes.map(\.tier) == [.push, .meeting, .queue]
-            && today.contains("columns { TodaySkeleton() }")
-            && today.contains("TodayRailSkeleton()")
+            && today.contains("page { TodaySkeleton() }")
+            && !today.contains("Rail")
             && today.contains("case .offline, .failed:\n                // The error replaces the lanes")
             && text("Shared/SurfaceState.swift").contains(".padding(.top, anchorInset)")))
     return results

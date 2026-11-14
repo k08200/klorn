@@ -1596,6 +1596,8 @@ func runSelfChecks() async -> Bool {
 
     // Design tokens and the one-badge row rule in the main window (M7).
     for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    // The editorial Today and the account-tinted chrome (M1/M2, 2026-11-13).
+    for (name, ok) in todayBriefSelfChecks() { check(name, ok) }
     // One style per view: no bar, legacy or overlay variant (2026-10-15).
     for (name, ok) in oneStyleSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     // The design detail pass (2026-10-16).

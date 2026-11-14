@@ -180,36 +180,8 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           && TodayRules.state(phase: .signedIn, hasQueue: false, loadError: nil) == .loading)
     check("today: a loaded queue stays on screen through a failed refresh",
           TodayRules.state(phase: .signedIn, hasQueue: true, loadError: "x") == .ready)
-    do {
-        // The calm header (founder decision 2026-10-24): counts for Push and
-        // Meeting only, Queue + Info as one waiting figure, Silent never.
-        func lane(_ tier: Tier, _ count: Int) -> TodayLane {
-            TodayLane(tier: tier, style: .rows, count: count, rows: [])
-        }
-        let busy = TodayRules.headerSummary(
-            [lane(.push, 3), lane(.meeting, 2), lane(.queue, 856), lane(.info, 64)])
-        check("today header: counts only Push and Meeting, Queue + Info fold into waiting",
-              busy.needs.map(\.tier) == [.push, .meeting] && busy.needs.map(\.count) == [3, 2]
-              && !busy.calm && busy.waiting == 920)
-        let calm = TodayRules.headerSummary([lane(.push, 0), lane(.queue, 5), lane(.info, 1)])
-        check("today header: calm when Push and Meeting are both zero, still naming the wait",
-              calm.needs.isEmpty && calm.calm && calm.waiting == 6)
-        let meetingOnly = TodayRules.headerSummary([lane(.meeting, 4)])
-        check("today header: a zero lane is left out and nothing waiting shows nothing",
-              meetingOnly.needs.map(\.tier) == [.meeting] && !meetingOnly.calm
-              && meetingOnly.waiting == 0)
-        check("today header: never carries Silent, large waits stay as is",
-              TodayRules.headerSummary([lane(.silent, 866), lane(.queue, 12_345)]).waiting == 12_345
-              && TodayRules.headerSummary([lane(.silent, 866)]).needs.isEmpty)
-        check("today header: the waiting phrase is singular only for one",
-              TodayRules.waitingLine(1) == L("today.waiting.one")
-              && TodayRules.waitingLine(920) == L("today.waiting.many", 920)
-              && TodayRules.waitingLine(920).contains("920"))
-    }
-    check("today: the briefing line is the headline, else the first plain line",
-          TodayRules.briefingLine(structure: nil, briefing: "first\nsecond") == "first"
-          && TodayRules.briefingLine(structure: nil, briefing: nil) == nil
-          && TodayRules.briefingLine(structure: nil, briefing: "  \n") == nil)
+    // The calm counted header (2026-10-24) became the editorial headline
+    // (M1, 2026-11-13): todayBriefSelfChecks pins its copy.
     do {
         func event(_ id: String) -> CalendarEventWire {
             CalendarEventWire(
@@ -358,7 +330,7 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     }
 
     check("new integer formats render",
-          [L("today.lane.more", 4), L("today.approvals.waiting", 4), L("a11y.position", 4, 5)]
+          [L("today.cards.more", 4), L("today.headline.many", 4), L("a11y.position", 4, 5)]
               .allSatisfy { $0.contains("4") && !$0.contains("%") })
     check("new string formats render",
           L("today.row.a11y", "x", "y").contains("x") && !L("today.row.a11y", "x", "y").contains("%")
@@ -389,18 +361,21 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           text("ProposalsList.swift").contains("var title = L(\"proposals.title\")")
           && text("AssistantThread.swift").contains("var inlineWhenOffscreen = false"))
     do {
-        // Lane groups carry no count (founder decision 2026-10-24): the
-        // header already counts Push and Meeting and the wait in Mail. The
-        // "N more in Mail" link stays, in caption ink.
-        let today = text("TodayScreen.swift")
-        let laneLink = today.components(separatedBy: "private func laneLink(").last ?? ""
-        check("today: a lane group header prints no count",
+        // Lane sections carry no count (founder decision 2026-10-24): the
+        // headline counts what waits. Since the editorial Today (M1,
+        // 2026-11-13) the overflow is "See all" on each lane and one
+        // "N more" under the PUSH cards, both opening the lane in Mail.
+        let today = text("TodayScreen.swift") + text("TodayLaneSections.swift")
+        let cards = text("TodayPushCards.swift")
+        check("today: a lane section header prints no count",
               !today.isEmpty && !today.contains("Text(\"\\(lane.count)\")")
               && !today.contains("today.lane.a11y")
               && today.contains(".accessibilityLabel(lane.tier.label)"))
-        check("today: the overflow link stays, in caption ink",
-              today.contains("L(\"today.lane.more\", lane.remaining)")
-              && laneLink.contains(".font(Theme.Typo.caption).foregroundStyle(Theme.textDim)"))
+        check("today: the overflow opens the lane in Mail (See all, N more)",
+              today.contains("Button { model.go(to: .tier(lane.tier)) }")
+              && today.contains("L(\"today.seeAll\")")
+              && cards.contains("L(\"today.cards.more\", cards.more)")
+              && cards.contains("model.go(to: .tier(.push))"))
         check("today: the lane-count a11y string is gone from every locale",
               ["en", "ko", "ja", "zh", "de", "fr", "es"]
                   .allSatisfy { !L10n.keys(forLanguage: $0).contains("today.lane.a11y") })

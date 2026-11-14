@@ -628,20 +628,10 @@
 "today.signingIn.detail" = "Schließe die Anmeldung im Browser ab. Dieses Fenster aktualisiert sich danach.";
 "today.failed.title" = "Mails konnten nicht geladen werden";
 "today.retry" = "Erneut versuchen";
-"today.clear.title" = "Nichts wartet auf dich";
-"today.clear.detail" = "Neue Mails erscheinen hier, sobald Klorn sie einsortiert hat.";
-"today.lane.more" = "%d weitere in Mail";
-"today.header.lane" = "%1$d %2$@";
-"today.waiting.one" = "1 wartet in Mail";
-"today.waiting.many" = "%d warten in Mail";
 "today.lane.push.older" = "Ältere %@-Mails ansehen";
 "today.row.a11y" = "%1$@: %2$@";
-"today.open" = "Öffnen";
 "today.calendar.empty" = "Heute steht nichts im Kalender.";
 "today.assistant.noBriefing" = "Heute gibt es noch kein Briefing.";
-"today.approvals.waiting" = "Wartende Freigaben: %d";
-"today.approvals.none" = "Keine Freigaben offen.";
-"today.ask.a11y" = "Den Assistenten fragen";
 "today.signIn.restart" = "Neu starten";
 "a11y.position" = "%1$d von %2$d";
 
@@ -808,3 +798,24 @@
 "prefs.group.support" = "Support";
 "prefs.group.about" = "Über";
 "prefs.group.mail" = "Mail";
+
+/* Editorial Today and account chrome (M1/M2, 2026-11-13) */
+"today.headline.none" = "Gerade wartet nichts auf dich";
+"today.headline.one" = "%d E-Mail wartet auf dich";
+"today.headline.many" = "%d E-Mails warten auf dich";
+"today.cards.more" = "%d weitere";
+"today.cards.reply" = "Antworten";
+"today.cards.later" = "Später";
+"today.cards.later.help" = "Diese E-Mail zurückstellen";
+"today.cards.reply.help" = "Öffnet die E-Mail und entwirft eine Antwort, die du vor dem Senden prüfst";
+"today.kicker.meetings" = "Termine %d";
+"today.kicker.free" = "Frei %d Std.";
+"today.lane.note.meeting" = "Zu deinem Kalender";
+"today.lane.note.queue" = "Ohne Mitteilung";
+"today.lane.note.info" = "Zur Info";
+"today.seeAll" = "Alle anzeigen";
+"today.schedule" = "Heute im Kalender";
+"today.search" = "Mail durchsuchen";
+"today.card.a11y" = "%1$@ von %2$@, %3$@";
+"nav.accounts.all" = "Alle Accounts";
+"nav.accounts.showOnly.a11y" = "Nur %@ anzeigen";

@@ -355,7 +355,8 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && MainWindowRules.titlebarInset(frameHeight: 600, layoutHeight: 640) == 0
             && MainWindowRules.contentSize(usable: usable, titlebarInset: 28)
                 == NSSize(width: 900, height: 628)
-            && text("Shell/MainShell.swift").contains("Theme.bg.ignoresSafeArea()")))
+            // The account-tinted chrome (M1) is what paints under the title bar now.
+            && text("Shell/MainShell.swift").contains("Theme.chromeGradient(identity: chromeIdentity).ignoresSafeArea()")))
     results.append(("the new string is localized", L("mail.unread") != "mail.unread"))
     return results
 }

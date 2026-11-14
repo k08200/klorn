@@ -1,16 +1,15 @@
 import SwiftUI
 
-/// Today — the main window's home (productization plan §1, FD-1). Composed
-/// from what the app already holds: the firewall queue by lane, today's
-/// calendar summary, the briefing and the pending approvals. It fetches
-/// nothing of its own.
+/// Today — the main window's home (productization plan §1, FD-1), in the
+/// editorial layout the founder chose on 2026-11-13 (M1 dark / M2 light):
+/// one headline that counts what is waiting, the PUSH mail as cards that say
+/// why each is urgent, the other lanes as compact sections, then today's
+/// schedule. Composed from what the app already holds; it fetches nothing.
 struct TodayScreen: View {
     @Environment(AppModel.self) private var model
     let actions: ShellActions
     /// Injectable so the offscreen renderer shows a fixed date.
     var now = Date()
-
-    static let sideColumnWidth: CGFloat = 300
 
     private var state: SurfaceState { model.surfaceState }
 
@@ -23,25 +22,20 @@ struct TodayScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: NavSection.today.title, detail: dateLabel) {
-                // The unified list is the default; this only narrows it.
-                InboxSelectorMenu()
-            }
-            Rectangle().fill(Theme.line).frame(height: 1)
+            TodayTopRow()
             switch state {
             case .signedOut, .signingIn:
                 SurfaceStateView(state: state)
             case .offline, .failed:
-                // The error replaces the lanes, not the day: the calendar and
-                // the assistant still have something true to say.
-                columns {
+                // The error replaces the lanes, not the frame: the state
+                // anchors where the headline would be.
+                page {
                     SurfaceStateView(state: state, anchorInset: TodayLayout.anchorInColumn)
                         .frame(maxWidth: .infinity, alignment: .top)
                 }
             case .loading:
-                // The skeleton is the loaded Today's shape: lane headers and
-                // rows on the left, the rail on the right.
-                columns { TodaySkeleton() }
+                // The skeleton is the loaded Today's shape.
+                page { TodaySkeleton() }
             case .ready:
                 if Theme.isRenderingOffscreen {
                     // ImageRenderer draws nothing inside a ScrollView; lay
@@ -56,214 +50,107 @@ struct TodayScreen: View {
     }
 
     private var ready: some View {
-        columns {
+        let lanes = model.queue.map(TodayRules.lanes) ?? []
+        let push = lanes.first { $0.tier == .push }
+        return page {
             VStack(alignment: .leading, spacing: Theme.s6) {
-                let lanes = model.queue.map(TodayRules.lanes) ?? []
-                if lanes.isEmpty {
-                    EmptyState(
-                        icon: "checkmark.circle", title: L("today.clear.title"),
-                        hint: L("today.clear.detail"))
-                        .padding(.top, TodayLayout.anchorInColumn)
-                } else {
-                    TodayHeaderLine(summary: TodayRules.headerSummary(lanes))
-                    ForEach(lanes, id: \.tier) { lane in
-                        TodayLaneGroup(lane: lane, now: now, open: open)
-                    }
+                TodayHeadline(dateLabel: dateLabel, pushCount: push?.count ?? 0)
+                if let push {
+                    TodayPushCards(lane: push, now: now, actions: actions, open: open)
                 }
+                ForEach(lanes.filter { $0.tier != .push }, id: \.tier) { lane in
+                    TodayLaneSection(lane: lane, now: now, open: open)
+                }
+                TodaySchedule()
+                TodayExtras(now: now)
             }
         }
     }
 
-    /// The Today frame every state shares: the main column and the rail.
-    private func columns(@ViewBuilder _ main: () -> some View) -> some View {
-        HStack(alignment: .top, spacing: Theme.s6) {
-            main().frame(maxWidth: .infinity, alignment: .topLeading)
-            rail.frame(width: Self.sideColumnWidth)
-        }
-        .padding(Theme.s6)
-        .frame(maxWidth: 1080, alignment: .topLeading)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    /// The Today frame every state shares: one column, the card's margins.
+    private func page(@ViewBuilder _ main: () -> some View) -> some View {
+        main()
+            .padding(.horizontal, Theme.s8).padding(.bottom, Theme.s6)
+            .frame(maxWidth: TodayLayout.maxWidth, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
-    private var rail: some View {
-        if state == .loading {
-            TodayRailSkeleton()
-        } else {
-            VStack(alignment: .leading, spacing: Theme.s4) {
-                TodayCalendarPanel()
-                // P12: each only with its server flag (and, for free time, a saved team).
-                if FreeTimeRules.visible(teamMode: model.clientFlags.teamMode, teamCount: model.teams.count) {
-                    TodayFreeTimePanel(renderNow: Theme.isRenderingOffscreen ? now : nil)
-                }
-                if model.clientFlags.files { TodayRecentFilesPanel() }
-                TodayAssistantPanel()
-            }
-        }
-    }
-
-    /// A row opens in Mail: the list on a facet that holds it, the reader
-    /// beside it.
+    /// A card or a row opens in Mail: the list on a facet that holds it,
+    /// the reader beside it.
     private func open(_ item: FirewallItem) {
         model.revealInMail(item)
         actions.onSelect(item)
     }
 }
 
-/// The day in one calm line (founder decision 2026-10-24): counts for Push
-/// and Meeting only, else "Nothing needs you right now", then one quiet
-/// "N waiting in Mail" for Queue + Info that opens Mail. Silent never shows.
-private struct TodayHeaderLine: View {
+/// The card's top row: the scope it shows ("All accounts" or one address)
+/// and search. The toolbar's Assistant button sits in the title bar above.
+private struct TodayTopRow: View {
     @Environment(AppModel.self) private var model
-    let summary: TodayHeaderSummary
 
-    var body: some View {
-        HStack(spacing: Theme.s4) {
-            ForEach(summary.needs, id: \.tier) { need in
-                HStack(spacing: Theme.s1) {
-                    Circle().fill(Theme.tint(need.tier)).frame(width: 6, height: 6)
-                        .accessibilityHidden(true)
-                    Text(L("today.header.lane", need.count, need.tier.label))
-                        .foregroundStyle(Theme.text)
-                }
-            }
-            if summary.calm {
-                Text(L("tier.push.empty")).foregroundStyle(Theme.textDim)
-            }
-            if summary.waiting > 0 {
-                Button { model.go(to: .tier(.queue)) } label: {
-                    Text(TodayRules.waitingLine(summary.waiting))
-                        .foregroundStyle(Theme.textDim)
-                        .frame(minHeight: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain).hoverDim()
-            }
-        }
-        .font(Theme.Typo.caption.monospacedDigit())
-        .lineLimit(1)
-        .padding(.horizontal, Theme.s1)
-    }
-}
-
-/// One lane on Today: a header that opens the lane in Mail, then its rows
-/// in a hairline group (or just the header for a collapsed lane).
-private struct TodayLaneGroup: View {
-    @Environment(AppModel.self) private var model
-    let lane: TodayLane
-    let now: Date
-    let open: (FirewallItem) -> Void
-
-    private func openLane() {
-        model.go(to: .tier(lane.tier))
+    private var scope: String {
+        guard let value = inboxQueryParam(selected: model.selectedInbox),
+              let inbox = model.inboxes.first(where: { $0.selectionValue == value })
+        else { return L("nav.accounts.all") }
+        return inboxDisplayLabel(email: inbox.email, kind: inbox.kind)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.s2) {
-            Button(action: openLane) {
-                HStack(spacing: Theme.s2) {
-                    // The one chip spec (X1) heads the group, as on the web.
-                    // No count (founder decision 2026-10-24): the Today
-                    // header already counts Push and Meeting and the wait.
-                    WindowLaneChip(tier: lane.tier)
-                    Spacer(minLength: Theme.s2)
-                    if lane.style == .collapsed {
-                        Image(systemName: "chevron.right").font(Theme.Typo.caption)
-                            .foregroundStyle(Theme.textDim).accessibilityHidden(true)
-                    }
-                }
-                .padding(.horizontal, Theme.s1)
-                .frame(minHeight: 24)
-                .contentShape(Rectangle())
+        HStack(spacing: Theme.s3) {
+            Text(scope).font(Theme.Typo.scopeLabel).foregroundStyle(Theme.todayInk3)
+                .lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: Theme.s3)
+            // Search lives in Mail (Find, ⌘F): the same path.
+            Button {
+                if !model.listMode.hasSearchField { model.go(to: .inbox) }
+                model.navigate(to: .mail)
+                model.searchFocusPending = true
+            } label: {
+                Image(systemName: "magnifyingglass").font(Theme.Typo.body)
+                    .foregroundStyle(Theme.todayInk2)
+                    .frame(width: TodayLayout.topRowHeight, height: TodayLayout.topRowHeight)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(lane.tier.blurb)
-            .accessibilityLabel(lane.tier.label)
-
-            if lane.style == .rows, !lane.rows.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(lane.rows.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { rowDivider }
-                        TodayMailRow(item: item, now: now, open: { open(item) })
-                    }
-                    if lane.remaining > 0 {
-                        rowDivider
-                        laneLink(L("today.lane.more", lane.remaining))
-                    } else if lane.older > 0 {
-                        rowDivider
-                        laneLink(L("today.lane.push.older", lane.tier.label))
-                    }
-                }
-                .todayPanel()
-            } else if lane.style == .rows, lane.older > 0 {
-                // Nothing inside Today's window: a calm line, and older PUSH
-                // one click away in Mail so nothing becomes unreachable.
-                VStack(spacing: 0) {
-                    Text(L("tier.push.empty"))
-                        .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
-                    rowDivider
-                    laneLink(L("today.lane.push.older", lane.tier.label))
-                }
-                .todayPanel()
-            }
+            .help(L("today.search"))
+            .accessibilityLabel(L("today.search"))
         }
-    }
-
-    /// A quiet link row that opens this lane in Mail, in caption ink.
-    private func laneLink(_ title: String) -> some View {
-        Button(action: openLane) {
-            Text(title)
-                .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Theme.s3)
-                .frame(height: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain).hoverDim()
-    }
-
-    private var rowDivider: some View {
-        Rectangle().fill(Theme.line).frame(height: Theme.hairline).padding(.leading, Theme.s3)
+        .padding(.leading, Theme.s6).padding(.trailing, Theme.s3)
+        .frame(height: TodayLayout.topRowHeight)
     }
 }
 
-/// A Today mail row under the one-badge rule: who, what, when, and why (the
-/// lane reason, or the snippet). The lane is the group it sits in; the reply
-/// state is in the reader.
-private struct TodayMailRow: View {
+/// The caps line (date · meetings · free time) and the headline that counts
+/// the PUSH mail waiting.
+private struct TodayHeadline: View {
     @Environment(AppModel.self) private var model
-    let item: FirewallItem
-    let now: Date
-    let open: () -> Void
-    @State private var hovering = false
+    let dateLabel: String?
+    let pushCount: Int
 
     var body: some View {
-        // Mixed lanes never happen inside a lane group: no chip.
-        let content = WindowRowRules.content(
-            for: item, mixedLanes: false, inboxes: model.inboxes,
-            opened: model.openedEmailIds, now: now)
-        Button(action: open) {
-            WindowRowBody(content: content)
-                .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
-                .frame(maxWidth: .infinity, minHeight: Theme.mailRowHeight, alignment: .leading)
-                .background(hovering ? Theme.surfaceHover : .clear)
-                .contentShape(Rectangle())
+        let parts = TodayBriefRules.kickerParts(
+            date: dateLabel, meetings: TodayBriefRules.meetings(model.today),
+            freeHours: TodayBriefRules.freeHours(model.briefingStructure))
+        VStack(alignment: .leading, spacing: Theme.s1) {
+            if !parts.isEmpty {
+                Text(parts.joined(separator: " · "))
+                    .font(Theme.Typo.todayCaps).tracking(TodayTracking.caps)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.todayInk3)
+                    .lineLimit(1)
+            }
+            Text(TodayBriefRules.headline(pushCount: pushCount))
+                .font(Theme.Typo.page).foregroundStyle(Theme.todayInk1)
+                .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel(
-            WindowRowRules.a11yLabel(
-                content, lead: L("today.row.a11y", content.sender, content.subject)))
     }
 }
 
 extension View {
-    /// A Today group: the raised surface with a hairline, no shadow.
+    /// A Today block: the raised surface, no hairline, no shadow.
     func todayPanel() -> some View {
-        background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.line))
+        background(Theme.todayRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.briefCard))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.briefCard))
     }
 }
