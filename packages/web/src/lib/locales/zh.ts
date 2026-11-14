@@ -2838,14 +2838,17 @@ const zh: Record<string, string> = {
   "vaultExport.error.unavailable": "此账户无法使用 Markdown 导出。",
   "vaultExport.error.failed": "Markdown 导出失败，请重试。",
   "slack.title": "Slack",
-  "slack.desc": "Klorn 读取你的 Slack 私信、群组私信和提到你的消息，并将其归入你的通道。它从不发帖、回应或标记已读。",
+  "slack.desc":
+    "Klorn 读取你的 Slack 私信、群组私信和提到你的消息，并将其归入你的通道。它从不发帖、回应或标记已读。",
   "slack.start": "开始设置",
   "slack.step.manifest": "下载应用清单（manifest），其中已填好你的 Request URL。",
   "slack.downloadManifest": "下载清单",
   "slack.requestUrl": "请求 URL（Request URL）",
-  "slack.step.create": "在 Slack 中用清单创建应用（Create New App → From a manifest），并安装到你的工作区。",
+  "slack.step.create":
+    "在 Slack 中用清单创建应用（Create New App → From a manifest），并安装到你的工作区。",
   "slack.openSlackApps": "打开 Slack 应用页面",
-  "slack.step.paste": "粘贴应用的 Signing Secret（Basic Information）和 User OAuth Token（OAuth & Permissions）。Klorn 只校验令牌，不会保存。",
+  "slack.step.paste":
+    "粘贴应用的 Signing Secret（Basic Information）和 User OAuth Token（OAuth & Permissions）。Klorn 只校验令牌，不会保存。",
   "slack.signingSecret": "签名密钥（Signing Secret）",
   "slack.userToken": "用户 OAuth 令牌",
   "slack.connect": "连接",
@@ -2856,12 +2859,14 @@ const zh: Record<string, string> = {
   "slack.status.waiting": "正在等待 Slack 验证 Request URL。",
   "slack.status.lastEvent": "最近一次来自 Slack 的事件：{time}",
   "slack.channels.title": "要关注的频道",
-  "slack.channels.desc": "这些频道中的每条消息都会被分类，而不只是提到你的消息。粘贴频道 ID（频道详情 → 关于），用逗号或空格分隔。",
+  "slack.channels.desc":
+    "这些频道中的每条消息都会被分类，而不只是提到你的消息。粘贴频道 ID（频道详情 → 关于），用逗号或空格分隔。",
   "slack.channels.save": "保存频道",
   "slack.channels.saved": "频道已保存",
   "slack.disconnect": "断开连接",
   "slack.disconnect.title": "要断开 Slack 吗？",
-  "slack.disconnect.message": "Klorn 会删除签名密钥、它存储的所有 Slack 消息和判定，以及从 Slack 中找到的承诺。也请在 Slack 中删除该应用。",
+  "slack.disconnect.message":
+    "Klorn 会删除签名密钥、它存储的所有 Slack 消息和判定，以及从 Slack 中找到的承诺。也请在 Slack 中删除该应用。",
   "slack.disconnected": "已断开 Slack。Klorn 已删除其存储的数据。",
   "slack.error.invalid-signing-secret": "这不是 Slack 签名密钥。",
   "slack.error.bot-token": "这是机器人令牌。请粘贴 User OAuth Token（xoxp-…）。",
