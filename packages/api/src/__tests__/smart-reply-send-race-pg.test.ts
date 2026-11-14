@@ -5,8 +5,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 // Real-Postgres proof that the smart action's Send cannot go out twice. The
 // repeat check ("the same bytes to the same mail moments ago") used to be a
 // read followed, a provider round trip later, by the receipt insert: two Sends
-// fired together both read "nothing yet" and both sent. The check now runs
-// under a claim row (mail/send-claim.ts) taken by one atomic INSERT ... ON
+// fired together both read "nothing yet" and both sent. The decisive check now
+// runs under a claim row (mail/send-claim.ts) taken by one atomic INSERT ... ON
 // CONFLICT, so exactly one request passes it. These requests go through the
 // real route, the real send path and the real tables; only the provider, the
 // session check and the billing gate are stubbed.
@@ -31,8 +31,8 @@ vi.mock("../mail/providers/dispatch.js", () => ({
   mailActionsFor: async () => ({ sendEmail: provider.sendEmail }),
 }));
 vi.mock("../mail/reply-threading.js", () => ({
-  // A provider round trip between the repeat check and the receipt insert: the
-  // window the race needed.
+  // A provider round trip between the early repeat read and the receipt insert:
+  // the window the race needed.
   resolveReplyThreading: async () => {
     await new Promise((resolve) => setTimeout(resolve, 40));
     return { threadId: "t1" };
@@ -49,7 +49,7 @@ vi.mock("../routes/calendar.js", () => ({ createUserCalendarEvent: vi.fn() }));
 import { signToken } from "../auth.js";
 import { prisma } from "../db.js";
 import { sendEmailPayloadHash } from "../judge/attention-floor.js";
-import { REPEAT_SEND_WINDOW_MS } from "../mail/reply-send.js";
+import { SEND_CLAIM_STALE_MS } from "../mail/send-claim.js";
 import { smartActionsRoutes } from "../routes/smart-actions.js";
 
 const describePg = url ? describe : describe.skip;
@@ -171,7 +171,7 @@ describePg("smart action Send against real Postgres: one send per tap, however m
     expect(await prisma.sendClaim.count({ where: { userId: seeded.userId } })).toBe(0);
   });
 
-  it("a claim left by a request that died holds for the repeat window, then is taken over", async () => {
+  it("a claim left by a request that died holds until it is stale, then is taken over", async () => {
     const seeded = await seed();
     const payloadHash = sendEmailPayloadHash({ to: TO, subject: SUBJECT, body: BODY });
     const claim = { userId: seeded.userId, emailId: seeded.emailId, payloadHash };
@@ -184,7 +184,7 @@ describePg("smart action Send against real Postgres: one send per tap, however m
 
     await prisma.sendClaim.update({
       where: { userId_emailId_payloadHash: claim },
-      data: { claimedAt: new Date(Date.now() - REPEAT_SEND_WINDOW_MS - 60_000) },
+      data: { claimedAt: new Date(Date.now() - SEND_CLAIM_STALE_MS - 60_000) },
     });
     expect(await sendAll(seeded, [BODY])).toEqual([200]);
     expect(provider.sendEmail).toHaveBeenCalledTimes(1);

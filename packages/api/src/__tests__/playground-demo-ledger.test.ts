@@ -3,6 +3,7 @@ import {
   createDemoClientLedger,
   DEMO_CLIENT_LEDGER_MAX_ENTRIES,
 } from "../routes/playground-demo-ledger.js";
+import { fastestCpuMs } from "./helpers/linear-timing.js";
 
 // The key-free demo's per-client ledger (routes/playground.ts, wall 1): 3 calls
 // a minute and 10 a UTC day per client bucket, held in memory on a 512 MB
@@ -96,6 +97,33 @@ describe("demo client ledger: bounded memory", () => {
     ledger.clear();
     expect(ledger.size).toBe(0);
     expect(ledger.take("a", T0)).toBe(true);
+  });
+
+  it("drops about 1% of the least recently seen at once when full, not one per call", () => {
+    const ledger = createDemoClientLedger({ ...LIMITS, maxEntries: 200 });
+    for (let i = 0; i < 200; i++) ledger.take(`client-${i}`, T0);
+    expect(ledger.size).toBe(200);
+
+    ledger.take("one-more", T0);
+
+    expect(ledger.size).toBe(199); // 2 dropped, 1 added
+    expect(ledger.take("client-199", T0)).toBe(true); // the most recent survive
+  });
+
+  it("stays cheap under a flood of unique clients at the production cap", () => {
+    // Deleting from the front of a V8 Map leaves holes a fresh iterator walks
+    // until the table is rebuilt: an eviction that opens an iterator on every
+    // call measured ~60 us a call here, with 13-60 ms stalls (review of this change).
+    const FLOOD = 4 * DEMO_CLIENT_LEDGER_MAX_ENTRIES;
+    const cpuMs = fastestCpuMs(() => {
+      const ledger = createDemoClientLedger({
+        ...LIMITS,
+        maxEntries: DEMO_CLIENT_LEDGER_MAX_ENTRIES,
+      });
+      for (let i = 0; i < FLOOD; i++) ledger.take(`flood-${i}`, T0);
+    }, 3);
+    // Generous for CI: the per-call iterator version needed ~8.7 s of CPU here.
+    expect(cpuMs).toBeLessThan(2_000);
   });
 
   it("caps production at 50,000 clients: over the 1,250 calls a day the default budget pays for", () => {

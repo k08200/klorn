@@ -360,25 +360,30 @@ describe("POST /emails/:id/reply (Send)", () => {
     expect(where).toMatchObject({ userId: "user-1", emailId: "e1", payloadHash: HASH });
   });
 
-  it("checks for a repeat and writes the receipt under the claim on these bytes to this mail", async () => {
+  it("re-checks for a repeat and writes the receipt under the claim, after the provider lookups", async () => {
     await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
-    expect(claims.claimSend).toHaveBeenCalledWith(
-      { userId: "user-1", emailId: "e1", payloadHash: HASH },
-      10 * 60_000,
-    );
+    expect(claims.claimSend).toHaveBeenCalledWith({
+      userId: "user-1",
+      emailId: "e1",
+      payloadHash: HASH,
+    });
     expect(claims.releaseSend).toHaveBeenCalledWith(expect.objectContaining({ token: "tok-1" }));
-    const checkedAt = db.receiptFindFirst.mock.invocationCallOrder[0];
-    expect(checkedAt).toBeGreaterThan(claims.claimSend.mock.invocationCallOrder[0]);
-    expect(checkedAt).toBeLessThan(claims.releaseSend.mock.invocationCallOrder[0]);
+    const [early, decisive] = db.receiptFindFirst.mock.invocationCallOrder;
+    const claimedAt = claims.claimSend.mock.invocationCallOrder[0];
+    // No provider call under the claim: threading is resolved before it.
+    expect(gmail.getReplyHeaders.mock.invocationCallOrder[0]).toBeLessThan(claimedAt);
+    expect(early).toBeLessThan(claimedAt);
+    expect(decisive).toBeGreaterThan(claimedAt);
+    expect(decisive).toBeLessThan(claims.releaseSend.mock.invocationCallOrder[0]);
   });
 
-  it("is a repeat while another request holds the claim: 409, nothing checked, written or sent", async () => {
+  it("is a repeat while another request holds the claim: 409, nothing written or sent", async () => {
     claims.claimSend.mockResolvedValueOnce(null);
     const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toMatch(/already went/);
     expectNothingSent();
-    expect(db.receiptFindFirst).not.toHaveBeenCalled();
+    expect(db.receiptFindFirst).toHaveBeenCalledTimes(1); // the early read only
     expect(claims.releaseSend).not.toHaveBeenCalled();
   });
 
@@ -389,18 +394,16 @@ describe("POST /emails/:id/reply (Send)", () => {
     expectNothingSent();
   });
 
-  it("releases the claim on a repeat found by the check and on a receipt that cannot be written", async () => {
-    db.receiptFindFirst.mockResolvedValueOnce({ id: "rcpt-0" });
-    expect(
-      (await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH }))
-        .statusCode,
-    ).toBe(409);
+  it("releases the claim on a repeat found under it, a receipt that cannot be written, and a failed check", async () => {
+    const send = () =>
+      call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    db.receiptFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "rcpt-0" });
+    expect((await send()).statusCode).toBe(409);
     db.receiptCreate.mockRejectedValueOnce(new Error("db down"));
-    expect(
-      (await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH }))
-        .statusCode,
-    ).toBe(503);
-    expect(claims.releaseSend).toHaveBeenCalledTimes(2);
+    expect((await send()).statusCode).toBe(503);
+    db.receiptFindFirst.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("db down"));
+    expect((await send()).statusCode).toBe(500);
+    expect(claims.releaseSend).toHaveBeenCalledTimes(3);
     expect(gmail.sendEmail).not.toHaveBeenCalled();
   });
 

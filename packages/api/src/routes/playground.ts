@@ -162,7 +162,7 @@ const DEMO_IP_PER_DAY = 10;
 const DEMO_CLASSIFY_EST_USD = 0.0004;
 const DEMO_CLASSIFY_COST_FRACTIONAL_CENTS = usdToFractionalCents(DEMO_CLASSIFY_EST_USD);
 // Wall 1's ledger, bounded (playground-demo-ledger.ts): previous-day entries
-// expire, and at the cap the least recently seen client is dropped. The cap
+// expire, and at the cap the least recently seen 1% are dropped. The cap
 // (50,000, ~10.6 MB measured) is 40x the 1,250 calls a day the default budget
 // pays for, so without a flood of unique addresses no client is ever dropped
 // within its day and the 3/min, 10/day counts above hold exactly. Under such a
