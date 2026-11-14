@@ -272,7 +272,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   ];
   // Returns every row on purpose.
   const EXPORTS_EVERYTHING = [
-    "index.ts", // GDPR export: every row is exported
+    "routes/core.ts", // GDPR export (GET /api/user/me/export): every row is exported
   ];
 
   it("finds the readers (so this guard cannot pass by scanning nothing)", () => {
@@ -299,7 +299,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   // device snapshot (C6) reads only its own source's rows, to reconcile them with
   // the snapshot the device just sent (its route is dark while its flag is off).
   const EXEMPT_FROM_KILL_SWITCH = [
-    "index.ts",
+    "routes/core.ts",
     "pim/calendar-cancellation.ts",
     "pim/calendar-window-reconcile.ts",
     "pim/device-calendar/device-ingest.ts",

@@ -301,20 +301,29 @@ describe("the routes use the shared deletion functions", () => {
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
   it("DELETE /api/user/me/data goes through purgeAllUserData", () => {
-    const index = source("../index.ts");
-    const handler = index.slice(index.indexOf('app.delete("/api/user/me/data"'));
-    expect(handler.slice(0, handler.indexOf("\n});"))).toContain("await purgeAllUserData(userId)");
+    // The inline "me" routes live in routes/core.ts (moved out of index.ts).
+    const core = source("../routes/core.ts");
+    expect(core).toContain('app.delete("/api/user/me/data"');
+    const handler = core.slice(core.indexOf('app.delete("/api/user/me/data"'));
+    const body = handler.slice(0, handler.indexOf("\n  });"));
+    expect(body).toContain("await purgeAllUserData(userId)");
     // 202 when access is gone but the purge has not committed: the sweep finishes it.
-    expect(handler.slice(0, handler.indexOf("\n});"))).toMatch(
+    expect(body).toMatch(
       /outcome === "purged"\s*\?\s*reply\.code\(204\)\.send\(\)\s*:\s*reply\.code\(202\)\.send\(\{ status: "pending" \}\)/,
     );
-    // The row purge must not be reachable from the entry point without the
-    // object purge in front of it.
-    expect(index).not.toMatch(/\bpurgeUserData\b/);
+    // The row purge must not be reachable from the route module (or the entry
+    // point) without the object purge in front of it.
+    expect(core).not.toMatch(/\bpurgeUserData\b/);
+    expect(source("../index.ts")).not.toMatch(/\bpurgeUserData\b/);
   });
 
   it("no route deletes a user row on its own", () => {
-    for (const path of ["../routes/auth.ts", "../routes/admin.ts", "../index.ts"]) {
+    for (const path of [
+      "../routes/auth.ts",
+      "../routes/admin.ts",
+      "../routes/core.ts",
+      "../index.ts",
+    ]) {
       expect(source(path)).not.toMatch(/\.user\.delete\(/);
     }
   });

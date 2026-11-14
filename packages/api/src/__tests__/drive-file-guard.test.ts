@@ -419,14 +419,16 @@ describe("every DriveFile read goes through the kill switch", () => {
   });
 
   it("the data export reads through the export module, and the purge deletes the rows", () => {
-    const index = fileAt("index.ts")?.text ?? "";
-    expect(index).toContain("exportDriveFiles(userId),");
-    expect(index).toMatch(/\n\s+driveFiles,\n/);
-    expect(index).not.toMatch(/\bdriveFile\s*\./);
+    // GET /api/user/me/export lives in routes/core.ts (moved out of index.ts).
+    const core = fileAt("routes/core.ts")?.text ?? "";
+    expect(core).toContain("exportDriveFiles(userId),");
+    expect(core).toMatch(/\n\s+driveFiles,\n/);
+    expect(core).not.toMatch(/\bdriveFile\s*\./);
   });
 
   it("the routes are registered behind the flag", () => {
-    const index = fileAt("index.ts")?.text ?? "";
+    // Every route registration lives in register-api-routes.ts (moved out of index.ts).
+    const index = fileAt("register-api-routes.ts")?.text ?? "";
     expect(index).toMatch(
       /app\.register\(driveRoutes\(\{ gate: driveEnabled \}\), \{\s*prefix: "\/api\/drive",?\s*\}\)/,
     );
@@ -626,9 +628,11 @@ describe("drive text reaches an LLM only wrapped", () => {
     "routes/link-complete.ts",
   ];
   // The server entry point imports the LLM for its own startup reporting, so its
-  // imports say nothing. What it does with drive code is pinned instead: it
-  // registers the routes and returns the export's result to its owner.
-  const ENTRY_POINT = "index.ts";
+  // imports say nothing. What it and the two modules it delegates to do with
+  // drive code is pinned instead: index.ts starts the drive jobs,
+  // register-api-routes.ts registers the routes, and routes/core.ts returns the
+  // export's result to its owner.
+  const ENTRY_POINTS = ["index.ts", "routes/core.ts"];
 
   /** Every static or dynamic import specifier that reaches the LLM client or its helpers. */
   function llmSpecifiers(text: string): string[] {
@@ -642,7 +646,7 @@ describe("drive text reaches an LLM only wrapped", () => {
     const accounted = new Set([
       ...LLM_FACING.map(([path]) => path),
       ...NOT_LLM_FACING,
-      ENTRY_POINT,
+      ...ENTRY_POINTS,
     ]);
     expect(consumers.filter((path) => !accounted.has(path))).toEqual([]);
   });
@@ -700,7 +704,7 @@ describe("drive text reaches an LLM only wrapped", () => {
   });
 
   it("the lists name no module that has stopped holding drive rows", () => {
-    const listed = [...LLM_FACING.map(([path]) => path), ...NOT_LLM_FACING, ENTRY_POINT];
+    const listed = [...LLM_FACING.map(([path]) => path), ...NOT_LLM_FACING, ...ENTRY_POINTS];
     expect(listed.filter((path) => !consumers.includes(path))).toEqual([]);
   });
 
@@ -712,21 +716,32 @@ describe("drive text reaches an LLM only wrapped", () => {
   });
 
   it("the entry point only registers the routes and returns the export", () => {
-    const text = fileAt(ENTRY_POINT)?.text ?? "";
-    const driveImports = [...text.matchAll(/from "(\.\/[^"]*drive[^"]*)"/g)]
-      .map((match) => match[1])
-      .sort();
-    expect(driveImports).toEqual([
-      "./drive/drive-export.js",
+    const staticDriveImports = (path: string) =>
+      [...(fileAt(path)?.text ?? "").matchAll(/from "(\.{1,2}\/[^"]*drive[^"]*)"/g)]
+        .map((match) => match[1])
+        .sort();
+    const count = (path: string, pattern: RegExp) =>
+      (fileAt(path)?.text ?? "").match(pattern)?.length ?? 0;
+
+    // index.ts: only the drive quota warning at startup (plus the jobs' dynamic imports).
+    expect(staticDriveImports("index.ts")).toEqual(["./routes/klorn-drive.js"]);
+    expect(count("index.ts", /\bexportDriveFiles\(|\bdriveFiles\b|\bdriveRoutes\(/g)).toBe(0);
+
+    // register-api-routes.ts: registers the three drive route plugins, once each.
+    expect(staticDriveImports("register-api-routes.ts")).toEqual([
       "./routes/drive.js",
       "./routes/google-drive-link.js",
       "./routes/klorn-drive.js",
     ]);
-    expect(text.match(/\bexportDriveFiles\(/g)).toHaveLength(1);
-    expect(text.match(/\bdriveRoutes\(/g)).toHaveLength(1);
-    expect(text.match(/\bklornDriveRoutes\(/g)).toHaveLength(1);
-    expect(text.match(/\bgoogleDriveLinkRoutes\(/g)).toHaveLength(1);
-    expect(text.match(/\bdriveFiles\b/g)).toHaveLength(2);
+    expect(count("register-api-routes.ts", /\bdriveRoutes\(/g)).toBe(1);
+    expect(count("register-api-routes.ts", /\bklornDriveRoutes\(/g)).toBe(1);
+    expect(count("register-api-routes.ts", /\bgoogleDriveLinkRoutes\(/g)).toBe(1);
+    expect(count("register-api-routes.ts", /\bexportDriveFiles\(|\bdriveFiles\b/g)).toBe(0);
+
+    // routes/core.ts: the data export returns exportDriveFiles' result, nothing else.
+    expect(staticDriveImports("routes/core.ts")).toEqual(["../drive/drive-export.js"]);
+    expect(count("routes/core.ts", /\bexportDriveFiles\(/g)).toBe(1);
+    expect(count("routes/core.ts", /\bdriveFiles\b/g)).toBe(2);
   });
 
   it("an LLM-facing module wraps the drive text it sends", () => {

@@ -3,97 +3,24 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { reportPendingGoogleRevokes } from "./auth/google-grant-revoke.js";
-import {
-  ensureDemoUser,
-  getUserId,
-  requireAdmin,
-  requireAuth,
-  revokeDemoAccessIfDisabled,
-} from "./auth.js";
+import { ensureDemoUser, revokeDemoAccessIfDisabled } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
 import { ADVERTISED_PRO_PRICE_WEB } from "./billing/advertised-price.js";
 import { checkPaddlePriceMatchesAdvertised } from "./billing/paddle-price-check.js";
-import {
-  caldavCalendarEnabled,
-  deviceCalendarEnabled,
-  driveEnabled,
-  genericImapEnabled,
-  icloudInboxEnabled,
-  klornMailboxEnabled,
-  outlookInboxEnabled,
-} from "./config.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
-import { db, prisma } from "./db.js";
+import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
-import { exportDriveFiles } from "./drive/drive-export.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
-import {
-  getPublicJudgeHealth,
-  type PublicJudgeHealth,
-  warnRetiredJudgeHealthEnv,
-} from "./judge/judge-fallback-check.js";
+import { warnRetiredJudgeHealthEnv } from "./judge/judge-fallback-check.js";
 import { reportJudgeModelResolution, reportJudgeServing } from "./llm/judge-model-gate.js";
 import { JUDGE_MODEL, JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
-import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
-import { briefingRoutes } from "./pim/briefing.js";
 import { getProviderChain } from "./providers/index.js";
-import { adminRoutes } from "./routes/admin.js";
-import { alertEndpointRoutes } from "./routes/alert-endpoints.js";
-import { analyticsRoutes } from "./routes/analytics.js";
-import { apiKeyRoutes } from "./routes/api-keys.js";
-import { authRoutes } from "./routes/auth.js";
-import { automationRoutes } from "./routes/automations.js";
-import { billingRoutes } from "./routes/billing.js";
-import { caldavCalendarRoutes } from "./routes/caldav-calendar.js";
-import { calendarRoutes } from "./routes/calendar.js";
-import { chatConversationRoutes } from "./routes/chat-conversations.js";
-import { chatRoutes } from "./routes/chat-pending-actions.js";
+import { registerApiRoutes } from "./register-api-routes.js";
 import { reportRolloutCohort } from "./routes/cohort-gate.js";
-import { commitmentRoutes } from "./routes/commitments.js";
-import { cronRoutes } from "./routes/cron.js";
-import { desktopReceiptRoutes } from "./routes/desktop-receipts.js";
-import { deviceCalendarRoutes } from "./routes/device-calendar.js";
-import { deviceRoutes } from "./routes/devices.js";
-import { diagnosticsRoutes } from "./routes/diagnostics.js";
-import { driveRoutes } from "./routes/drive.js";
-import { emailRoutes } from "./routes/email.js";
-import { feedbackRoutes } from "./routes/feedback.js";
-import { firewallRoutes } from "./routes/firewall.js";
-import { gmailPushRoutes } from "./routes/gmail-push.js";
-import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "./routes/google-drive-link.js";
-import { imapConnectRoutes } from "./routes/imap-connect.js";
-import { inboxRoutes } from "./routes/inbox.js";
-import {
-  klornDriveRoutes,
-  klornDriveRoutesEnabled,
-  warnIfKlornDriveQuotaMissing,
-} from "./routes/klorn-drive.js";
-import { klornMailboxInboundRoutes } from "./routes/klorn-mailbox-inbound.js";
-import { linkCompleteRoutes } from "./routes/link-complete.js";
-import { mcpRoutes } from "./routes/mcp.js";
-import { memoryRoutes } from "./routes/memory.js";
-import { notificationRoutes } from "./routes/notifications.js";
-import { opsRoutes } from "./routes/ops.js";
-import { outlookAuthRoutes } from "./routes/outlook-auth.js";
-import { patternRoutes } from "./routes/patterns.js";
-import { phoneRoutes } from "./routes/phone.js";
-import { playbookRoutes } from "./routes/playbooks.js";
-import { playgroundRoutes } from "./routes/playground.js";
-import { pmfRoutes } from "./routes/pmf.js";
-import { providersAvailableRoutes } from "./routes/providers-available.js";
-import { receiptRoutes } from "./routes/receipt.js";
-import { screenerRoutes } from "./routes/screener.js";
-import { skillRoutes } from "./routes/skills.js";
-import { smartActionsRoutes } from "./routes/smart-actions.js";
-import { smsRoutes } from "./routes/sms.js";
-import { appleAuthProvider, naverAuthProvider, socialAuthRoutes } from "./routes/social-auth.js";
-import { teamRoutes } from "./routes/teams.js";
-import { telegramRoutes } from "./routes/telegram.js";
-import { tokenUsageRoutes } from "./routes/token-usage.js";
-import { webhookRoutes } from "./routes/webhook.js";
-import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
+import { warnIfKlornDriveQuotaMissing } from "./routes/klorn-drive.js";
+import { isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
 import {
   describeClientAddressConfig,
   resolveClientAddressConfig,
@@ -104,9 +31,8 @@ import { parseAllowedCidrs } from "./security/scanner-allowlist.js";
 import { captureError, flushSentry, initSentry } from "./sentry.js";
 import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
 import { checkObjectStorageAtStartup } from "./storage/runtime.js";
-import { purgeAllUserData } from "./user-deletion.js";
-import { getClientCount, initWebSocket } from "./websocket.js";
-import { registerWorkContextHook } from "./work-context.js";
+import { initWebSocket } from "./websocket.js";
+import { newWork, registerWorkContextHook } from "./work-context.js";
 
 // Initialize Sentry FIRST so every captureError() across the app actually
 // reports. Without this call `initialized` stays false and every captureError
@@ -266,309 +192,11 @@ app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, 
   }
 });
 
-await app.register(billingRoutes, { prefix: "/api/billing" });
-await app.register(deviceRoutes, { prefix: "/api/devices" });
-await app.register(teamRoutes, { prefix: "/api/teams" });
-await app.register(webhookRoutes, { prefix: "/api/webhook" });
-await app.register(chatRoutes, { prefix: "/api/chat" });
-await app.register(chatConversationRoutes, { prefix: "/api/chat" });
-await app.register(authRoutes, { prefix: "/api/auth" });
-// POST /api/auth/link/complete: finishes every account-link OAuth flow (Google
-// connect/calendar/inbox, Outlook inbox/calendar) for the session that started
-// it. Its Outlook flows re-check their flags at completion (defaults: the same
-// OUTLOOK_INBOX_ENABLED / OUTLOOK_CALENDAR_ENABLED gates as the routes below).
-await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
-await app.register(briefingRoutes, { prefix: "/api/briefing" });
-await app.register(notificationRoutes, { prefix: "/api/notifications" });
-await app.register(alertEndpointRoutes, { prefix: "/api/notifications/alert-endpoints" });
-await app.register(desktopReceiptRoutes, { prefix: "/api/notifications/desktop/receipts" });
-await app.register(opsRoutes, { prefix: "/api/ops" });
-await app.register(cronRoutes, { prefix: "/api/cron" });
-await app.register(diagnosticsRoutes, { prefix: "/api/diagnostics" });
-await app.register(inboxRoutes, { prefix: "/api/inbox" });
-await app.register(firewallRoutes, { prefix: "/api/inbox/firewall" });
-await app.register(receiptRoutes, { prefix: "/api/inbox/receipt" });
-await app.register(playbookRoutes, { prefix: "/api/playbooks" });
-await app.register(commitmentRoutes, { prefix: "/api/commitments" });
-await app.register(feedbackRoutes, { prefix: "/api/feedback" });
-await app.register(calendarRoutes, { prefix: "/api/calendar" });
-await app.register(smartActionsRoutes, { prefix: "/api/smart-actions" });
-await app.register(emailRoutes, { prefix: "/api/email" });
-await app.register(apiKeyRoutes, { prefix: "/api/keys" });
-await app.register(mcpRoutes, { prefix: "/api/mcp" });
-await app.register(gmailPushRoutes, { prefix: "/api/gmail" });
-await app.register(automationRoutes, { prefix: "/api/automations" });
-await app.register(pmfRoutes, { prefix: "/api/pmf" });
-await app.register(screenerRoutes, { prefix: "/api/screener" });
-await app.register(playgroundRoutes, { prefix: "/api/playground" });
-await app.register(adminRoutes, { prefix: "/api/admin" });
-await app.register(analyticsRoutes, { prefix: "/api/analytics" });
-await app.register(memoryRoutes, { prefix: "/api/memories" });
-await app.register(imapConnectRoutes(IMAP_PROVIDERS.NAVER), { prefix: "/api/naver-imap" });
-// Phase 2: dark until ICLOUD_INBOX_ENABLED — every route (auth'd or not)
-// answers 404 while the flag is off (CASA surface freeze).
-await app.register(imapConnectRoutes(IMAP_PROVIDERS.ICLOUD, { gate: icloudInboxEnabled }), {
-  prefix: "/api/icloud-imap",
-});
-// Step B4: generic IMAP with a user-supplied host — dark until GENERIC_IMAP_ENABLED
-// (same cloaked 404 while off; the flag is not to be flipped before the SSRF review).
-await app.register(imapConnectRoutes(IMAP_PROVIDERS.IMAP, { gate: genericImapEnabled }), {
-  prefix: "/api/generic-imap",
-});
-// Phase 3: dark until OUTLOOK_INBOX_ENABLED — same 404 gate as iCloud.
-await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
-  prefix: "/api/auth/outlook",
-});
-// Step C3: iCloud and Naver calendars over CalDAV, dark until CALDAV_CALENDAR_ENABLED
-// (every route answers the default 404 while off).
-await app.register(caldavCalendarRoutes({ gate: caldavCalendarEnabled }), {
-  prefix: "/api/caldav-calendar",
-});
-// Step C6: calendars the desktop app uploads from the device (EventKit), one opted-in
-// calendar at a time — dark until DEVICE_CALENDAR_ENABLED (the default 404 while off,
-// which the Mac app reads as "hide the setting").
-await app.register(deviceCalendarRoutes({ gate: deviceCalendarEnabled }), {
-  prefix: "/api/device-calendar",
-});
-// The drive's read-only metadata routes (step D2) — dark until DRIVE_ENABLED.
-await app.register(driveRoutes({ gate: driveEnabled }), { prefix: "/api/drive" });
-// The Klorn drive (step D3): upload, folders, download, rename/move, delete —
-// dark until DRIVE_ENABLED, KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are on.
-await app.register(klornDriveRoutes({ gate: klornDriveRoutesEnabled }), { prefix: "/api/drive" });
-// Google Drive link and unlink (step D5b) — dark until DRIVE_ENABLED and
-// GOOGLE_DRIVE_ENABLED are both on. The consent's callback is routes/auth.ts's.
-await app.register(googleDriveLinkRoutes({ gate: googleDriveRoutesEnabled }), {
-  prefix: "/api/drive/google",
-});
-// The Klorn mailbox's inbound webhook (step E1b): Resend Inbound's email.received,
-// dark until KLORN_MAILBOX_ENABLED. Its own plugin, so the gate cannot reach the
-// Stripe and Paddle webhooks.
-await app.register(klornMailboxInboundRoutes({ gate: klornMailboxEnabled }), {
-  prefix: "/api/mailbox",
-});
-// Which account types this deployment can connect, for the first run's provider
-// grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
-await app.register(providersAvailableRoutes, { prefix: "/api/providers" });
-// Social LOGIN providers beyond Google — dark until APPLE_LOGIN_ENABLED /
-// NAVER_LOGIN_ENABLED flip; every route answers the cloaked 404 while off
-// (same CASA surface freeze as the dark IMAP providers above).
-await app.register(socialAuthRoutes(appleAuthProvider), { prefix: "/api/auth/apple" });
-await app.register(socialAuthRoutes(naverAuthProvider), { prefix: "/api/auth/naver" });
-await app.register(patternRoutes, { prefix: "/api/patterns" });
-await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
-await app.register(skillRoutes, { prefix: "/api/skills" });
-await app.register(smsRoutes, { prefix: "/api/sms" });
-await app.register(telegramRoutes, { prefix: "/api/telegram" });
-await app.register(phoneRoutes, { prefix: "/api/phone" });
-
-// Version is read once at startup from package.json on disk — keeps the
-// string in lockstep with the published artifact without a separate
-// manifest to forget about. Read sync at module load so /api/health is
-// answer-ready the moment the listener binds.
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { healthResponse } from "./ops/health-response.js";
-import { newWork } from "./work-context.js";
-
-const PKG_VERSION: string | null = (() => {
-  try {
-    const pkgPath = fileURLToPath(new URL("../package.json", import.meta.url));
-    const raw = readFileSync(pkgPath, "utf-8");
-    const parsed = JSON.parse(raw) as { version?: string };
-    return parsed.version ?? null;
-  } catch {
-    return null;
-  }
-})();
-
-function probeHealth() {
-  return healthResponse(() => prisma.$queryRaw`SELECT 1`, {
-    version: PKG_VERSION ?? null,
-    commit:
-      process.env.RENDER_GIT_COMMIT ||
-      process.env.GIT_COMMIT_SHA ||
-      process.env.VERCEL_GIT_COMMIT_SHA ||
-      null,
-    now: new Date(),
-    uptimeSeconds: Math.floor(process.uptime()),
-  });
-}
-
-// Liveness: 200 while the process serves requests; `db` in the body says
-// whether the database answered. See ops/health-response.ts.
-app.get("/api/health", async (_request, reply) => {
-  const { body } = await probeHealth();
-  return reply.code(200).send(body);
-});
-
-// Readiness: 503 while the database probe fails, for status-code monitors.
-app.get("/api/health/ready", async (_request, reply) => {
-  const { ready, body } = await probeHealth();
-  return reply.code(ready ? 200 : 503).send(body);
-});
-
-// Scheduler liveness for external monitors (UptimeRobot etc). 503 when any
-// in-process scheduler loop has gone silent past its staleness threshold —
-// the failure mode where the dyno slept or an import failed and briefings
-// just stopped (see routes/cron.ts). Public like /api/health: exposes only
-// scheduler names and tick times, no user data — plus the LLM judge's coarse
-// fallback status + ratio (#1572), never error text.
-app.get("/api/health/schedulers", async (_request, reply) => {
-  // The judge read is a cached in-memory value, but it must never turn the
-  // liveness endpoint into a 500: on any throw the field is simply omitted.
-  let judge: PublicJudgeHealth | undefined;
-  try {
-    judge = getPublicJudgeHealth();
-  } catch (err) {
-    console.warn("[JUDGE-HEALTH] public judge health read failed:", err);
-  }
-  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled(), judge });
-  reply.code(report.statusCode);
-  return report.body;
-});
-
-// User data management — "me" routes require authentication
-app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
-  const userId = getUserId(request);
-  const [
-    tasks,
-    notes,
-    contacts,
-    reminders,
-    conversations,
-    calendarEvents,
-    driveFiles,
-    notifications,
-    automationConfig,
-    agentLogs,
-  ] = await Promise.all([
-    prisma.task.findMany({ where: { userId } }),
-    prisma.note.findMany({ where: { userId } }),
-    prisma.contact.findMany({ where: { userId } }),
-    prisma.reminder.findMany({ where: { userId } }),
-    prisma.conversation.findMany({
-      where: { userId },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    }),
-    prisma.calendarEvent.findMany({ where: { userId } }),
-    exportDriveFiles(userId),
-    prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 200 }),
-    prisma.automationConfig.findUnique({ where: { userId } }),
-    db.agentLog.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    }),
-  ]);
-  return {
-    tasks,
-    notes,
-    contacts,
-    reminders,
-    conversations,
-    calendarEvents,
-    driveFiles,
-    notifications,
-    automationConfig,
-    agentLogs,
-    exportedAt: new Date().toISOString(),
-  };
-});
-
-// A wipe is heavy (long transactions) and never needs repeating quickly.
-const WIPE_DATA_ROUTE = {
-  preHandler: requireAuth,
-  config: { rateLimit: { max: 3, timeWindow: "1 hour" } },
-};
-
-app.delete("/api/user/me/data", WIPE_DATA_ROUTE, async (request, reply) => {
-  const userId = getUserId(request);
-  // Exhaustive user-data wipe (keeps the account row), fenced against work
-  // already running for the user. See user-deletion.ts. 202: access is gone and
-  // the purge did not commit yet; the data-wipe sweep finishes it.
-  const outcome = await purgeAllUserData(userId);
-  return outcome === "purged"
-    ? reply.code(204).send()
-    : reply.code(202).send({ status: "pending" });
-});
-
-app.get("/api/notion/status", async () => ({
-  configured: !!process.env.NOTION_API_KEY,
-}));
-
-// Activity feed — recent items across all categories. requireAuth (not bare
-// getUserId) so the device-session and revocation checks apply like every
-// other authed surface, and an invalid token gets a 401 instead of a 500.
-app.get("/api/activity", { preHandler: requireAuth }, async (request) => {
-  const uid = getUserId(request);
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
-
-  const [tasks, notes, reminders, conversations] = await Promise.all([
-    prisma.task.findMany({
-      where: { userId: uid, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    }),
-    prisma.note.findMany({
-      where: { userId: uid, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    }),
-    prisma.reminder.findMany({
-      where: { userId: uid, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    }),
-    prisma.conversation.findMany({
-      where: { userId: uid, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { _count: { select: { messages: true } } },
-    }),
-  ]);
-
-  const activity = [
-    ...tasks.map((t: { title: string; status: string; createdAt: Date }) => ({
-      type: "task" as const,
-      title: t.title,
-      status: t.status,
-      createdAt: t.createdAt.toISOString(),
-    })),
-    ...notes.map((n: { title: string; createdAt: Date }) => ({
-      type: "note" as const,
-      title: n.title,
-      status: null,
-      createdAt: n.createdAt.toISOString(),
-    })),
-    ...reminders.map((r: { title: string; status: string; createdAt: Date }) => ({
-      type: "reminder" as const,
-      title: r.title,
-      status: r.status,
-      createdAt: r.createdAt.toISOString(),
-    })),
-    ...conversations.map(
-      (c: { title: string | null; _count: { messages: number }; createdAt: Date }) => ({
-        type: "conversation" as const,
-        title: c.title || "Chat",
-        status: `${c._count.messages} msgs`,
-        createdAt: c.createdAt.toISOString(),
-      }),
-    ),
-  ]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 20);
-
-  return { activity };
-});
-
-// WebSocket status endpoint (must be before listen). Ops/debug surface — no
-// client consumes it, and connection counts are deployment telemetry, so it
-// is admin-gated rather than public. The old unauthenticated version also
-// hardcoded a demo-user count (dev leftover).
-app.get("/api/ws/status", { preHandler: requireAdmin }, async (request) => ({
-  connected: getClientCount(),
-  connectedForMe: getClientCount(getUserId(request)),
-}));
+// Every route, behind the default-deny route-auth guard (register-api-routes.ts).
+// Declare new routes there, not here: one declared on `app` before this call
+// misses the guard's onRoute hook, and one declared after it is guarded but
+// invisible to the route-inventory test.
+await registerApiRoutes(app);
 
 app.addHook("onClose", async () => {
   await prisma.$disconnect();
