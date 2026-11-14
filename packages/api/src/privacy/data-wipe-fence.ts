@@ -133,6 +133,8 @@ export const UNFENCED_MODELS: Record<string, string> = {
   PmfResponse: "a survey answer the user typed, not derived from mail",
   StoragePurge: "the stored-object purge queue, written by the wipe itself",
   DataWipe: "the fence's own record",
+  DataExportAudit:
+    "an export the user started: format, outcome and counts, no mail data; the wipe deletes it",
   SendClaim:
     "an in-flight Send's claim (mail id + payload hash), released once its receipt is written; that receipt insert is fenced",
   OrgMembership: "organization membership, an account relationship with no mail data",

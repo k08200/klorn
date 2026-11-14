@@ -13,7 +13,7 @@
 -- length of the transaction; lock_timeout makes a deploy blocked by a long
 -- transaction fail fast instead of queueing writes behind it. If it fails on
 -- lock_timeout, Prisma records the migration as failed: run
--- `prisma migrate resolve --rolled-back 20261114100000_teams_v1_foundation`
+-- `prisma migrate resolve --rolled-back 20261114130000_teams_v1_foundation`
 -- and redeploy.
 --
 -- Row-level security in the forms of docs/rls-rollout.md: OrgMembership and

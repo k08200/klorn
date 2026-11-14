@@ -14,6 +14,7 @@ const TABLES = [
   "attentionFacts",
   "llmUsageLog",
   "mcpWriteAudit",
+  "dataExportAudit",
   "imapMovedMessage",
 ] as const;
 
@@ -31,6 +32,7 @@ const prismaMock = vi.hoisted(() => {
     attentionFacts: make(),
     llmUsageLog: make(),
     mcpWriteAudit: make(),
+    dataExportAudit: make(),
     imapMovedMessage: make(),
   };
 });

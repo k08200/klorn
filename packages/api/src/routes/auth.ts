@@ -49,6 +49,7 @@ import {
   teamModeEnabled,
   teamsOpenTo,
   unifiedHomeEnabled,
+  vaultExportOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
@@ -727,6 +728,10 @@ export function authRoutes(app: FastifyInstance) {
           // shows the organization pages only when this is true — the same
           // answer the /api/orgs routes give this user.
           teams: teamsOpenTo(user.id),
+          // Server-driven client flag (VAULT_EXPORT_ENABLED, cohort-aware): the
+          // web offers "Export as markdown" in Settings only when this is true
+          // — the same answer GET /api/user/me/vault/export gives this user.
+          vaultExport: vaultExportOpenTo(user.id),
         },
       });
     } catch {

@@ -7,6 +7,7 @@ import { API_BASE, authHeaders } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { PROFILE_KEY } from "./profile-save-plan";
 import { PANEL, SECTION_TITLE } from "./shared";
+import { VaultExportPanel } from "./vault-export-panel";
 
 const PINNED_CHATS_KEY = "klorn-pinned-chats";
 
@@ -117,6 +118,7 @@ export function DataSection() {
               {t("settings.export")}
             </Button>
           </div>
+          <VaultExportPanel />
         </div>
       </section>
 

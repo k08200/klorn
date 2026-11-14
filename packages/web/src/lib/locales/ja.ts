@@ -2991,6 +2991,21 @@ const ja: Record<string, string> = {
     "通知には Google カレンダーの接続が必要なため、設定しませんでした。",
   "smartActions.event.saveHint": "保存するには、タイトル・日付・開始時刻・長さを入力してください。",
   "smartActions.event.savedWhen": "{date} {time}（{zone}）",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Markdown で書き出す",
+  "vaultExport.desc":
+    "Klorn のデータを Markdown で書き出します。レーン、送信者、約束、メールごとのノートを含み、Obsidian などのエディタでそのまま開けます。",
+  "vaultExport.button": ".zip をダウンロード",
+  "vaultExport.includeText": "メール本文を含める",
+  "vaultExport.includeText.desc":
+    "Klorn がまだ保持しているメール本文を追加します。オフの場合、ノートには件名、プレビュー、Klorn の判断だけが入ります。",
+  "vaultExport.done": "Markdown の書き出しをダウンロードしました。",
+  "vaultExport.error.cooldown":
+    "最近書き出したばかりです。{minutes} 分後にもう一度お試しください。",
+  "vaultExport.error.inProgress": "書き出しはすでに実行中です。完了するまでお待ちください。",
+  "vaultExport.error.busy": "現在、書き出しが混み合っています。1 分ほどしてからお試しください。",
+  "vaultExport.error.unavailable": "このアカウントでは Markdown の書き出しを利用できません。",
+  "vaultExport.error.failed": "Markdown の書き出しに失敗しました。もう一度お試しください。",
 };
 
 export default ja;

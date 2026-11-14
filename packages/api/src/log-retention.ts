@@ -36,6 +36,8 @@ const FIRST_SWEEP_DELAY_MS = 5 * 60 * 1000; // let the server warm up first
 const DELETE_BATCH_SIZE = 5000;
 /** MCP write audit (A2a): a security/activity trail, not a learning input. */
 export const MCP_WRITE_AUDIT_RETENTION_DAYS = 90;
+/** Klorn Vault export audit rows (vault/vault-audit.ts): who exported, when, no content. */
+export const DATA_EXPORT_AUDIT_RETENTION_DAYS = 90;
 
 export interface LogRetentionPolicy {
   name: string;
@@ -138,6 +140,18 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.mcpWriteAudit.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // The user's data exports (Klorn Vault): format, outcome, counts. The
+    // export cooldown only reads the last few minutes; createdAt is indexed.
+    name: "dataExportAudit",
+    column: "createdAt",
+    days: DATA_EXPORT_AUDIT_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.dataExportAudit
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.dataExportAudit.deleteMany({ where: { id: { in: ids } } }),
   },
   {
     // Where trash/archive parked a Naver or iCloud message so undo can restore it
