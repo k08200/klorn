@@ -2108,6 +2108,8 @@ const fr: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Courrier Outlook et Microsoft 365.",
   "onboardingV2.tile.naver.scope": "Naver Mail, avec un mot de passe d'application.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, avec un mot de passe pour application.",
+  "onboardingV2.tile.preset.scope": "E-mail, avec un mot de passe d'application.",
+  "onboardingV2.tile.zoho.scope": "E-mail, avec l'accès IMAP activé dans Zoho.",
   "onboardingV2.tile.readOnly":
     "Lecture seule pour l'instant. Répondez, archivez et marquez comme lu dans l'application du fournisseur.",
   "onboardingV2.health.connected": "Connecté",
@@ -2119,6 +2121,9 @@ const fr: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "Connecter iCloud Mail",
   "onboardingV2.sheet.icloud.body":
     "Une connexion unique. Apple demande un mot de passe pour application, pas le mot de passe de votre compte Apple. Klorn le conserve chiffré.",
+  "onboardingV2.sheet.preset.title": "Connecter {provider}",
+  "onboardingV2.sheet.preset.body":
+    "Une connexion unique. Le formulaire indique le mot de passe que {provider} demande. Klorn le conserve chiffré.",
   "onboardingV2.sheet.close": "Fermer",
   "onboardingV2.sheet.done": "Terminé",
   "onboardingV2.return.okTitle": "{provider} connecté.",
@@ -2292,6 +2297,39 @@ const fr: Record<string, string> = {
   "imap.naver.advancedHost": "Avancé : hôte IMAP",
   "imap.naver.hostLabel": "Hôte IMAP",
   "imap.naver.connect": "Connecter Naver Mail",
+  "imapPreset.body":
+    "Connectez une boîte {provider} via IMAP. Klorn classe chaque message entrant dans les mêmes {count} voies que Gmail.",
+  "imapPreset.error.status": "Impossible de charger l'état de la connexion {provider}.",
+  "imapPreset.confirmDisconnect.title": "Déconnecter {email} ?",
+  "imapPreset.emailLabel": "Adresse e-mail",
+  "imapPreset.passwordLabel.app": "Mot de passe d'application",
+  "imapPreset.passwordLabel.zoho": "Mot de passe ou mot de passe spécifique à l'application",
+  "imapPreset.help.link": "Aide {provider}",
+  "imapPreset.help.stored": "Klorn le conserve chiffré, jamais en clair.",
+  "imapPreset.connect": "Connecter {provider}",
+  "imapPreset.error.auth":
+    "{provider} n'a pas accepté cette adresse et ce mot de passe. Suivez les étapes ci-dessus, puis réessayez.",
+  "imapPreset.error.tooManyAttempts":
+    "Trop de tentatives. Patientez quelques minutes, puis réessayez.",
+  "imapPreset.hint.daum":
+    "Activez IMAP dans les réglages de Daum Mail, configurez la validation en deux étapes, puis créez un mot de passe d'application. Votre mot de passe Daum ne fonctionnera pas ici.",
+  "imapPreset.hint.kakao":
+    "Activez IMAP dans les réglages de Kakao Mail, configurez la validation en deux étapes de votre compte Kakao, puis créez un mot de passe d'application. Votre mot de passe Kakao ne fonctionnera pas ici.",
+  "imapPreset.hint.yahoo":
+    "Créez un mot de passe d'application dans les réglages de sécurité de votre compte Yahoo. Votre mot de passe Yahoo ne fonctionnera pas ici.",
+  "imapPreset.hint.aol":
+    "Créez un mot de passe d'application dans les réglages de sécurité de votre compte AOL. Votre mot de passe AOL ne fonctionnera pas ici.",
+  "imapPreset.hint.fastmail":
+    "Créez un mot de passe d'application avec accès IMAP et SMTP dans les réglages de Fastmail (Privacy & Security). Votre mot de passe Fastmail ne fonctionnera pas ici.",
+  "imapPreset.hint.zoho":
+    "Activez l'accès IMAP dans les réglages de Zoho Mail. Si l'authentification à deux facteurs est active, créez un mot de passe spécifique à l'application et utilisez-le.",
+  "imapPreset.hint.zohopro":
+    "Pour les adresses d'organisations Zoho payantes (domaine personnalisé). Activez l'accès IMAP dans les réglages de Zoho Mail (votre administrateur devra peut-être l'autoriser). Si l'authentification à deux facteurs est active, utilisez un mot de passe spécifique à l'application.",
+  "imapGeneric.title": "Autres serveurs de messagerie (IMAP)",
+  "imapGeneric.body":
+    "Comptes connectés avec l'adresse d'un serveur de messagerie. Affichés pour information : cette page ne peut ni les reconnecter ni les supprimer.",
+  "imapGeneric.authRefused":
+    "Le serveur de messagerie a refusé la connexion enregistrée. Cette page ne peut pas reconnecter ce compte.",
   "telegram.error.status": "Impossible de charger l'état de la liaison Telegram.",
   "telegram.error.link": "Impossible de lancer la liaison Telegram.",
   "telegram.error.disconnect": "Impossible de déconnecter Telegram.",

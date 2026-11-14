@@ -6,12 +6,14 @@
  * The grid shows only what GET /api/providers/available offers. Pressing a
  * tile runs the connect flow Settings already uses, unchanged: the OAuth start
  * helpers for Google and Microsoft, and Settings' own credential forms (in a
- * Sheet) for Naver and iCloud. No credential is handled in this file.
+ * Sheet) for Naver, iCloud and the app-password presets — each provider its
+ * own form, posting to its own routes. No credential is handled in this file.
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { ICloudImapSection } from "../../../components/icloud-imap-section";
+import { ImapPresetSection } from "../../../components/imap-preset-section";
 import {
   isEntitlementRefusal,
   MailAccountProGate,
@@ -23,6 +25,7 @@ import { Skeleton, SkeletonGroup } from "../../../components/ui/skeleton";
 import { startGoogleConnect, startLinkInbox, startLinkOutlookInbox } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
+import { imapPresetFor } from "../../../lib/imap-presets";
 import { isNativeShell } from "../../../lib/native/shell";
 import {
   type ConnectResult,
@@ -32,22 +35,37 @@ import {
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import type { ConnectedAccountsState } from "../../../lib/use-connected-accounts";
-import { canAddMailAccount, hasPrimaryGoogle, type ProviderTile, providerTiles } from "./model";
+import {
+  canAddMailAccount,
+  type FormSheet,
+  formSheetFor,
+  hasPrimaryGoogle,
+  type ProviderTile,
+  providerTiles,
+} from "./model";
 import { ProviderTileCard } from "./provider-tile";
 import { ReturnNotice } from "./return-notice";
 import { useProviderAvailability } from "./use-provider-availability";
 
-type FormProvider = "NAVER" | "ICLOUD";
+type Translate = (key: string, vars?: Record<string, string>) => string;
 
-const SHEET_TITLE_KEY: ReadonlyMap<FormProvider, string> = new Map([
-  ["NAVER", "onboardingV2.sheet.naver.title"],
-  ["ICLOUD", "onboardingV2.sheet.icloud.title"],
-]);
-
-const SHEET_BODY_KEY: ReadonlyMap<FormProvider, string> = new Map([
-  ["NAVER", "onboardingV2.sheet.naver.body"],
-  ["ICLOUD", "onboardingV2.sheet.icloud.body"],
-]);
+/** The sheet's title and description: Naver and iCloud have their own, a preset names itself. */
+function sheetCopy(sheet: FormSheet | null, t: Translate): { title: string; body: string } {
+  const preset = sheet ? imapPresetFor(sheet) : null;
+  if (preset) {
+    return {
+      title: t("onboardingV2.sheet.preset.title", { provider: preset.label }),
+      body: t("onboardingV2.sheet.preset.body", { provider: preset.label }),
+    };
+  }
+  if (sheet === "ICLOUD") {
+    return {
+      title: t("onboardingV2.sheet.icloud.title"),
+      body: t("onboardingV2.sheet.icloud.body"),
+    };
+  }
+  return { title: t("onboardingV2.sheet.naver.title"), body: t("onboardingV2.sheet.naver.body") };
+}
 
 interface ConnectStepProps {
   accounts: ConnectedAccountsState;
@@ -64,7 +82,7 @@ export function ConnectStep(props: ConnectStepProps) {
   const { googleNeedsReconnect, user } = useAuth();
   const queryClient = useQueryClient();
   const availability = useProviderAvailability();
-  const [sheet, setSheet] = useState<FormProvider | null>(null);
+  const [sheet, setSheet] = useState<FormSheet | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   // The server refused a start with the second-account gate.
   const [proRefused, setProRefused] = useState(false);
@@ -119,11 +137,14 @@ export function ConnectStep(props: ConnectStepProps) {
     if (tile.kind === "form") {
       setStartError(null);
       setProRefused(false);
-      setSheet(tile.provider === "ICLOUD" ? "ICLOUD" : "NAVER");
+      // Each form provider opens its own sheet; one this client has no form for opens none.
+      setSheet(formSheetFor(tile.provider));
       return;
     }
     oauth.mutate(tile);
   };
+  const sheetPreset = sheet ? imapPresetFor(sheet) : null;
+  const copy = sheetCopy(sheet, t);
 
   const closeSheet = () => {
     setSheet(null);
@@ -210,8 +231,8 @@ export function ConnectStep(props: ConnectStepProps) {
       <Sheet
         open={sheet !== null}
         onClose={closeSheet}
-        title={t((sheet && SHEET_TITLE_KEY.get(sheet)) ?? "onboardingV2.sheet.naver.title")}
-        description={t((sheet && SHEET_BODY_KEY.get(sheet)) ?? "onboardingV2.sheet.naver.body")}
+        title={copy.title}
+        description={copy.body}
         closeLabel={t("onboardingV2.sheet.close")}
         footer={
           <Button variant="secondary" onClick={closeSheet}>
@@ -221,6 +242,14 @@ export function ConnectStep(props: ConnectStepProps) {
       >
         {sheet === "NAVER" && <NaverImapSection embedded onChanged={refreshAccounts} />}
         {sheet === "ICLOUD" && <ICloudImapSection embedded onChanged={refreshAccounts} />}
+        {sheetPreset && (
+          <ImapPresetSection
+            key={sheetPreset.provider}
+            preset={sheetPreset}
+            embedded
+            onChanged={refreshAccounts}
+          />
+        )}
       </Sheet>
     </section>
   );

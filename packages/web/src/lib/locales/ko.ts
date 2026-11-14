@@ -2044,6 +2044,8 @@ const ko: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook 및 Microsoft 365 메일.",
   "onboardingV2.tile.naver.scope": "네이버 메일. 앱 비밀번호로 연결합니다.",
   "onboardingV2.tile.icloud.scope": "iCloud 메일. 앱 암호로 연결합니다.",
+  "onboardingV2.tile.preset.scope": "메일. 앱 비밀번호로 연결합니다.",
+  "onboardingV2.tile.zoho.scope": "메일. Zoho에서 IMAP 접근을 켜고 연결합니다.",
   "onboardingV2.tile.readOnly":
     "현재는 읽기 전용입니다. 답장, 보관, 읽음 표시는 해당 메일 서비스에서 하세요.",
   "onboardingV2.health.connected": "연결됨",
@@ -2055,6 +2057,9 @@ const ko: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "iCloud 메일 연결",
   "onboardingV2.sheet.icloud.body":
     "한 번만 연결하면 됩니다. Apple 계정 비밀번호가 아니라 앱 암호가 필요합니다. Klorn은 이를 암호화해 저장합니다.",
+  "onboardingV2.sheet.preset.title": "{provider} 연결",
+  "onboardingV2.sheet.preset.body":
+    "한 번만 연결하면 됩니다. {provider}에 필요한 비밀번호는 아래 양식에 안내되어 있습니다. Klorn은 이를 암호화해 저장합니다.",
   "onboardingV2.sheet.close": "닫기",
   "onboardingV2.sheet.done": "완료",
   "onboardingV2.return.okTitle": "{provider} 연결 완료.",
@@ -2220,6 +2225,38 @@ const ko: Record<string, string> = {
   "imap.naver.advancedHost": "고급: IMAP 호스트",
   "imap.naver.hostLabel": "IMAP 호스트",
   "imap.naver.connect": "네이버 메일 연결",
+  "imapPreset.body":
+    "IMAP으로 {provider} 메일함을 연결합니다. Klorn은 들어오는 모든 메일을 Gmail과 같은 {count}개 레인으로 분류합니다.",
+  "imapPreset.error.status": "{provider} 연결 상태를 불러오지 못했습니다.",
+  "imapPreset.confirmDisconnect.title": "{email} 연결을 해제할까요?",
+  "imapPreset.emailLabel": "이메일 주소",
+  "imapPreset.passwordLabel.app": "앱 비밀번호",
+  "imapPreset.passwordLabel.zoho": "비밀번호 또는 애플리케이션 전용 비밀번호",
+  "imapPreset.help.link": "{provider} 도움말",
+  "imapPreset.help.stored": "Klorn은 이를 암호화해 저장하며 평문은 저장하지 않습니다.",
+  "imapPreset.connect": "{provider} 연결",
+  "imapPreset.error.auth":
+    "{provider}에서 이 주소와 비밀번호를 받지 않았습니다. 위 안내대로 설정한 뒤 다시 시도하세요.",
+  "imapPreset.error.tooManyAttempts": "시도 횟수가 너무 많습니다. 몇 분 뒤 다시 시도하세요.",
+  "imapPreset.hint.daum":
+    "Daum 메일 설정에서 IMAP을 켜고 2단계 인증을 설정한 뒤 앱 비밀번호를 만드세요. Daum 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.kakao":
+    "카카오메일 설정에서 IMAP을 켜고 카카오계정에 2단계 인증을 설정한 뒤 앱 비밀번호를 만드세요. 카카오계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.yahoo":
+    "Yahoo 계정 보안 설정에서 앱 비밀번호를 만드세요. Yahoo 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.aol":
+    "AOL 계정 보안 설정에서 앱 비밀번호를 만드세요. AOL 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.fastmail":
+    "Fastmail 설정(Privacy & Security)에서 IMAP과 SMTP 접근 권한이 있는 앱 비밀번호를 만드세요. Fastmail 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.zoho":
+    "Zoho Mail 설정에서 IMAP 접근을 켜세요. 2단계 인증을 쓰고 있다면 애플리케이션 전용 비밀번호를 만들어 입력하세요.",
+  "imapPreset.hint.zohopro":
+    "유료 Zoho 조직(자체 도메인) 주소용입니다. Zoho Mail 설정에서 IMAP 접근을 켜세요(관리자 허용이 필요할 수 있습니다). 2단계 인증을 쓰고 있다면 애플리케이션 전용 비밀번호를 입력하세요.",
+  "imapGeneric.title": "기타 메일 서버 (IMAP)",
+  "imapGeneric.body":
+    "메일 서버 주소로 연결한 계정입니다. 참고용으로만 표시하며, 이 페이지에서는 다시 연결하거나 삭제할 수 없습니다.",
+  "imapGeneric.authRefused":
+    "메일 서버가 저장된 로그인을 거부했습니다. 이 페이지에서는 다시 연결할 수 없습니다.",
   "telegram.error.status": "Telegram 연결 상태를 불러오지 못했습니다.",
   "telegram.error.link": "Telegram 연결을 시작하지 못했습니다.",
   "telegram.error.disconnect": "Telegram 연결을 해제하지 못했습니다.",

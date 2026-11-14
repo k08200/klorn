@@ -1937,6 +1937,8 @@ const zh: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook 和 Microsoft 365 邮件。",
   "onboardingV2.tile.naver.scope": "Naver 邮箱，使用应用密码连接。",
   "onboardingV2.tile.icloud.scope": "iCloud 邮件，使用 App 专用密码连接。",
+  "onboardingV2.tile.preset.scope": "邮件，使用应用密码连接。",
+  "onboardingV2.tile.zoho.scope": "邮件，需在 Zoho 中开启 IMAP 访问。",
   "onboardingV2.tile.readOnly": "目前为只读。回复、归档和标记已读请在该邮箱自己的应用中进行。",
   "onboardingV2.health.connected": "已连接",
   "onboardingV2.health.syncing": "同步中",
@@ -1947,6 +1949,9 @@ const zh: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "连接 iCloud 邮件",
   "onboardingV2.sheet.icloud.body":
     "只需连接一次。Apple 要求使用 App 专用密码，而不是你的 Apple 账户密码。Klorn 会加密保存。",
+  "onboardingV2.sheet.preset.title": "连接 {provider}",
+  "onboardingV2.sheet.preset.body":
+    "只需连接一次。表单会说明 {provider} 需要哪种密码。Klorn 会加密保存。",
   "onboardingV2.sheet.close": "关闭",
   "onboardingV2.sheet.done": "完成",
   "onboardingV2.return.okTitle": "{provider} 已连接。",
@@ -2098,6 +2103,33 @@ const zh: Record<string, string> = {
   "imap.naver.advancedHost": "高级：IMAP 主机",
   "imap.naver.hostLabel": "IMAP 主机",
   "imap.naver.connect": "连接 Naver 邮件",
+  "imapPreset.body":
+    "通过 IMAP 连接 {provider} 邮箱。Klorn 会把每封来信分到与 Gmail 相同的 {count} 个通道中。",
+  "imapPreset.error.status": "无法加载 {provider} 的连接状态。",
+  "imapPreset.confirmDisconnect.title": "断开 {email} 的连接？",
+  "imapPreset.emailLabel": "邮箱地址",
+  "imapPreset.passwordLabel.app": "应用密码",
+  "imapPreset.passwordLabel.zoho": "密码或应用专用密码",
+  "imapPreset.help.link": "{provider} 帮助",
+  "imapPreset.help.stored": "Klorn 会加密保存，从不存储明文。",
+  "imapPreset.connect": "连接 {provider}",
+  "imapPreset.error.auth": "{provider} 未接受该地址和密码。请按上面的步骤操作后再试。",
+  "imapPreset.error.tooManyAttempts": "尝试次数过多。请等几分钟后再试。",
+  "imapPreset.hint.daum":
+    "在 Daum 邮箱设置中开启 IMAP，设置两步验证，然后创建应用密码。Daum 账户密码无法在此使用。",
+  "imapPreset.hint.kakao":
+    "在 Kakao 邮箱设置中开启 IMAP，为 Kakao 账户设置两步验证，然后创建应用密码。Kakao 账户密码无法在此使用。",
+  "imapPreset.hint.yahoo": "在 Yahoo 账户的安全设置中创建应用密码。Yahoo 账户密码无法在此使用。",
+  "imapPreset.hint.aol": "在 AOL 账户的安全设置中创建应用密码。AOL 账户密码无法在此使用。",
+  "imapPreset.hint.fastmail":
+    "在 Fastmail 设置（Privacy & Security）中创建具有 IMAP 和 SMTP 访问权限的应用密码。Fastmail 账户密码无法在此使用。",
+  "imapPreset.hint.zoho":
+    "在 Zoho Mail 设置中开启 IMAP 访问。如果开启了双重认证，请创建应用专用密码并在此输入。",
+  "imapPreset.hint.zohopro":
+    "适用于付费 Zoho 组织（自有域名）地址。在 Zoho Mail 设置中开启 IMAP 访问（可能需要管理员允许）。如果开启了双重认证，请使用应用专用密码。",
+  "imapGeneric.title": "其他邮件服务器（IMAP）",
+  "imapGeneric.body": "通过邮件服务器地址连接的账户。仅供查看：此页面无法重新连接或移除它们。",
+  "imapGeneric.authRefused": "邮件服务器拒绝了已保存的登录信息。此页面无法重新连接。",
   "telegram.error.status": "无法加载 Telegram 关联状态。",
   "telegram.error.link": "无法开始关联 Telegram。",
   "telegram.error.disconnect": "无法断开 Telegram。",

@@ -2056,6 +2056,8 @@ const en: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook and Microsoft 365 mail.",
   "onboardingV2.tile.naver.scope": "Naver Mail, with an app password.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, with an app-specific password.",
+  "onboardingV2.tile.preset.scope": "Mail, with an app password.",
+  "onboardingV2.tile.zoho.scope": "Mail, with IMAP access turned on in Zoho.",
   "onboardingV2.tile.readOnly":
     "Read-only for now. Reply, archive and mark as read in the provider's own app.",
   "onboardingV2.health.connected": "Connected",
@@ -2067,6 +2069,9 @@ const en: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "Connect iCloud Mail",
   "onboardingV2.sheet.icloud.body":
     "A one-time connection. Apple asks for an app-specific password, not your Apple Account password. Klorn stores it encrypted.",
+  "onboardingV2.sheet.preset.title": "Connect {provider}",
+  "onboardingV2.sheet.preset.body":
+    "A one-time connection. The form says which password {provider} asks for. Klorn stores it encrypted.",
   "onboardingV2.sheet.close": "Close",
   "onboardingV2.sheet.done": "Done",
   "onboardingV2.return.okTitle": "{provider} connected.",
@@ -2233,6 +2238,38 @@ const en: Record<string, string> = {
   "imap.naver.advancedHost": "Advanced: IMAP host",
   "imap.naver.hostLabel": "IMAP host",
   "imap.naver.connect": "Connect Naver Mail",
+  "imapPreset.body":
+    "Connect a {provider} mailbox via IMAP. Klorn sorts every incoming message into the same {count} lanes as Gmail.",
+  "imapPreset.error.status": "Could not load {provider} connection status.",
+  "imapPreset.confirmDisconnect.title": "Disconnect {email}?",
+  "imapPreset.emailLabel": "Email address",
+  "imapPreset.passwordLabel.app": "App password",
+  "imapPreset.passwordLabel.zoho": "Password or application-specific password",
+  "imapPreset.help.link": "{provider} help",
+  "imapPreset.help.stored": "Klorn stores it encrypted, never the plaintext.",
+  "imapPreset.connect": "Connect {provider}",
+  "imapPreset.error.auth":
+    "{provider} did not accept that address and password. Follow the steps above, then try again.",
+  "imapPreset.error.tooManyAttempts": "Too many attempts. Wait a few minutes, then try again.",
+  "imapPreset.hint.daum":
+    "Turn on IMAP in Daum Mail settings, set up two-step verification, then create an app password. Your Daum password will not work here.",
+  "imapPreset.hint.kakao":
+    "Turn on IMAP in Kakao Mail settings, set up two-step verification for your Kakao account, then create an app password. Your Kakao password will not work here.",
+  "imapPreset.hint.yahoo":
+    "Create an app password in your Yahoo account's security settings. Your Yahoo password will not work here.",
+  "imapPreset.hint.aol":
+    "Create an app password in your AOL account's security settings. Your AOL password will not work here.",
+  "imapPreset.hint.fastmail":
+    "Create an app password with IMAP and SMTP access in Fastmail settings (Privacy & Security). Your Fastmail password will not work here.",
+  "imapPreset.hint.zoho":
+    "Turn on IMAP access in Zoho Mail settings. If two-factor authentication is on, create an application-specific password and use that.",
+  "imapPreset.hint.zohopro":
+    "For paid Zoho organization (custom-domain) addresses. Turn on IMAP access in Zoho Mail settings (your admin may need to allow it). If two-factor authentication is on, use an application-specific password.",
+  "imapGeneric.title": "Other mail servers (IMAP)",
+  "imapGeneric.body":
+    "Accounts connected with a mail server address. Shown for reference: this page cannot reconnect or remove them.",
+  "imapGeneric.authRefused":
+    "The mail server refused the saved sign-in. This page cannot reconnect it.",
   "telegram.error.status": "Could not load Telegram link status.",
   "telegram.error.link": "Could not start Telegram linking.",
   "telegram.error.disconnect": "Could not disconnect Telegram.",
