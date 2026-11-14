@@ -14,11 +14,21 @@
  * rows written while Teams was open must still age out if the flag is turned
  * off. With no organizations the table is empty and a run is one indexed
  * query a day. Teams v1 shipped on 2026-11-14, so no row can reach the window
- * before 2027-12-19.
+ * before 2027-12-19. ORG_AUDIT_RETENTION_DISABLED=true pauses it (a legal hold
+ * or a billing dispute that needs older rows); the scheduler then reports
+ * itself disabled-by-design to the heartbeat registry.
+ *
+ * Reads and deletes run in the system scope (withSystem): OrgAuditEvent has
+ * only the bypass policy, so once RLS binds a tenant-scoped sweep would see no
+ * rows and report a clean run while deleting nothing.
  */
 
-import { prisma } from "../db.js";
-import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
+import { withSystem } from "../db-tenant.js";
+import {
+  markSchedulerDisabled,
+  recordSchedulerTick,
+  registerScheduler,
+} from "../scheduler-heartbeat.js";
 import { createSchedulerLease, type SchedulerLease } from "../scheduler-lease.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
@@ -31,6 +41,18 @@ const MAX_BATCHES_PER_RUN = 50;
 export const ORG_AUDIT_PURGE_INTERVAL_MS = DAY_MS;
 const FIRST_RUN_DELAY_MS = 10 * 60 * 1000;
 const SCHEDULER = "org-audit-retention";
+/**
+ * Consecutive lease refusals that alert. The lease's own alert needs ~10
+ * minutes of skipped ticks, which a daily job never accumulates, so a lease
+ * store that keeps failing would otherwise stop retention without a word. Two
+ * daily refusals in a row are not a deploy overlap.
+ */
+const SKIP_ALERT_AFTER = 2;
+
+export function isOrgAuditRetentionDisabled(): boolean {
+  const raw = (process.env.ORG_AUDIT_RETENTION_DISABLED ?? "").trim().toLowerCase();
+  return raw === "true" || raw === "1";
+}
 
 export function orgAuditCutoff(now: Date): Date {
   return new Date(now.getTime() - ORG_AUDIT_RETENTION_DAYS * DAY_MS);
@@ -56,29 +78,40 @@ export async function purgeExpiredOrgAuditEvents(
   const cutoff = orgAuditCutoff(now);
   let deleted = 0;
   for (let batch = 0; batch < maxBatches; batch++) {
-    const rows = await prisma.orgAuditEvent.findMany({
+    const page = await purgePage(cutoff, batchSize);
+    deleted += page.deleted;
+    if (page.found < batchSize) return { deleted, complete: true };
+  }
+  return { deleted, complete: false };
+}
+
+/** One page, in its own short system-scope transaction. */
+function purgePage(cutoff: Date, batchSize: number): Promise<{ found: number; deleted: number }> {
+  return withSystem(async (tx) => {
+    const rows = await tx.orgAuditEvent.findMany({
       where: { createdAt: { lt: cutoff } },
       select: { id: true },
       orderBy: { createdAt: "asc" },
       take: batchSize,
     });
-    if (rows.length === 0) return { deleted, complete: true };
-    const { count } = await prisma.orgAuditEvent.deleteMany({
+    if (rows.length === 0) return { found: 0, deleted: 0 };
+    const { count } = await tx.orgAuditEvent.deleteMany({
       where: { id: { in: rows.map((row) => row.id) }, createdAt: { lt: cutoff } },
     });
-    deleted += count;
-    if (rows.length < batchSize) return { deleted, complete: true };
-  }
-  return { deleted, complete: false };
+    return { found: rows.length, deleted: count };
+  });
 }
 
 export interface RetentionTickDeps {
   lease: Pick<SchedulerLease, "runExclusive">;
   purge: (now: Date) => Promise<PurgeResult>;
   now: () => Date;
+  /** Lease refusals in a row, across ticks of this process. */
+  skips: { inARow: number };
 }
 
 let defaultLease: SchedulerLease | null = null;
+const processSkips = { inARow: 0 };
 
 function defaults(): RetentionTickDeps {
   defaultLease ??= createSchedulerLease({ name: SCHEDULER, logPrefix: "[ORG-AUDIT]" });
@@ -86,14 +119,38 @@ function defaults(): RetentionTickDeps {
     lease: defaultLease,
     purge: (now) => purgeExpiredOrgAuditEvents(now),
     now: () => new Date(),
+    skips: processSkips,
   };
 }
 
+function reportRun(done: PurgeResult | undefined): void {
+  if (!done) return;
+  if (done.deleted > 0) {
+    console.log(`[ORG-AUDIT] deleted ${done.deleted} audit rows past ${ORG_AUDIT_RETENTION_DAYS}d`);
+  }
+  if (!done.complete) {
+    captureError(new Error("org audit retention left a backlog; it continues next run"), {
+      tags: { scope: "org-audit-retention.backlog" },
+      extra: { deleted: done.deleted },
+    });
+  }
+}
+
+/** Count a refusal; alert once when a run of them reaches SKIP_ALERT_AFTER. */
+function reportSkip(skips: { inARow: number }): void {
+  skips.inARow += 1;
+  if (skips.inARow !== SKIP_ALERT_AFTER) return;
+  captureError(new Error(`org audit retention skipped ${skips.inARow} daily runs in a row`), {
+    tags: { scope: "org-audit-retention.skipped" },
+  });
+}
+
 /**
- * One scheduled run. "skipped" when another instance holds the lease (it does
- * the work, so this one is still alive and records its heartbeat); "failed"
- * records no heartbeat, so a sweep that keeps failing goes stale in the health
- * check as well as reaching Sentry.
+ * One scheduled run. "skipped" when the lease is refused: another instance
+ * holds it (it does the work, so this one is alive and records its heartbeat)
+ * or the acquire failed, which repeated refusals alert on. "failed" records no
+ * heartbeat, so a sweep that keeps failing goes stale in the health check as
+ * well as reaching Sentry.
  */
 export async function orgAuditRetentionTick(
   deps: RetentionTickDeps = defaults(),
@@ -104,19 +161,13 @@ export async function orgAuditRetentionTick(
       run.result = await deps.purge(deps.now());
     });
     recordSchedulerTick(SCHEDULER);
-    const done = run.result;
-    if (done && done.deleted > 0) {
-      console.log(
-        `[ORG-AUDIT] deleted ${done.deleted} audit rows past ${ORG_AUDIT_RETENTION_DAYS}d`,
-      );
+    if (!ran) {
+      reportSkip(deps.skips);
+      return "skipped";
     }
-    if (done && !done.complete) {
-      captureError(new Error("org audit retention left a backlog; it continues next run"), {
-        tags: { scope: "org-audit-retention.backlog" },
-        extra: { deleted: done.deleted },
-      });
-    }
-    return ran ? "ran" : "skipped";
+    deps.skips.inARow = 0;
+    reportRun(run.result);
+    return "ran";
   } catch (err) {
     console.error("[ORG-AUDIT] retention run failed:", err);
     captureError(err, { tags: { scope: "org-audit-retention" } });
@@ -133,6 +184,11 @@ function tick(): void {
 
 export function startOrgAuditRetentionScheduler(): void {
   if (intervalId || firstRunTimer) return;
+  if (isOrgAuditRetentionDisabled()) {
+    console.log("[ORG-AUDIT] retention paused (ORG_AUDIT_RETENTION_DISABLED is set)");
+    markSchedulerDisabled(SCHEDULER);
+    return;
+  }
   registerScheduler(SCHEDULER, ORG_AUDIT_PURGE_INTERVAL_MS);
   firstRunTimer = setTimeout(
     newWork(() => {

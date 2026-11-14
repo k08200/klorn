@@ -16,6 +16,7 @@ vi.mock("../db.js", () => ({
   db: { orgMembership: { findUnique: m.findUnique } },
 }));
 
+import { loadRelationshipSnapshot } from "../judge/v3/relationship-loader.js";
 import { orgCompanyDomainsFor } from "../org/org-domains.js";
 
 const ENV = ["TEAMS_ENABLED", "ROLLOUT_COHORT_USER_IDS"] as const;
@@ -81,5 +82,38 @@ describe("orgCompanyDomainsFor", () => {
     process.env.TEAMS_ENABLED = "true";
     m.findUnique.mockRejectedValue(new Error("db down"));
     await expect(orgCompanyDomainsFor("u1")).rejects.toThrow("db down");
+  });
+});
+
+describe("the live relationship loader (prismaRelationshipDeps) with the flag off", () => {
+  it("never queries the organization and produces no org fact", async () => {
+    delete process.env.TEAMS_ENABLED;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // The other lookups hit tables this mock does not have: each fails into
+    // "unknown", which is fine here — only the org read is under test.
+    const snapshot = await loadRelationshipSnapshot({
+      userId: "u1",
+      senderAddress: "kim@acme.com",
+      userAddresses: ["me@gmail.com"],
+      senderAuthenticated: true,
+    });
+    warn.mockRestore();
+    expect(m.findUnique).not.toHaveBeenCalled();
+    expect(Object.keys(snapshot)).not.toContain("orgCompanyDomain");
+  });
+
+  it("flag on: the same loader reads the member's organization once", async () => {
+    process.env.TEAMS_ENABLED = "true";
+    m.findUnique.mockResolvedValue({ org: { companyDomains: ["acme.com"] } });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const snapshot = await loadRelationshipSnapshot({
+      userId: "u1",
+      senderAddress: "kim@acme.com",
+      userAddresses: ["me@gmail.com"],
+      senderAuthenticated: true,
+    });
+    warn.mockRestore();
+    expect(m.findUnique).toHaveBeenCalledTimes(1);
+    expect(snapshot.orgCompanyDomain).toBe(true);
   });
 });

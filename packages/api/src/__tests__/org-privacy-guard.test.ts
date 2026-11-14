@@ -120,12 +120,15 @@ describe("the judge's one read of the organization (company domains)", () => {
   it("judge code imports only orgCompanyDomainsFor from the org code", () => {
     const imports: string[] = [];
     for (const { path, text } of sourcesUnder(join(srcDir, "judge"))) {
-      for (const [statement] of text.matchAll(/import[^;]*from\s+"[./]*org\/[^"]+";/g)) {
+      // Static imports, re-exports and dynamic import() of anything under org/.
+      for (const [statement] of text.matchAll(
+        /(?:(?:import|export)[^;]*from\s+|import\(\s*)"[./]*org\/[^"]+"/g,
+      )) {
         imports.push(`${path.slice(srcDir.length)}: ${statement.replace(/\s+/g, " ")}`);
       }
     }
     expect(imports).toEqual([
-      '/judge/v3/relationship-loader.ts: import { orgCompanyDomainsFor } from "../../org/org-domains.js";',
+      '/judge/v3/relationship-loader.ts: import { orgCompanyDomainsFor } from "../../org/org-domains.js"',
     ]);
   });
 

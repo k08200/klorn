@@ -59,9 +59,12 @@ export function importancePrior(rel: RelationshipSnapshot | null, now: Date): nu
       w.sent * sentFeature(rel.sentCount) +
       w.recency * recencyFeature(rel.lastSentAt, now) +
       w.replyLatency * replyLatencyFeature(rel.medianReplyLatencyMs) +
-      // The organization's company domains (Klorn Teams) count as the same
-      // signal, never twice: an org fact is no more trust than a shared domain.
-      w.sameOrg * (rel.sameOrgDomain === true || rel.orgCompanyDomain === true ? 1 : 0) +
+      // Not orgCompanyDomain (Klorn Teams): those domains are owner-typed and
+      // unverified, and any lift above `unknown` makes a held item rank first
+      // (ranking.ts heldFirst), so a stranger on a domain an owner listed
+      // could take the top of every member's list. A raw fact until verified
+      // domains or P5's learned weights exist.
+      w.sameOrg * (rel.sameOrgDomain === true ? 1 : 0) +
       w.coAttendance * ((rel.coAttendanceNext14d ?? 0) > 0 ? 1 : 0) -
       IMPORTANCE_PRIOR.dismissWeight * dismiss,
   );

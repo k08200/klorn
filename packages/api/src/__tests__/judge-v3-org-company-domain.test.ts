@@ -6,9 +6,11 @@
  *   snapshot then has no orgCompanyDomain key at all, so every judge input is
  *   exactly what it was before this fact existed (stored rows, replay, hashes).
  * - Spoofing: true only for mail that passed DMARC, like sameOrgDomain; a
- *   public mailbox domain never matches, whatever the admin typed.
- * - It cannot move a lane or bypass the phishing / first-contact floors: every
- *   policy version decides the same lane with and without it.
+ *   public mailbox domain, a cc second-level suffix or a multi-tenant hosting
+ *   parent never matches, whatever the owner typed.
+ * - A raw fact with no hand weight: it moves no lane, no floor, no trust bar
+ *   and no importance (a lift above `unknown` would make a held item rank
+ *   first), so every policy version decides exactly as without it.
  * - Only a boolean reaches the judge: the domain list, the org and its members
  *   never do.
  */
@@ -88,6 +90,39 @@ describe("buildRelationshipSnapshot — orgCompanyDomain", () => {
       input({ senderAddress: "kim@gmail.com", orgCompanyDomains: ["gmail.com", "acme.com"] }),
     );
     expect(snapshot.orgCompanyDomain).toBe(false);
+  });
+
+  it("ignores owner-typed domains that stand for strangers (free mail, cc suffixes, hosting parents)", () => {
+    for (const domain of [
+      "yahoo.co.jp",
+      "hotmail.co.uk",
+      "co.uk",
+      "com.au",
+      "co.kr",
+      "or.kr",
+      "onmicrosoft.com",
+      "github.io",
+      "vercel.app",
+    ]) {
+      const snapshot = buildRelationshipSnapshot(
+        input({ senderAddress: `kim@tenant.${domain}`, orgCompanyDomains: [domain] }),
+      );
+      expect(Object.keys(snapshot), domain).not.toContain("orgCompanyDomain");
+    }
+  });
+
+  it("is not fooled by a display name, a malformed domain or a lookalike", () => {
+    const fact = (senderAddress: string) =>
+      buildRelationshipSnapshot(input({ senderAddress, orgCompanyDomains: ["acme.com"] }))
+        .orgCompanyDomain;
+    expect(fact('"kim@acme.com" <evil@x.io>')).toBe(false);
+    expect(fact("kim@acme.com <evil@x.io>")).toBe(false);
+    expect(fact("x@evil.io#.acme.com")).toBe(false);
+    expect(fact("x@a..acme.com")).toBe(false);
+    expect(fact("x@xn--acme-0za.com")).toBe(false);
+    expect(fact("x@xacme.com")).toBe(false);
+    // A punycode subdomain of the company is the company.
+    expect(fact("x@xn--bcher-kva.acme.com")).toBe(true);
   });
 
   it("an unparseable sender is unknown, with no org fact", () => {
@@ -205,22 +240,22 @@ describe("loadRelationshipSnapshot — the org fact is the only difference", () 
   });
 });
 
-describe("importance — no more trust than the personal same-domain signal", () => {
+describe("importance and trust — the org fact has no hand weight", () => {
   const plain: RelationshipSnapshot = { ...UNKNOWN_RELATIONSHIP, sentCount: 0 };
 
-  it("lifts importance exactly as sameOrgDomain does, and never twice", () => {
-    const sameOrg = importancePrior({ ...plain, sameOrgDomain: true }, NOW);
-    const orgFact = importancePrior({ ...plain, orgCompanyDomain: true }, NOW);
-    const both = importancePrior({ ...plain, sameOrgDomain: true, orgCompanyDomain: true }, NOW);
-    expect(orgFact).toBeCloseTo(IMPORTANCE_PRIOR.unknown + IMPORTANCE_PRIOR.weights.sameOrg);
-    expect(orgFact).toBe(sameOrg);
-    expect(both).toBe(sameOrg);
-    expect(importancePrior({ ...plain, orgCompanyDomain: null }, NOW)).toBe(
-      importancePrior(plain, NOW),
+  it("never lifts importance: a stranger on an owner-listed domain stays at the unknown prior", () => {
+    for (const orgCompanyDomain of [true, false, null]) {
+      expect(importancePrior({ ...plain, orgCompanyDomain }, NOW)).toBe(
+        importancePrior(plain, NOW),
+      );
+    }
+    expect(importancePrior({ ...plain, orgCompanyDomain: true }, NOW)).toBe(
+      IMPORTANCE_PRIOR.unknown,
     );
-    expect(importancePrior({ ...plain, orgCompanyDomain: false }, NOW)).toBe(
-      importancePrior(plain, NOW),
-    );
+    // The personal same-domain signal keeps its weight.
+    expect(
+      importancePrior({ ...plain, sameOrgDomain: true, orgCompanyDomain: true }, NOW),
+    ).toBeCloseTo(IMPORTANCE_PRIOR.unknown + IMPORTANCE_PRIOR.weights.sameOrg);
   });
 
   it("is not trust: the slot reserve and the first-contact bar ignore it", () => {
@@ -323,6 +358,9 @@ describe("policy — the org fact never moves a lane or a floor", () => {
     expect(reasonOf({ ...known, orgCompanyDomain: true })?.params).toMatchObject({
       orgCompanyDomain: true,
     });
+    expect(reasonOf({ ...known, orgCompanyDomain: false })?.params).toMatchObject({
+      orgCompanyDomain: false,
+    });
     expect(Object.keys(reasonOf({ ...known, dismissCount: 1 })?.params ?? {})).not.toContain(
       "orgCompanyDomain",
     );
@@ -331,7 +369,7 @@ describe("policy — the org fact never moves a lane or a floor", () => {
     ).not.toContain("orgCompanyDomain");
   });
 
-  it("the live decision keeps its lane and trust; only importance follows the fact", () => {
+  it("the live decision is unchanged in lane, trust and importance", () => {
     const rel: RelationshipSnapshot = { ...UNKNOWN_RELATIONSHIP, sentCount: 0, inboundCount: 0 };
     const live = (relationship: RelationshipSnapshot) =>
       decideLiveLane({
@@ -347,6 +385,7 @@ describe("policy — the org fact never moves a lane or a floor", () => {
     const lifted = live({ ...rel, orgCompanyDomain: true });
     expect(lifted.lane).toBe(plain.lane);
     expect(lifted.trusted).toBe(plain.trusted);
-    expect(lifted.importance).toBeGreaterThan(plain.importance);
+    expect(lifted.importance).toBe(plain.importance);
+    expect(withoutOrgParam(lifted as never)).toEqual(withoutOrgParam(plain as never));
   });
 });

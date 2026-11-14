@@ -14,10 +14,12 @@
 
 import { teamsOpenTo } from "../config.js";
 import { prisma } from "../db.js";
+import { DOMAIN_RE } from "./org-shape.js";
 
-const DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-
-/** Lower-case, de-duplicated domains; anything else is dropped (admin input). */
+/**
+ * Lower-case, de-duplicated domains, by the same rule the owner's write path
+ * enforces (org-shape.ts normalizeDomains); anything else is dropped.
+ */
 function cleanDomains(values: readonly unknown[]): string[] {
   const out: string[] = [];
   for (const value of values) {

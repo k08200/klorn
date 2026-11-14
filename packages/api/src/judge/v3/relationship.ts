@@ -19,6 +19,7 @@
 
 import { isPlainAddress, parseAddress, splitAddressList } from "../../mail/email-address.js";
 import { isPublicMailboxDomain } from "../../mail/public-mailbox-domains.js";
+import { orgDomainFact, usableOrgDomains } from "./org-domain-fact.js";
 import {
   medianReplyLatencyMs,
   replyThreadCounts,
@@ -43,7 +44,9 @@ export interface RelationshipSnapshot {
    * matches but authentication is unknown or failed. ABSENT (not null) unless
    * the user's organization has usable company domains, so a snapshot without
    * an organization is exactly what it was before this fact existed. Evidence
-   * only, with the same weight as sameOrgDomain: never a lane, a pin or trust.
+   * only: a raw feature with no hand weight (the importance prior ignores it
+   * until domains are verified or P5 learns a weight), never a lane, a pin or
+   * trust.
    */
   orgCompanyDomain?: boolean | null;
   /** Deprecated, always null: no upcoming attendee data is stored. See meetingCount. */
@@ -162,40 +165,13 @@ function sameOrg(
   return authenticated === true ? true : null;
 }
 
-/**
- * The organization's company domains a sender can match: never a public
- * mailbox domain, whatever an admin typed in (gmail.com would make every
- * stranger a colleague). Lower-cased; empty when none is usable.
- */
-function usableOrgDomains(domains: readonly string[] | undefined): string[] {
-  if (!domains) return [];
-  return domains
-    .map((d) => d.trim().toLowerCase())
-    .filter((d) => d !== "" && !isPublicMailboxDomain(d));
-}
-
-/**
- * The org fact, under the same spoofing rule as sameOrg: a company-domain From
- * is only a colleague when this mail passed DMARC. Exact domain or a subdomain
- * (mail.acme.com ⊂ acme.com, as mail/company-domains.ts isInternalSender);
- * notacme.com and acme.com.evil.io are not acme.com.
- */
-function orgDomainFact(
-  sender: string,
-  domains: readonly string[],
-  authenticated: boolean | null,
-): boolean | null {
-  const domain = domainOf(sender);
-  if (!domain || isPublicMailboxDomain(domain)) return false;
-  const match = domains.some((d) => domain === d || domain.endsWith(`.${d}`));
-  if (!match) return false;
-  return authenticated === true ? true : null;
-}
-
+/** The org fact, only when the organization has usable domains (org-domain-fact.ts). */
 function orgFields(sender: string, input: RelationshipInput) {
   const domains = usableOrgDomains(input.orgCompanyDomains);
   if (domains.length === 0) return {};
-  return { orgCompanyDomain: orgDomainFact(sender, domains, input.senderAuthenticated) };
+  return {
+    orgCompanyDomain: orgDomainFact(domainOf(sender), domains, input.senderAuthenticated),
+  };
 }
 
 function earliestIso(...dates: (Date | null | undefined)[]): string | null {
