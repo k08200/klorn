@@ -33,6 +33,8 @@ const MAIL_OPTIONAL_PREFIXES = [
   "/usage",
   "/login",
   "/auth",
+  // Accepting an organization invite needs no mailbox connected first.
+  "/team-invite",
 ];
 
 function isMailOptional(pathname: string): boolean {
