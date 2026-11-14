@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { registerApiRoutes } from "../register-api-routes.js";
-import { ROUTE_AUTH_EXEMPTIONS } from "../security/route-auth-exemptions.js";
+import {
+  ROUTE_AUTH_EXEMPTION_KINDS,
+  ROUTE_AUTH_EXEMPTIONS,
+} from "../security/route-auth-exemptions.js";
 import { hasActiveSessionGuard, installRouteAuthGuard } from "../security/route-auth-guard.js";
 import {
   collectRoutes,
@@ -18,14 +21,7 @@ import {
 // later is guarded by default; this test is what fails if a route ever escapes
 // the guard (declared before it, or on an instance that does not inherit it).
 
-const VALID_KINDS = new Set([
-  "public",
-  "oauth-flow",
-  "webhook-signature",
-  "cron-secret",
-  "api-key",
-  "own-token",
-]);
+const VALID_KINDS: ReadonlySet<string> = new Set(ROUTE_AUTH_EXEMPTION_KINDS);
 
 // The routes found serving on a bare JWT signature check (getUserId without
 // requireAuth) or with no check at all when the guard was introduced.
@@ -109,6 +105,11 @@ describe("route-auth inventory — completeness", () => {
       /\bapp\.(get|post|put|patch|delete|head|options|all|route)\s*[(<]/g,
     );
     expect(declarations).toBeNull();
+    // Nor does it register a route plugin after the routes: before the call
+    // only the cross-cutting plugins (helmet, cors, rate-limit) are registered.
+    const call = source.indexOf("await registerApiRoutes(app);");
+    expect(call).toBeGreaterThan(-1);
+    expect(source.indexOf("app.register(", call)).toBe(-1);
   });
 });
 
@@ -128,6 +129,24 @@ describe("route-auth inventory — the checker itself", () => {
     const unguarded = findUnguardedRoutes(escaped);
     expect(unguarded).toContain("GET /api/escaped");
     expect(unguarded).not.toContain("GET /api/covered");
+  });
+
+  it("guards both the prefix-root route and its trailing-slash twin", async () => {
+    vi.stubEnv("ENABLE_DEMO_USER", "");
+    const { app } = await collectRoutes(async (root) => {
+      installRouteAuthGuard(root);
+      await root.register(
+        async (scope) => {
+          scope.get("/", async () => ({ ok: true }));
+        },
+        { prefix: "/api/twin" },
+      );
+    });
+    expect((await app.inject({ method: "GET", url: "/api/twin" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/twin/" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "HEAD", url: "/api/twin/" })).statusCode).toBe(401);
+    await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("reports a synthetic route that carries no guard", () => {

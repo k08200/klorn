@@ -58,7 +58,9 @@ const { signToken, getUserId, requireAuth, AuthenticationRequiredError } = await
 );
 const { handleError } = await import("../error-handler.js");
 const { registerApiRoutes } = await import("../register-api-routes.js");
-const { requireActiveSession } = await import("../security/route-auth-guard.js");
+const { installRouteAuthGuard, requireActiveSession } = await import(
+  "../security/route-auth-guard.js"
+);
 
 const USER_ID = "u-guard";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -105,6 +107,8 @@ beforeEach(() => {
   store.device = liveDevice();
   store.user = user();
   store.deviceReads = 0;
+  // A shell exporting ENABLE_DEMO_USER=true must not open the demo fallback here.
+  vi.stubEnv("ENABLE_DEMO_USER", "");
 });
 
 afterEach(() => {
@@ -122,6 +126,8 @@ const FORMERLY_UNGUARDED: ReadonlyArray<{ method: "GET" | "POST"; url: string }>
   { method: "POST", url: "/api/briefing/generate" },
 ];
 
+// These prove 401-not-500. They pass with the guard OR with getUserId's typed
+// error alone; the ended-session cases below are what only the guard satisfies.
 describe("no or invalid token → 401, never 500", () => {
   it.each(FORMERLY_UNGUARDED)("$method $url without a token is 401", async ({ method, url }) => {
     const res = await app.inject({ method, url });
@@ -147,10 +153,41 @@ describe("no or invalid token → 401, never 500", () => {
     const res = await app.inject({ method: "HEAD", url: "/api/briefing/status" });
     expect(res.statusCode).toBe(401);
   });
+});
 
-  it("does not run the handler (no database read past the session check)", async () => {
-    await app.inject({ method: "GET", url: "/api/briefing/data" });
-    expect(store.deviceReads).toBe(0);
+describe("the guard stops a request before the handler", () => {
+  it("never calls a guarded handler without a live session", async () => {
+    const handler = vi.fn(async () => ({ reached: true }));
+    const tiny = Fastify();
+    installRouteAuthGuard(tiny);
+    tiny.get("/api/spy", handler);
+    tiny.post("/api/spy", handler);
+    await tiny.ready();
+
+    store.device = null;
+    const kicked = bearer(signToken({ userId: USER_ID, email: "guard@example.com" }));
+    expect((await tiny.inject({ method: "GET", url: "/api/spy" })).statusCode).toBe(401);
+    expect(
+      (await tiny.inject({ method: "POST", url: "/api/spy", headers: kicked })).statusCode,
+    ).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
+
+    store.device = liveDevice();
+    expect(
+      (await tiny.inject({ method: "GET", url: "/api/spy", headers: kicked })).statusCode,
+    ).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
+    await tiny.close();
+  });
+
+  it("keeps a dark (flag-off) route's cloaked 404 ahead of the 401", async () => {
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "");
+    vi.stubEnv("DEVICE_CALENDAR_ENABLED", "");
+    // Route-level onRequest gate, then plugin-level onRequest gate.
+    const routeGate = await app.inject({ method: "GET", url: "/api/keys/k-1/activity" });
+    expect(routeGate.statusCode).toBe(404);
+    const pluginGate = await app.inject({ method: "GET", url: "/api/device-calendar/sources" });
+    expect(pluginGate.statusCode).toBe(404);
   });
 });
 
@@ -160,10 +197,11 @@ describe("an ended session's token is rejected on a formerly unguarded route", (
   it("lets a live session through", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/api/briefing/status",
+      url: "/api/notion/status",
       headers: bearer(token()),
     });
-    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(200);
+    expect(store.deviceReads).toBe(1);
   });
 
   it("rejects a logged-out or device-kicked token (no Device row)", async () => {
@@ -200,14 +238,14 @@ describe("an ended session's token is rejected on a formerly unguarded route", (
   });
 
   it("checks the session once per request when a route also declares requireAuth", async () => {
-    // /api/briefing/today declares requireAuth as a preHandler; the guard ran it
-    // at onRequest already, so the second call reuses that verdict.
+    // /api/auth/has-password declares requireAuth as a preHandler; the guard ran
+    // it at onRequest already, so the second call reuses that verdict.
     const res = await app.inject({
       method: "GET",
-      url: "/api/briefing/today",
+      url: "/api/auth/has-password",
       headers: bearer(token()),
     });
-    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(200);
     expect(store.deviceReads).toBe(1);
   });
 });
@@ -316,6 +354,27 @@ describe("webhooks, cron and MCP still authenticate themselves", () => {
     expect(res.json()).toMatchObject({ ok: false, reason: "unauthorized" });
   });
 
+  it.each([
+    "/api/mcp",
+    "/api/mcp/",
+  ])("MCP at %s keeps its API-key auth (no session guard)", async (url) => {
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: bearer("klorn_sk_not_a_real_key"),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toMatch(/API key/);
+  });
+
+  it("MCP GET and DELETE still answer the transport's 405 to a key holder", async () => {
+    for (const method of ["GET", "DELETE"] as const) {
+      const res = await app.inject({ method, url: "/api/mcp", headers: bearer("klorn_sk_x") });
+      expect(res.statusCode, method).toBe(405);
+    }
+  });
+
   it("MCP rejects a session JWT and a bad key with its own API-key 401", async () => {
     const res = await app.inject({
       method: "POST",
@@ -328,20 +387,29 @@ describe("webhooks, cron and MCP still authenticate themselves", () => {
   });
 });
 
-describe("CORS preflight stays credential-free", () => {
-  it("answers a browser preflight for a guarded route with no Authorization header", async () => {
-    // Same order as index.ts: cors before the routes, so its OPTIONS route is
-    // declared before the guard and its hook answers the preflight first.
+describe("ordering with the cross-cutting plugins (index.ts order: cors, rate-limit, routes)", () => {
+  let full: FastifyInstance;
+
+  beforeAll(async () => {
     const cors = (await import("@fastify/cors")).default;
-    const withCors = Fastify();
-    await withCors.register(cors, {
+    const rateLimit = (await import("@fastify/rate-limit")).default;
+    full = Fastify();
+    await full.register(cors, {
       origin: ["https://app.klorn.ai"],
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
     });
-    await registerApiRoutes(withCors);
-    await withCors.ready();
-    const res = await withCors.inject({
+    await full.register(rateLimit, { max: 2, timeWindow: "1 minute" });
+    await registerApiRoutes(full);
+    await full.ready();
+  });
+
+  afterAll(async () => {
+    await full.close();
+  });
+
+  it("answers a browser preflight for a guarded route with no Authorization header", async () => {
+    const res = await full.inject({
       method: "OPTIONS",
       url: "/api/briefing/status",
       headers: {
@@ -350,9 +418,16 @@ describe("CORS preflight stays credential-free", () => {
         "access-control-request-headers": "authorization",
       },
     });
-    await withCors.close();
     expect(res.statusCode).toBe(204);
     expect(res.headers["access-control-allow-origin"]).toBe("https://app.klorn.ai");
+  });
+
+  it("runs the rate limiter before the guard (unauthenticated floods still get 429)", async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      statuses.push((await full.inject({ method: "GET", url: "/api/briefing/status" })).statusCode);
+    }
+    expect(statuses).toEqual([401, 401, 429]);
   });
 });
 

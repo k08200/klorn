@@ -30,9 +30,11 @@ import { isRouteAuthExempt } from "./route-auth-exemptions.js";
  * database round trip.
  */
 export async function requireActiveSession(request: FastifyRequest, reply: FastifyReply) {
-  // The demo-user fallback, kept exactly as getUserId has it: only where
+  // getUserId's demo-user fallback, behind the same gate: only where
   // isDemoAccessEnabled() holds (NODE_ENV development/test AND
-  // ENABLE_DEMO_USER=true), and only for a request carrying no credentials.
+  // ENABLE_DEMO_USER=true). Narrower than getUserId on purpose: only a request
+  // carrying no Authorization header at all; a present but invalid token is
+  // verified (and rejected) like anywhere else.
   if (request.headers.authorization === undefined && isDemoAccessEnabled()) return;
   return requireAuth(request, reply);
 }
@@ -43,12 +45,12 @@ type OnRequestHook = HookElement<NonNullable<RouteOptions["onRequest"]>>;
 
 function hookList(hooks: RouteOptions["onRequest"]): OnRequestHook[] {
   if (hooks === undefined) return [];
-  return Array.isArray(hooks) ? [...hooks] : [hooks as OnRequestHook];
+  return Array.isArray(hooks) ? [...hooks] : [hooks];
 }
 
 /** True when the route's onRequest hooks already include the guard. */
 export function hasActiveSessionGuard(routeOptions: Pick<RouteOptions, "onRequest">): boolean {
-  return hookList(routeOptions.onRequest).includes(requireActiveSession as OnRequestHook);
+  return hookList(routeOptions.onRequest).includes(requireActiveSession);
 }
 
 /**
@@ -60,9 +62,6 @@ export function installRouteAuthGuard(app: FastifyInstance): void {
   app.addHook("onRoute", (routeOptions) => {
     if (isRouteAuthExempt(routeOptions.method, routeOptions.url)) return;
     if (hasActiveSessionGuard(routeOptions)) return;
-    routeOptions.onRequest = [
-      ...hookList(routeOptions.onRequest),
-      requireActiveSession as OnRequestHook,
-    ];
+    routeOptions.onRequest = [...hookList(routeOptions.onRequest), requireActiveSession];
   });
 }

@@ -1,28 +1,31 @@
-/**
- * The routes the route-auth guard (route-auth-guard.ts) does NOT put behind
- * the active-session check. Everything else requires a live session.
- *
- * Keys are "METHOD /url/template", exactly as Fastify registers the route.
- * HEAD follows GET (Fastify derives a HEAD route from every GET).
- *
- * Every entry names how the route authenticates instead and why it cannot use
- * a session. Adding one is a security decision: the route-inventory test
- * (__tests__/route-auth-inventory.test.ts) fails on an entry that matches no
- * route, so stale exemptions cannot linger after a route is renamed.
- */
-export type RouteAuthExemptionKind =
-  /** No credentials by design (health probes, login, public demo). */
-  | "public"
+// The routes the route-auth guard (route-auth-guard.ts) does NOT put behind
+// the active-session check. Everything else requires a live session.
+//
+// Keys are "METHOD /url/template", exactly as Fastify hands the route to its
+// onRoute hooks (a prefix's root route is "/api/mcp", not "/api/mcp/"). HEAD
+// follows GET: Fastify derives a HEAD route from every GET.
+//
+// Every entry names how the route authenticates instead and why it cannot use
+// a session. Adding one is a security decision: the route-inventory test
+// (__tests__/route-auth-inventory.test.ts) fails on an entry that matches no
+// route, so stale exemptions cannot linger after a route is renamed.
+
+export const ROUTE_AUTH_EXEMPTION_KINDS = [
+  /** No credentials by design (health probes, login, public demo, static 405s). */
+  "public",
   /** Part of a login / account-link flow that starts before a session exists. */
-  | "oauth-flow"
+  "oauth-flow",
   /** Verifies a provider signature or shared secret on the request itself. */
-  | "webhook-signature"
-  /** Requires the CRON_SECRET header (machine-to-machine). */
-  | "cron-secret"
+  "webhook-signature",
+  /** Requires the cron secret header (machine-to-machine). */
+  "cron-secret",
   /** Authenticates with a Klorn API key, never a session JWT. */
-  | "api-key"
-  /** Authenticates with its own single-purpose token (link, unsubscribe, pairing). */
-  | "own-token";
+  "api-key",
+  /** Authenticates with its own single-purpose token (link, reset, capability). */
+  "own-token",
+] as const;
+
+export type RouteAuthExemptionKind = (typeof ROUTE_AUTH_EXEMPTION_KINDS)[number];
 
 export interface RouteAuthExemption {
   readonly kind: RouteAuthExemptionKind;
@@ -184,12 +187,12 @@ export const ROUTE_AUTH_EXEMPTIONS: Readonly<Record<string, RouteAuthExemption>>
     why: "MCP server; authenticates a Klorn API key, which a session guard would reject.",
   },
   "GET /api/mcp": {
-    kind: "api-key",
-    why: "Answers 405 (POST-only transport) to MCP clients holding an API key, never a session.",
+    kind: "public",
+    why: "A static 405 (POST-only transport) for MCP clients, which hold an API key, never a session.",
   },
   "DELETE /api/mcp": {
-    kind: "api-key",
-    why: "Answers 405 (POST-only transport) to MCP clients holding an API key, never a session.",
+    kind: "public",
+    why: "A static 405 (POST-only transport) for MCP clients, which hold an API key, never a session.",
   },
 
   // --- Login-free marketing demo.

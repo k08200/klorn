@@ -60,21 +60,22 @@ describe("healthResponse probe timeout", () => {
 describe("the health routes", () => {
   const source = () =>
     import("node:fs").then(({ readFileSync }) =>
-      readFileSync(new URL("../index.ts", import.meta.url), "utf8"),
+      readFileSync(new URL("../routes/core.ts", import.meta.url), "utf8"),
     );
 
   it("answers liveness with 200 whatever the probe said", async () => {
-    const index = await source();
-    const route = index.slice(index.indexOf('app.get("/api/health",'));
-    const handler = route.slice(0, route.indexOf("\n});"));
+    const core = await source();
+    expect(core).toContain('app.get("/api/health",');
+    const route = core.slice(core.indexOf('app.get("/api/health",'));
+    const handler = route.slice(0, route.indexOf("\n  });"));
     expect(handler).toContain("reply.code(200).send(body)");
   });
 
   it("answers readiness with 503 when the probe failed", async () => {
-    const index = await source();
-    expect(index).toContain('app.get("/api/health/ready",');
-    const route = index.slice(index.indexOf('app.get("/api/health/ready",'));
-    const handler = route.slice(0, route.indexOf("\n});"));
+    const core = await source();
+    expect(core).toContain('app.get("/api/health/ready",');
+    const route = core.slice(core.indexOf('app.get("/api/health/ready",'));
+    const handler = route.slice(0, route.indexOf("\n  });"));
     expect(handler).toContain("reply.code(ready ? 200 : 503).send(body)");
   });
 });
