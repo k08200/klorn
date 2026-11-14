@@ -80,9 +80,11 @@ private func panelChecks(
     check("panel: the header title is the Assistant section's name",
           panel.contains("Text(L(\"section.assistant\"))") && L("section.assistant") != "section.assistant")
     let window = text("MainWindow.swift")
-    check("toolbar: theme, then Assistant, then a trailing space so the trigger is off the edge",
+    // The bell (NC2-A, 2026-11-13) sits between the theme and Assistant.
+    check("toolbar: theme, bell, then Assistant, then a trailing space so the trigger is off the edge",
           MainWindowRules.toolbarItems
-              == [.flexibleSpace, ThemeToolbar.itemIdentifier, AssistantToolbar.itemIdentifier, .space]
+              == [.flexibleSpace, ThemeToolbar.itemIdentifier, BellToolbar.itemIdentifier,
+                  AssistantToolbar.itemIdentifier, .space]
               && window.contains("MainWindowRules.toolbarItems"))
 }
 
