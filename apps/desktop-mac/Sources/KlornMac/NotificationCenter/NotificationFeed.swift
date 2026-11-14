@@ -52,7 +52,8 @@ struct NotificationWire: Decodable, Sendable, Equatable, Identifiable {
     let pendingActionId: String?
     let pendingActionStatus: String?
     let createdAt: String
-    // The optional contract (absent on today's server).
+    // The optional contract fields (@klorn/contract NotificationCenterFields,
+    // server #1747): each may be absent on any row.
     let lane: Tier?
     let reason: NotificationReason?
     let held: Bool
@@ -121,16 +122,43 @@ private struct Lossy<T: Decodable>: Decodable {
     }
 }
 
-/// GET /api/notifications → `{ notifications, count, unread }`.
+/// The day's interrupt budget on the list (contract `NotificationBudget`):
+/// PUSH alerts rung today against the daily limit. Sent only for users under
+/// the v3 policy with a finite limit.
+struct NotificationBudget: Decodable, Sendable, Equatable {
+    let used: Int
+    let limit: Int
+
+    init(used: Int, limit: Int) {
+        self.used = used
+        self.limit = limit
+    }
+
+    /// nil (no chip) unless both are whole, `used` ≥ 0 and `limit` > 0.
+    static func valid(used: Int?, limit: Int?) -> NotificationBudget? {
+        guard let used, let limit, used >= 0, limit > 0 else { return nil }
+        return NotificationBudget(used: used, limit: limit)
+    }
+}
+
+/// GET /api/notifications → `{ notifications, count, unread, budget? }`
+/// (contract `NotificationListResponse`).
 struct NotificationsResponse: Decodable, Sendable {
     let notifications: [NotificationWire]
+    let budget: NotificationBudget?
 
-    private enum Keys: String, CodingKey { case notifications }
+    private enum Keys: String, CodingKey { case notifications, budget }
+    private enum BudgetKeys: String, CodingKey { case used, limit }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         let rows = try c.decode([Lossy<NotificationWire>].self, forKey: .notifications)
         notifications = rows.compactMap(\.value)
+        // A budget this build cannot read is no budget, never a failed list.
+        let b = try? c.nestedContainer(keyedBy: BudgetKeys.self, forKey: .budget)
+        budget = NotificationBudget.valid(
+            used: (try? b?.decodeIfPresent(Int.self, forKey: .used)) ?? nil,
+            limit: (try? b?.decodeIfPresent(Int.self, forKey: .limit)) ?? nil)
     }
 }
 

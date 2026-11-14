@@ -117,6 +117,11 @@ struct NotificationPanel: View {
                 .accessibilityAddTraits(.isHeader)
             Text(L("nc.unread", store.badgeCount)).font(Theme.Typo.meta).foregroundStyle(Theme.todayInk3)
                 .lineLimit(1)
+            // Only when the server sent a budget (v3 users with a daily limit).
+            if let budget = store.budget {
+                Text(L("nc.budget", budget.used, budget.limit)).font(Theme.Typo.meta)
+                    .foregroundStyle(Theme.todayInk3).lineLimit(1)
+            }
             Spacer(minLength: Theme.s2)
             Button { Task { await store.markAllRead() } } label: {
                 Text(L("nc.markAllRead")).font(Theme.Typo.label)

@@ -174,11 +174,14 @@ struct PushBanner: Equatable, Sendable {
     /// summaries and meeting reminders (`BannerInterruption`).
     var interruption: BannerInterruption = .standard
 
-    static func make(for item: FirewallItem) -> PushBanner {
+    /// `row`: the bell row for this mail (`NotificationCenterStore.row(forEmail:)`),
+    /// when the store already holds it. Its verified quote is the reason line
+    /// the server rang with (NC1); without one, the judge's reason on the item.
+    static func make(for item: FirewallItem, row: NotificationWire? = nil) -> PushBanner {
         let content = MailBannerContent.compose(
             from: item.email?.from.map(decodeHTMLEntities),
             subject: decodeHTMLEntities(item.email?.subject ?? item.title),
-            reason: rowTierReason(item.tierReason))
+            reason: bannerReason(item: item, row: row))
         return PushBanner(
             identifier: PushNotifier.notificationIdentifier(for: item.id),
             title: content.title,
@@ -186,39 +189,14 @@ struct PushBanner: Equatable, Sendable {
             subtitle: item.tier == .meeting ? Tier.meeting.label : nil,
             interruption: .forLane(item.tier))
     }
-}
 
-/// A mail banner's words (decision N1, the web push's `mailPushContent`):
-/// title = the sender's display name, body = the subject, then the judge's
-/// reason on a second line when there is one. Each part is one line with
-/// controls and bidi marks removed and the server's caps (100 / 180 / 140,
-/// "…" past them). The ONE place the Mac composes mail-banner text, so the
-/// server's shared formatter fields can replace its inputs later. Pure.
-enum MailBannerContent {
-    static let titleMax = 100
-    static let subjectMax = 180
-    static let reasonMax = 140
-
-    static func compose(from: String?, subject: String?, reason: String?) -> (title: String, body: String) {
-        let sender = oneLine(senderDisplayName(from), titleMax)
-        let title = sender.isEmpty ? (oneLine(from, titleMax).isEmpty ? "Klorn" : oneLine(from, titleMax)) : sender
-        let line = oneLine(subject, subjectMax)
-        let subjectLine = line.isEmpty ? L("mail.noSubjectParen") : line
-        let why = oneLine(reason, reasonMax)
-        return (title, why.isEmpty ? subjectLine : "\(subjectLine)\n\(why)")
-    }
-
-    /// The server's `oneLine`: C0/C1 controls and bidi embedding, override
-    /// and isolate marks become spaces, whitespace runs collapse, then the cap.
-    static func oneLine(_ value: String?, _ max: Int) -> String {
-        let cleaned = String(String.UnicodeScalarView((value ?? "").unicodeScalars.map { scalar in
-            let v = scalar.value
-            let unsafe = v < 0x20 || (0x7F...0x9F).contains(v) || (0x202A...0x202E).contains(v)
-                || (0x2066...0x2069).contains(v)
-            return unsafe ? " " : scalar
-        }))
-        let text = cleaned.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return text.count > max ? String(text.prefix(max - 1)) + "…" : text
+    /// The bell row's reason when it carries a verified quote; otherwise the
+    /// item's tier reason as an unverified one (never a quote). Pure.
+    static func bannerReason(item: FirewallItem, row: NotificationWire?) -> NotificationReason? {
+        if let reason = row?.reason, reason.verified, let quote = reason.quote, !quote.isEmpty { return reason }
+        return rowTierReason(item.tierReason).map {
+            NotificationReason(text: $0, verified: false, quote: nil, quoteIn: nil)
+        }
     }
 }
 
@@ -339,9 +317,11 @@ enum BannerBatch {
     }
 
     /// The banners for `items`, in posting order: the mails, then the summary.
-    static func banners(for items: [FirewallItem]) -> [PushBanner] {
+    static func banners(
+        for items: [FirewallItem], row: (FirewallItem) -> NotificationWire? = { _ in nil }
+    ) -> [PushBanner] {
         let (each, more) = split(items)
-        return each.map(PushBanner.make(for:)) + (more.isEmpty ? [] : [moreSummary(for: more)])
+        return each.map { PushBanner.make(for: $0, row: row($0)) } + (more.isEmpty ? [] : [moreSummary(for: more)])
     }
 
     /// "+N more need you", naming up to three senders — no subject, so one
@@ -518,7 +498,11 @@ final class PushAlerter {
         // WCAG 4.1.3 Status Messages: fires whatever the banner switch says.
         announce(Self.announcement(for: items))
         guard model.settings.notificationsEnabled else { return [] }
-        let banners = BannerBatch.banners(for: items)
+        // The bell rows already in memory: no network on the banner path.
+        // An empty store asks for its rows in the background, for the next one.
+        let bell = model.notificationCenter
+        if bell.rows.isEmpty { bell.nudge() }
+        let banners = BannerBatch.banners(for: items) { bell.row(forEmail: $0.email?.emailDbId) }
         banners.forEach { model.pushNotifier.post($0) }
         return banners
     }
