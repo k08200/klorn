@@ -238,6 +238,19 @@ export function icloudInboxEnabled(): boolean {
     (process.env.ICLOUD_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Fixed-host app-password IMAP presets — provider phase 2 (Daum, Kakao, Yahoo,
+// AOL, Fastmail, Zoho; mail/imap-preset-providers.ts). OFF by default (repo
+// doctrine). Takes the rollout cohort: while off every /api/<preset>-imap route
+// answers the cloaked 404 (even before authentication), the providers list and the
+// IMAP poll leave the presets out; in `cohort` mode only ROLLOUT_COHORT_USER_IDS
+// see the routes and tiles and have their preset rows polled. Read per call.
+export const IMAP_PRESETS_FLAGS = ["IMAP_PRESETS_ENABLED"] as const;
+
+/** Whether the presets exist at all (on, or cohort for someone); per-user access is featureOpenTo. */
+export function imapPresetsLive(): boolean {
+  return flagMode("IMAP_PRESETS_ENABLED") !== "off";
+}
+
 // Outlook inbox linking via Microsoft Graph OAuth — Phase 3 of the
 // multi-provider plan. OFF by default and dark until the CASA Letter of
 // Assessment (same freeze as ICLOUD_INBOX_ENABLED): while OFF, every

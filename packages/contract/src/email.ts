@@ -256,7 +256,22 @@ export interface EmailReaderContextResponse {
  * providers may appear before every client updates.
  */
 // KLORN: the Klorn address (step E1a of the unified platform plan).
-export type InboxProvider = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP" | "KLORN";
+// DAUM … ZOHOPRO: the fixed-host app-password IMAP presets (provider phase 2);
+// ZOHOPRO is a Zoho organization (paid) mailbox, which has its own hosts.
+export type InboxProvider =
+  | "GOOGLE"
+  | "NAVER"
+  | "ICLOUD"
+  | "OUTLOOK"
+  | "IMAP"
+  | "KLORN"
+  | "DAUM"
+  | "KAKAO"
+  | "YAHOO"
+  | "AOL"
+  | "FASTMAIL"
+  | "ZOHO"
+  | "ZOHOPRO";
 
 /**
  * A mailbox the user can scope the list to. `id === null` is the primary

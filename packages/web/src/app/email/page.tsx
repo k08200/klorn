@@ -1655,6 +1655,13 @@ function InboxSelector({
     ICLOUD: "iCloud",
     OUTLOOK: "Outlook",
     IMAP: "IMAP",
+    DAUM: "Daum",
+    KAKAO: "Kakao",
+    YAHOO: "Yahoo",
+    AOL: "AOL",
+    FASTMAIL: "Fastmail",
+    ZOHO: "Zoho",
+    ZOHOPRO: "Zoho",
   };
   const options = [
     {

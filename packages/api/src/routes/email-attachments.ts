@@ -14,7 +14,7 @@ import { prisma } from "../db.js";
 import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
-import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
+import { fetchStoredAttachmentBytes, openAttachmentSource } from "../mail/attachment-bytes.js";
 import {
   analyzeEmailAttachmentsForEmail,
   analyzePendingEmailAttachments,
@@ -35,7 +35,6 @@ import {
   requiresOriginalAttachment,
   SUPPORTED_CONVERSION_TARGETS,
 } from "../mail/file-conversions.js";
-import { resolveMailClient } from "../mail/gmail.js";
 import {
   isDecorativeImage,
   isVisionAttachment,
@@ -470,7 +469,9 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           userId: uid,
           email: { OR: [{ id }, { gmailId: id }] },
         },
-        include: { email: { select: { gmailId: true, linkedInboxAccountId: true } } },
+        include: {
+          email: { select: { gmailId: true, linkedInboxAccountId: true, messageIdHeader: true } },
+        },
       });
       if (!row) return reply.code(404).send({ error: "Attachment not found" });
 
@@ -511,7 +512,9 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           userId: uid,
           email: { OR: [{ id }, { gmailId: id }] },
         },
-        include: { email: { select: { gmailId: true, linkedInboxAccountId: true } } },
+        include: {
+          email: { select: { gmailId: true, linkedInboxAccountId: true, messageIdHeader: true } },
+        },
       });
       if (!row) return reply.code(404).send({ error: "Attachment not found" });
 
@@ -647,13 +650,15 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
 
       const dbEmail = await prisma.emailMessage.findFirst({
         where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-        select: { id: true, gmailId: true, linkedInboxAccountId: true },
+        select: { id: true, gmailId: true, linkedInboxAccountId: true, messageIdHeader: true },
       });
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-      // Same linked-inbox fix as the download/convert routes above (#761).
-      const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
-      if (!auth) return reply.code(409).send({ error: "Gmail not connected" });
+      // The message's own mailbox (Gmail, IMAP or Outlook; a linked inbox's own
+      // account, #761), resolved once: a disconnected one answers 409 before any
+      // row is read or marked, as the Gmail-only check did.
+      const source = await openAttachmentSource(uid, dbEmail);
+      if (!source.ok) return reply.code(source.status).send({ error: source.error });
 
       const rows = await prisma.emailAttachment.findMany({
         where: {
@@ -664,6 +669,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
         select: {
           id: true,
           gmailAttachmentId: true,
+          partKey: true,
           filename: true,
           mimeType: true,
           size: true,
@@ -674,8 +680,6 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
         take: 12,
       });
 
-      const { google } = await import("googleapis");
-      const gmail = google.gmail({ version: "v1", auth });
       const results: Array<{ attachmentId: string; filename: string; status: string }> = [];
 
       for (const row of rows) {
@@ -724,18 +728,14 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
         }
 
         try {
-          const res = await gmail.users.messages.attachments.get({
-            userId: "me",
-            messageId: dbEmail.gmailId,
-            id: row.gmailAttachmentId,
-          });
-          const data = res.data.data;
-          if (!data) throw new Error("Attachment body not found");
+          // 404/413/502 fail this row only, with the fetcher's short error.
+          const fetched = await source.fetch(row);
+          if (!fetched.ok) throw new Error(fetched.error);
           const analysis = await analyzeVisualAttachment({
             userId: uid,
             filename: row.filename,
             mimeType: row.mimeType,
-            content: Buffer.from(data, "base64url"),
+            content: fetched.bytes,
           });
           await prisma.emailAttachment.update({
             where: { id: row.id },

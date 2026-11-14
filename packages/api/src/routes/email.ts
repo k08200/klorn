@@ -1304,7 +1304,11 @@ export async function emailRoutes(app: FastifyInstance) {
         const fetched = await fetchStoredAttachmentBytes(uid, {
           gmailAttachmentId: attachment.gmailAttachmentId,
           partKey: attachment.partKey,
-          email: { gmailId: dbEmail.gmailId, linkedInboxAccountId: dbEmail.linkedInboxAccountId },
+          email: {
+            gmailId: dbEmail.gmailId,
+            linkedInboxAccountId: dbEmail.linkedInboxAccountId,
+            messageIdHeader: dbEmail.messageIdHeader,
+          },
         });
         if (!fetched.ok) {
           const error =

@@ -1,10 +1,11 @@
 import Foundation
 
-// Self-check for the IMAP connect form (Naver + iCloud Mail, 2026-10-24):
-// the request it sends, how each server refusal reads, the field rules, the
-// password never leaving memory except in that one request, and the entry
-// points. Pure and source scans only — no window, no network, no Keychain.
-// Fixtures are obviously fake (you@icloud.example / abcd-efgh-ijkl-mnop).
+// Self-check for the IMAP connect form (Naver + iCloud Mail, 2026-10-24; the
+// fixed-host presets Daum … Zoho, 2026-11-14): the request it sends, how each
+// server refusal reads, the field rules, the password never leaving memory
+// except in that one request, and the entry points. Pure and source scans
+// only — no window, no network, no Keychain. Fixtures are obviously fake
+// (you@icloud.example / abcd-efgh-ijkl-mnop).
 
 @MainActor
 func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
@@ -34,7 +35,57 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     let help = ImapMailProvider.icloud.appPasswordHelpURL
     check("iCloud's app-specific password link is https://appleid.apple.com",
           help?.scheme == "https" && help?.host == "appleid.apple.com")
-    check("both providers are beta", ImapMailProvider.allCases.allSatisfy { MailSourceCatalog.isBeta($0.rawValue) })
+    check("every provider is beta", ImapMailProvider.allCases.allSatisfy { MailSourceCatalog.isBeta($0.rawValue) })
+    check("the providers keep the server's display order",
+          ImapMailProvider.allCases.map(\.rawValue)
+              == ["NAVER", "ICLOUD", "DAUM", "KAKAO", "YAHOO", "AOL", "FASTMAIL", "ZOHO", "ZOHOPRO"])
+    // Pinned literally (not derived the way the enum derives them): the
+    // server mounts /api/<slug>-imap/{status,connect,disconnect} per preset.
+    let routes: [ImapMailProvider: String] = [
+        .naver: "/api/naver-imap", .icloud: "/api/icloud-imap", .daum: "/api/daum-imap",
+        .kakao: "/api/kakao-imap", .yahoo: "/api/yahoo-imap", .aol: "/api/aol-imap",
+        .fastmail: "/api/fastmail-imap", .zoho: "/api/zoho-imap", .zohopro: "/api/zohopro-imap",
+    ]
+    check("every provider has its own /api/<slug>-imap route family",
+          routes.count == ImapMailProvider.allCases.count
+              && ImapMailProvider.allCases.allSatisfy { p in
+                  routes[p].map { prefix in
+                      p.statusPath == prefix + "/status" && p.connectPath == prefix + "/connect"
+                          && p.disconnectPath == prefix + "/disconnect"
+                  } ?? false
+              })
+    // The provider's own domain, so a typo'd or look-alike link fails here.
+    let helpDomains: [ImapMailProvider: String] = [
+        .icloud: "appleid.apple.com", .daum: "daum.net", .kakao: "kakao.com", .yahoo: "yahoo.com",
+        .aol: "aol.com", .fastmail: "fastmail.help", .zoho: "zoho.com", .zohopro: "zoho.com",
+    ]
+    check("every preset's app-password link is https on the provider's own domain",
+          ImapMailProvider.allCases.filter(\.usesPresetCopy).allSatisfy { p in
+              guard let url = p.appPasswordHelpURL, let host = url.host?.lowercased(),
+                    let domain = helpDomains[p] else { return false }
+              return url.scheme == "https" && (host == domain || host.hasSuffix("." + domain))
+          })
+    check("only Naver and iCloud keep their own copy; every other case is a preset",
+          ImapMailProvider.allCases.filter { !$0.usesPresetCopy } == [.naver, .icloud])
+    check("each preset's address placeholder is a placeholder, never a real-looking person",
+          ImapMailProvider.allCases.allSatisfy { $0.emailPlaceholder.hasPrefix("you@") }
+              && Set(ImapMailProvider.allCases.map(\.emailPlaceholder)).count == ImapMailProvider.allCases.count)
+    check("every preset has its own row label, glyph and VoiceOver name (never the generic one)",
+          ImapMailProvider.allCases.allSatisfy { p in
+              providerLabel(p.rawValue) != L("inbox.provider.generic")
+                  && sourceMonogram(provider: p.rawValue) != "@"
+                  && sourceName(provider: p.rawValue) != L("source.generic")
+          }
+              && sourceMonogram(provider: "KAKAO") != sourceMonogram(provider: "KLORN")
+              && providerLabel("ZOHO") != providerLabel("ZOHOPRO")
+              && sourceName(provider: "ZOHOPRO") == ImapMailProvider.zohopro.presetName)
+    check("every preset asks for an app password, never the account password",
+          ImapMailProvider.allCases.filter(\.usesPresetCopy).allSatisfy {
+              $0.passwordLabel == L("account.preset.password")
+          }
+              && !files.contains { url in
+                  ((try? String(contentsOf: url, encoding: .utf8)) ?? "").contains("password" + ".either")
+              })
 
     // MARK: 2. request shape
     let body = (try? ImapConnectRequest.body(email: "  \(fakeEmail)\n", password: fakePassword)) ?? Data()
@@ -91,12 +142,28 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         .appPasswordRejected, .unreachable, .tooManyAccounts, .invalidEmail, .rateLimited,
         .needsPro, .unavailable, .offline, .insecureTransport, .generic,
     ]
-    check("every failure reads as a non-empty, translated sentence",
+    check("every failure reads as a non-empty, translated sentence for every provider",
           every.allSatisfy { f in
               ImapMailProvider.allCases.allSatisfy { p in
                   let m = f.message(for: p)
-                  return !m.isEmpty && !m.hasPrefix("account.")
+                  return !m.isEmpty && !m.contains("account.") && !m.contains("%")
               }
+          })
+    check("a preset's refusals name the preset",
+          ImapMailProvider.allCases.filter(\.usesPresetCopy).allSatisfy { p in
+              ImapConnectFailure.appPasswordRejected.message(for: p).contains(p.presetName)
+                  && ImapConnectFailure.unavailable.message(for: p).contains(p.presetName)
+          })
+    check("every provider's form copy is translated (no raw key, no unfilled format)",
+          ImapMailProvider.allCases.allSatisfy { p in
+              let copy = [p.connectLabel, p.formTitle, p.emailLabel, p.passwordLabel, p.passwordHint]
+                  + [p.bodyText, p.helpLinkLabel].compactMap { $0 }
+              return copy.allSatisfy { !$0.isEmpty && !$0.contains("account.") && !$0.contains("%") }
+          })
+    check("a preset's connect button and title name the preset",
+          ImapMailProvider.allCases.filter(\.usesPresetCopy).allSatisfy { p in
+              p.connectLabel.contains(p.presetName) && p.formTitle.contains(p.presetName)
+                  && p.helpLinkLabel != nil
           })
 
     // MARK: 4. field rules
@@ -161,12 +228,27 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
 
     // MARK: 6. entry points
     let prefs = text("PreferencesView.swift")
-    check("settings ▸ Accounts offers iCloud Mail next to Naver",
-          prefs.contains("L(\"account.icloud.connect\")") && prefs.contains("L(\"account.naver.connect\")"))
-    check("both open the one parameterized form",
+    check("settings ▸ Accounts draws one connect button per offered provider",
+          prefs.contains("ForEach(offeredImapProviders(model.availableImapProviders))")
+              && prefs.contains("connectButton(provider, title: provider.connectLabel)"))
+    check("every provider opens the one parameterized form",
           prefs.contains("ImapConnectForm(provider: provider") && prefs.contains("connectingProvider = provider"))
-    check("iCloud is offered only while the server has it (its 404 hides it)",
-          prefs.contains("model.availableImapProviders.contains(.icloud)"))
+    check("Naver is always offered; a gated provider only once its status answered",
+          offeredImapProviders([]) == [.naver]
+              && offeredImapProviders([.zohopro, .daum, .icloud]) == [.naver, .icloud, .daum, .zohopro]
+              && offeredImapProviders(Set(ImapMailProvider.allCases)) == ImapMailProvider.allCases)
+    check("a fresh session offers Naver only — the presets wait for their probe",
+          AppModel(tokenStore: InMemoryTokenStore()).availableImapProviders == [.naver])
+    check("the status probe covers every provider; a 404 hides any but Naver",
+          model.contains("for provider in ImapMailProvider.allCases { await refreshImapAccounts(provider) }")
+              && model.contains("guard isCurrent(session), provider != .naver else { return }"))
+    let probeCallers = product.filter {
+        ((try? String(contentsOf: $0, encoding: .utf8)) ?? "").contains("model.refreshImapAccounts()")
+    }.map(\.lastPathComponent)
+    check("the probe runs only when Settings ▸ Accounts opens (no polling)",
+          probeCallers == ["PreferencesView.swift"]
+              && prefs.components(separatedBy: "model.refreshImapAccounts()").count == 2
+              && prefs.contains(".task { await model.refreshImapAccounts() }"))
 
     // MARK: 7. copy, in every catalogue
     let keys = [
@@ -177,13 +259,38 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         "account.imap.error.invalidEmail", "account.imap.error.needsPro", "account.imap.error.offline",
         "account.icloud.error.unavailable", "account.naver.error.unavailable",
         "account.imap.error.insecure", "account.imap.submit",
+        "account.preset.body", "account.preset.email", "account.preset.password",
     ]
+    // The preset sentences take the preset's name as their one %@ (a string:
+    // a %d here would be the pointer-read crash).
+    let presetFormats = [
+        "account.preset.connect", "account.preset.title", "account.preset.help.link",
+        "account.preset.error.authFailed", "account.preset.error.unavailable",
+    ]
+    let presetStems = ImapMailProvider.allCases.filter(\.usesPresetCopy).map { $0.rawValue.lowercased() }
+    let perPreset = presetStems.flatMap { ["account.\($0).name", "account.\($0).password.hint"] }
     for language in ["en", "ko", "ja", "zh", "es", "fr", "de"] {
         let url = sourceDir.appendingPathComponent("Resources/\(language).lproj/Localizable.strings")
         let table = NSDictionary(contentsOf: url) as? [String: String] ?? [:]
-        let missing = keys.filter { (table[$0] ?? "").isEmpty }
+        let missing = (keys + presetFormats + perPreset).filter { (table[$0] ?? "").isEmpty }
         check("\(language): every connect-sheet string is translated", missing.isEmpty)
         if !missing.isEmpty { print("      missing: \(missing.joined(separator: ", "))") }
+        let badFormats = presetFormats.filter { key in
+            let value = table[key] ?? ""
+            return value.components(separatedBy: "%@").count != 2
+                || value.replacingOccurrences(of: "%@", with: "").contains("%")
+        }
+        check("\(language): each preset sentence takes exactly one %@ (the name)", badFormats.isEmpty)
+        if !badFormats.isEmpty { print("      bad formats: \(badFormats.joined(separator: ", "))") }
+        let unfilled = presetStems.flatMap { stem in
+            presetFormats.compactMap { key -> String? in
+                let name = table["account.\(stem).name"] ?? ""
+                let line = String(format: table[key] ?? "", name)
+                return !name.isEmpty && line.contains(name) && !line.contains("%") ? nil : "\(stem):\(key)"
+            }
+        }
+        check("\(language): every preset sentence reads with the preset's name in it", unfilled.isEmpty)
+        if !unfilled.isEmpty { print("      unfilled: \(unfilled.joined(separator: ", "))") }
         check("\(language): it says iCloud Mail (beta), never Apple Mail",
               (table["account.icloud.body"] ?? "").contains("iCloud Mail")
                   && !table.values.contains { $0.contains(retiredName) })
