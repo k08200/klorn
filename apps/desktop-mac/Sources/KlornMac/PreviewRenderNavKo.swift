@@ -38,7 +38,7 @@ extension PreviewRender {
       {"id":"p3","source":"email","sourceId":"e3","type":"email","title":"서명 대기",
        "tier":"PUSH","tierReason":"어제부터 두 명이 기다리는 중","priority":7,
        "surfacedAt":"2026-07-29T07:05:00Z",
-       "email":{"emailDbId":"d3","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+       "email":{"emailDbId":"d3","source":{"provider":"ICLOUD","accountId":"li-3","label":"you@icloud.example"},
                 "unread":false,"hasAttachment":false,"replyState":"needsReply","draftReady":true,"subject":"서명해 주셔야 출시할 수 있습니다",
                 "from":"박준호 <junho.park@team.example>","receivedAt":"2026-07-29T07:05:00Z"},"hashStale":false}],
       "MEETING":[

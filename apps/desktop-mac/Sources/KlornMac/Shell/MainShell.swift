@@ -22,13 +22,22 @@ struct MainShell: View {
         // .top: any overflow must be cut at the bottom, never eat the top
         // row (clipping lessons, 2026-08-20).
         ZStack(alignment: .top) {
-            // Under the transparent title bar too (M7); the shell itself
-            // stays inside the safe area, below the traffic lights.
-            Theme.bg.ignoresSafeArea()
+            // The account-tinted chrome (M1, 2026-11-13), under the
+            // transparent title bar too; the shell itself stays inside the
+            // safe area, below the traffic lights.
+            Theme.chromeGradient(identity: chromeIdentity).ignoresSafeArea()
+            // The floating content card, inset from the window's edges. It
+            // reaches up under the title bar; the content inside it does not.
+            HStack(spacing: 0) {
+                Color.clear.frame(width: NavRules.sidebarWidth)
+                RoundedRectangle(cornerRadius: Theme.Radius.contentCard)
+                    .fill(Theme.todayCard)
+                    .shadow(color: Theme.todayCardShadow, radius: ShellChrome.shadowRadius, y: ShellChrome.shadowY)
+                    .padding([.top, .trailing, .bottom], Theme.s2)
+            }
+            .ignoresSafeArea()
             HStack(spacing: 0) {
                 NavSidebar(actions: actions)
-                Rectangle().fill(Theme.line).frame(width: Theme.hairline)
-                    .ignoresSafeArea(.container, edges: .top)
                 VStack(spacing: 0) {
                     // Loaded mail whose refresh is failing (M6).
                     if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
@@ -37,6 +46,9 @@ struct MainShell: View {
                         // A zone the web pins (or un-pins) redraws every time.
                         .id(model.displayTimeZoneID ?? "")
                 }
+                .clipShape(UnevenRoundedRectangle(cornerRadii: ShellChrome.contentCorners))
+                // The card's own inset; under a title bar the top is extra air.
+                .padding([.top, .trailing, .bottom], Theme.s2)
             }
             // Keyboard focus must not wander behind a modal.
             .disabled(model.fullViewModalOpen)
@@ -55,6 +67,11 @@ struct MainShell: View {
         // No overlay layer here: the guide, the event editor and the
         // connect-time question are native sheets on the window (M5,
         // `MainWindowController.syncSheet`); the composer is its own window.
+    }
+
+    /// The chrome takes the selected account's tone; all accounts is espresso.
+    private var chromeIdentity: Theme.RGBA? {
+        AccountIdentity.color(selection: model.selectedInbox, among: model.inboxes)
     }
 
     /// The dock keeps the assistant one click away with the mail or the day
@@ -113,4 +130,15 @@ extension SectionHeader where Trailing == EmptyView {
     init(title: String, detail: String? = nil) {
         self.init(title: title, detail: detail) { EmptyView() }
     }
+}
+
+/// The content card's geometry (gen_m1e.py: inset 8, radius 12, shadow
+/// 0 10 30). SwiftUI's shadow radius is half the CSS blur.
+enum ShellChrome {
+    static let shadowRadius: CGFloat = 15
+    static let shadowY: CGFloat = 10
+    /// The content clips to the card's bottom corners; its top sits below
+    /// the title bar, inside the card.
+    static let contentCorners = RectangleCornerRadii(
+        bottomLeading: Theme.Radius.contentCard, bottomTrailing: Theme.Radius.contentCard)
 }

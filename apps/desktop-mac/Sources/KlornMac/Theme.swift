@@ -265,6 +265,10 @@ enum Theme {
         static let control = md
         static let card = lg
         static let sheet = xl
+        /// The floating content card the main window's sections sit on, and
+        /// the editorial Today's PUSH card (M1, founder decision 2026-11-13).
+        static let contentCard: CGFloat = 12
+        static let briefCard: CGFloat = 14
     }
 
     // MARK: Spacing (4pt grid)

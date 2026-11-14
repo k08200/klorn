@@ -17,145 +17,101 @@ struct PanelHeader: View {
     }
 }
 
-/// Today's calendar, merged across the calendars Klorn reads: what is on
-/// now, then what is left of the day. Read from the existing today summary.
-struct TodayCalendarPanel: View {
+/// "Today's schedule": what is on now and the rest of the day, side by
+/// side, each with a 3pt bar in its calendar's color (Klorn's own calendar
+/// in the accent, a linked one in gray, named under the title). Read from
+/// the existing today summary.
+struct TodaySchedule: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.s3) {
-            PanelHeader(title: NavSection.calendar.title, linkTitle: L("today.open")) {
-                model.navigate(to: .calendar)
-            }
+        VStack(alignment: .leading, spacing: Theme.s2) {
+            TodayCaps(text: L("today.schedule"))
             if model.today == nil {
-                Text(L("bar.loading")).font(Theme.Typo.body).foregroundStyle(Theme.textDim)
+                Text(L("bar.loading")).font(Theme.Typo.body).foregroundStyle(Theme.todayInk2)
             } else {
                 let events = TodayRules.events(model.today)
                 if events.isEmpty {
-                    Text(L("today.calendar.empty"))
-                        .font(Theme.Typo.body).foregroundStyle(Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(L("today.calendar.empty")).font(Theme.Typo.body).foregroundStyle(Theme.todayInk2)
                 } else {
-                    VStack(alignment: .leading, spacing: Theme.s2) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: TodayLayout.eventMinWidth), spacing: Theme.s6,
+                                           alignment: .leading)],
+                        alignment: .leading, spacing: Theme.s3
+                    ) {
                         ForEach(events, id: \.event.id) { entry in
-                            TodayEventRow(event: entry.event, isNow: entry.isNow)
+                            TodayEventEntry(event: entry.event, isNow: entry.isNow)
                         }
                     }
                 }
             }
         }
-        .padding(Theme.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .todayPanel()
     }
 }
 
-/// One event: a 3pt source bar, the time, the title, and the source by name
-/// when it is a linked calendar (the bar's color is never the only signal).
-private struct TodayEventRow: View {
+/// One event: the bar, the title, the time range (or "Now"), and the
+/// source by name when it is a linked calendar (the bar's color is never
+/// the only signal). Joins the meeting when it has a safe link.
+private struct TodayEventEntry: View {
     let event: CalendarEventWire
     let isNow: Bool
 
     private var time: String {
-        if event.allDay { return L("calendar.allDay") }
-        return String(
-            eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: false).prefix(5))
+        let range = eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+        return isNow ? "\(L("section.now")) · \(range)" : range
     }
 
     var body: some View {
         let source = calendarEventSourceLabel(event)
-        let row = HStack(alignment: .top, spacing: Theme.s2) {
+        let entry = HStack(alignment: .top, spacing: Theme.s2) {
             Capsule()
-                .fill(source == nil ? Theme.accent : Theme.textDim)
-                .frame(width: 3)
+                .fill(source == nil ? Theme.accent : Theme.todayInk3)
+                .frame(width: TodayLayout.eventBar)
                 .accessibilityHidden(true)
-            Text(isNow ? L("section.now") : time)
-                .font(Theme.Typo.caption.monospacedDigit().weight(isNow ? .semibold : .regular))
-                .foregroundStyle(isNow ? Theme.text : Theme.textDim)
-                .frame(width: 44, alignment: .leading)
-                .padding(.top, Theme.hairline)
             VStack(alignment: .leading, spacing: 1) {
-                Text(event.title).font(Theme.Typo.body).foregroundStyle(Theme.text).lineLimit(1)
+                HStack(spacing: Theme.s1) {
+                    Text(event.title).font(Theme.Typo.rowSender).foregroundStyle(Theme.todayInk1)
+                        .lineLimit(1)
+                    if MeetingLink.safeURL(event.meetingLink) != nil {
+                        Image(systemName: "video").font(Theme.Typo.icon).foregroundStyle(Theme.todayInk3)
+                            .accessibilityHidden(true)
+                    }
+                }
+                Text(time).font(Theme.Typo.meta.monospacedDigit()).foregroundStyle(Theme.todayInk2)
+                    .lineLimit(1)
                 if let source {
-                    Text(source).font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+                    Text(source).font(Theme.Typo.caption).foregroundStyle(Theme.todayInk3)
                         .lineLimit(1).truncationMode(.middle)
                 }
-            }
-            Spacer(minLength: 0)
-            if MeetingLink.safeURL(event.meetingLink) != nil {
-                Image(systemName: "video").font(Theme.Typo.icon).foregroundStyle(Theme.textDim)
-                    .accessibilityHidden(true)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
         if let url = MeetingLink.safeURL(event.meetingLink) {
-            Button { NSWorkspace.shared.open(url) } label: { row.contentShape(Rectangle()) }
+            Button { NSWorkspace.shared.open(url) } label: { entry.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("calendar.join.a11y", event.title))
         } else {
-            row.accessibilityElement(children: .combine)
+            entry.accessibilityElement(children: .combine)
         }
     }
 }
 
-/// The assistant strip: the briefing's one line, what waits on the user,
-/// and a way into the thread.
-struct TodayAssistantPanel: View {
+/// The P12 blocks, each only with its server flag (and, for free time, a
+/// saved team), below the schedule. They were rail cards; the rail is gone
+/// (M1), the features stay.
+struct TodayExtras: View {
     @Environment(AppModel.self) private var model
+    let now: Date
 
     var body: some View {
-        let approvals = model.pendingActions.count
-        VStack(alignment: .leading, spacing: Theme.s3) {
-            PanelHeader(title: NavSection.assistant.title, linkTitle: L("today.open")) {
-                model.navigate(to: .assistant)
-            }
-            if let line = TodayRules.briefingLine(
-                structure: model.briefingStructure, briefing: model.briefing)
-            {
-                Text(line).font(Theme.Typo.body).foregroundStyle(Theme.text)
-                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel(L("briefing.a11y", line))
-            } else {
-                Text(L("today.assistant.noBriefing"))
-                    .font(Theme.Typo.body).foregroundStyle(Theme.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Rectangle().fill(Theme.line).frame(height: Theme.hairline)
-            if approvals > 0 {
-                Button { model.showAssistantPane(.approvals) } label: {
-                    HStack(spacing: Theme.s2) {
-                        Text(L("today.approvals.waiting", approvals))
-                            .font(Theme.Typo.label).foregroundStyle(Theme.text)
-                        Spacer(minLength: Theme.s2)
-                        Image(systemName: "chevron.right").font(Theme.Typo.caption)
-                            .foregroundStyle(Theme.textDim).accessibilityHidden(true)
-                    }
-                    .frame(minHeight: 24)
-                    .contentShape(Rectangle())
+        let freeTime = FreeTimeRules.visible(teamMode: model.clientFlags.teamMode, teamCount: model.teams.count)
+        if freeTime || model.clientFlags.files {
+            HStack(alignment: .top, spacing: Theme.s3) {
+                if freeTime {
+                    TodayFreeTimePanel(renderNow: Theme.isRenderingOffscreen ? now : nil)
                 }
-                .buttonStyle(.plain)
-            } else {
-                Text(L("today.approvals.none"))
-                    .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                if model.clientFlags.files { TodayRecentFilesPanel() }
             }
-            // The ask box opens the thread; the composer there takes the keyboard.
-            Button { model.navigate(to: .assistant) } label: {
-                Text(L("assistant.placeholder"))
-                    .font(Theme.Typo.body).foregroundStyle(Theme.textDim)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Theme.s3)
-                    .frame(height: 32)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L("today.ask.a11y"))
         }
-        .padding(Theme.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .todayPanel()
     }
 }

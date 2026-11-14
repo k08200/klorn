@@ -22,22 +22,6 @@ struct TodayLane: Equatable, Sendable {
     var remaining: Int { max(count - rows.count, 0) }
 }
 
-/// Today's header line (founder decision 2026-10-24): counts only for the
-/// lanes that need the user, and one quiet figure for what waits in Mail.
-struct TodayHeaderSummary: Equatable, Sendable {
-    struct Need: Equatable, Sendable {
-        let tier: Tier
-        let count: Int
-    }
-
-    /// PUSH then MEETING, each only when it holds something.
-    let needs: [Need]
-    /// PUSH and MEETING are both empty: "Nothing needs you right now".
-    let calm: Bool
-    /// QUEUE + INFO open threads; 0 shows nothing. SILENT is never counted.
-    let waiting: Int
-}
-
 /// What the Today screen can be: the states every mail surface shares (M6).
 typealias TodayState = SurfaceState
 
@@ -115,32 +99,6 @@ enum TodayRules {
             guard let email = item.email else { return true }
             return email.unread != false && !opened.contains(email.emailDbId)
         }.count
-    }
-
-    /// The header line from the lanes Today lists: PUSH is already Today's
-    /// windowed count, so the header and the PUSH group agree.
-    static func headerSummary(_ lanes: [TodayLane]) -> TodayHeaderSummary {
-        func count(_ tier: Tier) -> Int { lanes.first { $0.tier == tier }?.count ?? 0 }
-        let needs = [Tier.push, .meeting]
-            .map { TodayHeaderSummary.Need(tier: $0, count: count($0)) }
-            .filter { $0.count > 0 }
-        return TodayHeaderSummary(
-            needs: needs, calm: needs.isEmpty, waiting: count(.queue) + count(.info))
-    }
-
-    /// "N waiting in Mail", singular only for exactly one.
-    static func waitingLine(_ count: Int) -> String {
-        count == 1 ? L("today.waiting.one") : L("today.waiting.many", count)
-    }
-
-    /// The assistant strip's one line: the structured headline, else the
-    /// first line of the plain briefing.
-    static func briefingLine(structure: BriefingStructure?, briefing: String?) -> String? {
-        if let headline = structure?.headline, !headline.isEmpty { return headline }
-        let first = briefing?
-            .split(whereSeparator: \.isNewline).first
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-        return first.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// The detail beside the Today title: the weekday and date, except in

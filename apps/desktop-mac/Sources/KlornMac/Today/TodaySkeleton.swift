@@ -8,41 +8,64 @@ enum TodayLayout {
     static let anchorInColumn: CGFloat = stateAnchorTop - Theme.s6
     /// Lanes and rows per lane the skeleton draws, like a loaded day.
     static let skeletonLanes: [(tier: Tier, rows: Int)] = [(.push, 2), (.meeting, 2), (.queue, 3)]
+
+    // The editorial Today's measures (gen_m1e.py, M1).
+    /// The content column's widest.
+    static let maxWidth: CGFloat = 1120
+    /// The scope + search row at the top of the content card.
+    static let topRowHeight: CGFloat = 44
+    /// A quiet link ("See all", "N more"): a 28pt target row.
+    static let linkHeight: CGFloat = 28
+    static let cardMinHeight: CGFloat = 196
+    static let cardFace: CGFloat = 32
+    static let rowFace: CGFloat = 26
+    /// The account ring around a face.
+    static let ringWidth: CGFloat = 2
+    static let buttonHeight: CGFloat = 28
+    /// A compact row: 44pt, the click-target floor.
+    static let rowHeight: CGFloat = 44
+    static let senderColumn: CGFloat = 96
+    static let timeColumn: CGFloat = 52
+    static let chipHeight: CGFloat = 20
+    static let chipMaxWidth: CGFloat = 260
+    /// A schedule entry's colored bar.
+    static let eventBar: CGFloat = 3
+    static let eventMinWidth: CGFloat = 150
 }
 
-/// The loading Today, shaped like the loaded one: a lane chip and count
-/// over a hairline group of rows, three lanes deep. Pulses gently unless
-/// Reduce Motion is on; still while rendering offscreen.
+/// The loading Today, shaped like the loaded one (M1): the caps line and
+/// headline, the PUSH lane as empty cards, then the other skeleton lanes as
+/// caps heads over compact rows. Pulses gently unless Reduce Motion is on;
+/// still while rendering offscreen.
 struct TodaySkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulsing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.s6) {
+            VStack(alignment: .leading, spacing: Theme.s2) {
+                bar(width: 220, height: 10)
+                bar(width: 300, height: 24)
+            }
             ForEach(TodayLayout.skeletonLanes, id: \.tier) { lane in
-                VStack(alignment: .leading, spacing: Theme.s2) {
-                    HStack(spacing: Theme.s2) {
-                        // The real chip: the lanes are known before the mail is.
-                        WindowLaneChip(tier: lane.tier)
-                        bar(width: 16, height: 10)
+                if lane.tier == .push {
+                    HStack(spacing: Theme.s3) {
+                        ForEach(0..<lane.rows, id: \.self) { _ in cardPlaceholder }
                     }
-                    .padding(.horizontal, Theme.s1)
-                    .frame(minHeight: 24)
-                    VStack(spacing: 0) {
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // The lanes are known before the mail is.
+                        TodayCaps(text: lane.tier.label).frame(minHeight: TodayLayout.linkHeight)
                         ForEach(0..<lane.rows, id: \.self) { row in
-                            if row > 0 {
-                                Rectangle().fill(Theme.line).frame(height: Theme.hairline)
-                                    .padding(.leading, Theme.s3)
-                            }
                             rowPlaceholder(row)
+                            Rectangle().fill(Theme.todayLine).frame(height: Theme.hairline)
                         }
                     }
-                    .todayPanel()
                 }
             }
             HStack(spacing: Theme.s2) {
                 if !Theme.isRenderingOffscreen { ProgressView().controlSize(.small) }
-                Text(L("list.firstSync")).font(Theme.Typo.body).foregroundStyle(Theme.textDim)
+                Text(L("list.firstSync")).font(Theme.Typo.body).foregroundStyle(Theme.todayInk2)
             }
         }
         .opacity(pulsing ? 0.55 : 1)
@@ -56,44 +79,32 @@ struct TodaySkeleton: View {
         .accessibilityLabel(L("list.firstSync"))
     }
 
-    private func rowPlaceholder(_ row: Int) -> some View {
-        VStack(alignment: .leading, spacing: Theme.s2) {
-            HStack {
-                bar(width: 110, height: 9)
-                Spacer()
-                bar(width: 34, height: 9)
+    private var cardPlaceholder: some View {
+        VStack(alignment: .leading, spacing: Theme.s3) {
+            HStack(spacing: Theme.s2) {
+                Circle().fill(Theme.todayChip).frame(width: TodayLayout.cardFace, height: TodayLayout.cardFace)
+                bar(width: 90, height: 9)
             }
-            bar(width: row.isMultiple(of: 2) ? 320 : 240, height: 11)
+            bar(width: 180, height: 14)
+            bar(width: 140, height: 10)
         }
-        .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
-        .frame(maxWidth: .infinity, minHeight: Theme.rowHeight, alignment: .leading)
+        .padding(Theme.s4)
+        .frame(maxWidth: .infinity, minHeight: TodayLayout.cardMinHeight, alignment: .topLeading)
+        .todayPanel()
+    }
+
+    private func rowPlaceholder(_ row: Int) -> some View {
+        HStack(spacing: Theme.s3) {
+            Circle().fill(Theme.todayChip).frame(width: TodayLayout.rowFace, height: TodayLayout.rowFace)
+            bar(width: 80, height: 9)
+            bar(width: row.isMultiple(of: 2) ? 280 : 200, height: 9)
+            Spacer()
+            bar(width: 34, height: 9)
+        }
+        .frame(maxWidth: .infinity, minHeight: TodayLayout.rowHeight, alignment: .leading)
     }
 
     private func bar(width: CGFloat, height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover).frame(width: width, height: height)
-    }
-}
-
-/// The rail while loading: the calendar and assistant cards, empty.
-struct TodayRailSkeleton: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.s4) {
-            card(title: NavSection.calendar.title, lines: 4)
-            card(title: NavSection.assistant.title, lines: 3)
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func card(title: String, lines: Int) -> some View {
-        VStack(alignment: .leading, spacing: Theme.s3) {
-            Text(title).font(Theme.Typo.head).foregroundStyle(Theme.textDim)
-            ForEach(0..<lines, id: \.self) { line in
-                RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
-                    .frame(width: line.isMultiple(of: 2) ? 200 : 150, height: 10)
-            }
-        }
-        .padding(Theme.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .todayPanel()
+        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.todayChip).frame(width: width, height: height)
     }
 }

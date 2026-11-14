@@ -124,6 +124,19 @@ final class AppModel {
         replyRequest = ReplyRequest(token: (replyRequest?.token ?? 0) &+ 1, itemId: item.id)
     }
 
+    /// Today's card "Reply": the same request for a mail the card opens in
+    /// Mail. The reading pane starts the reply once that mail has loaded
+    /// (the same AI draft in the composer, sent only by the user).
+    func requestReply(to item: FirewallItem) {
+        replyRequest = ReplyRequest(token: (replyRequest?.token ?? 0) &+ 1, itemId: item.id)
+    }
+
+    /// The reading pane answered the request (or the request's mail is no
+    /// longer selected): a later load of the same mail must not reply again.
+    func consumeReplyRequest() {
+        replyRequest = nil
+    }
+
     /// Go-menu navigation: switch the list column.
     func go(to mode: ListMode) {
         listMode = mode
@@ -982,6 +995,18 @@ final class AppModel {
         self.pendingActions = pendingActions
         self.commitments = commitments
         chatMessages = chat
+    }
+
+    /// Render-probe seam for the account-scoped shots (M1): the scope as if
+    /// the user picked one account, and the queue the server would answer
+    /// for it (the fixture's mail on other accounts removed). No network.
+    func seedInboxScopeForRender(_ selection: String) {
+        selectedInbox = selection
+        guard let queue, let value = inboxQueryParam(selected: selection) else { return }
+        let accountId: String? = value == "primary" ? nil : value
+        let others = Tier.allCases.flatMap { queue.items(for: $0) }
+            .filter { $0.email?.source.map { $0.accountId != accountId } ?? true }
+        self.queue = queue.removingIDs(Set(others.map(\.id)))
     }
 
     /// Render-probe seam for the state shots (M6): the states no fixture

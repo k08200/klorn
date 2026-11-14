@@ -636,20 +636,10 @@
 "today.signingIn.detail" = "브라우저에서 로그인을 끝내면 이 창이 바뀝니다.";
 "today.failed.title" = "메일을 불러오지 못했습니다";
 "today.retry" = "다시 시도";
-"today.clear.title" = "기다리는 메일이 없습니다";
-"today.clear.detail" = "새 메일은 Klorn이 분류하는 대로 여기에 나타납니다.";
-"today.lane.more" = "메일에서 %d건 더 보기";
-"today.header.lane" = "%2$@ %1$d";
-"today.waiting.one" = "메일에서 1건 대기";
-"today.waiting.many" = "메일에서 %d건 대기";
 "today.lane.push.older" = "이전 %@ 메일 보기";
 "today.row.a11y" = "%1$@: %2$@";
-"today.open" = "열기";
 "today.calendar.empty" = "오늘 일정이 없습니다.";
 "today.assistant.noBriefing" = "오늘 브리핑이 아직 없습니다.";
-"today.approvals.waiting" = "승인 대기 %d건";
-"today.approvals.none" = "승인 대기 없음.";
-"today.ask.a11y" = "어시스턴트에게 물어보기";
 "today.signIn.restart" = "처음부터 다시";
 "a11y.position" = "%2$d개 중 %1$d번째";
 
@@ -802,3 +792,24 @@
 "chat.send.failed" = "Klorn에 연결할 수 없습니다 — %@";
 "chat.event.failed" = "일정을 만들지 못했습니다 — %@";
 "commitments.needsPro" = "약속한 일 추적은 Klorn Pro가 필요합니다.";
+
+/* Editorial Today and account chrome (M1/M2, 2026-11-13) */
+"today.headline.none" = "지금 기다리는 메일이 없어요";
+"today.headline.one" = "지금 %d건이 기다려요";
+"today.headline.many" = "지금 %d건이 기다려요";
+"today.cards.more" = "외 %d건";
+"today.cards.reply" = "답장";
+"today.cards.later" = "나중에";
+"today.cards.later.help" = "이 메일을 나중에 다시 보기";
+"today.cards.reply.help" = "메일을 열고 답장 초안을 만들어요. 보내기 전에 직접 확인해요";
+"today.kicker.meetings" = "회의 %d";
+"today.kicker.free" = "빈 시간 %d시간";
+"today.lane.note.meeting" = "일정 관련";
+"today.lane.note.queue" = "울리지 않음";
+"today.lane.note.info" = "참고용";
+"today.seeAll" = "모두 보기";
+"today.schedule" = "오늘 일정";
+"today.search" = "메일 검색";
+"today.card.a11y" = "%2$@ 님의 %1$@, %3$@";
+"nav.accounts.all" = "모든 계정";
+"nav.accounts.showOnly.a11y" = "%@만 보기";

@@ -73,7 +73,9 @@ struct ReadingPane: View {
                 Rectangle().strokeBorder(Theme.accent, lineWidth: 2).allowsHitTesting(false)
             }
         }
-        .onChange(of: model.selectedItemId) { _, _ in
+        .onChange(of: model.selectedItemId) { _, selected in
+            // A pending reply for another mail dies with the selection.
+            if let request = model.replyRequest, request.itemId != selected { model.consumeReplyRequest() }
             replying = false
             replyText = ""
             showingPreparedDraft = false
@@ -82,13 +84,9 @@ struct ReadingPane: View {
         }
         // Message ▸ Reply (⌘R) runs the same path as the Reply-with-AI button.
         // Never while composing: a fresh draft would overwrite the user's text.
-        .onChange(of: model.replyRequest) { _, request in
-            guard let item, MenuRules.shouldStartReply(
-                request, selectedItemId: item.id, replying: replying,
-                emailLoaded: model.openedEmail != nil)
-            else { return }
-            startReply(item)
-        }
+        .onChange(of: model.replyRequest) { _, _ in startRequestedReply() }
+        // Today's card asks before the mail has loaded: answer once it has.
+        .onChange(of: model.openedEmail?.id, initial: true) { _, _ in startRequestedReply() }
         // Mirror the inline composer so the menu can disable Reply while it is open.
         .onChange(of: replying, initial: true) { _, now in model.readerReplying = now }
         .onDisappear { model.readerReplying = false }
@@ -625,6 +623,17 @@ struct ReadingPane: View {
             quickReplies = result
             loadingQuickReplies = false
         }
+    }
+
+    /// Start the reply a menu command or a Today card asked for, once, when
+    /// the mail it names is the one loaded here.
+    private func startRequestedReply() {
+        guard let item, MenuRules.shouldStartReply(
+            model.replyRequest, selectedItemId: item.id, replying: replying,
+            emailLoaded: model.openedEmail.map { $0.id == item.email?.emailDbId } ?? false)
+        else { return }
+        model.consumeReplyRequest()
+        startReply(item)
     }
 
     /// Open the composer and let Klorn's AI draft the reply into it. The user

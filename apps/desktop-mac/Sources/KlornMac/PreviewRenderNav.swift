@@ -22,7 +22,7 @@ extension PreviewRender {
       {"id":"p3","source":"email","sourceId":"e3","type":"email","title":"Sign-off needed",
        "tier":"PUSH","tierReason":"Blocking two people since yesterday","priority":7,
        "surfacedAt":"2026-07-29T07:05:00Z",
-       "email":{"emailDbId":"d3","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+       "email":{"emailDbId":"d3","source":{"provider":"ICLOUD","accountId":"li-3","label":"you@icloud.example"},
                 "unread":false,"hasAttachment":false,"replyState":"needsReply","draftReady":true,"subject":"Waiting on your sign-off to ship",
                 "from":"Alex Carter <alex@team.co>","receivedAt":"2026-07-29T07:05:00Z"},"hashStale":false}],
       "MEETING":[
@@ -218,6 +218,11 @@ extension PreviewRender {
 
         let model = navModel(firewallJSON: navFirewallJSON)
         shot("today", model) { $0.navigate(to: .today) }
+        // One account picked (M1): its mail only, the chrome in its tone.
+        shot("today-account", navModel(firewallJSON: navFirewallJSON)) {
+            $0.navigate(to: .today)
+            $0.seedInboxScopeForRender("primary")
+        }
         // Its own model: leaving Mail (the Today shot) drops the selection.
         shot("mail-lanes", navModel(firewallJSON: navFirewallJSON)) {
             $0.listMode = NavRules.defaultMailMode
