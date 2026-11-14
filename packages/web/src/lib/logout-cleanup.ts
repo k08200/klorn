@@ -35,6 +35,9 @@ const MAIL_VIEW_STATE_PREFIX = "klorn.mailV2.";
 export const SESSION_STATE_PREFIXES: readonly string[] = [
   MAIL_VIEW_STATE_PREFIX,
   "klorn.onboardingV2.",
+  // A pending organization invite token (app/team-invite): the next account
+  // in this tab must not inherit it.
+  "klorn.teamInviteToken",
 ];
 
 /** The keys under `prefix`, collected first so removing them cannot skip one. */
