@@ -3216,6 +3216,14 @@ const fr: Record<string, string> = {
   "teamInvite.accept": "Rejoindre {org}",
   "teamInvite.joined": "Vous avez rejoint {org}.",
   "teamInvite.openSettings": "Ouvrir les réglages d’équipe",
+  "settings.org.error.OWNER_ONLY": "Seul le propriétaire de l’organisation peut faire cela.",
+  "settings.org.error.NOT_IN_ORG": "Vous ne faites partie d’aucune organisation.",
+  "settings.org.error.MEMBER_NOT_FOUND": "Ce membre ne fait plus partie de l’organisation.",
+  "settings.org.error.INVITE_NOT_FOUND": "Cette invitation n’est plus en attente.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "Nommez un autre propriétaire avant de retirer le propriétaire.",
+  "settings.org.retry": "Réessayer",
+  "settings.org.loadFailed": "Cette partie n’a pas pu être chargée.",
 };
 
 export default fr;

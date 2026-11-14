@@ -4,9 +4,9 @@ import type { OrgViewResponse } from "@klorn/contract";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../../../lib/api";
 import { captureClientError } from "../../../../lib/sentry";
-import { orgErrorKey } from "./model";
+import { apiErrorCode, orgErrorKey } from "./model";
 
-/** The current organization view; `undefined` while loading. */
+/** The current organization view; `undefined` while loading, kept when a reload fails. */
 export function useOrgView() {
   const [view, setView] = useState<OrgViewResponse | undefined>(undefined);
   const [failed, setFailed] = useState(false);
@@ -15,6 +15,7 @@ export function useOrgView() {
       setView(await apiFetch<OrgViewResponse>("/api/orgs/current"));
       setFailed(false);
     } catch (err) {
+      // The last good view stays on screen; `failed` only adds a retry line.
       captureClientError(err, { scope: "org.load" });
       setFailed(true);
     }
@@ -36,10 +37,10 @@ export function useOrgAction() {
       await work();
       return true;
     } catch (err) {
-      const key = orgErrorKey(err);
-      // A refusal the server explained is expected; anything else is reported.
-      if (key === "settings.org.error.generic") captureClientError(err, { scope: "org.action" });
-      setErrorKey(key);
+      // A refusal the server explained (it carries a code) is expected;
+      // anything else is reported.
+      if (apiErrorCode(err) === null) captureClientError(err, { scope: "org.action" });
+      setErrorKey(orgErrorKey(err));
       return false;
     } finally {
       setBusy(false);
@@ -50,4 +51,23 @@ export function useOrgAction() {
 
 export function jsonBody(body: unknown): RequestInit {
   return { method: "POST", body: JSON.stringify(body) };
+}
+
+/** A list a panel loads itself: its rows, whether the last load failed, and a reload. */
+export function useOrgList<T>(path: string, pick: (body: unknown) => T[], scope: string) {
+  const [rows, setRows] = useState<T[]>([]);
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      setRows(pick(await apiFetch<unknown>(path)));
+      setFailed(false);
+    } catch (err) {
+      captureClientError(err, { scope });
+      setFailed(true);
+    }
+  }, [path, pick, scope]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return { rows, failed, load };
 }

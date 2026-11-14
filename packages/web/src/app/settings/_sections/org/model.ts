@@ -105,7 +105,20 @@ const KNOWN_CODES = new Set([
   "INVITE_EMAIL_MISMATCH",
   "TEAM_CHECKOUT_UNAVAILABLE",
   "INVALID_SEATS",
+  "OWNER_ONLY",
+  "NOT_IN_ORG",
+  "MEMBER_NOT_FOUND",
+  "INVITE_NOT_FOUND",
+  "CANNOT_REMOVE_OWNER",
   "rate-limited",
+]);
+
+/** Refusals after which an invite link can never succeed: its token is forgotten. */
+export const TERMINAL_INVITE_CODES = new Set([
+  "INVITE_EXPIRED",
+  "INVITE_USED",
+  "INVITE_INVALID",
+  "ALREADY_IN_ORG",
 ]);
 
 /** The `code` of an apiFetch error (`API <status>: {"error":…,"code":…}`), or null. */
@@ -119,6 +132,13 @@ export function apiErrorCode(err: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/** The seat count typed so far, or null while it is not a whole number in range. */
+export function parseSeats(raw: string): number | null {
+  if (!/^\d{1,3}$/.test(raw.trim())) return null;
+  const seats = Number(raw.trim());
+  return seats >= MIN_SEATS && seats <= MAX_SEATS ? seats : null;
 }
 
 /** The localized message key for an org route refusal; a generic one for anything else. */

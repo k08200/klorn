@@ -3153,6 +3153,14 @@ const ja: Record<string, string> = {
   "teamInvite.accept": "{org} に参加",
   "teamInvite.joined": "{org} に参加しました。",
   "teamInvite.openSettings": "チーム設定を開く",
+  "settings.org.error.OWNER_ONLY": "組織のオーナーだけが操作できます。",
+  "settings.org.error.NOT_IN_ORG": "組織に所属していません。",
+  "settings.org.error.MEMBER_NOT_FOUND": "そのメンバーはもう組織にいません。",
+  "settings.org.error.INVITE_NOT_FOUND": "その招待はもう保留中ではありません。",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "オーナーを削除する前に別のメンバーをオーナーにしてください。",
+  "settings.org.retry": "再試行",
+  "settings.org.loadFailed": "この部分を読み込めませんでした。",
 };
 
 export default ja;

@@ -3115,6 +3115,14 @@ const ko: Record<string, string> = {
   "teamInvite.accept": "{org}에 참여",
   "teamInvite.joined": "{org}에 참여했습니다.",
   "teamInvite.openSettings": "팀 설정 열기",
+  "settings.org.error.OWNER_ONLY": "조직 소유자만 할 수 있습니다.",
+  "settings.org.error.NOT_IN_ORG": "조직에 속해 있지 않습니다.",
+  "settings.org.error.MEMBER_NOT_FOUND": "이미 조직에 없는 멤버입니다.",
+  "settings.org.error.INVITE_NOT_FOUND": "이미 대기 중이 아닌 초대입니다.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "소유자를 내보내려면 먼저 다른 멤버를 소유자로 지정해 주세요.",
+  "settings.org.retry": "다시 시도",
+  "settings.org.loadFailed": "이 부분을 불러오지 못했습니다.",
 };
 
 export default ko;

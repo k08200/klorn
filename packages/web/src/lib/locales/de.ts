@@ -3248,10 +3248,18 @@ const de: Record<string, string> = {
   "teamInvite.missing": "Öffne diese Seite über den Link in deiner Einladungs-E-Mail.",
   "teamInvite.title": "{org} beitreten",
   "teamInvite.body":
-    "{org} sieht deinen Namen, deine E-Mail-Adresse, deine Rolle und deinen Platz. Deine E-Mails, Lanes und Zusagen sieht {org} nie.",
+    "{org} sieht deinen Namen, deine E-Mail-Adresse, deine Rolle und deinen Platz – nie aber deine E-Mails, Lanes oder Zusagen.",
   "teamInvite.accept": "{org} beitreten",
   "teamInvite.joined": "Du bist {org} beigetreten.",
   "teamInvite.openSettings": "Team-Einstellungen öffnen",
+  "settings.org.error.OWNER_ONLY": "Nur der Inhaber der Organisation kann das tun.",
+  "settings.org.error.NOT_IN_ORG": "Du bist in keiner Organisation.",
+  "settings.org.error.MEMBER_NOT_FOUND": "Dieses Mitglied ist nicht mehr in der Organisation.",
+  "settings.org.error.INVITE_NOT_FOUND": "Diese Einladung ist nicht mehr offen.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "Mache zuerst jemand anderen zum Inhaber, bevor du den Inhaber entfernst.",
+  "settings.org.retry": "Erneut versuchen",
+  "settings.org.loadFailed": "Dieser Teil konnte nicht geladen werden.",
 };
 
 export default de;

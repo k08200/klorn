@@ -6,6 +6,7 @@ import Button from "../../../../components/ui/button";
 import { Input, Select } from "../../../../components/ui/input";
 import Switch from "../../../../components/ui/switch";
 import { apiFetch } from "../../../../lib/api";
+import { isSafeBillingRedirect } from "../../../../lib/billing-redirect";
 import { useT } from "../../../../lib/i18n";
 import {
   CAP_OPTIONS,
@@ -15,6 +16,7 @@ import {
   formatUsd,
   MAX_SEATS,
   MIN_SEATS,
+  parseSeats,
   seatStatusKey,
 } from "./model";
 import { useOrgAction } from "./use-org";
@@ -81,19 +83,31 @@ export function OrgSeats({
   price: SeatPrice | null;
 }) {
   const { t, locale } = useT();
-  const [seats, setSeats] = useState(() => defaultSeats(org.seats.used));
+  const [seatsText, setSeatsText] = useState(() => String(defaultSeats(org.seats.used)));
+  // Set once the browser is handed to Paddle: the buttons stay off, so a
+  // second click cannot open a second transaction.
+  const [leaving, setLeaving] = useState(false);
+  const [refused, setRefused] = useState(false);
   const { busy, errorKey, run } = useOrgAction();
   const available = org.seats.checkoutIntervals;
   const live = org.seats.status !== null && org.seats.status !== "canceled";
+  const seats = parseSeats(seatsText);
 
   const checkout = (interval: TeamIntervalWire) =>
     run(async () => {
+      if (seats === null) return;
+      setRefused(false);
       const { url } = await apiFetch<OrgCheckoutResponse>("/api/orgs/current/checkout", {
         method: "POST",
         body: JSON.stringify({ interval, seats }),
       });
-      // The server hands back Paddle's hosted checkout; only an https page is followed.
-      if (url.startsWith("https://")) window.location.assign(url);
+      // Only Paddle's hosted checkout (or this origin) is followed.
+      if (!isSafeBillingRedirect(url, window.location.origin)) {
+        setRefused(true);
+        return;
+      }
+      setLeaving(true);
+      window.location.assign(url);
     });
 
   const priceLabel = (interval: TeamIntervalWire) =>
@@ -134,15 +148,16 @@ export function OrgSeats({
             min={MIN_SEATS}
             max={MAX_SEATS}
             label={t("settings.org.checkout.seats")}
-            value={seats}
-            onChange={(event) => setSeats(clampSeats(Number(event.target.value)))}
+            value={seatsText}
+            error={seats === null ? t("settings.org.error.INVALID_SEATS") : undefined}
+            onChange={(event) => setSeatsText(event.target.value)}
+            onBlur={() => setSeatsText(String(clampSeats(Number(seatsText))))}
           />
           <div className="flex flex-wrap gap-3">
             {available.map((interval) => (
               <Button
                 key={interval}
-                loading={busy}
-                disabled={busy}
+                disabled={busy || leaving || seats === null}
                 onClick={() => void checkout(interval)}
               >
                 {priceLabel(interval)}
@@ -151,9 +166,9 @@ export function OrgSeats({
           </div>
         </div>
       )}
-      {errorKey && (
+      {(errorKey || refused) && (
         <p role="alert" className="text-role-caption text-ink-mid">
-          {t(errorKey)}
+          {t(errorKey ?? "settings.org.error.generic")}
         </p>
       )}
     </section>

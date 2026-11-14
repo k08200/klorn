@@ -3125,6 +3125,14 @@ const en: Record<string, string> = {
   "teamInvite.accept": "Join {org}",
   "teamInvite.joined": "You joined {org}.",
   "teamInvite.openSettings": "Open team settings",
+  "settings.org.error.OWNER_ONLY": "Only the organization's owner can do this.",
+  "settings.org.error.NOT_IN_ORG": "You are not in an organization.",
+  "settings.org.error.MEMBER_NOT_FOUND": "That member is no longer in the organization.",
+  "settings.org.error.INVITE_NOT_FOUND": "That invite is no longer pending.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "Make someone else the owner before removing the owner.",
+  "settings.org.retry": "Try again",
+  "settings.org.loadFailed": "This part could not be loaded.",
 };
 
 export default en;

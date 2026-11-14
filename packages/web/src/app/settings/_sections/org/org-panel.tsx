@@ -8,6 +8,7 @@ import { apiFetch } from "../../../../lib/api";
 import { useT } from "../../../../lib/i18n";
 import { captureClientError } from "../../../../lib/sentry";
 import { PANEL, SECTION_TITLE } from "../shared";
+import { LoadFailed } from "./load-failed";
 import { isOwner } from "./model";
 import { OrgCeilings, OrgSeats } from "./org-admin";
 import { OrgCreate } from "./org-create";
@@ -22,11 +23,15 @@ export function OrgPanel() {
   const { view, failed, reload } = useOrgView();
 
   let body: React.ReactNode;
-  if (failed)
-    body = <p className="text-role-body text-ink-mid">{t("settings.org.error.generic")}</p>;
-  else if (view === undefined)
-    body = <p className="text-role-body text-ink-dim">{t("settings.org.loading")}</p>;
-  else if (view.org === null) body = <OrgCreate onCreated={reload} />;
+  if (view === undefined) {
+    body = failed ? (
+      <LoadFailed onRetry={() => void reload()} />
+    ) : (
+      <p role="status" className="text-role-body text-ink-dim">
+        {t("settings.org.loading")}
+      </p>
+    );
+  } else if (view.org === null) body = <OrgCreate onCreated={reload} />;
   else body = <OrgDetail org={view.org} me={view.me} reload={reload} />;
 
   return (
@@ -34,7 +39,10 @@ export function OrgPanel() {
       <h2 id="org-title" className={SECTION_TITLE}>
         {t("settings.org.title")}
       </h2>
-      <div className={`${PANEL} p-5`}>{body}</div>
+      <div className={`${PANEL} space-y-4 p-5`}>
+        {failed && view !== undefined && <LoadFailed onRetry={() => void reload()} />}
+        {body}
+      </div>
     </section>
   );
 }
@@ -51,13 +59,16 @@ function OrgDetail({
   const { t } = useT();
   const owner = isOwner(me);
   const [transparency, setTransparency] = useState<OrgTransparencyResponse | null>(null);
+  const [transparencyFailed, setTransparencyFailed] = useState(false);
   const { busy, errorKey, run } = useOrgAction();
 
   const loadTransparency = useCallback(async () => {
     try {
       setTransparency(await apiFetch<OrgTransparencyResponse>("/api/orgs/current/transparency"));
+      setTransparencyFailed(false);
     } catch (err) {
       captureClientError(err, { scope: "org.transparency" });
+      setTransparencyFailed(true);
     }
   }, []);
   useEffect(() => {
@@ -104,6 +115,7 @@ function OrgDetail({
       {owner && <OrgCeilings org={org} onChanged={refresh} />}
       <OrgSeats org={org} owner={owner} price={transparency?.seatPrice ?? null} />
       {transparency && <OrgTransparency data={transparency} />}
+      {transparencyFailed && <LoadFailed onRetry={() => void loadTransparency()} />}
       <div className="space-y-2 border-t border-line/70 pt-4">
         <Button variant="secondary" disabled={busy} onClick={() => void leave()}>
           {t("settings.org.leave.button")}

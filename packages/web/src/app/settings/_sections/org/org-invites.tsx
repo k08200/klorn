@@ -1,32 +1,28 @@
 "use client";
 
 import type { OrgInvitesResponse, OrgInviteWire } from "@klorn/contract";
-import { useCallback, useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import Button from "../../../../components/ui/button";
 import { Input } from "../../../../components/ui/input";
 import { apiFetch } from "../../../../lib/api";
 import { useT } from "../../../../lib/i18n";
-import { captureClientError } from "../../../../lib/sentry";
-import { jsonBody, useOrgAction } from "./use-org";
+import { LoadFailed } from "./load-failed";
+import { jsonBody, useOrgAction, useOrgList } from "./use-org";
+
+const pickInvites = (body: unknown) => (body as OrgInvitesResponse).invites;
 
 /** Owner only: invite by email, and the pending invites with a revoke each. */
 export function OrgInvites() {
   const { t, locale } = useT();
   const [email, setEmail] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
-  const [invites, setInvites] = useState<OrgInviteWire[]>([]);
+  const {
+    rows: invites,
+    failed,
+    load,
+  } = useOrgList("/api/orgs/current/invites", pickInvites, "org.invites");
   const { busy, errorKey, run } = useOrgAction();
-
-  const load = useCallback(async () => {
-    try {
-      setInvites((await apiFetch<OrgInvitesResponse>("/api/orgs/current/invites")).invites);
-    } catch (err) {
-      captureClientError(err, { scope: "org.invites" });
-    }
-  }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   const send = async () => {
     const address = email.trim();
@@ -41,13 +37,20 @@ export function OrgInvites() {
     const ok = await run(() =>
       apiFetch(`/api/orgs/current/invites/${encodeURIComponent(invite.id)}`, { method: "DELETE" }),
     );
-    if (ok) await load();
+    if (!ok) return;
+    await load();
+    heading.current?.focus();
   };
   const date = (iso: string) => new Date(iso).toLocaleDateString(locale);
 
   return (
     <section aria-labelledby="org-invite-title" className="space-y-3">
-      <h3 id="org-invite-title" className="text-role-label font-semibold text-ink">
+      <h3
+        id="org-invite-title"
+        ref={heading}
+        tabIndex={-1}
+        className="text-role-label font-semibold text-ink focus:outline-none"
+      >
         {t("settings.org.invite.title")}
       </h3>
       <form
@@ -84,6 +87,7 @@ export function OrgInvites() {
           </p>
         )}
       </div>
+      {failed && <LoadFailed onRetry={() => void load()} />}
       {invites.length > 0 && (
         <ul aria-label={t("settings.org.invite.pending")} className="divide-y divide-line/70">
           {invites.map((invite) => (
@@ -94,7 +98,13 @@ export function OrgInvites() {
                   {t("settings.org.invite.expires", { date: date(invite.expiresAt) })}
                 </p>
               </div>
-              <Button variant="secondary" size="sm" disabled={busy} onClick={() => revoke(invite)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                aria-label={`${t("settings.org.invite.revoke")}: ${invite.email}`}
+                onClick={() => revoke(invite)}
+              >
                 {t("settings.org.invite.revoke")}
               </Button>
             </li>

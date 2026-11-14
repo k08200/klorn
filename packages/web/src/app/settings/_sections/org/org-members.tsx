@@ -1,13 +1,15 @@
 "use client";
 
 import type { OrgMembersResponse, OrgMemberWire } from "@klorn/contract";
-import { useCallback, useEffect, useState } from "react";
+import { useRef } from "react";
 import Button from "../../../../components/ui/button";
 import { apiFetch } from "../../../../lib/api";
 import { useT } from "../../../../lib/i18n";
-import { captureClientError } from "../../../../lib/sentry";
+import { LoadFailed } from "./load-failed";
 import { ROLE_KEYS } from "./model";
-import { jsonBody, useOrgAction } from "./use-org";
+import { jsonBody, useOrgAction, useOrgList } from "./use-org";
+
+const pickMembers = (body: unknown) => (body as OrgMembersResponse).members;
 
 /** The roster: everyone sees it; the owner can remove a member or hand over ownership. */
 export function OrgMembers({
@@ -18,43 +20,48 @@ export function OrgMembers({
   onChanged: () => Promise<void>;
 }) {
   const { t } = useT();
-  const [members, setMembers] = useState<OrgMemberWire[]>([]);
+  const {
+    rows: members,
+    failed,
+    load,
+  } = useOrgList("/api/orgs/current/members", pickMembers, "org.members");
   const { busy, errorKey, run } = useOrgAction();
-
-  const load = useCallback(async () => {
-    try {
-      setMembers((await apiFetch<OrgMembersResponse>("/api/orgs/current/members")).members);
-    } catch (err) {
-      captureClientError(err, { scope: "org.members" });
-    }
-  }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   const label = (member: OrgMemberWire) => member.name || member.email;
-  const remove = async (member: OrgMemberWire) => {
+  const change = async (work: () => Promise<unknown>) => {
+    const ok = await run(work);
+    if (!ok) return;
+    await Promise.all([load(), onChanged()]);
+    // The row's button is gone: keep keyboard focus in the section.
+    heading.current?.focus();
+  };
+  const remove = (member: OrgMemberWire) => {
     if (!window.confirm(t("settings.org.members.confirmRemove", { name: label(member) }))) return;
-    const ok = await run(() =>
+    void change(() =>
       apiFetch(`/api/orgs/current/members/${encodeURIComponent(member.membershipId)}`, {
         method: "DELETE",
       }),
     );
-    if (ok) await Promise.all([load(), onChanged()]);
   };
-  const transfer = async (member: OrgMemberWire) => {
+  const transfer = (member: OrgMemberWire) => {
     if (!window.confirm(t("settings.org.members.confirmTransfer", { name: label(member) }))) return;
-    const ok = await run(() =>
+    void change(() =>
       apiFetch("/api/orgs/current/transfer", jsonBody({ membershipId: member.membershipId })),
     );
-    if (ok) await Promise.all([load(), onChanged()]);
   };
 
   return (
     <section aria-labelledby="org-members-title" className="space-y-3">
-      <h3 id="org-members-title" className="text-role-label font-semibold text-ink">
+      <h3
+        id="org-members-title"
+        ref={heading}
+        tabIndex={-1}
+        className="text-role-label font-semibold text-ink focus:outline-none"
+      >
         {t("settings.org.members.title")}
       </h3>
+      {failed && <LoadFailed onRetry={() => void load()} />}
       <ul className="divide-y divide-line/70">
         {members.map((member) => (
           <li key={member.membershipId} className="flex flex-wrap items-center gap-3 py-2">
@@ -83,11 +90,18 @@ export function OrgMembers({
                   variant="secondary"
                   size="sm"
                   disabled={busy}
+                  aria-label={`${t("settings.org.members.makeOwner")}: ${label(member)}`}
                   onClick={() => transfer(member)}
                 >
                   {t("settings.org.members.makeOwner")}
                 </Button>
-                <Button variant="danger" size="sm" disabled={busy} onClick={() => remove(member)}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={busy}
+                  aria-label={`${t("settings.org.members.remove")}: ${label(member)}`}
+                  onClick={() => remove(member)}
+                >
                   {t("settings.org.members.remove")}
                 </Button>
               </div>

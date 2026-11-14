@@ -17,8 +17,10 @@ import {
   isInviteToken,
   isOwner,
   orgErrorKey,
+  parseSeats,
   seatStatusKey,
   showTeamSection,
+  TERMINAL_INVITE_CODES,
 } from "../../../web/src/app/settings/_sections/org/model";
 import en from "../../../web/src/lib/locales/en";
 
@@ -65,6 +67,13 @@ describe("seats and caps", () => {
     expect(clampSeats(3.6)).toBe(4);
   });
 
+  it("lets a seat count be typed in full and accepts only 2–150", () => {
+    expect(parseSeats("1")).toBeNull();
+    expect(parseSeats("12")).toBe(12);
+    expect(parseSeats(" 150 ")).toBe(150);
+    for (const bad of ["151", "2.5", "", "abc", "-3", "1e2"]) expect(parseSeats(bad)).toBeNull();
+  });
+
   it("offers no cap or OFF/SHADOW/SUGGEST, and maps the empty choice to null", () => {
     expect(CAP_OPTIONS.map((option) => option.value)).toEqual(["", "SUGGEST", "SHADOW", "OFF"]);
     expect(capFromOption("")).toBeNull();
@@ -100,12 +109,26 @@ describe("org refusals", () => {
     );
   });
 
+  it("forgets an invite link only after a refusal it can never recover from", () => {
+    expect([...TERMINAL_INVITE_CODES].sort()).toEqual([
+      "ALREADY_IN_ORG",
+      "INVITE_EXPIRED",
+      "INVITE_INVALID",
+      "INVITE_USED",
+    ]);
+    expect(TERMINAL_INVITE_CODES.has("INVITE_EMAIL_MISMATCH")).toBe(false);
+    expect(TERMINAL_INVITE_CODES.has("EMAIL_NOT_VERIFIED")).toBe(false);
+  });
+
   it("has an English string for every key the pages use", () => {
     const keys = [
       ...CAP_OPTIONS.map((option) => option.key),
       ...["active", "trialing", "past_due", "paused", "canceled", null].map(seatStatusKey),
       orgErrorKey(new Error('API 410: {"code":"INVITE_USED"}')),
       orgErrorKey(new Error('API 429: {"code":"rate-limited"}')),
+      orgErrorKey(new Error('API 403: {"code":"OWNER_ONLY"}')),
+      "settings.org.loadFailed",
+      "settings.org.retry",
       "settings.org.error.generic",
     ];
     for (const key of keys) expect(en[key], key).toBeTypeOf("string");

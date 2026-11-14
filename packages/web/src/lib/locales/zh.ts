@@ -2939,6 +2939,13 @@ const zh: Record<string, string> = {
   "teamInvite.accept": "加入 {org}",
   "teamInvite.joined": "你已加入 {org}。",
   "teamInvite.openSettings": "打开团队设置",
+  "settings.org.error.OWNER_ONLY": "只有组织所有者可以执行此操作。",
+  "settings.org.error.NOT_IN_ORG": "你不在任何组织中。",
+  "settings.org.error.MEMBER_NOT_FOUND": "该成员已不在组织中。",
+  "settings.org.error.INVITE_NOT_FOUND": "该邀请已不再待处理。",
+  "settings.org.error.CANNOT_REMOVE_OWNER": "移除所有者前，请先将其他成员设为所有者。",
+  "settings.org.retry": "重试",
+  "settings.org.loadFailed": "此部分无法加载。",
 };
 
 export default zh;

@@ -12,10 +12,12 @@ import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { captureClientError } from "../../lib/sentry";
 import {
+  apiErrorCode,
   INVITE_TOKEN_STORAGE_KEY,
   inviteTokenFromHash,
   isInviteToken,
   orgErrorKey,
+  TERMINAL_INVITE_CODES,
 } from "../settings/_sections/org/model";
 import { jsonBody, useOrgAction } from "../settings/_sections/org/use-org";
 import { PRIMARY_BTN } from "../settings/_sections/shared";
@@ -63,24 +65,38 @@ function InviteAccept({ token }: { token: string | null }) {
   const { busy, errorKey, run } = useOrgAction();
 
   useEffect(() => {
-    if (!user) return;
+    // Nothing is asked of a server that has the feature off for this user.
+    if (!user || user.teams !== true) return;
     if (!token) {
       setState({ kind: "missing" });
       return;
     }
+    let current = true;
     apiFetch<OrgInvitePreviewResponse>("/api/orgs/invites/preview", jsonBody({ token }))
-      .then((preview) => setState({ kind: "ready", preview }))
+      .then((preview) => {
+        if (current) setState({ kind: "ready", preview });
+      })
       .catch((err) => {
-        const key = orgErrorKey(err);
-        if (key === "settings.org.error.generic")
-          captureClientError(err, { scope: "org.invite.preview" });
-        setState({ kind: "error", key });
+        const code = apiErrorCode(err);
+        if (code === null) captureClientError(err, { scope: "org.invite.preview" });
+        // A link that can never work is not kept for the next visit.
+        if (code !== null && TERMINAL_INVITE_CODES.has(code)) forgetToken();
+        if (current) setState({ kind: "error", key: orgErrorKey(err) });
       });
+    return () => {
+      current = false;
+    };
   }, [token, user]);
 
   const accept = async (orgName: string) => {
     const ok = await run(() =>
-      apiFetch("/api/orgs/invites/accept", jsonBody({ token, shareFreeBusy: share })),
+      apiFetch("/api/orgs/invites/accept", jsonBody({ token, shareFreeBusy: share })).catch(
+        (err: unknown) => {
+          const code = apiErrorCode(err);
+          if (code !== null && TERMINAL_INVITE_CODES.has(code)) forgetToken();
+          throw err;
+        },
+      ),
     );
     if (!ok) return;
     forgetToken();
@@ -91,7 +107,11 @@ function InviteAccept({ token }: { token: string | null }) {
     return <p className="text-role-body text-ink-mid">{t("settings.team.unavailable")}</p>;
   }
   if (state.kind === "loading") {
-    return <p className="text-role-body text-ink-dim">{t("teamInvite.loading")}</p>;
+    return (
+      <p role="status" className="text-role-body text-ink-dim">
+        {t("teamInvite.loading")}
+      </p>
+    );
   }
   if (state.kind === "missing")
     return <p className="text-role-body text-ink-mid">{t("teamInvite.missing")}</p>;
@@ -104,8 +124,10 @@ function InviteAccept({ token }: { token: string | null }) {
   if (state.kind === "joined") {
     return (
       <div className="space-y-3">
-        <p className="text-role-body text-ink">{t("teamInvite.joined", { org: state.orgName })}</p>
-        <Link className={PRIMARY_BTN} href="/settings/team">
+        <p role="status" className="text-role-body text-ink">
+          {t("teamInvite.joined", { org: state.orgName })}
+        </p>
+        <Link className={`${PRIMARY_BTN} min-h-11`} href="/settings/team">
           {t("teamInvite.openSettings")}
         </Link>
       </div>

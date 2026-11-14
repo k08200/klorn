@@ -11,7 +11,7 @@ import { MailRowSkeleton } from "./ui/skeleton";
 
 // Routes a non-entitled user can still reach: billing (to subscribe), settings
 // (manage/cancel), and the sign-in flow. Everything else shows the paywall.
-const PAYWALL_BYPASS_PREFIXES = ["/billing", "/settings", "/login", "/auth"];
+const PAYWALL_BYPASS_PREFIXES = ["/billing", "/settings", "/login", "/auth", "/team-invite"];
 
 function isPaywallBypass(pathname: string): boolean {
   return PAYWALL_BYPASS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
