@@ -69,6 +69,13 @@ interface User {
   // Server-driven client flag: the API's RULES_DSL_ENABLED, cohort-aware.
   // True shows "Rules as text" in Settings → Lanes. Undefined = off.
   rulesDsl?: boolean;
+  // Server-driven client flag: the API's TEAMS_ENABLED (Klorn Teams),
+  // cohort-aware. True shows the organization pages in Settings → Team and the
+  // invite accept page. Undefined (older API) = off.
+  teams?: boolean;
+  // The plan the user actually gets: `plan`, or a Klorn Teams seat derived
+  // from membership (never written to `plan`). Undefined (older API) = `plan`.
+  effectiveTier?: string;
 }
 
 interface AuthContextType {
