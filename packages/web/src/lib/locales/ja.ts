@@ -2967,6 +2967,10 @@ const ja: Record<string, string> = {
     "返信はすでに送信されている可能性があります。もう一度試す前に送信済みフォルダを確認してください。",
   "smartActions.reply.error":
     "返信の送信中に問題が起きました。もう一度試す前に送信済みフォルダを確認してください。",
+  "smartActions.reply.inProgress":
+    "この返信はまだ送信中のため、二重には送信していません。しばらくしてから送信済みフォルダを確認してください。",
+  "smartActions.reply.alreadySent":
+    "この返信は少し前にこのメールへ送信済みのため、もう一度は送信していません。",
   "smartActions.event.reading": "このメールから日付を読み取っています…",
   "smartActions.event.none": "このメールには日付も時刻もありません。",
   "smartActions.event.error":

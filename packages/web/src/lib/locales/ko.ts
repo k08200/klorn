@@ -2933,6 +2933,10 @@ const ko: Record<string, string> = {
     "답장이 이미 나갔을 수 있어요. 다시 시도하기 전에 보낸편지함을 확인해 주세요.",
   "smartActions.reply.error":
     "답장을 보내는 중 문제가 생겼어요. 다시 시도하기 전에 보낸편지함을 확인해 주세요.",
+  "smartActions.reply.inProgress":
+    "이 답장은 아직 보내는 중이라 한 번 더 보내지 않았어요. 잠시 후 보낸편지함을 확인해 주세요.",
+  "smartActions.reply.alreadySent":
+    "이 답장은 방금 이 메일로 이미 보냈기 때문에 다시 보내지 않았어요.",
   "smartActions.event.reading": "이 메일에서 날짜를 읽는 중…",
   "smartActions.event.none": "이 메일에는 날짜나 시간이 없어요.",
   "smartActions.event.error": "지금은 이 메일의 날짜를 읽을 수 없어요. 잠시 후 다시 시도해 주세요.",
