@@ -212,7 +212,11 @@ describePg("Klorn Teams lifecycle (real Postgres)", () => {
       call(member, "POST", "/api/orgs/invites/accept", { token }),
       call(member, "POST", "/api/orgs/invites/accept", { token }),
     ]);
-    expect(results.map((res) => res.statusCode).sort()).toEqual([200, 410]);
+    // The loser is refused either by the claim (410 INVITE_USED) or, when it
+    // starts after the winner committed, by the membership check (409).
+    const codes = results.map((res) => res.statusCode).sort();
+    expect(codes[0]).toBe(200);
+    expect([409, 410]).toContain(codes[1]);
     expect(await prisma.orgMembership.count({ where: { orgId: org.id } })).toBe(2);
   });
 
