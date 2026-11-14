@@ -3,8 +3,10 @@ import SwiftUI
 /// Today — the main window's home (productization plan §1, FD-1), in the
 /// editorial layout the founder chose on 2026-11-13 (M1 dark / M2 light):
 /// one headline that counts what is waiting, the PUSH mail as cards that say
-/// why each is urgent, the other lanes as compact sections, then today's
-/// schedule. Composed from what the app already holds; it fetches nothing.
+/// why each is urgent, the other lanes as compact sections, and today's
+/// schedule in a sticky right column (a strip under the headline when the
+/// card is narrow; DMG feedback, 2026-11-13). Composed from what the app
+/// already holds; it fetches nothing.
 struct TodayScreen: View {
     @Environment(AppModel.self) private var model
     let actions: ShellActions
@@ -37,33 +39,71 @@ struct TodayScreen: View {
                 // The skeleton is the loaded Today's shape.
                 page { TodaySkeleton() }
             case .ready:
-                if Theme.isRenderingOffscreen {
-                    // ImageRenderer draws nothing inside a ScrollView; lay
-                    // the content out directly and cut it at the frame.
-                    Color.clear.overlay(alignment: .topLeading) { ready }.clipped()
-                } else {
-                    ScrollView { ready }
+                // The day's placement follows the card's own width (column
+                // when wide, strip when narrow or beside the assistant).
+                GeometryReader { proxy in
+                    ready(placement: TodayLayoutRules.calendarPlacement(contentWidth: proxy.size.width))
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var ready: some View {
+    @ViewBuilder
+    private func ready(placement: TodayLayoutRules.CalendarPlacement) -> some View {
+        switch placement {
+        case .column:
+            // The column stays put while the mail scrolls (founder,
+            // 2026-11-13: the day without scrolling).
+            HStack(alignment: .top, spacing: Theme.s6) {
+                scrolling { mainColumn(strip: false).padding(.bottom, Theme.s6) }
+                TodayCalendarColumn(now: now)
+            }
+            .padding(.horizontal, Theme.s8)
+            .frame(maxWidth: TodayLayout.maxWidth + TodayLayoutRules.columnWidth + Theme.s6, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        case .strip:
+            scrolling {
+                page {
+                    VStack(alignment: .leading, spacing: Theme.s6) {
+                        mainColumn(strip: true)
+                        TodayExtras(now: now)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The headline, the PUSH cards, then the compact lanes; with `strip`
+    /// the day's strip sits under the headline, above the cards.
+    private func mainColumn(strip: Bool) -> some View {
         let lanes = model.queue.map(TodayRules.lanes) ?? []
         let push = lanes.first { $0.tier == .push }
-        return page {
-            VStack(alignment: .leading, spacing: Theme.s6) {
-                TodayHeadline(dateLabel: dateLabel, pushCount: push?.count ?? 0)
-                if let push {
-                    TodayPushCards(lane: push, now: now, actions: actions, open: open)
-                }
-                ForEach(lanes.filter { $0.tier != .push }, id: \.tier) { lane in
-                    TodayLaneSection(lane: lane, now: now, open: open)
-                }
-                TodaySchedule()
-                TodayExtras(now: now)
+        return VStack(alignment: .leading, spacing: Theme.s6) {
+            TodayHeadline(dateLabel: dateLabel, pushCount: push?.count ?? 0)
+            if strip { TodayCalendarStrip(now: now) }
+            if let push {
+                TodayPushCards(lane: push, now: now, actions: actions, open: open)
             }
+            ForEach(lanes.filter { $0.tier != .push }, id: \.tier) { lane in
+                TodayLaneSection(lane: lane, now: now, open: open)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// A ScrollView in the app. ImageRenderer draws nothing inside one, so
+    /// offscreen the content is laid out at its full height and cut at the
+    /// frame instead.
+    @ViewBuilder
+    private func scrolling(@ViewBuilder _ content: () -> some View) -> some View {
+        if Theme.isRenderingOffscreen {
+            Color.clear.overlay(alignment: .topLeading) {
+                content().fixedSize(horizontal: false, vertical: true)
+            }
+            .clipped()
+        } else {
+            ScrollView { content() }
         }
     }
 

@@ -32,9 +32,19 @@ struct MainShell: View {
                     // Loaded mail whose refresh is failing (M6).
                     if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
                     if let message = model.actionError { ActionErrorBanner(message: message) }
-                    content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        // A zone the web pins (or un-pins) redraws every time.
-                        .id(model.displayTimeZoneID ?? "")
+                    HStack(spacing: 0) {
+                        content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            // A zone the web pins (or un-pins) redraws every time.
+                            .id(model.displayTimeZoneID ?? "")
+                        // The assistant keeps the mail or the day on screen
+                        // beside it (M3): its own card INSIDE the content
+                        // card, below the title bar (founder, 2026-11-13 —
+                        // under the title bar its close button was covered).
+                        if model.assistantPanelVisible {
+                            AssistantPanel()
+                                .padding([.trailing, .bottom], AssistantPanelRules.inset)
+                        }
+                    }
                 }
                 .clipShape(UnevenRoundedRectangle(cornerRadii: ShellChrome.contentCorners))
                 // Inside the card: under a title bar the top is extra air.
@@ -49,12 +59,6 @@ struct MainShell: View {
                         .ignoresSafeArea(.container, edges: .top)
                 }
                 .padding([.trailing, .bottom], Theme.s2)
-                // The assistant keeps the mail or the day on screen beside
-                // it (M3): a trailing column, toggled from the toolbar / ⌘J.
-                if model.assistantPanelVisible {
-                    AssistantPanel()
-                        .ignoresSafeArea(.container, edges: .top)
-                }
             }
             // Keyboard focus must not wander behind a modal.
             .disabled(model.fullViewModalOpen)

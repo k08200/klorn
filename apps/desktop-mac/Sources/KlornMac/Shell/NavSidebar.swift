@@ -58,19 +58,21 @@ struct NavSidebar: View {
         }
     }
 
+    /// Updates above Settings (DMG feedback, 2026-11-13).
     private var footer: some View {
-        HStack(spacing: Theme.s1) {
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarUpdateButton()
             Button(action: actions.onOpenPreferences) {
                 HStack(spacing: Theme.s2) {
                     Image(systemName: "gearshape").font(Theme.Typo.body)
                         .foregroundStyle(Theme.accent)
-                        .frame(width: 20)
+                        .frame(width: NavFooterLayout.iconWidth)
                         .accessibilityHidden(true)
                     Text(L("prefs.title")).font(Theme.Typo.body)
                     Spacer(minLength: 0)
                 }
                 .foregroundStyle(Theme.sidebarInkDim)
-                .frame(height: 28)
+                .frame(height: NavFooterLayout.rowHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

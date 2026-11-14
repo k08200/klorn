@@ -813,9 +813,22 @@
 "today.lane.note.meeting" = "일정 관련";
 "today.lane.note.queue" = "울리지 않음";
 "today.lane.note.info" = "참고용";
-"today.seeAll" = "모두 보기";
 "today.schedule" = "오늘 일정";
 "today.search" = "메일 검색";
 "today.card.a11y" = "%2$@ 님의 %1$@, %3$@";
 "nav.accounts.all" = "모든 계정";
 "nav.accounts.showOnly.a11y" = "%@만 보기";
+
+/* DMG feedback (2026-11-13): Today column, sidebar update, theme toggle */
+"today.seeAllCount" = "모두 보기 (%d)";
+"today.free.title" = "빈 시간";
+"today.free.after" = "%@ 이후";
+"today.free.none" = "오늘 남은 빈 시간이 없어요.";
+"today.timeline.next" = "다음";
+"update.sidebar.install" = "새 버전 설치 · v%@";
+"update.sidebar.upToDate" = "최신 버전";
+"update.sidebar.checkFailed" = "확인하지 못했어요 · 다시 시도";
+"update.sidebar.installFailed" = "설치하지 못했어요 · 다시 시도";
+"theme.toggle.label" = "화면 모드";
+"theme.toggle.toLight" = "라이트 모드로 전환";
+"theme.toggle.toDark" = "다크 모드로 전환";

@@ -813,9 +813,22 @@
 "today.lane.note.meeting" = "予定に関係";
 "today.lane.note.queue" = "通知しない";
 "today.lane.note.info" = "参考";
-"today.seeAll" = "すべて表示";
 "today.schedule" = "今日の予定";
 "today.search" = "メールを検索";
 "today.card.a11y" = "%2$@からの%1$@、%3$@";
 "nav.accounts.all" = "すべてのアカウント";
 "nav.accounts.showOnly.a11y" = "%@のみ表示";
+
+/* DMG feedback (2026-11-13): Today column, sidebar update, theme toggle */
+"today.seeAllCount" = "すべて表示 (%d)";
+"today.free.title" = "空き時間";
+"today.free.after" = "%@ 以降";
+"today.free.none" = "今日の残りの空き時間はありません。";
+"today.timeline.next" = "次";
+"update.sidebar.install" = "新しいバージョンをインストール · v%@";
+"update.sidebar.upToDate" = "最新バージョン";
+"update.sidebar.checkFailed" = "確認できませんでした · 再試行";
+"update.sidebar.installFailed" = "インストールできませんでした · 再試行";
+"theme.toggle.label" = "外観";
+"theme.toggle.toLight" = "ライトモードに切り替え";
+"theme.toggle.toDark" = "ダークモードに切り替え";

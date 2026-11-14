@@ -136,14 +136,15 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               && !lanes.flatMap(\.rows).contains { $0.tier == .silent })
         let push = lanes.first { $0.tier == .push }
         check("today: Push is expanded: every row, nothing left over",
-              push?.style == .rows && push?.rows.count == 2 && push?.remaining == 0)
+              push?.rows.count == 2 && push?.remaining == 0)
         let laneQueue = lanes.first { $0.tier == .queue }
-        check("today: Queue shows the summary count and its top five, in server order",
-              laneQueue?.count == 20 && laneQueue?.rows.map(\.id) == ["q1", "q2", "q3", "q4", "q5"]
-              && laneQueue?.remaining == 15)
+        // Three rows a lane since the DMG feedback (founder, 2026-11-13).
+        check("today: Queue shows the summary count and its top three, in server order",
+              laneQueue?.count == 20 && laneQueue?.rows.map(\.id) == ["q1", "q2", "q3"]
+              && laneQueue?.remaining == 17)
         let info = lanes.first { $0.tier == .info }
-        check("today: Info is collapsed to a count",
-              info?.style == .collapsed && info?.count == 3 && info?.rows.isEmpty == true)
+        check("today: Info lists rows like the other compact lanes, with its count",
+              info?.count == 3 && info?.rows.map(\.id) == ["i1", "i2", "i3"])
     } else {
         check("the Today fixture decodes", false)
     }
@@ -371,9 +372,9 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               !today.isEmpty && !today.contains("Text(\"\\(lane.count)\")")
               && !today.contains("today.lane.a11y")
               && today.contains(".accessibilityLabel(lane.tier.label)"))
-        check("today: the overflow opens the lane in Mail (See all, N more)",
+        check("today: the overflow opens the lane in Mail (See all (N), N more)",
               today.contains("Button { model.go(to: .tier(lane.tier)) }")
-              && today.contains("L(\"today.seeAll\")")
+              && today.contains("L(\"today.seeAllCount\", compact.seeAllCount)")
               && cards.contains("L(\"today.cards.more\", cards.more)")
               && cards.contains("model.go(to: .tier(.push))"))
         check("today: the lane-count a11y string is gone from every locale",

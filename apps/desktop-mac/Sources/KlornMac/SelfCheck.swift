@@ -1604,6 +1604,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await detailPassSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     // M3/M4: sidebar symbols, the assistant toolbar panel, five Settings tabs (2026-11-13).
     for (name, ok) in await m34SelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    // The founder's DMG feedback: panel, Today column, sidebar update, theme (2026-11-13).
+    for (name, ok) in await macFeedbackSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("Localization:")
     // A key present in one language and missing in another ships a raw key

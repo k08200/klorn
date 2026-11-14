@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// The assistant as a trailing panel of the main window (M3, 2026-11-13,
-/// LOCKED), toggled by the window's "Assistant" toolbar button and ⌘J. It
+/// LOCKED; inside the content card since the DMG feedback), toggled by the window's "Assistant" toolbar button and ⌘J. It
 /// replaced the floating circular button and its popover dock; the contents
 /// are the dock's: the same thread as the Assistant section, plus the line
 /// naming the mail it is looking at with you. The point is still CONTEXT
@@ -18,50 +18,53 @@ struct AssistantPanel: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 0) {
-            Rectangle().fill(Theme.line).frame(width: Theme.hairline)
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                // The anchor line: what the assistant is looking at with
-                // you. Absent when nothing is open — never a fake claim.
-                if let subject = model.openedEmail?.subject, !subject.isEmpty {
-                    HStack(spacing: 5) {
-                        Image(systemName: "envelope").font(.caption2)
-                            .foregroundStyle(Theme.textDim).accessibilityHidden(true)
-                        Text(subject).font(.caption2).foregroundStyle(Theme.textDim)
-                            .lineLimit(1).truncationMode(.tail)
-                    }
-                    .padding(.horizontal, 12).padding(.bottom, 8)
-                    .accessibilityLabel(L("assistant.dock.context.a11y", subject))
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            // The anchor line: what the assistant is looking at with
+            // you. Absent when nothing is open — never a fake claim.
+            if let subject = model.openedEmail?.subject, !subject.isEmpty {
+                HStack(spacing: Theme.s1) {
+                    Image(systemName: "envelope").font(Theme.Typo.caption)
+                        .foregroundStyle(Theme.todayInk3).accessibilityHidden(true)
+                    Text(subject).font(Theme.Typo.caption).foregroundStyle(Theme.todayInk3)
+                        .lineLimit(1).truncationMode(.tail)
                 }
-                Divider().overlay(Theme.line)
-                AssistantThread(showsStarters: false)
+                .padding(.horizontal, Theme.s3).padding(.bottom, Theme.s2)
+                .accessibilityLabel(L("assistant.dock.context.a11y", subject))
             }
-            .frame(maxHeight: .infinity, alignment: .top)
+            Rectangle().fill(Theme.todayLine).frame(height: Theme.hairline)
+            AssistantThread(showsStarters: false)
         }
         .frame(width: AssistantPanelRules.width)
-        .background(Theme.bg)
+        .frame(maxHeight: .infinity, alignment: .top)
+        // Its own card inside the content card (founder, 2026-11-13): the
+        // content card's radius, the same 8pt inset from its edges.
+        .background(Theme.todayRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.contentCard))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.contentCard))
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: AssistantToolbar.symbol).font(.caption).foregroundStyle(Theme.accent)
+        HStack(spacing: Theme.s2) {
+            Image(systemName: AssistantToolbar.symbol).font(Theme.Typo.caption).foregroundStyle(Theme.accent)
                 .accessibilityHidden(true)
             Text(L("section.assistant"))
-                .font(.callout.weight(.semibold)).foregroundStyle(Theme.text)
+                .font(Theme.Typo.head).foregroundStyle(Theme.todayInk1)
+                .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 4)
+            Spacer(minLength: Theme.s1)
             Button {
                 model.showAssistantPanel = false
             } label: {
-                Image(systemName: "xmark").font(.caption2.weight(.semibold))
-                    .iconTarget(26)
+                Image(systemName: "xmark").font(Theme.Typo.caption.weight(.semibold))
+                    .frame(width: AssistantPanelRules.closeTarget, height: AssistantPanelRules.closeTarget)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .buttonStyle(.plain).foregroundStyle(Theme.todayInk2)
             .help(L("assistant.dock.close.a11y"))
             .accessibilityLabel(L("assistant.dock.close.a11y"))
         }
-        .padding(.horizontal, 12).padding(.vertical, 9)
+        .padding(.leading, Theme.s3).padding(.trailing, AssistantPanelRules.inset)
+        .frame(height: AssistantPanelRules.headerHeight)
     }
 }
 
@@ -71,6 +74,37 @@ enum AssistantPanelRules {
     /// thread's bubbles, narrow enough that main window floor + panel still
     /// fits a 1280pt display.
     static let width: CGFloat = 360
+    /// The gap between the panel and the content card's edges, and between
+    /// the close button and the panel's edge: the card's own 8pt inset.
+    static let inset: CGFloat = Theme.s2
+    /// The close button's hit target (≥28pt, founder 2026-11-13).
+    static let closeTarget: CGFloat = 28
+    static let headerHeight: CGFloat = 44
+
+    /// The panel's frame in the window (top-left origin): inside the content
+    /// card, which is inset `inset` from the window's trailing and bottom
+    /// edges and starts `inset` below the title bar. The panel was a full-
+    /// height column under the transparent title bar, so its close button
+    /// sat beneath the toolbar's own Assistant button (the clipped X).
+    static func frame(windowWidth: CGFloat, windowHeight: CGFloat, titlebarHeight: CGFloat) -> CGRect {
+        let top = titlebarHeight + inset
+        return CGRect(
+            x: windowWidth - 2 * inset - width, y: top,
+            width: width, height: max(0, windowHeight - top - 2 * inset))
+    }
+
+    /// The close button inside a panel frame: trailing, centred in the header.
+    static func closeButtonFrame(panel: CGRect) -> CGRect {
+        CGRect(
+            x: panel.maxX - inset - closeTarget, y: panel.minY + (headerHeight - closeTarget) / 2,
+            width: closeTarget, height: closeTarget)
+    }
+
+    /// Whole on screen: inside the window's width and below the title bar,
+    /// where nothing of the toolbar can cover it.
+    static func isWhollyVisible(_ rect: CGRect, windowWidth: CGFloat, titlebarHeight: CGFloat) -> Bool {
+        rect.minX >= 0 && rect.maxX <= windowWidth && rect.minY >= titlebarHeight
+    }
 
     /// Whether the panel is on screen. Signed out has no thread; a modal
     /// owns the window; the Assistant section already IS the thread.

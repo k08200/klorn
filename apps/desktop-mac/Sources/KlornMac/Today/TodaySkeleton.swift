@@ -30,7 +30,9 @@ enum TodayLayout {
     static let chipMaxWidth: CGFloat = 220
     /// A schedule entry's colored bar.
     static let eventBar: CGFloat = 3
-    static let eventMinWidth: CGFloat = 150
+    /// The timeline's start-time column and its "now" dot.
+    static let timelineClock: CGFloat = 40
+    static let nowDot: CGFloat = 6
 }
 
 /// The loading Today, shaped like the loaded one (M1): the caps line and

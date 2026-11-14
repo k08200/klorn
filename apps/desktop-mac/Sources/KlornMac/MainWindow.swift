@@ -6,8 +6,15 @@ import SwiftUI
 enum MainWindowRules {
     /// NSWindow frame autosave name: position and size survive relaunch.
     static let frameAutosaveName = "KlornMainWindow"
-    /// The main window's toolbar: one trailing "Assistant" button (M3).
+    /// The main window's toolbar: the light/dark toggle and the "Assistant"
+    /// button (M3), trailing.
     static let toolbarIdentifier = "KlornMainToolbar"
+    /// Left to right. The closing standard space keeps the Assistant button
+    /// off the window's edge (founder, 2026-11-13: "cramped at the edge");
+    /// AppKit spaces the two buttons itself.
+    @MainActor static let toolbarItems: [NSToolbarItem.Identifier] = [
+        .flexibleSpace, ThemeToolbar.itemIdentifier, AssistantToolbar.itemIdentifier, .space,
+    ]
     /// The shell's floor (sidebar 220 + list 420 + a readable ~240pt reading
     /// pane), so the window can never be dragged into clipping it. 880 keeps
     /// edge-drag alive on fitted sizes ("can't shrink it", 2026-08-07).
@@ -77,6 +84,11 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate,
     private var titlebarInset: CGFloat = 0
     /// The toolbar's "Assistant" button (M3); its state mirrors the panel.
     private weak var assistantButton: NSButton?
+    /// The toolbar's light/dark toggle; its symbol follows the appearance.
+    private weak var themeButton: NSButton?
+    /// Watches the app's effective appearance: the toggle's symbol follows
+    /// a System change and its own clicks alike.
+    private var appearanceObservation: NSKeyValueObservation?
     /// The shell's actions for the window; wired by the AppDelegate to the router.
     var actionsProvider: (() -> ShellActions?)?
     private(set) var window: NSWindow?
@@ -177,10 +189,26 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate,
         syncAssistantPanel()
     }
 
+    /// The toolbar toggle: the opposite of what is on screen, explicitly.
+    @objc func toggleAppearance(_ sender: Any?) {
+        model.settings.toggleAppearance(effectiveDark: ThemeToggleRules.isDark(NSApp.effectiveAppearance))
+    }
+
+    private func observeAppearance() {
+        guard appearanceObservation == nil else { return }
+        appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.initial, .new]) {
+            [weak self] _, _ in
+            // AppKit posts this KVO change on the main thread.
+            MainActor.assumeIsolated {
+                ThemeToolbar.update(self?.themeButton, effectiveDark: ThemeToggleRules.isDark(NSApp.effectiveAppearance))
+            }
+        }
+    }
+
     // MARK: NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, AssistantToolbar.itemIdentifier]
+        MainWindowRules.toolbarItems
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -191,10 +219,19 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate,
         _ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
-        guard itemIdentifier == AssistantToolbar.itemIdentifier else { return nil }
-        let item = AssistantToolbar.makeItem(target: self, action: #selector(toggleAssistantPanel(_:)))
-        assistantButton = item.view as? NSButton
-        return item
+        switch itemIdentifier {
+        case AssistantToolbar.itemIdentifier:
+            let item = AssistantToolbar.makeItem(target: self, action: #selector(toggleAssistantPanel(_:)))
+            assistantButton = item.view as? NSButton
+            return item
+        case ThemeToolbar.itemIdentifier:
+            let item = ThemeToolbar.makeItem(target: self, action: #selector(toggleAppearance(_:)))
+            themeButton = item.view as? NSButton
+            ThemeToolbar.update(themeButton, effectiveDark: ThemeToggleRules.isDark(NSApp.effectiveAppearance))
+            return item
+        default:
+            return nil
+        }
     }
 
     /// Close the main window; willClose does the rest.
@@ -221,7 +258,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate,
         window.title = "Klorn"
         window.titleVisibility = .hidden  // the sections draw their own titles
         window.titlebarAppearsTransparent = true
-        // The trailing "Assistant" button (M3). Installed before the title
+        // The trailing theme toggle and "Assistant" button. Installed before the title
         // bar is measured: the toolbar is part of the inset.
         let toolbar = NSToolbar(identifier: MainWindowRules.toolbarIdentifier)
         toolbar.delegate = self
@@ -229,6 +266,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate,
         toolbar.allowsUserCustomization = false
         window.toolbar = toolbar
         window.toolbarStyle = .unifiedCompact
+        observeAppearance()
         let titlebar = MainWindowRules.titlebarInset(
             frameHeight: window.frame.height, layoutHeight: window.contentLayoutRect.height)
         titlebarInset = titlebar
