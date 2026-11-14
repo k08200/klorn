@@ -13,7 +13,11 @@ const url = vi.hoisted(() => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
-import { orgAuditCutoff, purgeExpiredOrgAuditEvents } from "../org/audit-retention.js";
+import {
+  countOverdueOrgAuditEvents,
+  orgAuditCutoff,
+  purgeExpiredOrgAuditEvents,
+} from "../org/audit-retention.js";
 
 const describePg = url ? describe : describe.skip;
 const DAY_MS = 86_400_000;
@@ -85,6 +89,10 @@ describePg("org audit retention (real Postgres)", () => {
     await prisma.$disconnect();
   });
 
+  it("reports rows well past the window as overdue before the sweep", async () => {
+    expect(await countOverdueOrgAuditEvents(NOW)).toBeGreaterThanOrEqual(3);
+  });
+
   it("deletes only rows past the window, in batches smaller than the backlog", async () => {
     const result = await purgeExpiredOrgAuditEvents(NOW, { batchSize: 2, maxBatches: 100 });
     expect(result.complete).toBe(true);
@@ -97,9 +105,10 @@ describePg("org audit retention (real Postgres)", () => {
     expect(left.map((r) => r.id).sort()).toEqual([...kept, edge].sort());
   });
 
-  it("is idempotent: a second run deletes nothing of ours", async () => {
+  it("is idempotent: a second run deletes nothing of ours, and nothing is overdue", async () => {
     await purgeExpiredOrgAuditEvents(NOW);
     const left = await prisma.orgAuditEvent.count({ where: { id: { in: [...kept, edge] } } });
     expect(left).toBe(kept.length + 1);
+    expect(await countOverdueOrgAuditEvents(NOW)).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   findMany: vi.fn(),
   deleteMany: vi.fn(),
+  count: vi.fn(),
   withSystem: vi.fn(),
   captureError: vi.fn(),
   recordSchedulerTick: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("../scheduler-heartbeat.js", () => ({
 }));
 
 import {
+  countOverdueOrgAuditEvents,
   ORG_AUDIT_PURGE_INTERVAL_MS,
   ORG_AUDIT_RETENTION_DAYS,
   orgAuditCutoff,
@@ -42,7 +44,7 @@ const DAY_MS = 86_400_000;
 beforeEach(() => {
   for (const fn of Object.values(m)) fn.mockReset();
   m.withSystem.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({ orgAuditEvent: { findMany: m.findMany, deleteMany: m.deleteMany } }),
+    fn({ orgAuditEvent: { findMany: m.findMany, deleteMany: m.deleteMany, count: m.count } }),
   );
 });
 
@@ -118,7 +120,7 @@ describe("orgAuditRetentionTick", () => {
     const purge = vi.fn(async () => ({ deleted: 3, complete: true }));
     const held = lease(true);
     expect(
-      await orgAuditRetentionTick({ lease: held, purge, now: () => NOW, skips: { inARow: 0 } }),
+      await orgAuditRetentionTick({ lease: held, purge, now: () => NOW, overdue: async () => 0 }),
     ).toBe("ran");
     expect(held.runExclusive).toHaveBeenCalledTimes(1);
     expect(purge).toHaveBeenCalledWith(NOW);
@@ -132,7 +134,7 @@ describe("orgAuditRetentionTick", () => {
         lease: lease(false),
         purge,
         now: () => NOW,
-        skips: { inARow: 0 },
+        overdue: async () => 0,
       }),
     ).toBe("skipped");
     expect(purge).not.toHaveBeenCalled();
@@ -148,7 +150,7 @@ describe("orgAuditRetentionTick", () => {
         lease: lease(true),
         purge,
         now: () => NOW,
-        skips: { inARow: 0 },
+        overdue: async () => 0,
       }),
     ).toBe("failed");
     expect(m.captureError).toHaveBeenCalledTimes(1);
@@ -162,29 +164,51 @@ describe("orgAuditRetentionTick", () => {
         lease: lease(true),
         purge,
         now: () => NOW,
-        skips: { inARow: 0 },
+        overdue: async () => 0,
       }),
     ).toBe("ran");
     expect(m.captureError).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("org audit retention — repeated lease refusals", () => {
-  it("alerts once when two daily runs in a row are refused, and a run resets the count", async () => {
+describe("org audit retention — overdue rows (survives restarts)", () => {
+  it("counts rows more than two days past the cutoff, in the system scope", async () => {
+    m.count.mockResolvedValue(4);
+    expect(await countOverdueOrgAuditEvents(NOW)).toBe(4);
+    expect(m.count).toHaveBeenCalledWith({
+      where: { createdAt: { lt: new Date(orgAuditCutoff(NOW).getTime() - 2 * DAY_MS) } },
+    });
+    expect(m.withSystem).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused run alerts when rows are overdue, and stays quiet when none are", async () => {
     const purge = vi.fn(async () => ({ deleted: 0, complete: true }));
-    const skips = { inARow: 0 };
-    const tick = (granted: boolean) =>
-      orgAuditRetentionTick({ lease: lease(granted), purge, now: () => NOW, skips });
-    await tick(false);
+    const tick = (overdue: number) =>
+      orgAuditRetentionTick({
+        lease: lease(false),
+        purge,
+        now: () => NOW,
+        overdue: async () => overdue,
+      });
+    expect(await tick(0)).toBe("skipped");
     expect(m.captureError).not.toHaveBeenCalled();
-    await tick(false);
+    expect(await tick(12)).toBe("skipped");
     expect(m.captureError).toHaveBeenCalledTimes(1);
-    await tick(false);
-    expect(m.captureError).toHaveBeenCalledTimes(1);
-    expect(await tick(true)).toBe("ran");
-    expect(skips.inARow).toBe(0);
-    await tick(false);
-    expect(m.captureError).toHaveBeenCalledTimes(1);
+    expect(m.captureError.mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "org-audit-retention.overdue" },
+      extra: { overdue: 12 },
+    });
+  });
+
+  it("a run that purged does not ask (it just emptied the window)", async () => {
+    const overdue = vi.fn(async () => 99);
+    await orgAuditRetentionTick({
+      lease: lease(true),
+      purge: async () => ({ deleted: 1, complete: true }),
+      now: () => NOW,
+      overdue,
+    });
+    expect(overdue).not.toHaveBeenCalled();
   });
 });
 

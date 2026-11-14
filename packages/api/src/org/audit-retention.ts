@@ -42,12 +42,13 @@ export const ORG_AUDIT_PURGE_INTERVAL_MS = DAY_MS;
 const FIRST_RUN_DELAY_MS = 10 * 60 * 1000;
 const SCHEDULER = "org-audit-retention";
 /**
- * Consecutive lease refusals that alert. The lease's own alert needs ~10
- * minutes of skipped ticks, which a daily job never accumulates, so a lease
- * store that keeps failing would otherwise stop retention without a word. Two
- * daily refusals in a row are not a deploy overlap.
+ * Rows this far past the cutoff mean the sweep is not running: a refused lease
+ * every day, a crash, or a forgotten pause on another instance. Checked from
+ * the database on every refused run, so it survives restarts (an in-process
+ * streak would reset on each deploy, and the lease's own skip alert is
+ * in-memory too).
  */
-const SKIP_ALERT_AFTER = 2;
+const OVERDUE_GRACE_MS = 2 * DAY_MS;
 
 export function isOrgAuditRetentionDisabled(): boolean {
   const raw = (process.env.ORG_AUDIT_RETENTION_DISABLED ?? "").trim().toLowerCase();
@@ -106,12 +107,19 @@ export interface RetentionTickDeps {
   lease: Pick<SchedulerLease, "runExclusive">;
   purge: (now: Date) => Promise<PurgeResult>;
   now: () => Date;
-  /** Lease refusals in a row, across ticks of this process. */
-  skips: { inARow: number };
+  /** Rows older than the cutoff by more than the grace: the sweep is overdue. */
+  overdue: (now: Date) => Promise<number>;
 }
 
 let defaultLease: SchedulerLease | null = null;
-const processSkips = { inARow: 0 };
+
+/** Count audit rows past the window by more than OVERDUE_GRACE_MS. */
+export function countOverdueOrgAuditEvents(now: Date): Promise<number> {
+  const overdueBefore = new Date(orgAuditCutoff(now).getTime() - OVERDUE_GRACE_MS);
+  return withSystem((tx) =>
+    tx.orgAuditEvent.count({ where: { createdAt: { lt: overdueBefore } } }),
+  );
+}
 
 function defaults(): RetentionTickDeps {
   defaultLease ??= createSchedulerLease({ name: SCHEDULER, logPrefix: "[ORG-AUDIT]" });
@@ -119,7 +127,7 @@ function defaults(): RetentionTickDeps {
     lease: defaultLease,
     purge: (now) => purgeExpiredOrgAuditEvents(now),
     now: () => new Date(),
-    skips: processSkips,
+    overdue: countOverdueOrgAuditEvents,
   };
 }
 
@@ -136,36 +144,38 @@ function reportRun(done: PurgeResult | undefined): void {
   }
 }
 
-/** Count a refusal; alert once when a run of them reaches SKIP_ALERT_AFTER. */
-function reportSkip(skips: { inARow: number }): void {
-  skips.inARow += 1;
-  if (skips.inARow !== SKIP_ALERT_AFTER) return;
-  captureError(new Error(`org audit retention skipped ${skips.inARow} daily runs in a row`), {
-    tags: { scope: "org-audit-retention.skipped" },
+/** On a refused run: alert when rows are well past the window (no run has happened anywhere). */
+async function reportIfOverdue(deps: RetentionTickDeps, now: Date): Promise<void> {
+  const overdue = await deps.overdue(now);
+  if (overdue === 0) return;
+  captureError(new Error("org audit retention is overdue: rows remain past the window"), {
+    tags: { scope: "org-audit-retention.overdue" },
+    extra: { overdue },
   });
 }
 
 /**
  * One scheduled run. "skipped" when the lease is refused: another instance
  * holds it (it does the work, so this one is alive and records its heartbeat)
- * or the acquire failed, which repeated refusals alert on. "failed" records no
- * heartbeat, so a sweep that keeps failing goes stale in the health check as
- * well as reaching Sentry.
+ * or the acquire failed; either way the database is asked whether rows are
+ * overdue, which alerts when no instance has purged for days. "failed"
+ * records no heartbeat, so a sweep that keeps failing goes stale in the health
+ * check as well as reaching Sentry.
  */
 export async function orgAuditRetentionTick(
   deps: RetentionTickDeps = defaults(),
 ): Promise<"ran" | "skipped" | "failed"> {
   try {
+    const now = deps.now();
     const run: { result?: PurgeResult } = {};
     const ran = await deps.lease.runExclusive(async () => {
-      run.result = await deps.purge(deps.now());
+      run.result = await deps.purge(now);
     });
     recordSchedulerTick(SCHEDULER);
     if (!ran) {
-      reportSkip(deps.skips);
+      await reportIfOverdue(deps, now);
       return "skipped";
     }
-    deps.skips.inARow = 0;
     reportRun(run.result);
     return "ran";
   } catch (err) {
@@ -185,7 +195,9 @@ function tick(): void {
 export function startOrgAuditRetentionScheduler(): void {
   if (intervalId || firstRunTimer) return;
   if (isOrgAuditRetentionDisabled()) {
-    console.log("[ORG-AUDIT] retention paused (ORG_AUDIT_RETENTION_DISABLED is set)");
+    console.warn(
+      "[ORG-AUDIT] retention PAUSED (ORG_AUDIT_RETENTION_DISABLED is set): audit rows are kept past the window until it is unset",
+    );
     markSchedulerDisabled(SCHEDULER);
     return;
   }
