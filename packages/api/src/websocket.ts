@@ -8,14 +8,14 @@
  * - Voice command streaming
  */
 
-import type { Server } from "node:http";
+import type { IncomingMessage, Server } from "node:http";
 import type { DesktopAlertKind, DesktopMailToast } from "@klorn/contract";
 import { WebSocket, WebSocketServer } from "ws";
 import {
+  checkSessionActive,
   isDemoAccessEnabled,
-  isDeviceSessionValid,
-  sessionRevokedForToken,
-  verifyToken,
+  reportSessionCheckFailure,
+  verifiedPayload,
 } from "./auth.js";
 import {
   desktopPresence,
@@ -42,6 +42,20 @@ const clients: Map<string, WsClient> = new Map();
 
 let wss: WebSocketServer | null = null;
 
+/**
+ * Close codes for the handshake's session check. 4001 means the session is
+ * definitively over (forged/expired JWT, kicked device, revoked epoch) — the
+ * same verdict the HTTP path answers with a 401. When the database could not
+ * decide (pool timeout, dropped connection) the socket closes with 1013 "Try
+ * Again Later" from the IANA WebSocket close-code registry (RFC 6455 §11.7):
+ * the HTTP path's retryable 503 SESSION_CHECK_UNAVAILABLE, in socket form. Clients
+ * reconnect with backoff on it and never treat it as a sign-out.
+ */
+export const WS_CLOSE_SESSION_ENDED = 4001;
+export const WS_CLOSE_SESSION_CHECK_UNAVAILABLE = 1013;
+/** Close reason for 1013. Fixed text: no database error ever reaches it. */
+const SESSION_CHECK_UNAVAILABLE_REASON = "Couldn't verify your session right now. Try again.";
+
 /** Subprotocol marker that carries the auth JWT out of the URL. The client
  *  offers ["klorn-ws-v1", <jwt>] as its Sec-WebSocket-Protocol; the server
  *  selects only the marker back and reads the JWT from the value after it. */
@@ -64,6 +78,61 @@ export function extractWsSubprotocolToken(header: string | string[] | undefined)
   return parts[idx + 1] ?? null;
 }
 
+type SocketAuth = { ok: true; userId: string } | { ok: false; code: number; reason: string };
+
+/**
+ * Authenticate a new socket. The JWT rides the Sec-WebSocket-Protocol
+ * subprotocol — never the URL, so the credential stays out of proxy/LB access
+ * logs. The legacy ?token= query fallback is gone (every shipped client offers
+ * the subprotocol); the only tokenless path left is the demo branch.
+ */
+async function authenticateSocket(req: IncomingMessage, url: URL): Promise<SocketAuth> {
+  const token = extractWsSubprotocolToken(req.headers["sec-websocket-protocol"]);
+  if (!token) {
+    // Unauthenticated demo-user is OFF in production. Same single predicate as
+    // every HTTP demo path (getUserId, ensureDemoUser, /login) so the gates
+    // can't drift. Without it a tokenless client must not connect.
+    const rawUserId = url.searchParams.get("userId");
+    if (!isDemoAccessEnabled() || (rawUserId && rawUserId !== "demo-user")) {
+      return {
+        ok: false,
+        code: WS_CLOSE_SESSION_ENDED,
+        reason: "Authentication required — offer the auth subprotocol",
+      };
+    }
+    return { ok: true, userId: "demo-user" };
+  }
+  const payload = verifiedPayload(token);
+  if (!payload)
+    return { ok: false, code: WS_CLOSE_SESSION_ENDED, reason: "Invalid or expired token" };
+  // Mirror requireAuth: a bare verifyToken only checks signature+expiry. Also
+  // reject a token invalidated by a device-kick (another login) or a global
+  // revocation (password reset), else a revoked token keeps streaming the
+  // user's real-time notification payloads.
+  const verdict = await checkSessionActive(token, payload);
+  if (verdict.kind === "ended") {
+    return {
+      ok: false,
+      code: WS_CLOSE_SESSION_ENDED,
+      reason: "Session expired. Please log in again.",
+    };
+  }
+  if (verdict.kind === "unavailable") {
+    // The database could not decide. The session was never shown to be over,
+    // so this is not 4001 (which reads as "signed out"): a retryable close
+    // that admits nothing. Logged and reported (rate-limited, shared with the
+    // HTTP path); the error text stays server-side.
+    console.error("[WS] session check failed: database unavailable", verdict.error);
+    reportSessionCheckFailure(verdict.error);
+    return {
+      ok: false,
+      code: WS_CLOSE_SESSION_CHECK_UNAVAILABLE,
+      reason: SESSION_CHECK_UNAVAILABLE_REASON,
+    };
+  }
+  return { ok: true, userId: payload.userId };
+}
+
 /** Initialize WebSocket server attached to existing HTTP server */
 export function initWebSocket(server: Server): WebSocketServer {
   wss = new WebSocketServer({
@@ -79,54 +148,42 @@ export function initWebSocket(server: Server): WebSocketServer {
   });
 
   wss.on("connection", async (ws, req) => {
-    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    // Before any await: a malformed frame or a reset while the session check
+    // runs emits 'error', and an 'error' with no listener crashes the process.
+    // Replaced by the client's own handler once the socket is admitted.
+    const onEarlyError = (err: Error) => {
+      console.warn("[WS] socket error before admission:", err.message);
+    };
+    ws.on("error", onEarlyError);
+    // A fixed base: only the query is read, and a client-sent Host header that
+    // is no valid URL host must not throw out of this async handler.
+    const url = new URL(req.url || "/", "http://localhost");
     // Validated, not cast: the value lands in clientId, logs and broadcasts.
     const clientType = parseWsClientType(url.searchParams.get("type"));
     const desktopApp =
       clientType === "desktop" ? parseWsClientApp(url.searchParams.get("app")) : null;
 
-    // Authenticate. The JWT rides the Sec-WebSocket-Protocol subprotocol —
-    // never the URL, so the credential stays out of proxy/LB access logs. The
-    // legacy ?token= query fallback is gone (every shipped client offers the
-    // subprotocol); the only tokenless path left is the demo branch below.
-    let userId: string;
-    const token = extractWsSubprotocolToken(req.headers["sec-websocket-protocol"]);
-    if (token) {
-      try {
-        const payload = verifyToken(token);
-        // Mirror requireAuth: a bare verifyToken only checks signature+expiry.
-        // Also reject a token invalidated by a device-kick (another login) or a
-        // global revocation (password reset), else a revoked token keeps
-        // streaming the user's real-time notification payloads.
-        const [deviceValid, revoked] = await Promise.all([
-          isDeviceSessionValid(token),
-          sessionRevokedForToken(payload),
-        ]);
-        if (!deviceValid || revoked) {
-          ws.close(4001, "Session expired. Please log in again.");
-          return;
-        }
-        userId = payload.userId;
-      } catch (err) {
-        // Log a signal: this now also covers two DB-backed checks (device
-        // session + revocation), so a DB blip must not be indistinguishable
-        // from routine invalid-token noise with zero trace.
-        console.warn("[WS] auth check failed — closing socket:", err);
-        ws.close(4001, "Invalid or expired token");
-        return;
-      }
-    } else {
-      // Unauthenticated demo-user is OFF in production. Same single predicate as
-      // every HTTP demo path (getUserId, ensureDemoUser, /login) so the gates
-      // can't drift. Without it a tokenless client must not connect.
-      const demoAllowed = isDemoAccessEnabled();
-      const rawUserId = url.searchParams.get("userId");
-      if (!demoAllowed || (rawUserId && rawUserId !== "demo-user")) {
-        ws.close(4001, "Authentication required — offer the auth subprotocol");
-        return;
-      }
-      userId = "demo-user";
+    let auth: SocketAuth;
+    try {
+      auth = await authenticateSocket(req, url);
+    } catch (err) {
+      // Nothing decided the session: retryable, never 4001, admits nothing.
+      console.error("[WS] session check failed unexpectedly:", err);
+      auth = {
+        ok: false,
+        code: WS_CLOSE_SESSION_CHECK_UNAVAILABLE,
+        reason: SESSION_CHECK_UNAVAILABLE_REASON,
+      };
     }
+    if (!auth.ok) {
+      ws.close(auth.code, auth.reason);
+      return;
+    }
+    // The peer may have left while the check ran: its 'close' already fired,
+    // so registering it now would leak a client and its desktop presence.
+    if (ws.readyState !== WebSocket.OPEN) return;
+    ws.off("error", onEarlyError);
+    const { userId } = auth;
     const clientId = `${userId}-${clientType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const client: WsClient = {

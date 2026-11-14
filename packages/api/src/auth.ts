@@ -220,7 +220,7 @@ const SESSION_ENDED = {
  * when EVERY check answered and none ended it; a check that threw leaves it
  * "unavailable" (undecided), unless another check definitively ended it.
  */
-type SessionVerdict =
+export type SessionVerdict =
   | { kind: "active" }
   | { kind: "ended" }
   | { kind: "unavailable"; error: unknown };
@@ -236,6 +236,24 @@ function settleSessionChecks(
 }
 
 /**
+ * The session checks every bearer of a verified JWT must pass: the device was
+ * not kicked by another login, and the token predates no global revocation
+ * (password reset). Shared by requireAuth and the WebSocket handshake so the
+ * two can't drift: a check that threw is "unavailable" (retry), never "ended".
+ */
+export async function checkSessionActive(
+  rawToken: string,
+  payload: JwtPayload,
+): Promise<SessionVerdict> {
+  return settleSessionChecks(
+    await Promise.allSettled([
+      isDeviceSessionValid(rawToken),
+      sessionRevokedForToken(payload).then((revoked) => !revoked),
+    ]),
+  );
+}
+
+/**
  * At most one Sentry report per this interval per process: in a database
  * outage every authenticated request fails the session check, and one event
  * says as much as thousands. Every failure is still logged.
@@ -243,7 +261,7 @@ function settleSessionChecks(
 const SESSION_CHECK_REPORT_INTERVAL_MS = 30_000;
 let lastSessionCheckReportAt = Number.NEGATIVE_INFINITY;
 
-function reportSessionCheckFailure(err: unknown): void {
+export function reportSessionCheckFailure(err: unknown): void {
   const now = Date.now();
   if (now - lastSessionCheckReportAt < SESSION_CHECK_REPORT_INTERVAL_MS) return;
   lastSessionCheckReportAt = now;
@@ -268,7 +286,7 @@ function sendSessionCheckUnavailable(request: FastifyRequest, reply: FastifyRepl
 }
 
 /** The token's payload, or null when its signature or expiry fails. */
-function verifiedPayload(rawToken: string): JwtPayload | null {
+export function verifiedPayload(rawToken: string): JwtPayload | null {
   try {
     return verifyToken(rawToken);
   } catch {
@@ -292,12 +310,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   if (!payload) return reply.code(401).send({ error: "Invalid or expired token" });
   // Verify the session is still active: device not kicked by another login,
   // AND the token was not issued before a global revocation (password reset).
-  const verdict = settleSessionChecks(
-    await Promise.allSettled([
-      isDeviceSessionValid(rawToken),
-      sessionRevokedForToken(payload).then((revoked) => !revoked),
-    ]),
-  );
+  const verdict = await checkSessionActive(rawToken, payload);
   if (verdict.kind === "ended") return reply.code(401).send(SESSION_ENDED);
   if (verdict.kind === "unavailable") {
     return sendSessionCheckUnavailable(request, reply, verdict.error);

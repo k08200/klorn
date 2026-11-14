@@ -116,6 +116,7 @@ final class RealtimeClient {
             }
             heartbeat.cancel()
             if stopped || Task.isCancelled { return }
+            backoff = Self.backoffAfterClose(code: socket.closeCode.rawValue, current: backoff)
             try? await Task.sleep(for: .seconds(min(backoff, Self.maxBackoff)))
             backoff = Self.nextBackoff(backoff)
         }
@@ -163,6 +164,21 @@ final class RealtimeClient {
     /// Exponential backoff step, capped. Pure for the harness.
     nonisolated static func nextBackoff(_ current: Double) -> Double {
         min(current * 2, maxBackoff)
+    }
+
+    /// Close codes of the server's handshake session check (websocket.ts).
+    /// 4001: the session is definitively over. 1013 "Try Again Later": the
+    /// database could not decide it — retried on the normal backoff like any
+    /// network drop.
+    nonisolated static let closeSessionEnded = 4001
+
+    /// The wait before the next connect, given the close code the server sent.
+    /// After a 4001 a sooner retry with the same dead token only earns another
+    /// 4001, so it waits the cap. The socket never signs out: the poll's 401
+    /// (`sessionRejected`) is the only path that ends a session, so a database
+    /// blip on the socket can't. Pure for the harness.
+    nonisolated static func backoffAfterClose(code: Int, current: Double) -> Double {
+        code == closeSessionEnded ? maxBackoff : current
     }
 
     private nonisolated static func isWake(_ message: URLSessionWebSocketTask.Message) -> Bool {
