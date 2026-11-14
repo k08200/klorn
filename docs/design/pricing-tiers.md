@@ -68,6 +68,35 @@ each teammate's calendar. A company that adopts Klorn also removes the
 7. Audit log of admin actions and cross-member free/busy reads.
 8. Member transparency screen: what the company can and cannot see.
 
+### Seat changes, cancel and the billing portal
+
+Owner only (`src/org/seat-management.ts`); members are refused. Paddle is the
+source of truth: no route writes the stored seat count or status, the
+subscription webhook does.
+
+- **Seat changes** set the quantity to N (2–150, never below the current
+  members). Billed `prorated_immediately` in both directions: an added seat is
+  charged for the rest of the current period, a removed seat is credited to
+  the customer's Paddle balance for the next renewal. The other modes charge
+  for days a seat was not held, leave seats unbilled until the renewal, or
+  never bill them. The change keeps the subscription's own price (never the
+  newest configured one, which would move the team to it without notice), and
+  a failed proration charge leaves the subscription unchanged
+  (`on_payment_failure: prevent_change`). Asking for the count already bought,
+  or the count Paddle already holds, makes no change. Only while active or
+  trialing with nothing scheduled: Paddle refuses updates to a past-due
+  subscription.
+- **Cancel** is at the period end only, like Pro: seats stay until Paddle's
+  final event. A past-due subscription can be canceled this way and stays
+  past due until the period ends; a paused one can only be ended immediately,
+  which is left to the portal. A scheduled cancel can be taken back. An
+  organization whose subscription still bills (active, trialing, past due,
+  paused) is never closed or deleted.
+- **Billing portal** opens only for the account that opened the team
+  checkout. The portal is the payer's whole Paddle account (other
+  subscriptions, invoices, address); after an ownership transfer the new owner
+  manages seats and cancel in Klorn, not the old owner's Paddle account.
+
 ### Later
 
 - Organization VIP domains, only as a relationship signal into the judge.

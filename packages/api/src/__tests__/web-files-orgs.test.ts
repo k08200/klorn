@@ -19,9 +19,13 @@ import {
   isOwner,
   orgErrorKey,
   parseSeats,
+  parseSeatsFrom,
+  SEAT_MANAGEMENT_CODES,
   INVITE_TOKEN_STORAGE_KEY as STORED_TOKEN_KEY,
+  seatFloor,
   seatStatusKey,
   showTeamSection,
+  subscriptionActions,
   TERMINAL_INVITE_CODES,
 } from "../../../web/src/app/settings/_sections/org/model";
 import en from "../../../web/src/lib/locales/en";
@@ -96,6 +100,76 @@ describe("seats and caps", () => {
   });
 });
 
+describe("seat management after purchase", () => {
+  it("never lets the seat count fall below two or the members", () => {
+    expect([0, 1, 2, 5, 150, 200].map(seatFloor)).toEqual([2, 2, 2, 5, 150, 150]);
+    expect(parseSeatsFrom("4", 5)).toBeNull();
+    expect(parseSeatsFrom("5", 5)).toBe(5);
+    expect(parseSeatsFrom("151", 5)).toBeNull();
+    expect(parseSeatsFrom("abc", 2)).toBeNull();
+  });
+
+  it("offers each owner action only in the subscription states Paddle allows it", () => {
+    const at = "2026-12-14T00:00:00.000Z";
+    expect(subscriptionActions({ status: "active", cancelAt: null })).toEqual({
+      changeSeats: true,
+      cancel: true,
+      resume: false,
+      portal: true,
+    });
+    expect(subscriptionActions({ status: "trialing", cancelAt: at })).toEqual({
+      changeSeats: false,
+      cancel: false,
+      resume: true,
+      portal: true,
+    });
+    // Past due: Paddle refuses updates but takes a period-end cancel, and the
+    // portal is where the payment method is fixed.
+    expect(subscriptionActions({ status: "past_due", cancelAt: null })).toEqual({
+      changeSeats: false,
+      cancel: true,
+      resume: false,
+      portal: true,
+    });
+    expect(subscriptionActions({ status: "paused", cancelAt: null })).toEqual({
+      changeSeats: false,
+      cancel: false,
+      resume: false,
+      portal: true,
+    });
+    for (const status of ["canceled", null]) {
+      expect(Object.values(subscriptionActions({ status, cancelAt: null }))).toEqual([
+        false,
+        false,
+        false,
+        false,
+      ]);
+    }
+  });
+
+  it("gives every seat-management refusal its own message", () => {
+    expect([...SEAT_MANAGEMENT_CODES].sort()).toEqual(
+      [
+        "BILLING_PROVIDER_ERROR",
+        "CANCEL_SCHEDULED",
+        "NO_SCHEDULED_CANCEL",
+        "NO_SUBSCRIPTION",
+        "PORTAL_PAYER_ONLY",
+        "SEATS_BELOW_MEMBERS",
+        "SEAT_CHANGE_UNSUPPORTED",
+        "SUBSCRIPTION_NOT_ACTIVE",
+        "SUBSCRIPTION_PAUSED",
+        "TEAM_BILLING_UNAVAILABLE",
+      ].sort(),
+    );
+    for (const code of SEAT_MANAGEMENT_CODES) {
+      const key = orgErrorKey(new Error(`API 409: {"code":"${code}"}`));
+      expect(key).toBe(`settings.org.error.${code}`);
+      expect(en[key], key).toBeTypeOf("string");
+    }
+  });
+});
+
 describe("org refusals", () => {
   it("reads the code apiFetch's error carries", () => {
     const err = new Error('API 403: {"error":"x","code":"OWNER_ONLY"}');
@@ -133,6 +207,19 @@ describe("org refusals", () => {
       "settings.org.loadFailed",
       "settings.org.retry",
       "settings.org.error.generic",
+      "settings.org.seats.change",
+      "settings.org.seats.changeAction",
+      "settings.org.seats.floor",
+      "settings.org.seats.pending",
+      "settings.org.seats.unchanged",
+      "settings.org.subscription.cancel",
+      "settings.org.subscription.cancelTitle",
+      "settings.org.subscription.cancelMessageNoDate",
+      "settings.org.subscription.cancelConfirm",
+      "settings.org.subscription.keep",
+      "settings.org.subscription.endsOn",
+      "settings.org.subscription.endsSoon",
+      "settings.org.subscription.portal",
     ];
     for (const key of keys) expect(en[key], key).toBeTypeOf("string");
   });

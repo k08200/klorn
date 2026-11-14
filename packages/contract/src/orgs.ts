@@ -27,6 +27,8 @@ export interface OrgWire {
     active: boolean;
     /** Intervals a team checkout can be opened for now; empty while billing is off. */
     checkoutIntervals: TeamIntervalWire[];
+    /** When a scheduled period-end cancel ends the subscription (ISO), or null. */
+    cancelAt: string | null;
   };
 }
 
@@ -120,5 +122,30 @@ export interface OrgTransparencyResponse {
 
 /** `POST /api/orgs/current/checkout` with `{ interval, seats }` (owner only). */
 export interface OrgCheckoutResponse {
+  url: string;
+}
+
+/**
+ * `POST /api/orgs/current/seats` with `{ seats }` (owner only). "pending": Paddle
+ * took the change (202) and the stored seats move when its webhook arrives;
+ * "unchanged": the organization already has that many seats (200).
+ */
+export interface OrgSeatChangeResponse {
+  status: "pending" | "unchanged";
+  seats: number;
+}
+
+/** `POST /api/orgs/current/subscription/cancel` (owner only): when the seats end (ISO), if Paddle said. */
+export interface OrgCancelResponse {
+  cancelAt: string | null;
+}
+
+/** `POST /api/orgs/current/subscription/resume` (owner only). */
+export interface OrgResumeResponse {
+  resumed: true;
+}
+
+/** `POST /api/orgs/current/billing-portal` (the owner who set up billing only). */
+export interface OrgBillingPortalResponse {
   url: string;
 }

@@ -16,13 +16,13 @@ export type TeamInterval = "month" | "year";
 export const TEAM_INTERVALS: readonly TeamInterval[] = ["month", "year"];
 export const TEAM_SEATS_KIND = "team_seats";
 
-const PRICE_ENV: Record<TeamInterval, string> = {
+export const TEAM_PRICE_ENV: Record<TeamInterval, string> = {
   month: "PADDLE_TEAM_PRICE_ID_MONTHLY",
   year: "PADDLE_TEAM_PRICE_ID_ANNUAL",
 };
 
 export function teamPriceIdFor(interval: TeamInterval): string | null {
-  const value = (process.env[PRICE_ENV[interval]] ?? "").trim();
+  const value = (process.env[TEAM_PRICE_ENV[interval]] ?? "").trim();
   return value === "" ? null : value;
 }
 
@@ -50,6 +50,81 @@ export async function createPaddleTeamCheckout(opts: {
   return url;
 }
 
+/**
+ * How a seat change is billed (Paddle `proration_billing_mode`):
+ * prorated_immediately, both directions. Adding seats charges only the rest
+ * of the current period now, so a seat is paid for from the day it exists and
+ * no new member waits for a renewal; removing seats credits the unused part
+ * to the customer's Paddle balance, which the next renewal draws down. Every
+ * other mode either charges for days a seat was not held (full_*), lets seats
+ * run unbilled until the renewal (*_next_billing_period), or never bills
+ * them (do_not_bill).
+ */
+export const SEAT_CHANGE_PRORATION = "prorated_immediately";
+
+/** The live subscription, read before a seat change (GET /subscriptions/{id}). */
+export interface PaddleTeamSubscription {
+  status: string | null;
+  /** The scheduled change's action ("cancel", "pause", …), or null. */
+  scheduledChange: string | null;
+  items: Array<{ priceId: string | null; quantity: number | null }>;
+}
+
+export async function getPaddleTeamSubscription(
+  subscriptionId: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<PaddleTeamSubscription> {
+  const body = (await paddleFetch(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    undefined,
+    "GET",
+    opts,
+  )) as {
+    data?: {
+      status?: unknown;
+      scheduled_change?: { action?: unknown } | null;
+      items?: Array<{ price?: { id?: unknown } | null; quantity?: unknown }> | null;
+    };
+  };
+  const data = body?.data ?? {};
+  const action = data.scheduled_change?.action;
+  return {
+    status: typeof data.status === "string" ? data.status : null,
+    scheduledChange: data.scheduled_change
+      ? typeof action === "string"
+        ? action
+        : "unknown"
+      : null,
+    items: (data.items ?? []).map((item) => ({
+      priceId: typeof item.price?.id === "string" ? item.price.id : null,
+      quantity: Number.isInteger(item.quantity) ? (item.quantity as number) : null,
+    })),
+  };
+}
+
+/**
+ * Set the seat count: the subscription's one item, on its own price, at
+ * `quantity`. Paddle replaces the item list, so the price id is the one the
+ * subscription already bills on (never chosen by a client, never the newest
+ * configured price, which would quietly move the organization to it). A failed
+ * proration charge leaves the subscription as it was (prevent_change).
+ */
+export async function setPaddleSeatQuantity(
+  opts: { subscriptionId: string; priceId: string; quantity: number },
+  call: { timeoutMs?: number } = {},
+): Promise<void> {
+  await paddleFetch(
+    `/subscriptions/${encodeURIComponent(opts.subscriptionId)}`,
+    {
+      items: [{ price_id: opts.priceId, quantity: opts.quantity }],
+      proration_billing_mode: SEAT_CHANGE_PRORATION,
+      on_payment_failure: "prevent_change",
+    },
+    "PATCH",
+    call,
+  );
+}
+
 /** The parts of a Paddle subscription event the team path reads. */
 export interface TeamSubscriptionData {
   id?: string;
@@ -58,6 +133,21 @@ export interface TeamSubscriptionData {
   custom_data?: { orgId?: unknown; kind?: unknown; userId?: unknown } | null;
   items?: Array<{ price?: { id?: string } | null; quantity?: number }> | null;
   billing_cycle?: { interval?: string; frequency?: number } | null;
+  scheduled_change?: { action?: string; effective_at?: string | null } | null;
+}
+
+/**
+ * When a scheduled period-end cancel takes effect: a Date, null when the event
+ * says there is none (or the subscription is already canceled), undefined when
+ * the event does not say (the stored value is kept).
+ */
+export function teamCancelAt(data: TeamSubscriptionData): Date | null | undefined {
+  if (data.status === "canceled") return null;
+  if (data.scheduled_change === undefined) return undefined;
+  const change = data.scheduled_change;
+  if (change?.action !== "cancel" || !change.effective_at) return null;
+  const at = new Date(change.effective_at);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 /** Per item, Paddle quantities outside this are refused rather than stored. */

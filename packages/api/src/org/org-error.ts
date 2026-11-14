@@ -29,7 +29,18 @@ export type OrgErrorCode =
   | "INVITE_LIMIT"
   | "EMAIL_NOT_VERIFIED"
   | "INVALID_SEATS"
-  | "TEAM_CHECKOUT_UNAVAILABLE";
+  | "TEAM_CHECKOUT_UNAVAILABLE"
+  // Seat management after purchase (seat-management.ts).
+  | "TEAM_BILLING_UNAVAILABLE"
+  | "NO_SUBSCRIPTION"
+  | "SUBSCRIPTION_NOT_ACTIVE"
+  | "SUBSCRIPTION_PAUSED"
+  | "CANCEL_SCHEDULED"
+  | "NO_SCHEDULED_CANCEL"
+  | "SEATS_BELOW_MEMBERS"
+  | "SEAT_CHANGE_UNSUPPORTED"
+  | "PORTAL_PAYER_ONLY"
+  | "BILLING_PROVIDER_ERROR";
 
 export class OrgError extends Error {
   constructor(

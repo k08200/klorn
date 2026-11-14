@@ -3195,6 +3195,42 @@ const fr: Record<string, string> = {
   "settings.org.checkout.annual": "Payer à l’année · {price} par siège et par mois",
   "settings.org.checkout.monthlyPlain": "Payer au mois",
   "settings.org.checkout.annualPlain": "Payer à l’année",
+  "settings.org.seats.change": "Sièges ({min}–{max})",
+  "settings.org.seats.changeAction": "Mettre à jour les sièges",
+  "settings.org.seats.floor":
+    "Au moins {min} : deux sièges minimum, et un par membre. Paddle facture ou crédite la différence pour le reste de cette période de facturation.",
+  "settings.org.seats.pending":
+    "Envoyé à Paddle. {seats} sièges s’afficheront ici dès que Paddle confirme.",
+  "settings.org.seats.unchanged": "L’organisation a déjà {seats} sièges.",
+  "settings.org.subscription.cancel": "Résilier l’abonnement",
+  "settings.org.subscription.cancelTitle": "Résilier l’abonnement d’équipe ?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Chacun garde son siège jusqu’à la fin de la période déjà payée. Ensuite, le forfait équipe prend fin pour tous les membres, et plus rien n’est facturé.",
+  "settings.org.subscription.cancelConfirm": "Résilier en fin de période",
+  "settings.org.subscription.keep": "Garder l’abonnement",
+  "settings.org.subscription.endsOn":
+    "L’abonnement prend fin le {date}. Les sièges restent jusque-là.",
+  "settings.org.subscription.endsSoon":
+    "L’abonnement prend fin à la fin de cette période de facturation. Les sièges restent jusque-là.",
+  "settings.org.subscription.portal": "Gérer la facturation",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "L’organisation compte plus de membres. Retirez des membres avant de retirer leurs sièges.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Les sièges ne changent que si l’abonnement est actif. Mettez d’abord à jour le moyen de paiement.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "La résiliation de l’abonnement est programmée. Gardez-le d’abord, puis changez les sièges.",
+  "settings.org.error.NO_SUBSCRIPTION": "Cette organisation n’a pas d’abonnement d’équipe.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "Un abonnement en pause ne peut être arrêté que depuis le portail de facturation.",
+  "settings.org.error.NO_SCHEDULED_CANCEL": "Aucune résiliation n’est programmée.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "Seule la personne qui a configuré la facturation de l’équipe peut ouvrir le portail de facturation. Les sièges et la résiliation se gèrent ici.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle n’a pas confirmé le changement. Rien n’a changé ; réessayez dans un instant.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "La facturation d’équipe n’est pas disponible pour le moment. Rien n’a changé.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "Cet abonnement ne peut pas changer de sièges ici. Contactez le support.",
   "settings.org.transparency.title": "Ce que votre organisation peut voir",
   "settings.org.transparency.can": "Peut voir",
   "settings.org.transparency.cannot": "Ne voit jamais",

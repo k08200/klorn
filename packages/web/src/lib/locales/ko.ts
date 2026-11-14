@@ -3093,6 +3093,41 @@ const ko: Record<string, string> = {
   "settings.org.checkout.annual": "연간 결제 · 시트당 월 {price}",
   "settings.org.checkout.monthlyPlain": "월간 결제",
   "settings.org.checkout.annualPlain": "연간 결제",
+  "settings.org.seats.change": "시트 수 ({min}–{max})",
+  "settings.org.seats.changeAction": "시트 변경",
+  "settings.org.seats.floor":
+    "최소 {min}개: 기본 2개 이상, 멤버마다 1개씩 필요합니다. 차액은 이번 결제 기간의 남은 날짜만큼 Paddle이 청구하거나 크레딧으로 돌려줍니다.",
+  "settings.org.seats.pending":
+    "Paddle에 보냈습니다. Paddle이 확인하면 시트 {seats}개로 표시됩니다.",
+  "settings.org.seats.unchanged": "조직에 이미 시트 {seats}개가 있습니다.",
+  "settings.org.subscription.cancel": "구독 해지",
+  "settings.org.subscription.cancelTitle": "팀 구독을 해지할까요?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "이미 결제한 기간이 끝날 때까지는 모두 시트를 유지합니다. 그 후 모든 멤버의 팀 플랜이 끝나고 더 이상 청구되지 않습니다.",
+  "settings.org.subscription.cancelConfirm": "기간 종료 시 해지",
+  "settings.org.subscription.keep": "구독 유지",
+  "settings.org.subscription.endsOn": "구독이 {date}에 끝납니다. 그때까지 시트는 유지됩니다.",
+  "settings.org.subscription.endsSoon":
+    "구독이 이번 결제 기간이 끝날 때 종료됩니다. 그때까지 시트는 유지됩니다.",
+  "settings.org.subscription.portal": "결제 관리",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "멤버 수가 그보다 많습니다. 시트를 줄이기 전에 멤버를 먼저 내보내 주세요.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "구독이 활성 상태일 때만 시트를 바꿀 수 있습니다. 먼저 결제 수단을 업데이트해 주세요.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "구독 해지가 예약되어 있습니다. 먼저 구독을 유지한 뒤 시트를 바꿔 주세요.",
+  "settings.org.error.NO_SUBSCRIPTION": "이 조직에는 팀 구독이 없습니다.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "일시 중지된 구독은 결제 포털에서만 종료할 수 있습니다.",
+  "settings.org.error.NO_SCHEDULED_CANCEL": "예약된 해지가 없습니다.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "결제 포털은 팀 결제를 설정한 사람만 열 수 있습니다. 시트 변경과 해지는 여기서 할 수 있습니다.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle이 변경을 확인하지 않았습니다. 바뀐 것은 없습니다. 잠시 후 다시 시도해 주세요.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "지금은 팀 결제를 이용할 수 없습니다. 바뀐 것은 없습니다.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "이 구독은 여기서 시트를 바꿀 수 없습니다. 지원팀에 문의해 주세요.",
   "settings.org.transparency.title": "조직이 볼 수 있는 것",
   "settings.org.transparency.can": "볼 수 있음",
   "settings.org.transparency.cannot": "절대 볼 수 없음",

@@ -2804,6 +2804,15 @@ model Organization {
   paddleCustomerId     String?
   paddleSubscriptionId String?             @unique
   subscriptionEventAt  DateTime?
+  /// When a period-end cancel takes effect (Paddle scheduled_change), or
+  /// null. Written by the owner's cancel route and confirmed by the webhook;
+  /// the seats stay until Paddle's final canceled event.
+  subscriptionCancelAt DateTime?
+  /// The account that opened the team checkout, i.e. the Paddle payer. The
+  /// customer portal opens only for them: it shows the payer's whole Paddle
+  /// account (other subscriptions, invoices, address), which a later owner
+  /// must not see.
+  billingUserId        String?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   memberships          OrgMembership[]

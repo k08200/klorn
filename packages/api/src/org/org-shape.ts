@@ -85,6 +85,7 @@ export const ORG_SELECT = {
   billingInterval: true,
   subscriptionStatus: true,
   paddleSubscriptionId: true,
+  subscriptionCancelAt: true,
 } as const;
 
 export interface OrgRow {
@@ -98,6 +99,7 @@ export interface OrgRow {
   billingInterval: string | null;
   subscriptionStatus: string | null;
   paddleSubscriptionId: string | null;
+  subscriptionCancelAt: Date | null;
 }
 
 export interface OrgWire {
@@ -115,6 +117,8 @@ export interface OrgWire {
     active: boolean;
     /** Intervals a team checkout can be opened for now; empty while billing is off. */
     checkoutIntervals: TeamInterval[];
+    /** When a scheduled period-end cancel ends the subscription (ISO), or null. */
+    cancelAt: string | null;
   };
 }
 
@@ -133,6 +137,7 @@ export function orgWire(org: OrgRow, memberCount: number, cap: AgentModeCap | nu
       interval: org.billingInterval,
       active: seatsActive(org.subscriptionStatus),
       checkoutIntervals: teamCheckoutIntervals(),
+      cancelAt: org.subscriptionCancelAt?.toISOString() ?? null,
     },
   };
 }

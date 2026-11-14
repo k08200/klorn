@@ -3104,6 +3104,40 @@ const en: Record<string, string> = {
   "settings.org.checkout.annual": "Pay yearly · {price} per seat per month",
   "settings.org.checkout.monthlyPlain": "Pay monthly",
   "settings.org.checkout.annualPlain": "Pay yearly",
+  "settings.org.seats.change": "Seats ({min}–{max})",
+  "settings.org.seats.changeAction": "Update seats",
+  "settings.org.seats.floor":
+    "At least {min}: two seats minimum, and one for every member. Paddle charges or credits the difference for the rest of this billing period.",
+  "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
+  "settings.org.seats.unchanged": "The organization already has {seats} seats.",
+  "settings.org.subscription.cancel": "Cancel subscription",
+  "settings.org.subscription.cancelTitle": "Cancel the team subscription?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Everyone keeps their seat until the end of the period already paid for. Then the team plan ends for every member, and nothing more is charged.",
+  "settings.org.subscription.cancelConfirm": "Cancel at period end",
+  "settings.org.subscription.keep": "Keep subscription",
+  "settings.org.subscription.endsOn": "The subscription ends on {date}. Seats stay until then.",
+  "settings.org.subscription.endsSoon":
+    "The subscription ends at the end of this billing period. Seats stay until then.",
+  "settings.org.subscription.portal": "Manage billing",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "The organization has more members than that. Remove members before you remove their seats.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Seats can change only while the subscription is active. Update the payment method first.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "The subscription is set to end. Keep it first, then change seats.",
+  "settings.org.error.NO_SUBSCRIPTION": "This organization has no team subscription.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "A paused subscription can only be ended from the billing portal.",
+  "settings.org.error.NO_SCHEDULED_CANCEL": "No cancel is scheduled.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "Only the person who set up team billing can open the billing portal. Seats and cancel work here.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle didn't confirm the change. Nothing was changed; try again shortly.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "Team billing isn't available right now. Nothing was changed.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "This subscription can't change seats here. Contact support.",
   "settings.org.transparency.title": "What your organization can see",
   "settings.org.transparency.can": "Can see",
   "settings.org.transparency.cannot": "Never sees",
