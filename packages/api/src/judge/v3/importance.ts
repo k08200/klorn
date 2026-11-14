@@ -59,7 +59,9 @@ export function importancePrior(rel: RelationshipSnapshot | null, now: Date): nu
       w.sent * sentFeature(rel.sentCount) +
       w.recency * recencyFeature(rel.lastSentAt, now) +
       w.replyLatency * replyLatencyFeature(rel.medianReplyLatencyMs) +
-      w.sameOrg * (rel.sameOrgDomain === true ? 1 : 0) +
+      // The organization's company domains (Klorn Teams) count as the same
+      // signal, never twice: an org fact is no more trust than a shared domain.
+      w.sameOrg * (rel.sameOrgDomain === true || rel.orgCompanyDomain === true ? 1 : 0) +
       w.coAttendance * ((rel.coAttendanceNext14d ?? 0) > 0 ? 1 : 0) -
       IMPORTANCE_PRIOR.dismissWeight * dismiss,
   );

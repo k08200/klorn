@@ -424,6 +424,20 @@ try {
       });
   }
 
+  // Organization audit log retention (daily, under the "org-audit-retention"
+  // scheduler lease). Not behind TEAMS_ENABLED: rows written while Teams was
+  // open must still age out (org/audit-retention.ts).
+  if (!BG_DISABLED) {
+    import("./org/audit-retention.js")
+      .then(({ startOrgAuditRetentionScheduler }) => {
+        startOrgAuditRetentionScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] org-audit-retention failed to start:", err);
+        captureError(err, { tags: { context: "startup:org-audit-retention" } });
+      });
+  }
+
   // Pending account purges in object storage (step D3; hourly). While
   // OBJECT_STORAGE_ENABLED is off a tick runs no purge and only counts pending
   // records, to report them once.

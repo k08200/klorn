@@ -52,6 +52,25 @@ Org creation is a paid-tier capability (entitlement flag, OFF by default at laun
 3. PR-C: desktop/web org management UI + shared teams.
 4. Security review gates every PR (invite token hashing, grant enforcement at the resolver — not the route, audit completeness).
 
+### Company domains in a member's judge (Teams v1.1, 2026-11-14)
+
+`Organization.companyDomains` (launch feature 6 in `pricing-tiers.md`) reaches each member's judge as **one relationship fact**, `orgCompanyDomain`, on the AE3 relationship snapshot (`packages/api/src/judge/v3/relationship.ts`): "the sender is a colleague at your company".
+
+- **Read path:** `src/org/org-domains.ts` reads the member's own membership and their organization's `companyDomains`, and nothing else. It runs no query while `TEAMS_ENABLED` is closed to the user. It does not depend on a paid seat, because the domains are an organization setting and not a paid capability.
+- **Shape:** the fact is present only when the organization has usable domains, and is then `true`, `false` or `null`. Without an organization the snapshot has no such key, so stored rows, replay and every judge input are byte-for-byte what they were before. The domain list, the organization and its members never reach the judge, only the boolean. The facts LLM prompt takes no relationship data at all (`facts-prompt.ts`).
+- **Spoofing:** the fact is `true` only for mail whose From passed DMARC, under the same rule as `sameOrgDomain`. Unknown or failed DMARC makes it `null`, which is no evidence. A public mailbox domain never matches, even when an admin typed it in. Matching is exact or by subdomain (`mail.acme.com` ⊂ `acme.com`). Lookalikes like `notacme.com` and `acme.com.evil.io` don't match.
+- **Weight:** no more trust than a shared domain. It feeds the importance prior through the same `sameOrg` weight, never twice. It is not trust: `isTrustedSender`, `trustedSender` and the v3.2 first-contact bar ignore it. It never sets a lane and is never a pin, so it cannot lift a phishing-suspect or first-contact mail past its floor. A generated-facts test proves every policy version decides the same lane with and without it. The relationship reason names it, so the signal is explainable.
+- **Known limit:** there is no public-suffix list. An admin who enters a public suffix such as `co.uk` would mark every DMARC-passing `*.co.uk` sender as a colleague, which gives a ranking lift and nothing more. A later step is to validate domains against a public-suffix list when they are saved.
+
+### Audit log retention (Teams v1.1, 2026-11-14)
+
+`OrgAuditEvent` rows are kept for **400 days** and then deleted (`src/org/audit-retention.ts`).
+
+- **Why 400:** the log answers two kinds of question. The first is "who changed this setting, who read my free/busy" (members, owners). The second is what happened around a charge (billing disputes, chargebacks). A full annual billing cycle (365 days, since team seats bill yearly too) plus ~35 days covers a dispute raised after the renewal invoice and a year-on-year look back. Keeping rows longer holds member-adjacent data (who read whose free/busy, invited addresses) with no use for it.
+- **How:** a daily sweep runs under the `org-audit-retention` scheduler lease, so one instance runs it during a zero-downtime deploy overlap. It pages oldest first in batches of 1,000, at most 50 batches a run, and reports any backlog it leaves. The delete re-checks the cutoff. A single-column `createdAt` index serves the range.
+- **Flag:** the sweep is not behind `TEAMS_ENABLED`. Retention is a promise about rows that exist, and rows written while Teams was open must still age out if the flag is turned off again. With no organizations the table is empty and a run costs one indexed query. Teams v1 shipped on 2026-11-14, so the first row can reach the window no earlier than 2027-12-19.
+- **Disclosure:** the member transparency screen states that the organization sees the audit log. The privacy policy should state the 400-day window before Teams is opened to customers. That is a founder follow-up, because legal docs are not edited here.
+
 ### Explicit non-goals (v3)
 
 Shared inboxes, delegated sending, org-wide dossiers, cross-member mail search, admin visibility into member mail. Any of these is a new founder decision, not scope creep into v3.

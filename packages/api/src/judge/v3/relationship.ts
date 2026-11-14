@@ -37,6 +37,15 @@ export interface RelationshipSnapshot {
   /** Sender shares a non-public mail domain with the user AND this mail passed
    * DMARC; null when the domain matches but authentication is unknown. */
   sameOrgDomain: boolean | null;
+  /**
+   * Klorn Teams: the sender is on one of the user's organization's company
+   * domains (or a subdomain) AND this mail passed DMARC; null when the domain
+   * matches but authentication is unknown or failed. ABSENT (not null) unless
+   * the user's organization has usable company domains, so a snapshot without
+   * an organization is exactly what it was before this fact existed. Evidence
+   * only, with the same weight as sameOrgDomain: never a lane, a pin or trust.
+   */
+  orgCompanyDomain?: boolean | null;
   /** Deprecated, always null: no upcoming attendee data is stored. See meetingCount. */
   coAttendanceNext14d: number | null;
   /** A PIN_TIER rule applies to the sender (address or domain). */
@@ -112,6 +121,9 @@ export interface RelationshipInput {
   senderCategory: string | null | undefined;
   /** Past calendar co-attendance; undefined = unknown. */
   coAttendance?: CoAttendanceView;
+  /** The user's organization's company domains (org/org-domains.ts); absent or
+   * empty when Teams is closed to the user or the organization set none. */
+  orgCompanyDomains?: readonly string[];
 }
 
 const VIP_CATEGORIES = new Set(["investor", "customer"]);
@@ -148,6 +160,42 @@ function sameOrg(
   const shared = userAddresses.some((a) => domainOf(senderMailbox(a)) === domain);
   if (!shared) return false;
   return authenticated === true ? true : null;
+}
+
+/**
+ * The organization's company domains a sender can match: never a public
+ * mailbox domain, whatever an admin typed in (gmail.com would make every
+ * stranger a colleague). Lower-cased; empty when none is usable.
+ */
+function usableOrgDomains(domains: readonly string[] | undefined): string[] {
+  if (!domains) return [];
+  return domains
+    .map((d) => d.trim().toLowerCase())
+    .filter((d) => d !== "" && !isPublicMailboxDomain(d));
+}
+
+/**
+ * The org fact, under the same spoofing rule as sameOrg: a company-domain From
+ * is only a colleague when this mail passed DMARC. Exact domain or a subdomain
+ * (mail.acme.com ⊂ acme.com, as mail/company-domains.ts isInternalSender);
+ * notacme.com and acme.com.evil.io are not acme.com.
+ */
+function orgDomainFact(
+  sender: string,
+  domains: readonly string[],
+  authenticated: boolean | null,
+): boolean | null {
+  const domain = domainOf(sender);
+  if (!domain || isPublicMailboxDomain(domain)) return false;
+  const match = domains.some((d) => domain === d || domain.endsWith(`.${d}`));
+  if (!match) return false;
+  return authenticated === true ? true : null;
+}
+
+function orgFields(sender: string, input: RelationshipInput) {
+  const domains = usableOrgDomains(input.orgCompanyDomains);
+  if (domains.length === 0) return {};
+  return { orgCompanyDomain: orgDomainFact(sender, domains, input.senderAuthenticated) };
 }
 
 function earliestIso(...dates: (Date | null | undefined)[]): string | null {
@@ -231,6 +279,7 @@ export function buildRelationshipSnapshot(input: RelationshipInput): Relationshi
     ...inboundFields(input),
     firstSeenAt: earliestIso(input.firstInboundAt, input.firstSentAt),
     ...coAttendanceFields(input.coAttendance),
+    ...orgFields(sender, input),
   };
 }
 
@@ -292,6 +341,7 @@ const NUMBER_FIELDS = [
   "smallMeetingCount",
 ] as const;
 const BOOLEAN_FIELDS = ["sameOrgDomain", "pinned", "vip"] as const;
+const OPTIONAL_BOOLEAN_FIELDS = ["orgCompanyDomain"] as const;
 const DATE_FIELDS = [
   "lastSentAt",
   "firstSeenAt",
@@ -316,5 +366,12 @@ export function parseRelationshipSnapshot(raw: unknown): RelationshipSnapshot | 
   if (!ok) return null;
   const out: Record<string, unknown> = {};
   for (const k of [...NUMBER_FIELDS, ...BOOLEAN_FIELDS, ...DATE_FIELDS]) out[k] = get(k);
+  // Optional facts stay absent when the row has none, so a row written before
+  // them (or without an organization) reads back unchanged.
+  for (const k of OPTIONAL_BOOLEAN_FIELDS) {
+    if (r[k] === undefined) continue;
+    if (!isNullableBoolean(r[k])) return null;
+    out[k] = r[k];
+  }
   return out as unknown as RelationshipSnapshot;
 }
