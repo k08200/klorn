@@ -1617,9 +1617,9 @@ final class AppModel {
 
     /// In-memory thread for this app session (one conversation, lazily created
     /// server-side on the first send so an unopened Assistant costs nothing).
-    /// Floating assistant dock (full view). Session-scoped on purpose: the
-    /// dock is a glance surface, not a mode to get stuck in.
-    var showAssistantDock = false
+    /// The main window's trailing assistant panel (M3). Session-scoped on
+    /// purpose: the panel is a glance surface, not a mode to get stuck in.
+    var showAssistantPanel = false
     private(set) var chatMessages: [ChatMessage] = []
     private(set) var isChatting = false
     private var chatConversationId: String?

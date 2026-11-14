@@ -117,17 +117,13 @@
 /* Preferences — shell */
 "prefs.title" = "Préférences";
 "prefs.section.notifications" = "NOTIFICATIONS";
-"prefs.section.general" = "GÉNÉRAL";
-"prefs.section.keyboard" = "CLAVIER";
-"prefs.section.language" = "LANGUE";
 "prefs.section.account" = "COMPTE";
-"prefs.section.about" = "À PROPOS";
 
 "prefs.banners" = "Afficher les bannières macOS sur ce Mac";
 "prefs.banners.detail" = "Une bannière pour chaque nouveau courriel PUSH ou MEETING, avec seulement l'expéditeur et l'objet. Interrupteur général local : désactivé, il coupe toutes les bannières ici quelles que soient les catégories ci-dessus ; le nombre de PUSH dans la fenêtre principale continue d'être mis à jour.";
 "prefs.banners.denied" = "macOS bloque les notifications de Klorn. Autorisez-les dans Réglages Système ▸ Notifications.";
 "prefs.banners.openSystemSettings" = "Ouvrir Réglages Système";
-"prefs.dockBadge" = "Afficher le nombre sur l'icône du Dock";
+"prefs.dockBadge" = "Afficher le nombre « Requiert votre attention »";
 "prefs.dockBadge.detail" = "Le nombre d'e-mails urgents en attente dans Aujourd'hui. Les heures calmes ne le masquent pas : il n'émet aucun son et n'affiche aucune bannière.";
 "loginPrompt.title" = "Garder Klorn actif en arrière-plan ?";
 "loginPrompt.body" = "Klorn ne peut vous alerter des e-mails urgents que lorsqu'il est ouvert. Ouvrez-le à l'ouverture de session pour ne rien manquer après un redémarrage.";
@@ -141,7 +137,7 @@
 "push.closedSummary.title" = "%d e-mails urgents pendant que Klorn était fermé";
 "push.moreSummary.title" = "+%d autres ont besoin de vous";
 "push.delayedSummary.title" = "%d e-mails urgents ont besoin de vous";
-"prefs.launchAtLogin" = "Lancer Klorn à l'ouverture de session";
+"prefs.launchAtLogin" = "Ouvrir Klorn à l'ouverture de session";
 "prefs.launchAtLogin.unavailable.label" = "Lancer à l'ouverture";
 "prefs.launchAtLogin.unavailable.value" = "Application packagée uniquement";
 "prefs.updates" = "Mises à jour";
@@ -364,12 +360,10 @@
 "a11y.collapsed" = "Replié";
 
 /* Mail remote-content privacy toggle (2026-08-14) */
-"prefs.section.mail" = "COURRIER";
 "prefs.remoteImages" = "Charger les images distantes dans le courrier";
 "prefs.remoteImages.detail" = "Désactivé, cela bloque toute requête réseau pendant la lecture — y compris les pixels de suivi. Les images intégrées continuent de s'afficher.";
 
 /* Appearance (2026-08-15) */
-"prefs.section.appearance" = "APPARENCE";
 "prefs.appearance" = "Thème";
 "prefs.appearance.detail" = "« Système » suit macOS et change en direct.";
 "appearance.system" = "Système";
@@ -447,7 +441,6 @@
 "compose.needsPro" = "L'envoi d'e-mails nécessite le forfait Pro.";
 
 /* Assistant dock */
-"assistant.dock.toggle" = "Assistant (⌘J)";
 "assistant.dock.close.a11y" = "Fermer l'assistant";
 "assistant.dock.context.a11y" = "À propos de : %@";
 
@@ -587,7 +580,6 @@
 "settings.tab.accounts" = "Comptes";
 "settings.tab.assistant" = "Assistant";
 "settings.tab.notifications" = "Notifications";
-"settings.tab.appearance" = "Apparence";
 "settings.tab.privacy" = "Confidentialité";
 "settings.signedOutNote" = "Connectez-vous à Klorn pour voir ces réglages.";
 "menu.message" = "Message";
@@ -792,6 +784,20 @@
 "chat.send.failed" = "Impossible de joindre Klorn — %@";
 "chat.event.failed" = "Impossible de créer l'événement — %@";
 "commitments.needsPro" = "Les engagements nécessitent Klorn Pro.";
+
+/* M3/M4 (2026-11-13): assistant toolbar panel, grouped General settings */
+"assistant.toolbar.label" = "Assistant";
+"assistant.toolbar.help" = "Afficher ou masquer l'assistant (⌘J)";
+"menu.assistant.show" = "Afficher l'assistant";
+"menu.assistant.hide" = "Masquer l'assistant";
+"prefs.group.startup" = "Démarrage";
+"prefs.group.appearance" = "Apparence";
+"prefs.group.dock" = "Dock";
+"prefs.group.updates" = "Mises à jour";
+"prefs.group.keyboard" = "Clavier";
+"prefs.group.support" = "Assistance";
+"prefs.group.about" = "À propos";
+"prefs.group.mail" = "Courrier";
 
 /* Editorial Today and account chrome (M1/M2, 2026-11-13) */
 "today.headline.none" = "Rien ne vous attend pour l'instant";

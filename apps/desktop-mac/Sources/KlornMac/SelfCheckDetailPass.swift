@@ -142,7 +142,7 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
         FilesRules.trailingInset == 20
             && text("Files/FilesSection.swift").contains(".padding(.trailing, FilesRules.trailingInset)")))
 
-    // X2: one blue for text, links, selection and the floating button.
+    // X2: one blue for text, links and selection.
     let sky: Theme.RGBA = Theme.hex(0x0EA5E9)
     func same(_ a: Theme.RGBA, _ b: Theme.RGBA) -> Bool {
         abs(a.r - b.r) < 0.01 && abs(a.g - b.g) < 0.01 && abs(a.b - b.b) < 0.01
@@ -151,8 +151,7 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
         "accent is #0369A1 / #38BDF8; #0EA5E9 is gone from text, links and selection",
         same(Theme.accentSolidLight, Theme.hex(0x0369A1)) && same(Theme.accentSolidDark, Theme.hex(0x38BDF8))
             && same(Theme.accentComponents, Theme.accentSolidLight) && !same(Theme.accentComponents, sky)
-            && !text("Theme.swift").contains("0.055, green: 0.647")
-            && text("Assistant/AssistantDock.swift").contains(".background(Theme.accentSolid, in: Circle())")))
+            && !text("Theme.swift").contains("0.055, green: 0.647")))
 
     // States: one anchor, a skeleton shaped like the day. The rail is gone
     // with the editorial Today (M1, 2026-11-13): one column in every state.

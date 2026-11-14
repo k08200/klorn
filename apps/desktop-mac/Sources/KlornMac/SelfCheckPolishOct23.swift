@@ -15,14 +15,12 @@ func polishOct23SelfChecks(sourceDir: URL) async -> [(String, Bool)] {
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
 
-    // MARK: 1. calendar vs the floating assistant button
+    // MARK: 1. calendar vs the assistant
+    // The floating button is gone (M3, 2026-11-13): the assistant is a
+    // trailing panel beside the content, so no scope reserves a corner for it.
     let calendar = text("CalendarScreen.swift")
-    check("the dock's edge clearance covers its 48pt button + 20pt inset",
-          AssistantDock.edgeClearance >= 48 + 20)
-    check("the month grid ends above the assistant button",
-          calendar.contains(".padding(.bottom, AssistantDock.edgeClearance)"))
-    check("every calendar scope (day, week, month, year) keeps dock clearance",
-          calendar.components(separatedBy: "AssistantDock.").count - 1 >= 4)
+    check("no calendar scope pads for a floating assistant button any more",
+          !calendar.contains("AssistantDock.") && !calendar.contains("AssistantPanel."))
 
     // MARK: 2. beta mail sources
     check("naver and iCloud are beta", MailSourceCatalog.isBeta("NAVER") && MailSourceCatalog.isBeta("icloud"))

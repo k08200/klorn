@@ -10,14 +10,24 @@ enum NavSection: String, CaseIterable, Identifiable, Sendable {
 
     var title: String { L("nav.\(rawValue)") }
 
+    /// Outline SF Symbols, one per section (M3, 2026-11-13, LOCKED).
     var icon: String {
         switch self {
-        case .today: "sun.max"
+        case .today: "house"
         case .mail: "envelope"
         case .calendar: "calendar"
         case .files: "folder"
         // A conversation, not a sparkle (FeatureIcon's rule).
-        case .assistant: "bubble.left"
+        case .assistant: "text.bubble"
+        }
+    }
+
+    /// The selected row's symbol: the `.fill` variant (HIG: fill is for
+    /// selection). `calendar` has no fill variant, so it stays outline.
+    var selectedIcon: String {
+        switch self {
+        case .calendar: icon
+        default: "\(icon).fill"
         }
     }
 }

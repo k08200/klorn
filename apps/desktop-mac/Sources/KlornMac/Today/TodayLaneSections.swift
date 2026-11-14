@@ -88,7 +88,6 @@ private struct TodayCompactRow: View {
                         .frame(height: TodayLayout.chipHeight)
                         .background(Theme.todayChip, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
                         .frame(maxWidth: TodayLayout.chipMaxWidth, alignment: .trailing)
-                        .layoutPriority(1)
                 }
                 Text(content.time).font(Theme.Typo.meta.monospacedDigit()).foregroundStyle(Theme.todayInk3)
                     .lineLimit(1)

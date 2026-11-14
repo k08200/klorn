@@ -117,17 +117,13 @@
 /* Preferences — shell */
 "prefs.title" = "環境設定";
 "prefs.section.notifications" = "通知";
-"prefs.section.general" = "一般";
-"prefs.section.keyboard" = "キーボード";
-"prefs.section.language" = "言語";
 "prefs.section.account" = "アカウント";
-"prefs.section.about" = "情報";
 
 "prefs.banners" = "このMacでmacOS通知バナーを表示";
 "prefs.banners.detail" = "新しいPUSH・MEETINGメールごとに、差出人と件名だけを表示するバナーを出します。ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。メインウィンドウのPUSH件数は更新され続けます。";
 "prefs.banners.denied" = "macOSがKlornの通知をブロックしています。システム設定 ▸ 通知で許可してください。";
 "prefs.banners.openSystemSettings" = "システム設定を開く";
-"prefs.dockBadge" = "Dockアイコンに件数を表示";
+"prefs.dockBadge" = "「今すぐ確認」の件数を表示";
 "prefs.dockBadge.detail" = "「今日」で待っている緊急メールの件数です。音もバナーも出ないため、通知しない時間中も表示されます。";
 "loginPrompt.title" = "Klornをバックグラウンドで実行し続けますか？";
 "loginPrompt.body" = "Klornは実行中にしか緊急メールをお知らせできません。ログイン時に開くようにしておけば、再起動後も見逃しません。";
@@ -141,7 +137,7 @@
 "push.closedSummary.title" = "Klornを閉じている間に緊急メール%d件";
 "push.moreSummary.title" = "ほかに%d件、確認が必要です";
 "push.delayedSummary.title" = "確認が必要な緊急メール%d件";
-"prefs.launchAtLogin" = "ログイン時にKlornを起動";
+"prefs.launchAtLogin" = "ログイン時にKlornを開く";
 "prefs.launchAtLogin.unavailable.label" = "ログイン時に起動";
 "prefs.launchAtLogin.unavailable.value" = "パッケージ版のみ";
 "prefs.updates" = "アップデート";
@@ -364,12 +360,10 @@
 "a11y.collapsed" = "折りたたみ済み";
 
 /* Mail remote-content privacy toggle (2026-08-14) */
-"prefs.section.mail" = "メール";
 "prefs.remoteImages" = "メール内の外部画像を読み込む";
 "prefs.remoteImages.detail" = "オフにすると、メール閲覧中のネットワーク要求をすべて遮断します（トラッキングピクセルを含む）。埋め込み画像は表示されます。";
 
 /* Appearance (2026-08-15) */
-"prefs.section.appearance" = "外観";
 "prefs.appearance" = "テーマ";
 "prefs.appearance.detail" = "「システム」はmacOSに従い、リアルタイムで切り替わります。";
 "appearance.system" = "システム";
@@ -447,7 +441,6 @@
 "compose.needsPro" = "メール送信にはProプランが必要です。";
 
 /* Assistant dock */
-"assistant.dock.toggle" = "アシスタント（⌘J）";
 "assistant.dock.close.a11y" = "アシスタントを閉じる";
 "assistant.dock.context.a11y" = "このメールについて: %@";
 
@@ -587,7 +580,6 @@
 "settings.tab.accounts" = "アカウント";
 "settings.tab.assistant" = "アシスタント";
 "settings.tab.notifications" = "通知";
-"settings.tab.appearance" = "外観";
 "settings.tab.privacy" = "プライバシー";
 "settings.signedOutNote" = "この設定を表示するには Klorn にサインインしてください。";
 "menu.message" = "メッセージ";
@@ -792,6 +784,20 @@
 "chat.send.failed" = "Klornに接続できませんでした — %@";
 "chat.event.failed" = "予定を作成できませんでした — %@";
 "commitments.needsPro" = "約束の管理にはKlorn Proが必要です。";
+
+/* M3/M4 (2026-11-13): assistant toolbar panel, grouped General settings */
+"assistant.toolbar.label" = "アシスタント";
+"assistant.toolbar.help" = "アシスタントを表示/非表示（⌘J）";
+"menu.assistant.show" = "アシスタントを表示";
+"menu.assistant.hide" = "アシスタントを隠す";
+"prefs.group.startup" = "起動";
+"prefs.group.appearance" = "外観";
+"prefs.group.dock" = "Dock";
+"prefs.group.updates" = "アップデート";
+"prefs.group.keyboard" = "キーボード";
+"prefs.group.support" = "サポート";
+"prefs.group.about" = "情報";
+"prefs.group.mail" = "メール";
 
 /* Editorial Today and account chrome (M1/M2, 2026-11-13) */
 "today.headline.none" = "今、対応待ちのメールはありません";

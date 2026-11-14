@@ -27,7 +27,7 @@ enum TodayLayout {
     static let senderColumn: CGFloat = 96
     static let timeColumn: CGFloat = 52
     static let chipHeight: CGFloat = 20
-    static let chipMaxWidth: CGFloat = 260
+    static let chipMaxWidth: CGFloat = 220
     /// A schedule entry's colored bar.
     static let eventBar: CGFloat = 3
     static let eventMinWidth: CGFloat = 150

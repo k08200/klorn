@@ -1,10 +1,15 @@
 import Carbon.HIToolbox
 import SwiftUI
 
-/// One tab of the Settings window: the sections `SettingsTab` assigns to it,
-/// in a scroll view pinned to the top (a short window scrolls; it never
-/// clips the first section). The sections themselves are the ones the old
-/// in-window Preferences overlay showed — regrouped, not redesigned.
+/// One tab of the Settings window: the sections `SettingsTab` assigns to it.
+/// General and Privacy are grouped Forms (M4); the other tabs keep their
+/// hand-laid sections in a scroll view pinned to the top (their bodies are
+/// custom views — the automation controls, the account lists — that a Form
+/// row would re-lay out, so converting them is not mechanical).
+///
+/// Every pane fixes its own height: its content's, between
+/// `SettingsMetrics.minHeight` and `.maxHeight`, scrolling past the cap.
+/// The Settings window resizes to the selected pane.
 struct PreferencesView: View {
     @Environment(AppModel.self) private var model
     let tab: SettingsTab
@@ -19,36 +24,138 @@ struct PreferencesView: View {
     @State private var recordingShortcut = false
 
     var body: some View {
-        let visible = tab.visibleSections(signedIn: model.phase == .signedIn)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if visible.isEmpty {
-                    // Only the server-backed tabs can end up empty, and only
-                    // while signed out — say why instead of showing nothing.
-                    Text(L("settings.signedOutNote"))
-                        .font(.callout).foregroundStyle(Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.vertical, 12)
-                }
-                ForEach(visible, id: \.self) { section in
-                    sectionView(section)
+        pane
+            .frame(width: SettingsMetrics.width)
+            .frame(minHeight: SettingsMetrics.minHeight, maxHeight: SettingsMetrics.maxHeight)
+            .fixedSize(horizontal: false, vertical: true)
+            .onAppear { launchAtLogin = LoginItem.isEnabled }
+            // Re-ask the server whether device calendars and the Klorn drive exist each
+            // time Settings shows this tab, so a server-side flip shows (or hides) the
+            // section without a relaunch.
+            .task {
+                guard model.phase == .signedIn else { return }
+                if tab.sections.contains(.driveImport) { await model.driveImport.refreshAvailability() }
+                if tab.sections.contains(.deviceCalendars) {
+                    await model.deviceCalendars.refreshAvailability()
                 }
             }
-            .padding(.horizontal, 24).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-        .onAppear { launchAtLogin = LoginItem.isEnabled }
-        // Re-ask the server whether device calendars and the Klorn drive exist each
-        // time Settings shows this tab, so a server-side flip shows (or hides) the
-        // section without a relaunch.
-        .task {
-            guard model.phase == .signedIn else { return }
-            if tab.sections.contains(.driveImport) { await model.driveImport.refreshAvailability() }
-            if tab.sections.contains(.deviceCalendars) {
-                await model.deviceCalendars.refreshAvailability()
+    }
+
+    @ViewBuilder
+    private var pane: some View {
+        let visible = tab.visibleSections(signedIn: model.phase == .signedIn)
+        if PreferencesLayout.usesGroupedForm(tab) {
+            Form {
+                ForEach(visible, id: \.self) { section in
+                    formSection(section)
+                }
+            }
+            .formStyle(.grouped)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if visible.isEmpty {
+                        // Only the server-backed tabs can end up empty, and only
+                        // while signed out — say why instead of showing nothing.
+                        Text(L("settings.signedOutNote"))
+                            .font(.callout).foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.vertical, 12)
+                    }
+                    ForEach(visible, id: \.self) { section in
+                        sectionView(section)
+                    }
+                }
+                .padding(.horizontal, 24).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
     }
+
+    // MARK: Grouped-Form sections (General, Privacy)
+
+    @ViewBuilder
+    private func formSection(_ kind: PrefsSection) -> some View {
+        @Bindable var settings = model.settings
+        switch kind {
+        case .startup:
+            Section(L("prefs.group.startup")) { loginItemRow }
+        case .appearance:
+            Section(L("prefs.group.appearance")) {
+                Picker(selection: $settings.appearance) {
+                    ForEach(AppearanceChoice.allCases, id: \.self) { choice in
+                        Text(choice.label).tag(choice)
+                    }
+                } label: {
+                    Text(L("prefs.appearance"))
+                    Text(L("prefs.appearance.detail"))
+                }
+                .pickerStyle(.segmented)
+                Picker(selection: $settings.appLanguage) {
+                    ForEach(AppLanguage.allCases, id: \.self) { language in
+                        Text(language.label).tag(language)
+                    }
+                } label: {
+                    Text(L("lang.label"))
+                    Text(L("lang.detail"))
+                }
+                .pickerStyle(.menu)
+            }
+        case .dock:
+            // The Dock count is not an interrupt: quiet hours leave it.
+            Section(L("prefs.group.dock")) {
+                Toggle(isOn: $settings.showDockBadge) {
+                    Text(L("prefs.dockBadge"))
+                    Text(L("prefs.dockBadge.detail"))
+                }
+            }
+        case .updates:
+            Section(L("prefs.group.updates")) { updatesRow }
+        case .keyboard:
+            Section(L("prefs.group.keyboard")) { shortcutRow }
+        case .support:
+            Section(L("prefs.group.support")) { SupportSection() }
+        case .about:
+            Section(L("prefs.group.about")) {
+                infoRow(L("prefs.about.version"), AppInfo.version)
+                infoRow(L("prefs.about.api"), Config.apiBaseURL)
+            }
+        case .mail:
+            Section(L("prefs.group.mail")) {
+                Toggle(isOn: $settings.loadRemoteImages) {
+                    Text(L("prefs.remoteImages"))
+                    Text(L("prefs.remoteImages.detail"))
+                }
+            }
+        default:
+            // Not a Form tab's section (`PreferencesLayout.formSections`).
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var loginItemRow: some View {
+        if LoginItem.isAvailable {
+            Toggle(L("prefs.launchAtLogin"), isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { _, wanted in
+                    guard wanted != LoginItem.isEnabled else { return }
+                    if let error = LoginItem.setEnabled(wanted) {
+                        loginItemError = error
+                        launchAtLogin = LoginItem.isEnabled  // revert to OS truth
+                    } else {
+                        loginItemError = nil
+                    }
+                }
+            if let loginItemError {
+                Text(loginItemError).font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
+        }
+    }
+
+    // MARK: Scroll-pane sections (Accounts, Notifications, Assistant)
 
     @ViewBuilder
     private func sectionView(_ kind: PrefsSection) -> some View {
@@ -58,12 +165,6 @@ struct PreferencesView: View {
         case .replies: AutomationPreferences(parts: [.replies])
         case .interrupts: AutomationPreferences(parts: [.interrupts])
         case .banners: bannersSection
-        case .appearance: appearanceSection
-        case .mail: mailSection
-        case .general: generalSection
-        case .support: section(L("prefs.section.support")) { SupportSection() }
-        case .keyboard: keyboardSection
-        case .language: languageSection
         case .account: accountSection
         case .inboxes:
             section(L("prefs.section.inboxes")) { InboxAccountsSection(model: model) }
@@ -79,11 +180,9 @@ struct PreferencesView: View {
             if model.driveImport.availability == .available {
                 section(L("prefs.section.driveImport")) { DriveImportSection(importer: model.driveImport) }
             }
-        case .about:
-            section(L("prefs.section.about")) {
-                infoRow(L("prefs.about.version"), AppInfo.version)
-                infoRow(L("prefs.about.api"), Config.apiBaseURL)
-            }
+        case .startup, .appearance, .dock, .updates, .keyboard, .support, .about, .mail:
+            // Form tabs' sections (`formSection`); never in a scroll pane.
+            EmptyView()
         }
     }
 
@@ -112,73 +211,8 @@ struct PreferencesView: View {
                     .buttonStyle(.bordered).controlSize(.small)
                 }
             }
-            // The Dock count is not an interrupt: quiet hours leave it.
-            Toggle(isOn: $settings.showDockBadge) {
-                Text(L("prefs.dockBadge")).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.switch).tint(Theme.accent)
-            Text(L("prefs.dockBadge.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
         }
         .task { await model.refreshNotificationPermission() }
-    }
-
-    @ViewBuilder
-    private var appearanceSection: some View {
-        @Bindable var settings = model.settings
-        section(L("prefs.section.appearance")) {
-            Picker(L("prefs.appearance"), selection: $settings.appearance) {
-                ForEach(AppearanceChoice.allCases, id: \.self) { choice in
-                    Text(choice.label).tag(choice)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityLabel(L("prefs.appearance"))
-            Text(L("prefs.appearance.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder
-    private var mailSection: some View {
-        @Bindable var settings = model.settings
-        section(L("prefs.section.mail")) {
-            Toggle(isOn: $settings.loadRemoteImages) {
-                Text(L("prefs.remoteImages")).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.switch).tint(Theme.accent)
-            Text(L("prefs.remoteImages.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder
-    private var generalSection: some View {
-        section(L("prefs.section.general")) {
-            if LoginItem.isAvailable {
-                Toggle(isOn: $launchAtLogin) {
-                    Text(L("prefs.launchAtLogin")).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(.switch).tint(Theme.accent)
-                .onChange(of: launchAtLogin) { _, wanted in
-                    guard wanted != LoginItem.isEnabled else { return }
-                    if let error = LoginItem.setEnabled(wanted) {
-                        loginItemError = error
-                        launchAtLogin = LoginItem.isEnabled  // revert to OS truth
-                    } else {
-                        loginItemError = nil
-                    }
-                }
-                if let loginItemError {
-                    Text(loginItemError).font(.caption).foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            } else {
-                infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
-            }
-            updatesRow
-        }
     }
 
     private var updatesRow: some View {
@@ -220,56 +254,33 @@ struct PreferencesView: View {
     }
 
     @ViewBuilder
-    private var keyboardSection: some View {
-        section(L("prefs.section.keyboard")) {
-            HStack {
-                Text(L("prefs.shortcut")).font(.body).foregroundStyle(Theme.text)
-                Spacer()
-                ShortcutRecorder(
-                    shortcut: model.settings.shortcut,
-                    recording: recordingShortcut,
-                    onStartRecording: {
-                        recordingShortcut = true
-                        model.settings.onShortcutRecordingChanged?(true)
-                    },
-                    onCapture: { model.settings.shortcut = $0 },
-                    onFinished: {
-                        recordingShortcut = false
-                        model.settings.onShortcutRecordingChanged?(false)
-                    },
-                    onReset: {
-                        recordingShortcut = false
-                        model.settings.onShortcutRecordingChanged?(false)
-                        model.settings.shortcut = .defaultToggle
-                    })
-            }
-            Text(recordingShortcut
-                 ? L("prefs.shortcut.recording")
-                 : L("prefs.shortcut.idle"))
-                .font(.caption).foregroundStyle(Theme.textDim)
-                .fixedSize(horizontal: false, vertical: true)
+    private var shortcutRow: some View {
+        HStack {
+            Text(L("prefs.shortcut")).font(.body).foregroundStyle(Theme.text)
+            Spacer()
+            ShortcutRecorder(
+                shortcut: model.settings.shortcut,
+                recording: recordingShortcut,
+                onStartRecording: {
+                    recordingShortcut = true
+                    model.settings.onShortcutRecordingChanged?(true)
+                },
+                onCapture: { model.settings.shortcut = $0 },
+                onFinished: {
+                    recordingShortcut = false
+                    model.settings.onShortcutRecordingChanged?(false)
+                },
+                onReset: {
+                    recordingShortcut = false
+                    model.settings.onShortcutRecordingChanged?(false)
+                    model.settings.shortcut = .defaultToggle
+                })
         }
-    }
-
-    @ViewBuilder
-    private var languageSection: some View {
-        @Bindable var settings = model.settings
-        section(L("prefs.section.language")) {
-            HStack {
-                Text(L("lang.label")).font(.body).foregroundStyle(Theme.text)
-                Spacer()
-                Picker(L("lang.label"), selection: $settings.appLanguage) {
-                    ForEach(AppLanguage.allCases, id: \.self) { language in
-                        Text(language.label).tag(language)
-                    }
-                }
-                .labelsHidden().pickerStyle(.menu).frame(width: 160)
-                .accessibilityLabel(L("lang.label"))
-            }
-            Text(L("lang.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(recordingShortcut
+             ? L("prefs.shortcut.recording")
+             : L("prefs.shortcut.idle"))
+            .font(.caption).foregroundStyle(Theme.textDim)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -331,6 +342,21 @@ struct PreferencesView: View {
         .accessibilityLabel(L("prefs.infoRow.a11y", label, value))
     }
 }
+
+/// Which tabs are grouped Forms (M4). Pure for the harness.
+enum PreferencesLayout {
+    /// The sections a Form tab may hold; `formSection` draws each of them.
+    static let formSections: Set<PrefsSection> = [
+        .startup, .appearance, .dock, .updates, .keyboard, .support, .about, .mail,
+    ]
+
+    /// General (decision M4) and Privacy (one toggle — a mechanical
+    /// conversion). The rest hold custom views and stay hand-laid.
+    static func usesGroupedForm(_ tab: SettingsTab) -> Bool {
+        tab == .general || tab == .privacy
+    }
+}
+
 
 /// A macOS-style shortcut recorder: shows the current chord (⌥⌘K); click to
 /// record, then the next valid key-with-modifier chord is captured via a local

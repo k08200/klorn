@@ -247,6 +247,11 @@ extension PreviewRender {
                 .padding(14)
         } && ok
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
+        // Mail with the assistant's trailing panel open (M3).
+        shot("mail-assistant-panel", navModel(firewallJSON: navFirewallJSON)) {
+            $0.listMode = NavRules.defaultMailMode
+            $0.showAssistantPanel = true
+        }
         // The demo day's briefing, the source of the landing's `.brief` card.
         shot("assistant-briefing", model) { $0.showAssistantPane(.briefing) }
 

@@ -26,16 +26,6 @@ struct MainShell: View {
             // transparent title bar too; the shell itself stays inside the
             // safe area, below the traffic lights.
             Theme.chromeGradient(identity: chromeIdentity).ignoresSafeArea()
-            // The floating content card, inset from the window's edges. It
-            // reaches up under the title bar; the content inside it does not.
-            HStack(spacing: 0) {
-                Color.clear.frame(width: NavRules.sidebarWidth)
-                RoundedRectangle(cornerRadius: Theme.Radius.contentCard)
-                    .fill(Theme.todayCard)
-                    .shadow(color: Theme.todayCardShadow, radius: ShellChrome.shadowRadius, y: ShellChrome.shadowY)
-                    .padding([.top, .trailing, .bottom], Theme.s2)
-            }
-            .ignoresSafeArea()
             HStack(spacing: 0) {
                 NavSidebar(actions: actions)
                 VStack(spacing: 0) {
@@ -47,18 +37,30 @@ struct MainShell: View {
                         .id(model.displayTimeZoneID ?? "")
                 }
                 .clipShape(UnevenRoundedRectangle(cornerRadii: ShellChrome.contentCorners))
-                // The card's own inset; under a title bar the top is extra air.
-                .padding([.top, .trailing, .bottom], Theme.s2)
+                // Inside the card: under a title bar the top is extra air.
+                .padding(.top, Theme.s2)
+                // The floating content card, inset from the window's edges.
+                // It reaches up under the title bar; the content does not.
+                .background {
+                    RoundedRectangle(cornerRadius: Theme.Radius.contentCard)
+                        .fill(Theme.todayCard)
+                        .shadow(color: Theme.todayCardShadow, radius: ShellChrome.shadowRadius, y: ShellChrome.shadowY)
+                        .padding(.top, Theme.s2)
+                        .ignoresSafeArea(.container, edges: .top)
+                }
+                .padding([.trailing, .bottom], Theme.s2)
+                // The assistant keeps the mail or the day on screen beside
+                // it (M3): a trailing column, toggled from the toolbar / ⌘J.
+                if model.assistantPanelVisible {
+                    AssistantPanel()
+                        .ignoresSafeArea(.container, edges: .top)
+                }
             }
             // Keyboard focus must not wander behind a modal.
             .disabled(model.fullViewModalOpen)
             .onAppear {
                 model.presentTierGuideIfFirstRun()
                 model.presentPurposePromptIfNeeded()
-            }
-            if showsDock {
-                AssistantDock()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
         .frame(
@@ -72,13 +74,6 @@ struct MainShell: View {
     /// The chrome takes the selected account's tone; all accounts is espresso.
     private var chromeIdentity: Theme.RGBA? {
         AccountIdentity.color(selection: model.selectedInbox, among: model.inboxes)
-    }
-
-    /// The dock keeps the assistant one click away with the mail or the day
-    /// still on screen. Assistant has the thread itself, so no dock there.
-    private var showsDock: Bool {
-        model.phase == .signedIn && !model.fullViewModalOpen
-            && model.mainNav.section != .assistant
     }
 
     @ViewBuilder

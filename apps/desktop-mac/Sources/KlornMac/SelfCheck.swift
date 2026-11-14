@@ -1602,6 +1602,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in oneStyleSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     // The design detail pass (2026-10-16).
     for (name, ok) in await detailPassSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    // M3/M4: sidebar symbols, the assistant toolbar panel, five Settings tabs (2026-11-13).
+    for (name, ok) in await m34SelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
@@ -1973,7 +1975,7 @@ func runSelfChecks() async -> Bool {
     check("every tab title is localized",
           SettingsTab.allCases.allSatisfy { $0.title != $0.titleKey && !$0.title.isEmpty })
     check("Settings window fits the smallest supported display",
-          SettingsMetrics.height + SettingsMetrics.chromeHeight
+          SettingsMetrics.maxHeight + SettingsMetrics.chromeHeight
               <= SettingsMetrics.smallestVisibleHeight)
     check("only a real close clears the Settings-open flag",
           !SettingsWindowEvent.willClose.openState(current: true)

@@ -6,6 +6,8 @@ import SwiftUI
 enum MainWindowRules {
     /// NSWindow frame autosave name: position and size survive relaunch.
     static let frameAutosaveName = "KlornMainWindow"
+    /// The main window's toolbar: one trailing "Assistant" button (M3).
+    static let toolbarIdentifier = "KlornMainToolbar"
     /// The shell's floor (sidebar 220 + list 420 + a readable ~240pt reading
     /// pane), so the window can never be dragged into clipping it. 880 keeps
     /// edge-drag alive on fitted sizes ("can't shrink it", 2026-08-07).
@@ -43,11 +45,17 @@ struct MainWindowRoot: View {
     let actions: ShellActions
     /// Tells the controller the sheet the model wants has changed (M5).
     var onSheetChange: () -> Void = {}
+    /// Tells the controller the assistant panel's state has changed (M3):
+    /// the toolbar button's state and the window's width floor follow it.
+    var onAssistantPanelChange: () -> Void = {}
 
     var body: some View {
         MainShell(actions: actions)
             .environment(model)
             .onChange(of: model.activeMainSheet, initial: true) { _, _ in onSheetChange() }
+            .onChange(
+                of: [model.assistantPanelVisible, model.canToggleAssistantPanel], initial: true
+            ) { _, _ in onAssistantPanelChange() }
             // L() is not observable; rebuild on a language change.
             .id(model.settings.languageRevision)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -63,8 +71,12 @@ struct MainWindowRoot: View {
 /// Open/closed and key state come from the window's own delegate callbacks
 /// (shown → open, willClose → closed), never from view lifecycle.
 @MainActor
-final class MainWindowController: NSObject, NSWindowDelegate, MainWindowPresenting {
+final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate, MainWindowPresenting {
     private let model: AppModel
+    /// The title bar + toolbar height the content view includes (M7).
+    private var titlebarInset: CGFloat = 0
+    /// The toolbar's "Assistant" button (M3); its state mirrors the panel.
+    private weak var assistantButton: NSButton?
     /// The shell's actions for the window; wired by the AppDelegate to the router.
     var actionsProvider: (() -> ShellActions?)?
     private(set) var window: NSWindow?
@@ -139,6 +151,52 @@ final class MainWindowController: NSObject, NSWindowDelegate, MainWindowPresenti
         window.beginSheet(sheet)
     }
 
+    /// Match the toolbar button and the window's width floor to the panel
+    /// (M3). Opening the panel on a window narrower than floor + panel
+    /// widens the window rather than squeezing the mail columns; closing it
+    /// lowers the floor but never shrinks the window behind the user.
+    func syncAssistantPanel() {
+        let visible = model.assistantPanelVisible
+        assistantButton?.state = visible ? .on : .off
+        assistantButton?.isEnabled = model.canToggleAssistantPanel
+        guard let window else { return }
+        let floor = NSSize(
+            width: AssistantPanelRules.minContentWidth(panelVisible: visible),
+            height: MainWindowRules.minSize.height)
+        window.contentMinSize = MainWindowRules.contentSize(usable: floor, titlebarInset: titlebarInset)
+        let shortfall = floor.width - window.contentLayoutRect.width
+        guard visible, shortfall > 0 else { return }
+        var frame = window.frame
+        frame.size.width += shortfall
+        window.setFrame(frame, display: true)
+        clampOnScreen(window)
+    }
+
+    @objc func toggleAssistantPanel(_ sender: Any?) {
+        if model.canToggleAssistantPanel { model.showAssistantPanel.toggle() }
+        syncAssistantPanel()
+    }
+
+    // MARK: NSToolbarDelegate
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, AssistantToolbar.itemIdentifier]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard itemIdentifier == AssistantToolbar.itemIdentifier else { return nil }
+        let item = AssistantToolbar.makeItem(target: self, action: #selector(toggleAssistantPanel(_:)))
+        assistantButton = item.view as? NSButton
+        return item
+    }
+
     /// Close the main window; willClose does the rest.
     func close() {
         window?.close()
@@ -150,7 +208,9 @@ final class MainWindowController: NSObject, NSWindowDelegate, MainWindowPresenti
         model.prepareMainNavigation()
         let host = NSHostingController(
             rootView: MainWindowRoot(
-                model: model, actions: actions, onSheetChange: { [weak self] in self?.syncSheet() }))
+                model: model, actions: actions,
+                onSheetChange: { [weak self] in self?.syncSheet() },
+                onAssistantPanelChange: { [weak self] in self?.syncAssistantPanel() }))
         // The window owns its frame; SwiftUI content must never resize it
         // (clipping lessons, 2026-08-19).
         host.sizingOptions = []
@@ -161,8 +221,17 @@ final class MainWindowController: NSObject, NSWindowDelegate, MainWindowPresenti
         window.title = "Klorn"
         window.titleVisibility = .hidden  // the sections draw their own titles
         window.titlebarAppearsTransparent = true
+        // The trailing "Assistant" button (M3). Installed before the title
+        // bar is measured: the toolbar is part of the inset.
+        let toolbar = NSToolbar(identifier: MainWindowRules.toolbarIdentifier)
+        toolbar.delegate = self
+        toolbar.displayMode = .iconOnly
+        toolbar.allowsUserCustomization = false
+        window.toolbar = toolbar
+        window.toolbarStyle = .unifiedCompact
         let titlebar = MainWindowRules.titlebarInset(
             frameHeight: window.frame.height, layoutHeight: window.contentLayoutRect.height)
+        titlebarInset = titlebar
         window.contentMinSize = MainWindowRules.contentSize(
             usable: MainWindowRules.minSize, titlebarInset: titlebar)
         window.isReleasedWhenClosed = false  // reused on reopen

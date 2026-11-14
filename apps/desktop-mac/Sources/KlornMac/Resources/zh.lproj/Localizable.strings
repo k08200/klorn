@@ -117,17 +117,13 @@
 /* Preferences — shell */
 "prefs.title" = "偏好设置";
 "prefs.section.notifications" = "通知";
-"prefs.section.general" = "通用";
-"prefs.section.keyboard" = "键盘";
-"prefs.section.language" = "语言";
 "prefs.section.account" = "账户";
-"prefs.section.about" = "关于";
 
 "prefs.banners" = "在这台 Mac 上显示 macOS 横幅通知";
 "prefs.banners.detail" = "每封新的 PUSH 或 MEETING 邮件都会显示一条横幅，仅包含发件人和主题。这是本机的总开关：关闭后无论上方分类如何，这里的横幅都会静音；主窗口中的 PUSH 数量仍会更新。";
 "prefs.banners.denied" = "macOS 正在阻止 Klorn 的通知。请在“系统设置 ▸ 通知”中允许。";
 "prefs.banners.openSystemSettings" = "打开系统设置";
-"prefs.dockBadge" = "在 Dock 图标上显示数量";
+"prefs.dockBadge" = "显示“需要你处理”的数量";
 "prefs.dockBadge.detail" = "“今天”中等待处理的紧急邮件数量。它不发声也不显示横幅，所以免打扰时段也会显示。";
 "loginPrompt.title" = "让 Klorn 在后台保持运行？";
 "loginPrompt.body" = "Klorn 只有在运行时才能提醒你紧急邮件。登录时打开它，重启后也不会错过任何邮件。";
@@ -141,7 +137,7 @@
 "push.closedSummary.title" = "Klorn 关闭期间有 %d 封紧急邮件";
 "push.moreSummary.title" = "还有 %d 封需要你处理";
 "push.delayedSummary.title" = "%d 封紧急邮件需要你处理";
-"prefs.launchAtLogin" = "登录时启动 Klorn";
+"prefs.launchAtLogin" = "登录时打开 Klorn";
 "prefs.launchAtLogin.unavailable.label" = "登录时启动";
 "prefs.launchAtLogin.unavailable.value" = "仅打包版可用";
 "prefs.updates" = "更新";
@@ -364,12 +360,10 @@
 "a11y.collapsed" = "已收起";
 
 /* Mail remote-content privacy toggle (2026-08-14) */
-"prefs.section.mail" = "邮件";
 "prefs.remoteImages" = "在邮件中加载远程图片";
 "prefs.remoteImages.detail" = "关闭后，阅读邮件时会拦截所有网络请求 — 包括跟踪像素。内嵌图片仍可显示。";
 
 /* Appearance (2026-08-15) */
-"prefs.section.appearance" = "外观";
 "prefs.appearance" = "主题";
 "prefs.appearance.detail" = "“系统”跟随 macOS，并实时切换。";
 "appearance.system" = "系统";
@@ -447,7 +441,6 @@
 "compose.needsPro" = "发送邮件需要 Pro 套餐。";
 
 /* Assistant dock */
-"assistant.dock.toggle" = "助理（⌘J）";
 "assistant.dock.close.a11y" = "关闭助理";
 "assistant.dock.context.a11y" = "正在讨论：%@";
 
@@ -587,7 +580,6 @@
 "settings.tab.accounts" = "账户";
 "settings.tab.assistant" = "助理";
 "settings.tab.notifications" = "通知";
-"settings.tab.appearance" = "外观";
 "settings.tab.privacy" = "隐私";
 "settings.signedOutNote" = "登录 Klorn 后即可查看这些设置。";
 "menu.message" = "邮件";
@@ -792,6 +784,20 @@
 "chat.send.failed" = "无法连接到 Klorn — %@";
 "chat.event.failed" = "无法创建日程 — %@";
 "commitments.needsPro" = "承诺跟踪需要 Klorn Pro。";
+
+/* M3/M4 (2026-11-13): assistant toolbar panel, grouped General settings */
+"assistant.toolbar.label" = "助理";
+"assistant.toolbar.help" = "显示或隐藏助理（⌘J）";
+"menu.assistant.show" = "显示助理";
+"menu.assistant.hide" = "隐藏助理";
+"prefs.group.startup" = "启动";
+"prefs.group.appearance" = "外观";
+"prefs.group.dock" = "程序坞";
+"prefs.group.updates" = "更新";
+"prefs.group.keyboard" = "键盘";
+"prefs.group.support" = "支持";
+"prefs.group.about" = "关于";
+"prefs.group.mail" = "邮件";
 
 /* Editorial Today and account chrome (M1/M2, 2026-11-13) */
 "today.headline.none" = "现在没有等你处理的邮件";

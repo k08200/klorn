@@ -74,7 +74,7 @@ struct AssistantThread: View {
             if model.chatMessages.isEmpty {
                 VStack(spacing: Theme.s4) {
                     EmptyState(
-                        icon: "sparkles",
+                        icon: AssistantToolbar.symbol,
                         title: L("assistant.empty"))
                     // One-click starters: discoverability beats a
                     // blank prompt. Each sends immediately. The
