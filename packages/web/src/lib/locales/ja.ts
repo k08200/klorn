@@ -3149,7 +3149,7 @@ const ja: Record<string, string> = {
   "teamInvite.missing": "招待メールのリンクからこのページを開いてください。",
   "teamInvite.title": "{org} に参加",
   "teamInvite.body":
-    "{org} はあなたの名前、メールアドレス、役割、シートを見られます。メール、レーン、約束を見ることは決してありません。",
+    "{org} はあなたの名前、メールアドレス、役割、シートを見られます。メール、レーン、約束を見ることは決してありません。 また、全員の自動返信をオフにしたり、エージェントを制限したりできます。",
   "teamInvite.accept": "{org} に参加",
   "teamInvite.joined": "{org} に参加しました。",
   "teamInvite.openSettings": "チーム設定を開く",
@@ -3161,6 +3161,13 @@ const ja: Record<string, string> = {
     "オーナーを削除する前に別のメンバーをオーナーにしてください。",
   "settings.org.retry": "再試行",
   "settings.org.loadFailed": "この部分を読み込めませんでした。",
+  "settings.org.transparency.ceilings": "組織があなたに設定している制限",
+  "settings.org.transparency.ceiling.none": "なし",
+  "settings.org.transparency.ceiling.autoReplyOff": "自動返信はオフです",
+  "settings.org.transparency.ceiling.cap.off": "エージェントはオフです",
+  "settings.org.transparency.ceiling.cap.shadow": "エージェントは観察のみ行います",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "エージェントは提案のみ行い、自分では実行しません",
 };
 
 export default ja;

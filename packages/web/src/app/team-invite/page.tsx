@@ -28,17 +28,23 @@ import { PRIMARY_BTN } from "../settings/_sections/shared";
  * before the sign-in redirect could drop it, then posted in a request body.
  */
 function captureToken(): string | null {
-  try {
-    const fromHash = inviteTokenFromHash(window.location.hash);
-    if (fromHash) {
+  const fromHash = inviteTokenFromHash(window.location.hash);
+  if (fromHash) {
+    try {
       window.sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, fromHash);
+    } catch {
+      // Storage blocked: the token lives in this page only.
+    } finally {
+      // The fragment goes either way: it must not stay in the address bar or history.
       window.history.replaceState(null, "", window.location.pathname);
-      return fromHash;
     }
+    return fromHash;
+  }
+  try {
     const stored = window.sessionStorage.getItem(INVITE_TOKEN_STORAGE_KEY);
     return isInviteToken(stored) ? stored : null;
   } catch {
-    return inviteTokenFromHash(window.location.hash);
+    return null;
   }
 }
 
@@ -65,8 +71,13 @@ function InviteAccept({ token }: { token: string | null }) {
   const { busy, errorKey, run } = useOrgAction();
 
   useEffect(() => {
-    // Nothing is asked of a server that has the feature off for this user.
-    if (!user || user.teams !== true) return;
+    if (!user) return;
+    // Nothing is asked of a server that has the feature off for this user,
+    // and its link is not kept for whoever signs in next.
+    if (user.teams !== true) {
+      forgetToken();
+      return;
+    }
     if (!token) {
       setState({ kind: "missing" });
       return;

@@ -3111,7 +3111,7 @@ const ko: Record<string, string> = {
   "teamInvite.missing": "초대 메일의 링크로 이 페이지를 열어 주세요.",
   "teamInvite.title": "{org}에 참여",
   "teamInvite.body":
-    "{org}은(는) 회원님의 이름, 이메일 주소, 역할, 시트를 볼 수 있습니다. 메일, 레인, 약속은 절대 볼 수 없습니다.",
+    "{org}은(는) 회원님의 이름, 이메일 주소, 역할, 시트를 볼 수 있습니다. 메일, 레인, 약속은 절대 볼 수 없습니다. 또한 모든 멤버의 자동 답장을 끄거나 에이전트를 제한할 수 있습니다.",
   "teamInvite.accept": "{org}에 참여",
   "teamInvite.joined": "{org}에 참여했습니다.",
   "teamInvite.openSettings": "팀 설정 열기",
@@ -3123,6 +3123,13 @@ const ko: Record<string, string> = {
     "소유자를 내보내려면 먼저 다른 멤버를 소유자로 지정해 주세요.",
   "settings.org.retry": "다시 시도",
   "settings.org.loadFailed": "이 부분을 불러오지 못했습니다.",
+  "settings.org.transparency.ceilings": "조직이 정한 나의 제한",
+  "settings.org.transparency.ceiling.none": "없음",
+  "settings.org.transparency.ceiling.autoReplyOff": "자동 답장이 꺼져 있습니다",
+  "settings.org.transparency.ceiling.cap.off": "에이전트가 꺼져 있습니다",
+  "settings.org.transparency.ceiling.cap.shadow": "에이전트는 관찰만 합니다",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "에이전트는 제안만 하고 스스로 실행하지 않습니다",
 };
 
 export default ko;

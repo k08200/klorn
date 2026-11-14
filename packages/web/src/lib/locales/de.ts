@@ -3248,7 +3248,7 @@ const de: Record<string, string> = {
   "teamInvite.missing": "Öffne diese Seite über den Link in deiner Einladungs-E-Mail.",
   "teamInvite.title": "{org} beitreten",
   "teamInvite.body":
-    "{org} sieht deinen Namen, deine E-Mail-Adresse, deine Rolle und deinen Platz – nie aber deine E-Mails, Lanes oder Zusagen.",
+    "{org} sieht deinen Namen, deine E-Mail-Adresse, deine Rolle und deinen Platz – nie aber deine E-Mails, Lanes oder Zusagen. Sie kann außerdem automatische Antworten für alle ausschalten oder den Agenten begrenzen.",
   "teamInvite.accept": "{org} beitreten",
   "teamInvite.joined": "Du bist {org} beigetreten.",
   "teamInvite.openSettings": "Team-Einstellungen öffnen",
@@ -3260,6 +3260,13 @@ const de: Record<string, string> = {
     "Mache zuerst jemand anderen zum Inhaber, bevor du den Inhaber entfernst.",
   "settings.org.retry": "Erneut versuchen",
   "settings.org.loadFailed": "Dieser Teil konnte nicht geladen werden.",
+  "settings.org.transparency.ceilings": "Grenzen, die deine Organisation für dich setzt",
+  "settings.org.transparency.ceiling.none": "Keine",
+  "settings.org.transparency.ceiling.autoReplyOff": "Automatische Antworten sind aus",
+  "settings.org.transparency.ceiling.cap.off": "Der Agent ist aus",
+  "settings.org.transparency.ceiling.cap.shadow": "Der Agent beobachtet nur",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "Der Agent schlägt nur vor und handelt nie selbst",
 };
 
 export default de;

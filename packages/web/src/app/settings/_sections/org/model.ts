@@ -47,6 +47,23 @@ export const CAP_OPTIONS: ReadonlyArray<{ value: AgentModeCapWire | ""; key: str
   { value: "OFF", key: "settings.org.cap.off" },
 ];
 
+const CAP_CEILING_KEYS: Record<AgentModeCapWire, string> = {
+  OFF: "settings.org.transparency.ceiling.cap.off",
+  SHADOW: "settings.org.transparency.ceiling.cap.shadow",
+  SUGGEST: "settings.org.transparency.ceiling.cap.suggest",
+};
+
+/** The limits the organization sets for this member, as message keys (none = empty). */
+export function ceilingKeys(ceilings: {
+  autoReplyDisabled: boolean;
+  agentModeCap: AgentModeCapWire | null;
+}): string[] {
+  return [
+    ...(ceilings.autoReplyDisabled ? ["settings.org.transparency.ceiling.autoReplyOff"] : []),
+    ...(ceilings.agentModeCap ? [CAP_CEILING_KEYS[ceilings.agentModeCap]] : []),
+  ];
+}
+
 export function capFromOption(value: string): AgentModeCapWire | null {
   return value === "SUGGEST" || value === "SHADOW" || value === "OFF" ? value : null;
 }

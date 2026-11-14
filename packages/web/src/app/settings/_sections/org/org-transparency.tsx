@@ -2,10 +2,12 @@
 
 import type { OrgTransparencyResponse } from "@klorn/contract";
 import { useT } from "../../../../lib/i18n";
+import { ceilingKeys } from "./model";
 
 /** What the organization can and cannot see of this member — the server's static truth. */
 export function OrgTransparency({ data }: { data: OrgTransparencyResponse }) {
   const { t, locale } = useT();
+  const ceilings = ceilingKeys(data.ceilings);
   return (
     <section aria-labelledby="org-transparency-title" className="space-y-3">
       <h3 id="org-transparency-title" className="text-role-label font-semibold text-ink">
@@ -37,6 +39,22 @@ export function OrgTransparency({ data }: { data: OrgTransparencyResponse }) {
             ))}
           </ul>
         </div>
+      </div>
+      <div>
+        <h4 className="text-role-caption font-semibold text-ink-mid">
+          {t("settings.org.transparency.ceilings")}
+        </h4>
+        {ceilings.length === 0 ? (
+          <p className="text-role-caption text-ink-dim">
+            {t("settings.org.transparency.ceiling.none")}
+          </p>
+        ) : (
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-role-body text-ink">
+            {ceilings.map((key) => (
+              <li key={key}>{t(key)}</li>
+            ))}
+          </ul>
+        )}
       </div>
       <div>
         <h4 className="text-role-caption font-semibold text-ink-mid">

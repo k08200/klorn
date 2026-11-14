@@ -10,6 +10,7 @@ import {
   apiErrorCode,
   CAP_OPTIONS,
   capFromOption,
+  ceilingKeys,
   clampSeats,
   defaultSeats,
   formatUsd,
@@ -18,11 +19,13 @@ import {
   isOwner,
   orgErrorKey,
   parseSeats,
+  INVITE_TOKEN_STORAGE_KEY as STORED_TOKEN_KEY,
   seatStatusKey,
   showTeamSection,
   TERMINAL_INVITE_CODES,
 } from "../../../web/src/app/settings/_sections/org/model";
 import en from "../../../web/src/lib/locales/en";
+import { SESSION_STATE_PREFIXES } from "../../../web/src/lib/logout-cleanup";
 
 const TOKEN = "a".repeat(64);
 
@@ -132,5 +135,27 @@ describe("org refusals", () => {
       "settings.org.error.generic",
     ];
     for (const key of keys) expect(en[key], key).toBeTypeOf("string");
+  });
+});
+
+describe("invite token lifetime", () => {
+  it("is cleared at sign-out with the other per-tab session state", () => {
+    expect(SESSION_STATE_PREFIXES.some((prefix) => STORED_TOKEN_KEY.startsWith(prefix))).toBe(true);
+  });
+});
+
+describe("ceilings in the transparency view", () => {
+  it("names each ceiling that applies to the member, and none when there is none", () => {
+    expect(ceilingKeys({ autoReplyDisabled: false, agentModeCap: null })).toEqual([]);
+    expect(ceilingKeys({ autoReplyDisabled: true, agentModeCap: "SHADOW" })).toEqual([
+      "settings.org.transparency.ceiling.autoReplyOff",
+      "settings.org.transparency.ceiling.cap.shadow",
+    ]);
+    for (const cap of ["OFF", "SHADOW", "SUGGEST"] as const) {
+      const [key] = ceilingKeys({ autoReplyDisabled: false, agentModeCap: cap });
+      expect(en[key ?? ""], cap).toBeTypeOf("string");
+    }
+    expect(en["settings.org.transparency.ceiling.autoReplyOff"]).toBeTypeOf("string");
+    expect(en["settings.org.transparency.ceilings"]).toBeTypeOf("string");
   });
 });

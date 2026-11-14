@@ -3193,7 +3193,7 @@ const es: Record<string, string> = {
   "teamInvite.missing": "Abre esta página desde el enlace de tu correo de invitación.",
   "teamInvite.title": "Unirte a {org}",
   "teamInvite.body":
-    "{org} verá tu nombre, tu dirección de correo, tu rol y tu plaza. Nunca verá tu correo, tus carriles ni tus compromisos.",
+    "{org} verá tu nombre, tu dirección de correo, tu rol y tu plaza. Nunca verá tu correo, tus carriles ni tus compromisos. También puede desactivar la respuesta automática o limitar el agente para todos.",
   "teamInvite.accept": "Unirte a {org}",
   "teamInvite.joined": "Te uniste a {org}.",
   "teamInvite.openSettings": "Abrir ajustes del equipo",
@@ -3205,6 +3205,13 @@ const es: Record<string, string> = {
     "Haz propietario a otra persona antes de quitar al propietario.",
   "settings.org.retry": "Reintentar",
   "settings.org.loadFailed": "No se pudo cargar esta parte.",
+  "settings.org.transparency.ceilings": "Límites que tu organización fija para ti",
+  "settings.org.transparency.ceiling.none": "Ninguno",
+  "settings.org.transparency.ceiling.autoReplyOff": "La respuesta automática está desactivada",
+  "settings.org.transparency.ceiling.cap.off": "El agente está desactivado",
+  "settings.org.transparency.ceiling.cap.shadow": "El agente solo observa",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "El agente solo sugiere; nunca actúa por su cuenta",
 };
 
 export default es;

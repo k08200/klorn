@@ -3121,7 +3121,7 @@ const en: Record<string, string> = {
   "teamInvite.missing": "Open this page from the link in your invite email.",
   "teamInvite.title": "Join {org}",
   "teamInvite.body":
-    "{org} will see your name, email address, role and seat. It never sees your mail, your lanes or your commitments.",
+    "{org} will see your name, email address, role and seat. It never sees your mail, your lanes or your commitments. It can also turn off auto-reply or limit the agent for everyone.",
   "teamInvite.accept": "Join {org}",
   "teamInvite.joined": "You joined {org}.",
   "teamInvite.openSettings": "Open team settings",
@@ -3133,6 +3133,13 @@ const en: Record<string, string> = {
     "Make someone else the owner before removing the owner.",
   "settings.org.retry": "Try again",
   "settings.org.loadFailed": "This part could not be loaded.",
+  "settings.org.transparency.ceilings": "Limits your organization sets for you",
+  "settings.org.transparency.ceiling.none": "None",
+  "settings.org.transparency.ceiling.autoReplyOff": "Auto-reply is off",
+  "settings.org.transparency.ceiling.cap.off": "The agent is off",
+  "settings.org.transparency.ceiling.cap.shadow": "The agent only observes",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "The agent only suggests; it never acts on its own",
 };
 
 export default en;

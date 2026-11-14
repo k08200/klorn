@@ -3212,7 +3212,7 @@ const fr: Record<string, string> = {
   "teamInvite.missing": "Ouvrez cette page depuis le lien de votre e-mail d’invitation.",
   "teamInvite.title": "Rejoindre {org}",
   "teamInvite.body":
-    "{org} verra votre nom, votre adresse e-mail, votre rôle et votre siège. Jamais vos e-mails, vos voies ni vos engagements.",
+    "{org} verra votre nom, votre adresse e-mail, votre rôle et votre siège. Jamais vos e-mails, vos voies ni vos engagements. Elle peut aussi désactiver la réponse automatique ou limiter l’agent pour tous.",
   "teamInvite.accept": "Rejoindre {org}",
   "teamInvite.joined": "Vous avez rejoint {org}.",
   "teamInvite.openSettings": "Ouvrir les réglages d’équipe",
@@ -3224,6 +3224,13 @@ const fr: Record<string, string> = {
     "Nommez un autre propriétaire avant de retirer le propriétaire.",
   "settings.org.retry": "Réessayer",
   "settings.org.loadFailed": "Cette partie n’a pas pu être chargée.",
+  "settings.org.transparency.ceilings": "Limites fixées par votre organisation",
+  "settings.org.transparency.ceiling.none": "Aucune",
+  "settings.org.transparency.ceiling.autoReplyOff": "La réponse automatique est désactivée",
+  "settings.org.transparency.ceiling.cap.off": "L’agent est désactivé",
+  "settings.org.transparency.ceiling.cap.shadow": "L’agent observe seulement",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "L’agent propose seulement et n’agit jamais seul",
 };
 
 export default fr;

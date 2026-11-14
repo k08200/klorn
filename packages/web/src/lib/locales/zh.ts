@@ -2935,7 +2935,7 @@ const zh: Record<string, string> = {
   "teamInvite.missing": "请通过邀请邮件中的链接打开此页面。",
   "teamInvite.title": "加入 {org}",
   "teamInvite.body":
-    "{org} 能看到你的姓名、邮箱地址、角色和席位，永远看不到你的邮件、分类或承诺事项。",
+    "{org} 能看到你的姓名、邮箱地址、角色和席位，永远看不到你的邮件、分类或承诺事项。它还可以为所有人关闭自动回复或限制代理。",
   "teamInvite.accept": "加入 {org}",
   "teamInvite.joined": "你已加入 {org}。",
   "teamInvite.openSettings": "打开团队设置",
@@ -2946,6 +2946,12 @@ const zh: Record<string, string> = {
   "settings.org.error.CANNOT_REMOVE_OWNER": "移除所有者前，请先将其他成员设为所有者。",
   "settings.org.retry": "重试",
   "settings.org.loadFailed": "此部分无法加载。",
+  "settings.org.transparency.ceilings": "组织为你设置的限制",
+  "settings.org.transparency.ceiling.none": "无",
+  "settings.org.transparency.ceiling.autoReplyOff": "自动回复已关闭",
+  "settings.org.transparency.ceiling.cap.off": "代理已关闭",
+  "settings.org.transparency.ceiling.cap.shadow": "代理只观察",
+  "settings.org.transparency.ceiling.cap.suggest": "代理只提出建议，不会自行执行",
 };
 
 export default zh;
