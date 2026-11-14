@@ -273,6 +273,8 @@ enum PreviewRender {
         // The main window's sections (M4b), on their own model so the
         // shots above keep their state.
         ok = renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
+        // The toolbar bell's floating panel (NC2-A), both appearances.
+        ok = renderNotificationCenter(dir: dir, actions: actions) && ok
         // The compose window and the sheets (M5).
         ok = renderWindows(dir: dir, dark: renderDark) && ok
         // Settings ▸ Accounts' IMAP connect form (Naver + iCloud Mail).

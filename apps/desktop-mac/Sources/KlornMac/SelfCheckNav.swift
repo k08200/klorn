@@ -349,7 +349,10 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     let shellUsers = files.map(\.lastPathComponent)
         .filter { !$0.hasPrefix("SelfCheck") && text($0).contains(shell) }.sorted()
     check("only the main window (and its render shots) builds the shell",
-          shellUsers == ["MainWindow.swift", "PreviewRenderFiles.swift", "PreviewRenderNav.swift"])
+          shellUsers == [
+              "MainWindow.swift", "PreviewRenderFiles.swift", "PreviewRenderNav.swift",
+              "PreviewRenderNotificationCenter.swift",
+          ])
     let newViews = ["NavSidebar(", "TodayScreen(", "MailSection(", "CalendarSection(", "AssistantSection(", "FilesSection("]
     check("only the shell mounts the main-window views",
           files.map(\.lastPathComponent)

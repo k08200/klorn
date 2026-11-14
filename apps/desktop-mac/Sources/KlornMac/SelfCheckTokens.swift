@@ -16,7 +16,7 @@ enum TokenGuard {
         "Shell/MainShell", "Shell/NavSidebar", "Shell/MainNav", "Shell/MainSheets", "Today/",
         "Mail/MailSection", "Mail/ComposeWindow", "Mail/WindowMailRow", "Mail/WindowLaneChip",
         "Calendar/CalendarSection", "Assistant/AssistantSection", "Onboarding/",
-        "Shared/SurfaceState", "Shared/SegmentedBar",
+        "Shared/SurfaceState", "Shared/SegmentedBar", "NotificationCenter/",
     ]
 
     static func inScope(_ relativePath: String) -> Bool {

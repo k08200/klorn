@@ -160,8 +160,9 @@ final class InMemoryPushLedgerStore: PushLedgerStoring {
 
 // MARK: - Posting banners
 
-/// What one banner says. Sender and subject only: no body text, so a
-/// banner on a shared screen never shows the mail's contents. Pure.
+/// What one banner says. Sender, subject and the judge's reason
+/// (`MailBannerContent`): never the mail's body text, so a banner on a
+/// shared screen never shows the mail's contents. Pure.
 struct PushBanner: Equatable, Sendable {
     let identifier: String
     let title: String
@@ -174,14 +175,50 @@ struct PushBanner: Equatable, Sendable {
     var interruption: BannerInterruption = .standard
 
     static func make(for item: FirewallItem) -> PushBanner {
-        let sender = senderDisplayName(item.email?.from.map(decodeHTMLEntities))
-        let subject = decodeHTMLEntities(item.email?.subject ?? item.title)
+        let content = MailBannerContent.compose(
+            from: item.email?.from.map(decodeHTMLEntities),
+            subject: decodeHTMLEntities(item.email?.subject ?? item.title),
+            reason: rowTierReason(item.tierReason))
         return PushBanner(
             identifier: PushNotifier.notificationIdentifier(for: item.id),
-            title: sender.isEmpty ? "Klorn" : sender,
-            body: subject,
+            title: content.title,
+            body: content.body,
             subtitle: item.tier == .meeting ? Tier.meeting.label : nil,
             interruption: .forLane(item.tier))
+    }
+}
+
+/// A mail banner's words (decision N1, the web push's `mailPushContent`):
+/// title = the sender's display name, body = the subject, then the judge's
+/// reason on a second line when there is one. Each part is one line with
+/// controls and bidi marks removed and the server's caps (100 / 180 / 140,
+/// "…" past them). The ONE place the Mac composes mail-banner text, so the
+/// server's shared formatter fields can replace its inputs later. Pure.
+enum MailBannerContent {
+    static let titleMax = 100
+    static let subjectMax = 180
+    static let reasonMax = 140
+
+    static func compose(from: String?, subject: String?, reason: String?) -> (title: String, body: String) {
+        let sender = oneLine(senderDisplayName(from), titleMax)
+        let title = sender.isEmpty ? (oneLine(from, titleMax).isEmpty ? "Klorn" : oneLine(from, titleMax)) : sender
+        let line = oneLine(subject, subjectMax)
+        let subjectLine = line.isEmpty ? L("mail.noSubjectParen") : line
+        let why = oneLine(reason, reasonMax)
+        return (title, why.isEmpty ? subjectLine : "\(subjectLine)\n\(why)")
+    }
+
+    /// The server's `oneLine`: C0/C1 controls and bidi embedding, override
+    /// and isolate marks become spaces, whitespace runs collapse, then the cap.
+    static func oneLine(_ value: String?, _ max: Int) -> String {
+        let cleaned = String(String.UnicodeScalarView((value ?? "").unicodeScalars.map { scalar in
+            let v = scalar.value
+            let unsafe = v < 0x20 || (0x7F...0x9F).contains(v) || (0x202A...0x202E).contains(v)
+                || (0x2066...0x2069).contains(v)
+            return unsafe ? " " : scalar
+        }))
+        let text = cleaned.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return text.count > max ? String(text.prefix(max - 1)) + "…" : text
     }
 }
 
