@@ -3,14 +3,21 @@
 // is split into who / subject. Pure decisions in
 // packages/web/src/lib/notification-center.ts, run from the api suite because
 // the web package has no unit-test runner (see web-auth-surfaces.test.ts).
-import { describe, expect, it } from "vitest";
+import type {
+  NotificationBudget,
+  NotificationListResponse,
+  NotificationRow,
+} from "@klorn/contract";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { type AlertEndpointList, alertStripItems } from "../../../web/src/lib/alert-devices";
 import {
   bellBadgeCount,
   CENTER_GROUP_ORDER,
   type CenterNotification,
   centerGroupOf,
+  createDeliveryLookupMemo,
   deliveredToLabel,
+  deliveryFailureKind,
   deliveryPath,
   groupForCenter,
   isMissingRoute,
@@ -22,6 +29,11 @@ import {
   rowLane,
 } from "../../../web/src/lib/notification-center";
 
+// A fixed "now" for the fallback rules: 2026-11-13 12:00 UTC.
+const NOW = new Date("2026-11-13T12:00:00.000Z");
+const HOUR_MS = 3_600_000;
+const hoursAgo = (h: number) => new Date(NOW.getTime() - h * HOUR_MS).toISOString();
+
 function notif(overrides: Partial<CenterNotification> = {}): CenterNotification {
   return {
     id: "n1",
@@ -29,55 +41,129 @@ function notif(overrides: Partial<CenterNotification> = {}): CenterNotification 
     title: "Urgent email",
     message: "Dana Whitfield: Contract signature needed [18c3abc]",
     isRead: false,
+    link: null,
+    conversationId: null,
+    sourceEmailId: null,
+    pendingActionId: null,
+    pendingActionStatus: null,
     createdAt: "2026-11-13T09:00:00.000Z",
     ...overrides,
   };
 }
 
-describe("centerGroupOf — server group wins", () => {
-  it.each(["now", "today", "reply", "later", "done"] as const)("uses n.group = %s", (group) => {
-    expect(centerGroupOf(notif({ group, isRead: true }))).toBe(group);
+/** A local-day check that ignores the machine's zone: same UTC calendar day. */
+const sameUtcDay = (a: Date, b: Date) =>
+  a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+
+describe("contract types — the bell reads @klorn/contract, not local copies", () => {
+  it("a bell row IS the contract NotificationRow", () => {
+    expectTypeOf<CenterNotification>().toEqualTypeOf<NotificationRow>();
+    const row: NotificationRow = notif({
+      lane: "PUSH",
+      reason: { text: "Deadline today", verified: true, quote: "Sign by 17:00", quoteIn: "body" },
+      held: false,
+      group: "now",
+    });
+    const asCenter: CenterNotification = row;
+    expect(asCenter.group).toBe("now");
   });
 
-  it("ignores an unknown server group and falls back", () => {
-    expect(centerGroupOf(notif({ group: "urgent" as never }))).toBe("now");
+  it("the budget chip reads the list-level contract budget", () => {
+    const list: NotificationListResponse = {
+      notifications: [notif()],
+      count: 1,
+      unread: 1,
+      budget: { used: 3, limit: 5 },
+    };
+    const budget = parseNotifBudget(list);
+    expectTypeOf(budget).toEqualTypeOf<NotificationBudget | null>();
+    expect(budget).toEqual({ used: 3, limit: 5 });
+    expect(parseNotifBudget({ notifications: [], count: 0, unread: 0 })).toBeNull();
   });
 });
 
-describe("centerGroupOf — fallback when n.group is absent", () => {
-  it("read → done, whatever the type", () => {
-    expect(centerGroupOf(notif({ isRead: true }))).toBe("done");
-    expect(centerGroupOf(notif({ isRead: true, type: "meeting" }))).toBe("done");
-    expect(centerGroupOf(notif({ isRead: true, type: "reminder" }))).toBe("done");
+describe("centerGroupOf — server group wins", () => {
+  it.each(["now", "today", "reply", "later", "done"] as const)("uses n.group = %s", (group) => {
+    expect(centerGroupOf(notif({ group, isRead: true }), NOW)).toBe(group);
   });
 
-  it("unread reminder → later", () => {
-    expect(centerGroupOf(notif({ type: "reminder" }))).toBe("later");
+  it("ignores an unknown server group and falls back", () => {
+    expect(centerGroupOf(notif({ group: "urgent" as never, isRead: true }), NOW)).toBe("done");
+  });
+});
+
+// Mirrors api notify/notification-group.ts (done → snoozed → now → reply →
+// today → later) for the inputs a bell row carries; snooze and needs-reply are
+// not on the row, so those rules cannot fire client-side.
+describe("centerGroupOf — fallback when n.group is absent mirrors the server order", () => {
+  it("read → done, whatever the lane or type", () => {
+    expect(centerGroupOf(notif({ isRead: true, lane: "PUSH" }), NOW)).toBe("done");
+    expect(centerGroupOf(notif({ isRead: true, type: "meeting" }), NOW)).toBe("done");
   });
 
-  it("unread meeting → today", () => {
-    expect(centerGroupOf(notif({ type: "meeting" }))).toBe("today");
-  });
-
-  it("unread email → now", () => {
-    expect(centerGroupOf(notif({ type: "email" }))).toBe("now");
-  });
-
-  it("agent_proposal with a PENDING action → now", () => {
+  it("an approval no longer PENDING → done", () => {
     expect(
       centerGroupOf(
-        notif({ type: "agent_proposal", pendingActionId: "pa1", pendingActionStatus: "PENDING" }),
+        notif({ type: "agent_proposal", pendingActionId: "pa1", pendingActionStatus: "APPROVED" }),
+        NOW,
       ),
+    ).toBe("done");
+  });
+
+  it("PUSH lane inside the 72h window → now; outside it → later", () => {
+    expect(centerGroupOf(notif({ lane: "PUSH", createdAt: hoursAgo(1) }), NOW)).toBe("now");
+    expect(centerGroupOf(notif({ lane: "PUSH", createdAt: hoursAgo(72) }), NOW)).toBe("now");
+    expect(centerGroupOf(notif({ lane: "PUSH", createdAt: hoursAgo(73) }), NOW)).toBe("later");
+  });
+
+  it("now outranks today: a fresh PUSH meeting row is now", () => {
+    expect(
+      centerGroupOf(notif({ lane: "PUSH", type: "meeting", createdAt: hoursAgo(1) }), NOW),
     ).toBe("now");
   });
 
-  it("any other unread row → now", () => {
-    expect(centerGroupOf(notif({ type: "briefing" }))).toBe("now");
-    expect(centerGroupOf(notif({ type: "calendar" }))).toBe("now");
+  it("a PENDING approval → today", () => {
+    expect(
+      centerGroupOf(
+        notif({ type: "agent_proposal", pendingActionId: "pa1", pendingActionStatus: "PENDING" }),
+        NOW,
+      ),
+    ).toBe("today");
+  });
+
+  it("MEETING lane or a meeting / calendar / reminder row written today → today", () => {
+    const today = hoursAgo(2);
+    const opts = { sameDay: sameUtcDay };
+    expect(centerGroupOf(notif({ lane: "MEETING", createdAt: today }), NOW, opts)).toBe("today");
+    for (const type of ["meeting", "calendar", "reminder"]) {
+      expect(centerGroupOf(notif({ type, createdAt: today }), NOW, opts)).toBe("today");
+    }
+  });
+
+  it("the same rows from an earlier day → later", () => {
+    const yesterday = hoursAgo(20);
+    const opts = { sameDay: sameUtcDay };
+    expect(centerGroupOf(notif({ lane: "MEETING", createdAt: yesterday }), NOW, opts)).toBe(
+      "later",
+    );
+    expect(centerGroupOf(notif({ type: "reminder", createdAt: yesterday }), NOW, opts)).toBe(
+      "later",
+    );
+  });
+
+  it("an unread mail without a lane, a QUEUE mail and a briefing → later (never guessed now)", () => {
+    expect(centerGroupOf(notif({ createdAt: hoursAgo(1) }), NOW)).toBe("later");
+    expect(centerGroupOf(notif({ lane: "QUEUE", createdAt: hoursAgo(1) }), NOW)).toBe("later");
+    expect(centerGroupOf(notif({ type: "briefing", createdAt: hoursAgo(1) }), NOW)).toBe("later");
+  });
+
+  it("an unreadable createdAt never lands in now or today", () => {
+    expect(centerGroupOf(notif({ lane: "PUSH", createdAt: "nope" }), NOW)).toBe("later");
+    expect(centerGroupOf(notif({ type: "meeting", createdAt: "nope" }), NOW)).toBe("later");
   });
 
   it("null group is treated as absent", () => {
-    expect(centerGroupOf(notif({ group: null, type: "reminder" }))).toBe("later");
+    expect(centerGroupOf(notif({ group: null as never, isRead: true }), NOW)).toBe("done");
   });
 });
 
@@ -85,12 +171,12 @@ describe("groupForCenter", () => {
   it("orders groups now → today → reply → later → done and hides empty ones", () => {
     const rows = [
       notif({ id: "a", isRead: true }),
-      notif({ id: "b", type: "reminder" }),
-      notif({ id: "c" }),
-      notif({ id: "d", type: "meeting" }),
+      notif({ id: "b", type: "briefing" }),
+      notif({ id: "c", lane: "PUSH", createdAt: hoursAgo(1) }),
+      notif({ id: "d", pendingActionId: "pa", pendingActionStatus: "PENDING" }),
       notif({ id: "e", group: "reply" }),
     ];
-    const groups = groupForCenter(rows);
+    const groups = groupForCenter(rows, NOW);
     expect(groups.map((g) => g.key)).toEqual(["now", "today", "reply", "later", "done"]);
     expect(groups.map((g) => g.items.map((n) => n.id))).toEqual([
       ["c"],
@@ -103,12 +189,12 @@ describe("groupForCenter", () => {
   });
 
   it("keeps the incoming order inside a group and drops empty groups", () => {
-    const groups = groupForCenter([notif({ id: "x" }), notif({ id: "y" })]);
-    expect(groups).toEqual([{ key: "now", items: [notif({ id: "x" }), notif({ id: "y" })] }]);
+    const groups = groupForCenter([notif({ id: "x" }), notif({ id: "y" })], NOW);
+    expect(groups).toEqual([{ key: "later", items: [notif({ id: "x" }), notif({ id: "y" })] }]);
   });
 
   it("returns nothing for an empty list", () => {
-    expect(groupForCenter([])).toEqual([]);
+    expect(groupForCenter([], NOW)).toEqual([]);
   });
 });
 
@@ -368,9 +454,62 @@ describe("lazy delivery lookup — GET /api/notifications/:id/delivery", () => {
     expect(parseDeliveryResponse("mac")).toBeNull();
   });
 
-  it("treats a 404 as 'route not there yet' and nothing else", () => {
-    expect(isMissingRoute(new Error('API 404: {"error":"Not Found"}'))).toBe(true);
+  const ROUTE_MISSING = new Error(
+    'API 404: {"message":"Route GET:/api/notifications/abc/delivery not found","error":"Not Found","statusCode":404}',
+  );
+  const ROW_GONE = new Error('API 404: {"error":"Notification not found"}');
+
+  it("only Fastify's own 'Route … not found' body proves the route is missing", () => {
+    expect(isMissingRoute(ROUTE_MISSING)).toBe(true);
+    expect(deliveryFailureKind(ROUTE_MISSING)).toBe("route-missing");
+  });
+
+  it("any other 404 (not yours, deleted after the list loaded, unreadable body) is per row", () => {
+    expect(isMissingRoute(ROW_GONE)).toBe(false);
+    expect(deliveryFailureKind(ROW_GONE)).toBe("row-unavailable");
+    expect(deliveryFailureKind(new Error('API 404: {"error":"Not Found"}'))).toBe(
+      "row-unavailable",
+    );
+    expect(deliveryFailureKind(new Error("API 404: <html>Not Found</html>"))).toBe(
+      "row-unavailable",
+    );
+    expect(deliveryFailureKind(new Error("API 404: "))).toBe("row-unavailable");
+    expect(
+      deliveryFailureKind(new Error('API 404: {"message":"Route GET:/api/other not found!"}')),
+    ).toBe("row-unavailable");
+  });
+
+  it("non-404 failures are neither", () => {
+    expect(deliveryFailureKind(new Error("API 500: boom"))).toBe("other");
+    expect(deliveryFailureKind("API 404")).toBe("other");
     expect(isMissingRoute(new Error("API 500: boom"))).toBe(false);
-    expect(isMissingRoute("API 404")).toBe(false);
+  });
+});
+
+describe("delivery lookup memo — a 404 disables only that row", () => {
+  it("a row 404 stops asking for that row and keeps asking for the others", () => {
+    const memo = createDeliveryLookupMemo();
+    expect(memo.shouldLookup("a")).toBe(true);
+    memo.recordFailure("a", new Error('API 404: {"error":"Notification not found"}'));
+    expect(memo.shouldLookup("a")).toBe(false);
+    expect(memo.shouldLookup("b")).toBe(true);
+    expect(memo.routeMissing()).toBe(false);
+  });
+
+  it("a proven route-missing 404 stops every row", () => {
+    const memo = createDeliveryLookupMemo();
+    memo.recordFailure(
+      "a",
+      new Error('API 404: {"message":"Route GET:/api/notifications/a/delivery not found"}'),
+    );
+    expect(memo.routeMissing()).toBe(true);
+    expect(memo.shouldLookup("b")).toBe(false);
+  });
+
+  it("a transient failure disables nothing", () => {
+    const memo = createDeliveryLookupMemo();
+    memo.recordFailure("a", new Error("API 503: busy"));
+    expect(memo.shouldLookup("a")).toBe(true);
+    expect(memo.routeMissing()).toBe(false);
   });
 });

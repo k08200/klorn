@@ -1,5 +1,6 @@
 "use client";
 
+import type { NotificationBudget, NotificationListResponse } from "@klorn/contract";
 import { useRouter } from "next/navigation";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -23,7 +24,6 @@ import {
   bellBadgeCount,
   type CenterNotification,
   groupForCenter,
-  type NotifBudget,
   parseNotifBudget,
 } from "../lib/notification-center";
 import { notificationClickTarget } from "../lib/notification-target";
@@ -43,7 +43,7 @@ const ROW_SELECTOR = "[data-nc-row]";
 
 export default function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [budget, setBudget] = useState<NotifBudget | null>(null);
+  const [budget, setBudget] = useState<NotificationBudget | null>(null);
   // The header's overflow menu (holds "Clear").
   const [menuOpen, setMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
@@ -210,10 +210,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
   // hadn't recorded yet, so a resume is visibly signalled.
   const fetchNotifications = useCallback(
     (opts?: { flashOnNew?: boolean }) => {
-      apiFetch<{ notifications: Notification[] }>("/api/notifications?limit=30")
+      apiFetch<NotificationListResponse>("/api/notifications?limit=30")
         .then((d) => {
           const notifs = d.notifications || [];
-          // The daily alert budget shows only if this response already carries it.
+          // The list-level daily alert budget (contract NotificationListResponse
+          // `budget`) shows only when the server sends it (v3 users with a limit).
           setBudget(parseNotifBudget(d));
           // Anything not yet in seenIds arrived while we were away. On the first
           // load every id is unseen, so the initializedRef guard suppresses the
