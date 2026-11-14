@@ -1118,6 +1118,8 @@ const de: Record<string, string> = {
     "Dieser Tarif wird nicht über das Web abgerechnet, hier gibt es also nichts zu kündigen. Wenn du in der mobilen App abonniert hast, verwalte es dort.",
   "billing.enterpriseBilling":
     "Enterprise wird nach Vereinbarung abgerechnet — für einen Tarifwechsel wende dich an den Vertrieb.",
+  "billing.teamSeatCoversPro":
+    "Dein Team-Platz enthält bereits alles aus Pro. Dein persönliches Pro verlängert sich weiter – kündige es, wenn du nicht beides brauchst.",
   "billing.keepSubscription": "Abo behalten",
   "billing.renewsOn": "Verlängert sich am {date}",
   "billing.trialFirstCharge": "Kostenlose Testphase · erste Abbuchung am {date}",

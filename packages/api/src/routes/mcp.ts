@@ -16,6 +16,7 @@ import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { authenticateApiKey } from "../mcp/api-keys.js";
 import { buildMcpServer } from "../mcp/server.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { clientAddress } from "../security/client-address.js";
 import { captureError } from "../sentry.js";
 
@@ -60,14 +61,17 @@ export async function mcpRoutes(app: FastifyInstance) {
     // paywall is on, MCP must not be a free side door to the identical
     // toolset. Checked here because requireEntitled reads the session's
     // userId, which an API-key request does not carry.
-    if (PAYWALL_ENABLED && !isEntitled(user.plan, user.role ?? undefined)) {
+    // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+    // TEAMS_ENABLED is closed to the key's owner.
+    const plan = await effectivePlan({ id: key.userId, plan: user.plan });
+    if (PAYWALL_ENABLED && !isEntitled(plan, user.role ?? undefined)) {
       return reply.code(403).send({
         error: "An active subscription is required to use this feature.",
         code: "ENTITLEMENT_REQUIRED",
       });
     }
 
-    const server = buildMcpServer(key.userId, user.plan, {
+    const server = buildMcpServer(key.userId, plan, {
       keyId: key.keyId,
       permission: key.permission,
     });

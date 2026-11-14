@@ -77,7 +77,12 @@ import {
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
-import { effectiveTier, normalizeTier, type Tier } from "../org/effective-tier.js";
+import {
+  effectiveTier,
+  normalizeTier,
+  seatCoversPersonalPlan,
+  type Tier,
+} from "../org/effective-tier.js";
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
@@ -448,6 +453,8 @@ export function authRoutes(app: FastifyInstance) {
       });
       triggerDueLoginBriefing(user.id, 10_000);
 
+      // entitled/paywalled from the effective plan, like /me (a Klorn Teams seat counts).
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
       return reply.code(201).send({
         token,
         user: {
@@ -458,10 +465,10 @@ export function authRoutes(app: FastifyInstance) {
           role: user.role,
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -577,6 +584,8 @@ export function authRoutes(app: FastifyInstance) {
         ipAddress: ip,
       });
 
+      // entitled/paywalled from the effective plan, like /me (a Klorn Teams seat counts).
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
       return reply.send({
         token,
         user: {
@@ -587,10 +596,10 @@ export function authRoutes(app: FastifyInstance) {
           role: user.role,
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -671,6 +680,14 @@ export function authRoutes(app: FastifyInstance) {
           entitled: isEntitled(tier, user.role),
           // Same answer as `plan` unless a Klorn Teams seat raises it.
           effectiveTier: tier,
+          // A team seat already covers this user's own paid Pro, which still
+          // renews: Settings → Billing says so next to the personal cancel.
+          // Klorn never cancels it (org/effective-tier.ts).
+          teamSeatCoversPersonalPlan: seatCoversPersonalPlan(
+            user.plan,
+            tier,
+            user.subscriptionCancelAt,
+          ),
           // Whether to hard-wall the app on entry (pure subscriber-only mode).
           // Always false with the usable free tier — free users get in and are
           // bounded by the free daily cost cap instead.
@@ -763,6 +780,8 @@ export function authRoutes(app: FastifyInstance) {
         data: { ...(name !== undefined && { name: name.trim() }) },
       });
 
+      // entitled/paywalled from the effective plan, like /me (a Klorn Teams seat counts).
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
       return reply.send({
         user: {
           id: user.id,
@@ -772,10 +791,10 @@ export function authRoutes(app: FastifyInstance) {
           role: user.role,
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.

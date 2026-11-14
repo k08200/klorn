@@ -52,6 +52,43 @@ each teammate's calendar. A company that adopts Klorn also removes the
 - Pooled means the team shares (number of seats × seat target); one person
   can use more on a day the others use less.
 
+### Seat entitlement in code (Teams v1.1)
+
+- `effectivePlan` (`packages/api/src/org/effective-tier.ts`) is the one
+  resolver every plan gate reads: the user's own plan, raised to TEAM by a
+  held paid seat. Its batch form `effectivePlans` serves the schedulers in two
+  queries. While `TEAMS_ENABLED` is closed to a user it returns the own plan
+  value untouched and runs no query, so every gate answers exactly as before
+  seats. A static guard (`effective-tier-wiring-guard.test.ts`) fails the
+  build when a gate is handed a raw `User.plan`.
+- A seat holder carries `PLANS.TEAM`'s limits (device count, message and
+  token allowances) wherever the code reads plan limits.
+- Pooled LLM cap (`billing/team-cost-pool.ts`): a seat holder may spend
+  seats × `TEAM_SEAT_DAILY_COST_CAP_CENTS` (default 80¢) minus today's spend
+  by the organization's other seated members, bounded per member at 10× the
+  seat target (the anomaly brake), and never less than their own plan's cap.
+  The sum reads cost cents only, re-read at most every 30 s per user.
+
+### Personal Pro and a team seat
+
+*Founder decision made on the founder's behalf on 2026-11-14 (Teams v1.1);
+reversible — change it here and in `seatCoversPersonalPlan`.*
+
+- Entitlement is the higher of the two: TEAM. The LLM cap is the higher of
+  the personal cap and the pool's remainder.
+- Klorn never cancels the personal subscription by itself. A cancel is a
+  money action, and the seat can lapse (the organization stops paying, or the
+  member is removed), which would leave the user without the plan they paid
+  for.
+- Not silent: while the personal Pro still renews (no cancel scheduled), `/me`
+  and `/api/billing/status` carry `teamSeatCoversPersonalPlan: true`, and
+  Settings → Billing says the seat already covers Pro next to the personal
+  cancel. That cancel is the existing one: Paddle in-app cancel at the end of
+  the billing period (`POST /api/billing/cancel`, undo with
+  `POST /api/billing/resume`); Stripe customers use the portal; App Store and
+  Google Play subscriptions are managed in the store.
+- No automatic refund or proration of the personal plan.
+
 ### Launch features
 
 1. Organization, members, invites. No organization role is named `ADMIN`

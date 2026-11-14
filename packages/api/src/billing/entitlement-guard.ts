@@ -8,7 +8,7 @@ import { isEntitled, isHardPaywalled } from "./stripe.js";
 async function loadPlanRole(
   request: FastifyRequest,
   reply: FastifyReply,
-): Promise<{ plan: string; role?: string } | null> {
+): Promise<{ tier: string; role?: string } | null> {
   const userId = (request as unknown as { userId?: string }).userId;
   if (!userId) {
     reply.code(401).send({ error: "Authentication required" });
@@ -21,8 +21,8 @@ async function loadPlanRole(
     });
     // A Klorn Teams seat counts: the tier is derived from membership at read
     // time (org/effective-tier.ts) and never written to User.plan.
-    const plan = await effectiveTier({ id: userId, plan: user?.plan ?? "FREE" });
-    return { plan, role: user?.role ?? undefined };
+    const tier = await effectiveTier({ id: userId, plan: user?.plan ?? "FREE" });
+    return { tier, role: user?.role ?? undefined };
   } catch (err) {
     // Fail CLOSED (re-throw → Fastify 500): an access guard must not admit a
     // request when it can't determine entitlement. Surface it so a DB fault on
@@ -52,7 +52,7 @@ export async function requireEntitled(request: FastifyRequest, reply: FastifyRep
 
   const who = await loadPlanRole(request, reply);
   if (!who) return;
-  if (!isEntitled(who.plan, who.role)) {
+  if (!isEntitled(who.tier, who.role)) {
     return reply.code(403).send({
       error: "An active subscription is required to use this feature.",
       code: "ENTITLEMENT_REQUIRED",
@@ -76,7 +76,7 @@ export async function requireAppAccess(request: FastifyRequest, reply: FastifyRe
 
   const who = await loadPlanRole(request, reply);
   if (!who) return;
-  if (isHardPaywalled(who.plan, who.role)) {
+  if (isHardPaywalled(who.tier, who.role)) {
     return reply.code(403).send({
       error: "An active subscription is required.",
       code: "ENTITLEMENT_REQUIRED",

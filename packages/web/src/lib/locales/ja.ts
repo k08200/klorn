@@ -1078,6 +1078,8 @@ const ja: Record<string, string> = {
     "このプランはウェブで課金されていないため、ここで解約するものはありません。モバイルアプリで登録した場合は、そちらで管理してください。",
   "billing.enterpriseBilling":
     "Enterpriseは個別契約での請求です — プラン変更は営業にご連絡ください。",
+  "billing.teamSeatCoversPro":
+    "チームのシートに Pro の機能がすべて含まれています。個人の Pro は引き続き更新されるため、両方が不要なら解約してください。",
   "billing.keepSubscription": "解約を取り消す",
   "billing.renewsOn": "{date} に更新",
   "billing.trialFirstCharge": "無料トライアル中 · 最初の請求は {date}",

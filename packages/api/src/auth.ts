@@ -5,6 +5,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
+import { effectivePlan } from "./org/effective-tier.js";
 import { localEventSource } from "./pim/calendar-rows.js";
 import { captureError } from "./sentry.js";
 
@@ -374,7 +375,10 @@ export async function registerDevice(
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  const planConfig = getEffectivePlan(user?.plan || "FREE", user?.role);
+  // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+  // TEAMS_ENABLED is closed to the user.
+  const plan = await effectivePlan({ id: userId, plan: user?.plan || "FREE" });
+  const planConfig = getEffectivePlan(plan, user?.role);
   const limit = planConfig.deviceLimit;
 
   const device = await db.device.create({

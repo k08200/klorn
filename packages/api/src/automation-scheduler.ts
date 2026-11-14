@@ -89,6 +89,7 @@ import {
 } from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { AutoReplyBlockedByOrgError } from "./org/ceilings.js";
+import { effectivePlans } from "./org/effective-tier.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -1072,8 +1073,11 @@ async function runAutomationTick(): Promise<void> {
       // Keep role alongside plan so planHasFeature's ADMIN bypass works here too
       // — without it, an ADMIN on a FREE plan would have background jobs
       // silently suppressed once the paywall locks FREE.
+      // A Klorn Teams seat counts (org/effective-tier.ts): one batch lookup per
+      // batch, none while TEAMS_ENABLED is off. Every gate below reads this map.
+      const plans = await effectivePlans(automationUsers);
       const automationPlanMap = new Map(
-        automationUsers.map((u) => [u.id, { plan: u.plan, role: u.role }]),
+        automationUsers.map((u) => [u.id, { plan: plans.get(u.id) ?? "FREE", role: u.role }]),
       );
 
       // Pre-fetch which users have a usable Google token. Abandoned signups
@@ -1330,6 +1334,7 @@ async function runUserCycle(
 ): Promise<void> {
   const { automationPlanMap, googleConnectedUserIds, linkedGoogleUserIds } = ctx;
   const configUserEntry = automationPlanMap.get(config.userId);
+  // effective-tier: resolved (automationPlanMap holds effectivePlans)
   const configUserPlan = configUserEntry?.plan || "FREE";
   const configUserRole = configUserEntry?.role;
   const timeZone = normalizeTimeZone(config.timezone);

@@ -1095,6 +1095,8 @@ const es: Record<string, string> = {
     "Este plan no se factura en la web, así que aquí no hay nada que cancelar. Si te suscribiste en la app móvil, gestiónalo allí.",
   "billing.enterpriseBilling":
     "Enterprise se factura por acuerdo: contacta con ventas para cambiar de plan.",
+  "billing.teamSeatCoversPro":
+    "Tu puesto de equipo ya incluye todo Pro. Tu Pro personal se sigue renovando: cancélalo si ya no necesitas ambos.",
   "billing.keepSubscription": "Mantener la suscripción",
   "billing.renewsOn": "Se renueva el {date}",
   "billing.trialFirstCharge": "Prueba gratis · primer cargo el {date}",

@@ -874,6 +874,13 @@ export const DAILY_COST_CAP_CENTS = intEnv("DAILY_COST_CAP_CENTS", 100);
 // the wall. Entitled users (paid/trial/admin) keep DAILY_COST_CAP_CENTS.
 export const FREE_DAILY_COST_CAP_CENTS = intEnv("FREE_DAILY_COST_CAP_CENTS", 10);
 
+// Klorn Teams seat target (pricing-tiers.md: $0.80 / seat / day, POOLED across
+// the team). A seat holder's daily cap is the pool (seats x this) minus the
+// other seated members' spend today, bounded by the 10x anomaly brake, and
+// never below their own plan's cap (billing/team-cost-pool.ts). Read only
+// while TEAMS_ENABLED is open to the user.
+export const TEAM_SEAT_DAILY_COST_CAP_CENTS = intEnv("TEAM_SEAT_DAILY_COST_CAP_CENTS", 80);
+
 // Slice of the per-user daily cap that ONLY the firewall judge may spend.
 // Chat, agent, briefing and summarize stop at (cap - reserve); the judge may
 // use the whole cap. 0 disables the reserve.

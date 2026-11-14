@@ -1073,6 +1073,8 @@ const ko: Record<string, string> = {
     "이 플랜은 웹에서 결제된 것이 아니라 여기서 취소할 것이 없습니다. 모바일 앱에서 구독했다면 앱에서 관리하세요.",
   "billing.enterpriseBilling":
     "엔터프라이즈는 별도 계약으로 청구됩니다 — 플랜 변경은 영업팀에 문의하세요.",
+  "billing.teamSeatCoversPro":
+    "팀 좌석에 Pro 기능이 모두 포함되어 있습니다. 개인 Pro는 계속 갱신되니, 둘 다 필요하지 않다면 해지하세요.",
   "billing.keepSubscription": "구독 유지",
   "billing.renewsOn": "{date}에 갱신",
   "billing.trialFirstCharge": "무료 체험 · {date}에 첫 결제",
