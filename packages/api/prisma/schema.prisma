@@ -190,6 +190,9 @@ model User {
   dataExportAudits           DataExportAudit[]
   ruleChangeAudits           RuleChangeAudit[]
   imapMovedMessages          ImapMovedMessage[]
+  slackConnection            SlackConnection?
+  slackEpisodes              SlackEpisode[]
+  slackMessages              SlackMessage[]
 }
 
 enum UserRole {
@@ -323,6 +326,89 @@ model RuleChangeAudit {
 
   @@index([userId, createdAt])
   @@index([createdAt]) // the retention sweep's range scan
+}
+
+/// Slack integration v1 (docs/providers/slack.md): one internal Slack app per
+/// user, read-and-judge only. The signing secret is AES-256-GCM
+/// (crypto-tokens.ts) and never leaves the API; the user token is checked with
+/// auth.test on connect and never stored. Behind SLACK_ENABLED.
+model SlackConnection {
+  id                  String         @id @default(uuid())
+  userId              String         @unique
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Random 128-bit hex; the Request URL is /api/slack/events/<hookId>.
+  hookId              String         @unique
+  teamId              String?
+  slackUserId         String?
+  workspaceUrl        String?
+  signingSecretCipher String?
+  optInChannelIds     String[]       @default([])
+  credentialsSetAt    DateTime?
+  lastEventAt         DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  episodes            SlackEpisode[]
+  messages            SlackMessage[]
+}
+
+/// One burst of Slack conversation, judged into one lane. Keeps the verdict
+/// and a short reason for 90 days; the text lives in SlackMessage (7 days).
+model SlackEpisode {
+  id            String          @id @default(uuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId  String
+  connection    SlackConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  channelId     String
+  channelType   String // im | mpim | channel | group
+  /// thread_ts, or "" for top-level messages.
+  threadKey     String
+  /// OPEN | JUDGING | JUDGED | ANSWERED
+  status        String          @default("OPEN")
+  mentionsUser  Boolean         @default(false)
+  messageCount  Int             @default(0)
+  firstTs       String
+  lastTs        String
+  startedAt     DateTime        @default(now())
+  lastMessageAt DateTime        @default(now())
+  claimedAt     DateTime?
+  tier          String?
+  reason        String?
+  judgedAt      DateTime?
+  notifiedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  messages      SlackMessage[]
+
+  @@index([connectionId, channelId, threadKey, status])
+  @@index([connectionId, status])
+  @@index([status, lastMessageAt])
+  @@index([userId, createdAt])
+  @@index([createdAt]) // the 90-day purge
+}
+
+/// A kept Slack message's text, purged 7 days after receipt. The unique
+/// (connectionId, eventId) makes a Slack retry or replay a no-op.
+model SlackMessage {
+  id           String          @id @default(uuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   SlackConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  episodeId    String
+  episode      SlackEpisode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  eventId      String
+  channelId    String
+  ts           String
+  threadTs     String?
+  senderId     String
+  text         String
+  createdAt    DateTime        @default(now())
+
+  @@unique([connectionId, eventId])
+  @@index([connectionId, channelId, ts])
+  @@index([connectionId, createdAt]) // the per-connection storage caps
+  @@index([episodeId])
+  @@index([createdAt]) // the 7-day purge
 }
 
 enum McpAuditOutcome {
@@ -2505,7 +2591,7 @@ model Commitment {
   // When the user confirmed a suggested (low-confidence, rule-mined) row. A
   // row is "confirmed" when this is set or confidence >= 0.7
   // (pim/commitment-confirmation.ts); only a confirmed row may interrupt.
-  confirmedAt DateTime?
+  confirmedAt           DateTime?
   // When a later reply in the thread suggested the promise was kept: the
   // user's own send (owner USER, "likely done") or the counterparty writing
   // again (owner COUNTERPARTY, "likely delivered"). The evidence's own time.
