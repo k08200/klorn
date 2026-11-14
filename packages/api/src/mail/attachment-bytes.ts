@@ -5,7 +5,7 @@
  *
  *   - Gmail (primary or a linked Google inbox): attachments.get with the row's
  *     handle, exactly as the routes did before.
- *   - IMAP (iCloud, Naver, generic): BODY[<partKey>] of the message's UID over the
+ *   - IMAP (iCloud, Naver, the app-password presets, generic): BODY[<partKey>] of the message's UID over the
  *     action session layer (one queue per account, global session cap, auth
  *     cooldown, time limits), only while INBOX still has the UIDVALIDITY the UID
  *     was stored under.
@@ -50,7 +50,8 @@ const TOO_LARGE: AttachmentBytes = {
   status: 413,
   error: "Attachment is too large to download here",
 };
-const IMAP_KEYS: ReadonlySet<string> = new Set<ImapProviderKey>(["NAVER", "ICLOUD", "IMAP"]);
+/** Every IMAP provider: Naver, iCloud, generic and the app-password presets. */
+const IMAP_KEYS: ReadonlySet<string> = new Set<string>(Object.keys(IMAP_PROVIDERS));
 
 export async function fetchStoredAttachmentBytes(
   userId: string,

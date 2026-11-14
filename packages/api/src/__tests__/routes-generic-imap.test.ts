@@ -88,7 +88,7 @@ function expectNothingStored() {
   expect(db.upsert).not.toHaveBeenCalled();
 }
 
-const GOOD = { email: "me@fastmail.com", password: "app-pw-1234", host: "imap.fastmail.com" };
+const GOOD = { email: "me@purelymail.com", password: "app-pw-1234", host: "imap.purelymail.com" };
 const GENERIC_FAILURE = "Could not connect securely to that server.";
 
 beforeEach(() => {
@@ -157,28 +157,28 @@ describe("flag ON: connect with a user-supplied host", () => {
 
   it("verifies through the pinned path, then stores the folded host and an encrypted password", async () => {
     const { app, headers } = await buildApp();
-    const res = await connect(app, headers, { ...GOOD, host: "  IMAP.Fastmail.COM:993 " });
+    const res = await connect(app, headers, { ...GOOD, host: "  IMAP.Purelymail.COM:993 " });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       ok: true,
-      email: "me@fastmail.com",
-      host: "imap.fastmail.com:993",
+      email: "me@purelymail.com",
+      host: "imap.purelymail.com:993",
       firstSync: true,
     });
     expect(imapSync.verifyImapCredentials).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: expect.objectContaining({ provider: "IMAP" }),
-        email: "me@fastmail.com",
+        email: "me@purelymail.com",
         password: "app-pw-1234",
-        host: "imap.fastmail.com:993",
+        host: "imap.purelymail.com:993",
       }),
     );
     expect(db.create).toHaveBeenCalledWith({
       data: {
         userId: "user-1",
         provider: "IMAP",
-        email: "me@fastmail.com",
-        imapHost: "imap.fastmail.com:993",
+        email: "me@purelymail.com",
+        imapHost: "imap.purelymail.com:993",
         imapPasswordCipher: "cipher",
       },
     });
@@ -213,12 +213,12 @@ describe("flag ON: connect with a user-supplied host", () => {
     "localhost",
     "printer.local",
     "metadata.google.internal",
-    "imap.fastmail.com:143",
-    "imap.fastmail.com:587",
-    "user@imap.fastmail.com",
-    "imap.fastmail.com/path",
-    "imap.fastmail.com.",
-    "http://imap.fastmail.com",
+    "imap.purelymail.com:143",
+    "imap.purelymail.com:587",
+    "user@imap.purelymail.com",
+    "imap.purelymail.com/path",
+    "imap.purelymail.com.",
+    "http://imap.purelymail.com",
   ])("refuses %j before any connection, without counting an attempt", async (host) => {
     const { app, headers } = await buildApp();
     const res = await connect(app, headers, { ...GOOD, host });
@@ -239,8 +239,8 @@ describe("flag ON: connect with a user-supplied host", () => {
     const { app, headers } = await buildApp();
     const messages = new Set<string>();
     for (const leak of [
-      "Could not reach imap.fastmail.com:993: connect ECONNREFUSED 10.0.0.5:993",
-      "getaddrinfo ENOTFOUND imap.fastmail.com",
+      "Could not reach imap.purelymail.com:993: connect ECONNREFUSED 10.0.0.5:993",
+      "getaddrinfo ENOTFOUND imap.purelymail.com",
       "Hostname/IP does not match certificate's altnames",
       "Connection timeout",
       "host did not resolve to a public address",
@@ -299,7 +299,7 @@ describe("flag ON: connect with a user-supplied host", () => {
     expect(refused.json().message).toBe("At most 3 IMAP accounts.");
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
 
-    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.purelymail.com:993" } as never);
     const reverify = await connect(app, headers, GOOD);
     expect(reverify.statusCode).toBe(200);
     await app.close();
@@ -331,13 +331,13 @@ describe("flag ON: connect with a user-supplied host", () => {
       imapHost: "imap.old-server.example.org:993",
     } as never);
     const bodies = new Set<string>();
-    for (const host of ["imap.fastmail.com", "mail.other.example.net:993", "imap.daum.net"]) {
+    for (const host of ["imap.purelymail.com", "mail.other.example.net:993", "imap.gmx.net"]) {
       const res = await connect(app, headers, { ...GOOD, host });
       expect(res.statusCode).toBe(409);
       bodies.add(res.body);
     }
     expect(bodies.size).toBe(1);
-    expect([...bodies][0]).not.toMatch(/fastmail|old-server|other|daum/);
+    expect([...bodies][0]).not.toMatch(/purelymail|old-server|other|gmx/);
     await app.close();
   });
 
@@ -349,14 +349,14 @@ describe("flag ON: connect with a user-supplied host", () => {
     } as never);
     for (let i = 0; i < 12; i++) expect((await connect(app, headers, GOOD)).statusCode).toBe(409);
 
-    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.purelymail.com:993" } as never);
     expect((await connect(app, headers, GOOD)).statusCode).toBe(200);
     await app.close();
   });
 
   it("the SAME host still re-links (password rotation): verified, stored, reconnect flag cleared", async () => {
     const { app, headers } = await buildApp();
-    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.purelymail.com:993" } as never);
 
     const res = await connect(app, headers, GOOD);
 
@@ -364,9 +364,14 @@ describe("flag ON: connect with a user-supplied host", () => {
     expect(imapSync.verifyImapCredentials).toHaveBeenCalledTimes(1);
     // Conditional on the host the account had when it was checked, and only that row.
     expect(db.updateMany).toHaveBeenCalledWith({
-      where: { id: "row-9", userId: "user-1", provider: "IMAP", imapHost: "imap.fastmail.com:993" },
+      where: {
+        id: "row-9",
+        userId: "user-1",
+        provider: "IMAP",
+        imapHost: "imap.purelymail.com:993",
+      },
       data: {
-        imapHost: "imap.fastmail.com:993",
+        imapHost: "imap.purelymail.com:993",
         imapPasswordCipher: "cipher",
         needsReconnect: false,
         syncErrorCode: null,
@@ -378,13 +383,13 @@ describe("flag ON: connect with a user-supplied host", () => {
   });
 
   it.each([
-    "IMAP.Fastmail.COM:993",
-    "imap.fastmail.com",
-    "  imap.fastmail.com:993 ",
+    "IMAP.Purelymail.COM:993",
+    "imap.purelymail.com",
+    "  imap.purelymail.com:993 ",
   ])("the same host spelled %j is the same host (compared in folded form)", async (stored) => {
     const { app, headers } = await buildApp();
     db.findUnique.mockResolvedValue({ id: "row-9", imapHost: stored } as never);
-    const res = await connect(app, headers, { ...GOOD, host: "imap.fastmail.com:993" });
+    const res = await connect(app, headers, { ...GOOD, host: "imap.purelymail.com:993" });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
@@ -490,7 +495,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       const { app, headers } = await buildApp();
 
       const [a, b] = await Promise.all([
-        connect(app, headers, { ...GOOD, host: "imap.fastmail.com" }),
+        connect(app, headers, { ...GOOD, host: "imap.purelymail.com" }),
         connect(app, headers, { ...GOOD, host: "imap.other-server.example.net" }),
       ]);
 
@@ -514,23 +519,23 @@ describe("flag ON: connect with a user-supplied host", () => {
 
       expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
       expect(rows.size).toBe(1);
-      expect([...rows.values()][0].imapHost).toBe("imap.fastmail.com:993");
+      expect([...rows.values()][0].imapHost).toBe("imap.purelymail.com:993");
       await app.close();
     });
 
     it("an existing account whose host changed between the check and the write is refused, not overwritten", async () => {
       const rows = useStatefulStore();
-      rows.set("user-1|IMAP|me@fastmail.com", {
+      rows.set("user-1|IMAP|me@purelymail.com", {
         id: "row-9",
         userId: "user-1",
         provider: "IMAP",
-        email: "me@fastmail.com",
-        imapHost: "imap.fastmail.com:993",
+        email: "me@purelymail.com",
+        imapHost: "imap.purelymail.com:993",
         imapPasswordCipher: "old",
       });
       // While the verify runs, another request re-points the row.
       imapSync.verifyImapCredentials.mockImplementation(async () => {
-        const row = rows.get("user-1|IMAP|me@fastmail.com") as StoredRow;
+        const row = rows.get("user-1|IMAP|me@purelymail.com") as StoredRow;
         row.imapHost = "imap.sneaky.example.net:993";
         return { ok: true };
       });
@@ -539,7 +544,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       const res = await connect(app, headers, GOOD);
 
       expect(res.statusCode).toBe(409);
-      expect(rows.get("user-1|IMAP|me@fastmail.com")).toMatchObject({
+      expect(rows.get("user-1|IMAP|me@purelymail.com")).toMatchObject({
         imapHost: "imap.sneaky.example.net:993",
         imapPasswordCipher: "old", // the new password was NOT stored against the other host
       });
@@ -577,7 +582,10 @@ describe("flag ON: connect with a user-supplied host", () => {
       // buildApp reset the module registry, so this is the instance the route uses.
       const backoff = await import("../mail/imap-poll-backoff.js");
       backoff.notePollBackoff("row-9");
-      db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+      db.findUnique.mockResolvedValue({
+        id: "row-9",
+        imapHost: "imap.purelymail.com:993",
+      } as never);
 
       expect((await connect(app, headers, GOOD)).statusCode).toBe(200);
 
@@ -639,11 +647,11 @@ describe("flag ON: connect with a user-supplied host", () => {
       method: "POST",
       url: `${PREFIX}/disconnect`,
       headers,
-      payload: { email: "me@fastmail.com" },
+      payload: { email: "me@purelymail.com" },
     });
     expect(res.statusCode).toBe(200);
     expect(db.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", provider: "IMAP", email: "me@fastmail.com" },
+      where: { userId: "user-1", provider: "IMAP", email: "me@purelymail.com" },
     });
     await app.close();
   });
@@ -667,7 +675,7 @@ describe("fixed-host providers keep their own verify and messages", () => {
       method: "POST",
       url: "/api/naver-imap/connect",
       headers,
-      payload: { email: "me@naver.com", password: "pw-1234", host: "imap.fastmail.com" },
+      payload: { email: "me@naver.com", password: "pw-1234", host: "imap.purelymail.com" },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().message).toBe("Unsupported IMAP host. Only imap.naver.com:993 is allowed.");

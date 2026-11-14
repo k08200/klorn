@@ -12,9 +12,15 @@
  * mailbox, so a caller must not hide or delete its row on that answer (step B2).
  */
 
+import { IMAP_PRESET_KEYS } from "../imap-preset-keys.js";
 import type { InboxProviderName } from "../inbox-credentials.js";
 
-const IMAP_FAMILY: ReadonlySet<InboxProviderName> = new Set(["NAVER", "ICLOUD", "IMAP"]);
+const IMAP_FAMILY: ReadonlySet<InboxProviderName> = new Set<InboxProviderName>([
+  "NAVER",
+  "ICLOUD",
+  "IMAP",
+  ...IMAP_PRESET_KEYS,
+]);
 
 export function isImapFamily(provider: InboxProviderName): boolean {
   return IMAP_FAMILY.has(provider);

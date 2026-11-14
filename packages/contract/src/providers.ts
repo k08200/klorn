@@ -11,7 +11,19 @@
  */
 
 /** Same values as `InboxProvider`; listed here so the order is part of the contract. */
-export type ConnectableProvider = "GOOGLE" | "OUTLOOK" | "NAVER" | "ICLOUD" | "IMAP";
+export type ConnectableProvider =
+  | "GOOGLE"
+  | "OUTLOOK"
+  | "NAVER"
+  | "ICLOUD"
+  | "DAUM"
+  | "KAKAO"
+  | "YAHOO"
+  | "AOL"
+  | "FASTMAIL"
+  | "ZOHO"
+  | "ZOHOPRO"
+  | "IMAP";
 
 export interface ProviderAvailability {
   provider: ConnectableProvider;

@@ -516,6 +516,15 @@ enum InboxProvider {
   OUTLOOK
   IMAP
   KLORN
+  // Fixed-host app-password IMAP presets (provider phase 2,
+  // mail/imap-preset-providers.ts). ZOHOPRO = a Zoho organization mailbox.
+  DAUM
+  KAKAO
+  YAHOO
+  AOL
+  FASTMAIL
+  ZOHO
+  ZOHOPRO
 }
 
 // A SECONDARY mail account linked for FULL INBOX access so the firewall runs

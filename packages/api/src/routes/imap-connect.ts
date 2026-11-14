@@ -23,6 +23,9 @@
  * `opts.gate` (Phase 2, CASA surface freeze): while the provider's flag is
  * OFF every route — including unauthenticated probes — answers 404, so the
  * DAST-scanned surface is identical to the flag not existing at all.
+ * `opts.cohortFlags` (the app-password presets): once the gate lets a request in,
+ * a flag in `cohort` mode lets in only ROLLOUT_COHORT_USER_IDS, after
+ * authentication, with the same 404 for everyone else (routes/cohort-gate.ts).
  *
  * Generic IMAP (step B4, `cfg.hostPolicy === "user-supplied"`): the body's `host`
  * is REQUIRED and is a DNS name on port 993, checked by the host grammar before
@@ -51,6 +54,7 @@ import { clearPollBackoff } from "../mail/imap-poll-backoff.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "../mail/imap-providers.js";
 import { verifyImapCredentials } from "../mail/imap-sync.js";
 import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
+import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
 const GENERIC_HOST_HINT =
@@ -303,7 +307,7 @@ const verifierFor = (cfg: ImapProviderConfig) =>
 
 export function imapConnectRoutes(
   cfg: ImapProviderConfig,
-  opts: { gate?: () => boolean } = {},
+  opts: { gate?: () => boolean; cohortFlags?: readonly string[] } = {},
 ): (app: FastifyInstance) => Promise<void> {
   return async function routes(app: FastifyInstance) {
     // Feature-flag gate FIRST — shared darkRouteGate (see its doc comment
@@ -312,6 +316,10 @@ export function imapConnectRoutes(
       app.addHook("onRequest", darkRouteGate(opts.gate));
     }
     app.addHook("preHandler", requireAuth);
+    // Hooks run in order: the user is known here, and nothing below has run yet.
+    if (opts.cohortFlags) {
+      app.addHook("preHandler", cohortGate(opts.cohortFlags));
+    }
 
     app.get("/status", async (request) => {
       const userId = getUserId(request);

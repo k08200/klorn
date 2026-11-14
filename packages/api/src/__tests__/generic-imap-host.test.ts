@@ -18,10 +18,10 @@ function nameOfLength(total: number): string {
 }
 
 const ACCEPTED: ReadonlyArray<readonly [string, string]> = [
-  ["imap.fastmail.com", "imap.fastmail.com"],
-  ["imap.fastmail.com:993", "imap.fastmail.com"],
-  ["  IMAP.Fastmail.COM  ", "imap.fastmail.com"],
-  ["imap.daum.net", "imap.daum.net"],
+  ["imap.purelymail.com", "imap.purelymail.com"],
+  ["imap.purelymail.com:993", "imap.purelymail.com"],
+  ["  IMAP.Purelymail.COM  ", "imap.purelymail.com"],
+  ["imap.gmx.net", "imap.gmx.net"],
   ["mail.example.co.kr", "mail.example.co.kr"],
   ["a-b.c-d.example.org", "a-b.c-d.example.org"],
   ["123.example.com", "123.example.com"],
@@ -175,6 +175,14 @@ const REJECTED: ReadonlyArray<readonly [string, string, string]> = [
   ["Gmail alias", "imap.googlemail.com", "built-in-provider"],
   ["Outlook", "outlook.office365.com", "built-in-provider"],
   ["Outlook legacy", "imap-mail.outlook.com", "built-in-provider"],
+  // the app-password presets (provider phase 2) have their own connection too
+  ["Daum", "imap.daum.net", "built-in-provider"],
+  ["Kakao", "imap.kakao.com", "built-in-provider"],
+  ["Yahoo", "imap.mail.yahoo.com", "built-in-provider"],
+  ["AOL", "imap.aol.com:993", "built-in-provider"],
+  ["Fastmail", "IMAP.Fastmail.com", "built-in-provider"],
+  ["Zoho", "imap.zoho.com", "built-in-provider"],
+  ["Zoho organization", "imappro.zoho.com", "built-in-provider"],
   ["built-in in capitals", "IMAP.GMAIL.COM", "built-in-provider"],
   ["built-in as a full-width name", "ｉｍａｐ.ｇｍａｉｌ.ｃｏｍ", "built-in-provider"],
 ];
