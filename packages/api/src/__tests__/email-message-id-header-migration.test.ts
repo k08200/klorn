@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 const prismaDir = join(here, "..", "..", "prisma");
 const migrationsDir = join(prismaDir, "migrations");
-const MIGRATION = "20261114140000_email_message_id_header";
+const MIGRATION = "20261114160000_email_message_id_header";
 
 const migrationNames = readdirSync(migrationsDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -33,7 +33,7 @@ const readStatements = () =>
 describe("EmailMessage messageIdHeader migration", () => {
   it("exists as a migration directory, after the IMAP presets one", () => {
     expect(migrationNames).toContain(MIGRATION);
-    expect(MIGRATION > "20261114130000_imap_preset_providers").toBe(true);
+    expect(MIGRATION > "20261114150000_imap_preset_providers").toBe(true);
   });
 
   it("adds one nullable TEXT column under a lock timeout, and nothing else", () => {
