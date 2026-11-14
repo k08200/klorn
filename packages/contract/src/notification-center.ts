@@ -44,11 +44,11 @@ export interface NotificationReason {
  *  1. `done`  — the row is read; or its mail's item is RESOLVED / DISMISSED;
  *               or its approval is no longer PENDING.
  *  2. `later` — its mail's item is SNOOZED (the user said "later").
- *  3. `reply` — its mail needs a reply that has not been sent through Klorn
- *               (EmailMessage.needsReply and no repliedAt).
- *  4. `now`   — its mail is in the PUSH lane and inside Today's 72-hour PUSH
+ *  3. `now`   — its mail is in the PUSH lane and inside Today's 72-hour PUSH
  *               window (received in the last 72h; judge/today-push-window.ts,
- *               LOCKED 2026-10-23).
+ *               LOCKED 2026-10-23), whether or not it also needs a reply.
+ *  4. `reply` — its mail needs a reply that has not been sent through Klorn
+ *               (EmailMessage.needsReply and no repliedAt).
  *  5. `today` — in the user's local calendar day (AutomationConfig.timezone):
  *               a MEETING mail whose row was written today, a mail whose v3
  *               ask is due today, or a meeting / calendar / reminder row
