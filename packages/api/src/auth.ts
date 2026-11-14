@@ -151,7 +151,29 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
-/** Extract userId from Authorization header or fall back to "demo-user" */
+/**
+ * Thrown by getUserId when the request carries no valid session token. Its
+ * 401 statusCode makes the global error handler answer 401 with the standard
+ * `{ error }` envelope — a plain Error surfaced as a 500, which told a client
+ * "the server broke, retry" instead of "sign in" and paged Sentry for nothing.
+ */
+export class AuthenticationRequiredError extends Error {
+  readonly statusCode = 401;
+
+  constructor() {
+    super("Authentication required");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
+/**
+ * Extract userId from the Authorization header (JWT signature + expiry only)
+ * or fall back to "demo-user" where demo access is enabled.
+ *
+ * It does NOT check that the session is still active — that is requireAuth's
+ * job, and the route-auth guard (security/route-auth-guard.ts) puts it in
+ * front of every route that is not explicitly exempt.
+ */
 export function getUserId(request: FastifyRequest): string {
   const auth = request.headers.authorization;
   if (auth?.startsWith("Bearer ")) {
@@ -168,8 +190,17 @@ export function getUserId(request: FastifyRequest): string {
   if (isDemoAccessEnabled()) {
     return "demo-user";
   }
-  throw new Error("Authentication required");
+  throw new AuthenticationRequiredError();
 }
+
+/**
+ * The session requireAuth already verified for an in-flight request. The
+ * route-auth guard runs requireAuth at onRequest, and many routes declare it
+ * again as a preHandler; the second call reuses the first verdict instead of
+ * repeating the database round trip. Keyed weakly by the request object, so an
+ * entry lives exactly as long as its request — nothing to bound or expire.
+ */
+const verifiedSessions = new WeakMap<FastifyRequest, { token: string; userId: string }>();
 
 /** Fastify preHandler that requires authentication */
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
@@ -178,6 +209,11 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(401).send({ error: "Authentication required" });
   }
   const rawToken = auth.slice(7);
+  const verified = verifiedSessions.get(request);
+  if (verified?.token === rawToken) {
+    (request as unknown as { userId: string }).userId = verified.userId;
+    return;
+  }
   try {
     const payload = verifyToken(rawToken);
     // Verify the session is still active: device not kicked by another login,
@@ -193,6 +229,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     }
     // Attach to request for downstream handlers
     (request as unknown as { userId: string }).userId = payload.userId;
+    verifiedSessions.set(request, { token: rawToken, userId: payload.userId });
   } catch {
     return reply.code(401).send({ error: "Invalid or expired token" });
   }

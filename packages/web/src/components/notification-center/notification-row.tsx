@@ -13,7 +13,6 @@
 import { useT } from "../../lib/i18n";
 import {
   type CenterNotification,
-  deliveredToLabel,
   isAgentTitle,
   mailRowParts,
   monogram,
@@ -149,7 +148,7 @@ function MetaLine({ n, lazy }: { n: CenterNotification; lazy?: string | null }) 
   const { t } = useT();
   const laneName = useLaneName();
   const lane = rowLane(n.lane);
-  const where = deliveredToLabel(n.deliveredTo) ?? lazy ?? null;
+  const where = lazy ?? null;
   if (!lane && !where) return null;
   return (
     <span className="flex min-w-0 items-center gap-1.5 truncate text-role-caption text-ink-muted">
