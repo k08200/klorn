@@ -84,6 +84,20 @@ describe("sendTelegramMessage", () => {
     expect(body.reply_markup.inline_keyboard[0][0].text).toBe("Open Klorn");
   });
 
+  it("disables link previews only when asked", async () => {
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendTelegramMessage("777", "hello https://e.vil", { noLinkPreview: true });
+    await sendTelegramMessage("777", "hello");
+
+    const bodies = vi
+      .mocked(fetchMock)
+      .mock.calls.map((c) => JSON.parse((c as unknown as [string, RequestInit])[1].body as string));
+    expect(bodies[0].link_preview_options).toEqual({ is_disabled: true });
+    expect(bodies[1].link_preview_options).toBeUndefined();
+  });
+
   it("returns ok:false without calling fetch when the token is missing", async () => {
     delete process.env.TELEGRAM_BOT_TOKEN;
     const fetchMock = okFetch();
