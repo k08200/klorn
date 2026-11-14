@@ -381,9 +381,11 @@ final class AppModel {
         self.driveImport = DriveImporter(api: api)
         self.files = FilesStore(api: api)
         self.freeTime = FreeTimeStore(api: api)
+        self.notificationCenter = NotificationCenterStore(api: api)
         self.phase = tokenStore.load() != nil ? .signedIn : .signedOut
         self.selectedInbox =
             UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
+        notificationCenter.onUnauthorized = { [weak self] in self?.sessionRejected() }
     }
 
     // MARK: Multi-inbox
@@ -441,6 +443,8 @@ final class AppModel {
     let files: FilesStore
     /// Today's "When is everyone free?".
     let freeTime: FreeTimeStore
+    /// The toolbar bell's rows and panel (NC2-A).
+    let notificationCenter: NotificationCenterStore
     /// `user.files` / `user.teamMode` from GET /api/auth/me; both false until read.
     private(set) var clientFlags = ClientFlags()
     @ObservationIgnored private var clientFlagsFetchedAt: Date?
@@ -498,6 +502,7 @@ final class AppModel {
     /// The per-account P12 state, at sign-out and when a session begins.
     private func resetFilesState() {
         files.reset()
+        notificationCenter.reset()
         freeTime.reset()
         clientFlagsFetchedAt = nil
     }
@@ -3250,6 +3255,9 @@ final class AppModel {
         })
         client.start(token: token)
         realtime = client
+        // The bell's badge is live from the session's start, not from the
+        // first time the panel opens.
+        notificationCenter.nudge()
     }
 
     /// A server push on the wake channel that `session` opened. The socket
@@ -3259,6 +3267,8 @@ final class AppModel {
     /// self-check.
     @discardableResult
     func realtimeDidWake(session: Int) -> Bool {
+        // The bell follows every wake, whatever the queue load is doing.
+        if isCurrent(session), opensRealtime { notificationCenter.nudge() }
         // Skip if a load is already in flight — avoids overlapping refetches
         // if the server bursts events.
         guard isCurrent(session), !isLoadingQueue else { return false }
