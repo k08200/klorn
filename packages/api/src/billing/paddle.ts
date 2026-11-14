@@ -54,7 +54,7 @@ export function verifyPaddleSignature(
   return timingSafeEqualStr(h1, expected);
 }
 
-async function paddleFetch(
+export async function paddleFetch(
   path: string,
   body: unknown,
   method: "POST" | "PATCH" = "POST",

@@ -4,11 +4,14 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { type TeamInterval, teamCheckoutIntervals } from "../billing/paddle-team.js";
 import type { AgentModeCap } from "./ceilings.js";
 import { seatsActive } from "./effective-tier.js";
 
 /** Self-serve organizations hold at most 150 seats; larger ones go to Enterprise. */
 export const MAX_SELF_SERVE_SEATS = 150;
+/** The smallest team subscription. */
+export const MIN_TEAM_SEATS = 2;
 export const NAME_MAX = 80;
 export const MAX_COMPANY_DOMAINS = 10;
 
@@ -110,6 +113,8 @@ export interface OrgWire {
     status: string | null;
     interval: string | null;
     active: boolean;
+    /** Intervals a team checkout can be opened for now; empty while billing is off. */
+    checkoutIntervals: TeamInterval[];
   };
 }
 
@@ -127,6 +132,7 @@ export function orgWire(org: OrgRow, memberCount: number, cap: AgentModeCap | nu
       status: org.subscriptionStatus,
       interval: org.billingInterval,
       active: seatsActive(org.subscriptionStatus),
+      checkoutIntervals: teamCheckoutIntervals(),
     },
   };
 }

@@ -35,6 +35,8 @@ vi.mock("../db.js", () => {
         return { id: "n1", createdAt: new Date() };
       }),
     },
+    // No organization holds a subscription here: every event is a Pro one.
+    organization: { findUnique: vi.fn(async () => null) },
     webhookEvent: {
       findUnique: vi.fn(async () => processedEvent),
       create: vi.fn(async () => ({})),
