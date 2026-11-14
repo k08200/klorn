@@ -25,6 +25,7 @@ vi.mock("../db.js", () => ({
     linkedInboxAccount: empty,
     linkedCalendarAccount: empty,
     user: empty,
+    slackConnection: empty,
     linkedDriveAccount: { findMany: driveFindMany, updateMany: driveUpdateMany },
     $disconnect: disconnect,
   },

@@ -18,6 +18,7 @@ describe("the cohort-gated routes", () => {
     "smart-actions.ts",
     "vault-export.ts",
     "rules-dsl.ts",
+    "slack-connection.ts",
   ])("%s checks the cohort right after requireAuth on every route", (file) => {
     const text = source(file);
     const chains = [...text.matchAll(/preHandler:\s*(\[[^\]]*\]|requireAuth)/g)].map((m) =>

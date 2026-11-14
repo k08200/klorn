@@ -167,6 +167,18 @@ function buildSweeps(): FieldSweep[] {
       (id, data, guard) => prisma.linkedDriveAccount.updateMany({ where: { id, ...guard }, data }),
     ),
     tableSweep(
+      "SlackConnection",
+      // Slack v1: the internal app's signing secret (the user token is never
+      // stored). Covered from the day the table exists, so no rotation strands
+      // a Slack connection.
+      () =>
+        prisma.slackConnection.findMany({
+          select: { id: true, signingSecretCipher: true },
+        }),
+      ["signingSecretCipher"],
+      (id, data, guard) => prisma.slackConnection.updateMany({ where: { id, ...guard }, data }),
+    ),
+    tableSweep(
       "User(secrets)",
       () =>
         prisma.user.findMany({

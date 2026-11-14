@@ -6,8 +6,7 @@
  *
  * Shared by the Windows shell's catch-up (desktop-catchup.ts) and the server's
  * quiet-hours summary (quiet-hours-summary.ts), so both count the same mail.
- * The summary also skips mail already read (`skipReadMail`), as the Mac does;
- * the Windows catch-up does not ask for that and is unchanged.
+ * Both skip mail already read (`skipReadMail`), as the Mac does.
  *
  * The urgent sweep (urgentSweepItemIdsFailClosed) rings open PUSH items too, and one
  * more case these readers do not count: urgent mail the keyword fallback left in

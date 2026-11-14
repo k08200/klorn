@@ -1,0 +1,26 @@
+# Klorn — internal Slack app, read-only (docs/providers/slack.md).
+# Create it at https://api.slack.com/apps → Create New App → From a manifest.
+# Replace the request_url with the one Klorn shows in Settings → Integrations →
+# Slack (or download this manifest from there, already filled in).
+display_information:
+  name: Klorn (read-only)
+  description: Judges your Slack DMs and mentions into Klorn's lanes. Never posts.
+  background_color: "#1d1d1f"
+oauth_config:
+  scopes:
+    user:
+      - im:history
+      - mpim:history
+      - channels:history
+      - groups:history
+settings:
+  event_subscriptions:
+    request_url: https://YOUR-KLORN-API/api/slack/events/YOUR-HOOK-ID
+    user_events:
+      - message.im
+      - message.mpim
+      - message.channels
+      - message.groups
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

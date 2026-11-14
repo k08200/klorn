@@ -25,6 +25,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": { "schemes": ["klorn"] }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
