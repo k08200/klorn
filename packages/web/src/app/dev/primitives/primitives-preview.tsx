@@ -12,7 +12,22 @@ import { MailRowSkeleton, Skeleton, SkeletonGroup } from "../../../components/ui
 import { SourceBadge } from "../../../components/ui/source-badge";
 import { CORE_TIERS } from "../../../lib/tiers";
 
-const PROVIDERS = ["GOOGLE", "OUTLOOK", "NAVER", "ICLOUD", "IMAP", "KLORN", "SOMETHING_NEW"];
+const PROVIDERS = [
+  "GOOGLE",
+  "OUTLOOK",
+  "NAVER",
+  "ICLOUD",
+  "DAUM",
+  "KAKAO",
+  "YAHOO",
+  "AOL",
+  "FASTMAIL",
+  "ZOHO",
+  "ZOHOPRO",
+  "IMAP",
+  "KLORN",
+  "SOMETHING_NEW",
+];
 
 const ROWS: {
   sender: string;

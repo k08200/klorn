@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useConfirm } from "../../../components/confirm-dialog";
+import { GenericImapAccountsSection } from "../../../components/generic-imap-accounts-section";
 import { GoogleConnectRedirect } from "../../../components/google-connect-redirect";
 import { ICloudImapSection } from "../../../components/icloud-imap-section";
+import { ImapPresetSection } from "../../../components/imap-preset-section";
 import InAppBrowserNotice from "../../../components/in-app-browser-notice";
 import { LinkedInboxesSection } from "../../../components/linked-inboxes-section";
 import {
@@ -18,8 +20,10 @@ import { ListSkeleton } from "../../../components/skeleton";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import StatusChip from "../../../components/ui/status-chip";
+import { accountSectionId } from "../../../lib/account-health";
 import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
+import { IMAP_PRESETS } from "../../../lib/imap-presets";
 import { captureClientError } from "../../../lib/sentry";
 import { AccountHealthSection } from "./account-health";
 import { PANEL, PRIMARY_BTN, SECTION_TITLE } from "./shared";
@@ -310,6 +314,20 @@ export function AccountsSection() {
         <ICloudImapSection />
       </div>
 
+      {/* App-password IMAP presets (Daum, Kakao, Yahoo, AOL, Fastmail, Zoho) —
+            each renders nothing while IMAP_PRESETS_ENABLED is closed to this
+            user (its status probe 404s), so each carries its own mb-8. The id
+            is the one Account health's Reconnect link targets. */}
+      {IMAP_PRESETS.map((preset) => (
+        <div
+          key={preset.provider}
+          id={accountSectionId(preset.provider, "linked") ?? undefined}
+          className="scroll-mt-24"
+        >
+          <ImapPresetSection preset={preset} />
+        </div>
+      ))}
+
       {/* Outlook inboxes (Graph OAuth) — renders nothing while
             OUTLOOK_INBOX_ENABLED is off server-side (the list probe 404s),
             so it carries its own mb-8. Needs Suspense (useSearchParams). */}
@@ -318,6 +336,10 @@ export function AccountsSection() {
           <OutlookInboxesSection />
         </Suspense>
       </div>
+
+      {/* Generic IMAP accounts — display only (no connect, reconnect or
+            disconnect while its routes are dark); nothing when there are none. */}
+      <GenericImapAccountsSection />
     </>
   );
 }

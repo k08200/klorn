@@ -411,6 +411,28 @@
 "account.naver.error.unavailable" = "Naver Mail aún no está disponible en este servidor.";
 "account.imap.error.insecure" = "Klorn solo envía una contraseña de app por una conexión segura (HTTPS).";
 "account.imap.submit" = "Conectar";
+"account.preset.connect" = "Conectar buzón de %@…";
+"account.preset.title" = "Conectar buzón de %@";
+"account.preset.body" = "Este buzón se conecta por IMAP (beta). Klorn clasifica cada mensaje nuevo en los mismos carriles que Gmail.";
+"account.preset.email" = "Dirección de correo";
+"account.preset.password" = "Contraseña de aplicación";
+"account.preset.help.link" = "Abrir la ayuda de %@";
+"account.preset.error.authFailed" = "%@ rechazó el inicio de sesión. Sigue los pasos de arriba y vuelve a intentarlo.";
+"account.preset.error.unavailable" = "%@ aún no está disponible en este servidor.";
+"account.daum.name" = "Daum";
+"account.kakao.name" = "Kakao";
+"account.yahoo.name" = "Yahoo";
+"account.aol.name" = "AOL";
+"account.fastmail.name" = "Fastmail";
+"account.zoho.name" = "Zoho";
+"account.zohopro.name" = "Zoho (organización)";
+"account.daum.password.hint" = "Activa IMAP en los ajustes de Daum Mail, configura la verificación en dos pasos y crea una contraseña de aplicación para introducirla aquí, no tu contraseña de inicio de sesión.";
+"account.kakao.password.hint" = "Activa IMAP en los ajustes de Kakao Mail, configura la verificación en dos pasos de tu cuenta Kakao y crea una contraseña de aplicación para introducirla aquí, no tu contraseña de inicio de sesión.";
+"account.yahoo.password.hint" = "Crea una contraseña de aplicación en los ajustes de seguridad de tu cuenta de Yahoo e introdúcela aquí, no tu contraseña de inicio de sesión.";
+"account.aol.password.hint" = "Crea una contraseña de aplicación en los ajustes de seguridad de tu cuenta de AOL e introdúcela aquí, no tu contraseña de inicio de sesión.";
+"account.fastmail.password.hint" = "En los ajustes de Fastmail, crea una contraseña de aplicación con acceso IMAP y SMTP e introdúcela aquí, no tu contraseña de inicio de sesión.";
+"account.zoho.password.hint" = "Activa el acceso IMAP en los ajustes de Zoho Mail y la autenticación en dos pasos; luego crea una contraseña específica de aplicación e introdúcela aquí, no tu contraseña de inicio de sesión.";
+"account.zohopro.password.hint" = "Para cuentas de organización de pago de Zoho Mail con dominio propio. Activa el acceso IMAP en los ajustes de Zoho Mail (puede que el administrador de tu organización tenga que permitirlo) y la autenticación en dos pasos; luego crea una contraseña específica de aplicación e introdúcela aquí, no tu contraseña de inicio de sesión.";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "MODO DE RESPUESTA";

@@ -464,10 +464,11 @@ struct InboxAccountsSection: View {
                 ImapConnectForm(provider: provider, model: model) { connectingProvider = nil }
                     .id(provider)
             } else {
-                connectButton(.naver, title: L("account.naver.connect"))
-                // Drawn only while the server has iCloud Mail (its status 404s while off).
-                if model.availableImapProviders.contains(.icloud) {
-                    connectButton(.icloud, title: L("account.icloud.connect"))
+                // One button per provider the server has, in display order: a
+                // gated provider's status 404s while its flag is off (or the
+                // user is outside its cohort), which drops it from the set.
+                ForEach(offeredImapProviders(model.availableImapProviders)) { provider in
+                    connectButton(provider, title: provider.connectLabel)
                 }
             }
             if let error = model.imapError {

@@ -19,7 +19,9 @@ export type OrgAuditAction =
   | "owner.transferred"
   | "owner.succeeded"
   | "availability.grant_changed"
-  | "availability.read";
+  | "availability.read"
+  | "billing.checkout_started"
+  | "billing.subscription_changed";
 
 export interface OrgAuditInput {
   orgId: string;

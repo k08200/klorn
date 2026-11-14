@@ -614,7 +614,9 @@ final class AppModel {
     /// selector flag is off.
     private(set) var imapAccounts: [ImapMailProvider: [ImapAccount]] = [:]
     /// Providers whose routes answered: Naver's are never gated; iCloud's 404
-    /// while ICLOUD_INBOX_ENABLED is off, and its entry point stays hidden.
+    /// while ICLOUD_INBOX_ENABLED is off, the presets' (Daum … Zoho) while
+    /// IMAP_PRESETS_ENABLED is off or the user is outside its cohort — and
+    /// their entry points stay hidden.
     private(set) var availableImapProviders: Set<ImapMailProvider> = [.naver]
     private(set) var imapError: String?
     private(set) var isConnectingImap = false

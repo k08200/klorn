@@ -31,6 +31,16 @@ export function seatsActive(status: string | null | undefined): boolean {
   return typeof status === "string" && SEAT_BEARING_STATUSES.has(status);
 }
 
+/**
+ * True while a team subscription still bills or can recover (active,
+ * trialing, past_due, paused): an organization in this state is never closed
+ * or deleted, and gets no second checkout. Seats are a narrower question
+ * (seatsActive).
+ */
+export function subscriptionBills(status: string | null | undefined): boolean {
+  return typeof status === "string" && status !== "" && status !== "canceled";
+}
+
 interface SeatCandidate {
   id: string;
   role: "OWNER" | "MEMBER";

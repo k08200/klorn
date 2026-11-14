@@ -15,6 +15,7 @@
 
 import { imapActionsEnabled, imapMoveActionsEnabled, imapSendEnabled } from "../../config.js";
 import { prisma } from "../../db.js";
+import { IMAP_PRESET_KEYS, type ImapPresetKey } from "../imap-preset-keys.js";
 import { enabledImapProviderKeys } from "../imap-providers.js";
 import type { InboxProviderName } from "../inbox-credentials.js";
 import { googleMailActions } from "./google.js";
@@ -24,6 +25,14 @@ import { imapSendActions } from "./imap-send.js";
 import { outlookMailActions } from "./outlook.js";
 import type { MailProviderActions } from "./types.js";
 import { unsupportedMailActions } from "./unsupported.js";
+
+/** One value per app-password preset, keyed by its provider. */
+function presetRecord<T>(make: (key: ImapPresetKey) => T): Record<ImapPresetKey, T> {
+  return Object.fromEntries(IMAP_PRESET_KEYS.map((key) => [key, make(key)])) as Record<
+    ImapPresetKey,
+    T
+  >;
+}
 
 const ACTIONS_BY_PROVIDER: Readonly<Record<InboxProviderName, MailProviderActions>> = {
   GOOGLE: googleMailActions,
@@ -36,6 +45,9 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<InboxProviderName, MailProviderAction
   // The Klorn address (step E1a): the database is the source of truth, and its
   // actions arrive with E2. Until then every action answers unsupported.
   KLORN: unsupportedMailActions("KLORN"),
+  // The app-password presets (provider phase 2): unsupported unless an IMAP action
+  // flag composes them below, exactly like NAVER and ICLOUD.
+  ...presetRecord((key) => unsupportedMailActions(key)),
 };
 
 // The three opt-in action sets, each behind its own OFF flag and independent of the
@@ -43,13 +55,13 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<InboxProviderName, MailProviderAction
 //   - step B1, IMAP_ACTIONS_ENABLED: read/unread/star over IMAP flags;
 //   - step B2, IMAP_MOVE_ACTIONS_ENABLED: archive, trash and their undo over MOVE;
 //   - step B3, IMAP_SEND_ENABLED: send, drafts and reply headers over SMTP/IMAP.
-// NAVER and ICLOUD can have all three. Generic IMAP (step B4) can have the first two
+// NAVER, ICLOUD and the app-password presets can have all three. Generic IMAP (step B4) can have the first two
 // and only while GENERIC_IMAP_ENABLED is on as well (enabledImapProviderKeys()): it
 // has NO send part, because a user-supplied SMTP endpoint is out of scope, so
 // IMAP_SEND_ENABLED never changes a generic mailbox. Every combination is built
 // once, on first use, so each call returns the same object and, with every flag
 // off, the unchanged unsupported one.
-const IMAP_PROVIDER_KEYS = ["NAVER", "ICLOUD", "IMAP"] as const;
+const IMAP_PROVIDER_KEYS = ["NAVER", "ICLOUD", "IMAP", ...IMAP_PRESET_KEYS] as const;
 type ImapKey = (typeof IMAP_PROVIDER_KEYS)[number];
 // imap-send.ts does not export its surface type (another change edits that file).
 type SendSurface = ReturnType<typeof imapSendActions>;
@@ -79,6 +91,11 @@ const IMAP_PARTS: Record<ImapKey, ImapParts> = {
     send: imapSendActions("ICLOUD"),
   },
   IMAP: { flags: imapMailActions("IMAP"), moves: imapMoveActions("IMAP") },
+  ...presetRecord((key) => ({
+    flags: imapMailActions(key),
+    moves: imapMoveActions(key),
+    send: imapSendActions(key),
+  })),
 };
 
 const COMPOSED = new Map<string, MailProviderActions>();

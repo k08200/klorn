@@ -12,12 +12,14 @@
  * once we move off free tier.
  */
 
+import { featureOpenTo, IMAP_PRESETS_FLAGS } from "../config.js";
 import { prisma } from "../db.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { syncImapAccountsForUser } from "./imap-accounts.js";
+import { isImapPresetKey } from "./imap-preset-keys.js";
 import { enabledImapProviderKeys, IMAP_PROVIDERS, type ImapProviderKey } from "./imap-providers.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -40,6 +42,11 @@ async function tickOnce(): Promise<void> {
   for (const owner of owners) {
     const provider = IMAP_PROVIDERS[owner.provider as ImapProviderKey];
     if (!provider) continue; // groupBy is provider-filtered; belt and braces
+    // IMAP_PRESETS_ENABLED=cohort: the presets are live, but only the cohort's rows
+    // are polled (a row connected while the flag was on stays untouched).
+    if (isImapPresetKey(owner.provider) && !featureOpenTo(owner.userId, IMAP_PRESETS_FLAGS)) {
+      continue;
+    }
     try {
       const result = await syncImapAccountsForUser(owner.userId, provider);
       if (result) {

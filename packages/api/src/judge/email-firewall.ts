@@ -119,6 +119,11 @@ export async function persistGmailEmail(
         ...(options.linkedInboxAccountId
           ? { linkedInboxAccountId: options.linkedInboxAccountId }
           : {}),
+        // An IMAP row that predates the column picks up its Message-ID the next
+        // time the poll re-touches it; a stored value is never rewritten or cleared.
+        ...(email.messageIdHeader && !existing.messageIdHeader
+          ? { messageIdHeader: email.messageIdHeader }
+          : {}),
       },
     });
     if (email.attachments.length > 0) {
@@ -189,6 +194,8 @@ export async function persistGmailEmail(
       // Only the Klorn mailbox has verdicts (step E1b); every other producer
       // leaves the column out, so it stays null.
       ...(email.authentication ? { authentication: email.authentication } : {}),
+      // Only IMAP producers have it (imap-sync.ts); every other row stays null.
+      ...(email.messageIdHeader ? { messageIdHeader: email.messageIdHeader } : {}),
     },
   });
   if (email.attachments.length > 0) {

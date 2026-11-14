@@ -2129,6 +2129,7 @@ const de: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Mail von Outlook und Microsoft 365.",
   "onboardingV2.tile.naver.scope": "Naver Mail, mit einem App-Passwort.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, mit einem anwendungsspezifischen Passwort.",
+  "onboardingV2.tile.preset.scope": "E-Mail, mit einem App-Passwort.",
   "onboardingV2.tile.readOnly":
     "Vorerst nur lesend. Antworten, Archivieren und Als-gelesen-Markieren erfolgen in der App des Anbieters.",
   "onboardingV2.health.connected": "Verbunden",
@@ -2140,6 +2141,9 @@ const de: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "iCloud Mail verbinden",
   "onboardingV2.sheet.icloud.body":
     "Eine einmalige Verbindung. Apple verlangt ein anwendungsspezifisches Passwort, nicht das Passwort Ihres Apple Accounts. Klorn speichert es verschlüsselt.",
+  "onboardingV2.sheet.preset.title": "{provider} verbinden",
+  "onboardingV2.sheet.preset.body":
+    "Eine einmalige Verbindung. Das Formular nennt das Passwort, das {provider} verlangt. Klorn speichert es verschlüsselt.",
   "onboardingV2.sheet.close": "Schließen",
   "onboardingV2.sheet.done": "Fertig",
   "onboardingV2.return.okTitle": "{provider} verbunden.",
@@ -2317,6 +2321,38 @@ const de: Record<string, string> = {
   "imap.naver.advancedHost": "Erweitert: IMAP-Host",
   "imap.naver.hostLabel": "IMAP-Host",
   "imap.naver.connect": "Naver Mail verbinden",
+  "imapPreset.body":
+    "Verbinden Sie ein {provider}-Postfach per IMAP. Klorn sortiert jede eingehende Nachricht in dieselben {count} Spuren wie bei Gmail.",
+  "imapPreset.error.status": "Der Verbindungsstatus von {provider} konnte nicht geladen werden.",
+  "imapPreset.confirmDisconnect.title": "{email} trennen?",
+  "imapPreset.emailLabel": "E-Mail-Adresse",
+  "imapPreset.passwordLabel.app": "App-Passwort",
+  "imapPreset.help.link": "Hilfe von {provider}",
+  "imapPreset.help.stored": "Klorn speichert es verschlüsselt, nie im Klartext.",
+  "imapPreset.connect": "{provider} verbinden",
+  "imapPreset.error.auth":
+    "{provider} hat diese Adresse und dieses Passwort nicht akzeptiert. Folgen Sie den Schritten oben und versuchen Sie es erneut.",
+  "imapPreset.error.tooManyAttempts":
+    "Zu viele Versuche. Warten Sie einige Minuten und versuchen Sie es dann erneut.",
+  "imapPreset.hint.daum":
+    "Aktivieren Sie IMAP in den Einstellungen von Daum Mail, richten Sie die Bestätigung in zwei Schritten ein und erstellen Sie dann ein App-Passwort. Ihr Daum-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.kakao":
+    "Aktivieren Sie IMAP in den Einstellungen von Kakao Mail, richten Sie für Ihr Kakao-Konto die Bestätigung in zwei Schritten ein und erstellen Sie dann ein App-Passwort. Ihr Kakao-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.yahoo":
+    "Erstellen Sie ein App-Passwort in den Sicherheitseinstellungen Ihres Yahoo-Kontos. Ihr Yahoo-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.aol":
+    "Erstellen Sie ein App-Passwort in den Sicherheitseinstellungen Ihres AOL-Kontos. Ihr AOL-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.fastmail":
+    "Erstellen Sie in den Fastmail-Einstellungen (Privacy & Security) ein App-Passwort mit IMAP- und SMTP-Zugriff. Ihr Fastmail-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.zoho":
+    "Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail, schalten Sie die Zwei-Faktor-Authentifizierung ein und erstellen Sie dann ein anwendungsspezifisches Passwort. Ihr Zoho-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.zohopro":
+    "Für Konten kostenpflichtiger Zoho-Organisationen (eigene Domain). Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail (Ihr Administrator muss ihn eventuell erlauben), schalten Sie die Zwei-Faktor-Authentifizierung ein und erstellen Sie dann ein anwendungsspezifisches Passwort. Ihr Zoho-Passwort funktioniert hier nicht.",
+  "imapGeneric.title": "Andere Mailserver (IMAP)",
+  "imapGeneric.body":
+    "Konten, die mit einer Mailserver-Adresse verbunden sind. Nur zur Information: Auf dieser Seite lassen sie sich weder neu verbinden noch entfernen.",
+  "imapGeneric.authRefused":
+    "Der Mailserver hat die gespeicherte Anmeldung abgelehnt. Auf dieser Seite lässt sich das Konto nicht neu verbinden.",
   "telegram.error.status": "Telegram-Verknüpfungsstatus konnte nicht geladen werden.",
   "telegram.error.link": "Telegram-Verknüpfung konnte nicht gestartet werden.",
   "telegram.error.disconnect": "Telegram konnte nicht getrennt werden.",

@@ -2050,6 +2050,7 @@ const ja: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook と Microsoft 365 のメール。",
   "onboardingV2.tile.naver.scope": "Naver メール。アプリパスワードで接続します。",
   "onboardingV2.tile.icloud.scope": "iCloud メール。アプリ用パスワードで接続します。",
+  "onboardingV2.tile.preset.scope": "メール。アプリパスワードで接続します。",
   "onboardingV2.tile.readOnly":
     "現在は読み取り専用です。返信・アーカイブ・既読は、そのメールサービス側で行ってください。",
   "onboardingV2.health.connected": "接続済み",
@@ -2061,6 +2062,9 @@ const ja: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "iCloud メールを接続",
   "onboardingV2.sheet.icloud.body":
     "接続は一度だけです。Apple Account のパスワードではなく、アプリ用パスワードが必要です。Klorn は暗号化して保存します。",
+  "onboardingV2.sheet.preset.title": "{provider} を接続",
+  "onboardingV2.sheet.preset.body":
+    "接続は一度だけです。{provider} で必要なパスワードはフォームに記載しています。Klorn は暗号化して保存します。",
   "onboardingV2.sheet.close": "閉じる",
   "onboardingV2.sheet.done": "完了",
   "onboardingV2.return.okTitle": "{provider} を接続しました。",
@@ -2237,6 +2241,38 @@ const ja: Record<string, string> = {
   "imap.naver.advancedHost": "詳細設定: IMAP ホスト",
   "imap.naver.hostLabel": "IMAP ホスト",
   "imap.naver.connect": "Naver メールを接続",
+  "imapPreset.body":
+    "IMAP で {provider} のメールボックスを接続します。Klorn は受信するすべてのメールを Gmail と同じ {count} つのレーンに分類します。",
+  "imapPreset.error.status": "{provider} の接続状態を読み込めませんでした。",
+  "imapPreset.confirmDisconnect.title": "{email} の接続を解除しますか？",
+  "imapPreset.emailLabel": "メールアドレス",
+  "imapPreset.passwordLabel.app": "アプリパスワード",
+  "imapPreset.help.link": "{provider} のヘルプ",
+  "imapPreset.help.stored": "Klorn は暗号化して保存し、平文では保存しません。",
+  "imapPreset.connect": "{provider} を接続",
+  "imapPreset.error.auth":
+    "{provider} がこのアドレスとパスワードを受け付けませんでした。上の手順に従ってから、もう一度お試しください。",
+  "imapPreset.error.tooManyAttempts":
+    "試行回数が多すぎます。数分待ってから、もう一度お試しください。",
+  "imapPreset.hint.daum":
+    "Daum メールの設定で IMAP を有効にし、2 段階認証を設定してからアプリパスワードを作成してください。Daum のパスワードでは接続できません。",
+  "imapPreset.hint.kakao":
+    "Kakao メールの設定で IMAP を有効にし、Kakao アカウントで 2 段階認証を設定してからアプリパスワードを作成してください。Kakao のパスワードでは接続できません。",
+  "imapPreset.hint.yahoo":
+    "Yahoo アカウントのセキュリティ設定でアプリパスワードを作成してください。Yahoo のパスワードでは接続できません。",
+  "imapPreset.hint.aol":
+    "AOL アカウントのセキュリティ設定でアプリパスワードを作成してください。AOL のパスワードでは接続できません。",
+  "imapPreset.hint.fastmail":
+    "Fastmail の設定（Privacy & Security）で、IMAP と SMTP のアクセス権を持つアプリパスワードを作成してください。Fastmail のパスワードでは接続できません。",
+  "imapPreset.hint.zoho":
+    "Zoho Mail の設定で IMAP アクセスを有効にし、2 要素認証をオンにしてから、アプリケーション固有のパスワードを作成してください。Zoho のパスワードでは接続できません。",
+  "imapPreset.hint.zohopro":
+    "有料の Zoho 組織（独自ドメイン）のアカウント用です。Zoho Mail の設定で IMAP アクセスを有効にし（管理者の許可が必要な場合があります）、2 要素認証をオンにしてから、アプリケーション固有のパスワードを作成してください。Zoho のパスワードでは接続できません。",
+  "imapGeneric.title": "その他のメールサーバー（IMAP）",
+  "imapGeneric.body":
+    "メールサーバーのアドレスで接続したアカウントです。参考として表示しています。このページでは再接続も削除もできません。",
+  "imapGeneric.authRefused":
+    "メールサーバーが保存済みのサインインを拒否しました。このページでは再接続できません。",
   "telegram.error.status": "Telegram の連携状態を読み込めませんでした。",
   "telegram.error.link": "Telegram の連携を開始できませんでした。",
   "telegram.error.disconnect": "Telegram の接続を解除できませんでした。",

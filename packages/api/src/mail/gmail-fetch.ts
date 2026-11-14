@@ -58,6 +58,11 @@ export interface GmailRawEmail {
   // (mail/klorn-inbound-map.ts). Only the Klorn mailbox has them; written on
   // create only, into EmailMessage.authentication.
   authentication?: { spf: string; dkim: string; dmarc: string } | null;
+  // The RFC 5322 Message-ID the IMAP poll read from the envelope (imap-envelope.ts
+  // envelopeMessageId), so a message moved out of INBOX in another client can still
+  // be found for its attachments (attachment-bytes.ts). Written on create, and once
+  // on a re-sync of a row that has none. Gmail and Outlook leave it out (null rows).
+  messageIdHeader?: string | null;
   // Header signals for the attention engine v3 facts shadow
   // (judge/v3/pre-facts.ts). In memory only, never persisted. Gmail-only, so
   // optional for the same reason as hasListUnsubscribe.
