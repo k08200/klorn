@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Datenverarbeitung und Unterauftragsverarbeiter — Klorn</title>
-<meta name="description" content="Wie du einen Auftragsverarbeitungsvertrag (DPA) bekommst, und die vollständige Liste der Unterauftragsverarbeiter, die im gehosteten Dienst mit Daten in Berührung kommen können — Google, Render, Vercel, Anthropic, Paddle und Apple.">
+<meta name="description" content="Wie du einen Auftragsverarbeitungsvertrag (DPA) bekommst, und die vollständige Liste der Unterauftragsverarbeiter, die im gehosteten Dienst mit Daten in Berührung kommen können — Google, Render, Cloudflare, Anthropic, Paddle und Apple.">
 <meta property="og:title" content="Datenverarbeitung und Unterauftragsverarbeiter — Klorn">
-<meta property="og:description" content="Wie du einen Auftragsverarbeitungsvertrag (DPA) bekommst, und die vollständige Liste der Unterauftragsverarbeiter, die im gehosteten Dienst mit Daten in Berührung kommen können — Google, Render, Vercel, Anthropic, Paddle und Apple.">
+<meta property="og:description" content="Wie du einen Auftragsverarbeitungsvertrag (DPA) bekommst, und die vollständige Liste der Unterauftragsverarbeiter, die im gehosteten Dienst mit Daten in Berührung kommen können — Google, Render, Cloudflare, Anthropic, Paddle und Apple.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://klorn.ai/de/dpa/">
 <meta property="og:locale" content="de_DE">
@@ -15,7 +15,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Datenverarbeitung und Unterauftragsverarbeiter — Klorn">
-<meta name="twitter:description" content="Wie du einen Auftragsverarbeitungsvertrag (DPA) bekommst, und die vollständige Liste der Unterauftragsverarbeiter, die im gehosteten Dienst mit Daten in Berührung kommen können — Google, Render, Vercel, Anthropic, Paddle und Apple.">
+<meta name="twitter:description" content="Wie du einen Auftragsverarbeitungsvertrag (DPA) bekommst, und die vollständige Liste der Unterauftragsverarbeiter, die im gehosteten Dienst mit Daten in Berührung kommen können — Google, Render, Cloudflare, Anthropic, Paddle und Apple.">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
 <link rel="canonical" href="https://klorn.ai/de/dpa/">
 <link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/">
@@ -79,7 +79,7 @@
       <tr><th>Render</th><td class="us">API-Hosting, Region Singapur</td><td>Alles, was die API verarbeitet, bei der Übertragung und im Arbeitsspeicher</td></tr>
       <tr><th>Supabase</th><td class="us">Verwaltetes Postgres, Seoul (ap-northeast-2)</td><td>Alle gespeicherten Konto-, Mail- und Einordnungsdaten</td></tr>
       <tr><th>GitHub</th><td class="us">Speicherung der nächtlichen Datenbank-Backups (Actions-Artefakte, die nach 14 Tagen ablaufen)</td><td>Nur verschlüsselte Dateien. Die Datenbank wird auf einen temporären GitHub-Runner kopiert, dort verschlüsselt, und nur der Geheimtext wird gespeichert; der Schlüssel zum Lesen wird nie auf GitHub gespeichert</td></tr>
-      <tr><th>Vercel</th><td class="us">Hosting der Web-App</td><td>Anfragen und Antworten bei der Übertragung</td></tr>
+      <tr><th>Cloudflare</th><td class="us">Hosting der Web-App (Cloudflare Pages: statisches Hosting und CDN für app.klorn.ai)</td><td>Anfragen und Antworten bei der Übertragung</td></tr>
       <tr><th>Google (Gemini API)</th><td class="us">Modellaufrufe</td><td>Der zur Einordnung oder zum Entwerfen gesendete Nachrichtentext, unter API-Bedingungen, die ein Training mit übermittelten Daten ausschließen</td></tr>
       <tr><th>Anthropic (Claude API)</th><td class="us">Modellaufrufe</td><td>Derselbe Nachrichtentext, unter kommerziellen API-Bedingungen, die ein Training mit übermittelten Daten ausschließen. Standardmäßig innerhalb von 30 Tagen gelöscht, länger nur bei Inhalten, die bei der Durchsetzung der Nutzungsrichtlinien markiert wurden</td></tr>
       <tr><th>Paddle</th><td class="us">Zahlungen und Merchant of Record</td><td>Rechnungsdaten. <strong>Keine Mailinhalte</strong></td></tr>

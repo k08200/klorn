@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "November 11, 2026";
+const updatedAt = "November 14, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -538,21 +538,22 @@ export default function PrivacyPage() {
               scoped to your account, transport is TLS-encrypted, and your Google user data is
               stored only in Klorn&apos;s own database and its encrypted backups — it is not shared
               with analytics or advertising services. Klorn&apos;s infrastructure sub-processors are
-              Render (API hosting), Vercel (web application hosting), Supabase (managed Postgres
-              database, hosted in Seoul, ap-northeast-2), and GitHub (storage of the nightly
-              database backups: the database is copied to a temporary GitHub runner, encrypted
-              there, and only the encrypted file is kept; the key to read it is never stored on
-              GitHub) and Sentry (error reporting: when something fails, a report that can include
-              the failing request's context is sent there so it can be diagnosed); they store and
-              transmit data solely to operate Klorn. Paddle acts as merchant of record for paid
-              subscriptions and receives only billing details — never mail content. Resend delivers
-              Klorn&apos;s own outgoing email (address verification, password reset, invitations,
-              and the daily digest where it is enabled) and therefore receives your address and the
-              contents of those messages. Because the digest lists who your filed mail came from,
-              those sender addresses pass through Resend; the messages themselves never do. Apple
-              (APNs) and Google (Firebase Cloud Messaging) deliver push notifications to devices you
-              register. RevenueCat manages subscriptions bought in the mobile app and receives only
-              purchase records and your Klorn account id.
+              Render (API hosting), Cloudflare (web application hosting: Cloudflare Pages, static
+              hosting and CDN for app.klorn.ai), Supabase (managed Postgres database, hosted in
+              Seoul, ap-northeast-2), and GitHub (storage of the nightly database backups: the
+              database is copied to a temporary GitHub runner, encrypted there, and only the
+              encrypted file is kept; the key to read it is never stored on GitHub) and Sentry
+              (error reporting: when something fails, a report that can include the failing
+              request's context is sent there so it can be diagnosed); they store and transmit data
+              solely to operate Klorn. Paddle acts as merchant of record for paid subscriptions and
+              receives only billing details — never mail content. Resend delivers Klorn&apos;s own
+              outgoing email (address verification, password reset, invitations, and the daily
+              digest where it is enabled) and therefore receives your address and the contents of
+              those messages. Because the digest lists who your filed mail came from, those sender
+              addresses pass through Resend; the messages themselves never do. Apple (APNs) and
+              Google (Firebase Cloud Messaging) deliver push notifications to devices you register.
+              RevenueCat manages subscriptions bought in the mobile app and receives only purchase
+              records and your Klorn account id.
             </p>
             <p>
               Because Klorn is a beta product, avoid connecting accounts that contain information

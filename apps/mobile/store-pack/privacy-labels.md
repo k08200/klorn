@@ -90,7 +90,7 @@ Audio Data, Gameplay Content, Customer Support, Other Data.
 
 Third parties inside the binary: **RevenueCat** (purchase history + the
 account id, only with a key), **Apple APNs** (the token). Service providers on
-the server side — Render, Supabase, Vercel, Anthropic (Claude API), Google
+the server side — Render, Supabase, Cloudflare (Pages), Anthropic (Claude API), Google
 Gemini API, Resend — process data for Klorn and are listed in the privacy
 policy.
 
