@@ -324,7 +324,7 @@ export async function sendPushNotification(
   // channel attempt; "skipped" (not linked / not configured) is none.
   if (telegram === "sent" || telegram === "failed") {
     await recordChannelSend({
-      ...channelRecordBase(userId, channelPayload, category),
+      ...channelRecordBase(userId, channelPayload, category, bellNotificationId),
       channel: "telegram",
       outcome:
         telegram === "sent" ? { status: "sent" } : { status: "failed", reason: "telegram_error" },
@@ -344,7 +344,7 @@ export async function sendPushNotification(
   const nativeQueuedAt = new Date();
   const recordNative = (channel: "fcm" | "apns") => (summary: NativeSendSummary | undefined) =>
     recordNativeOutcome(channel, nativeSendOutcome(summary), {
-      ...channelRecordBase(userId, channelPayload, category),
+      ...channelRecordBase(userId, channelPayload, category, bellNotificationId),
       queuedAt: nativeQueuedAt,
     });
   void Promise.all([
@@ -462,6 +462,7 @@ async function deliverToSubscription(
     subscriptionId: sub.id,
     endpoint: sub.endpoint,
     notificationId: payload.notificationId ?? null,
+    bellNotificationId: payload.bellNotificationId ?? null,
     category,
     title: payload.title,
   });
@@ -586,10 +587,12 @@ function channelRecordBase(
   userId: string,
   payload: { title: string; notificationId?: string },
   category: NotifCategory,
+  bellNotificationId: string | undefined,
 ) {
   return {
     userId,
     notificationId: payload.notificationId ?? null,
+    bellNotificationId: bellNotificationId ?? null,
     category,
     title: payload.title,
   };

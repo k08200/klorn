@@ -2,8 +2,9 @@
  * Decision N1 (2026-11-08): every surface shows an urgent-mail notification the
  * same way. Title = the sender's display name only (the OS already shows the
  * app name). Body = the subject (localized stand-in when empty), then the
- * judge's one-line reason when there is one. Web actions: Reply and Later for
- * a PUSH mail, Later for a MEETING mail. There is no Silent / Mute action.
+ * reason line: the verified quote from the mail when there is one (NC1), else
+ * the judge's one-line reason. Web actions: Reply and Later for a PUSH mail,
+ * Later for a MEETING mail. There is no Silent / Mute action.
  */
 
 import { describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ describe("mailPushContent", () => {
     const content = mailPushContent({
       from: "Alice Kim <alice@example.com>",
       subject: "Contract",
-      reason: "Signature needed today",
+      reason: { text: "Signature needed today", verified: false },
       language: "en",
     });
     expect(content.title).toBe("Alice Kim");
@@ -32,14 +33,19 @@ describe("mailPushContent", () => {
     const content = mailPushContent({
       from: "Alice <alice@example.com>",
       subject: "Contract",
-      reason: "Signature needed today",
+      reason: { text: "Signature needed today", verified: false },
       language: "en",
     });
     expect(content.body).toBe("Contract\nSignature needed today");
   });
 
   it("omits the reason line when there is no reason", () => {
-    for (const reason of [null, undefined, "", "   "]) {
+    for (const reason of [
+      null,
+      undefined,
+      { text: "", verified: false },
+      { text: "   ", verified: false },
+    ]) {
       const content = mailPushContent({ from: "a@b.c", subject: "Hi", reason, language: "en" });
       expect(content.body).toBe("Hi");
     }
@@ -63,7 +69,7 @@ describe("mailPushContent", () => {
     const content = mailPushContent({
       from: '"Evil\nKlorn Security" <e@x.io>',
       subject: "Pay now\r\nYour account is locked\u0007",
-      reason: "line one\nline two",
+      reason: { text: "line one\nline two", verified: false },
       language: "en",
     });
     expect(content.title).toBe("Evil Klorn Security");
@@ -86,7 +92,7 @@ describe("mailPushContent", () => {
     const content = mailPushContent({
       from: "a@b.c",
       subject: "s",
-      reason: "x".repeat(500),
+      reason: { text: "x".repeat(500), verified: false },
       language: "en",
     });
     const reasonLine = content.body.split("\n")[1] ?? "";
@@ -94,15 +100,105 @@ describe("mailPushContent", () => {
     expect(reasonLine.endsWith("…")).toBe(true);
   });
 
-  it("does not interpret HTML in mail text (notifications are plain text, passed through as-is)", () => {
+  it("strips HTML from mail text: notifications are plain text and carry no markup", () => {
     const content = mailPushContent({
-      from: "<b>x</b> <a@b.c>",
-      subject: "<img src=x onerror=alert(1)>",
+      from: "<b>Mallory</b> <m@b.c>",
+      subject: 'Invoice <img src=x onerror=alert(1)> <a href="https://e.vil">due</a>',
+      reason: { text: "<script>alert(1)</script>Pay today", verified: false },
       language: "en",
     });
-    // Plain text: nothing is rendered as markup by any notification surface,
-    // so the text is kept verbatim rather than half-escaped.
-    expect(content.body).toBe("<img src=x onerror=alert(1)>");
+    expect(content.title).toBe("Mallory");
+    expect(content.body).toBe("Invoice due\nalert(1) Pay today");
+    expect(content.title + content.body).not.toMatch(/[<>]/);
+  });
+
+  it("keeps a comparison that is not a tag", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "Q3: cost < 5% > plan",
+      language: "en",
+    });
+    expect(content.body).toBe("Q3: cost < 5% > plan");
+  });
+
+  it("a subject that is only markup reads as the localized no-subject stand-in", () => {
+    const content = mailPushContent({ from: "a@b.c", subject: "<div></div>", language: "en" });
+    expect(content.body).toBe(notificationCopy("en").noSubject);
+  });
+
+  it("titles a bare <address> From header with the address", () => {
+    expect(mailPushContent({ from: "<b@x.io>", subject: "s", language: "en" }).title).toBe(
+      "b@x.io",
+    );
+  });
+
+  it("bounds the work on a huge subject before any pattern runs", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: `${"<a ".repeat(50_000)}tail`,
+      language: "en",
+    });
+    expect(content.body.length).toBeLessThanOrEqual(180);
+  });
+});
+
+describe("mailPushContent — reason line (NC1)", () => {
+  it("a verified quote replaces the short reason, in curly quotes", () => {
+    const content = mailPushContent({
+      from: "Alice <a@b.c>",
+      subject: "Contract",
+      reason: {
+        text: "Signature needed today",
+        verified: true,
+        quote: "Please sign by 5pm today",
+        quoteIn: "body",
+      },
+      language: "en",
+    });
+    expect(content.body).toBe("Contract\n“Please sign by 5pm today”");
+  });
+
+  it("quotation marks the quote already carries are not doubled", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "s",
+      reason: { text: "t", verified: true, quote: '"Please sign by 5pm"' },
+      language: "en",
+    });
+    expect(content.body.split("\n")[1]).toBe("“Please sign by 5pm”");
+  });
+
+  it("an unverified quote is never shown: the short reason is", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "s",
+      reason: { text: "Looks urgent", verified: false, quote: "wire the money now" },
+      language: "en",
+    });
+    expect(content.body).toBe("s\nLooks urgent");
+  });
+
+  it("a verified reason with an empty quote falls back to the text", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "s",
+      reason: { text: "Looks urgent", verified: true, quote: "  " },
+      language: "en",
+    });
+    expect(content.body).toBe("s\nLooks urgent");
+  });
+
+  it("caps a long quote, marks included", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "s",
+      reason: { text: "t", verified: true, quote: "y".repeat(400) },
+      language: "en",
+    });
+    const line = content.body.split("\n")[1] ?? "";
+    expect(line.length).toBeLessThanOrEqual(MAIL_PUSH_REASON_MAX);
+    expect(line.startsWith("“")).toBe(true);
+    expect(line.endsWith("…”")).toBe(true);
   });
 });
 

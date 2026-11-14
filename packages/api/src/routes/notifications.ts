@@ -1,3 +1,4 @@
+import type { NotificationListResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import {
@@ -16,12 +17,18 @@ import { isReceiptAction } from "../notify/delivery-lifecycle.js";
 import { desktopAlertState } from "../notify/desktop-alert.js";
 import { desktopCatchUp, parseCatchUpIds } from "../notify/desktop-catchup.js";
 import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
+import {
+  enrichNotifications,
+  notificationBudget,
+  notificationDelivery,
+} from "../notify/notification-center.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
 import { sendDevicePush } from "../notify/push-device.js";
 import { remindLaterFromPush } from "../notify/push-later.js";
 import { verifyPushLaterToken } from "../notify/push-later-token.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { captureError } from "../sentry.js";
 
 const listNotificationsQuerySchema = {
@@ -30,7 +37,17 @@ const listNotificationsQuerySchema = {
   properties: {
     unread: { type: "string", maxLength: 500 },
     limit: { type: "string", maxLength: 500 },
+    // The language reasons render in (lang → Accept-Language → the stored
+    // notification language), as on the firewall list.
+    lang: LANG_QUERY_PROPERTY,
   },
+} as const;
+
+// Bell row ids are Prisma uuids: reject anything else before a query runs.
+const notificationIdParamsSchema = {
+  type: "object",
+  required: ["id"],
+  properties: { id: { type: "string", pattern: "^[0-9a-fA-F-]{36}$" } },
 } as const;
 
 const desktopCatchUpQuerySchema = {
@@ -173,20 +190,52 @@ export async function notificationRoutes(app: FastifyInstance) {
     return requireAuth(request, reply);
   });
 
-  // GET /api/notifications — Get notifications (supports ?unread=true&limit=50)
-  app.get("/", { schema: { querystring: listNotificationsQuerySchema } }, async (request) => {
-    const userId = getUserId(request);
-    const { unread, limit } = request.query as { unread?: string; limit?: string };
-    const notifs = await getNotifications(userId, {
-      unreadOnly: unread === "true",
-      limit: limit ? Number.parseInt(limit, 10) : 50,
-    });
-    return {
-      notifications: notifs,
-      count: notifs.length,
-      unread: notifs.filter((n) => !n.isRead).length,
-    };
-  });
+  // GET /api/notifications — Get notifications (supports ?unread=true&limit=50).
+  // Each row also carries the notification center's optional fields (lane,
+  // reason, held, group; @klorn/contract notification-center.ts), and the list
+  // carries `budget` when the interrupt budget applies to the user. All
+  // additive: when an enrichment read fails the list goes out as before.
+  app.get(
+    "/",
+    { schema: { querystring: listNotificationsQuerySchema } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { unread, limit } = request.query as { unread?: string; limit?: string };
+      const notifs = await getNotifications(userId, {
+        unreadOnly: unread === "true",
+        limit: limit ? Number.parseInt(limit, 10) : 50,
+      });
+      const [rows, budget] = await Promise.all([
+        withCenterFields(userId, notifs, () => readerLanguageFor(request, reply, userId)),
+        budgetIfApplies(userId),
+      ]);
+      const response: NotificationListResponse = {
+        notifications: rows,
+        count: rows.length,
+        unread: rows.filter((n) => !n.isRead).length,
+        ...(budget ? { budget } : {}),
+      };
+      return response;
+    },
+  );
+
+  // GET /api/notifications/:id/delivery — where this bell row's alert landed:
+  // { deliveredTo, channels } (notify/notification-center.ts). 404 when the
+  // row is not the caller's.
+  app.get(
+    "/:id/delivery",
+    {
+      schema: { params: notificationIdParamsSchema },
+      config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { id } = request.params as { id: string };
+      const delivery = await notificationDelivery(userId, id);
+      if (!delivery) return reply.code(404).send({ error: "Notification not found" });
+      return delivery;
+    },
+  );
 
   // GET /api/notifications/desktop-catchup?ids=a,b — Windows desktop shell:
   // of these bell rows, the urgent mails missed while it was closed that still
@@ -552,4 +601,34 @@ function parseOptionalInteger(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * The notification center fields on a page of bell rows. Additive: a failed
+ * enrichment read is reported and the plain rows are returned, so the bell
+ * never breaks because of it.
+ */
+async function withCenterFields(
+  userId: string,
+  rows: Awaited<ReturnType<typeof getNotifications>>,
+  language: () => Promise<string>,
+) {
+  try {
+    return await enrichNotifications(userId, rows, { language });
+  } catch (err) {
+    console.error(`[NOTIFY] notification center enrichment failed for user ${userId}:`, err);
+    captureError(err, { tags: { scope: "notify.center-enrich" }, extra: { userId } });
+    return rows;
+  }
+}
+
+/** The day's interrupt budget, or null (does not apply, or the read failed: reported). */
+async function budgetIfApplies(userId: string) {
+  try {
+    return await notificationBudget(userId);
+  } catch (err) {
+    console.error(`[NOTIFY] interrupt budget read failed for user ${userId}:`, err);
+    captureError(err, { tags: { scope: "notify.center-budget" }, extra: { userId } });
+    return null;
+  }
 }

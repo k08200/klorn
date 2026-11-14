@@ -15,14 +15,16 @@
  * not caught up after quiet hours or by the Windows shell (as before #1687).
  */
 
+import type { NotificationReason } from "@klorn/contract";
 import { prisma } from "../db.js";
 import { NOT_AGENT_SET } from "../judge/agent-tier.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
 import type { PocJudgement } from "../judge/poc-judge.js";
-import { resolveTierReason } from "../judge/tier-reason-strings.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { describeFailure } from "../mail/providers/action-failure.js";
 import { captureError } from "../sentry.js";
-import { mailPushContent } from "./mail-push-content.js";
+import { type MailPushContent, mailPushContent } from "./mail-push-content.js";
+import { REASON_ITEM_SELECT, reasonsForMail } from "./notification-reason.js";
 import { type NotificationLanguage, URGENT_EMAIL_TITLES } from "./notification-strings.js";
 
 /** Lanes that ring as PUSH; "CALL" is the retired v1 name normalizeTier folds. */
@@ -84,7 +86,7 @@ export async function openPushMail(
         status: "OPEN",
         tier: { in: PUSH_TIERS },
       },
-      select: { id: true, sourceId: true, tierReason: true },
+      select: { id: true, sourceId: true, ...REASON_ITEM_SELECT },
     }),
     prisma.emailMessage.findMany({
       where: { userId, id: { in: emailIds }, ...(options.skipReadMail ? { isRead: false } : {}) },
@@ -93,6 +95,13 @@ export async function openPushMail(
   ]);
   const itemByEmail = new Map(openItems.map((i) => [i.sourceId, i]));
   const emailById = new Map(emails.map((e) => [e.id, e]));
+  // Why each rang, the same rule as the live push (notification-reason.ts).
+  const reasons = await reasonsForMail(
+    userId,
+    emails.filter((e) => itemByEmail.has(e.id)).map((e) => ({ id: e.id, subject: e.subject })),
+    itemByEmail,
+    { language, now: new Date(), policyUser: isJudgeV3PolicyEnabled(userId) },
+  );
 
   const mail: OpenPushMail[] = [];
   for (const row of rows) {
@@ -103,7 +112,7 @@ export async function openPushMail(
     const content = mailPushContent({
       from: email.from ?? "",
       subject: email.subject,
-      reason: resolveTierReason(item.tierReason ?? null, language),
+      reason: reasons.get(emailId) ?? null,
       language,
     });
     mail.push({
@@ -233,4 +242,38 @@ async function keywordFallbackSourceIds(
     reportLaneLookupFailure("ledger", userId, err);
     return new Set();
   }
+}
+
+/**
+ * The content of the urgent sweep's push about ONE mail: the same formatter
+ * and reason rule as the firewall ring (mail-push-content.ts,
+ * notification-reason.ts), so every surface says the same thing. The reason
+ * comes from the mail's open item; a failed read rings without a reason line
+ * rather than not at all, and is reported.
+ */
+export async function urgentLeadPushContent(
+  userId: string,
+  lead: { id: string; from: string | null; subject: string | null },
+  language: string,
+): Promise<MailPushContent> {
+  let reason: NotificationReason | null = null;
+  try {
+    const items = await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: [lead.id] }, status: "OPEN" },
+      select: { sourceId: true, ...REASON_ITEM_SELECT },
+    });
+    const reasons = await reasonsForMail(
+      userId,
+      [{ id: lead.id, subject: lead.subject }],
+      new Map(items.map((item) => [item.sourceId, item])),
+      { language, now: new Date(), policyUser: isJudgeV3PolicyEnabled(userId) },
+    );
+    reason = reasons.get(lead.id) ?? null;
+  } catch (err) {
+    console.warn(
+      `[urgent-sweep] reason lookup failed for ${userId}; ringing without a reason line: ${describeFailure(err)}`,
+    );
+    captureError(err, { tags: { scope: "automation.urgent-reason" }, extra: { userId } });
+  }
+  return mailPushContent({ from: lead.from ?? "", subject: lead.subject, reason, language });
 }
