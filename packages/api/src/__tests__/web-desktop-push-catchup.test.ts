@@ -224,7 +224,8 @@ describe("planPushCatchUp — after the baseline", () => {
       response: answer([missed("n1", "Kim Lee")]),
     });
     expect(plan.toast).toMatchObject({ id: "n1", title: "Kim Lee", open: "/email/mail-n1" });
-    expect(plan.next.notified).toEqual(["n1"]);
+    // The row, and the mail itself (one mail, one toast: web-desktop-mail-dedupe).
+    expect(plan.next.notified).toEqual(["n1", "mail:mail-n1"]);
     const again = planAll({
       ledger: plan.next,
       rows,
@@ -255,7 +256,14 @@ describe("planPushCatchUp — after the baseline", () => {
       body: "A, B, C +2",
       open: "/today",
     });
-    expect(plan.next.notified).toEqual(["n1", "n2", "n3", "n4", "n5"]);
+    expect(plan.next.notified).toEqual([
+      "n1",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      ...["n1", "n2", "n3", "n4", "n5"].map((id) => `mail:mail-${id}`),
+    ]);
   });
 
   it("a mail handled since (not returned by the server) is recorded, not shown", () => {
@@ -267,7 +275,7 @@ describe("planPushCatchUp — after the baseline", () => {
       response: answer([missed("open", "Kim")]),
     });
     expect(plan.toast?.id).toBe("open");
-    expect(plan.next.notified).toEqual(["open", "handled"]);
+    expect(plan.next.notified).toEqual(["open", "handled", "mail:mail-open"]);
   });
 
   it("ignores anything the server returns that the shell did not ask about", () => {
@@ -311,7 +319,7 @@ describe("planPushCatchUp — after the baseline", () => {
       sent: ["n1"],
     });
     expect(plan.toast).toMatchObject({ id: "n1" });
-    expect(plan.next.notified).toEqual(["n1"]);
+    expect(plan.next.notified).toEqual(["n1", "mail:mail-n1"]);
     expect(pushCatchUpCandidates(plan.next, rows, NOW).ask).toEqual(["n2"]);
   });
 

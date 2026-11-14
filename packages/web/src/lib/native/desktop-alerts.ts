@@ -129,11 +129,35 @@ export interface DesktopAlertPlan {
   seen: string[];
 }
 
+const MAIL_KEY_PREFIX = "mail:";
+
+/** The ledger entry for one mail, beside its bell row ids. The server can
+ *  write a second row for a mail already announced (the urgent sweep rings it
+ *  again once "Clear all" deleted the rows its dedupe reads); the Mac keys its
+ *  PushLedger on the mail's attention item, so one mail gets one banner. Row
+ *  ids never contain ":", so the two never collide. */
+export function mailLedgerKey(emailId: string): string {
+  return `${MAIL_KEY_PREFIX}${emailId}`;
+}
+
+/** The mail a PUSH toast opens, as a ledger key; null for anything else
+ *  (meetings, the catch-up summary that opens Today). */
+export function mailKeyOf(alert: DesktopAlert): string | null {
+  if (alert.kind !== "push" || !alert.open?.startsWith("/email/")) return null;
+  return mailLedgerKey(alert.open.slice("/email/".length));
+}
+
 /** Decide whether this frame banners, given the ids already bannered (the
- *  persisted ledger, ./desktop-catchup.ts). Returns a new seen list; the input
- *  is never mutated. */
+ *  persisted ledger, ./desktop-catchup.ts). A frame for a mail already
+ *  bannered under another row is recorded without a banner. Returns a new
+ *  seen list; the input is never mutated. */
 export function planDesktopAlert(seen: readonly string[], payload: unknown): DesktopAlertPlan {
   const alert = parseDesktopAlert(payload);
   if (!alert || seen.includes(alert.id)) return { alert: null, seen: [...seen] };
-  return { alert, seen: [...seen, alert.id].slice(-SEEN_CAP) };
+  const mailKey = mailKeyOf(alert);
+  if (mailKey && seen.includes(mailKey)) {
+    return { alert: null, seen: [...seen, alert.id].slice(-SEEN_CAP) };
+  }
+  const recorded = mailKey ? [alert.id, mailKey] : [alert.id];
+  return { alert, seen: [...seen, ...recorded].slice(-SEEN_CAP) };
 }
