@@ -18,6 +18,7 @@ import { slackPlainText } from "./text.js";
 export const SLACK_REASON_MAX = 200;
 const MESSAGE_CHARS = 600;
 const EPISODE_CHARS = 1500;
+const MESSAGE_SEPARATOR = " | ";
 
 export function slackConversationKind(
   channelType: string,
@@ -28,22 +29,31 @@ export function slackConversationKind(
   return mentionsUser ? "mention" : "opt_in";
 }
 
-/** The episode's messages as plain lines, oldest first, capped. */
-export function slackEpisodeText(messages: ReadonlyArray<{ text: string }>): string {
+/** The episode's messages as plain lines, oldest first, blank ones dropped. */
+export function slackEpisodeLines(messages: ReadonlyArray<{ text: string }>): string[] {
   return messages
     .map((m) => slackPlainText(m.text, MESSAGE_CHARS))
-    .filter((line) => line.length > 0)
-    .join("\n")
-    .slice(0, EPISODE_CHARS);
+    .filter((line) => line.length > 0);
 }
 
+/** The lines as one capped text, " | " between messages so they stay apart for the judge. */
+export function slackEpisodeText(messages: ReadonlyArray<{ text: string }>): string {
+  return slackEpisodeLines(messages).join(MESSAGE_SEPARATOR).slice(0, EPISODE_CHARS);
+}
+
+/**
+ * Null when no message has any text left (nothing to judge). Judged as
+ * backlog, i.e. outside the slice of the daily cap reserved for incoming mail:
+ * Slack volume is set by other people and must never leave mail unjudged.
+ */
 export async function judgeSlackEpisode(input: {
   userId: string;
   channelType: string;
   mentionsUser: boolean;
   messages: ReadonlyArray<{ text: string }>;
-}): Promise<{ tier: LiveTier; reason: string }> {
-  const text = slackEpisodeText(input.messages);
+}): Promise<{ tier: LiveTier; reason: string } | null> {
+  const lines = slackEpisodeLines(input.messages);
+  if (lines.length === 0) return null;
   const [credentials, language] = await Promise.all([
     getUserLlmCredentials(input.userId),
     getUserNotificationLanguage(input.userId),
@@ -52,8 +62,8 @@ export async function judgeSlackEpisode(input: {
     {
       from: "",
       subject: "",
-      snippet: text.split("\n")[0] ?? "",
-      body: text,
+      snippet: lines[0] ?? "",
+      body: lines.join(MESSAGE_SEPARATOR).slice(0, EPISODE_CHARS),
       slack: { conversation: slackConversationKind(input.channelType, input.mentionsUser) },
     },
     input.userId,
@@ -62,6 +72,7 @@ export async function judgeSlackEpisode(input: {
     undefined,
     undefined,
     language,
+    { backlog: true },
   );
   return {
     tier: toLiveTier(judgement.tier),

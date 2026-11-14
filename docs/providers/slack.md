@@ -226,11 +226,16 @@ is not set, cohort-aware, 10 episodes a tick. It claims an episode
 (`OPEN → JUDGING`, so an ingest can no longer extend it and no other worker
 judges it); a claim older than 10 minutes belongs to a crashed tick and is
 taken again. Outcomes: `JUDGED` (lane + reason), `ANSWERED` (the user replied
-first), `EMPTY` (every message was deleted in Slack), `OVER_CAP` (past
-**200 judged episodes per connection per UTC day** — no LLM call; the signing
-secret is the user's own, so the episode count is theirs to inflate). A judge
+first), `EMPTY` (no message has text left), `OVER_CAP` (past **200 judged
+episodes per connection per UTC day**, of which followed-channel episodes may
+use 120 so DMs and mentions keep room — no LLM call; the signing secret is
+the user's own, so the episode count is theirs to inflate). The verdict is
+stored first, guarded on the claim (a disconnect mid-judge writes nothing);
+the ring and the commitment pass then run best-effort, so a failure in either
+never rewrites the verdict and a retaken claim never rings twice. A judge
 error lands the episode in QUEUE, the default lane, instead of retrying
-forever.
+forever. A keyword-fallback verdict (LLM down or the user's daily cap hit) is
+final in v1 — there is no re-judge sweep for Slack yet.
 
 ## 8. Judging
 
@@ -254,8 +259,14 @@ with a `slack: { conversation }` field on its item (`ClassifiableEmail`,
   never be emitted. The email prompt is unchanged byte for byte.
 
 The call carries `userId` and the user's BYOK credentials, so the per-user
-daily cost cap and BYOK exemption apply unchanged. If the cap is hit the
-judge's own fallback decides the lane (no Slack-specific bypass).
+daily cost cap and BYOK exemption apply unchanged. It is made as *backlog*
+(`{ backlog: true }`), i.e. **outside** the slice of the cap reserved for
+incoming mail: Slack volume is set by other people and must never leave mail
+unjudged. If the cap is hit the judge's own fallback decides the lane (no
+Slack-specific bypass). The mail-shaped heuristics — scheduling intent,
+transactional notice, the routine sign-in confirmation cap — are off for
+Slack, so a pasted Zoom link cannot turn an urgent DM into MEETING. A test
+pins the email prompt's exact bytes.
 
 Not judged: the user's own messages, bot messages, joins and other subtypes
 (§6). AE3 v3 facts/policy (`judge/v3/*`) is email-shaped (`FactsMailInput`,
@@ -281,7 +292,15 @@ text comes from `slackPushContent` (`slack/push-content.ts`, sibling of
 mentioned / Followed channel" in all 7 notification languages, body the
 first message as one plain line (180 chars) and the judge's reason. A push
 the budget holds is written as a bell row (deduped per episode) and does not
-ring. The Mac app's native banners are built from `AttentionItem`, so they do
+ring. Slack's share is bounded so other people's messages cannot crowd out
+mail: at most **2 Slack rings** and **20 Slack bell rows** per user per UTC
+day (past the rings cap a quiet bell row, past the rows cap nothing), Slack
+never uses the trusted-sender reserve, and a PUSH verdict on talk older than
+6 hours (after an outage or the brake) is stored but does not ring. No phone
+escalation: the push carries no `notificationId`, which escalation keys on
+(pinned by a test). The push body carries up to 180 characters of the first
+message to the push providers (APNs, FCM, web push, Telegram), unlike mail
+pushes, which carry the subject — a founder decision listed in §14. The Mac app's native banners are built from `AttentionItem`, so they do
 not show Slack episodes in v1.
 
 ## 10. Commitments
@@ -295,7 +314,10 @@ confirmed** (`pim/commitment-confirmation.ts:20`), exactly as for mail. Every
 message in a Slack episode is from someone else, so a first-person promise
 ("I'll send it Friday") is the counterparty's, not the user's
 (`ownerForCandidate` and the refiner prompt treat `SLACK` like `EMAIL`).
-SILENT episodes are not mined.
+SILENT episodes and followed-channel (opt-in) episodes — talk between other
+people — are not mined. A Slack commitment's confidence is capped below the
+0.7 confirmation line even when the LLM refiner is sure, so Slack text can
+never land as confirmed on its own.
 
 ## 11. What is stored, for how long, and why
 
@@ -317,7 +339,10 @@ one connection can store). The purge (`purgeExpiredSlackData`) runs at most
 every 10 minutes from the Slack scheduler, independent of
 `LOG_RETENTION_ENABLED` and of `SLACK_ENABLED`, and keeps running under
 `BACKGROUND_AGENTS_DISABLED`; it is covered by unit and Postgres tests. Disconnect deletes the connection, every episode and
-message, and the Slack-sourced commitments and notifications. Deleting the
+message, the Slack bell rows (interrupt-slot rows are kept so the day's
+spent budget is not handed back, but emptied of Slack text), and the
+Slack-sourced commitments. Re-connecting to another workspace or Slack user
+does the same for the old one. Deleting the
 Klorn account deletes all of it (`purge-user-data.ts`). No Slack data is used
 to train any model (Slack Developer Policy, "Use of Data",
 https://docs.slack.dev/developer-policy).
@@ -391,6 +416,11 @@ https://docs.slack.dev/developer-policy).
 6. Legal: whether a hosted-Klorn manifest template is "commercial
    distribution" under the Slack API Terms needs review before `SLACK_ENABLED`
    goes past the founder cohort on the hosted service (§2).
+7. Notification limits: 2 Slack rings and 20 Slack bell rows a day; opt-in
+   channels can ring (under those caps); Slack never uses the trusted reserve
+   (§9).
+8. The first 180 characters of the triggering Slack message go into the push
+   body (mail pushes carry only the subject) (§9).
 
 ## 15. Self-host setup
 

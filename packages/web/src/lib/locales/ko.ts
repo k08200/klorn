@@ -3051,6 +3051,7 @@ const ko: Record<string, string> = {
   "slack.error.not-started": "먼저 Slack 설정을 시작하세요.",
   "slack.error.rate-limited": "시도가 너무 많습니다. 나중에 다시 시도하세요.",
   "slack.error.generic": "Slack 처리 중 문제가 생겼습니다. 다시 시도하세요.",
+  "slack.retry": "다시 시도",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "텍스트로 규칙 편집",
   "rulesDsl.desc":

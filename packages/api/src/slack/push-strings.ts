@@ -52,6 +52,9 @@ const TITLES: Record<NotificationLanguage, KindTitles> = {
   },
 };
 
+/** Every Slack push title starts with this; disconnect finds Slack bell rows by it. */
+export const SLACK_TITLE_PREFIX = "Slack · ";
+
 export function slackPushTitle(kind: SlackConversationKind, language: string): string {
-  return `Slack · ${TITLES[resolveNotificationLanguage(language)][kind]}`;
+  return `${SLACK_TITLE_PREFIX}${TITLES[resolveNotificationLanguage(language)][kind]}`;
 }

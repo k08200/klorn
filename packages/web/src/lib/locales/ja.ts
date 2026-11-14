@@ -3089,6 +3089,7 @@ const ja: Record<string, string> = {
   "slack.error.not-started": "先に Slack の設定を開始してください。",
   "slack.error.rate-limited": "試行回数が多すぎます。しばらくしてからお試しください。",
   "slack.error.generic": "Slack の処理で問題が発生しました。もう一度お試しください。",
+  "slack.retry": "再試行",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "テキストでルールを編集",
   "rulesDsl.desc":

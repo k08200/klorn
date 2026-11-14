@@ -2881,6 +2881,7 @@ const zh: Record<string, string> = {
   "slack.error.not-started": "请先开始 Slack 设置。",
   "slack.error.rate-limited": "尝试次数过多，请稍后再试。",
   "slack.error.generic": "Slack 出了点问题，请重试。",
+  "slack.retry": "重试",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "以文本编辑规则",
   "rulesDsl.desc":

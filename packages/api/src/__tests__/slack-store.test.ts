@@ -30,7 +30,10 @@ const db = vi.hoisted(() => {
         deleteMany: vi.fn(async () => ({ count: 0 })),
         updateMany: vi.fn(async () => ({ count: 0 })),
       },
-      notification: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+      notification: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
       slackConnection: {
         findUnique: vi.fn(),
         create: vi.fn(),
@@ -387,6 +390,10 @@ describe("connection store", () => {
     expect(db.prisma.slackEpisode.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
     expect(db.prisma.slackConnection.update.mock.calls[0]?.[0]?.data.optInChannelIds).toEqual([]);
     expect(db.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.prisma.notification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", type: "slack" },
+    });
+    expect(slackCommitments.deleteSlackCommitments).toHaveBeenCalledWith("user-1");
   });
 
   it("refuses credentials before the connection was started", async () => {
@@ -421,6 +428,15 @@ describe("connection store", () => {
     });
     expect(db.prisma.notification.deleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1", type: "slack" },
+    });
+    // Spent interrupt slots stay (deleting one hands budget back) but lose the Slack text.
+    expect(db.prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        dedupeKey: { startsWith: "interrupt:" },
+        OR: [{ type: "slack" }, { title: { startsWith: "Slack · " } }],
+      },
+      data: { type: "claim", isRead: true, title: "", message: "", link: null },
     });
     expect(slackCommitments.deleteSlackCommitments).toHaveBeenCalledWith("user-1");
   });

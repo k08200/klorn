@@ -3188,6 +3188,7 @@ const de: Record<string, string> = {
   "slack.error.not-started": "Starte zuerst die Slack-Einrichtung.",
   "slack.error.rate-limited": "Zu viele Versuche. Versuche es später erneut.",
   "slack.error.generic": "Mit Slack ist etwas schiefgelaufen. Versuche es erneut.",
+  "slack.retry": "Erneut versuchen",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "Regeln als Text",
   "rulesDsl.desc":

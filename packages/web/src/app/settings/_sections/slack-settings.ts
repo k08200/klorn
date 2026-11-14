@@ -62,6 +62,7 @@ export function slackFailure(error: unknown): SlackFailure {
       ? body.scopes
           .filter((s): s is string => typeof s === "string")
           .slice(0, 20)
+          .map((s) => s.slice(0, 64))
           .join(", ")
       : "";
     return scopes

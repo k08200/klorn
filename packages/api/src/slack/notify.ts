@@ -6,6 +6,12 @@
  * urgent-interrupt category. The bell row's link is the Slack permalink; the
  * device push opens Today (service workers only open same-origin paths).
  * Held by the budget: a bell row the user can find later, no ring.
+ *
+ * Slack's share is bounded so other people's messages cannot crowd out mail:
+ * at most SLACK_RINGS_PER_DAY Slack rings a (UTC) day (past it, a bell row
+ * without a ring) and SLACK_BELL_ROWS_PER_DAY Slack bell rows (past it,
+ * nothing; the episode keeps its PUSH verdict). The budget's trusted reserve is never Slack's (trusted:
+ * false), so VIP mail always has room.
  */
 
 import { prisma } from "../db.js";
@@ -13,9 +19,16 @@ import type { SlackConversationKind } from "../judge/email-classifier.js";
 import { admitPushNotification } from "../judge/v3/push-budget-gate.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { slackPushContent } from "./push-content.js";
+import { SLACK_TITLE_PREFIX } from "./push-strings.js";
 import { isUniqueViolation } from "./unique-violation.js";
 
 export const SLACK_NOTIFICATION_TYPE = "slack";
+/** Slack rings a day: under the default stranger slots, so mail keeps at least one. */
+export const SLACK_RINGS_PER_DAY = 2;
+/** Slack bell rows a day (rung, held or quiet-hours), so the bell cannot be flooded. */
+export const SLACK_BELL_ROWS_PER_DAY = 20;
+const INTERRUPT_SLOT_PREFIX = "interrupt:";
+const DAY_MS = 86_400_000;
 /** Where a tap on the device push lands: Today, whose bell holds the Slack link. */
 export const SLACK_PUSH_OPEN_PATH = "/today";
 
@@ -29,7 +42,34 @@ export interface SlackPushInput {
   now?: Date;
 }
 
-export type SlackPushOutcome = "admitted" | "unbudgeted" | "held";
+export type SlackPushOutcome = "admitted" | "unbudgeted" | "held" | "capped";
+
+function utcDayStart(now: Date): Date {
+  return new Date(Math.floor(now.getTime() / DAY_MS) * DAY_MS);
+}
+
+/** Today's Slack bell rows: ones still typed slack, and slot rows a "Clear all" hid. */
+async function slackRowsToday(userId: string, now: Date): Promise<{ rows: number; rings: number }> {
+  const since = { gte: utcDayStart(now) };
+  const [rows, rings] = await Promise.all([
+    prisma.notification.count({
+      where: {
+        userId,
+        createdAt: since,
+        OR: [{ type: SLACK_NOTIFICATION_TYPE }, { title: { startsWith: SLACK_TITLE_PREFIX } }],
+      },
+    }),
+    prisma.notification.count({
+      where: {
+        userId,
+        createdAt: since,
+        dedupeKey: { startsWith: INTERRUPT_SLOT_PREFIX },
+        title: { startsWith: SLACK_TITLE_PREFIX },
+      },
+    }),
+  ]);
+  return { rows, rings };
+}
 
 async function writeHeldRow(
   userId: string,
@@ -83,6 +123,9 @@ async function ring(
 }
 
 export async function notifySlackPush(input: SlackPushInput): Promise<SlackPushOutcome> {
+  const now = input.now ?? new Date();
+  const today = await slackRowsToday(input.userId, now);
+  if (today.rows >= SLACK_BELL_ROWS_PER_DAY) return "capped";
   const language = await getUserNotificationLanguage(input.userId);
   const content = slackPushContent({
     kind: input.kind,
@@ -96,10 +139,14 @@ export async function notifySlackPush(input: SlackPushInput): Promise<SlackPushO
     message: content.body,
     ...(input.link ? { link: input.link } : {}),
   };
+  if (today.rings >= SLACK_RINGS_PER_DAY) {
+    await writeHeldRow(input.userId, input.episodeId, row);
+    return "held";
+  }
   const admission = await admitPushNotification(input.userId, row, {
     pinned: false,
     trusted: false,
-    now: input.now,
+    now,
   });
   if (admission.status === "held") {
     await writeHeldRow(input.userId, input.episodeId, row);

@@ -102,6 +102,18 @@ function ownerForCandidate(
   return candidate.owner;
 }
 
+/** Below the 0.7 confirmation line (pim/commitment-confirmation.ts). */
+const SLACK_MAX_CONFIDENCE = 0.69;
+
+/**
+ * Slack commitments stay suggested until the user confirms one
+ * (docs/providers/slack.md §10): Slack text is someone else's and may be
+ * written to steer the refiner, so it never lands as confirmed on its own.
+ */
+function capSuggested(input: CommitmentIngestionInput, confidence: number): number {
+  return input.sourceType === "SLACK" ? Math.min(confidence, SLACK_MAX_CONFIDENCE) : confidence;
+}
+
 function buildCommitmentInput(
   input: CommitmentIngestionInput,
   candidate: CommitmentCandidate,
@@ -125,7 +137,7 @@ function buildCommitmentInput(
     sourceId: input.sourceId,
     threadId: input.threadId ?? null,
     evidenceText: compactText(candidate.text, 500),
-    confidence: refinement?.confidence ?? confidenceForCandidate(candidate),
+    confidence: capSuggested(input, refinement?.confidence ?? confidenceForCandidate(candidate)),
     dedupKey,
   };
 }

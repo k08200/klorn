@@ -949,7 +949,7 @@ export async function judgeEmail(
         `[JUDGE] sender-facts grounded: llmTrust=${llm.features.senderTrust.toFixed(2)} history=${history} overrides=${senderFacts.manualOverrides} interaction=${senderFacts.interaction ? "yes" : "no"} commitments=${senderFacts.commitments ? `${senderFacts.commitments.onTime}/${senderFacts.commitments.total}` : "none"}`,
       );
     }
-    const features = applyRoutineConfirmationCap(email, llm.features);
+    const features = routineCapUnlessSlack(email, llm.features);
     const decided = decideTier(email, features);
     const scored = { tier: decided.tier, reason: modelReason(llm.reason) || decided.reason };
     const floored = slackOrFloored(email, scored);
@@ -984,7 +984,7 @@ function modelReason(reason: string | undefined): string {
  * before it in judgeEmail and is not part of it.
  */
 export function keywordFallbackJudgement(email: ClassifiableEmail): PocJudgement {
-  const features = applyRoutineConfirmationCap(email, keywordFeatures(email));
+  const features = routineCapUnlessSlack(email, keywordFeatures(email));
   const decided = decideTier(email, features);
   const floored = slackOrFloored(email, decided);
   return {
@@ -996,6 +996,11 @@ export function keywordFallbackJudgement(email: ClassifiableEmail): PocJudgement
     autoEligible:
       eligibleAfterFloor(decided.autoEligible, floored.tier) && !hasSpamLabel(email.labels),
   };
+}
+
+/** The routine sign-in-confirmation urgency cap is a mail heuristic; Slack keeps its scores. */
+function routineCapUnlessSlack(email: ClassifiableEmail, features: PocFeatures): PocFeatures {
+  return email.slack ? features : applyRoutineConfirmationCap(email, features);
 }
 
 /**
@@ -1042,11 +1047,14 @@ function decideTier(
   features: PocFeatures,
 ): { tier: Tier; reason: string; autoEligible: boolean; rule?: TierRuleV2 } {
   if (tierV2Enabled()) {
+    // The scheduling / transactional detectors read mail shapes (invite
+    // wording, meeting links, receipts); on a Slack episode a pasted Zoom link
+    // would pre-empt an urgent PUSH, so Slack is decided by its scores alone.
     return tierFromFeaturesV2(
       features,
       {
-        scheduling: detectSchedulingIntent(email),
-        transactional: detectTransactionalNotice(email),
+        scheduling: email.slack ? false : detectSchedulingIntent(email),
+        transactional: email.slack ? false : detectTransactionalNotice(email),
       },
       getEffectiveThresholds(),
     );

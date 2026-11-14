@@ -100,6 +100,29 @@ describe("extractAndUpsertCommitmentsFromText", () => {
     );
   });
 
+  it("keeps a Slack commitment suggested even when the refiner is sure of it", async () => {
+    mocks.refinerEnabledMock.mockReturnValue(true);
+    mocks.refineMock.mockResolvedValue({
+      isCommitment: true,
+      title: "Send the deck",
+      kind: "DELIVERABLE",
+      owner: "COUNTERPARTY",
+      counterpartyName: null,
+      dueText: null,
+      dueAt: null,
+      confidence: 0.95,
+    });
+    await extractAndUpsertCommitmentsFromText({
+      userId: "user-1",
+      sourceType: "SLACK",
+      sourceId: "D0DM:1763100000.000100",
+      text: "I'll send the deck tomorrow.",
+      senderIsUser: false,
+    });
+    const input = mocks.upsertCommitmentMock.mock.calls[0]?.[1] as { confidence: number };
+    expect(input.confidence).toBeLessThan(0.7);
+  });
+
   it("uses deterministic dedup keys so repeated ingestion is counted as duplicate", async () => {
     const input = {
       userId: "user-1",

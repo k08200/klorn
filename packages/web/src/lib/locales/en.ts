@@ -3064,6 +3064,7 @@ const en: Record<string, string> = {
   "slack.error.not-started": "Start the Slack setup first.",
   "slack.error.rate-limited": "Too many attempts. Try again later.",
   "slack.error.generic": "Something went wrong with Slack. Try again.",
+  "slack.retry": "Try again",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "Rules as text",
   "rulesDsl.desc":

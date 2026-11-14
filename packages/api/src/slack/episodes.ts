@@ -33,7 +33,7 @@ export const SLACK_MAX_MESSAGES_PER_HOUR = 300;
 export const SLACK_MAX_LIVE_MESSAGES = 3000;
 const HOUR_MS = 3_600_000;
 
-export type EpisodeStatus = "OPEN" | "JUDGING" | "JUDGED" | "ANSWERED";
+export type EpisodeStatus = "OPEN" | "JUDGING" | "JUDGED" | "ANSWERED" | "EMPTY" | "OVER_CAP";
 export type IngestResult = "stored" | "duplicate" | "capped";
 
 export interface SlackIngestInput {

@@ -8,9 +8,15 @@
  *
  * Off while SLACK_ENABLED is off or BACKGROUND_AGENTS_DISABLED is set (the
  * LLM brake). Cohort-aware. At most SLACK_JUDGED_EPISODES_PER_DAY episodes per
- * connection a day reach the judge; past it an episode is closed OVER_CAP
- * without an LLM call — the signing secret is the user's own, so the episode
- * count is theirs to inflate.
+ * connection a day reach the judge, of which followed-channel chatter may use
+ * SLACK_OPT_IN_EPISODES_PER_DAY (DMs and mentions keep the rest); past it an
+ * episode is closed OVER_CAP without an LLM call.
+ *
+ * Order per episode: the verdict is stored first (guarded on the claim, so a
+ * disconnect mid-judge writes nothing), then the ring and the commitments run
+ * best-effort — a failure in either never rewrites the verdict, and a retaken
+ * claim can never ring twice. Episodes older than SLACK_RING_RECENCY_MS (after
+ * an outage or the brake) are judged but do not ring.
  */
 
 import { cohortRestriction, SLACK_FLAGS } from "../config.js";
@@ -27,6 +33,10 @@ import { slackPermalink } from "./permalink.js";
 export const SLACK_JUDGE_BATCH = 10;
 /** Episodes per connection per UTC day that reach the LLM judge. */
 export const SLACK_JUDGED_EPISODES_PER_DAY = 200;
+/** Of those, how many followed-channel (opt-in) episodes may use. */
+export const SLACK_OPT_IN_EPISODES_PER_DAY = 120;
+/** A PUSH verdict on talk older than this does not ring (mail uses the same 6 h). */
+export const SLACK_RING_RECENCY_MS = 6 * 3_600_000;
 /** A JUDGING claim older than this belongs to a crashed tick and is retried. */
 export const SLACK_CLAIM_TIMEOUT_MS = 10 * 60_000;
 const LOG_PREFIX = "[SLACK]";
@@ -41,6 +51,7 @@ type ReadyEpisode = {
   threadKey: string;
   mentionsUser: boolean;
   firstTs: string;
+  lastMessageAt: Date;
   connection: { workspaceUrl: string | null };
 };
 
@@ -53,6 +64,7 @@ const READY_SELECT = {
   threadKey: true,
   mentionsUser: true,
   firstTs: true,
+  lastMessageAt: true,
   connection: { select: { workspaceUrl: true } },
 } as const;
 
@@ -89,61 +101,81 @@ async function claim(episodeId: string, now: Date): Promise<boolean> {
   return count === 1;
 }
 
-async function overDailyCap(connectionId: string, now: Date): Promise<boolean> {
+const OPT_IN_WHERE = { channelType: { in: ["channel", "group"] }, mentionsUser: false };
+
+async function overDailyCap(episode: ReadyEpisode, now: Date): Promise<boolean> {
   const dayStart = new Date(Math.floor(now.getTime() / DAY_MS) * DAY_MS);
-  const judged = await prisma.slackEpisode.count({
-    where: { connectionId, status: "JUDGED", judgedAt: { gte: dayStart } },
-  });
-  return judged >= SLACK_JUDGED_EPISODES_PER_DAY;
+  const judgedToday = {
+    connectionId: episode.connectionId,
+    status: "JUDGED",
+    judgedAt: { gte: dayStart },
+  };
+  const total = await prisma.slackEpisode.count({ where: judgedToday });
+  if (total >= SLACK_JUDGED_EPISODES_PER_DAY) return true;
+  if (slackConversationKind(episode.channelType, episode.mentionsUser) !== "opt_in") return false;
+  const optIn = await prisma.slackEpisode.count({ where: { ...judgedToday, ...OPT_IN_WHERE } });
+  return optIn >= SLACK_OPT_IN_EPISODES_PER_DAY;
 }
 
-async function close(episodeId: string, status: "EMPTY" | "OVER_CAP", now: Date): Promise<void> {
-  await prisma.slackEpisode.update({ where: { id: episodeId }, data: { status, judgedAt: now } });
+/** Writes an outcome only while this tick still holds the claim; false if it lost it. */
+async function settle(episodeId: string, data: Record<string, unknown>): Promise<boolean> {
+  const { count } = await prisma.slackEpisode.updateMany({
+    where: { id: episodeId, status: "JUDGING" },
+    data,
+  });
+  return count === 1;
 }
 
-async function judgeOne(episode: ReadyEpisode, now: Date): Promise<void> {
-  const messages = await prisma.slackMessage.findMany({
-    where: { episodeId: episode.id },
-    orderBy: { ts: "asc" },
-    select: { text: true, ts: true, threadTs: true },
-  });
-  if (messages.length === 0) return close(episode.id, "EMPTY", now);
-  if (await overDailyCap(episode.connectionId, now)) return close(episode.id, "OVER_CAP", now);
-  const verdict = await judgeSlackEpisode({
-    userId: episode.userId,
-    channelType: episode.channelType,
-    mentionsUser: episode.mentionsUser,
-    messages,
-  });
-  const first = messages[0];
-  const notified =
-    verdict.tier === "PUSH" && first
-      ? await notifySlackPush({
-          userId: episode.userId,
-          episodeId: episode.id,
-          kind: slackConversationKind(episode.channelType, episode.mentionsUser),
-          preview: first.text,
-          reason: verdict.reason,
-          link: slackPermalink(
-            episode.connection.workspaceUrl,
-            episode.channelId,
-            first.ts,
-            first.threadTs,
-          ),
-          now,
-        })
-      : null;
-  await prisma.slackEpisode.update({
-    where: { id: episode.id },
-    data: {
-      status: "JUDGED",
-      tier: verdict.tier,
+async function ringIfPush(
+  episode: ReadyEpisode,
+  verdict: { tier: string; reason: string },
+  first: { text: string; ts: string; threadTs: string | null },
+  tickNow: Date,
+): Promise<void> {
+  if (verdict.tier !== "PUSH") return;
+  if (tickNow.getTime() - episode.lastMessageAt.getTime() > SLACK_RING_RECENCY_MS) return;
+  // Quiet hours, focus and the budget day are read at ring time, not tick start.
+  const now = new Date();
+  try {
+    const outcome = await notifySlackPush({
+      userId: episode.userId,
+      episodeId: episode.id,
+      kind: slackConversationKind(episode.channelType, episode.mentionsUser),
+      preview: first.text,
       reason: verdict.reason,
-      judgedAt: now,
-      ...(notified ? { notifiedAt: now } : {}),
-    },
-  });
-  if (verdict.tier !== "SILENT") {
+      link: slackPermalink(
+        episode.connection.workspaceUrl,
+        episode.channelId,
+        first.ts,
+        first.threadTs,
+      ),
+      now,
+    });
+    if (outcome === "admitted") {
+      await prisma.slackEpisode.updateMany({
+        where: { id: episode.id },
+        data: { notifiedAt: now },
+      });
+    }
+  } catch (err) {
+    console.error(
+      `${LOG_PREFIX} ringing an episode failed:`,
+      err instanceof Error ? err.name : err,
+    );
+    captureError(err, { tags: { scope: "slack.notify" } });
+  }
+}
+
+/** Followed-channel chatter between other people is not the user's ledger. */
+async function commitmentsIfDirect(
+  episode: ReadyEpisode,
+  tier: string,
+  messages: ReadonlyArray<{ text: string }>,
+  now: Date,
+): Promise<void> {
+  const kind = slackConversationKind(episode.channelType, episode.mentionsUser);
+  if (tier === "SILENT" || kind === "opt_in") return;
+  try {
     await extractSlackCommitments({
       userId: episode.userId,
       channel: episode.channelId,
@@ -152,7 +184,39 @@ async function judgeOne(episode: ReadyEpisode, now: Date): Promise<void> {
       text: slackEpisodeText(messages),
       referenceDate: now,
     });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} commitments failed:`, err instanceof Error ? err.name : err);
+    captureError(err, { tags: { scope: "slack.commitments" } });
   }
+}
+
+async function judgeOne(episode: ReadyEpisode, now: Date): Promise<void> {
+  const messages = await prisma.slackMessage.findMany({
+    where: { episodeId: episode.id },
+    orderBy: { ts: "asc" },
+    select: { text: true, ts: true, threadTs: true },
+  });
+  const first = messages[0];
+  if (!first) return void (await settle(episode.id, { status: "EMPTY", judgedAt: now }));
+  if (await overDailyCap(episode, now)) {
+    return void (await settle(episode.id, { status: "OVER_CAP", judgedAt: now }));
+  }
+  const verdict = await judgeSlackEpisode({
+    userId: episode.userId,
+    channelType: episode.channelType,
+    mentionsUser: episode.mentionsUser,
+    messages,
+  });
+  if (!verdict) return void (await settle(episode.id, { status: "EMPTY", judgedAt: now }));
+  const kept = await settle(episode.id, {
+    status: "JUDGED",
+    tier: verdict.tier,
+    reason: verdict.reason,
+    judgedAt: now,
+  });
+  if (!kept) return;
+  await ringIfPush(episode, verdict, first, now);
+  await commitmentsIfDirect(episode, verdict.tier, messages, now);
 }
 
 /** A failed judgment lands in QUEUE (the default lane) rather than retrying forever. */
@@ -165,10 +229,12 @@ async function judgeOrQueue(episode: ReadyEpisode, now: Date): Promise<void> {
       err instanceof Error ? err.name : err,
     );
     captureError(err, { tags: { scope: "slack.judge" } });
-    await prisma.slackEpisode.update({
-      where: { id: episode.id },
-      data: { status: "JUDGED", tier: "QUEUE", reason: "Could not be judged", judgedAt: now },
-    });
+    await settle(episode.id, {
+      status: "JUDGED",
+      tier: "QUEUE",
+      reason: "Could not be judged",
+      judgedAt: now,
+    }).catch((settleErr) => captureError(settleErr, { tags: { scope: "slack.judge" } }));
   }
 }
 

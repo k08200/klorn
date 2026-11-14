@@ -31,13 +31,20 @@ type Connected = Exclude<SlackConnectionStatus, { state: "none" }>;
 
 function useSlackStatus(enabled: boolean) {
   const [status, setStatus] = useState<SlackConnectionStatus | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const reload = useCallback(async () => {
-    setStatus(await apiFetch<SlackConnectionStatus>("/api/slack/connection"));
+    setLoadFailed(false);
+    try {
+      setStatus(await apiFetch<SlackConnectionStatus>("/api/slack/connection"));
+    } catch {
+      // Not "none": a transient failure must not offer "Start setup" to a connected user.
+      setLoadFailed(true);
+    }
   }, []);
   useEffect(() => {
-    if (enabled) reload().catch(() => setStatus({ state: "none" }));
+    if (enabled) void reload();
   }, [enabled, reload]);
-  return { status, setStatus, reload };
+  return { status, setStatus, reload, loadFailed };
 }
 
 function SetupSteps({
@@ -62,7 +69,9 @@ function SetupSteps({
       a.href = url;
       a.download = "klorn-slack-manifest.yaml";
       a.click();
-      URL.revokeObjectURL(url);
+      // Revoked after the click has been handled: an immediate revoke can cancel
+      // the download in Safari and Firefox.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (err) {
       const failure = slackFailure(err);
       toast(t(failure.key, failure.vars), "error");
@@ -77,13 +86,14 @@ function SetupSteps({
         body: JSON.stringify({ signingSecret: secret, userToken: token }),
       });
       setSecret("");
-      setToken("");
       onSaved(next);
       toast(t("slack.connected"), "success");
     } catch (err) {
       const failure = slackFailure(err);
       toast(t(failure.key, failure.vars), "error");
     } finally {
+      // The token is never kept in state past the attempt, success or not.
+      setToken("");
       setBusy(false);
     }
   };
@@ -126,14 +136,16 @@ function SetupSteps({
         <Input
           label={t("slack.signingSecret")}
           type="password"
-          autoComplete="off"
+          autoComplete="new-password"
+          data-1p-ignore
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
         />
         <Input
           label={t("slack.userToken")}
           type="password"
-          autoComplete="off"
+          autoComplete="new-password"
+          data-1p-ignore
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
@@ -223,10 +235,21 @@ export function SlackPanel() {
   const { toast } = useToast();
   const { confirm } = useConfirm();
   const visible = slackPanelVisible(user);
-  const { status, setStatus } = useSlackStatus(visible);
+  const { status, setStatus, reload, loadFailed } = useSlackStatus(visible);
   const [busy, setBusy] = useState(false);
 
-  if (!visible || status === null) return null;
+  if (!visible) return null;
+  if (loadFailed) {
+    return (
+      <section className={`${PANEL} mb-8 flex items-center justify-between gap-4 p-4`}>
+        <p className="text-role-body text-ink-mid">{t("slack.error.generic")}</p>
+        <Button variant="secondary" onClick={() => void reload()}>
+          {t("slack.retry")}
+        </Button>
+      </section>
+    );
+  }
+  if (status === null) return null;
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -291,7 +314,13 @@ export function SlackPanel() {
                 <SetupSteps status={status} onSaved={setStatus} />
               </details>
             )}
-            {status.state === "connected" && <ChannelOptIn status={status} onSaved={setStatus} />}
+            {status.state === "connected" && (
+              <ChannelOptIn
+                key={status.optInChannelIds.join(",")}
+                status={status}
+                onSaved={setStatus}
+              />
+            )}
           </>
         )}
       </div>

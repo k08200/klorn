@@ -7,6 +7,7 @@
  * mocked and its prompt captured.
  */
 
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCompletionMock = vi.hoisted(() => vi.fn());
@@ -115,6 +116,26 @@ describe("judgeEmail — Slack source", () => {
     for (const judgement of [llm, fallback]) {
       expect(LIVE_TIERS as readonly string[]).toContain(judgement.tier);
     }
+  });
+
+  it("a pasted meeting link never pre-empts an urgent Slack PUSH (mail scheduling heuristics are off)", async () => {
+    const judgement = await judgeEmail(
+      { ...SLACK, body: "prod is down, join zoom.us/j/123 now, meeting invite inside" },
+      "user-1",
+      EMPTY_JUDGE_CONTEXT,
+    );
+    expect(judgement.tier).toBe("PUSH");
+  });
+
+  it("pins the exact email prompt bytes (cache keys and the eval gate depend on them)", async () => {
+    vi.stubEnv("JUDGE_INCLUDE_BODY", "false");
+    await judgeEmail(
+      { from: "Alice <alice@company.com>", subject: "Q3 numbers", snippet: "attached, by Friday" },
+      "user-1",
+      EMPTY_JUDGE_CONTEXT,
+    );
+    const digest = createHash("sha256").update(JSON.stringify(prompts()[0])).digest("hex");
+    expect(digest).toBe("8f64dee3e82de3f08d8e46c65fcd1f6ccd8ed2bef38285fb072b56834e6e7cbf");
   });
 
   it("leaves the email prompt as it was: no Slack wording without a Slack source", async () => {

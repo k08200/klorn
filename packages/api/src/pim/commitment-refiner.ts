@@ -197,10 +197,11 @@ export async function maybeRefineCommitmentCandidateWithLlm(
   } catch (err) {
     captureError(err, {
       tags: { scope: "commitment.llm_refinement" },
+      // Sizes only: the text is someone else's mail or Slack message.
       extra: {
         sourceType: input.sourceType,
-        contextTitle: input.contextTitle,
-        candidateText: input.candidate.text,
+        contextTitleLength: input.contextTitle?.length ?? 0,
+        candidateTextLength: input.candidate.text.length,
       },
     });
     return null;
