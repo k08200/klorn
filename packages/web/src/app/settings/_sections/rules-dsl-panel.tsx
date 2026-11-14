@@ -278,16 +278,17 @@ function ErrorList({
       <ul className="space-y-1">
         {errors.map((error) => (
           <li key={`${error.line}:${error.column}:${error.code}`}>
-            <button
-              type="button"
-              onClick={() => onPick(error)}
-              className="min-h-11 w-full rounded-control px-2 py-1 text-left text-role-body text-ink hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-            >
-              <span className="font-mono text-ink-mid">
-                {t("rulesDsl.errorAt", { line: String(error.line), column: String(error.column) })}
-              </span>{" "}
-              {error.message}
-            </button>
+            <Button variant="ghost" size="lg" onClick={() => onPick(error)} className="w-full">
+              <span className="block w-full text-left">
+                <span className="font-mono text-ink-mid">
+                  {t("rulesDsl.errorAt", {
+                    line: String(error.line),
+                    column: String(error.column),
+                  })}
+                </span>{" "}
+                {error.message}
+              </span>
+            </Button>
           </li>
         ))}
       </ul>
