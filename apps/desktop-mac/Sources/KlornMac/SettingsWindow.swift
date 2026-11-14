@@ -4,11 +4,12 @@ import SwiftUI
 /// One existing Preferences section. The Settings window regroups these into
 /// tabs; it adds no new settings (productization plan, macOS M0).
 enum PrefsSection: CaseIterable, Hashable, Sendable {
-    case general, support, keyboard, about
+    /// General (M4): login item, theme + language, the Dock badge, then the
+    /// app chrome that was already there.
+    case startup, appearance, dock, updates, keyboard, support, about
     case account, inboxes, deviceCalendars, driveImport
     case mode, behaviour, replies
     case banners, interrupts
-    case appearance, language
     case mail
 
     /// Server-backed sections only make sense with an account behind them.
@@ -20,15 +21,16 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
     }
 }
 
-/// The Settings window's tabs, in display order. Groups follow the settings
-/// IA in `docs/design/productization-plan.md` §1 (labels shortened to one
-/// word each so six toolbar tabs fit) for the groups the Mac app
+/// The Settings window's tabs, in display order (M4, 2026-11-13, LOCKED):
+/// five, with Appearance folded into General. Groups follow the settings
+/// IA in `docs/design/productization-plan.md` §1 for the groups the Mac app
 /// already has; plan groups with no Mac settings yet (Lanes & rules, Team,
 /// Integrations, billing) are deliberately absent rather than shown empty.
 /// `general` is the macOS-convention home for app chrome (login item,
-/// updates, app & support, hotkey, about), which the web IA has no slot for.
+/// theme, language, Dock badge, updates, hotkey, support, about), which the
+/// web IA has no slot for.
 enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
-    case general, accounts, assistant, notifications, appearance, privacy
+    case general, accounts, notifications, assistant, privacy
 
     /// The defaults key of the selected tab (the Settings window and the D7 import share it).
     static let storageKey = "settings.selectedTab"
@@ -40,21 +42,19 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
-        case .accounts: "person.crop.circle"
-        case .assistant: "sparkles"
-        case .notifications: "bell.badge"
-        case .appearance: "paintbrush"
-        case .privacy: "hand.raised"
+        case .accounts: "at"
+        case .notifications: "bell"
+        case .assistant: "text.bubble"
+        case .privacy: "lock"
         }
     }
 
     var sections: [PrefsSection] {
         switch self {
-        case .general: [.general, .support, .keyboard, .about]
+        case .general: [.startup, .appearance, .dock, .updates, .keyboard, .support, .about]
         case .accounts: [.account, .inboxes, .deviceCalendars, .driveImport]
-        case .assistant: [.mode, .behaviour, .replies]
         case .notifications: [.banners, .interrupts]
-        case .appearance: [.appearance, .language]
+        case .assistant: [.mode, .behaviour, .replies]
         case .privacy: [.mail]
         }
     }
@@ -65,20 +65,32 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// The persisted selection, falling back to the first tab for a value
-    /// written by a build that had a tab this one no longer has.
+    /// written by a build that had a tab this one no longer has — including
+    /// "appearance", whose settings now live in General (M4).
     static func restored(_ raw: String) -> SettingsTab {
         SettingsTab(rawValue: raw) ?? .general
     }
+
+    /// The stored value rewritten to a tab this build has, so the defaults
+    /// stop carrying a retired tab name ("appearance" → "general").
+    static func migratedRaw(_ raw: String) -> String {
+        restored(raw).rawValue
+    }
 }
 
-/// Fixed Settings window size. Every tab scrolls inside it, so content can
-/// never grow the window (the content-overflow clipping lesson, 2026-08-20),
-/// and the height fits the smallest supported display's visible area.
+/// Settings window size. The width is fixed; the height fits the selected
+/// pane (M4) between a floor and a cap, and a pane taller than the cap
+/// scrolls inside it, so content can never grow the window past the
+/// smallest supported display (the content-overflow clipping lesson,
+/// 2026-08-20).
 enum SettingsMetrics {
-    /// Wide enough for all six toolbar tabs in the longest locale (de/fr)
+    /// Wide enough for every toolbar tab in the longest locale (de/fr)
     /// without the overflow chevron hiding the last tab (probe, 2026-10-02).
     static let width: CGFloat = 620
-    static let height: CGFloat = 560
+    /// A near-empty pane (signed out) still reads as a window.
+    static let minHeight: CGFloat = 220
+    /// The tallest a pane grows before it scrolls.
+    static let maxHeight: CGFloat = 560
     /// Title bar + toolbar tab strip above the content, approximately.
     static let chromeHeight: CGFloat = 90
     /// Visible height of a 1280×800 display minus menu bar and Dock.
@@ -90,6 +102,8 @@ struct SettingsRoot: View {
     @Environment(AppModel.self) private var model
     @AppStorage(SettingsTab.storageKey) private var selectedRaw = SettingsTab.general.rawValue
 
+    private var selected: SettingsTab { SettingsTab.restored(selectedRaw) }
+
     var body: some View {
         tabs
             // L() is not observable; rebuild the tabs on a language change
@@ -97,25 +111,42 @@ struct SettingsRoot: View {
             // Scoped to the tabs only, so the window tracker below is never
             // torn down by a language switch.
             .id(model.settings.languageRevision)
-            .frame(width: SettingsMetrics.width, height: SettingsMetrics.height)
+            // Width only: each pane fixes its own height (PreferencesView),
+            // and the Settings window resizes to the selected one.
+            .frame(width: SettingsMetrics.width)
+            // A retired tab name ("appearance") is rewritten once (M4).
+            .onAppear {
+                let migrated = SettingsTab.migratedRaw(selectedRaw)
+                if migrated != selectedRaw { selectedRaw = migrated }
+            }
             // Open/closed comes from the real NSWindow, not view lifecycle:
             // SwiftUI may keep this content alive after the window closes,
-            // so onDisappear is not a close signal.
-            .background(SettingsWindowTracker { open in model.settingsWindowOpen = open })
+            // so onDisappear is not a close signal. The tracker also names
+            // the window after the selected pane (M4).
+            .background(SettingsWindowTracker(title: selected.title) { open in
+                model.settingsWindowOpen = open
+            })
     }
 
     private var tabs: some View {
         TabView(selection: Binding(
-            get: { SettingsTab.restored(selectedRaw) },
+            get: { selected },
             set: { selectedRaw = $0.rawValue })
         ) {
             ForEach(SettingsTab.allCases) { tab in
-                PreferencesView(tab: tab)
+                tab.pane
                     .tabItem { Label(tab.title, systemImage: tab.systemImage) }
                     .tag(tab)
             }
         }
     }
+}
+
+extension SettingsTab {
+    /// The tab's pane. The one place a PreferencesView is made, so the
+    /// window, the self-check's measurement and the preview shots draw the
+    /// same view.
+    @MainActor var pane: some View { PreferencesView(tab: self) }
 }
 
 /// What happened to the Settings window, as the tracker sees it.
@@ -142,20 +173,28 @@ extension SettingsWindowEvent {
 /// Reports the Settings window's open/closed state from the NSWindow that
 /// actually hosts the scene content (no private identifiers, no timers).
 struct SettingsWindowTracker: NSViewRepresentable {
+    /// The selected pane's name, shown as the window title (M4).
+    let title: String
     let onChange: @MainActor (Bool) -> Void
 
     func makeNSView(context: Context) -> TrackingView {
         let view = TrackingView()
         view.onChange = onChange
+        view.title = title
         return view
     }
 
     func updateNSView(_ view: TrackingView, context: Context) {
         view.onChange = onChange
+        view.title = title
     }
 
     final class TrackingView: NSView {
         var onChange: (@MainActor (Bool) -> Void)?
+        /// Applied to the hosting window now and whenever it changes.
+        var title = "" {
+            didSet { applyTitle() }
+        }
         private var isOpen = false
         nonisolated(unsafe) private var tokens: [NSObjectProtocol] = []
 
@@ -177,6 +216,12 @@ struct SettingsWindowTracker: NSViewRepresentable {
                 }
             }
             apply(.attached(visible: window.isVisible))
+            applyTitle()
+        }
+
+        private func applyTitle() {
+            guard let window, !title.isEmpty, window.title != title else { return }
+            window.title = title
         }
 
         private func handle(_ name: Notification.Name) {

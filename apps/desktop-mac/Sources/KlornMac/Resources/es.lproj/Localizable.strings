@@ -117,17 +117,13 @@
 /* Preferences — shell */
 "prefs.title" = "Preferencias";
 "prefs.section.notifications" = "NOTIFICACIONES";
-"prefs.section.general" = "GENERAL";
-"prefs.section.keyboard" = "TECLADO";
-"prefs.section.language" = "IDIOMA";
 "prefs.section.account" = "CUENTA";
-"prefs.section.about" = "ACERCA DE";
 
 "prefs.banners" = "Mostrar avisos de macOS en este Mac";
 "prefs.banners.detail" = "Un aviso por cada correo PUSH o MEETING nuevo, solo con el remitente y el asunto. Interruptor general local: desactivado, silencia todos los avisos aquí sin importar las categorías de arriba; el recuento de PUSH de la ventana principal se sigue actualizando.";
 "prefs.banners.denied" = "macOS está bloqueando las notificaciones de Klorn. Permítelas en Ajustes del Sistema ▸ Notificaciones.";
 "prefs.banners.openSystemSettings" = "Abrir Ajustes del Sistema";
-"prefs.dockBadge" = "Mostrar el número en el icono del Dock";
+"prefs.dockBadge" = "Mostrar el número de «Te necesita ahora»";
 "prefs.dockBadge.detail" = "El número de correos urgentes que esperan en Hoy. Las horas de silencio no lo ocultan: no suena ni muestra banners.";
 "loginPrompt.title" = "¿Mantener Klorn en segundo plano?";
 "loginPrompt.body" = "Klorn solo puede avisarte de correos urgentes mientras está abierto. Ábrelo al iniciar sesión para no perderte nada después de reiniciar.";
@@ -364,12 +360,10 @@
 "a11y.collapsed" = "Plegado";
 
 /* Mail remote-content privacy toggle (2026-08-14) */
-"prefs.section.mail" = "CORREO";
 "prefs.remoteImages" = "Cargar imágenes remotas en el correo";
 "prefs.remoteImages.detail" = "Al desactivarlo se bloquea toda petición de red mientras lees el correo, incluidos los píxeles de seguimiento. Las imágenes incrustadas siguen funcionando.";
 
 /* Appearance (2026-08-15) */
-"prefs.section.appearance" = "APARIENCIA";
 "prefs.appearance" = "Tema";
 "prefs.appearance.detail" = "«Sistema» sigue a macOS y se actualiza al momento.";
 "appearance.system" = "Sistema";
@@ -447,7 +441,6 @@
 "compose.needsPro" = "Enviar correo requiere el plan Pro.";
 
 /* Assistant dock */
-"assistant.dock.toggle" = "Asistente (⌘J)";
 "assistant.dock.close.a11y" = "Cerrar el asistente";
 "assistant.dock.context.a11y" = "Preguntando sobre: %@";
 
@@ -587,7 +580,6 @@
 "settings.tab.accounts" = "Cuentas";
 "settings.tab.assistant" = "Asistente";
 "settings.tab.notifications" = "Notificaciones";
-"settings.tab.appearance" = "Apariencia";
 "settings.tab.privacy" = "Privacidad";
 "settings.signedOutNote" = "Inicia sesión en Klorn para ver estos ajustes.";
 "menu.message" = "Mensaje";
@@ -802,3 +794,17 @@
 "chat.send.failed" = "No se pudo conectar con Klorn: %@";
 "chat.event.failed" = "No se pudo crear el evento: %@";
 "commitments.needsPro" = "Los compromisos requieren Klorn Pro.";
+
+/* M3/M4 (2026-11-13): assistant toolbar panel, grouped General settings */
+"assistant.toolbar.label" = "Asistente";
+"assistant.toolbar.help" = "Mostrar u ocultar el asistente (⌘J)";
+"menu.assistant.show" = "Mostrar asistente";
+"menu.assistant.hide" = "Ocultar asistente";
+"prefs.group.startup" = "Inicio";
+"prefs.group.appearance" = "Apariencia";
+"prefs.group.dock" = "Dock";
+"prefs.group.updates" = "Actualizaciones";
+"prefs.group.keyboard" = "Teclado";
+"prefs.group.support" = "Soporte";
+"prefs.group.about" = "Acerca de";
+"prefs.group.mail" = "Correo";

@@ -48,9 +48,7 @@ struct TodayScreen: View {
                     // the content out directly and cut it at the frame.
                     Color.clear.overlay(alignment: .topLeading) { ready }.clipped()
                 } else {
-                    // The bottom clears the floating assistant button, so
-                    // the last rail card is never stuck under it.
-                    ScrollView { ready.padding(.bottom, AssistantDock.contentClearance) }
+                    ScrollView { ready }
                 }
             }
         }

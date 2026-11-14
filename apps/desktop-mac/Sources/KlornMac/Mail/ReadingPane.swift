@@ -233,7 +233,7 @@ struct ReadingPane: View {
                         showingPreparedDraft = false
                         Task { if let d = await model.draftReply(item) { replyText = d } }
                     } label: {
-                        Label(L("reading.regenerate"), systemImage: "sparkles").font(m.caption)
+                        Label(L("reading.regenerate"), systemImage: "arrow.clockwise").font(m.caption)
                     }
                     .buttonStyle(.plain).foregroundStyle(Theme.accent)
                     .help(L("reading.regenerate.help"))
@@ -695,7 +695,7 @@ enum ReaderActionRules {
     static let controlSize: ControlSize = .regular
     /// Widest first: the row takes the first that fits the pane.
     static let densities: [ReaderActionDensity] = [.full, .primaryLabel, .icons]
-    static let replyIcon = "sparkles"
+    static let replyIcon = "arrowshape.turn.up.left"
     static let draftIcon = "doc.text"
     static let snoozeIcon = "clock"
     static let moveIcon = "arrow.left.arrow.right"

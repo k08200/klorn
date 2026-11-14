@@ -220,6 +220,10 @@ struct KlornCommands: Commands {
         CommandGroup(after: .textEditing) {
             CommandButton(model: model, command: .find, title: L("menu.find"), perform: perform)
         }
+        // View ▸ Show/Hide Assistant, ⌘J: the toolbar button's key (M3).
+        CommandGroup(after: .toolbar) {
+            AssistantPanelMenuItem(model: model)
+        }
         CommandMenu(L("menu.message")) {
             CommandButton(
                 model: model, command: .reply, title: L("reading.replyWithAI"), perform: perform)
@@ -259,6 +263,21 @@ private struct GoMenuItems: View {
                     shortcut: MenuRules.mainWindowShortcut(for: .go(mode)))
             }
         }
+    }
+}
+
+/// View ▸ Show / Hide Assistant (⌘J): the same toggle as the main window's
+/// "Assistant" toolbar button (M3). A View so the title and enablement
+/// follow the model.
+private struct AssistantPanelMenuItem: View {
+    let model: AppModel
+
+    var body: some View {
+        Button(model.assistantPanelVisible ? L("menu.assistant.hide") : L("menu.assistant.show")) {
+            model.showAssistantPanel.toggle()
+        }
+        .keyboardShortcut(KeyboardShortcut("j", modifiers: .command))
+        .disabled(!model.mainWindowOpen || !model.canToggleAssistantPanel)
     }
 }
 

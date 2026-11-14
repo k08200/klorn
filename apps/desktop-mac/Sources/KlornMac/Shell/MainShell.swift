@@ -37,16 +37,18 @@ struct MainShell: View {
                         // A zone the web pins (or un-pins) redraws every time.
                         .id(model.displayTimeZoneID ?? "")
                 }
+                // The assistant keeps the mail or the day on screen beside
+                // it (M3): a trailing column, toggled from the toolbar / ⌘J.
+                if model.assistantPanelVisible {
+                    AssistantPanel()
+                        .ignoresSafeArea(.container, edges: .top)
+                }
             }
             // Keyboard focus must not wander behind a modal.
             .disabled(model.fullViewModalOpen)
             .onAppear {
                 model.presentTierGuideIfFirstRun()
                 model.presentPurposePromptIfNeeded()
-            }
-            if showsDock {
-                AssistantDock()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
         .frame(
@@ -55,13 +57,6 @@ struct MainShell: View {
         // No overlay layer here: the guide, the event editor and the
         // connect-time question are native sheets on the window (M5,
         // `MainWindowController.syncSheet`); the composer is its own window.
-    }
-
-    /// The dock keeps the assistant one click away with the mail or the day
-    /// still on screen. Assistant has the thread itself, so no dock there.
-    private var showsDock: Bool {
-        model.phase == .signedIn && !model.fullViewModalOpen
-            && model.mainNav.section != .assistant
     }
 
     @ViewBuilder

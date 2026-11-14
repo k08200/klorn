@@ -117,17 +117,13 @@
 /* Preferences — shell */
 "prefs.title" = "환경설정";
 "prefs.section.notifications" = "알림";
-"prefs.section.general" = "일반";
-"prefs.section.keyboard" = "키보드";
-"prefs.section.language" = "언어";
 "prefs.section.account" = "계정";
-"prefs.section.about" = "정보";
 
 "prefs.banners" = "이 Mac에서 macOS 배너 표시";
 "prefs.banners.detail" = "새 PUSH·MEETING 메일마다 보낸 사람과 제목만 담은 배너를 띄웁니다. 이 Mac에만 적용되는 마스터 스위치로, 끄면 위 항목 설정과 무관하게 배너가 모두 사라지며 메인 창의 PUSH 개수는 계속 갱신됩니다.";
 "prefs.banners.denied" = "macOS가 Klorn 알림을 막고 있습니다. 시스템 설정 ▸ 알림에서 허용하세요.";
 "prefs.banners.openSystemSettings" = "시스템 설정 열기";
-"prefs.dockBadge" = "Dock 아이콘에 개수 표시";
+"prefs.dockBadge" = "‘지금 확인 필요’ 개수 표시";
 "prefs.dockBadge.detail" = "오늘 화면에서 기다리는 긴급 메일 수입니다. 소리도 배너도 없으므로 방해 금지 시간에도 표시됩니다.";
 "loginPrompt.title" = "Klorn을 백그라운드에서 계속 실행할까요?";
 "loginPrompt.body" = "Klorn은 실행 중일 때만 긴급 메일을 알려 드릴 수 있습니다. 로그인할 때 열어 두면 재시동 후에도 놓치지 않습니다.";
@@ -141,7 +137,7 @@
 "push.closedSummary.title" = "Klorn이 닫혀 있는 동안 긴급 메일 %d건";
 "push.moreSummary.title" = "+%d건 더 확인이 필요합니다";
 "push.delayedSummary.title" = "확인이 필요한 긴급 메일 %d건";
-"prefs.launchAtLogin" = "로그인할 때 Klorn 시작";
+"prefs.launchAtLogin" = "로그인 시 Klorn 열기";
 "prefs.launchAtLogin.unavailable.label" = "로그인 시 시작";
 "prefs.launchAtLogin.unavailable.value" = "패키지 앱에서만 가능";
 "prefs.updates" = "업데이트";
@@ -364,12 +360,10 @@
 "a11y.collapsed" = "접힘";
 
 /* Mail remote-content privacy toggle (2026-08-14) */
-"prefs.section.mail" = "메일";
 "prefs.remoteImages" = "메일의 외부 이미지 불러오기";
 "prefs.remoteImages.detail" = "끄면 메일을 읽는 동안 모든 네트워크 요청을 차단합니다 — 추적 픽셀 포함. 본문에 내장된 이미지는 계속 보입니다.";
 
 /* Appearance (2026-08-15) */
-"prefs.section.appearance" = "화면 모드";
 "prefs.appearance" = "테마";
 "prefs.appearance.detail" = "시스템은 macOS 설정을 따르고 즉시 반영됩니다.";
 "appearance.system" = "시스템";
@@ -447,7 +441,6 @@
 "compose.needsPro" = "메일 발송은 Pro 플랜이 필요합니다.";
 
 /* Assistant dock */
-"assistant.dock.toggle" = "어시스턴트 (⌘J)";
 "assistant.dock.close.a11y" = "어시스턴트 닫기";
 "assistant.dock.context.a11y" = "이 메일에 대해: %@";
 
@@ -587,7 +580,6 @@
 "settings.tab.accounts" = "계정";
 "settings.tab.assistant" = "어시스턴트";
 "settings.tab.notifications" = "알림";
-"settings.tab.appearance" = "화면";
 "settings.tab.privacy" = "개인정보";
 "settings.signedOutNote" = "이 설정을 보려면 Klorn에 로그인하세요.";
 "menu.message" = "메시지";
@@ -802,3 +794,17 @@
 "chat.send.failed" = "Klorn에 연결할 수 없습니다 — %@";
 "chat.event.failed" = "일정을 만들지 못했습니다 — %@";
 "commitments.needsPro" = "약속한 일 추적은 Klorn Pro가 필요합니다.";
+
+/* M3/M4 (2026-11-13): assistant toolbar panel, grouped General settings */
+"assistant.toolbar.label" = "어시스턴트";
+"assistant.toolbar.help" = "어시스턴트 보기/숨기기 (⌘J)";
+"menu.assistant.show" = "어시스턴트 보기";
+"menu.assistant.hide" = "어시스턴트 숨기기";
+"prefs.group.startup" = "시작";
+"prefs.group.appearance" = "화면";
+"prefs.group.dock" = "Dock";
+"prefs.group.updates" = "업데이트";
+"prefs.group.keyboard" = "키보드";
+"prefs.group.support" = "지원";
+"prefs.group.about" = "정보";
+"prefs.group.mail" = "메일";
