@@ -779,6 +779,20 @@ export function rulesDslOpenTo(userId: string): boolean {
   return featureOpenTo(userId, [RULES_DSL_FLAG]);
 }
 
+// Slack integration v1 (docs/providers/slack.md): an internal Slack app per
+// user, read-and-judge only. OFF by default (repo doctrine). `cohort` opens
+// the routes, the events webhook and `user.slack` only to
+// ROLLOUT_COHORT_USER_IDS. While off every /api/slack route answers the
+// default 404, even unauthenticated. Read per call: a flip needs no redeploy.
+export const SLACK_FLAG = "SLACK_ENABLED";
+export const SLACK_FLAGS = [SLACK_FLAG] as const;
+export function slackLive(): boolean {
+  return flagMode(SLACK_FLAG) !== "off";
+}
+export function slackOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, SLACK_FLAGS);
+}
+
 export function appleLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.APPLE_LOGIN_ENABLED ?? "").trim().toLowerCase(),

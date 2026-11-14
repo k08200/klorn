@@ -71,6 +71,11 @@ export const FENCED_MODELS = [
   "AttentionItem",
   "DecisionLabel",
   "AttentionFacts",
+  // Slack (docs/providers/slack.md): an event landing during a wipe must not
+  // re-create the user's Slack data or connection.
+  "SlackConnection",
+  "SlackEpisode",
+  "SlackMessage",
   "LearnedRule",
   "SenderTrait",
   "SenderLabel",

@@ -123,6 +123,11 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.dataExportAudit.deleteMany(scope);
   // RuleChangeAudit: the user's own Rules DSL applies (counts, text hash), no rules.
   await tx.ruleChangeAudit.deleteMany(scope);
+  // Slack (docs/providers/slack.md): message text, episode verdicts, and the
+  // connection holding the encrypted signing secret.
+  await tx.slackMessage.deleteMany(scope);
+  await tx.slackEpisode.deleteMany(scope);
+  await tx.slackConnection.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);
