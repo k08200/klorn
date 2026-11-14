@@ -293,16 +293,24 @@ export async function runAgentForUser(
     console.log(`[AGENT] ${userId} already in flight — skipping re-entrant run`);
     return;
   }
+  // Claimed before the first await, so the check above stays atomic.
+  runningUsers.add(userId);
   // Every run (scheduler, new-mail trigger, manual) takes this entry, so the
   // organization's agent mode cap (org/ceilings.ts) is enforced here once.
-  const cappedMode = await agentModeUnderOrgCeiling(userId, mode);
+  let cappedMode: Awaited<ReturnType<typeof agentModeUnderOrgCeiling>>;
+  try {
+    cappedMode = await agentModeUnderOrgCeiling(userId, mode);
+  } catch (err) {
+    runningUsers.delete(userId);
+    throw err;
+  }
   if (cappedMode === "OFF") {
+    runningUsers.delete(userId);
     console.log(`[AGENT] ${userId} skipped — the organization turned the agent off`);
     return;
   }
   const startTime = Date.now();
   const agentModePolicy = getAgentModePolicy(cappedMode);
-  runningUsers.add(userId);
 
   try {
     // Load user plan and model for tool gating

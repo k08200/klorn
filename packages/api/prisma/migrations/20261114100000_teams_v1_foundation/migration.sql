@@ -145,6 +145,11 @@ ALTER TABLE "AvailabilityGrant" ADD CONSTRAINT "AvailabilityGrant_orgId_fkey" FO
 ALTER TABLE "OrgAuditEvent" ADD CONSTRAINT "OrgAuditEvent_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
+-- Exactly one OWNER per organization, in the database itself (src/org/
+-- org-lock.ts serializes the changes; this backs it). A partial index, which
+-- Prisma neither models nor reports as drift.
+CREATE UNIQUE INDEX "OrgMembership_one_owner_per_org" ON "OrgMembership" ("orgId") WHERE "role" = 'OWNER';
+
 -- Row-level security
 ALTER TABLE "Organization" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Organization_system_bypass" ON "Organization" USING (current_setting('app.bypass_rls', true) = 'on');

@@ -103,6 +103,17 @@ describe("agent mode cap (org ceiling)", () => {
     expect(await agentModeUnderOrgCeiling("u1", "garbage")).toBe("SUGGEST");
   });
 
+  it("keeps the re-entrancy guard atomic across the ceiling lookup", async () => {
+    ceilings.value = { autoReplyDisabled: false, agentModeCap: "OFF" };
+    const { runAgentForUser } = await import("../agentcore/autonomous-agent.js");
+    await Promise.all([runAgentForUser("u-race", "AUTO"), runAgentForUser("u-race", "AUTO")]);
+    // The second call saw the first one's claim and never looked anything up.
+    expect(prismaSpy.calls).toEqual([MEMBERSHIP_LOOKUP]);
+    // An OFF cap releases the claim, so the next run is not locked out.
+    await runAgentForUser("u-race", "AUTO");
+    expect(prismaSpy.calls).toEqual([MEMBERSHIP_LOOKUP, MEMBERSHIP_LOOKUP]);
+  });
+
   it("does not run the agent at all under an OFF cap", async () => {
     ceilings.value = { autoReplyDisabled: false, agentModeCap: "OFF" };
     const { runAgentForUser } = await import("../agentcore/autonomous-agent.js");

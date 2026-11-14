@@ -19,7 +19,8 @@ import { OrgError } from "./org-error.js";
 import { requireMembership } from "./org-members.js";
 import { normalizeEmail } from "./org-shape.js";
 
-const MAX_EVENTS = 2000;
+/** Events read per member and window; more means the member stays unknown. */
+export const MAX_EVENTS_PER_MEMBER = 500;
 
 /**
  * Busy blocks of the requester's co-members (by lowercase address) who share
@@ -58,16 +59,25 @@ export async function grantedOrgFreeBusy(
     .filter((member) => wanted.has(member.email));
   if (readable.length === 0) return busy;
 
-  const events = await prisma.calendarEvent.findMany({
-    where: {
-      userId: { in: readable.map((member) => member.userId) },
-      startTime: { lte: windowEnd },
-      endTime: { gte: windowStart },
-      ...calendarSourceScope(),
-    },
-    select: { userId: true, startTime: true, endTime: true },
-    take: MAX_EVENTS,
-  });
+  // One bounded query per member: a member whose window holds more events
+  // than the bound may be cut short, so they stay UNKNOWN (absent from the
+  // map) rather than look free where the cut fell.
+  const perMember = await Promise.all(
+    readable.map(async (member) => ({
+      member,
+      events: await prisma.calendarEvent.findMany({
+        where: {
+          userId: member.userId,
+          startTime: { lte: windowEnd },
+          endTime: { gte: windowStart },
+          ...calendarSourceScope(),
+        },
+        orderBy: { startTime: "asc" },
+        select: { userId: true, startTime: true, endTime: true },
+        take: MAX_EVENTS_PER_MEMBER + 1,
+      }),
+    })),
+  );
   await prisma.orgAuditEvent.createMany({
     data: readable.map((member) => ({
       orgId: mine.orgId,
@@ -77,15 +87,14 @@ export async function grantedOrgFreeBusy(
       detail: { windowStart: windowStart.toISOString(), windowEnd: windowEnd.toISOString() },
     })),
   });
-  for (const member of readable) {
+  for (const { member, events } of perMember) {
+    if (events.length > MAX_EVENTS_PER_MEMBER) continue;
     busy.set(
       member.email,
-      events
-        .filter((event) => event.userId === member.userId)
-        .map((event) => ({
-          start: event.startTime.toISOString(),
-          end: event.endTime.toISOString(),
-        })),
+      events.map((event) => ({
+        start: event.startTime.toISOString(),
+        end: event.endTime.toISOString(),
+      })),
     );
   }
   return busy;
@@ -97,7 +106,7 @@ export async function grantedOrgFreeBusy(
  */
 export async function orgAvailabilityMembers(
   userId: string,
-  requested: string | undefined,
+  requested: unknown,
 ): Promise<string[]> {
   const mine = await requireMembership(userId);
   const coMembers = await prisma.orgMembership.findMany({
@@ -106,8 +115,13 @@ export async function orgAvailabilityMembers(
     select: { user: { select: { email: true } } },
   });
   const all = coMembers.map((member) => member.user.email.toLowerCase());
-  if (requested === undefined || requested.trim() === "") return all;
-  const picked = requested.split(",").map((raw) => normalizeEmail(raw));
+  // `?members=a,b` or a repeated `?members=a&members=b`.
+  const list = Array.isArray(requested) ? requested.join(",") : requested;
+  if (list === undefined || list === null || list === "") return all;
+  if (typeof list !== "string") {
+    throw new OrgError(400, "NOT_A_MEMBER", "Pick members of your organization.");
+  }
+  const picked = list.split(",").map((raw) => normalizeEmail(raw));
   if (picked.some((email) => email === null || !all.includes(email))) {
     throw new OrgError(400, "NOT_A_MEMBER", "Pick members of your organization.");
   }

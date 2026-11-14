@@ -27,14 +27,16 @@ const service = vi.hoisted(() => ({
 vi.mock("../org/org-members.js", () => ({
   createOrganization: vi.fn(),
   currentOrgView: service.currentOrgView,
-  leaveOrganization: vi.fn(),
   listAudit: vi.fn(),
   listMembers: vi.fn(),
-  removeMember: vi.fn(),
   requireMembership: vi.fn(),
   setAvailabilityGrant: vi.fn(),
-  transferOwnership: vi.fn(),
   updateOrganization: vi.fn(),
+}));
+vi.mock("../org/org-membership-changes.js", () => ({
+  leaveOrganization: vi.fn(),
+  removeMember: vi.fn(),
+  transferOwnership: vi.fn(),
 }));
 vi.mock("../org/org-invites.js", () => ({
   acceptInvite: service.acceptInvite,

@@ -75,7 +75,7 @@ import {
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
-import { effectiveTier } from "../org/effective-tier.js";
+import { effectiveTier, normalizeTier, type Tier } from "../org/effective-tier.js";
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
@@ -310,6 +310,23 @@ export function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
     });
   }, delayMs);
   timer.unref?.();
+}
+
+/**
+ * The plan /me reports as effective: the user's own, or a Klorn Teams seat
+ * derived from membership (org/effective-tier.ts, never written to
+ * User.plan). A failed seat lookup falls back to the user's own plan instead
+ * of failing the session bootstrap, whose catch answers 401 (a logout).
+ */
+export async function effectiveTierOrOwnPlan(userId: string, plan: string): Promise<Tier> {
+  try {
+    return await withDbRetry(() => effectiveTier({ id: userId, plan }), {
+      label: "me.effective_tier",
+    });
+  } catch (err) {
+    captureError(err, { tags: { scope: "auth.me.effective-tier" }, extra: { userId } });
+    return normalizeTier(plan);
+  }
 }
 
 export function authRoutes(app: FastifyInstance) {
@@ -637,9 +654,7 @@ export function authRoutes(app: FastifyInstance) {
       // The plan the user actually gets: their own, or a Klorn Teams seat
       // derived from membership (org/effective-tier.ts, never written to
       // User.plan). No query while TEAMS_ENABLED is closed to the user.
-      const tier = await withDbRetry(() => effectiveTier({ id: user.id, plan: user.plan }), {
-        label: "me.effective_tier",
-      });
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
 
       return reply.send({
         user: {
@@ -657,7 +672,7 @@ export function authRoutes(app: FastifyInstance) {
           // Whether to hard-wall the app on entry (pure subscriber-only mode).
           // Always false with the usable free tier — free users get in and are
           // bounded by the free daily cost cap instead.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.

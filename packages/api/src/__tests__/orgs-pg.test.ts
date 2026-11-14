@@ -32,6 +32,8 @@ import { prisma } from "../db.js";
 import { handleError } from "../error-handler.js";
 import { orgCeilingsFor } from "../org/ceilings.js";
 import { effectiveTier } from "../org/effective-tier.js";
+import { getTeamAvailability } from "../pim/team-availability.js";
+import { teamAvailabilityMembers } from "../pim/team-availability-members.js";
 import { registerApiRoutes } from "../register-api-routes.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 
@@ -47,7 +49,7 @@ interface Session {
 
 async function newSession(label = "member"): Promise<Session> {
   const email = `${label}-${randomUUID()}@teams.test`;
-  const user = await prisma.user.create({ data: { email, name: label } });
+  const user = await prisma.user.create({ data: { email, name: label, emailVerified: true } });
   createdUsers.push(user.id);
   const token = signToken({ userId: user.id, email });
   await registerDevice(user.id, token, { deviceType: "web" });
@@ -453,6 +455,235 @@ describePg("Klorn Teams lifecycle (real Postgres)", () => {
   });
 });
 
+describePg("Klorn Teams refusals and races (real Postgres)", () => {
+  it("needs a verified address to create, invite or accept", async () => {
+    const unverified = await newSession("unverified");
+    await prisma.user.update({
+      where: { id: unverified.userId },
+      data: { emailVerified: false },
+    });
+    const create = await call(unverified, "POST", "/api/orgs", { name: "Spam Co" });
+    expect(create.statusCode).toBe(403);
+    expect(create.json()).toMatchObject({ code: "EMAIL_NOT_VERIFIED" });
+
+    const owner = await newSession("owner");
+    await createOrg(owner);
+    const token = await invite(owner, unverified.email);
+    const accept = await call(unverified, "POST", "/api/orgs/invites/accept", { token });
+    expect(accept.statusCode).toBe(403);
+    expect(accept.json()).toMatchObject({ code: "EMAIL_NOT_VERIFIED" });
+    const preview = await call(unverified, "POST", "/api/orgs/invites/preview", { token });
+    expect(preview.json()).toMatchObject({ emailMatches: true, emailVerified: false });
+  });
+
+  it("refuses an organization name that is a link or hides characters", async () => {
+    const owner = await newSession("owner");
+    for (const name of ["https://evil.test", "Visit www.evil.test"]) {
+      const res = await call(owner, "POST", "/api/orgs", { name });
+      expect(res.statusCode).toBe(400);
+    }
+    const res = await call(owner, "POST", "/api/orgs", { name: "Ac\u202eme\u200b" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ org: { name: "Acme" } });
+  });
+
+  it("refuses inviting a current member, and removing the owner", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    const { me: ownerMe } = await createOrg(owner);
+    await join(owner, member);
+    const again = await call(owner, "POST", "/api/orgs/current/invites", { email: member.email });
+    expect(again.json()).toMatchObject({ code: "ALREADY_MEMBER" });
+    const self = await call(owner, "DELETE", `/api/orgs/current/members/${ownerMe.membershipId}`);
+    expect(self.statusCode).toBe(409);
+    expect(self.json()).toMatchObject({ code: "CANNOT_REMOVE_OWNER" });
+  });
+
+  it("caps invites per recipient per day across organizations", async () => {
+    const target = `target-${randomUUID()}@teams.test`;
+    for (let i = 0; i < 3; i++) {
+      const owner = await newSession(`owner${i}`);
+      await createOrg(owner, `Org ${i}`);
+      await invite(owner, target);
+    }
+    const fourth = await newSession("owner4");
+    await createOrg(fourth, "Org 4");
+    const res = await call(fourth, "POST", "/api/orgs/current/invites", { email: target });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toMatchObject({ code: "INVITE_LIMIT" });
+  });
+
+  it("caps members plus pending invites at 150", async () => {
+    const owner = await newSession("owner");
+    const { org } = await createOrg(owner);
+    const expiresAt = new Date(Date.now() + 86_400_000);
+    await prisma.orgInvite.createMany({
+      data: Array.from({ length: 149 }, (_, i) => ({
+        orgId: org.id,
+        email: `pending-${i}-${randomUUID()}@teams.test`,
+        tokenHash: createHash("sha256").update(randomUUID()).digest("hex"),
+        expiresAt,
+        createdAt: new Date(Date.now() - 2 * 86_400_000),
+      })),
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/invites", {
+      email: `one-more-${randomUUID()}@teams.test`,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "MEMBER_LIMIT" });
+  });
+
+  it("drops the invite and audits it when the mail could not be sent", async () => {
+    const { sendOrgInviteEmail } = await import("../mail/email.js");
+    const owner = await newSession("owner");
+    const { org } = await createOrg(owner);
+    vi.mocked(sendOrgInviteEmail).mockResolvedValueOnce(false);
+    const res = await call(owner, "POST", "/api/orgs/current/invites", {
+      email: `bounce-${randomUUID()}@teams.test`,
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "INVITE_EMAIL_FAILED" });
+    expect(await prisma.orgInvite.count({ where: { orgId: org.id } })).toBe(0);
+    const failed = await prisma.orgAuditEvent.count({
+      where: { orgId: org.id, action: "invite.email_failed" },
+    });
+    expect(failed).toBe(1);
+  });
+
+  it("refuses to close an organization with a live subscription", async () => {
+    const owner = await newSession("owner");
+    const { org } = await createOrg(owner);
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { seatsPurchased: 2, subscriptionStatus: "active" },
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/leave");
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "SUBSCRIPTION_ACTIVE" });
+  });
+
+  it("never reaches another organization's member or invite by id", async () => {
+    const ownerA = await newSession("ownerA");
+    const ownerB = await newSession("ownerB");
+    const memberB = await newSession("memberB");
+    await createOrg(ownerA, "A");
+    await createOrg(ownerB, "B");
+    const { me: memberBMe } = await join(ownerB, memberB);
+    await invite(ownerB, `pending-${randomUUID()}@teams.test`);
+    const inviteB = await prisma.orgInvite.findFirstOrThrow({
+      where: { org: { memberships: { some: { userId: ownerB.userId } } }, acceptedAt: null },
+    });
+    for (const [method, path, body] of [
+      ["DELETE", `/api/orgs/current/members/${memberBMe.membershipId}`, undefined],
+      ["POST", "/api/orgs/current/transfer", { membershipId: memberBMe.membershipId }],
+      ["DELETE", `/api/orgs/current/invites/${inviteB.id}`, undefined],
+    ] as const) {
+      const res = await call(ownerA, method, path, body);
+      expect(res.statusCode, path).toBe(404);
+    }
+    expect(
+      await prisma.orgMembership.findUnique({ where: { userId: memberB.userId } }),
+    ).not.toBeNull();
+    expect(
+      (await prisma.orgInvite.findUniqueOrThrow({ where: { id: inviteB.id } })).revokedAt,
+    ).toBeNull();
+  });
+
+  it("ignores keys that are not settings: no mass assignment", async () => {
+    const owner = await newSession("owner");
+    const { org } = await createOrg(owner);
+    const only = await call(owner, "PATCH", "/api/orgs/current", {
+      seatsPurchased: 99,
+      subscriptionStatus: "active",
+      slug: "taken",
+    });
+    expect(only.statusCode).toBe(400);
+    await call(owner, "PATCH", "/api/orgs/current", { name: "Renamed", seatsPurchased: 99 });
+    const row = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(row).toMatchObject({ name: "Renamed", seatsPurchased: 0, subscriptionStatus: null });
+  });
+
+  it("keeps exactly one owner when a transfer races a leave", async () => {
+    for (let round = 0; round < 3; round++) {
+      const owner = await newSession("owner");
+      const member = await newSession("member");
+      const { org } = await createOrg(owner);
+      const { me } = await join(owner, member);
+      await Promise.all([
+        call(owner, "POST", "/api/orgs/current/transfer", { membershipId: me.membershipId }),
+        call(member, "POST", "/api/orgs/current/leave"),
+      ]);
+      const owners = await prisma.orgMembership.count({ where: { orgId: org.id, role: "OWNER" } });
+      expect(owners).toBe(1);
+    }
+  });
+
+  it("refuses a second OWNER row in the database itself", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    const { org } = await createOrg(owner);
+    await join(owner, member);
+    await expect(
+      prisma.orgMembership.update({ where: { userId: member.userId }, data: { role: "OWNER" } }),
+    ).rejects.toMatchObject({ code: "P2002" });
+    expect(await prisma.orgMembership.count({ where: { orgId: org.id, role: "OWNER" } })).toBe(1);
+  });
+
+  it("filters the audit log to admin actions and pages back", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    await createOrg(owner);
+    await join(owner, member, true);
+    await call(
+      owner,
+      "GET",
+      "/api/orgs/current/availability?window_start=2026-12-01T00:00:00.000Z&window_end=2026-12-02T00:00:00.000Z",
+    );
+    const all = (await call(owner, "GET", "/api/orgs/current/audit")).json() as {
+      events: Array<{ action: string }>;
+      nextBefore: string | null;
+    };
+    expect(all.events.map((e) => e.action)).toContain("availability.read");
+    expect(all.nextBefore).toBeNull();
+    const admin = (await call(owner, "GET", "/api/orgs/current/audit?kind=admin")).json() as {
+      events: Array<{ action: string }>;
+    };
+    expect(admin.events.map((e) => e.action)).not.toContain("availability.read");
+    expect(admin.events.map((e) => e.action)).toContain("member.joined");
+  });
+
+  it("shows a member who read their free/busy", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    await createOrg(owner);
+    await join(owner, member, true);
+    await call(
+      owner,
+      "GET",
+      "/api/orgs/current/availability?window_start=2026-12-01T00:00:00.000Z&window_end=2026-12-02T00:00:00.000Z",
+    );
+    const res = await call(member, "GET", "/api/orgs/current/transparency");
+    expect(res.json()).toMatchObject({
+      freeBusyReads: [{ by: "owner", window: { windowStart: "2026-12-01T00:00:00.000Z" } }],
+    });
+  });
+
+  it("stops naming a deleted account in the audit log", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    const { org } = await createOrg(owner);
+    await join(owner, member);
+    await deleteUserAndAllData(member.userId);
+    const named = await prisma.orgAuditEvent.count({
+      where: {
+        orgId: org.id,
+        OR: [{ actorUserId: member.userId }, { targetUserId: member.userId }],
+      },
+    });
+    expect(named).toBe(0);
+  });
+});
+
 describePg("org free/busy (real Postgres)", () => {
   const windowStart = "2026-12-01T00:00:00.000Z";
   const windowEnd = "2026-12-03T00:00:00.000Z";
@@ -531,6 +762,67 @@ describePg("org free/busy (real Postgres)", () => {
     expect(revoke.json()).toEqual({ sharesFreeBusy: false });
     const res = await call(owner, "GET", availabilityPath);
     expect(res.json()).toMatchObject({ unknownMembers: [member.email], checkedMembers: [] });
+  });
+
+  it("ignores a grant that names another organization, at the resolver itself", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    const otherOwner = await newSession("otherOwner");
+    await createOrg(owner);
+    const { org: otherOrg } = await createOrg(otherOwner, "Other");
+    await join(owner, member, true);
+    await busyDay(member.userId, "Stale grant");
+    await prisma.availabilityGrant.update({
+      where: { userId: member.userId },
+      data: { orgId: otherOrg.id },
+    });
+    const result = await getTeamAvailability(owner.userId, [member.email], windowStart, windowEnd);
+    expect(result).toMatchObject({ unknownMembers: [member.email], checkedMembers: [] });
+  });
+
+  it("never reads another organization's member, even when named explicitly", async () => {
+    const ownerA = await newSession("ownerA");
+    const ownerB = await newSession("ownerB");
+    const memberB = await newSession("memberB");
+    await createOrg(ownerA, "A");
+    await createOrg(ownerB, "B");
+    await join(ownerB, memberB, true);
+    await busyDay(memberB.userId, "Other company");
+    const result = await getTeamAvailability(
+      ownerA.userId,
+      [memberB.email],
+      windowStart,
+      windowEnd,
+    );
+    expect(result).toMatchObject({
+      unknownMembers: [memberB.email.toLowerCase()],
+      checkedMembers: [],
+    });
+    const reads = await prisma.orgAuditEvent.count({
+      where: { action: "availability.read", targetUserId: memberB.userId },
+    });
+    expect(reads).toBe(0);
+  });
+
+  it("limits the chat tool to co-members while only TEAMS_ENABLED is on", async () => {
+    delete process.env.TEAM_MODE_ENABLED;
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    await createOrg(owner);
+    await join(owner, member, true);
+    expect(await teamAvailabilityMembers(owner.userId, { org_members: true })).toEqual({
+      members: [member.email],
+    });
+    expect(
+      await teamAvailabilityMembers(owner.userId, { members: ["stranger@elsewhere.test"] }),
+    ).toMatchObject({ code: "NOT_A_MEMBER" });
+    expect(await teamAvailabilityMembers(owner.userId, { team_name: "Saved" })).toMatchObject({
+      error: expect.stringContaining("org_members"),
+    });
+    process.env.TEAMS_ENABLED = "false";
+    expect(await teamAvailabilityMembers(owner.userId, { org_members: true })).toMatchObject({
+      error: expect.stringContaining("not available"),
+    });
   });
 
   it("never reads a member of a different organization", async () => {

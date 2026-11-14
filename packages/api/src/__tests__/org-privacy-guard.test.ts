@@ -79,6 +79,24 @@ describe("org code reaches no member data", () => {
     }
   });
 
+  it("reads only identity fields from an account row", () => {
+    const reads: string[] = [];
+    for (const { text } of sources) {
+      for (const [, body] of text.matchAll(
+        /(?<![/\w.])(?:prisma|tx)\.user\.\w+\(\{[\s\S]*?select:\s*\{([^}]*)\}/g,
+      )) {
+        reads.push(body ?? "");
+      }
+    }
+    expect(reads.length).toBeGreaterThan(0);
+    for (const body of reads) {
+      const keys = [...body.matchAll(/(\w+)\s*:/g)].map(([, key]) => key ?? "");
+      expect(keys.filter((key) => !["id", "name", "email", "emailVerified"].includes(key))).toEqual(
+        [],
+      );
+    }
+  });
+
   it("reads only name and email from another account", () => {
     for (const { path, text } of sources) {
       for (const [, body] of text.matchAll(/\buser:\s*\{\s*select:\s*\{([^}]*)\}/g)) {

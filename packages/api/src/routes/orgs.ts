@@ -27,19 +27,22 @@ import {
 import {
   createOrganization,
   currentOrgView,
-  leaveOrganization,
   listAudit,
   listMembers,
-  removeMember,
   requireMembership,
   setAvailabilityGrant,
-  transferOwnership,
   updateOrganization,
 } from "../org/org-members.js";
+import {
+  leaveOrganization,
+  removeMember,
+  transferOwnership,
+} from "../org/org-membership-changes.js";
 import { transparencyFor } from "../org/transparency.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { type RouteRateLimit, rateLimitHook } from "./rate-limit-hook.js";
 
 const MAX_AVAILABILITY_MEMBERS = 30;
 const DEFAULT_DURATION_MINUTES = 60;
@@ -58,9 +61,22 @@ export async function orgRoutes(app: FastifyInstance) {
 
   app.get("/current", async (request) => currentOrgView(getUserId(request)));
 
+  // Per-user limits on top of the per-address route limits: mail-sending and
+  // organization-creating routes must not scale with the number of addresses.
+  const perUser = (name: string, limit: RouteRateLimit) =>
+    rateLimitHook(
+      app,
+      limit,
+      (request) => `orgs:${name}:user:${getUserId(request)}`,
+      "Too many requests. Try again later.",
+    );
+
   app.post(
     "/",
-    { config: { rateLimit: { max: 5, timeWindow: "1 hour" } } },
+    {
+      config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
+      preHandler: perUser("create", { max: 5, timeWindow: "1 hour" }),
+    },
     async (request, reply) => {
       reply.code(201);
       return createOrganization(getUserId(request), request.body);
@@ -86,7 +102,10 @@ export async function orgRoutes(app: FastifyInstance) {
 
   app.post(
     "/current/invites",
-    { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } },
+    {
+      config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
+      preHandler: perUser("invite", { max: 30, timeWindow: "1 hour" }),
+    },
     async (request, reply) => {
       reply.code(201);
       return { invite: await inviteMember(getUserId(request), request.body) };
@@ -131,7 +150,7 @@ export async function orgRoutes(app: FastifyInstance) {
         window_start?: string;
         window_end?: string;
         duration_minutes?: string;
-        members?: string;
+        members?: string | string[];
       };
       const members = await orgAvailabilityMembers(userId, q.members);
       if (members.length === 0) {
@@ -165,5 +184,8 @@ export async function orgRoutes(app: FastifyInstance) {
     return transparencyFor(userId);
   });
 
-  app.get("/current/audit", async (request) => ({ events: await listAudit(getUserId(request)) }));
+  // ?kind=admin leaves out the free/busy reads; ?before=<event id> pages back.
+  app.get("/current/audit", async (request) =>
+    listAudit(getUserId(request), request.query as { kind?: unknown; before?: unknown }),
+  );
 }

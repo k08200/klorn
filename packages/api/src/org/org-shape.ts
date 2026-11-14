@@ -9,21 +9,33 @@ import { seatsActive } from "./effective-tier.js";
 
 /** Self-serve organizations hold at most 150 seats; larger ones go to Enterprise. */
 export const MAX_SELF_SERVE_SEATS = 150;
-/** The smallest team subscription. */
-export const MIN_TEAM_SEATS = 2;
 export const NAME_MAX = 80;
 export const MAX_COMPANY_DOMAINS = 10;
 
-const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
+// A plain address only: no display name, list separator, quote or bracket can
+// reach the mail provider. Applied after lowercasing.
+const EMAIL_RE =
+  /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
+// Zero-width and bidirectional controls: they let a name read differently
+// from what it is (a spoofed "Klorn Security" in an invite subject).
+const INVISIBLE_RE = /[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+// An organization name is not a link: it is shown in invite mail.
+const LINK_LIKE_RE = /:\/\/|\bwww\./i;
 const SLUG_BASE_MAX = 40;
+
+/** Text with its zero-width and bidirectional control characters removed. */
+export function stripInvisibleText(value: string): string {
+  return value.replace(INVISIBLE_RE, "");
+}
 
 export function normalizeOrgName(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const name = value.trim().replace(/\s+/g, " ");
-  if (name.length === 0 || name.length > NAME_MAX || CONTROL_RE.test(name)) return null;
+  const name = stripInvisibleText(value).trim().replace(/\s+/g, " ");
+  if (name.length === 0 || name.length > NAME_MAX) return null;
+  if (CONTROL_RE.test(name) || LINK_LIKE_RE.test(name)) return null;
   return name;
 }
 

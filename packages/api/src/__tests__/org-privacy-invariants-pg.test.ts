@@ -49,7 +49,7 @@ interface Seeded {
 
 async function seededSession(label: string): Promise<Seeded> {
   const email = `${label}-${randomUUID()}@privacy.test`;
-  const user = await prisma.user.create({ data: { email, name: label } });
+  const user = await prisma.user.create({ data: { email, name: label, emailVerified: true } });
   createdUsers.push(user.id);
   const token = signToken({ userId: user.id, email });
   await registerDevice(user.id, token, { deviceType: "web" });
@@ -169,9 +169,16 @@ describePg("no org role reads another member's mail, attention items or commitme
       it("finds nothing of the other member in any org route", async () => {
         const { viewer, other } = pair();
         for (const path of ORG_READS) {
+          // The owner-only reads answer a member 403; everything else answers.
+          const ownerOnly = path.endsWith("/invites") || path.endsWith("/audit");
           const res = await call(viewer, "GET", path);
+          expect(res.statusCode, path).toBe(ownerOnly && viewerName === "member" ? 403 : 200);
           expect(res.body, path).not.toContain(other.secret);
           expect(res.body, path).not.toContain(viewer.secret);
+          if (path.includes("/availability")) {
+            // The read did use the other member's calendar — as busy times only.
+            expect(res.json()).toMatchObject({ checkedMembers: [other.email] });
+          }
         }
       });
 

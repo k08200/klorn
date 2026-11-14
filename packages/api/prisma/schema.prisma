@@ -2722,7 +2722,8 @@ model Organization {
   id                   String              @id @default(uuid())
   name                 String              @db.VarChar(80)
   slug                 String              @unique @db.VarChar(48)
-  /// Lowercase domains the company sends from, pushed to every member's judge.
+  /// Lowercase domains the company sends from. Stored only: feeding them to
+  /// members' judge is a later step (pricing-tiers.md launch feature 6).
   companyDomains       String[]            @default([])
   /// Admin ceiling: no unattended reply leaves any member's account.
   autoReplyDisabled    Boolean             @default(false)

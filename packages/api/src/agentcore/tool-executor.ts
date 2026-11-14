@@ -5,7 +5,7 @@
  */
 
 import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
-import { teamAvailabilityOpenTo, teamsOpenTo } from "../config.js";
+import { teamAvailabilityOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -23,8 +23,6 @@ import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { markEmailReplied } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
 import { recordSentMessage, type SentOrigin } from "../mail/sent-messages.js";
-import { orgAvailabilityMembers } from "../org/org-availability.js";
-import { isOrgError } from "../org/org-error.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,
@@ -42,6 +40,7 @@ import {
   summarizeMeeting,
 } from "../pim/meeting.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
+import { teamAvailabilityMembers } from "../pim/team-availability-members.js";
 import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
@@ -404,39 +403,9 @@ async function executeToolCallInternal(
             error: "Too many availability checks — try again in a minute.",
           });
         }
-        let members: string[] = [];
-        if (args.org_members === true) {
-          if (!teamsOpenTo(userId)) {
-            return JSON.stringify({ error: "Organizations are not available on this account." });
-          }
-          try {
-            members = await orgAvailabilityMembers(userId, undefined);
-          } catch (err) {
-            if (isOrgError(err)) return JSON.stringify({ error: err.message, code: err.code });
-            throw err;
-          }
-          if (members.length === 0) {
-            return JSON.stringify({ error: "The organization has no other members yet." });
-          }
-        } else if (typeof args.team_name === "string" && args.team_name.trim()) {
-          const teams = await prisma.team.findMany({
-            where: { userId },
-            select: { name: true, members: true },
-          });
-          const wanted = args.team_name.trim().toLowerCase();
-          const team = teams.find((t) => t.name.toLowerCase() === wanted);
-          if (!team) {
-            return JSON.stringify({
-              error: `No saved team named "${args.team_name}".`,
-              availableTeams: teams.map((t) => t.name),
-            });
-          }
-          members = Array.isArray(team.members)
-            ? team.members.filter((m): m is string => typeof m === "string")
-            : [];
-        } else if (Array.isArray(args.members)) {
-          members = args.members.filter((m): m is string => typeof m === "string");
-        }
+        const resolved = await teamAvailabilityMembers(userId, args);
+        if ("error" in resolved) return JSON.stringify(resolved);
+        const { members } = resolved;
         if (members.length === 0) {
           return JSON.stringify({ error: "Provide team_name (a saved team) or a members list." });
         }

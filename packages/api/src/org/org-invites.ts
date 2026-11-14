@@ -4,15 +4,20 @@
  *
  * Token security: only the SHA-256 is stored (invite-token.ts); an invite is
  * single use (a conditional update claims it inside the same transaction that
- * creates the membership, so two concurrent accepts cannot both succeed);
- * it expires after seven days; and it binds to the invited address — the
- * signed-in account's email must match it. Re-inviting an address revokes its
- * earlier pending invite.
+ * creates the membership, under the organization's lock, so two concurrent
+ * accepts cannot both succeed); it expires after seven days; and it binds to
+ * the invited address — the signed-in account's VERIFIED email must match it.
+ * Re-inviting an address revokes its earlier pending invite.
+ *
+ * Abuse: inviting needs a verified address, and the database caps invites
+ * per organization per day and per recipient per day across organizations, so
+ * the invite mail cannot be turned into a relay.
  */
 
-import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
+import { prisma } from "../db.js";
 import { sendOrgInviteEmail } from "../mail/email.js";
 import { recordOrgAudit } from "./audit.js";
+import { seatsActive } from "./effective-tier.js";
 import {
   hashInviteToken,
   inviteExpiry,
@@ -20,8 +25,15 @@ import {
   mintInviteToken,
 } from "./invite-token.js";
 import { OrgError } from "./org-error.js";
+import { type OrgTx, ownerInTx, requireVerifiedEmail, withOrgLock } from "./org-lock.js";
 import { currentOrgView, findMembership, requireOwner } from "./org-members.js";
 import { MAX_SELF_SERVE_SEATS, normalizeEmail } from "./org-shape.js";
+
+/** Invites an organization without an active subscription may send a day. */
+export const UNPAID_ORG_INVITES_PER_DAY = 20;
+/** Invites one address may receive a day, across every organization. */
+export const RECIPIENT_INVITES_PER_DAY = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface InviteWire {
   id: string;
@@ -43,18 +55,15 @@ function pendingWhere(orgId: string, now: Date) {
   return { orgId, acceptedAt: null, revokedAt: null, expiresAt: { gt: now } };
 }
 
-export async function inviteMember(userId: string, body: unknown): Promise<InviteWire> {
-  const owner = await requireOwner(userId);
-  const email = normalizeEmail(((body ?? {}) as { email?: unknown }).email);
-  if (!email) throw new OrgError(400, "INVALID_EMAIL", "Enter a valid email address.");
-  const now = new Date();
-  const [members, pending, inviter] = await Promise.all([
-    prisma.orgMembership.findMany({
-      where: { orgId: owner.orgId },
-      select: { user: { select: { email: true } } },
-    }),
-    prisma.orgInvite.count({ where: { ...pendingWhere(owner.orgId, now), email: { not: email } } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }),
+/** Membership, seat and send-rate limits, read under the organization's lock. */
+async function assertInviteAllowed(tx: OrgTx, orgId: string, email: string, now: Date) {
+  const dayAgo = new Date(now.getTime() - DAY_MS);
+  const [members, pending, orgToday, recipientToday, org] = await Promise.all([
+    tx.orgMembership.findMany({ where: { orgId }, select: { user: { select: { email: true } } } }),
+    tx.orgInvite.count({ where: { ...pendingWhere(orgId, now), email: { not: email } } }),
+    tx.orgInvite.count({ where: { orgId, createdAt: { gte: dayAgo } } }),
+    tx.orgInvite.count({ where: { email, createdAt: { gte: dayAgo } } }),
+    tx.organization.findUnique({ where: { id: orgId }, select: { subscriptionStatus: true } }),
   ]);
   if (members.some((member) => member.user.email.toLowerCase() === email)) {
     throw new OrgError(409, "ALREADY_MEMBER", "That address is already a member.");
@@ -66,8 +75,24 @@ export async function inviteMember(userId: string, body: unknown): Promise<Invit
       `A self-serve organization holds up to ${MAX_SELF_SERVE_SEATS} members and pending invites.`,
     );
   }
+  const orgCap = seatsActive(org?.subscriptionStatus)
+    ? MAX_SELF_SERVE_SEATS
+    : UNPAID_ORG_INVITES_PER_DAY;
+  if (orgToday >= orgCap || recipientToday >= RECIPIENT_INVITES_PER_DAY) {
+    throw new OrgError(429, "INVITE_LIMIT", "Too many invites today. Try again tomorrow.");
+  }
+}
+
+export async function inviteMember(userId: string, body: unknown): Promise<InviteWire> {
+  const email = normalizeEmail(((body ?? {}) as { email?: unknown }).email);
+  if (!email) throw new OrgError(400, "INVALID_EMAIL", "Enter a valid email address.");
+  await requireVerifiedEmail(userId);
+  const owner = await requireOwner(userId);
+  const now = new Date();
   const { token, tokenHash } = mintInviteToken();
-  const invite = await prisma.$transaction(async (tx) => {
+  const invite = await withOrgLock(owner.orgId, async (tx) => {
+    await ownerInTx(tx, userId, owner.orgId);
+    await assertInviteAllowed(tx, owner.orgId, email, now);
     await tx.orgInvite.updateMany({
       where: { orgId: owner.orgId, email, acceptedAt: null, revokedAt: null },
       data: { revokedAt: now },
@@ -86,29 +111,48 @@ export async function inviteMember(userId: string, body: unknown): Promise<Invit
       orgId: owner.orgId,
       action: "invite.created",
       actorUserId: userId,
-      detail: { email },
+      detail: { email, inviteId: created.id },
     });
     return created;
-  }, INTERACTIVE_TX_OPTIONS);
+  });
+  await sendInvite(userId, owner.org.name, invite.id, email, token);
+  return inviteWire(invite);
+}
 
+async function sendInvite(
+  userId: string,
+  orgName: string,
+  inviteId: string,
+  email: string,
+  token: string,
+) {
+  const inviter = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true },
+  });
   const sent = await sendOrgInviteEmail({
     to: email,
     token,
-    orgName: owner.org.name,
+    orgName,
     inviterName: inviter?.name || inviter?.email || null,
   });
-  if (!sent) {
-    await prisma.orgInvite.updateMany({
-      where: { id: invite.id },
-      data: { revokedAt: new Date() },
+  if (sent) return;
+  // Nothing reached the recipient: the invite goes (so it does not count
+  // against the day's limits) and the audit log says the send failed.
+  const deleted = await prisma.orgInvite.findUnique({
+    where: { id: inviteId },
+    select: { orgId: true },
+  });
+  await prisma.orgInvite.deleteMany({ where: { id: inviteId } });
+  if (deleted) {
+    await recordOrgAudit(prisma, {
+      orgId: deleted.orgId,
+      action: "invite.email_failed",
+      actorUserId: userId,
+      detail: { inviteId },
     });
-    throw new OrgError(
-      502,
-      "INVITE_EMAIL_FAILED",
-      "The invite email could not be sent. Try again.",
-    );
   }
-  return inviteWire(invite);
+  throw new OrgError(502, "INVITE_EMAIL_FAILED", "The invite email could not be sent. Try again.");
 }
 
 export async function listInvites(userId: string): Promise<InviteWire[]> {
@@ -123,22 +167,21 @@ export async function listInvites(userId: string): Promise<InviteWire[]> {
 
 export async function revokeInvite(userId: string, inviteId: string) {
   const owner = await requireOwner(userId);
-  const now = new Date();
-  const revoked = await prisma.$transaction(async (tx) => {
+  const revoked = await withOrgLock(owner.orgId, async (tx) => {
+    await ownerInTx(tx, userId, owner.orgId);
     const result = await tx.orgInvite.updateMany({
       where: { id: inviteId, orgId: owner.orgId, acceptedAt: null, revokedAt: null },
-      data: { revokedAt: now },
+      data: { revokedAt: new Date() },
     });
-    if (result.count === 1) {
-      await recordOrgAudit(tx, {
-        orgId: owner.orgId,
-        action: "invite.revoked",
-        actorUserId: userId,
-        detail: { inviteId },
-      });
-    }
-    return result.count === 1;
-  }, INTERACTIVE_TX_OPTIONS);
+    if (result.count !== 1) return false;
+    await recordOrgAudit(tx, {
+      orgId: owner.orgId,
+      action: "invite.revoked",
+      actorUserId: userId,
+      detail: { inviteId },
+    });
+    return true;
+  });
   if (!revoked) throw new OrgError(404, "INVITE_NOT_FOUND", "No such pending invite.");
   return { revoked: true as const };
 }
@@ -168,17 +211,17 @@ async function usableInvite(rawToken: unknown, now: Date) {
   return invite;
 }
 
-async function signedInEmail(userId: string): Promise<string> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-  return (user?.email ?? "").trim().toLowerCase();
-}
-
 export async function previewInvite(userId: string, body: unknown) {
   const invite = await usableInvite(((body ?? {}) as { token?: unknown }).token, new Date());
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, emailVerified: true },
+  });
   return {
     orgName: invite.org.name,
     expiresAt: invite.expiresAt.toISOString(),
-    emailMatches: (await signedInEmail(userId)) === invite.email,
+    emailMatches: (user?.email ?? "").trim().toLowerCase() === invite.email,
+    emailVerified: user?.emailVerified === true,
   };
 }
 
@@ -186,7 +229,9 @@ export async function acceptInvite(userId: string, body: unknown) {
   const input = (body ?? {}) as { token?: unknown; shareFreeBusy?: unknown };
   const now = new Date();
   const invite = await usableInvite(input.token, now);
-  if ((await signedInEmail(userId)) !== invite.email) {
+  // A session can exist before its address is verified, so the binding is to
+  // the VERIFIED address: holding a forwarded link is not enough.
+  if ((await requireVerifiedEmail(userId)) !== invite.email) {
     throw new OrgError(
       403,
       "INVITE_EMAIL_MISMATCH",
@@ -196,9 +241,9 @@ export async function acceptInvite(userId: string, body: unknown) {
   if (await findMembership(userId)) {
     throw new OrgError(409, "ALREADY_IN_ORG", "You are already in an organization.");
   }
-  const share = input.shareFreeBusy === true;
+  const scope = input.shareFreeBusy === true ? "FREEBUSY" : "NONE";
   try {
-    await prisma.$transaction(async (tx) => {
+    await withOrgLock(invite.orgId, async (tx) => {
       const claimed = await tx.orgInvite.updateMany({
         where: { id: invite.id, acceptedAt: null, revokedAt: null, expiresAt: { gt: now } },
         data: { acceptedAt: now, acceptedById: userId },
@@ -212,8 +257,8 @@ export async function acceptInvite(userId: string, body: unknown) {
       });
       await tx.availabilityGrant.upsert({
         where: { userId },
-        create: { userId, orgId: invite.orgId, scope: share ? "FREEBUSY" : "NONE" },
-        update: { orgId: invite.orgId, scope: share ? "FREEBUSY" : "NONE" },
+        create: { userId, orgId: invite.orgId, scope },
+        update: { orgId: invite.orgId, scope },
         select: { userId: true },
       });
       await recordOrgAudit(tx, {
@@ -221,13 +266,15 @@ export async function acceptInvite(userId: string, body: unknown) {
         action: "member.joined",
         actorUserId: userId,
         targetUserId: userId,
-        detail: { sharesFreeBusy: share },
+        detail: { sharesFreeBusy: scope === "FREEBUSY" },
       });
-    }, INTERACTIVE_TX_OPTIONS);
+    });
   } catch (err) {
     if ((err as { code?: string })?.code === "P2002") {
       throw new OrgError(409, "ALREADY_IN_ORG", "You are already in an organization.");
     }
+    // The organization was closed between the link and the accept.
+    if (err instanceof OrgError && err.code === "NOT_IN_ORG") throw INVALID();
     throw err;
   }
   return currentOrgView(userId);

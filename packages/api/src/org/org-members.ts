@@ -1,7 +1,8 @@
 /**
- * Organization lifecycle (Klorn Teams v1): create, read, settings and admin
- * ceilings, the member roster, removal, leaving, ownership transfer, the
- * member's own free/busy grant and the audit log. Every admin action is
+ * Organization reads and settings (Klorn Teams v1): create, the current view,
+ * settings and admin ceilings, the roster, the member's own free/busy grant
+ * and the audit log. Membership changes (remove, leave, transfer) live in
+ * org-membership-changes.ts, invites in org-invites.ts. Every admin action is
  * OWNER-only and audited in the same transaction as the change.
  *
  * Privacy: these functions read the org tables and, from another account,
@@ -12,8 +13,9 @@ import { Prisma } from "@prisma/client";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import { recordOrgAudit } from "./audit.js";
 import { normalizeAgentModeCap } from "./ceilings.js";
-import { seatedMembershipIds, seatsActive } from "./effective-tier.js";
+import { seatedMembershipIds } from "./effective-tier.js";
 import { OrgError } from "./org-error.js";
+import { membershipInTx, ownerInTx, requireVerifiedEmail, withOrgLock } from "./org-lock.js";
 import {
   normalizeDomains,
   normalizeOrgName,
@@ -52,6 +54,8 @@ export interface Membership {
 
 const SLUG_ATTEMPTS = 3;
 const AUDIT_PAGE = 100;
+const INVALID_NAME = "Give the organization a name (1–80 characters, not a link).";
+const INVALID_DOMAINS = "Company domains must be up to 10 domain names.";
 
 function isUniqueViolation(err: unknown, field: string): boolean {
   if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== "P2002") return false;
@@ -60,7 +64,7 @@ function isUniqueViolation(err: unknown, field: string): boolean {
   return fields.some((name) => name.includes(field));
 }
 
-export async function findMembership(userId: string): Promise<Membership | null> {
+export function findMembership(userId: string): Promise<Membership | null> {
   return prisma.orgMembership.findUnique({
     where: { userId },
     select: { id: true, orgId: true, role: true, joinedAt: true, org: { select: ORG_SELECT } },
@@ -108,16 +112,19 @@ export async function currentOrgView(
   };
 }
 
-export async function createOrganization(userId: string, body: unknown) {
+function createInput(body: unknown): { name: string; companyDomains: string[] } {
   const input = (body ?? {}) as { name?: unknown; companyDomains?: unknown };
   const name = normalizeOrgName(input.name);
-  if (!name)
-    throw new OrgError(400, "INVALID_NAME", "Give the organization a name (1–80 characters).");
+  if (!name) throw new OrgError(400, "INVALID_NAME", INVALID_NAME);
   const companyDomains =
     input.companyDomains === undefined ? [] : normalizeDomains(input.companyDomains);
-  if (!companyDomains) {
-    throw new OrgError(400, "INVALID_DOMAINS", "Company domains must be up to 10 domain names.");
-  }
+  if (!companyDomains) throw new OrgError(400, "INVALID_DOMAINS", INVALID_DOMAINS);
+  return { name, companyDomains };
+}
+
+export async function createOrganization(userId: string, body: unknown) {
+  const { name, companyDomains } = createInput(body);
+  await requireVerifiedEmail(userId);
   if (await findMembership(userId)) {
     throw new OrgError(409, "ALREADY_IN_ORG", "You are already in an organization.");
   }
@@ -147,55 +154,60 @@ export async function createOrganization(userId: string, body: unknown) {
   throw new Error("unreachable: slug attempts exhausted");
 }
 
-interface SettingsChange {
-  data: Prisma.OrganizationUpdateInput;
-  detail: Record<string, Prisma.InputJsonValue | null>;
+type Change = [Prisma.OrganizationUpdateInput, Record<string, Prisma.InputJsonValue | null>];
+
+function nameChange(value: unknown): Change {
+  const name = normalizeOrgName(value);
+  if (!name) throw new OrgError(400, "INVALID_NAME", INVALID_NAME);
+  return [{ name }, { name }];
 }
 
-function settingsChange(body: unknown): SettingsChange {
+function domainsChange(value: unknown): Change {
+  const companyDomains = normalizeDomains(value);
+  if (!companyDomains) throw new OrgError(400, "INVALID_DOMAINS", INVALID_DOMAINS);
+  return [{ companyDomains }, { companyDomains }];
+}
+
+function autoReplyChange(value: unknown): Change {
+  if (typeof value !== "boolean") {
+    throw new OrgError(400, "INVALID_BODY", "autoReplyDisabled must be true or false.");
+  }
+  return [{ autoReplyDisabled: value }, { autoReplyDisabled: value }];
+}
+
+function capChange(value: unknown): Change {
+  const agentModeCap = value === null ? null : normalizeAgentModeCap(value);
+  if (value !== null && agentModeCap === null) {
+    throw new OrgError(400, "INVALID_CAP", "agentModeCap must be OFF, SHADOW, SUGGEST or null.");
+  }
+  return [{ agentModeCap }, { agentModeCap }];
+}
+
+/** The settings an owner may change; every other key is ignored. */
+const SETTINGS: Record<string, (value: unknown) => Change> = {
+  name: nameChange,
+  companyDomains: domainsChange,
+  autoReplyDisabled: autoReplyChange,
+  agentModeCap: capChange,
+};
+
+function settingsChange(body: unknown): Change {
   const input = (body ?? {}) as Record<string, unknown>;
-  const data: Prisma.OrganizationUpdateInput = {};
-  const detail: Record<string, Prisma.InputJsonValue | null> = {};
-  if (input.name !== undefined) {
-    const name = normalizeOrgName(input.name);
-    if (!name)
-      throw new OrgError(400, "INVALID_NAME", "Give the organization a name (1–80 characters).");
-    data.name = name;
-    detail.name = name;
-  }
-  if (input.companyDomains !== undefined) {
-    const domains = normalizeDomains(input.companyDomains);
-    if (!domains) {
-      throw new OrgError(400, "INVALID_DOMAINS", "Company domains must be up to 10 domain names.");
-    }
-    data.companyDomains = domains;
-    detail.companyDomains = domains;
-  }
-  if (input.autoReplyDisabled !== undefined) {
-    if (typeof input.autoReplyDisabled !== "boolean") {
-      throw new OrgError(400, "INVALID_BODY", "autoReplyDisabled must be true or false.");
-    }
-    data.autoReplyDisabled = input.autoReplyDisabled;
-    detail.autoReplyDisabled = input.autoReplyDisabled;
-  }
-  if (input.agentModeCap !== undefined) {
-    const cap = input.agentModeCap === null ? null : normalizeAgentModeCap(input.agentModeCap);
-    if (input.agentModeCap !== null && cap === null) {
-      throw new OrgError(400, "INVALID_CAP", "agentModeCap must be OFF, SHADOW, SUGGEST or null.");
-    }
-    data.agentModeCap = cap;
-    detail.agentModeCap = cap;
-  }
-  if (Object.keys(data).length === 0) {
-    throw new OrgError(400, "INVALID_BODY", "Nothing to change.");
-  }
-  return { data, detail };
+  const changes = Object.entries(SETTINGS)
+    .filter(([key]) => input[key] !== undefined)
+    .map(([key, change]) => change(input[key]));
+  if (changes.length === 0) throw new OrgError(400, "INVALID_BODY", "Nothing to change.");
+  return [
+    Object.assign({}, ...changes.map(([data]) => data)),
+    Object.assign({}, ...changes.map(([, detail]) => detail)),
+  ];
 }
 
 export async function updateOrganization(userId: string, body: unknown) {
+  const [data, detail] = settingsChange(body);
   const owner = await requireOwner(userId);
-  const { data, detail } = settingsChange(body);
-  await prisma.$transaction(async (tx) => {
+  await withOrgLock(owner.orgId, async (tx) => {
+    await ownerInTx(tx, userId, owner.orgId);
     await tx.organization.update({ where: { id: owner.orgId }, data, select: { id: true } });
     await recordOrgAudit(tx, {
       orgId: owner.orgId,
@@ -203,7 +215,7 @@ export async function updateOrganization(userId: string, body: unknown) {
       actorUserId: userId,
       detail,
     });
-  }, INTERACTIVE_TX_OPTIONS);
+  });
   return currentOrgView(userId);
 }
 
@@ -240,103 +252,6 @@ export async function listMembers(userId: string): Promise<MemberWire[]> {
   }));
 }
 
-async function memberOf(orgId: string, membershipId: unknown) {
-  if (typeof membershipId !== "string" || membershipId.length === 0) return null;
-  return prisma.orgMembership.findFirst({
-    where: { id: membershipId, orgId },
-    select: { id: true, userId: true, role: true },
-  });
-}
-
-export async function removeMember(userId: string, membershipId: string) {
-  const owner = await requireOwner(userId);
-  const target = await memberOf(owner.orgId, membershipId);
-  if (!target) throw new OrgError(404, "MEMBER_NOT_FOUND", "No such member in your organization.");
-  if (target.role === "OWNER") {
-    throw new OrgError(409, "CANNOT_REMOVE_OWNER", "Transfer ownership before removing the owner.");
-  }
-  await prisma.$transaction(async (tx) => {
-    await tx.orgMembership.deleteMany({ where: { id: target.id, orgId: owner.orgId } });
-    await tx.availabilityGrant.deleteMany({ where: { userId: target.userId, orgId: owner.orgId } });
-    await recordOrgAudit(tx, {
-      orgId: owner.orgId,
-      action: "member.removed",
-      actorUserId: userId,
-      targetUserId: target.userId,
-    });
-  }, INTERACTIVE_TX_OPTIONS);
-  return { removed: true as const };
-}
-
-export async function leaveOrganization(userId: string) {
-  const mine = await requireMembership(userId);
-  if (mine.role === "OWNER") {
-    const members = await prisma.orgMembership.count({ where: { orgId: mine.orgId } });
-    if (members > 1) {
-      throw new OrgError(
-        409,
-        "OWNER_MUST_TRANSFER",
-        "Transfer ownership to another member before you leave.",
-      );
-    }
-    if (seatsActive(mine.org.subscriptionStatus)) {
-      throw new OrgError(
-        409,
-        "SUBSCRIPTION_ACTIVE",
-        "Cancel the team subscription before you close the organization.",
-      );
-    }
-    // The last member leaving closes the organization: its invites, grants and
-    // audit rows go with it (foreign keys cascade).
-    await prisma.organization.delete({ where: { id: mine.orgId }, select: { id: true } });
-    return { left: true as const, orgDeleted: true };
-  }
-  await prisma.$transaction(async (tx) => {
-    await tx.orgMembership.deleteMany({ where: { id: mine.id } });
-    await tx.availabilityGrant.deleteMany({ where: { userId, orgId: mine.orgId } });
-    await recordOrgAudit(tx, {
-      orgId: mine.orgId,
-      action: "member.left",
-      actorUserId: userId,
-      targetUserId: userId,
-    });
-  }, INTERACTIVE_TX_OPTIONS);
-  return { left: true as const, orgDeleted: false };
-}
-
-export async function transferOwnership(userId: string, body: unknown) {
-  const owner = await requireOwner(userId);
-  const membershipId = ((body ?? {}) as { membershipId?: unknown }).membershipId;
-  const target = await memberOf(owner.orgId, membershipId);
-  if (!target || target.role !== "MEMBER") {
-    throw new OrgError(404, "MEMBER_NOT_FOUND", "No such member in your organization.");
-  }
-  await prisma.$transaction(async (tx) => {
-    // Conditional updates keep exactly one OWNER even when two transfers race.
-    const demoted = await tx.orgMembership.updateMany({
-      where: { id: owner.id, role: "OWNER" },
-      data: { role: "MEMBER" },
-    });
-    if (demoted.count !== 1) {
-      throw new OrgError(403, "OWNER_ONLY", "Only the organization's owner can do this.");
-    }
-    const promoted = await tx.orgMembership.updateMany({
-      where: { id: target.id, orgId: owner.orgId, role: "MEMBER" },
-      data: { role: "OWNER" },
-    });
-    if (promoted.count !== 1) {
-      throw new OrgError(404, "MEMBER_NOT_FOUND", "No such member in your organization.");
-    }
-    await recordOrgAudit(tx, {
-      orgId: owner.orgId,
-      action: "owner.transferred",
-      actorUserId: userId,
-      targetUserId: target.userId,
-    });
-  }, INTERACTIVE_TX_OPTIONS);
-  return currentOrgView(userId);
-}
-
 export async function setAvailabilityGrant(userId: string, body: unknown) {
   const share = ((body ?? {}) as { shareFreeBusy?: unknown }).shareFreeBusy;
   if (typeof share !== "boolean") {
@@ -344,7 +259,10 @@ export async function setAvailabilityGrant(userId: string, body: unknown) {
   }
   const mine = await requireMembership(userId);
   const scope = share ? "FREEBUSY" : "NONE";
-  await prisma.$transaction(async (tx) => {
+  await withOrgLock(mine.orgId, async (tx) => {
+    // Re-checked under the lock: a grant is never left behind for an
+    // organization the member just left.
+    await membershipInTx(tx, userId, mine.orgId);
     await tx.availabilityGrant.upsert({
       where: { userId },
       create: { userId, orgId: mine.orgId, scope },
@@ -358,7 +276,7 @@ export async function setAvailabilityGrant(userId: string, body: unknown) {
       targetUserId: userId,
       detail: { shared: share },
     });
-  }, INTERACTIVE_TX_OPTIONS);
+  });
   return { sharesFreeBusy: share };
 }
 
@@ -371,13 +289,38 @@ export interface AuditWire {
   createdAt: string;
 }
 
-export async function listAudit(userId: string): Promise<AuditWire[]> {
+/** Names of the organization's current members, by user id (departed members are absent). */
+async function memberLabels(orgId: string): Promise<Map<string, string>> {
+  const members = await prisma.orgMembership.findMany({
+    where: { orgId },
+    select: { userId: true, user: { select: { name: true, email: true } } },
+  });
+  return new Map(members.map((m) => [m.userId, m.user.name || m.user.email]));
+}
+
+export interface AuditQuery {
+  /** "admin" leaves out the free/busy reads, so they never bury an admin action. */
+  kind?: unknown;
+  /** The id of the last event of the previous page. */
+  before?: unknown;
+}
+
+export async function listAudit(
+  userId: string,
+  query: AuditQuery,
+): Promise<{ events: AuditWire[]; nextBefore: string | null }> {
   const owner = await requireOwner(userId);
-  const [events, members] = await Promise.all([
+  const before =
+    typeof query.before === "string" && query.before.length <= 64 ? query.before : null;
+  const [events, labels] = await Promise.all([
     prisma.orgAuditEvent.findMany({
-      where: { orgId: owner.orgId },
+      where: {
+        orgId: owner.orgId,
+        ...(query.kind === "admin" ? { action: { not: "availability.read" } } : {}),
+      },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: AUDIT_PAGE,
+      ...(before ? { cursor: { id: before }, skip: 1 } : {}),
       select: {
         id: true,
         action: true,
@@ -387,20 +330,36 @@ export async function listAudit(userId: string): Promise<AuditWire[]> {
         createdAt: true,
       },
     }),
-    prisma.orgMembership.findMany({
-      where: { orgId: owner.orgId },
-      select: { userId: true, user: { select: { name: true, email: true } } },
-    }),
+    memberLabels(owner.orgId),
   ]);
-  // People are named only while they are members; a departed one shows as null.
-  const label = new Map(members.map((m) => [m.userId, m.user.name || m.user.email]));
-  const name = (id: string | null) => (id ? (label.get(id) ?? null) : null);
-  return events.map((event) => ({
-    id: event.id,
-    action: event.action,
-    actor: name(event.actorUserId),
-    target: name(event.targetUserId),
-    detail: event.detail,
-    createdAt: event.createdAt.toISOString(),
+  const name = (id: string | null) => (id ? (labels.get(id) ?? null) : null);
+  return {
+    events: events.map((event) => ({
+      id: event.id,
+      action: event.action,
+      actor: name(event.actorUserId),
+      target: name(event.targetUserId),
+      detail: event.detail,
+      createdAt: event.createdAt.toISOString(),
+    })),
+    nextBefore: events.length === AUDIT_PAGE ? (events.at(-1)?.id ?? null) : null,
+  };
+}
+
+/** Who read this member's free/busy lately (the member's own transparency). */
+export async function recentFreeBusyReads(userId: string, orgId: string, take = 20) {
+  const [reads, labels] = await Promise.all([
+    prisma.orgAuditEvent.findMany({
+      where: { orgId, targetUserId: userId, action: "availability.read" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take,
+      select: { actorUserId: true, detail: true, createdAt: true },
+    }),
+    memberLabels(orgId),
+  ]);
+  return reads.map((read) => ({
+    by: read.actorUserId ? (labels.get(read.actorUserId) ?? null) : null,
+    window: read.detail,
+    at: read.createdAt.toISOString(),
   }));
 }

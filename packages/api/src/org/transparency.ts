@@ -9,7 +9,7 @@ import {
   TEAM_STANDARD_SEAT_ANNUAL_PER_MONTH_CENTS,
   TEAM_STANDARD_SEAT_MONTHLY_CENTS,
 } from "../billing/advertised-price.js";
-import { currentOrgView } from "./org-members.js";
+import { currentOrgView, recentFreeBusyReads } from "./org-members.js";
 import { NEVER_VISIBLE_TO_ORG, VISIBLE_TO_ORG } from "./privacy.js";
 
 export async function transparencyFor(userId: string) {
@@ -28,6 +28,9 @@ export async function transparencyFor(userId: string) {
       agentModeCap: org.agentModeCap,
       appliesToEveryone: true,
     },
+    // Who read your free/busy lately, and for which window: the same rows the
+    // owner sees in the audit log.
+    freeBusyReads: await recentFreeBusyReads(userId, org.id),
     seatPrice: {
       currency: "USD",
       monthlyCents: TEAM_STANDARD_SEAT_MONTHLY_CENTS,

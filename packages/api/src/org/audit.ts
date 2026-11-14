@@ -12,6 +12,7 @@ export type OrgAuditAction =
   | "settings.changed"
   | "invite.created"
   | "invite.revoked"
+  | "invite.email_failed"
   | "member.joined"
   | "member.removed"
   | "member.left"
