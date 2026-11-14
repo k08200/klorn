@@ -126,11 +126,13 @@ export const IMAP_PRESET_PROVIDERS: Readonly<Record<ImapPresetKey, ImapProviderC
     // with TLS). IMAP access must be enabled in Zoho Mail settings; with two-factor
     // authentication on, an application-specific password is needed. Only the .com
     // data center's hosts are documented, so no other data center is listed here.
+    // Zoho accepts the account password while two-factor is off; Klorn asks only for
+    // an application-specific one (the hint and the clients' copy say so).
     defaultHost: "imap.zoho.com:993",
     idPrefix: "zoho-imap",
     logScope: "zoho-imap",
     authFailureHint:
-      "Zoho IMAP login failed. Turn on IMAP access in Zoho Mail settings; if two-factor authentication is on, create an application-specific password and paste that.",
+      "Zoho IMAP login failed. Turn on IMAP access in Zoho Mail settings and two-factor authentication, then create an application-specific password and paste that — not your account password.",
     maxAccounts: MAX_PRESET_ACCOUNTS,
     smtp: { host: "smtp.zoho.com", port: IMPLICIT_TLS_PORT, security: "implicit-tls" },
     webmailUrl: "https://mail.zoho.com/",
@@ -146,7 +148,7 @@ export const IMAP_PRESET_PROVIDERS: Readonly<Record<ImapPresetKey, ImapProviderC
     idPrefix: "zohopro-imap",
     logScope: "zohopro-imap",
     authFailureHint:
-      "Zoho IMAP login failed. Turn on IMAP access in Zoho Mail settings (your organization's admin may need to allow it); if two-factor authentication is on, create an application-specific password and paste that.",
+      "Zoho IMAP login failed. Turn on IMAP access in Zoho Mail settings (your organization's admin may need to allow it) and two-factor authentication, then create an application-specific password and paste that — not your account password.",
     maxAccounts: MAX_PRESET_ACCOUNTS,
     smtp: { host: "smtppro.zoho.com", port: IMPLICIT_TLS_PORT, security: "implicit-tls" },
     webmailUrl: "https://mail.zoho.com/",

@@ -16,6 +16,14 @@ import {
   genericImapProblemKey,
   PROVIDER_LABEL,
 } from "../../../web/src/lib/account-health";
+import {
+  INITIAL_PRESET_PROBE,
+  latestOnly,
+  type PresetProbe,
+  type PresetStatus,
+  presetCardView,
+  presetProbeReducer,
+} from "../../../web/src/lib/imap-preset-status";
 import { IMAP_PRESETS, imapPresetFor } from "../../../web/src/lib/imap-presets";
 import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
@@ -91,11 +99,27 @@ describe("IMAP_PRESETS", () => {
 });
 
 describe("preset copy, all 7 locales", () => {
-  const presetKeys = IMAP_PRESETS.flatMap((preset) => [
-    preset.hintKey,
-    preset.passwordLabelKey,
-    preset.scopeKey,
-  ]);
+  const presetKeys = [
+    ...IMAP_PRESETS.map((preset) => preset.hintKey),
+    "imapPreset.passwordLabel.app",
+    "onboardingV2.tile.preset.scope",
+  ];
+
+  it("asks every preset for an app password, never the account password", () => {
+    const source = read("components/imap-preset-section.tsx");
+    expect(source).toContain('label={t("imapPreset.passwordLabel.app")}');
+    for (const [locale, table] of Object.entries(LOCALES)) {
+      const keys = Object.keys(table);
+      // Zoho has no label or tile line of its own any more: it is an app password too.
+      expect(keys, locale).not.toContain("imapPreset.passwordLabel.zoho");
+      expect(keys, locale).not.toContain("onboardingV2.tile.zoho.scope");
+    }
+    for (const key of ["imapPreset.hint.zoho", "imapPreset.hint.zohopro"]) {
+      expect(en[key]).toContain("turn on two-factor authentication");
+      expect(en[key]).toContain("application-specific password");
+      expect(en[key]).not.toMatch(/\bIf two-factor\b|\botherwise\b/i);
+    }
+  });
   const shared = Object.keys(en).filter(
     (key) => key.startsWith("imapPreset.") || key.startsWith("imapGeneric."),
   );
@@ -236,13 +260,87 @@ describe("generic IMAP card (display only)", () => {
   });
 });
 
+describe("preset card status probe", () => {
+  const status = (accounts: number, canConnect = true): PresetStatus => ({
+    canConnect,
+    accounts: Array.from({ length: accounts }, (_, i) => ({
+      email: `user${i}@example.com`,
+      host: "imap.example.com:993",
+      connectedAt: "2026-11-14T00:00:00Z",
+      lastSyncedAt: null,
+      needsReconnect: false,
+    })),
+  });
+  const run = (...events: Parameters<typeof presetProbeReducer>[1][]): PresetProbe =>
+    events.reduce(presetProbeReducer, INITIAL_PRESET_PROBE);
+
+  it("draws nothing until /status has answered once", () => {
+    expect(presetCardView(run(), true)).toBe("hidden");
+    expect(presetCardView(run({ type: "start" }), true)).toBe("hidden");
+  });
+
+  it("draws nothing for a preset whose /status never succeeded (5xx, 429, offline)", () => {
+    const probe = run({ type: "start" }, { type: "failed" });
+    expect(probe.failed).toBe(true);
+    expect(presetCardView(probe, true)).toBe("hidden");
+  });
+
+  it("draws nothing on a 404 (flag off or outside the cohort), even after a success", () => {
+    expect(presetCardView(run({ type: "notFound" }), true)).toBe("hidden");
+    const closed = run({ type: "loaded", status: status(1) }, { type: "notFound" });
+    expect(presetCardView(closed, true)).toBe("hidden");
+  });
+
+  it("comes back when a later load succeeds after a 404", () => {
+    const reopened = run(
+      { type: "notFound" },
+      { type: "start" },
+      { type: "loaded", status: status(0) },
+    );
+    expect(reopened.unavailable).toBe(false);
+    expect(presetCardView(reopened, true)).toBe("connect");
+  });
+
+  it("keeps the last good answer, flagged, when a refresh fails", () => {
+    const probe = run({ type: "loaded", status: status(2) }, { type: "start" }, { type: "failed" });
+    expect(probe.failed).toBe(true);
+    expect(presetCardView(probe, true)).toBe("accounts");
+    expect(run({ type: "loaded", status: status(2) }, { type: "start" }).loading).toBe(true);
+  });
+
+  it("offers the form, or the Pro note when a new mailbox is not allowed", () => {
+    expect(presetCardView(run({ type: "loaded", status: status(0) }), true)).toBe("connect");
+    expect(presetCardView(run({ type: "loaded", status: status(0, false) }), true)).toBe("proGate");
+    // An answer without canConnect falls back to the plan.
+    const legacy = run({ type: "loaded", status: { accounts: [] } });
+    expect(presetCardView(legacy, false)).toBe("proGate");
+  });
+
+  it("lets only the newest request write, and nothing after unmount", () => {
+    const guard = latestOnly();
+    const first = guard.begin();
+    const second = guard.begin();
+    expect(guard.isCurrent(first)).toBe(false);
+    expect(guard.isCurrent(second)).toBe(true);
+    guard.dispose();
+    expect(guard.isCurrent(second)).toBe(false);
+  });
+
+  it("guards each response and never reports the probe's failure as an error", () => {
+    const source = read("components/imap-preset-section.tsx");
+    expect(source).toContain("latestOnly()");
+    expect(source).toContain("guard.isCurrent(token)");
+    expect(source).not.toContain("-imap.status`");
+    expect(source).toContain('if (view === "hidden") return null;');
+  });
+});
+
 describe("preset card", () => {
   const source = read("components/imap-preset-section.tsx");
 
-  it("probes its own status route and renders nothing on a 404 (flag off or outside the cohort)", () => {
+  it("probes its own status route and treats a 404 as not available", () => {
     expect(source).toContain("`/api/${preset.slug}-imap/status`");
     expect(source).toContain('startsWith("API 404")');
-    expect(source).toContain("if (unavailable) return null;");
   });
 
   it("connects with an app password the browser never fills in from a saved one", () => {

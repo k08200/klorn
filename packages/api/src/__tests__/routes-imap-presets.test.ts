@@ -232,3 +232,42 @@ describe("flag on: connect is pinned to the preset's host", () => {
     });
   });
 });
+
+describe("abuse limits", () => {
+  it("stores the registry host, not the spelling the body sent", async () => {
+    process.env.IMAP_PRESETS_ENABLED = "true";
+    const { app, headers } = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/connect",
+      headers,
+      payload: { ...BODY, host: "IMAP.Mail.Yahoo.com" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ host: "imap.mail.yahoo.com:993" });
+    const verifyArgs = verifyImapCredentials.mock.calls[0]?.[0] as { host: string };
+    expect(verifyArgs.host).toBe("imap.mail.yahoo.com:993");
+    const upsertArgs = (db.upsert.mock.calls as unknown as Array<[{ create: unknown }]>)[0]?.[0];
+    expect(upsertArgs?.create).toMatchObject({ imapHost: "imap.mail.yahoo.com:993" });
+  });
+
+  it("one per-user budget of connect attempts covers every preset, then 429 without connecting", async () => {
+    process.env.IMAP_PRESETS_ENABLED = "true";
+    verifyImapCredentials.mockResolvedValue({ ok: false, message: "no", code: "IMAP_AUTH_FAILED" });
+    const { app, headers } = await buildApp();
+    const slugs = ["daum", "kakao", "yahoo", "aol", "fastmail", "zoho", "zohopro"];
+    const codes: number[] = [];
+    for (let attempt = 0; attempt < 11; attempt++) {
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/${slugs[attempt % slugs.length]}-imap/connect`,
+        headers,
+        payload: BODY,
+      });
+      codes.push(res.statusCode);
+    }
+    expect(codes.slice(0, 10)).toEqual(Array(10).fill(400));
+    expect(codes[10]).toBe(429);
+    expect(verifyImapCredentials).toHaveBeenCalledTimes(10);
+  });
+});

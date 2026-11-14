@@ -6,6 +6,8 @@
  * sorting check shows, and how an OAuth callback turns into a fixed result.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { EmailLaneCounts, FirewallItem, ProviderAvailability } from "@klorn/contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -193,9 +195,17 @@ describe("providerTiles", () => {
       "onboardingV2.tile.preset.scope",
       "onboardingV2.tile.preset.scope",
       "onboardingV2.tile.preset.scope",
-      "onboardingV2.tile.zoho.scope",
-      "onboardingV2.tile.zoho.scope",
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
     ]);
+  });
+
+  it("scopes the offered providers to the signed-in user (the presets follow a per-user cohort)", () => {
+    const hook = readFileSync(
+      join(__dirname, "../../../web/src/app/onboarding/v2/use-provider-availability.ts"),
+      "utf8",
+    );
+    expect(hook).toContain('queryKey: ["providers", "available", user?.id ?? null]');
   });
 
   it("draws no preset tile the server did not offer (flag off or outside the cohort)", () => {

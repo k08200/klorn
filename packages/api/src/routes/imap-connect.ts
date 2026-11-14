@@ -51,6 +51,7 @@ import { type HostRejection, parseGenericImapHost } from "../mail/generic-imap-h
 import { verifyGenericImapCredentials } from "../mail/generic-imap-verify.js";
 import { startFirstImapSync } from "../mail/imap-first-sync.js";
 import { clearPollBackoff } from "../mail/imap-poll-backoff.js";
+import { isImapPresetKey } from "../mail/imap-preset-keys.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "../mail/imap-providers.js";
 import { verifyImapCredentials } from "../mail/imap-sync.js";
 import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
@@ -117,11 +118,17 @@ function resolveConnectHost(cfg: ImapProviderConfig, host: string | undefined): 
       ? { ok: true, imapHost: parsed.stored }
       : { ok: false, message: GENERIC_HOST_MESSAGES[parsed.reason] };
   }
-  const imapHost = (host ?? cfg.defaultHost ?? "").trim();
-  if (!isAllowedImapHost(imapHost) || !hostMatchesProvider(imapHost, cfg)) {
+  const requested = (host ?? cfg.defaultHost ?? "").trim();
+  if (
+    cfg.defaultHost === null ||
+    !isAllowedImapHost(requested) ||
+    !hostMatchesProvider(requested, cfg)
+  ) {
     return { ok: false, message: `Unsupported IMAP host. Only ${cfg.defaultHost} is allowed.` };
   }
-  return { ok: true, imapHost };
+  // The registry constant, not the body's spelling of it ("IMAP.Naver.com"): what is
+  // stored and connected to is exactly the documented host and port.
+  return { ok: true, imapHost: cfg.defaultHost };
 }
 
 type Refusal = { status: number; message: string };
@@ -279,14 +286,23 @@ async function saveFixedAccount(cfg: ImapProviderConfig, args: SaveArgs): Promis
 const saveAccount = (cfg: ImapProviderConfig, args: SaveArgs): Promise<Saved> =>
   cfg.hostPolicy === "user-supplied" ? saveGenericAccount(cfg, args) : saveFixedAccount(cfg, args);
 
+/** The presets share one budget per user, apart from generic IMAP's. */
+const PRESET_ATTEMPT_KEY_PREFIX = "imap-preset:";
+
 /**
  * Counts this connect attempt when the host is user-supplied (design D5): every
- * verify then opens a real connection to a host the user chose. Null when the attempt
+ * verify then opens a real connection to a host the user chose. The app-password
+ * presets are counted too, in one budget across all of them: the per-IP route limit
+ * alone would let one account (or many IPs) use Klorn as a login oracle against
+ * seven providers and get the shared egress address blocked. Null when the attempt
  * is allowed (or not counted), else how long to wait.
  */
 function retryAfterMsFor(cfg: ImapProviderConfig, userId: string): number | null {
-  if (cfg.hostPolicy !== "user-supplied") return null;
-  const attempt = takeGenericImapAttempt(userId);
+  let key: string;
+  if (cfg.hostPolicy === "user-supplied") key = userId;
+  else if (isImapPresetKey(cfg.provider)) key = `${PRESET_ATTEMPT_KEY_PREFIX}${userId}`;
+  else return null;
+  const attempt = takeGenericImapAttempt(key);
   return attempt.allowed ? null : attempt.retryAfterMs;
 }
 
