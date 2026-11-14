@@ -35,7 +35,6 @@
     "packages/web/src/components/linked-calendars.tsx": 1,
     "packages/web/src/components/linked-inboxes-section.tsx": 1,
     "packages/web/src/components/new-event-modal.tsx": 1,
-    "packages/web/src/components/notification-bell.tsx": 4,
     "packages/web/src/components/oauth-error-banner.tsx": 2,
     "packages/web/src/components/outlook-inboxes-section.tsx": 1,
     "packages/web/src/components/paddle-loader.tsx": 2,
@@ -85,7 +84,6 @@
     "packages/web/src/app/privacy/page.tsx": 1,
     "packages/web/src/app/refund/page.tsx": 1,
     "packages/web/src/app/terms/page.tsx": 1,
-    "packages/web/src/components/notification-bell.tsx": 2,
     "packages/web/src/components/push-onboarding-banner.tsx": 2
   },
   "retired-auto-lane": {

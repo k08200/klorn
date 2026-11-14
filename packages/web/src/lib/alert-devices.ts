@@ -149,3 +149,81 @@ export function isPushEndpoint(
 ): e is Extract<AlertEndpoint, { kind: "web" | "native" }> {
   return e.kind !== "desktop";
 }
+
+// ── Notification center footer: "Where you get alerts" in one line ──
+
+export interface AlertStripItem {
+  id: string;
+  /** Short channel name ("Mac app", "Chrome", "Phone"). */
+  name: I18nRef;
+  /** Dot colour; always next to `statusKey` text, never alone. */
+  tone: AlertTone;
+  statusKey: string;
+}
+
+const PHONE_OS: readonly (AlertOs | null)[] = ["ios", "android"];
+const TONE_RANK: Record<AlertTone, number> = { ok: 3, neutral: 2, warn: 1, off: 0 };
+const TONE_STATUS: Record<AlertTone, string> = {
+  ok: "notifCenter.status.ok",
+  neutral: "notifCenter.status.new",
+  warn: "notifCenter.status.check",
+  off: "notifCenter.status.notConnected",
+};
+
+function webTone(e: Extract<AlertEndpoint, { kind: "web" }>): AlertTone {
+  if (e.needsResubscribe || e.health === "stale") return "warn";
+  return e.health === "ok" ? "ok" : "neutral";
+}
+
+function better(a: AlertTone | undefined, b: AlertTone): AlertTone {
+  return a !== undefined && TONE_RANK[a] >= TONE_RANK[b] ? a : b;
+}
+
+/**
+ * One item per desktop app, one per browser (the best of its endpoints) and
+ * always one for the phone, so "phone not connected" is visible too.
+ */
+export function alertStripItems(list: AlertEndpointList): AlertStripItem[] {
+  const desktop: AlertStripItem[] = [];
+  const browsers = new Map<string, AlertTone>();
+  let phone: AlertTone | undefined;
+  for (const e of list.endpoints) {
+    if (e.kind === "desktop") {
+      if (desktop.some((d) => d.id === e.app)) continue;
+      desktop.push({
+        id: e.app,
+        name: { key: `notifCenter.device.${e.app}`, params: {} },
+        tone: e.running ? "ok" : "off",
+        statusKey: e.running ? "notifCenter.status.running" : "notifCenter.status.notRunning",
+      });
+    } else if (e.kind === "native") {
+      phone = better(phone, "ok");
+    } else if (PHONE_OS.includes(e.os)) {
+      phone = better(phone, webTone(e));
+    } else {
+      const name = e.browser ? BROWSER_NAMES[e.browser] : "";
+      browsers.set(name, better(browsers.get(name), webTone(e)));
+    }
+  }
+  const web = [...browsers].map(
+    ([browser, tone]): AlertStripItem => ({
+      id: `web:${browser}`,
+      name: browser
+        ? { key: "alertDevices.name.browserOnly", params: { browser } }
+        : { key: "alertDevices.name.unknownBrowser", params: {} },
+      tone,
+      statusKey: TONE_STATUS[tone],
+    }),
+  );
+  const phoneTone = phone ?? "off";
+  return [
+    ...desktop,
+    ...web,
+    {
+      id: "phone",
+      name: { key: "notifCenter.device.phone", params: {} },
+      tone: phoneTone,
+      statusKey: TONE_STATUS[phoneTone],
+    },
+  ];
+}
