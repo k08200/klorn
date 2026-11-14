@@ -245,11 +245,11 @@ describe("monogram", () => {
 });
 
 describe("rowLane", () => {
-  it("returns a live lane, folds retired values, and nothing when absent", () => {
+  it("returns a live lane and nothing for a retired, unknown or absent one", () => {
     expect(rowLane("PUSH")).toBe("PUSH");
     expect(rowLane("MEETING")).toBe("MEETING");
-    expect(rowLane("CALL")).toBe("PUSH");
-    expect(rowLane("AUTO")).toBe("QUEUE");
+    expect(rowLane("CALL")).toBeNull();
+    expect(rowLane("AUTO")).toBeNull();
     expect(rowLane(undefined)).toBeNull();
     expect(rowLane(null)).toBeNull();
     expect(rowLane("nonsense")).toBeNull();

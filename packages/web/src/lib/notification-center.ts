@@ -163,15 +163,14 @@ export function monogram(name: string): Monogram {
   return { initials: initials.toUpperCase(), hue: Math.abs(hash) % HUE_RANGE };
 }
 
-const RETIRED_TIERS = ["CALL", "AUTO"];
-
-/** A recorded lane folded to a live one; null when absent or unrecognised. */
+/**
+ * A recorded live lane; null when absent or not a live lane. Retired v1
+ * values are folded server-side (normalizeTier) before they reach the bell,
+ * so anything else renders no lane rather than a guessed one.
+ */
 export function rowLane(lane: string | null | undefined): LiveTier | null {
   if (typeof lane !== "string") return null;
-  if (!(CORE_TIERS as readonly string[]).includes(lane) && !RETIRED_TIERS.includes(lane)) {
-    return null;
-  }
-  return toLiveTier(lane);
+  return (CORE_TIERS as readonly string[]).includes(lane) ? toLiveTier(lane) : null;
 }
 
 // Product and platform names are proper nouns: the same in every locale.
