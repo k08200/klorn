@@ -2774,7 +2774,7 @@ const zh: Record<string, string> = {
   "smartActions.reply.unknown": "回复可能已经发出。重试前请先查看已发送邮件。",
   "smartActions.reply.error": "发送回复时出了问题。重试前请先查看已发送邮件。",
   "smartActions.reply.inProgress": "这条回复仍在发送中，因此没有重复发送。请稍后查看已发送邮件。",
-  "smartActions.reply.alreadySent": "这条回复刚刚已发送到这封邮件，因此没有再次发送。",
+  "smartActions.reply.alreadySent": "这条回复刚刚已作为对这封邮件的回复发出，因此没有再次发送。",
   "smartActions.event.reading": "正在从这封邮件读取日期…",
   "smartActions.event.none": "这封邮件没有写明日期或时间。",
   "smartActions.event.error": "现在无法读取这封邮件的日期，请稍后再试。",

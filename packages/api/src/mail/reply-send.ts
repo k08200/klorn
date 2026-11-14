@@ -90,13 +90,22 @@ export type ReplySendOutcome =
 export const REPEAT_SEND_WINDOW_MS = 10 * 60_000;
 
 /**
- * A receipt's status as a repeat: PENDING was written and its provider call has
- * not settled yet; UNKNOWN is a send the provider could not confirm either way.
+ * How long a PENDING receipt counts as a send still in flight. Its provider call
+ * runs between the receipt insert and the settle; one still PENDING after this
+ * never settled (the settle failed, or the process died after the provider
+ * call) and reads as "may have gone out" (send-receipt.ts settleSendReceipt).
  */
-function repeatStateOf(status: string | undefined): RepeatState {
-  if (status === "PENDING") return "in_progress";
-  if (status === "UNKNOWN") return "outcome_unknown";
-  return "sent";
+export const PENDING_IN_FLIGHT_MS = 2 * 60_000;
+
+/**
+ * A receipt as a repeat: only SENT is "sent". PENDING is in flight while young,
+ * then unknown; UNKNOWN is a send the provider could not confirm either way.
+ */
+function repeatStateOf(prior: { status: string; createdAt: Date }): RepeatState {
+  if (prior.status === "SENT") return "sent";
+  if (prior.status !== "PENDING") return "outcome_unknown";
+  const inFlight = Date.now() - prior.createdAt.getTime() < PENDING_IN_FLIGHT_MS;
+  return inFlight ? "in_progress" : "outcome_unknown";
 }
 
 /**
@@ -117,9 +126,9 @@ async function priorSendMomentsAgo(
       createdAt: { gte: new Date(Date.now() - REPEAT_SEND_WINDOW_MS) },
     },
     orderBy: { createdAt: "desc" },
-    select: { status: true },
+    select: { status: true, createdAt: true },
   });
-  return prior ? repeatStateOf(prior.status) : null;
+  return prior ? repeatStateOf(prior) : null;
 }
 
 async function openReceipt(
@@ -179,8 +188,10 @@ async function writeClaimedReceipt(
     });
     return { kind: "receipt_unavailable" };
   }
-  // Another request is sending these bytes to this mail right now: it has not
-  // gone out yet, so this is "still sending", never "already sent".
+  // Another request holds the claim for these bytes to this mail: nothing of
+  // theirs has gone out yet, so this is "still sending", never "already sent".
+  // (A holder that died reads the same until its claim goes stale,
+  // SEND_CLAIM_STALE_MS; nothing was sent then either.)
   if (!claim) return { kind: "repeat", state: "in_progress" };
   try {
     const prior = await priorSendMomentsAgo(input.userId, key.emailId, payloadHash);

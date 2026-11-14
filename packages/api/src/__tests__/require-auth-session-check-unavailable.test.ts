@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // requireAuth / requireAdmin when the database cannot answer the session check.
 //
@@ -24,6 +24,8 @@ const store = vi.hoisted(() => ({
   user: null as UserRow | null,
   deviceError: null as Error | null,
   userError: null as Error | null,
+  deviceReads: 0,
+  userReads: 0,
 }));
 
 const captureError = vi.hoisted(() => vi.fn());
@@ -34,16 +36,29 @@ vi.mock("../db.js", () => {
   const prisma = {
     device: {
       findUnique: vi.fn(async () => {
+        store.deviceReads += 1;
         if (store.deviceError) throw store.deviceError;
         return store.device;
       }),
       update: vi.fn(async () => ({})),
     },
     user: {
-      findUnique: vi.fn(async () => {
-        if (store.userError) throw store.userError;
-        return store.user;
-      }),
+      // A lazy thenable like a PrismaPromise, minus its memoization: every
+      // then() runs the query again, so a second read would show as a second query.
+      findUnique: vi.fn(() => ({
+        // biome-ignore lint/suspicious/noThenProperty: mimics Prisma's lazy query thenable
+        then(
+          onFulfilled?: (row: UserRow | null) => unknown,
+          onRejected?: (err: unknown) => unknown,
+        ) {
+          const run = async () => {
+            store.userReads += 1;
+            if (store.userError) throw store.userError;
+            return store.user;
+          };
+          return run().then(onFulfilled, onRejected);
+        },
+      })),
     },
   };
   return { prisma, db: prisma };
@@ -109,7 +124,17 @@ afterAll(async () => {
   await app.close();
 });
 
+// Each test runs a minute after the previous one on a fake clock, so the
+// once-per-30-seconds Sentry report never carries over between tests.
+const REPORT_INTERVAL_MS = 30_000;
+let clock = Date.now();
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  clock += 2 * REPORT_INTERVAL_MS;
+  vi.setSystemTime(clock);
+  store.deviceReads = 0;
+  store.userReads = 0;
   store.device = liveDevice();
   store.user = liveUser();
   store.deviceError = null;
@@ -118,6 +143,10 @@ beforeEach(() => {
   handlerCalls.admin = 0;
   handlerCalls.guarded = 0;
   captureError.mockClear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function bearer(token = signToken({ userId: USER_ID, email: "u503@example.com" })) {
@@ -157,6 +186,19 @@ describe("requireAuth: the database cannot answer → 503, never 401", () => {
       err,
       expect.objectContaining({ tags: expect.objectContaining({ scope: "auth.session-check" }) }),
     );
+  });
+
+  it("reports to Sentry at most once per 30 seconds, while answering every request 503", async () => {
+    store.deviceError = poolTimeout();
+    const first = await app.inject({ method: "GET", url: "/user", headers: bearer() });
+    const second = await app.inject({ method: "GET", url: "/user", headers: bearer() });
+    expect([first.statusCode, second.statusCode]).toEqual([503, 503]);
+    expect(captureError).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(clock + REPORT_INTERVAL_MS + 1);
+    const third = await app.inject({ method: "GET", url: "/user", headers: bearer() });
+    expect(third.statusCode).toBe(503);
+    expect(captureError).toHaveBeenCalledTimes(2);
   });
 
   it("does not leak the database error text", async () => {
@@ -217,6 +259,8 @@ describe("requireAuth: a definitively ended or invalid session → 401", () => {
     });
 
     expect(res.statusCode).toBe(401);
+    expect(store.deviceReads).toBe(0);
+    expect(store.userReads).toBe(0);
     expect(captureError).not.toHaveBeenCalled();
     expect(handlerCalls.user).toBe(0);
   });
@@ -272,6 +316,30 @@ describe("requireAdmin: same split", () => {
 
     expect(res.statusCode).toBe(503);
     expect(handlerCalls.admin).toBe(0);
+  });
+
+  it("answers 401 when the device ended the session even though the user lookup threw", async () => {
+    store.device = null;
+    store.userError = poolTimeout();
+    const res = await app.inject({ method: "GET", url: "/admin", headers: bearer() });
+
+    expect(res.statusCode).toBe(401);
+    expect(handlerCalls.admin).toBe(0);
+  });
+
+  it("answers 503 when both lookups throw", async () => {
+    store.deviceError = poolTimeout();
+    store.userError = poolTimeout();
+    const res = await app.inject({ method: "GET", url: "/admin", headers: bearer() });
+
+    expect(res.statusCode).toBe(503);
+    expect(handlerCalls.admin).toBe(0);
+  });
+
+  it("reads the user row once per admin request", async () => {
+    store.user = liveUser({ role: "ADMIN" });
+    await app.inject({ method: "GET", url: "/admin", headers: bearer() });
+    expect(store.userReads).toBe(1);
   });
 
   it("answers 401 to an admin whose session was revoked", async () => {

@@ -20,6 +20,7 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { sendEmailPayloadHash } from "../judge/attention-floor.js";
+import { PENDING_IN_FLIGHT_MS } from "../mail/reply-send.js";
 
 const order = vi.hoisted(() => [] as string[]);
 const db = vi.hoisted(() => ({
@@ -27,7 +28,9 @@ const db = vi.hoisted(() => ({
   emailUpdateMany: vi.fn(async () => ({ count: 1 })),
   receiptCreate: vi.fn(),
   receiptUpdateMany: vi.fn(async () => ({ count: 1 })),
-  receiptFindFirst: vi.fn(async () => null as { id: string; status?: string } | null),
+  receiptFindFirst: vi.fn(
+    async () => null as { id: string; status?: string; createdAt?: Date } | null,
+  ),
   linkedFindFirst: vi.fn(async () => null),
   sentUpsert: vi.fn(async () => ({})),
   eventFindMany: vi.fn(async () => [] as unknown[]),
@@ -393,10 +396,41 @@ describe("POST /emails/:id/reply (Send)", () => {
   });
 
   it("answers SEND_IN_PROGRESS for an earlier send whose receipt is still PENDING", async () => {
-    db.receiptFindFirst.mockResolvedValueOnce({ id: "rcpt-0", status: "PENDING" });
+    db.receiptFindFirst.mockResolvedValueOnce({
+      id: "rcpt-0",
+      status: "PENDING",
+      createdAt: new Date(),
+    });
     const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("SEND_IN_PROGRESS");
+    expectNothingSent();
+  });
+
+  it("answers SEND_OUTCOME_UNKNOWN for a PENDING receipt too old to be in flight", async () => {
+    db.receiptFindFirst.mockResolvedValueOnce({
+      id: "rcpt-0",
+      status: "PENDING",
+      createdAt: new Date(Date.now() - PENDING_IN_FLIGHT_MS - 1_000),
+    });
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SEND_OUTCOME_UNKNOWN");
+    expectNothingSent();
+  });
+
+  it.each([
+    ["PENDING", "SEND_IN_PROGRESS"],
+    ["UNKNOWN", "SEND_OUTCOME_UNKNOWN"],
+    ["SENT", "ALREADY_SENT"],
+  ])("maps a %s receipt found under the claim to %s and releases the claim", async (status, code) => {
+    db.receiptFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "rcpt-0", status, createdAt: new Date() });
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe(code);
+    expect(claims.releaseSend).toHaveBeenCalledTimes(1);
     expectNothingSent();
   });
 
@@ -417,7 +451,7 @@ describe("POST /emails/:id/reply (Send)", () => {
       ]
     )[0];
     expect(query.orderBy).toEqual({ createdAt: "desc" });
-    expect(query.select).toMatchObject({ status: true });
+    expect(query.select).toMatchObject({ status: true, createdAt: true });
   });
 
   it("sends nothing when the claim cannot be taken (503, as for the receipt)", async () => {

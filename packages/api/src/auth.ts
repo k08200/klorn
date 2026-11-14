@@ -236,6 +236,21 @@ function settleSessionChecks(
 }
 
 /**
+ * At most one Sentry report per this interval per process: in a database
+ * outage every authenticated request fails the session check, and one event
+ * says as much as thousands. Every failure is still logged.
+ */
+const SESSION_CHECK_REPORT_INTERVAL_MS = 30_000;
+let lastSessionCheckReportAt = Number.NEGATIVE_INFINITY;
+
+function reportSessionCheckFailure(err: unknown): void {
+  const now = Date.now();
+  if (now - lastSessionCheckReportAt < SESSION_CHECK_REPORT_INTERVAL_MS) return;
+  lastSessionCheckReportAt = now;
+  captureError(err, { tags: { scope: "auth.session-check" } });
+}
+
+/**
  * The database could not answer a session check (pool timeout, dropped
  * connection). The session was never shown to be ended, so this is not a 401 —
  * a 401 signs the client out. A retryable 503 that lets nothing through: the
@@ -244,7 +259,7 @@ function settleSessionChecks(
  */
 function sendSessionCheckUnavailable(request: FastifyRequest, reply: FastifyReply, err: unknown) {
   request.log.error({ err }, "session check failed: database unavailable");
-  captureError(err, { tags: { scope: "auth.session-check" } });
+  reportSessionCheckFailure(err);
   return reply.code(503).header("Retry-After", String(SESSION_CHECK_RETRY_AFTER_SECONDS)).send({
     error: "Couldn't verify your session right now. Please try again.",
     code: SESSION_CHECK_UNAVAILABLE_CODE,
