@@ -54,10 +54,7 @@ vi.mock("../db.js", () => db);
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { judgeSlackEpisode, slackConversationKind } from "../slack/judge-episode.js";
-import {
-  judgeReadySlackEpisodes,
-  SLACK_JUDGED_EPISODES_PER_DAY,
-} from "../slack/judge-sweep.js";
+import { judgeReadySlackEpisodes, SLACK_JUDGED_EPISODES_PER_DAY } from "../slack/judge-sweep.js";
 import { notifySlackPush, SLACK_PUSH_OPEN_PATH } from "../slack/notify.js";
 import { slackPermalink } from "../slack/permalink.js";
 import { slackPushContent } from "../slack/push-content.js";
@@ -121,9 +118,9 @@ describe("slackPushContent", () => {
       expect(title.startsWith("Slack")).toBe(true);
       expect(title.length).toBeGreaterThan("Slack · ".length);
     }
-    expect(slackPushContent({ kind: "dm", preview: "hi", reason: "", language: "ko" }).title).not.toBe(
-      slackPushContent({ kind: "dm", preview: "hi", reason: "", language: "en" }).title,
-    );
+    expect(
+      slackPushContent({ kind: "dm", preview: "hi", reason: "", language: "ko" }).title,
+    ).not.toBe(slackPushContent({ kind: "dm", preview: "hi", reason: "", language: "en" }).title);
   });
 });
 
@@ -301,7 +298,12 @@ describe("judgeReadySlackEpisodes", () => {
   });
 
   it("does not ring or extract for a quiet lane, and SILENT skips commitments", async () => {
-    judge.judgeEmail.mockResolvedValueOnce({ tier: "SILENT", reason: "chit-chat", features: {}, source: "llm" });
+    judge.judgeEmail.mockResolvedValueOnce({
+      tier: "SILENT",
+      reason: "chit-chat",
+      features: {},
+      source: "llm",
+    });
     await judgeReadySlackEpisodes(NOW);
     expect(budget.admitPushNotification).not.toHaveBeenCalled();
     expect(commit.extractAndUpsertCommitmentsFromText).not.toHaveBeenCalled();

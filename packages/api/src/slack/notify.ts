@@ -8,9 +8,9 @@
  * Held by the budget: a bell row the user can find later, no ring.
  */
 
+import { prisma } from "../db.js";
 import type { SlackConversationKind } from "../judge/email-classifier.js";
 import { admitPushNotification } from "../judge/v3/push-budget-gate.js";
-import { prisma } from "../db.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { slackPushContent } from "./push-content.js";
 import { isUniqueViolation } from "./unique-violation.js";

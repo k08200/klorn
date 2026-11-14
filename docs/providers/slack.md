@@ -220,22 +220,38 @@ episode was judged starts a new episode. Constants live in
 This keeps one LLM call per burst instead of per message, and still rings
 within about 90 s of the last message of an urgent DM.
 
+The judge pass (`packages/api/src/slack/judge-sweep.ts`) runs on every 30 s
+scheduler tick while `SLACK_ENABLED` is on and `BACKGROUND_AGENTS_DISABLED`
+is not set, cohort-aware, 10 episodes a tick. It claims an episode
+(`OPEN → JUDGING`, so an ingest can no longer extend it and no other worker
+judges it); a claim older than 10 minutes belongs to a crashed tick and is
+taken again. Outcomes: `JUDGED` (lane + reason), `ANSWERED` (the user replied
+first), `EMPTY` (every message was deleted in Slack), `OVER_CAP` (past
+**200 judged episodes per connection per UTC day** — no LLM call; the signing
+secret is the user's own, so the episode count is theirs to inflate). A judge
+error lands the episode in QUEUE, the default lane, instead of retrying
+forever.
+
 ## 8. Judging
 
-The existing judge, not a new engine: `judgeEmail` (`packages/api/src/judge/poc-judge.ts:804`)
-with a `source: "slack"` option. For Slack it:
+The existing judge, not a new engine: `judgeEmail` (`packages/api/src/judge/poc-judge.ts`)
+with a `slack: { conversation }` field on its item (`ClassifiableEmail`,
+`judge/email-classifier.ts`), set by `slack/judge-episode.ts`. For Slack it:
 
-- replaces the email item block of the prompt (`buildJudgePrompt`, `poc-judge.ts:342`)
-  with a Slack block (conversation kind, mentions-you, messages), every
+- replaces the email item block of the prompt (`buildJudgePrompt` /
+  `judgeItemBlock`) and the system prompt with Slack ones (the conversation
+  kind — DM, group DM, @mention, followed channel — and the messages as plain
+  text, at most 1,500 characters, always included), every
   Slack-supplied string wrapped by `wrapUntrusted` (`packages/api/src/untrusted.ts:26`)
   with `slack:*` sources — the same wrapping mail gets;
 - skips the email-address-keyed shortcuts (pinned sender rule, marketing
-  fast path, sender prior, learned rules), because a Slack user ID is not an
-  email address;
+  fast path, sender prior, learned rules) and the automated-sender / CI /
+  spam floors, because a Slack user ID is not an email address and bots are
+  dropped before anything is stored;
 - keeps the four-feature LLM score → deterministic tier rule → keyword
   fallback, so the output is one of the 5 lanes (PUSH / MEETING / QUEUE /
-  INFO / SILENT) via `normalizeTier` (`judge/tiers.ts:36`); retired values
-  can never be emitted.
+  INFO / SILENT) via `toLiveTier` (`judge/tiers.ts`); retired values can
+  never be emitted. The email prompt is unchanged byte for byte.
 
 The call carries `userId` and the user's BYOK credentials, so the per-user
 daily cost cap and BYOK exemption apply unchanged. If the cap is hit the
@@ -256,11 +272,17 @@ row of type `slack` whose `link` is the Slack permalink
 `?thread_ts=…&cid=…` for a thread reply — the format Slack's own
 `chat.getPermalink` examples use; computed locally so no API call is made),
 the desktop WebSocket frame, and `sendPushNotification` (`notify/push.ts:176`)
-with the urgent-interrupt category, so quiet hours, focus window and the
-user's urgent-push opt-out apply. Push text comes from `slackPushContent`
-(sibling of `mailPushContent`, `notify/mail-push-content.ts:102`): title
-"Slack", body the first line of the episode (plain text, 180 chars) and the
-judge's reason, localized in all 7 notification languages.
+with the urgent-interrupt category and `bucket: "interrupt"` (listed in
+`push-interrupt-callers-guard.test.ts`), so quiet hours, focus window and the
+user's urgent-push opt-out apply. The device push opens Today (service
+workers only open same-origin paths); the bell row's link opens Slack. Push
+text comes from `slackPushContent` (`slack/push-content.ts`, sibling of
+`mailPushContent`): title "Slack · Direct message / Group message / You were
+mentioned / Followed channel" in all 7 notification languages, body the
+first message as one plain line (180 chars) and the judge's reason. A push
+the budget holds is written as a bell row (deduped per episode) and does not
+ring. The Mac app's native banners are built from `AttentionItem`, so they do
+not show Slack episodes in v1.
 
 ## 10. Commitments
 
@@ -271,7 +293,9 @@ with `sourceType: "SLACK"` (already in `CommitmentSource`, `schema.prisma:2537`)
 candidates are written below the 0.7 confirmation line, i.e. **suggested, not
 confirmed** (`pim/commitment-confirmation.ts:20`), exactly as for mail. Every
 message in a Slack episode is from someone else, so a first-person promise
-("I'll send it Friday") is the counterparty's, not the user's.
+("I'll send it Friday") is the counterparty's, not the user's
+(`ownerForCandidate` and the refiner prompt treat `SLACK` like `EMAIL`).
+SILENT episodes are not mined.
 
 ## 11. What is stored, for how long, and why
 

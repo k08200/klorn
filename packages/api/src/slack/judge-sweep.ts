@@ -13,16 +13,12 @@
  * count is theirs to inflate.
  */
 
-import { SLACK_FLAGS, cohortRestriction } from "../config.js";
+import { cohortRestriction, SLACK_FLAGS } from "../config.js";
 import { prisma } from "../db.js";
 import { isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { extractSlackCommitments } from "./commitments.js";
-import {
-  EPISODE_MAX_MESSAGES,
-  EPISODE_MAX_WAIT_MS,
-  EPISODE_QUIET_MS,
-} from "./episodes.js";
+import { EPISODE_MAX_MESSAGES, EPISODE_MAX_WAIT_MS, EPISODE_QUIET_MS } from "./episodes.js";
 import { judgeSlackEpisode, slackConversationKind, slackEpisodeText } from "./judge-episode.js";
 import { notifySlackPush } from "./notify.js";
 import { slackPermalink } from "./permalink.js";
@@ -164,7 +160,10 @@ async function judgeOrQueue(episode: ReadyEpisode, now: Date): Promise<void> {
   try {
     await judgeOne(episode, now);
   } catch (err) {
-    console.error(`${LOG_PREFIX} judging an episode failed:`, err instanceof Error ? err.name : err);
+    console.error(
+      `${LOG_PREFIX} judging an episode failed:`,
+      err instanceof Error ? err.name : err,
+    );
     captureError(err, { tags: { scope: "slack.judge" } });
     await prisma.slackEpisode.update({
       where: { id: episode.id },

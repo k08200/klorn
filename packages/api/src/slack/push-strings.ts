@@ -19,7 +19,12 @@ const TITLES: Record<NotificationLanguage, KindTitles> = {
     mention: "You were mentioned",
     opt_in: "Followed channel",
   },
-  ko: { dm: "다이렉트 메시지", group_dm: "그룹 메시지", mention: "회원님 멘션", opt_in: "팔로우한 채널" },
+  ko: {
+    dm: "다이렉트 메시지",
+    group_dm: "그룹 메시지",
+    mention: "회원님 멘션",
+    opt_in: "팔로우한 채널",
+  },
   ja: {
     dm: "ダイレクトメッセージ",
     group_dm: "グループメッセージ",

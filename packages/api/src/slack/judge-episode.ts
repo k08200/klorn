@@ -6,11 +6,11 @@
  * background pacer and the BYOK exemption apply unchanged.
  */
 
+import type { LiveTier } from "@klorn/contract";
 import type { SlackConversationKind } from "../judge/email-classifier.js";
 import { EMPTY_JUDGE_CONTEXT, judgeEmail } from "../judge/poc-judge.js";
 import { toLiveTier } from "../judge/tiers.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
-import type { LiveTier } from "@klorn/contract";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { slackPlainText } from "./text.js";
 
