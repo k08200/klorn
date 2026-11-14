@@ -3027,7 +3027,7 @@ const en: Record<string, string> = {
   "rulesDsl.apply": "Apply",
   "rulesDsl.reload": "Reload",
   "rulesDsl.loading": "Loading your rules…",
-  "rulesDsl.valid": "No problems found. {n} rules.",
+  "rulesDsl.valid": "No problems found. Rules: {n}.",
   "rulesDsl.errorsTitle": "Problems to fix: {n}",
   "rulesDsl.errorAt": "Line {line}, column {column}:",
   "rulesDsl.errorsTruncated": "Only the first 50 problems are listed.",
@@ -3035,9 +3035,9 @@ const en: Record<string, string> = {
   "rulesDsl.preview.summary":
     "Of your last {examined} sorted mails, {changed} would land in a different lane.",
   "rulesDsl.preview.none": "None of your last {examined} sorted mails would change lane.",
-  "rulesDsl.preview.manualKept": "{n} mails you moved yourself keep their lane.",
+  "rulesDsl.preview.manualKept": "Mails you moved yourself keep their lane: {n}.",
   "rulesDsl.preview.toJudge": "decided by Klorn again",
-  "rulesDsl.preview.count": "{n} mails",
+  "rulesDsl.preview.count": "Mails: {n}",
   "rulesDsl.preview.examples": "Examples",
   "rulesDsl.preview.note": "Rules apply to new mail. Mail that is already sorted keeps its lane.",
   "rulesDsl.confirm.title": "Apply these rules?",
@@ -3050,6 +3050,8 @@ const en: Record<string, string> = {
   "rulesDsl.error.tooLarge": "The rules text is too large.",
   "rulesDsl.error.rateLimited": "Too many requests. Try again in a minute.",
   "rulesDsl.error.unavailable": "Rules as text isn't available for this account.",
+  "rulesDsl.notApplicable":
+    "Your rules are over the text editor's limits (500 rules, 64 KiB), so they can't be applied from here. Edit them in the list above.",
   "rulesDsl.error.failed": "Something went wrong. Try again.",
 };
 

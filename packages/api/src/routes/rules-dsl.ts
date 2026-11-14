@@ -14,7 +14,11 @@
  * nothing else — no reply, send, archive or calendar action.
  */
 
-import type { RulesDslInvalidResponse, RulesDslValidateResponse } from "@klorn/contract";
+import type {
+  RulesDslApplyResponse,
+  RulesDslInvalidResponse,
+  RulesDslValidateResponse,
+} from "@klorn/contract";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { RULES_DSL_FLAG, rulesDslLive } from "../config.js";
@@ -142,7 +146,12 @@ export async function rulesDslRoutes(app: FastifyInstance) {
         });
       }
       const fresh = await exportRulesFor(userId);
-      return { ...outcome.result, text: fresh.text, baseHash: fresh.baseHash };
+      return {
+        ...outcome.result,
+        text: fresh.text,
+        baseHash: fresh.baseHash,
+        applicable: fresh.applicable,
+      } satisfies RulesDslApplyResponse;
     },
   );
 }

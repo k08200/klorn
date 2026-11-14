@@ -3080,6 +3080,8 @@ const ja: Record<string, string> = {
   "rulesDsl.error.tooLarge": "ルールのテキストが大きすぎます。",
   "rulesDsl.error.rateLimited": "リクエストが多すぎます。1 分ほどしてからお試しください。",
   "rulesDsl.error.unavailable": "このアカウントではテキストでのルール編集を利用できません。",
+  "rulesDsl.notApplicable":
+    "ルールがテキストエディターの上限（ルール 500 件、64 KiB）を超えているため、ここでは適用できません。上の一覧で編集してください。",
   "rulesDsl.error.failed": "問題が発生しました。もう一度お試しください。",
 };
 

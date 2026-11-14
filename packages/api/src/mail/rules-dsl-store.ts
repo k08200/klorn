@@ -14,11 +14,14 @@ import type {
   RulesDslDryRunResponse,
   RulesDslExportResponse,
 } from "@klorn/contract";
-import { prisma } from "../db.js";
+import { Prisma } from "@prisma/client";
+import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import { toLiveTier } from "../judge/tiers.js";
 import {
+  type ApplyPlan,
   buildInventory,
   type CompiledRule,
+  checkRules,
   currentPinRules,
   dryRunRules,
   exportText,
@@ -53,8 +56,28 @@ function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
-function loadRules(userId: string): Promise<StoredEmailRule[]> {
-  return prisma.emailRule.findMany({
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * pg_advisory_xact_lock(class, key): one user's applies run one at a time
+ * across processes, so two tabs applying the same baseHash cannot both create
+ * the same sender. Its own key space (two-int form), apart from other locks.
+ */
+const RULES_DSL_LOCK_CLASS = 0x0d51;
+
+/** Thrown inside the apply transaction to roll it back as a 409. */
+class RulesChangedError extends Error {
+  constructor() {
+    super("rules changed since export");
+    this.name = "RulesChangedError";
+  }
+}
+
+function loadRules(
+  userId: string,
+  client: Pick<Tx, "emailRule"> = prisma,
+): Promise<StoredEmailRule[]> {
+  return client.emailRule.findMany({
     where: { userId },
     select: RULE_SELECT,
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -96,11 +119,15 @@ export function inventoryHash(inventory: RuleInventory): string {
 export async function exportRulesFor(userId: string): Promise<RulesDslExportResponse> {
   const [rules, learned] = await Promise.all([loadRules(userId), loadLearned(userId)]);
   const inventory = buildInventory(rules, learned);
+  const text = exportText(inventory);
   return {
-    text: exportText(inventory),
+    text,
     baseHash: inventoryHash(inventory),
     ruleCount: inventory.editable.length,
     readOnlyCount: inventory.readOnly.length,
+    // Over the text limits (500 rules, 64 KiB) the export cannot be applied
+    // back; the editor says so instead of failing on Apply.
+    applicable: checkRules(text).ok,
   };
 }
 
@@ -113,7 +140,8 @@ export async function dryRunFor(
   const stored = await loadRules(userId);
   const inventory = buildInventory(stored, []);
   const items = await prisma.attentionItem.findMany({
-    where: { userId, source: "EMAIL" },
+    // tier null = not classified yet: it has no lane to change.
+    where: { userId, source: "EMAIL", tier: { not: null } },
     orderBy: [{ surfacedAt: "desc" }, { id: "desc" }],
     take: limit,
     select: { sourceId: true, tier: true, isManualOverride: true },
@@ -143,19 +171,25 @@ export async function dryRunFor(
   });
   return dryRunRules({
     current: currentPinRules(stored),
-    proposed: proposedPinRules(rules, inventory.keptPins),
+    proposed: proposedPinRules(rules, inventory, new Date()),
     mails: dryMails,
   });
 }
 
 export type ApplyOutcome =
   | { kind: "conflict" }
-  | { kind: "applied"; result: Omit<RulesDslApplyResponse, "text" | "baseHash"> };
+  | {
+      kind: "applied";
+      result: Omit<RulesDslApplyResponse, "text" | "baseHash" | "applicable">;
+    };
 
 /**
- * Replace the user's editable pins with `rules`, in one transaction with the
- * audit row. Refuses (conflict) when the pins changed since the export the
- * user edited, so a pin made elsewhere meanwhile is never silently deleted.
+ * Replace the user's editable pins with `rules`: one interactive transaction
+ * that takes the user's lock, re-reads the pins, checks `baseHash`, writes
+ * the plan and the audit row. Any surprise rolls everything back as a
+ * conflict: the pins changed since the export the user edited (a pin made
+ * elsewhere meanwhile is never silently deleted), or a row it edits or
+ * deletes was changed by another writer between its read and its write.
  */
 export async function applyRulesFor(
   userId: string,
@@ -163,48 +197,64 @@ export async function applyRulesFor(
   text: string,
   baseHash: string,
 ): Promise<ApplyOutcome> {
-  const stored = await loadRules(userId);
-  const inventory = buildInventory(stored, []);
-  if (inventoryHash(inventory) !== baseHash) return { kind: "conflict" };
+  try {
+    const plan = await prisma.$transaction(
+      (tx) => applyInTx(tx, userId, rules, text, baseHash),
+      INTERACTIVE_TX_OPTIONS,
+    );
+    return {
+      kind: "applied",
+      result: {
+        added: plan.creates.length,
+        changed: plan.updates.length,
+        removed: plan.deletes.length,
+        unchanged: plan.unchanged,
+      },
+    };
+  } catch (err) {
+    if (err instanceof RulesChangedError) return { kind: "conflict" };
+    throw err;
+  }
+}
+
+async function applyInTx(
+  tx: Tx,
+  userId: string,
+  rules: readonly CompiledRule[],
+  text: string,
+  baseHash: string,
+): Promise<ApplyPlan> {
+  await tx.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(${RULES_DSL_LOCK_CLASS}::int, hashtext(${userId}))`,
+  );
+  const inventory = buildInventory(await loadRules(userId, tx), []);
+  if (inventoryHash(inventory) !== baseHash) throw new RulesChangedError();
   const plan = planApply(inventory, rules);
   const scope = { userId, actionType: "PIN_TIER" as const };
-  const writes = [
-    ...(plan.deletes.length > 0
-      ? [prisma.emailRule.deleteMany({ where: { ...scope, id: { in: plan.deletes } } })]
-      : []),
-    ...plan.updates.map((update) =>
-      prisma.emailRule.updateMany({
-        where: { ...scope, id: update.id },
-        data: toRuleRow(update.rule),
-      }),
-    ),
-    ...(plan.creates.length > 0
-      ? [
-          prisma.emailRule.createMany({
-            data: plan.creates.map((r) => ({ userId, ...toRuleRow(r) })),
-          }),
-        ]
-      : []),
-    prisma.ruleChangeAudit.create({
-      data: {
-        userId,
-        source: AUDIT_SOURCE,
-        ruleCount: rules.length,
-        addedCount: plan.creates.length,
-        changedCount: plan.updates.length,
-        removedCount: plan.deletes.length,
-        textHash: sha256(text),
-      },
-    }),
-  ];
-  await prisma.$transaction(writes);
-  return {
-    kind: "applied",
-    result: {
-      added: plan.creates.length,
-      changed: plan.updates.length,
-      removed: plan.deletes.length,
-      unchanged: plan.unchanged,
+  if (plan.deletes.length > 0) {
+    const gone = await tx.emailRule.deleteMany({ where: { ...scope, id: { in: plan.deletes } } });
+    if (gone.count !== plan.deletes.length) throw new RulesChangedError();
+  }
+  for (const update of plan.updates) {
+    const done = await tx.emailRule.updateMany({
+      where: { ...scope, id: update.id },
+      data: toRuleRow(update.rule),
+    });
+    if (done.count !== 1) throw new RulesChangedError();
+  }
+  if (plan.creates.length > 0) {
+    await tx.emailRule.createMany({ data: plan.creates.map((r) => ({ userId, ...toRuleRow(r) })) });
+  }
+  await tx.ruleChangeAudit.create({
+    data: {
+      userId,
+      source: AUDIT_SOURCE,
+      ruleCount: rules.length,
+      addedCount: plan.creates.length,
+      changedCount: plan.updates.length,
+      removedCount: plan.deletes.length,
+      textHash: sha256(text),
     },
-  };
+  });
+  return plan;
 }

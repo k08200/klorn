@@ -32,6 +32,8 @@ function pin(conditions: unknown, lane: string, extra: Partial<StoredEmailRule> 
   } satisfies StoredEmailRule;
 }
 
+const NOW = new Date(Date.UTC(2026, 10, 14));
+
 function mail(id: string, sender: string, lane: DryRunMail["lane"], manual = false): DryRunMail {
   return { id, sender, subject: `subject ${id}`, lane, manual };
 }
@@ -68,10 +70,11 @@ describe("dryRunRules", () => {
 
   it("reports nothing for the unchanged rules", () => {
     const current = currentPinRules(stored);
-    const proposed = proposedPinRules(rulesFrom(""), inventory.keptPins);
+    const proposed = proposedPinRules(rulesFrom(""), inventory, NOW);
     const unchanged = proposedPinRules(
-      inventory.editable.map(({ rowId: _r, duplicateIds: _d, ...rule }) => rule),
-      inventory.keptPins,
+      inventory.editable.map(({ rowId: _r, duplicateIds: _d, updatedAt: _u, ...rule }) => rule),
+      inventory,
+      NOW,
     );
     const mails = [mail("1", "boss@x.co", "PUSH"), mail("2", "a@news.io", "SILENT")];
     expect(dryRunRules({ current, proposed: unchanged, mails })).toMatchObject({
@@ -98,7 +101,8 @@ describe("dryRunRules", () => {
           'rule "Off"\nwhen from address "off@x.co"\nthen lane PUSH\ndisabled',
         ].join("\n"),
       ),
-      inventory.keptPins,
+      inventory,
+      NOW,
     );
     const mails = [
       mail("1", "boss@x.co", "PUSH"),
@@ -131,17 +135,34 @@ describe("dryRunRules", () => {
     const current = currentPinRules(stored);
     const proposed = proposedPinRules(
       rulesFrom('rule "m"\nwhen from address "a@m.co"\nthen lane INFO'),
-      inventory.keptPins,
+      inventory,
+      NOW,
     );
     const result = dryRunRules({ current, proposed, mails: [mail("1", "b@m.co", "MEETING")] });
     expect(result.changed).toBe(0);
+  });
+
+  it("orders the proposed pins as the judge would read them after apply", () => {
+    // An unchanged rule keeps its old row (and updatedAt); a newer read-only
+    // pin on the same address wins in the judge, so it must win here too.
+    const old = pin({ from: ["a@m.co"] }, "PUSH", { updatedAt: new Date(Date.UTC(2026, 0, 1)) });
+    const newerKept = pin({ from: ["a@m.co", "b@m.co"] }, "SILENT", {
+      updatedAt: new Date(Date.UTC(2026, 5, 1)),
+    });
+    const inv = buildInventory([old, newerKept], []);
+    const unchanged = rulesFrom(`rule "${old.name}"\nwhen from address "a@m.co"\nthen lane PUSH`);
+    expect(pinnedTierFromRules(proposedPinRules(unchanged, inv, NOW), "a@m.co")).toBe("SILENT");
+    // An edited rule is rewritten at apply time, so it becomes the newest row.
+    const edited = rulesFrom(`rule "${old.name}"\nwhen from address "a@m.co"\nthen lane INFO`);
+    expect(pinnedTierFromRules(proposedPinRules(edited, inv, NOW), "a@m.co")).toBe("INFO");
   });
 
   it("caps samples and cuts long subjects", () => {
     const current = currentPinRules([]);
     const proposed = proposedPinRules(
       rulesFrom('rule "a"\nwhen from domain "y.co"\nthen lane PUSH'),
-      [],
+      buildInventory([], []),
+      NOW,
     );
     const mails = Array.from({ length: 50 }, (_, i) => ({
       ...mail(String(i), "a@y.co", "QUEUE" as const),

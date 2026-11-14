@@ -12,8 +12,21 @@ import { isPublicMailboxDomain } from "./public-mailbox-domains.js";
 const ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DOMAIN_RE = /^[^\s@]+\.[^\s@]+$/;
 
+/**
+ * RFC 5321's forward-path limit. Checked before the patterns run, on the raw
+ * and on the lowercased value: ADDRESS_RE/DOMAIN_RE backtrack quadratically on
+ * a crafted failing input, so an uncapped value posted to /rules/pins could
+ * hold the event loop for minutes.
+ */
+export const PIN_VALUE_MAX_CHARS = 254;
+
 /** Why a pin was refused, for callers that report it in their own words. */
-export type PinErrorCode = "scope" | "tier" | "address" | "domain" | "public-domain";
+export type PinErrorCode = "scope" | "tier" | "address" | "domain" | "public-domain" | "too-long";
+
+const TOO_LONG = {
+  error: `at most ${PIN_VALUE_MAX_CHARS} characters.`,
+  code: "too-long",
+} as const;
 
 export type PinValidation = { ok: TierPinInput } | { error: string; code: PinErrorCode };
 
@@ -29,9 +42,10 @@ export function validateTierPin(pin: {
   if (!isTier(pin.tier) || pin.tier === "AUTO") {
     return { error: "tier must be one of the five live lanes.", code: "tier" };
   }
-  const value = String(pin.value ?? "")
-    .trim()
-    .toLowerCase();
+  const raw = String(pin.value ?? "");
+  if (raw.length > PIN_VALUE_MAX_CHARS * 2) return TOO_LONG;
+  const value = raw.trim().toLowerCase();
+  if (value.length > PIN_VALUE_MAX_CHARS) return TOO_LONG;
   if (pin.scope === "sender") {
     if (!ADDRESS_RE.test(value)) return { error: "not a valid email address.", code: "address" };
     return { ok: { scope: "sender", value, tier: pin.tier } };

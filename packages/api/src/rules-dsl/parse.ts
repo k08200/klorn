@@ -22,6 +22,7 @@ import {
 const LANE_LIST = "PUSH, MEETING, QUEUE, INFO or SILENT";
 const RETIRED_LANES = new Set(["AUTO", "CALL"]);
 const STATEMENTS = "rule, when, then, note or disabled";
+const BOM = 0xfeff;
 const CLAUSES: ReadonlySet<string> = new Set(["when", "then", "note", "disabled"]);
 
 /** A token shape: a fixed word, one of several words, a string, or any word. */
@@ -95,7 +96,9 @@ class Parser {
       const want = shape[i] as Expect;
       const got = tokens[i];
       if (!got) {
-        this.fail(lineLength + 1, "unexpected-token", `Expected ${expected(want)} here.`);
+        // Just after the last token (and one space), not past a trailing comment.
+        const at = i > 0 ? (tokens[i - 1] as Token).end + 1 : lineLength + 1;
+        this.fail(at, "unexpected-token", `Expected ${expected(want)} here.`);
         return null;
       }
       if (!accepts(want, got)) {
@@ -132,23 +135,19 @@ class Parser {
     this.match(tokens, [{ word: "version" }, { word: "1" }], lineLength);
   }
 
-  private rule(tokens: Token[], lineLength: number): void {
+  /** Close the open rule and open a new one; false once the rule limit is hit. */
+  private startRule(column: number): boolean {
     this.finishRule();
-    const head = tokens[0] as Token;
     this.ruleCount += 1;
     if (this.ruleCount > RULES_DSL_LIMITS.maxRules) {
-      this.fail(
-        head.column,
-        "too-many-rules",
-        `At most ${RULES_DSL_LIMITS.maxRules} rules per file.`,
-      );
+      this.fail(column, "too-many-rules", `At most ${RULES_DSL_LIMITS.maxRules} rules per file.`);
       this.stopped = true;
-      return;
+      return false;
     }
     this.current = {
       name: "",
       line: this.lineNo,
-      column: head.column,
+      column,
       note: null,
       disabled: null,
       sender: null,
@@ -156,6 +155,22 @@ class Parser {
       target: null,
       broken: false,
     };
+    return true;
+  }
+
+  /**
+   * A line that could not be tokenized. When it is a rule header, it still
+   * opens a (broken) rule, so its clauses do not pile onto the rule above.
+   */
+  badLine(line: string, column: number, code: DslErrorCode, message: string): void {
+    const head = ruleHeaderColumn(line);
+    if (head !== null && this.sawStatement && !this.startRule(head)) return;
+    this.fail(column, code, message);
+  }
+
+  private rule(tokens: Token[], lineLength: number): void {
+    const head = tokens[0] as Token;
+    if (!this.startRule(head.column) || !this.current) return;
     const matched = this.match(tokens, [{ word: "rule" }, { string: true }], lineLength);
     if (!matched) return;
     const name = matched[1] as Token;
@@ -243,7 +258,7 @@ class Parser {
     );
     if (!matched) return;
     const laneToken = matched[2] as Token;
-    const upper = laneToken.text.toUpperCase();
+    const upper = asciiUpper(laneToken.text);
     if (RETIRED_LANES.has(upper)) {
       this.fail(
         laneToken.column,
@@ -332,6 +347,26 @@ function describe(token: Token): string {
   return token.kind === "string" ? "a string" : quoteForMessage(token.text);
 }
 
+/** Uppercase a-z only: `ſilent` must not fold into SILENT. */
+function asciiUpper(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    out += ch >= "a" && ch <= "z" ? ch.toUpperCase() : ch;
+  }
+  return out;
+}
+
+/** Column of a leading `rule` keyword on a raw line, or null. */
+function ruleHeaderColumn(line: string): number | null {
+  let i = 0;
+  while (line[i] === " " || line[i] === "\t") i += 1;
+  if (!line.startsWith("rule", i)) return null;
+  const next = line[i + 4];
+  return next === undefined || next === " " || next === "\t" || next === '"' || next === "#"
+    ? i + 1
+    : null;
+}
+
 function tooLong(what: string, max: number): string {
   return `${what} can be at most ${max} characters.`;
 }
@@ -369,25 +404,33 @@ export function parseRules(text: string): ParseResult {
   }
   const parser = new Parser();
   let lineNo = 0;
-  for (const line of lines(text)) {
+  // One leading byte order mark (some editors add it) is not part of the text.
+  const body = text.charCodeAt(0) === BOM ? text.slice(1) : text;
+  for (const line of lines(body)) {
     lineNo += 1;
     parser.setLine(lineNo);
     const bad = findForbidden(line);
     if (bad !== -1) {
-      parser.fail(
+      const hex = line.charCodeAt(bad).toString(16).toUpperCase().padStart(4, "0");
+      parser.badLine(
+        line,
         bad + 1,
         "forbidden-character",
-        `Control or text-direction character U+${line.charCodeAt(bad).toString(16).toUpperCase().padStart(4, "0")} is not allowed.`,
+        `Invisible, control or text-direction character U+${hex} is not allowed.`,
       );
-      continue;
+    } else {
+      const tokenized = tokenizeLine(line);
+      if ("error" in tokenized) {
+        const { column, code, message } = tokenized.error;
+        parser.badLine(line, column, code, message);
+      } else if (tokenized.tokens.length > 0) {
+        parser.statement(tokenized.tokens, line.length);
+      }
     }
-    const tokenized = tokenizeLine(line);
-    if ("error" in tokenized) {
-      parser.fail(tokenized.error.column, tokenized.error.code, tokenized.error.message);
-      continue;
+    // Past the cap nothing more is reported, so stop working.
+    if (parser.stopped || parser.errors.length > RULES_DSL_LIMITS.maxErrors) {
+      return failure(parser.errors);
     }
-    if (tokenized.tokens.length > 0) parser.statement(tokenized.tokens, line.length);
-    if (parser.stopped) return failure(parser.errors);
   }
   parser.finishFile();
   if (parser.errors.length > 0) return failure(parser.errors);

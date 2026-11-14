@@ -24,6 +24,10 @@ const store = vi.hoisted(() => ({
   mails: [] as Row[],
   audits: [] as Row[],
   nextId: 1,
+  /** Runs when apply takes its lock: lets a test change rows mid-apply. */
+  onLock: null as null | (() => void),
+  /** Runs before an updateMany: another writer acting between read and write. */
+  beforeUpdate: null as null | (() => void),
 }));
 
 const WRITE_OPS = new Set([
@@ -91,6 +95,7 @@ vi.mock("../db.js", () => {
       }),
       updateMany: vi.fn(async (args: { where: Row; data: Row }) => {
         record("updateMany", args);
+        store.beforeUpdate?.();
         const hit = rows().filter((r) => whereMatches(r, args.where));
         for (const r of hit) Object.assign(r, args.data, { updatedAt: new Date() });
         return { count: hit.length };
@@ -110,9 +115,29 @@ vi.mock("../db.js", () => {
     attentionItem: table("attentionItem", () => store.items),
     emailMessage: table("emailMessage", () => store.mails),
     ruleChangeAudit: table("ruleChangeAudit", () => store.audits),
-    $transaction: vi.fn(async (ops: Promise<unknown>[]) => {
-      store.calls.push({ model: "$", op: "$transaction", args: ops.length });
-      return Promise.all(ops);
+    // Interactive form: runs the callback on the same tables and rolls every
+    // table back if it throws, as Postgres would.
+    $transaction: vi.fn(async (arg: unknown) => {
+      store.calls.push({ model: "$", op: "$transaction", args: typeof arg });
+      if (typeof arg !== "function") return Promise.all(arg as Promise<unknown>[]);
+      const saved = {
+        emailRules: store.emailRules.map((r) => ({ ...r })),
+        learnedRules: store.learnedRules.map((r) => ({ ...r })),
+        audits: store.audits.map((r) => ({ ...r })),
+      };
+      try {
+        return await (arg as (tx: unknown) => Promise<unknown>)(prisma);
+      } catch (err) {
+        store.emailRules.splice(0, store.emailRules.length, ...saved.emailRules);
+        store.learnedRules.splice(0, store.learnedRules.length, ...saved.learnedRules);
+        store.audits.splice(0, store.audits.length, ...saved.audits);
+        throw err;
+      }
+    }),
+    $executeRaw: vi.fn(async () => {
+      store.calls.push({ model: "$", op: "$executeRaw", args: null });
+      store.onLock?.();
+      return 1;
     }),
     user: {
       findUnique: vi.fn(async () => ({
@@ -131,7 +156,7 @@ vi.mock("../db.js", () => {
       update: vi.fn(async () => ({})),
     },
   };
-  return { prisma, db: prisma };
+  return { prisma, db: prisma, INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 } };
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
@@ -267,6 +292,8 @@ beforeEach(() => {
   store.mails = [];
   store.audits = [];
   store.nextId = 1;
+  store.onLock = null;
+  store.beforeUpdate = null;
   process.env.RULES_DSL_ENABLED = "true";
   delete process.env.ROLLOUT_COHORT_USER_IDS;
   seed();
@@ -336,6 +363,7 @@ describe("GET /export", () => {
     };
     expect(body.ruleCount).toBe(2);
     expect(body.readOnlyCount).toBe(4);
+    expect(body).toMatchObject({ applicable: true });
     expect(body.baseHash).toMatch(/^[0-9a-f]{64}$/);
     expect(body.text).toContain('when from address "boss@x.co"');
     expect(body.text).toContain('# reply rule "Thanks": auto-reply, 1 sender, active');
@@ -349,6 +377,17 @@ describe("GET /export", () => {
       expect((c.args as { where: Row }).where.userId).toBe("user-1");
     }
     expect(writes()).toEqual([]);
+  });
+});
+
+describe("GET /export — limits", () => {
+  it("says when the rules are too many to apply as text", async () => {
+    for (let i = 0; i < 501; i++) {
+      store.emailRules.push(rule({ conditions: { from: [`many${i}@x.co`] } }));
+    }
+    const res = await call("GET", `${BASE}/export`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ applicable: false, ruleCount: 503 });
   });
 });
 
@@ -422,6 +461,28 @@ describe("POST /dry-run", () => {
     }
   });
 
+  it("skips mail that is not classified yet (no lane)", async () => {
+    store.items.push({
+      id: "item-m5",
+      userId: "user-1",
+      source: "EMAIL",
+      sourceId: "m5",
+      tier: null,
+      isManualOverride: false,
+    });
+    store.mails.push({
+      id: "m5",
+      userId: "user-1",
+      from: "z@y.co",
+      fromAddress: null,
+      subject: "s",
+    });
+    const res = await call("POST", `${BASE}/dry-run`, {
+      text: 'version 1\nrule "New"\nwhen from domain "y.co"\nthen lane SILENT',
+    });
+    expect(res.json()).toMatchObject({ examined: 3 });
+  });
+
   it("answers 400 with errors for invalid text", async () => {
     const res = await call("POST", `${BASE}/dry-run`, { text: "version 1\nbogus" });
     expect(res.statusCode).toBe(400);
@@ -451,10 +512,14 @@ describe("POST /apply", () => {
   it("refuses a stale base hash with 409 and writes nothing", async () => {
     const { text } = await exported();
     store.calls = [];
+    const before = snapshot();
     const res = await call("POST", `${BASE}/apply`, { text, baseHash: "0".repeat(64) });
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ code: "rules-changed" });
-    expect(writes()).toEqual([]);
+    // The check runs inside the transaction, under the lock: no write reached a table.
+    expect(writes().filter((c) => c.op !== "$transaction")).toEqual([]);
+    expect(snapshot()).toBe(before);
+    expect(store.audits).toEqual([]);
   });
 
   it("refuses invalid text with 400 and writes nothing", async () => {
@@ -559,6 +624,53 @@ describe("POST /apply", () => {
     expect(res.json()).toMatchObject({ removed: 2 });
     expect(store.emailRules.map((r) => r.id).sort()).toEqual(["draft", "multi", "reply", "theirs"]);
     expect(store.learnedRules).toHaveLength(2);
+  });
+
+  it("rolls everything back with 409 when a pin it edits changes mid-apply", async () => {
+    const { baseHash } = await exported();
+    // Another writer replaces the Boss pin after apply read the rows.
+    store.onLock = () => {
+      const i = store.emailRules.findIndex((r) => r.id === "boss");
+      store.emailRules.splice(i, 1);
+    };
+    const before = snapshot();
+    const res = await call("POST", `${BASE}/apply`, {
+      text: 'version 1\nrule "Boss"\nwhen from address "boss@x.co"\nthen lane MEETING\nrule "Acme"\nwhen from domain "acme.io"\nthen lane INFO\nrule "New"\nwhen from domain "y.co"\nthen lane INFO',
+      baseHash,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "rules-changed" });
+    expect(snapshot()).toBe(before);
+    expect(store.audits).toEqual([]);
+  });
+
+  it("rolls back with 409 when a row vanishes between its read and its update", async () => {
+    const { baseHash } = await exported();
+    store.beforeUpdate = () => {
+      const i = store.emailRules.findIndex((r) => r.id === "boss");
+      if (i >= 0) store.emailRules.splice(i, 1);
+    };
+    const before = snapshot();
+    const res = await call("POST", `${BASE}/apply`, {
+      text: 'version 1\nrule "Boss"\nwhen from address "boss@x.co"\nthen lane MEETING\nrule "Acme"\nwhen from domain "acme.io"\nthen lane INFO\nrule "New"\nwhen from domain "y.co"\nthen lane INFO',
+      baseHash,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(snapshot()).toBe(before);
+    expect(store.audits).toEqual([]);
+  });
+
+  it("takes a per-user lock and re-reads inside the transaction", async () => {
+    const { text, baseHash } = await exported();
+    store.calls = [];
+    await call("POST", `${BASE}/apply`, { text, baseHash });
+    const ops = store.calls.map((c) => `${c.model}.${c.op}`);
+    const tx = ops.indexOf("$.$transaction");
+    const lock = ops.indexOf("$.$executeRaw");
+    const read = ops.lastIndexOf("emailRule.findMany");
+    expect(tx).toBeGreaterThanOrEqual(0);
+    expect(lock).toBeGreaterThan(tx);
+    expect(read).toBeGreaterThan(lock);
   });
 
   it("a second apply with the first export's hash is refused", async () => {

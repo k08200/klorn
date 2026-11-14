@@ -3038,6 +3038,8 @@ const ko: Record<string, string> = {
   "rulesDsl.error.tooLarge": "규칙 텍스트가 너무 큽니다.",
   "rulesDsl.error.rateLimited": "요청이 너무 많습니다. 잠시 뒤에 다시 시도하세요.",
   "rulesDsl.error.unavailable": "이 계정에서는 텍스트 규칙 편집을 사용할 수 없습니다.",
+  "rulesDsl.notApplicable":
+    "규칙이 텍스트 편집기 한도(규칙 500개, 64 KiB)를 넘어 여기서 적용할 수 없습니다. 위 목록에서 편집하세요.",
   "rulesDsl.error.failed": "문제가 발생했습니다. 다시 시도하세요.",
 };
 

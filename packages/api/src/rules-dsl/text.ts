@@ -11,20 +11,45 @@ const SPACE = 0x20;
 const DEL = 0x7f;
 
 /**
- * C0 controls (tab excepted), DEL, and the bidirectional override/isolate
- * characters ("Trojan Source"): a rules file kept in git must show what it
- * does, and none of these has a use in a rule name, note or sender.
+ * Characters a rules file may not contain: C0 controls (tab excepted), DEL,
+ * C1 controls (U+0080–U+009F, NEL included), the Unicode line and paragraph
+ * separators, zero-width and invisible format characters, and the
+ * bidirectional marks, overrides and isolates ("Trojan Source"). A rules file
+ * kept in git must show what it does: none of these is visible, and a
+ * zero-width character inside a sender would make a pin that looks right and
+ * never matches.
  */
 export function isForbiddenCode(code: number): boolean {
   if (code < SPACE) return code !== TAB;
-  if (code === DEL) return true;
-  return (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069);
+  if (code >= DEL && code <= 0x9f) return true;
+  return (
+    code === 0x061c ||
+    code === 0x180e ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x2028 && code <= 0x202e) ||
+    (code >= 0x2060 && code <= 0x2064) ||
+    (code >= 0x2066 && code <= 0x2069) ||
+    code === 0xfeff
+  );
 }
 
-/** Index of the first forbidden character, or -1. */
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/** Index of the first forbidden character or lone surrogate, or -1. */
 export function findForbidden(text: string): number {
   for (let i = 0; i < text.length; i++) {
-    if (isForbiddenCode(text.charCodeAt(i))) return i;
+    const code = text.charCodeAt(i);
+    if (isHighSurrogate(code) && isLowSurrogate(text.charCodeAt(i + 1))) {
+      i += 1;
+      continue;
+    }
+    if (isForbiddenCode(code) || isHighSurrogate(code) || isLowSurrogate(code)) return i;
   }
   return -1;
 }
@@ -67,7 +92,8 @@ function cut(text: string, max: number, forbiddenTo: string): string {
   for (const ch of text) {
     if (count === max) return `${out}…`;
     const code = ch.charCodeAt(0);
-    out += isForbiddenCode(code) || code === TAB ? forbiddenTo : ch;
+    const lone = ch.length === 1 && (isHighSurrogate(code) || isLowSurrogate(code));
+    out += isForbiddenCode(code) || code === TAB || lone ? forbiddenTo : ch;
     count += 1;
   }
   return out;

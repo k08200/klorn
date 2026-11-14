@@ -22,6 +22,8 @@ export interface RulesDslExportResponse {
   baseHash: string;
   ruleCount: number;
   readOnlyCount: number;
+  /** False when the rules exceed the text limits (500 rules, 64 KiB): edit them elsewhere. */
+  applicable: boolean;
 }
 
 /** `POST /api/email/rules/dsl/validate` */
@@ -70,6 +72,8 @@ export interface RulesDslApplyResponse {
   changed: number;
   removed: number;
   unchanged: number;
+  /** The fresh export after apply, as from GET /export. */
   text: string;
   baseHash: string;
+  applicable: boolean;
 }

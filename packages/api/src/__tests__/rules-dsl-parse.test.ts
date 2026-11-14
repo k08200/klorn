@@ -425,6 +425,88 @@ describe("hostile input", () => {
   });
 });
 
+describe("review hardening", () => {
+  it.each([
+    ["zero-width space", "\u200b"],
+    ["word joiner", "\u2060"],
+    ["line separator", "\u2028"],
+    ["paragraph separator", "\u2029"],
+    ["next line (C1)", "\u0085"],
+    ["Arabic letter mark", "\u061c"],
+    ["byte order mark mid-text", "\ufeff"],
+    ["lone high surrogate", "\ud800"],
+    ["lone low surrogate", "\udc00"],
+  ])("refuses an invisible or ill-formed %s inside a sender or name", (_label, ch) => {
+    expect(
+      firstError(ok(`rule "a${ch}b"\nwhen from address "a@b.co"\nthen lane PUSH`)),
+    ).toMatchObject({ line: 2, column: 8, code: "forbidden-character" });
+    expect(firstError(ok(`rule "a"\nwhen from address "a@b.co${ch}"\nthen lane PUSH`)).code).toBe(
+      "forbidden-character",
+    );
+  });
+
+  it("accepts a well-formed surrogate pair (emoji) in a name", () => {
+    expect(
+      checkRules(ok('rule "VIP \ud83d\ude80"\nwhen from address "a@b.co"\nthen lane PUSH')).ok,
+    ).toBe(true);
+  });
+
+  it("ignores one leading byte order mark", () => {
+    expect(checkRules("\ufeffversion 1\n")).toEqual({ ok: true, rules: [] });
+  });
+
+  it("folds lane case in ASCII only", () => {
+    for (const lane of ["\u017filent", "\u0131nfo"]) {
+      expect(firstError(ok(`rule "a"\nwhen from address "a@b.co"\nthen lane ${lane}`)).code).toBe(
+        "unknown-lane",
+      );
+    }
+  });
+
+  it("measures a sender after lowercasing, so the export always re-parses", () => {
+    const value = `${"\u0130".repeat(130)}@x.com`; // İ lowercases to two code units
+    expect(firstError(ok(`rule "a"\nwhen from address "${value}"\nthen lane PUSH`))).toMatchObject({
+      line: 3,
+      column: 19,
+      code: "string-too-long",
+    });
+  });
+
+  it("does not cascade a broken rule header into the previous rule", () => {
+    const errors = errorsOf(
+      ok(
+        'rule "a"\nwhen from address "a@b.co"\nrule "b\nwhen from address "c@d.co"\nthen lane PUSH',
+      ),
+    );
+    expect(errors.map((e) => [e.line, e.code])).toEqual([
+      [2, "missing-then"],
+      [4, "unterminated-string"],
+    ]);
+  });
+
+  it("points a missing token just after the last one, not at the end of a comment", () => {
+    expect(firstError(ok('rule "a"\nwhen from address "a@b.co"\nthen lane # c'))).toMatchObject({
+      line: 4,
+      column: 11,
+      code: "unexpected-token",
+    });
+  });
+
+  it("stops collecting errors once the cap is reached (bounded work)", () => {
+    // ~60 KB of junk lines: under the size limit, far over the error cap.
+    const text = ok(Array.from({ length: 10_000 }, () => "bogus").join("\n"));
+    const started = process.cpuUsage();
+    const result = checkRules(text);
+    const { user, system } = process.cpuUsage(started);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toHaveLength(50);
+      expect(result.truncated).toBe(true);
+    }
+    expect((user + system) / 1000).toBeLessThan(500);
+  });
+});
+
 describe("the module stays pure", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = join(here, "..", "rules-dsl");

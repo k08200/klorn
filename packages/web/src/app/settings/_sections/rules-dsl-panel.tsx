@@ -61,17 +61,23 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
   const [truncated, setTruncated] = useState(false);
   const [status, setStatus] = useState("");
   const [preview, setPreview] = useState<RulesDslDryRunResponse | null>(null);
+  const [applicable, setApplicable] = useState(true);
   const visible = rulesDslVisible(user);
+  // Latest t/toast without making load() depend on them: a language switch
+  // must not reload the text over unsaved edits.
+  const tRef = useRef(t);
+  tRef.current = t;
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
-  const fail = useCallback(
-    (reply: { status: number; body: unknown }) => {
-      const found = dslErrorsFrom(reply.body);
-      setErrors(found);
-      setTruncated(Boolean((reply.body as { truncated?: unknown } | null)?.truncated));
-      if (found.length === 0) toast(t(dslFailureKey(reply.status, reply.body)), "error");
-    },
-    [t, toast],
-  );
+  const fail = useCallback((reply: { status: number; body: unknown }) => {
+    const found = dslErrorsFrom(reply.body);
+    setErrors(found);
+    setTruncated(Boolean((reply.body as { truncated?: unknown } | null)?.truncated));
+    if (found.length === 0) {
+      toastRef.current(tRef.current(dslFailureKey(reply.status, reply.body)), "error");
+    }
+  }, []);
 
   const run = useCallback(
     async <T,>(kind: Exclude<Busy, null>, path: string, body?: unknown) => {
@@ -83,13 +89,13 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
         return reply;
       } catch (err) {
         captureClientError(err, { scope: `settings.rules-dsl.${kind}` });
-        toast(t("rulesDsl.error.failed"), "error");
+        toastRef.current(tRef.current("rulesDsl.error.failed"), "error");
         return null;
       } finally {
         setBusy(null);
       }
     },
-    [fail, t, toast],
+    [fail],
   );
 
   const load = useCallback(async () => {
@@ -97,7 +103,9 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
     if (!reply?.ok) return;
     setText(reply.data.text);
     setBaseHash(reply.data.baseHash);
+    setApplicable(reply.data.applicable);
     setErrors([]);
+    setTruncated(false);
     setPreview(null);
   }, [run]);
 
@@ -107,8 +115,12 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
 
   if (!visible) return null;
 
+  // Anything shown for the previous text (errors and their positions, the
+  // preview, "no problems") no longer describes what is in the editor.
   const edit = (value: string) => {
     setText(value);
+    setErrors([]);
+    setTruncated(false);
     setPreview(null);
     setStatus("");
   };
@@ -154,7 +166,9 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
     const { added, changed, removed } = reply.data;
     setText(reply.data.text);
     setBaseHash(reply.data.baseHash);
+    setApplicable(reply.data.applicable);
     setErrors([]);
+    setTruncated(false);
     setPreview(null);
     toast(
       t("rulesDsl.applied", {
@@ -181,7 +195,8 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
         ref={editorRef}
         value={text}
         onChange={(e) => edit(e.target.value)}
-        disabled={busy === "load"}
+        // Read-only while a request runs, so an answer always matches the text.
+        readOnly={busy !== null}
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
@@ -215,7 +230,7 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
           size="lg"
           onClick={apply}
           loading={busy === "apply"}
-          disabled={busy !== null || !baseHash}
+          disabled={busy !== null || !baseHash || !applicable}
         >
           {t("rulesDsl.apply")}
         </Button>
@@ -229,6 +244,9 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
           {t("rulesDsl.reload")}
         </Button>
       </div>
+      {!applicable && (
+        <p className="text-role-body text-state-danger-ink">{t("rulesDsl.notApplicable")}</p>
+      )}
       <p role="status" aria-live="polite" className="text-role-body text-ink-mid">
         {busy === "load" ? t("rulesDsl.loading") : status}
       </p>

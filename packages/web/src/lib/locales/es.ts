@@ -3093,7 +3093,7 @@ const es: Record<string, string> = {
   "rulesDsl.apply": "Aplicar",
   "rulesDsl.reload": "Volver a cargar",
   "rulesDsl.loading": "Cargando tus reglas…",
-  "rulesDsl.valid": "No hay problemas. {n} reglas.",
+  "rulesDsl.valid": "No hay problemas. Reglas: {n}.",
   "rulesDsl.errorsTitle": "Problemas por corregir: {n}",
   "rulesDsl.errorAt": "Línea {line}, columna {column}:",
   "rulesDsl.errorsTruncated": "Solo se muestran los primeros 50 problemas.",
@@ -3102,9 +3102,9 @@ const es: Record<string, string> = {
     "De tus últimos {examined} correos clasificados, {changed} irían a otro carril.",
   "rulesDsl.preview.none":
     "Ninguno de tus últimos {examined} correos clasificados cambiaría de carril.",
-  "rulesDsl.preview.manualKept": "{n} correos que moviste tú conservan su carril.",
+  "rulesDsl.preview.manualKept": "Correos que moviste tú y conservan su carril: {n}.",
   "rulesDsl.preview.toJudge": "lo decide Klorn de nuevo",
-  "rulesDsl.preview.count": "{n} correos",
+  "rulesDsl.preview.count": "Correos: {n}",
   "rulesDsl.preview.examples": "Ejemplos",
   "rulesDsl.preview.note":
     "Las reglas se aplican al correo nuevo. El correo ya clasificado conserva su carril.",
@@ -3121,6 +3121,8 @@ const es: Record<string, string> = {
   "rulesDsl.error.tooLarge": "El texto de las reglas es demasiado grande.",
   "rulesDsl.error.rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo en un minuto.",
   "rulesDsl.error.unavailable": "Las reglas como texto no están disponibles para esta cuenta.",
+  "rulesDsl.notApplicable":
+    "Tus reglas superan los límites del editor de texto (500 reglas, 64 KiB), así que no se pueden aplicar desde aquí. Edítalas en la lista de arriba.",
   "rulesDsl.error.failed": "Algo salió mal. Inténtalo de nuevo.",
 };
 

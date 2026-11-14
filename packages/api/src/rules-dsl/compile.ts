@@ -5,6 +5,7 @@
  */
 
 import { validateTierPin } from "../mail/pin-validate.js";
+import { RULES_DSL_LIMITS } from "./limits.js";
 import { failure, parseRules } from "./parse.js";
 import { quoteForMessage } from "./text.js";
 import type {
@@ -27,6 +28,11 @@ function senderError(rule: AstRule, code: string): { code: DslErrorCode; message
   switch (code) {
     case "address":
       return { code: "invalid-address", message: `${value} is not a valid email address.` };
+    case "too-long":
+      return {
+        code: "string-too-long",
+        message: `A sender can be at most ${RULES_DSL_LIMITS.maxValueChars} characters (counted lowercased).`,
+      };
     case "public-domain":
       return {
         code: "public-domain",
@@ -62,6 +68,8 @@ export function compileRules(ast: DslAst): CompileResult {
   const rules: CompiledRule[] = [];
   const firstLine = new Map<string, number>();
   for (const rule of ast.rules) {
+    // Past the cap nothing more is reported, so stop working.
+    if (errors.length > RULES_DSL_LIMITS.maxErrors) break;
     const compiled = compileRule(rule);
     const at = { line: rule.sender.line, column: rule.sender.valueColumn };
     if ("code" in compiled) {

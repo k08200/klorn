@@ -2870,6 +2870,8 @@ const zh: Record<string, string> = {
   "rulesDsl.error.tooLarge": "规则文本过大。",
   "rulesDsl.error.rateLimited": "请求过多。请一分钟后重试。",
   "rulesDsl.error.unavailable": "此账户无法使用以文本编辑规则。",
+  "rulesDsl.notApplicable":
+    "你的规则超出了文本编辑器的上限（500 条规则、64 KiB），无法在此应用。请在上方列表中编辑。",
   "rulesDsl.error.failed": "出了点问题。请重试。",
 };
 

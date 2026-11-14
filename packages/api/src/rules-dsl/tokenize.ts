@@ -11,6 +11,8 @@ export interface Token {
   text: string;
   /** 1-based column of the token's first character (the quote for a string). */
   column: number;
+  /** 1-based column just past the token's last character. */
+  end: number;
 }
 
 export interface LineError {
@@ -31,7 +33,10 @@ function readString(line: string, start: number): { token: Token; next: number }
   while (i < line.length) {
     const ch = line[i] as string;
     if (ch === '"') {
-      return { token: { kind: "string", text: chunks.join(""), column: start + 1 }, next: i + 1 };
+      return {
+        token: { kind: "string", text: chunks.join(""), column: start + 1, end: i + 2 },
+        next: i + 1,
+      };
     }
     if (ch === "\\") {
       const next = line[i + 1];
@@ -84,7 +89,7 @@ export function tokenizeLine(line: string): TokenizeResult {
       continue;
     }
     const end = wordEnd(line, i);
-    tokens.push({ kind: "word", text: line.slice(i, end), column: i + 1 });
+    tokens.push({ kind: "word", text: line.slice(i, end), column: i + 1, end: end + 1 });
     i = end;
   }
   return { tokens };

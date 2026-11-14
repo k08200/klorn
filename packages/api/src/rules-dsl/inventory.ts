@@ -40,6 +40,8 @@ export interface StoredLearnedRule {
 export interface InventoryRule extends CompiledRule {
   rowId: string;
   duplicateIds: string[];
+  /** The kept row's updatedAt: the judge reads newest first. */
+  updatedAt: Date;
 }
 
 export interface RuleInventory {
@@ -157,7 +159,12 @@ export function buildInventory(
   const editable = [...groups.values()].map((group) => {
     const [first, ...rest] = representative(group);
     const winner = first as { rule: CompiledRule; row: StoredEmailRule };
-    return { ...winner.rule, rowId: winner.row.id, duplicateIds: rest.map((r) => r.row.id) };
+    return {
+      ...winner.rule,
+      rowId: winner.row.id,
+      duplicateIds: rest.map((r) => r.row.id),
+      updatedAt: winner.row.updatedAt,
+    };
   });
   const learnedEntries = [...learned]
     .sort((a, b) => byText(a.pattern, b.pattern) || byText(a.value, b.value))
@@ -191,7 +198,8 @@ export interface ApplyPlan {
   unchanged: number;
 }
 
-function sameRule(a: CompiledRule, b: CompiledRule): boolean {
+/** Same stored fields: apply leaves the row untouched. */
+export function sameRule(a: CompiledRule, b: CompiledRule): boolean {
   return (
     a.name === b.name &&
     a.description === b.description &&
@@ -214,8 +222,12 @@ export function planApply(inventory: RuleInventory, rules: readonly CompiledRule
   const existing = new Map(inventory.editable.map((rule) => [senderKey(rule), rule]));
   const plan: ApplyPlan = { creates: [], updates: [], deletes: [], unchanged: 0 };
   const kept = new Set<string>();
+  const seen = new Set<string>();
   for (const rule of rules) {
     const key = senderKey(rule);
+    // checkRules never yields one sender twice; a direct caller might.
+    if (seen.has(key)) continue;
+    seen.add(key);
     const current = existing.get(key);
     if (!current) {
       plan.creates.push(stripRow(rule));

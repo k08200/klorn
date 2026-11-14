@@ -5,6 +5,7 @@
  */
 
 import { senderKey } from "./compile.js";
+import { RULES_DSL_LIMITS } from "./limits.js";
 import { commentString, dslString } from "./text.js";
 import type { CompiledRule, DslLane } from "./types.js";
 
@@ -119,8 +120,12 @@ export function serializeRules(input: SerializeInput): string {
   }
   const readOnly = input.readOnly ?? [];
   if (readOnly.length > 0) {
+    const max = RULES_DSL_LIMITS.maxReadOnlyLines;
     lines.push("", "# Read-only below: listed for reference, never changed by Apply.");
-    for (const entry of readOnly) lines.push(readOnlyLine(entry));
+    for (const entry of readOnly.slice(0, max)) lines.push(readOnlyLine(entry));
+    if (readOnly.length > max) {
+      lines.push(`# ... ${readOnly.length - max} more read-only entries not shown.`);
+    }
   }
   return `${lines.join("\n")}\n`;
 }

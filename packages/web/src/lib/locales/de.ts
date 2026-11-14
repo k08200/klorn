@@ -3151,7 +3151,7 @@ const de: Record<string, string> = {
   "rulesDsl.apply": "Anwenden",
   "rulesDsl.reload": "Neu laden",
   "rulesDsl.loading": "Deine Regeln werden geladen…",
-  "rulesDsl.valid": "Keine Probleme gefunden. {n} Regeln.",
+  "rulesDsl.valid": "Keine Probleme gefunden. Regeln: {n}.",
   "rulesDsl.errorsTitle": "Zu behebende Probleme: {n}",
   "rulesDsl.errorAt": "Zeile {line}, Spalte {column}:",
   "rulesDsl.errorsTruncated": "Nur die ersten 50 Probleme werden angezeigt.",
@@ -3160,9 +3160,9 @@ const de: Record<string, string> = {
     "Von deinen letzten {examined} sortierten Mails würden {changed} in einer anderen Spur landen.",
   "rulesDsl.preview.none":
     "Keine deiner letzten {examined} sortierten Mails würde die Spur wechseln.",
-  "rulesDsl.preview.manualKept": "{n} Mails, die du selbst verschoben hast, behalten ihre Spur.",
+  "rulesDsl.preview.manualKept": "Selbst verschobene Mails, die ihre Spur behalten: {n}.",
   "rulesDsl.preview.toJudge": "wieder von Klorn entschieden",
-  "rulesDsl.preview.count": "{n} Mails",
+  "rulesDsl.preview.count": "E-Mails: {n}",
   "rulesDsl.preview.examples": "Beispiele",
   "rulesDsl.preview.note":
     "Regeln gelten für neue Mails. Bereits sortierte Mails behalten ihre Spur.",
@@ -3178,6 +3178,8 @@ const de: Record<string, string> = {
   "rulesDsl.error.tooLarge": "Der Regeltext ist zu groß.",
   "rulesDsl.error.rateLimited": "Zu viele Anfragen. Versuche es in einer Minute erneut.",
   "rulesDsl.error.unavailable": "Regeln als Text sind für dieses Konto nicht verfügbar.",
+  "rulesDsl.notApplicable":
+    "Deine Regeln überschreiten die Grenzen des Texteditors (500 Regeln, 64 KiB) und können hier nicht angewendet werden. Bearbeite sie in der Liste oben.",
   "rulesDsl.error.failed": "Etwas ist schiefgelaufen. Versuche es erneut.",
 };
 

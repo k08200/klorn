@@ -289,6 +289,48 @@ describe("planApply", () => {
   });
 });
 
+describe("review hardening", () => {
+  it("keeps a pin read-only when its sender only grows past 254 characters lowercased", () => {
+    const inv = buildInventory(
+      [stored({ conditions: { from: [`${"\u0130".repeat(130)}@x.com`] } })],
+      [],
+    );
+    expect(inv.editable).toEqual([]);
+    expect(checkRules(exportText(inv)).ok).toBe(true);
+  });
+
+  it("lists at most 100 read-only lines and says how many more there are", () => {
+    const learned = Array.from({ length: 150 }, (_, i) => ({
+      pattern: "sender-domain",
+      value: `d${String(i).padStart(3, "0")}.io`,
+      tier: "INFO",
+      status: "APPLIED",
+      evidenceCount: 2,
+    }));
+    const text = exportText(buildInventory([], learned));
+    expect(text.split("\n").filter((l) => l.startsWith("# learned:"))).toHaveLength(100);
+    expect(text).toContain("# ... 50 more read-only entries not shown.");
+    expect(checkRules(text).ok).toBe(true);
+  });
+
+  it("plans one write per sender even if handed the same sender twice", () => {
+    const inv = buildInventory([stored({ id: "a", conditions: { from: ["a@x.co"] } })], []);
+    const rule = {
+      name: "n",
+      description: null,
+      scope: "sender" as const,
+      value: "a@x.co",
+      lane: "PUSH" as const,
+      isActive: true,
+    };
+    const plan = planApply(inv, [rule, { ...rule, lane: "INFO" }]);
+    expect(plan.updates).toHaveLength(1);
+    expect(plan.creates).toEqual([]);
+    const fresh = planApply(buildInventory([], []), [rule, rule]);
+    expect(fresh.creates).toHaveLength(1);
+  });
+});
+
 describe("toRuleRow", () => {
   it("maps a rule to the exact EmailRule columns pin writers use", () => {
     expect(

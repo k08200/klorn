@@ -9,7 +9,8 @@
 
 import { toLiveTier } from "../judge/tiers.js";
 import { type PinRuleLike, pinnedTierFromRules } from "../mail/pin-match.js";
-import { type StoredEmailRule, toRuleRow } from "./inventory.js";
+import { senderKey } from "./compile.js";
+import { type RuleInventory, type StoredEmailRule, sameRule, toRuleRow } from "./inventory.js";
 import type { CompiledRule, DslLane } from "./types.js";
 
 export const DRY_RUN_SAMPLE_LIMIT = 20;
@@ -59,17 +60,25 @@ export function currentPinRules(rows: readonly StoredEmailRule[]): PinRuleLike[]
 }
 
 /**
- * The pins the judge would read after apply: the text's active rules (they
- * would be the newest rows) and every PIN_TIER row apply keeps as-is.
+ * The pins the judge would read after apply, newest first as it reads them: a
+ * rule apply leaves untouched keeps its row's updatedAt, a created or changed
+ * one is written at `now`, and every PIN_TIER row apply keeps as-is stays in.
  */
 export function proposedPinRules(
   rules: readonly CompiledRule[],
-  keptPins: readonly StoredEmailRule[],
+  inventory: RuleInventory,
+  now: Date,
 ): PinRuleLike[] {
-  return [
-    ...rules.filter((r) => r.isActive).map((r) => toRuleRow(r)),
-    ...keptPins.filter((r) => r.isActive).sort(newestFirst),
-  ];
+  const existing = new Map(inventory.editable.map((rule) => [senderKey(rule), rule]));
+  const fromText = rules
+    .filter((rule) => rule.isActive)
+    .map((rule) => {
+      const row = existing.get(senderKey(rule));
+      const updatedAt = row && sameRule(row, rule) ? row.updatedAt : now;
+      return { ...toRuleRow(rule), updatedAt };
+    });
+  const kept = inventory.keptPins.filter((row) => row.isActive);
+  return [...fromText, ...kept].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }
 
 function laneOf(rules: readonly PinRuleLike[], sender: string): DslLane | null {

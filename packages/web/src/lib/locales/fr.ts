@@ -3112,7 +3112,7 @@ const fr: Record<string, string> = {
   "rulesDsl.apply": "Appliquer",
   "rulesDsl.reload": "Recharger",
   "rulesDsl.loading": "Chargement de vos règles…",
-  "rulesDsl.valid": "Aucun problème. {n} règles.",
+  "rulesDsl.valid": "Aucun problème. Règles : {n}.",
   "rulesDsl.errorsTitle": "Problèmes à corriger : {n}",
   "rulesDsl.errorAt": "Ligne {line}, colonne {column} :",
   "rulesDsl.errorsTruncated": "Seuls les 50 premiers problèmes sont affichés.",
@@ -3120,9 +3120,9 @@ const fr: Record<string, string> = {
   "rulesDsl.preview.summary":
     "Sur vos {examined} derniers e-mails triés, {changed} iraient dans une autre voie.",
   "rulesDsl.preview.none": "Aucun de vos {examined} derniers e-mails triés ne changerait de voie.",
-  "rulesDsl.preview.manualKept": "{n} e-mails que vous avez déplacés vous-même gardent leur voie.",
+  "rulesDsl.preview.manualKept": "E-mails déplacés par vous, qui gardent leur voie : {n}.",
   "rulesDsl.preview.toJudge": "de nouveau décidé par Klorn",
-  "rulesDsl.preview.count": "{n} e-mails",
+  "rulesDsl.preview.count": "E-mails : {n}",
   "rulesDsl.preview.examples": "Exemples",
   "rulesDsl.preview.note":
     "Les règles s'appliquent aux nouveaux e-mails. Les e-mails déjà triés gardent leur voie.",
@@ -3139,6 +3139,8 @@ const fr: Record<string, string> = {
   "rulesDsl.error.tooLarge": "Le texte des règles est trop volumineux.",
   "rulesDsl.error.rateLimited": "Trop de requêtes. Réessayez dans une minute.",
   "rulesDsl.error.unavailable": "Les règles en texte ne sont pas disponibles pour ce compte.",
+  "rulesDsl.notApplicable":
+    "Vos règles dépassent les limites de l'éditeur de texte (500 règles, 64 Kio) : elles ne peuvent pas être appliquées ici. Modifiez-les dans la liste ci-dessus.",
   "rulesDsl.error.failed": "Une erreur s'est produite. Réessayez.",
 };
 

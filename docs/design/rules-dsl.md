@@ -38,7 +38,7 @@ always lands in one lane. That is exactly what v1 makes editable.
 |---|---|---|
 | `EmailRule` `PIN_TIER`, well-formed (one address or one domain, a live lane, a name and note the DSL can spell) | **editable** `rule` block | replaced (diffed) |
 | `EmailRule` `PIN_TIER` the DSL cannot spell (several senders, address + domain, public domain, retired or unknown lane, over-long name) | read-only comment | untouched |
-| Screener BLOCK pins | editable like any pin (they are pins) | diffed like any pin; the name is kept, so the screener's ALLOW still finds it |
+| Screener BLOCK pins | editable like any pin (they are pins) | diffed like any pin; the name is kept, so the screener's ALLOW still finds it. Renaming one in the text detaches it: the screener's ALLOW deletes by the name `Screener block: <address>` and would no longer find it |
 | `EmailRule` `AUTO_REPLY`, `DRAFT_REPLY` | read-only comment (name, sender count, active) — never the reply template | untouched (tested) |
 | `EmailRule` `LABEL`, `ARCHIVE`, `NOTIFY` | read-only comment | untouched |
 | `LearnedRule` | read-only comment (pattern, value, lane, status, evidence count) | untouched (tested) |
@@ -69,14 +69,16 @@ note        = "note" , ws , string ;
 lane        = "PUSH" | "MEETING" | "QUEUE" | "INFO" | "SILENT" ;   (* case-insensitive *)
 string      = '"' , { char | '\"' | '\\' } , '"' ;                 (* one line, no other escapes *)
 comment     = "#" , { any char } ;                                  (* outside strings only *)
-ws          = ( " " | "\t" ) , { " " | "\t" } ;
+ws          = ( " " | "\t" ) , { " " | "\t" } ;           (* optional next to a string *)
 ```
 
 Rules inside a `rule` block (checked after parsing, each with a line:column):
 
 - exactly one `when` (a second one is `too-many-conditions`), exactly one `then`;
 - at most one `note`, at most one `disabled`;
-- keywords are lowercase; lanes are case-insensitive and serialized uppercase;
+- keywords are lowercase; lanes are case-insensitive in ASCII only (`ſilent`
+  is not SILENT) and serialized uppercase;
+- one leading byte order mark is ignored;
 - `from address` takes one email address, `from domain` one domain (a leading
   `@` is accepted and dropped). Both are lowercased.
 
@@ -174,8 +176,9 @@ Codes: `missing-version`, `unsupported-version`, `unexpected-token`,
 | Conditions per rule | 1 | `too-many-conditions` |
 | Rule name | 120 characters | `string-too-long` |
 | Note | 500 characters | `string-too-long` |
-| Address / domain | 254 characters (RFC 5321 path limit) | `string-too-long` |
-| Errors returned | 50 | `truncated: true` |
+| Address / domain | 254 characters (RFC 5321 path limit), counted as written and again lowercased | `string-too-long` |
+| Errors returned | 50; parsing and compiling stop once the cap is passed | `truncated: true` |
+| Read-only lines in an export | 100, then `# ... N more read-only entries not shown.` | — |
 | Dry-run sample | 500 most recent judged mails max (default 200), 20 listed | — |
 
 - **No user-supplied pattern is ever executed.** Matching is equality on a
@@ -183,14 +186,22 @@ Codes: `missing-version`, `unsupported-version`, `unexpected-token`,
   (`mail/pin-match.ts`, extracted from `lookupPinnedTier`, so a dry-run cannot
   drift from the judge). The parser is a single left-to-right scan with no
   regular expression over the text. Address/domain validation reuses the pin
-  writers' fixed validators (`mail/pin-validate.ts`) on strings already cut to
-  254 characters.
+  writers' fixed validators (`mail/pin-validate.ts`). Their two patterns
+  backtrack quadratically on a crafted failing input, so `validateTierPin` now
+  refuses a value over 254 characters (as written, and again lowercased)
+  before either runs. That also closes the same exposure on the existing
+  `POST /api/email/rules/pins`, which had no length cap.
 - No existing `EmailRule` field the DSL edits stores a regex. `subjectContains`
   (reply rules only) is a substring match in `email-reply.ts`; the DSL does not
   edit it.
-- Control characters (C0 except tab, DEL) and bidirectional-override
-  characters (U+202A–U+202E, U+2066–U+2069) are rejected anywhere in the text,
-  so a file in git shows what it does.
+- Rejected anywhere in the text (`forbidden-character`), so a file in git
+  shows what it does: C0 controls except tab, DEL and C1 controls
+  (U+0080–U+009F), the line and paragraph separators (U+2028, U+2029),
+  zero-width and invisible format characters (U+200B–U+200F, U+2060–U+2064,
+  U+180E, U+FEFF after the first character), bidirectional marks, overrides
+  and isolates (U+061C, U+202A–U+202E, U+2066–U+2069), and lone surrogates. A
+  zero-width character inside a sender would otherwise make a pin that looks
+  right and never matches.
 - Read-only comments are generated from stored names; those are cut to 60
   characters and stripped of control characters, so a stored name cannot end a
   comment line and smuggle a statement into the exported file.
@@ -198,7 +209,8 @@ Codes: `missing-version`, `unsupported-version`, `unexpected-token`,
   plus an explicit `requireAuth`, then the cohort gate, and every query and
   write is scoped by the session's `userId`. Writes additionally match
   `actionType = PIN_TIER`, so a stale or forged plan cannot touch a reply rule.
-- Rate limits: export 30/min, validate 60/min, dry-run 20/min, apply 10/min.
+- Rate limits: export 30/min, validate 60/min, dry-run 20/min, apply 10/min
+  (the app's limiter keys them by client).
 
 ## 9. Round-trip guarantee
 
@@ -225,6 +237,10 @@ Guarantees, each covered by golden and property tests:
 Not preserved: comments, blank lines, rule order, keyword case of lanes,
 `@` before a domain.
 
+An account over the text limits (more than 500 editable pins, or an export
+over 64 KiB) still gets its export, flagged `applicable: false`: the editor
+says so and disables Apply rather than failing on it.
+
 ## 10. Versioning
 
 The first statement must be `version 1`. Any other number is
@@ -236,13 +252,17 @@ server keeps exporting the lowest version that can express the rule set.
 
 | Method + path | Body | Answer |
 |---|---|---|
-| `GET /api/email/rules/dsl/export` | — | `{ text, baseHash, ruleCount, readOnlyCount }` |
+| `GET /api/email/rules/dsl/export` | — | `{ text, baseHash, ruleCount, readOnlyCount, applicable }` |
 | `POST /api/email/rules/dsl/validate` | `{ text }` | `{ ok, ruleCount, errors, truncated }` |
 | `POST /api/email/rules/dsl/dry-run` | `{ text, limit? }` | 400 with errors, or `{ examined, changed, manualKept, transitions[], samples[] }` |
-| `POST /api/email/rules/dsl/apply` | `{ text, baseHash }` | 400 with errors, 409 `rules-changed` when `baseHash` is stale, or `{ added, changed, removed, unchanged, text, baseHash }` |
+| `POST /api/email/rules/dsl/apply` | `{ text, baseHash }` | 400 with errors, 409 `rules-changed` when `baseHash` is stale, or `{ added, changed, removed, unchanged, text, baseHash, applicable }` |
 
-Dry-run is read-only: two `findMany`s (the newest judged mails and their
-senders) plus the user's rules, no write. For each mail it applies the pin
+Dry-run is read-only: two `findMany`s (the newest judged mails, skipping
+items with no lane yet, and their senders) plus the user's rules, no write.
+The proposed pins are ordered as the judge would read them after apply: a
+rule apply leaves untouched keeps its row's `updatedAt`, a created or changed
+one counts as newest, and kept read-only pins stay in at their own
+`updatedAt`. For each mail it applies the pin
 cascade with the current and the proposed rules: a mail the user moved by
 hand keeps its lane (`manualKept`); otherwise "before" is the lane the
 current pins give (or the mail's own lane when no pin decided it) and a
@@ -255,10 +275,16 @@ Apply re-reads the rules and refuses with 409 if `baseHash` no longer
 matches. `baseHash` is a SHA-256 over the editable pins the export was made
 from (row ids included), not over the text: a pin made from the mail view
 while the editor was open makes it stale, so that pin is never silently
-deleted; a reply-rule edit or a weekly learned-rule run does not. Then one
-transaction: delete removed pins, update changed ones, create new ones, write
-one `RuleChangeAudit` row (counts and a SHA-256 of the text, no rule
-content). Pins apply to new mail; mail already judged keeps its lane, as with
+deleted; a reply-rule edit or a weekly learned-rule run does not.
+
+Everything runs in one interactive transaction (`INTERACTIVE_TX_OPTIONS`):
+take `pg_advisory_xact_lock(<rules-dsl class>, hashtext(userId))` so one
+user's applies run one at a time, re-read the pins, compare `baseHash`, then
+delete removed pins, update changed ones, create new ones and write one
+`RuleChangeAudit` row (counts and a SHA-256 of the text, no rule content).
+Every delete and update must touch exactly the rows the plan names; if
+another pin writer (which does not take the lock) changed one in between, the
+whole transaction rolls back and the answer is 409. Pins apply to new mail; mail already judged keeps its lane, as with
 every other pin writer.
 
 ## 12. Rollout
