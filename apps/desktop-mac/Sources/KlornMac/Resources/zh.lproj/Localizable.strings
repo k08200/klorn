@@ -411,6 +411,29 @@
 "account.naver.error.unavailable" = "此服务器尚未提供 Naver 邮件。";
 "account.imap.error.insecure" = "Klorn 只通过安全 (HTTPS) 连接发送应用密码。";
 "account.imap.submit" = "连接";
+"account.preset.connect" = "连接 %@ 邮箱…";
+"account.preset.title" = "连接 %@ 邮箱";
+"account.preset.body" = "此邮箱通过 IMAP 连接（beta）。新邮件会分到与 Gmail 相同的通道。";
+"account.preset.email" = "电子邮件地址";
+"account.preset.password" = "应用专用密码";
+"account.preset.password.either" = "密码或应用专用密码";
+"account.preset.help.link" = "打开 %@ 帮助";
+"account.preset.error.authFailed" = "%@ 拒绝了登录。请按上面的步骤操作后重试。";
+"account.preset.error.unavailable" = "此服务器尚未提供 %@ 邮箱。";
+"account.daum.name" = "Daum";
+"account.kakao.name" = "Kakao";
+"account.yahoo.name" = "Yahoo";
+"account.aol.name" = "AOL";
+"account.fastmail.name" = "Fastmail";
+"account.zoho.name" = "Zoho";
+"account.zohopro.name" = "Zoho（组织）";
+"account.daum.password.hint" = "在 Daum 邮箱设置中开启 IMAP，设置两步验证，然后创建应用专用密码并在此输入，而不是登录密码。";
+"account.kakao.password.hint" = "在 Kakao 邮箱设置中开启 IMAP，为 Kakao 账户设置两步验证，然后创建应用专用密码并在此输入，而不是登录密码。";
+"account.yahoo.password.hint" = "在 Yahoo 账户的安全设置中创建应用专用密码并在此输入，而不是登录密码。";
+"account.aol.password.hint" = "在 AOL 账户的安全设置中创建应用专用密码并在此输入，而不是登录密码。";
+"account.fastmail.password.hint" = "在 Fastmail 设置中创建具有 IMAP 和 SMTP 权限的应用专用密码并在此输入，而不是登录密码。";
+"account.zoho.password.hint" = "适用于个人及免费 Zoho Mail 账户。请在 Zoho Mail 设置中开启 IMAP 访问。如已开启双重验证，请创建应用专用密码并输入它，而不是账户密码。";
+"account.zohopro.password.hint" = "适用于使用自有域名的付费 Zoho Mail 组织账户。请在 Zoho Mail 设置中开启 IMAP 访问（可能需要组织管理员允许）。如已开启双重验证，请创建应用专用密码并输入它，而不是账户密码。";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "回复模式";

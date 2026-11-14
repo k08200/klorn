@@ -411,6 +411,29 @@
 "account.naver.error.unavailable" = "Naver Mail isn't available on this server yet.";
 "account.imap.error.insecure" = "Klorn only sends an app password over a secure (HTTPS) connection.";
 "account.imap.submit" = "Connect";
+"account.preset.connect" = "Connect %@ mailbox…";
+"account.preset.title" = "Connect %@ mailbox";
+"account.preset.body" = "This mailbox connects over IMAP (beta). Klorn sorts every new message into the same lanes as Gmail.";
+"account.preset.email" = "Email address";
+"account.preset.password" = "App password";
+"account.preset.password.either" = "Password or app password";
+"account.preset.help.link" = "Open %@ help";
+"account.preset.error.authFailed" = "%@ refused the sign-in. Follow the steps above, then try again.";
+"account.preset.error.unavailable" = "%@ isn't available on this server yet.";
+"account.daum.name" = "Daum";
+"account.kakao.name" = "Kakao";
+"account.yahoo.name" = "Yahoo";
+"account.aol.name" = "AOL";
+"account.fastmail.name" = "Fastmail";
+"account.zoho.name" = "Zoho";
+"account.zohopro.name" = "Zoho (organization)";
+"account.daum.password.hint" = "Turn on IMAP in Daum Mail settings, set up two-step verification, then create an app password and enter it here — not your login password.";
+"account.kakao.password.hint" = "Turn on IMAP in Kakao Mail settings, set up two-step verification on your Kakao account, then create an app password and enter it here — not your login password.";
+"account.yahoo.password.hint" = "Create an app password in your Yahoo account's security settings and enter it here — not your login password.";
+"account.aol.password.hint" = "Create an app password in your AOL account's security settings and enter it here — not your login password.";
+"account.fastmail.password.hint" = "In Fastmail settings, create an app password with IMAP and SMTP access and enter it here — not your login password.";
+"account.zoho.password.hint" = "For personal and free Zoho Mail accounts. Turn on IMAP access in Zoho Mail settings. If two-factor authentication is on, create an application-specific password and enter that instead of your password.";
+"account.zohopro.password.hint" = "For paid Zoho Mail organization accounts on your own domain. Turn on IMAP access in Zoho Mail settings (your organization's admin may need to allow it). If two-factor authentication is on, create an application-specific password and enter that instead of your password.";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "REPLY MODE";

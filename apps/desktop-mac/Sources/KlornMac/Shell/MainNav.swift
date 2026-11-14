@@ -201,7 +201,8 @@ enum NavRules {
 }
 
 /// Neutral monochrome source glyph (productization plan §2): G, M, N, iC,
-/// IMAP, K. No provider is Klorn's own; a provider this build does not know
+/// IMAP, K, plus the IMAP presets (D, Ka, Y, A, F, Z — Kakao takes two
+/// letters so it never reads as Klorn's K). No provider is Klorn's own; a provider this build does not know
 /// is a generic mail source ("@"), never mislabeled as one it knows. Pure for
 /// the harness.
 func sourceMonogram(provider: String?) -> String {
@@ -212,6 +213,12 @@ func sourceMonogram(provider: String?) -> String {
     case "ONEDRIVE": "O"
     case "NAVER": "N"
     case "ICLOUD", "APPLE": "iC"
+    case "DAUM": "D"
+    case "KAKAO": "Ka"
+    case "YAHOO": "Y"
+    case "AOL": "A"
+    case "FASTMAIL": "F"
+    case "ZOHO", "ZOHOPRO": "Z"
     case "IMAP": "IMAP"
     case nil, "KLORN": "K"
     default: "@"
@@ -227,6 +234,12 @@ func sourceName(provider: String?) -> String {
     case "ONEDRIVE": "OneDrive"
     case "NAVER": "Naver"
     case "ICLOUD", "APPLE": "iCloud"
+    case "DAUM": "Daum"
+    case "KAKAO": "Kakao"
+    case "YAHOO": "Yahoo"
+    case "AOL": "AOL"
+    case "FASTMAIL": "Fastmail"
+    case "ZOHO", "ZOHOPRO": "Zoho"
     case "IMAP": "IMAP"
     case nil, "KLORN": "Klorn"
     default: L("source.generic")

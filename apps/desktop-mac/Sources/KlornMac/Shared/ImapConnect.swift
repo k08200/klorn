@@ -2,65 +2,114 @@ import Foundation
 
 /// A mail provider the desktop connects over IMAP with an app password
 /// (routes/imap-connect.ts, one route family per provider). Naver's routes are
-/// always live; iCloud's answer 404 while ICLOUD_INBOX_ENABLED is off, which
-/// hides its entry point. The raw value is the server's provider enum.
+/// always live; every other provider's routes answer 404 while its server flag
+/// is off (iCloud: ICLOUD_INBOX_ENABLED; the presets: IMAP_PRESETS_ENABLED,
+/// also outside its rollout cohort), which hides its entry point. The raw
+/// value is the server's provider enum; the case order is the display order.
 enum ImapMailProvider: String, CaseIterable, Identifiable, Sendable {
     case naver = "NAVER"
     case icloud = "ICLOUD"
+    // Fixed-host app-password presets (provider phase 2). ZOHOPRO is a Zoho
+    // organization (paid, own-domain) mailbox, which has its own hosts.
+    case daum = "DAUM"
+    case kakao = "KAKAO"
+    case yahoo = "YAHOO"
+    case aol = "AOL"
+    case fastmail = "FASTMAIL"
+    case zoho = "ZOHO"
+    case zohopro = "ZOHOPRO"
 
     var id: String { rawValue }
 
-    private var routePrefix: String {
-        switch self {
-        case .naver: "/api/naver-imap"
-        case .icloud: "/api/icloud-imap"
-        }
-    }
+    /// `/api/<slug>-imap`, slug = the lowercased server enum.
+    private var routePrefix: String { "/api/\(slug)-imap" }
 
     var statusPath: String { routePrefix + "/status" }
     var connectPath: String { routePrefix + "/connect" }
     var disconnectPath: String { routePrefix + "/disconnect" }
 
-    /// Where the user makes the app password. Opened in the default browser.
+    /// Where the user makes the app password: the provider's own help page,
+    /// opened in the default browser.
     var appPasswordHelpURL: URL? {
         switch self {
         case .naver: nil
         case .icloud: URL(string: "https://appleid.apple.com")
+        case .daum: URL(string: "https://cs.daum.net/faq/service/43/category/9234/detail/24081")
+        case .kakao: URL(string: "https://cs.kakao.com/helps_html/1073209983")
+        case .yahoo: URL(string: "https://help.yahoo.com/kb/SLN15241.html")
+        case .aol: URL(string: "https://help.aol.com/articles/create-and-manage-app-password")
+        case .fastmail: URL(string: "https://www.fastmail.help/hc/en-us/articles/360058752854-App-passwords")
+        case .zoho, .zohopro: URL(string: "https://www.zoho.com/mail/help/imap-access.html")
         }
     }
-
-    /// Localization keys, one place per provider.
-    var connectKey: String { "account.\(keyStem).connect" }
-    var titleKey: String { "account.\(keyStem).title" }
-    var emailKey: String { "account.\(keyStem).email" }
-    var passwordKey: String { "account.\(keyStem).password" }
-    var hintKey: String { "account.\(keyStem).password.hint" }
-    var bodyKey: String? { self == .icloud ? "account.icloud.body" : nil }
-    var helpLinkKey: String? { self == .icloud ? "account.icloud.help.link" : nil }
-    var authFailedKey: String { "account.\(keyStem).error.authFailed" }
-    var unavailableKey: String { "account.\(keyStem).error.unavailable" }
 
     /// Placeholder shapes only — never a real address.
     var emailPlaceholder: String {
         switch self {
         case .naver: "you@naver.com"
         case .icloud: "you@icloud.com"
+        case .daum: "you@daum.net"
+        case .kakao: "you@kakao.com"
+        case .yahoo: "you@yahoo.com"
+        case .aol: "you@aol.com"
+        case .fastmail: "you@fastmail.com"
+        case .zoho: "you@zoho.com"
+        case .zohopro: "you@yourcompany.com"
         }
     }
 
     var passwordPlaceholder: String {
-        switch self {
-        case .naver: ""
-        case .icloud: "xxxx-xxxx-xxxx-xxxx"
-        }
+        self == .icloud ? "xxxx-xxxx-xxxx-xxxx" : ""
     }
 
-    private var keyStem: String {
+    // MARK: copy
+    // Naver and iCloud keep their own sentences (`account.<slug>.*`). The
+    // presets share one shape (`account.preset.*`) with the provider's name
+    // filled in; only the name and the where-to-make-the-password hint are
+    // per preset.
+
+    /// Whether this provider reads the shared preset sentences.
+    var usesPresetCopy: Bool { self != .naver && self != .icloud }
+
+    var connectLabel: String { sentence("connect") }
+    var formTitle: String { sentence("title") }
+    var emailLabel: String { label("email") }
+    var passwordLabel: String {
+        // Zoho takes the account password unless two-factor is on.
+        self == .zoho || self == .zohopro ? L("account.preset.password.either") : label("password")
+    }
+    var passwordHint: String { L("account.\(slug).password.hint") }
+    var bodyText: String? {
         switch self {
-        case .naver: "naver"
-        case .icloud: "icloud"
+        case .naver: nil
+        case .icloud: L("account.icloud.body")
+        default: L("account.preset.body")
         }
     }
+    var helpLinkLabel: String? {
+        switch self {
+        case .naver: nil
+        case .icloud: L("account.icloud.help.link")
+        default: L("account.preset.help.link", presetName)
+        }
+    }
+    var authFailedMessage: String { sentence("error.authFailed") }
+    var unavailableMessage: String { sentence("error.unavailable") }
+
+    /// A preset's name inside a sentence (a qualifier like "(organization)"
+    /// is translated). Presets only: Naver and iCloud name themselves in
+    /// their own copy and have no `.name` key.
+    var presetName: String { L("account.\(slug).name") }
+
+    private func sentence(_ suffix: String) -> String {
+        usesPresetCopy ? L("account.preset.\(suffix)", presetName) : L("account.\(slug).\(suffix)")
+    }
+
+    private func label(_ suffix: String) -> String {
+        usesPresetCopy ? L("account.preset.\(suffix)") : L("account.\(slug).\(suffix)")
+    }
+
+    private var slug: String { rawValue.lowercased() }
 }
 
 /// The connect request. The body is exactly `{ email, password }`: the server
@@ -148,13 +197,13 @@ enum ImapConnectFailure: Equatable, Sendable {
 
     func message(for provider: ImapMailProvider) -> String {
         switch self {
-        case .appPasswordRejected: L(provider.authFailedKey)
+        case .appPasswordRejected: provider.authFailedMessage
         case .unreachable: L("account.imap.error.unreachable")
         case .tooManyAccounts: L("account.imap.error.tooMany")
         case .invalidEmail: L("account.imap.error.invalidEmail")
         case .rateLimited: L("account.imap.rateLimited")
         case .needsPro: L("account.imap.error.needsPro")
-        case .unavailable: L(provider.unavailableKey)
+        case .unavailable: provider.unavailableMessage
         case .offline: L("account.imap.error.offline")
         case .insecureTransport: L("account.imap.error.insecure")
         case .generic: L("account.imap.failed")
@@ -174,6 +223,13 @@ enum ImapConnectOutcome: Equatable, Sendable {
     case connected
     case failed(ImapConnectFailure)
     case ignored
+}
+
+/// The connect buttons Settings ▸ Accounts draws, in display order: Naver
+/// always (its routes are never gated), every other provider only once its
+/// status probe answered. Pure.
+func offeredImapProviders(_ available: Set<ImapMailProvider>) -> [ImapMailProvider] {
+    ImapMailProvider.allCases.filter { $0 == .naver || available.contains($0) }
 }
 
 /// Account rows from /api/email/inboxes that the IMAP status lists already
