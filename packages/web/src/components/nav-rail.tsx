@@ -11,8 +11,8 @@ import { NavIcon } from "./nav-icons";
 import NotificationBell from "./notification-bell";
 
 /**
- * The navigation rail: 600px up to 1024px (rail: … lg:hidden), between the
- * phone's bottom tab bar and the full sidebar — a Fold opened, a phone on
+ * The navigation rail: 600px up to 840px (rail: … shell-wide:hidden; up to
+ * 1024px on a phone on its side), between the phone's bottom tab bar and the full sidebar — a Fold opened, a phone on
  * its side, an iPad in portrait or split view. The same destinations as the
  * tab bar, stacked down the left edge so the content keeps the full height;
  * the account button opens the tab bar's account sheet beside the rail.
@@ -36,7 +36,10 @@ export default function NavRail() {
 
   return (
     <>
-      <aside className="hidden h-dvh w-[calc(72px+env(safe-area-inset-left))] shrink-0 flex-col items-center phone-landscape:w-[calc(56px+env(safe-area-inset-left))] phone-landscape:overflow-y-auto border-r border-line/70 bg-surface-panel/55 pb-safe pl-safe pt-safe backdrop-blur-xl rail:flex lg:hidden">
+      <aside
+        data-testid="nav-rail"
+        className="hidden h-dvh w-[calc(72px+env(safe-area-inset-left))] shrink-0 flex-col items-center phone-landscape:w-[calc(56px+env(safe-area-inset-left))] phone-landscape:overflow-y-auto border-r border-line/70 bg-surface-panel/55 pb-safe pl-safe pt-safe backdrop-blur-xl rail:flex shell-wide:hidden"
+      >
         <div className="flex flex-col items-center gap-1 py-3 phone-landscape:gap-0 phone-landscape:py-1">
           <Link
             href={unified ? TODAY_HOME : "/inbox"}
