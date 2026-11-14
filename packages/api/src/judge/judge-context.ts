@@ -43,7 +43,7 @@ import {
 import { getActiveSenderTraits, type SenderTraitFact } from "../learning/sender-trait-store.js";
 import { getTrustScore } from "../learning/trust-score.js";
 import { extractEmailAddress } from "../mail/email-address.js";
-import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
+import { pinnedTierFromRules } from "../mail/pin-match.js";
 import { fetchTriagePriorities } from "../mail/triage-priorities.js";
 import { captureError } from "../sentry.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
@@ -600,12 +600,9 @@ async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
 }
 
 /**
- * The user's PIN_TIER rule for this sender, if any. Two levels and no more —
- * exact address (`conditions.from`) beats exact domain (`conditions.fromDomain`)
- * — and both match by equality, never substring: this runs at cascade rank 0,
- * above the LLM, so a rule that could fuzzy-match would override the judge on
- * mail it was never authored for (subdomains do not inherit a parent-domain
- * pin for the same reason). Fail-open null.
+ * The user's PIN_TIER rule for this sender, if any: mail/pin-match.ts holds
+ * the matcher (exact address beats exact domain, equality only, public
+ * mailbox domains refused), shared with the Rules DSL dry-run. Fail-open null.
  */
 export async function fetchPinnedTier(userId: string, senderAddress: string): Promise<Tier | null> {
   try {
@@ -632,41 +629,7 @@ export async function lookupPinnedTier(
     // Deterministic if duplicates ever exist: the newest pin wins.
     orderBy: { updatedAt: "desc" },
   });
-  const sender = senderAddress.toLowerCase();
-  const at = sender.lastIndexOf("@");
-  const senderDomain = at > 0 ? sender.slice(at + 1) : "";
-  let domainPin: Tier | null = null;
-  for (const rule of rules) {
-    const conditions = rule.conditions as { from?: unknown; fromDomain?: unknown } | null;
-    const from = conditions?.from;
-    if (
-      Array.isArray(from) &&
-      from.some((f) => typeof f === "string" && f.toLowerCase() === sender)
-    ) {
-      // Junk actionValue must NOT pin to the normalizeTier fallback (QUEUE).
-      return isTier(rule.actionValue) ? rule.actionValue : null;
-    }
-    const fromDomain = conditions?.fromDomain;
-    if (
-      domainPin === null &&
-      senderDomain &&
-      // Enforced at READ time, not only at the /pin-tier write guard: the
-      // generic /api/email/rules endpoint can author arbitrary PIN_TIER
-      // rows, and a public-mailbox domain pin would rank-0 every stranger
-      // mailing from that provider.
-      !isPublicMailboxDomain(senderDomain) &&
-      Array.isArray(fromDomain) &&
-      fromDomain.some(
-        (d) => typeof d === "string" && d.toLowerCase().replace(/^@/, "") === senderDomain,
-      ) &&
-      isTier(rule.actionValue)
-    ) {
-      // Remember but keep scanning: a later rule may hold the exact-address
-      // pin that outranks this one.
-      domainPin = rule.actionValue;
-    }
-  }
-  return domainPin;
+  return pinnedTierFromRules(rules, senderAddress);
 }
 
 /**

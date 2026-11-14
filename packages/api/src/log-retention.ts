@@ -38,6 +38,8 @@ const DELETE_BATCH_SIZE = 5000;
 export const MCP_WRITE_AUDIT_RETENTION_DAYS = 90;
 /** Klorn Vault export audit rows (vault/vault-audit.ts): who exported, when, no content. */
 export const DATA_EXPORT_AUDIT_RETENTION_DAYS = 90;
+/** Rules DSL apply audit rows (mail/rules-dsl-store.ts): who applied, when, counts. */
+export const RULE_CHANGE_AUDIT_RETENTION_DAYS = 90;
 
 export interface LogRetentionPolicy {
   name: string;
@@ -152,6 +154,17 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.dataExportAudit.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // The user's Rules DSL applies: counts and a text hash, no rule content.
+    name: "ruleChangeAudit",
+    column: "createdAt",
+    days: RULE_CHANGE_AUDIT_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.ruleChangeAudit
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.ruleChangeAudit.deleteMany({ where: { id: { in: ids } } }),
   },
   {
     // Where trash/archive parked a Naver or iCloud message so undo can restore it

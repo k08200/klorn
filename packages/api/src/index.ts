@@ -325,6 +325,7 @@ try {
     "IMAP_PRESETS_ENABLED",
     "TEAMS_ENABLED",
     "VAULT_EXPORT_ENABLED",
+    "RULES_DSL_ENABLED",
   ]);
 
   // Start autonomous background agent

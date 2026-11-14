@@ -1345,6 +1345,32 @@ describe("GET /api/auth/me", () => {
     await app.close();
   });
 
+  it("reports RULES_DSL_ENABLED as user.rulesDsl, cohort-aware, false unless open", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "rules-dsl@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user as { id: string; rulesDsl: boolean };
+
+    delete process.env.RULES_DSL_ENABLED;
+    const { id, rulesDsl } = await me();
+    expect(rulesDsl).toBe(false);
+    try {
+      process.env.RULES_DSL_ENABLED = "cohort";
+      process.env.ROLLOUT_COHORT_USER_IDS = "someone-else";
+      expect((await me()).rulesDsl).toBe(false);
+      process.env.ROLLOUT_COHORT_USER_IDS = `someone-else,${id}`;
+      expect((await me()).rulesDsl).toBe(true);
+      process.env.RULES_DSL_ENABLED = "true";
+      process.env.ROLLOUT_COHORT_USER_IDS = "";
+      expect((await me()).rulesDsl).toBe(true);
+    } finally {
+      delete process.env.RULES_DSL_ENABLED;
+      delete process.env.ROLLOUT_COHORT_USER_IDS;
+    }
+    await app.close();
+  });
+
   it("reports ONBOARDING_V2 as user.onboardingV2 on /me, login and register, false unless on", async () => {
     const app = await buildApp();
     const register = async (email: string) =>
