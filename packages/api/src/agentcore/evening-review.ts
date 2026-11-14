@@ -23,12 +23,22 @@
  * Tomorrow's first timed meeting rides along with any of those, and sends on
  * its own only when it starts before EARLY_MEETING_MINUTE local.
  *
+ * Meeting prep (CONTEXT_MEETING_PREP_ENABLED, context/meeting-prep.ts): a
+ * meeting tomorrow before MORNING_END_MINUTE local with something to prep
+ * (an open commitment, unanswered mail or a recent thread with its external
+ * attendees) is listed with those items, and is reason enough to send.
+ *
  * Copy follows the user's notification language, like the briefing body.
  * Rule-based, no LLM.
  */
 
+import type { MeetingPrep } from "@klorn/contract";
+import { prepCopy, renderPrepHeader, renderPrepLines } from "../context/meeting-prep-copy.js";
+import { isActionablePrepItem } from "../context/meeting-prep-link.js";
+import { meetingPrepForUser } from "../context/meeting-prep-surface.js";
 import { prisma } from "../db.js";
 import { normalizeTier } from "../judge/tiers.js";
+import { lastReplyByThread } from "../mail/thread-last-reply.js";
 import { senderName } from "../notify/notification-format.js";
 import type { NotificationLanguage } from "../notify/notification-strings.js";
 import { readCalendarRows } from "../pim/calendar-read.js";
@@ -48,6 +58,10 @@ const MIN_COMMITMENT_CONFIDENCE = COMMITMENT_CONFIRMED_MIN_CONFIDENCE;
 const MAX_MEETING_MS = 8 * 60 * 60 * 1000;
 /** A meeting tomorrow before this local minute sends the review on its own. */
 const EARLY_MEETING_MINUTE = 10 * 60;
+/** Meetings tomorrow starting before this local minute get their prep in the review. */
+const MORNING_END_MINUTE = 12 * 60;
+/** Prepped meetings listed in one review. */
+const PREP_MEETINGS_LIMIT = 2;
 /** Items named per section; the header carries the full count. */
 const LIST_LIMIT = 3;
 /** Today's mail rows read per user; far above a real day's needs-reply volume. */
@@ -84,6 +98,8 @@ export interface EveningReviewInput {
   /** What the other side still owes the user, as display text. */
   readonly theyOwe: readonly string[];
   readonly firstMeetingTomorrow: EveningMeeting | null;
+  /** Tomorrow-morning meetings with prep (flag on); absent or empty otherwise. */
+  readonly meetingPrep?: readonly MeetingPrep[];
 }
 
 export interface EveningReviewMessage {
@@ -203,28 +219,35 @@ function section(header: string, items: readonly string[]): string[] {
   return [header, ...items.slice(0, LIST_LIMIT).map((item) => `• ${item}`)];
 }
 
+/** Tomorrow-morning meetings with prep, at most PREP_MEETINGS_LIMIT. */
+const preppedMeetings = (input: EveningReviewInput): MeetingPrep[] =>
+  (input.meetingPrep ?? []).filter((p) => p.items.length > 0).slice(0, PREP_MEETINGS_LIMIT);
+
 /**
- * Whether the review has anything to say: an open item, or tomorrow's first
- * meeting starting before EARLY_MEETING_MINUTE local.
+ * Whether the review has anything to say: an open item, tomorrow's first
+ * meeting starting before EARLY_MEETING_MINUTE local, or prep that asks
+ * something of the user (a confirmed commitment or mail awaiting a reply). A
+ * recent thread or an unconfirmed suggestion rides along but never rings.
  */
 export function eveningReviewHasContent(input: EveningReviewInput, timeZone: string): boolean {
   if (input.unanswered.length + input.commitments.length + input.theyOwe.length > 0) return true;
+  if (preppedMeetings(input).some((p) => p.items.some(isActionablePrepItem))) return true;
   const meeting = input.firstMeetingTomorrow;
   return meeting !== null && localMinuteOfDay(meeting.startTime, timeZone) < EARLY_MEETING_MINUTE;
 }
 
-/**
- * The review to send, or null when there is nothing to close tonight. Pure:
- * the caller gathers the input and owns delivery and dedupe.
- */
-export function composeEveningReview(
+interface ReviewSection {
+  readonly header: string;
+  readonly items: string[];
+}
+
+/** The open sections: today's mail, the user's commitments, what others owe. */
+function openSections(
   input: EveningReviewInput,
+  copy: EveningCopy,
   lang: NotificationLanguage,
-  timeZone: string,
-): EveningReviewMessage | null {
-  if (!eveningReviewHasContent(input, timeZone)) return null;
-  const copy = COPY[lang] ?? COPY.en;
-  const sections: Array<{ header: string; items: string[] }> = [];
+): ReviewSection[] {
+  const sections: ReviewSection[] = [];
   if (input.unanswered.length > 0) {
     sections.push({
       header: copy.openMail(input.unanswered.length),
@@ -244,22 +267,57 @@ export function composeEveningReview(
   if (input.theyOwe.length > 0) {
     sections.push({ header: copy.theyOwe(input.theyOwe.length), items: input.theyOwe.map(clip) });
   }
+  return sections;
+}
+
+/** Tomorrow's first meeting as a line, unless a prep header already names it. */
+function firstMeetingLine(
+  input: EveningReviewInput,
+  prepped: readonly MeetingPrep[],
+  copy: EveningCopy,
+  timeZone: string,
+): string | null {
   const meeting = input.firstMeetingTomorrow;
-  const meetingLine = meeting
-    ? copy.firstMeeting(
-        formatTime(meeting.startTime, timeZone, copy.timeLocale),
-        clip(meeting.title),
-      )
-    : null;
+  if (!meeting) return null;
+  if (prepped.some((p) => Date.parse(p.startTime) === meeting.startTime.getTime())) return null;
+  return copy.firstMeeting(
+    formatTime(meeting.startTime, timeZone, copy.timeLocale),
+    clip(meeting.title),
+  );
+}
+
+/**
+ * The review to send, or null when there is nothing to close tonight. Pure:
+ * the caller gathers the input and owns delivery and dedupe.
+ */
+export function composeEveningReview(
+  input: EveningReviewInput,
+  lang: NotificationLanguage,
+  timeZone: string,
+): EveningReviewMessage | null {
+  if (!eveningReviewHasContent(input, timeZone)) return null;
+  const copy = COPY[lang] ?? COPY.en;
+  const sections = openSections(input, copy, lang);
+  const prepped = preppedMeetings(input);
+  const prepSections: ReviewSection[] = prepped.map((p) => ({
+    header: clip(renderPrepHeader(p, lang, timeZone)),
+    items: renderPrepLines(p.items, lang, timeZone).map((line) => clip(line.text)),
+  }));
+  const meetingLine = firstMeetingLine(input, prepped, copy, timeZone);
 
   const openCount = sections.reduce((sum, s) => sum + s.items.length, 0);
-  const lines = sections.flatMap((s) => section(s.header, s.items));
+  const lines = [...sections, ...prepSections].flatMap((s) => section(s.header, s.items));
   // One open item: name it. More: the section counts, which always fit.
   const summary =
     openCount === 1 ? (sections[0]?.items[0] ?? "") : sections.map((s) => s.header).join(" · ");
-  const pushParts = [summary, meetingLine].filter((part): part is string => Boolean(part));
+  // The push names the first prepped meeting instead of the first meeting: one
+  // clipped line either way, so the body stays inside its 200 characters.
+  const pushParts = [summary, prepSections[0]?.header ?? meetingLine].filter(
+    (part): part is string => Boolean(part),
+  );
+  const fallbackTitle = prepped.length > 0 ? prepCopy(lang).title : copy.earlyStartTitle;
   return {
-    title: openCount > 0 ? copy.title(openCount) : copy.earlyStartTitle,
+    title: openCount > 0 ? copy.title(openCount) : fallbackTitle,
     message: [...lines, ...(meetingLine ? [meetingLine] : [])].join("\n"),
     pushBody: pushParts.join("\n"),
   };
@@ -278,35 +336,6 @@ interface TodayMail {
   readonly isRead: boolean;
   readonly threadId: string | null;
   readonly receivedAt: Date;
-}
-
-/** Latest time the user answered each thread: Klorn, provider and Sent-folder records. */
-async function lastReplyByThread(
-  userId: string,
-  mails: readonly TodayMail[],
-  ledger: ReadonlyMap<string, { repliedAt: Date | null; providerRepliedAt: Date | null }>,
-  repliedAt: ReadonlyMap<string, Date | null>,
-  since: Date,
-): Promise<Map<string, number>> {
-  const latest = new Map<string, number>();
-  const note = (thread: string, at: Date | null | undefined) => {
-    if (at && at.getTime() > (latest.get(thread) ?? 0)) latest.set(thread, at.getTime());
-  };
-  for (const mail of mails) {
-    const thread = mail.threadId ?? mail.id;
-    note(thread, repliedAt.get(mail.id));
-    note(thread, ledger.get(mail.id)?.repliedAt);
-    note(thread, ledger.get(mail.id)?.providerRepliedAt);
-  }
-  const threadIds = [...new Set(mails.flatMap((m) => (m.threadId ? [m.threadId] : [])))];
-  if (threadIds.length > 0) {
-    const sent = await prisma.sentMessage.findMany({
-      where: { userId, threadId: { in: threadIds }, sentAt: { gte: since } },
-      select: { threadId: true, sentAt: true },
-    });
-    for (const row of sent) if (row.threadId) note(row.threadId, row.sentAt);
-  }
-  return latest;
 }
 
 /**
@@ -456,6 +485,33 @@ async function firstMeetingTomorrow(
   return first ? { title: stripUntrusted(first.title), startTime: first.startTime } : null;
 }
 
+/**
+ * Tomorrow-morning meetings with prep (flag on): the next-24-hour block,
+ * narrowed to meetings starting tomorrow before MORNING_END_MINUTE local.
+ * Never throws (meetingPrepForUser is fail-open).
+ */
+async function tomorrowMorningPrep(
+  userId: string,
+  tomorrowStart: Date,
+  timeZone: string,
+  now: Date,
+): Promise<MeetingPrep[]> {
+  const block = await meetingPrepForUser(userId, now);
+  if (!block) return [];
+  const tomorrowEnd = localDayUtcRange(
+    new Date(tomorrowStart.getTime() + HALF_DAY_MS),
+    timeZone,
+  ).lt;
+  return block.meetings.filter((p) => {
+    const start = new Date(p.startTime);
+    return (
+      start.getTime() >= tomorrowStart.getTime() &&
+      start.getTime() < tomorrowEnd.getTime() &&
+      localMinuteOfDay(start, timeZone) < MORNING_END_MINUTE
+    );
+  });
+}
+
 /** Everything the review can name, for the user's local day containing `now`. */
 export async function gatherEveningReviewInput(
   userId: string,
@@ -463,10 +519,11 @@ export async function gatherEveningReviewInput(
   now: Date,
 ): Promise<EveningReviewInput> {
   const today = localDayUtcRange(now, timeZone);
-  const [unanswered, commitments, meeting] = await Promise.all([
+  const [unanswered, commitments, meeting, meetingPrep] = await Promise.all([
     unansweredToday(userId, today),
     openCommitments(userId, today, now),
     firstMeetingTomorrow(userId, today.lt, timeZone),
+    tomorrowMorningPrep(userId, today.lt, timeZone, now),
   ]);
   const briefs = await briefsTheyOwe(userId, today, commitments.theirThreads);
   return {
@@ -474,5 +531,6 @@ export async function gatherEveningReviewInput(
     commitments: commitments.mine,
     theyOwe: [...commitments.theirs, ...briefs],
     firstMeetingTomorrow: meeting,
+    meetingPrep,
   };
 }

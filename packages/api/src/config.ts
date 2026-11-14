@@ -182,6 +182,13 @@ export function cohortRestriction(envNames: readonly string[]): CohortRestrictio
   return { kind: "only", userIds: [...rolloutCohortUserIds()] };
 }
 
+/**
+ * Context Engine slice 1, meeting prep (context/meeting-prep.ts): what to review
+ * before each meeting of the next 24 hours, from the user's own mail and
+ * commitments. OFF by default; takes the rollout cohort; read per call.
+ */
+export const CONTEXT_MEETING_PREP_FLAGS = ["CONTEXT_MEETING_PREP_ENABLED"] as const;
+
 /** The flags of each drive surface, as featureOpenTo takes them. */
 export const DRIVE_LIST_FLAGS = ["DRIVE_ENABLED"] as const;
 export const KLORN_DRIVE_FLAGS = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED"] as const;

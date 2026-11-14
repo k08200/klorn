@@ -20,6 +20,7 @@ export type * from "./email.js";
 export type * from "./email-rules.js";
 export type * from "./firewall.js";
 export type * from "./inbox-summary.js";
+export type * from "./meeting-prep.js";
 export type * from "./providers.js";
 export type * from "./push.js";
 export type * from "./receipt.js";
