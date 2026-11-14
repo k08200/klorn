@@ -64,7 +64,7 @@ trader / individual** can sign up — no company registration needed.
 3. Create the product and a **$29.99/mo** price. Copy the price id.
 4. Render → klorn-api: `PADDLE_API_KEY`, `PADDLE_PRO_PRICE_ID`,
    `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` — start at `sandbox`.
-4b. Vercel → klorn-web: `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (and
+4b. Cloudflare Pages → klorn-web: `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (and
    `NEXT_PUBLIC_PADDLE_ENV=sandbox` while testing). **Easy to miss** — the
    server env alone is not enough: without the client token Paddle.js never
    loads and the upgrade button silently does nothing.
