@@ -10,6 +10,34 @@ export const SLACK_MAX_TEXT = 4000;
 /** The longest `<…>` token Slack markup produces that we try to render. */
 const MAX_MARKUP_TOKEN = 300;
 
+const REPLACEMENT_CHAR = "\uFFFD";
+
+/**
+ * Text Postgres and JSON can always hold: NUL dropped (Postgres text cannot
+ * store it) and any lone surrogate replaced with U+FFFD. One linear pass.
+ */
+export function sanitizeSlackText(text: string): string {
+  let out = "";
+  let runStart = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    const high = code >= 0xd800 && code <= 0xdbff;
+    const low = code >= 0xdc00 && code <= 0xdfff;
+    if (high) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        i += 1;
+        continue;
+      }
+    }
+    if (code === 0 || high || low) {
+      out += text.slice(runStart, i) + (code === 0 ? "" : REPLACEMENT_CHAR);
+      runStart = i + 1;
+    }
+  }
+  return runStart === 0 ? text : out + text.slice(runStart);
+}
+
 /** At most `max` UTF-16 units, never ending on half a surrogate pair. */
 export function capSlackText(text: string, max: number): string {
   if (text.length <= max) return text;

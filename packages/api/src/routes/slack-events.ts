@@ -7,8 +7,12 @@
  * - This plugin's own body parser keeps the raw bytes and parses nothing; the
  *   v0 signature is verified over them with the connection's signing secret
  *   (constant time, ±5 minutes) before JSON.parse ever runs.
- * - 256 KiB body cap (413) and 600 requests a minute per hook, i.e. per
- *   workspace (Slack's own ceiling is 30,000 an hour).
+ * - 256 KiB body cap (413). Rate limits (slack/limits.ts) replace the global
+ *   per-address one, which would throttle Slack's shared delivery addresses:
+ *   30 failed requests a minute per client address (checked before any
+ *   database lookup), and 600 verified requests a minute per hook, i.e. per
+ *   workspace (Slack's own ceiling is 30,000 an hour), counted only after the
+ *   signature verified so a leaked hook id cannot exhaust it.
  * - url_verification is answered with its challenge. A kept message is stored
  *   with its event_id unique, so a retry or replay is a no-op; judging runs
  *   later on the Slack scheduler, so the answer comes well inside Slack's 3 s.
@@ -19,6 +23,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { slackLive, slackOpenTo } from "../config.js";
 import { decryptToken } from "../crypto-tokens.js";
+import { clientAddressBucket } from "../security/client-address.js";
 import { captureError } from "../sentry.js";
 import { findSlackHook, type SlackHook, touchSlackHook } from "../slack/connection-store.js";
 import { parseSlackEnvelope, type SlackEventCallback } from "../slack/envelope.js";
@@ -27,13 +32,19 @@ import {
   ingestSlackMessage,
   markSlackConversationAnswered,
 } from "../slack/episodes.js";
-import { decideSlackEvent } from "../slack/event-filter.js";
+import { decideSlackEvent, type SlackDropReason } from "../slack/event-filter.js";
+import { WindowCounter } from "../slack/limits.js";
 import { type SlackSignatureFailure, verifySlackSignature } from "../slack/signature.js";
 import { darkRouteGate, replyRouteNotFound } from "./dark-route-gate.js";
 
 export const SLACK_EVENTS_BODY_LIMIT = 256 * 1024;
-export const SLACK_EVENTS_RATE_LIMIT = { max: 600, timeWindow: "1 minute" } as const;
+/** Verified requests per hook per minute. */
+export const SLACK_EVENTS_PER_HOOK_PER_MINUTE = 600;
+/** Failed requests (unknown hook, bad signature) per client address per minute. */
+export const SLACK_EVENTS_FAILURES_PER_ADDRESS_PER_MINUTE = 30;
+const MINUTE_MS = 60_000;
 const HOOK_ID_LENGTH = 32;
+const HTTP_TOO_MANY = 429;
 const HTTP_OK = 200;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_UNAUTHORIZED = 401;
@@ -58,17 +69,44 @@ function hookIdOf(request: FastifyRequest): string | null {
   return isSlackHookId(id) ? id : null;
 }
 
-/** Per hook, i.e. per workspace; malformed ids share one bucket. */
-export function slackEventsRateKey(request: FastifyRequest): string {
-  return `slack-events:${hookIdOf(request) ?? "invalid"}`;
+export const failuresByAddress = new WindowCounter(
+  SLACK_EVENTS_FAILURES_PER_ADDRESS_PER_MINUTE,
+  MINUTE_MS,
+);
+export const verifiedByHook = new WindowCounter(SLACK_EVENTS_PER_HOOK_PER_MINUTE, MINUTE_MS);
+
+type LoggedReason = SlackSignatureFailure | SlackDropReason | "capped" | "not-configured";
+const lastReasonLog = new Map<LoggedReason, number>();
+
+/** One log line per reason per hour: never the body, never the hook id. */
+function noteReason(kind: "rejected" | "dropped", reason: LoggedReason, now: number): void {
+  const last = lastReasonLog.get(reason) ?? 0;
+  if (now - last < REJECTION_LOG_INTERVAL_MS) return;
+  lastReasonLog.set(reason, now);
+  console.warn(`${LOG_PREFIX} ${kind} an event: ${reason} (logged at most hourly per reason)`);
 }
 
-const lastRejectionLog = new Map<SlackSignatureFailure, number>();
-function noteRejection(reason: SlackSignatureFailure, now: number): void {
-  const last = lastRejectionLog.get(reason) ?? 0;
-  if (now - last < REJECTION_LOG_INTERVAL_MS) return;
-  lastRejectionLog.set(reason, now);
-  console.warn(`${LOG_PREFIX} rejected a request: ${reason} (logged at most hourly per reason)`);
+/** Test seam. */
+export function resetSlackEventLimits(): void {
+  failuresByAddress.reset();
+  verifiedByHook.reset();
+  lastReasonLog.clear();
+}
+
+function rejectUnsigned(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  reason: SlackSignatureFailure | "not-configured",
+): FastifyReply {
+  const now = Date.now();
+  failuresByAddress.hit(clientAddressBucket(request), now);
+  noteReason("rejected", reason, now);
+  return reply.code(HTTP_UNAUTHORIZED).send({ error: "Invalid Slack signature" });
+}
+
+function notFound(request: FastifyRequest, reply: FastifyReply): FastifyReply {
+  failuresByAddress.hit(clientAddressBucket(request), Date.now());
+  return replyRouteNotFound(request, reply);
 }
 
 function header(request: FastifyRequest, name: string): string | null {
@@ -97,7 +135,7 @@ async function applyEvent(hook: SlackHook, envelope: SlackEventCallback): Promis
   if (!event) return;
   const where = { connectionId: hook.id, channel: event.channel };
   if (decision.action === "keep") {
-    await ingestSlackMessage({
+    const result = await ingestSlackMessage({
       ...where,
       userId: hook.userId,
       eventId: envelope.eventId,
@@ -108,10 +146,13 @@ async function applyEvent(hook: SlackHook, envelope: SlackEventCallback): Promis
       text: event.text,
       mentionsUser: decision.mentionsUser,
     });
+    if (result === "capped") noteReason("dropped", "capped", Date.now());
   } else if (decision.action === "own") {
-    await markSlackConversationAnswered({ ...where, threadTs: event.threadTs });
+    await markSlackConversationAnswered({ ...where, threadTs: event.threadTs, ts: event.ts });
   } else if (decision.action === "delete") {
     await deleteSlackMessageCopy({ ...where, ts: decision.ts });
+  } else if (decision.action === "drop") {
+    noteReason("dropped", decision.reason, Date.now());
   }
 }
 
@@ -138,17 +179,21 @@ async function answerVerified(
   return reply.code(HTTP_OK).send({ ok: true });
 }
 
+function tooMany(reply: FastifyReply): FastifyReply {
+  reply.header("retry-after", "60");
+  return reply.code(HTTP_TOO_MANY).send({ error: "Too many requests" });
+}
+
 async function handleSlackEvent(request: FastifyRequest, reply: FastifyReply) {
-  const hookId = hookIdOf(request);
-  if (!hookId) return replyRouteNotFound(request, reply);
-  const hook = await findSlackHook(hookId);
-  if (!hook || !slackOpenTo(hook.userId)) return replyRouteNotFound(request, reply);
-  const secret = signingSecretOf(hook);
-  if (!secret) {
-    return reply.code(HTTP_UNAUTHORIZED).send({ error: "Slack connection is not configured" });
-  }
-  const rawBody = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
   const now = Date.now();
+  if (failuresByAddress.exceeded(clientAddressBucket(request), now)) return tooMany(reply);
+  const hookId = hookIdOf(request);
+  if (!hookId) return notFound(request, reply);
+  const hook = await findSlackHook(hookId);
+  if (!hook || !slackOpenTo(hook.userId)) return notFound(request, reply);
+  const secret = signingSecretOf(hook);
+  if (!secret) return rejectUnsigned(request, reply, "not-configured");
+  const rawBody = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
   const verdict = verifySlackSignature({
     rawBody,
     timestamp: header(request, "x-slack-request-timestamp"),
@@ -156,10 +201,8 @@ async function handleSlackEvent(request: FastifyRequest, reply: FastifyReply) {
     signingSecret: secret,
     nowMs: now,
   });
-  if (!verdict.ok) {
-    noteRejection(verdict.reason, now);
-    return reply.code(HTTP_UNAUTHORIZED).send({ error: "Invalid Slack signature" });
-  }
+  if (!verdict.ok) return rejectUnsigned(request, reply, verdict.reason);
+  if (!verifiedByHook.hit(hookId, now)) return tooMany(reply);
   try {
     return await answerVerified(reply, hook, rawBody);
   } catch (err) {
@@ -179,7 +222,9 @@ export async function slackEventsRoutes(app: FastifyInstance) {
     "/events/:hookId",
     {
       bodyLimit: SLACK_EVENTS_BODY_LIMIT,
-      config: { rateLimit: { ...SLACK_EVENTS_RATE_LIMIT, keyGenerator: slackEventsRateKey } },
+      // The global per-address limit would throttle Slack's shared delivery
+      // addresses; this route's own limits are in handleSlackEvent.
+      config: { rateLimit: false },
     },
     handleSlackEvent,
   );

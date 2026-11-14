@@ -427,8 +427,7 @@ try {
 
   // Slack v1 (docs/providers/slack.md). Started even under
   // BACKGROUND_AGENTS_DISABLED: the webhook keeps storing while the brake is on,
-  // so the 7-day text purge must keep running; slack/scheduler.ts skips the
-  // LLM work itself while the brake is set.
+  // so the 7-day text purge must keep running (the scheduler does no LLM work).
   import("./slack/scheduler.js")
     .then(({ startSlackScheduler }) => {
       startSlackScheduler();

@@ -6,6 +6,7 @@
  * once per event_id. Real signing, envelope and filter; the store is faked.
  */
 
+import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptToken } from "../crypto-tokens.js";
@@ -30,7 +31,15 @@ vi.mock("../slack/episodes.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { SLACK_EVENTS_BODY_LIMIT, slackEventsRoutes } from "../routes/slack-events.js";
+import { slackConnectionRoutes } from "../routes/slack-connection.js";
+import {
+  resetSlackEventLimits,
+  SLACK_EVENTS_BODY_LIMIT,
+  SLACK_EVENTS_FAILURES_PER_ADDRESS_PER_MINUTE,
+  SLACK_EVENTS_PER_HOOK_PER_MINUTE,
+  slackEventsRoutes,
+  verifiedByHook,
+} from "../routes/slack-events.js";
 import { signSlackRequest } from "../slack/signature.js";
 
 const SECRET = "8f742231b10e8888abcd99eeeeee85a5";
@@ -78,11 +87,16 @@ function signedHeaders(body: string, opts: { secret?: string; ageSeconds?: numbe
   };
 }
 
-const post = (body: string, headers: Record<string, string>, url = URL_PATH) =>
-  app.inject({ method: "POST", url, payload: body, headers });
+const post = (
+  body: string,
+  headers: Record<string, string>,
+  url = URL_PATH,
+  remoteAddress = "203.0.113.7",
+) => app.inject({ method: "POST", url, payload: body, headers, remoteAddress });
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  resetSlackEventLimits();
   store.hooks.clear();
   store.seenEvents.clear();
   store.hooks.set(HOOK, hookRow());
@@ -147,11 +161,12 @@ describe("gating", () => {
     expect((await post(body, signedHeaders(body))).statusCode).toBe(200);
   });
 
-  it("a hook without a signing secret yet answers 401 and stores nothing", async () => {
+  it("a hook without a signing secret yet answers the same 401 as a bad signature", async () => {
     store.hooks.set(HOOK, hookRow({ signingSecretCipher: null }));
     const body = dm();
     const res = await post(body, signedHeaders(body));
     expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: "Invalid Slack signature" });
     expect(store.ingestSlackMessage).not.toHaveBeenCalled();
   });
 });
@@ -259,6 +274,7 @@ describe("verified events", () => {
       connectionId: "conn-1",
       channel: "D0DM",
       threadTs: null,
+      ts: "1763100000.000100",
     });
   });
 
@@ -275,5 +291,83 @@ describe("verified events", () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).not.toContain(SECRET);
     expect(res.body).not.toContain("contract");
+  });
+});
+
+describe("rate limits", () => {
+  it("cuts off an address after repeated failures, before any database lookup", async () => {
+    const probe = () =>
+      post(dm(), { "content-type": "application/json" }, `/api/slack/events/${"e".repeat(32)}`);
+    for (let i = 0; i < SLACK_EVENTS_FAILURES_PER_ADDRESS_PER_MINUTE; i++) {
+      expect((await probe()).statusCode).toBe(404);
+    }
+    store.findSlackHook.mockClear();
+    const blocked = await probe();
+    expect(blocked.statusCode).toBe(429);
+    expect(store.findSlackHook).not.toHaveBeenCalled();
+    // Slack, from another address, is unaffected.
+    const body = dm();
+    expect((await post(body, signedHeaders(body), URL_PATH, "198.51.100.1")).statusCode).toBe(200);
+  });
+
+  it("counts a hook's budget only for verified requests, so a leaked hook id cannot exhaust it", async () => {
+    for (let i = 0; i < 20; i++) {
+      await post(dm(), { "content-type": "application/json" }, URL_PATH, `192.0.2.${i}`);
+    }
+    const body = dm();
+    expect((await post(body, signedHeaders(body))).statusCode).toBe(200);
+  });
+
+  it("answers 429 once a hook used its verified budget", async () => {
+    const now = Date.now();
+    for (let i = 0; i < SLACK_EVENTS_PER_HOOK_PER_MINUTE; i++) verifiedByHook.hit(HOOK, now);
+    const body = dm();
+    const res = await post(body, signedHeaders(body));
+    expect(res.statusCode).toBe(429);
+    expect(store.ingestSlackMessage).not.toHaveBeenCalled();
+  });
+
+  it("is exempt from the global per-address limiter Slack's shared addresses would trip", async () => {
+    const limited = Fastify();
+    await limited.register(rateLimit, { max: 2, timeWindow: "1 minute" });
+    await limited.register(slackEventsRoutes, { prefix: "/api/slack" });
+    await limited.ready();
+    const codes: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const body = dm({}, `Ev0LIMIT${i}`);
+      const res = await limited.inject({
+        method: "POST",
+        url: URL_PATH,
+        payload: body,
+        headers: signedHeaders(body),
+      });
+      codes.push(res.statusCode);
+    }
+    await limited.close();
+    expect(codes).toEqual([200, 200, 200, 200, 200]);
+  });
+});
+
+describe("plugin isolation", () => {
+  it("the raw-bytes parser stays inside the events plugin: sibling routes still parse JSON", async () => {
+    const full = Fastify();
+    full.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+      done(null, JSON.parse((body as string) || "{}"));
+    });
+    await full.register(slackEventsRoutes, { prefix: "/api/slack" });
+    await full.register(slackConnectionRoutes, { prefix: "/api/slack" });
+    full.post("/echo", async (request) => ({
+      isBuffer: Buffer.isBuffer(request.body),
+      body: request.body,
+    }));
+    await full.ready();
+    const res = await full.inject({
+      method: "POST",
+      url: "/echo",
+      payload: '{"a":1}',
+      headers: { "content-type": "application/json" },
+    });
+    await full.close();
+    expect(res.json()).toEqual({ isBuffer: false, body: { a: 1 } });
   });
 });

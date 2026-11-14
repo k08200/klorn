@@ -83,7 +83,9 @@ async function callAuthTest(token: string, fetchImpl: typeof fetch): Promise<Res
       body: "",
       signal: AbortSignal.timeout(AUTH_TEST_TIMEOUT_MS),
     });
-  } catch {
+  } catch (err) {
+    // The error's name only: a message could carry the request, i.e. the token.
+    console.warn(`[slack] auth.test unreachable: ${err instanceof Error ? err.name : "unknown"}`);
     return null;
   }
 }
@@ -93,13 +95,21 @@ export async function slackAuthTest(
   fetchImpl: typeof fetch = fetch,
 ): Promise<SlackAuthResult> {
   const response = await callAuthTest(token, fetchImpl);
-  if (!response || !response.ok) return { ok: false, code: "slack-unreachable" };
+  if (!response) return { ok: false, code: "slack-unreachable" };
+  if (!response.ok) {
+    console.warn(`[slack] auth.test answered HTTP ${response.status}`);
+    await response.body?.cancel().catch(() => undefined);
+    return { ok: false, code: "slack-unreachable" };
+  }
   let body: Record<string, unknown>;
   try {
     const text = await response.text();
     if (text.length > MAX_RESPONSE_CHARS) return { ok: false, code: "bad-response" };
     body = JSON.parse(text) as Record<string, unknown>;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[slack] auth.test body unreadable: ${err instanceof Error ? err.name : "unknown"}`,
+    );
     return { ok: false, code: "bad-response" };
   }
   if (body?.ok !== true) return { ok: false, code: "slack-rejected-token" };

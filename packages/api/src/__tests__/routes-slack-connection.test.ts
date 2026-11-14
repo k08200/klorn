@@ -162,7 +162,6 @@ describe("setup flow", () => {
     expect(slack.slackAuthTest).toHaveBeenCalledWith(TOKEN);
     expect(store.saveSlackCredentials).toHaveBeenCalledWith("user-a", {
       signingSecret: SECRET,
-      userToken: TOKEN,
       teamId: "T0001",
       slackUserId: "U0001",
       workspaceUrl: "https://acme.slack.com/",
@@ -209,6 +208,17 @@ describe("setup flow", () => {
       scopes: ["chat:write"],
     });
     expect(store.saveSlackCredentials).not.toHaveBeenCalled();
+  });
+
+  it("refuses to hand out a manifest when the server has no public URL", async () => {
+    await call("POST", "/connection");
+    store.getSlackConnectionStatus.mockImplementationOnce(async (userId: string) => ({
+      ...(store.status(userId) as Record<string, unknown>),
+      requestUrl: null,
+    }));
+    const res = await call("GET", "/manifest");
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("public-url-missing");
   });
 
   it("credentials before setup started are refused", async () => {

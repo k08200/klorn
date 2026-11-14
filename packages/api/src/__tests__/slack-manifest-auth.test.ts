@@ -20,7 +20,8 @@ const repoManifest = () =>
   readFileSync(new URL("../../../../integrations/slack/manifest.yaml", import.meta.url), "utf8");
 
 afterEach(() => {
-  delete process.env.PUBLIC_API_URL;
+  delete process.env.PUBLIC_URL;
+  delete process.env.RENDER_EXTERNAL_URL;
 });
 
 describe("Slack manifest", () => {
@@ -47,18 +48,24 @@ describe("Slack manifest", () => {
     expect(yaml).toContain("socket_mode_enabled: false");
   });
 
-  it("puts this connection's Request URL in the rendered manifest", () => {
-    process.env.PUBLIC_API_URL = "https://klorn.example.com/ignored/path";
+  it("puts this connection's Request URL, on the API's public origin, in the manifest", () => {
+    process.env.PUBLIC_URL = "https://klorn.example.com/ignored/path";
     const url = slackEventsUrl("a".repeat(32));
     expect(url).toBe(`https://klorn.example.com/api/slack/events/${"a".repeat(32)}`);
-    expect(renderSlackManifest(url)).toContain(`request_url: ${url}`);
+    expect(renderSlackManifest(url ?? "")).toContain(`request_url: ${url}`);
   });
 
-  it("falls back to the hosted API when PUBLIC_API_URL is unusable", () => {
-    process.env.PUBLIC_API_URL = "javascript:alert(1)";
-    expect(slackEventsUrl("b".repeat(32))).toBe(
-      `https://api.klorn.ai/api/slack/events/${"b".repeat(32)}`,
+  it("uses RENDER_EXTERNAL_URL when PUBLIC_URL is unset, as the phone webhooks do", () => {
+    process.env.RENDER_EXTERNAL_URL = "https://klorn-api.onrender.com";
+    expect(slackEventsUrl("c".repeat(32))).toBe(
+      `https://klorn-api.onrender.com/api/slack/events/${"c".repeat(32)}`,
     );
+  });
+
+  it("has no Request URL rather than a wrong one when the public origin is unset or unusable", () => {
+    expect(slackEventsUrl("b".repeat(32))).toBeNull();
+    process.env.PUBLIC_URL = "javascript:alert(1)";
+    expect(slackEventsUrl("b".repeat(32))).toBeNull();
   });
 });
 

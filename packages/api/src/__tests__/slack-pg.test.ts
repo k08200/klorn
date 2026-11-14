@@ -101,17 +101,49 @@ describePg("Slack storage on Postgres", () => {
     expect(episode.messageCount).toBe(1);
   });
 
+  it("two different first messages arriving together open one episode, not two", async () => {
+    const ids = await newConnection();
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        ingestSlackMessage(message(ids, { ts: `1763100000.00010${i}` })),
+      ),
+    );
+    expect(results).toEqual(["stored", "stored", "stored", "stored", "stored"]);
+    const episodes = await prisma.slackEpisode.findMany({
+      where: { connectionId: ids.connectionId },
+      select: { messageCount: true },
+    });
+    expect(episodes).toEqual([{ messageCount: 5 }]);
+  });
+
+  it("stores text with NUL and lone surrogates once the envelope sanitized it", async () => {
+    const ids = await newConnection();
+    const { sanitizeSlackText } = await import("../slack/text.js");
+    const text = sanitizeSlackText("a\u0000b\ud800");
+    expect(await ingestSlackMessage(message(ids, { text }))).toBe("stored");
+  });
+
   it("the user's reply closes the open episode and the next message opens a new one", async () => {
     const ids = await newConnection();
     await ingestSlackMessage(message(ids));
+    // A late (or replayed) reply older than the message answers nothing.
     expect(
       await markSlackConversationAnswered({
         connectionId: ids.connectionId,
         channel: "D0DM",
         threadTs: null,
+        ts: "1763099999.000100",
+      }),
+    ).toBe(0);
+    expect(
+      await markSlackConversationAnswered({
+        connectionId: ids.connectionId,
+        channel: "D0DM",
+        threadTs: null,
+        ts: "1763100100.000100",
       }),
     ).toBe(1);
-    await ingestSlackMessage(message(ids, { ts: "9.0" }));
+    await ingestSlackMessage(message(ids, { ts: "1763100200.000100" }));
     const statuses = await prisma.slackEpisode.findMany({
       where: { connectionId: ids.connectionId },
       orderBy: { startedAt: "asc" },
@@ -123,8 +155,12 @@ describePg("Slack storage on Postgres", () => {
   it("purges text after 7 days and verdicts after 90, keeping younger rows", async () => {
     const ids = await newConnection();
     const now = new Date();
-    await ingestSlackMessage(message(ids, { now: new Date(now.getTime() - 8 * DAY_MS), ts: "1.0" }));
-    await ingestSlackMessage(message(ids, { now: new Date(now.getTime() - 6 * DAY_MS), ts: "2.0" }));
+    await ingestSlackMessage(
+      message(ids, { now: new Date(now.getTime() - 8 * DAY_MS), ts: "1.0" }),
+    );
+    await ingestSlackMessage(
+      message(ids, { now: new Date(now.getTime() - 6 * DAY_MS), ts: "2.0" }),
+    );
     const old = await prisma.slackEpisode.create({
       data: {
         userId: ids.userId,

@@ -103,6 +103,12 @@ const AUTH_ERRORS: Record<string, { status: number; error: string }> = {
   "extra-scopes": { status: 400, error: "The token has scopes Klorn must not hold." },
 };
 
+const NOT_STARTED = { error: "Start the Slack setup first.", code: "not-started" } as const;
+const NO_PUBLIC_URL = {
+  error: "This Klorn server has no public URL (set PUBLIC_URL), so Slack cannot reach it.",
+  code: "public-url-missing",
+} as const;
+
 async function putCredentials(request: FastifyRequest, reply: FastifyReply) {
   const userId = getUserId(request);
   const body = asBody(request);
@@ -120,6 +126,7 @@ async function putCredentials(request: FastifyRequest, reply: FastifyReply) {
         : "That is not a Slack user token (xoxp-…).";
     return reply.code(400).send({ error, code: token.code });
   }
+  // The token is checked here and then dropped: v1 never calls Slack with it.
   const auth = await slackAuthTest(token.token);
   if (!auth.ok) {
     const mapped = AUTH_ERRORS[auth.code] ?? { status: 502, error: "Slack check failed." };
@@ -128,15 +135,42 @@ async function putCredentials(request: FastifyRequest, reply: FastifyReply) {
   }
   const saved = await saveSlackCredentials(userId, {
     signingSecret,
-    userToken: token.token,
     teamId: auth.teamId,
     slackUserId: auth.slackUserId,
     workspaceUrl: auth.workspaceUrl,
   });
-  if (saved === "not-started") {
-    return reply.code(409).send({ error: "Start the Slack setup first.", code: "not-started" });
+  if (saved === "not-started") return reply.code(409).send(NOT_STARTED);
+  return getSlackConnectionStatus(userId);
+}
+
+async function getManifest(request: FastifyRequest, reply: FastifyReply) {
+  const status = await getSlackConnectionStatus(getUserId(request));
+  if (status.state === "none") return reply.code(409).send(NOT_STARTED);
+  if (!status.requestUrl) return reply.code(409).send(NO_PUBLIC_URL);
+  return reply
+    .header("content-type", "text/yaml; charset=utf-8")
+    .header("content-disposition", 'attachment; filename="klorn-slack-manifest.yaml"')
+    .send(renderSlackManifest(status.requestUrl));
+}
+
+async function putChannels(request: FastifyRequest, reply: FastifyReply) {
+  const channelIds = validChannelIds(asBody(request).channelIds);
+  if (!channelIds) {
+    return reply.code(400).send({
+      error: `Up to ${MAX_OPT_IN_CHANNELS} channel IDs like C0123456789.`,
+      code: "invalid-channels",
+    });
+  }
+  const userId = getUserId(request);
+  if (!(await setSlackOptInChannels(userId, channelIds))) {
+    return reply.code(409).send(NOT_STARTED);
   }
   return getSlackConnectionStatus(userId);
+}
+
+async function deleteConnection(request: FastifyRequest, reply: FastifyReply) {
+  await disconnectSlack(getUserId(request));
+  return reply.code(204).send();
 }
 
 export async function slackConnectionRoutes(app: FastifyInstance) {
@@ -147,61 +181,26 @@ export async function slackConnectionRoutes(app: FastifyInstance) {
     (request) => `slack-connect:user:${getUserId(request)}`,
     "Too many connection attempts. Try again later.",
   );
-
   app.get("/connection", { preHandler: [requireAuth, cohortGate(SLACK_FLAGS)] }, async (request) =>
     getSlackConnectionStatus(getUserId(request)),
   );
-
   app.post("/connection", { preHandler: [requireAuth, cohortGate(SLACK_FLAGS)] }, async (request) =>
     startSlackConnection(getUserId(request)),
   );
-
-  app.get(
-    "/manifest",
-    { preHandler: [requireAuth, cohortGate(SLACK_FLAGS)] },
-    async (request, reply) => {
-      const status = await getSlackConnectionStatus(getUserId(request));
-      if (status.state === "none") {
-        return reply.code(409).send({ error: "Start the Slack setup first.", code: "not-started" });
-      }
-      return reply
-        .header("content-type", "text/yaml; charset=utf-8")
-        .header("content-disposition", 'attachment; filename="klorn-slack-manifest.yaml"')
-        .send(renderSlackManifest(status.requestUrl));
-    },
-  );
-
+  app.get("/manifest", { preHandler: [requireAuth, cohortGate(SLACK_FLAGS)] }, getManifest);
   app.put(
     "/connection/credentials",
     { preHandler: [requireAuth, cohortGate(SLACK_FLAGS), connectLimit] },
     putCredentials,
   );
-
   app.put(
     "/connection/channels",
     { preHandler: [requireAuth, cohortGate(SLACK_FLAGS)] },
-    async (request, reply) => {
-      const channelIds = validChannelIds(asBody(request).channelIds);
-      if (!channelIds) {
-        return reply.code(400).send({
-          error: `Up to ${MAX_OPT_IN_CHANNELS} channel IDs like C0123456789.`,
-          code: "invalid-channels",
-        });
-      }
-      const userId = getUserId(request);
-      if (!(await setSlackOptInChannels(userId, channelIds))) {
-        return reply.code(409).send({ error: "Start the Slack setup first.", code: "not-started" });
-      }
-      return getSlackConnectionStatus(userId);
-    },
+    putChannels,
   );
-
   app.delete(
     "/connection",
     { preHandler: [requireAuth, cohortGate(SLACK_FLAGS)] },
-    async (request, reply) => {
-      await disconnectSlack(getUserId(request));
-      return reply.code(204).send();
-    },
+    deleteConnection,
   );
 }

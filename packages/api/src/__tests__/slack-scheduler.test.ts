@@ -65,12 +65,15 @@ describe("slackSchedulerTick", () => {
     expect(purge.purgeExpiredSlackData).toHaveBeenCalledTimes(1);
   });
 
-  it("a failing purge is reported, not thrown, and retried on the next tick", async () => {
+  it("a failing purge is reported, not thrown, and retried after the interval, not every tick", async () => {
     purge.purgeExpiredSlackData.mockRejectedValueOnce(new Error("db down"));
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(slackSchedulerTick(T0)).resolves.toBeUndefined();
     await slackSchedulerTick(at(30_000));
+    expect(purge.purgeExpiredSlackData).toHaveBeenCalledTimes(1);
+    await slackSchedulerTick(at(SLACK_PURGE_INTERVAL_MS));
     expect(purge.purgeExpiredSlackData).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledTimes(1);
     error.mockRestore();
   });
 });

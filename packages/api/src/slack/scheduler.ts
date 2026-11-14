@@ -30,8 +30,10 @@ export function resetSlackSchedulerState(): void {
 /** One tick's work, run under the lease. */
 export async function runSlackWork(now: Date = new Date()): Promise<void> {
   if (now.getTime() - lastPurgeAt >= SLACK_PURGE_INTERVAL_MS) {
-    const purged = await purgeExpiredSlackData(now);
+    // Stamped before the attempt: a failing purge is retried after the
+    // interval, not hammered every tick.
     lastPurgeAt = now.getTime();
+    const purged = await purgeExpiredSlackData(now);
     if (purged.messages > 0 || purged.episodes > 0) {
       console.log(
         `${LOG_PREFIX} retention: deleted ${purged.messages} messages, ${purged.episodes} episodes`,

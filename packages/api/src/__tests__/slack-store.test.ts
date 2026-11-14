@@ -10,14 +10,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => {
   const tx = {
-    slackMessage: { findUnique: vi.fn(), create: vi.fn() },
-    slackEpisode: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
+    $executeRaw: vi.fn(async () => 0),
+    slackMessage: { findUnique: vi.fn(), create: vi.fn(), count: vi.fn(async () => 0) },
+    slackEpisode: { findFirst: vi.fn(), updateMany: vi.fn(), create: vi.fn() },
   };
   return {
     tx,
     prisma: {
-      $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
-      slackMessage: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+      $transaction: vi.fn(async (arg: unknown) =>
+        typeof arg === "function"
+          ? (arg as (t: typeof tx) => unknown)(tx)
+          : Promise.all(arg as unknown[]),
+      ),
+      slackMessage: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        findFirst: vi.fn(async () => null),
+      },
       slackEpisode: {
         deleteMany: vi.fn(async () => ({ count: 0 })),
         updateMany: vi.fn(async () => ({ count: 0 })),
@@ -56,6 +64,8 @@ import {
   ingestSlackMessage,
   isEpisodeReady,
   markSlackConversationAnswered,
+  SLACK_MAX_LIVE_MESSAGES,
+  SLACK_MAX_MESSAGES_PER_HOUR,
 } from "../slack/episodes.js";
 import {
   purgeExpiredSlackData,
@@ -86,7 +96,8 @@ beforeEach(() => {
   db.tx.slackMessage.findUnique.mockResolvedValue(null);
   db.tx.slackEpisode.findFirst.mockResolvedValue(null);
   db.tx.slackEpisode.create.mockResolvedValue({ id: "ep-new" });
-  db.tx.slackEpisode.update.mockResolvedValue({ id: "ep-open" });
+  db.tx.slackEpisode.updateMany.mockResolvedValue({ count: 1 });
+  db.tx.slackMessage.count.mockResolvedValue(0);
   db.tx.slackMessage.create.mockResolvedValue({ id: "msg-1" });
 });
 
@@ -94,6 +105,13 @@ describe("episode grouping", () => {
   it("uses the thread ts as the conversation key, or one key for top-level messages", () => {
     expect(episodeThreadKey("1763.0001")).toBe("1763.0001");
     expect(episodeThreadKey(null)).toBe("");
+  });
+
+  it("serializes each conversation on a transaction-scoped advisory lock", async () => {
+    await ingestSlackMessage(input());
+    const [sql, key] = db.tx.$executeRaw.mock.calls[0] as unknown as [TemplateStringsArray, string];
+    expect(sql.join("?")).toContain("pg_advisory_xact_lock");
+    expect(key).toBe("slack:conn-1:D0DM:");
   });
 
   it("opens a new episode when no open one is recent enough", async () => {
@@ -132,8 +150,8 @@ describe("episode grouping", () => {
     db.tx.slackEpisode.findFirst.mockResolvedValue({ id: "ep-open" });
     await ingestSlackMessage(input({ threadTs: "1763.0001", mentionsUser: true }));
     expect(db.tx.slackEpisode.create).not.toHaveBeenCalled();
-    expect(db.tx.slackEpisode.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: "ep-open" },
+    expect(db.tx.slackEpisode.updateMany.mock.calls[0]?.[0]).toMatchObject({
+      where: { id: "ep-open", status: "OPEN" },
       data: {
         messageCount: { increment: 1 },
         lastMessageAt: NOW,
@@ -142,6 +160,14 @@ describe("episode grouping", () => {
       },
     });
     expect(db.tx.slackMessage.create.mock.calls[0]?.[0]?.data.episodeId).toBe("ep-open");
+  });
+
+  it("never appends to an episode the judge already claimed: a new one starts", async () => {
+    db.tx.slackEpisode.findFirst.mockResolvedValue({ id: "ep-claimed" });
+    db.tx.slackEpisode.updateMany.mockResolvedValue({ count: 0 });
+    await ingestSlackMessage(input());
+    expect(db.tx.slackEpisode.create).toHaveBeenCalledTimes(1);
+    expect(db.tx.slackMessage.create.mock.calls[0]?.[0]?.data.episodeId).toBe("ep-new");
   });
 
   it("is ready after 90 s of quiet, 5 minutes from the first message, or 20 messages", () => {
@@ -185,19 +211,72 @@ describe("retry and replay dedupe", () => {
   });
 });
 
+describe("storage caps", () => {
+  it("drops a message once the connection stored its hourly allowance", async () => {
+    db.tx.slackMessage.count.mockResolvedValueOnce(SLACK_MAX_MESSAGES_PER_HOUR);
+    expect(await ingestSlackMessage(input())).toBe("capped");
+    expect(db.tx.slackMessage.count.mock.calls[0]?.[0]).toEqual({
+      where: { connectionId: "conn-1", createdAt: { gte: new Date(NOW.getTime() - 3_600_000) } },
+    });
+    expect(db.tx.slackEpisode.create).not.toHaveBeenCalled();
+    expect(db.tx.slackMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("drops a message once the connection holds its live allowance", async () => {
+    db.tx.slackMessage.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(SLACK_MAX_LIVE_MESSAGES);
+    expect(await ingestSlackMessage(input())).toBe("capped");
+    expect(db.tx.slackMessage.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("own replies and deletions", () => {
-  it("the user's reply marks the open episode of that conversation answered", async () => {
+  it("the user's reply answers only episodes older than the reply", async () => {
     db.prisma.slackEpisode.updateMany.mockResolvedValueOnce({ count: 1 });
     expect(
       await markSlackConversationAnswered({
         connectionId: "conn-1",
         channel: "D0DM",
         threadTs: null,
+        ts: "1763114500.000100",
       }),
     ).toBe(1);
     expect(db.prisma.slackEpisode.updateMany.mock.calls[0]?.[0]).toEqual({
-      where: { connectionId: "conn-1", channelId: "D0DM", threadKey: "", status: "OPEN" },
+      where: {
+        connectionId: "conn-1",
+        channelId: "D0DM",
+        status: "OPEN",
+        threadKey: "",
+        lastTs: { lt: "1763114500.000100" },
+      },
       data: { status: "ANSWERED" },
+    });
+    expect(db.prisma.slackMessage.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("a reply in a thread also answers the top-level episode holding the parent message", async () => {
+    db.prisma.slackEpisode.updateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 });
+    db.prisma.slackMessage.findFirst.mockResolvedValueOnce({ episodeId: "ep-top" } as never);
+    const closed = await markSlackConversationAnswered({
+      connectionId: "conn-1",
+      channel: "C0PUB",
+      threadTs: "1763114400.000100",
+      ts: "1763114500.000100",
+    });
+    expect(closed).toBe(1);
+    expect(db.prisma.slackMessage.findFirst.mock.calls[0]?.[0]).toEqual({
+      where: { connectionId: "conn-1", channelId: "C0PUB", ts: "1763114400.000100" },
+      select: { episodeId: true },
+    });
+    expect(db.prisma.slackEpisode.updateMany.mock.calls[1]?.[0]?.where).toEqual({
+      connectionId: "conn-1",
+      channelId: "C0PUB",
+      status: "OPEN",
+      id: "ep-top",
+      lastTs: { lt: "1763114500.000100" },
     });
   });
 
@@ -251,6 +330,14 @@ describe("connection store", () => {
     expect(db.prisma.slackConnection.create).toHaveBeenCalledTimes(1);
   });
 
+  it("a concurrent start that loses the unique race is not an error", async () => {
+    db.prisma.slackConnection.findUnique.mockResolvedValueOnce(null);
+    db.prisma.slackConnection.create.mockRejectedValueOnce(
+      Object.assign(new Error("dup"), { code: "P2002" }),
+    );
+    await expect(startSlackConnection("user-1")).resolves.toBeDefined();
+  });
+
   it("the status never selects a secret column", async () => {
     db.prisma.slackConnection.findUnique.mockResolvedValueOnce(null);
     expect(await getSlackConnectionStatus("user-1")).toEqual({ state: "none" });
@@ -260,11 +347,14 @@ describe("connection store", () => {
     expect(Object.keys(args.select)).not.toContain("userTokenCipher");
   });
 
-  it("stores both secrets encrypted, scoped to the session user", async () => {
-    db.prisma.slackConnection.findUnique.mockResolvedValueOnce({ id: "c1", teamId: null });
+  it("stores the signing secret encrypted and never a user token", async () => {
+    db.prisma.slackConnection.findUnique.mockResolvedValueOnce({
+      id: "c1",
+      teamId: null,
+      slackUserId: null,
+    });
     await saveSlackCredentials("user-1", {
       signingSecret: "8f742231b10e8888abcd99eeeeee85a5",
-      userToken: "xoxp-1-2-3",
       teamId: "T0001",
       slackUserId: "U0001",
       workspaceUrl: "https://acme.slack.com/",
@@ -273,24 +363,27 @@ describe("connection store", () => {
     const args = db.prisma.slackConnection.update.mock.calls[0]?.[0];
     expect(args.where).toEqual({ userId: "user-1" });
     expect(args.data.signingSecretCipher).not.toContain("8f742231");
-    expect(args.data.userTokenCipher).not.toContain("xoxp");
     expect(decryptToken(args.data.signingSecretCipher)).toBe("8f742231b10e8888abcd99eeeeee85a5");
-    expect(decryptToken(args.data.userTokenCipher)).toBe("xoxp-1-2-3");
-    expect(args.select).toBeDefined();
-    expect(Object.keys(args.select)).not.toContain("userTokenCipher");
+    expect(JSON.stringify(args.data)).not.toMatch(/xox|token/i);
+    expect(db.prisma.slackEpisode.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("switching to another workspace drops what was stored from the old one", async () => {
-    db.prisma.slackConnection.findUnique.mockResolvedValueOnce({ id: "c1", teamId: "TOLD" });
+  it.each([
+    ["another workspace", { teamId: "TOLD", slackUserId: "U0001" }],
+    ["another Slack user in the same workspace", { teamId: "TNEW", slackUserId: "UOLD" }],
+  ])("switching to %s drops what was stored for the old one, opt-ins included", async (_l, old) => {
+    db.prisma.slackConnection.findUnique.mockResolvedValueOnce({ id: "c1", ...old });
     await saveSlackCredentials("user-1", {
       signingSecret: "8f742231b10e8888abcd99eeeeee85a5",
-      userToken: "xoxp-1-2-3",
       teamId: "TNEW",
       slackUserId: "U0001",
       workspaceUrl: "https://new.slack.com/",
       now: NOW,
     });
+    expect(db.prisma.slackMessage.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
     expect(db.prisma.slackEpisode.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
+    expect(db.prisma.slackConnection.update.mock.calls[0]?.[0]?.data.optInChannelIds).toEqual([]);
+    expect(db.prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it("refuses credentials before the connection was started", async () => {
@@ -298,7 +391,6 @@ describe("connection store", () => {
     await expect(
       saveSlackCredentials("user-1", {
         signingSecret: "s",
-        userToken: "xoxp-1",
         teamId: "T",
         slackUserId: "U",
         workspaceUrl: "https://a.slack.com/",
@@ -316,8 +408,9 @@ describe("connection store", () => {
     });
   });
 
-  it("disconnect deletes the user's messages, episodes and connection", async () => {
+  it("disconnect deletes the user's messages, episodes and connection in one transaction", async () => {
     await disconnectSlack("user-1");
+    expect(db.prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(db.prisma.slackMessage.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
     expect(db.prisma.slackEpisode.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
     expect(db.prisma.slackConnection.deleteMany).toHaveBeenCalledWith({
@@ -330,6 +423,14 @@ describe("connection store", () => {
     expect(await findSlackHook("a".repeat(32))).toBeNull();
     const args = db.prisma.slackConnection.findUnique.mock.calls[0]?.[0];
     expect(args.where).toEqual({ hookId: "a".repeat(32) });
-    expect(Object.keys(args.select)).not.toContain("userTokenCipher");
+    expect(Object.keys(args.select)).toEqual([
+      "id",
+      "userId",
+      "teamId",
+      "slackUserId",
+      "optInChannelIds",
+      "signingSecretCipher",
+      "lastEventAt",
+    ]);
   });
 });

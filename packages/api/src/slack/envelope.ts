@@ -6,7 +6,7 @@
  * https://docs.slack.dev/reference/events/message.
  */
 
-import { capSlackText, SLACK_MAX_TEXT } from "./text.js";
+import { capSlackText, SLACK_MAX_TEXT, sanitizeSlackText } from "./text.js";
 
 export interface SlackMessageEvent {
   channel: string;
@@ -104,7 +104,8 @@ function parseMessageEvent(raw: Json): SlackMessageEvent | null {
     channelType: boundedString(raw.channel_type, MAX_TYPE) ?? "",
     subtype,
     user: slackId(raw.user, "UW"),
-    text: typeof raw.text === "string" ? capSlackText(raw.text, SLACK_MAX_TEXT) : "",
+    text:
+      typeof raw.text === "string" ? sanitizeSlackText(capSlackText(raw.text, SLACK_MAX_TEXT)) : "",
     ts,
     threadTs: slackTs(raw.thread_ts),
     deletedTs: slackTs(raw.deleted_ts),

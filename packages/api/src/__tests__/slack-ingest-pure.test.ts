@@ -12,7 +12,13 @@ import {
   signSlackRequest,
   verifySlackSignature,
 } from "../slack/signature.js";
-import { capSlackText, mentionsSlackUser, SLACK_MAX_TEXT, slackPlainText } from "../slack/text.js";
+import {
+  capSlackText,
+  mentionsSlackUser,
+  SLACK_MAX_TEXT,
+  sanitizeSlackText,
+  slackPlainText,
+} from "../slack/text.js";
 import { expectLinear, fastestCpuMs, MB, repeatTo } from "./helpers/linear-timing.js";
 
 const SECRET = "8f742231b10e8888abcd99eeeeee85a5";
@@ -311,6 +317,14 @@ describe("Slack text", () => {
     expect(mentionsSlackUser("hi <@U123|bob>", "U123")).toBe(true);
     expect(mentionsSlackUser("hi <@U1234>", "U123")).toBe(false);
     expect(mentionsSlackUser("hi @U123", "U123")).toBe(false);
+  });
+
+  it("drops NUL and replaces lone surrogates so Postgres can always store the text", () => {
+    expect(sanitizeSlackText("a\u0000b")).toBe("ab");
+    expect(sanitizeSlackText("x\ud800y\udc00z")).toBe("x\ufffdy\ufffdz");
+    expect(sanitizeSlackText("ok 😀")).toBe("ok 😀");
+    const parsed = parseSlackEnvelope(message({ text: "hi\u0000\ud800" })) as SlackEventCallback;
+    expect(parsed.event?.text).toBe("hi\ufffd");
   });
 
   it("caps text without leaving half a surrogate pair", () => {

@@ -1,15 +1,18 @@
 /**
- * The per-user Slack connection (docs/providers/slack.md §5). Secrets are
- * encrypted with crypto-tokens.ts and only ever selected by the two readers
- * that need them (the webhook's signing secret); nothing here returns a
- * secret to a route. Every query is scoped by the session user's id or, for
+ * The per-user Slack connection (docs/providers/slack.md §5). The signing
+ * secret is encrypted with crypto-tokens.ts and only ever selected by the
+ * webhook's lookup; nothing here returns it to a route. The user token is
+ * checked with auth.test on connect and never stored: v1 makes no Slack API
+ * call that needs it. Every query is scoped by the session user's id or, for
  * the webhook, by the hook id in the URL.
  */
 
 import crypto from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { slackEventsUrl } from "./manifest.js";
+import { isUniqueViolation } from "./unique-violation.js";
 
 const HOOK_ID_BYTES = 16;
 
@@ -17,7 +20,8 @@ export type SlackConnectionStatus =
   | { state: "none" }
   | {
       state: "pending" | "connected";
-      requestUrl: string;
+      /** Null when the API's public origin (PUBLIC_URL) is not configured. */
+      requestUrl: string | null;
       teamId: string | null;
       workspaceUrl: string | null;
       optInChannelIds: string[];
@@ -71,49 +75,62 @@ export async function startSlackConnection(userId: string): Promise<SlackConnect
     select: { id: true },
   });
   if (!existing) {
-    await prisma.slackConnection.create({
-      data: { userId, hookId: crypto.randomBytes(HOOK_ID_BYTES).toString("hex") },
-      select: { id: true },
-    });
+    try {
+      await prisma.slackConnection.create({
+        data: { userId, hookId: crypto.randomBytes(HOOK_ID_BYTES).toString("hex") },
+        select: { id: true },
+      });
+    } catch (err) {
+      // A concurrent start already created it: same outcome.
+      if (!isUniqueViolation(err)) throw err;
+    }
   }
   return getSlackConnectionStatus(userId);
 }
 
 export interface SlackCredentials {
   signingSecret: string;
-  userToken: string;
   teamId: string;
   slackUserId: string;
   workspaceUrl: string;
   now?: Date;
 }
 
-/** Stores the verified credentials; a different workspace drops the old one's data. */
+/**
+ * Stores the verified connection. Moving to another workspace or another
+ * Slack user drops what was stored for the previous one, opt-ins included.
+ */
 export async function saveSlackCredentials(
   userId: string,
   creds: SlackCredentials,
 ): Promise<"saved" | "not-started"> {
   const existing = await prisma.slackConnection.findUnique({
     where: { userId },
-    select: { id: true, teamId: true },
+    select: { id: true, teamId: true, slackUserId: true },
   });
   if (!existing) return "not-started";
-  if (existing.teamId && existing.teamId !== creds.teamId) {
-    await prisma.slackMessage.deleteMany({ where: { userId } });
-    await prisma.slackEpisode.deleteMany({ where: { userId } });
-  }
-  await prisma.slackConnection.update({
+  const switched =
+    (existing.teamId !== null && existing.teamId !== creds.teamId) ||
+    (existing.slackUserId !== null && existing.slackUserId !== creds.slackUserId);
+  const update = prisma.slackConnection.update({
     where: { userId },
     data: {
       signingSecretCipher: encryptToken(creds.signingSecret),
-      userTokenCipher: encryptToken(creds.userToken),
       teamId: creds.teamId,
       slackUserId: creds.slackUserId,
       workspaceUrl: creds.workspaceUrl,
       credentialsSetAt: creds.now ?? new Date(),
+      ...(switched ? { optInChannelIds: [] } : {}),
     },
     select: { id: true },
   });
+  const wipe: Prisma.PrismaPromise<unknown>[] = switched
+    ? [
+        prisma.slackMessage.deleteMany({ where: { userId } }),
+        prisma.slackEpisode.deleteMany({ where: { userId } }),
+      ]
+    : [];
+  await prisma.$transaction([...wipe, update]);
   return "saved";
 }
 
@@ -129,11 +146,13 @@ export async function setSlackOptInChannels(
   return result.count > 0;
 }
 
-/** Disconnect: the tokens and every stored Slack row of this user. */
+/** Disconnect: the signing secret and every stored Slack row of this user, atomically. */
 export async function disconnectSlack(userId: string): Promise<void> {
-  await prisma.slackMessage.deleteMany({ where: { userId } });
-  await prisma.slackEpisode.deleteMany({ where: { userId } });
-  await prisma.slackConnection.deleteMany({ where: { userId } });
+  await prisma.$transaction([
+    prisma.slackMessage.deleteMany({ where: { userId } }),
+    prisma.slackEpisode.deleteMany({ where: { userId } }),
+    prisma.slackConnection.deleteMany({ where: { userId } }),
+  ]);
 }
 
 export interface SlackHook {

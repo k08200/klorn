@@ -1,15 +1,13 @@
 /**
- * Key rotation covers the Slack connection's two ciphers (signing secret and
- * user token) from the day the table exists, so a rotation never strands a
- * Slack connection on a retired key.
+ * Key rotation covers the Slack connection's signing secret (the user token
+ * is never stored) from the day the table exists, so a rotation never
+ * strands a Slack connection on a retired key.
  */
 
 import { describe, expect, it, vi } from "vitest";
 
 const slackFindMany = vi.hoisted(() =>
-  vi.fn(async () => [
-    { id: "s1", signingSecretCipher: "v1:old-secret", userTokenCipher: "v1:old-token" },
-  ]),
+  vi.fn(async () => [{ id: "s1", signingSecretCipher: "v1:old-secret" }]),
 );
 const slackUpdateMany = vi.hoisted(() => vi.fn(async (_args: unknown) => ({ count: 1 })));
 const disconnect = vi.hoisted(() => vi.fn(async () => {}));
@@ -33,7 +31,7 @@ vi.mock("../crypto-tokens.js", () => ({
 }));
 
 describe("re-encryption sweep — SlackConnection", () => {
-  it("selects both Slack ciphers and rewrites them guarded by what it read", async () => {
+  it("selects the signing secret and rewrites it guarded by what it read", async () => {
     process.argv.push("--apply");
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await import("../scripts/reencrypt-tokens.js");
@@ -41,11 +39,11 @@ describe("re-encryption sweep — SlackConnection", () => {
     logSpy.mockRestore();
     process.argv.pop();
     expect(slackFindMany).toHaveBeenCalledWith({
-      select: { id: true, signingSecretCipher: true, userTokenCipher: true },
+      select: { id: true, signingSecretCipher: true },
     });
     expect(slackUpdateMany).toHaveBeenCalledWith({
-      where: { id: "s1", signingSecretCipher: "v1:old-secret", userTokenCipher: "v1:old-token" },
-      data: { signingSecretCipher: "v2:k2:old-secret", userTokenCipher: "v2:k2:old-token" },
+      where: { id: "s1", signingSecretCipher: "v1:old-secret" },
+      data: { signingSecretCipher: "v2:k2:old-secret" },
     });
   });
 });

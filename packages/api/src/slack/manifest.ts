@@ -10,7 +10,7 @@
  * writes. The connect route refuses a token holding any other scope.
  */
 
-import { publicApiUrl } from "../config.js";
+import { publicBaseUrl } from "../notify/phone-twiml.js";
 
 export const SLACK_USER_SCOPES = [
   "im:history",
@@ -31,9 +31,22 @@ export const SLACK_USER_EVENTS = [
 
 export const MANIFEST_PLACEHOLDER_URL = "https://YOUR-KLORN-API/api/slack/events/YOUR-HOOK-ID";
 
-/** The Request URL Slack calls for this connection. */
-export function slackEventsUrl(hookId: string): string {
-  return `${publicApiUrl()}/api/slack/events/${hookId}`;
+/**
+ * The Request URL Slack calls for this connection, on the API's public origin
+ * (PUBLIC_URL, else RENDER_EXTERNAL_URL — the same origin the phone webhooks
+ * use). Null when that origin is unset or not an http(s) URL: a self-hoster
+ * must set it rather than get a manifest pointing at someone else's API.
+ */
+export function slackEventsUrl(hookId: string): string | null {
+  const base = publicBaseUrl();
+  if (!base) return null;
+  try {
+    const url = new URL(base);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return `${url.origin}/api/slack/events/${hookId}`;
+  } catch {
+    return null;
+  }
 }
 
 const list = (items: readonly string[], indent: string) =>
