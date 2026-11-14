@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>数据处理与子处理者 — Klorn</title>
-<meta name="description" content="如何获取 DPA，以及托管服务中可能接触数据的全部子处理者——Google、Render、Vercel、Anthropic、Paddle 和 Apple。">
+<meta name="description" content="如何获取 DPA，以及托管服务中可能接触数据的全部子处理者——Google、Render、Cloudflare、Anthropic、Paddle 和 Apple。">
 <meta property="og:title" content="数据处理与子处理者 — Klorn">
-<meta property="og:description" content="如何获取 DPA，以及托管服务中可能接触数据的全部子处理者——Google、Render、Vercel、Anthropic、Paddle 和 Apple。">
+<meta property="og:description" content="如何获取 DPA，以及托管服务中可能接触数据的全部子处理者——Google、Render、Cloudflare、Anthropic、Paddle 和 Apple。">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://klorn.ai/zh/dpa/">
 <meta property="og:locale" content="zh_CN">
@@ -15,7 +15,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="数据处理与子处理者 — Klorn">
-<meta name="twitter:description" content="如何获取 DPA，以及托管服务中可能接触数据的全部子处理者——Google、Render、Vercel、Anthropic、Paddle 和 Apple。">
+<meta name="twitter:description" content="如何获取 DPA，以及托管服务中可能接触数据的全部子处理者——Google、Render、Cloudflare、Anthropic、Paddle 和 Apple。">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
 <link rel="canonical" href="https://klorn.ai/zh/dpa/">
 <link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/">
@@ -79,7 +79,7 @@
       <tr><th>Render</th><td class="us">API 托管，新加坡区域</td><td>API 处理的一切内容，包括传输中和内存中的数据</td></tr>
       <tr><th>Supabase</th><td class="us">托管 Postgres，首尔（ap-northeast-2）</td><td>所有已存储的账户、邮件和分类数据</td></tr>
       <tr><th>GitHub</th><td class="us">存储每晚的数据库备份（Actions 工件，14 天后过期）</td><td>仅限加密文件。数据库被复制到一个临时的 GitHub runner 上并在那里加密，只存储密文；用于解密的密钥从不存放在 GitHub 上</td></tr>
-      <tr><th>Vercel</th><td class="us">网页应用托管</td><td>传输中的请求和响应</td></tr>
+      <tr><th>Cloudflare</th><td class="us">网页应用托管（Cloudflare Pages：app.klorn.ai 的静态托管和 CDN）</td><td>传输中的请求和响应</td></tr>
       <tr><th>Google（Gemini API）</th><td class="us">模型调用</td><td>为分类或起草而发送的邮件文本，适用禁止用提交数据进行训练的 API 条款</td></tr>
       <tr><th>Anthropic（Claude API）</th><td class="us">模型调用</td><td>同样的邮件文本，适用禁止用提交数据进行训练的商业 API 条款。默认在 30 天内删除，只有被使用政策执行机制标记的内容才会保留更久</td></tr>
       <tr><th>Paddle</th><td class="us">支付及记录商家（merchant of record）</td><td>账单信息。<strong>不含邮件内容</strong></td></tr>
