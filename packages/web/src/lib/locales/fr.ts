@@ -3066,6 +3066,44 @@ const fr: Record<string, string> = {
     "Les exports sont très demandés en ce moment. Réessayez dans une minute.",
   "vaultExport.error.unavailable": "L'export Markdown n'est pas disponible pour ce compte.",
   "vaultExport.error.failed": "L'export Markdown a échoué. Réessayez.",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "Règles en texte",
+  "rulesDsl.desc":
+    "Consultez et modifiez vos règles de voies en texte brut. Gardez-en une copie dans git ou vos notes, vérifiez-la, prévisualisez-la sur vos e-mails récents, puis appliquez-la.",
+  "rulesDsl.editorLabel": "Texte des règles",
+  "rulesDsl.validate": "Vérifier",
+  "rulesDsl.dryRun": "Prévisualiser sur les e-mails récents",
+  "rulesDsl.apply": "Appliquer",
+  "rulesDsl.reload": "Recharger",
+  "rulesDsl.loading": "Chargement de vos règles…",
+  "rulesDsl.valid": "Aucun problème. {n} règles.",
+  "rulesDsl.errorsTitle": "Problèmes à corriger : {n}",
+  "rulesDsl.errorAt": "Ligne {line}, colonne {column} :",
+  "rulesDsl.errorsTruncated": "Seuls les 50 premiers problèmes sont affichés.",
+  "rulesDsl.preview.title": "Aperçu",
+  "rulesDsl.preview.summary":
+    "Sur vos {examined} derniers e-mails triés, {changed} iraient dans une autre voie.",
+  "rulesDsl.preview.none": "Aucun de vos {examined} derniers e-mails triés ne changerait de voie.",
+  "rulesDsl.preview.manualKept": "{n} e-mails que vous avez déplacés vous-même gardent leur voie.",
+  "rulesDsl.preview.toJudge": "de nouveau décidé par Klorn",
+  "rulesDsl.preview.count": "{n} e-mails",
+  "rulesDsl.preview.examples": "Exemples",
+  "rulesDsl.preview.note":
+    "Les règles s'appliquent aux nouveaux e-mails. Les e-mails déjà triés gardent leur voie.",
+  "rulesDsl.confirm.title": "Appliquer ces règles ?",
+  "rulesDsl.confirm.message":
+    "Vos règles de voies seront remplacées par ce texte. Les règles de réponse et les règles apprises restent inchangées. Les nouveaux e-mails suivront les nouvelles règles.",
+  "rulesDsl.confirm.label": "Appliquer les règles",
+  "rulesDsl.applied":
+    "Règles appliquées : {added} ajoutées, {changed} modifiées, {removed} supprimées.",
+  "rulesDsl.error.changed":
+    "Vos règles ont changé depuis leur ouverture. Rechargez-les, puis appliquez à nouveau.",
+  "rulesDsl.error.invalid":
+    "Le texte des règles contient des problèmes. Corrigez-les, puis réessayez.",
+  "rulesDsl.error.tooLarge": "Le texte des règles est trop volumineux.",
+  "rulesDsl.error.rateLimited": "Trop de requêtes. Réessayez dans une minute.",
+  "rulesDsl.error.unavailable": "Les règles en texte ne sont pas disponibles pour ce compte.",
+  "rulesDsl.error.failed": "Une erreur s'est produite. Réessayez.",
 };
 
 export default fr;

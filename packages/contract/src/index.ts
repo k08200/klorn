@@ -27,5 +27,6 @@ export type * from "./push.js";
 export type * from "./receipt.js";
 export type * from "./reply-needed.js";
 export type * from "./reply-options.js";
+export type * from "./rules-dsl.js";
 export type * from "./smart-actions.js";
 export type * from "./teams.js";

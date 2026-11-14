@@ -1,0 +1,28 @@
+# Klorn rules (Rules DSL v1). One rule per sender: an address or a domain.
+# Lanes: PUSH, MEETING, QUEUE, INFO, SILENT. Lines starting with # are ignored.
+# Edit, then Validate and Apply in Settings > Lanes. Comments are not saved.
+version 1
+
+rule "Board"
+  when from address "assistant@board.example"
+  then lane MEETING
+
+rule "Old \"weekly\" newsletter"
+  note "muted 2026-11 # not a comment"
+  when from address "news@example.com"
+  then lane SILENT
+  disabled
+
+# 1 older copy of this rule is removed on apply.
+rule "Investors always interrupt"
+  when from domain "sequoiacap.com"
+  then lane PUSH
+
+# Read-only below: listed for reference, never changed by Apply.
+# reply rule "Thanks note": auto-reply, 2 senders, active
+# reply rule "Vendors": draft reply, any sender, disabled
+# rule "Tag receipts": label, active
+# pin "Two people": kept as-is, it names several senders, active
+# pin "Retired": kept as-is, its lane is not one of the five live lanes, active
+# learned: sender domain "example.org" -> INFO (applied, 12 corrections)
+# learned: subject keyword "invoice" -> QUEUE (proposed, 1 correction)

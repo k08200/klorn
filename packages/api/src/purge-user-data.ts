@@ -121,6 +121,8 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.mcpWriteAudit.deleteMany(scope);
   // DataExportAudit: the user's own exports (format, outcome, counts), no content.
   await tx.dataExportAudit.deleteMany(scope);
+  // RuleChangeAudit: the user's own Rules DSL applies (counts, text hash), no rules.
+  await tx.ruleChangeAudit.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);

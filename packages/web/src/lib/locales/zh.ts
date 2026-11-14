@@ -2807,6 +2807,40 @@ const zh: Record<string, string> = {
   "vaultExport.error.busy": "当前导出请求较多，请一分钟后重试。",
   "vaultExport.error.unavailable": "此账户无法使用 Markdown 导出。",
   "vaultExport.error.failed": "Markdown 导出失败，请重试。",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "以文本编辑规则",
+  "rulesDsl.desc":
+    "以纯文本查看和编辑你的通道规则。可在 git 或笔记中保存副本，检查后在最近的邮件上预览，再应用。",
+  "rulesDsl.editorLabel": "规则文本",
+  "rulesDsl.validate": "检查",
+  "rulesDsl.dryRun": "在最近的邮件上预览",
+  "rulesDsl.apply": "应用",
+  "rulesDsl.reload": "重新加载",
+  "rulesDsl.loading": "正在加载你的规则…",
+  "rulesDsl.valid": "未发现问题。共 {n} 条规则。",
+  "rulesDsl.errorsTitle": "需要修正的问题：{n} 个",
+  "rulesDsl.errorAt": "第 {line} 行，第 {column} 列：",
+  "rulesDsl.errorsTruncated": "仅列出前 50 个问题。",
+  "rulesDsl.preview.title": "预览",
+  "rulesDsl.preview.summary":
+    "在最近已分类的 {examined} 封邮件中，有 {changed} 封会进入不同的通道。",
+  "rulesDsl.preview.none": "在最近已分类的 {examined} 封邮件中，没有邮件会更换通道。",
+  "rulesDsl.preview.manualKept": "你手动移动过的 {n} 封邮件保持原通道。",
+  "rulesDsl.preview.toJudge": "重新由 Klorn 判断",
+  "rulesDsl.preview.count": "{n} 封",
+  "rulesDsl.preview.examples": "示例",
+  "rulesDsl.preview.note": "规则只作用于新邮件。已分类的邮件保持原通道。",
+  "rulesDsl.confirm.title": "要应用这些规则吗？",
+  "rulesDsl.confirm.message":
+    "你的通道规则将被这段文本替换。回复规则和学习到的规则保持不变。新邮件将遵循新规则。",
+  "rulesDsl.confirm.label": "应用规则",
+  "rulesDsl.applied": "规则已应用：新增 {added} 条，修改 {changed} 条，删除 {removed} 条。",
+  "rulesDsl.error.changed": "打开后你的规则已发生变化。请重新加载后再应用。",
+  "rulesDsl.error.invalid": "规则文本有问题。请修正后重试。",
+  "rulesDsl.error.tooLarge": "规则文本过大。",
+  "rulesDsl.error.rateLimited": "请求过多。请一分钟后重试。",
+  "rulesDsl.error.unavailable": "此账户无法使用以文本编辑规则。",
+  "rulesDsl.error.failed": "出了点问题。请重试。",
 };
 
 export default zh;

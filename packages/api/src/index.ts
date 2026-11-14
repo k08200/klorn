@@ -324,6 +324,7 @@ try {
     "CONTEXT_MEETING_PREP_ENABLED",
     "TEAMS_ENABLED",
     "VAULT_EXPORT_ENABLED",
+    "RULES_DSL_ENABLED",
   ]);
 
   // Start autonomous background agent

@@ -1,0 +1,14 @@
+# Klorn rules (Rules DSL v1). One rule per sender: an address or a domain.
+# Lanes: PUSH, MEETING, QUEUE, INFO, SILENT. Lines starting with # are ignored.
+# Edit, then Validate and Apply in Settings > Lanes. Comments are not saved.
+version 1
+
+rule "ceo"
+  note "board season"
+  when from address "ceo@acme.io"
+  then lane MEETING
+  disabled
+
+rule "investors"
+  when from domain "sequoiacap.com"
+  then lane PUSH
