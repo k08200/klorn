@@ -11,39 +11,10 @@
 import type { TierPinInput, TierPinWire } from "@klorn/contract";
 import { prisma } from "../db.js";
 import { isTier } from "../judge/tiers.js";
-import { isPublicMailboxDomain } from "./public-mailbox-domains.js";
 
-const ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DOMAIN_RE = /^[^\s@]+\.[^\s@]+$/;
-
-export type PinValidation = { ok: TierPinInput } | { error: string };
-
-/** Normalize + validate one pin. Returns the canonical lowercased pin. */
-export function validateTierPin(pin: {
-  scope: string;
-  value: string;
-  tier: string;
-}): PinValidation {
-  if (pin.scope !== "sender" && pin.scope !== "domain") {
-    return { error: 'scope must be "sender" or "domain".' };
-  }
-  if (!isTier(pin.tier) || pin.tier === "AUTO") {
-    return { error: "tier must be one of the five live lanes." };
-  }
-  const value = String(pin.value ?? "")
-    .trim()
-    .toLowerCase();
-  if (pin.scope === "sender") {
-    if (!ADDRESS_RE.test(value)) return { error: "not a valid email address." };
-    return { ok: { scope: "sender", value, tier: pin.tier } };
-  }
-  const domain = value.replace(/^@/, "");
-  if (!DOMAIN_RE.test(domain)) return { error: "not a valid domain." };
-  if (isPublicMailboxDomain(domain)) {
-    return { error: "public mailbox domain — pin the sender instead." };
-  }
-  return { ok: { scope: "domain", value: domain, tier: pin.tier } };
-}
+// Validation is pure and lives in pin-validate.ts, shared with the Rules DSL
+// compiler; re-exported so existing callers keep importing it from here.
+export { type PinValidation, validateTierPin } from "./pin-validate.js";
 
 type StoredPinRule = {
   id: string;

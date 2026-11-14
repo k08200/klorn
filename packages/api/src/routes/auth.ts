@@ -45,6 +45,7 @@ import {
   mailV2Enabled,
   naverLoginEnabled,
   onboardingV2Enabled,
+  rulesDslOpenTo,
   smartActionsOpenTo,
   teamModeEnabled,
   teamsOpenTo,
@@ -732,6 +733,10 @@ export function authRoutes(app: FastifyInstance) {
           // web offers "Export as markdown" in Settings only when this is true
           // — the same answer GET /api/user/me/vault/export gives this user.
           vaultExport: vaultExportOpenTo(user.id),
+          // Server-driven client flag (RULES_DSL_ENABLED, cohort-aware): the
+          // web shows the rules text editor in Settings → Lanes only when this
+          // is true — the same answer the /api/email/rules/dsl routes give.
+          rulesDsl: rulesDslOpenTo(user.id),
         },
       });
     } catch {

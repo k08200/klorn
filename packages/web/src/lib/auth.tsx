@@ -66,6 +66,9 @@ interface User {
   // Server-driven client flag: the API's VAULT_EXPORT_ENABLED, cohort-aware.
   // True offers "Export as markdown" in Settings → Data. Undefined = off.
   vaultExport?: boolean;
+  // Server-driven client flag: the API's RULES_DSL_ENABLED, cohort-aware.
+  // True shows "Rules as text" in Settings → Lanes. Undefined = off.
+  rulesDsl?: boolean;
   // Server-driven client flag: the API's TEAMS_ENABLED (Klorn Teams),
   // cohort-aware. True shows the organization pages in Settings → Team and the
   // invite accept page. Undefined (older API) = off.

@@ -3042,6 +3042,47 @@ const ja: Record<string, string> = {
   "vaultExport.error.busy": "現在、書き出しが混み合っています。1 分ほどしてからお試しください。",
   "vaultExport.error.unavailable": "このアカウントでは Markdown の書き出しを利用できません。",
   "vaultExport.error.failed": "Markdown の書き出しに失敗しました。もう一度お試しください。",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "テキストでルールを編集",
+  "rulesDsl.desc":
+    "レーンのルールをプレーンテキストで確認・編集できます。git やノートにコピーを残し、チェックして、最近のメールでプレビューしてから適用します。",
+  "rulesDsl.editorLabel": "ルールのテキスト",
+  "rulesDsl.validate": "チェック",
+  "rulesDsl.dryRun": "最近のメールでプレビュー",
+  "rulesDsl.apply": "適用",
+  "rulesDsl.reload": "再読み込み",
+  "rulesDsl.loading": "ルールを読み込んでいます…",
+  "rulesDsl.valid": "問題はありません。ルール {n} 件。",
+  "rulesDsl.errorsTitle": "修正が必要な問題: {n} 件",
+  "rulesDsl.errorAt": "{line} 行目、{column} 列目:",
+  "rulesDsl.errorsTruncated": "最初の 50 件の問題のみ表示しています。",
+  "rulesDsl.preview.title": "プレビュー",
+  "rulesDsl.preview.summary":
+    "直近で振り分けたメール {examined} 通のうち、{changed} 通が別のレーンに入ります。",
+  "rulesDsl.preview.none":
+    "直近で振り分けたメール {examined} 通で、レーンが変わるものはありません。",
+  "rulesDsl.preview.manualKept": "手動で移動したメール {n} 通はレーンを保持します。",
+  "rulesDsl.preview.toJudge": "Klorn が改めて判断",
+  "rulesDsl.preview.count": "{n} 通",
+  "rulesDsl.preview.examples": "例",
+  "rulesDsl.preview.note":
+    "ルールは新しいメールから適用されます。振り分け済みのメールはレーンを保持します。",
+  "rulesDsl.confirm.title": "このルールを適用しますか?",
+  "rulesDsl.confirm.message":
+    "レーンのルールがこのテキストに置き換わります。返信ルールと学習済みルールはそのままです。新しいメールは新しいルールに従います。",
+  "rulesDsl.confirm.label": "ルールを適用",
+  "rulesDsl.applied":
+    "ルールを適用しました: 追加 {added} 件、変更 {changed} 件、削除 {removed} 件。",
+  "rulesDsl.error.changed":
+    "開いた後にルールが変更されました。再読み込みしてから適用してください。",
+  "rulesDsl.error.invalid":
+    "ルールのテキストに問題があります。修正してからもう一度お試しください。",
+  "rulesDsl.error.tooLarge": "ルールのテキストが大きすぎます。",
+  "rulesDsl.error.rateLimited": "リクエストが多すぎます。1 分ほどしてからお試しください。",
+  "rulesDsl.error.unavailable": "このアカウントではテキストでのルール編集を利用できません。",
+  "rulesDsl.notApplicable":
+    "ルールがテキストエディターの上限（ルール 500 件、64 KiB）を超えているため、ここでは適用できません。上の一覧で編集してください。",
+  "rulesDsl.error.failed": "問題が発生しました。もう一度お試しください。",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "組織",
   "settings.org.loading": "組織を読み込んでいます…",

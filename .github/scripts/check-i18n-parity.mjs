@@ -227,6 +227,8 @@ const COPY_GUARD_PREFIXES = [
   "smartActions.",
   // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
   "vaultExport.",
+  // Rules as text (RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */

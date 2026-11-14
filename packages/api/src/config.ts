@@ -765,6 +765,20 @@ export function vaultExportOpenTo(userId: string): boolean {
   return featureOpenTo(userId, [VAULT_EXPORT_FLAG]);
 }
 
+// Rules DSL (routes/rules-dsl.ts, docs/design/rules-dsl.md): the user's lane
+// pins as editable text with validate, dry-run and apply. OFF by default (repo
+// doctrine). Takes the rollout cohort (flagMode above): `cohort` opens the
+// routes and `user.rulesDsl` only to ROLLOUT_COHORT_USER_IDS. While off the
+// routes answer the default 404, even unauthenticated. Read per call, so a flip
+// needs no redeploy.
+export const RULES_DSL_FLAG = "RULES_DSL_ENABLED";
+export function rulesDslLive(): boolean {
+  return flagMode(RULES_DSL_FLAG) !== "off";
+}
+export function rulesDslOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [RULES_DSL_FLAG]);
+}
+
 export function appleLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.APPLE_LOGIN_ENABLED ?? "").trim().toLowerCase(),

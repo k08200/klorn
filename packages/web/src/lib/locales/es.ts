@@ -3083,6 +3083,47 @@ const es: Record<string, string> = {
   "vaultExport.error.unavailable":
     "La exportación en Markdown no está disponible para esta cuenta.",
   "vaultExport.error.failed": "La exportación en Markdown falló. Vuelve a intentarlo.",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "Reglas como texto",
+  "rulesDsl.desc":
+    "Consulta y edita tus reglas de carriles como texto plano. Guarda una copia en git o en tus notas, revísala, pruébala con el correo reciente y aplícala.",
+  "rulesDsl.editorLabel": "Texto de las reglas",
+  "rulesDsl.validate": "Revisar",
+  "rulesDsl.dryRun": "Vista previa con correo reciente",
+  "rulesDsl.apply": "Aplicar",
+  "rulesDsl.reload": "Volver a cargar",
+  "rulesDsl.loading": "Cargando tus reglas…",
+  "rulesDsl.valid": "No hay problemas. Reglas: {n}.",
+  "rulesDsl.errorsTitle": "Problemas por corregir: {n}",
+  "rulesDsl.errorAt": "Línea {line}, columna {column}:",
+  "rulesDsl.errorsTruncated": "Solo se muestran los primeros 50 problemas.",
+  "rulesDsl.preview.title": "Vista previa",
+  "rulesDsl.preview.summary":
+    "De tus últimos {examined} correos clasificados, {changed} irían a otro carril.",
+  "rulesDsl.preview.none":
+    "Ninguno de tus últimos {examined} correos clasificados cambiaría de carril.",
+  "rulesDsl.preview.manualKept": "Correos que moviste tú y conservan su carril: {n}.",
+  "rulesDsl.preview.toJudge": "lo decide Klorn de nuevo",
+  "rulesDsl.preview.count": "Correos: {n}",
+  "rulesDsl.preview.examples": "Ejemplos",
+  "rulesDsl.preview.note":
+    "Las reglas se aplican al correo nuevo. El correo ya clasificado conserva su carril.",
+  "rulesDsl.confirm.title": "¿Aplicar estas reglas?",
+  "rulesDsl.confirm.message":
+    "Tus reglas de carriles se sustituirán por este texto. Las reglas de respuesta y las aprendidas no cambian. El correo nuevo seguirá las nuevas reglas.",
+  "rulesDsl.confirm.label": "Aplicar reglas",
+  "rulesDsl.applied":
+    "Reglas aplicadas: {added} añadidas, {changed} cambiadas, {removed} eliminadas.",
+  "rulesDsl.error.changed":
+    "Tus reglas cambiaron desde que las abriste. Vuelve a cargarlas y aplícalas de nuevo.",
+  "rulesDsl.error.invalid":
+    "El texto de las reglas tiene problemas. Corrígelos e inténtalo de nuevo.",
+  "rulesDsl.error.tooLarge": "El texto de las reglas es demasiado grande.",
+  "rulesDsl.error.rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo en un minuto.",
+  "rulesDsl.error.unavailable": "Las reglas como texto no están disponibles para esta cuenta.",
+  "rulesDsl.notApplicable":
+    "Tus reglas superan los límites del editor de texto (500 reglas, 64 KiB), así que no se pueden aplicar desde aquí. Edítalas en la lista de arriba.",
+  "rulesDsl.error.failed": "Algo salió mal. Inténtalo de nuevo.",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "Organización",
   "settings.org.loading": "Cargando tu organización…",

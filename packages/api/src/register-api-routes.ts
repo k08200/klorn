@@ -53,6 +53,7 @@ import { playgroundRoutes } from "./routes/playground.js";
 import { pmfRoutes } from "./routes/pmf.js";
 import { providersAvailableRoutes } from "./routes/providers-available.js";
 import { receiptRoutes } from "./routes/receipt.js";
+import { rulesDslRoutes } from "./routes/rules-dsl.js";
 import { screenerRoutes } from "./routes/screener.js";
 import { skillRoutes } from "./routes/skills.js";
 import { smartActionsRoutes } from "./routes/smart-actions.js";
@@ -106,6 +107,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(calendarRoutes, { prefix: "/api/calendar" });
   await app.register(smartActionsRoutes, { prefix: "/api/smart-actions" });
   await app.register(vaultExportRoutes, { prefix: "/api/user/me/vault" });
+  await app.register(rulesDslRoutes, { prefix: "/api/email/rules/dsl" });
   await app.register(emailRoutes, { prefix: "/api/email" });
   await app.register(apiKeyRoutes, { prefix: "/api/keys" });
   await app.register(mcpRoutes, { prefix: "/api/mcp" });

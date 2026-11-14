@@ -94,6 +94,9 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       // Read per request by config.ts vaultExportLive/vaultExportOpenTo
       // (routes/vault-export.ts, /me user.vaultExport). True for "true" or "cohort".
       VAULT_EXPORT_ENABLED: cohortCapableFlag(env, "VAULT_EXPORT_ENABLED"),
+      // Read per request by config.ts rulesDslLive/rulesDslOpenTo
+      // (routes/rules-dsl.ts, /me user.rulesDsl). True for "true" or "cohort".
+      RULES_DSL_ENABLED: cohortCapableFlag(env, "RULES_DSL_ENABLED"),
       // Attention engine v3 policy (P3): interrupt budget on PUSH notifications.
       // Founder flip only, after replay + shadow data. Requires JUDGE_V3_SHADOW.
       JUDGE_V3_POLICY: dynamicFlag(env, "JUDGE_V3_POLICY"),

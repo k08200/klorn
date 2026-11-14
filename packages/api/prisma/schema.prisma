@@ -188,6 +188,7 @@ model User {
   apiKeys                    ApiKey[]
   mcpWriteAudits             McpWriteAudit[]
   dataExportAudits           DataExportAudit[]
+  ruleChangeAudits           RuleChangeAudit[]
   imapMovedMessages          ImapMovedMessage[]
 }
 
@@ -297,6 +298,28 @@ model DataExportAudit {
   byteCount     Int?
   createdAt     DateTime  @default(now())
   finishedAt    DateTime?
+
+  @@index([userId, createdAt])
+  @@index([createdAt]) // the retention sweep's range scan
+}
+
+/// One row per Rules DSL apply (routes/rules-dsl.ts, docs/design/rules-dsl.md):
+/// how many lane pins the text added, changed and removed, and a SHA-256 of
+/// the applied text so two applies of the same file can be recognised.
+///
+/// Never holds rule content: no names, senders or lanes. Swept after 90 days
+/// by log-retention.ts, removed with the User (cascade) and by purgeUserData.
+model RuleChangeAudit {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source       String // "rules-dsl"
+  ruleCount    Int // rules in the applied text
+  addedCount   Int
+  changedCount Int
+  removedCount Int // rows deleted, older duplicate copies included
+  textHash     String // SHA-256 hex of the applied text
+  createdAt    DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([createdAt]) // the retention sweep's range scan
