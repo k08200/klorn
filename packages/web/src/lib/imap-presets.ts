@@ -28,27 +28,17 @@ export interface ImapPreset {
   /** The provider's own instructions for the password Klorn needs. */
   helpUrl: string;
   emailPlaceholder: string;
-  /** i18n key: the one-line steps to get that password. */
+  /**
+   * i18n key: the one-line steps to get an app password. Every preset asks for
+   * one, never the account password (Zoho too: its hint has two-factor turned on).
+   */
   hintKey: string;
-  /** i18n key of the password field's label. */
-  passwordLabelKey: string;
-  /** i18n key of the first run tile's scope line. */
-  scopeKey: string;
 }
 
 type PresetFields = Omit<ImapPreset, "provider" | "slug">;
 
-const APP_PASSWORD = {
-  passwordLabelKey: "imapPreset.passwordLabel.app",
-  scopeKey: "onboardingV2.tile.preset.scope",
-} as const;
-
-// Zoho takes the account password unless two-factor authentication is on.
-const ZOHO_PASSWORD = {
-  passwordLabelKey: "imapPreset.passwordLabel.zoho",
-  scopeKey: "onboardingV2.tile.zoho.scope",
-  helpUrl: "https://www.zoho.com/mail/help/imap-access.html",
-} as const;
+/** Zoho's IMAP page covers both kinds of mailbox and the application-specific password. */
+const ZOHO_HELP_URL = "https://www.zoho.com/mail/help/imap-access.html";
 
 /** A Record so the compiler insists on every preset; insertion order is display order. */
 const PRESETS: Readonly<Record<ImapPresetProvider, PresetFields>> = {
@@ -57,47 +47,42 @@ const PRESETS: Readonly<Record<ImapPresetProvider, PresetFields>> = {
     helpUrl: "https://cs.daum.net/faq/service/43/category/9234/detail/24081",
     emailPlaceholder: "you@daum.net",
     hintKey: "imapPreset.hint.daum",
-    ...APP_PASSWORD,
   },
   KAKAO: {
     label: "Kakao Mail",
     helpUrl: "https://cs.kakao.com/helps_html/1073209983",
     emailPlaceholder: "you@kakao.com",
     hintKey: "imapPreset.hint.kakao",
-    ...APP_PASSWORD,
   },
   YAHOO: {
     label: "Yahoo Mail",
     helpUrl: "https://help.yahoo.com/kb/SLN15241.html",
     emailPlaceholder: "you@yahoo.com",
     hintKey: "imapPreset.hint.yahoo",
-    ...APP_PASSWORD,
   },
   AOL: {
     label: "AOL Mail",
     helpUrl: "https://help.aol.com/articles/create-and-manage-app-password",
     emailPlaceholder: "you@aol.com",
     hintKey: "imapPreset.hint.aol",
-    ...APP_PASSWORD,
   },
   FASTMAIL: {
     label: "Fastmail",
     helpUrl: "https://www.fastmail.help/hc/en-us/articles/360058752854-App-passwords",
     emailPlaceholder: "you@fastmail.com",
     hintKey: "imapPreset.hint.fastmail",
-    ...APP_PASSWORD,
   },
   ZOHO: {
     label: "Zoho Mail",
     emailPlaceholder: "you@zohomail.com",
     hintKey: "imapPreset.hint.zoho",
-    ...ZOHO_PASSWORD,
+    helpUrl: ZOHO_HELP_URL,
   },
   ZOHOPRO: {
     label: "Zoho Mail (organization)",
     emailPlaceholder: "you@example.com",
     hintKey: "imapPreset.hint.zohopro",
-    ...ZOHO_PASSWORD,
+    helpUrl: ZOHO_HELP_URL,
   },
 };
 

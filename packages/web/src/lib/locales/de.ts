@@ -2130,7 +2130,6 @@ const de: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "Naver Mail, mit einem App-Passwort.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, mit einem anwendungsspezifischen Passwort.",
   "onboardingV2.tile.preset.scope": "E-Mail, mit einem App-Passwort.",
-  "onboardingV2.tile.zoho.scope": "E-Mail, mit in Zoho aktiviertem IMAP-Zugriff.",
   "onboardingV2.tile.readOnly":
     "Vorerst nur lesend. Antworten, Archivieren und Als-gelesen-Markieren erfolgen in der App des Anbieters.",
   "onboardingV2.health.connected": "Verbunden",
@@ -2328,7 +2327,6 @@ const de: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "{email} trennen?",
   "imapPreset.emailLabel": "E-Mail-Adresse",
   "imapPreset.passwordLabel.app": "App-Passwort",
-  "imapPreset.passwordLabel.zoho": "Passwort oder anwendungsspezifisches Passwort",
   "imapPreset.help.link": "Hilfe von {provider}",
   "imapPreset.help.stored": "Klorn speichert es verschlüsselt, nie im Klartext.",
   "imapPreset.connect": "{provider} verbinden",
@@ -2347,9 +2345,9 @@ const de: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "Erstellen Sie in den Fastmail-Einstellungen (Privacy & Security) ein App-Passwort mit IMAP- und SMTP-Zugriff. Ihr Fastmail-Passwort funktioniert hier nicht.",
   "imapPreset.hint.zoho":
-    "Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail. Ist die Zwei-Faktor-Authentifizierung aktiv, erstellen Sie ein anwendungsspezifisches Passwort und verwenden Sie dieses.",
+    "Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail, schalten Sie die Zwei-Faktor-Authentifizierung ein und erstellen Sie dann ein anwendungsspezifisches Passwort. Ihr Zoho-Passwort funktioniert hier nicht.",
   "imapPreset.hint.zohopro":
-    "Für Adressen kostenpflichtiger Zoho-Organisationen (eigene Domain). Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail (Ihr Administrator muss ihn eventuell erlauben). Ist die Zwei-Faktor-Authentifizierung aktiv, verwenden Sie ein anwendungsspezifisches Passwort.",
+    "Für Konten kostenpflichtiger Zoho-Organisationen (eigene Domain). Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail (Ihr Administrator muss ihn eventuell erlauben), schalten Sie die Zwei-Faktor-Authentifizierung ein und erstellen Sie dann ein anwendungsspezifisches Passwort. Ihr Zoho-Passwort funktioniert hier nicht.",
   "imapGeneric.title": "Andere Mailserver (IMAP)",
   "imapGeneric.body":
     "Konten, die mit einer Mailserver-Adresse verbunden sind. Nur zur Information: Auf dieser Seite lassen sie sich weder neu verbinden noch entfernen.",

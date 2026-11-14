@@ -10,21 +10,29 @@
  *
  * IMAP_PRESETS_ENABLED is server-side: while it is off, or the user is outside
  * the rollout cohort, every /api/<slug>-imap route answers 404 and this card
- * renders nothing. No skeleton before the first status either: for most users
- * the card does not exist, and a flash-then-vanish panel is worse.
+ * renders nothing. It is drawn only once its /status has answered (rules in
+ * lib/imap-preset-status.ts): no skeleton first, and no panel for a probe that
+ * never succeeded — for most users the card does not exist.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import {
   ACCOUNT_HEALTH_REFRESH_EVENT,
   IMAP_STATUS_REFRESH_EVENT,
-  type ImapStatusAccount,
   imapAccountStatus,
 } from "../lib/account-health";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
+import {
+  INITIAL_PRESET_PROBE,
+  latestOnly,
+  type PresetAccount,
+  type PresetStatus,
+  presetCardView,
+  presetProbeReducer,
+} from "../lib/imap-preset-status";
 import type { ImapPreset } from "../lib/imap-presets";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
@@ -37,18 +45,6 @@ import Button from "./ui/button";
 import ErrorAlert from "./ui/error-alert";
 import { Input } from "./ui/input";
 import StatusChip from "./ui/status-chip";
-
-/** A mailbox as `/api/<slug>-imap/status` lists it. */
-interface PresetAccount extends ImapStatusAccount {
-  host: string | null;
-  connectedAt: string;
-}
-
-interface PresetStatus {
-  /** Whether a NEW mailbox may be connected now (the first is free, a second Pro). */
-  canConnect?: boolean;
-  accounts?: PresetAccount[];
-}
 
 interface ConnectResponse {
   ok: boolean;
@@ -77,50 +73,51 @@ interface ImapPresetSectionProps {
 
 /**
  * `/api/<slug>-imap/status`, reloaded when Account health's Reconnect link is
- * pressed. `unavailable`: the route answered 404 (flag off, or outside the cohort).
+ * pressed. Only the newest response is applied, and none after unmount.
  */
 function usePresetStatus(preset: ImapPreset) {
-  const { t } = useT();
-  const [status, setStatus] = useState<PresetStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [probe, dispatch] = useReducer(presetProbeReducer, INITIAL_PRESET_PROBE);
+  const guardRef = useRef(latestOnly());
 
   const loadStatus = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    const guard = guardRef.current;
+    const token = guard.begin();
+    dispatch({ type: "start" });
     try {
-      setStatus(await apiFetch<PresetStatus>(`/api/${preset.slug}-imap/status`));
+      const status = await apiFetch<PresetStatus>(`/api/${preset.slug}-imap/status`);
+      if (guard.isCurrent(token)) dispatch({ type: "loaded", status });
     } catch (err) {
+      if (!guard.isCurrent(token)) return;
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.startsWith("API 404")) {
-        setUnavailable(true);
-        return;
-      }
-      captureClientError(err, { scope: `${preset.slug}-imap.status` });
-      setError(t("imapPreset.error.status", { provider: preset.label }));
-    } finally {
-      setLoading(false);
+      // 404: closed to this user. Anything else is a transient probe failure that
+      // the next visit retries — not an error to report.
+      dispatch({ type: msg.startsWith("API 404") ? "notFound" : "failed" });
     }
-  }, [preset.slug, preset.label, t]);
+  }, [preset.slug]);
 
   useEffect(() => {
+    const guard = latestOnly();
+    guardRef.current = guard;
     void loadStatus();
     // Account health's Reconnect link: the flag may be newer than this card.
     const refresh = () => void loadStatus();
     window.addEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
-    return () => window.removeEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
+    return () => {
+      guard.dispose();
+      window.removeEventListener(IMAP_STATUS_REFRESH_EVENT, refresh);
+    };
   }, [loadStatus]);
 
-  return { status, loading, unavailable, error, setError, loadStatus };
+  return { probe, loadStatus };
 }
 
 export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapPresetSectionProps) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const { t } = useT();
-  const { status, loading, unavailable, error, setError, loadStatus } = usePresetStatus(preset);
+  const { probe, loadStatus } = usePresetStatus(preset);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [firstSync, setFirstSync] = useState<boolean | null>(null);
 
   const afterChange = async () => {
@@ -139,7 +136,7 @@ export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapP
     });
     if (!ok) return;
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       await apiFetch(`/api/${preset.slug}-imap/disconnect`, {
         method: "POST",
@@ -149,18 +146,20 @@ export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapP
       await afterChange();
     } catch (err) {
       captureClientError(err, { scope: `${preset.slug}-imap.disconnect` });
-      setError(t("imap.error.disconnectFailed"));
+      setActionError(t("imap.error.disconnectFailed"));
     } finally {
       setBusy(false);
     }
   };
 
-  if (unavailable) return null;
-  if (loading && !status) return null;
-
-  const accounts = status?.accounts ?? [];
   // `entitled` is only the fallback for a status without `canConnect`.
-  const mayConnect = status?.canConnect ?? user?.entitled !== false;
+  const view = presetCardView(probe, user?.entitled !== false);
+  if (view === "hidden") return null;
+
+  const accounts = probe.status?.accounts ?? [];
+  // A refresh failed after an earlier answer: the card keeps that answer and says so.
+  const error =
+    actionError ?? (probe.failed ? t("imapPreset.error.status", { provider: preset.label }) : null);
 
   // Embedded (the first run's sheet names it already): no panel and no heading.
   const chrome = embedded
@@ -171,9 +170,10 @@ export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapP
     <section {...chrome}>
       {!embedded && <PresetHeader preset={preset} accounts={accounts} />}
 
-      {loading ? (
+      {view === "loading" && (
         <div className="text-role-caption text-ink-dim">{t("common.loading")}</div>
-      ) : accounts.length > 0 ? (
+      )}
+      {view === "accounts" && (
         <div className="space-y-4">
           {accounts.map((account) => (
             <PresetAccountRow
@@ -187,7 +187,8 @@ export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapP
           ))}
           {firstSync !== null && <FirstSyncNote started={firstSync} />}
         </div>
-      ) : mayConnect ? (
+      )}
+      {view === "connect" && (
         <PresetConnectForm
           preset={preset}
           onConnected={async (started) => {
@@ -195,9 +196,8 @@ export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapP
             await afterChange();
           }}
         />
-      ) : (
-        <MailAccountProGate />
       )}
+      {view === "proGate" && <MailAccountProGate />}
       {error && (
         <div className="mt-3">
           <ErrorAlert>{error}</ErrorAlert>
@@ -369,7 +369,7 @@ function PresetConnectForm({ preset, onConnected }: PresetConnectFormProps) {
       <div>
         <Input
           id={`${preset.slug}-password`}
-          label={t(preset.passwordLabelKey)}
+          label={t("imapPreset.passwordLabel.app")}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}

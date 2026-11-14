@@ -2051,7 +2051,6 @@ const ja: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "Naver メール。アプリパスワードで接続します。",
   "onboardingV2.tile.icloud.scope": "iCloud メール。アプリ用パスワードで接続します。",
   "onboardingV2.tile.preset.scope": "メール。アプリパスワードで接続します。",
-  "onboardingV2.tile.zoho.scope": "メール。Zoho で IMAP アクセスを有効にして接続します。",
   "onboardingV2.tile.readOnly":
     "現在は読み取り専用です。返信・アーカイブ・既読は、そのメールサービス側で行ってください。",
   "onboardingV2.health.connected": "接続済み",
@@ -2248,7 +2247,6 @@ const ja: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "{email} の接続を解除しますか？",
   "imapPreset.emailLabel": "メールアドレス",
   "imapPreset.passwordLabel.app": "アプリパスワード",
-  "imapPreset.passwordLabel.zoho": "パスワードまたはアプリケーション固有のパスワード",
   "imapPreset.help.link": "{provider} のヘルプ",
   "imapPreset.help.stored": "Klorn は暗号化して保存し、平文では保存しません。",
   "imapPreset.connect": "{provider} を接続",
@@ -2267,9 +2265,9 @@ const ja: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "Fastmail の設定（Privacy & Security）で、IMAP と SMTP のアクセス権を持つアプリパスワードを作成してください。Fastmail のパスワードでは接続できません。",
   "imapPreset.hint.zoho":
-    "Zoho Mail の設定で IMAP アクセスを有効にしてください。2 要素認証を使っている場合は、アプリケーション固有のパスワードを作成して入力してください。",
+    "Zoho Mail の設定で IMAP アクセスを有効にし、2 要素認証をオンにしてから、アプリケーション固有のパスワードを作成してください。Zoho のパスワードでは接続できません。",
   "imapPreset.hint.zohopro":
-    "有料の Zoho 組織（独自ドメイン）のアドレス用です。Zoho Mail の設定で IMAP アクセスを有効にしてください（管理者の許可が必要な場合があります）。2 要素認証を使っている場合は、アプリケーション固有のパスワードを入力してください。",
+    "有料の Zoho 組織（独自ドメイン）のアカウント用です。Zoho Mail の設定で IMAP アクセスを有効にし（管理者の許可が必要な場合があります）、2 要素認証をオンにしてから、アプリケーション固有のパスワードを作成してください。Zoho のパスワードでは接続できません。",
   "imapGeneric.title": "その他のメールサーバー（IMAP）",
   "imapGeneric.body":
     "メールサーバーのアドレスで接続したアカウントです。参考として表示しています。このページでは再接続も削除もできません。",

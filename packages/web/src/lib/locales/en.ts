@@ -2057,7 +2057,6 @@ const en: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "Naver Mail, with an app password.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, with an app-specific password.",
   "onboardingV2.tile.preset.scope": "Mail, with an app password.",
-  "onboardingV2.tile.zoho.scope": "Mail, with IMAP access turned on in Zoho.",
   "onboardingV2.tile.readOnly":
     "Read-only for now. Reply, archive and mark as read in the provider's own app.",
   "onboardingV2.health.connected": "Connected",
@@ -2244,7 +2243,6 @@ const en: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "Disconnect {email}?",
   "imapPreset.emailLabel": "Email address",
   "imapPreset.passwordLabel.app": "App password",
-  "imapPreset.passwordLabel.zoho": "Password or application-specific password",
   "imapPreset.help.link": "{provider} help",
   "imapPreset.help.stored": "Klorn stores it encrypted, never the plaintext.",
   "imapPreset.connect": "Connect {provider}",
@@ -2262,9 +2260,9 @@ const en: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "Create an app password with IMAP and SMTP access in Fastmail settings (Privacy & Security). Your Fastmail password will not work here.",
   "imapPreset.hint.zoho":
-    "Turn on IMAP access in Zoho Mail settings. If two-factor authentication is on, create an application-specific password and use that.",
+    "Turn on IMAP access in Zoho Mail settings, turn on two-factor authentication, then create an application-specific password. Your Zoho password will not work here.",
   "imapPreset.hint.zohopro":
-    "For paid Zoho organization (custom-domain) addresses. Turn on IMAP access in Zoho Mail settings (your admin may need to allow it). If two-factor authentication is on, use an application-specific password.",
+    "For paid Zoho organization (custom-domain) accounts. Turn on IMAP access in Zoho Mail settings (your admin may need to allow it), turn on two-factor authentication, then create an application-specific password. Your Zoho password will not work here.",
   "imapGeneric.title": "Other mail servers (IMAP)",
   "imapGeneric.body":
     "Accounts connected with a mail server address. Shown for reference: this page cannot reconnect or remove them.",

@@ -65,9 +65,10 @@ const SCOPE_KEY: ReadonlyMap<ConnectableProvider, string> = new Map<ConnectableP
   ["OUTLOOK", "onboardingV2.tile.outlook.scope"],
   ["NAVER", "onboardingV2.tile.naver.scope"],
   ["ICLOUD", "onboardingV2.tile.icloud.scope"],
+  // Every app-password preset brings in mail only, with an app password.
   ...IMAP_PRESETS.map((preset): [ConnectableProvider, string] => [
     preset.provider,
-    preset.scopeKey,
+    "onboardingV2.tile.preset.scope",
   ]),
 ]);
 

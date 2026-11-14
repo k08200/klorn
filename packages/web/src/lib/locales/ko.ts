@@ -2045,7 +2045,6 @@ const ko: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "네이버 메일. 앱 비밀번호로 연결합니다.",
   "onboardingV2.tile.icloud.scope": "iCloud 메일. 앱 암호로 연결합니다.",
   "onboardingV2.tile.preset.scope": "메일. 앱 비밀번호로 연결합니다.",
-  "onboardingV2.tile.zoho.scope": "메일. Zoho에서 IMAP 접근을 켜고 연결합니다.",
   "onboardingV2.tile.readOnly":
     "현재는 읽기 전용입니다. 답장, 보관, 읽음 표시는 해당 메일 서비스에서 하세요.",
   "onboardingV2.health.connected": "연결됨",
@@ -2231,7 +2230,6 @@ const ko: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "{email} 연결을 해제할까요?",
   "imapPreset.emailLabel": "이메일 주소",
   "imapPreset.passwordLabel.app": "앱 비밀번호",
-  "imapPreset.passwordLabel.zoho": "비밀번호 또는 애플리케이션 전용 비밀번호",
   "imapPreset.help.link": "{provider} 도움말",
   "imapPreset.help.stored": "Klorn은 이를 암호화해 저장하며 평문은 저장하지 않습니다.",
   "imapPreset.connect": "{provider} 연결",
@@ -2249,9 +2247,9 @@ const ko: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "Fastmail 설정(Privacy & Security)에서 IMAP과 SMTP 접근 권한이 있는 앱 비밀번호를 만드세요. Fastmail 계정 비밀번호로는 연결되지 않습니다.",
   "imapPreset.hint.zoho":
-    "Zoho Mail 설정에서 IMAP 접근을 켜세요. 2단계 인증을 쓰고 있다면 애플리케이션 전용 비밀번호를 만들어 입력하세요.",
+    "Zoho Mail 설정에서 IMAP 접근을 켜고 2단계 인증을 설정한 뒤 애플리케이션 전용 비밀번호를 만드세요. Zoho 계정 비밀번호로는 연결되지 않습니다.",
   "imapPreset.hint.zohopro":
-    "유료 Zoho 조직(자체 도메인) 주소용입니다. Zoho Mail 설정에서 IMAP 접근을 켜세요(관리자 허용이 필요할 수 있습니다). 2단계 인증을 쓰고 있다면 애플리케이션 전용 비밀번호를 입력하세요.",
+    "유료 Zoho 조직(자체 도메인) 계정용입니다. Zoho Mail 설정에서 IMAP 접근을 켜고(관리자 허용이 필요할 수 있습니다) 2단계 인증을 설정한 뒤 애플리케이션 전용 비밀번호를 만드세요. Zoho 계정 비밀번호로는 연결되지 않습니다.",
   "imapGeneric.title": "기타 메일 서버 (IMAP)",
   "imapGeneric.body":
     "메일 서버 주소로 연결한 계정입니다. 참고용으로만 표시하며, 이 페이지에서는 다시 연결하거나 삭제할 수 없습니다.",

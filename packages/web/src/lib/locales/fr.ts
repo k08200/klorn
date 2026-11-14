@@ -2109,7 +2109,6 @@ const fr: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "Naver Mail, avec un mot de passe d'application.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, avec un mot de passe pour application.",
   "onboardingV2.tile.preset.scope": "E-mail, avec un mot de passe d'application.",
-  "onboardingV2.tile.zoho.scope": "E-mail, avec l'accès IMAP activé dans Zoho.",
   "onboardingV2.tile.readOnly":
     "Lecture seule pour l'instant. Répondez, archivez et marquez comme lu dans l'application du fournisseur.",
   "onboardingV2.health.connected": "Connecté",
@@ -2303,7 +2302,6 @@ const fr: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "Déconnecter {email} ?",
   "imapPreset.emailLabel": "Adresse e-mail",
   "imapPreset.passwordLabel.app": "Mot de passe d'application",
-  "imapPreset.passwordLabel.zoho": "Mot de passe ou mot de passe spécifique à l'application",
   "imapPreset.help.link": "Aide {provider}",
   "imapPreset.help.stored": "Klorn le conserve chiffré, jamais en clair.",
   "imapPreset.connect": "Connecter {provider}",
@@ -2322,9 +2320,9 @@ const fr: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "Créez un mot de passe d'application avec accès IMAP et SMTP dans les réglages de Fastmail (Privacy & Security). Votre mot de passe Fastmail ne fonctionnera pas ici.",
   "imapPreset.hint.zoho":
-    "Activez l'accès IMAP dans les réglages de Zoho Mail. Si l'authentification à deux facteurs est active, créez un mot de passe spécifique à l'application et utilisez-le.",
+    "Activez l'accès IMAP dans les réglages de Zoho Mail, activez l'authentification à deux facteurs, puis créez un mot de passe spécifique à l'application. Votre mot de passe Zoho ne fonctionnera pas ici.",
   "imapPreset.hint.zohopro":
-    "Pour les adresses d'organisations Zoho payantes (domaine personnalisé). Activez l'accès IMAP dans les réglages de Zoho Mail (votre administrateur devra peut-être l'autoriser). Si l'authentification à deux facteurs est active, utilisez un mot de passe spécifique à l'application.",
+    "Pour les comptes d'organisations Zoho payantes (domaine personnalisé). Activez l'accès IMAP dans les réglages de Zoho Mail (votre administrateur devra peut-être l'autoriser), activez l'authentification à deux facteurs, puis créez un mot de passe spécifique à l'application. Votre mot de passe Zoho ne fonctionnera pas ici.",
   "imapGeneric.title": "Autres serveurs de messagerie (IMAP)",
   "imapGeneric.body":
     "Comptes connectés avec l'adresse d'un serveur de messagerie. Affichés pour information : cette page ne peut ni les reconnecter ni les supprimer.",

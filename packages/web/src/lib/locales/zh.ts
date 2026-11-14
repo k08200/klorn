@@ -1938,7 +1938,6 @@ const zh: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "Naver 邮箱，使用应用密码连接。",
   "onboardingV2.tile.icloud.scope": "iCloud 邮件，使用 App 专用密码连接。",
   "onboardingV2.tile.preset.scope": "邮件，使用应用密码连接。",
-  "onboardingV2.tile.zoho.scope": "邮件，需在 Zoho 中开启 IMAP 访问。",
   "onboardingV2.tile.readOnly": "目前为只读。回复、归档和标记已读请在该邮箱自己的应用中进行。",
   "onboardingV2.health.connected": "已连接",
   "onboardingV2.health.syncing": "同步中",
@@ -2109,7 +2108,6 @@ const zh: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "断开 {email} 的连接？",
   "imapPreset.emailLabel": "邮箱地址",
   "imapPreset.passwordLabel.app": "应用密码",
-  "imapPreset.passwordLabel.zoho": "密码或应用专用密码",
   "imapPreset.help.link": "{provider} 帮助",
   "imapPreset.help.stored": "Klorn 会加密保存，从不存储明文。",
   "imapPreset.connect": "连接 {provider}",
@@ -2124,9 +2122,9 @@ const zh: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "在 Fastmail 设置（Privacy & Security）中创建具有 IMAP 和 SMTP 访问权限的应用密码。Fastmail 账户密码无法在此使用。",
   "imapPreset.hint.zoho":
-    "在 Zoho Mail 设置中开启 IMAP 访问。如果开启了双重认证，请创建应用专用密码并在此输入。",
+    "在 Zoho Mail 设置中开启 IMAP 访问，开启双重认证，然后创建应用专用密码。Zoho 账户密码无法在此使用。",
   "imapPreset.hint.zohopro":
-    "适用于付费 Zoho 组织（自有域名）地址。在 Zoho Mail 设置中开启 IMAP 访问（可能需要管理员允许）。如果开启了双重认证，请使用应用专用密码。",
+    "适用于付费 Zoho 组织（自有域名）账户。在 Zoho Mail 设置中开启 IMAP 访问（可能需要管理员允许），开启双重认证，然后创建应用专用密码。Zoho 账户密码无法在此使用。",
   "imapGeneric.title": "其他邮件服务器（IMAP）",
   "imapGeneric.body": "通过邮件服务器地址连接的账户。仅供查看：此页面无法重新连接或移除它们。",
   "imapGeneric.authRefused": "邮件服务器拒绝了已保存的登录信息。此页面无法重新连接。",

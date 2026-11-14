@@ -2091,7 +2091,6 @@ const es: Record<string, string> = {
   "onboardingV2.tile.naver.scope": "Naver Mail, con una contraseña de aplicación.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, con una contraseña específica de app.",
   "onboardingV2.tile.preset.scope": "Correo, con una contraseña de aplicación.",
-  "onboardingV2.tile.zoho.scope": "Correo, con el acceso IMAP activado en Zoho.",
   "onboardingV2.tile.readOnly":
     "Por ahora solo lectura. Responde, archiva y marca como leído en la app del proveedor.",
   "onboardingV2.health.connected": "Conectada",
@@ -2285,7 +2284,6 @@ const es: Record<string, string> = {
   "imapPreset.confirmDisconnect.title": "¿Desconectar {email}?",
   "imapPreset.emailLabel": "Dirección de correo",
   "imapPreset.passwordLabel.app": "Contraseña de aplicación",
-  "imapPreset.passwordLabel.zoho": "Contraseña o contraseña específica de la aplicación",
   "imapPreset.help.link": "Ayuda de {provider}",
   "imapPreset.help.stored": "Klorn la guarda cifrada, nunca en texto plano.",
   "imapPreset.connect": "Conectar {provider}",
@@ -2304,9 +2302,9 @@ const es: Record<string, string> = {
   "imapPreset.hint.fastmail":
     "Crea una contraseña de aplicación con acceso IMAP y SMTP en los ajustes de Fastmail (Privacy & Security). Tu contraseña de Fastmail no funcionará aquí.",
   "imapPreset.hint.zoho":
-    "Activa el acceso IMAP en los ajustes de Zoho Mail. Si tienes activada la autenticación de dos factores, crea una contraseña específica de la aplicación y úsala.",
+    "Activa el acceso IMAP en los ajustes de Zoho Mail, activa la autenticación de dos factores y luego crea una contraseña específica de la aplicación. Tu contraseña de Zoho no funcionará aquí.",
   "imapPreset.hint.zohopro":
-    "Para direcciones de organizaciones de Zoho de pago (dominio propio). Activa el acceso IMAP en los ajustes de Zoho Mail (puede que tu administrador tenga que permitirlo). Si tienes activada la autenticación de dos factores, usa una contraseña específica de la aplicación.",
+    "Para cuentas de organizaciones de Zoho de pago (dominio propio). Activa el acceso IMAP en los ajustes de Zoho Mail (puede que tu administrador tenga que permitirlo), activa la autenticación de dos factores y luego crea una contraseña específica de la aplicación. Tu contraseña de Zoho no funcionará aquí.",
   "imapGeneric.title": "Otros servidores de correo (IMAP)",
   "imapGeneric.body":
     "Cuentas conectadas con la dirección de un servidor de correo. Se muestran solo como referencia: esta página no puede volver a conectarlas ni quitarlas.",
