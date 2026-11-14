@@ -152,6 +152,10 @@ export const ROUTE_AUTH_EXEMPTIONS: Readonly<Record<string, RouteAuthExemption>>
     kind: "webhook-signature",
     why: "Verifies the Paddle-Signature header over the raw body.",
   },
+  "POST /api/slack/events/:hookId": {
+    kind: "webhook-signature",
+    why: "Verifies Slack's v0 X-Slack-Signature over the raw body with the connection's signing secret; dark until SLACK_ENABLED.",
+  },
   "POST /api/webhook/revenuecat": {
     kind: "webhook-signature",
     why: "Requires the shared RevenueCat secret in the Authorization header (timing-safe).",

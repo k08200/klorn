@@ -56,6 +56,8 @@ import { receiptRoutes } from "./routes/receipt.js";
 import { rulesDslRoutes } from "./routes/rules-dsl.js";
 import { screenerRoutes } from "./routes/screener.js";
 import { skillRoutes } from "./routes/skills.js";
+import { slackConnectionRoutes } from "./routes/slack-connection.js";
+import { slackEventsRoutes } from "./routes/slack-events.js";
 import { smartActionsRoutes } from "./routes/smart-actions.js";
 import { smsRoutes } from "./routes/sms.js";
 import { appleAuthProvider, naverAuthProvider, socialAuthRoutes } from "./routes/social-auth.js";
@@ -164,6 +166,11 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(klornMailboxInboundRoutes({ gate: klornMailboxEnabled }), {
     prefix: "/api/mailbox",
   });
+  // Slack integration v1 (docs/providers/slack.md), dark until SLACK_ENABLED. The
+  // events webhook is its own plugin: its raw-body parser must not reach any
+  // other route, and it verifies Slack's signature before parsing anything.
+  await app.register(slackEventsRoutes, { prefix: "/api/slack" });
+  await app.register(slackConnectionRoutes, { prefix: "/api/slack" });
   // Which account types this deployment can connect, for the first run's provider
   // grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
   await app.register(providersAvailableRoutes, { prefix: "/api/providers" });

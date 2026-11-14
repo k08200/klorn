@@ -326,6 +326,7 @@ try {
     "TEAMS_ENABLED",
     "VAULT_EXPORT_ENABLED",
     "RULES_DSL_ENABLED",
+    "SLACK_ENABLED",
   ]);
 
   // Start autonomous background agent
@@ -423,6 +424,19 @@ try {
         captureError(err, { tags: { context: "startup:log-retention" } });
       });
   }
+
+  // Slack v1 (docs/providers/slack.md). Started even under
+  // BACKGROUND_AGENTS_DISABLED: the webhook keeps storing while the brake is on,
+  // so the 7-day text purge must keep running; slack/scheduler.ts skips the
+  // LLM work itself while the brake is set.
+  import("./slack/scheduler.js")
+    .then(({ startSlackScheduler }) => {
+      startSlackScheduler();
+    })
+    .catch((err) => {
+      console.error("[STARTUP] slack scheduler failed to start:", err);
+      captureError(err, { tags: { context: "startup:slack" } });
+    });
 
   // Pending account purges in object storage (step D3; hourly). While
   // OBJECT_STORAGE_ENABLED is off a tick runs no purge and only counts pending
