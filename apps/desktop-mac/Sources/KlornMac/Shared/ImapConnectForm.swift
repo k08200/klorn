@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// The one connect form for app-password IMAP providers (Naver Mail and
-/// iCloud Mail, both beta), opened in place in Settings ▸ Accounts — the app
-/// presents no SwiftUI sheets (SelfCheckWindows). The app password lives only
+/// The one connect form for app-password IMAP providers (Naver Mail, iCloud
+/// Mail and the fixed-host presets, all beta), opened in place in Settings ▸
+/// Accounts — the app presents no SwiftUI sheets (SelfCheckWindows). The app password lives only
 /// in this view's state and the single POST that verifies it; the fields are
 /// cleared on success and whenever the form closes.
 struct ImapConnectForm: View {
@@ -41,23 +41,23 @@ struct ImapConnectForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.s3) {
             HStack(spacing: Theme.s2) {
-                Text(L(provider.titleKey)).font(Theme.Typo.head).foregroundStyle(Theme.text)
+                Text(provider.formTitle).font(Theme.Typo.head).foregroundStyle(Theme.text)
                 BetaChip()
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            if let bodyKey = provider.bodyKey {
-                caption(L(bodyKey))
+            if let bodyText = provider.bodyText {
+                caption(bodyText)
             }
-            field(L(provider.emailKey), text: $email, placeholder: provider.emailPlaceholder, secure: false)
-            field(L(provider.passwordKey), text: $password, placeholder: provider.passwordPlaceholder, secure: true)
-            caption(L(provider.hintKey))
-            if let url = provider.appPasswordHelpURL, let linkKey = provider.helpLinkKey {
+            field(provider.emailLabel, text: $email, placeholder: provider.emailPlaceholder, secure: false)
+            field(provider.passwordLabel, text: $password, placeholder: provider.passwordPlaceholder, secure: true)
+            caption(provider.passwordHint)
+            if let url = provider.appPasswordHelpURL, let linkLabel = provider.helpLinkLabel {
                 if Theme.isRenderingOffscreen {
                     // The AppKit-backed link button paints a placeholder offscreen.
-                    Text(L(linkKey)).font(Theme.Typo.caption).foregroundStyle(Theme.accentDeep)
+                    Text(linkLabel).font(Theme.Typo.caption).foregroundStyle(Theme.accentDeep)
                 } else {
-                    Button(L(linkKey)) { NSWorkspace.shared.open(url) }
+                    Button(linkLabel) { NSWorkspace.shared.open(url) }
                         .buttonStyle(.link).font(Theme.Typo.caption)
                         .help(url.absoluteString)
                 }

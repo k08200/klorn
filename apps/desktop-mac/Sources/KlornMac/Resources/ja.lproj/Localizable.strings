@@ -411,6 +411,28 @@
 "account.naver.error.unavailable" = "このサーバーではNaverメールはまだ利用できません。";
 "account.imap.error.insecure" = "KlornはApp用パスワードを安全な（HTTPS）接続でのみ送信します。";
 "account.imap.submit" = "接続";
+"account.preset.connect" = "%@メールを接続…";
+"account.preset.title" = "%@メールを接続";
+"account.preset.body" = "このメールボックスはIMAPで接続します（beta）。新着メールはGmailと同じレーンに振り分けられます。";
+"account.preset.email" = "メールアドレス";
+"account.preset.password" = "アプリパスワード";
+"account.preset.help.link" = "%@のヘルプを開く";
+"account.preset.error.authFailed" = "%@がサインインを拒否しました。上の手順に従ってから、もう一度お試しください。";
+"account.preset.error.unavailable" = "このサーバーでは%@メールはまだ利用できません。";
+"account.daum.name" = "Daum";
+"account.kakao.name" = "Kakao";
+"account.yahoo.name" = "Yahoo";
+"account.aol.name" = "AOL";
+"account.fastmail.name" = "Fastmail";
+"account.zoho.name" = "Zoho";
+"account.zohopro.name" = "Zoho（組織）";
+"account.daum.password.hint" = "Daumメールの設定でIMAPをオンにし、2段階認証を設定してから、アプリパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.kakao.password.hint" = "Kakaoメールの設定でIMAPをオンにし、Kakaoアカウントの2段階認証を設定してから、アプリパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.yahoo.password.hint" = "Yahooアカウントのセキュリティ設定でアプリパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.aol.password.hint" = "AOLアカウントのセキュリティ設定でアプリパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.fastmail.password.hint" = "Fastmailの設定でIMAPとSMTPのアクセス権を持つアプリパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.zoho.password.hint" = "Zoho Mailの設定でIMAPアクセスと2要素認証をオンにしてから、アプリケーション固有のパスワードを作成して入力してください。ログインパスワードは使えません。";
+"account.zohopro.password.hint" = "独自ドメインの有料Zoho Mail組織アカウント用です。Zoho Mailの設定でIMAPアクセス（組織の管理者の許可が必要な場合があります）と2要素認証をオンにしてから、アプリケーション固有のパスワードを作成して入力してください。ログインパスワードは使えません。";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "返信モード";

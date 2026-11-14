@@ -55,7 +55,8 @@ struct APIClient: Sendable {
     }
 
     /// GET /api/<provider>-imap/status — that provider's connected mailboxes.
-    /// Naver's is never gated; iCloud's answers 404 while its flag is off.
+    /// Naver's is never gated; every other provider's answers 404 while its
+    /// flag is off (iCloud, the presets) or the user is outside its cohort.
     /// Either way it is the reliable account list, even when
     /// /api/email/inboxes hides non-Google rows.
     func fetchImapStatus(_ provider: ImapMailProvider) async throws -> ImapStatusResponse {

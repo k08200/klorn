@@ -14,6 +14,7 @@ import type {
   ProviderAvailability,
 } from "@klorn/contract";
 import type { ConnectedAccount } from "../../../lib/connected-accounts";
+import { IMAP_PRESETS, type ImapPresetProvider, imapPresetFor } from "../../../lib/imap-presets";
 import { CORE_TIERS, toLiveTier } from "../../../lib/tiers";
 
 export const STEPS = ["connect", "sync", "review", "finish"] as const;
@@ -27,11 +28,16 @@ export type ConnectKind = "oauth" | "form";
  * purpose: the server can accept one (GENERIC_IMAP_ENABLED) but the web has no
  * form for it yet, and a tile that cannot connect anything is not drawn.
  */
-const CONNECT_KIND: ReadonlyMap<ConnectableProvider, ConnectKind> = new Map([
+const CONNECT_KIND: ReadonlyMap<ConnectableProvider, ConnectKind> = new Map<
+  ConnectableProvider,
+  ConnectKind
+>([
   ["GOOGLE", "oauth"],
   ["OUTLOOK", "oauth"],
   ["NAVER", "form"],
   ["ICLOUD", "form"],
+  // The app-password presets: each opens its own card (components/imap-preset-section.tsx).
+  ...IMAP_PRESETS.map((preset): [ConnectableProvider, ConnectKind] => [preset.provider, "form"]),
 ]);
 
 /**
@@ -54,12 +60,26 @@ export interface ProviderTile {
   action: TileAction;
 }
 
-const SCOPE_KEY: ReadonlyMap<ConnectableProvider, string> = new Map([
+const SCOPE_KEY: ReadonlyMap<ConnectableProvider, string> = new Map<ConnectableProvider, string>([
   ["GOOGLE", "onboardingV2.tile.google.scope"],
   ["OUTLOOK", "onboardingV2.tile.outlook.scope"],
   ["NAVER", "onboardingV2.tile.naver.scope"],
   ["ICLOUD", "onboardingV2.tile.icloud.scope"],
+  // Every app-password preset brings in mail only, with an app password.
+  ...IMAP_PRESETS.map((preset): [ConnectableProvider, string] => [
+    preset.provider,
+    "onboardingV2.tile.preset.scope",
+  ]),
 ]);
+
+/** The connect sheet a form tile opens: Naver's, iCloud's, or the preset's own. */
+export type FormSheet = "NAVER" | "ICLOUD" | ImapPresetProvider;
+
+/** Null for a provider without a form (OAuth providers, generic IMAP). */
+export function formSheetFor(provider: ConnectableProvider): FormSheet | null {
+  if (provider === "NAVER" || provider === "ICLOUD") return provider;
+  return imapPresetFor(provider)?.provider ?? null;
+}
 
 function tileAction(
   available: ProviderAvailability,

@@ -39,7 +39,10 @@ const ALL_OFF: ProviderFacts = {
   imapActions: false,
   imapMoveActions: false,
   imapSend: false,
+  imapPresets: false,
 };
+
+const PRESETS = ["DAUM", "KAKAO", "YAHOO", "AOL", "FASTMAIL", "ZOHO", "ZOHOPRO"];
 
 const names = (facts: Partial<ProviderFacts>) =>
   availableProviders({ ...ALL_OFF, ...facts }).map((p) => p.provider);
@@ -98,6 +101,32 @@ describe("availableProviders", () => {
     expect(find({ ...base, imapMoveActions: true }, "IMAP")?.readOnly).toBe(false);
   });
 
+  it("lists the app-password presets only while IMAP_PRESETS_ENABLED is open to the user", () => {
+    expect(names({ imapPresets: true })).toEqual(["GOOGLE", "NAVER", ...PRESETS]);
+    expect(
+      names({
+        imapPresets: true,
+        icloudInbox: true,
+        genericImap: true,
+        outlookInbox: true,
+        outlookConfigured: true,
+      }),
+    ).toEqual(["GOOGLE", "OUTLOOK", "NAVER", "ICLOUD", ...PRESETS, "IMAP"]);
+  });
+
+  it("words a preset's readOnly like Naver's (it has an SMTP endpoint) and offers no calendar", () => {
+    for (const provider of PRESETS) {
+      expect(find({ imapPresets: true }, provider)).toEqual({
+        provider,
+        calendar: false,
+        readOnly: true,
+        additionalAccounts: true,
+      });
+      expect(find({ imapPresets: true, imapSend: true }, provider)?.readOnly).toBe(false);
+      expect(find({ imapPresets: true, caldavCalendar: true }, provider)?.calendar).toBe(false);
+    }
+  });
+
   it("never calls Google or Outlook read-only", () => {
     const facts = { outlookInbox: true, outlookConfigured: true };
     expect(find(facts, "GOOGLE")?.readOnly).toBe(false);
@@ -112,6 +141,8 @@ describe("GET /api/providers/available", () => {
     "ICLOUD_INBOX_ENABLED",
     "MS_CLIENT_ID",
     "MS_CLIENT_SECRET",
+    "IMAP_PRESETS_ENABLED",
+    "ROLLOUT_COHORT_USER_IDS",
   ] as const;
 
   afterEach(() => {
@@ -179,6 +210,26 @@ describe("GET /api/providers/available", () => {
       ]);
     }
     expect(JSON.stringify(body)).not.toContain("client-");
+    await app.close();
+  });
+  it("offers the presets per user in cohort mode", async () => {
+    process.env.ONBOARDING_V2 = "true";
+    process.env.IMAP_PRESETS_ENABLED = "cohort";
+    const app = await buildApp();
+    const read = async () =>
+      (
+        (
+          await app.inject({ method: "GET", url: "/api/providers/available", headers: auth() })
+        ).json() as { providers: Array<{ provider: string }> }
+      ).providers.map((p) => p.provider);
+
+    process.env.ROLLOUT_COHORT_USER_IDS = "someone-else";
+    expect(await read()).toEqual(["GOOGLE", "NAVER"]);
+    process.env.ROLLOUT_COHORT_USER_IDS = "user-1";
+    expect(await read()).toEqual(["GOOGLE", "NAVER", ...PRESETS]);
+    process.env.IMAP_PRESETS_ENABLED = "true";
+    process.env.ROLLOUT_COHORT_USER_IDS = "";
+    expect(await read()).toEqual(["GOOGLE", "NAVER", ...PRESETS]);
     await app.close();
   });
 });

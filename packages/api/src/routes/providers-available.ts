@@ -3,19 +3,22 @@
  * connect (productization plan P8). The first run's provider grid draws its
  * tiles from this, so a provider whose connector flag is off is never offered.
  *
- * Read-only and the same for every signed-in user: it reports deployment
- * facts (flags, and whether the Outlook app registration is present), never a
- * value. Behind ONBOARDING_V2 via darkRouteGate: while off it answers
+ * Read-only: it reports deployment facts (flags, and whether the Outlook app
+ * registration is present), never a value. The same for every signed-in user,
+ * except a flag in rollout-cohort mode (IMAP_PRESETS_ENABLED), which lists its
+ * providers only to the cohort. Behind ONBOARDING_V2 via darkRouteGate: while off it answers
  * Fastify's default 404 before authentication, so the surface is the same as
  * the route not existing.
  */
 
 import type { ProviderAvailability, ProvidersAvailableResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
-import { requireAuth } from "../auth.js";
+import { getUserId, requireAuth } from "../auth.js";
 import {
   caldavCalendarEnabled,
+  featureOpenTo,
   genericImapEnabled,
+  IMAP_PRESETS_FLAGS,
   icloudInboxEnabled,
   imapActionsEnabled,
   imapMoveActionsEnabled,
@@ -25,6 +28,7 @@ import {
   outlookCalendarEnabled,
   outlookInboxEnabled,
 } from "../config.js";
+import { IMAP_PRESET_KEYS } from "../mail/imap-preset-keys.js";
 import { outlookConfigured } from "../mail/outlook-oauth.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
@@ -43,9 +47,11 @@ export interface ProviderFacts {
   imapActions: boolean;
   imapMoveActions: boolean;
   imapSend: boolean;
+  /** IMAP_PRESETS_ENABLED is open to this user (on, or cohort with the user in it). */
+  imapPresets: boolean;
 }
 
-export function readProviderFacts(): ProviderFacts {
+export function readProviderFacts(userId: string): ProviderFacts {
   return {
     multiInboxSync: MULTI_INBOX_SYNC_ENABLED,
     outlookInbox: outlookInboxEnabled(),
@@ -57,6 +63,7 @@ export function readProviderFacts(): ProviderFacts {
     imapActions: imapActionsEnabled(),
     imapMoveActions: imapMoveActionsEnabled(),
     imapSend: imapSendEnabled(),
+    imapPresets: featureOpenTo(userId, IMAP_PRESETS_FLAGS),
   };
 }
 
@@ -99,6 +106,17 @@ export function availableProviders(facts: ProviderFacts): ProviderAvailability[]
       additionalAccounts: true,
     });
   }
+  if (facts.imapPresets) {
+    // Fixed hosts with an SMTP endpoint, like Naver; no CalDAV calendar of theirs is wired.
+    for (const provider of IMAP_PRESET_KEYS) {
+      providers.push({
+        provider,
+        calendar: false,
+        readOnly: !(imapWrites || facts.imapSend),
+        additionalAccounts: true,
+      });
+    }
+  }
   if (facts.genericImap) {
     providers.push({
       provider: "IMAP",
@@ -117,8 +135,8 @@ export async function providersAvailableRoutes(app: FastifyInstance) {
   app.get(
     "/available",
     { config: { rateLimit: AVAILABLE_RATE_LIMIT } },
-    async (): Promise<ProvidersAvailableResponse> => ({
-      providers: availableProviders(readProviderFacts()),
+    async (request): Promise<ProvidersAvailableResponse> => ({
+      providers: availableProviders(readProviderFacts(getUserId(request))),
     }),
   );
 }

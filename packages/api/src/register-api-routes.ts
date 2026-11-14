@@ -35,6 +35,7 @@ import { firewallRoutes } from "./routes/firewall.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
 import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "./routes/google-drive-link.js";
 import { imapConnectRoutes } from "./routes/imap-connect.js";
+import { registerImapPresetRoutes } from "./routes/imap-preset-routes.js";
 import { inboxRoutes } from "./routes/inbox.js";
 import { klornDriveRoutes, klornDriveRoutesEnabled } from "./routes/klorn-drive.js";
 import { klornMailboxInboundRoutes } from "./routes/klorn-mailbox-inbound.js";
@@ -127,6 +128,9 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(imapConnectRoutes(IMAP_PROVIDERS.IMAP, { gate: genericImapEnabled }), {
     prefix: "/api/generic-imap",
   });
+  // Provider phase 2: the app-password presets (Daum, Kakao, Yahoo, AOL, Fastmail,
+  // Zoho), one /api/<preset>-imap plugin each, dark until IMAP_PRESETS_ENABLED.
+  await registerImapPresetRoutes(app);
   // Phase 3: dark until OUTLOOK_INBOX_ENABLED — same 404 gate as iCloud.
   await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
     prefix: "/api/auth/outlook",

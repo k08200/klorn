@@ -21,11 +21,18 @@
  * When there is no trustworthy folder the action is unsupported on that account,
  * and when two folders claim the same role nothing is guessed. INBOX is never a
  * destination.
+ *
+ * The same rules pick the folders a stored message is looked for in after it left
+ * INBOX (LookupRole, attachment-bytes.ts): read-only, but a folder whose role is a
+ * guess is no more trusted there. Their exact-name lists are empty too.
  */
 
 import type { ImapFlow, ListResponse } from "imapflow";
 
 export type MoveRole = "\\Trash" | "\\Archive";
+
+/** Every role a folder is trusted for: the move destinations plus the read-only lookup roles. */
+export type LookupRole = MoveRole | "\\All" | "\\Sent" | "\\Junk";
 
 /** The part of imapflow's LIST entry the trust rules read. */
 export type FolderEntry = Pick<
@@ -37,16 +44,19 @@ const UNSELECTABLE_FLAGS = ["\\Noselect", "\\NonExistent"] as const;
 const INBOX_PATH = "INBOX";
 
 /** Exact leaf names a NAME-sourced role may have. Empty until a real LIST documents one. */
-const TRUSTED_NAME_LEAVES: Readonly<Record<MoveRole, readonly string[]>> = {
+const TRUSTED_NAME_LEAVES: Readonly<Record<LookupRole, readonly string[]>> = {
   "\\Trash": [],
   "\\Archive": [],
+  "\\All": [],
+  "\\Sent": [],
+  "\\Junk": [],
 };
 
 function leafName(folder: FolderEntry): string {
   return folder.name || folder.path.split(folder.delimiter || "/").pop() || folder.path;
 }
 
-function isTrustedFolder(folder: FolderEntry, role: MoveRole): boolean {
+function isTrustedFolder(folder: FolderEntry, role: LookupRole): boolean {
   if (folder.path.toUpperCase() === INBOX_PATH) return false;
   if (folder.specialUse !== role) return false;
   if (UNSELECTABLE_FLAGS.some((flag) => folder.flags?.has(flag))) return false;
@@ -62,7 +72,10 @@ function isTrustedFolder(folder: FolderEntry, role: MoveRole): boolean {
 }
 
 /** The path of the one trusted folder with this role, or null when there is none or it is ambiguous. */
-export function findTrustedFolder(folders: readonly FolderEntry[], role: MoveRole): string | null {
+export function findTrustedFolder(
+  folders: readonly FolderEntry[],
+  role: LookupRole,
+): string | null {
   const trusted = folders.filter((folder) => isTrustedFolder(folder, role));
   return trusted.length === 1 ? trusted[0].path : null;
 }
