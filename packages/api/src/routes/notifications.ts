@@ -426,14 +426,9 @@ export async function notificationRoutes(app: FastifyInstance) {
   // UPDATED in place (same user, same origin) — this route can never create
   // a subscription for an attacker-chosen user.
   app.post("/push/rotate", async (request, reply) => {
-    const { oldEndpoint, endpoint, keys } = request.body as {
-      oldEndpoint?: string;
-      endpoint?: string;
-      keys?: { p256dh?: string; auth?: string };
-    };
-    if (!oldEndpoint || !endpoint || !keys?.p256dh || !keys?.auth) {
-      return reply.code(400).send({ error: "Invalid rotate payload" });
-    }
+    const rotate = parseRotateBody(request.body);
+    if (!rotate) return reply.code(400).send({ error: "Invalid rotate payload" });
+    const { oldEndpoint, endpoint, keys } = rotate;
     // Single source of truth for the SSRF check — shared with delivery time
     // (notify/is-safe-push-endpoint.ts), which has the complete 127/8 + IPv6 +
     // IPv4-mapped coverage a second local copy kept drifting from.
@@ -612,6 +607,32 @@ function parseOptionalInteger(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+interface RotateBody {
+  oldEndpoint: string;
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value !== "";
+}
+
+/**
+ * POST /push/rotate's body, or null for anything else: no body at all (the
+ * request then reached the handler with `body` undefined and destructuring it
+ * threw a 500), JSON null, or a field of the wrong type (an object where the
+ * endpoint string goes would have reached the database query).
+ */
+function parseRotateBody(body: unknown): RotateBody | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { oldEndpoint, endpoint, keys } = body as Record<string, unknown>;
+  if (!nonEmptyString(oldEndpoint) || !nonEmptyString(endpoint)) return null;
+  if (typeof keys !== "object" || keys === null) return null;
+  const { p256dh, auth } = keys as Record<string, unknown>;
+  if (!nonEmptyString(p256dh) || !nonEmptyString(auth)) return null;
+  return { oldEndpoint, endpoint, keys: { p256dh, auth } };
 }
 
 /**

@@ -77,6 +77,36 @@ describe("POST /api/notifications/push/rotate", () => {
     expect(subUpdate).not.toHaveBeenCalled();
   });
 
+  it("answers 400 with the standard envelope when called with no body at all", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/notifications/push/rotate" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid rotate payload" });
+    expect(subFindUnique).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["JSON null", "null"],
+    ["a JSON array", "[]"],
+    ["a JSON string", '"x"'],
+    ["a non-string old endpoint", JSON.stringify(payload({ oldEndpoint: { not: "a string" } }))],
+    ["a non-string new endpoint", JSON.stringify(payload({ endpoint: 42 }))],
+    ["non-string keys", JSON.stringify(payload({ keys: { p256dh: 1, auth: ["a"] } }))],
+    ["keys that are not an object", JSON.stringify(payload({ keys: "p256dh" }))],
+  ])("answers 400 and touches no row for %s", async (_label, raw) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/rotate",
+      headers: { "content-type": "application/json" },
+      payload: raw,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid rotate payload" });
+    expect(subFindUnique).not.toHaveBeenCalled();
+    expect(subUpdate).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid new endpoint (SSRF guard shared with subscribe)", async () => {
     const app = await buildApp();
     const res = await app.inject({
