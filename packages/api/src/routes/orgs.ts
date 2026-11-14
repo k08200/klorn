@@ -38,6 +38,7 @@ import {
   removeMember,
   transferOwnership,
 } from "../org/org-membership-changes.js";
+import { startTeamCheckout } from "../org/seat-billing.js";
 import { transparencyFor } from "../org/transparency.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 import { cohortGate } from "./cohort-gate.js";
@@ -176,6 +177,17 @@ export async function orgRoutes(app: FastifyInstance) {
       if ("error" in result) throw new OrgError(400, "INVALID_BODY", result.error);
       return result;
     },
+  );
+
+  // Seat billing (scaffold): a quantity-based Paddle checkout for the
+  // organization. 503 TEAM_CHECKOUT_UNAVAILABLE while the team prices are unset.
+  app.post(
+    "/current/checkout",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+      preHandler: perUser("checkout", { max: 10, timeWindow: "1 hour" }),
+    },
+    async (request) => startTeamCheckout(getUserId(request), request.body),
   );
 
   app.get("/current/transparency", async (request) => {

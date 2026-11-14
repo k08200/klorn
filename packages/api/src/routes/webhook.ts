@@ -3,9 +3,11 @@ import type Stripe from "stripe";
 import { ADVERTISED_PRO_PRICE_WEB } from "../billing/advertised-price.js";
 import { verifyPaddleSignature } from "../billing/paddle.js";
 import { checkPaddlePriceEvent } from "../billing/paddle-price-check.js";
+import { isTeamSubscriptionEvent } from "../billing/paddle-team.js";
 import { PLANS, stripe } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
+import { applyTeamSubscriptionEvent } from "../org/seat-billing.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 import { pushNotification } from "../websocket.js";
@@ -204,7 +206,9 @@ export async function webhookRoutes(app: FastifyInstance) {
           id?: string;
           status?: string;
           customer_id?: string;
-          custom_data?: { userId?: string } | null;
+          custom_data?: { userId?: string; orgId?: string; kind?: string } | null;
+          items?: Array<{ price?: { id?: string } | null; quantity?: number }> | null;
+          billing_cycle?: { interval?: string; frequency?: number } | null;
           next_billed_at?: string | null;
           scheduled_change?: { action?: string; effective_at?: string | null } | null;
         };
@@ -218,7 +222,17 @@ export async function webhookRoutes(app: FastifyInstance) {
       });
       if (alreadyProcessed) return { received: true };
 
-      if (body.event_type.startsWith("subscription.")) {
+      if (body.event_type.startsWith("subscription.") && isTeamSubscriptionEvent(body.data)) {
+        // Klorn Teams seats (org/seat-billing.ts): the organization's seats and
+        // status. Taken before the Pro path, which maps an event to a user and
+        // writes User.plan — a team subscription must never reach it, even
+        // when its Paddle customer is a Pro subscriber's.
+        await applyTeamSubscriptionEvent({
+          eventId: body.event_id,
+          occurredAt: body.occurred_at,
+          data: body.data,
+        });
+      } else if (body.event_type.startsWith("subscription.")) {
         const data = body.data;
         // Primary mapping: the userId we attached at checkout. Fallback: the
         // customer id stored on a previous event for this user.

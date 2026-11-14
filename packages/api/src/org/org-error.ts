@@ -27,7 +27,9 @@ export type OrgErrorCode =
   | "INVITE_USED"
   | "INVITE_EMAIL_FAILED"
   | "INVITE_LIMIT"
-  | "EMAIL_NOT_VERIFIED";
+  | "EMAIL_NOT_VERIFIED"
+  | "INVALID_SEATS"
+  | "TEAM_CHECKOUT_UNAVAILABLE";
 
 export class OrgError extends Error {
   constructor(
