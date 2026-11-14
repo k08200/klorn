@@ -171,7 +171,7 @@ extension PreviewRender {
     }
 
     /// A signed-in model holding the main-window fixtures.
-    private static func navModel(firewallJSON: String, loadError: String? = nil) -> AppModel {
+    static func navModel(firewallJSON: String, loadError: String? = nil) -> AppModel {
         // Never the default store: see `run`.
         let model = AppModel(tokenStore: InMemoryTokenStore())
         model.seedForPreview(

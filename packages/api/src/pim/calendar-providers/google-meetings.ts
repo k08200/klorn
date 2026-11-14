@@ -72,6 +72,7 @@ function toAttendee(attendee: calendar_v3.Schema$EventAttendee): MeetingAttendee
 function toMeeting(item: calendar_v3.Schema$Event): ProviderMeeting {
   return {
     identity: identityOf(item),
+    eventId: item.id ?? null,
     cancelled: item.status === "cancelled",
     allDay: !item.start?.dateTime && Boolean(item.start?.date),
     startTime: instantOf(item.start?.dateTime),

@@ -8,7 +8,7 @@
  * are reported as codes; each page words them itself.
  */
 
-import type { BriefingStatus } from "@klorn/contract";
+import type { BriefingStatus, MeetingPrepBlock } from "@klorn/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../lib/api";
@@ -42,6 +42,8 @@ interface BriefingResponse {
     picks?: BriefingPick[];
   } | null;
   structured?: BriefingStructure | null;
+  /** Present only when CONTEXT_MEETING_PREP_ENABLED opens to the user and there is prep. */
+  meetingPrep?: MeetingPrepBlock;
 }
 
 interface GenerateResponse {
@@ -179,6 +181,7 @@ export function useBriefingPage() {
   return {
     noteId,
     structured: briefingQuery.data?.structured ?? null,
+    meetingPrep: briefingQuery.data?.meetingPrep ?? null,
     content,
     createdAt: briefingQuery.data?.briefing?.createdAt ?? null,
     status: statusQuery.data ?? null,
