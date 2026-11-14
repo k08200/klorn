@@ -34,6 +34,20 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           fixture.count == 7 && fixture[0].lane == .push && fixture[0].reason?.verified == true
           && fixture[0].reason?.quoteIn == "body" && fixture[1].held
           && fixture[4].group == .reply && fixture[0].deliveredTo == ["mac", "chrome"])
+    func list(_ json: String) -> NotificationsResponse? {
+        try? JSONDecoder().decode(NotificationsResponse.self, from: Data(json.utf8))
+    }
+    check("the list-level budget decodes; absent or unreadable, there is none (no chip)",
+          list(PreviewRender.notificationFixtureJSON)?.budget == NotificationBudget(used: 3, limit: 5)
+          && list(#"{"notifications":[]}"#)?.budget == nil
+          && list(#"{"notifications":[],"budget":{"used":1}}"#)?.budget == nil
+          && list(#"{"notifications":[],"budget":{"used":-1,"limit":5}}"#)?.budget == nil
+          && list(#"{"notifications":[],"budget":{"used":2,"limit":0}}"#)?.budget == nil
+          && list(#"{"notifications":[],"budget":"lots"}"#)?.budget == nil
+          && list(#"{"notifications":[{"id":"a"}],"budget":{"used":"x","limit":5}}"#)?.notifications.count == 1)
+    check("the panel header shows the budget chip only when the list carried one",
+          text("NotificationCenter/NotificationPanel.swift").contains("if let budget = store.budget {")
+          && text("NotificationCenter/NotificationPanel.swift").contains(#"L("nc.budget", budget.used, budget.limit)"#))
     let odd = rows(#"""
     {"notifications":[
       {"id":"x","type":"email","lane":"LOUD","group":"someday","held":"yes","reason":"plain","deliveredTo":"mac"},
@@ -227,7 +241,7 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     await store.refresh()
     let fetched = FilesStubProtocol.calls
     check("refresh reads the latest 50 and the channel health",
-          store.rows.count == 7 && store.phase == .loaded && store.channels?.webPushState == "live"
+          store.rows.count == 7 && store.phase == .loaded && store.budget == NotificationBudget(used: 3, limit: 5) && store.channels?.webPushState == "live"
           && fetched.contains(.init(path: "/api/notifications", query: "limit=50"))
           && fetched.contains(.init(path: "/api/notifications/alert-endpoints/health", query: "")))
     await store.markRead("n1")
@@ -282,20 +296,7 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
 
     // MARK: banner words (N1)
 
-    let words = MailBannerContent.compose(
-        from: "kim <kim@co.example>", subject: "q4 budget", reason: "payment due today")
-    check("a mail banner: title = sender, body = subject, then the reason on a second line",
-          words.title == "kim" && words.body == "q4 budget\npayment due today")
-    check("no reason: the subject alone; no subject: the no-subject line; no sender: the address or Klorn",
-          MailBannerContent.compose(from: "kim <k@x.example>", subject: "s", reason: nil).body == "s"
-          && MailBannerContent.compose(from: "k@x.example", subject: "", reason: "  ").body == L("mail.noSubjectParen")
-          && MailBannerContent.compose(from: nil, subject: "s", reason: nil).title == "Klorn")
-    let messy = MailBannerContent.compose(
-        from: "kim\u{202E} <k@x.example>", subject: "a\nb", reason: String(repeating: "r", count: 200))
-    check("each part is one line, without bidi marks, capped like the server (140 for the reason)",
-          messy.title == "kim" && messy.body.hasPrefix("a b\n")
-          && messy.body.split(separator: "\n").last?.count == MailBannerContent.reasonMax
-          && messy.body.hasSuffix("…"))
+    // The full server-parity fixtures live in SelfCheckNotificationContract.swift.
     let banner = PushBanner.make(for: item("d9", reason: "you replied 6 times"))
     check("a PUSH banner carries the reason line; a meeting reminder keeps its own words",
           banner.title == "kim" && banner.body == "s-d9\nyou replied 6 times"
@@ -311,7 +312,8 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         "nc.group.later", "nc.group.done", "nc.group.count", "nc.reason.quote", "nc.reason.judgment",
         "nc.meta.delivered", "nc.meta.held", "nc.action.reply", "nc.action.later", "nc.action.join",
         "nc.action.open", "nc.channels.title", "nc.channels.settings", "nc.toolbar.label",
-        "nc.toolbar.help", "nc.toolbar.a11y.unread", "nc.badge.overflow", "nc.empty", "nc.failed",
+        "nc.toolbar.help", "nc.toolbar.a11y.unread", "nc.badge.overflow", "nc.empty", "nc.failed", "nc.budget",
+        "banner.noSubject",
     ]
     let missing = L10n.shipped.flatMap { language in
         keys.filter { L10n.value($0, language: language) == nil }.map { "\(language):\($0)" }
@@ -324,12 +326,15 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
                   L10n.value($0, language: language)?.contains("%d") == true
               }
               && L10n.value("nc.group.count", language: language)?.hasSuffix("%d") == true
+              && L10n.value("nc.budget", language: language)?.components(separatedBy: "%d").count == 3
+              && L10n.value("nc.budget", language: language)?.contains("%@") == false
           })
     check("the toolbar bell is in Korean what the board says (알림, 모두 읽음, 지금 확인)",
           L10n.value("nc.title", language: "ko") == "알림"
           && L10n.value("nc.markAllRead", language: "ko") == "모두 읽음"
           && L10n.value("nc.group.now", language: "ko") == "지금 확인"
-          && L10n.value("nc.reason.judgment", language: "ko") == "Klorn 판단 · %@")
+          && L10n.value("nc.reason.judgment", language: "ko") == "Klorn 판단 · %@"
+          && L10n.value("nc.budget", language: "ko") == "오늘 알림 %d/%d")
     return results
 }
 

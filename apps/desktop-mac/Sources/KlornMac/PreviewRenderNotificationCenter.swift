@@ -32,7 +32,7 @@ extension PreviewRender {
       {"id":"n7","type":"email","title":"Klorn replied for you","message":"Re: Meeting time next week",
        "isRead":true,"createdAt":"2026-07-28T09:00:00Z",
        "reason":{"text":"Sent by an auto-reply rule you created","verified":false}}
-    ]}
+    ],"budget":{"used":3,"limit":5}}
     """
 
     static let notificationChannelsJSON = """

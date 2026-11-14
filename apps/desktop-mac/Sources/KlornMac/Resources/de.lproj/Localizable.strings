@@ -873,3 +873,8 @@
 "nc.toolbar.label" = "Mitteilungen";
 "nc.toolbar.help" = "Mitteilungen ein- oder ausblenden";
 "nc.toolbar.a11y.unread" = "Mitteilungen, %d ungelesen";
+
+/* Notification center: the day's interrupt budget (used/limit), header chip */
+"nc.budget" = "Hinweise heute %d/%d";
+/* A mail banner with an empty subject: the server's mailPushContent stand-in (notification-strings.ts noSubject) */
+"banner.noSubject" = "(kein Betreff)";
