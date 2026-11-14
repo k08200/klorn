@@ -28,6 +28,9 @@ function toastDuration(type: Toast["type"]): number {
   return type === "error" ? ERROR_DURATION_MS : DEFAULT_DURATION_MS;
 }
 
+const TOAST_REGION =
+  "fixed z-[100] flex flex-col gap-2 pointer-events-none inset-x-4 items-center bottom-[max(calc(134px+env(safe-area-inset-bottom)),152px)] rail:inset-x-auto rail:items-stretch rail:bottom-6 rail:right-6 rail:pb-safe rail:pr-safe";
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   // Live dismiss timers keyed by toast id, so hover can pause and dismiss can
@@ -88,8 +91,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           and competed with each toast's own role. Each ToastItem carries its
           OWN live semantics instead — role="alert"/assertive for errors,
           role="status"/polite for success/info — so only the new toast is
-          announced, at the right urgency. */}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none pb-safe pr-safe">
+          announced, at the right urgency.
+          Below 600px the stack is centred and sits above the bottom tab bar
+          and the assistant button: the same floor as <main>'s clearance
+          (app-shell.tsx, DOCK_CLEARANCE: 62px bar + 72px button + the home
+          indicator, at least 152px for the flag-off button). From 600px it
+          stays bottom-right. */}
+      <div data-testid="toast-region" className={TOAST_REGION}>
         {toasts.map((t) => (
           <ToastItem
             key={t.id}

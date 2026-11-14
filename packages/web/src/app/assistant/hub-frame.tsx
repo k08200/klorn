@@ -3,8 +3,8 @@
 /**
  * The frame every Assistant hub page shares (productization plan P7): the
  * flag gate, the page width, and the section's own navigation. On a phone that
- * navigation is a row of tabs under the app header — below 1024px, where the
- * tab bar or the rail carries only the top-level destinations; from 1024px
+ * navigation is a row of tabs under the app header — below 840px, where the
+ * tab bar or the rail carries only the top-level destinations; from 840px
  * the sidebar lists the same four pages under Assistant, so the row is not
  * repeated.
  */
@@ -60,7 +60,7 @@ function HubTabs({ pathname }: { pathname: string }) {
   return (
     <nav
       aria-label={t("assistantHub.nav.label")}
-      className="sticky top-0 z-10 -mx-4 border-b border-line bg-surface-panel md:-mx-8 lg:hidden"
+      className="sticky top-0 z-10 -mx-4 border-b border-line bg-surface-panel md:-mx-8 wide:hidden"
     >
       <ul className="flex overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {HUB_PAGES.map((page) => {

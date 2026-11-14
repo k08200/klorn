@@ -83,7 +83,9 @@ function NavCountBadge({ count, active }: { count: number; active: boolean }) {
   );
 }
 
-// The full workspace nav, from 1024px (`hidden lg:block`). From 600px the
+// The full workspace nav, from 840px (`hidden wide:block`): 220px wide up to
+// 1024px, so the mail split (list + reader) still fits beside it, and 260px
+// from there (globals.css, --shell-nav-w). From 600px the
 // navigation rail (nav-rail.tsx) stands in for it, and below 600px the bottom
 // tab bar (+ account sheet) is the whole navigation; there is no drawer. Labels resolve via t() inside the component.
 interface NavItem {
@@ -178,7 +180,10 @@ export default function Sidebar() {
     : "";
 
   return (
-    <aside className="hidden lg:block w-[calc(260px+env(safe-area-inset-left))] h-dvh shrink-0 sticky top-0">
+    <aside
+      data-testid="sidebar"
+      className="hidden wide:block w-[calc(220px+env(safe-area-inset-left))] lg:w-[calc(260px+env(safe-area-inset-left))] h-dvh shrink-0 sticky top-0"
+    >
       <div className="relative flex h-full flex-col overflow-hidden border-r border-line/70 bg-surface-panel/55 backdrop-blur-xl pt-safe pb-safe pl-safe">
         {/* Header */}
         <div className="relative flex items-center justify-between px-3 py-4">

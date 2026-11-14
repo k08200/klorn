@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useAuth } from "../lib/auth";
 import {
   ASSISTANT_ROUTES,
@@ -44,8 +44,9 @@ const UNIFIED_TABS: Tab[] = [
 
 const FILES_TAB: Tab = { href: FILES_HOME, labelKey: "nav.files", icon: "files" };
 
-// Routes the account sheet owns — the account tab reads as "active" on these so
-// the bottom bar still reflects where you are after tapping through the sheet.
+// Routes the account sheet owns — the account button (rail, phone header)
+// reads as "active" on these so the nav still reflects where you are after
+// tapping through the sheet.
 export const ACCOUNT_ROUTES = ["/settings", "/admin"];
 
 /** The shell's destinations — the bottom tab bar and the navigation rail show the same set. */
@@ -68,84 +69,54 @@ export function userInitials(user: AuthUser | null): string {
     : "";
 }
 
+/**
+ * The phone's bottom tab bar (below 600px): the shell's destinations only.
+ * The account avatar lives in the phone header (app-shell.tsx,
+ * PhoneHeaderActions), beside the notification bell. Below 360px (the tiny
+ * tier: an iPad slide-over, a Fold's cover screen) the labels are kept for
+ * screen readers only and the bar drops from 62px to 56px.
+ */
 export default function BottomTabs() {
   const pathname = usePathname();
   const { t } = useT();
   const { user } = useAuth();
-  const [accountOpen, setAccountOpen] = useState(false);
-  // Stable identity so the sheet's focus/Escape effect doesn't re-run on every
-  // parent re-render (AuthProvider hands a fresh context value each render).
-  const closeAccount = useCallback(() => setAccountOpen(false), []);
-  const unified = user?.unifiedHome === true;
   const tabs = shellTabs(user);
-  // UNIFIED_HOME (P10): tab labels move off the retired 10px size to the
-  // caption role (12px); the legacy bar is left as it was.
-  const labelSize = unified ? "text-role-caption" : "text-role-caption";
-
-  const accountActive = ACCOUNT_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
-
-  const initials = userInitials(user);
 
   return (
-    <>
-      <nav
-        aria-label={t("bottomTabs.nav")}
-        className="rail:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface-panel/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
-      >
-        {/* One column per tab plus the account button: the legacy bar and the
-            unified bar without Files hold 5 items, the unified bar with Files 6. */}
-        <ul className={tabs.length > 4 ? "grid grid-cols-6" : "grid grid-cols-5"}>
-          {tabs.map((tab) => {
-            const active = isTabActive(pathname, tab);
-            return (
-              <li key={tab.labelKey}>
-                <Link
-                  href={tab.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`focus-ring flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 ${labelSize} transition ${
-                    active ? "text-accent-deep" : "text-ink-mid"
-                  }`}
-                >
-                  <NavIcon type={tab.icon} size={22} strokeWidth={active ? 2 : 1.6} />
-                  <span className={active ? "font-medium" : ""}>{t(tab.labelKey)}</span>
-                </Link>
-              </li>
-            );
-          })}
-          <li>
-            <button
-              type="button"
-              onClick={() => setAccountOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={accountOpen}
-              className={`focus-ring flex w-full min-h-[62px] flex-col items-center justify-center gap-1 py-2 ${labelSize} transition ${
-                accountActive || accountOpen ? "text-accent-deep" : "text-ink-mid"
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-bold text-accent-solid-ink ring-1 transition ${
-                  accountActive || accountOpen ? "ring-accent" : "ring-transparent"
+    <nav
+      aria-label={t("bottomTabs.nav")}
+      data-testid="bottom-tabs"
+      className="rail:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface-panel/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+    >
+      {/* One column per tab: 4 for the legacy and unified bars, 5 with Files. */}
+      <ul className={tabs.length > 4 ? "grid grid-cols-5" : "grid grid-cols-4"}>
+        {tabs.map((tab) => {
+          const active = isTabActive(pathname, tab);
+          return (
+            <li key={tab.labelKey}>
+              <Link
+                href={tab.href}
+                aria-current={active ? "page" : undefined}
+                className={`focus-ring flex min-h-[62px] max-tiny:min-h-14 flex-col items-center justify-center gap-1 py-2 text-role-caption transition ${
+                  active ? "text-accent-deep" : "text-ink-mid"
                 }`}
               >
-                {initials || "?"}
-              </span>
-              <span className={accountActive || accountOpen ? "font-medium" : ""}>
-                {t("tabs.account")}
-              </span>
-            </button>
-          </li>
-        </ul>
-      </nav>
-
-      {accountOpen && <AccountSheet onClose={closeAccount} initials={initials} />}
-    </>
+                <NavIcon type={tab.icon} size={22} strokeWidth={active ? 2 : 1.6} />
+                <span data-tab-label className={`max-tiny:sr-only ${active ? "font-medium" : ""}`}>
+                  {t(tab.labelKey)}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }
 
 /**
- * The account sheet. Below 600px it rises from the bottom edge, over the tab
- * bar; from 600px the navigation rail opens it as a panel beside the rail,
+ * The account sheet. Below 600px (opened from the phone header's avatar) it
+ * rises from the bottom edge, over the tab bar; from 600px the navigation rail opens it as a panel beside the rail,
  * anchored to the rail's account button.
  */
 export function AccountSheet({ onClose, initials }: { onClose: () => void; initials: string }) {
