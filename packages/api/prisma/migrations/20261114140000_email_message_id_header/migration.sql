@@ -16,7 +16,7 @@
 -- No new table, so no new RLS policy: the table already has RLS enabled.
 --
 -- If it fails on lock_timeout, Prisma records the migration as failed: run
--- `prisma migrate resolve --rolled-back 20261114020000_email_message_id_header`
+-- `prisma migrate resolve --rolled-back 20261114140000_email_message_id_header`
 -- and redeploy.
 SET LOCAL lock_timeout = '5s';
 
