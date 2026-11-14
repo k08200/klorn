@@ -18,7 +18,13 @@
 // (packages/api/src/__tests__/web-desktop-push-catchup.test.ts).
 
 import type { DesktopCatchUpResponse, DesktopMissedMail } from "@klorn/contract";
-import { type DesktopAlert, parseMailToast, TITLE_MAX, TODAY_PATH } from "./desktop-alerts";
+import {
+  type DesktopAlert,
+  mailLedgerKey,
+  parseMailToast,
+  TITLE_MAX,
+  TODAY_PATH,
+} from "./desktop-alerts";
 import { type AlertLedger, recording, SETTLE_MS } from "./desktop-catchup";
 
 /** Only mail from the last 72 hours is caught up (decision N6). */
@@ -68,6 +74,11 @@ export function pushCatchUpCandidates(
     const id = rowId(record);
     if (!id || known.has(id) || !isMailRow(record)) continue;
     known.add(id);
+    // Another row for a mail already toasted: never again (one mail, one toast).
+    if (known.has(mailLedgerKey(record.sourceEmailId as string))) {
+      settled.push(id);
+      continue;
+    }
     const createdAtMs = typeof record.createdAt === "string" ? Date.parse(record.createdAt) : NaN;
     const age = nowMs - createdAtMs;
     if (Number.isFinite(age) && age < SETTLE_MS) {
@@ -184,9 +195,24 @@ export function planPushCatchUp({
   const named = new Set(sent);
   const answered = ask.filter((id) => named.has(id));
   const asked = new Set(answered);
-  const missed = response.items.filter((item) => asked.has(item.id));
+  const missed = distinctMail(response.items.filter((item) => asked.has(item.id)));
   return {
     toast: summarizeMissed(missed, response.summaryTitle),
-    next: recording(ledger, [...answered, ...settled]),
+    next: recording(ledger, [
+      ...answered,
+      ...settled,
+      ...missed.map((item) => mailLedgerKey(item.emailId)),
+    ]),
   };
+}
+
+/** One entry per mail, the first (newest) row kept: two rows for one mail are
+ *  one missed mail, not two. */
+function distinctMail(items: readonly DesktopMissedMail[]): DesktopMissedMail[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.emailId)) return false;
+    seen.add(item.emailId);
+    return true;
+  });
 }

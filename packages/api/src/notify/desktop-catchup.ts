@@ -7,8 +7,8 @@
  * back the ones that still deserve a toast:
  *   - an urgent-mail bell row of this user (any language's title), naming one
  *     mail (sourceEmailId), unread, from the last 72 hours;
- *   - whose mail is still an OPEN PUSH item (handled, moved or archived mail
- *     never toasts late);
+ *   - whose mail is still an OPEN PUSH item and not read in the mailbox
+ *     (handled, moved, archived or already-read mail never toasts late);
  *   - shaped like every other mail notification (decision N1,
  *     mail-push-content.ts).
  * The last two are open-push-mail.ts, shared with the server's quiet-hours
@@ -64,7 +64,10 @@ export async function desktopCatchUp(
     },
     select: { id: true, sourceEmailId: true, createdAt: true },
   });
-  const mail = await openPushMail(userId, rows, language);
+  // Mail already read in the mailbox (Gmail, or a bulk mark-read that leaves
+  // the bell row unread) was seen: no late toast for it, as on the Mac
+  // (HeldBanners) and in the quiet-hours summary.
+  const mail = await openPushMail(userId, rows, language, { skipReadMail: true });
   const items = mail.map((m) => ({
     id: m.bellId,
     emailId: m.emailId,

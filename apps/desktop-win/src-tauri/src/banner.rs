@@ -10,10 +10,13 @@
 //! everything else is fixed by the shell.
 //!
 //! A click (decision N1): bring the window back and open that page inside it.
-//! The plugin reports a click only while the toast is on screen, not once it
-//! moved to the Action Center (tauri-plugin-notification 2.7 desktop.rs). For
-//! that reason the toast has no Reply / Later buttons: from the Action Center
-//! they would silently do nothing.
+//! On Windows the shell posts the toast itself, with a `klorn://toast?…`
+//! launch URI and protocol activation, so a click reaches the app from the
+//! Action Center too, and starts Klorn when it was quit (toast_link.rs). The
+//! notification plugin only reports a click while the toast is on screen; it
+//! still posts the toast elsewhere (dev builds) and if the shell's own post
+//! fails. The toast has no Reply / Later buttons: a protocol launch carries
+//! one URI, not a button choice.
 //!
 //! Receipts (POST /api/notifications/desktop/receipts): the page passes the
 //! bell row id as `receipt`; `show_banner` answers whether it posted the toast
@@ -21,11 +24,13 @@
 //! (`click_script`), which reports `clicked`. The shell itself sends nothing:
 //! the session lives in the page.
 
+use std::path::{Component, Path};
+
 use tauri::plugin::PermissionState;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 use tauri_plugin_notification::{ActionPerformed, NotificationExt};
 
-use crate::tray;
+use crate::toast_link::{self, ToastClick};
 
 pub const TITLE_MAX: usize = 120;
 pub const BODY_MAX: usize = 240;
@@ -144,31 +149,104 @@ pub fn open_script(path: &str) -> String {
     )
 }
 
-/// Handler for every action the plugin reports (registered in main.rs).
+/// Handler for every action the plugin reports (registered in main.rs): a
+/// click on a toast the plugin posted, while it is on screen.
 pub fn on_action<R: Runtime>(app: &AppHandle<R>, performed: &ActionPerformed) {
     if performed.action_id() != TAP {
         return;
     }
-    tray::show_main(app);
     let extra = |key: &str| {
         performed
             .notification()
             .and_then(|n| n.extra().get(key))
             .and_then(|v| v.as_str())
     };
-    let Some(win) = app.get_webview_window("main") else {
-        return;
+    let click = ToastClick {
+        open: tap_route(performed.action_id(), extra(OPEN_KEY)),
+        receipt: tap_receipt(performed.action_id(), extra(RECEIPT_KEY)),
     };
-    // The receipt first, so its request is already queued when the page
-    // routes. The hook is installed with the router (desktop-toast-router.tsx):
-    // while neither is mounted, the click is not reported and the open script
-    // falls back to a plain navigation.
-    if let Some(id) = tap_receipt(performed.action_id(), extra(RECEIPT_KEY)) {
-        let _ = win.eval(click_script(&id));
+    toast_link::deliver(app, &click);
+}
+
+/// Text for an XML element or attribute value, without the characters XML
+/// cannot hold. Pure.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn xml_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            // Not XML characters: LoadXml would refuse the whole toast.
+            '\u{FFFE}' | '\u{FFFF}' => {}
+            _ => out.push(c),
+        }
     }
-    if let Some(path) = tap_route(performed.action_id(), extra(OPEN_KEY)) {
-        let _ = win.eval(open_script(&path));
+    out
+}
+
+/// The toast the shell posts on Windows: the title, then each body line, as
+/// plain text, and a click that launches `launch` by protocol activation
+/// (toast_link.rs). Inputs come from `sanitize` (no control characters but
+/// the body's one line break) and `toast_link::launch_uri`. Pure.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn toast_xml(title: &str, body: &str, launch: &str) -> String {
+    let texts: String = std::iter::once(title)
+        .chain(body.lines().filter(|line| !line.is_empty()))
+        .map(|text| format!("<text>{}</text>", xml_escape(text)))
+        .collect();
+    format!(
+        "<toast activationType=\"protocol\" launch=\"{}\"><visual><binding template=\"ToastGeneric\">{texts}</binding></visual></toast>",
+        xml_escape(launch)
+    )
+}
+
+/// PowerShell's AppUserModelID: what the notification plugin posts under when
+/// Klorn runs from a cargo build, which has no Start-menu shortcut of its own.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const POWERSHELL_APP_ID: &str =
+    "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe";
+
+/// The AppUserModelID the shell's toasts post under — the plugin's rule
+/// (tauri-plugin-notification 2.7 desktop.rs): the bundle identifier, which
+/// the installer stamps on the Start-menu shortcut, unless the exe runs from
+/// `target/debug` or `target/release`. Pure.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn toast_app_id(exe_dir: &Path, identifier: &str) -> String {
+    let mut tail = exe_dir.components().rev().filter_map(|c| match c {
+        Component::Normal(name) => name.to_str(),
+        _ => None,
+    });
+    let profile = tail.next();
+    let parent = tail.next();
+    let cargo_build = parent == Some("target") && matches!(profile, Some("debug" | "release"));
+    if cargo_build {
+        POWERSHELL_APP_ID.to_string()
+    } else {
+        identifier.to_string()
     }
+}
+
+/// Windows: post the toast with WinRT directly. The plugin builds its own
+/// toast XML with no launch URI, so it cannot ask for protocol activation.
+#[cfg(windows)]
+fn post_protocol_toast<R: Runtime>(app: &AppHandle<R>, xml: &str) -> windows::core::Result<()> {
+    use windows::core::HSTRING;
+    use windows::Data::Xml::Dom::XmlDocument;
+    use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
+
+    let identifier = &app.config().identifier;
+    let app_id = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| toast_app_id(dir, identifier)))
+        .unwrap_or_else(|| identifier.clone());
+    let doc = XmlDocument::new()?;
+    doc.LoadXml(&HSTRING::from(xml))?;
+    let toast = ToastNotification::CreateToastNotification(&doc)?;
+    ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(app_id))?.Show(&toast)
 }
 
 /// Posts the toast. `Ok(true)` once posted, `Ok(false)` when the OS refused
@@ -193,11 +271,23 @@ pub fn show_banner<R: Runtime>(
         return Ok(false);
     }
     let (title, body) = sanitize(&title, &body);
+    let open = open_path(open.as_deref());
+    let receipt = receipt_id(receipt.as_deref());
+    #[cfg(windows)]
+    {
+        let launch = toast_link::launch_uri(open.as_deref(), receipt.as_deref());
+        match post_protocol_toast(&app, &toast_xml(&title, &body, &launch)) {
+            Ok(()) => return Ok(true),
+            // Still a toast, through the plugin: only an on-screen click
+            // reaches the app then (on_action), not one from the Action Center.
+            Err(err) => eprintln!("[banner] protocol toast failed, posting via the plugin: {err}"),
+        }
+    }
     let mut builder = notifier.builder().title(title).body(body);
-    if let Some(path) = open_path(open.as_deref()) {
+    if let Some(path) = open {
         builder = builder.extra(OPEN_KEY, path);
     }
-    if let Some(id) = receipt_id(receipt.as_deref()) {
+    if let Some(id) = receipt {
         builder = builder.extra(RECEIPT_KEY, id);
     }
     builder.show().map_err(|e| e.to_string())?;
@@ -316,6 +406,55 @@ mod tests {
             click_script(ROW),
             format!("window.__klornToastClicked && window.__klornToastClicked('{ROW}');")
         );
+    }
+
+    #[test]
+    fn the_windows_toast_launches_its_click_by_protocol() {
+        assert_eq!(
+            toast_xml("Kim", "Signed contract\nWhy it matters", "klorn://toast?open=/today"),
+            "<toast activationType=\"protocol\" launch=\"klorn://toast?open=/today\"><visual><binding template=\"ToastGeneric\"><text>Kim</text><text>Signed contract</text><text>Why it matters</text></binding></visual></toast>"
+        );
+    }
+
+    #[test]
+    fn the_windows_toast_keeps_mail_text_as_text() {
+        // A subject is attacker-chosen: it must never become markup.
+        let xml = toast_xml(
+            "<b>\"Kim\" & 'Lee'</b>",
+            "</text><action/>",
+            &toast_link::launch_uri(Some("/email/x1"), Some(ROW)),
+        );
+        assert!(
+            xml.contains("<text>&lt;b&gt;&quot;Kim&quot; &amp; &apos;Lee&apos;&lt;/b&gt;</text>")
+        );
+        assert!(xml.contains("<text>&lt;/text&gt;&lt;action/&gt;</text>"));
+        assert!(xml.contains(&format!(
+            "launch=\"klorn://toast?open=/email/x1&amp;receipt={ROW}\""
+        )));
+        assert_eq!(xml.matches("<text>").count(), 2);
+    }
+
+    #[test]
+    fn the_windows_toast_drops_characters_xml_cannot_hold() {
+        // U+FFFE / U+FFFF are no control characters (`clean` keeps them) but
+        // are not XML: LoadXml would refuse the whole toast.
+        let xml = toast_xml("Kim\u{FFFE}", "a\u{FFFF}b", "klorn://toast");
+        assert!(xml.contains("<text>Kim</text><text>ab</text>"));
+    }
+
+    #[test]
+    fn toasts_post_under_the_installed_app_id_or_powershell_for_a_cargo_build() {
+        let id = "ai.klorn.desktop.win";
+        for installed in ["C:/Users/u/AppData/Local/Klorn", "/opt/Klorn", "C:/target"] {
+            assert_eq!(toast_app_id(Path::new(installed), id), id, "{installed}");
+        }
+        for cargo in ["C:/src/klorn/target/debug", "/src/target/release"] {
+            assert_eq!(
+                toast_app_id(Path::new(cargo), id),
+                POWERSHELL_APP_ID,
+                "{cargo}"
+            );
+        }
     }
 
     #[test]
