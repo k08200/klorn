@@ -6,12 +6,14 @@
  *            its approval (PendingAction) is no longer PENDING.
  *  2. later  its mail's item is SNOOZED until a time still ahead: the user
  *            said "later", and that outranks every rule below.
- *  3. reply  its mail needs a reply not yet sent through Klorn
- *            (mail/reply-state.ts replyStateOf === "needsReply").
- *  4. now    its mail is in the PUSH lane (retired CALL folds to PUSH) and
+ *  3. now    its mail is in the PUSH lane (retired CALL folds to PUSH) and
  *            inside Today's PUSH window: received in the last 72 hours
  *            (judge/today-push-window.ts, LOCKED 2026-10-23). A row whose
- *            lane is unknown is never "now".
+ *            lane is unknown is never "now". Before reply: a PUSH mail that
+ *            also needs an answer is still what needs the user now (and what
+ *            the bell badge counts).
+ *  4. reply  its mail needs a reply not yet sent through Klorn
+ *            (mail/reply-state.ts replyStateOf === "needsReply").
  *  5. today  in the user's local calendar day: a MEETING mail whose row was
  *            written today, a mail whose v3 ask is due today (v3Due), or a
  *            meeting / calendar / reminder row written today; or an approval
@@ -114,8 +116,8 @@ function isToday(input: GroupInput, ctx: GroupContext): boolean {
 export function notificationGroup(input: GroupInput, ctx: GroupContext): NotificationGroup {
   if (isDone(input)) return "done";
   if (isSnoozed(input, ctx.now)) return "later";
-  if (needsReply(input)) return "reply";
   if (isNow(input, ctx.now)) return "now";
+  if (needsReply(input)) return "reply";
   if (isToday(input, ctx)) return "today";
   return "later";
 }

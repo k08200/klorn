@@ -88,8 +88,26 @@ describe("notificationGroup — later (snoozed)", () => {
 });
 
 describe("notificationGroup — reply", () => {
-  it("a mail that needs a reply and has none is reply (before now)", () => {
+  it("a mail that needs a reply and has none is reply", () => {
+    const input = row({ item: item({ tier: "QUEUE" }), email: email({ needsReply: true }) });
+    expect(notificationGroup(input, ctx)).toBe("reply");
+  });
+
+  it("a fresh PUSH mail that also needs a reply stays now (now comes before reply)", () => {
     const input = row({ item: item({ tier: "PUSH" }), email: email({ needsReply: true }) });
+    expect(notificationGroup(input, ctx)).toBe("now");
+  });
+
+  it("a PUSH mail older than 72h that needs a reply is reply", () => {
+    const input = row({
+      item: item({ tier: "PUSH" }),
+      email: email({ needsReply: true, receivedAt: new Date(NOW.getTime() - 80 * HOUR) }),
+    });
+    expect(notificationGroup(input, ctx)).toBe("reply");
+  });
+
+  it("a MEETING mail today that needs a reply is reply (reply comes before today)", () => {
+    const input = row({ item: item({ tier: "MEETING" }), email: email({ needsReply: true }) });
     expect(notificationGroup(input, ctx)).toBe("reply");
   });
 

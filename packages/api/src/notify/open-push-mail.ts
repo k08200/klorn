@@ -24,7 +24,12 @@ import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { describeFailure } from "../mail/providers/action-failure.js";
 import { captureError } from "../sentry.js";
 import { type MailPushContent, mailPushContent } from "./mail-push-content.js";
-import { REASON_ITEM_SELECT, reasonsForMail } from "./notification-reason.js";
+import {
+  type MailForReason,
+  REASON_ITEM_SELECT,
+  type ReasonItemRow,
+  reasonsForMail,
+} from "./notification-reason.js";
 import { type NotificationLanguage, URGENT_EMAIL_TITLES } from "./notification-strings.js";
 
 /** Lanes that ring as PUSH; "CALL" is the retired v1 name normalizeTier folds. */
@@ -96,11 +101,11 @@ export async function openPushMail(
   const itemByEmail = new Map(openItems.map((i) => [i.sourceId, i]));
   const emailById = new Map(emails.map((e) => [e.id, e]));
   // Why each rang, the same rule as the live push (notification-reason.ts).
-  const reasons = await reasonsForMail(
+  const reasons = await reasonsOrNone(
     userId,
     emails.filter((e) => itemByEmail.has(e.id)).map((e) => ({ id: e.id, subject: e.subject })),
     itemByEmail,
-    { language, now: new Date(), policyUser: isJudgeV3PolicyEnabled(userId) },
+    language,
   );
 
   const mail: OpenPushMail[] = [];
@@ -251,29 +256,54 @@ async function keywordFallbackSourceIds(
  * comes from the mail's open item; a failed read rings without a reason line
  * rather than not at all, and is reported.
  */
+/**
+ * Reasons for these mails; on a failed read none (reported), so the mail
+ * still rings, without a reason line, exactly as it would have before.
+ */
+async function reasonsOrNone(
+  userId: string,
+  mails: readonly MailForReason[],
+  items: ReadonlyMap<string, ReasonItemRow>,
+  language: string,
+): Promise<ReadonlyMap<string, NotificationReason | null>> {
+  try {
+    return await reasonsForMail(userId, mails, items, {
+      language,
+      now: new Date(),
+      policyUser: isJudgeV3PolicyEnabled(userId),
+    });
+  } catch (err) {
+    console.warn(
+      `[NOTIFY] reason lookup failed for ${userId}; ringing without a reason line: ${describeFailure(err)}`,
+    );
+    captureError(err, { tags: { scope: "notify.mail-reason" }, extra: { userId } });
+    return new Map();
+  }
+}
+
 export async function urgentLeadPushContent(
   userId: string,
   lead: { id: string; from: string | null; subject: string | null },
   language: string,
 ): Promise<MailPushContent> {
-  let reason: NotificationReason | null = null;
+  let items: Array<{ sourceId: string } & ReasonItemRow> = [];
   try {
-    const items = await prisma.attentionItem.findMany({
+    items = await prisma.attentionItem.findMany({
       where: { userId, source: "EMAIL", sourceId: { in: [lead.id] }, status: "OPEN" },
       select: { sourceId: true, ...REASON_ITEM_SELECT },
     });
-    const reasons = await reasonsForMail(
-      userId,
-      [{ id: lead.id, subject: lead.subject }],
-      new Map(items.map((item) => [item.sourceId, item])),
-      { language, now: new Date(), policyUser: isJudgeV3PolicyEnabled(userId) },
-    );
-    reason = reasons.get(lead.id) ?? null;
   } catch (err) {
     console.warn(
       `[urgent-sweep] reason lookup failed for ${userId}; ringing without a reason line: ${describeFailure(err)}`,
     );
     captureError(err, { tags: { scope: "automation.urgent-reason" }, extra: { userId } });
   }
+  const reasons = await reasonsOrNone(
+    userId,
+    [{ id: lead.id, subject: lead.subject }],
+    new Map(items.map((item) => [item.sourceId, item])),
+    language,
+  );
+  const reason = reasons.get(lead.id) ?? null;
   return mailPushContent({ from: lead.from ?? "", subject: lead.subject, reason, language });
 }

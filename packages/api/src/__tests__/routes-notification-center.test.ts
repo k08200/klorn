@@ -228,6 +228,30 @@ describe("GET /api/notifications — notification center fields", () => {
   });
 });
 
+describe("GET /api/notifications — limit", () => {
+  it.each([
+    [undefined, 50],
+    ["30", 30],
+    ["100", 100],
+    ["5000", 100],
+    ["0", 50],
+    ["-20", 50],
+    ["abc", 50],
+  ])("?limit=%s reads %i rows at most", async (raw, expected) => {
+    seed();
+    const { getNotifications } = await import("../background.js");
+    vi.mocked(getNotifications).mockClear();
+    const app = await buildApp();
+    const url = raw === undefined ? "/api/notifications" : `/api/notifications?limit=${raw}`;
+    await app.inject({ method: "GET", url, headers: auth() });
+    expect(vi.mocked(getNotifications)).toHaveBeenCalledWith(USER, {
+      unreadOnly: false,
+      limit: expected,
+    });
+    await app.close();
+  });
+});
+
 describe("GET /api/notifications — budget", () => {
   function seedSlots(used: number) {
     const slots: Row[] = Array.from({ length: used }, (_, i) => ({

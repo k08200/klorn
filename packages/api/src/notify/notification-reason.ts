@@ -44,6 +44,12 @@ export const REASON_ITEM_SELECT = { tierReason: true, ...V3_ITEM_SELECT } as con
 const BODY_SEARCH_CHARS = FACTS_BODY_CAP * 2;
 
 /**
+ * At most this many bodies are read per batch (each up to the 50k stored
+ * cap). A mail past it keeps its quote unverified: the short reason shows.
+ */
+export const MAX_BODY_READS = 50;
+
+/**
  * Under policy v3: the stored quote of the first reason that has one — the
  * deciding reason, or the one a hold put first. Re-parsed and cleaned by
  * v3ItemWire, so a manual override, an agent's lane or a policy version this
@@ -78,16 +84,21 @@ export function notificationReason(input: {
   return text ? { text, verified: false } : null;
 }
 
+/**
+ * The quote as shown, only when THAT text verifies: cleaning (tags, controls,
+ * format characters) runs first, so a quote is never shown that is not in the
+ * mail as the user would read it.
+ */
 function verifiedQuote(
   evidence: string | null,
   mail: ReasonMailText | null,
 ): { quote: string; quoteIn: "subject" | "body" } | null {
   if (!evidence || !mail) return null;
-  const body = mail.body ? mail.body.slice(0, BODY_SEARCH_CHARS) : null;
-  if (!verifyEvidence(evidence, buildEvidenceHaystack(mail.subject, body))) return null;
   const quote = plainLine(evidence, MAX_EVIDENCE_CHARS);
   if (!quote) return null;
-  const inSubject = verifyEvidence(evidence, buildEvidenceHaystack(mail.subject, null));
+  const body = mail.body ? mail.body.slice(0, BODY_SEARCH_CHARS) : null;
+  if (!verifyEvidence(quote, buildEvidenceHaystack(mail.subject, body))) return null;
+  const inSubject = verifyEvidence(quote, buildEvidenceHaystack(mail.subject, null));
   return { quote, quoteIn: inSubject ? "subject" : "body" };
 }
 
@@ -162,6 +173,7 @@ async function loadBodies(
       const evidence = evidenceOf.get(m.id) ?? "";
       return !verifyEvidence(evidence, buildEvidenceHaystack(m.subject, null));
     })
+    .slice(0, MAX_BODY_READS)
     .map((m) => m.id);
   if (ids.length === 0) return new Map();
   const rows = await prisma.emailMessage.findMany({

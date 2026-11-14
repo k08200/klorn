@@ -112,6 +112,25 @@ describe("mailPushContent", () => {
     expect(content.title + content.body).not.toMatch(/[<>]/);
   });
 
+  it("drops invisible format characters: a zero-width-only field reads as empty", () => {
+    const content = mailPushContent({
+      from: "\u200b\u200b <z@x.io>",
+      subject: "\u200b\u2060\u00ad",
+      reason: { text: "Pay\u200b today\u061c", verified: false },
+      language: "en",
+    });
+    expect(content.title).toBe("z@x.io");
+    expect(content.body).toBe(`${notificationCopy("en").noSubject}\nPay today`);
+  });
+
+  it("reads at most a bounded prefix of a huge From header", () => {
+    const from = `${"x".repeat(200_000)} <a@b.c>`;
+    const started = performance.now();
+    const content = mailPushContent({ from, subject: "s", language: "en" });
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(content.title.length).toBeLessThanOrEqual(100);
+  });
+
   it("keeps a comparison that is not a tag", () => {
     const content = mailPushContent({
       from: "a@b.c",

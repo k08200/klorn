@@ -21,6 +21,7 @@ vi.mock("../db.js", async () => {
 });
 
 import {
+  MAX_BODY_READS,
   notificationReason,
   type ReasonItemRow,
   reasonEvidence,
@@ -177,16 +178,39 @@ describe("notificationReason", () => {
     ).toBe(null);
   });
 
-  it("plain text only: tags, controls and bidi marks are stripped from text and quote", () => {
+  it("plain text only: tags, controls and bidi marks are stripped from the text", () => {
     const reason = notificationReason({
-      tierReason: "<b>Pay</b> now\u0007\nor‮ lose access",
+      tierReason: "<b>Pay</b> now\u0007\nor\u202e lose access",
+      evidence: null,
+      mail: null,
+      language: "en",
+    });
+    expect(reason).toEqual({ text: "Pay now or lose access", verified: false });
+  });
+
+  it("verbatim: a quote whose cleaned text is not in the mail is not verified", () => {
+    // The mail carries literal tags; the cleaned quote "please sign the…" is
+    // not a substring of what the mail says, so it must not show as verbatim.
+    const reason = notificationReason({
+      tierReason: "Looks urgent",
       evidence: "please <i>sign</i> the contract by 5pm today",
       mail: { subject: "x", body: "Please <i>sign</i> the contract by 5pm today" },
       language: "en",
     });
-    expect(reason?.text).toBe("Pay now or lose access");
-    expect(reason?.verified).toBe(true);
-    expect(reason?.quote).toBe("please sign the contract by 5pm today");
+    expect(reason).toEqual({ text: "Looks urgent", verified: false });
+  });
+
+  it("invisible format characters in a quote are dropped and it still verifies", () => {
+    const reason = notificationReason({
+      tierReason: null,
+      evidence: "please\u200b sign the contract\u2060 by 5pm today",
+      mail: MAIL,
+      language: "en",
+    });
+    expect(reason).toMatchObject({
+      verified: true,
+      quote: "please sign the contract by 5pm today",
+    });
   });
 });
 
@@ -285,6 +309,32 @@ describe("reasonsForMail", () => {
     );
     expect(reasons.get("e-body")).toEqual({ text: "Signature needed today", verified: false });
     expect(queries).toEqual([]);
+  });
+
+  it(`reads at most MAX_BODY_READS bodies; the rest stay unverified`, async () => {
+    const many = Array.from({ length: MAX_BODY_READS + 3 }, (_, i) => `e${i}`);
+    db = createFakeDb({
+      emailMessage: many.map((id) => ({
+        id,
+        userId: USER,
+        gmailId: `g-${id}`,
+        from: "a@b.c",
+        to: "me@x.io",
+        subject: "Contract",
+        body: MAIL.body,
+        receivedAt: NOW,
+      })),
+    });
+    dbHolder.current = db;
+    const reasons = await reasonsForMail(
+      USER,
+      many.map((id) => ({ id, subject: "Contract" })),
+      new Map(many.map((id) => [id, v3Item()])),
+      { language: "en", now: NOW, policyUser: true },
+    );
+    const verified = many.filter((id) => reasons.get(id)?.verified).length;
+    expect(verified).toBe(MAX_BODY_READS);
+    expect(queries).toEqual(["emailMessage.findMany"]);
   });
 
   it("a mail with no item has no reason", async () => {

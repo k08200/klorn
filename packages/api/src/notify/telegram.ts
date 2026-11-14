@@ -83,16 +83,21 @@ async function callTelegram(
   }
 }
 
-/** Send a plain-text message (optionally with an inline keyboard) to a chat. */
+/**
+ * Send a plain-text message (optionally with an inline keyboard) to a chat.
+ * `noLinkPreview`: text that quotes a mail must not make Telegram's servers
+ * fetch a URL the sender planted.
+ */
 export async function sendTelegramMessage(
   chatId: string,
   text: string,
-  opts?: { inlineKeyboard?: TelegramInlineButton[][] },
+  opts?: { inlineKeyboard?: TelegramInlineButton[][]; noLinkPreview?: boolean },
 ): Promise<TelegramCallResult> {
   const body: Record<string, unknown> = { chat_id: chatId, text };
   if (opts?.inlineKeyboard?.length) {
     body.reply_markup = { inline_keyboard: opts.inlineKeyboard };
   }
+  if (opts?.noLinkPreview) body.link_preview_options = { is_disabled: true };
   return callTelegram("sendMessage", body);
 }
 

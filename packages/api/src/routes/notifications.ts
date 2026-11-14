@@ -203,7 +203,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       const { unread, limit } = request.query as { unread?: string; limit?: string };
       const notifs = await getNotifications(userId, {
         unreadOnly: unread === "true",
-        limit: limit ? Number.parseInt(limit, 10) : 50,
+        limit: listLimit(limit),
       });
       const [rows, budget] = await Promise.all([
         withCenterFields(userId, notifs, () => readerLanguageFor(request, reply, userId)),
@@ -595,6 +595,17 @@ export async function notificationRoutes(app: FastifyInstance) {
     });
     return { sent: result.status === "sent" && result.accepted > 0, result };
   });
+}
+
+const DEFAULT_LIST_LIMIT = 50;
+/** Every page is enriched (notify/notification-center.ts), so its size is bounded. */
+export const MAX_LIST_LIMIT = 100;
+
+/** `?limit`: 1..MAX_LIST_LIMIT; absent, unreadable or below 1 → the default. */
+export function listLimit(raw: string | undefined): number {
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_LIST_LIMIT;
+  return Math.min(parsed, MAX_LIST_LIMIT);
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {
