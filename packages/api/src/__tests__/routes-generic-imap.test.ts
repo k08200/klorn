@@ -88,7 +88,7 @@ function expectNothingStored() {
   expect(db.upsert).not.toHaveBeenCalled();
 }
 
-const GOOD = { email: "me@purelymail.com", password: "app-pw-1234", host: "imap.purelymail.com" };
+const GOOD = { email: "me@example.net", password: "app-pw-1234", host: "imap.purelymail.com" };
 const GENERIC_FAILURE = "Could not connect securely to that server.";
 
 beforeEach(() => {
@@ -161,14 +161,14 @@ describe("flag ON: connect with a user-supplied host", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       ok: true,
-      email: "me@purelymail.com",
+      email: "me@example.net",
       host: "imap.purelymail.com:993",
       firstSync: true,
     });
     expect(imapSync.verifyImapCredentials).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: expect.objectContaining({ provider: "IMAP" }),
-        email: "me@purelymail.com",
+        email: "me@example.net",
         password: "app-pw-1234",
         host: "imap.purelymail.com:993",
       }),
@@ -177,7 +177,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       data: {
         userId: "user-1",
         provider: "IMAP",
-        email: "me@purelymail.com",
+        email: "me@example.net",
         imapHost: "imap.purelymail.com:993",
         imapPasswordCipher: "cipher",
       },
@@ -525,17 +525,17 @@ describe("flag ON: connect with a user-supplied host", () => {
 
     it("an existing account whose host changed between the check and the write is refused, not overwritten", async () => {
       const rows = useStatefulStore();
-      rows.set("user-1|IMAP|me@purelymail.com", {
+      rows.set("user-1|IMAP|me@example.net", {
         id: "row-9",
         userId: "user-1",
         provider: "IMAP",
-        email: "me@purelymail.com",
+        email: "me@example.net",
         imapHost: "imap.purelymail.com:993",
         imapPasswordCipher: "old",
       });
       // While the verify runs, another request re-points the row.
       imapSync.verifyImapCredentials.mockImplementation(async () => {
-        const row = rows.get("user-1|IMAP|me@purelymail.com") as StoredRow;
+        const row = rows.get("user-1|IMAP|me@example.net") as StoredRow;
         row.imapHost = "imap.sneaky.example.net:993";
         return { ok: true };
       });
@@ -544,7 +544,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       const res = await connect(app, headers, GOOD);
 
       expect(res.statusCode).toBe(409);
-      expect(rows.get("user-1|IMAP|me@purelymail.com")).toMatchObject({
+      expect(rows.get("user-1|IMAP|me@example.net")).toMatchObject({
         imapHost: "imap.sneaky.example.net:993",
         imapPasswordCipher: "old", // the new password was NOT stored against the other host
       });
@@ -647,11 +647,11 @@ describe("flag ON: connect with a user-supplied host", () => {
       method: "POST",
       url: `${PREFIX}/disconnect`,
       headers,
-      payload: { email: "me@purelymail.com" },
+      payload: { email: "me@example.net" },
     });
     expect(res.statusCode).toBe(200);
     expect(db.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", provider: "IMAP", email: "me@purelymail.com" },
+      where: { userId: "user-1", provider: "IMAP", email: "me@example.net" },
     });
     await app.close();
   });
