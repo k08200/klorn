@@ -44,6 +44,7 @@ import { humanizeAutoExec } from "../notify/notification-format.js";
 import { notificationSuppressionReason } from "../notify/notification-policy.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
+import { agentModeUnderOrgCeiling } from "../org/ceilings.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
@@ -292,9 +293,24 @@ export async function runAgentForUser(
     console.log(`[AGENT] ${userId} already in flight — skipping re-entrant run`);
     return;
   }
-  const startTime = Date.now();
-  const agentModePolicy = getAgentModePolicy(mode);
+  // Claimed before the first await, so the check above stays atomic.
   runningUsers.add(userId);
+  // Every run (scheduler, new-mail trigger, manual) takes this entry, so the
+  // organization's agent mode cap (org/ceilings.ts) is enforced here once.
+  let cappedMode: Awaited<ReturnType<typeof agentModeUnderOrgCeiling>>;
+  try {
+    cappedMode = await agentModeUnderOrgCeiling(userId, mode);
+  } catch (err) {
+    runningUsers.delete(userId);
+    throw err;
+  }
+  if (cappedMode === "OFF") {
+    runningUsers.delete(userId);
+    console.log(`[AGENT] ${userId} skipped — the organization turned the agent off`);
+    return;
+  }
+  const startTime = Date.now();
+  const agentModePolicy = getAgentModePolicy(cappedMode);
 
   try {
     // Load user plan and model for tool gating

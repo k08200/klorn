@@ -43,6 +43,7 @@ import { mcpRoutes } from "./routes/mcp.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { opsRoutes } from "./routes/ops.js";
+import { orgRoutes } from "./routes/orgs.js";
 import { outlookAuthRoutes } from "./routes/outlook-auth.js";
 import { patternRoutes } from "./routes/patterns.js";
 import { phoneRoutes } from "./routes/phone.js";
@@ -78,6 +79,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(billingRoutes, { prefix: "/api/billing" });
   await app.register(deviceRoutes, { prefix: "/api/devices" });
   await app.register(teamRoutes, { prefix: "/api/teams" });
+  await app.register(orgRoutes, { prefix: "/api/orgs" });
   await app.register(webhookRoutes, { prefix: "/api/webhook" });
   await app.register(chatRoutes, { prefix: "/api/chat" });
   await app.register(chatConversationRoutes, { prefix: "/api/chat" });

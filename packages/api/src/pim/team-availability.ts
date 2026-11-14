@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "../db.js";
+import { grantedOrgFreeBusy } from "../org/org-availability.js";
 import { normalizeMembers } from "../routes/teams.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { getAttendeeBusyByMember } from "./calendar.js";
@@ -78,12 +79,25 @@ export async function getTeamAvailability(
     ),
   ]);
 
-  const checkedMembers = memberBusy.filter((m) => m.blocks !== null).map((m) => m.email);
-  const unknownMembers = memberBusy.filter((m) => m.blocks === null).map((m) => m.email);
+  // A member the user's Google calendar cannot see may still share free/busy
+  // with the user's Klorn organization (org/org-availability.ts enforces the
+  // grant and audits the read; busy times only).
+  const orgBusy = await grantedOrgFreeBusy(
+    userId,
+    memberBusy.filter((m) => m.blocks === null).map((m) => m.email),
+    new Date(start),
+    new Date(end),
+  );
+  const resolved = memberBusy.map((m) =>
+    m.blocks === null ? { email: m.email, blocks: orgBusy.get(m.email) ?? null } : m,
+  );
+
+  const checkedMembers = resolved.filter((m) => m.blocks !== null).map((m) => m.email);
+  const unknownMembers = resolved.filter((m) => m.blocks === null).map((m) => m.email);
 
   const busy: BusyInterval[] = [
     ...myEvents.map((e) => ({ start: e.startTime.toISOString(), end: e.endTime.toISOString() })),
-    ...memberBusy.flatMap((m) => m.blocks ?? []),
+    ...resolved.flatMap((m) => m.blocks ?? []),
   ];
 
   const slots = findFreeSlots({

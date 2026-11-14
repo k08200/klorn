@@ -188,4 +188,7 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.pmfResponse.deleteMany(scope);
   // Third-party addresses the user typed (like contacts); owner-scoped, never shared.
   await tx.team.deleteMany(scope);
+  // The free/busy consent goes back to its default (not shared). Membership
+  // itself stays: it is the account's seat, not data obtained from a provider.
+  await tx.availabilityGrant.deleteMany(scope);
 }

@@ -88,6 +88,7 @@ import {
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
+import { AutoReplyBlockedByOrgError } from "./org/ceilings.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -616,6 +617,8 @@ async function rewriteLedgerAsFailed(
  * rather than tell the user the reply "failed" and invite a second one.
  */
 function deliveryUnknown(sendErr: unknown): boolean {
+  // The organization's auto-reply ceiling refused it before anything left.
+  if (sendErr instanceof AutoReplyBlockedByOrgError) return false;
   return !(sendErr instanceof AutoReplyNotSentError && sendErr.reason === "unsupported");
 }
 

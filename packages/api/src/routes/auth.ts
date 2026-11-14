@@ -47,6 +47,7 @@ import {
   onboardingV2Enabled,
   smartActionsOpenTo,
   teamModeEnabled,
+  teamsOpenTo,
   unifiedHomeEnabled,
   vaultExportOpenTo,
 } from "../config.js";
@@ -75,6 +76,7 @@ import {
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
+import { effectiveTier, normalizeTier, type Tier } from "../org/effective-tier.js";
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
@@ -309,6 +311,23 @@ export function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
     });
   }, delayMs);
   timer.unref?.();
+}
+
+/**
+ * The plan /me reports as effective: the user's own, or a Klorn Teams seat
+ * derived from membership (org/effective-tier.ts, never written to
+ * User.plan). A failed seat lookup falls back to the user's own plan instead
+ * of failing the session bootstrap, whose catch answers 401 (a logout).
+ */
+export async function effectiveTierOrOwnPlan(userId: string, plan: string): Promise<Tier> {
+  try {
+    return await withDbRetry(() => effectiveTier({ id: userId, plan }), {
+      label: "me.effective_tier",
+    });
+  } catch (err) {
+    captureError(err, { tags: { scope: "auth.me.effective-tier" }, extra: { userId } });
+    return normalizeTier(plan);
+  }
 }
 
 export function authRoutes(app: FastifyInstance) {
@@ -633,6 +652,10 @@ export function authRoutes(app: FastifyInstance) {
         () => prisma.linkedInboxAccount.count({ where: { userId: user.id } }),
         { label: "me.linked_inbox_count" },
       );
+      // The plan the user actually gets: their own, or a Klorn Teams seat
+      // derived from membership (org/effective-tier.ts, never written to
+      // User.plan). No query while TEAMS_ENABLED is closed to the user.
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
 
       return reply.send({
         user: {
@@ -644,11 +667,13 @@ export function authRoutes(app: FastifyInstance) {
           // Whether the user may use paid features (active sub / trial / comped
           // / admin). Gates Pro-only capabilities. Always true while
           // PAYWALL_ENABLED is off, so nothing gates pre-launch.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
+          // Same answer as `plan` unless a Klorn Teams seat raises it.
+          effectiveTier: tier,
           // Whether to hard-wall the app on entry (pure subscriber-only mode).
           // Always false with the usable free tier — free users get in and are
           // bounded by the free daily cost cap instead.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -699,6 +724,10 @@ export function authRoutes(app: FastifyInstance) {
           // to calendar" only when this is true — the same answer the
           // /api/smart-actions routes give this user.
           smartActions: smartActionsOpenTo(user.id),
+          // Server-driven client flag (TEAMS_ENABLED, cohort-aware): the web
+          // shows the organization pages only when this is true — the same
+          // answer the /api/orgs routes give this user.
+          teams: teamsOpenTo(user.id),
           // Server-driven client flag (VAULT_EXPORT_ENABLED, cohort-aware): the
           // web offers "Export as markdown" in Settings only when this is true
           // — the same answer GET /api/user/me/vault/export gives this user.

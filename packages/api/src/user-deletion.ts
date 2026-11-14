@@ -23,6 +23,7 @@ import {
   revokeGoogleGrantsInBackground,
 } from "./auth/google-grant-revoke.js";
 import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
+import { handOverOrgBeforeAccountDeletion } from "./org/account-deletion.js";
 import { DATA_WIPE_FENCE_MS, rememberDataWipe } from "./privacy/data-wipe-fence.js";
 import { purgeUserData, revokeUserAccess } from "./purge-user-data.js";
 import { captureError } from "./sentry.js";
@@ -48,6 +49,9 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  * deletion leaves nothing tied to the user, not even an anonymized usage row.
  */
 export async function deleteUserAndAllData(userId: string): Promise<void> {
+  // An organization owner hands the organization on before the membership
+  // cascades away (org/account-deletion.ts).
+  await handOverOrgBeforeAccountDeletion(userId);
   await purgeUserObjects(userId);
   const grants = await googleGrantsBeforeRemoval(userId);
   const email = (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))
