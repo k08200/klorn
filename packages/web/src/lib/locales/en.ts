@@ -2945,6 +2945,10 @@ const en: Record<string, string> = {
     "The reply may already have been sent. Check your Sent folder before trying again.",
   "smartActions.reply.error":
     "Something went wrong sending the reply. Check your Sent folder before trying again.",
+  "smartActions.reply.inProgress":
+    "This reply is still being sent, so it wasn't sent a second time. Check your Sent folder in a moment.",
+  "smartActions.reply.alreadySent":
+    "This reply already went to this mail moments ago, so it wasn't sent again.",
   "smartActions.event.reading": "Reading the date from this mail…",
   "smartActions.event.none": "This mail doesn't name a date or a time.",
   "smartActions.event.error": "Couldn't read this mail's date right now. Try again shortly.",

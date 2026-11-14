@@ -13,6 +13,7 @@ import type {
   SmartEventCreateRequest,
   SmartEventProposalWire,
   SmartExistingEventWire,
+  SmartReplyRepeatCode,
   SmartReplySendRequest,
 } from "@klorn/contract";
 import { sha256 } from "../../lib/sha256";
@@ -45,18 +46,53 @@ export function apiErrorStatus(err: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/** The JSON body of the Error apiFetch throws; null when there is none. */
+function apiErrorBody(err: unknown): Record<string, unknown> | null {
+  if (apiErrorStatus(err) === null || !(err instanceof Error)) return null;
+  try {
+    const body = JSON.parse(err.message.slice(err.message.indexOf(":") + 1)) as unknown;
+    return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The overlapping events of a 409 from the event save (nothing was written);
  * null for any other failure.
  */
 export function duplicateFromError(err: unknown): SmartExistingEventWire[] | null {
-  if (apiErrorStatus(err) !== 409 || !(err instanceof Error)) return null;
-  try {
-    const body = JSON.parse(err.message.slice(err.message.indexOf(":") + 1)) as unknown;
-    const existing = (body as { existing?: unknown } | null)?.existing;
-    return Array.isArray(existing) ? (existing as SmartExistingEventWire[]) : null;
-  } catch {
-    return null;
+  if (apiErrorStatus(err) !== 409) return null;
+  const existing = apiErrorBody(err)?.existing;
+  return Array.isArray(existing) ? (existing as SmartExistingEventWire[]) : null;
+}
+
+/** A repeat Send's 409, by why it was not sent again; only "went out" says "already sent". */
+const REPEAT_ERROR_KEYS: Record<SmartReplyRepeatCode, string> = {
+  SEND_IN_PROGRESS: "smartActions.reply.inProgress",
+  ALREADY_SENT: "smartActions.reply.alreadySent",
+  SEND_OUTCOME_UNKNOWN: "smartActions.reply.unknown",
+};
+
+function repeatErrorKey(err: unknown): string | null {
+  const code = apiErrorBody(err)?.code;
+  return typeof code === "string" && Object.hasOwn(REPEAT_ERROR_KEYS, code)
+    ? REPEAT_ERROR_KEYS[code as SmartReplyRepeatCode]
+    : null;
+}
+
+/** The i18n key for a failed Send, by what the server said happened. */
+export function replySendErrorKey(err: unknown): string {
+  switch (apiErrorStatus(err)) {
+    case 409:
+      // A 409 without a repeat code is the provider refusing the send.
+      return repeatErrorKey(err) ?? "smartActions.reply.error";
+    case 412:
+      return "smartActions.reply.changed";
+    case 502:
+      return "smartActions.reply.unknown";
+    default:
+      return "smartActions.reply.error";
   }
 }
 

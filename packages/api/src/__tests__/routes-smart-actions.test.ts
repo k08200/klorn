@@ -20,6 +20,7 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { sendEmailPayloadHash } from "../judge/attention-floor.js";
+import { PENDING_IN_FLIGHT_MS } from "../mail/reply-send.js";
 
 const order = vi.hoisted(() => [] as string[]);
 const db = vi.hoisted(() => ({
@@ -27,7 +28,9 @@ const db = vi.hoisted(() => ({
   emailUpdateMany: vi.fn(async () => ({ count: 1 })),
   receiptCreate: vi.fn(),
   receiptUpdateMany: vi.fn(async () => ({ count: 1 })),
-  receiptFindFirst: vi.fn(async () => null as { id: string } | null),
+  receiptFindFirst: vi.fn(
+    async () => null as { id: string; status?: string; createdAt?: Date } | null,
+  ),
   linkedFindFirst: vi.fn(async () => null),
   sentUpsert: vi.fn(async () => ({})),
   eventFindMany: vi.fn(async () => [] as unknown[]),
@@ -350,9 +353,13 @@ describe("POST /emails/:id/reply (Send)", () => {
   });
 
   it("refuses the same bytes to the same mail moments after a send", async () => {
-    db.receiptFindFirst.mockResolvedValueOnce({ id: "rcpt-0" });
+    db.receiptFindFirst.mockResolvedValueOnce({ id: "rcpt-0", status: "SENT" });
     const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
     expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: expect.stringMatching(/already went/),
+      code: "ALREADY_SENT",
+    });
     expectNothingSent();
     const where = (
       db.receiptFindFirst.mock.calls[0] as unknown as [{ where: Record<string, unknown> }]
@@ -377,14 +384,74 @@ describe("POST /emails/:id/reply (Send)", () => {
     expect(decisive).toBeLessThan(claims.releaseSend.mock.invocationCallOrder[0]);
   });
 
-  it("is a repeat while another request holds the claim: 409, nothing written or sent", async () => {
+  it("tells the request that lost the claim the send is still in progress, not that it went", async () => {
     claims.claimSend.mockResolvedValueOnce(null);
     const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toMatch(/already went/);
+    expect(res.json()).toEqual({ error: expect.any(String), code: "SEND_IN_PROGRESS" });
+    expect(res.json().error).not.toMatch(/already went/);
     expectNothingSent();
     expect(db.receiptFindFirst).toHaveBeenCalledTimes(1); // the early read only
     expect(claims.releaseSend).not.toHaveBeenCalled();
+  });
+
+  it("answers SEND_IN_PROGRESS for an earlier send whose receipt is still PENDING", async () => {
+    db.receiptFindFirst.mockResolvedValueOnce({
+      id: "rcpt-0",
+      status: "PENDING",
+      createdAt: new Date(),
+    });
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SEND_IN_PROGRESS");
+    expectNothingSent();
+  });
+
+  it("answers SEND_OUTCOME_UNKNOWN for a PENDING receipt too old to be in flight", async () => {
+    db.receiptFindFirst.mockResolvedValueOnce({
+      id: "rcpt-0",
+      status: "PENDING",
+      createdAt: new Date(Date.now() - PENDING_IN_FLIGHT_MS - 1_000),
+    });
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SEND_OUTCOME_UNKNOWN");
+    expectNothingSent();
+  });
+
+  it.each([
+    ["PENDING", "SEND_IN_PROGRESS"],
+    ["UNKNOWN", "SEND_OUTCOME_UNKNOWN"],
+    ["SENT", "ALREADY_SENT"],
+  ])("maps a %s receipt found under the claim to %s and releases the claim", async (status, code) => {
+    db.receiptFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "rcpt-0", status, createdAt: new Date() });
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe(code);
+    expect(claims.releaseSend).toHaveBeenCalledTimes(1);
+    expectNothingSent();
+  });
+
+  it("answers SEND_OUTCOME_UNKNOWN, never ALREADY_SENT, when the earlier send's outcome is unknown", async () => {
+    db.receiptFindFirst.mockResolvedValueOnce({ id: "rcpt-0", status: "UNKNOWN" });
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SEND_OUTCOME_UNKNOWN");
+    expectNothingSent();
+  });
+
+  it("reads the latest receipt for these bytes when deciding which repeat it is", async () => {
+    db.receiptFindFirst.mockResolvedValueOnce({ id: "rcpt-0", status: "SENT" });
+    await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    const query = (
+      db.receiptFindFirst.mock.calls[0] as unknown as [
+        { orderBy?: unknown; select?: Record<string, boolean> },
+      ]
+    )[0];
+    expect(query.orderBy).toEqual({ createdAt: "desc" });
+    expect(query.select).toMatchObject({ status: true, createdAt: true });
   });
 
   it("sends nothing when the claim cannot be taken (503, as for the receipt)", async () => {
@@ -397,7 +464,9 @@ describe("POST /emails/:id/reply (Send)", () => {
   it("releases the claim on a repeat found under it, a receipt that cannot be written, and a failed check", async () => {
     const send = () =>
       call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
-    db.receiptFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "rcpt-0" });
+    db.receiptFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "rcpt-0", status: "SENT" });
     expect((await send()).statusCode).toBe(409);
     db.receiptCreate.mockRejectedValueOnce(new Error("db down"));
     expect((await send()).statusCode).toBe(503);

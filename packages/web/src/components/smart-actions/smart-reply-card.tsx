@@ -16,21 +16,9 @@ import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { ProFeatureNotice } from "../pro-feature-notice";
 import Button from "../ui/button";
-import { apiErrorStatus, replySendRequest, smartActionPath } from "./model";
+import { apiErrorStatus, replySendErrorKey, replySendRequest, smartActionPath } from "./model";
 
 const RECEIPT_PREFIX_CHARS = 12;
-
-/** The i18n key for a failed Send, by what the server said happened. */
-function sendErrorKey(err: unknown): string {
-  switch (apiErrorStatus(err)) {
-    case 412:
-      return "smartActions.reply.changed";
-    case 502:
-      return "smartActions.reply.unknown";
-    default:
-      return "smartActions.reply.error";
-  }
-}
 
 export function SmartReplyCard({ emailId }: { emailId: string }) {
   const { t } = useT();
@@ -130,7 +118,7 @@ export function SmartReplyCard({ emailId }: { emailId: string }) {
           <ProFeatureNotice className="mt-2" />
         ) : (
           <p className="mt-2 text-state-danger-ink" role="alert">
-            {t(sendErrorKey(send.error))}
+            {t(replySendErrorKey(send.error))}
           </p>
         ))}
       <div className="mt-2 flex items-center gap-3">

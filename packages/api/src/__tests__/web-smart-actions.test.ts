@@ -19,6 +19,7 @@ import {
   duplicateFromError,
   eventSaveRequest,
   initialEventChoice,
+  replySendErrorKey,
   replySendRequest,
   sendPayloadHash,
   smartActionPath,
@@ -107,6 +108,40 @@ describe("duplicateFromError", () => {
   });
 });
 
+describe("replySendErrorKey", () => {
+  const refusal = (status: number, body: unknown) =>
+    new Error(`API ${status}: ${JSON.stringify(body)}`);
+
+  it("tells a send still in flight apart from one that already went", () => {
+    expect(replySendErrorKey(refusal(409, { error: "x", code: "SEND_IN_PROGRESS" }))).toBe(
+      "smartActions.reply.inProgress",
+    );
+    expect(replySendErrorKey(refusal(409, { error: "x", code: "ALREADY_SENT" }))).toBe(
+      "smartActions.reply.alreadySent",
+    );
+  });
+
+  it("says 'may have been sent' for a repeat whose earlier outcome is unknown", () => {
+    expect(replySendErrorKey(refusal(409, { error: "x", code: "SEND_OUTCOME_UNKNOWN" }))).toBe(
+      "smartActions.reply.unknown",
+    );
+  });
+
+  it("keeps the generic copy for a provider refusal (a 409 with no repeat code)", () => {
+    expect(replySendErrorKey(refusal(409, { error: "Gmail said no" }))).toBe(
+      "smartActions.reply.error",
+    );
+    expect(replySendErrorKey(new Error("API 409: not json"))).toBe("smartActions.reply.error");
+  });
+
+  it("maps the other statuses as before", () => {
+    expect(replySendErrorKey(refusal(412, { error: "x" }))).toBe("smartActions.reply.changed");
+    expect(replySendErrorKey(refusal(502, { error: "x" }))).toBe("smartActions.reply.unknown");
+    expect(replySendErrorKey(refusal(503, { error: "x" }))).toBe("smartActions.reply.error");
+    expect(replySendErrorKey(new Error("network"))).toBe("smartActions.reply.error");
+  });
+});
+
 describe("the calendar confirm card", () => {
   it("cannot save while the AM/PM question is open", () => {
     const choice = initialEventChoice(PROPOSAL);
@@ -178,6 +213,21 @@ describe("smart actions copy", () => {
 
   it("uses the approved approval sentence verbatim in English", () => {
     expect(en["smartActions.reply.approval"]).toBe(APPROVED);
+  });
+
+  it.each(
+    Object.entries(LOCALES),
+  )("%s tells 'still sending' apart from 'already sent'", (_n, t) => {
+    const table = t as Record<string, string>;
+    expect(table["smartActions.reply.inProgress"]).toBeTruthy();
+    expect(table["smartActions.reply.alreadySent"]).toBeTruthy();
+    expect(table["smartActions.reply.inProgress"]).not.toBe(
+      table["smartActions.reply.alreadySent"],
+    );
+  });
+
+  it("the English in-progress line never says the reply already went", () => {
+    expect(en["smartActions.reply.inProgress"]).not.toMatch(/already (went|sent)|was sent/i);
   });
 
   it.each(Object.entries(LOCALES))("%s has every key and no forbidden claim", (_name, table) => {

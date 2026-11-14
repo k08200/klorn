@@ -3025,6 +3025,10 @@ const fr: Record<string, string> = {
     "La réponse est peut-être déjà partie. Vérifiez vos messages envoyés avant de réessayer.",
   "smartActions.reply.error":
     "Un problème est survenu lors de l'envoi. Vérifiez vos messages envoyés avant de réessayer.",
+  "smartActions.reply.inProgress":
+    "Cette réponse est encore en cours d'envoi : elle n'a pas été envoyée une deuxième fois. Vérifiez vos messages envoyés dans un instant.",
+  "smartActions.reply.alreadySent":
+    "Cette réponse est déjà partie à l'instant pour ce message : elle n'a donc pas été renvoyée.",
   "smartActions.event.reading": "Lecture de la date dans ce message…",
   "smartActions.event.none": "Ce message n'indique ni date ni heure.",
   "smartActions.event.error":

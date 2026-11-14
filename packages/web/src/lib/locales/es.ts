@@ -3006,6 +3006,10 @@ const es: Record<string, string> = {
     "Puede que la respuesta ya se haya enviado. Revisa la carpeta de enviados antes de volver a intentarlo.",
   "smartActions.reply.error":
     "Algo falló al enviar la respuesta. Revisa la carpeta de enviados antes de volver a intentarlo.",
+  "smartActions.reply.inProgress":
+    "Esta respuesta todavía se está enviando, así que no se ha enviado dos veces. Revisa la carpeta de enviados en un momento.",
+  "smartActions.reply.alreadySent":
+    "Esta respuesta ya se envió a este correo hace un momento, así que no se ha vuelto a enviar.",
   "smartActions.event.reading": "Leyendo la fecha de este correo…",
   "smartActions.event.none": "Este correo no indica ninguna fecha ni hora.",
   "smartActions.event.error":

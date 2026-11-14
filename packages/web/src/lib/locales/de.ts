@@ -3064,6 +3064,10 @@ const de: Record<string, string> = {
     "Die Antwort ist vielleicht schon raus. Prüfe deinen Gesendet-Ordner, bevor du es erneut versuchst.",
   "smartActions.reply.error":
     "Beim Senden der Antwort ist etwas schiefgelaufen. Prüfe deinen Gesendet-Ordner, bevor du es erneut versuchst.",
+  "smartActions.reply.inProgress":
+    "Diese Antwort wird noch gesendet, deshalb wurde sie nicht ein zweites Mal gesendet. Prüfe deinen Gesendet-Ordner in einem Moment.",
+  "smartActions.reply.alreadySent":
+    "Diese Antwort wurde vor Kurzem schon auf diese E-Mail gesendet, deshalb wurde sie nicht erneut gesendet.",
   "smartActions.event.reading": "Datum wird aus dieser E-Mail gelesen…",
   "smartActions.event.none": "Diese E-Mail nennt kein Datum und keine Uhrzeit.",
   "smartActions.event.error":

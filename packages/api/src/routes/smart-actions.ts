@@ -29,6 +29,7 @@ import type {
   SmartEventCreateResponse,
   SmartEventProposalResponse,
   SmartReplyDraftWire,
+  SmartReplyRepeatRefusal,
 } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
@@ -36,6 +37,7 @@ import { requireEntitled } from "../billing/entitlement-guard.js";
 import { SMART_ACTIONS_FLAG, smartActionsLive } from "../config.js";
 import { prisma } from "../db.js";
 import {
+  type RepeatState,
   replyEnvelopeFor,
   SEND_OUTCOME_UNKNOWN_MESSAGE,
   sendReplyToEmail,
@@ -66,6 +68,14 @@ const PAYLOAD_MISMATCH_MESSAGE =
   "This reply changed before it was sent, so nothing was sent. Review it and send again.";
 const REPEAT_SEND_MESSAGE =
   "This reply already went to this mail moments ago, so it was not sent again.";
+const SEND_IN_PROGRESS_MESSAGE =
+  "This reply is already being sent, so it was not sent a second time. Check Sent Items in a moment.";
+/** The 409 for each kind of repeat: only a send that went out is "already sent". */
+const REPEAT_REFUSALS: Record<RepeatState, SmartReplyRepeatRefusal> = {
+  in_progress: { error: SEND_IN_PROGRESS_MESSAGE, code: "SEND_IN_PROGRESS" },
+  sent: { error: REPEAT_SEND_MESSAGE, code: "ALREADY_SENT" },
+  outcome_unknown: { error: SEND_OUTCOME_UNKNOWN_MESSAGE, code: "SEND_OUTCOME_UNKNOWN" },
+};
 const DUPLICATE_EVENT_MESSAGE = "Something is already on your calendar at this time.";
 const NOT_FOUND = { error: "Email not found" };
 
@@ -195,7 +205,7 @@ export async function smartActionsRoutes(app: FastifyInstance) {
           // apart from 409, the provider refusing a send.
           return reply.code(412).send({ error: PAYLOAD_MISMATCH_MESSAGE });
         case "repeat":
-          return reply.code(409).send({ error: REPEAT_SEND_MESSAGE });
+          return reply.code(409).send(REPEAT_REFUSALS[outcome.state]);
         case "receipt_unavailable":
           return reply.code(503).send({ error: SEND_RECEIPT_UNAVAILABLE_MESSAGE });
         case "outcome_unknown":
