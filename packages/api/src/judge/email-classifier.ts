@@ -46,7 +46,16 @@ export interface ClassifiableEmail {
    * the v2 transactional detector to keep marketing out of the INFO lane.
    */
   hasListUnsubscribe?: boolean;
+  /**
+   * Set when the item is a Slack conversation episode, not an email
+   * (docs/providers/slack.md §8): the judge scores it with a Slack prompt and
+   * skips its email-address shortcuts and floors. `body` holds the messages.
+   */
+  slack?: { conversation: SlackConversationKind };
 }
+
+/** How a Slack episode reached the user: DM, group DM, @mention, or a followed channel. */
+export type SlackConversationKind = "dm" | "group_dm" | "mention" | "opt_in";
 
 export interface ClassifiedLabel {
   priority: EmailPriority;

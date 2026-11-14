@@ -11,6 +11,7 @@ import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
+import { deleteSlackCommitments } from "./commitments.js";
 import { slackEventsUrl } from "./manifest.js";
 import { isUniqueViolation } from "./unique-violation.js";
 
@@ -146,13 +147,19 @@ export async function setSlackOptInChannels(
   return result.count > 0;
 }
 
-/** Disconnect: the signing secret and every stored Slack row of this user, atomically. */
+/**
+ * Disconnect: the signing secret and every stored Slack row of this user
+ * (messages, episodes, the Slack bell rows) atomically, then the
+ * Slack-sourced commitments and their queue mirrors.
+ */
 export async function disconnectSlack(userId: string): Promise<void> {
   await prisma.$transaction([
     prisma.slackMessage.deleteMany({ where: { userId } }),
     prisma.slackEpisode.deleteMany({ where: { userId } }),
+    prisma.notification.deleteMany({ where: { userId, type: "slack" } }),
     prisma.slackConnection.deleteMany({ where: { userId } }),
   ]);
+  await deleteSlackCommitments(userId);
 }
 
 export interface SlackHook {

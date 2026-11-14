@@ -86,6 +86,20 @@ describe("extractAndUpsertCommitmentsFromText", () => {
     );
   });
 
+  it("reads a first-person promise in Slack text as the sender's, suggested not confirmed", async () => {
+    await extractAndUpsertCommitmentsFromText({
+      userId: "user-1",
+      sourceType: "SLACK",
+      sourceId: "D0DM:1763100000.000100",
+      text: "내일까지 자료 보내드릴게요.",
+      senderIsUser: false,
+    });
+    expect(mocks.upsertCommitmentMock).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ owner: "COUNTERPARTY", sourceType: "SLACK", confidence: 0.55 }),
+    );
+  });
+
   it("uses deterministic dedup keys so repeated ingestion is counted as duplicate", async () => {
     const input = {
       userId: "user-1",

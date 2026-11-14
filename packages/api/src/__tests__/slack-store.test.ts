@@ -30,6 +30,7 @@ const db = vi.hoisted(() => {
         deleteMany: vi.fn(async () => ({ count: 0 })),
         updateMany: vi.fn(async () => ({ count: 0 })),
       },
+      notification: { deleteMany: vi.fn(async () => ({ count: 0 })) },
       slackConnection: {
         findUnique: vi.fn(),
         create: vi.fn(),
@@ -40,6 +41,8 @@ const db = vi.hoisted(() => {
     },
   };
 });
+const slackCommitments = vi.hoisted(() => ({ deleteSlackCommitments: vi.fn(async () => 0) }));
+vi.mock("../slack/commitments.js", () => slackCommitments);
 vi.mock("../db.js", () => ({
   prisma: db.prisma,
   INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
@@ -416,6 +419,10 @@ describe("connection store", () => {
     expect(db.prisma.slackConnection.deleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1" },
     });
+    expect(db.prisma.notification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", type: "slack" },
+    });
+    expect(slackCommitments.deleteSlackCommitments).toHaveBeenCalledWith("user-1");
   });
 
   it("the webhook lookup reads one hook and only what verification and the filter need", async () => {
