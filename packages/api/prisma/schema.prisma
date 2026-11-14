@@ -181,6 +181,7 @@ model User {
   senderLabels               SenderLabel[]
   sentMessages               SentMessage[]
   sendReceipts               SendReceipt[]
+  sendClaims                 SendClaim[]
   learnedRules               LearnedRule[]
   apiKeys                    ApiKey[]
   mcpWriteAudits             McpWriteAudit[]
@@ -2279,6 +2280,24 @@ model SendReceipt {
   completedAt       DateTime?
 
   @@index([userId, createdAt])
+}
+
+/// The in-flight claim on one smart-action Send (mail/send-claim.ts): while a
+/// request checks for a repeat ("these bytes to this mail moments ago") and
+/// writes its SendReceipt, it holds this row, so two Sends of the same bytes
+/// fired together cannot both pass the check. Taken by one atomic
+/// INSERT ... ON CONFLICT, deleted by its holder (token) once the receipt is
+/// written or refused. A row older than the repeat window belongs to a request
+/// that died and is taken over. No content: the mail id and the payload hash only.
+model SendClaim {
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailId     String // the EmailMessage answered (no FK: as SendReceipt.emailId)
+  payloadHash String // sendEmailPayloadHash of { to, subject, body }
+  token       String // the holder's random id: only the holder releases its claim
+  claimedAt   DateTime @default(now())
+
+  @@id([userId, emailId, payloadHash])
 }
 
 /// A standing, user-made decision about whether a sender may reach them.

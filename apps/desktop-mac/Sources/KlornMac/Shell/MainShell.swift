@@ -62,6 +62,14 @@ struct MainShell: View {
             }
             // Keyboard focus must not wander behind a modal.
             .disabled(model.fullViewModalOpen)
+            // The bell's floating panel (NC2-A): inside the safe area, so
+            // below the title bar; over the content and the assistant panel
+            // without taking part in their layout.
+            .overlay(alignment: .topTrailing) {
+                if model.notificationCenter.panelOpen, model.phase == .signedIn, !model.fullViewModalOpen {
+                    NotificationPanelLayer(actions: actions)
+                }
+            }
             .onAppear {
                 model.presentTierGuideIfFirstRun()
                 model.presentPurposePromptIfNeeded()

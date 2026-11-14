@@ -82,6 +82,7 @@ describe("Google listMeetingAttendees", () => {
       meetings: [
         {
           identity: "ical:uid-1@google.com|",
+          eventId: "evt1",
           cancelled: false,
           allDay: false,
           startTime: new Date("2026-10-20T01:00:00.000Z"),

@@ -84,6 +84,8 @@ vi.mock("../mail/email-attachments.js", () => ({
   buildAttachmentCandidateProfile: vi.fn(() => null),
 }));
 vi.mock("../mail/email-candidate-intake.js", () => ({ updateCandidateIntake: vi.fn() }));
+const claimSend = vi.hoisted(() => vi.fn());
+vi.mock("../mail/send-claim.js", () => ({ claimSend, releaseSend: vi.fn() }));
 
 const TOKEN = signToken({ userId: "user-1", email: "test@example.com" });
 
@@ -340,5 +342,14 @@ describe("POST /api/email/:id/reply with receipts on", () => {
     expect(db.receiptUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "REFUSED" }) }),
     );
+  });
+  it("takes no send claim and runs no repeat check: the smart action's guard only", async () => {
+    for (const flag of ["true", ""]) {
+      vi.stubEnv("MANUAL_SEND_RECEIPTS_ENABLED", flag);
+      expect((await inject("/api/email/e1/reply", { body: "ok" })).statusCode).toBe(200);
+      expect((await inject("/api/email/e1/reply", { body: "ok" })).statusCode).toBe(200);
+    }
+    expect(claimSend).not.toHaveBeenCalled();
+    expect(gmail.sendEmail).toHaveBeenCalledTimes(4);
   });
 });

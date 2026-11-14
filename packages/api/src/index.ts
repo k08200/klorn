@@ -693,6 +693,7 @@ try {
     "GOOGLE_DRIVE_ENABLED",
     "DRIVE_SUMMARIES_ENABLED",
     "SMART_ACTIONS_ENABLED",
+    "CONTEXT_MEETING_PREP_ENABLED",
   ]);
 
   // Start autonomous background agent
