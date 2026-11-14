@@ -4763,7 +4763,7 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
   - Operations: a restore from a backup older than a claim loses that
     handle's row, so the restore runbook replays newer tombstones and claims
     first. A CAA record limits certificate issuance for the domain to the CAs
-    Vercel and Render use, checked before it is set, since a wrong CAA breaks
+    Cloudflare Pages and Render use, checked before it is set, since a wrong CAA breaks
     renewals: `administrator@` and the like are reserved, but CAA closes the
     domain-validation route whatever a mailbox holds.
 - Before the E flip, not in E1: the stranded-row safety net.

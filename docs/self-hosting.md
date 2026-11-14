@@ -76,16 +76,23 @@ The repo's [`render.yaml`](../render.yaml) is a Render Blueprint for the API:
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/k08200/klorn)
 
 The blueprint defines the **API service only** — you bring a Postgres and
-deploy the web app separately (Vercel free tier is the tested path, via
-[`packages/web/vercel.json`](../packages/web/vercel.json), with the Vercel
-project's Root Directory set to `packages/web`).
+deploy the web app separately, on any host that runs the Next server build
+(`pnpm --filter @klorn/web build`, then `pnpm --filter @klorn/web start`, or
+[`Dockerfile.web`](../Dockerfile.web)). Klorn's own production serves a static
+export from Cloudflare Pages ([`deploy/cloudflare-pages.md`](deploy/cloudflare-pages.md)),
+but that build is pinned to production's API origin: the committed
+`public/_headers` CSP names it, so `scripts/check-static-export.mjs` fails a
+static build with any other `NEXT_PUBLIC_API_URL`. On Vercel, note that
+[`packages/web/vercel.json`](../packages/web/vercel.json) turns Git deployments
+off (`git.deploymentEnabled: false`, since Klorn retired its own Vercel
+project) — set it back to `true` in your fork.
 
 1. **Create a Postgres first** (Render Postgres free tier, or
    [Neon](https://neon.tech) — for Neon use the PgBouncer options shown in
    [`.env.example`](../.env.example)). Copy its connection string.
 2. Click the button. Render prompts for every `sync: false` env var; the
    table below says what to enter. Vars you don't use can be left empty.
-3. Deploy the web app on Vercel with `NEXT_PUBLIC_API_URL` set to the
+3. Deploy the web app with `NEXT_PUBLIC_API_URL` set to the
    Render API URL, then set `WEB_URL` / `CORS_ORIGINS` /
    `GOOGLE_REDIRECT_URI` on the API to match.
 
