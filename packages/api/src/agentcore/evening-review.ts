@@ -26,7 +26,9 @@
  * Meeting prep (CONTEXT_MEETING_PREP_ENABLED, context/meeting-prep.ts): a
  * meeting tomorrow before MORNING_END_MINUTE local with something to prep
  * (an open commitment, unanswered mail or a recent thread with its external
- * attendees) is listed with those items, and is reason enough to send.
+ * attendees) is listed with those items. Only an actionable item (a confirmed
+ * commitment, or mail awaiting a reply) is reason enough to send; the rest
+ * rides along with a review that sends anyway.
  *
  * Copy follows the user's notification language, like the briefing body.
  * Rule-based, no LLM.
@@ -315,7 +317,8 @@ export function composeEveningReview(
   const pushParts = [summary, prepSections[0]?.header ?? meetingLine].filter(
     (part): part is string => Boolean(part),
   );
-  const fallbackTitle = prepped.length > 0 ? prepCopy(lang).title : copy.earlyStartTitle;
+  const actionablePrep = prepped.some((p) => p.items.some(isActionablePrepItem));
+  const fallbackTitle = actionablePrep ? prepCopy(lang).title : copy.earlyStartTitle;
   return {
     title: openCount > 0 ? copy.title(openCount) : fallbackTitle,
     message: [...lines, ...(meetingLine ? [meetingLine] : [])].join("\n"),

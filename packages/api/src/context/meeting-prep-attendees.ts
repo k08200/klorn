@@ -104,15 +104,22 @@ async function connectLinked(userId: string, ids: readonly string[]): Promise<So
   const accounts = (await listLinkedCalendarAccounts(userId)).filter(
     (a) => ids.includes(a.id) && !a.needsReconnect,
   );
+  // Each account on its own: one broken linked account (a token that will not
+  // decrypt, a revoked grant) must not take the other sources down with it.
   const sessions = await Promise.all(
-    accounts.map(async (account) => {
-      const session = await calendarActionsForProvider(account.provider).connect({
-        userId,
-        linkedAccountId: account.id,
-        linked: account,
-      });
-      if (!session || isCalendarUnsupported(session) || !canList(session)) return [];
-      return [{ key: sourceKey(account.provider, account.id), session }];
+    accounts.map(async (account): Promise<Source[]> => {
+      try {
+        const session = await calendarActionsForProvider(account.provider).connect({
+          userId,
+          linkedAccountId: account.id,
+          linked: account,
+        });
+        if (!session || isCalendarUnsupported(session) || !canList(session)) return [];
+        return [{ key: sourceKey(account.provider, account.id), session }];
+      } catch (err) {
+        console.warn(`[MEETING_PREP] linked calendar connect failed: ${describeError(err)}`);
+        return [];
+      }
     }),
   );
   return sessions.flat();

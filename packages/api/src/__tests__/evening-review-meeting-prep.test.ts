@@ -164,6 +164,33 @@ describe("composeEveningReview with meeting prep", () => {
     expect(withOpen?.message).toContain("Recent: Alice — Notes");
   });
 
+  it("an early start that sends with informational prep keeps the early-start title", () => {
+    const fyi = prep("ev-3", "2099-01-06T01:30:00.000Z", {
+      items: [
+        {
+          kind: "thread",
+          from: "Alice",
+          subject: "Notes",
+          receivedAt: "2099-01-04T00:00:00.000Z",
+          match: "address",
+          source: { kind: "email", emailId: "m-9" },
+        },
+      ],
+    });
+    const review = composeEveningReview(
+      {
+        ...empty,
+        // 08:30 KST tomorrow: before the 10:00 early-start cutoff.
+        firstMeetingTomorrow: { title: "Standup", startTime: new Date("2099-01-05T23:30:00Z") },
+        meetingPrep: [fyi],
+      },
+      "en",
+      TZ,
+    );
+    expect(review?.title).toBe("Early start tomorrow");
+    expect(review?.message).toContain("Recent: Alice — Notes");
+  });
+
   it("follows the notification language", () => {
     const review = composeEveningReview({ ...empty, meetingPrep: [morning] }, "ko", TZ);
     expect(review?.title).toBe("내일 오전 회의 준비");

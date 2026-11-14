@@ -91,8 +91,10 @@ vi.mock("../pim/calendar-providers/dispatch.js", () => ({
   }),
   calendarActionsForProvider: vi.fn(() => ({
     connect: vi.fn(
-      async ({ userId, linkedAccountId }: { userId: string; linkedAccountId: string }) =>
-        session(userId, linkedAccountId),
+      async ({ userId, linkedAccountId }: { userId: string; linkedAccountId: string }) => {
+        if (linkedAccountId === "lk-broken") throw new Error("token decrypt failed");
+        return session(userId, linkedAccountId);
+      },
     ),
   })),
 }));
@@ -404,5 +406,15 @@ describe("attendee listing cache", () => {
     await buildMeetingPrep("u1", NOW);
     await buildMeetingPrep("u1", new Date(NOW.getTime() + MINUTE));
     expect(m.listCalls).toEqual([{ userId: "u1", source: "primary" }]);
+  });
+
+  it("a linked account that fails to connect does not take the primary calendar down with it", async () => {
+    seedUser("u1", "me@mycorp.com");
+    m.linkedAccounts = [{ id: "lk-broken", provider: "GOOGLE", needsReconnect: false }];
+    m.events.push(
+      event("u1", { id: "ev-broken", sourceAccountId: "lk-broken", externalId: "g-b" }),
+    );
+    const block = await buildMeetingPrep("u1", NOW);
+    expect(block?.meetings.map((p) => p.eventId)).toEqual(["ev-u1"]);
   });
 });
