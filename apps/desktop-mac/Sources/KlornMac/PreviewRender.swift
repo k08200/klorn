@@ -129,7 +129,7 @@ enum PreviewRender {
             selectedItemId: "p1",
             briefingJSON: briefingJSON)
         GuideSeen.value = true
-        model.showAssistantDock = true
+        model.showAssistantPanel = true
         // The reading shot sells the analysis band — shoot it expanded (the
         // in-app default is collapsed so the mail stays the star).
         // `-klorn.readingBand collapsed` shoots the in-app default instead.
@@ -196,8 +196,8 @@ enum PreviewRender {
         let actions = previewActions()
 
         print("Rendering previews to \(dir.path):")
-        shot("assistant-dock", size: CGSize(width: 440, height: 560), align: .bottomTrailing) {
-            AssistantDockRenderProbe()
+        shot("assistant-panel", size: CGSize(width: 360, height: 460), align: .topTrailing) {
+            AssistantPanelRenderProbe()
         }
         shot("briefing", size: CGSize(width: 380, height: 260), align: .top) {
             BriefingCardRenderProbe()
@@ -277,6 +277,8 @@ enum PreviewRender {
         ok = renderWindows(dir: dir, dark: renderDark) && ok
         // Settings ▸ Accounts' IMAP connect form (Naver + iCloud Mail).
         ok = renderImapConnect(dir: dir, dark: renderDark) && ok
+        // The five Settings panes at their fitted heights (M4).
+        ok = renderSettingsPanes(dir: dir, dark: renderDark) && ok
         // Signed out, offline, failed and first launch (M6).
         return renderStates(
             dir: dir, dark: renderDark, actions: actions, firewallJSON: firewallJSON) && ok

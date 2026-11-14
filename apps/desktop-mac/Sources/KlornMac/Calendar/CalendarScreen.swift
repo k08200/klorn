@@ -202,7 +202,6 @@ struct CalendarScreen: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -221,7 +220,6 @@ struct CalendarScreen: View {
                 }
             }
             .background(Theme.line)
-            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -287,9 +285,6 @@ struct CalendarScreen: View {
                 grid(CalendarMetrics.monthRowHeight(
                     available: proxy.size.height, weeks: days.count / 7))
             }
-            // The assistant button floats over the bottom-right corner; the
-            // last week ends above it instead of sitting under it.
-            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -357,7 +352,6 @@ struct CalendarScreen: View {
                 }
             }
             .padding(20)
-            .padding(.bottom, AssistantDock.contentClearance)
         }
     }
 

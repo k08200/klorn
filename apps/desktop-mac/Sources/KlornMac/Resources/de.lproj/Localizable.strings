@@ -117,17 +117,13 @@
 /* Preferences — shell */
 "prefs.title" = "Einstellungen";
 "prefs.section.notifications" = "MITTEILUNGEN";
-"prefs.section.general" = "ALLGEMEIN";
-"prefs.section.keyboard" = "TASTATUR";
-"prefs.section.language" = "SPRACHE";
 "prefs.section.account" = "ACCOUNT";
-"prefs.section.about" = "ÜBER";
 
 "prefs.banners" = "macOS-Banner auf diesem Mac zeigen";
 "prefs.banners.detail" = "Für jede neue PUSH- oder MEETING-Mail ein Banner, nur mit Absender und Betreff. Ein lokaler Hauptschalter: Aus schaltet hier jedes Banner stumm, unabhängig von den Kategorien oben; die PUSH-Anzahl im Hauptfenster wird weiter aktualisiert.";
 "prefs.banners.denied" = "macOS blockiert die Mitteilungen von Klorn. Erlaube sie in Systemeinstellungen ▸ Mitteilungen.";
 "prefs.banners.openSystemSettings" = "Systemeinstellungen öffnen";
-"prefs.dockBadge" = "Anzahl am Dock-Symbol anzeigen";
+"prefs.dockBadge" = "Anzahl „Braucht dich jetzt“ anzeigen";
 "prefs.dockBadge.detail" = "Die Zahl der dringenden E-Mails, die in „Heute“ warten. Ruhezeiten blenden sie nicht aus: Sie macht keinen Ton und zeigt kein Banner.";
 "loginPrompt.title" = "Klorn im Hintergrund weiterlaufen lassen?";
 "loginPrompt.body" = "Klorn kann dich nur über dringende E-Mails informieren, solange es läuft. Öffne es beim Anmelden, damit dir nach einem Neustart nichts entgeht.";
@@ -141,7 +137,7 @@
 "push.closedSummary.title" = "%d dringende E-Mails, während Klorn geschlossen war";
 "push.moreSummary.title" = "+%d weitere brauchen dich";
 "push.delayedSummary.title" = "%d dringende E-Mails brauchen dich";
-"prefs.launchAtLogin" = "Klorn beim Anmelden starten";
+"prefs.launchAtLogin" = "Klorn beim Anmelden öffnen";
 "prefs.launchAtLogin.unavailable.label" = "Beim Anmelden starten";
 "prefs.launchAtLogin.unavailable.value" = "Nur in der gepackten App";
 "prefs.updates" = "Updates";
@@ -364,12 +360,10 @@
 "a11y.collapsed" = "Eingeklappt";
 
 /* Mail remote-content privacy toggle (2026-08-14) */
-"prefs.section.mail" = "MAIL";
 "prefs.remoteImages" = "Externe Bilder in Mails laden";
 "prefs.remoteImages.detail" = "Aus blockiert jede Netzwerkanfrage beim Lesen — auch Tracking-Pixel. Eingebettete Bilder funktionieren weiter.";
 
 /* Appearance (2026-08-15) */
-"prefs.section.appearance" = "DARSTELLUNG";
 "prefs.appearance" = "Design";
 "prefs.appearance.detail" = "„System\" folgt macOS und wechselt live.";
 "appearance.system" = "System";
@@ -447,7 +441,6 @@
 "compose.needsPro" = "Mail senden braucht den Pro-Tarif.";
 
 /* Assistant dock */
-"assistant.dock.toggle" = "Assistent (⌘J)";
 "assistant.dock.close.a11y" = "Assistent schließen";
 "assistant.dock.context.a11y" = "Es geht um: %@";
 
@@ -587,7 +580,6 @@
 "settings.tab.accounts" = "Konten";
 "settings.tab.assistant" = "Assistent";
 "settings.tab.notifications" = "Mitteilungen";
-"settings.tab.appearance" = "Darstellung";
 "settings.tab.privacy" = "Datenschutz";
 "settings.signedOutNote" = "Melde dich bei Klorn an, um diese Einstellungen zu sehen.";
 "menu.message" = "E-Mail";
@@ -802,3 +794,17 @@
 "chat.send.failed" = "Klorn ist nicht erreichbar — %@";
 "chat.event.failed" = "Termin konnte nicht erstellt werden — %@";
 "commitments.needsPro" = "Zusagen brauchen Klorn Pro.";
+
+/* M3/M4 (2026-11-13): assistant toolbar panel, grouped General settings */
+"assistant.toolbar.label" = "Assistent";
+"assistant.toolbar.help" = "Assistent ein- oder ausblenden (⌘J)";
+"menu.assistant.show" = "Assistent einblenden";
+"menu.assistant.hide" = "Assistent ausblenden";
+"prefs.group.startup" = "Start";
+"prefs.group.appearance" = "Darstellung";
+"prefs.group.dock" = "Dock";
+"prefs.group.updates" = "Updates";
+"prefs.group.keyboard" = "Tastatur";
+"prefs.group.support" = "Support";
+"prefs.group.about" = "Über";
+"prefs.group.mail" = "Mail";

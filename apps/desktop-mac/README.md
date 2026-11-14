@@ -179,7 +179,7 @@ center of the Mac it runs on.
 - **Dock badge.** Today's "Needs you now" PUSH mail (72 h window) that is
   still unread — the server's read flag minus mail opened on this Mac
   (`TodayRules.dockBadgeCount`). Quiet hours never hide it; Settings ▸
-  Notifications ▸ *Show count on Dock icon* does.
+  General ▸ Dock ▸ *Show Needs-you-now count* does.
 - **Time Sensitive (Focus).** A banner about one PUSH- or MEETING-lane
   mail posts at `interruptionLevel = .timeSensitive`
   (`BannerInterruption.forLane`), so it gets through a Focus mode or the
@@ -220,11 +220,17 @@ overlay.
   window; if it is already frontmost, hide Klorn (`NSApp.hide`). It's a
   Carbon global hotkey, so it needs **no Accessibility permission**.
 - **`⌘,`** — the Settings window (also the sidebar's *Settings* button).
-  Tabs: General, Accounts, Assistant, Notifications, Appearance, Privacy.
+  Tabs: General, Accounts, Notifications, Assistant, Privacy (M4). General
+  is a grouped Form (Startup, Appearance — theme and language —, Dock,
+  Updates, Keyboard, Support, About); the window is titled after the pane
+  and sized to it, scrolling past `SettingsMetrics.maxHeight`.
   Accounts holds sign out, *Reconnect Google account…*, *Add account*,
   today's AI usage meter, the company domains and the triage priorities.
-  General holds launch at login, updates, *App & support* (email support;
-  Option-click for Restart and connection status), the shortcut and About.
+  General holds launch at login, theme and language, the Dock badge,
+  updates, *App & support* (email support; Option-click for Restart and
+  connection status), the shortcut and About.
+- **`⌘J`** — View ▸ Show/Hide Assistant: the trailing assistant panel (M3),
+  also the main window's *Assistant* toolbar button.
 
 ### Standard main window
 

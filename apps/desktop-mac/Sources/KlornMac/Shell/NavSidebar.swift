@@ -36,8 +36,8 @@ struct NavSidebar: View {
         let selected = FilesRules.displayed(model.mainNav.section, files: model.clientFlags.files) == section
         return Button { model.navigate(to: section) } label: {
             NavRowLabel(
-                icon: section.icon, title: section.title, count: count(for: section),
-                selected: selected)
+                icon: section.icon, selectedIcon: section.selectedIcon, title: section.title,
+                count: count(for: section), selected: selected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(section.title)
@@ -63,7 +63,10 @@ struct NavSidebar: View {
         HStack(spacing: Theme.s1) {
             Button(action: actions.onOpenPreferences) {
                 HStack(spacing: Theme.s2) {
-                    Image(systemName: "gearshape").font(Theme.Typo.icon).accessibilityHidden(true)
+                    Image(systemName: "gearshape").font(Theme.Typo.body)
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
                     Text(L("prefs.title")).font(Theme.Typo.body)
                     Spacer(minLength: 0)
                 }
@@ -78,9 +81,12 @@ struct NavSidebar: View {
 }
 
 /// A sidebar row: icon, title, optional count. Same selection language as
-/// the mail list (accent bar plus the selected rung).
+/// the mail list (accent bar plus the selected rung). The icon is an outline
+/// SF Symbol in the accent at the label's own font (M3, HIG: sidebar icons
+/// take the accent); a selected row may swap in its `.fill` variant.
 struct NavRowLabel: View {
     let icon: String
+    var selectedIcon: String? = nil
     let title: String
     var count: Int? = nil
     let selected: Bool
@@ -89,9 +95,9 @@ struct NavRowLabel: View {
 
     var body: some View {
         HStack(spacing: Theme.s2) {
-            Image(systemName: icon)
-                .font(Theme.Typo.icon)
-                .foregroundStyle(selected ? Theme.text : Theme.textDim)
+            Image(systemName: selected ? (selectedIcon ?? icon) : icon)
+                .font(Theme.Typo.body)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 20)
                 .accessibilityHidden(true)
             Text(title)
