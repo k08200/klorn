@@ -5,7 +5,8 @@ import { expect, type Page, test } from "@playwright/test";
  *   tiny   < 360px  bottom tabs, icon-only labels, 56px bar
  *   phone  360–599  bottom tabs + header bell and account avatar
  *   rail   600–839  navigation rail; the mail split starts here
- *   wide   ≥ 840px  sidebar (220px up to 1023px, 260px from 1024px)
+ *   wide   ≥ 840px  sidebar (220px up to 1023px, 260px from 1024px); a phone
+ *                    on its side (< 500px tall) keeps the rail up to 1023px
  * The shell is reached signed in with every API call mocked, the same way
  * navigation.spec.ts does it.
  */
@@ -22,6 +23,8 @@ const DEVICES: ReadonlyArray<{ name: string; width: number; height: number; tier
   { name: "iPhone Pro Max", width: 440, height: 956, tier: "phone" },
   { name: "Fold open", width: 690, height: 840, tier: "rail" },
   { name: "iPad mini", width: 744, height: 1133, tier: "rail" },
+  // A phone on its side keeps the compact rail up to 1024px, not the sidebar.
+  { name: "iPhone Pro Max landscape", width: 932, height: 430, tier: "rail" },
   { name: "Small laptop window", width: 840, height: 1000, tier: "wide" },
   { name: "iPad Air landscape", width: 1180, height: 820, tier: "wide" },
   { name: "iPad Pro landscape", width: 1366, height: 1024, tier: "wide" },

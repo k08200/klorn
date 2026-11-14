@@ -16,6 +16,18 @@
   }
 }
 
+/* The sidebar step (mobile redesign MB4): from 840px the sidebar replaces the
+   navigation rail — except a phone on its side (phone-landscape: under 500px
+   tall), which keeps the compact rail until 1024px, as before, so an iPhone
+   in landscape (844–932px wide) does not lose a third of its width to the
+   sidebar. Keep in step with the --shell-nav-w block below. */
+@custom-variant shell-wide {
+  @media (min-width: 64rem), (min-width: 52.5rem) and (min-height: 500px),
+    (min-width: 52.5rem) and (orientation: portrait) {
+    @slot;
+  }
+}
+
 /* ── Theme palettes ─────────────────────────────────────────────────
    Semantic tokens carry the theme: light values here are byte-identical to
    what the app hardcoded before dark mode, so the light theme cannot drift.
@@ -305,13 +317,13 @@
      shell adds one step: from 600px (a Fold opened, a phone on its side, an
      iPad in split view) the bottom tab bar gives way to the navigation rail.
      `rail:` / `max-rail:` name that step. The full sidebar replaces the rail
-     from 840px (`wide:`; 220px wide up to lg, 260px from lg 1024). Below
-     360px (`max-tiny:` — an iPad slide-over, a Fold's cover screen) the tab
-     bar drops to icons and the page title steps down. Same unit (rem) as the
-     defaults so the variants sort. */
+     from 840px (`shell-wide:`, a custom variant at the top of this file;
+     220px wide up to lg, 260px from lg 1024). Below 360px (`max-tiny:` — an
+     iPad slide-over, a Fold's cover screen) the tab bar drops to icons and
+     the page title steps down. Same unit (rem) as the defaults so the
+     variants sort. */
   --breakpoint-tiny: 22.5rem;
   --breakpoint-rail: 37.5rem;
-  --breakpoint-wide: 52.5rem;
 
   /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
      are stamped on <html> by layout.tsx). Hangul falls through to Pretendard,
@@ -620,7 +632,8 @@ body {
     --shell-nav-w: calc(56px + env(safe-area-inset-left));
   }
 }
-@media (min-width: 52.5rem) {
+@media (min-width: 64rem), (min-width: 52.5rem) and (min-height: 500px),
+  (min-width: 52.5rem) and (orientation: portrait) {
   :root {
     --shell-nav-w: calc(220px + env(safe-area-inset-left));
   }

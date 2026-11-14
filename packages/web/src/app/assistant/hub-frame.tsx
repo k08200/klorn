@@ -60,7 +60,7 @@ function HubTabs({ pathname }: { pathname: string }) {
   return (
     <nav
       aria-label={t("assistantHub.nav.label")}
-      className="sticky top-0 z-10 -mx-4 border-b border-line bg-surface-panel md:-mx-8 wide:hidden"
+      className="sticky top-0 z-10 -mx-4 border-b border-line bg-surface-panel md:-mx-8 shell-wide:hidden"
     >
       <ul className="flex overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {HUB_PAGES.map((page) => {
