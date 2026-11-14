@@ -8,7 +8,7 @@ Klorn — an AI email chief-of-staff. Emails are triaged into exactly **5 lanes:
 
 - `packages/api` — Fastify 5 + Prisma backend (deployed on Render)
 - `packages/contract` — type-only API wire contract shared by api and its clients
-- `packages/web` — Next.js 15 app (Vercel; prod deploys from `main`)
+- `packages/web` — Next.js 15 app (static export on Cloudflare Pages; prod deploys from `main` — `docs/deploy/cloudflare-pages.md`)
 - `apps/mobile` — Capacitor shell wrapping the hosted web app
 - `apps/desktop-mac` — native SwiftUI macOS app
 - `website/` — static landing (GitHub Pages)
