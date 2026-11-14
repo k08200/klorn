@@ -8,18 +8,18 @@ over the rule machinery that already exists. It is **not** a new judging engine.
 
 ## 1. What already exists (the machinery the DSL sits on)
 
-Read on 2026-11-14 (`main` at `d49379d4`); line numbers are as of this change.
+Read on 2026-11-14 (`main` at `63e11991`); line numbers are as of this change.
 
 | Surface | Where | What the judge does with it |
 |---|---|---|
-| `EmailRule` | `packages/api/prisma/schema.prisma:1822` | One table, six `actionType`s (`EmailRuleAction`, `schema.prisma:1849`). |
+| `EmailRule` | `packages/api/prisma/schema.prisma:1824` | One table, six `actionType`s (`EmailRuleAction`, `schema.prisma:1851`). |
 | `PIN_TIER` rows | written by `mail/pin-rules.ts:44` (`replaceTierPins`), `routes/email.ts:1871` (`/:id/pin-tier`), `judge/screener.ts:141` (screener BLOCK), the generic `routes/email-rules.ts:169` | Read at cascade rank 0 by `judge/judge-context.ts:621` (`lookupPinnedTier`, matcher now in `mail/pin-match.ts:26`): exact address beats exact domain, equality only, public mailbox domains refused at read time. Consumed by `judge/poc-judge.ts:828` (v2) and `judge/v3/policy.ts:247` (v3, after a manual override). |
-| `AUTO_REPLY` / `DRAFT_REPLY` rows | `mail/email-reply.ts:60` (`checkAutoReplyRules`), executed by `automation-scheduler.ts:1658` | **Sends mail** (`AUTO_REPLY`) or creates a draft. `subjectContains` is a substring match, `from` an address/domain match (`ruleSenderMatches`, `email-reply.ts:34`). |
+| `AUTO_REPLY` / `DRAFT_REPLY` rows | `mail/email-reply.ts:60` (`checkAutoReplyRules`), executed by `automation-scheduler.ts:1661` | **Sends mail** (`AUTO_REPLY`) or creates a draft. `subjectContains` is a substring match, `from` an address/domain match (`ruleSenderMatches`, `email-reply.ts:34`). |
 | `LABEL` / `ARCHIVE` / `NOTIFY` rows | enum only | No reader anywhere in `packages/api/src` (grep for the literals finds only IMAP move roles). |
-| `LearnedRule` | `schema.prisma:2197`, mined weekly (`automation-scheduler.ts:1225`) | `APPLIED` rows short-circuit the judge only under `LEARNED_RULES_IN_JUDGE` (`judge-context.ts:588`). Machine-derived. |
-| `ScreenerDecision` | `schema.prisma:2364`, `judge/screener.ts:133` | A decision about a sender. BLOCK is implemented as a `PIN_TIER → SILENT` rule named `Screener block: <address>`; ALLOW deletes that rule and pins nothing. The judge never reads `ScreenerDecision` itself. |
-| `FeedbackPolicyPreference` | `schema.prisma:2647` | Agent tool-approval preferences (`toolName`, `recipient`). Not a mail classification rule. |
-| Interrupt budget | `AutomationConfig.interruptBudget` (`schema.prisma:1147`), `judge/v3/push-budget-gate.ts:149`, `JUDGE_V3_POLICY_VERSION` in `judge/v3/policy.ts:41` | A per-user number and a system policy version. Not a rule about mail. |
+| `LearnedRule` | `schema.prisma:2199`, mined weekly (`automation-scheduler.ts:1228`) | `APPLIED` rows short-circuit the judge only under `LEARNED_RULES_IN_JUDGE` (`judge-context.ts:588`). Machine-derived. |
+| `ScreenerDecision` | `schema.prisma:2366`, `judge/screener.ts:133` | A decision about a sender. BLOCK is implemented as a `PIN_TIER → SILENT` rule named `Screener block: <address>`; ALLOW deletes that rule and pins nothing. The judge never reads `ScreenerDecision` itself. |
+| `FeedbackPolicyPreference` | `schema.prisma:2649` | Agent tool-approval preferences (`toolName`, `recipient`). Not a mail classification rule. |
+| Interrupt budget | `AutomationConfig.interruptBudget` (`schema.prisma:1149`), `judge/v3/push-budget-gate.ts:149`, `JUDGE_V3_POLICY_VERSION` in `judge/v3/policy.ts:41` | A per-user number and a system policy version. Not a rule about mail. |
 | Rules routes | `routes/email-rules.ts` (`GET/POST/PATCH/DELETE /api/email/rules`, `/rules/pins`, `/rules/compile`) | — |
 | Web rules UI | `packages/web/src/components/rules-section.tsx` in Settings → Lanes (`app/settings/_sections/lanes-section.tsx`) | NL text → LLM-proposed pins → review → `POST /rules/pins`. |
 
