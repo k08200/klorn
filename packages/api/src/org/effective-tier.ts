@@ -17,6 +17,7 @@
 
 import { teamsOpenTo } from "../config.js";
 import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 
 export const TIERS = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
 export type Tier = (typeof TIERS)[number];
@@ -194,21 +195,73 @@ export async function effectiveTier(user: { id: string; plan: string }): Promise
   return normalizeTier(await effectivePlan(user));
 }
 
+function reportSeatLookup(err: unknown, scope: string, extra: Record<string, unknown>): void {
+  console.warn(`[effective-tier] seat lookup failed (${scope}) — using the own plan:`, err);
+  captureError(err, { tags: { scope: `effective-tier.${scope}` }, extra });
+}
+
 /**
- * True when a held team seat already covers the user's own paid Pro plan and
- * that personal subscription is still set to renew: the user pays twice.
- * (ownPlan PRO resolving to TEAM can only mean a held seat.)
+ * effectivePlan for a path that is not an access gate (a device limit, a
+ * displayed plan): a failed seat lookup is reported and falls back to the own
+ * plan — never a higher one — instead of failing the request. Access gates
+ * keep effectivePlan, which throws (fail closed).
+ */
+export async function effectivePlanOrOwn(user: { id: string; plan: string }): Promise<string> {
+  try {
+    return await effectivePlan(user);
+  } catch (err) {
+    reportSeatLookup(err, "single", { userId: user.id });
+    return user.plan;
+  }
+}
+
+/**
+ * effectivePlans for the schedulers: a failed seat lookup is reported and
+ * every user keeps their own plan (never a higher one), so an org-table fault
+ * cannot stop briefing, sync and classify for everyone.
+ */
+export async function effectivePlansOrOwn(
+  users: readonly { id: string; plan: string }[],
+): Promise<Map<string, string>> {
+  try {
+    return await effectivePlans(users);
+  } catch (err) {
+    reportSeatLookup(err, "batch", { users: users.length });
+    return new Map(users.map((user) => [user.id, user.plan]));
+  }
+}
+
+/** The personal subscription fields Klorn stores (written by the Paddle webhook only). */
+interface PersonalBilling {
+  paddleSubscriptionId: string | null;
+  subscriptionStatus: string | null;
+  subscriptionCancelAt: Date | null;
+}
+
+/**
+ * True when a held team seat already covers the user's own paid Pro and that
+ * personal Paddle subscription is live and still set to renew: the user pays
+ * twice. (ownPlan PRO resolving to TEAM can only mean a held seat.) Only the
+ * Paddle path stores renewal state, so a comped Pro, a Stripe customer or an
+ * App Store / Play subscriber is never told "still renews" on a guess.
  *
- * Klorn never cancels the personal plan itself — a founder decision made on
- * their behalf on 2026-11-14, reversible (pricing-tiers.md, "Personal Pro and
- * a team seat"): a cancel is a money action, and the seat can lapse with the
- * organization's subscription or a removal. /me and /api/billing/status carry
- * this so the app can say so next to the personal cancel.
+ * Klorn never cancels the personal plan itself — a default chosen on the
+ * founder's behalf on 2026-11-14, pending founder confirmation and reversible
+ * (pricing-tiers.md, "Personal Pro and a team seat"): a cancel is a money
+ * action, and the seat can lapse with the organization's subscription or a
+ * removal. /me and /api/billing/status carry this so the app can say so next
+ * to the personal cancel.
  */
 export function seatCoversPersonalPlan(
   ownPlan: string,
   effective: string,
-  personalCancelAt: Date | null,
+  personal: PersonalBilling,
 ): boolean {
-  return ownPlan === "PRO" && effective === "TEAM" && personalCancelAt === null;
+  return (
+    ownPlan === "PRO" &&
+    effective === "TEAM" &&
+    personal.paddleSubscriptionId !== null &&
+    seatsActive(personal.subscriptionStatus) &&
+    personal.subscriptionCancelAt === null
+  );
 }

@@ -11,14 +11,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   orgMembership: { findUnique: vi.fn(), findMany: vi.fn() },
 }));
+const captureError = vi.hoisted(() => vi.fn());
 vi.mock("../db.js", () => ({ prisma: db, db }));
+vi.mock("../sentry.js", () => ({ captureError }));
 
 const ORIGINAL_ENV = { ...process.env };
 const PLANS_UNDER_TEST = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
 const ROLES_UNDER_TEST = [undefined, "USER", "ADMIN"] as const;
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   delete process.env.TEAMS_ENABLED;
   delete process.env.ROLLOUT_COHORT_USER_IDS;
 });
@@ -236,5 +238,63 @@ describe("effectivePlans (batch) — TEAMS_ENABLED on", () => {
     expect(Object.fromEntries(plans)).toEqual({ "u-1": "FREE", "u-2": "FREE" });
     expect(db.orgMembership.findMany).toHaveBeenCalledTimes(1);
     expect(db.orgMembership.findMany.mock.calls[0]?.[0]?.where.userId.in).toEqual(["u-2"]);
+  });
+});
+
+describe("total variants for non-gate paths (TEAMS_ENABLED on)", () => {
+  beforeEach(() => {
+    process.env.TEAMS_ENABLED = "on";
+  });
+
+  it("falls back to the own plan, reported, when the seat lookup fails", async () => {
+    db.orgMembership.findUnique.mockRejectedValue(new Error("db down"));
+    const { effectivePlan, effectivePlanOrOwn } = await import("../org/effective-tier.js");
+    expect(await effectivePlanOrOwn({ id: "u-1", plan: "FREE" })).toBe("FREE");
+    expect(captureError).toHaveBeenCalledTimes(1);
+    // The strict resolver (access gates) still fails closed by throwing.
+    await expect(effectivePlan({ id: "u-1", plan: "FREE" })).rejects.toThrow("db down");
+  });
+
+  it("keeps every scheduler user on their own plan when the batch lookup fails", async () => {
+    db.orgMembership.findMany.mockRejectedValue(new Error("db down"));
+    const { effectivePlansOrOwn } = await import("../org/effective-tier.js");
+    const plans = await effectivePlansOrOwn([
+      { id: "u-1", plan: "FREE" },
+      { id: "u-2", plan: "PRO" },
+    ]);
+    expect(Object.fromEntries(plans)).toEqual({ "u-1": "FREE", "u-2": "PRO" });
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("seatCoversPersonalPlan", () => {
+  const live = {
+    paddleSubscriptionId: "sub_1",
+    subscriptionStatus: "active",
+    subscriptionCancelAt: null,
+  };
+
+  it("is true only for a live, renewing personal Paddle Pro under a seat", async () => {
+    const { seatCoversPersonalPlan } = await import("../org/effective-tier.js");
+    expect(seatCoversPersonalPlan("PRO", "TEAM", live)).toBe(true);
+    expect(seatCoversPersonalPlan("PRO", "TEAM", { ...live, subscriptionStatus: "trialing" })).toBe(
+      true,
+    );
+  });
+
+  it("stays false without a seat, a scheduled cancel, or a stored live subscription", async () => {
+    const { seatCoversPersonalPlan } = await import("../org/effective-tier.js");
+    expect(seatCoversPersonalPlan("PRO", "PRO", live)).toBe(false);
+    expect(seatCoversPersonalPlan("FREE", "TEAM", live)).toBe(false);
+    expect(
+      seatCoversPersonalPlan("PRO", "TEAM", { ...live, subscriptionCancelAt: new Date() }),
+    ).toBe(false);
+    // A comped Pro, a Stripe customer or an IAP subscriber: no Paddle record.
+    expect(seatCoversPersonalPlan("PRO", "TEAM", { ...live, paddleSubscriptionId: null })).toBe(
+      false,
+    );
+    expect(seatCoversPersonalPlan("PRO", "TEAM", { ...live, subscriptionStatus: "past_due" })).toBe(
+      false,
+    );
   });
 });

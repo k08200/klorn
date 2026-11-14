@@ -33,7 +33,14 @@ interface Session {
 
 async function newUser(plan: "FREE" | "PRO" = "FREE"): Promise<Session> {
   const email = `tier-${randomUUID()}@teams.test`;
-  const user = await prisma.user.create({ data: { email, name: "t", emailVerified: true, plan } });
+  // A PRO here is a live personal Paddle subscriber (what the webhook writes).
+  const billing =
+    plan === "PRO"
+      ? { paddleSubscriptionId: `sub_${randomUUID()}`, subscriptionStatus: "active" }
+      : {};
+  const user = await prisma.user.create({
+    data: { email, name: "t", emailVerified: true, plan, ...billing },
+  });
   createdUsers.push(user.id);
   const token = signToken({ userId: user.id, email });
   await registerDevice(user.id, token, { deviceType: "web" });
@@ -135,12 +142,23 @@ describePg("effective plan wiring (real Postgres)", () => {
     expect(await heldTeamSeat(unseated.userId)).toBeNull();
 
     const dayKey = new Date().toISOString().slice(0, 10);
-    await prisma.llmCostLedger.create({ data: { userId: owner.userId, dayKey, cents: 30 } });
+    await prisma.llmCostLedger.create({ data: { userId: owner.userId, dayKey, cents: 70 } });
     // An unseated member's spend is their own plan's, not the pool's.
     await prisma.llmCostLedger.create({ data: { userId: unseated.userId, dayKey, cents: 999 } });
     const result = await checkCostGate(me.userId);
-    // pool 2 x 80 = 160 - the owner's 30 = 130, above the 100¢ own-plan cap.
-    expect(result.capCents).toBe(130);
+    // pool 2 x 80 = 160 - the owner's 70 = 90 < the 100¢ own-plan cap
+    // (paywall off): the higher one wins.
+    expect(result.capCents).toBe(100);
+    __resetTeamPoolCacheForTest();
+    // 4 seats seat the third member too, whose spend now counts (at least the
+    // 40¢ floor); the fourth, unfilled seat still feeds the pool.
+    await prisma.llmCostLedger.update({
+      where: { userId_dayKey: { userId: unseated.userId, dayKey } },
+      data: { cents: 10 },
+    });
+    await prisma.organization.update({ where: { id: org.id }, data: { seatsPurchased: 4 } });
+    // 4 x 80 = 320 - 70 (owner) - max(10, 40) (third member) = 210.
+    expect((await checkCostGate(me.userId)).capCents).toBe(210);
     expect(result.freeCapApplied).toBe(false);
   });
 

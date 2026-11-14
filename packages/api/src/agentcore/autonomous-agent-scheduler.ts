@@ -13,7 +13,7 @@ import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "../config.js";
 import { db, prisma } from "../db.js";
 import { bulkResolveAttentionForPendingActions } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
-import { effectivePlans } from "../org/effective-tier.js";
+import { effectivePlansOrOwn } from "../org/effective-tier.js";
 import { hasLlmProvider } from "../providers/index.js";
 import {
   markSchedulerDisabled,
@@ -167,7 +167,7 @@ async function runAgentTick() {
     // a FREE plan must not have the agent loop silently gated when FREE locks).
     // A Klorn Teams seat counts (org/effective-tier.ts); one batch lookup,
     // none while TEAMS_ENABLED is off.
-    const plans = await effectivePlans(users);
+    const plans = await effectivePlansOrOwn(users);
     const userPlanMap = new Map(
       users.map((u) => [u.id, { plan: plans.get(u.id) ?? "FREE", role: u.role }]),
     );
@@ -188,7 +188,7 @@ async function runAgentTick() {
 
       // Plan-based gating: autonomous agent requires PRO+ plan
       const userEntry = userPlanMap.get(config.userId);
-      // effective-tier: resolved (userPlanMap holds effectivePlans)
+      // effective-tier: resolved (userPlanMap holds effectivePlansOrOwn)
       const userPlan = userEntry?.plan || "FREE";
       const userRole = userEntry?.role;
       if (!planHasFeature(userPlan, "autonomous_agent", userRole)) {

@@ -87,7 +87,8 @@ async function ownPlanCapCents(userId: string): Promise<ResolvedCap> {
       where: { id: userId },
       select: { plan: true, role: true },
     });
-    // The seat's pool is layered on by resolveCapCents. effective-tier: own plan
+    // The own plan on purpose: resolveCapCents layers the seat's pool on top.
+    // effective-tier: own plan
     if (user && !isEntitled(user.plan, user.role ?? undefined)) {
       return { capCents: FREE_DAILY_COST_CAP_CENTS, freeCapApplied: true };
     }

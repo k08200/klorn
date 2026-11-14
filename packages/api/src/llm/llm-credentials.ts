@@ -103,11 +103,12 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
  */
 async function byokEntitled(
   userId: string,
-  user: { plan: string | null; role: string | null },
+  user: { plan?: string | null; role?: string | null },
 ): Promise<boolean> {
   const role = user.role ?? undefined;
   // Hot path: a seat only ever raises the plan, so an entitled own plan needs
-  // no seat lookup. effective-tier: own plan
+  // no seat lookup.
+  // effective-tier: own plan
   const ownPlan = user.plan ?? "FREE";
   if (isEntitled(ownPlan, role)) return true;
   try {

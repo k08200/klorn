@@ -17,7 +17,7 @@ import { planHasFeature } from "../billing/stripe.js";
 import { PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS, PATTERN_MIN_OCCURRENCES } from "../config.js";
 import { db, prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
-import { effectivePlans } from "../org/effective-tier.js";
+import { effectivePlansOrOwn } from "../org/effective-tier.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { newWork } from "../work-context.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
@@ -579,7 +579,7 @@ async function runPatternAnalysisForAllUsers() {
     });
     // A Klorn Teams seat counts (org/effective-tier.ts); one batch lookup,
     // none while TEAMS_ENABLED is off.
-    const plans = await effectivePlans(patternUsers);
+    const plans = await effectivePlansOrOwn(patternUsers);
     const eligibleUserIds = new Set(
       patternUsers
         .filter((u) =>

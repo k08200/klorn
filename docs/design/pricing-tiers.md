@@ -59,20 +59,32 @@ each teammate's calendar. A company that adopts Klorn also removes the
   held paid seat. Its batch form `effectivePlans` serves the schedulers in two
   queries. While `TEAMS_ENABLED` is closed to a user it returns the own plan
   value untouched and runs no query, so every gate answers exactly as before
-  seats. A static guard (`effective-tier-wiring-guard.test.ts`) fails the
-  build when a gate is handed a raw `User.plan`.
+  seats. A static guard (`effective-tier-wiring-guard.test.ts`) catches the
+  common bypasses (a raw `.plan` handed to a gate helper, a raw plan aliased
+  outside a resolver call, a gate-calling file that never imports the
+  resolver); it is pattern-based, not a type-level proof.
+- Access gates use the strict resolver, which throws on a lookup failure
+  (fail closed). Device limits, displayed plans and the schedulers use the
+  `...OrOwn` variants, which report the failure and keep the own plan.
 - A seat holder carries `PLANS.TEAM`'s limits (device count, message and
   token allowances) wherever the code reads plan limits.
 - Pooled LLM cap (`billing/team-cost-pool.ts`): a seat holder may spend
-  seats × `TEAM_SEAT_DAILY_COST_CAP_CENTS` (default 80¢) minus today's spend
-  by the organization's other seated members, bounded per member at 10× the
-  seat target (the anomaly brake), and never less than their own plan's cap.
-  The sum reads cost cents only, re-read at most every 30 s per user.
+  purchased seats × `TEAM_SEAT_DAILY_COST_CAP_CENTS` (default 80¢) minus
+  today's spend by the organization's other seated members, each counted as
+  at least half a seat target (so one member cannot drain the others down to
+  their own-plan caps), bounded per member at 10× the seat target (the
+  anomaly brake), and never less than their own plan's cap. Unfilled paid
+  seats feed the pool; a member removed mid-day drops out of the sum. The sum
+  reads cost cents only, re-read at most every 30 s per user.
+- Before large organizations: `GLOBAL_DAILY_COST_CAP_CENTS` (default 5000¢)
+  is below one 150-seat pool (12000¢); raise it or add a per-organization
+  share before enabling teams of that size.
 
 ### Personal Pro and a team seat
 
-*Founder decision made on the founder's behalf on 2026-11-14 (Teams v1.1);
-reversible — change it here and in `seatCoversPersonalPlan`.*
+*Default chosen on the founder's behalf on 2026-11-14 (Teams v1.1). Not
+LOCKED: pending founder confirmation, reversible — change it here and in
+`seatCoversPersonalPlan`.*
 
 - Entitlement is the higher of the two: TEAM. The LLM cap is the higher of
   the personal cap and the pool's remainder.
@@ -80,10 +92,12 @@ reversible — change it here and in `seatCoversPersonalPlan`.*
   money action, and the seat can lapse (the organization stops paying, or the
   member is removed), which would leave the user without the plan they paid
   for.
-- Not silent: while the personal Pro still renews (no cancel scheduled), `/me`
-  and `/api/billing/status` carry `teamSeatCoversPersonalPlan: true`, and
-  Settings → Billing says the seat already covers Pro next to the personal
-  cancel. That cancel is the existing one: Paddle in-app cancel at the end of
+- Not silent: while a live personal Paddle Pro still renews (active or
+  trialing, no cancel scheduled), `/me` and `/api/billing/status` carry
+  `teamSeatCoversPersonalPlan: true`, and Settings → Billing says the seat
+  already covers Pro next to the personal cancel. Only the Paddle path stores
+  renewal state, so a Stripe or App Store / Play subscriber with a seat is
+  not detected (no notice) — a known gap. That cancel is the existing one: Paddle in-app cancel at the end of
   the billing period (`POST /api/billing/cancel`, undo with
   `POST /api/billing/resume`); Stripe customers use the portal; App Store and
   Google Play subscriptions are managed in the store.

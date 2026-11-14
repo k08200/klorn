@@ -89,7 +89,7 @@ import {
 } from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { AutoReplyBlockedByOrgError } from "./org/ceilings.js";
-import { effectivePlans } from "./org/effective-tier.js";
+import { effectivePlansOrOwn } from "./org/effective-tier.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -1075,7 +1075,7 @@ async function runAutomationTick(): Promise<void> {
       // silently suppressed once the paywall locks FREE.
       // A Klorn Teams seat counts (org/effective-tier.ts): one batch lookup per
       // batch, none while TEAMS_ENABLED is off. Every gate below reads this map.
-      const plans = await effectivePlans(automationUsers);
+      const plans = await effectivePlansOrOwn(automationUsers);
       const automationPlanMap = new Map(
         automationUsers.map((u) => [u.id, { plan: plans.get(u.id) ?? "FREE", role: u.role }]),
       );
@@ -1288,7 +1288,11 @@ async function runAutomationTick(): Promise<void> {
 // `prisma.user.findMany({ select: { plan, role } })` result so `role` stays the
 // Prisma `UserRole` enum (planHasFeature's ADMIN bypass) rather than a widened
 // `string | null` — matching the inline map this cycle was extracted from.
-type PlanRole = Pick<Awaited<ReturnType<typeof prisma.user.findMany>>[number], "plan" | "role">;
+/** The effective plan (effectivePlans: own plan or a Klorn Teams seat) and the role. */
+type PlanRole = { plan: string } & Pick<
+  Awaited<ReturnType<typeof prisma.user.findMany>>[number],
+  "role"
+>;
 
 /**
  * Per-batch locals a user cycle closes over. Bundled so `runUserCycle` can be
@@ -1334,7 +1338,7 @@ async function runUserCycle(
 ): Promise<void> {
   const { automationPlanMap, googleConnectedUserIds, linkedGoogleUserIds } = ctx;
   const configUserEntry = automationPlanMap.get(config.userId);
-  // effective-tier: resolved (automationPlanMap holds effectivePlans)
+  // effective-tier: resolved (automationPlanMap holds effectivePlansOrOwn)
   const configUserPlan = configUserEntry?.plan || "FREE";
   const configUserRole = configUserEntry?.role;
   const timeZone = normalizeTimeZone(config.timezone);

@@ -5,7 +5,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
-import { effectivePlan } from "./org/effective-tier.js";
+import { effectivePlanOrOwn } from "./org/effective-tier.js";
 import { localEventSource } from "./pim/calendar-rows.js";
 import { captureError } from "./sentry.js";
 
@@ -376,8 +376,10 @@ export async function registerDevice(
     select: { plan: true, role: true },
   });
   // A Klorn Teams seat counts (org/effective-tier.ts); no query while
-  // TEAMS_ENABLED is closed to the user.
-  const plan = await effectivePlan({ id: userId, plan: user?.plan || "FREE" });
+  // TEAMS_ENABLED is closed to the user. A device limit is not an access
+  // gate: a failed seat lookup must not fail the sign-in, so it falls back to
+  // the own plan.
+  const plan = await effectivePlanOrOwn({ id: userId, plan: user?.plan || "FREE" });
   const planConfig = getEffectivePlan(plan, user?.role);
   const limit = planConfig.deviceLimit;
 

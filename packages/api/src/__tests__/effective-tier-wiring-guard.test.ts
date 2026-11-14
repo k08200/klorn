@@ -9,7 +9,8 @@
  * without importing the resolver. The rare deliberate own-plan read carries
  * an `effective-tier: own plan` comment on the line above, with its reason; a
  * read of a value the resolver already produced carries `effective-tier:
- * resolved`.
+ * resolved`, and a plan that is no gate input (a checkout's requested plan)
+ * `effective-tier: not a gate`.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -47,10 +48,24 @@ const PLAN_PARAMETER_ONLY = new Set([
   "mcp/server.ts",
 ]);
 
-// The resolver, or the pooled-cost module built on it (cost-guard.ts).
+/** Gate call sites the guard must see, so it can never pass vacuously. */
+const SENTINEL_CALLERS = [
+  "automation-scheduler.ts",
+  "agentcore/autonomous-agent-scheduler.ts",
+  "learning/pattern-learner.ts",
+  "llm/llm-credentials.ts",
+  "billing/cost-guard.ts",
+  "routes/mcp.ts",
+  "routes/auth.ts",
+  "routes/billing.ts",
+];
+
+// A value import of the resolver, or of the pooled-cost module built on it
+// (cost-guard.ts). `import type` does not count.
 const RESOLVER_IMPORT =
-  /from\s+"(?:\.\.?\/)+(?:org\/)?effective-tier\.js"|from\s+"\.\/team-cost-pool\.js"/;
-const OWN_PLAN_MARKER = /effective-tier: (?:own plan|resolved)/;
+  /import\s+\{[^}]*\}\s+from\s+"(?:\.\.?\/)+(?:org\/)?effective-tier\.js"|import\s+\{[^}]*\}\s+from\s+"\.\/team-cost-pool\.js"/;
+const RESOLVER_CALL = /\beffective(?:Plans?|PlanOrOwn|PlansOrOwn|Tier|TierOrOwnPlan)\(/g;
+const OWN_PLAN_MARKER = /effective-tier: (?:own plan|resolved|not a gate)/;
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -80,10 +95,9 @@ function blankComments(text: string): string {
     );
 }
 
-const sources = walk(srcDir).map((path) => {
-  const raw = readFileSync(path, "utf8");
-  return { rel: relative(srcDir, path), raw, text: blankComments(raw) };
-});
+const sources = walk(srcDir).map((path) =>
+  source(relative(srcDir, path), readFileSync(path, "utf8")),
+);
 
 /** The text of a call's argument list (balanced parentheses), starting at `(`. */
 function callArgs(text: string, openParen: number): string {
@@ -115,57 +129,140 @@ function callsGateHelper(text: string): boolean {
   return /PLAN_FEATURES\[/.test(text);
 }
 
-describe("plan gates read the effective plan", () => {
-  it("finds the gate call sites (the guard cannot pass vacuously)", () => {
-    const callers = sources.filter(
-      ({ rel, text }) => !PLAN_PARAMETER_ONLY.has(rel) && callsGateHelper(text),
+interface Source {
+  rel: string;
+  raw: string;
+  text: string;
+}
+
+function source(rel: string, raw: string): Source {
+  return { rel, raw, text: blankComments(raw) };
+}
+
+/** Gate helpers handed a raw `.plan` (a nested resolver call is resolved). */
+function rawPlanArguments({ rel, raw, text }: Source): string[] {
+  const offenders: string[] = [];
+  for (const match of text.matchAll(helperCall)) {
+    const index = match.index ?? 0;
+    const args = callArgs(text, index + (match[1]?.length ?? 0)).replace(
+      /\beffective(?:Plans?|PlanOrOwn|PlansOrOwn|Tier|TierOrOwnPlan)\([^)]*\)/g,
+      "RESOLVED",
     );
+    if (/\.plan\b/.test(args) && !OWN_PLAN_MARKER.test(lineBefore(raw, index))) {
+      offenders.push(`${rel}: ${match[1]}(${args.slice(0, 60)})`);
+    }
+  }
+  for (const match of text.matchAll(/PLAN_FEATURES\[([^\]]*)\]/g)) {
+    if (/\.plan\b/.test(match[1] ?? "")) offenders.push(`${rel}: PLAN_FEATURES[${match[1]}]`);
+  }
+  return offenders;
+}
+
+/** True when `index` sits inside the argument list of a resolver call. */
+function insideResolverCall(text: string, index: number): boolean {
+  let open = -1;
+  for (const match of text.slice(0, index).matchAll(RESOLVER_CALL)) {
+    open = (match.index ?? 0) + match[0].length - 1;
+  }
+  if (open < 0) return false;
+  let depth = 0;
+  for (let i = open; i < index; i++) {
+    if (text[i] === "(") depth++;
+    else if (text[i] === ")") depth--;
+  }
+  return depth > 0;
+}
+
+/**
+ * Raw plans aliased in a gate-calling file outside a resolver call:
+ * `x.plan || "FREE"`, `const p = x.plan;`, `const { plan } = x`.
+ */
+function rawPlanAliases({ rel, raw, text }: Source): string[] {
+  if (rel === "org/effective-tier.ts" || !callsGateHelper(text)) return [];
+  const patterns = [
+    /\.plan\s*(?:\|\||\?\?)\s*"FREE"/g,
+    /(?:const|let)\s+\w+\s*=\s*[\w?.]+\.plan\s*;/g,
+    /(?:const|let)\s*\{[^}]*\bplan\b[^}]*\}\s*=/g,
+  ];
+  const offenders: string[] = [];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      if (insideResolverCall(text, index) || OWN_PLAN_MARKER.test(lineBefore(raw, index))) continue;
+      const line = text.slice(text.lastIndexOf("\n", index) + 1, text.indexOf("\n", index));
+      offenders.push(`${rel}: ${line.trim()}`);
+    }
+  }
+  return offenders;
+}
+
+function missesResolverImport({ rel, text }: Source): boolean {
+  return !PLAN_PARAMETER_ONLY.has(rel) && callsGateHelper(text) && !RESOLVER_IMPORT.test(text);
+}
+
+describe("the guard's detectors fire on known-bad code", () => {
+  const bad = source(
+    "probe.ts",
+    [
+      'import type { Tier } from "./org/effective-tier.js";',
+      'import { isEntitled, planHasFeature } from "./billing/stripe.js";',
+      "export function probe(user: { plan: string }, other: { plan: string }) {",
+      '  const fallback = user.plan || "FREE";',
+      "  const alias = other.plan;",
+      "  const { plan } = user;",
+      '  return isEntitled(user.plan) && planHasFeature(alias, "multi_account");',
+      "}",
+    ].join("\n"),
+  );
+
+  it("flags a raw plan handed to a gate helper", () => {
+    expect(rawPlanArguments(bad)).toEqual(["probe.ts: isEntitled(user.plan)"]);
+  });
+
+  it("flags raw plan aliases outside a resolver call", () => {
+    expect(rawPlanAliases(bad)).toHaveLength(3);
+  });
+
+  it("flags a type-only resolver import", () => {
+    expect(missesResolverImport(bad)).toBe(true);
+  });
+
+  it("accepts a resolver call around the raw plan", () => {
+    const good = source(
+      "good.ts",
+      [
+        'import { effectivePlan } from "./org/effective-tier.js";',
+        'import { isEntitled } from "./billing/stripe.js";',
+        "export async function good(user: { id: string; plan: string | null }) {",
+        '  const plan = await effectivePlan({ id: user.id, plan: user.plan ?? "FREE" });',
+        "  return isEntitled(plan);",
+        "}",
+      ].join("\n"),
+    );
+    expect(rawPlanArguments(good)).toEqual([]);
+    expect(rawPlanAliases(good)).toEqual([]);
+    expect(missesResolverImport(good)).toBe(false);
+  });
+});
+
+describe("plan gates read the effective plan", () => {
+  it("finds the gate call sites, every sentinel among them", () => {
+    const callers = sources
+      .filter(({ rel, text }) => !PLAN_PARAMETER_ONLY.has(rel) && callsGateHelper(text))
+      .map(({ rel }) => rel);
     expect(callers.length).toBeGreaterThanOrEqual(15);
+    expect(callers).toEqual(expect.arrayContaining(SENTINEL_CALLERS));
   });
 
   it("never hands a gate helper a raw `.plan`", () => {
-    const offenders: string[] = [];
-    for (const { rel, raw, text } of sources) {
-      for (const match of text.matchAll(helperCall)) {
-        const index = match.index ?? 0;
-        // A resolver call nested in the arguments is the resolved plan.
-        const args = callArgs(text, index + (match[1]?.length ?? 0)).replace(
-          /\beffective(?:Plans?|Tier|TierOrOwnPlan)\([^)]*\)/g,
-          "RESOLVED",
-        );
-        if (/\.plan\b/.test(args) && !OWN_PLAN_MARKER.test(lineBefore(raw, index))) {
-          offenders.push(`${rel}: ${match[1]}(${args.slice(0, 60)})`);
-        }
-      }
-      for (const match of text.matchAll(/PLAN_FEATURES\[([^\]]*)\]/g)) {
-        if (/\.plan\b/.test(match[1] ?? "")) offenders.push(`${rel}: PLAN_FEATURES[${match[1]}]`);
-      }
-    }
-    expect(offenders).toEqual([]);
+    expect(sources.flatMap(rawPlanArguments)).toEqual([]);
   });
 
-  it("aliases a raw plan with a FREE fallback only inside the resolver call", () => {
-    const offenders: string[] = [];
-    for (const { rel, raw, text } of sources) {
-      if (rel === "org/effective-tier.ts" || !callsGateHelper(text)) continue;
-      for (const match of text.matchAll(/\.plan\s*(?:\|\||\?\?)\s*"FREE"/g)) {
-        const index = match.index ?? 0;
-        const window = text.slice(Math.max(0, index - 160), index);
-        const resolved = /effectivePlans?\(|effectiveTierOrOwnPlan\(|effectiveTier\(/.test(window);
-        if (!resolved && !OWN_PLAN_MARKER.test(lineBefore(raw, index))) {
-          const line = text.slice(text.lastIndexOf("\n", index) + 1, text.indexOf("\n", index));
-          offenders.push(`${rel}: ${line.trim()}`);
-        }
-      }
-    }
-    expect(offenders).toEqual([]);
+  it("aliases a raw plan only inside a resolver call", () => {
+    expect(sources.flatMap(rawPlanAliases)).toEqual([]);
   });
 
   it("imports the resolver wherever a gate helper is called", () => {
-    const missing = sources
-      .filter(({ rel, text }) => !PLAN_PARAMETER_ONLY.has(rel) && callsGateHelper(text))
-      .filter(({ text }) => !RESOLVER_IMPORT.test(text))
-      .map(({ rel }) => rel);
-    expect(missing).toEqual([]);
+    expect(sources.filter(missesResolverImport).map(({ rel }) => rel)).toEqual([]);
   });
 });

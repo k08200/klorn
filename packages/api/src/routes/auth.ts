@@ -683,11 +683,7 @@ export function authRoutes(app: FastifyInstance) {
           // A team seat already covers this user's own paid Pro, which still
           // renews: Settings → Billing says so next to the personal cancel.
           // Klorn never cancels it (org/effective-tier.ts).
-          teamSeatCoversPersonalPlan: seatCoversPersonalPlan(
-            user.plan,
-            tier,
-            user.subscriptionCancelAt,
-          ),
+          teamSeatCoversPersonalPlan: seatCoversPersonalPlan(user.plan, tier, user),
           // Whether to hard-wall the app on entry (pure subscriber-only mode).
           // Always false with the usable free tier — free users get in and are
           // bounded by the free daily cost cap instead.

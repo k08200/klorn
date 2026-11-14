@@ -23,7 +23,11 @@ import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { CURATED_MODELS, isCuratedModel } from "../llm/model-catalog.js";
 import { MODEL } from "../llm/openai.js";
-import { effectivePlan, seatCoversPersonalPlan } from "../org/effective-tier.js";
+import {
+  effectivePlan,
+  effectivePlanOrOwn,
+  seatCoversPersonalPlan,
+} from "../org/effective-tier.js";
 import { captureError } from "../sentry.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
@@ -63,6 +67,7 @@ export async function billingRoutes(app: FastifyInstance) {
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const userId = getUserId(request);
+      // The plan the checkout asks for. effective-tier: not a gate
       const { plan } = request.body as {
         plan: "PRO";
       };
@@ -215,8 +220,9 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!user) return reply.code(404).send({ error: "User not found" });
 
     // A Klorn Teams seat counts (org/effective-tier.ts); no query while
-    // TEAMS_ENABLED is closed to the user.
-    const plan = await effectivePlan({ id: userId, plan: user.plan });
+    // TEAMS_ENABLED is closed to the user. Display only, so a failed seat
+    // lookup shows the own plan instead of failing the page.
+    const plan = await effectivePlanOrOwn({ id: userId, plan: user.plan });
     const planConfig = getEffectivePlan(plan, user.role);
 
     // Count user messages and tokens this billing period (current calendar month)
@@ -258,11 +264,7 @@ export async function billingRoutes(app: FastifyInstance) {
       canCancelInApp: isPaddleConfigured() && Boolean(user.paddleSubscriptionId),
       // A team seat already covers this personal plan while it still renews:
       // the page says so next to the personal cancel. Klorn never cancels it.
-      teamSeatCoversPersonalPlan: seatCoversPersonalPlan(
-        user.plan,
-        plan,
-        user.subscriptionCancelAt,
-      ),
+      teamSeatCoversPersonalPlan: seatCoversPersonalPlan(user.plan, plan, user),
     };
   });
 
@@ -272,8 +274,8 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
-    // A Klorn Teams seat counts (org/effective-tier.ts).
-    const plan = await effectivePlan({ id: userId, plan: user.plan });
+    // A Klorn Teams seat counts (org/effective-tier.ts). Display only.
+    const plan = await effectivePlanOrOwn({ id: userId, plan: user.plan });
     const features = PLAN_FEATURES[plan];
     const featureList = features ? Array.from(features) : [];
 
