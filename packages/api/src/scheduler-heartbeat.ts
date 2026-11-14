@@ -38,6 +38,7 @@ export const EXPECTED_SCHEDULERS = [
   "drive-google-refresh",
   "data-wipe",
   "org-audit-retention",
+  "slack-episodes",
 ] as const;
 
 export type SchedulerName = (typeof EXPECTED_SCHEDULERS)[number];

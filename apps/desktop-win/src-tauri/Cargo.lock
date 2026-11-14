@@ -1851,6 +1851,7 @@ dependencies = [
 name = "klorn-desktop-win"
 version = "0.3.0"
 dependencies = [
+ "serde_json",
  "sys-locale",
  "tauri",
  "tauri-build",
@@ -1858,6 +1859,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "windows 0.62.2",
 ]
 
 [[package]]

@@ -46,6 +46,7 @@ import {
   naverLoginEnabled,
   onboardingV2Enabled,
   rulesDslOpenTo,
+  slackOpenTo,
   smartActionsOpenTo,
   teamModeEnabled,
   teamsOpenTo,
@@ -737,6 +738,10 @@ export function authRoutes(app: FastifyInstance) {
           // web shows the rules text editor in Settings → Lanes only when this
           // is true — the same answer the /api/email/rules/dsl routes give.
           rulesDsl: rulesDslOpenTo(user.id),
+          // Server-driven client flag (SLACK_ENABLED, cohort-aware): the web
+          // shows the Slack panel in Settings → Integrations only when this
+          // is true — the same answer the /api/slack routes give this user.
+          slack: slackOpenTo(user.id),
         },
       });
     } catch {

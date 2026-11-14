@@ -16,6 +16,8 @@
 // - the first pass for an account is a silent baseline;
 // - an id is bannered at most once, and the record survives restarts (the
 //   ledger lives in localStorage, shared with the live path);
+// - a mail is bannered at most once, however many bell rows name it (its
+//   `mail:<emailId>` entry, ./desktop-alerts.ts mailLedgerKey);
 // - at most CATCHUP_MAX meeting banners per pass, newest first; the rest are
 //   recorded;
 // plus a freshness cutoff: meeting reminders older than 2 minutes, and rows
@@ -69,7 +71,8 @@ export interface AlertLedger {
   owner: string;
   /** False until the first catch-up pass recorded the bell silently. */
   baselineEstablished: boolean;
-  /** Announced (or silently recorded) notification ids, oldest first. */
+  /** Announced (or silently recorded) notification ids, plus `mail:<emailId>`
+   *  for each mail toasted, oldest first. */
   notified: string[];
 }
 
