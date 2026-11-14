@@ -181,7 +181,8 @@ jobs:
             # copy (single instance) and bring its window back.
             $cmd = (Get-ItemProperty -Path 'HKCU:\Software\Classes\klorn\shell\open\command' -ErrorAction SilentlyContinue).'(default)'
             if (-not $cmd) { throw "the installer did not register the klorn:// scheme" }
-            if ($cmd -notlike "*$($exeItem.Name)*%1*") { throw "klorn:// opens '$cmd', not this app" }
+            # Quoted "%1": an unquoted link with spaces would split into extra arguments.
+            if ($cmd -notlike ('*\' + $exeItem.Name + '" "%1"')) { throw "klorn:// opens '$cmd', not this app with a quoted link" }
             Write-Host "klorn:// registered: $cmd"
             Start-Process 'klorn://toast?open=/today'
             Start-Sleep -Seconds 5

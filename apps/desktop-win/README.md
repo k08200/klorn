@@ -68,7 +68,9 @@ the receipt and opens the page through the web app's router
 (`components/desktop-toast-router.tsx`, `window.__klornOpenToast`), or a plain
 navigation when the router is not mounted yet. Quit: Klorn starts with the URI,
 loads the page instead of the sign-in page, and reports the receipt once that
-page has loaded and the web app installed its click hook (polled for ~10 s).
+page (same origin and path) has loaded and the web app installed its click
+hook (polled for ~10 s); a receipt whose page has not loaded within 60 s is
+dropped.
 
 Why not the notification plugin: tauri-plugin-notification 2.7 reports a
 click only **while the toast is on screen** (its `NotificationBuilder::show`

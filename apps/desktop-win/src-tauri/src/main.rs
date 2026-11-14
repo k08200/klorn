@@ -28,8 +28,10 @@ mod theme;
 mod toast_link;
 mod tray;
 
+use std::time::Instant;
+
 use tauri::webview::PageLoadEvent;
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, WebviewUrl, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
 use toast_link::PendingReceipt;
 
@@ -59,7 +61,7 @@ fn main() {
                 return;
             }
             let pending = webview.state::<PendingReceipt>();
-            if let Some(id) = pending.take_for(payload.url().path()) {
+            if let Some(id) = pending.for_page(payload.url(), Instant::now()) {
                 let _ = webview.eval(toast_link::pending_click_script(&id));
             }
         })
@@ -80,7 +82,23 @@ fn main() {
                 }
                 // Started by a click on a toast in the Action Center.
                 if let Some(click) = toast_link::from_args(std::env::args()) {
-                    toast_link::open_on_launch(&win, &click, &app.state::<PendingReceipt>());
+                    let configured = app
+                        .config()
+                        .app
+                        .windows
+                        .iter()
+                        .find(|w| w.label == "main")
+                        .and_then(|w| match &w.url {
+                            WebviewUrl::External(url) => Some(url.clone()),
+                            _ => None,
+                        });
+                    toast_link::open_on_launch(
+                        &win,
+                        configured.as_ref(),
+                        &click,
+                        &app.state::<PendingReceipt>(),
+                        Instant::now(),
+                    );
                 }
             }
             Ok(())

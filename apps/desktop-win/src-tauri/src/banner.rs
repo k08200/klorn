@@ -168,7 +168,8 @@ pub fn on_action<R: Runtime>(app: &AppHandle<R>, performed: &ActionPerformed) {
     toast_link::deliver(app, &click);
 }
 
-/// Text for an XML element or attribute value. Pure.
+/// Text for an XML element or attribute value, without the characters XML
+/// cannot hold. Pure.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn xml_escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -179,6 +180,8 @@ fn xml_escape(text: &str) -> String {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&apos;"),
+            // Not XML characters: LoadXml would refuse the whole toast.
+            '\u{FFFE}' | '\u{FFFF}' => {}
             _ => out.push(c),
         }
     }
@@ -231,7 +234,6 @@ pub fn toast_app_id(exe_dir: &Path, identifier: &str) -> String {
 /// toast XML with no launch URI, so it cannot ask for protocol activation.
 #[cfg(windows)]
 fn post_protocol_toast<R: Runtime>(app: &AppHandle<R>, xml: &str) -> windows::core::Result<()> {
-    use tauri::Manager;
     use windows::core::HSTRING;
     use windows::Data::Xml::Dom::XmlDocument;
     use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
@@ -430,6 +432,14 @@ mod tests {
             "launch=\"klorn://toast?open=/email/x1&amp;receipt={ROW}\""
         )));
         assert_eq!(xml.matches("<text>").count(), 2);
+    }
+
+    #[test]
+    fn the_windows_toast_drops_characters_xml_cannot_hold() {
+        // U+FFFE / U+FFFF are no control characters (`clean` keeps them) but
+        // are not XML: LoadXml would refuse the whole toast.
+        let xml = toast_xml("Kim\u{FFFE}", "a\u{FFFF}b", "klorn://toast");
+        assert!(xml.contains("<text>Kim</text><text>ab</text>"));
     }
 
     #[test]

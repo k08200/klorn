@@ -22,6 +22,7 @@
 //! caller's own rows, stamping the first report only.
 
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewWindow};
 
@@ -121,36 +122,70 @@ pub fn deliver<R: Runtime>(app: &AppHandle<R>, click: &ToastClick) {
     }
 }
 
+/// How long a cold start's receipt waits for the page it was opened on.
+pub const HOLD_FOR: Duration = Duration::from_secs(60);
+
+/// The page a held receipt waits for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Wait {
+    /// This page (origin and path): the one the click opened.
+    Page(Url),
+    /// Any page of this origin: a click with no page of its own (a meeting).
+    AnyPageOf(Url),
+}
+
+impl Wait {
+    fn matches(&self, loaded: &Url) -> bool {
+        let same_origin = |want: &Url| want.origin() == loaded.origin();
+        match self {
+            Wait::Page(want) => same_origin(want) && want.path() == loaded.path(),
+            Wait::AnyPageOf(want) => same_origin(want),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Held {
+    id: String,
+    wait: Wait,
+    until: Instant,
+}
+
 /// A receipt held for the page a cold start opens: reported once that page
 /// has loaded, not on the sign-in page loading underneath it.
 #[derive(Debug, Default)]
-pub struct PendingReceipt(Mutex<Option<(String, Option<String>)>>);
+pub struct PendingReceipt(Mutex<Option<Held>>);
 
 impl PendingReceipt {
-    fn slot(&self) -> MutexGuard<'_, Option<(String, Option<String>)>> {
+    fn slot(&self) -> MutexGuard<'_, Option<Held>> {
         self.0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Hold `id` until a page at `path` (any page when None) has loaded.
-    pub fn hold(&self, id: String, path: Option<String>) {
-        *self.slot() = Some((id, path));
+    /// Hold `id` until the page `wait` names has loaded, for `HOLD_FOR`.
+    pub fn hold(&self, id: String, wait: Wait, now: Instant) {
+        *self.slot() = Some(Held {
+            id,
+            wait,
+            until: now + HOLD_FOR,
+        });
     }
 
-    /// The held receipt, taken, when the page at `loaded_path` is the one it
-    /// waits for.
-    pub fn take_for(&self, loaded_path: &str) -> Option<String> {
+    /// The held receipt when `loaded` is the page it waits for. Not taken:
+    /// WebView2 can report a load finished that the cold start's navigation
+    /// cancelled, so the next finished load of that page gets it again (a
+    /// repeat `clicked` is a no-op: the endpoint stamps the first report).
+    /// Dropped once `HOLD_FOR` has passed, so a receipt whose page never
+    /// loaded (signed out, say) is not reported on some later visit.
+    pub fn for_page(&self, loaded: &Url, now: Instant) -> Option<String> {
         let mut slot = self.slot();
-        let waits_here = match slot.as_ref() {
-            Some((_, Some(path))) => path == loaded_path,
-            Some((_, None)) => true,
-            None => false,
-        };
-        if !waits_here {
+        let held = slot.as_ref()?;
+        if now >= held.until {
+            *slot = None;
             return None;
         }
-        slot.take().map(|(id, _)| id)
+        held.wait.matches(loaded).then(|| held.id.clone())
     }
 }
 
@@ -163,27 +198,47 @@ pub fn pending_click_script(id: &str) -> String {
     )
 }
 
-/// The page to load for a click that started Klorn: the same origin as the
-/// window's start page, at the click's path. Pure.
-pub fn launch_url(start: &Url, path: &str) -> Option<Url> {
-    start.join(path).ok()
+/// The web origin a cold start opens pages on: the main window's configured
+/// start page, else the window's current page — either only when it is
+/// http(s): right after creation WebView2 may still report about:blank. Pure.
+pub fn launch_base(configured: Option<&Url>, current: Option<&Url>) -> Option<Url> {
+    let web = |url: &&Url| matches!(url.scheme(), "https" | "http");
+    configured.filter(web).or(current.filter(web)).cloned()
+}
+
+/// The page to load for a click that started Klorn: the click's path on the
+/// `launch_base` origin. Pure.
+pub fn launch_url(configured: Option<&Url>, current: Option<&Url>, path: &str) -> Option<Url> {
+    launch_base(configured, current)?.join(path).ok()
 }
 
 /// A click that started Klorn: open its page in place of the start page, and
 /// hold its receipt until that page has loaded (main.rs `on_page_load`).
+/// `configured` is the main window's start URL from tauri.conf.json.
 pub fn open_on_launch<R: Runtime>(
     win: &WebviewWindow<R>,
+    configured: Option<&Url>,
     click: &ToastClick,
     pending: &PendingReceipt,
+    now: Instant,
 ) {
-    if let Some(id) = &click.receipt {
-        pending.hold(id.clone(), click.open.clone());
-    }
-    let Some(path) = &click.open else {
+    let current = win.url().ok();
+    let Some(base) = launch_base(configured, current.as_ref()) else {
         return;
     };
-    if let Some(url) = win.url().ok().and_then(|start| launch_url(&start, path)) {
-        let _ = win.navigate(url);
+    let target = click
+        .open
+        .as_deref()
+        .and_then(|path| launch_url(configured, current.as_ref(), path));
+    if let Some(id) = &click.receipt {
+        let wait = match &target {
+            Some(page) => Wait::Page(page.clone()),
+            None => Wait::AnyPageOf(base.clone()),
+        };
+        pending.hold(id.clone(), wait, now);
+    }
+    if let Some(page) = target {
+        let _ = win.navigate(page);
     }
 }
 
@@ -306,25 +361,96 @@ mod tests {
         assert_eq!(from_args(["Klorn.exe", "--autostart"]), None);
     }
 
+    fn url(s: &str) -> Url {
+        Url::parse(s).unwrap()
+    }
+
     #[test]
-    fn a_cold_start_opens_the_page_on_the_start_origin() {
-        let start = Url::parse("https://app.klorn.ai/login").unwrap();
+    fn a_cold_start_opens_the_page_on_the_configured_origin() {
+        let configured = url("https://app.klorn.ai/login");
         assert_eq!(
-            launch_url(&start, "/email/x1").unwrap().as_str(),
+            launch_url(Some(&configured), None, "/email/x1")
+                .unwrap()
+                .as_str(),
             "https://app.klorn.ai/email/x1"
+        );
+        // Right after creation WebView2 may still report about:blank.
+        assert_eq!(
+            launch_url(Some(&configured), Some(&url("about:blank")), "/today")
+                .unwrap()
+                .as_str(),
+            "https://app.klorn.ai/today"
+        );
+        // No configured web origin: the window's own, if it is one.
+        assert_eq!(
+            launch_url(None, Some(&url("https://app.klorn.ai/login")), "/today")
+                .unwrap()
+                .as_str(),
+            "https://app.klorn.ai/today"
+        );
+        assert_eq!(launch_url(None, Some(&url("about:blank")), "/today"), None);
+        assert_eq!(launch_url(None, None, "/today"), None);
+    }
+
+    #[test]
+    fn a_held_receipt_waits_for_its_own_page() {
+        let now = Instant::now();
+        let pending = PendingReceipt::default();
+        pending.hold(
+            ROW.into(),
+            Wait::Page(url("https://app.klorn.ai/email/x1")),
+            now,
+        );
+        assert_eq!(
+            pending.for_page(&url("https://app.klorn.ai/login"), now),
+            None
+        );
+        // Same path on another origin: never.
+        assert_eq!(
+            pending.for_page(&url("https://evil.example/email/x1"), now),
+            None
+        );
+        assert_eq!(
+            pending.for_page(&url("https://app.klorn.ai/email/x1?x=1"), now),
+            Some(ROW.into())
         );
     }
 
     #[test]
-    fn a_held_receipt_waits_for_its_own_page_and_is_reported_once() {
+    fn a_held_receipt_survives_a_load_that_was_cancelled_then_expires() {
+        let now = Instant::now();
         let pending = PendingReceipt::default();
-        pending.hold(ROW.into(), Some("/email/x1".into()));
-        assert_eq!(pending.take_for("/login"), None);
-        assert_eq!(pending.take_for("/email/x1"), Some(ROW.into()));
-        assert_eq!(pending.take_for("/email/x1"), None);
+        let page = url("https://app.klorn.ai/email/x1");
+        pending.hold(ROW.into(), Wait::Page(page.clone()), now);
+        // WebView2 can report a cancelled load finished: offer it again on
+        // the next finished load (a repeat report is a no-op server-side).
+        assert_eq!(pending.for_page(&page, now), Some(ROW.into()));
+        assert_eq!(
+            pending.for_page(&page, now + Duration::from_secs(5)),
+            Some(ROW.into())
+        );
+        // Never reported long after the click (a redirect to sign-in, say).
+        assert_eq!(pending.for_page(&page, now + HOLD_FOR), None);
+        assert_eq!(pending.for_page(&page, now), None);
+    }
 
-        pending.hold(ROW.into(), None);
-        assert_eq!(pending.take_for("/today"), Some(ROW.into()));
+    #[test]
+    fn a_receipt_without_a_page_waits_for_any_page_of_the_app() {
+        let now = Instant::now();
+        let pending = PendingReceipt::default();
+        pending.hold(
+            ROW.into(),
+            Wait::AnyPageOf(url("https://app.klorn.ai/login")),
+            now,
+        );
+        assert_eq!(
+            pending.for_page(&url("https://app.klorn.ai/today"), now),
+            Some(ROW.into())
+        );
+        assert_eq!(
+            pending.for_page(&url("https://evil.example/today"), now),
+            None
+        );
     }
 
     #[test]
