@@ -25,6 +25,7 @@ import type { SendMailResult } from "./providers/types.js";
 import { pickInReplyTo } from "./reply-headers.js";
 import { markEmailReplied } from "./reply-state.js";
 import { resolveReplyThreading } from "./reply-threading.js";
+import { claimSend, releaseSend, type SendClaim } from "./send-claim.js";
 import {
   openSendReceipt,
   outcomeOfSend,
@@ -106,6 +107,64 @@ async function openReceipt(
     : openSendReceipt(receiptInput);
 }
 
+type ReceiptStep = { receipt: SendReceiptHandle | null } | ReplySendOutcome;
+
+/**
+ * Deterministic floor: the receipt binds the recipient and subject derived from
+ * the user's row and the body the user confirmed, and is written before
+ * anything leaves. No receipt, no send. null only in "if-enabled" mode with the
+ * flag off — then nothing after it changes.
+ */
+async function writeReceipt(
+  input: ReplySendInput,
+  receiptInput: SendReceiptInput,
+): Promise<ReceiptStep> {
+  try {
+    return { receipt: await openReceipt(input, receiptInput) };
+  } catch (err) {
+    captureError(err, {
+      tags: { scope: "email-replies.receipt" },
+      extra: { userId: input.userId, emailId: receiptInput.emailId, route: input.route },
+    });
+    return { kind: "receipt_unavailable" };
+  }
+}
+
+/**
+ * The repeat check and the receipt write, under the send claim (send-claim.ts):
+ * of two requests for the same bytes to the same mail, only the one holding the
+ * claim runs them, so they cannot both find "nothing sent yet". The claim is
+ * released once the receipt is written or refused; from then on that receipt
+ * is what the next request's check finds. No provider call runs under it.
+ */
+async function writeClaimedReceipt(
+  input: ReplySendInput,
+  receiptInput: SendReceiptInput & { emailId: string },
+  payloadHash: string,
+): Promise<ReceiptStep> {
+  const key = { userId: input.userId, emailId: receiptInput.emailId, payloadHash };
+  let claim: SendClaim | null;
+  try {
+    claim = await claimSend(key);
+  } catch (err) {
+    // Nothing was written, so nothing can go out: the answer for a receipt that
+    // cannot be written.
+    captureError(err, {
+      tags: { scope: "email-replies.send-claim" },
+      extra: { userId: input.userId, emailId: key.emailId, route: input.route },
+    });
+    return { kind: "receipt_unavailable" };
+  }
+  // Another request is sending these bytes to this mail right now.
+  if (!claim) return { kind: "repeat" };
+  try {
+    if (await sentMomentsAgo(input.userId, key.emailId, payloadHash)) return { kind: "repeat" };
+    return await writeReceipt(input, receiptInput);
+  } finally {
+    await releaseSend(claim);
+  }
+}
+
 /**
  * Send `body` as a threaded reply to the user's own mail. Throws only what the
  * route should fail loud on: a receipt/payload mismatch at the last check, or a
@@ -135,6 +194,8 @@ export async function sendReplyToEmail(input: ReplySendInput): Promise<ReplySend
   }
   // With a receipt on every send, the same bytes to the same mail moments ago
   // (a double tap, a second tab, a retry after "may have been sent") are a repeat.
+  // This early read skips the provider calls below; the decisive check runs
+  // again under the claim, right before the receipt is written.
   if (input.receipt === "required" && (await sentMomentsAgo(uid, dbEmail.id, payloadHash))) {
     return { kind: "repeat" };
   }
@@ -145,28 +206,23 @@ export async function sendReplyToEmail(input: ReplySendInput): Promise<ReplySend
   const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
   const threading = await resolveReplyThreading(actions, uid, dbEmail);
 
-  // Deterministic floor: the receipt binds the recipient and subject derived
-  // above and the body the user confirmed, and is written before anything
-  // leaves. No receipt, no send. null only in "if-enabled" mode with the flag
-  // off — then nothing below changes.
-  let receipt: SendReceiptHandle | null;
-  try {
-    receipt = await openReceipt(input, {
-      userId: uid,
-      route: input.route,
-      to,
-      subject,
-      body,
-      inbox: dbEmail.linkedInboxAccountId ?? "primary",
-      emailId: dbEmail.id,
-    });
-  } catch (err) {
-    captureError(err, {
-      tags: { scope: "email-replies.receipt" },
-      extra: { userId: uid, emailId: dbEmail.id, route: input.route },
-    });
-    return { kind: "receipt_unavailable" };
-  }
+  const receiptInput = {
+    userId: uid,
+    route: input.route,
+    to,
+    subject,
+    body,
+    inbox: dbEmail.linkedInboxAccountId ?? "primary",
+    emailId: dbEmail.id,
+  };
+  // "required" (the smart action): check and write atomically, under the claim.
+  // "if-enabled" (POST /api/email/:id/reply): no repeat check, no claim, as before.
+  const step =
+    input.receipt === "required"
+      ? await writeClaimedReceipt(input, receiptInput, payloadHash)
+      : await writeReceipt(input, receiptInput);
+  if ("kind" in step) return step;
+  const { receipt } = step;
 
   // The exact bytes handed to the provider, verified against the receipt.
   if (receipt) await verifySendOrRefuse(receipt, uid, { to, subject, body });

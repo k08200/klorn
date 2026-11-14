@@ -53,6 +53,10 @@ const replies = vi.hoisted(() => ({
       reply.code(503).send({ error: "unavailable" }),
   ),
 }));
+const claims = vi.hoisted(() => ({
+  claimSend: vi.fn(),
+  releaseSend: vi.fn(async () => {}),
+}));
 const calendar = vi.hoisted(() => ({ createUserCalendarEvent: vi.fn() }));
 const parseEventText = vi.hoisted(() => vi.fn());
 const entitled = vi.hoisted(() => vi.fn(async () => {}));
@@ -97,6 +101,8 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../billing/entitlement-guard.js", () => ({ requireEntitled: entitled }));
 vi.mock("../routes/email-replies.js", () => replies);
 vi.mock("../routes/calendar.js", () => calendar);
+// The claim's SQL is proven against real Postgres (smart-reply-send-race-pg.test.ts).
+vi.mock("../mail/send-claim.js", () => claims);
 vi.mock("../event-parse.js", () => ({ parseEventText }));
 vi.mock("../user-timezone.js", () => ({ getUserTimeZone: vi.fn(async () => "Asia/Seoul") }));
 
@@ -159,6 +165,13 @@ beforeEach(() => {
   });
   db.eventFindMany.mockResolvedValue([]);
   db.receiptFindFirst.mockResolvedValue(null);
+  claims.claimSend.mockImplementation(async (key: object) => {
+    order.push("claim");
+    return { ...key, token: "tok-1" };
+  });
+  claims.releaseSend.mockImplementation(async () => {
+    order.push("release");
+  });
   gmail.sendEmail.mockImplementation(async () => {
     order.push("send");
     return { success: true, messageId: "sent-1", threadId: "t1" };
@@ -305,7 +318,7 @@ describe("POST /emails/:id/reply (Send)", () => {
   it("mints the receipt over the shown bytes BEFORE sending, flag or not", async () => {
     const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
     expect(res.statusCode).toBe(200);
-    expect(order).toEqual(["receipt", "send"]);
+    expect(order).toEqual(["claim", "receipt", "release", "send"]);
     expect(db.receiptCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -345,6 +358,53 @@ describe("POST /emails/:id/reply (Send)", () => {
       db.receiptFindFirst.mock.calls[0] as unknown as [{ where: Record<string, unknown> }]
     )[0].where;
     expect(where).toMatchObject({ userId: "user-1", emailId: "e1", payloadHash: HASH });
+  });
+
+  it("re-checks for a repeat and writes the receipt under the claim, after the provider lookups", async () => {
+    await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(claims.claimSend).toHaveBeenCalledWith({
+      userId: "user-1",
+      emailId: "e1",
+      payloadHash: HASH,
+    });
+    expect(claims.releaseSend).toHaveBeenCalledWith(expect.objectContaining({ token: "tok-1" }));
+    const [early, decisive] = db.receiptFindFirst.mock.invocationCallOrder;
+    const claimedAt = claims.claimSend.mock.invocationCallOrder[0];
+    // No provider call under the claim: threading is resolved before it.
+    expect(gmail.getReplyHeaders.mock.invocationCallOrder[0]).toBeLessThan(claimedAt);
+    expect(early).toBeLessThan(claimedAt);
+    expect(decisive).toBeGreaterThan(claimedAt);
+    expect(decisive).toBeLessThan(claims.releaseSend.mock.invocationCallOrder[0]);
+  });
+
+  it("is a repeat while another request holds the claim: 409, nothing written or sent", async () => {
+    claims.claimSend.mockResolvedValueOnce(null);
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/already went/);
+    expectNothingSent();
+    expect(db.receiptFindFirst).toHaveBeenCalledTimes(1); // the early read only
+    expect(claims.releaseSend).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the claim cannot be taken (503, as for the receipt)", async () => {
+    claims.claimSend.mockRejectedValueOnce(new Error("db down"));
+    const res = await call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    expect(res.statusCode).toBe(503);
+    expectNothingSent();
+  });
+
+  it("releases the claim on a repeat found under it, a receipt that cannot be written, and a failed check", async () => {
+    const send = () =>
+      call("/api/smart-actions/emails/e1/reply", { body: BODY, payloadHash: HASH });
+    db.receiptFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "rcpt-0" });
+    expect((await send()).statusCode).toBe(409);
+    db.receiptCreate.mockRejectedValueOnce(new Error("db down"));
+    expect((await send()).statusCode).toBe(503);
+    db.receiptFindFirst.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("db down"));
+    expect((await send()).statusCode).toBe(500);
+    expect(claims.releaseSend).toHaveBeenCalledTimes(3);
+    expect(gmail.sendEmail).not.toHaveBeenCalled();
   });
 
   it("answers a provider refusal 409, an unsupported provider 501, an unknown outcome 502", async () => {
