@@ -119,6 +119,8 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // McpWriteAudit: what an agent changed through the user's API keys — opaque
   // message ids and argument hashes, no content, but still the user's history.
   await tx.mcpWriteAudit.deleteMany(scope);
+  // DataExportAudit: the user's own exports (format, outcome, counts), no content.
+  await tx.dataExportAudit.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);

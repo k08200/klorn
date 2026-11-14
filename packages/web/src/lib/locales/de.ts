@@ -3090,6 +3090,21 @@ const de: Record<string, string> = {
     "Die Erinnerung braucht einen verbundenen Google Kalender, deshalb wurde keine gesetzt.",
   "smartActions.event.saveHint": "Titel, Tag, Startzeit und Dauer ausfüllen, um zu speichern.",
   "smartActions.event.savedWhen": "{date} um {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Als Markdown exportieren",
+  "vaultExport.desc":
+    "Exportiere deine Klorn-Daten als Markdown: Lanes, Absender, Zusagen und eine Notiz pro Mail, bereit für Obsidian oder jeden Editor.",
+  "vaultExport.button": "ZIP herunterladen",
+  "vaultExport.includeText": "Mailtext einschließen",
+  "vaultExport.includeText.desc":
+    "Fügt den Text jeder Mail hinzu, den Klorn noch aufbewahrt. Ohne diese Option enthalten die Notizen Betreff, Vorschau und Klorns Entscheidung.",
+  "vaultExport.done": "Markdown-Export heruntergeladen.",
+  "vaultExport.error.cooldown":
+    "Du hast gerade erst exportiert. Versuche es in {minutes} Min. erneut.",
+  "vaultExport.error.inProgress": "Ein Export läuft bereits. Warte, bis er fertig ist.",
+  "vaultExport.error.busy": "Gerade laufen viele Exporte. Versuche es in einer Minute erneut.",
+  "vaultExport.error.unavailable": "Der Markdown-Export ist für dieses Konto nicht verfügbar.",
+  "vaultExport.error.failed": "Der Markdown-Export ist fehlgeschlagen. Versuche es erneut.",
 };
 
 export default de;

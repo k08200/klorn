@@ -63,6 +63,9 @@ interface User {
   // True shows "Draft reply" / "Add to calendar" on the briefing picks and in
   // the mail reader. Undefined (older API) = off.
   smartActions?: boolean;
+  // Server-driven client flag: the API's VAULT_EXPORT_ENABLED, cohort-aware.
+  // True offers "Export as markdown" in Settings → Data. Undefined = off.
+  vaultExport?: boolean;
 }
 
 interface AuthContextType {

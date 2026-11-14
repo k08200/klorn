@@ -185,6 +185,7 @@ model User {
   learnedRules               LearnedRule[]
   apiKeys                    ApiKey[]
   mcpWriteAudits             McpWriteAudit[]
+  dataExportAudits           DataExportAudit[]
   imapMovedMessages          ImapMovedMessage[]
 }
 
@@ -271,6 +272,31 @@ model McpWriteAudit {
 
   @@index([userId, createdAt])
   @@index([apiKeyId, createdAt])
+  @@index([createdAt]) // the retention sweep's range scan
+}
+
+/// One row per data export the user started (Klorn Vault, routes/vault-export.ts).
+/// The audit trail and the per-user cooldown both read it: an export started
+/// within VAULT_EXPORT_COOLDOWN_MS of the last one is refused, across restarts.
+///
+/// Never holds export content: the archive is streamed to the user and kept
+/// nowhere. `outcome` is `started` until the stream ends, then `ok`, `partial`
+/// (a size/count/time limit cut the mail notes), `aborted` (the client went
+/// away) or `error`. Swept after 90 days by log-retention.ts, removed with the
+/// User (cascade) and by purgeUserData.
+model DataExportAudit {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format        String // "vault-markdown"
+  includeBodies Boolean
+  outcome       String // started | ok | partial | aborted | error
+  noteCount     Int?
+  byteCount     Int?
+  createdAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  @@index([userId, createdAt])
   @@index([createdAt]) // the retention sweep's range scan
 }
 
@@ -2437,7 +2463,7 @@ model Commitment {
   // When the user confirmed a suggested (low-confidence, rule-mined) row. A
   // row is "confirmed" when this is set or confidence >= 0.7
   // (pim/commitment-confirmation.ts); only a confirmed row may interrupt.
-  confirmedAt DateTime?
+  confirmedAt           DateTime?
   // When a later reply in the thread suggested the promise was kept: the
   // user's own send (owner USER, "likely done") or the counterparty writing
   // again (owner COUNTERPARTY, "likely delivered"). The evidence's own time.

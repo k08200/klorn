@@ -225,6 +225,8 @@ const COPY_GUARD_PREFIXES = [
   "dailyCap.",
   // Smart actions: Draft reply → Send, Add to calendar (SMART_ACTIONS_ENABLED).
   "smartActions.",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */

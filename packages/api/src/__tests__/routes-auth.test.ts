@@ -1319,6 +1319,32 @@ describe("GET /api/auth/me", () => {
     await app.close();
   });
 
+  it("reports VAULT_EXPORT_ENABLED as user.vaultExport, cohort-aware, false unless open", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "vault-export@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user as { id: string; vaultExport: boolean };
+
+    delete process.env.VAULT_EXPORT_ENABLED;
+    const { id, vaultExport } = await me();
+    expect(vaultExport).toBe(false);
+    try {
+      process.env.VAULT_EXPORT_ENABLED = "cohort";
+      process.env.ROLLOUT_COHORT_USER_IDS = "someone-else";
+      expect((await me()).vaultExport).toBe(false);
+      process.env.ROLLOUT_COHORT_USER_IDS = `someone-else,${id}`;
+      expect((await me()).vaultExport).toBe(true);
+      process.env.VAULT_EXPORT_ENABLED = "true";
+      process.env.ROLLOUT_COHORT_USER_IDS = "";
+      expect((await me()).vaultExport).toBe(true);
+    } finally {
+      delete process.env.VAULT_EXPORT_ENABLED;
+      delete process.env.ROLLOUT_COHORT_USER_IDS;
+    }
+    await app.close();
+  });
+
   it("reports ONBOARDING_V2 as user.onboardingV2 on /me, login and register, false unless on", async () => {
     const app = await buildApp();
     const register = async (email: string) =>

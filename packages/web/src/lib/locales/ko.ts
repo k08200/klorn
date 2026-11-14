@@ -2956,6 +2956,20 @@ const ko: Record<string, string> = {
     "알림은 Google 캘린더가 연결되어 있어야 해서 설정하지 않았어요.",
   "smartActions.event.saveHint": "저장하려면 제목, 날짜, 시작 시간, 길이를 채워 주세요.",
   "smartActions.event.savedWhen": "{date} {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "마크다운으로 내보내기",
+  "vaultExport.desc":
+    "Klorn 데이터를 마크다운으로 내보냅니다. 레인, 발신자, 약속, 메일별 노트가 담기며 Obsidian이나 다른 편집기에서 바로 열 수 있습니다.",
+  "vaultExport.button": ".zip 다운로드",
+  "vaultExport.includeText": "메일 본문 포함",
+  "vaultExport.includeText.desc":
+    "Klorn에 아직 남아 있는 메일 본문을 함께 담습니다. 끄면 노트에는 제목, 미리보기, Klorn의 판단만 담깁니다.",
+  "vaultExport.done": "마크다운 내보내기 파일을 다운로드했습니다.",
+  "vaultExport.error.cooldown": "최근에 내보냈습니다. {minutes}분 뒤에 다시 시도하세요.",
+  "vaultExport.error.inProgress": "이미 내보내는 중입니다. 끝날 때까지 기다려 주세요.",
+  "vaultExport.error.busy": "지금은 내보내기 요청이 많습니다. 잠시 뒤에 다시 시도하세요.",
+  "vaultExport.error.unavailable": "이 계정에서는 마크다운 내보내기를 사용할 수 없습니다.",
+  "vaultExport.error.failed": "마크다운 내보내기에 실패했습니다. 다시 시도하세요.",
 };
 
 export default ko;
