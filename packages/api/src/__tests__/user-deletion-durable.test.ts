@@ -49,6 +49,9 @@ vi.mock("../purge-user-data.js", () => ({
   revokeUserAccess: vi.fn(async () => {}),
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+// Organization ownership handover (org/account-deletion.ts) has its own proof
+// in orgs-pg.test.ts; this file's prisma mock has no org tables.
+vi.mock("../org/account-deletion.js", () => ({ handOverOrgBeforeAccountDeletion: vi.fn() }));
 
 import { StorageError } from "../storage/errors.js";
 import { newObjectKey } from "../storage/keys.js";

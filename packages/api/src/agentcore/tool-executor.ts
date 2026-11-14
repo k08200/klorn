@@ -5,7 +5,7 @@
  */
 
 import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
-import { teamModeEnabled } from "../config.js";
+import { teamAvailabilityOpenTo, teamsOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -23,6 +23,8 @@ import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { markEmailReplied } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
 import { recordSentMessage, type SentOrigin } from "../mail/sent-messages.js";
+import { orgAvailabilityMembers } from "../org/org-availability.js";
+import { isOrgError } from "../org/org-error.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,
@@ -88,15 +90,21 @@ const TEAM_AVAILABILITY_TOOL = {
   function: {
     name: "team_availability",
     description:
-      "Find time slots where the USER and a group of people are all free. Pass either the " +
-      "name of one of the user's saved teams (team_name) or an explicit members list of " +
-      "email addresses. Members whose calendars are not visible come back in " +
+      "Find time slots where the USER and a group of people are all free. Pass the name " +
+      "of one of the user's saved teams (team_name), an explicit members list of email " +
+      "addresses, or org_members: true for everyone in the user's Klorn organization. " +
+      "Organization members are read only when they share free/busy (busy times only). " +
+      "Members whose calendars are not visible come back in " +
       "unknownMembers — their availability is UNKNOWN, do not claim they are free. Use for " +
       "questions like 'AX팀 내일 언제 다 돼?' or 'find an hour for me, alice@ and bob@ this week'.",
     parameters: {
       type: "object",
       properties: {
         team_name: { type: "string", description: "Name of one of the user's saved teams." },
+        org_members: {
+          type: "boolean",
+          description: "true = everyone else in the user's Klorn organization.",
+        },
         members: {
           type: "array",
           items: { type: "string" },
@@ -383,7 +391,7 @@ async function executeToolCallInternal(
       case "list_events":
         return JSON.stringify(await listEvents(userId, safeInt(args.max_results, 10, 200)));
       case "team_availability": {
-        if (!teamModeEnabled()) {
+        if (!teamAvailabilityOpenTo(userId)) {
           return JSON.stringify({
             error: "Team mode is not part of the current plan.",
             code: "TEAM_REQUIRED",
@@ -397,7 +405,20 @@ async function executeToolCallInternal(
           });
         }
         let members: string[] = [];
-        if (typeof args.team_name === "string" && args.team_name.trim()) {
+        if (args.org_members === true) {
+          if (!teamsOpenTo(userId)) {
+            return JSON.stringify({ error: "Organizations are not available on this account." });
+          }
+          try {
+            members = await orgAvailabilityMembers(userId, undefined);
+          } catch (err) {
+            if (isOrgError(err)) return JSON.stringify({ error: err.message, code: err.code });
+            throw err;
+          }
+          if (members.length === 0) {
+            return JSON.stringify({ error: "The organization has no other members yet." });
+          }
+        } else if (typeof args.team_name === "string" && args.team_name.trim()) {
           const teams = await prisma.team.findMany({
             where: { userId },
             select: { name: true, members: true },

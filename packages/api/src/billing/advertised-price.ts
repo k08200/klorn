@@ -15,3 +15,12 @@
  * Change `PRO_PRICE_WEB` and this together, or CI will say so.
  */
 export const ADVERTISED_PRO_PRICE_WEB = "$29.99";
+
+/**
+ * Team (company) plan, standard seat (docs/design/pricing-tiers.md, LOCKED
+ * 2026-11-11): $30 per seat per month billed monthly, $26 per seat per month
+ * billed annually ($312 a year). USD cents. Not on the public site until the
+ * price-consistency guard covers them; the Paddle prices are founder work.
+ */
+export const TEAM_STANDARD_SEAT_MONTHLY_CENTS = 3000;
+export const TEAM_STANDARD_SEAT_ANNUAL_PER_MONTH_CENTS = 2600;

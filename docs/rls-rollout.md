@@ -59,6 +59,8 @@ rolled the revoke back too.
 | ApiKey, ContactDossier, ImapMovedMessage, LlmUsageLog, McpWriteAudit, PmfResponse, ScreenerDecision, SenderLabel, SentMessage, Team, ThreadBrief | `_tenant_isolation` on `"userId"`, `_system_bypass` | The standard pair. `LlmUsageLog."userId"` is nullable: a NULL row is a system call and is reachable through the bypass only. |
 | Message, ConversationSummary, CommitmentPath | `_tenant_isolation` through the parent (`Conversation`, `Commitment`), `_system_bypass` | No `"userId"`, but the parent has one, and tenant-scoped handlers read them with the parent. Bypass-only would return zero rows to those handlers once RLS binds. |
 | GlobalCostLedger, OntologyProposal, Waitlist, WebhookEvent | `_system_bypass` only | No owning user. Reach them with `withSystem`. |
+| OrgMembership, AvailabilityGrant (Klorn Teams, 2026-11-14) | `_tenant_isolation` on `"userId"`, `_system_bypass` | The standard pair. The roster and a co-member's grant are cross-member reads: `src/org/` must reach them through `withSystem` once RLS binds, or they return zero rows. |
+| Organization, OrgInvite, OrgAuditEvent (Klorn Teams, 2026-11-14) | `_system_bypass` only | No owning user: an organization is shared by its members. Reach them with `withSystem`. |
 | `_prisma_migrations` | none | RLS with no policy denies every role that neither owns the table nor bypasses RLS. `prisma migrate deploy` runs as the owner. |
 
 The revoke goes table by table over the tables the migrating role owns.

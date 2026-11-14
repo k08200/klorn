@@ -135,6 +135,8 @@ export const UNFENCED_MODELS: Record<string, string> = {
   DataWipe: "the fence's own record",
   SendClaim:
     "an in-flight Send's claim (mail id + payload hash), released once its receipt is written; that receipt insert is fenced",
+  OrgMembership: "organization membership, an account relationship with no mail data",
+  AvailabilityGrant: "the free/busy consent the user sets, no mail data; the wipe resets it",
 };
 
 /** Fenced tables without a userId: the owner is the parent row's. */

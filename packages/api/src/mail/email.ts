@@ -144,6 +144,65 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
   }
 }
 
+const INVITE_NAME_MAX = 80;
+
+/**
+ * Klorn Teams invite (org/org-invites.ts). The raw token rides in the URL
+ * fragment, which browsers never send to a server, so it stays out of access
+ * logs and Referer headers; the accept page posts it in a request body. The
+ * organization and inviter names are user text: escaped for HTML and stripped
+ * of header controls for the subject. Returns false only when Resend refused.
+ */
+export async function sendOrgInviteEmail(input: {
+  to: string;
+  token: string;
+  orgName: string;
+  inviterName: string | null;
+}): Promise<boolean> {
+  const safeAddr = maskEmail(input.to);
+  if (!resend) {
+    console.log("[EMAIL] No RESEND_API_KEY — organization invite generated for", safeAddr);
+    return true;
+  }
+  const acceptUrl = `${WEB_URL}/team-invite#token=${encodeURIComponent(input.token)}`;
+  const org = stripHeaderControls(input.orgName).slice(0, INVITE_NAME_MAX);
+  const inviter = input.inviterName
+    ? stripHeaderControls(input.inviterName).slice(0, INVITE_NAME_MAX)
+    : null;
+  const lead = inviter
+    ? `${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(org)}</strong> on Klorn.`
+    : `You were invited to join <strong>${escapeHtml(org)}</strong> on Klorn.`;
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: input.to,
+      subject: `Join ${org} on Klorn`,
+      html: `
+        <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #0ea5e9; margin-bottom: 24px;">Klorn</h2>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">${lead}</p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Sign in with this address (<strong>${escapeHtml(input.to)}</strong>) to accept.
+            Your organization never sees your mail. It sees your name, role and seat, and
+            your busy times only if you choose to share them.
+          </p>
+          <a href="${escapeHtml(acceptUrl)}" style="display: inline-block; background: #0ea5e9; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+            Review the invite
+          </a>
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+            This invite expires in 7 days and works once. If you did not expect it, ignore this email.
+          </p>
+        </div>
+      `,
+    });
+    console.log("[EMAIL] Organization invite sent to", safeAddr);
+    return true;
+  } catch (err) {
+    console.error("[EMAIL] Failed to send organization invite:", err);
+    return false;
+  }
+}
+
 export async function sendVerificationEmail(to: string, verifyToken: string): Promise<boolean> {
   const verifyUrl = `${WEB_URL}/verify-email?token=${verifyToken}`;
   const safeAddr = maskEmail(to);

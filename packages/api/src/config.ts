@@ -704,6 +704,26 @@ export function teamModeEnabled(): boolean {
   );
 }
 
+// Klorn Teams v1 (src/org/, routes/orgs.ts): organizations, seats, invites,
+// org free/busy and admin ceilings (docs/design/pricing-tiers.md "Team
+// (company) plan"). OFF by default (repo doctrine). Takes the rollout cohort
+// (flagMode above): `cohort` opens it only to ROLLOUT_COHORT_USER_IDS. While
+// off every /api/orgs route answers the default 404, even unauthenticated; no
+// seat is entitled (org/effective-tier.ts) and no org ceiling applies
+// (org/ceilings.ts), so turning it off is the kill switch for the whole plan.
+// Separate from TEAM_MODE_ENABLED, which gates the per-user saved teams.
+export const TEAMS_FLAG = "TEAMS_ENABLED";
+export function teamsLive(): boolean {
+  return flagMode(TEAMS_FLAG) !== "off";
+}
+export function teamsOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [TEAMS_FLAG]);
+}
+/** The team_availability tool: saved teams (team mode) or organization members. */
+export function teamAvailabilityOpenTo(userId: string): boolean {
+  return teamModeEnabled() || teamsOpenTo(userId);
+}
+
 // Smart actions (routes/smart-actions.ts): "Draft reply → Send" and "Add to
 // calendar" one-tap flows from the briefing picks and the mail reader. OFF by
 // default (repo doctrine). Takes the rollout cohort (flagMode above): `cohort`
