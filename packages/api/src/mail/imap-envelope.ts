@@ -46,17 +46,25 @@ export function envelopeSubject(raw: string | null | undefined): string {
 export const MAX_STORED_MESSAGE_ID_LENGTH = 998;
 
 const CONTROL_CHAR = /\p{Cc}/u;
+/**
+ * RFC 5322 msg-id: "<" id-left "@" id-right ">", no whitespace or angle brackets
+ * inside. A looser value ("abc") would make the header SEARCH of the attachment
+ * lookup substring-match most of a mailbox.
+ */
+const MSG_ID_SHAPE = /^<[^<>\s@]+@[^<>\s]+>$/;
 
 /**
  * The Message-ID exactly as the poller stores it (EmailMessage.messageIdHeader) and
  * as the attachment lookup compares it (imap-message-locate.ts): trimmed, case kept,
  * and null when absent, longer than the line limit, or carrying a control character
- * (CR/LF included). One derivation for both sides, so they cannot drift.
+ * (CR/LF included), or not shaped like a msg-id. One derivation for both sides, so
+ * they cannot drift.
  */
 export function envelopeMessageId(raw: string | null | undefined): string | null {
   const trimmed = raw?.trim();
   if (!trimmed || trimmed.length > MAX_STORED_MESSAGE_ID_LENGTH) return null;
-  return CONTROL_CHAR.test(trimmed) ? null : trimmed;
+  if (CONTROL_CHAR.test(trimmed)) return null;
+  return MSG_ID_SHAPE.test(trimmed) ? trimmed : null;
 }
 
 export interface EnvelopeFacts {

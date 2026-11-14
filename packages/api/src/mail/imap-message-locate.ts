@@ -19,6 +19,9 @@
  * looking further. At most five folders and five envelopes per folder, so a hostile
  * header cannot make it scan a mailbox.
  *
+ * A folder that cannot be opened or searched is skipped; a lost connection ends the
+ * lookup (the session layer reports it).
+ *
  * One mailbox at a time: every folder is opened through the caller's MailboxSwitch
  * (imapflow's getMailboxLock waits forever for a second lock), and the folder that
  * answered is left selected for the caller's download. The caller releases it.
@@ -61,12 +64,31 @@ export async function locateByMessageId(
   // One folder may carry two roles; it is searched once.
   for (const path of new Set(paths)) {
     if (path === null) continue;
-    await mailboxes.open(path);
-    const verdict = await exactMatchInSelected(client, messageId);
+    const verdict = await verdictForFolder(client, mailboxes, path, messageId);
     if (verdict.kind === "one") return verdict.uid;
     if (verdict.kind === "ambiguous") return null;
   }
   return null;
+}
+
+/**
+ * One folder's answer. A folder the server will not open or search (a refused
+ * SELECT, a failed SEARCH) is skipped so the next role folder can still answer;
+ * a lost connection is not a folder's problem and is rethrown.
+ */
+async function verdictForFolder(
+  client: ImapFlow,
+  mailboxes: MailboxSwitch,
+  path: string,
+  messageId: string,
+): Promise<FolderVerdict> {
+  try {
+    await mailboxes.open(path);
+    return await exactMatchInSelected(client, messageId);
+  } catch (err) {
+    if (client.usable === false) throw err;
+    return NONE;
+  }
 }
 
 /** SEARCH the selected folder, then keep only candidates whose envelope matches exactly. */

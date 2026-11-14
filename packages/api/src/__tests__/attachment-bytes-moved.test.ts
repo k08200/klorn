@@ -35,6 +35,8 @@ const server = vi.hoisted(() => ({
   selected: null as string | null,
   held: 0,
   events: [] as string[],
+  /** Folders whose SELECT the server refuses. */
+  refused: new Set<string>(),
 }));
 
 const folderAt = (path: string | null): FakeFolder | undefined =>
@@ -51,6 +53,8 @@ function selectedFolder(): FakeFolder {
 const loose = (value: string) => value.replace(/[<>]/g, "").toLowerCase();
 
 const imapClient = vi.hoisted(() => ({
+  /** imapflow's flag: false once the connection is gone. */
+  usable: true,
   get mailbox() {
     const folder = server.folders.find((f) => f.path === server.selected);
     return folder ? { path: folder.path, uidValidity: folder.uidValidity } : false;
@@ -121,6 +125,8 @@ beforeEach(() => {
   server.selected = null;
   server.held = 0;
   server.events = [];
+  server.refused = new Set();
+  imapClient.usable = true;
   findFirst.mockResolvedValue({ provider: "ICLOUD" });
   findCheckedAccount.mockResolvedValue({
     id: "acc-icloud",
@@ -132,6 +138,7 @@ beforeEach(() => {
   imapClient.getMailboxLock.mockImplementation(async (path: string) => {
     if (server.held > 0) throw new Error(`second lock on ${path} while one is held`);
     if (!folderAt(path)) throw new Error(`no mailbox ${path}`);
+    if (server.refused.has(path)) throw new Error(`NO [NOPERM] cannot select ${path}`);
     server.held += 1;
     server.selected = path;
     server.events.push(`lock ${path}`);
@@ -332,10 +339,13 @@ describe("IMAP attachment download beyond INBOX", () => {
       "release Junk",
     ]);
 
-    // A failing command throws out of the task (the real session layer turns that
+    // A lost connection throws out of the task (the real session layer turns that
     // into its soft failure); the lock is released first.
     server.events = [];
-    imapClient.search.mockRejectedValueOnce(new Error("socket hang up"));
+    imapClient.search.mockImplementationOnce(async () => {
+      imapClient.usable = false;
+      throw new Error("socket hang up");
+    });
     await expect(fetchRow(row(MESSAGE_ID))).rejects.toThrow("socket hang up");
     expect(server.held).toBe(0);
     expect(server.events).toEqual([
@@ -380,5 +390,37 @@ describe("IMAP attachment download beyond INBOX", () => {
 
     expect(out).toMatchObject({ ok: false, status: 404 });
     expect(imapClient.getMailboxLock).not.toHaveBeenCalled();
+  });
+  it("(i) skips a role folder the server refuses to open, and the next one still answers", async () => {
+    server.folders = [
+      inbox([]),
+      roleFolder("Archive", "\\Archive", [message(9, MESSAGE_ID)]),
+      roleFolder("Trash", "\\Trash", [message(5, MESSAGE_ID)]),
+    ];
+    server.refused.add("Archive");
+
+    expect(await fetchRow(row(MESSAGE_ID))).toEqual({ ok: true, bytes: PDF });
+    expect(imapClient.download).toHaveBeenLastCalledWith("5", "2", expect.anything());
+    expect(server.held).toBe(0);
+  });
+
+  it("(i) skips a folder whose SEARCH fails while the connection is still up", async () => {
+    server.folders = [
+      inbox([]),
+      roleFolder("Archive", "\\Archive"),
+      roleFolder("Sent", "\\Sent", [message(3, MESSAGE_ID)]),
+    ];
+    imapClient.search.mockRejectedValueOnce(new Error("NO [CANNOT] search failed"));
+
+    expect(await fetchRow(row(MESSAGE_ID))).toEqual({ ok: true, bytes: PDF });
+    expect(server.held).toBe(0);
+    expect(server.events).toEqual([
+      "lock INBOX",
+      "release INBOX",
+      "lock Archive",
+      "release Archive",
+      "lock Sent",
+      "release Sent",
+    ]);
   });
 });

@@ -109,13 +109,25 @@ describe("IMAP ingest → messageIdHeader", () => {
 
 describe("envelopeMessageId", () => {
   it("keeps a value of exactly the limit and drops one past it", () => {
-    const atLimit = `<${"a".repeat(MAX_STORED_MESSAGE_ID_LENGTH - 2)}>`;
+    const atLimit = `<${"a".repeat(MAX_STORED_MESSAGE_ID_LENGTH - 4)}@x>`;
     expect(MAX_STORED_MESSAGE_ID_LENGTH).toBe(998);
     expect(envelopeMessageId(atLimit)).toBe(atLimit);
     expect(envelopeMessageId(`${atLimit}x`)).toBeNull();
   });
 
-  it("is case-preserving and leaves inner spaces alone", () => {
+  it("is case-preserving and trims the ends", () => {
     expect(envelopeMessageId(" <AbC@X.example.com> ")).toBe("<AbC@X.example.com>");
+  });
+
+  it.each([
+    "abc",
+    "<abc>",
+    "abc@x.example.com",
+    "<a b@x.example.com>",
+    "<>",
+    "<@>",
+    "<<a@x>>",
+  ])("drops %j, which is not shaped like a msg-id (a loose value would SEARCH-match half a mailbox)", (value) => {
+    expect(envelopeMessageId(value)).toBeNull();
   });
 });
