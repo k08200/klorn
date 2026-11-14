@@ -74,10 +74,9 @@ import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { mailOpenPath } from "./notify/mail-path.js";
-import { mailPushContent } from "./notify/mail-push-content.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
-import { urgentSweepItemIdsFailClosed } from "./notify/open-push-mail.js";
+import { urgentLeadPushContent, urgentSweepItemIdsFailClosed } from "./notify/open-push-mail.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendQuietHoursSummaries } from "./notify/quiet-hours-summary.js";
@@ -1869,22 +1868,24 @@ async function runUserCycle(
             // dedup; this closes the residual concurrent-tick race on one batch so
             // the bell + web-push + SMS fire at most once. A P2002 loser returns
             // null and we skip ALL follow-on side-effects below.
+            // A push about ONE mail says what every surface says about it
+            // (decision N1 + NC1 reason line): the live frame, the device
+            // push, Telegram. A batch keeps the digest.
+            const leadContent =
+              newUrgent.length === 1
+                ? await urgentLeadPushContent(
+                    config.userId,
+                    newUrgent[0],
+                    notificationLanguage ?? "en",
+                  )
+                : null;
             const notification = await ensureUrgentEmailNotification(
               config.userId,
               newUrgent[0],
               dbMessage,
               userBody,
               notificationLanguage,
-              newUrgent.length === 1
-                ? {
-                    emailId: newUrgent[0].id,
-                    ...mailPushContent({
-                      from: newUrgent[0].from ?? "",
-                      subject: newUrgent[0].subject,
-                      language: notificationLanguage ?? "en",
-                    }),
-                  }
-                : undefined,
+              leadContent ? { emailId: newUrgent[0].id, ...leadContent } : undefined,
             );
 
             // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
@@ -1898,8 +1899,9 @@ async function runUserCycle(
                 config.userId,
                 urgentMailPushPayload({
                   notificationId: notification.id,
-                  title: notificationCopy(notificationLanguage).urgentMailTitle,
-                  body: userBody,
+                  title:
+                    leadContent?.title ?? notificationCopy(notificationLanguage).urgentMailTitle,
+                  body: leadContent?.body ?? userBody,
                   leads: newUrgent,
                   attentionItemId,
                   language: notificationLanguage,

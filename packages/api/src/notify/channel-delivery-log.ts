@@ -33,6 +33,8 @@ export interface ChannelSendInput {
   userId: string;
   channel: Extract<DeliveryChannel, "fcm" | "apns" | "telegram">;
   notificationId?: string | null;
+  /** The bell row this push rang for (notification-center.ts delivery view). */
+  bellNotificationId?: string | null;
   category: string;
   title: string;
   outcome: ChannelSendOutcome;
@@ -52,6 +54,7 @@ export async function recordChannelSend(input: ChannelSendInput): Promise<string
         userId: input.userId,
         channel: input.channel,
         notificationId: input.notificationId ?? null,
+        ...(input.bellNotificationId ? { bellNotificationId: input.bellNotificationId } : {}),
         category: input.category,
         title: input.title,
         status: sent ? "ACCEPTED" : "FAILED",
@@ -116,6 +119,19 @@ export interface DesktopReceiptInput {
   now?: Date;
 }
 
+/**
+ * The idempotency key of a desktop receipt row: one row per (user, app,
+ * subject). The notification center reads Mac banners back by it.
+ */
+export function desktopReceiptDedupeKey(
+  userId: string,
+  app: DesktopApp,
+  kind: DesktopReceiptKind,
+  id: string,
+): string {
+  return `desktop:${userId}:${app}:${kind}:${id}`;
+}
+
 async function ownsSubject(userId: string, kind: DesktopReceiptKind, id: string) {
   const query = { where: { id, userId }, select: { id: true } } as const;
   if (kind === "notification") return prisma.notification.findFirst(query);
@@ -138,7 +154,7 @@ export async function recordDesktopReceipt(
   const { userId, app, event, kind, id } = input;
   if (!(await ownsSubject(userId, kind, id))) return "not_found";
   const now = input.now ?? new Date();
-  const dedupeKey = `desktop:${userId}:${app}:${kind}:${id}`;
+  const dedupeKey = desktopReceiptDedupeKey(userId, app, kind, id);
   await prisma.pushDeliveryLog.createMany({
     data: [
       {

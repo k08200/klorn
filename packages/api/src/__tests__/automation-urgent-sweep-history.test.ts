@@ -482,7 +482,7 @@ describe("the urgent sweep speaks the user's notification language", () => {
       .map((r) => ({ message: r.message, createdAt: new Date(NOW.getTime() - 3_600_000) }));
   };
 
-  it("titles the bell row and the device push in Korean for a ko user", async () => {
+  it("titles the bell row in Korean for a ko user; the one-mail device push is N1-shaped", async () => {
     override("automationConfig.findMany", koConfig);
     arrange([urgent("g1", "18abc", BEFORE_RESET, null)]);
 
@@ -490,10 +490,13 @@ describe("the urgent sweep speaks the user's notification language", () => {
 
     const created = createdNotifications().filter((d) => d.dedupeKey === "urgent:18abc");
     expect(created).toHaveLength(1);
+    // The bell row keeps the localized urgent title: both dedupe reads key on it.
     expect(created[0].title).toBe("긴급 메일");
+    // The push about ONE mail says what every surface says (mail-push-content.ts):
+    // the sender as title, the subject as body (no open item here, so no reason line).
     expect(m.sendPushNotification).toHaveBeenCalledWith(
       USER,
-      expect.objectContaining({ title: "긴급 메일" }),
+      expect.objectContaining({ title: "Kim", body: "Subject g1" }),
       "email_urgent",
       { bucket: "interrupt" },
     );
