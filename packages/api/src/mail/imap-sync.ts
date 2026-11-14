@@ -41,7 +41,12 @@ import {
   parseParams,
 } from "./imap-body.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
-import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
+import {
+  capStored,
+  envelopeMessageId,
+  envelopeSubject,
+  MAX_STORED_CC_LENGTH,
+} from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
@@ -219,6 +224,8 @@ function toPersistCall(
       isStarred,
       receivedAt,
       attachments,
+      // Finds the message for its attachments after it leaves INBOX (attachment-bytes.ts).
+      messageIdHeader: envelopeMessageId(env.messageId),
     },
     {
       linkedInboxAccountId: args.linkedInboxAccountId ?? null,

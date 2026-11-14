@@ -1617,6 +1617,14 @@ model EmailMessage {
   listUnsubscribeMailto   String?
   listUnsubscribeUrl      String?
   listUnsubscribeOneClick Boolean           @default(false)
+  // The RFC 5322 Message-ID as the IMAP poll read it from the envelope (trimmed,
+  // <= 998 chars, no control characters; imap-envelope.ts envelopeMessageId). An
+  // IMAP row's gmailId names an INBOX UID, which stops serving once the user moves
+  // the message in another client; attachment-bytes.ts then finds the message in
+  // the account's role folders by this value. NULL for Gmail/Outlook/Klorn rows and
+  // for IMAP rows not re-touched since the column was added. No index: it is read
+  // from the row the caller already holds, never queried by.
+  messageIdHeader         String?
   isRead                  Boolean           @default(false)
   isStarred               Boolean           @default(false)
   priority                EmailPriority     @default(NORMAL)
