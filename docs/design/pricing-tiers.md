@@ -64,8 +64,9 @@ each teammate's calendar. A company that adopts Klorn also removes the
   outside a resolver call, a gate-calling file that never imports the
   resolver); it is pattern-based, not a type-level proof.
 - Access gates use the strict resolver, which throws on a lookup failure
-  (fail closed). Device limits, displayed plans and the schedulers use the
-  `...OrOwn` variants, which report the failure and keep the own plan.
+  (fail closed). Displayed plans, the device list and the schedulers use the
+  `...OrOwn` variants, which report the failure and keep the own plan. A
+  sign-in whose seat lookup fails proceeds but evicts no device that time.
 - A seat holder carries `PLANS.TEAM`'s limits (device count, message and
   token allowances) wherever the code reads plan limits.
 - Pooled LLM cap (`billing/team-cost-pool.ts`): a seat holder may spend

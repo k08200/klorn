@@ -265,4 +265,22 @@ describe("plan gates read the effective plan", () => {
   it("imports the resolver wherever a gate helper is called", () => {
     expect(sources.filter(missesResolverImport).map(({ rel }) => rel)).toEqual([]);
   });
+
+  it("keeps the lenient (...OrOwn) resolvers off access gates", () => {
+    // They swallow a failed seat lookup; only non-gate paths may: the
+    // schedulers, the /api/devices list and the billing display routes.
+    const lenientCallers = new Set([
+      "automation-scheduler.ts",
+      "agentcore/autonomous-agent-scheduler.ts",
+      "learning/pattern-learner.ts",
+      "routes/devices.ts",
+      "routes/billing.ts",
+    ]);
+    const users = sources
+      .filter(
+        ({ rel, text }) => rel !== "org/effective-tier.ts" && /\beffectivePlans?OrOwn\(/.test(text),
+      )
+      .map(({ rel }) => rel);
+    expect(users.filter((rel) => !lenientCallers.has(rel))).toEqual([]);
+  });
 });
