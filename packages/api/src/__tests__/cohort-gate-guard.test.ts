@@ -1,5 +1,5 @@
 /**
- * Every drive route and every smart-action route checks the rollout cohort
+ * Every drive, smart-action and vault-export route checks the rollout cohort
  * (L23) after authentication, so a route added later cannot skip it. The one exception is unlinking a Google
  * account: auth only, so a user outside the cohort can always remove a grant.
  */
@@ -16,6 +16,7 @@ describe("the cohort-gated routes", () => {
     "klorn-drive.ts",
     "google-drive-link.ts",
     "smart-actions.ts",
+    "vault-export.ts",
   ])("%s checks the cohort right after requireAuth on every route", (file) => {
     const text = source(file);
     const chains = [...text.matchAll(/preHandler:\s*(\[[^\]]*\]|requireAuth)/g)].map((m) =>

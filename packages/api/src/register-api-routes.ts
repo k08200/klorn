@@ -60,6 +60,7 @@ import { appleAuthProvider, naverAuthProvider, socialAuthRoutes } from "./routes
 import { teamRoutes } from "./routes/teams.js";
 import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
+import { vaultExportRoutes } from "./routes/vault-export.js";
 import { webhookRoutes } from "./routes/webhook.js";
 import { installRouteAuthGuard } from "./security/route-auth-guard.js";
 
@@ -102,6 +103,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(feedbackRoutes, { prefix: "/api/feedback" });
   await app.register(calendarRoutes, { prefix: "/api/calendar" });
   await app.register(smartActionsRoutes, { prefix: "/api/smart-actions" });
+  await app.register(vaultExportRoutes, { prefix: "/api/user/me/vault" });
   await app.register(emailRoutes, { prefix: "/api/email" });
   await app.register(apiKeyRoutes, { prefix: "/api/keys" });
   await app.register(mcpRoutes, { prefix: "/api/mcp" });

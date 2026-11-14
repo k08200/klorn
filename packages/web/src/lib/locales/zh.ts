@@ -2823,6 +2823,20 @@ const zh: Record<string, string> = {
   "smartActions.event.reminderNotSet": "提醒需要连接 Google 日历，因此未设置。",
   "smartActions.event.saveHint": "请填写标题、日期、开始时间和时长后再保存。",
   "smartActions.event.savedWhen": "{date} {time}（{zone}）",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "导出为 Markdown",
+  "vaultExport.desc":
+    "将你的 Klorn 数据导出为 Markdown：分类、发件人、承诺，以及每封邮件一条笔记，可直接在 Obsidian 或任意编辑器中打开。",
+  "vaultExport.button": "下载 .zip",
+  "vaultExport.includeText": "包含邮件正文",
+  "vaultExport.includeText.desc":
+    "加入 Klorn 仍保留的邮件正文。不勾选时，笔记只包含主题、预览和 Klorn 的判断。",
+  "vaultExport.done": "已下载 Markdown 导出文件。",
+  "vaultExport.error.cooldown": "你刚导出过。请在 {minutes} 分钟后重试。",
+  "vaultExport.error.inProgress": "已有导出正在进行，请等待其完成。",
+  "vaultExport.error.busy": "当前导出请求较多，请一分钟后重试。",
+  "vaultExport.error.unavailable": "此账户无法使用 Markdown 导出。",
+  "vaultExport.error.failed": "Markdown 导出失败，请重试。",
 };
 
 export default zh;

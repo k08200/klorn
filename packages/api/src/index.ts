@@ -323,6 +323,7 @@ try {
     "SMART_ACTIONS_ENABLED",
     "CONTEXT_MEETING_PREP_ENABLED",
     "IMAP_PRESETS_ENABLED",
+    "VAULT_EXPORT_ENABLED",
   ]);
 
   // Start autonomous background agent
