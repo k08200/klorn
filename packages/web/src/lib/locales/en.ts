@@ -3107,7 +3107,7 @@ const en: Record<string, string> = {
   "settings.org.seats.change": "Seats ({min}–{max})",
   "settings.org.seats.changeAction": "Update seats",
   "settings.org.seats.floor":
-    "At least {min}: two seats minimum, and one for every member. Paddle charges or credits the difference for the rest of this billing period.",
+    "At least {min}: the team minimum, and one seat for every member. Paddle charges or credits the difference for the rest of this billing period.",
   "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
   "settings.org.seats.unchanged": "The organization already has {seats} seats.",
   "settings.org.subscription.cancel": "Cancel subscription",
@@ -3123,17 +3123,16 @@ const en: Record<string, string> = {
   "settings.org.error.SEATS_BELOW_MEMBERS":
     "The organization has more members than that. Remove members before you remove their seats.",
   "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
-    "Seats can change only while the subscription is active. Update the payment method first.",
+    "Seats can change only while the subscription is active. Whoever pays can fix the payment method in the billing portal.",
   "settings.org.error.CANCEL_SCHEDULED":
     "The subscription is set to end. Keep it first, then change seats.",
   "settings.org.error.NO_SUBSCRIPTION": "This organization has no team subscription.",
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "A paused subscription can only be ended from the billing portal.",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "No cancel is scheduled.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Only the person who set up team billing can open the billing portal. Seats and cancel work here.",
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
-    "Paddle didn't confirm the change. Nothing was changed; try again shortly.",
+    "Paddle didn't confirm the change, so it may not have gone through. Check again in a minute before you retry.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
     "Team billing isn't available right now. Nothing was changed.",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED":

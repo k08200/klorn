@@ -80,6 +80,7 @@ describe("Team prices: pricing-tiers.md against the code", () => {
       status: "active",
       unit_price: { amount: String(cents), currency_code: "USD" },
       billing_cycle: { interval, frequency: 1 },
+      quantity: { minimum: MIN_TEAM_SEATS, maximum: MAX_SELF_SERVE_SEATS },
     });
     expect(
       compareTeamPaddlePrice({ interval: "month", price: priceAt(docMonthly * CENTS, "month") }).ok,

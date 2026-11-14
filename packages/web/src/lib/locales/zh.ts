@@ -2925,7 +2925,7 @@ const zh: Record<string, string> = {
   "settings.org.seats.change": "席位数（{min}–{max}）",
   "settings.org.seats.changeAction": "更新席位",
   "settings.org.seats.floor":
-    "至少 {min} 个：最少 2 个席位，且每位成员一个。差额按本计费周期剩余天数由 Paddle 补收或计入余额。",
+    "至少 {min} 个：不少于团队最低席位数，且每位成员一个。差额按本计费周期剩余天数由 Paddle 补收或计入余额。",
   "settings.org.seats.pending": "已提交给 Paddle。Paddle 确认后这里会显示 {seats} 个席位。",
   "settings.org.seats.unchanged": "组织已有 {seats} 个席位。",
   "settings.org.subscription.cancel": "取消订阅",
@@ -2938,14 +2938,15 @@ const zh: Record<string, string> = {
   "settings.org.subscription.endsSoon": "订阅将在本计费周期结束时终止。在此之前席位保留。",
   "settings.org.subscription.portal": "管理账单",
   "settings.org.error.SEATS_BELOW_MEMBERS": "成员数多于该数量。请先移除成员，再减少他们的席位。",
-  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE": "只有在订阅有效时才能更改席位。请先更新付款方式。",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "只有在订阅有效时才能更改席位。付款人可以在账单门户中修正付款方式。",
   "settings.org.error.CANCEL_SCHEDULED": "订阅已安排结束。请先保留订阅，再更改席位。",
   "settings.org.error.NO_SUBSCRIPTION": "该组织没有团队订阅。",
   "settings.org.error.SUBSCRIPTION_PAUSED": "已暂停的订阅只能在账单门户中结束。",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "没有已安排的取消。",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "只有设置团队账单的人可以打开账单门户。席位和取消可在这里操作。",
-  "settings.org.error.BILLING_PROVIDER_ERROR": "Paddle 未确认此更改。未做任何更改；请稍后重试。",
+    "账单门户只对支付团队费用的邮箱地址开放。付款人也可以使用 Paddle 收据邮件中的链接。",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle 未确认此更改，可能未生效。请稍等片刻确认后再重试。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE": "团队账单目前不可用。未做任何更改。",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED": "此订阅无法在这里更改席位。请联系支持。",
   "settings.org.transparency.title": "你的组织能看到什么",

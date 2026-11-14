@@ -103,6 +103,25 @@ export async function getPaddleTeamSubscription(
 }
 
 /**
+ * The Paddle customer's email (GET /customers/{id}), or null when Paddle
+ * returns none. The team billing portal opens only for the owner whose
+ * verified Klorn email this is.
+ */
+export async function getPaddleCustomerEmail(
+  customerId: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<string | null> {
+  const body = (await paddleFetch(
+    `/customers/${encodeURIComponent(customerId)}`,
+    undefined,
+    "GET",
+    opts,
+  )) as { data?: { email?: unknown } };
+  const email = body?.data?.email;
+  return typeof email === "string" && email.trim() !== "" ? email : null;
+}
+
+/**
  * Set the seat count: the subscription's one item, on its own price, at
  * `quantity`. Paddle replaces the item list, so the price id is the one the
  * subscription already bills on (never chosen by a client, never the newest

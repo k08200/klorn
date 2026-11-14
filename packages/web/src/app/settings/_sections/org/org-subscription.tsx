@@ -3,6 +3,7 @@
 import type {
   OrgBillingPortalResponse,
   OrgCancelResponse,
+  OrgResumeResponse,
   OrgSeatChangeResponse,
   OrgWire,
 } from "@klorn/contract";
@@ -16,6 +17,40 @@ import { useT } from "../../../../lib/i18n";
 import { formatBillingDate } from "../../../../lib/subscription";
 import { MAX_SEATS, parseSeatsFrom, seatFloor, subscriptionActions } from "./model";
 import { useOrgAction } from "./use-org";
+
+const POST_EMPTY: RequestInit = { method: "POST", body: JSON.stringify({}) };
+
+/** The seat count field: at least two and one per member, at most 150. */
+function SeatCountField({
+  floor,
+  value,
+  onChange,
+}: {
+  floor: number;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const { t } = useT();
+  const valid = parseSeatsFrom(value, floor) !== null;
+  const tooMany = Number(value) > MAX_SEATS;
+  const hint = t("settings.org.seats.floor", { min: String(floor) });
+  return (
+    <div className="space-y-2">
+      <Input
+        id="org-seat-change"
+        type="number"
+        inputMode="numeric"
+        min={floor}
+        max={MAX_SEATS}
+        label={t("settings.org.seats.change", { min: String(floor), max: String(MAX_SEATS) })}
+        value={value}
+        error={valid ? undefined : tooMany ? t("settings.org.error.INVALID_SEATS") : hint}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {valid && <p className="text-role-caption text-ink-dim">{hint}</p>}
+    </div>
+  );
+}
 
 /**
  * Owner only, once a team subscription exists: change the seat count, cancel
@@ -42,22 +77,23 @@ export function OrgSubscription({
   const seats = parseSeatsFrom(seatsText, floor);
   const endDate = formatBillingDate(org.seats.cancelAt, locale);
 
+  /** One action at a time; each starts from a clean slate of notes. */
+  const act = (work: () => Promise<unknown>) => {
+    setNote(null);
+    setRefused(false);
+    return run(work);
+  };
+
   const changeSeats = () =>
-    run(async () => {
+    act(async () => {
       if (seats === null) return;
-      setNote(null);
       const result = await apiFetch<OrgSeatChangeResponse>("/api/orgs/current/seats", {
         method: "POST",
         body: JSON.stringify({ seats }),
       });
-      setNote(
-        t(
-          result.status === "pending"
-            ? "settings.org.seats.pending"
-            : "settings.org.seats.unchanged",
-          { seats: String(result.seats) },
-        ),
-      );
+      const key =
+        result.status === "pending" ? "settings.org.seats.pending" : "settings.org.seats.unchanged";
+      setNote(t(key, { seats: String(result.seats) }));
     });
 
   const cancel = async () => {
@@ -70,32 +106,19 @@ export function OrgSubscription({
       danger: true,
     });
     if (!ok) return;
-    const done = await run(() =>
-      apiFetch<OrgCancelResponse>("/api/orgs/current/subscription/cancel", {
-        method: "POST",
-        body: JSON.stringify({}),
-      }),
-    );
-    if (done) await onChanged();
+    const path = "/api/orgs/current/subscription/cancel";
+    if (await act(() => apiFetch<OrgCancelResponse>(path, POST_EMPTY))) await onChanged();
   };
 
   const resume = async () => {
-    const done = await run(() =>
-      apiFetch<{ resumed: true }>("/api/orgs/current/subscription/resume", {
-        method: "POST",
-        body: JSON.stringify({}),
-      }),
-    );
-    if (done) await onChanged();
+    const path = "/api/orgs/current/subscription/resume";
+    if (await act(() => apiFetch<OrgResumeResponse>(path, POST_EMPTY))) await onChanged();
   };
 
   const openPortal = () =>
-    run(async () => {
-      setRefused(false);
-      const { url } = await apiFetch<OrgBillingPortalResponse>("/api/orgs/current/billing-portal", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+    act(async () => {
+      const path = "/api/orgs/current/billing-portal";
+      const { url } = await apiFetch<OrgBillingPortalResponse>(path, POST_EMPTY);
       // Only Paddle's portal (or this origin) is followed.
       if (!isSafeBillingRedirect(url, window.location.origin)) {
         setRefused(true);
@@ -117,26 +140,7 @@ export function OrgSubscription({
         </p>
       )}
       {actions.changeSeats && (
-        <div className="space-y-2">
-          <Input
-            id="org-seat-change"
-            type="number"
-            inputMode="numeric"
-            min={floor}
-            max={MAX_SEATS}
-            label={t("settings.org.seats.change", { min: String(floor), max: String(MAX_SEATS) })}
-            value={seatsText}
-            error={
-              seats === null ? t("settings.org.seats.floor", { min: String(floor) }) : undefined
-            }
-            onChange={(event) => setSeatsText(event.target.value)}
-          />
-          {seats !== null && (
-            <p className="text-role-caption text-ink-dim">
-              {t("settings.org.seats.floor", { min: String(floor) })}
-            </p>
-          )}
-        </div>
+        <SeatCountField floor={floor} value={seatsText} onChange={setSeatsText} />
       )}
       <div className="flex flex-wrap gap-3">
         {actions.changeSeats && (

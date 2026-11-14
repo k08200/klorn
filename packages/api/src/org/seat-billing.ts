@@ -75,13 +75,6 @@ export async function startTeamCheckout(userId: string, body: unknown): Promise<
     );
   }
   const url = await createPaddleTeamCheckout({ orgId: owner.orgId, priceId, quantity: seats });
-  // The owner who opens the checkout is the one who pays: the customer portal
-  // (seat-management.ts) opens only for them.
-  await prisma.organization.update({
-    where: { id: owner.orgId },
-    data: { billingUserId: userId },
-    select: { id: true },
-  });
   await recordOrgAudit(prisma, {
     orgId: owner.orgId,
     action: "billing.checkout_started",
@@ -224,7 +217,12 @@ export async function applyTeamSubscriptionEvent(
       // with its seats, and the drift is reported.
       const drifted = await tx.organization.updateMany({
         where: { paddleSubscriptionId: event.data.id, id: { not: orgId } },
-        data: { paddleSubscriptionId: null, subscriptionStatus: null, seatsPurchased: 0 },
+        data: {
+          paddleSubscriptionId: null,
+          subscriptionStatus: null,
+          seatsPurchased: 0,
+          subscriptionCancelAt: null,
+        },
       });
       if (drifted.count > 0)
         report("team subscription id moved between organizations", event.eventId);

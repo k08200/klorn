@@ -152,7 +152,6 @@ describe("seat management after purchase", () => {
       [
         "BILLING_PROVIDER_ERROR",
         "CANCEL_SCHEDULED",
-        "NO_SCHEDULED_CANCEL",
         "NO_SUBSCRIPTION",
         "PORTAL_PAYER_ONLY",
         "SEATS_BELOW_MEMBERS",

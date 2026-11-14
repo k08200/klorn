@@ -3096,7 +3096,7 @@ const ko: Record<string, string> = {
   "settings.org.seats.change": "시트 수 ({min}–{max})",
   "settings.org.seats.changeAction": "시트 변경",
   "settings.org.seats.floor":
-    "최소 {min}개: 기본 2개 이상, 멤버마다 1개씩 필요합니다. 차액은 이번 결제 기간의 남은 날짜만큼 Paddle이 청구하거나 크레딧으로 돌려줍니다.",
+    "최소 {min}개: 팀 최소 시트 수 이상, 멤버마다 1개씩 필요합니다. 차액은 이번 결제 기간의 남은 날짜만큼 Paddle이 청구하거나 크레딧으로 돌려줍니다.",
   "settings.org.seats.pending":
     "Paddle에 보냈습니다. Paddle이 확인하면 시트 {seats}개로 표시됩니다.",
   "settings.org.seats.unchanged": "조직에 이미 시트 {seats}개가 있습니다.",
@@ -3113,17 +3113,16 @@ const ko: Record<string, string> = {
   "settings.org.error.SEATS_BELOW_MEMBERS":
     "멤버 수가 그보다 많습니다. 시트를 줄이기 전에 멤버를 먼저 내보내 주세요.",
   "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
-    "구독이 활성 상태일 때만 시트를 바꿀 수 있습니다. 먼저 결제 수단을 업데이트해 주세요.",
+    "구독이 활성 상태일 때만 시트를 바꿀 수 있습니다. 결제하는 사람이 결제 포털에서 결제 수단을 고칠 수 있습니다.",
   "settings.org.error.CANCEL_SCHEDULED":
     "구독 해지가 예약되어 있습니다. 먼저 구독을 유지한 뒤 시트를 바꿔 주세요.",
   "settings.org.error.NO_SUBSCRIPTION": "이 조직에는 팀 구독이 없습니다.",
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "일시 중지된 구독은 결제 포털에서만 종료할 수 있습니다.",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "예약된 해지가 없습니다.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "결제 포털은 팀 결제를 설정한 사람만 열 수 있습니다. 시트 변경과 해지는 여기서 할 수 있습니다.",
+    "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
-    "Paddle이 변경을 확인하지 않았습니다. 바뀐 것은 없습니다. 잠시 후 다시 시도해 주세요.",
+    "Paddle이 변경을 확인하지 않아 반영되지 않았을 수 있습니다. 다시 시도하기 전에 잠시 후 확인해 주세요.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
     "지금은 팀 결제를 이용할 수 없습니다. 바뀐 것은 없습니다.",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED":

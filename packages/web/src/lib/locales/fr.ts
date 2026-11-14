@@ -3198,7 +3198,7 @@ const fr: Record<string, string> = {
   "settings.org.seats.change": "Sièges ({min}–{max})",
   "settings.org.seats.changeAction": "Mettre à jour les sièges",
   "settings.org.seats.floor":
-    "Au moins {min} : deux sièges minimum, et un par membre. Paddle facture ou crédite la différence pour le reste de cette période de facturation.",
+    "Au moins {min} : le minimum de l’équipe, et un siège par membre. Paddle facture ou crédite la différence pour le reste de cette période de facturation.",
   "settings.org.seats.pending":
     "Envoyé à Paddle. {seats} sièges s’afficheront ici dès que Paddle confirme.",
   "settings.org.seats.unchanged": "L’organisation a déjà {seats} sièges.",
@@ -3216,17 +3216,16 @@ const fr: Record<string, string> = {
   "settings.org.error.SEATS_BELOW_MEMBERS":
     "L’organisation compte plus de membres. Retirez des membres avant de retirer leurs sièges.",
   "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
-    "Les sièges ne changent que si l’abonnement est actif. Mettez d’abord à jour le moyen de paiement.",
+    "Les sièges ne changent que si l’abonnement est actif. La personne qui paie peut corriger le moyen de paiement dans le portail de facturation.",
   "settings.org.error.CANCEL_SCHEDULED":
     "La résiliation de l’abonnement est programmée. Gardez-le d’abord, puis changez les sièges.",
   "settings.org.error.NO_SUBSCRIPTION": "Cette organisation n’a pas d’abonnement d’équipe.",
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Un abonnement en pause ne peut être arrêté que depuis le portail de facturation.",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "Aucune résiliation n’est programmée.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Seule la personne qui a configuré la facturation de l’équipe peut ouvrir le portail de facturation. Les sièges et la résiliation se gèrent ici.",
+    "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
-    "Paddle n’a pas confirmé le changement. Rien n’a changé ; réessayez dans un instant.",
+    "Paddle n’a pas confirmé le changement : il n’a peut-être pas été appliqué. Vérifiez dans une minute avant de réessayer.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
     "La facturation d’équipe n’est pas disponible pour le moment. Rien n’a changé.",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED":

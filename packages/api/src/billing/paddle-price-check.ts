@@ -73,6 +73,8 @@ export interface PriceExpectation {
   trialDays: number | null;
   /** The env var that wires this price, named when it is archived. */
   envName: string;
+  /** Quantities checkout and seat changes send; the price must allow all of them. Unset: not checked. */
+  quantity?: { min: number; max: number };
 }
 
 /**
@@ -108,7 +110,23 @@ type PaddlePriceShape = {
   unit_price?: { amount?: unknown; currency_code?: unknown };
   billing_cycle?: { interval?: unknown; frequency?: unknown } | null;
   trial_period?: { interval?: unknown; frequency?: unknown } | null;
+  quantity?: { minimum?: unknown; maximum?: unknown } | null;
 };
+
+/** Which quantities: a price allows 1–100 by default, and a seat count outside its range fails at Paddle. */
+function quantityProblems(price: PaddlePriceShape, expected: PriceExpectation): string[] {
+  if (!expected.quantity) return [];
+  const min = Number(price.quantity?.minimum);
+  const max = Number(price.quantity?.maximum);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return ["Paddle price has no quantity range — cannot confirm every seat count can be bought"];
+  }
+  if (min <= expected.quantity.min && max >= expected.quantity.max) return [];
+  return [
+    `Paddle price allows quantities ${min}–${max}, but seats can be ${expected.quantity.min}–` +
+      `${expected.quantity.max}: a seat count outside Paddle's range fails at checkout or on a seat change`,
+  ];
+}
 
 /** What it charges: whole minor units, equal to the quoted amount. */
 function amountProblems(price: PaddlePriceShape, expected: PriceExpectation): string[] {
@@ -225,6 +243,7 @@ export function comparePriceObject(raw: unknown, expected: PriceExpectation): Pr
   }
 
   problems.push(...trialProblems(price, expected));
+  problems.push(...quantityProblems(price, expected));
 
   // --- and is it even live -------------------------------------------------
   if (price.status !== "active") {

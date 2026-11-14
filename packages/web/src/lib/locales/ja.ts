@@ -3138,7 +3138,7 @@ const ja: Record<string, string> = {
   "settings.org.seats.change": "シート数 ({min}–{max})",
   "settings.org.seats.changeAction": "シート数を変更",
   "settings.org.seats.floor":
-    "最低 {min}：2 シート以上、メンバー 1 人につき 1 シートが必要です。差額は今回の請求期間の残り日数分を Paddle が請求またはクレジットします。",
+    "最低 {min}：チームの最小シート数以上、メンバー 1 人につき 1 シートが必要です。差額は今回の請求期間の残り日数分を Paddle が請求またはクレジットします。",
   "settings.org.seats.pending":
     "Paddle に送信しました。Paddle が確認すると {seats} シートと表示されます。",
   "settings.org.seats.unchanged": "この組織はすでに {seats} シートです。",
@@ -3156,17 +3156,16 @@ const ja: Record<string, string> = {
   "settings.org.error.SEATS_BELOW_MEMBERS":
     "メンバー数がそれより多いです。シートを減らす前にメンバーを外してください。",
   "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
-    "シート数はサブスクリプションが有効なときだけ変更できます。先に支払い方法を更新してください。",
+    "シート数はサブスクリプションが有効なときだけ変更できます。支払い担当者が請求ポータルで支払い方法を修正できます。",
   "settings.org.error.CANCEL_SCHEDULED":
     "サブスクリプションの解約が予約されています。先に継続してからシート数を変更してください。",
   "settings.org.error.NO_SUBSCRIPTION": "この組織にはチームのサブスクリプションがありません。",
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "一時停止中のサブスクリプションは請求ポータルからのみ終了できます。",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "予約された解約はありません。",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "請求ポータルはチームの請求を設定した人だけが開けます。シート数の変更と解約はここでできます。",
+    "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
-    "Paddle が変更を確認しませんでした。何も変更されていません。しばらくしてからもう一度お試しください。",
+    "Paddle が変更を確認しなかったため、反映されていない可能性があります。再試行する前に少し待ってから確認してください。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
     "現在チームの請求は利用できません。何も変更されていません。",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED":

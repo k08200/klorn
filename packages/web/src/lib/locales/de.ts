@@ -3236,7 +3236,7 @@ const de: Record<string, string> = {
   "settings.org.seats.change": "Plätze ({min}–{max})",
   "settings.org.seats.changeAction": "Plätze ändern",
   "settings.org.seats.floor":
-    "Mindestens {min}: zwei Plätze und einer pro Mitglied. Paddle berechnet oder erstattet die Differenz für den Rest dieses Abrechnungszeitraums.",
+    "Mindestens {min}: das Team-Minimum und ein Platz pro Mitglied. Paddle berechnet oder erstattet die Differenz für den Rest dieses Abrechnungszeitraums.",
   "settings.org.seats.pending":
     "An Paddle gesendet. {seats} Plätze erscheinen hier, sobald Paddle bestätigt.",
   "settings.org.seats.unchanged": "Die Organisation hat bereits {seats} Plätze.",
@@ -3253,17 +3253,16 @@ const de: Record<string, string> = {
   "settings.org.error.SEATS_BELOW_MEMBERS":
     "Die Organisation hat mehr Mitglieder. Entferne Mitglieder, bevor du ihre Plätze entfernst.",
   "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
-    "Plätze lassen sich nur bei aktivem Abo ändern. Aktualisiere zuerst die Zahlungsmethode.",
+    "Plätze lassen sich nur bei aktivem Abo ändern. Wer bezahlt, kann die Zahlungsmethode im Abrechnungsportal korrigieren.",
   "settings.org.error.CANCEL_SCHEDULED":
     "Das Abo ist gekündigt. Behalte es zuerst, dann ändere die Plätze.",
   "settings.org.error.NO_SUBSCRIPTION": "Diese Organisation hat kein Team-Abo.",
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Ein pausiertes Abo lässt sich nur im Abrechnungsportal beenden.",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "Es ist keine Kündigung geplant.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Nur die Person, die die Team-Abrechnung eingerichtet hat, kann das Abrechnungsportal öffnen. Plätze und Kündigung gehen hier.",
+    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
-    "Paddle hat die Änderung nicht bestätigt. Nichts wurde geändert; versuche es gleich noch einmal.",
+    "Paddle hat die Änderung nicht bestätigt, sie ist also womöglich nicht durchgegangen. Prüfe es in einer Minute, bevor du es erneut versuchst.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
     "Die Team-Abrechnung ist gerade nicht verfügbar. Nichts wurde geändert.",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED":

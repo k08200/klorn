@@ -9,10 +9,13 @@
  * Read once at boot and on every price.updated / price.created webhook (a
  * dashboard edit with no deploy is how both Pro price incidents happened). It
  * logs and alerts on a mismatch; it never throws and never blocks anything.
- * No team trial is promised anywhere, so none is checked. Unset prices (the
+ * The price's quantity range must allow every self-serve seat count (2–150;
+ * Paddle's default range is 1–100). No team trial is promised anywhere, so
+ * none is checked. Unset prices (the
  * default until the founder creates them) make it a no-op.
  */
 
+import { MAX_SELF_SERVE_SEATS, MIN_TEAM_SEATS } from "../org/org-shape.js";
 import { captureError } from "../sentry.js";
 import {
   TEAM_STANDARD_SEAT_ANNUAL_CENTS,
@@ -45,6 +48,7 @@ function expectationFor(interval: TeamInterval): PriceExpectation {
     interval,
     trialDays: null,
     envName: TEAM_PRICE_ENV[interval],
+    quantity: { min: MIN_TEAM_SEATS, max: MAX_SELF_SERVE_SEATS },
   };
 }
 

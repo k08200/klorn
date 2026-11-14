@@ -59,6 +59,7 @@ function price(over: Record<string, unknown> = {}) {
     unit_price: { amount: "3000", currency_code: "USD" },
     billing_cycle: { interval: "month", frequency: 1 },
     trial_period: null,
+    quantity: { minimum: 1, maximum: 150 },
     ...over,
   };
 }
@@ -129,6 +130,23 @@ describe("compareTeamPaddlePrice", () => {
     expect(many.problems.join(" ")).toContain("EUR");
     expect(many.problems.join(" ")).toMatch(/tax/i);
     expect(many.problems.join(" ")).toContain("PADDLE_TEAM_PRICE_ID_MONTHLY");
+  });
+
+  it("names a quantity range that cannot sell every seat count from 2 to 150", () => {
+    // Paddle's default range is 1–100: seats 101–150 would fail at Paddle.
+    const narrow = compareTeamPaddlePrice({
+      interval: "month",
+      price: price({ quantity: { minimum: 1, maximum: 100 } }),
+    });
+    expect(narrow.ok).toBe(false);
+    expect(narrow.problems.join(" ")).toMatch(/1–100.*2–150/);
+    const floor = compareTeamPaddlePrice({
+      interval: "month",
+      price: price({ quantity: { minimum: 3, maximum: 150 } }),
+    });
+    expect(floor.ok).toBe(false);
+    const missing = compareTeamPaddlePrice({ interval: "month", price: price({ quantity: null }) });
+    expect(missing.problems.join(" ")).toMatch(/quantity range/);
   });
 
   it("treats an unreadable response as unconfirmed, never as agreeing", () => {

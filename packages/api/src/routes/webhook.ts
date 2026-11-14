@@ -391,9 +391,14 @@ export async function webhookRoutes(app: FastifyInstance) {
             data: body.data,
             advertised: ADVERTISED_PRO_PRICE_WEB,
           });
-          checkTeamPaddlePriceEvent({ eventType: body.event_type, data: body.data });
         } catch (err) {
           captureError(err, { tags: { scope: "paddle.webhook.price_check" } });
+        }
+        // The team seat prices, separately: a failure above must not skip it.
+        try {
+          checkTeamPaddlePriceEvent({ eventType: body.event_type, data: body.data });
+        } catch (err) {
+          captureError(err, { tags: { scope: "paddle.webhook.team_price_check" } });
         }
       }
       // Other event types are acknowledged and ignored.

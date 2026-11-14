@@ -3180,7 +3180,7 @@ const es: Record<string, string> = {
   "settings.org.seats.change": "Plazas ({min}–{max})",
   "settings.org.seats.changeAction": "Actualizar plazas",
   "settings.org.seats.floor":
-    "Al menos {min}: dos plazas como mínimo y una por cada miembro. Paddle cobra o abona la diferencia por lo que queda de este periodo de facturación.",
+    "Al menos {min}: el mínimo del equipo y una plaza por cada miembro. Paddle cobra o abona la diferencia por lo que queda de este periodo de facturación.",
   "settings.org.seats.pending":
     "Enviado a Paddle. Verás {seats} plazas aquí cuando Paddle lo confirme.",
   "settings.org.seats.unchanged": "La organización ya tiene {seats} plazas.",
@@ -3198,17 +3198,16 @@ const es: Record<string, string> = {
   "settings.org.error.SEATS_BELOW_MEMBERS":
     "La organización tiene más miembros. Quita miembros antes de quitar sus plazas.",
   "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
-    "Las plazas solo cambian con la suscripción activa. Actualiza primero el método de pago.",
+    "Las plazas solo cambian con la suscripción activa. Quien paga puede corregir el método de pago en el portal de facturación.",
   "settings.org.error.CANCEL_SCHEDULED":
     "La suscripción está programada para terminar. Mantenla primero y luego cambia las plazas.",
   "settings.org.error.NO_SUBSCRIPTION": "Esta organización no tiene suscripción de equipo.",
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Una suscripción en pausa solo se puede terminar desde el portal de facturación.",
-  "settings.org.error.NO_SCHEDULED_CANCEL": "No hay ninguna cancelación programada.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Solo quien configuró la facturación del equipo puede abrir el portal de facturación. Las plazas y la cancelación se gestionan aquí.",
+    "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
-    "Paddle no confirmó el cambio. No se cambió nada; inténtalo de nuevo en un momento.",
+    "Paddle no confirmó el cambio, así que puede que no se haya aplicado. Compruébalo en un minuto antes de volver a intentarlo.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
     "La facturación de equipo no está disponible ahora. No se cambió nada.",
   "settings.org.error.SEAT_CHANGE_UNSUPPORTED":

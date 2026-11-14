@@ -33,12 +33,14 @@ let app: FastifyInstance;
 interface Session {
   userId: string;
   token: string;
+  email: string;
 }
 
 interface PaddleCall {
   url: string;
   method: string;
   body: unknown;
+  bounded: boolean;
 }
 
 async function newSession(label: string): Promise<Session> {
@@ -47,7 +49,7 @@ async function newSession(label: string): Promise<Session> {
   createdUsers.push(user.id);
   const token = signToken({ userId: user.id, email });
   await registerDevice(user.id, token, { deviceType: "web" });
-  return { userId: user.id, token };
+  return { userId: user.id, token, email };
 }
 
 function call(session: Session, method: string, path: string, payload?: unknown) {
@@ -113,28 +115,34 @@ async function subscribedOrg(subscriptionId: string, data: Record<string, unknow
 }
 
 /**
- * A stand-in Paddle: GET /subscriptions/:id answers `live`, everything else
- * answers `answer`. Every request is recorded.
+ * A stand-in Paddle: GET /subscriptions/:id answers `live`, GET /customers/:id
+ * answers `customer`, everything else answers `answer`. Every request is
+ * recorded, with whether it carried an abort signal (a timeout).
  */
 function stubPaddle(opts: {
   live?: Record<string, unknown>;
+  customer?: Record<string, unknown>;
   answer?: Record<string, unknown>;
   fail?: (call: PaddleCall) => boolean;
 }) {
   const calls: PaddleCall[] = [];
-  const fetchMock = vi.fn(async (target: string, init?: { method?: string; body?: string }) => {
-    const entry = {
-      url: target,
-      method: init?.method ?? "GET",
-      body: init?.body ? JSON.parse(init.body) : undefined,
-    };
-    calls.push(entry);
-    if (opts.fail?.(entry)) {
-      return { ok: false, status: 400, text: async () => '{"error":{"code":"bad_request"}}' };
-    }
-    const data = entry.method === "GET" ? { data: opts.live ?? {} } : { data: opts.answer ?? {} };
-    return { ok: true, status: 200, json: async () => data, text: async () => "" };
-  });
+  const fetchMock = vi.fn(
+    async (target: string, init?: { method?: string; body?: string; signal?: unknown }) => {
+      const entry = {
+        url: target,
+        method: init?.method ?? "GET",
+        body: init?.body ? JSON.parse(init.body) : undefined,
+        bounded: init?.signal instanceof AbortSignal,
+      };
+      calls.push(entry);
+      if (opts.fail?.(entry)) {
+        return { ok: false, status: 400, text: async () => '{"error":{"code":"bad_request"}}' };
+      }
+      const read = entry.url.includes("/customers/") ? opts.customer : opts.live;
+      const data = { data: (entry.method === "GET" ? read : opts.answer) ?? {} };
+      return { ok: true, status: 200, json: async () => data, text: async () => "" };
+    },
+  );
   vi.stubGlobal("fetch", fetchMock);
   return calls;
 }
@@ -211,6 +219,7 @@ describePg("team seat changes (real Postgres)", () => {
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ status: "pending", seats: 5 });
     expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+    expect(calls.every((c) => c.bounded)).toBe(true);
     expect(calls[1]?.url).toMatch(/\/subscriptions\/sub_seat_1$/);
     expect(calls[1]?.body).toEqual({
       items: [{ price_id: "pri_team_month", quantity: 5 }],
@@ -233,32 +242,39 @@ describePg("team seat changes (real Postgres)", () => {
     expect(after.seatsPurchased).toBe(5);
   });
 
-  it("makes no Paddle call when the count is already the one bought", async () => {
+  it("changes nothing when Paddle already bills that count", async () => {
     const { owner } = await subscribedOrg("sub_seat_2");
     const calls = stubPaddle({ live: liveSubscription({ id: "sub_seat_2" }) });
     const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 3 });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: "unchanged", seats: 3 });
-    expect(calls).toEqual([]);
+    expect(calls.map((c) => c.method)).toEqual(["GET"]);
   });
 
-  it("makes no second change when Paddle already has the count and the webhook is on its way", async () => {
+  it("compares with Paddle, not the stored count, while a webhook is on its way", async () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_3");
+    // Paddle already moved to 6; the stored count (3) has not caught up.
     const calls = stubPaddle({
       live: liveSubscription({
         id: "sub_seat_3",
         items: [{ price: { id: "pri_team_month" }, quantity: 6 }],
       }),
     });
-    const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 6 });
-    expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ status: "pending", seats: 6 });
+    const repeat = await call(owner, "POST", "/api/orgs/current/seats", { seats: 6 });
+    expect(repeat.statusCode).toBe(202);
+    expect(repeat.json()).toEqual({ status: "pending", seats: 6 });
     expect(calls.map((c) => c.method)).toEqual(["GET"]);
     expect(
       await prisma.orgAuditEvent.count({
         where: { orgId, action: "billing.seats_change_requested" },
       }),
     ).toBe(0);
+
+    // Going back to the stored count must still reach Paddle.
+    const back = await call(owner, "POST", "/api/orgs/current/seats", { seats: 3 });
+    expect(back.statusCode).toBe(202);
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "PATCH"]);
+    expect(calls[2]?.body).toMatchObject({ items: [{ price_id: "pri_team_month", quantity: 3 }] });
   });
 
   it("refuses a count outside 2–150 or below the members, and anyone but the owner", async () => {
@@ -275,9 +291,12 @@ describePg("team seat changes (real Postgres)", () => {
     const below = await call(owner, "POST", "/api/orgs/current/seats", { seats: 3 });
     expect(below.statusCode).toBe(409);
     expect(below.json()).toMatchObject({ code: "SEATS_BELOW_MEMBERS" });
-    const byMember = await call(member, "POST", "/api/orgs/current/seats", { seats: 6 });
-    expect(byMember.statusCode).toBe(403);
-    expect(byMember.json()).toMatchObject({ code: "OWNER_ONLY" });
+    // Authorization comes before the body: a member learns nothing either way.
+    for (const seats of [6, 1]) {
+      const byMember = await call(member, "POST", "/api/orgs/current/seats", { seats });
+      expect(byMember.statusCode).toBe(403);
+      expect(byMember.json()).toMatchObject({ code: "OWNER_ONLY" });
+    }
     const stranger = await newSession("stranger");
     expect((await call(stranger, "POST", "/api/orgs/current/seats", { seats: 6 })).statusCode).toBe(
       404,
@@ -327,6 +346,7 @@ describePg("team seat changes (real Postgres)", () => {
     const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
     expect(res.statusCode).toBe(502);
     expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
+    expect(JSON.stringify(res.json())).not.toContain("bad_request");
     expect(
       await prisma.orgAuditEvent.count({
         where: { orgId, action: "billing.seats_change_requested" },
@@ -356,6 +376,12 @@ describePg("team subscription webhook: scheduled cancel (real Postgres)", () => 
     const view = await call(owner, "GET", "/api/orgs/current");
     expect(view.json()).toMatchObject({ org: { seats: { cancelAt: "2026-12-14T00:00:00.000Z" } } });
 
+    // An event that does not mention scheduled_change keeps the stored date.
+    const silent = teamEvent(orgId, { id: "sub_seat_10" });
+    await webhook(silent);
+    const kept = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(kept.subscriptionCancelAt?.toISOString()).toBe("2026-12-14T00:00:00.000Z");
+
     await webhook(teamEvent(orgId, { id: "sub_seat_10", scheduled_change: null }));
     const after = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
     expect(after.subscriptionCancelAt).toBeNull();
@@ -384,6 +410,7 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toMatch(/\/subscriptions\/sub_seat_11\/cancel$/);
     expect(calls[0]?.body).toEqual({ effective_from: "next_billing_period" });
+    expect(calls[0]?.bounded).toBe(true);
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
     // Seats stay until the period ends: only Paddle's final event ends them.
     expect(org).toMatchObject({ subscriptionStatus: "active", seatsPurchased: 3 });
@@ -391,6 +418,19 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     expect(
       await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_scheduled" } }),
     ).toBe(1);
+  });
+
+  it("answers 502 and records nothing when Paddle refuses the cancel", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_16");
+    stubPaddle({ fail: () => true });
+    const res = await call(owner, "POST", "/api/orgs/current/subscription/cancel");
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(org.subscriptionCancelAt).toBeNull();
+    expect(
+      await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_scheduled" } }),
+    ).toBe(0);
   });
 
   it("cancels a past-due subscription at the period end, and the organization still cannot close", async () => {
@@ -419,7 +459,7 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     expect(calls).toEqual([]);
   });
 
-  it("takes a scheduled cancel back, and refuses when none is scheduled", async () => {
+  it("takes a scheduled cancel back once; a repeat answers the same without Paddle", async () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_14", {
       scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
     });
@@ -434,38 +474,37 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
       await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_removed" } }),
     ).toBe(1);
     const twice = await call(owner, "POST", "/api/orgs/current/subscription/resume");
-    expect(twice.statusCode).toBe(409);
-    expect(twice.json()).toMatchObject({ code: "NO_SCHEDULED_CANCEL" });
+    expect(twice.statusCode).toBe(200);
+    expect(twice.json()).toEqual({ resumed: true });
     expect(calls).toHaveLength(1);
   });
 });
 
 describePg("team billing portal (real Postgres)", () => {
-  it("opens for the owner who set up billing, and for no one else", async () => {
-    const calls = stubPaddle({
-      answer: {
-        checkout: { url: "https://pay.example/c/1" },
-        urls: { general: { overview: "https://customer-portal.paddle.com/cpl_1" } },
-      },
-    });
-    const { owner, orgId } = await ownedOrg();
-    expect(
-      (await call(owner, "POST", "/api/orgs/current/checkout", { interval: "month", seats: 3 }))
-        .statusCode,
-    ).toBe(200);
-    await webhook(teamEvent(orgId, { id: "sub_seat_15", customer_id: "ctm_seat_15" }));
+  it("opens for the owner whose verified email pays, and for no one else", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_15", { customer_id: "ctm_seat_15" });
     const member = await addMember(orgId);
+    const calls = stubPaddle({
+      customer: { id: "ctm_seat_15", email: owner.email.toUpperCase() },
+      answer: { urls: { general: { overview: "https://customer-portal.paddle.com/cpl_1" } } },
+    });
 
     const res = await call(owner, "POST", "/api/orgs/current/billing-portal");
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ url: "https://customer-portal.paddle.com/cpl_1" });
-    expect(calls.at(-1)?.url).toMatch(/\/customers\/ctm_seat_15\/portal-sessions$/);
+    expect(calls.map((c) => c.url.replace(/^https:\/\/[^/]+/, ""))).toEqual([
+      "/customers/ctm_seat_15",
+      "/customers/ctm_seat_15/portal-sessions",
+    ]);
+    expect(
+      await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.portal_opened" } }),
+    ).toBe(1);
 
     const byMember = await call(member, "POST", "/api/orgs/current/billing-portal");
     expect(byMember.json()).toMatchObject({ code: "OWNER_ONLY" });
 
-    // Ownership moves: the portal would show the payer's own Paddle account
-    // (their other subscriptions, invoices, address), so it stays theirs.
+    // Ownership moves: the portal is the payer's own Paddle account (their
+    // other subscriptions, invoices, address), so it stays theirs.
     const transfer = await call(owner, "POST", "/api/orgs/current/transfer", {
       membershipId: (
         await prisma.orgMembership.findUniqueOrThrow({ where: { userId: member.userId } })
@@ -478,10 +517,46 @@ describePg("team billing portal (real Postgres)", () => {
     expect(calls.filter((c) => c.url.includes("portal-sessions"))).toHaveLength(1);
   });
 
-  it("refuses an organization that has no billing account", async () => {
+  it("stays closed after the subscription ends, even for a new owner who opens a checkout", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_17", { customer_id: "ctm_seat_17" });
+    const member = await addMember(orgId);
+    await webhook(teamEvent(orgId, { id: "sub_seat_17", status: "canceled" }));
+    const calls = stubPaddle({
+      customer: { email: member.email },
+      answer: {
+        checkout: { url: "https://pay.example/c/1" },
+        urls: { general: { overview: "https://customer-portal.paddle.com/cpl_1" } },
+      },
+    });
+    await call(owner, "POST", "/api/orgs/current/transfer", {
+      membershipId: (
+        await prisma.orgMembership.findUniqueOrThrow({ where: { userId: member.userId } })
+      ).id,
+    });
+    const checkout = await call(member, "POST", "/api/orgs/current/checkout", {
+      interval: "month",
+      seats: 2,
+    });
+    expect(checkout.statusCode).toBe(200);
+    const res = await call(member, "POST", "/api/orgs/current/billing-portal");
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "NO_SUBSCRIPTION" });
+    expect(calls.filter((c) => c.url.includes("/customers/"))).toHaveLength(0);
+  });
+
+  it("refuses a portal link outside paddle.com, and an organization with no billing account", async () => {
+    const { owner } = await subscribedOrg("sub_seat_18", { customer_id: "ctm_seat_18" });
+    stubPaddle({
+      customer: { email: owner.email },
+      answer: { urls: { general: { overview: "https://evil.example/portal" } } },
+    });
+    const odd = await call(owner, "POST", "/api/orgs/current/billing-portal");
+    expect(odd.statusCode).toBe(502);
+    expect(JSON.stringify(odd.json())).not.toContain("evil.example");
+
     const calls = stubPaddle({});
-    const { owner } = await ownedOrg();
-    const res = await call(owner, "POST", "/api/orgs/current/billing-portal");
+    const none = await ownedOrg();
+    const res = await call(none.owner, "POST", "/api/orgs/current/billing-portal");
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ code: "NO_SUBSCRIPTION" });
     expect(calls).toEqual([]);

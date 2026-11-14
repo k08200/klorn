@@ -9,21 +9,28 @@
  * The cancel date is stored at once, like the personal Pro cancel
  * (routes/billing.ts), so the page shows it before the webhook confirms it.
  *
- * Each change runs under the organization's lock, so two of them for one
- * organization are serialized and a seat change sees the member count it is
- * checked against. The Paddle calls inside the lock are time-bounded to fit
- * the interactive transaction's 15 s timeout (INTERACTIVE_TX_OPTIONS).
- * The audit row is written before the Paddle call in the same transaction, so
- * a refused or timed-out call leaves no row behind; a seat change is "set the
- * count to N", so retrying one whose answer was lost is safe.
+ * Reads from Paddle happen before the organization's lock; each change then
+ * runs under the lock with exactly one Paddle call, time-bounded so the lock
+ * wait plus the call fit the interactive transaction's 15 s timeout
+ * (INTERACTIVE_TX_OPTIONS). The audit row is written before that call in the
+ * same transaction, so a refused call leaves no row behind. A call that times
+ * out may still have reached Paddle; the answer says so, and a seat change is
+ * "set the count to N", so retrying it is safe.
+ *
+ * The owner is the organization's billing admin: any owner can change seats
+ * or cancel on the payment method already on the subscription (Paddle emails
+ * its payer a receipt for every prorated charge). The customer portal is
+ * different: it is the payer's whole Paddle account (other subscriptions,
+ * invoices, address), so it opens only when the owner's verified Klorn email
+ * is the Paddle customer's email.
  *
  * Status rules, from Paddle's API: a past_due subscription cannot be updated
- * (seat changes need active or trialing), but can be canceled at the period
- * end, after which it stays past_due until the period ends; a paused one can
- * only be canceled immediately, which this route does not do (the portal
- * can). An organization whose subscription still bills is never closed or
- * deleted (subscriptionBills, effective-tier.ts) — a scheduled cancel does
- * not change that until Paddle reports the subscription canceled.
+ * (seat changes need active or trialing) except to remove a scheduled change,
+ * and can be canceled at the period end, after which it stays past_due until
+ * the period ends; a paused one can only be canceled immediately, which this
+ * route does not do (the portal can). An organization whose subscription
+ * still bills is never closed or deleted (subscriptionBills, effective-tier.ts)
+ * — a scheduled cancel does not change that until Paddle reports it canceled.
  */
 
 import {
@@ -32,19 +39,21 @@ import {
   undoPaddleCancellation,
 } from "../billing/paddle.js";
 import {
+  getPaddleCustomerEmail,
   getPaddleTeamSubscription,
   type PaddleTeamSubscription,
   setPaddleSeatQuantity,
 } from "../billing/paddle-team.js";
+import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { recordOrgAudit } from "./audit.js";
-import { seatsActive } from "./effective-tier.js";
+import { seatsActive, subscriptionBills } from "./effective-tier.js";
 import { OrgError } from "./org-error.js";
-import { type OrgTx, ownerInTx, withOrgLock } from "./org-lock.js";
+import { type OrgTx, ownerInTx, requireVerifiedEmail, withOrgLock } from "./org-lock.js";
 import { requireOwner } from "./org-members.js";
 import { MAX_SELF_SERVE_SEATS, MIN_TEAM_SEATS } from "./org-shape.js";
 
-/** Two calls (read, then update) must finish inside the 15 s transaction. */
+/** One Paddle call under the lock: the 15 s transaction keeps ~9 s for the lock wait. */
 const PADDLE_CALL_TIMEOUT_MS = 6_000;
 const CALL = { timeoutMs: PADDLE_CALL_TIMEOUT_MS };
 
@@ -56,7 +65,6 @@ interface BillingRow {
   paddleSubscriptionId: string | null;
   paddleCustomerId: string | null;
   subscriptionCancelAt: Date | null;
-  billingUserId: string | null;
 }
 
 const BILLING_SELECT = {
@@ -65,7 +73,6 @@ const BILLING_SELECT = {
   paddleSubscriptionId: true,
   paddleCustomerId: true,
   subscriptionCancelAt: true,
-  billingUserId: true,
 } as const;
 
 function requirePaddleKey(): void {
@@ -102,7 +109,7 @@ const NOT_ACTIVE = () =>
   new OrgError(
     409,
     "SUBSCRIPTION_NOT_ACTIVE",
-    "Seats can change only while the subscription is active. Update the payment method first.",
+    "Seats can change only while the subscription is active. Whoever pays can fix the payment method in the billing portal.",
   );
 
 const CANCEL_SCHEDULED = () =>
@@ -118,21 +125,32 @@ function providerError(err: unknown, orgId: string, step: string): OrgError {
   return new OrgError(
     502,
     "BILLING_PROVIDER_ERROR",
-    "Paddle did not confirm the change. Nothing was changed here; try again shortly.",
+    "Paddle didn't confirm the change, so it may not have gone through. Check again in a minute before you retry.",
   );
+}
+
+function readBilling(orgId: string): Promise<BillingRow> {
+  return prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: BILLING_SELECT });
 }
 
 function billingInTx(tx: OrgTx, orgId: string): Promise<BillingRow> {
   return tx.organization.findUniqueOrThrow({ where: { id: orgId }, select: BILLING_SELECT });
 }
 
-/** The stored subscription a seat change may act on, checked against the members. */
-async function storedSeatTarget(tx: OrgTx, orgId: string, seats: number) {
-  const org = await billingInTx(tx, orgId);
+/** The subscription a seat change may act on: active or trialing, nothing scheduled. */
+function seatTarget(org: BillingRow): string {
   if (!org.paddleSubscriptionId || !org.subscriptionStatus) throw NO_SUBSCRIPTION();
   if (!seatsActive(org.subscriptionStatus)) throw NOT_ACTIVE();
   if (org.subscriptionCancelAt) throw CANCEL_SCHEDULED();
-  const members = await tx.orgMembership.count({ where: { orgId } });
+  return org.paddleSubscriptionId;
+}
+
+async function assertMemberFloor(
+  client: Pick<OrgTx, "orgMembership">,
+  orgId: string,
+  seats: number,
+): Promise<void> {
+  const members = await client.orgMembership.count({ where: { orgId } });
   if (seats < members) {
     throw new OrgError(
       409,
@@ -140,7 +158,6 @@ async function storedSeatTarget(tx: OrgTx, orgId: string, seats: number) {
       `The organization has ${members} members. Remove members before you remove their seats.`,
     );
   }
-  return { subscriptionId: org.paddleSubscriptionId, purchased: org.seatsPurchased };
 }
 
 /**
@@ -173,33 +190,36 @@ async function liveSeatItem(subscriptionId: string, orgId: string) {
 
 /**
  * Set the organization's seat count to `seats` (owner only). At least two,
- * at most 150, and never fewer than the members. No Paddle call when the
- * count is already bought; no second update when Paddle already holds it.
+ * at most 150, and never fewer than the members. Compared with what Paddle
+ * bills now, not with the stored count (which waits for the webhook): no
+ * update when Paddle already holds `seats`.
  */
 export async function changeSeats(userId: string, body: unknown): Promise<SeatChangeResult> {
-  const seats = seatsInput(body);
   const owner = await requireOwner(userId);
+  const seats = seatsInput(body);
   const orgId = owner.orgId;
+  const stored = await readBilling(orgId);
+  const subscriptionId = seatTarget(stored);
+  await assertMemberFloor(prisma, orgId, seats);
+  requirePaddleKey();
+  const item = await liveSeatItem(subscriptionId, orgId);
+  if (item.quantity === seats) {
+    return { status: stored.seatsPurchased === seats ? "unchanged" : "pending", seats };
+  }
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
-    const target = await storedSeatTarget(tx, orgId, seats);
-    if (seats === target.purchased) return { status: "unchanged", seats };
-    requirePaddleKey();
-    const item = await liveSeatItem(target.subscriptionId, orgId);
-    // Paddle already holds this count (an earlier request whose webhook has
-    // not arrived yet): nothing to send.
-    if (item.quantity === seats) return { status: "pending", seats };
+    // What may have moved since the reads above: the subscription, a cancel,
+    // a member who joined.
+    if (seatTarget(await billingInTx(tx, orgId)) !== subscriptionId) throw NOT_ACTIVE();
+    await assertMemberFloor(tx, orgId, seats);
     await recordOrgAudit(tx, {
       orgId,
       action: "billing.seats_change_requested",
       actorUserId: userId,
-      detail: { from: target.purchased, to: seats },
+      detail: { from: item.quantity, to: seats },
     });
     try {
-      await setPaddleSeatQuantity(
-        { subscriptionId: target.subscriptionId, priceId: item.priceId, quantity: seats },
-        CALL,
-      );
+      await setPaddleSeatQuantity({ subscriptionId, priceId: item.priceId, quantity: seats }, CALL);
     } catch (err) {
       throw providerError(err, orgId, "set_seats");
     }
@@ -265,16 +285,19 @@ export async function cancelTeamSubscription(userId: string): Promise<{ cancelAt
   });
 }
 
-/** Take back a scheduled cancel (owner only): billing resumes on the original schedule. */
+/**
+ * Take back a scheduled cancel (owner only): billing resumes on the original
+ * schedule. Paddle allows this on a past-due subscription too. Nothing to take
+ * back answers the same, so a retry after a lost answer is not an error.
+ */
 export async function resumeTeamSubscription(userId: string): Promise<{ resumed: true }> {
   const owner = await requireOwner(userId);
   const orgId = owner.orgId;
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
     const org = await billingInTx(tx, orgId);
-    if (!org.paddleSubscriptionId || !org.subscriptionCancelAt) {
-      throw new OrgError(409, "NO_SCHEDULED_CANCEL", "No cancel is scheduled.");
-    }
+    if (!org.paddleSubscriptionId) throw NO_SUBSCRIPTION();
+    if (!org.subscriptionCancelAt) return { resumed: true as const };
     requirePaddleKey();
     await recordOrgAudit(tx, { orgId, action: "billing.cancel_removed", actorUserId: userId });
     try {
@@ -291,31 +314,59 @@ export async function resumeTeamSubscription(userId: string): Promise<{ resumed:
   });
 }
 
+const PORTAL_PAYER_ONLY = () =>
+  new OrgError(
+    409,
+    "PORTAL_PAYER_ONLY",
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
+  );
+
+function sameEmail(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Only Paddle's own portal host, over https, is handed to the client. */
+function isPaddlePortalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && /(^|\.)paddle\.com$/.test(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * A Paddle customer-portal link (payment method, invoices) for the owner who
- * set up billing. The portal is the payer's whole Paddle account, so a later
- * owner is refused rather than shown it.
+ * A Paddle customer-portal link (payment method, invoices) while the team
+ * subscription still bills, for an owner whose verified Klorn email is the
+ * Paddle customer's: the portal shows that person's whole Paddle account, so
+ * a later owner, or an owner who did not pay, is refused. Reads only; no lock.
  */
 export async function teamBillingPortal(userId: string): Promise<{ url: string }> {
   const owner = await requireOwner(userId);
   const orgId = owner.orgId;
-  return withOrgLock(orgId, async (tx) => {
-    await ownerInTx(tx, userId, orgId);
-    const org = await billingInTx(tx, orgId);
-    if (!org.paddleCustomerId) throw NO_SUBSCRIPTION();
-    if (org.billingUserId !== userId) {
-      throw new OrgError(
-        409,
-        "PORTAL_PAYER_ONLY",
-        "Only the person who set up team billing can open the billing portal. Seats and cancel work here.",
-      );
-    }
-    requirePaddleKey();
-    await recordOrgAudit(tx, { orgId, action: "billing.portal_opened", actorUserId: userId });
-    try {
-      return { url: await createPaddlePortalUrl(org.paddleCustomerId, CALL) };
-    } catch (err) {
-      throw providerError(err, orgId, "portal");
-    }
-  });
+  const org = await readBilling(orgId);
+  const customerId = org.paddleCustomerId;
+  if (!customerId || !org.paddleSubscriptionId || !subscriptionBills(org.subscriptionStatus)) {
+    throw NO_SUBSCRIPTION();
+  }
+  requirePaddleKey();
+  const email = await requireVerifiedEmail(userId);
+  let payerEmail: string | null;
+  try {
+    payerEmail = await getPaddleCustomerEmail(customerId, CALL);
+  } catch (err) {
+    throw providerError(err, orgId, "read_customer");
+  }
+  if (!payerEmail || !sameEmail(payerEmail, email)) throw PORTAL_PAYER_ONLY();
+  let url: string;
+  try {
+    url = await createPaddlePortalUrl(customerId, CALL);
+  } catch (err) {
+    throw providerError(err, orgId, "portal");
+  }
+  if (!isPaddlePortalUrl(url)) {
+    throw providerError(new Error("Paddle portal url outside paddle.com"), orgId, "portal_url");
+  }
+  await recordOrgAudit(prisma, { orgId, action: "billing.portal_opened", actorUserId: userId });
+  return { url };
 }
