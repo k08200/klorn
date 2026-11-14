@@ -63,6 +63,8 @@ export interface VaultCommitment {
   sourceSubject: string | null;
   confirmedAt: string | null;
   completedAt: string | null;
+  /** A low-confidence suggestion the user has not confirmed (pim/commitment-confirmation.ts). */
+  suggested: boolean;
 }
 
 export type MailLimit = "count" | "size" | "time";
@@ -77,6 +79,8 @@ export interface VaultSummary {
   activeCommitments: number;
   doneCommitments: number;
   partial: { mails: MailLimit | null; commitments: boolean; senderTraits: boolean };
+  /** Mails whose note could not be written (an unusable stored value), left out. */
+  skippedMails: number;
 }
 
 function newestFirst(refs: readonly VaultMailRef[]): VaultMailRef[] {
@@ -109,7 +113,7 @@ export function renderLaneNote(lane: LiveTier, refs: readonly VaultMailRef[]): s
   return `${lines.join("\n")}\n`;
 }
 
-function laneCounts(refs: readonly VaultMailRef[]): Record<LiveTier, number> {
+export function countLanes(refs: readonly VaultMailRef[]): Record<LiveTier, number> {
   const counts = { PUSH: 0, MEETING: 0, QUEUE: 0, INFO: 0, SILENT: 0 };
   for (const ref of refs) counts[ref.lane] += 1;
   return counts;
@@ -130,7 +134,7 @@ function traitLines(traits: readonly VaultTrait[]): string[] {
 
 /** Klorn/senders/<key>.md: lane counts, what Klorn learned, newest mails. */
 export function renderSenderNote(sender: VaultSender): string {
-  const counts = laneCounts(sender.mails);
+  const counts = countLanes(sender.mails);
   const relationships = [
     ...new Set(sender.traits.filter((t) => t.kind === "relationship").map((t) => t.value)),
   ];
@@ -202,7 +206,13 @@ export function renderCommitmentsNote(
     return `${lines.join("\n")}\n`;
   }
   if (list === "active") {
-    for (const c of commitments) lines.push(commitmentLine(c, "[ ] "));
+    const suggested = commitments.filter((c) => c.suggested);
+    for (const c of commitments.filter((c) => !c.suggested)) lines.push(commitmentLine(c, "[ ] "));
+    if (suggested.length > 0) {
+      lines.push("", "## Suggested, not confirmed", "");
+      lines.push("Klorn found these but you have not confirmed them.", "");
+      for (const c of suggested) lines.push(commitmentLine(c, ""));
+    }
     return `${lines.join("\n")}\n`;
   }
   const done = commitments.filter((c) => c.status === "DONE");
@@ -221,25 +231,47 @@ const MAIL_LIMIT_TEXT: Record<MailLimit, string> = {
   time: "it reached the time one export can take",
 };
 
+function isComplete(summary: VaultSummary): boolean {
+  const { mails, commitments, senderTraits } = summary.partial;
+  return !mails && !commitments && !senderTraits && summary.skippedMails === 0;
+}
+
 function partialLines(summary: VaultSummary): string[] {
   const { mails, commitments, senderTraits } = summary.partial;
-  if (!mails && !commitments && !senderTraits) return [];
+  if (isComplete(summary)) return [];
   const lines = ["", "## This export is partial", ""];
   if (mails) {
     lines.push(
       `- Mail: the newest ${summary.mailCount} are here; older ones were left out because ${MAIL_LIMIT_TEXT[mails]}.`,
     );
   }
-  if (commitments)
-    lines.push("- Commitments: the most recent ones are here; older ones were left out.");
+  if (summary.skippedMails > 0) {
+    lines.push(`- Mail: ${summary.skippedMails} could not be written and were left out.`);
+  }
+  if (commitments) {
+    lines.push("- Commitments: a list reached the most one export holds, so some were left out.");
+  }
   if (senderTraits) lines.push("- Senders: some of what Klorn learned about senders was left out.");
   return lines;
 }
 
+const READING_GUIDE = [
+  "## Reading a mail note",
+  "",
+  "One note per mail, in `Klorn/mail/YYYY/MM/`. `klorn_id` stays the same across exports. Its properties:",
+  "",
+  "- `lane`: the lane Klorn put the mail in.",
+  "- `lane_reason`: why. With `lane_reason_verified: true` it is a quote checked word for word against the mail; otherwise it is Klorn's own summary, not checked.",
+  "- `judged_by`: what decided the lane. `llm`, `fast-path`, `sender-prior` and `keyword-fallback` are Klorn's classifier paths; `you` means you moved it; `agent` means an agent you connected moved it; `klorn` means no path was recorded.",
+  "- `policy`: the attention policy version, when one decided.",
+  "- `status`: `open`, `resolved`, `dismissed` or `snoozed`.",
+  "- `lane_feedback`: `override` when you moved the mail to another lane, `confirm` when you confirmed its lane.",
+  "- `you` and `you_at`: the strongest thing you did with the mail that Klorn recorded: `replied`, `archived`, `unsubscribed`, `dismissed`, `snoozed`, `starred` or `opened`.",
+];
+
 /** Klorn/_klorn.md: what this folder is, the lane legend, how to read a note. */
 export function renderVaultIndex(summary: VaultSummary): string {
-  const complete =
-    !summary.partial.mails && !summary.partial.commitments && !summary.partial.senderTraits;
+  const complete = isComplete(summary);
   const head = frontmatter([
     ["klorn_type", "index"],
     ["klorn_vault_version", VAULT_FORMAT_VERSION],
@@ -268,21 +300,11 @@ export function renderVaultIndex(summary: VaultSummary): string {
     "| --- | --- | --- |",
     ...lanes,
     "",
-    "## Reading a mail note",
-    "",
-    "One note per mail, in `Klorn/mail/YYYY/MM/`. `klorn_id` stays the same across exports. Its properties:",
-    "",
-    "- `lane`: the lane Klorn put the mail in.",
-    "- `lane_reason`: why. With `lane_reason_verified: true` it is a quote checked word for word against the mail; otherwise it is Klorn's own summary, not checked.",
-    "- `judged_by`: what decided the lane. `llm`, `fast-path`, `sender-prior` and `keyword-fallback` are Klorn's classifier paths; `you` means you moved it; `agent` means an agent you connected moved it; `klorn` means no path was recorded.",
-    "- `policy`: the attention policy version, when one decided.",
-    "- `status`: `open`, `resolved`, `dismissed` or `snoozed`.",
-    "- `lane_feedback`: `override` when you moved the mail to another lane, `confirm` when you confirmed its lane.",
-    "- `you` and `you_at`: the strongest thing you did with the mail that Klorn recorded: `replied`, `archived`, `unsubscribed`, `dismissed`, `snoozed`, `starred` or `opened`.",
+    ...READING_GUIDE,
     "",
     summary.includesMailText
-      ? "Mail text is included where Klorn still keeps it."
-      : "Mail text is not included. Export again with mail text turned on to add it.",
+      ? "Full mail text is included where Klorn still keeps it."
+      : "Full mail text is not included: a mail note holds the subject, the preview line and Klorn's decision, with any quote Klorn checked against the mail. Export again with mail text turned on to add the full text.",
     "",
     "## Also here",
     "",

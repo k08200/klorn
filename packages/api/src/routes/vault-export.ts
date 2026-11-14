@@ -5,15 +5,18 @@
  *   GET /api/user/me/vault/export[?bodies=1]
  *
  * Streams the user's own Klorn data as an Obsidian-compatible markdown zip
- * (vault/vault-export.ts). Mail text only with bodies=1. The archive is built
- * as it streams and stored nowhere: no file, no row, no cache.
+ * (vault/vault-export.ts). Full mail text only with bodies=1; without it a
+ * mail note still holds the subject, the preview line and Klorn's decision
+ * (with any quote checked against the mail). The archive is built as it
+ * streams and stored nowhere: no file, no content row, no cache.
  *
  * While the flag is off the route answers Fastify's default 404 before any
  * auth (darkRouteGate); in cohort mode a user outside it gets the same 404
  * after auth (cohortGate). Then, in order: one export per user at a time and
  * MAX_CONCURRENT_EXPORTS per process (429 / 503), one per user per
  * VAULT_EXPORT_COOLDOWN_MS (429 with retryAfterSeconds, from the audit table),
- * and an audit row settled when the stream ends however it ends.
+ * an audit row settled when the request ends however it ends, and a
+ * wall-clock cap on the whole request (VAULT_LIMITS.streamMaxMs).
  */
 
 import { Readable } from "node:stream";
@@ -21,6 +24,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { VAULT_EXPORT_FLAG, vaultExportLive } from "../config.js";
 import { readerLanguageFor } from "../notify/request-language.js";
+import { captureError } from "../sentry.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import {
   acquireExportSlot,
@@ -38,6 +42,8 @@ import { darkRouteGate } from "./dark-route-gate.js";
 
 const VAULT_EXPORT_FLAGS = [VAULT_EXPORT_FLAG] as const;
 const MS_PER_SECOND = 1000;
+// nginx's "client closed request": nothing reads it, the socket is gone.
+const CLIENT_CLOSED_REQUEST = 499;
 
 const querySchema = {
   type: "object",
@@ -58,43 +64,77 @@ const SERVER_BUSY = {
 const COOLDOWN_MESSAGE = "You exported recently. Try again in a few minutes.";
 
 /**
- * The archive, audited: the slot is released and the audit row settled
- * exactly once, when the stream ends, fails, or the client goes away (the
- * response's close covers a stream that never started).
+ * One export request's lifecycle. Watching starts right after the slot is
+ * taken, before any await, so a client that leaves at any point (before the
+ * stream, during it, or by stalling past streamMaxMs) frees the slot. The
+ * slot is released and the audit row settled at most once.
  */
-function auditedStream(
-  input: VaultExportInput,
-  run: { auditId: string; slot: ExportSlot },
-  reply: FastifyReply,
-): Readable {
-  const progress = newVaultProgress();
-  let settled = false;
-  const settle = (outcome: ExportEnd["outcome"]): Promise<void> => {
-    if (settled) return Promise.resolve();
-    settled = true;
-    run.slot.release();
-    return recordExportEnd(run.auditId, input.userId, {
-      outcome,
-      noteCount: progress.notes,
-      byteCount: progress.bytes,
-    });
-  };
-  reply.raw.once("close", () => void settle("aborted"));
+class ExportRun {
+  readonly progress = newVaultProgress();
+  closed = false;
+  #auditId: string | null = null;
+  #settled = false;
+  #timer: NodeJS.Timeout | null = null;
 
+  constructor(
+    private readonly userId: string,
+    private readonly slot: ExportSlot,
+  ) {}
+
+  watch(reply: FastifyReply, maxMs: number): void {
+    reply.raw.once("close", () => {
+      this.closed = true;
+      void this.finish("aborted");
+    });
+    this.#timer = setTimeout(() => reply.raw.destroy(), maxMs);
+    this.#timer.unref();
+  }
+
+  started(auditId: string): void {
+    this.#auditId = auditId;
+  }
+
+  finish(outcome: ExportEnd["outcome"]): Promise<void> {
+    this.slot.release();
+    if (this.#timer) clearTimeout(this.#timer);
+    if (this.#settled || !this.#auditId) return Promise.resolve();
+    this.#settled = true;
+    return recordExportEnd(this.#auditId, this.userId, {
+      outcome,
+      noteCount: this.progress.notes,
+      byteCount: this.progress.bytes,
+    });
+  }
+}
+
+/** The archive as a byte stream that settles `run` when it ends or fails. */
+function archiveStream(input: VaultExportInput, run: ExportRun): Readable {
   async function* chunks(): AsyncGenerator<Buffer> {
     let outcome: ExportEnd["outcome"] = "aborted";
     try {
-      yield* vaultArchive(input, progress);
-      outcome = progress.partial ? "partial" : "ok";
+      yield* vaultArchive(input, run.progress);
+      outcome = run.progress.partial ? "partial" : "ok";
     } catch (err) {
       outcome = "error";
-      console.error("[VAULT-EXPORT] export failed:", err instanceof Error ? err.name : "unknown");
+      // The name only: a message could quote a stored value.
+      const name = err instanceof Error ? err.name : "unknown";
+      console.error("[VAULT-EXPORT] export failed:", name);
+      captureError(new Error(`vault export failed: ${name}`), { tags: { area: "vault-export" } });
       throw err;
     } finally {
-      await settle(outcome);
+      // Not awaited: the download must not wait on the audit write.
+      void run.finish(outcome);
     }
   }
   return Readable.from(chunks(), { objectMode: false });
+}
+
+function replyCooldown(reply: FastifyReply, waitMs: number) {
+  const retryAfterSeconds = Math.ceil(waitMs / MS_PER_SECOND);
+  reply.header("retry-after", String(retryAfterSeconds));
+  return reply
+    .code(429)
+    .send({ error: COOLDOWN_MESSAGE, code: "rate-limited", retryable: true, retryAfterSeconds });
 }
 
 async function exportHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -103,26 +143,24 @@ async function exportHandler(request: FastifyRequest, reply: FastifyReply) {
   const slot = acquireExportSlot(userId);
   if (slot === "user-busy") return reply.code(429).send(IN_PROGRESS);
   if (slot === "server-busy") return reply.code(503).send(SERVER_BUSY);
+  const run = new ExportRun(userId, slot);
+  run.watch(reply, VAULT_LIMITS.streamMaxMs);
 
   let streaming = false;
   try {
     const now = new Date();
     const waitMs = await cooldownRemainingMs(userId, now);
-    if (waitMs > 0) {
-      const retryAfterSeconds = Math.ceil(waitMs / MS_PER_SECOND);
-      reply.header("retry-after", String(retryAfterSeconds));
-      return reply.code(429).send({
-        error: COOLDOWN_MESSAGE,
-        code: "rate-limited",
-        retryable: true,
-        retryAfterSeconds,
-      });
-    }
+    if (waitMs > 0) return replyCooldown(reply, waitMs);
     const [language, timeZone] = await Promise.all([
       readerLanguageFor(request, reply, userId),
       getUserTimeZone(userId),
     ]);
-    const auditId = await recordExportStart(userId, includeBodies);
+    run.started(await recordExportStart(userId, includeBodies));
+    if (run.closed) {
+      // The client left while this request was starting: audited as aborted.
+      await run.finish("aborted");
+      return reply.code(CLIENT_CLOSED_REQUEST).send();
+    }
     const input: VaultExportInput = {
       userId,
       includeBodies,
@@ -131,7 +169,7 @@ async function exportHandler(request: FastifyRequest, reply: FastifyReply) {
       now,
       limits: VAULT_LIMITS,
     };
-    const stream = auditedStream(input, { auditId, slot }, reply);
+    const stream = archiveStream(input, run);
     streaming = true;
     return reply
       .header("content-type", "application/zip")
@@ -143,7 +181,7 @@ async function exportHandler(request: FastifyRequest, reply: FastifyReply) {
       .header("x-content-type-options", "nosniff")
       .send(stream);
   } finally {
-    if (!streaming) slot.release();
+    if (!streaming) void run.finish("error");
   }
 }
 

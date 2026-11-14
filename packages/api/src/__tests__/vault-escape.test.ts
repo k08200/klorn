@@ -151,3 +151,31 @@ describe("wikiLink in a table cell", () => {
     );
   });
 });
+
+describe("Templater markers (run from a file's raw text)", () => {
+  const TEMPLATE = "<%* tp.system.exec('x') %> and <% tp.date.now() %>";
+
+  it("never leave a raw `<%` or `%>` in a YAML value, which still parses back", () => {
+    const out = yamlString(TEMPLATE);
+    expect(out).not.toMatch(/<%|%>/);
+    expect(JSON.parse(out)).toBe(TEMPLATE);
+  });
+
+  it("never leave a raw `<%` or `%>` in note text", () => {
+    expect(mdInline(TEMPLATE)).not.toMatch(/<%|%>/);
+  });
+
+  it("never leave a raw `<%` or `%>` in a body block or an alias", () => {
+    expect(codeBlock(TEMPLATE)).not.toMatch(/<%|%>/);
+    expect(codeBlock(TEMPLATE)).toContain("<​%* tp.system.exec('x') %​>");
+    expect(aliasText(TEMPLATE)).not.toMatch(/<%|%>/);
+  });
+});
+
+describe("aliasText comment markers", () => {
+  it("folds a `%%` hidden by a format character or created by stripping", () => {
+    expect(aliasText("a%​%b")).toBe("a%b");
+    expect(aliasText("a%[%b")).toBe("a%b");
+    expect(aliasText("a%]]%%[[%b")).toBe("a%b");
+  });
+});

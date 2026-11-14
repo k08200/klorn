@@ -185,6 +185,7 @@ describe("golden files", () => {
       sourceSubject: MAIL.subject,
       confirmedAt: "2026-11-12",
       completedAt: null,
+      suggested: false,
     };
     const active = [
       base,
@@ -200,6 +201,15 @@ describe("golden files", () => {
         sourcePath: null,
         sourceSubject: null,
         confirmedAt: null,
+      },
+      {
+        ...base,
+        id: "c0ffee00-4444-4222-8333-444455556666",
+        title: "Follow up on the venue quote",
+        due: null,
+        dueText: null,
+        confirmedAt: null,
+        suggested: true,
       },
     ];
     const done = [
@@ -228,6 +238,7 @@ describe("golden files", () => {
       activeCommitments: 2,
       doneCommitments: 2,
       partial: { mails: null, commitments: false, senderTraits: false },
+      skippedMails: 0,
     };
     golden("index.md", renderVaultIndex(summary));
     const partial = renderVaultIndex({
@@ -337,6 +348,7 @@ describe("hostile mail text", () => {
       sourceSubject: HOSTILE,
       confirmedAt: null,
       completedAt: null,
+      suggested: false,
     };
     for (const note of [
       renderLaneNote("PUSH", refs),

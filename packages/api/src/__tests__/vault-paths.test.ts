@@ -126,6 +126,21 @@ describe("senderNotePath", () => {
     const b = senderNotePath("a:b.com", paths);
     expect(b).not.toBe(a);
     expect(isVaultPath(b)).toBe(true);
+    // The suffix comes from the key, so it is the same in every export.
+    const other = new PathRegistry();
+    other.claim("Klorn/senders/a-b.com.md");
+    expect(senderNotePath("a:b.com", other)).toBe(b);
+  });
+
+  it("never runs out of paths, however many keys sanitize alike", () => {
+    const paths = new PathRegistry();
+    const seen = new Set<string>();
+    for (let i = 0; i < 2_000; i++) seen.add(senderNotePath(`a${"/".repeat(i + 1)}b.com`, paths));
+    expect(seen.size).toBe(2_000);
+  });
+
+  it("does not end a sender file in .md.md", () => {
+    expect(senderNotePath("corp.md", new PathRegistry())).toBe("Klorn/senders/corp_md.md");
   });
 
   it("never yields a hidden file, a traversal or a trailing dot", () => {

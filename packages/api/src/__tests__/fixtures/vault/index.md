@@ -37,7 +37,7 @@ One note per mail, in `Klorn/mail/YYYY/MM/`. `klorn_id` stays the same across ex
 - `lane_feedback`: `override` when you moved the mail to another lane, `confirm` when you confirmed its lane.
 - `you` and `you_at`: the strongest thing you did with the mail that Klorn recorded: `replied`, `archived`, `unsubscribed`, `dismissed`, `snoozed`, `starred` or `opened`.
 
-Mail text is not included. Export again with mail text turned on to add it.
+Full mail text is not included: a mail note holds the subject, the preview line and Klorn's decision, with any quote Klorn checked against the mail. Export again with mail text turned on to add the full text.
 
 ## Also here
 

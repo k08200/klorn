@@ -17,6 +17,7 @@
  * device name, and is capped in UTF-8 bytes (file systems cap names at 255).
  */
 
+import { createHash } from "node:crypto";
 import { orgDomainOf } from "../mail/public-mail-domains.js";
 
 export const VAULT_ROOT = "Klorn";
@@ -25,6 +26,7 @@ export const VAULT_MAX_PATH_BYTES = 240;
 const SLUG_MAX_CHARS = 48;
 const SLUG_MAX_BYTES = 64;
 const SHORT_ID_LENGTHS = [8, 12, 16, 32] as const;
+const HASH_SUFFIX_LENGTHS = [8, 16, 64] as const;
 const MD = ".md";
 
 const SEGMENT_CHARS = /^[\p{L}\p{M}\p{N}._@+-]+$/u;
@@ -136,13 +138,23 @@ export function senderKeyOf(address: string | null | undefined): string {
   return orgDomainOf(addr) ?? addr;
 }
 
-/** Klorn/senders/<key>.md: one path per key, unique in `paths`. */
+/**
+ * Klorn/senders/<key>.md: one path per key, unique in `paths`. Two keys that
+ * sanitize alike (or differ only in case) are told apart by a hash of the key,
+ * so the suffix is stable across exports and never runs out.
+ */
 export function senderNotePath(key: string, paths: PathRegistry): string {
   const known = paths.keyed(key);
   if (known) return known;
   const base = senderSegment(key);
-  for (let n = 1; n < 1_000; n++) {
-    const name = n === 1 ? base : `${capBytes(base, VAULT_MAX_SEGMENT_BYTES - 8)}-${n}`;
+  const hash = createHash("sha256").update(key).digest("hex");
+  const names = [
+    base,
+    ...HASH_SUFFIX_LENGTHS.map(
+      (n) => `${capBytes(base, VAULT_MAX_SEGMENT_BYTES - MD.length - n - 1)}-${hash.slice(0, n)}`,
+    ),
+  ];
+  for (const name of names) {
     const path = `${VAULT_ROOT}/senders/${name}${MD}`;
     if (!isVaultPath(path)) throw new Error("senderNotePath: unsafe path");
     if (paths.claim(path)) {
@@ -161,7 +173,10 @@ function senderSegment(key: string): string {
     .toLowerCase()
     .replace(NOT_SENDER_CHAR, "-")
     .replace(/\.{2,}/g, ".")
-    .replace(/^[.-]+|[.-]+$/g, "");
+    .replace(/^[.-]+|[.-]+$/g, "")
+    // A key ending in ".md" (Moldova's TLD) would make "corp.md.md", whose
+    // link [[…/corp.md]] Obsidian reads as the file "corp.md".
+    .replace(/\.md$/, "_md");
   // One byte spare for the device-name prefix below.
   const capped = capBytes(cleaned, VAULT_MAX_SEGMENT_BYTES - MD.length - 1).replace(/[.-]+$/, "");
   const segment = capped || "unknown";

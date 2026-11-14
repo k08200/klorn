@@ -10,6 +10,8 @@
  */
 
 import { readdirSync, readFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +27,7 @@ interface Where {
   threadId?: { in: string[] };
   status?: { in: string[] };
   createdAt?: { gt: Date };
+  outcome?: { not: string };
 }
 interface Args {
   where: Where;
@@ -42,7 +45,7 @@ const store = vi.hoisted(() => ({
   traits: [] as Row[],
   commitments: [] as Row[],
   audits: [] as Row[],
-  gate: null as null | { reached: () => void; release: Promise<void> },
+  gate: null as null | { model: string; reached: () => void; release: Promise<void> },
   failCommitments: false,
 }));
 
@@ -54,7 +57,16 @@ function matches(row: Row, where: Where): boolean {
   if (where.threadId && !where.threadId.in.includes(row.threadId as string)) return false;
   if (where.status && !where.status.in.includes(row.status as string)) return false;
   if (where.createdAt && !((row.createdAt as Date) > where.createdAt.gt)) return false;
+  if (where.outcome && row.outcome === where.outcome.not) return false;
   return true;
+}
+
+async function passGate(model: string): Promise<void> {
+  if (store.gate?.model !== model) return;
+  const { reached, release } = store.gate;
+  store.gate = null;
+  reached();
+  await release;
 }
 
 function pick(row: Row, select?: Record<string, boolean>): Row {
@@ -70,10 +82,7 @@ vi.mock("../db.js", () => {
   const table = (model: string, rows: () => Row[]) => ({
     findMany: vi.fn(async (args: Args) => {
       store.calls.push({ model, args });
-      if (model === "attentionItem" && store.gate) {
-        store.gate.reached();
-        await store.gate.release;
-      }
+      await passGate(model);
       if (model === "commitment" && store.failCommitments) throw new Error("db down");
       const found = rows().filter((r) => matches(r, args.where ?? {}));
       return found.slice(0, args.take ?? found.length).map((r) => pick(r, args.select));
@@ -95,6 +104,7 @@ vi.mock("../db.js", () => {
       }),
       findFirst: vi.fn(async (args: Args) => {
         store.calls.push({ model: "dataExportAudit.findFirst", args });
+        await passGate("dataExportAudit.findFirst");
         const found = store.audits.filter((r) => matches(r, args.where ?? {}));
         found.sort((a, b) => (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime());
         return found[0] ? pick(found[0], args.select) : null;
@@ -157,6 +167,68 @@ async function call(query = "", opts: { auth?: boolean } = {}) {
   });
   await app.close();
   return res;
+}
+
+/** Every wiki-link target in the archive that is not itself in the archive. */
+function danglingLinks(files: Map<string, string>): string[] {
+  const out: string[] = [];
+  for (const [name, text] of files) {
+    for (const m of text.matchAll(/(?<!\\)\[\[([^\]|\\]+)(?:\\?\||\]\])/g)) {
+      if (!files.has(`${m[1]}.md`)) out.push(`${name} -> ${m[1]}`);
+    }
+  }
+  return out;
+}
+
+/** Holds the next query on `model` until released. */
+function gateAt(model: string): { reached: Promise<void>; release: () => void } {
+  let reached!: () => void;
+  let release!: () => void;
+  const reachedP = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  store.gate = {
+    model,
+    reached,
+    release: new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  };
+  return { reached: reachedP, release };
+}
+
+async function until(done: () => boolean | Promise<boolean>, ms = 5_000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!(await done())) {
+    if (Date.now() > end) throw new Error("timed out");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+async function slotFree(): Promise<boolean> {
+  const { acquireExportSlot } = await import("../vault/vault-audit.js");
+  const slot = acquireExportSlot("user-1");
+  if (typeof slot !== "object") return false;
+  slot.release();
+  return true;
+}
+
+/** A real server, so a test can drop or stall the client's socket. */
+async function listening() {
+  const { vaultExportRoutes } = await import("../routes/vault-export.js");
+  const app = Fastify();
+  await app.register(vaultExportRoutes, { prefix: "/api/user/me/vault" });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const { port } = app.server.address() as AddressInfo;
+  const req = httpRequest({
+    host: "127.0.0.1",
+    port,
+    path: URL_PATH,
+    headers: { authorization: `Bearer ${TOKEN}`, "accept-language": "en" },
+  });
+  req.on("error", () => undefined);
+  req.end();
+  return { app, req };
 }
 
 function seedUser(userId: string, tag: string, n: number): void {
@@ -253,6 +325,7 @@ function seedUser(userId: string, tag: string, n: number): void {
     sourceType: "EMAIL",
     sourceId: `${tag}-g0`,
     threadId: `${tag}-t0`,
+    confidence: 1,
     confirmedAt: null,
     completedAt: null,
     createdAt: new Date("2026-11-12T00:00:00Z"),
@@ -362,6 +435,48 @@ describe("the archive", () => {
     expect(sender).toContain("relationship: customer");
     expect(sender).not.toContain("forged");
     expect(files.get("Klorn/_klorn.md")).toContain("complete: true");
+    expect(danglingLinks(files)).toEqual([]);
+  });
+
+  it("lists an unconfirmed suggestion apart from the commitments the user owns", async () => {
+    store.commitments.push({
+      ...(store.commitments[0] as Row),
+      id: "c0ffee00-a100-4000-8000-000000000000",
+      title: "a maybe follow up",
+      confidence: 0.45,
+      dueAt: null,
+    });
+    const active = zipTexts((await call()).rawPayload).get("Klorn/commitments/active.md") ?? "";
+    const [owned, suggested] = active.split("## Suggested, not confirmed");
+    expect(owned).toContain("- [ ] a send the deck");
+    expect(owned).not.toContain("a maybe follow up");
+    expect(suggested).toContain("- a maybe follow up · you owe");
+  });
+
+  it("pages through mails, putting a thread's brief on its newest note only", async () => {
+    limits.current.pageSize = 1;
+    const older = store.mails.find((m) => m.id === "a000000-0000-4000-8000-000000000001");
+    if (older) older.threadId = "a-t0";
+    const files = zipTexts((await call()).rawPayload);
+    expect(files.get("Klorn/mail/2026/11/2026-11-12-a-subject-0-a0000000.md")).toContain(
+      "## Thread brief",
+    );
+    expect(files.get("Klorn/mail/2026/11/2026-11-11-a-subject-1-a0000000.md")).not.toContain(
+      "## Thread brief",
+    );
+    expect(store.calls.filter((c) => c.model === "emailMessage")).toHaveLength(3);
+    expect(store.calls.filter((c) => c.model === "threadBrief")).toHaveLength(2);
+  });
+
+  it("leaves out a mail it cannot write, says so, and still exports the rest", async () => {
+    const odd = store.mails.find((m) => m.id === "a000000-0000-4000-8000-000000000002");
+    if (odd) odd.receivedAt = new Date("+010000-01-01T00:00:00Z");
+    const files = zipTexts((await call()).rawPayload);
+    expect([...files.keys()].filter((n) => n.startsWith("Klorn/mail/"))).toHaveLength(2);
+    const index = files.get("Klorn/_klorn.md") ?? "";
+    expect(index).toContain("- Mail: 1 could not be written and were left out.");
+    expect(index).toContain("complete: false");
+    expect(store.audits[0]?.outcome).toBe("partial");
   });
 
   it("selects no mail text unless asked, and includes it on bodies=1", async () => {
@@ -427,6 +542,7 @@ describe("limits", () => {
     });
     let release!: () => void;
     store.gate = {
+      model: "attentionItem",
       reached,
       release: new Promise<void>((resolve) => {
         release = resolve;
@@ -456,6 +572,7 @@ describe("limits", () => {
       byteCount: res.rawPayload.length,
     });
     expect(audit.finishedAt).toBeInstanceOf(Date);
+    expect(store.calls.filter((c) => c.model === "dataExportAudit.updateMany")).toHaveLength(1);
     const written = store.calls
       .filter((c) => c.model.startsWith("dataExportAudit.") && (c.args as Args).data)
       .flatMap((c) => Object.keys((c.args as Args).data ?? {}));
@@ -480,6 +597,9 @@ describe("limits", () => {
     const slot = acquireExportSlot("user-1");
     expect(typeof slot).toBe("object");
     if (typeof slot === "object") slot.release();
+    // The server's failure does not cost the user the cooldown.
+    store.failCommitments = false;
+    expect((await call()).statusCode).toBe(200);
   });
 });
 
@@ -499,6 +619,12 @@ describe("size and time bounds", () => {
     expect(index).toContain("complete: false");
     expect(index).toContain("it reached the most mails one export holds");
     expect(store.audits[0]?.outcome).toBe("partial");
+    const pick = store.calls.find((c) => c.model === "attentionItem")?.args as Args & {
+      orderBy: unknown;
+    };
+    expect(pick.orderBy).toEqual([{ surfacedAt: "desc" }, { id: "desc" }]);
+    expect(pick.take).toBe(3);
+    expect(danglingLinks(files)).toEqual([]);
   });
 
   it("stops adding mail notes at the size limit, and still closes a valid archive", async () => {
@@ -508,6 +634,9 @@ describe("size and time bounds", () => {
     expect(mailNotes(files)).toEqual([]);
     expect(files.get("Klorn/_klorn.md")).toContain("it reached the size one export can be");
     expect(files.has("Klorn/commitments/active.md")).toBe(true);
+    // The commitment's mail note was never written: no link to it.
+    expect(files.get("Klorn/commitments/active.md")).not.toContain("[[Klorn/mail/");
+    expect(danglingLinks(files)).toEqual([]);
   });
 
   it("stops adding mail notes at the time limit", async () => {
@@ -538,6 +667,73 @@ describe("size and time bounds", () => {
   });
 });
 
+describe("partial lists", () => {
+  it("says when commitments or sender traits reached their limit", async () => {
+    limits.current.maxCommitments = 0;
+    limits.current.maxSenderTraits = 0;
+    const index = zipTexts((await call()).rawPayload).get("Klorn/_klorn.md") ?? "";
+    expect(index).toContain("- Commitments: a list reached the most one export holds");
+    expect(index).toContain("- Senders: some of what Klorn learned about senders was left out.");
+    expect(store.audits[0]?.outcome).toBe("partial");
+  });
+});
+
+describe("client goes away", () => {
+  it("frees the slot when the client leaves before the stream starts", async () => {
+    const gate = gateAt("dataExportAudit.findFirst");
+    const { app, req } = await listening();
+    try {
+      await gate.reached;
+      req.destroy();
+      // Freed while the request still waits on its first query.
+      await until(slotFree);
+      expect(store.audits).toEqual([]);
+      gate.release();
+      await until(() => store.audits.length === 1 && store.audits[0]?.outcome !== "started");
+      expect(store.audits[0]?.outcome).toBe("aborted");
+    } finally {
+      gate.release();
+      await app.close();
+    }
+  });
+
+  it("frees the slot and audits once when the client leaves mid-stream", async () => {
+    const gate = gateAt("attentionItem");
+    const { app, req } = await listening();
+    try {
+      await gate.reached;
+      req.destroy();
+      await until(() => store.audits[0]?.outcome === "aborted");
+      await until(slotFree);
+      gate.release();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(store.calls.filter((c) => c.model === "dataExportAudit.updateMany")).toHaveLength(1);
+    } finally {
+      gate.release();
+      await app.close();
+    }
+  });
+
+  it("closes a request that outlives the wall-clock cap, freeing the slot", async () => {
+    limits.current.streamMaxMs = 150;
+    const gate = gateAt("attentionItem");
+    const { app, req } = await listening();
+    let clientClosed = false;
+    req.on("close", () => {
+      clientClosed = true;
+    });
+    try {
+      await gate.reached;
+      await until(() => store.audits[0]?.outcome === "aborted", 3_000);
+      await until(slotFree, 3_000);
+      await until(() => clientClosed, 3_000);
+    } finally {
+      gate.release();
+      await app.close();
+    }
+  });
+});
+
 describe("no server-side residue", () => {
   it("writes nothing to the temp directory", async () => {
     const before = readdirSync(tmpdir()).sort();
@@ -549,6 +745,9 @@ describe("no server-side residue", () => {
   it("the export code never touches the file system", () => {
     const files = [
       "../vault/vault-export.ts",
+      "../vault/vault-export-lists.ts",
+      "../vault/vault-export-state.ts",
+      "../vault/vault-limits.ts",
       "../vault/vault-mail-rows.ts",
       "../vault/vault-audit.ts",
       "../vault/zip-writer.ts",

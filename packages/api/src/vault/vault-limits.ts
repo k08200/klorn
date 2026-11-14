@@ -22,6 +22,12 @@ export interface VaultLimits {
   timeBudgetMs: number;
   /** Mails read per query page. */
   pageSize: number;
+  /**
+   * Wall-clock cap on one whole request, client included: past it the
+   * connection is closed, so a client that stops reading cannot hold an
+   * export slot.
+   */
+  streamMaxMs: number;
 }
 
 export const VAULT_LIMITS: VaultLimits = {
@@ -32,6 +38,7 @@ export const VAULT_LIMITS: VaultLimits = {
   maxSenderTraits: 5_000,
   timeBudgetMs: 60_000,
   pageSize: 200,
+  streamMaxMs: 5 * 60 * 1000,
 };
 
 // Generous per-line upper bounds of the index notes: two links (path ≤ 240

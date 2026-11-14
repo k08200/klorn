@@ -6,7 +6,8 @@
  *             both pass. In memory: the process that streams is the one that
  *             holds it, and it is released when the stream ends however it ends.
  *   cooldown  one export per user per VAULT_EXPORT_COOLDOWN_MS, read from the
- *             audit table, so it holds across restarts and deploys.
+ *             audit table, so it holds across restarts and deploys. A row
+ *             that ended in `error` (the server's fault) does not count.
  *   audit     a DataExportAudit row per export: format, whether mail text was
  *             asked for, outcome and counts. Never the content; the archive
  *             is streamed and kept nowhere.
@@ -45,7 +46,13 @@ export function acquireExportSlot(userId: string): ExportSlot | SlotRefusal {
 /** Milliseconds until the user may export again (0: now). */
 export async function cooldownRemainingMs(userId: string, now: Date): Promise<number> {
   const last = await prisma.dataExportAudit.findFirst({
-    where: { userId, createdAt: { gt: new Date(now.getTime() - VAULT_EXPORT_COOLDOWN_MS) } },
+    // A server-side failure does not cost the user their next try; an aborted
+    // one does, or start-then-drop would sidestep the cooldown.
+    where: {
+      userId,
+      createdAt: { gt: new Date(now.getTime() - VAULT_EXPORT_COOLDOWN_MS) },
+      outcome: { not: "error" },
+    },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });

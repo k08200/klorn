@@ -9,31 +9,36 @@
  *   Klorn/commitments/active.md, done.md     with due, owner and source links
  *   Klorn/mail/YYYY/MM/<date>-<slug>-<id>.md one note per mail Klorn decided on
  *
- * Every query is scoped to `userId` (and nothing else picks rows). Mail text
- * is read only when the user asked for it. The newest mails come first, up to
- * the limits in vault-limits.ts; when one is hit the export stops adding mail
- * notes, finishes the rest and says in _klorn.md that it is partial.
+ * Every query is scoped to `userId` (and nothing else picks rows). Full mail
+ * text is read only when the user asked for it. The newest mails come first,
+ * up to the limits in vault-limits.ts; when one is hit the export stops adding
+ * mail notes, finishes the rest and says in _klorn.md that it is partial. A
+ * mail whose note cannot be written (an unusable stored value) is left out and
+ * counted there, instead of failing the whole stream.
  */
 
-import type { CommitmentStatus, SenderTraitStatus } from "@prisma/client";
 import { prisma } from "../db.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
-import { validateTraitValue } from "../learning/sender-trait-policy.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { reasonsForMail } from "../notify/notification-reason.js";
+import { loadCommitments, senderNotes } from "./vault-export-lists.js";
+import {
+  type Emit,
+  type ExportState,
+  newExportState,
+  type VaultExportInput,
+  type VaultExportProgress,
+} from "./vault-export-state.js";
 import {
   ACTIVE_COMMITMENTS_PATH,
+  countLanes,
   DONE_COMMITMENTS_PATH,
   INDEX_PATH,
   renderCommitmentsNote,
   renderLaneNote,
-  renderSenderNote,
   renderVaultIndex,
-  type VaultCommitment,
   type VaultSummary,
-  type VaultTrait,
 } from "./vault-index-notes.js";
-import type { VaultLimits } from "./vault-limits.js";
 import {
   BRIEF_SELECT,
   type BriefRow,
@@ -45,62 +50,20 @@ import {
   mailSelect,
   toVaultMail,
 } from "./vault-mail-rows.js";
-import { lanePath, renderMailNote, VAULT_LANES, type VaultMailRef } from "./vault-notes.js";
-import { mailNotePath, PathRegistry, senderKeyOf, senderNotePath } from "./vault-paths.js";
-import { ZipWriter } from "./zip-writer.js";
+import { lanePath, renderMailNote, VAULT_LANES, type VaultMail } from "./vault-notes.js";
+import { mailNotePath, senderKeyOf, senderNotePath } from "./vault-paths.js";
 
-export interface VaultExportInput {
-  userId: string;
-  includeBodies: boolean;
-  /** The reader's language, for lane reasons stored as keys. */
-  language: string;
-  timeZone: string;
-  now: Date;
-  limits: VaultLimits;
-}
+export {
+  newVaultProgress,
+  type VaultExportInput,
+  type VaultExportProgress,
+} from "./vault-export-state.js";
 
-/** Updated as the archive streams; the route audits it when the stream ends. */
-export interface VaultExportProgress {
-  notes: number;
-  bytes: number;
-  partial: boolean;
-}
-
-interface ExportState {
-  input: VaultExportInput;
-  zip: ZipWriter;
-  paths: PathRegistry;
-  refs: VaultMailRef[];
-  pathByGmailId: Map<string, string>;
-  pathByThread: Map<string, string>;
-  subjectByPath: Map<string, string>;
-  briefedThreads: Set<string>;
-  mailBytes: number;
-  partial: VaultSummary["partial"];
-}
-
-const TRAIT_STATUSES: SenderTraitStatus[] = ["active", "conflicted"];
-const ACTIVE_COMMITMENT_STATUSES: CommitmentStatus[] = ["OPEN", "SNOOZED"];
-const DONE_COMMITMENT_STATUSES: CommitmentStatus[] = ["DONE", "DISMISSED"];
-
-const COMMITMENT_SELECT = {
-  id: true,
-  title: true,
-  status: true,
-  owner: true,
-  counterpartyName: true,
-  counterpartyEmail: true,
-  dueAt: true,
-  dueText: true,
-  sourceType: true,
-  sourceId: true,
-  threadId: true,
-  confirmedAt: true,
-  completedAt: true,
-} as const;
-
-export function newVaultProgress(): VaultExportProgress {
-  return { notes: 0, bytes: 0, partial: false };
+/** A mail ready to emit, with what later notes link by. */
+interface PageEntry {
+  mail: VaultMail;
+  gmailId: string;
+  threadId: string | null;
 }
 
 /** The archive, chunk by chunk: one local entry per note, then the central directory. */
@@ -108,19 +71,8 @@ export async function* vaultArchive(
   input: VaultExportInput,
   progress: VaultExportProgress,
 ): AsyncGenerator<Buffer> {
-  const state: ExportState = {
-    input,
-    zip: new ZipWriter(input.now),
-    paths: new PathRegistry(),
-    refs: [],
-    pathByGmailId: new Map(),
-    pathByThread: new Map(),
-    subjectByPath: new Map(),
-    briefedThreads: new Set(),
-    mailBytes: 0,
-    partial: { mails: null, commitments: false, senderTraits: false },
-  };
-  const emit = (path: string, text: string): Buffer => {
+  const state = newExportState(input);
+  const emit: Emit = (path, text) => {
     const chunk = state.zip.entry(path, text);
     progress.notes = state.zip.entryCount;
     progress.bytes = state.zip.bytesWritten;
@@ -130,33 +82,24 @@ export async function* vaultArchive(
   yield* mailNotes(state, emit);
   const senderCount = yield* senderNotes(state, emit);
   for (const lane of VAULT_LANES) {
-    yield emit(
-      lanePath(lane),
-      renderLaneNote(
-        lane,
-        state.refs.filter((r) => r.lane === lane),
-      ),
-    );
+    const refs = state.refs.filter((r) => r.lane === lane);
+    yield emit(lanePath(lane), renderLaneNote(lane, refs));
   }
   const [active, done] = await loadCommitments(state);
   yield emit(ACTIVE_COMMITMENTS_PATH, renderCommitmentsNote("active", active));
   yield emit(DONE_COMMITMENTS_PATH, renderCommitmentsNote("done", done));
-  yield emit(
-    INDEX_PATH,
-    renderVaultIndex(summaryOf(state, senderCount, active.length, done.length)),
-  );
+  const summary = summaryOf(state, senderCount, active.length, done.length);
+  yield emit(INDEX_PATH, renderVaultIndex(summary));
 
-  progress.partial = Boolean(
-    state.partial.mails || state.partial.commitments || state.partial.senderTraits,
-  );
+  const { mails, commitments, senderTraits } = state.partial;
+  progress.partial = Boolean(mails || commitments || senderTraits || state.skippedMails > 0);
   const end = state.zip.finish();
   progress.bytes = state.zip.bytesWritten;
   yield end;
 }
 
-type Emit = (path: string, text: string) => Buffer;
-
-async function* mailNotes(state: ExportState, emit: Emit): AsyncGenerator<Buffer> {
+/** The ids of the newest mails Klorn decided on, up to the count limit. */
+async function pickMailIds(state: ExportState): Promise<string[]> {
   const { userId, limits } = state.input;
   const picked = await prisma.attentionItem.findMany({
     where: { userId, source: "EMAIL" },
@@ -165,40 +108,55 @@ async function* mailNotes(state: ExportState, emit: Emit): AsyncGenerator<Buffer
     select: { sourceId: true },
   });
   if (picked.length > limits.maxMailNotes) state.partial.mails = "count";
-  const ids = picked.slice(0, limits.maxMailNotes).map((row) => row.sourceId);
-  const deadline = Date.now() + limits.timeBudgetMs;
+  return picked.slice(0, limits.maxMailNotes).map((row) => row.sourceId);
+}
 
+async function* mailNotes(state: ExportState, emit: Emit): AsyncGenerator<Buffer> {
+  const { limits } = state.input;
+  const ids = await pickMailIds(state);
   for (let at = 0; at < ids.length; at += limits.pageSize) {
-    if (Date.now() > deadline) {
+    // Work time only: a slow reader holds the stream, not the budget.
+    if (state.workMs > limits.timeBudgetMs) {
       state.partial.mails = "time";
       return;
     }
-    for (const mail of await loadPage(state, ids.slice(at, at + limits.pageSize))) {
-      const note = renderMailNote(mail);
+    const started = Date.now();
+    const page = await loadPage(state, ids.slice(at, at + limits.pageSize));
+    const notes = page.map((entry) => ({ entry, note: renderMailNote(entry.mail) }));
+    state.workMs += Date.now() - started;
+    for (const { entry, note } of notes) {
       const size = Buffer.byteLength(note);
       if (state.mailBytes + size > limits.maxMailBytes) {
         state.partial.mails = "size";
         return;
       }
       state.mailBytes += size;
-      yield emit(mail.path, note);
-      state.refs.push({
-        path: mail.path,
-        subject: mail.subject,
-        dateKey: mail.dateKey,
-        receivedMs: Date.parse(mail.received),
-        lane: mail.lane,
-        senderKey: mail.senderKey,
-        senderPath: mail.senderPath,
-      });
-      state.subjectByPath.set(mail.path, mail.subject);
+      yield emit(entry.mail.path, note);
+      recordEmitted(state, entry);
     }
   }
 }
 
-/** One page of mails, in `ids` order, as notes ready to render. */
-async function loadPage(state: ExportState, ids: string[]) {
-  const { userId, includeBodies, language, now, timeZone, limits } = state.input;
+/** Only an emitted note becomes a link target for the notes after it. */
+function recordEmitted(state: ExportState, { mail, gmailId, threadId }: PageEntry): void {
+  state.refs.push({
+    path: mail.path,
+    subject: mail.subject,
+    dateKey: mail.dateKey,
+    receivedMs: Date.parse(mail.received),
+    lane: mail.lane,
+    senderKey: mail.senderKey,
+    senderPath: mail.senderPath,
+  });
+  state.subjectByPath.set(mail.path, mail.subject);
+  state.pathByGmailId.set(gmailId, mail.path);
+  if (threadId && !state.pathByThread.has(threadId)) state.pathByThread.set(threadId, mail.path);
+}
+
+type PageRows = Awaited<ReturnType<typeof loadPageRows>>;
+
+async function loadPageRows(state: ExportState, ids: string[]) {
+  const { userId, includeBodies, language, now } = state.input;
   const [items, mails, labels] = await Promise.all([
     prisma.attentionItem.findMany({
       where: { userId, source: "EMAIL", sourceId: { in: ids } },
@@ -215,7 +173,6 @@ async function loadPage(state: ExportState, ids: string[]) {
   ]);
   const itemBy = new Map(items.map((item) => [item.sourceId, item]));
   const mailBy = new Map(mails.filter((m) => itemBy.has(m.id)).map((m) => [m.id, m]));
-  const labelBy = new Map(labels.map((label) => [label.sourceId, label]));
   const briefBy = await loadBriefs(state, [...mailBy.values()]);
   const reasons = await reasonsForMail(
     userId,
@@ -227,38 +184,56 @@ async function loadPage(state: ExportState, ids: string[]) {
     itemBy,
     { language, now, policyUser: isJudgeV3PolicyEnabled(userId) },
   );
+  return { itemBy, mailBy, labelBy: new Map(labels.map((l) => [l.sourceId, l])), briefBy, reasons };
+}
 
+/** One page of mails, in `ids` order, ready to render. */
+async function loadPage(state: ExportState, ids: string[]): Promise<PageEntry[]> {
+  const rows = await loadPageRows(state, ids);
   return ids.flatMap((id) => {
-    const mail = mailBy.get(id);
-    const item = itemBy.get(id);
-    if (!mail || !item) return [];
-    const senderKey = senderKeyOf(mail.fromAddress ?? extractEmailAddress(mail.from));
-    const path = mailNotePath(
-      { dateKey: localDate(mail.receivedAt, timeZone), subject: mail.subject, id: mail.id },
-      state.paths,
-    );
-    state.pathByGmailId.set(mail.gmailId, path);
-    let brief: BriefRow | undefined;
-    if (mail.threadId && !state.briefedThreads.has(mail.threadId)) {
-      // Newest first: the thread's brief goes on its newest mail note.
-      state.briefedThreads.add(mail.threadId);
-      state.pathByThread.set(mail.threadId, path);
-      brief = briefBy.get(mail.threadId);
+    try {
+      const entry = toEntry(state, rows, id);
+      return entry ? [entry] : [];
+    } catch (err) {
+      // Counted and reported in _klorn.md; logged without any mail content.
+      state.skippedMails += 1;
+      console.warn(
+        "[VAULT-EXPORT] left out a mail note:",
+        err instanceof Error ? err.name : "unknown",
+      );
+      return [];
     }
-    return [
-      toVaultMail(
-        { mail, item, label: labelBy.get(id), brief, reason: reasons.get(id) },
-        {
-          path,
-          senderKey,
-          senderPath: senderNotePath(senderKey, state.paths),
-          timeZone,
-          includeBodies,
-          maxBodyChars: limits.maxBodyChars,
-        },
-      ),
-    ];
   });
+}
+
+function toEntry(state: ExportState, rows: PageRows, id: string): PageEntry | null {
+  const { includeBodies, timeZone, limits } = state.input;
+  const mail = rows.mailBy.get(id);
+  const item = rows.itemBy.get(id);
+  if (!mail || !item) return null;
+  const path = mailNotePath(
+    { dateKey: localDate(mail.receivedAt, timeZone), subject: mail.subject, id: mail.id },
+    state.paths,
+  );
+  const senderKey = senderKeyOf(mail.fromAddress ?? extractEmailAddress(mail.from));
+  let brief: BriefRow | undefined;
+  if (mail.threadId && !state.briefedThreads.has(mail.threadId)) {
+    // Newest first: a thread's brief goes on its newest mail note.
+    state.briefedThreads.add(mail.threadId);
+    brief = rows.briefBy.get(mail.threadId);
+  }
+  const vaultMail = toVaultMail(
+    { mail, item, label: rows.labelBy.get(id), brief, reason: rows.reasons.get(id) },
+    {
+      path,
+      senderKey,
+      senderPath: senderNotePath(senderKey, state.paths),
+      timeZone,
+      includeBodies,
+      maxBodyChars: limits.maxBodyChars,
+    },
+  );
+  return { mail: vaultMail, gmailId: mail.gmailId, threadId: mail.threadId };
 }
 
 async function loadBriefs(state: ExportState, mails: MailRow[]): Promise<Map<string, BriefRow>> {
@@ -277,137 +252,22 @@ async function loadBriefs(state: ExportState, mails: MailRow[]): Promise<Map<str
   return new Map(rows.map((row) => [row.threadId, row]));
 }
 
-/** One note per sender of an exported mail or with something Klorn learned. */
-async function* senderNotes(state: ExportState, emit: Emit): AsyncGenerator<Buffer, number> {
-  const { userId, limits } = state.input;
-  const rows = await prisma.senderTrait.findMany({
-    where: { userId, status: { in: TRAIT_STATUSES } },
-    orderBy: { lastSeenAt: "desc" },
-    take: limits.maxSenderTraits + 1,
-    select: {
-      sender: true,
-      factKind: true,
-      factValue: true,
-      confidence: true,
-      observedCount: true,
-      evidenceText: true,
-      status: true,
-    },
-  });
-  if (rows.length > limits.maxSenderTraits) state.partial.senderTraits = true;
-  const traitsBy = new Map<string, VaultTrait[]>();
-  for (const row of rows.slice(0, limits.maxSenderTraits)) {
-    const value = validateTraitValue(row.factKind, row.factValue);
-    if (!value) continue;
-    const key = senderKeyOf(row.sender);
-    const trait: VaultTrait = {
-      address: row.sender,
-      kind: row.factKind,
-      value,
-      confidence: row.confidence,
-      observedCount: row.observedCount,
-      status: row.status,
-      evidence: row.evidenceText,
-    };
-    appendTo(traitsBy, key, trait);
-  }
-  const refsBy = new Map<string, VaultMailRef[]>();
-  for (const ref of state.refs) appendTo(refsBy, ref.senderKey, ref);
-
-  const keys = [...new Set([...refsBy.keys(), ...traitsBy.keys()])].sort();
-  for (const key of keys) {
-    const path = senderNotePath(key, state.paths);
-    yield emit(
-      path,
-      renderSenderNote({
-        key,
-        path,
-        mails: refsBy.get(key) ?? [],
-        traits: traitsBy.get(key) ?? [],
-      }),
-    );
-  }
-  return keys.length;
-}
-
-/** Groups into a map this function owns (local accumulator; linear, not copy-per-row). */
-function appendTo<T>(groups: Map<string, T[]>, key: string, value: T): void {
-  const list = groups.get(key);
-  if (list) list.push(value);
-  else groups.set(key, [value]);
-}
-
-async function loadCommitments(
-  state: ExportState,
-): Promise<[VaultCommitment[], VaultCommitment[]]> {
-  const { userId, limits } = state.input;
-  const [active, done] = await Promise.all([
-    prisma.commitment.findMany({
-      where: { userId, status: { in: ACTIVE_COMMITMENT_STATUSES } },
-      orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
-      take: limits.maxCommitments + 1,
-      select: COMMITMENT_SELECT,
-    }),
-    prisma.commitment.findMany({
-      where: { userId, status: { in: DONE_COMMITMENT_STATUSES } },
-      orderBy: [{ updatedAt: "desc" }],
-      take: limits.maxCommitments + 1,
-      select: COMMITMENT_SELECT,
-    }),
-  ]);
-  if (active.length > limits.maxCommitments || done.length > limits.maxCommitments) {
-    state.partial.commitments = true;
-  }
-  const shape = (rows: typeof active) =>
-    rows.slice(0, limits.maxCommitments).map((c) => toCommitment(state, c));
-  return [shape(active), shape(done)];
-}
-
-type CommitmentRow = Awaited<
-  ReturnType<typeof prisma.commitment.findMany<{ select: typeof COMMITMENT_SELECT }>>
->[number];
-
-function toCommitment(state: ExportState, c: CommitmentRow): VaultCommitment {
-  const { timeZone } = state.input;
-  const fromMail = c.sourceType === "EMAIL";
-  const sourcePath =
-    (fromMail && c.sourceId ? state.pathByGmailId.get(c.sourceId) : undefined) ??
-    (fromMail && c.threadId ? state.pathByThread.get(c.threadId) : undefined) ??
-    null;
-  const email = c.counterpartyEmail?.trim() || null;
-  return {
-    id: c.id,
-    title: c.title,
-    status: c.status,
-    owner: c.owner,
-    counterparty: c.counterpartyName?.trim() || email,
-    counterpartyPath: email ? (state.paths.keyed(senderKeyOf(email)) ?? null) : null,
-    due: c.dueAt ? localDate(c.dueAt, timeZone) : null,
-    dueText: c.dueText,
-    sourcePath,
-    sourceSubject: sourcePath ? (state.subjectByPath.get(sourcePath) ?? null) : null,
-    confirmedAt: c.confirmedAt ? localDate(c.confirmedAt, timeZone) : null,
-    completedAt: c.completedAt ? localDate(c.completedAt, timeZone) : null,
-  };
-}
-
 function summaryOf(
   state: ExportState,
   senderCount: number,
   active: number,
   done: number,
 ): VaultSummary {
-  const laneCounts = { PUSH: 0, MEETING: 0, QUEUE: 0, INFO: 0, SILENT: 0 };
-  for (const ref of state.refs) laneCounts[ref.lane] += 1;
   return {
     exportedAt: isoWithOffset(state.input.now, state.input.timeZone),
     timeZone: state.input.timeZone,
     includesMailText: state.input.includeBodies,
     mailCount: state.refs.length,
-    laneCounts,
+    laneCounts: countLanes(state.refs),
     senderCount,
     activeCommitments: active,
     doneCommitments: done,
     partial: state.partial,
+    skippedMails: state.skippedMails,
   };
 }

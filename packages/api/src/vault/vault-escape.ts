@@ -47,6 +47,15 @@ const DATAVIEW_FIELD = /::/g;
 // marker `%%` to a lone `%`.
 const ALIAS_BREAKERS = /[[\]|\\<>`#^]/g;
 const COMMENT_MARKER = /%{2,}/g;
+// Templater (a common Obsidian plugin) runs `<% ... %>` found in a file's raw
+// text, and can be set to do so when a file appears in the vault. Escaping for
+// the markdown renderer does not help there: the opening `<%` must not exist
+// as raw bytes. mdInline escapes both characters; YAML values carry them as
+// \u escapes; a body block gets a zero-width space between them.
+const TEMPLATER_OPEN = /<%/g;
+const TEMPLATER_CLOSE = /%>/g;
+const YAML_RAW_HAZARDS = /[<>%]/g;
+const ZERO_WIDTH_SPACE = "\u200B";
 const BACKTICK_RUN = /`+/g;
 const MIN_FENCE = 3;
 
@@ -54,7 +63,7 @@ const MIN_FENCE = 3;
 function oneLine(value: string, max: number): string {
   const text = value
     .slice(0, max * 4)
-    .replace(LONE_SURROGATE, "�")
+    .replace(LONE_SURROGATE, "\uFFFD")
     .replace(FORMAT_CHARS, "")
     .replace(CONTROL_CHARS, " ")
     .replace(LINE_SEPARATORS, " ")
@@ -70,7 +79,10 @@ function capChars(text: string, max: number): string {
 
 /** A frontmatter scalar: double-quoted, one line, capped. */
 export function yamlString(value: string, max = YAML_VALUE_MAX): string {
-  return JSON.stringify(oneLine(value, max));
+  return JSON.stringify(oneLine(value, max)).replace(
+    YAML_RAW_HAZARDS,
+    (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
 }
 
 /** Text inside a note: one line, markdown-inert, capped. */
@@ -82,14 +94,19 @@ export function mdInline(value: string, max = MD_INLINE_MAX): string {
     .replace(LEADING_ORDERED, "$1\\$2");
 }
 
-/** A body as a fenced block: nothing inside is parsed as markdown. */
+/**
+ * A body as a fenced block: nothing inside is parsed as markdown. The only
+ * change to the text: `<%` / `%>` get a zero-width space inside (Templater).
+ */
 export function codeBlock(text: string): string {
   const clean = text
-    .replace(LONE_SURROGATE, "�")
+    .replace(LONE_SURROGATE, "\uFFFD")
     .replace(/\r\n?/g, "\n")
     .replace(LINE_SEPARATORS, "\n")
     .replace(FORMAT_CHARS, "")
-    .replace(CONTROL_CHARS, (ch) => (ch === "\n" || ch === "\t" ? ch : ""));
+    .replace(CONTROL_CHARS, (ch) => (ch === "\n" || ch === "\t" ? ch : ""))
+    .replace(TEMPLATER_OPEN, `<${ZERO_WIDTH_SPACE}%`)
+    .replace(TEMPLATER_CLOSE, `%${ZERO_WIDTH_SPACE}>`);
   const longest = Math.max(0, ...Array.from(clean.matchAll(BACKTICK_RUN), (m) => m[0].length));
   const fence = "`".repeat(Math.max(MIN_FENCE, longest + 1));
   return `${fence}text\n${clean}\n${fence}`;
@@ -97,7 +114,13 @@ export function codeBlock(text: string): string {
 
 /** Display text for a wiki-link alias: one line, nothing that ends the link. */
 export function aliasText(value: string, fallback = ""): string {
-  const text = oneLine(value.replace(ALIAS_BREAKERS, "").replace(COMMENT_MARKER, "%"), ALIAS_MAX);
+  // Clean first (format characters could hide a `%%` or a breaker), then
+  // strip; folding last, so a `%%` that stripping created is folded too.
+  const text = oneLine(value, ALIAS_MAX)
+    .replace(ALIAS_BREAKERS, "")
+    .replace(COMMENT_MARKER, "%")
+    .replace(/\s+/g, " ")
+    .trim();
   return text || fallback;
 }
 
