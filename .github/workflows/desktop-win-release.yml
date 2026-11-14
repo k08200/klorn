@@ -47,10 +47,20 @@ jobs:
         run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop-win/src-tauri
+
+      # The Windows-only code (cfg(windows): the shell's own WinRT toast in
+      # src/banner.rs) compiles nowhere else, so lint and test it here.
+      - name: Clippy and unit tests (Windows target)
+        working-directory: apps/desktop-win/src-tauri
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo test
 
       - name: Install tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
@@ -164,6 +174,23 @@ jobs:
             if ($app.HasExited) { throw "the app QUIT on window close (exit code $($app.ExitCode)) — close-to-tray is broken" }
             if ([KlornWin]::IsWindowVisible($main)) { throw "main window is still visible 5 s after WM_CLOSE — the close was not handled" }
             Write-Host "window close hid the window and the process stayed alive — close-to-tray OK"
+
+            # A toast click arrives as a klorn:// launch (protocol activation,
+            # src/toast_link.rs). The installer must register the scheme for
+            # this exe, and a launch while Klorn runs must reach the running
+            # copy (single instance) and bring its window back.
+            $cmd = (Get-ItemProperty -Path 'HKCU:\Software\Classes\klorn\shell\open\command' -ErrorAction SilentlyContinue).'(default)'
+            if (-not $cmd) { throw "the installer did not register the klorn:// scheme" }
+            if ($cmd -notlike "*$($exeItem.Name)*%1*") { throw "klorn:// opens '$cmd', not this app" }
+            Write-Host "klorn:// registered: $cmd"
+            Start-Process 'klorn://toast?open=/today'
+            Start-Sleep -Seconds 5
+            $app.Refresh()
+            if ($app.HasExited) { throw "the app quit on a klorn:// launch" }
+            $copies = @(Get-Process -Name $exeItem.BaseName -ErrorAction SilentlyContinue)
+            if ($copies.Count -ne 1) { throw "a klorn:// launch left $($copies.Count) Klorn processes running, not 1" }
+            if (-not [KlornWin]::IsWindowVisible($main)) { throw "a klorn:// launch did not bring the window back" }
+            Write-Host "klorn:// launch reached the running app and showed its window — toast activation path OK"
           } catch {
             $failed = "$_"
           } finally {

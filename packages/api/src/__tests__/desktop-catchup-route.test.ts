@@ -57,6 +57,7 @@ function email(id: string, from: string, subject: string, userId = USER): Row {
     from,
     to: "me@example.com",
     subject,
+    isRead: false,
     createdAt: new Date(NOW.getTime() - 2 * HOUR),
   };
 }
@@ -164,6 +165,24 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
     // Only the legacy-titled row survives: an urgent title in an older
     // language, its mail still OPEN on the retired name of the PUSH lane.
     expect(res.items.map((i) => i.id)).toEqual(["legacy"]);
+  });
+
+  it("drops mail already read in the mailbox, as the Mac does", async () => {
+    // Read in Gmail, or bulk-marked read in Klorn (which leaves the bell row
+    // unread): the user has seen it, so a "missed" toast after a relaunch
+    // would announce mail that was already handled.
+    seed({
+      notification: [bell("n-read-mail", "e1"), bell("n-unread-mail", "e2")],
+      emailMessage: [
+        { ...email("e1", "Kim <k@x.com>", "seen already"), isRead: true },
+        email("e2", "Lee <l@x.com>", "still unread"),
+      ],
+      attentionItem: [item("e1"), item("e2")],
+    });
+
+    const res = await desktopCatchUp(USER, ["n-read-mail", "n-unread-mail"], NOW);
+
+    expect(res.items.map((i) => i.id)).toEqual(["n-unread-mail"]);
   });
 
   it("answers only about the ids it was asked about", async () => {

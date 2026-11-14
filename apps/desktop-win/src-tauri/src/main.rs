@@ -8,8 +8,9 @@
 //   • OS banners for PUSH mail and meetings starting soon — the web app
 //     (lib/native/tauri-notify.ts) calls our `show_banner` command (banner.rs,
 //     title + body + the page a click opens: Today or one mail); the plugin's
-//     own commands are NOT exposed to it. A click brings the window back and
-//     opens that page (banner::on_action)
+//     own commands are NOT exposed to it. A click — on screen or from the
+//     Action Center — launches `klorn://toast?…` (toast_link.rs): it brings
+//     the window back and opens that page, starting Klorn if it was quit
 //   • close-to-tray (tray.rs) — closing hides the window so banners keep
 //     arriving; the tray's Quit really quits
 //   • start at sign-in (autostart.rs) — opt-in, OFF until the user says yes
@@ -24,14 +25,23 @@
 mod autostart;
 mod banner;
 mod theme;
+mod toast_link;
 mod tray;
 
+use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
+use toast_link::PendingReceipt;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A toast click (on screen or from the Action Center) while Klorn
+            // runs arrives as a second launch with its klorn:// link.
+            if let Some(click) = toast_link::from_args(&args) {
+                toast_link::deliver(app, &click);
+                return;
+            }
             // A sign-in launch while Klorn already runs stays in the tray.
             if !autostart::launched_at_login(&args) {
                 tray::show_main(app);
@@ -41,6 +51,18 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(autostart::plugin())
         .invoke_handler(tauri::generate_handler![banner::show_banner])
+        .manage(PendingReceipt::default())
+        // A toast click that started Klorn: its receipt waits for the page it
+        // opened (toast_link::open_on_launch) and the web app's click hook.
+        .on_page_load(|webview, payload| {
+            if webview.label() != "main" || payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+            let pending = webview.state::<PendingReceipt>();
+            if let Some(id) = pending.take_for(payload.url().path()) {
+                let _ = webview.eval(toast_link::pending_click_script(&id));
+            }
+        })
         .setup(|app| {
             // Fatal on purpose: close-to-tray below hides the window, so
             // without a tray there would be no way back to it.
@@ -55,6 +77,10 @@ fn main() {
                 theme::paint(&win, win.theme().unwrap_or(tauri::Theme::Light));
                 if !autostart::launched_at_login(std::env::args()) {
                     win.show()?;
+                }
+                // Started by a click on a toast in the Action Center.
+                if let Some(click) = toast_link::from_args(std::env::args()) {
+                    toast_link::open_on_launch(&win, &click, &app.state::<PendingReceipt>());
                 }
             }
             Ok(())

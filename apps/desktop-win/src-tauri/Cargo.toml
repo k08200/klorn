@@ -27,3 +27,13 @@ sys-locale = "0.3"
 # Start at sign-in, opt-in (src/autostart.rs). Only its enable / disable /
 # is_enabled commands are granted to the remote origin; none takes an argument.
 tauri-plugin-autostart = "2"
+# tauri::generate_context! emits serde_json for tauri.conf.json's `plugins`
+# block (the klorn:// scheme the installer registers). Already in the tree.
+serde_json = "1"
+
+# Windows: the shell posts its toasts with WinRT itself (src/banner.rs) so a
+# click carries a klorn:// launch URI (protocol activation), which reaches the
+# app from the Action Center too. Same version the notification plugin already
+# pulls in (tauri-winrt-notification 0.8), so no new crate.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Data_Xml_Dom", "UI_Notifications"] }

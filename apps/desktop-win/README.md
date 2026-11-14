@@ -53,39 +53,64 @@ line. Other frames keep their own title and message.
 
 **Clicking a banner (decision N1).** `show_banner` also takes `open`, the
 in-app page a click opens — accepted only as `/today` or `/email/<id>` (uuid /
-cuid characters), checked again in Rust. tauri-plugin-notification 2.7 reports
-a click on desktop (`on_action`, action `tap`); `banner::on_action` then shows,
-un-minimizes and focuses the window and opens the page through the web app's
-router (`components/desktop-toast-router.tsx`, `window.__klornOpenToast`), or
-a plain navigation when the router is not mounted yet. Limits, from the
-plugin's source: a click is only reported **while the toast is on screen**,
-not once it moved to the Action Center. A click in the Action Center falls back
-to Windows activating the app by its AppUserModelID (installed app only),
-which lands in the single-instance handler and shows the window without
-routing. Neither path is verified on a Windows machine yet.
+cuid characters), checked again in Rust.
+
+On Windows the shell posts the toast itself (WinRT, `banner.rs`
+`post_protocol_toast`) with `activationType="protocol"` and a launch URI
+`klorn://toast?open=<page>&receipt=<row id>` (`src/toast_link.rs`). A click —
+on the toast on screen **or in the Action Center**, with Klorn running or quit
+— makes Windows launch `Klorn.exe "<uri>"` through the `klorn` scheme the
+installer registers (`tauri.conf.json` → `plugins.deep-link.desktop.schemes`;
+Tauri's NSIS template writes `HKCU\Software\Classes\klorn` on install and
+removes it on uninstall). Running: the single-instance plugin hands the URI to
+the running copy, which shows, un-minimizes and focuses the window, reports
+the receipt and opens the page through the web app's router
+(`components/desktop-toast-router.tsx`, `window.__klornOpenToast`), or a plain
+navigation when the router is not mounted yet. Quit: Klorn starts with the URI,
+loads the page instead of the sign-in page, and reports the receipt once that
+page has loaded and the web app installed its click hook (polled for ~10 s).
+
+Why not the notification plugin: tauri-plugin-notification 2.7 reports a
+click only **while the toast is on screen** (its `NotificationBuilder::show`
+docs; its notify-rust wait thread takes one event per toast and ends when the
+toast times out into the Action Center). Klorn is an unpackaged app and the
+installer registers no COM activator (`ToastActivatorCLSID`), so Windows has
+no in-process callback for an Action Center click; protocol activation is
+what it supports for such apps. The plugin still posts the toast (on-screen
+clicks only, `banner::on_action`) when the shell's own WinRT post fails, and
+in non-Windows dev builds.
+
+Limits: a `cargo tauri dev` / `cargo build` run has no `klorn` scheme
+registered and posts under PowerShell's AppUserModelID, so a click there opens
+nothing; an installed shell built before this change keeps the old on-screen
+only behaviour until it is reinstalled. Not yet verified on a Windows machine
+beyond the release workflow's smoke test (scheme registered, a `klorn://`
+launch reaches the running copy and shows its window).
 
 **Receipts.** The web app reports what became of a toast to
 `POST /api/notifications/desktop/receipts`
 (`packages/web/src/lib/native/desktop-receipts.ts`), keyed on the bell row id
 (`kind: "notification"`): `shown` when `show_banner` posted it (`true`; a
 shell built before receipts answers nothing for a posted toast, `false` means
-the OS refused permission), `clicked` when a click reaches `banner::on_action`
-— the page passed the row id as `receipt`, Rust checks it is a uuid and hands
-it back through `window.__klornToastClicked` (installed by
+the OS refused permission), `clicked` when a click reaches the shell (from
+the Action Center too, see above) — the page passed the row id as `receipt`,
+Rust checks it is a uuid, carries it in the launch URI and hands it back
+through `window.__klornToastClicked` (installed by
 `desktop-toast-router.tsx`). The catch-up summary stands for several rows and
 reports nothing. Fire-and-forget: one request at a time, at most 30 a minute
 (the server allows 60 per user), a network error or 5xx retried after 2 s and
 10 s and then dropped, a 4xx never retried, a 429 pauses the queue a minute.
 `shown` works with any installed shell (an older shell answers nothing even
 when the OS refused permission, which desktop Windows does not do); `clicked`
-needs a shell built from this change, has the click's Action Center limit
-above, and is not reported while the page's router is not mounted (the same
-case in which a click falls back to a plain navigation).
+from the Action Center needs a shell built with protocol activation, and a
+click on a running Klorn is not reported while the page's router is not
+mounted (the same case in which a click falls back to a plain navigation).
 
-**No Reply / Later buttons.** The plugin can add buttons on Windows, but they
-share the click's limit: from the Action Center they would silently do
-nothing, and Later would then never set its reminder. Reply / Later stay on
-the phone, Web Push and in-app.
+**No Reply / Later buttons.** A protocol launch carries the toast's one URI,
+and buttons posted through the plugin would only work while the toast is on
+screen: from the Action Center they would silently do nothing, and Later
+would then never set its reminder. Reply / Later stay on the phone, Web Push
+and in-app.
 
 Real-time banners only arrive while Klorn is running (window open or in the
 tray) and its websocket is connected; there is no server push to a quit app,
@@ -106,7 +131,12 @@ app's `PushLedger`):
   (or a new account signing in) never dumps old mail; each account keeps its
   own ledger;
 - **each id once**, across restarts; rows younger than 30 s are left to their
-  live frame.
+  live frame;
+- **each mail once**: a mail toast also records `mail:<emailId>`, so a second
+  bell row for the same mail (the urgent sweep re-rings unread mail once
+  "Clear all" deleted the rows its dedupe reads) neither toasts live nor is
+  caught up — the Mac keys its ledger on the mail's attention item the same
+  way.
 
 **Urgent mail (decision N6,
 `packages/web/src/lib/native/desktop-push-catchup.ts`).** For unseen,
@@ -114,7 +144,9 @@ unread urgent-mail rows from the last 72 h that name one mail
 (`sourceEmailId`, written by the firewall push and by a one-mail urgent
 sweep), the shell asks `GET /api/notifications/desktop-catchup?ids=…`
 (`packages/api/src/notify/desktop-catchup.ts`). The server keeps only mails
-that are still an OPEN PUSH item, shapes each like every mail notification
+that are still an OPEN PUSH item and not read in the mailbox (read in Gmail,
+or bulk-marked read in Klorn, which leaves the bell row unread — as on the
+Mac), shapes each like every mail notification
 (N1, in the user's notification language) and applies the live frame's gate:
 
 - **exactly one** missed mail → that mail's normal toast, opening it;
@@ -199,12 +231,20 @@ strings, sanitized in Rust (and already validated and capped by
 on app.klorn.ai, and `receipt` only a uuid (hex digits and dashes), so the
 click script it is spliced into cannot be broken out of.
 
+The `klorn://` scheme is reachable from outside too: any web page can open a
+`klorn://toast?…` link once the browser's own "Open Klorn?" prompt is
+accepted. Such a link gets exactly what a toast click gets, through the same
+checks (`toast_link::parse`): the window is shown, Today or one mail by id is
+opened, and `clicked` is reported for a bell row id — which the receipts
+endpoint accepts only for the caller's own rows and stamps on the first report
+only. Anything else in the link is dropped.
+
 ## Build
 
 ```
 cd apps/desktop-win/src-tauri
 cargo check          # compiles on any OS
-cargo test           # banner sanitizing, click routes and receipt ids, tray labels, theme colour, sign-in launch flag
+cargo test           # banner sanitizing, toast XML, click routes and receipt ids, klorn:// links, tray labels, theme colour, sign-in launch flag
 cargo tauri build    # NSIS installer, Windows only
 ```
 
