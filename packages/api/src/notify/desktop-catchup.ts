@@ -16,7 +16,9 @@
  * The same gate a live frame passes decides: a category opt-out returns
  * nothing, quiet hours return `held` so the shell waits and asks again later.
  * The shell keeps the once-per-id ledger and decides one toast vs. a summary
- * (packages/web lib/native/desktop-push-catchup.ts).
+ * (packages/web lib/native/desktop-push-catchup.ts), and which of the two
+ * summary titles fits: quiet hours held mail it saw ring live, or it was
+ * closed.
  */
 
 import type { DesktopCatchUpResponse } from "@klorn/contract";
@@ -48,12 +50,17 @@ export async function desktopCatchUp(
   now: Date = new Date(),
 ): Promise<DesktopCatchUpResponse> {
   const language = await getUserNotificationLanguage(userId);
-  const summaryTitle = notificationCopy(language).missedWhileClosed("{count}");
-  if (ids.length === 0) return { held: false, summaryTitle, items: [] };
+  const copy = notificationCopy(language);
+  // The shell picks: quiet hours held mail it saw ring live, or it was closed.
+  const titles = {
+    summaryTitle: copy.missedWhileClosed("{count}"),
+    heldSummaryTitle: copy.heldDuringQuietHours("{count}"),
+  };
+  if (ids.length === 0) return { held: false, ...titles, items: [] };
 
   const gate = await evaluateNotificationGate(userId, "email_urgent", now);
   if (!gate.allowed) {
-    return { held: gate.reason === "quiet_hours", summaryTitle, items: [] };
+    return { held: gate.reason === "quiet_hours", ...titles, items: [] };
   }
 
   const rows = await prisma.notification.findMany({
@@ -75,5 +82,5 @@ export async function desktopCatchUp(
     body: m.body,
     createdAt: m.createdAt.toISOString(),
   }));
-  return { held: false, summaryTitle, items };
+  return { held: false, ...titles, items };
 }
