@@ -158,8 +158,9 @@ export function OrgSubscription({
     return run(work);
   };
 
-  const changeSeats = () =>
-    act(async () => {
+  const changeSeats = async () => {
+    const answer: { note?: string } = {};
+    const ok = await act(async () => {
       if (seats === null) return;
       const result = await apiFetch<OrgSeatChangeResponse>("/api/orgs/current/seats", {
         method: "POST",
@@ -167,8 +168,13 @@ export function OrgSubscription({
       });
       const key =
         result.status === "pending" ? "settings.org.seats.pending" : "settings.org.seats.unchanged";
-      setNote(t(key, { seats: String(result.seats) }));
+      answer.note = t(key, { seats: String(result.seats) });
     });
+    if (!ok || answer.note === undefined) return;
+    // The cap and the counts move with the change: reload them, then say so.
+    await onChanged();
+    setNote(answer.note);
+  };
 
   const cancel = async () => {
     const ok = await confirm({
@@ -213,7 +219,7 @@ export function OrgSubscription({
         <SeatCountField
           floor={floor}
           ceiling={ceiling}
-          noteKey={seatNoteKey(billing)}
+          noteKey={seatNoteKey(billing, org.seats.purchased)}
           value={seatsText}
           onChange={setSeatsText}
         />

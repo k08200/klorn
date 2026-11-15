@@ -163,13 +163,18 @@ export function seatCeiling(purchased: number, billing: OrgBillingAccessWire | u
 }
 
 /**
- * The note under the seat field: the cap when one applies, nothing for a payer
- * without one, and the general payer-only rule otherwise (not the payer, or
- * not known).
+ * The note under the seat field: the cap when one applies (or that no seat can
+ * be added now, when the cap leaves no room), nothing for a payer without one,
+ * and the general payer-only rule otherwise (not the payer, or not known).
  */
-export function seatNoteKey(billing: OrgBillingAccessWire | undefined): string | null {
+export function seatNoteKey(
+  billing: OrgBillingAccessWire | undefined,
+  purchased: number,
+): string | null {
   if (billing?.seatCap !== null && billing?.seatCap !== undefined) {
-    return "settings.org.seats.capped";
+    return billing.seatCap > purchased
+      ? "settings.org.seats.capped"
+      : "settings.org.seats.cappedNone";
   }
   if (billing?.isPayer === true) return null;
   return "settings.org.seats.payerOnly";

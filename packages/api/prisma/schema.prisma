@@ -2970,7 +2970,7 @@ model Organization {
   /// organization (its checkout's count), stored by the webhook; null when it
   /// attached before this was recorded, reported no quantity, or ended. Bounds
   /// what a recorded payer whose email Paddle does not bill can add
-  /// (recordedPayerSeatCap, src/org/seat-management.ts).
+  /// (recordedPayerSeatCap, src/org/seat-cap.ts).
   seatsAtAttach           Int?
   /// The owner who scheduled the pending period-end cancel through Klorn, and
   /// when, or null (a cancel made in Paddle's portal has no Klorn actor). That

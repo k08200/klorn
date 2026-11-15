@@ -3353,7 +3353,9 @@ const de: Record<string, string> = {
   "settings.org.seats.payerOnly":
     "Zusätzliche Plätze werden sofort von der hinterlegten Karte abgebucht, deshalb kann nur die Person, die für das Team bezahlt, Plätze hinzufügen. Jeder Inhaber kann Plätze entfernen.",
   "settings.org.seats.capped":
-    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du höchstens auf {max} Plätze erhöhen. Die Person mit der zahlenden E-Mail-Adresse kann mehr hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du mit dieser Änderung höchstens auf {max} Plätze erhöhen. Die Person mit der zahlenden E-Mail-Adresse kann mehr hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+  "settings.org.seats.cappedNone":
+    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du gerade keine Plätze hinzufügen. Die Person mit der zahlenden E-Mail-Adresse kann welche hinzufügen. Jeder Inhaber kann Plätze entfernen.",
   "settings.org.seats.pending":
     "An Paddle gesendet. {seats} Plätze erscheinen hier, sobald Paddle bestätigt.",
   "settings.org.seats.unchanged": "Die Organisation hat bereits {seats} Plätze.",

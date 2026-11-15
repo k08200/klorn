@@ -162,7 +162,7 @@ subscription webhook does.
 - **A recorded payer without the paying email is capped.** *Decided by
   recommendation on 2026-11-15 (founder: "follow my recommendations"); not
   LOCKED, reversible — change `RECORDED_PAYER_MAX_STEP` /
-  `RECORDED_PAYER_MAX_MULTIPLE` in `src/org/seat-management.ts` and this
+  `RECORDED_PAYER_MAX_MULTIPLE` in `src/org/seat-cap.ts` and this
   paragraph.* The recorded payer is the owner who opened the checkout, not
   necessarily the card holder: if that owner forwarded the checkout link and
   someone else paid, the owner could otherwise add seats on that person's
@@ -210,7 +210,8 @@ subscription webhook does.
   `billing.resume_refused` or `billing.portal_refused`, with the reason class
   only (`not_payer`,
   `email_not_verified`, `no_payer_email`, `no_payer_on_record`,
-  `recorded_payer_cap`) — never an email or card detail.
+  `recorded_payer_cap`, `recorded_payer_portal_cancel`) — never an email or
+  card detail.
 - **Cancel** is at the period end only, like Pro: seats stay until Paddle's
   final event. A past-due subscription can be canceled this way and stays
   past due until the period ends; a paused one can only be ended immediately,
@@ -219,6 +220,18 @@ subscription webhook does.
   there), by the payer (`RESUME_PAYER_ONLY` for anyone else): it restarts
   billing on the payer's card. An organization whose subscription still bills
   (active, trialing, past due, paused) is never closed or deleted.
+- **A portal cancel takes the paying email to undo.** *Decided by
+  recommendation on 2026-11-15 (security review of this change); not LOCKED,
+  reversible — `resumeBasis` in `src/org/seat-management.ts`.* Only the paying
+  email reaches Paddle's portal (or its receipt link), so a cancel made there
+  is the Paddle customer's own decision, and the recorded payer may not be
+  that person. The recorded payer alone may take back a cancel scheduled
+  through Klorn (re-checked under the lock: that Klorn cancel must still be
+  the pending one); a cancel with no Klorn actor needs the verified email to
+  match Paddle's customer, recorded payer or not. Refused as
+  `RESUME_PAYER_ONLY`, audited `billing.resume_refused` with reason
+  `recorded_payer_portal_cancel`. Before this, the recorded payer could undo
+  the card holder's portal cancel, uncapped, on every renewal.
 - **The owner who scheduled a cancel in Klorn can take it back.** *Decided by
   recommendation on 2026-11-15; not LOCKED, reversible.* Taking back one's own
   decision restores what the payer already agreed to, so the owner who
@@ -235,17 +248,32 @@ subscription webhook does.
   event too old to apply otherwise, so a portal resume-then-recancel whose
   events arrive out of order still ends the claim. Resume re-checks the actor
   under the org lock and audits `billing.cancel_removed` with
-  `via: "canceler"`. Residual gap: if Paddle never delivers the removal's
-  event, a portal re-cancel would still read as the Klorn actor's.
+  `via: "canceler"`. Residual gaps, accepted: if Paddle never delivers the
+  removal's event, or delivers it only after the re-cancel's, a portal
+  re-cancel reads as the Klorn actor's until it does; `cancelRequestedAt` is
+  Klorn's clock compared with Paddle's `occurred_at`, so skew can end a claim
+  early (safe) or, within the skew, late; and the cancel route's live read
+  happens before the org lock, so a portal cancel made in that window (up to
+  the lock wait) could be recorded as Klorn's, and a portal cancel taken back
+  in that window leaves a stored cancel date until the next event (it blocks
+  seat changes with `CANCEL_SCHEDULED`; Keep subscription clears it). Paddle's
+  answer to a cancel on a subscription that already has one scheduled is not
+  verified. Since the cancel route now reads Paddle first, it answers
+  `BILLING_PROVIDER_READ_FAILED` while Paddle reads fail.
 - **Settings → Team explains before a click.** `GET /api/orgs/current` adds
   `me.billing` for an owner while the subscription bills
   (`src/org/billing-access.ts`): `isPayer`, `portal` (the paying email),
-  `seatCap` (the recorded-payer cap, from the stored count) and `canResume`.
-  Only the viewer's own standing — never who pays or an email; nothing for a
-  member. null means Paddle could not be asked. The one Paddle read (customer
-  email) is remembered per owner and customer for two minutes so reloads
-  cannot drain Paddle's rate limit; a failure is not remembered. A hint, not
-  a gate: every route checks again.
+  `seatCap` (the recorded-payer cap, from the stored count; also shown while
+  Paddle cannot confirm the email, since the server caps until it can) and
+  `canResume` (the same rule as resume). Only the viewer's own standing —
+  never who pays or an email; nothing for a member. null means Paddle could
+  not be asked. The one Paddle read (customer email) is shared by concurrent
+  loads and remembered per owner, verified email and customer for two
+  minutes, a failed read for 30 seconds, so reloads cannot drain the Paddle
+  API rate limit that checkout and every billing route share. A failing hint
+  never fails the page: the view goes without `billing` and the page shows
+  the general rules. A hint, not a gate: every route checks again, and the
+  page reloads it after a seat change.
 - **Billing portal** opens only while the subscription bills, and only for the
   owner whose verified Klorn email is the Paddle customer's email — never on
   the recorded payer alone. The portal is the Paddle customer's whole account

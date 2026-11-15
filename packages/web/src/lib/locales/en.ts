@@ -3222,7 +3222,9 @@ const en: Record<string, string> = {
   "settings.org.seats.payerOnly":
     "Adding seats charges the card on file right away, so only the person who pays for the team can add them. Any owner can remove seats.",
   "settings.org.seats.capped":
-    "Without the email address that pays for the team, you can raise seats to {max} at most. The person whose email pays can add more. Any owner can remove seats.",
+    "Without the email address that pays for the team, you can raise seats to {max} in this change. The person whose email pays can add more. Any owner can remove seats.",
+  "settings.org.seats.cappedNone":
+    "Without the email address that pays for the team, you can't add seats right now. The person whose email pays can add more. Any owner can remove seats.",
   "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
   "settings.org.seats.unchanged": "The organization already has {seats} seats.",
   "settings.org.subscription.cancel": "Cancel subscription",

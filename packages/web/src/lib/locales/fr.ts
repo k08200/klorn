@@ -3319,7 +3319,9 @@ const fr: Record<string, string> = {
   "settings.org.seats.payerOnly":
     "Ajouter des sièges débite tout de suite la carte enregistrée : seule la personne qui paie l’équipe peut en ajouter. Tout propriétaire peut en retirer.",
   "settings.org.seats.capped":
-    "Sans l’adresse e-mail qui paie l’équipe, vous pouvez monter à {max} sièges au maximum. La personne qui a cette adresse peut en ajouter davantage. Tout propriétaire peut en retirer.",
+    "Sans l’adresse e-mail qui paie l’équipe, vous pouvez monter à {max} sièges au maximum avec ce changement. La personne qui a cette adresse peut en ajouter davantage. Tout propriétaire peut en retirer.",
+  "settings.org.seats.cappedNone":
+    "Sans l’adresse e-mail qui paie l’équipe, vous ne pouvez pas ajouter de sièges pour l’instant. La personne qui a cette adresse peut en ajouter. Tout propriétaire peut en retirer.",
   "settings.org.seats.pending":
     "Envoyé à Paddle. {seats} sièges s’afficheront ici dès que Paddle confirme.",
   "settings.org.seats.unchanged": "L’organisation a déjà {seats} sièges.",

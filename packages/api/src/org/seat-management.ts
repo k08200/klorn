@@ -26,7 +26,8 @@
  * owner whose verified Klorn email is the Paddle customer's email. A recorded
  * payer whose email is not Paddle's adds seats only up to
  * recordedPayerSeatCap. The owner who scheduled the pending cancel through
- * Klorn may also take back that cancel. The customer portal is the Paddle
+ * Klorn may also take back that cancel; a cancel made in the portal takes the
+ * paying email to undo. The customer portal is the Paddle
  * customer's whole account (other subscriptions, invoices, address), so it
  * takes the email match only. Refused payer checks are audited by reason
  * class only, never an email.
@@ -60,6 +61,7 @@ import { isOrgError, OrgError } from "./org-error.js";
 import { type OrgTx, ownerInTx, requireVerifiedEmail, withOrgLock } from "./org-lock.js";
 import { requireOwner } from "./org-members.js";
 import { MAX_SELF_SERVE_SEATS, MIN_TEAM_SEATS } from "./org-shape.js";
+import { recordedPayerSeatCap } from "./seat-cap.js";
 
 /** One Paddle call under the lock: the 15 s transaction keeps ~9 s for the lock wait. */
 const PADDLE_CALL_TIMEOUT_MS = 6_000;
@@ -235,40 +237,13 @@ const SEATS_INCREASE_PAYER_ONLY = () =>
     "Only the person who pays for the team can add seats, because the card on file is charged right away. Ask them to add seats from their own Klorn account (Paddle's receipt emails go to them). Any owner can remove seats.",
   );
 
-/**
- * A recorded payer whose verified email is not the Paddle customer's is the
- * owner who opened the checkout, not necessarily the card holder (a checkout
- * link forwarded to someone else who paid). Without the paying email, one
- * request adds at most RECORDED_PAYER_MAX_STEP seats over what Paddle bills
- * now, and never goes past RECORDED_PAYER_MAX_MULTIPLE times the seats the
- * subscription attached with: the card holder agreed to that count at
- * checkout, so the most it can grow on the recorded payer alone is doubling
- * it. The owner whose email Paddle bills has no cap beyond 2–150.
- */
-export const RECORDED_PAYER_MAX_STEP = 10;
-export const RECORDED_PAYER_MAX_MULTIPLE = 2;
-
-/**
- * The most seats a recorded payer whose email Paddle does not bill can set,
- * from Paddle's live count (`current`) and the attach count: never below the
- * live count, and the live count itself (no increase) when the attach count is
- * unknown.
- */
-export function recordedPayerSeatCap(current: number, seatsAtAttach: number | null): number {
-  if (seatsAtAttach === null) return current;
-  const cap = Math.min(
-    current + RECORDED_PAYER_MAX_STEP,
-    seatsAtAttach * RECORDED_PAYER_MAX_MULTIPLE,
-    MAX_SELF_SERVE_SEATS,
-  );
-  return Math.max(current, cap);
-}
-
-const SEATS_INCREASE_CAPPED = () =>
+const SEATS_INCREASE_CAPPED = (from: number, cap: number) =>
   new OrgError(
     403,
     "SEATS_INCREASE_CAPPED",
-    `Without the email address that pays for the team, seats can go up by at most ${RECORDED_PAYER_MAX_STEP} at a time, and to at most ${RECORDED_PAYER_MAX_MULTIPLE}× the count the subscription started with. The person whose email pays can add more from their own Klorn account.`,
+    cap > from
+      ? `Without the email address that pays for the team, you can set at most ${cap} seats in this change. The person whose email pays can add more from their own Klorn account.`
+      : "Without the email address that pays for the team, you can't add seats now. The person whose email pays can add more from their own Klorn account.",
   );
 
 export function sameEmail(a: string, b: string): boolean {
@@ -281,7 +256,8 @@ type PayerRefusalReason =
   | "no_payer_on_record"
   | "no_payer_email"
   | "not_payer"
-  | "recorded_payer_cap";
+  | "recorded_payer_cap"
+  | "recorded_payer_portal_cancel";
 
 interface PayerRefusal {
   reason: PayerRefusalReason;
@@ -381,6 +357,35 @@ async function requirePayer(
 }
 
 /**
+ * The email payer check for a recorded payer whose recorded status is not
+ * enough (a seat increase past the cap, the undo of a portal cancel): passes
+ * as "email", or audits `reason` (the class, never an email) and refuses.
+ */
+async function requireEmailOverRecorded(
+  userId: string,
+  orgId: string,
+  billing: BillingRow,
+  refused: {
+    action: OrgAuditAction;
+    reason: PayerRefusalReason;
+    error: () => OrgError;
+    detail?: Record<string, number>;
+  },
+): Promise<"email"> {
+  const refusal = await emailPayerRefusal(userId, orgId, billing.paddleCustomerId, refused.error);
+  if (refusal) {
+    await refuseAudited(
+      orgId,
+      userId,
+      refused.action,
+      { reason: refused.reason, error: refused.error() },
+      refused.detail,
+    );
+  }
+  return "email";
+}
+
+/**
  * The payer check for adding seats: the payer (requirePayer), and for a
  * recorded payer past recordedPayerSeatCap, the paying email too. Answers how
  * it passed; a refusal is audited (reason class and counts only) and thrown.
@@ -400,22 +405,12 @@ async function requireIncreasePayer(
   });
   const cap = recordedPayerSeatCap(from, billing.seatsAtAttach);
   if (basis !== "recorded" || to <= cap) return basis;
-  const refusal = await emailPayerRefusal(
-    userId,
-    orgId,
-    billing.paddleCustomerId,
-    SEATS_INCREASE_CAPPED,
-  );
-  if (refusal) {
-    await refuseAudited(
-      orgId,
-      userId,
-      action,
-      { reason: "recorded_payer_cap", error: SEATS_INCREASE_CAPPED() },
-      { from, to, cap },
-    );
-  }
-  return "email";
+  return requireEmailOverRecorded(userId, orgId, billing, {
+    action,
+    reason: "recorded_payer_cap",
+    error: () => SEATS_INCREASE_CAPPED(from, cap),
+    detail: { from, to, cap },
+  });
 }
 
 const SEATS_CHANGE_ACTION = "billing.seats_change_requested" satisfies OrgAuditAction;
@@ -649,23 +644,42 @@ const RESUME_PAYER_ONLY = () =>
 type ResumeBasis = PayerBasis | "canceler";
 
 /**
- * The owner who scheduled the pending cancel through Klorn (its stored actor)
- * takes back their own decision; anyone else needs the payer check. A cancel
- * made in the portal has no actor, so it stays the payer's.
+ * Who may take back the pending cancel. The owner who scheduled it through
+ * Klorn (its stored actor) takes back their own decision. The recorded payer
+ * may take back a cancel scheduled through Klorn. A cancel made in Paddle's
+ * portal (no Klorn actor) is the Paddle customer's own decision — only the
+ * paying email reaches the portal — so undoing it takes the paying email,
+ * recorded payer or not: the recorded payer may not be the card holder.
  */
 function resumeBasis(userId: string, orgId: string, stored: BillingRow): Promise<ResumeBasis> {
-  if (isRecordedPayer(userId, stored)) return Promise.resolve("recorded");
   if (stored.cancelRequestedByUserId === userId) return Promise.resolve("canceler");
-  return requirePayer(userId, orgId, stored, {
-    action: "billing.resume_refused",
-    notPayer: RESUME_PAYER_ONLY,
+  const action = "billing.resume_refused";
+  if (!isRecordedPayer(userId, stored)) {
+    return requirePayer(userId, orgId, stored, { action, notPayer: RESUME_PAYER_ONLY });
+  }
+  if (stored.cancelRequestedByUserId !== null) return Promise.resolve("recorded");
+  return requireEmailOverRecorded(userId, orgId, stored, {
+    action,
+    reason: "recorded_payer_portal_cancel",
+    error: RESUME_PAYER_ONLY,
   });
+}
+
+/**
+ * Under the lock: a resume that passed on the Klorn cancel's actor (as that
+ * actor, or as the recorded payer) needs that Klorn cancel still pending — not
+ * removed, or replaced by a portal cancel, meanwhile.
+ */
+function assertResumeStillHolds(basis: ResumeBasis, org: BillingRow, userId: string): void {
+  if (basis === "canceler" && org.cancelRequestedByUserId !== userId) throw RESUME_PAYER_ONLY();
+  if (basis === "recorded" && org.cancelRequestedByUserId === null) throw RESUME_PAYER_ONLY();
 }
 
 /**
  * Take back a scheduled cancel: billing resumes on the original schedule, on
  * the payer's card, so it takes the payer or the owner who scheduled this
- * cancel through Klorn (re-checked under the lock: an actor forgotten
+ * cancel through Klorn, and a cancel made in the portal takes the paying
+ * email (resumeBasis; re-checked under the lock: an actor forgotten
  * meanwhile, because the cancel was removed or replaced in Paddle, no longer
  * holds). Paddle allows this on a past-due subscription too. With no cancel
  * stored, Paddle is asked: one made in the portal (or whose webhook is late)
@@ -696,7 +710,7 @@ export async function resumeTeamSubscription(userId: string): Promise<{ resumed:
     if (!org.paddleSubscriptionId || org.paddleSubscriptionId !== stored.paddleSubscriptionId) {
       throw NO_SUBSCRIPTION();
     }
-    if (basis === "canceler" && org.cancelRequestedByUserId !== userId) throw RESUME_PAYER_ONLY();
+    assertResumeStillHolds(basis, org, userId);
     await recordOrgAudit(tx, {
       orgId,
       action: "billing.cancel_removed",

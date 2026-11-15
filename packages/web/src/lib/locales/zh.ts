@@ -3032,7 +3032,9 @@ const zh: Record<string, string> = {
   "settings.org.seats.payerOnly":
     "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的人可以添加。任何所有者都可以减少席位。",
   "settings.org.seats.capped":
-    "如果不是支付团队费用的邮箱地址，你最多只能把席位增加到 {max} 个。付款邮箱的主人可以添加更多。任何所有者都可以减少席位。",
+    "如果不是支付团队费用的邮箱地址，这次最多只能把席位增加到 {max} 个。付款邮箱的主人可以添加更多。任何所有者都可以减少席位。",
+  "settings.org.seats.cappedNone":
+    "如果不是支付团队费用的邮箱地址，现在无法添加席位。付款邮箱的主人可以添加。任何所有者都可以减少席位。",
   "settings.org.seats.pending": "已提交给 Paddle。Paddle 确认后这里会显示 {seats} 个席位。",
   "settings.org.seats.unchanged": "组织已有 {seats} 个席位。",
   "settings.org.subscription.cancel": "取消订阅",

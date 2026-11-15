@@ -194,12 +194,18 @@ describe("what the owner is told before a click (me.billing)", () => {
   });
 
   it("explains the cap, the payer-only rule, or nothing for a payer without a cap", () => {
-    expect(seatNoteKey(recordedOnly)).toBe("settings.org.seats.capped");
-    expect(seatNoteKey(payer)).toBeNull();
-    expect(seatNoteKey(notPayer)).toBe("settings.org.seats.payerOnly");
-    expect(seatNoteKey(unknown)).toBe("settings.org.seats.payerOnly");
-    expect(seatNoteKey(undefined)).toBe("settings.org.seats.payerOnly");
-    for (const key of ["settings.org.seats.capped", "settings.org.seats.payerOnly"]) {
+    expect(seatNoteKey(recordedOnly, 3)).toBe("settings.org.seats.capped");
+    // The cap leaves no room: no seat can be added now.
+    expect(seatNoteKey(recordedOnly, 6)).toBe("settings.org.seats.cappedNone");
+    expect(seatNoteKey(payer, 3)).toBeNull();
+    expect(seatNoteKey(notPayer, 3)).toBe("settings.org.seats.payerOnly");
+    expect(seatNoteKey(unknown, 3)).toBe("settings.org.seats.payerOnly");
+    expect(seatNoteKey(undefined, 3)).toBe("settings.org.seats.payerOnly");
+    for (const key of [
+      "settings.org.seats.capped",
+      "settings.org.seats.cappedNone",
+      "settings.org.seats.payerOnly",
+    ]) {
       expect(en[key], key).toBeTypeOf("string");
     }
     expect(en["settings.org.seats.capped"]).toContain("{max}");

@@ -3301,7 +3301,9 @@ const es: Record<string, string> = {
   "settings.org.seats.payerOnly":
     "Añadir plazas cobra al momento en la tarjeta registrada, así que solo quien paga el equipo puede añadirlas. Cualquier propietario puede quitar plazas.",
   "settings.org.seats.capped":
-    "Sin el correo que paga el equipo, puedes subir hasta {max} plazas como máximo. Quien tiene ese correo puede añadir más. Cualquier propietario puede quitar plazas.",
+    "Sin el correo que paga el equipo, en este cambio puedes subir hasta {max} plazas como máximo. Quien tiene ese correo puede añadir más. Cualquier propietario puede quitar plazas.",
+  "settings.org.seats.cappedNone":
+    "Sin el correo que paga el equipo, ahora no puedes añadir plazas. Quien tiene ese correo sí puede. Cualquier propietario puede quitar plazas.",
   "settings.org.seats.pending":
     "Enviado a Paddle. Verás {seats} plazas aquí cuando Paddle lo confirme.",
   "settings.org.seats.unchanged": "La organización ya tiene {seats} plazas.",
