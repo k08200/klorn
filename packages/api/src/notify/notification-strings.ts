@@ -55,8 +55,10 @@ interface NotificationCopy {
    * Title of the server's quiet-hours summary push (quiet-hours-summary.ts):
    * two or more urgent mails were held during quiet hours. Always 2+. Worded as
    * the Mac app's `push.heldSummary.title` (#1650), so every surface reads alike.
+   * The Windows shell's catch-up uses it too, with `{count}` for N
+   * (desktop-catchup.ts), for mail that rang live during quiet hours.
    */
-  heldDuringQuietHours: (count: number) => string;
+  heldDuringQuietHours: (count: number | string) => string;
   actionComplete: { title: string; body: (action: string) => string };
   tools: Record<
     string,

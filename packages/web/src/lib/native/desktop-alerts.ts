@@ -132,8 +132,9 @@ export interface DesktopAlertPlan {
 const MAIL_KEY_PREFIX = "mail:";
 
 /** The ledger entry for one mail, beside its bell row ids. The server can
- *  write a second row for a mail already announced (the urgent sweep rings it
- *  again once "Clear all" deleted the rows its dedupe reads); the Mac keys its
+ *  have written a second row for a mail already announced (a re-ring from
+ *  before 2026-11-15, when "Clear all" still deleted the rows the sweep's
+ *  dedupe reads, or a race between the two ring paths); the Mac keys its
  *  PushLedger on the mail's attention item, so one mail gets one banner. Row
  *  ids never contain ":", so the two never collide. */
 export function mailLedgerKey(emailId: string): string {
