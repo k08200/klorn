@@ -47,6 +47,7 @@ const captureError = vi.fn();
 vi.mock("../sentry.js", () => ({ captureError: (...args: unknown[]) => captureError(...args) }));
 
 import { CHAT_TOOL_NAMES, runChatTurn } from "../agentcore/chat-engine.js";
+import { callText, LLM_CANARY, providerErrorQuotingMail } from "./helpers/canary.js";
 
 function textResponse(content: string) {
   return {
@@ -233,6 +234,21 @@ describe("runChatTurn", () => {
     expect(result.reply.length).toBeGreaterThan(0);
     expect(result.errorCode).toBeUndefined();
     expect(captureError).toHaveBeenCalled();
+  });
+
+  it("keeps the provider's words for the user's own result, and out of the log and Sentry", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    createCompletion.mockRejectedValueOnce(providerErrorQuotingMail());
+
+    const result = await runChatTurn({ userId: "u1", history: [], userText: "hi" });
+
+    expect(result.error).toContain(LLM_CANARY);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ tags: { scope: "chat.turn", userId: "u1" } }),
+    );
+    expect(callText(captureError) + callText(error)).not.toContain(LLM_CANARY);
+    error.mockRestore();
   });
 
   it("answers the daily cost cap with its own message + code, not a false 'try again'", async () => {

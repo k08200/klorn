@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 const { handleError } = await import("../error-handler.js");
+const { captureError } = await import("../sentry.js");
+const { callText, exhaustedOverQuotingError, LLM_CANARY, NON_JSON_REPLY } = await import(
+  "./helpers/canary.js"
+);
 const { DataWipeFenceError, DATA_WIPE_FENCE_MARKER } = await import(
   "../privacy/data-wipe-fence.js"
 );
@@ -130,6 +134,64 @@ describe("handleError — the daily cost cap", () => {
     const res = await app.inject({ method: "POST", url: "/llm" });
     expect(res.statusCode).toBe(429);
     expect(res.json()).toEqual({ error: "Quota used for today.", code: "DAILY_COST_CAP" });
+    await app.close();
+  });
+});
+
+/**
+ * An LLM failure no route caught: pino and Sentry both print the message and
+ * the cause chain, and a provider's message can quote the request's mail.
+ */
+describe("handleError — an uncaught LLM failure", () => {
+  async function buildLoggedApp() {
+    const lines: string[] = [];
+    const app = Fastify({
+      logger: { level: "error", stream: { write: (l: string) => lines.push(l) } },
+    });
+    app.setErrorHandler(handleError);
+    app.get("/exhausted", async () => {
+      throw exhaustedOverQuotingError();
+    });
+    app.get("/reply-parse", async () => JSON.parse(NON_JSON_REPLY));
+    app.get("/boom", async () => {
+      throw new Error('ENOTFOUND internal-db-host.acme.local: relation "User" does not exist');
+    });
+    return { app, lines };
+  }
+
+  it.each([
+    "/exhausted",
+    "/reply-parse",
+  ])("%s: same 500, and the log and Sentry get facts only", async (url) => {
+    vi.mocked(captureError).mockClear();
+    const { app, lines } = await buildLoggedApp();
+
+    const res = await app.inject({ method: "GET", url });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toEqual({ error: "Internal server error" });
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: { scope: "fastify.errorHandler" },
+        extra: expect.objectContaining({ method: "GET", route: url }),
+      }),
+    );
+    expect(lines.join("\n")).toContain("LLM failure reached the error handler");
+    expect(lines.join("\n") + callText(vi.mocked(captureError))).not.toContain(LLM_CANARY);
+    await app.close();
+  });
+
+  it("still logs and reports any other 5xx in full", async () => {
+    vi.mocked(captureError).mockClear();
+    const { app, lines } = await buildLoggedApp();
+
+    await app.inject({ method: "GET", url: "/boom" });
+
+    expect(lines.join("\n")).toContain("internal-db-host");
+    expect((vi.mocked(captureError).mock.calls[0]?.[0] as Error).message).toContain(
+      "internal-db-host",
+    );
     await app.close();
   });
 });
