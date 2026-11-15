@@ -15,6 +15,14 @@
 
 import { isImapMessageId } from "../mail/imap-message-id.js";
 
+/**
+ * How far back the urgent-mail "already notified?" reads look over bell rows (the
+ * firewall push and the urgent sweep): the longest look-back any such read takes.
+ * clearNotifications keeps a cleared row this long (background.ts), so a clear
+ * never erases a marker one of these reads still needs.
+ */
+export const NOTIFIED_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Build `"<body> [id1,id2,…]"`. Gmail message IDs are hex, never contain commas. */
 export function buildUrgentDedupMessage(body: string, gmailIds: readonly string[]): string {
   return `${body} [${gmailIds.join(",")}]`;

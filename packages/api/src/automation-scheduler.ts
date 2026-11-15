@@ -45,7 +45,7 @@ import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
-import { stampDecisionRang } from "./judge/decision-label.js";
+import { findRungEmailIds, stampDecisionRang } from "./judge/decision-label.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import { FIREWALL_PUSH_RECENCY_MS } from "./judge/firewall-push.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
@@ -84,6 +84,7 @@ import { sendSms } from "./notify/sms.js";
 import {
   buildUrgentDedupMessage,
   latestNotifiedAt,
+  NOTIFIED_LOOKBACK_MS,
   unnotifiedEmails,
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
@@ -885,6 +886,197 @@ export function urgentMailPushPayload(input: {
       ? { emailId: leads[0].id, lane: "PUSH" as const, ...(language ? { language } : {}) }
       : {}),
   };
+}
+
+/**
+ * The urgent-mail sweep, run at the end of each user cycle: unread mail marked
+ * URGENT, synced in the last hour, rings once as an interrupt. Throws what its
+ * reads throw; the user cycle catches it like any other failure of the tick.
+ */
+export async function sweepUrgentEmails(config: {
+  userId: string;
+  notificationLanguage?: string | null;
+}): Promise<void> {
+  // Check for urgent unread emails — notify only for NEW urgent emails
+  // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
+  // and, like the firewall push, received in its recency window: a late sync
+  // or backfill that surfaces old mail does not ring it as urgent now.
+  // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
+  // under the daily interrupt budget is the only email interrupt
+  // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
+  // the budget, so it stands down for that user.
+  const keywordUrgent = isJudgeV3PolicyEnabled(config.userId)
+    ? []
+    : await prisma.emailMessage.findMany({
+        where: {
+          userId: config.userId,
+          priority: "URGENT",
+          isRead: false,
+          syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+          receivedAt: { gte: new Date(Date.now() - FIREWALL_PUSH_RECENCY_MS) },
+        },
+        orderBy: { receivedAt: "desc" },
+        select: {
+          id: true,
+          gmailId: true,
+          subject: true,
+          from: true,
+          summary: true,
+          createdAt: true,
+          receivedAt: true,
+          linkedInboxAccountId: true,
+        },
+      });
+  // Lane contract (tier-ontology-v2.md): the keyword priority never
+  // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
+  // here: a safety net for PUSH mail the firewall push did not ring (its
+  // bell row's [gmailId] marker dedupes below). When the judge's LLM did
+  // not run (outage, spend cap, unusable key) the keyword fallback cannot
+  // reach PUSH for an ordinary sender, so mail it left in QUEUE (and nobody
+  // moved since) rings here too. Mail the judge has not reached yet waits
+  // for the judge's own push.
+  const ringItemByEmail = await urgentSweepItemIdsFailClosed(config.userId, keywordUrgent);
+  const urgentEmails = keywordUrgent.filter((e) => ringItemByEmail.has(e.id));
+  // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
+  // history: rung once already, never again. Gmail rows read nothing more.
+  // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
+  // alert of a mixed batch must still go out.
+  const urgentHistory = await findReingestedHistoryFailClosed(
+    config.userId,
+    urgentEmails,
+    "urgent-sweep",
+  );
+  const ringableUrgent = urgentEmails.filter((e) => !urgentHistory.has(e.id));
+
+  if (ringableUrgent.length > 0) {
+    // Check which urgent emails we already notified about (by gmailId in message, last 7
+    // days). A row the user cleared from the bell is kept (clearedAt) and still counts.
+    const recentUrgentNotifs = await prisma.notification.findMany({
+      where: {
+        userId: config.userId,
+        type: "email",
+        // Every language's title plus the legacy ones: a row written
+        // before a language switch (or before the title was localized)
+        // still marks its mails as notified.
+        title: { in: [...URGENT_EMAIL_TITLES] },
+        createdAt: { gte: new Date(Date.now() - NOTIFIED_LOOKBACK_MS) },
+      },
+      select: { message: true, createdAt: true },
+    });
+    // Only notify for urgent emails we haven't notified about yet. For an IMAP
+    // id a marker counts only from the row's creation on (step B2b: a repair
+    // can hand a re-keyed row's id to a new message); Gmail ids as before.
+    const unmarked = unnotifiedEmails(ringableUrgent, latestNotifiedAt(recentUrgentNotifs));
+    // ...and never for one that already rang (this sweep, the firewall push or a
+    // quiet-hours summary): the ledger's per-mail fact, which no bell action
+    // erases. A new message is a new row, with its own ledger row, and rings.
+    const rung = await findRungEmailIds(
+      config.userId,
+      unmarked.map((e) => e.id),
+    );
+    const newUrgent = unmarked.filter((e) => !rung.has(e.id));
+    if (rung.size > 0) {
+      // Not silent: a mail skipped here is the first thing to check when a PUSH
+      // mail rang nothing (the firewall gate logs its own ledger dedupe too).
+      console.log(
+        `[AUTOMATION] Urgent sweep skipped ${rung.size} mail that already rang for user ${config.userId}`,
+      );
+    }
+
+    if (newUrgent.length > 0) {
+      // User-visible body: who + what, no internal IDs.
+      // DB message keeps a trailing [id1,id2,…] marker for EVERY
+      // notified email so the dedup read above records all of them
+      // (not just the first) and they aren't re-notified next tick.
+      // Klorn's own copy follows the user's notification language;
+      // the email subject/summary inside it stays as written.
+      const notificationLanguage = config.notificationLanguage;
+      const userBody = formatUrgentEmailBody(newUrgent, notificationLanguage);
+      const dbMessage = buildUrgentDedupMessage(
+        userBody,
+        newUrgent.map((e) => e.gmailId),
+      );
+
+      // Atomic + winner-only (dedupeKey = urgentDedupeKey(lead)): the
+      // read-based marker filter above is the primary per-message
+      // dedup; this closes the residual concurrent-tick race on one batch so
+      // the bell + web-push + SMS fire at most once. A P2002 loser returns
+      // null and we skip ALL follow-on side-effects below.
+      // A push about ONE mail says what every surface says about it
+      // (decision N1 + NC1 reason line): the live frame, the device
+      // push, Telegram. A batch keeps the digest.
+      const leadContent =
+        newUrgent.length === 1
+          ? await urgentLeadPushContent(config.userId, newUrgent[0], notificationLanguage ?? "en")
+          : null;
+      const notification = await ensureUrgentEmailNotification(
+        config.userId,
+        newUrgent[0],
+        dbMessage,
+        userBody,
+        notificationLanguage,
+        leadContent ? { emailId: newUrgent[0].id, ...leadContent } : undefined,
+      );
+
+      // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
+      // re-fire the web-push / SMS side-effects for the same batch.
+      if (notification) {
+        // The lead's open item (read with the lane above). Lets the
+        // Telegram channel attach tier-override buttons.
+        const attentionItemId = ringItemByEmail.get(newUrgent[0].id) ?? null;
+
+        sendPushNotification(
+          config.userId,
+          urgentMailPushPayload({
+            notificationId: notification.id,
+            title: leadContent?.title ?? notificationCopy(notificationLanguage).urgentMailTitle,
+            body: leadContent?.body ?? userBody,
+            leads: newUrgent,
+            attentionItemId,
+            language: notificationLanguage,
+          }),
+          "email_urgent",
+          // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
+          { bucket: "interrupt" },
+          // Unawaited (don't block the tick) but guarded: an
+          // unhandled rejection from the push internals would
+          // otherwise crash the single dyno. Matches the candidate
+          // push path above.
+        )
+          // A ring past every hold gate is recorded on each named
+          // mail's ledger row (IP24; stampDecisionRang never throws).
+          .then((summary) =>
+            summary.dispatchedAt
+              ? stampDecisionRang(
+                  config.userId,
+                  newUrgent.map((e) => e.id),
+                  summary.dispatchedAt,
+                )
+              : undefined,
+          )
+          .catch((err) => {
+            console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
+            captureError(err, {
+              tags: { scope: "automation.urgent-push", userId: config.userId },
+            });
+          });
+
+        // Admin-only SMS escalation. Gated inside sendSms (admin +
+        // phone + daily cap). Best-effort: never throws, never
+        // blocks the scheduler. Body covers the first urgent email;
+        // if many landed at once the user still gets the bell + push
+        // for the rest via the existing notification record.
+        const lead = newUrgent[0];
+        const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
+        sendSms(config.userId, smsBody).catch((err) => {
+          console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
+          captureError(err, {
+            tags: { scope: "automation.urgent-sms", userId: config.userId },
+          });
+        });
+      }
+    }
+  }
 }
 
 async function runAutomations() {
@@ -1781,176 +1973,7 @@ async function runUserCycle(
           lastReconcileAt.set(config.userId, Date.now());
         }
 
-        // Check for urgent unread emails — notify only for NEW urgent emails
-        // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-        // and, like the firewall push, received in its recency window: a late sync
-        // or backfill that surfaces old mail does not ring it as urgent now.
-        // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
-        // under the daily interrupt budget is the only email interrupt
-        // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
-        // the budget, so it stands down for that user.
-        const keywordUrgent = isJudgeV3PolicyEnabled(config.userId)
-          ? []
-          : await prisma.emailMessage.findMany({
-              where: {
-                userId: config.userId,
-                priority: "URGENT",
-                isRead: false,
-                syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-                receivedAt: { gte: new Date(Date.now() - FIREWALL_PUSH_RECENCY_MS) },
-              },
-              orderBy: { receivedAt: "desc" },
-              select: {
-                id: true,
-                gmailId: true,
-                subject: true,
-                from: true,
-                summary: true,
-                createdAt: true,
-                receivedAt: true,
-                linkedInboxAccountId: true,
-              },
-            });
-        // Lane contract (tier-ontology-v2.md): the keyword priority never
-        // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
-        // here: a safety net for PUSH mail the firewall push did not ring (its
-        // bell row's [gmailId] marker dedupes below). When the judge's LLM did
-        // not run (outage, spend cap, unusable key) the keyword fallback cannot
-        // reach PUSH for an ordinary sender, so mail it left in QUEUE (and nobody
-        // moved since) rings here too. Mail the judge has not reached yet waits
-        // for the judge's own push.
-        const ringItemByEmail = await urgentSweepItemIdsFailClosed(config.userId, keywordUrgent);
-        const urgentEmails = keywordUrgent.filter((e) => ringItemByEmail.has(e.id));
-        // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
-        // history: rung once already, never again. Gmail rows read nothing more.
-        // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
-        // alert of a mixed batch must still go out.
-        const urgentHistory = await findReingestedHistoryFailClosed(
-          config.userId,
-          urgentEmails,
-          "urgent-sweep",
-        );
-        const ringableUrgent = urgentEmails.filter((e) => !urgentHistory.has(e.id));
-
-        if (ringableUrgent.length > 0) {
-          // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
-          const recentUrgentNotifs = await prisma.notification.findMany({
-            where: {
-              userId: config.userId,
-              type: "email",
-              // Every language's title plus the legacy ones: a row written
-              // before a language switch (or before the title was localized)
-              // still marks its mails as notified.
-              title: { in: [...URGENT_EMAIL_TITLES] },
-              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-            },
-            select: { message: true, createdAt: true },
-          });
-          // Only notify for urgent emails we haven't notified about yet. For an IMAP
-          // id a marker counts only from the row's creation on (step B2b: a repair
-          // can hand a re-keyed row's id to a new message); Gmail ids as before.
-          const newUrgent = unnotifiedEmails(ringableUrgent, latestNotifiedAt(recentUrgentNotifs));
-
-          if (newUrgent.length > 0) {
-            // User-visible body: who + what, no internal IDs.
-            // DB message keeps a trailing [id1,id2,…] marker for EVERY
-            // notified email so the dedup read above records all of them
-            // (not just the first) and they aren't re-notified next tick.
-            // Klorn's own copy follows the user's notification language;
-            // the email subject/summary inside it stays as written.
-            const notificationLanguage = (config as { notificationLanguage?: string | null })
-              .notificationLanguage;
-            const userBody = formatUrgentEmailBody(newUrgent, notificationLanguage);
-            const dbMessage = buildUrgentDedupMessage(
-              userBody,
-              newUrgent.map((e) => e.gmailId),
-            );
-
-            // Atomic + winner-only (dedupeKey = urgentDedupeKey(lead)): the
-            // read-based marker filter above is the primary per-message
-            // dedup; this closes the residual concurrent-tick race on one batch so
-            // the bell + web-push + SMS fire at most once. A P2002 loser returns
-            // null and we skip ALL follow-on side-effects below.
-            // A push about ONE mail says what every surface says about it
-            // (decision N1 + NC1 reason line): the live frame, the device
-            // push, Telegram. A batch keeps the digest.
-            const leadContent =
-              newUrgent.length === 1
-                ? await urgentLeadPushContent(
-                    config.userId,
-                    newUrgent[0],
-                    notificationLanguage ?? "en",
-                  )
-                : null;
-            const notification = await ensureUrgentEmailNotification(
-              config.userId,
-              newUrgent[0],
-              dbMessage,
-              userBody,
-              notificationLanguage,
-              leadContent ? { emailId: newUrgent[0].id, ...leadContent } : undefined,
-            );
-
-            // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
-            // re-fire the web-push / SMS side-effects for the same batch.
-            if (notification) {
-              // The lead's open item (read with the lane above). Lets the
-              // Telegram channel attach tier-override buttons.
-              const attentionItemId = ringItemByEmail.get(newUrgent[0].id) ?? null;
-
-              sendPushNotification(
-                config.userId,
-                urgentMailPushPayload({
-                  notificationId: notification.id,
-                  title:
-                    leadContent?.title ?? notificationCopy(notificationLanguage).urgentMailTitle,
-                  body: leadContent?.body ?? userBody,
-                  leads: newUrgent,
-                  attentionItemId,
-                  language: notificationLanguage,
-                }),
-                "email_urgent",
-                // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
-                { bucket: "interrupt" },
-                // Unawaited (don't block the tick) but guarded: an
-                // unhandled rejection from the push internals would
-                // otherwise crash the single dyno. Matches the candidate
-                // push path above.
-              )
-                // A ring past every hold gate is recorded on each named
-                // mail's ledger row (IP24; stampDecisionRang never throws).
-                .then((summary) =>
-                  summary.dispatchedAt
-                    ? stampDecisionRang(
-                        config.userId,
-                        newUrgent.map((e) => e.id),
-                        summary.dispatchedAt,
-                      )
-                    : undefined,
-                )
-                .catch((err) => {
-                  console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
-                  captureError(err, {
-                    tags: { scope: "automation.urgent-push", userId: config.userId },
-                  });
-                });
-
-              // Admin-only SMS escalation. Gated inside sendSms (admin +
-              // phone + daily cap). Best-effort: never throws, never
-              // blocks the scheduler. Body covers the first urgent email;
-              // if many landed at once the user still gets the bell + push
-              // for the rest via the existing notification record.
-              const lead = newUrgent[0];
-              const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
-              sendSms(config.userId, smsBody).catch((err) => {
-                console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
-                captureError(err, {
-                  tags: { scope: "automation.urgent-sms", userId: config.userId },
-                });
-              });
-            }
-          }
-        }
+        await sweepUrgentEmails(config);
       } catch (err) {
         const errName = err instanceof Error ? err.name : "";
         // "Gmail not connected" is an expected state: the pre-filter
