@@ -61,10 +61,14 @@ function matches(row: Record<string, unknown>, where: Where): boolean {
         startsWith?: string;
         not?: unknown;
         gte?: Date;
+        lt?: Date;
       };
       if (c.in) return c.in.includes(row[key]);
       if (c.gte instanceof Date) {
         return row[key] instanceof Date && (row[key] as Date).getTime() >= c.gte.getTime();
+      }
+      if (c.lt instanceof Date) {
+        return row[key] instanceof Date && (row[key] as Date).getTime() < c.lt.getTime();
       }
       if (c.contains !== undefined) {
         return typeof row[key] === "string" && (row[key] as string).includes(c.contains);
@@ -74,6 +78,8 @@ function matches(row: Record<string, unknown>, where: Where): boolean {
       }
       if ("not" in c) return row[key] !== c.not;
     }
+    // A column the row never set reads as NULL, as in the database.
+    if (cond === null) return (row[key] ?? null) === null;
     return row[key] === cond;
   });
 }
@@ -542,6 +548,7 @@ describe("one lock for both paths: auto-mode and the rule sweep claim the SAME k
 
 describe("clearNotifications keeps reply claims (they are at-most-once locks, not bell entries)", () => {
   it("clear -> the claim survives -> the failed mail is never re-sent, and the bell is visually cleared", async () => {
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
     // A failed (delivery-unknown) rule reply, plus ordinary notifications.
     executeToolCall.mockResolvedValueOnce(JSON.stringify({ error: "socket hang up" }));
     await deliverRuleAutoReply(USER, email, "thanks!", "vip rule").catch(() => {});
@@ -573,15 +580,31 @@ describe("clearNotifications keeps reply claims (they are at-most-once locks, no
         message: "m",
         createdAt: new Date(),
       },
+      {
+        id: "old",
+        userId: USER,
+        type: "task",
+        dedupeKey: null,
+        title: "t",
+        message: "m",
+        createdAt: eightDaysAgo,
+      },
     );
-    expect(await getNotifications(USER)).toHaveLength(3);
+    expect(await getNotifications(USER)).toHaveLength(4);
 
     await clearNotifications(USER);
 
     // Bell cleared...
     expect(await getNotifications(USER)).toHaveLength(0);
-    // ...ordinary rows gone, other users untouched, the claim kept.
-    expect(store.rows.map((r) => r.id).sort()).toEqual(["c", ledgerRow().id].sort());
+    // ...recent ordinary rows hidden (kept for the dedupe reads), the old one
+    // gone, other users untouched, the claim kept.
+    expect(store.rows.map((r) => r.id).sort()).toEqual(["a", "b", "c", ledgerRow().id].sort());
+    for (const id of ["a", "b"]) {
+      const row = store.rows.find((r) => r.id === id);
+      expect(row?.clearedAt).toBeInstanceOf(Date);
+      expect(row?.isRead).toBe(true);
+    }
+    expect(store.rows.find((r) => r.id === "c")?.clearedAt).toBeUndefined();
     expect(ledgerRow().dedupeKey).toBe("auto-reply:g-1");
     expect(ledgerRow().isRead).toBe(true);
     // The lock still holds: neither path can re-send after the clear.

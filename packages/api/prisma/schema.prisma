@@ -1355,6 +1355,15 @@ model Notification {
   // NULLs are DISTINCT in the unique index, so ordinary notifications never
   // collide — the winner of the create is the only caller that sends the push.
   dedupeKey       String?
+  // When the user cleared this row from the bell ("Clear all"); null = shown.
+  // A cleared row is kept, read, out of the bell, so the "already notified?"
+  // reads that look back over bell rows (urgent mail, the day's briefing,
+  // proactive nudges, ...) still see it: clearing is a UI action and never
+  // rings anything again. The next clear deletes rows past the longest such
+  // window (notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS, 7 days); the
+  // log-retention sweep deletes cleared rows after 30 days. A reader that lists
+  // the bell must filter `clearedAt: null` (or `isRead: false`).
+  clearedAt       DateTime?
   createdAt       DateTime       @default(now())
 
   @@unique([userId, dedupeKey])
