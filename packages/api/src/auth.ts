@@ -5,6 +5,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
+import { effectivePlan } from "./org/effective-tier.js";
 import { localEventSource } from "./pim/calendar-rows.js";
 import { captureError } from "./sentry.js";
 
@@ -374,8 +375,7 @@ export async function registerDevice(
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  const planConfig = getEffectivePlan(user?.plan || "FREE", user?.role);
-  const limit = planConfig.deviceLimit;
+  const limit = await deviceLimitFor(userId, user);
 
   const device = await db.device.create({
     data: {
@@ -403,6 +403,28 @@ export async function registerDevice(
   }
 
   return device.id;
+}
+
+/**
+ * The device limit for this sign-in: the effective plan's (a Klorn Teams seat
+ * counts; no query while TEAMS_ENABLED is closed to the user). The limit
+ * evicts the oldest sessions, so a failed seat lookup must not shrink it to
+ * the own plan's and sign a seat holder out elsewhere: the sign-in proceeds,
+ * the failure is reported, and this sign-in evicts nothing (Infinity). The
+ * next sign-in with a healthy lookup enforces the limit again.
+ */
+async function deviceLimitFor(
+  userId: string,
+  user: { plan: string; role: string | null } | null,
+): Promise<number> {
+  try {
+    const plan = await effectivePlan({ id: userId, plan: user?.plan || "FREE" });
+    return getEffectivePlan(plan, user?.role ?? undefined).deviceLimit;
+  } catch (err) {
+    console.warn("[AUTH] device-limit seat lookup failed — evicting nothing this sign-in:", err);
+    captureError(err, { tags: { scope: "auth.device-limit.seat-lookup" }, extra: { userId } });
+    return Number.POSITIVE_INFINITY;
+  }
 }
 
 /** Validate that a token's device session is still active */

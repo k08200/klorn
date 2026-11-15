@@ -144,6 +144,15 @@ export function SubscriptionManager({
   }
 
   const showPortal = Boolean(state.hasPortal);
+  // A Klorn Teams seat already includes Pro while the personal plan still
+  // renews. Klorn never cancels it for the user (a money action, and the seat
+  // can lapse); it says so here, next to the personal cancel.
+  const seatNotice =
+    state.teamSeatCoversPersonalPlan && !pendingCancel ? (
+      <p className="basis-full text-role-caption leading-relaxed text-ink-mid sm:text-right">
+        {t("billing.teamSeatCoversPro")}
+      </p>
+    ) : null;
   if (!showPortal && !canCancel && !pendingCancel) {
     // Nothing to manage. For a FREE account that is self-evident, but a PAID
     // account with no billing record — an Enterprise agreement, a beta grant,
@@ -151,9 +160,14 @@ export function SubscriptionManager({
     // blank space and no way to tell why the cancel button is missing.
     if (!isPaidPlan(state.plan)) return null;
     return (
-      <p className="max-w-xs text-role-caption leading-relaxed text-ink-mid sm:text-right">
-        {t(state.plan === "ENTERPRISE" ? "billing.enterpriseBilling" : "billing.noWebSubscription")}
-      </p>
+      <div className="flex max-w-xs flex-col gap-1">
+        {seatNotice}
+        <p className="text-role-caption leading-relaxed text-ink-mid sm:text-right">
+          {t(
+            state.plan === "ENTERPRISE" ? "billing.enterpriseBilling" : "billing.noWebSubscription",
+          )}
+        </p>
+      </div>
     );
   }
 
@@ -162,6 +176,7 @@ export function SubscriptionManager({
     // Cancel stays last and quiet: reachable, never the thing you hit by
     // reflex. shrink-0 keeps the group intact when the plan name is long.
     <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+      {seatNotice}
       {pendingCancel && state.canCancelInApp && (
         <button
           type="button"

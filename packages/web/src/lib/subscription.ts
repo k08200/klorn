@@ -23,6 +23,11 @@ export interface SubscriptionState {
   hasPortal?: boolean;
   /** The plan itself, so a paid account with nothing to manage can say why. */
   plan?: string;
+  /**
+   * A Klorn Teams seat already covers this personal Pro, which still renews.
+   * Klorn never cancels it for the user; the manager says so instead.
+   */
+  teamSeatCoversPersonalPlan?: boolean;
 }
 
 /** Plans that cost money, and therefore owe the user an explanation when the
@@ -92,6 +97,7 @@ interface BillingStatusPayload {
   renewsAt?: string | null;
   cancelAt?: string | null;
   canCancelInApp?: boolean;
+  teamSeatCoversPersonalPlan?: boolean;
 }
 
 /**
@@ -107,6 +113,7 @@ export function toSubscriptionState(status: BillingStatusPayload): SubscriptionS
     canCancelInApp: status.canCancelInApp,
     hasPortal: Boolean(status.stripeId || status.hasPaddleCustomer),
     plan: status.plan,
+    teamSeatCoversPersonalPlan: status.teamSeatCoversPersonalPlan === true,
   };
 }
 

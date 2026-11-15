@@ -33,6 +33,9 @@ vi.mock("../config.js", () => ({
   get PAYWALL_ENABLED() {
     return state.paywall;
   },
+  // The entitlement check resolves a Klorn Teams seat (org/effective-tier.ts);
+  // with TEAMS_ENABLED off it reads nothing.
+  teamsOpenTo: () => false,
 }));
 
 vi.mock("../billing/stripe.js", () => ({

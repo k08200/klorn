@@ -15,6 +15,7 @@ import { prisma } from "../db.js";
 import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
 import { Semaphore } from "../semaphore.js";
 import { captureError } from "../sentry.js";
@@ -393,7 +394,9 @@ export async function syncLinkedInboxesForUser(userId: string): Promise<{ newCou
     getLinkedInboxClients(userId),
     prisma.userToken.findFirst({ where: { userId, provider: "google" }, select: { id: true } }),
   ]);
-  const linked = await scopeLinkedInboxes(userId, user.plan, user.role, allLinked);
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  const plan = await effectivePlan({ id: userId, plan: user.plan });
+  const linked = await scopeLinkedInboxes(userId, plan, user.role, allLinked);
   // A linked row mirroring the primary address (pre-guard data) would sync
   // the same mailbox twice per pass — skip it; the primary sync covers it.
   // Only when a primary Gmail exists: without one, a linked inbox at the login

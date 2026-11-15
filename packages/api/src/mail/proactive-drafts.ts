@@ -29,6 +29,7 @@
 import { isEntitled } from "../billing/stripe.js";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { captureError } from "../sentry.js";
 
 export function isProactiveDraftEnabled(): boolean {
@@ -121,7 +122,11 @@ async function entitledForDrafts(userId: string): Promise<boolean> {
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  return isEntitled(user?.plan ?? "FREE", user?.role ?? undefined);
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  return isEntitled(
+    await effectivePlan({ id: userId, plan: user?.plan ?? "FREE" }),
+    user?.role ?? undefined,
+  );
 }
 
 /** Fresh, unanswered, never-attempted PUSH mail that needs a reply — newest first. */
