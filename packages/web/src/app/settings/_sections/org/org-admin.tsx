@@ -1,6 +1,11 @@
 "use client";
 
-import type { OrgCheckoutResponse, OrgWire, TeamIntervalWire } from "@klorn/contract";
+import type {
+  OrgBillingAccessWire,
+  OrgCheckoutResponse,
+  OrgWire,
+  TeamIntervalWire,
+} from "@klorn/contract";
 import { useState } from "react";
 import Button from "../../../../components/ui/button";
 import { Input, Select } from "../../../../components/ui/input";
@@ -80,11 +85,13 @@ interface SeatPrice {
 export function OrgSeats({
   org,
   owner,
+  billing,
   price,
   onChanged,
 }: {
   org: OrgWire;
   owner: boolean;
+  billing: OrgBillingAccessWire | undefined;
   price: SeatPrice | null;
   onChanged: () => Promise<void>;
 }) {
@@ -142,7 +149,7 @@ export function OrgSeats({
         })}{" "}
         · {t(seatStatusKey(org.seats.status))}
       </p>
-      {owner && live && <OrgSubscription org={org} onChanged={onChanged} />}
+      {owner && live && <OrgSubscription org={org} billing={billing} onChanged={onChanged} />}
       {owner && !live && available.length === 0 && (
         <p className="text-role-caption text-ink-dim">{t("settings.org.checkout.unavailable")}</p>
       )}

@@ -15,6 +15,7 @@ import type { FastifyError, FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { TEAMS_FLAG, teamsLive } from "../config.js";
 import { handleError } from "../error-handler.js";
+import { currentOrgViewWithBilling } from "../org/billing-access.js";
 import { orgAvailabilityMembers } from "../org/org-availability.js";
 import { isOrgError, OrgError } from "../org/org-error.js";
 import {
@@ -26,7 +27,6 @@ import {
 } from "../org/org-invites.js";
 import {
   createOrganization,
-  currentOrgView,
   listAudit,
   listMembers,
   requireMembership,
@@ -66,7 +66,7 @@ export async function orgRoutes(app: FastifyInstance) {
     return handleError(error, request, reply);
   });
 
-  app.get("/current", async (request) => currentOrgView(getUserId(request)));
+  app.get("/current", async (request) => currentOrgViewWithBilling(getUserId(request)));
 
   // Per-user limits on top of the per-address route limits: mail-sending and
   // organization-creating routes must not scale with the number of addresses.

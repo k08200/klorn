@@ -147,6 +147,41 @@ interface StoredSubscription {
   paddleSubscriptionId: string | null;
   subscriptionStatus: string | null;
   payerUserId: string | null;
+  cancelRequestedByUserId: string | null;
+  cancelRequestedAt: Date | null;
+}
+
+const STORED_SUBSCRIPTION_SELECT = {
+  subscriptionEventAt: true,
+  paddleSubscriptionId: true,
+  subscriptionStatus: true,
+  payerUserId: true,
+  cancelRequestedByUserId: true,
+  cancelRequestedAt: true,
+} as const;
+
+const NO_CANCELER = { cancelRequestedByUserId: null, cancelRequestedAt: null } as const;
+
+/**
+ * Whether this event for the organization's own subscription shows the cancel
+ * an owner scheduled through Klorn gone: the subscription ended, or Paddle
+ * reports no scheduled cancel as of a moment after Klorn sent it (taken back
+ * or replaced in the portal). An event that does not mention the scheduled
+ * change, or that predates the request, says nothing about it. Checked even
+ * for an event too old to apply otherwise: a removal whose event arrives after
+ * a newer re-cancel's still ends the canceler's claim to that re-cancel.
+ */
+function cancelerEnds(
+  stored: StoredSubscription,
+  data: TeamSubscriptionData,
+  eventAt: Date | null,
+): boolean {
+  if (stored.cancelRequestedByUserId === null) return false;
+  if (data.status === "canceled") return true;
+  if (teamCancelAt(data) !== null) return false;
+  return (
+    eventAt === null || stored.cancelRequestedAt === null || eventAt > stored.cancelRequestedAt
+  );
 }
 
 /** Why an event must not be applied to this organization, or null to apply it. */
@@ -172,12 +207,15 @@ function updateFor(data: TeamSubscriptionData, own: boolean, eventAt: Date | nul
   const seats = teamSeatQuantity(data, { anyPrice: own });
   const interval = teamBillingInterval(data);
   const cancelAt = teamCancelAt(data);
+  const ended = data.status === "canceled";
   const update: Prisma.OrganizationUpdateInput = {
     subscriptionStatus: data.status ?? null,
     // canceled is terminal: the id is freed so it cannot be targeted again.
-    paddleSubscriptionId: data.status === "canceled" ? null : (data.id ?? undefined),
+    paddleSubscriptionId: ended ? null : (data.id ?? undefined),
     paddleCustomerId: data.customer_id ?? undefined,
     ...(seats === null ? {} : { seatsPurchased: seats }),
+    // The checkout's count, written once when the subscription attaches.
+    ...(ended ? { seatsAtAttach: null } : own ? {} : { seatsAtAttach: seats }),
     ...(interval === null ? {} : { billingInterval: interval }),
     ...(cancelAt === undefined ? {} : { subscriptionCancelAt: cancelAt }),
     ...(eventAt ? { subscriptionEventAt: eventAt } : {}),
@@ -237,18 +275,60 @@ async function detachDrifted(
       seatsPurchased: 0,
       subscriptionCancelAt: null,
       payerUserId: null,
+      seatsAtAttach: null,
+      ...NO_CANCELER,
     },
   });
   if (drifted.count > 0) report("team subscription id moved between organizations", eventId);
 }
 
+/** Under the lock: write an event that applies, and audit it. */
+async function writeEvent(
+  tx: OrgTx,
+  apply: {
+    orgId: string;
+    stored: StoredSubscription;
+    event: TeamSubscriptionEvent;
+    own: boolean;
+    eventAt: Date | null;
+  },
+): Promise<void> {
+  const { orgId, stored, event, own, eventAt } = apply;
+  const { update, seats, interval } = updateFor(event.data, own, eventAt);
+  const payerUserId = await payerFor(tx, orgId, stored, event, own);
+  // A newly attached subscription carries no Klorn cancel of the old one.
+  const canceler = !own || cancelerEnds(stored, event.data, eventAt) ? NO_CANCELER : {};
+  if (event.data.id && !own) await detachDrifted(tx, orgId, event.data.id, event.eventId);
+  await tx.organization.update({
+    where: { id: orgId },
+    data: {
+      ...update,
+      ...canceler,
+      ...(payerUserId === undefined ? {} : { payerUserId }),
+    },
+    select: { id: true },
+  });
+  await recordOrgAudit(tx, {
+    orgId,
+    action: "billing.subscription_changed",
+    actorUserId: null,
+    detail: {
+      status: event.data.status ?? null,
+      seats,
+      interval,
+      ...(payerUserId === undefined ? {} : { payer: payerUserId ? "recorded" : "none" }),
+    },
+  });
+}
+
 /**
  * Apply a team subscription event to its organization, under the
  * organization's lock. Order-safe: an event older than the last one applied
- * is skipped, checked inside the lock. An event that maps to no organization,
- * or that must not be applied (see refusal), is reported — never dropped
- * silently, never mapped to a user — and acknowledged, so Paddle does not
- * retry it forever.
+ * is skipped, checked inside the lock — except that it can still end the
+ * claim of the owner who scheduled a cancel through Klorn (cancelerEnds). An
+ * event that maps to no organization, or that must not be applied (see
+ * refusal), is reported — never dropped silently, never mapped to a user —
+ * and acknowledged, so Paddle does not retry it forever.
  */
 export async function applyTeamSubscriptionEvent(
   event: TeamSubscriptionEvent,
@@ -262,14 +342,17 @@ export async function applyTeamSubscriptionEvent(
   return withOrgLock(orgId, async (tx) => {
     const stored = await tx.organization.findUniqueOrThrow({
       where: { id: orgId },
-      select: {
-        subscriptionEventAt: true,
-        paddleSubscriptionId: true,
-        subscriptionStatus: true,
-        payerUserId: true,
-      },
+      select: STORED_SUBSCRIPTION_SELECT,
     });
+    const own = Boolean(event.data.id) && stored.paddleSubscriptionId === event.data.id;
     if (eventAt && stored.subscriptionEventAt && eventAt < stored.subscriptionEventAt) {
+      if (own && cancelerEnds(stored, event.data, eventAt)) {
+        await tx.organization.update({
+          where: { id: orgId },
+          data: NO_CANCELER,
+          select: { id: true },
+        });
+      }
       return "stale";
     }
     const refused = refusal(stored, event.data);
@@ -277,26 +360,7 @@ export async function applyTeamSubscriptionEvent(
       report(`paddle ${refused}`, event.eventId);
       return "refused";
     }
-    const own = Boolean(event.data.id) && stored.paddleSubscriptionId === event.data.id;
-    const { update, seats, interval } = updateFor(event.data, own, eventAt);
-    const payerUserId = await payerFor(tx, orgId, stored, event, own);
-    if (event.data.id && !own) await detachDrifted(tx, orgId, event.data.id, event.eventId);
-    await tx.organization.update({
-      where: { id: orgId },
-      data: payerUserId === undefined ? update : { ...update, payerUserId },
-      select: { id: true },
-    });
-    await recordOrgAudit(tx, {
-      orgId,
-      action: "billing.subscription_changed",
-      actorUserId: null,
-      detail: {
-        status: event.data.status ?? null,
-        seats,
-        interval,
-        ...(payerUserId === undefined ? {} : { payer: payerUserId ? "recorded" : "none" }),
-      },
-    });
+    await writeEvent(tx, { orgId, stored, event, own, eventAt });
     return "applied";
   });
 }

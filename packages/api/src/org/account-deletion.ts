@@ -115,4 +115,8 @@ export async function handOverOrgBeforeAccountDeletion(userId: string): Promise<
     where: { payerUserId: userId },
     data: { payerUserId: null },
   });
+  await prisma.organization.updateMany({
+    where: { cancelRequestedByUserId: userId },
+    data: { cancelRequestedByUserId: null, cancelRequestedAt: null },
+  });
 }

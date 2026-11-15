@@ -3253,6 +3253,8 @@ const ja: Record<string, string> = {
     "最低 {min}：チームの最小シート数以上、メンバー 1 人につき 1 シートが必要です。差額は今回の請求期間の残り日数分を Paddle が請求またはクレジットします。",
   "settings.org.seats.payerOnly":
     "シートを追加すると登録済みのカードにすぐ請求されるため、チームの料金を支払っている人だけが追加できます。シートの削減はどのオーナーでもできます。",
+  "settings.org.seats.capped":
+    "チームの料金を支払っているメールアドレスでない場合、シートは最大 {max} まで増やせます。支払っているメールアドレスの人はさらに追加できます。シートの削減はどのオーナーでもできます。",
   "settings.org.seats.pending":
     "Paddle に送信しました。Paddle が確認すると {seats} シートと表示されます。",
   "settings.org.seats.unchanged": "この組織はすでに {seats} シートです。",
@@ -3263,7 +3265,9 @@ const ja: Record<string, string> = {
   "settings.org.subscription.cancelConfirm": "期間終了時に解約",
   "settings.org.subscription.keep": "サブスクリプションを継続",
   "settings.org.subscription.keepPayerOnly":
-    "継続すると支払い担当者のカードへの請求が再開されるため、継続できるのはチームの料金を支払っている人だけです。",
+    "継続すると支払い担当者のカードへの請求が再開されるため、継続できるのはチームの料金を支払っている人か、ここで終了を設定したオーナーだけです。",
+  "settings.org.subscription.portalPayerOnly":
+    "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
   "settings.org.subscription.endsOn":
     "サブスクリプションは {date} に終了します。それまでシートは保持されます。",
   "settings.org.subscription.endsSoon":
@@ -3282,10 +3286,12 @@ const ja: Record<string, string> = {
     "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "登録済みのカードにすぐ請求されるため、シートを追加できるのはチームの料金を支払っている人だけです。その人に自分の Klorn アカウントから追加するよう依頼してください（Paddle の領収書メールを受け取っている人です）。シートの削減は引き続きできます。",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "チームの料金を支払っているメールアドレスなしで追加できるシート数を超えています。支払っているメールアドレスの人は、自分の Klorn アカウントからさらに追加できます（Paddle の領収書メールを受け取っている人です）。シートの削減は引き続きできます。",
   "settings.org.error.SEATS_CHANGED":
     "保存中にシート数が変わりました。現在のシート数を確認して、もう一度お試しください。",
   "settings.org.error.RESUME_PAYER_ONLY":
-    "サブスクリプションを継続すると支払い担当者のカードへの請求が再開されるため、チームの料金を支払っている人だけが操作できます。その人に自分の Klorn アカウントから継続するよう依頼してください（Paddle の領収書メールを受け取っている人です）。",
+    "サブスクリプションを継続すると支払い担当者のカードへの請求が再開されるため、チームの料金を支払っている人か、Klorn で終了を設定したオーナーだけが操作できます。支払い担当者に自分の Klorn アカウントから継続するよう依頼してください（Paddle の領収書メールを受け取っている人です）。",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
     "Paddle から応答がなかったため、何も変更されていません。少し待ってからもう一度お試しください。",
   "settings.org.error.BILLING_PROVIDER_ERROR":

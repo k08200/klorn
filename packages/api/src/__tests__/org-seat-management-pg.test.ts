@@ -619,6 +619,7 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_11");
     const member = await addMember(orgId);
     const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_11" }),
       answer: { scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" } },
     });
 
@@ -633,10 +634,12 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     const again = await call(owner, "POST", "/api/orgs/current/subscription/cancel");
     expect(again.json()).toEqual({ cancelAt: "2026-12-14T00:00:00.000Z" });
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toMatch(/\/subscriptions\/sub_seat_11\/cancel$/);
-    expect(calls[0]?.body).toEqual({ effective_from: "next_billing_period" });
-    expect(calls[0]?.bounded).toBe(true);
+    // One live read (is a cancel already pending in Paddle?), then the cancel;
+    // the repeat answers the stored date.
+    expect(calls.map((c) => c.method)).toEqual(["GET", "POST"]);
+    expect(calls[1]?.url).toMatch(/\/subscriptions\/sub_seat_11\/cancel$/);
+    expect(calls[1]?.body).toEqual({ effective_from: "next_billing_period" });
+    expect(calls.every((c) => c.bounded)).toBe(true);
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
     // Seats stay until the period ends: only Paddle's final event ends them.
     expect(org).toMatchObject({ subscriptionStatus: "active", seatsPurchased: 3 });
@@ -648,12 +651,13 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
 
   it("answers 502 and records nothing when Paddle refuses the cancel", async () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_16");
-    stubPaddle({ fail: () => true });
+    stubPaddle({ live: liveSubscription({ id: "sub_seat_16" }), fail: (c) => c.method === "POST" });
     const res = await call(owner, "POST", "/api/orgs/current/subscription/cancel");
     expect(res.statusCode).toBe(502);
     expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
     expect(org.subscriptionCancelAt).toBeNull();
+    expect(org.cancelRequestedByUserId).toBeNull();
     expect(
       await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_scheduled" } }),
     ).toBe(0);
@@ -666,7 +670,9 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     });
     const res = await call(owner, "POST", "/api/orgs/current/subscription/cancel");
     expect(res.statusCode).toBe(200);
-    expect(calls[0]?.body).toEqual({ effective_from: "next_billing_period" });
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+      effective_from: "next_billing_period",
+    });
     const leave = await call(owner, "POST", "/api/orgs/current/leave");
     expect(leave.statusCode).toBe(409);
     expect(leave.json()).toMatchObject({ code: "SUBSCRIPTION_ACTIVE" });
@@ -730,16 +736,16 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
   });
 });
 
-describePg("team payer recorded at checkout (real Postgres)", () => {
-  /** The organization's own checkout event, naming its buyer. */
-  function checkoutEvent(orgId: string, subscriptionId: string, payerUserId: string, over = {}) {
-    return teamEvent(orgId, {
-      id: subscriptionId,
-      custom_data: { orgId, kind: "team_seats", payerUserId },
-      ...over,
-    });
-  }
+/** The organization's own checkout event, naming its buyer. */
+function checkoutEvent(orgId: string, subscriptionId: string, payerUserId: string, over = {}) {
+  return teamEvent(orgId, {
+    id: subscriptionId,
+    custom_data: { orgId, kind: "team_seats", payerUserId },
+    ...over,
+  });
+}
 
+describePg("team payer recorded at checkout (real Postgres)", () => {
   async function payerOf(orgId: string): Promise<string | null> {
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
     return org.payerUserId;
@@ -938,7 +944,7 @@ describePg("team resume: payer only (real Postgres)", () => {
     });
     const res = await call(heir, "POST", "/api/orgs/current/subscription/cancel");
     expect(res.statusCode).toBe(200);
-    expect(calls.map((c) => c.method)).toEqual(["POST"]);
+    expect(calls.map((c) => c.method)).toEqual(["GET", "POST"]);
     expect(
       await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_scheduled" } }),
     ).toBe(1);
@@ -1096,3 +1102,440 @@ describePg("global cost ceiling counts paid seat pools (real Postgres)", () => {
     expect(closed.capCents).toBe(base);
   });
 });
+
+const CANCEL_END = "2026-12-14T00:00:00Z";
+const CANCEL_END_ISO = "2026-12-14T00:00:00.000Z";
+
+/** An event `ms` from now: webhooks carry Paddle's own occurred_at. */
+function at(ms: number): string {
+  return new Date(Date.now() + ms).toISOString();
+}
+
+function timedEvent(orgId: string, occurredAt: string, data: Record<string, unknown>) {
+  return { ...teamEvent(orgId, data), occurred_at: occurredAt };
+}
+
+/** The owner schedules the period-end cancel through Klorn (nothing pending in Paddle). */
+async function cancelInKlorn(owner: Session, subscriptionId: string): Promise<PaddleCall[]> {
+  const calls = stubPaddle({
+    live: liveSubscription({ id: subscriptionId }),
+    answer: { scheduled_change: { action: "cancel", effective_at: CANCEL_END } },
+  });
+  const res = await call(owner, "POST", "/api/orgs/current/subscription/cancel");
+  expect(res.statusCode).toBe(200);
+  vi.unstubAllGlobals();
+  return calls;
+}
+
+function orgRow(orgId: string) {
+  return prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+}
+
+/** An organization whose checkout recorded its owner as payer, attached with `quantity` seats. */
+async function recordedPayerOrg(subscriptionId: string, quantity: number) {
+  const { owner, orgId } = await ownedOrg("buyer");
+  const attached = await webhook(
+    checkoutEvent(orgId, subscriptionId, owner.userId, {
+      items: [{ price: { id: "pri_team_month" }, quantity }],
+    }),
+  );
+  expect(attached.statusCode).toBe(200);
+  return { owner, orgId };
+}
+
+function liveWith(subscriptionId: string, quantity: number) {
+  return liveSubscription({
+    id: subscriptionId,
+    items: [{ price: { id: "pri_team_month" }, quantity, status: "active" }],
+  });
+}
+
+describePg("team resume: the owner who scheduled the cancel in Klorn (real Postgres)", () => {
+  it("records who scheduled the cancel and when, and lets that owner take it back without being the payer", async () => {
+    const { payer, heir, orgId } = await transferredOrg("sub_seat_50");
+    const before = Date.now();
+    const cancelCalls = await cancelInKlorn(heir, "sub_seat_50");
+    expect(cancelCalls.map((c) => c.method)).toEqual(["GET", "POST"]);
+    const scheduled = await orgRow(orgId);
+    expect(scheduled.cancelRequestedByUserId).toBe(heir.userId);
+    expect(scheduled.cancelRequestedAt?.getTime() ?? 0).toBeGreaterThanOrEqual(before - 1_000);
+    expect(scheduled.subscriptionCancelAt?.toISOString()).toBe(CANCEL_END_ISO);
+
+    const calls = stubPaddle({ customer: { email: payer.email } });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(200);
+    // No payer check: this owner takes back their own cancel.
+    expect(calls.map((c) => c.method)).toEqual(["PATCH"]);
+    expect(await orgRow(orgId)).toMatchObject({
+      subscriptionCancelAt: null,
+      cancelRequestedByUserId: null,
+      cancelRequestedAt: null,
+    });
+    expect(
+      await prisma.orgAuditEvent.findFirst({ where: { orgId, action: "billing.cancel_removed" } }),
+    ).toMatchObject({ actorUserId: heir.userId, detail: { via: "canceler" } });
+  });
+
+  it("forgets the canceler once Paddle reports the cancel removed, so a later portal cancel stays payer-only", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_51");
+    await cancelInKlorn(heir, "sub_seat_51");
+    // The payer takes it back in Paddle's portal, then cancels there.
+    await webhook(timedEvent(orgId, at(60_000), { id: "sub_seat_51", scheduled_change: null }));
+    expect((await orgRow(orgId)).cancelRequestedByUserId).toBeNull();
+    await webhook(
+      timedEvent(orgId, at(120_000), {
+        id: "sub_seat_51",
+        scheduled_change: { action: "cancel", effective_at: CANCEL_END },
+      }),
+    );
+    const calls = stubPaddle({ customer: { email: "accounts@company.test" } });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("forgets the canceler when the removal's event arrives after a newer one", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_52");
+    await cancelInKlorn(heir, "sub_seat_52");
+    // The portal re-cancel's event (newer) lands first; the removal's event
+    // (older, but after the Klorn cancel) lands late and is stale for the rest.
+    await webhook(
+      timedEvent(orgId, at(120_000), {
+        id: "sub_seat_52",
+        scheduled_change: { action: "cancel", effective_at: CANCEL_END },
+      }),
+    );
+    await webhook(timedEvent(orgId, at(60_000), { id: "sub_seat_52", scheduled_change: null }));
+    const org = await orgRow(orgId);
+    expect(org.cancelRequestedByUserId).toBeNull();
+    expect(org.cancelRequestedAt).toBeNull();
+    expect(org.subscriptionCancelAt?.toISOString()).toBe(CANCEL_END_ISO);
+    const calls = stubPaddle({ customer: { email: "accounts@company.test" } });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("keeps the canceler through a late event from before the cancel", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    await webhook(timedEvent(orgId, at(-600_000), { id: "sub_seat_53" }));
+    const heir = await addMember(orgId, "heir");
+    await transferTo(owner, heir);
+    await cancelInKlorn(heir, "sub_seat_53");
+    // Newer than the last event applied, older than the cancel: applied, and
+    // it clears the stored date, but says nothing about the Klorn cancel.
+    await webhook(timedEvent(orgId, at(-300_000), { id: "sub_seat_53", scheduled_change: null }));
+    const org = await orgRow(orgId);
+    expect(org.subscriptionCancelAt).toBeNull();
+    expect(org.cancelRequestedByUserId).toBe(heir.userId);
+
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_53",
+        scheduled_change: { action: "cancel", effective_at: CANCEL_END },
+      }),
+      customer: { email: owner.email },
+    });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(200);
+    expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+  });
+
+  it("does not let a canceler who is no longer an owner take it back", async () => {
+    const { payer, heir } = await transferredOrg("sub_seat_54");
+    await cancelInKlorn(heir, "sub_seat_54");
+    await transferTo(heir, payer);
+    const calls = stubPaddle({});
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.json()).toMatchObject({ code: "OWNER_ONLY" });
+    expect(calls).toEqual([]);
+  });
+
+  it("re-checks the canceler under the lock", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_55");
+    await cancelInKlorn(heir, "sub_seat_55");
+    // No stored date (a late event), so resume asks Paddle; meanwhile the
+    // removal's webhook forgets the canceler.
+    await prisma.organization.update({
+      where: { id: orgId },
+      data: { subscriptionCancelAt: null },
+    });
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_55",
+        scheduled_change: { action: "cancel", effective_at: CANCEL_END },
+      }),
+      onCall: async (c) => {
+        if (!c.url.includes("/subscriptions/")) return;
+        await prisma.organization.update({
+          where: { id: orgId },
+          data: { cancelRequestedByUserId: null, cancelRequestedAt: null },
+        });
+      },
+    });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("records no canceler and sends no cancel when Paddle already holds a portal cancel", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_56");
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_56",
+        scheduled_change: { action: "cancel", effective_at: CANCEL_END },
+      }),
+      customer: { email: "accounts@company.test" },
+    });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/cancel");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ cancelAt: CANCEL_END_ISO });
+    expect(calls.map((c) => c.method)).toEqual(["GET"]);
+    const org = await orgRow(orgId);
+    expect(org.subscriptionCancelAt?.toISOString()).toBe(CANCEL_END_ISO);
+    expect(org.cancelRequestedByUserId).toBeNull();
+    expect(
+      await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_scheduled" } }),
+    ).toBe(0);
+
+    const resume = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(resume.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("forgets the canceler when the cancel takes effect", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_57");
+    await cancelInKlorn(heir, "sub_seat_57");
+    await webhook(
+      timedEvent(orgId, at(60_000), {
+        id: "sub_seat_57",
+        status: "canceled",
+        scheduled_change: null,
+      }),
+    );
+    expect(await orgRow(orgId)).toMatchObject({
+      paddleSubscriptionId: null,
+      cancelRequestedByUserId: null,
+      cancelRequestedAt: null,
+      seatsAtAttach: null,
+    });
+  });
+});
+
+describePg(
+  "seat increases by a recorded payer whose email Paddle does not bill (real Postgres)",
+  () => {
+    it("stores the attach count once: later quantities do not move it, the end clears it", async () => {
+      const { owner, orgId } = await recordedPayerOrg("sub_seat_60", 3);
+      expect((await orgRow(orgId)).seatsAtAttach).toBe(3);
+      await webhook(
+        checkoutEvent(orgId, "sub_seat_60", owner.userId, {
+          items: [{ price: { id: "pri_team_month" }, quantity: 9 }],
+        }),
+      );
+      expect(await orgRow(orgId)).toMatchObject({ seatsPurchased: 9, seatsAtAttach: 3 });
+      await webhook(checkoutEvent(orgId, "sub_seat_60", owner.userId, { status: "canceled" }));
+      expect((await orgRow(orgId)).seatsAtAttach).toBeNull();
+    });
+
+    it("clears the attach count of an organization that loses its subscription id to drift", async () => {
+      const first = await recordedPayerOrg("sub_seat_67", 4);
+      await recordedPayerOrg("sub_seat_67", 6);
+      expect((await orgRow(first.orgId)).seatsAtAttach).toBeNull();
+    });
+
+    it("lets the recorded payer add up to twice the attach count, and refuses past it without the paying email", async () => {
+      const { owner, orgId } = await recordedPayerOrg("sub_seat_61", 3);
+      const calls = stubPaddle({
+        live: liveWith("sub_seat_61", 3),
+        customer: { email: "accounts@company.test" },
+      });
+      const allowed = await call(owner, "POST", "/api/orgs/current/seats", { seats: 6 });
+      expect(allowed.statusCode).toBe(202);
+      // Within the cap: no email lookup.
+      expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+
+      const refused = await call(owner, "POST", "/api/orgs/current/seats", { seats: 7 });
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json()).toMatchObject({ code: "SEATS_INCREASE_CAPPED" });
+      expect(JSON.stringify(refused.json())).not.toContain("accounts@company.test");
+      expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH", "GET", "GET"]);
+      const audit = await prisma.orgAuditEvent.findFirst({
+        where: { orgId, action: "billing.seats_increase_refused" },
+      });
+      expect(audit).toMatchObject({
+        actorUserId: owner.userId,
+        detail: { from: 3, to: 7, cap: 6, reason: "recorded_payer_cap" },
+      });
+      expect(JSON.stringify(audit?.detail)).not.toContain("@");
+    });
+
+    it("caps each step at ten seats over Paddle's live count", async () => {
+      const { owner } = await recordedPayerOrg("sub_seat_62", 12);
+      const calls = stubPaddle({
+        live: liveWith("sub_seat_62", 12),
+        customer: { email: "accounts@company.test" },
+      });
+      const over = await call(owner, "POST", "/api/orgs/current/seats", { seats: 23 });
+      expect(over.json()).toMatchObject({ code: "SEATS_INCREASE_CAPPED" });
+      const step = await call(owner, "POST", "/api/orgs/current/seats", { seats: 22 });
+      expect(step.statusCode).toBe(202);
+      expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+    });
+
+    it("measures the step from Paddle's live count, not the stored one", async () => {
+      const { owner } = await recordedPayerOrg("sub_seat_63", 20);
+      // Paddle already bills 25 (an increase whose webhook is on its way).
+      const calls = stubPaddle({
+        live: liveWith("sub_seat_63", 25),
+        customer: { email: "accounts@company.test" },
+      });
+      const over = await call(owner, "POST", "/api/orgs/current/seats", { seats: 36 });
+      expect(over.json()).toMatchObject({ code: "SEATS_INCREASE_CAPPED" });
+      const step = await call(owner, "POST", "/api/orgs/current/seats", { seats: 35 });
+      expect(step.statusCode).toBe(202);
+      expect(calls.find((c) => c.method === "PATCH")?.body).toMatchObject({
+        items: [{ price_id: "pri_team_month", quantity: 35 }],
+      });
+    });
+
+    it("lifts the cap when the recorded payer's verified email is also Paddle's", async () => {
+      const { owner, orgId } = await recordedPayerOrg("sub_seat_64", 3);
+      const calls = stubPaddle({
+        live: liveWith("sub_seat_64", 3),
+        customer: { email: owner.email },
+      });
+      const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 40 });
+      expect(res.statusCode).toBe(202);
+      expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "PATCH"]);
+      expect(
+        await prisma.orgAuditEvent.findFirst({
+          where: { orgId, action: "billing.seats_change_requested" },
+        }),
+      ).toMatchObject({ detail: { from: 3, to: 40, payer: "email" } });
+    });
+
+    it("adds no seats on the recorded payer alone when the attach count is unknown, but removes them", async () => {
+      const { owner, orgId } = await recordedPayerOrg("sub_seat_65", 5);
+      await prisma.organization.update({ where: { id: orgId }, data: { seatsAtAttach: null } });
+      const calls = stubPaddle({
+        live: liveWith("sub_seat_65", 5),
+        customer: { email: "accounts@company.test" },
+      });
+      const up = await call(owner, "POST", "/api/orgs/current/seats", { seats: 6 });
+      expect(up.statusCode).toBe(403);
+      expect(up.json()).toMatchObject({ code: "SEATS_INCREASE_CAPPED" });
+      const down = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
+      expect(down.statusCode).toBe(202);
+      expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+    });
+
+    it("answers 502 and changes nothing when the email lookup for a capped increase fails", async () => {
+      const { owner, orgId } = await recordedPayerOrg("sub_seat_66", 3);
+      const calls = stubPaddle({
+        live: liveWith("sub_seat_66", 3),
+        fail: (c) => c.url.includes("/customers/"),
+      });
+      const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 7 });
+      expect(res.statusCode).toBe(502);
+      expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_READ_FAILED" });
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+      expect(
+        await prisma.orgAuditEvent.count({
+          where: { orgId, action: "billing.seats_increase_refused" },
+        }),
+      ).toBe(0);
+    });
+  },
+);
+
+describePg(
+  "what the viewing owner may do with the subscription, on GET /api/orgs/current (real Postgres)",
+  () => {
+    async function billingOf(session: Session) {
+      const res = await call(session, "GET", "/api/orgs/current");
+      expect(res.statusCode).toBe(200);
+      return res;
+    }
+
+    it("tells the recorded payer whose email Paddle does not bill: payer, no portal, capped", async () => {
+      const { owner } = await recordedPayerOrg("sub_seat_70", 3);
+      stubPaddle({ customer: { email: "accounts@company.test" } });
+      const res = await billingOf(owner);
+      expect((res.json() as { me: { billing?: unknown } }).me.billing).toEqual({
+        isPayer: true,
+        portal: false,
+        seatCap: 6,
+        canResume: true,
+      });
+      // The viewer's own standing only: no payer id, no Paddle email.
+      expect(res.body).not.toContain(owner.userId);
+      expect(res.body).not.toContain("accounts@company.test");
+    });
+
+    it("tells the owner whose verified email Paddle bills: payer, portal, no cap", async () => {
+      const { owner } = await subscribedOrg("sub_seat_71");
+      stubPaddle({ customer: { email: owner.email } });
+      const res = await billingOf(owner);
+      expect((res.json() as { me: { billing?: unknown } }).me.billing).toEqual({
+        isPayer: true,
+        portal: true,
+        seatCap: null,
+        canResume: true,
+      });
+    });
+
+    it("tells an owner who does not pay, until they schedule a cancel in Klorn", async () => {
+      const { payer, heir } = await transferredOrg("sub_seat_72");
+      stubPaddle({ customer: { email: payer.email } });
+      const before = await billingOf(heir);
+      expect((before.json() as { me: { billing?: unknown } }).me.billing).toEqual({
+        isPayer: false,
+        portal: false,
+        seatCap: null,
+        canResume: false,
+      });
+      expect(before.body).not.toContain(payer.email);
+      vi.unstubAllGlobals();
+      await cancelInKlorn(heir, "sub_seat_72");
+      stubPaddle({ customer: { email: payer.email } });
+      const after = await billingOf(heir);
+      expect(
+        (after.json() as { me: { billing?: { canResume: boolean } } }).me.billing,
+      ).toMatchObject({ isPayer: false, canResume: true });
+    });
+
+    it("adds nothing for a member, or without a subscription that bills", async () => {
+      const { orgId } = await subscribedOrg("sub_seat_73");
+      const member = await addMember(orgId);
+      const none = await ownedOrg();
+      const calls = stubPaddle({});
+      const asMember = (await billingOf(member)).json() as { me: Record<string, unknown> };
+      expect(asMember.me).not.toHaveProperty("billing");
+      const asOwner = (await billingOf(none.owner)).json() as { me: Record<string, unknown> };
+      expect(asOwner.me).not.toHaveProperty("billing");
+      expect(calls).toEqual([]);
+    });
+
+    it("answers unknown, not false, when Paddle cannot be asked, and asks again only after a while", async () => {
+      const { owner } = await subscribedOrg("sub_seat_74", { customer_id: "ctm_seat_74" });
+      stubPaddle({ fail: () => true });
+      const failed = (await billingOf(owner)).json() as { me: { billing?: unknown } };
+      expect(failed.me.billing).toEqual({
+        isPayer: null,
+        portal: null,
+        seatCap: null,
+        canResume: null,
+      });
+      vi.unstubAllGlobals();
+      const calls = stubPaddle({ customer: { email: owner.email } });
+      const known = (await billingOf(owner)).json() as { me: { billing?: unknown } };
+      expect(known.me.billing).toMatchObject({ isPayer: true, portal: true });
+      await billingOf(owner);
+      // A failed lookup is not remembered; a good one is, for a short while.
+      expect(calls.filter((c) => c.url.includes("/customers/"))).toHaveLength(1);
+    });
+  },
+);

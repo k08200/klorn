@@ -32,11 +32,30 @@ export interface OrgWire {
   };
 }
 
+/**
+ * What the viewing owner may do with the team subscription, so the page can
+ * explain it before a click (src/org/billing-access.ts). Only the viewer's own
+ * standing: never who pays, never an email. null means Paddle could not be
+ * asked; the routes check again either way.
+ */
+export interface OrgBillingAccessWire {
+  /** The recorded payer, or the owner whose verified email Paddle bills. */
+  isPayer: boolean | null;
+  /** The billing portal opens for this owner (their verified email is Paddle's). */
+  portal: boolean | null;
+  /** The most seats this owner can set without the paying email; null when no such cap applies. */
+  seatCap: number | null;
+  /** This owner can take back a scheduled cancel (the payer, or the owner who scheduled it in Klorn). */
+  canResume: boolean | null;
+}
+
 export interface OrgMeWire {
   membershipId: string;
   role: OrgRoleWire;
   seated: boolean;
   sharesFreeBusy: boolean;
+  /** On `GET /api/orgs/current` only, for an owner, while the team subscription bills. */
+  billing?: OrgBillingAccessWire;
 }
 
 /** `GET /api/orgs/current`, and the answer of every change that returns the view. */

@@ -3318,6 +3318,8 @@ const fr: Record<string, string> = {
     "Au moins {min} : le minimum de l’équipe, et un siège par membre. Paddle facture ou crédite la différence pour le reste de cette période de facturation.",
   "settings.org.seats.payerOnly":
     "Ajouter des sièges débite tout de suite la carte enregistrée : seule la personne qui paie l’équipe peut en ajouter. Tout propriétaire peut en retirer.",
+  "settings.org.seats.capped":
+    "Sans l’adresse e-mail qui paie l’équipe, vous pouvez monter à {max} sièges au maximum. La personne qui a cette adresse peut en ajouter davantage. Tout propriétaire peut en retirer.",
   "settings.org.seats.pending":
     "Envoyé à Paddle. {seats} sièges s’afficheront ici dès que Paddle confirme.",
   "settings.org.seats.unchanged": "L’organisation a déjà {seats} sièges.",
@@ -3328,7 +3330,9 @@ const fr: Record<string, string> = {
   "settings.org.subscription.cancelConfirm": "Résilier en fin de période",
   "settings.org.subscription.keep": "Garder l’abonnement",
   "settings.org.subscription.keepPayerOnly":
-    "Seule la personne qui paie l’équipe peut le conserver, car la facturation reprend sur sa carte.",
+    "Seule la personne qui paie l’équipe, ou le propriétaire qui a programmé la fin ici, peut le conserver, car la facturation reprend sur la carte de la personne qui paie.",
+  "settings.org.subscription.portalPayerOnly":
+    "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
   "settings.org.subscription.endsOn":
     "L’abonnement prend fin le {date}. Les sièges restent jusque-là.",
   "settings.org.subscription.endsSoon":
@@ -3347,10 +3351,12 @@ const fr: Record<string, string> = {
     "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Seule la personne qui paie l’équipe peut ajouter des sièges, car la carte enregistrée est débitée tout de suite. Demandez-lui de les ajouter depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle). Vous pouvez toujours retirer des sièges.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "C’est plus de sièges que vous ne pouvez en ajouter sans l’adresse e-mail qui paie l’équipe. La personne qui a cette adresse peut en ajouter davantage depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle). Vous pouvez toujours retirer des sièges.",
   "settings.org.error.SEATS_CHANGED":
     "Le nombre de sièges a changé pendant l’enregistrement. Vérifiez le nombre actuel et réessayez.",
   "settings.org.error.RESUME_PAYER_ONLY":
-    "Conserver l’abonnement relance la facturation sur la carte de la personne qui paie : elle seule peut le faire. Demandez-lui de le conserver depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle).",
+    "Conserver l’abonnement relance la facturation sur la carte de la personne qui paie : seule elle, ou le propriétaire qui a programmé la fin dans Klorn, peut le faire. Demandez-lui de le conserver depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle).",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
     "Paddle n’a pas répondu, donc rien n’a été modifié. Réessayez dans une minute.",
   "settings.org.error.BILLING_PROVIDER_ERROR":

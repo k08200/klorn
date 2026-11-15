@@ -23,10 +23,13 @@
  * once (prorated) and taking a cancel back restarts billing on it, so only
  * the payer may do either: the owner the team checkout recorded
  * (Organization.payerUserId, stored by the webhook) or, failing that, the
- * owner whose verified Klorn email is the Paddle customer's email. The
- * customer portal is the Paddle customer's whole account (other
- * subscriptions, invoices, address), so it takes the email match only.
- * Refused payer checks are audited by reason class only, never an email.
+ * owner whose verified Klorn email is the Paddle customer's email. A recorded
+ * payer whose email is not Paddle's adds seats only up to
+ * recordedPayerSeatCap. The owner who scheduled the pending cancel through
+ * Klorn may also take back that cancel. The customer portal is the Paddle
+ * customer's whole account (other subscriptions, invoices, address), so it
+ * takes the email match only. Refused payer checks are audited by reason
+ * class only, never an email.
  *
  * Status rules, from Paddle's API: a past_due subscription cannot be updated
  * (seat changes need active or trialing) except to remove a scheduled change,
@@ -64,22 +67,26 @@ const CALL = { timeoutMs: PADDLE_CALL_TIMEOUT_MS };
 
 export type SeatChangeResult = { status: "pending" | "unchanged"; seats: number };
 
-interface BillingRow {
+export interface BillingRow {
   seatsPurchased: number;
   payerUserId: string | null;
+  seatsAtAttach: number | null;
   subscriptionStatus: string | null;
   paddleSubscriptionId: string | null;
   paddleCustomerId: string | null;
   subscriptionCancelAt: Date | null;
+  cancelRequestedByUserId: string | null;
 }
 
-const BILLING_SELECT = {
+export const BILLING_SELECT = {
   seatsPurchased: true,
   payerUserId: true,
+  seatsAtAttach: true,
   subscriptionStatus: true,
   paddleSubscriptionId: true,
   paddleCustomerId: true,
   subscriptionCancelAt: true,
+  cancelRequestedByUserId: true,
 } as const;
 
 function requirePaddleKey(): void {
@@ -228,7 +235,43 @@ const SEATS_INCREASE_PAYER_ONLY = () =>
     "Only the person who pays for the team can add seats, because the card on file is charged right away. Ask them to add seats from their own Klorn account (Paddle's receipt emails go to them). Any owner can remove seats.",
   );
 
-function sameEmail(a: string, b: string): boolean {
+/**
+ * A recorded payer whose verified email is not the Paddle customer's is the
+ * owner who opened the checkout, not necessarily the card holder (a checkout
+ * link forwarded to someone else who paid). Without the paying email, one
+ * request adds at most RECORDED_PAYER_MAX_STEP seats over what Paddle bills
+ * now, and never goes past RECORDED_PAYER_MAX_MULTIPLE times the seats the
+ * subscription attached with: the card holder agreed to that count at
+ * checkout, so the most it can grow on the recorded payer alone is doubling
+ * it. The owner whose email Paddle bills has no cap beyond 2–150.
+ */
+export const RECORDED_PAYER_MAX_STEP = 10;
+export const RECORDED_PAYER_MAX_MULTIPLE = 2;
+
+/**
+ * The most seats a recorded payer whose email Paddle does not bill can set,
+ * from Paddle's live count (`current`) and the attach count: never below the
+ * live count, and the live count itself (no increase) when the attach count is
+ * unknown.
+ */
+export function recordedPayerSeatCap(current: number, seatsAtAttach: number | null): number {
+  if (seatsAtAttach === null) return current;
+  const cap = Math.min(
+    current + RECORDED_PAYER_MAX_STEP,
+    seatsAtAttach * RECORDED_PAYER_MAX_MULTIPLE,
+    MAX_SELF_SERVE_SEATS,
+  );
+  return Math.max(current, cap);
+}
+
+const SEATS_INCREASE_CAPPED = () =>
+  new OrgError(
+    403,
+    "SEATS_INCREASE_CAPPED",
+    `Without the email address that pays for the team, seats can go up by at most ${RECORDED_PAYER_MAX_STEP} at a time, and to at most ${RECORDED_PAYER_MAX_MULTIPLE}× the count the subscription started with. The person whose email pays can add more from their own Klorn account.`,
+  );
+
+export function sameEmail(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
@@ -237,7 +280,8 @@ type PayerRefusalReason =
   | "email_not_verified"
   | "no_payer_on_record"
   | "no_payer_email"
-  | "not_payer";
+  | "not_payer"
+  | "recorded_payer_cap";
 
 interface PayerRefusal {
   reason: PayerRefusalReason;
@@ -336,6 +380,44 @@ async function requirePayer(
   return "email";
 }
 
+/**
+ * The payer check for adding seats: the payer (requirePayer), and for a
+ * recorded payer past recordedPayerSeatCap, the paying email too. Answers how
+ * it passed; a refusal is audited (reason class and counts only) and thrown.
+ */
+async function requireIncreasePayer(
+  userId: string,
+  orgId: string,
+  billing: BillingRow,
+  from: number,
+  to: number,
+): Promise<PayerBasis> {
+  const action = "billing.seats_increase_refused";
+  const basis = await requirePayer(userId, orgId, billing, {
+    action,
+    notPayer: SEATS_INCREASE_PAYER_ONLY,
+    detail: { from, to },
+  });
+  const cap = recordedPayerSeatCap(from, billing.seatsAtAttach);
+  if (basis !== "recorded" || to <= cap) return basis;
+  const refusal = await emailPayerRefusal(
+    userId,
+    orgId,
+    billing.paddleCustomerId,
+    SEATS_INCREASE_CAPPED,
+  );
+  if (refusal) {
+    await refuseAudited(
+      orgId,
+      userId,
+      action,
+      { reason: "recorded_payer_cap", error: SEATS_INCREASE_CAPPED() },
+      { from, to, cap },
+    );
+  }
+  return "email";
+}
+
 const SEATS_CHANGE_ACTION = "billing.seats_change_requested" satisfies OrgAuditAction;
 
 /** The newest seat change requested through Klorn, or null: a mark taken before the live read. */
@@ -424,8 +506,9 @@ async function applySeatChange(tx: OrgTx, change: SeatChange): Promise<SeatChang
  * Set the organization's seat count to `seats` (owner only). At least two,
  * at most 150, and never fewer than the members. Compared with what Paddle
  * bills now, not with the stored count (which waits for the webhook): no
- * update when Paddle already holds `seats`. Adding seats takes the payer;
- * removing them takes any owner.
+ * update when Paddle already holds `seats`. Adding seats takes the payer
+ * (capped for a recorded payer without the paying email); removing them takes
+ * any owner.
  */
 export async function changeSeats(userId: string, body: unknown): Promise<SeatChangeResult> {
   const owner = await requireOwner(userId);
@@ -442,11 +525,7 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
   }
   const payer =
     seats > item.quantity
-      ? await requirePayer(userId, orgId, stored, {
-          action: "billing.seats_increase_refused",
-          notPayer: SEATS_INCREASE_PAYER_ONLY,
-          detail: { from: item.quantity, to: seats },
-        })
+      ? await requireIncreasePayer(userId, orgId, stored, item.quantity, seats)
       : null;
   return withOrgLock(orgId, (tx) =>
     applySeatChange(tx, { userId, orgId, subscriptionId, item, seats, mark, payer }),
@@ -467,6 +546,11 @@ function cancellable(org: BillingRow): string {
   return org.paddleSubscriptionId;
 }
 
+function parseDate(value: string | null): Date | null {
+  const parsed = value ? new Date(value) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
 /** Ask Paddle to cancel at the period end; the date access stops, when Paddle says. */
 async function scheduleCancel(subscriptionId: string, orgId: string): Promise<Date | null> {
   let effectiveAt: string | null;
@@ -475,31 +559,50 @@ async function scheduleCancel(subscriptionId: string, orgId: string): Promise<Da
   } catch (err) {
     throw providerError(err, orgId, "cancel");
   }
-  const parsed = effectiveAt ? new Date(effectiveAt) : null;
-  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  return parseDate(effectiveAt);
+}
+
+/**
+ * A cancel already pending in Paddle (made in the portal, its webhook on the
+ * way), with its date when Paddle gives one; null when none is.
+ */
+async function pendingCancel(
+  subscriptionId: string,
+  orgId: string,
+): Promise<{ at: Date | null } | null> {
+  let live: PaddleTeamSubscription;
+  try {
+    live = await getPaddleTeamSubscription(subscriptionId, CALL);
+  } catch (err) {
+    throw readError(err, orgId, "read_subscription");
+  }
+  return live.scheduledChange === "cancel" ? { at: parseDate(live.cancelEffectiveAt) } : null;
 }
 
 /**
  * Cancel the team subscription at the end of the period already paid for
  * (owner only). Seats stay until then. A second request answers the stored
- * date without asking Paddle again.
+ * date without asking Paddle again. Paddle is read first: a cancel already
+ * pending there (made in the portal) is stored as it is, with no Klorn actor,
+ * and not sent again. A cancel Klorn sends records the owner who asked, and
+ * when, so that owner can take back this cancel (resumeTeamSubscription).
  */
 export async function cancelTeamSubscription(userId: string): Promise<{ cancelAt: string | null }> {
   const owner = await requireOwner(userId);
   const orgId = owner.orgId;
+  const stored = await readBilling(orgId);
+  const subscriptionId = cancellable(stored);
+  if (stored.subscriptionCancelAt) return { cancelAt: stored.subscriptionCancelAt.toISOString() };
+  requirePaddleKey();
+  const pending = await pendingCancel(subscriptionId, orgId);
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
     const org = await billingInTx(tx, orgId);
-    const subscriptionId = cancellable(org);
+    if (cancellable(org) !== subscriptionId) throw NO_SUBSCRIPTION();
     if (org.subscriptionCancelAt) return { cancelAt: org.subscriptionCancelAt.toISOString() };
-    requirePaddleKey();
-    await recordOrgAudit(tx, {
-      orgId,
-      action: "billing.cancel_scheduled",
-      actorUserId: userId,
-      detail: { status: org.subscriptionStatus },
-    });
-    const cancelAt = await scheduleCancel(subscriptionId, orgId);
+    const cancelAt = pending
+      ? pending.at
+      : await sendCancel(tx, { userId, orgId, subscriptionId, status: org.subscriptionStatus });
     if (cancelAt) {
       await tx.organization.update({
         where: { id: orgId },
@@ -511,20 +614,63 @@ export async function cancelTeamSubscription(userId: string): Promise<{ cancelAt
   });
 }
 
+/**
+ * Under the lock: audit, record the owner who asked and when (taken before
+ * the call, so every event Paddle sends for this cancel is later), then the
+ * one Paddle call. A refused call rolls all of it back.
+ */
+async function sendCancel(
+  tx: OrgTx,
+  cancel: { userId: string; orgId: string; subscriptionId: string; status: string | null },
+): Promise<Date | null> {
+  const { userId, orgId } = cancel;
+  await recordOrgAudit(tx, {
+    orgId,
+    action: "billing.cancel_scheduled",
+    actorUserId: userId,
+    detail: { status: cancel.status },
+  });
+  await tx.organization.update({
+    where: { id: orgId },
+    data: { cancelRequestedByUserId: userId, cancelRequestedAt: new Date() },
+    select: { id: true },
+  });
+  return scheduleCancel(cancel.subscriptionId, orgId);
+}
+
 const RESUME_PAYER_ONLY = () =>
   new OrgError(
     403,
     "RESUME_PAYER_ONLY",
-    "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team can do it. Ask them to keep it from their own Klorn account (Paddle's receipt emails go to them).",
+    "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team, or the owner who set it to end in Klorn, can do it. Ask the payer to keep it from their own Klorn account (Paddle's receipt emails go to them).",
   );
 
+/** How an owner may take a cancel back: as the payer, or as the owner who scheduled it in Klorn. */
+type ResumeBasis = PayerBasis | "canceler";
+
 /**
- * Take back a scheduled cancel (the payer only: it restarts billing on their
- * card): billing resumes on the original schedule. Paddle allows this on a
- * past-due subscription too. With no cancel stored, Paddle is asked: one made
- * in the portal (or whose webhook is late) is still taken back, and nothing
- * to take back answers the same (no payer check: nothing changes), so a
- * retry after a lost answer is not an error.
+ * The owner who scheduled the pending cancel through Klorn (its stored actor)
+ * takes back their own decision; anyone else needs the payer check. A cancel
+ * made in the portal has no actor, so it stays the payer's.
+ */
+function resumeBasis(userId: string, orgId: string, stored: BillingRow): Promise<ResumeBasis> {
+  if (isRecordedPayer(userId, stored)) return Promise.resolve("recorded");
+  if (stored.cancelRequestedByUserId === userId) return Promise.resolve("canceler");
+  return requirePayer(userId, orgId, stored, {
+    action: "billing.resume_refused",
+    notPayer: RESUME_PAYER_ONLY,
+  });
+}
+
+/**
+ * Take back a scheduled cancel: billing resumes on the original schedule, on
+ * the payer's card, so it takes the payer or the owner who scheduled this
+ * cancel through Klorn (re-checked under the lock: an actor forgotten
+ * meanwhile, because the cancel was removed or replaced in Paddle, no longer
+ * holds). Paddle allows this on a past-due subscription too. With no cancel
+ * stored, Paddle is asked: one made in the portal (or whose webhook is late)
+ * is still taken back, and nothing to take back answers the same (no payer
+ * check: nothing changes), so a retry after a lost answer is not an error.
  */
 export async function resumeTeamSubscription(userId: string): Promise<{ resumed: true }> {
   const owner = await requireOwner(userId);
@@ -541,23 +687,21 @@ export async function resumeTeamSubscription(userId: string): Promise<{ resumed:
     }
     if (live.scheduledChange !== "cancel") return { resumed: true as const };
   }
-  const payer = await requirePayer(userId, orgId, stored, {
-    action: "billing.resume_refused",
-    notPayer: RESUME_PAYER_ONLY,
-  });
+  const basis = await resumeBasis(userId, orgId, stored);
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
     const org = await billingInTx(tx, orgId);
-    // The payer check above was for this subscription: one that ended and was
+    // The check above was for this subscription: one that ended and was
     // replaced meanwhile (another payer) is not taken back on its strength.
     if (!org.paddleSubscriptionId || org.paddleSubscriptionId !== stored.paddleSubscriptionId) {
       throw NO_SUBSCRIPTION();
     }
+    if (basis === "canceler" && org.cancelRequestedByUserId !== userId) throw RESUME_PAYER_ONLY();
     await recordOrgAudit(tx, {
       orgId,
       action: "billing.cancel_removed",
       actorUserId: userId,
-      detail: { payer },
+      detail: basis === "canceler" ? { via: "canceler" } : { payer: basis },
     });
     try {
       await undoPaddleCancellation(org.paddleSubscriptionId, CALL);
@@ -566,7 +710,7 @@ export async function resumeTeamSubscription(userId: string): Promise<{ resumed:
     }
     await tx.organization.update({
       where: { id: orgId },
-      data: { subscriptionCancelAt: null },
+      data: { subscriptionCancelAt: null, cancelRequestedByUserId: null, cancelRequestedAt: null },
       select: { id: true },
     });
     return { resumed: true as const };

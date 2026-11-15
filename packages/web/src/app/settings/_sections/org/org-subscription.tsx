@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  OrgBillingAccessWire,
   OrgBillingPortalResponse,
   OrgCancelResponse,
   OrgResumeResponse,
@@ -15,29 +16,59 @@ import { apiFetch } from "../../../../lib/api";
 import { isSafeBillingRedirect } from "../../../../lib/billing-redirect";
 import { useT } from "../../../../lib/i18n";
 import { formatBillingDate } from "../../../../lib/subscription";
-import { MAX_SEATS, parseSeatsFrom, seatFloor, subscriptionActions } from "./model";
+import {
+  canKeepSubscription,
+  canOpenPortal,
+  MAX_SEATS,
+  parseSeatsFrom,
+  seatCeiling,
+  seatFloor,
+  seatNoteKey,
+  subscriptionActions,
+} from "./model";
 import { useOrgAction } from "./use-org";
 
 const POST_EMPTY: RequestInit = { method: "POST", body: JSON.stringify({}) };
 
+/** A typed seat count this owner can ask for: from `floor` to `ceiling`, or null. */
+function seatsWithin(raw: string, floor: number, ceiling: number): number | null {
+  const seats = parseSeatsFrom(raw, floor);
+  return seats !== null && seats <= ceiling ? seats : null;
+}
+
 /**
- * The seat count field: at least two and one per member, at most 150. Adding
- * seats is the payer's alone (it charges their card at once); the field says
- * so up front, and the server's refusal names who can.
+ * The seat count field: at least two and one per member, at most 150, and at
+ * most what this owner can add (`ceiling`, from `me.billing`): adding seats
+ * charges the card at once, so it is the payer's, and a recorded payer whose
+ * email Paddle does not bill is capped. The field says so up front; the
+ * server's refusal names who can.
  */
 function SeatCountField({
   floor,
+  ceiling,
+  noteKey,
   value,
   onChange,
 }: {
   floor: number;
+  ceiling: number;
+  noteKey: string | null;
   value: string;
   onChange: (next: string) => void;
 }) {
   const { t } = useT();
-  const valid = parseSeatsFrom(value, floor) !== null;
+  const valid = seatsWithin(value, floor, ceiling) !== null;
   const tooMany = Number(value) > MAX_SEATS;
+  const overCeiling = Number(value) > ceiling;
   const hint = t("settings.org.seats.floor", { min: String(floor) });
+  const note = noteKey ? t(noteKey, { max: String(ceiling) }) : null;
+  const error = valid
+    ? undefined
+    : tooMany
+      ? t("settings.org.error.INVALID_SEATS")
+      : overCeiling && note
+        ? note
+        : hint;
   return (
     <div className="space-y-2">
       <Input
@@ -45,34 +76,68 @@ function SeatCountField({
         type="number"
         inputMode="numeric"
         min={floor}
-        max={MAX_SEATS}
+        max={ceiling}
         label={t("settings.org.seats.change", { min: String(floor), max: String(MAX_SEATS) })}
         value={value}
-        error={valid ? undefined : tooMany ? t("settings.org.error.INVALID_SEATS") : hint}
+        error={error}
         onChange={(event) => onChange(event.target.value)}
       />
       {valid && <p className="text-role-caption text-ink-dim">{hint}</p>}
-      <p className="text-role-caption text-ink-dim">{t("settings.org.seats.payerOnly")}</p>
+      {note && error !== note && <p className="text-role-caption text-ink-dim">{note}</p>}
     </div>
+  );
+}
+
+/**
+ * When a scheduled cancel ends the subscription, and (unless the server says
+ * this owner can) who may keep it: the payer, or the owner who set it to end.
+ */
+function EndingNotice({
+  cancelAt,
+  showKeepRule,
+}: {
+  cancelAt: string | null;
+  showKeepRule: boolean;
+}) {
+  const { t, locale } = useT();
+  const endDate = formatBillingDate(cancelAt, locale);
+  return (
+    <>
+      <p className="text-role-body text-ink-mid">
+        {endDate
+          ? t("settings.org.subscription.endsOn", { date: endDate })
+          : t("settings.org.subscription.endsSoon")}
+      </p>
+      {showKeepRule && (
+        <p id="org-keep-note" className="text-role-caption text-ink-dim">
+          {t("settings.org.subscription.keepPayerOnly")}
+        </p>
+      )}
+    </>
   );
 }
 
 /**
  * Owner only, once a team subscription exists: change the seat count, cancel
  * at the period end (or keep the subscription), open the Paddle portal.
- * Adding seats, keeping a canceled subscription and the portal are the
- * payer's alone, and the page says so. The server enforces every rule again
+ * Adding seats is the payer's (capped for a recorded payer whose email Paddle
+ * does not bill), keeping a canceled subscription is the payer's or the
+ * canceling owner's, and the portal is the paying email's. `billing` (the
+ * server's word on this owner) explains that before a click; without it the
+ * general rule is shown. The server enforces every rule again
  * (org/seat-management.ts); a seat change shows as pending until Paddle's
  * webhook moves the stored count.
  */
 export function OrgSubscription({
   org,
+  billing,
   onChanged,
 }: {
   org: OrgWire;
+  billing: OrgBillingAccessWire | undefined;
   onChanged: () => Promise<void>;
 }) {
-  const { t, locale } = useT();
+  const { t } = useT();
   const { confirm } = useConfirm();
   const floor = seatFloor(org.seats.used);
   const [seatsText, setSeatsText] = useState(() => String(Math.max(floor, org.seats.purchased)));
@@ -81,8 +146,10 @@ export function OrgSubscription({
   const [refused, setRefused] = useState(false);
   const { busy, errorKey, run } = useOrgAction();
   const actions = subscriptionActions(org.seats);
-  const seats = parseSeatsFrom(seatsText, floor);
-  const endDate = formatBillingDate(org.seats.cancelAt, locale);
+  const ceiling = seatCeiling(org.seats.purchased, billing);
+  const seats = seatsWithin(seatsText, floor, ceiling);
+  const keepable = canKeepSubscription(billing);
+  const portalOpens = canOpenPortal(billing);
 
   /** One action at a time; each starts from a clean slate of notes. */
   const act = (work: () => Promise<unknown>) => {
@@ -140,19 +207,21 @@ export function OrgSubscription({
   return (
     <div className="space-y-3">
       {actions.resume && (
-        <>
-          <p className="text-role-body text-ink-mid">
-            {endDate
-              ? t("settings.org.subscription.endsOn", { date: endDate })
-              : t("settings.org.subscription.endsSoon")}
-          </p>
-          <p className="text-role-caption text-ink-dim">
-            {t("settings.org.subscription.keepPayerOnly")}
-          </p>
-        </>
+        <EndingNotice cancelAt={org.seats.cancelAt} showKeepRule={billing?.canResume !== true} />
       )}
       {actions.changeSeats && (
-        <SeatCountField floor={floor} value={seatsText} onChange={setSeatsText} />
+        <SeatCountField
+          floor={floor}
+          ceiling={ceiling}
+          noteKey={seatNoteKey(billing)}
+          value={seatsText}
+          onChange={setSeatsText}
+        />
+      )}
+      {actions.portal && !portalOpens && (
+        <p id="org-portal-note" className="text-role-caption text-ink-dim">
+          {t("settings.org.subscription.portalPayerOnly")}
+        </p>
       )}
       <div className="flex flex-wrap gap-3">
         {actions.changeSeats && (
@@ -161,12 +230,21 @@ export function OrgSubscription({
           </Button>
         )}
         {actions.resume && (
-          <Button disabled={disabled} onClick={() => void resume()}>
+          <Button
+            disabled={disabled || !keepable}
+            aria-describedby={keepable ? undefined : "org-keep-note"}
+            onClick={() => void resume()}
+          >
             {t("settings.org.subscription.keep")}
           </Button>
         )}
         {actions.portal && (
-          <Button variant="secondary" disabled={disabled} onClick={() => void openPortal()}>
+          <Button
+            variant="secondary"
+            disabled={disabled || !portalOpens}
+            aria-describedby={portalOpens ? undefined : "org-portal-note"}
+            onClick={() => void openPortal()}
+          >
             {t("settings.org.subscription.portal")}
           </Button>
         )}

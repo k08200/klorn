@@ -3221,6 +3221,8 @@ const en: Record<string, string> = {
     "At least {min}: the team minimum, and one seat for every member. Paddle charges or credits the difference for the rest of this billing period.",
   "settings.org.seats.payerOnly":
     "Adding seats charges the card on file right away, so only the person who pays for the team can add them. Any owner can remove seats.",
+  "settings.org.seats.capped":
+    "Without the email address that pays for the team, you can raise seats to {max} at most. The person whose email pays can add more. Any owner can remove seats.",
   "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
   "settings.org.seats.unchanged": "The organization already has {seats} seats.",
   "settings.org.subscription.cancel": "Cancel subscription",
@@ -3230,7 +3232,9 @@ const en: Record<string, string> = {
   "settings.org.subscription.cancelConfirm": "Cancel at period end",
   "settings.org.subscription.keep": "Keep subscription",
   "settings.org.subscription.keepPayerOnly":
-    "Only the person who pays for the team can keep it, because billing restarts on their card.",
+    "Only the person who pays for the team, or the owner who set it to end here, can keep it, because billing restarts on the payer's card.",
+  "settings.org.subscription.portalPayerOnly":
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
   "settings.org.subscription.endsOn": "The subscription ends on {date}. Seats stay until then.",
   "settings.org.subscription.endsSoon":
     "The subscription ends at the end of this billing period. Seats stay until then.",
@@ -3248,10 +3252,12 @@ const en: Record<string, string> = {
     "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Only the person who pays for the team can add seats, because the card on file is charged right away. Ask them to add seats from their own Klorn account (Paddle's receipt emails go to them). You can still remove seats.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "That's more seats than you can add without the email address that pays for the team. The person whose email pays can add more from their own Klorn account (Paddle's receipt emails go to them). You can still remove seats.",
   "settings.org.error.SEATS_CHANGED":
     "The seat count changed while this was saving. Check the current count and try again.",
   "settings.org.error.RESUME_PAYER_ONLY":
-    "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team can do it. Ask them to keep it from their own Klorn account (Paddle's receipt emails go to them).",
+    "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team, or the owner who set it to end in Klorn, can do it. Ask the payer to keep it from their own Klorn account (Paddle's receipt emails go to them).",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
     "Paddle didn't answer, so nothing was changed. Try again in a minute.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
