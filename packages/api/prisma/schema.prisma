@@ -363,7 +363,7 @@ model SlackEpisode {
   channelType   String // im | mpim | channel | group
   /// thread_ts, or "" for top-level messages.
   threadKey     String
-  /// OPEN | JUDGING | JUDGED | ANSWERED
+  /// OPEN | JUDGING | JUDGED | ANSWERED | EMPTY | OVER_CAP (judge-sweep.ts)
   status        String          @default("OPEN")
   mentionsUser  Boolean         @default(false)
   messageCount  Int             @default(0)
@@ -2874,8 +2874,9 @@ model Organization {
   id                   String              @id @default(uuid())
   name                 String              @db.VarChar(80)
   slug                 String              @unique @db.VarChar(48)
-  /// Lowercase domains the company sends from. Stored only: feeding them to
-  /// members' judge is a later step (pricing-tiers.md launch feature 6).
+  /// Lowercase domains the company sends from. A member's judge reads them as
+  /// one relationship fact, orgCompanyDomain (src/org/org-domains.ts), never as
+  /// a lane or a pin (pricing-tiers.md launch feature 6).
   companyDomains       String[]            @default([])
   /// Admin ceiling: no unattended reply leaves any member's account.
   autoReplyDisabled    Boolean             @default(false)
@@ -2971,6 +2972,8 @@ model OrgAuditEvent {
   createdAt    DateTime     @default(now())
 
   @@index([orgId, createdAt])
+  /// The retention sweep's range (src/org/audit-retention.ts, 400 days).
+  @@index([createdAt])
 }
 
 /// Team-of-one memory: per-sender relationship context distilled from the

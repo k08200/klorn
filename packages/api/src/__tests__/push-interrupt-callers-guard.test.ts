@@ -46,6 +46,8 @@ const INTERRUPT_CALLERS: Record<string, string[]> = {
   "background.ts": ["meeting"],
   // Reminders the user set for a time.
   "pim/reminder-scheduler.ts": ["system"],
+  // A Slack episode judged PUSH, under the same interrupt budget (slack.md §9).
+  "slack/notify.ts": ["email_urgent"],
 };
 
 /** Agent-originated pushes live here; each must say bucket: "ambient". */

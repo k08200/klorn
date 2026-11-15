@@ -3007,6 +3007,53 @@ const ko: Record<string, string> = {
   "vaultExport.error.busy": "지금은 내보내기 요청이 많습니다. 잠시 뒤에 다시 시도하세요.",
   "vaultExport.error.unavailable": "이 계정에서는 마크다운 내보내기를 사용할 수 없습니다.",
   "vaultExport.error.failed": "마크다운 내보내기에 실패했습니다. 다시 시도하세요.",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn이 Slack DM, 그룹 DM, 회원님 멘션을 읽고 레인으로 분류합니다. 글을 올리거나 반응하거나 읽음 처리하지 않습니다.",
+  "slack.start": "설정 시작",
+  "slack.step.manifest": "앱 매니페스트를 내려받으세요. Request URL이 이미 들어 있습니다.",
+  "slack.downloadManifest": "매니페스트 내려받기",
+  "slack.requestUrl": "요청 URL (Request URL)",
+  "slack.step.create":
+    "Slack에서 매니페스트로 앱을 만들고(Create New App → From a manifest) 워크스페이스에 설치하세요.",
+  "slack.openSlackApps": "Slack 앱 페이지 열기",
+  "slack.step.paste":
+    "앱의 Signing Secret(Basic Information)과 User OAuth Token(OAuth & Permissions)을 붙여 넣으세요. Klorn은 토큰을 확인만 하고 보관하지 않습니다.",
+  "slack.signingSecret": "서명 비밀값 (Signing Secret)",
+  "slack.userToken": "사용자 OAuth 토큰",
+  "slack.connect": "연결",
+  "slack.step.verify":
+    "Slack의 Event Subscriptions에서 Retry를 눌러 Slack이 Request URL을 확인하게 하세요.",
+  "slack.setupAgain": "설정 단계",
+  "slack.connected": "Slack이 연결되었습니다",
+  "slack.status.connected": "{workspace}에 연결됨",
+  "slack.status.waiting": "Slack이 Request URL을 확인하기를 기다리는 중입니다.",
+  "slack.status.lastEvent": "Slack에서 받은 마지막 이벤트: {time}",
+  "slack.channels.title": "팔로우할 채널",
+  "slack.channels.desc":
+    "이 채널의 모든 메시지를 분류합니다(멘션만이 아님). 채널 ID(채널 세부정보 → 정보)를 쉼표나 공백으로 구분해 붙여 넣으세요.",
+  "slack.channels.save": "채널 저장",
+  "slack.channels.saved": "채널을 저장했습니다",
+  "slack.disconnect": "연결 해제",
+  "slack.disconnect.title": "Slack 연결을 해제할까요?",
+  "slack.disconnect.message":
+    "Klorn이 서명 비밀값, 저장한 모든 Slack 메시지와 판정, Slack에서 찾은 약속을 삭제합니다. Slack에서도 앱을 삭제하세요.",
+  "slack.disconnected": "Slack 연결을 해제했습니다. Klorn이 저장한 데이터를 삭제했습니다.",
+  "slack.error.invalid-signing-secret": "Slack 서명 비밀값이 아닙니다.",
+  "slack.error.bot-token": "봇 토큰입니다. User OAuth Token(xoxp-…)을 붙여 넣으세요.",
+  "slack.error.invalid-user-token": "Slack 사용자 토큰(xoxp-…)이 아닙니다.",
+  "slack.error.slack-rejected-token": "Slack이 이 토큰을 받아들이지 않았습니다.",
+  "slack.error.slack-unreachable": "Slack에 연결하지 못했습니다. 다시 시도하세요.",
+  "slack.error.bad-response": "Slack의 응답을 처리할 수 없었습니다. 다시 시도하세요.",
+  "slack.error.missing-scopes": "토큰에 Klorn이 필요한 권한이 없습니다: {scopes}",
+  "slack.error.extra-scopes":
+    "토큰에 Klorn이 가져서는 안 되는 권한이 있습니다: {scopes}. 앱에서 제거한 뒤 다시 설치하세요.",
+  "slack.error.invalid-channels": "C0123456789 같은 채널 ID를 최대 50개까지 쓰세요.",
+  "slack.error.public-url-missing": "이 Klorn 서버에 공개 URL이 없어 Slack이 접근할 수 없습니다.",
+  "slack.error.not-started": "먼저 Slack 설정을 시작하세요.",
+  "slack.error.rate-limited": "시도가 너무 많습니다. 나중에 다시 시도하세요.",
+  "slack.error.generic": "Slack 처리 중 문제가 생겼습니다. 다시 시도하세요.",
+  "slack.retry": "다시 시도",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "텍스트로 규칙 편집",
   "rulesDsl.desc":

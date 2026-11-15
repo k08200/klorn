@@ -4,12 +4,14 @@
  *
  * Two independent buckets (caps in config.ts, enforced by push-rate-limit.ts):
  *
- * - interrupt: "this needs you now". Asked for by exactly four callers, pinned
+ * - interrupt: "this needs you now". Asked for by exactly five callers, pinned
  *   by __tests__/push-interrupt-callers-guard.test.ts:
  *   - judge/firewall-push.ts: the firewall's PUSH and MEETING mail;
  *   - automation-scheduler.ts: the urgent keyword sweep;
  *   - background.ts: "Meeting in N min";
- *   - pim/reminder-scheduler.ts: reminders the user set for a time.
+ *   - pim/reminder-scheduler.ts: reminders the user set for a time;
+ *   - slack/notify.ts: a Slack episode judged PUSH (under the interrupt
+ *     budget, at most two a day — docs/providers/slack.md §9).
  * - ambient: everything else, and the default. Briefings and the weekly report,
  *   agent proposals, candidate-mail notices, reconnect prompts, test pushes,
  *   the quiet-hours summary of held mail (quiet-hours-summary.ts),
