@@ -3232,7 +3232,7 @@ const ko: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "일시 중지된 구독은 결제 포털에서만 종료할 수 있습니다.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "결제 포털은 팀 요금을 결제하는 사람에게만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
+    "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "등록된 카드로 바로 청구되기 때문에 시트 추가는 팀 요금을 결제하는 사람만 할 수 있습니다. 그 사람에게 본인 Klorn 계정에서 추가해 달라고 요청하세요(Paddle 영수증 이메일을 받는 사람입니다). 시트 줄이기는 지금도 할 수 있습니다.",
   "settings.org.error.SEATS_CHANGED":

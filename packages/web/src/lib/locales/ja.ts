@@ -3279,7 +3279,7 @@ const ja: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "一時停止中のサブスクリプションは請求ポータルからのみ終了できます。",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "請求ポータルはチームの料金を支払っている人だけが開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
+    "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "登録済みのカードにすぐ請求されるため、シートを追加できるのはチームの料金を支払っている人だけです。その人に自分の Klorn アカウントから追加するよう依頼してください（Paddle の領収書メールを受け取っている人です）。シートの削減は引き続きできます。",
   "settings.org.error.SEATS_CHANGED":

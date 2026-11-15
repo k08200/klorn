@@ -189,9 +189,10 @@ function updateFor(data: TeamSubscriptionData, own: boolean, eventAt: Date | nul
  * The payer to store from this event: the buyer the organization's own
  * checkout named (custom_data.payerUserId with custom_data.orgId = this
  * organization), accepted only while they are an owner of it. Written when a
- * subscription first attaches (replacing an earlier subscription's payer, or
- * clearing it) or when the attached one has none yet; never moved by a later
- * event. A canceled subscription clears it. Undefined leaves it as stored.
+ * subscription first attaches (null when its checkout named no owner) or when
+ * the attached one has none yet; never moved by a later event. A canceled
+ * subscription clears it. Undefined leaves it as stored. A non-owner payer is
+ * reported once, when the subscription attaches.
  */
 async function payerFor(
   tx: OrgTx,
@@ -212,8 +213,33 @@ async function payerFor(
     select: { id: true },
   });
   if (owner) return claimed;
+  if (own) return undefined;
   report("team checkout payer is not an owner of the organization", event.eventId);
-  return own ? undefined : null;
+  return null;
+}
+
+/**
+ * paddleSubscriptionId is unique: a drifted copy on another organization
+ * would fail the event's update on every retry. That organization loses it,
+ * with its seats and payer, and the drift is reported.
+ */
+async function detachDrifted(
+  tx: OrgTx,
+  orgId: string,
+  subscriptionId: string,
+  eventId: string,
+): Promise<void> {
+  const drifted = await tx.organization.updateMany({
+    where: { paddleSubscriptionId: subscriptionId, id: { not: orgId } },
+    data: {
+      paddleSubscriptionId: null,
+      subscriptionStatus: null,
+      seatsPurchased: 0,
+      subscriptionCancelAt: null,
+      payerUserId: null,
+    },
+  });
+  if (drifted.count > 0) report("team subscription id moved between organizations", eventId);
 }
 
 /**
@@ -254,23 +280,7 @@ export async function applyTeamSubscriptionEvent(
     const own = Boolean(event.data.id) && stored.paddleSubscriptionId === event.data.id;
     const { update, seats, interval } = updateFor(event.data, own, eventAt);
     const payerUserId = await payerFor(tx, orgId, stored, event, own);
-    if (event.data.id && !own) {
-      // paddleSubscriptionId is unique: a drifted copy on another organization
-      // would fail this update on every retry. That organization loses it,
-      // with its seats, and the drift is reported.
-      const drifted = await tx.organization.updateMany({
-        where: { paddleSubscriptionId: event.data.id, id: { not: orgId } },
-        data: {
-          paddleSubscriptionId: null,
-          subscriptionStatus: null,
-          seatsPurchased: 0,
-          subscriptionCancelAt: null,
-          payerUserId: null,
-        },
-      });
-      if (drifted.count > 0)
-        report("team subscription id moved between organizations", event.eventId);
-    }
+    if (event.data.id && !own) await detachDrifted(tx, orgId, event.data.id, event.eventId);
     await tx.organization.update({
       where: { id: orgId },
       data: payerUserId === undefined ? update : { ...update, payerUserId },
@@ -280,7 +290,12 @@ export async function applyTeamSubscriptionEvent(
       orgId,
       action: "billing.subscription_changed",
       actorUserId: null,
-      detail: { status: event.data.status ?? null, seats, interval },
+      detail: {
+        status: event.data.status ?? null,
+        seats,
+        interval,
+        ...(payerUserId === undefined ? {} : { payer: payerUserId ? "recorded" : "none" }),
+      },
     });
     return "applied";
   });

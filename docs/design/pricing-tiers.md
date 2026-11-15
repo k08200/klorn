@@ -151,11 +151,20 @@ subscription webhook does.
   `Organization.payerUserId` only from this organization's own checkout
   (`custom_data.orgId` matches) and only while that user is an owner: when a
   subscription first attaches, or when the attached one has no payer yet. A
-  later event never moves it; a canceled subscription clears it. The payer
-  check passes for the recorded payer while they are still an owner, and
-  otherwise for the owner whose verified Klorn email is the Paddle customer's
-  email — so a buyer who paid with a work address still passes, and an
-  organization that subscribed before payers were recorded keeps working.
+  later event never moves it; a canceled subscription, subscription drift and
+  the payer's account deletion clear it. For a seat increase or a resume
+  (both billed to the subscription's own payment method) the payer check
+  passes for the recorded payer while they are still an owner, and otherwise
+  for the owner whose verified Klorn email is the Paddle customer's email —
+  so a buyer who paid with a work address still passes, and an organization
+  that subscribed before payers were recorded keeps working. The audit row
+  says which (`payer: "recorded" | "email"`).
+- **Known trade-off (not decided):** the recorded payer is the owner who
+  opened the checkout, not necessarily the card holder. If that owner sends
+  the checkout link to someone else who pays, the owner can later add seats
+  on that person's card. Paddle emails the card holder a receipt for every
+  charge. A bound on increases by a recorded-only payer is open for the
+  founder.
   Prefilling the checkout email is not done: Paddle takes it only as an
   existing customer on the transaction or through Paddle.js on the payment
   page.
@@ -189,9 +198,13 @@ subscription webhook does.
   payer's card. An organization whose subscription still bills (active, trialing,
   past due, paused) is never closed or deleted.
 - **Billing portal** opens only while the subscription bills, and only for the
-  payer. The portal is the payer's whole Paddle account (other subscriptions,
-  invoices, address): a later owner is refused, and the payer still has the
-  portal link in Paddle's receipt emails.
+  owner whose verified Klorn email is the Paddle customer's email — never on
+  the recorded payer alone. The portal is the Paddle customer's whole account
+  (other subscriptions, invoices, address), and the customer is whoever's
+  email was typed at checkout, which Klorn does not bind to the buyer: a
+  checkout opened by one person and paid under another person's existing
+  Paddle email must not open that person's account. Everyone else is
+  refused; the payer still has the portal link in Paddle's receipt emails.
 - A Paddle call that fails before anything changed (a read, or a portal link)
   answers `BILLING_PROVIDER_READ_FAILED` ("nothing was changed"); a failed
   change answers `BILLING_PROVIDER_ERROR` ("may not have gone through").

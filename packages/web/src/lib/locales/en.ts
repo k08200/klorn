@@ -3245,7 +3245,7 @@ const en: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "A paused subscription can only be ended from the billing portal.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "The billing portal opens only for the person who pays for the team. They can also use the link in Paddle's receipt emails.",
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Only the person who pays for the team can add seats, because the card on file is charged right away. Ask them to add seats from their own Klorn account (Paddle's receipt emails go to them). You can still remove seats.",
   "settings.org.error.SEATS_CHANGED":

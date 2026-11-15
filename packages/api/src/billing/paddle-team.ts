@@ -111,7 +111,8 @@ export async function getPaddleTeamSubscription(
 /**
  * The Paddle customer's email (GET /customers/{id}), or null when Paddle
  * returns none. The team billing portal opens only for the owner whose
- * verified Klorn email this is.
+ * verified Klorn email this is; seat increases and resume accept it when the
+ * checkout recorded no payer, or another one (seat-management.ts).
  */
 export async function getPaddleCustomerEmail(
   customerId: string,

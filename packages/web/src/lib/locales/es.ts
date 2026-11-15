@@ -3326,7 +3326,7 @@ const es: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Una suscripción en pausa solo se puede terminar desde el portal de facturación.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "El portal de facturación solo se abre para quien paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
+    "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Solo quien paga el equipo puede añadir plazas, porque se cobra al momento en la tarjeta registrada. Pídele que las añada desde su propia cuenta de Klorn (es quien recibe los recibos de Paddle). Tú sí puedes quitar plazas.",
   "settings.org.error.SEATS_CHANGED":

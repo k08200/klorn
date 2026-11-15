@@ -61,9 +61,9 @@ function SeatCountField({
  * Owner only, once a team subscription exists: change the seat count, cancel
  * at the period end (or keep the subscription), open the Paddle portal.
  * Adding seats, keeping a canceled subscription and the portal are the
- * payer's alone; the page says so and the server enforces it. The
- * server enforces every rule again (org/seat-management.ts); a seat change
- * shows as pending until Paddle's webhook moves the stored count.
+ * payer's alone, and the page says so. The server enforces every rule again
+ * (org/seat-management.ts); a seat change shows as pending until Paddle's
+ * webhook moves the stored count.
  */
 export function OrgSubscription({
   org,

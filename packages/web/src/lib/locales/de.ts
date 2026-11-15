@@ -3377,7 +3377,7 @@ const de: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Ein pausiertes Abo lässt sich nur im Abrechnungsportal beenden.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Das Abrechnungsportal öffnet sich nur für die Person, die für das Team bezahlt. Sie kann auch den Link in den Paddle-Belegen nutzen.",
+    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Nur die Person, die für das Team bezahlt, kann Plätze hinzufügen, weil die hinterlegte Karte sofort belastet wird. Bitte sie, die Plätze in ihrem eigenen Klorn-Konto hinzuzufügen (sie erhält die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
   "settings.org.error.SEATS_CHANGED":

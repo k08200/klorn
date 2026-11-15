@@ -3344,7 +3344,7 @@ const fr: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Un abonnement en pause ne peut être arrêté que depuis le portail de facturation.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Le portail de facturation ne s’ouvre que pour la personne qui paie l’équipe. Elle peut aussi utiliser le lien des reçus Paddle.",
+    "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Seule la personne qui paie l’équipe peut ajouter des sièges, car la carte enregistrée est débitée tout de suite. Demandez-lui de les ajouter depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle). Vous pouvez toujours retirer des sièges.",
   "settings.org.error.SEATS_CHANGED":

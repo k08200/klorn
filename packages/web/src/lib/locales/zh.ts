@@ -3051,7 +3051,7 @@ const zh: Record<string, string> = {
   "settings.org.error.NO_SUBSCRIPTION": "该组织没有团队订阅。",
   "settings.org.error.SUBSCRIPTION_PAUSED": "已暂停的订阅只能在账单门户中结束。",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "账单门户只对支付团队费用的人开放。付款人也可以使用 Paddle 收据邮件中的链接。",
+    "账单门户只对支付团队费用的邮箱地址开放。付款人也可以使用 Paddle 收据邮件中的链接。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的人可以添加。请让付款人用自己的 Klorn 账户添加（即接收 Paddle 收据邮件的人）。你仍然可以减少席位。",
   "settings.org.error.SEATS_CHANGED": "保存期间席位数已变更。请查看当前席位数后重试。",
