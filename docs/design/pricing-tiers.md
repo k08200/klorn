@@ -145,14 +145,35 @@ subscription webhook does.
   Paddle bills now, not the stored count, so asking for the count Paddle
   already holds makes no change. Only while active or trialing with nothing
   scheduled: Paddle refuses updates to a past-due subscription.
+- **The payer.** The team checkout names its buyer (the owner who opened it)
+  in Paddle's custom data as `payerUserId` — never `userId`, the key the Pro
+  webhook maps to an account. The webhook stores it as
+  `Organization.payerUserId` only from this organization's own checkout
+  (`custom_data.orgId` matches) and only while that user is an owner: when a
+  subscription first attaches, or when the attached one has no payer yet. A
+  later event never moves it; a canceled subscription, subscription drift and
+  the payer's account deletion clear it. For a seat increase or a resume
+  (both billed to the subscription's own payment method) the payer check
+  passes for the recorded payer while they are still an owner, and otherwise
+  for the owner whose verified Klorn email is the Paddle customer's email —
+  so a buyer who paid with a work address still passes, and an organization
+  that subscribed before payers were recorded keeps working. The audit row
+  says which (`payer: "recorded" | "email"`).
+- **Known trade-off (not decided):** the recorded payer is the owner who
+  opened the checkout, not necessarily the card holder. If that owner sends
+  the checkout link to someone else who pays, the owner can later add seats
+  on that person's card. Paddle emails the card holder a receipt for every
+  charge. A bound on increases by a recorded-only payer is open for the
+  founder.
+  Prefilling the checkout email is not done: Paddle takes it only as an
+  existing customer on the transaction or through Paddle.js on the payment
+  page.
 - **Adding seats is the payer's.** It charges the card on file at once
-  (prorated), so it takes the portal's payer check: the owner's verified Klorn
-  email is the Paddle customer's email. Any other owner, including one who
-  took over by transfer, gets `SEATS_INCREASE_PAYER_ONLY` and is told to ask
-  the payer (who also has the link in Paddle's receipt emails). Removing seats
-  and the period-end cancel stay open to any owner: both lower or end the
-  charge, and the member floor still holds. Paddle emails the payer a receipt
-  for every prorated charge.
+  (prorated). Any other owner, including one who took over by transfer, gets
+  `SEATS_INCREASE_PAYER_ONLY` and is told to ask the payer. Removing seats and
+  the period-end cancel stay open to any owner: both lower or end the charge,
+  and the member floor still holds. Paddle emails the payer a receipt for
+  every prorated charge.
 - **A portal cancel cannot race a seat change.** Paddle refuses any update
   while a scheduled change is pending (`subscription_locked_pending_changes`),
   so a cancel made in the portal after the live read is caught by the seat
@@ -163,8 +184,9 @@ subscription webhook does.
   Paddle call) answers `SEATS_CHANGED`, so two concurrent decreases by a
   non-payer cannot add up to an unchecked increase.
 - **Audit.** Every allowed change is `billing.seats_change_requested`; a
-  refused payer check is `billing.seats_increase_refused` or
-  `billing.portal_refused`, with the reason class only (`not_payer`,
+  refused payer check is `billing.seats_increase_refused`,
+  `billing.resume_refused` or `billing.portal_refused`, with the reason class
+  only (`not_payer`,
   `email_not_verified`, `no_payer_email`, `no_payer_on_record`) — never an
   email or card detail.
 - **Cancel** is at the period end only, like Pro: seats stay until Paddle's
@@ -172,13 +194,20 @@ subscription webhook does.
   past due until the period ends; a paused one can only be ended immediately,
   which is left to the portal. A scheduled cancel can be taken back, past due
   included (removing a scheduled change is the one update Paddle allows
-  there). An organization whose subscription still bills (active, trialing,
+  there), by the payer only (`RESUME_PAYER_ONLY`): it restarts billing on the
+  payer's card. An organization whose subscription still bills (active, trialing,
   past due, paused) is never closed or deleted.
-- **Billing portal** opens only while the subscription bills, and only for an
-  owner whose verified Klorn email is the Paddle customer's email. The portal
-  is the payer's whole Paddle account (other subscriptions, invoices,
-  address): a later owner, or an owner who paid from another address, is
-  refused, and the payer still has the portal link in Paddle's receipt emails.
+- **Billing portal** opens only while the subscription bills, and only for the
+  owner whose verified Klorn email is the Paddle customer's email — never on
+  the recorded payer alone. The portal is the Paddle customer's whole account
+  (other subscriptions, invoices, address), and the customer is whoever's
+  email was typed at checkout, which Klorn does not bind to the buyer: a
+  checkout opened by one person and paid under another person's existing
+  Paddle email must not open that person's account. Everyone else is
+  refused; the payer still has the portal link in Paddle's receipt emails.
+- A Paddle call that fails before anything changed (a read, or a portal link)
+  answers `BILLING_PROVIDER_READ_FAILED` ("nothing was changed"); a failed
+  change answers `BILLING_PROVIDER_ERROR` ("may not have gone through").
 
 ### Later
 

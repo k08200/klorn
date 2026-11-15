@@ -26,6 +26,7 @@ export type OrgAuditAction =
   | "billing.seats_increase_refused"
   | "billing.cancel_scheduled"
   | "billing.cancel_removed"
+  | "billing.resume_refused"
   | "billing.portal_opened"
   | "billing.portal_refused";
 

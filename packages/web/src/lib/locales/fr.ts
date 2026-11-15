@@ -3327,6 +3327,8 @@ const fr: Record<string, string> = {
     "Chacun garde son siège jusqu’à la fin de la période déjà payée. Ensuite, le forfait équipe prend fin pour tous les membres, et plus rien n’est facturé.",
   "settings.org.subscription.cancelConfirm": "Résilier en fin de période",
   "settings.org.subscription.keep": "Garder l’abonnement",
+  "settings.org.subscription.keepPayerOnly":
+    "Seule la personne qui paie l’équipe peut le conserver, car la facturation reprend sur sa carte.",
   "settings.org.subscription.endsOn":
     "L’abonnement prend fin le {date}. Les sièges restent jusque-là.",
   "settings.org.subscription.endsSoon":
@@ -3344,9 +3346,13 @@ const fr: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "Seule l’adresse e-mail qui paie l’équipe peut ajouter des sièges, car la carte enregistrée est débitée tout de suite. Demandez-le à la personne qui se connecte à Klorn avec cette adresse (les reçus Paddle y sont envoyés). Vous pouvez toujours retirer des sièges.",
+    "Seule la personne qui paie l’équipe peut ajouter des sièges, car la carte enregistrée est débitée tout de suite. Demandez-lui de les ajouter depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle). Vous pouvez toujours retirer des sièges.",
   "settings.org.error.SEATS_CHANGED":
     "Le nombre de sièges a changé pendant l’enregistrement. Vérifiez le nombre actuel et réessayez.",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "Conserver l’abonnement relance la facturation sur la carte de la personne qui paie : elle seule peut le faire. Demandez-lui de le conserver depuis son propre compte Klorn (c’est elle qui reçoit les reçus Paddle).",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle n’a pas répondu, donc rien n’a été modifié. Réessayez dans une minute.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle n’a pas confirmé le changement : il n’a peut-être pas été appliqué. Vérifiez dans une minute avant de réessayer.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

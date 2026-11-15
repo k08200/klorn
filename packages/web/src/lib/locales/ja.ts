@@ -3262,6 +3262,8 @@ const ja: Record<string, string> = {
     "支払い済みの期間が終わるまでは全員がシートを保持します。その後、全メンバーのチームプランが終了し、以降の請求はありません。",
   "settings.org.subscription.cancelConfirm": "期間終了時に解約",
   "settings.org.subscription.keep": "サブスクリプションを継続",
+  "settings.org.subscription.keepPayerOnly":
+    "継続すると支払い担当者のカードへの請求が再開されるため、継続できるのはチームの料金を支払っている人だけです。",
   "settings.org.subscription.endsOn":
     "サブスクリプションは {date} に終了します。それまでシートは保持されます。",
   "settings.org.subscription.endsSoon":
@@ -3279,9 +3281,13 @@ const ja: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "登録済みのカードにすぐ請求されるため、シートの追加はチームの料金を支払っているメールアドレスでのみできます。そのアドレスで Klorn にログインする人に依頼してください（Paddle の領収書メールはそのアドレスに届きます）。シートの削減は引き続きできます。",
+    "登録済みのカードにすぐ請求されるため、シートを追加できるのはチームの料金を支払っている人だけです。その人に自分の Klorn アカウントから追加するよう依頼してください（Paddle の領収書メールを受け取っている人です）。シートの削減は引き続きできます。",
   "settings.org.error.SEATS_CHANGED":
     "保存中にシート数が変わりました。現在のシート数を確認して、もう一度お試しください。",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "サブスクリプションを継続すると支払い担当者のカードへの請求が再開されるため、チームの料金を支払っている人だけが操作できます。その人に自分の Klorn アカウントから継続するよう依頼してください（Paddle の領収書メールを受け取っている人です）。",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle から応答がなかったため、何も変更されていません。少し待ってからもう一度お試しください。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle が変更を確認しなかったため、反映されていない可能性があります。再試行する前に少し待ってから確認してください。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

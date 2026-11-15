@@ -159,6 +159,22 @@ function stubPaddle(opts: {
   return calls;
 }
 
+/** An owner who took the organization over by transfer: not the Paddle customer. */
+async function transferredOrg(subscriptionId: string, data: Record<string, unknown> = {}) {
+  const { owner, orgId } = await subscribedOrg(subscriptionId, data);
+  const heir = await addMember(orgId, "heir");
+  await transferTo(owner, heir);
+  return { payer: owner, heir, orgId };
+}
+
+async function transferTo(from: Session, to: Session): Promise<void> {
+  const membershipId = (
+    await prisma.orgMembership.findUniqueOrThrow({ where: { userId: to.userId } })
+  ).id;
+  const moved = await call(from, "POST", "/api/orgs/current/transfer", { membershipId });
+  expect(moved.statusCode).toBe(200);
+}
+
 function liveSubscription(over: Record<string, unknown> = {}) {
   return {
     id: "sub_seat_1",
@@ -385,18 +401,6 @@ describePg("team seat changes (real Postgres)", () => {
 });
 
 describePg("team seat increases: payer only (real Postgres)", () => {
-  /** An owner who took the organization over by transfer: not the Paddle customer. */
-  async function transferredOrg(subscriptionId: string) {
-    const { owner, orgId } = await subscribedOrg(subscriptionId);
-    const heir = await addMember(orgId, "heir");
-    const membershipId = (
-      await prisma.orgMembership.findUniqueOrThrow({ where: { userId: heir.userId } })
-    ).id;
-    const moved = await call(owner, "POST", "/api/orgs/current/transfer", { membershipId });
-    expect(moved.statusCode).toBe(200);
-    return { payer: owner, heir, orgId };
-  }
-
   it("refuses an increase by an owner who does not pay, audits it without the email, and calls no PATCH", async () => {
     const { payer, heir, orgId } = await transferredOrg("sub_seat_20");
     const calls = stubPaddle({
@@ -548,7 +552,8 @@ describePg("team seat increases: payer only (real Postgres)", () => {
     });
     const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
     expect(res.statusCode).toBe(502);
-    expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
+    // A failed read before any change says nothing was changed.
+    expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_READ_FAILED" });
     expect(calls.map((c) => c.method)).toEqual(["GET", "GET"]);
     expect(
       await prisma.orgAuditEvent.count({
@@ -684,11 +689,16 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_14", {
       scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
     });
-    const calls = stubPaddle({ answer: { next_billed_at: "2026-12-14T00:00:00Z" } });
+    const calls = stubPaddle({
+      customer: { email: owner.email },
+      answer: { next_billed_at: "2026-12-14T00:00:00Z" },
+    });
     const res = await call(owner, "POST", "/api/orgs/current/subscription/resume");
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ resumed: true });
-    expect(calls[0]).toMatchObject({ method: "PATCH", body: { scheduled_change: null } });
+    // Resume restarts billing on the payer's card: the payer check comes first.
+    expect(calls[0]?.url).toMatch(/\/customers\/ctm_seat_1$/);
+    expect(calls[1]).toMatchObject({ method: "PATCH", body: { scheduled_change: null } });
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
     expect(org.subscriptionCancelAt).toBeNull();
     expect(
@@ -697,7 +707,8 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     const twice = await call(owner, "POST", "/api/orgs/current/subscription/resume");
     expect(twice.statusCode).toBe(200);
     expect(twice.json()).toEqual({ resumed: true });
-    expect(calls.map((c) => c.method)).toEqual(["PATCH", "GET"]);
+    // Nothing left to take back: no payer check, nothing changed.
+    expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH", "GET"]);
   });
 
   it("takes back a cancel made in the portal before its webhook arrives", async () => {
@@ -707,14 +718,238 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
         id: "sub_seat_19",
         scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
       }),
+      customer: { email: owner.email },
     });
     const res = await call(owner, "POST", "/api/orgs/current/subscription/resume");
     expect(res.statusCode).toBe(200);
-    expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
-    expect(calls[1]?.body).toEqual({ scheduled_change: null });
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "PATCH"]);
+    expect(calls[2]?.body).toEqual({ scheduled_change: null });
     expect(
       await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_removed" } }),
     ).toBe(1);
+  });
+});
+
+describePg("team payer recorded at checkout (real Postgres)", () => {
+  /** The organization's own checkout event, naming its buyer. */
+  function checkoutEvent(orgId: string, subscriptionId: string, payerUserId: string, over = {}) {
+    return teamEvent(orgId, {
+      id: subscriptionId,
+      custom_data: { orgId, kind: "team_seats", payerUserId },
+      ...over,
+    });
+  }
+
+  async function payerOf(orgId: string): Promise<string | null> {
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    return org.payerUserId;
+  }
+
+  it("names the buyer in the checkout, stores them as payer, and lets them add seats while Paddle bills another email — but not open that customer's portal", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    const checkoutCalls = stubPaddle({ answer: { checkout: { url: "https://pay.example/c/1" } } });
+    const checkout = await call(owner, "POST", "/api/orgs/current/checkout", {
+      interval: "month",
+      seats: 3,
+    });
+    expect(checkout.statusCode).toBe(200);
+    expect(checkoutCalls[0]?.body).toMatchObject({
+      custom_data: { orgId, kind: "team_seats", payerUserId: owner.userId },
+    });
+
+    expect((await webhook(checkoutEvent(orgId, "sub_seat_31", owner.userId))).statusCode).toBe(200);
+    expect(await payerOf(orgId)).toBe(owner.userId);
+
+    // The buyer paid with a work address that is not their Klorn login.
+    const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_31" }),
+      customer: { email: "accounts@company.test" },
+      answer: { urls: { general: { overview: "https://customer-portal.paddle.com/cpl_9" } } },
+    });
+    const seats = await call(owner, "POST", "/api/orgs/current/seats", { seats: 5 });
+    expect(seats.statusCode).toBe(202);
+    // The recorded payer needs no email lookup for a seat increase.
+    expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+    expect(
+      await prisma.orgAuditEvent.findFirst({
+        where: { orgId, action: "billing.seats_change_requested" },
+      }),
+    ).toMatchObject({ detail: { from: 3, to: 5, payer: "recorded" } });
+
+    // The portal is the Paddle customer's whole account, and the customer is
+    // whoever's email was typed at checkout: it keeps the email match.
+    const portal = await call(owner, "POST", "/api/orgs/current/billing-portal");
+    expect(portal.statusCode).toBe(409);
+    expect(portal.json()).toMatchObject({ code: "PORTAL_PAYER_ONLY" });
+    expect(calls.some((c) => c.url.includes("portal-sessions"))).toBe(false);
+    expect(
+      await prisma.orgAuditEvent.findFirst({ where: { orgId, action: "billing.portal_refused" } }),
+    ).toMatchObject({ detail: { reason: "not_payer" } });
+  });
+
+  it("lets the recorded payer take a cancel back while Paddle bills another email", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    await webhook(
+      checkoutEvent(orgId, "sub_seat_41", owner.userId, {
+        scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+      }),
+    );
+    const calls = stubPaddle({ customer: { email: "accounts@company.test" } });
+    const res = await call(owner, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(200);
+    expect(calls.map((c) => c.method)).toEqual(["PATCH"]);
+    expect(
+      await prisma.orgAuditEvent.findFirst({ where: { orgId, action: "billing.cancel_removed" } }),
+    ).toMatchObject({ detail: { payer: "recorded" } });
+  });
+
+  it("does not take back a cancel on a subscription that was replaced after the payer check", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_42", {
+      scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+    });
+    // While the payer check reads Paddle, subscription 42 ends and 43 attaches.
+    const calls = stubPaddle({
+      customer: { email: owner.email },
+      onCall: async (c) => {
+        if (!c.url.includes("/customers/")) return;
+        await prisma.organization.update({
+          where: { id: orgId },
+          data: { paddleSubscriptionId: "sub_seat_43" },
+        });
+      },
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "NO_SUBSCRIPTION" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("clears the payer of an organization that loses its subscription id to drift", async () => {
+    const first = await ownedOrg("first");
+    await webhook(checkoutEvent(first.orgId, "sub_seat_44", first.owner.userId));
+    expect(await payerOf(first.orgId)).toBe(first.owner.userId);
+    const second = await ownedOrg("second");
+    await webhook(checkoutEvent(second.orgId, "sub_seat_44", second.owner.userId));
+    const lost = await prisma.organization.findUniqueOrThrow({ where: { id: first.orgId } });
+    expect(lost).toMatchObject({ paddleSubscriptionId: null, payerUserId: null });
+    expect(await payerOf(second.orgId)).toBe(second.owner.userId);
+  });
+
+  it("loses the payer's rights with ownership, and a later event cannot move the payer", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    await webhook(checkoutEvent(orgId, "sub_seat_32", owner.userId));
+    const heir = await addMember(orgId, "heir");
+    await transferTo(owner, heir);
+    // A later event for the same subscription naming the new owner (Paddle
+    // keeps the checkout's custom data; this one is forged) changes nothing.
+    await webhook(checkoutEvent(orgId, "sub_seat_32", heir.userId));
+    expect(await payerOf(orgId)).toBe(owner.userId);
+
+    const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_32" }),
+      customer: { email: "accounts@company.test" },
+    });
+    const byHeir = await call(heir, "POST", "/api/orgs/current/seats", { seats: 5 });
+    expect(byHeir.statusCode).toBe(403);
+    expect(byHeir.json()).toMatchObject({ code: "SEATS_INCREASE_PAYER_ONLY" });
+    const byFormerOwner = await call(owner, "POST", "/api/orgs/current/seats", { seats: 5 });
+    expect(byFormerOwner.json()).toMatchObject({ code: "OWNER_ONLY" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("never stores a payer who is not an owner of that organization at webhook time", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    const member = await addMember(orgId);
+    const stranger = await newSession("stranger");
+    await webhook(checkoutEvent(orgId, "sub_seat_33", member.userId));
+    expect(await payerOf(orgId)).toBeNull();
+    expect(captured.length).toBeGreaterThan(0);
+
+    const other = await ownedOrg("other");
+    await webhook(checkoutEvent(other.orgId, "sub_seat_34", stranger.userId));
+    expect(await payerOf(other.orgId)).toBeNull();
+
+    // The owner's later event fills a payer the first event could not store.
+    await webhook(checkoutEvent(orgId, "sub_seat_33", owner.userId));
+    expect(await payerOf(orgId)).toBe(owner.userId);
+  });
+
+  it("stores no payer from an event mapped only by subscription id, and clears it when the subscription ends", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    await webhook(checkoutEvent(orgId, "sub_seat_35", owner.userId));
+    expect(await payerOf(orgId)).toBe(owner.userId);
+    await webhook(checkoutEvent(orgId, "sub_seat_35", owner.userId, { status: "canceled" }));
+    expect(await payerOf(orgId)).toBeNull();
+
+    const legacy = await subscribedOrg("sub_seat_36");
+    const foreign = teamEvent(legacy.orgId, {
+      id: "sub_seat_36",
+      custom_data: { kind: "team_seats", payerUserId: legacy.owner.userId },
+    });
+    await webhook(foreign);
+    expect(await payerOf(legacy.orgId)).toBeNull();
+  });
+});
+
+describePg("team resume: payer only (real Postgres)", () => {
+  it("refuses an owner who does not pay, audits the reason, and changes nothing", async () => {
+    const { payer, heir, orgId } = await transferredOrg("sub_seat_37", {
+      scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+    });
+    const calls = stubPaddle({ customer: { email: payer.email } });
+
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(JSON.stringify(res.json())).not.toContain(payer.email);
+    expect(calls.map((c) => c.method)).toEqual(["GET"]);
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    expect(org.subscriptionCancelAt?.toISOString()).toBe("2026-12-14T00:00:00.000Z");
+    const refused = await prisma.orgAuditEvent.findMany({
+      where: { orgId, action: "billing.resume_refused" },
+    });
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ actorUserId: heir.userId, detail: { reason: "not_payer" } });
+    expect(JSON.stringify(refused[0]?.detail)).not.toContain("@");
+    expect(
+      await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_removed" } }),
+    ).toBe(0);
+  });
+
+  it("refuses a portal cancel's undo by a non-payer before its webhook arrives", async () => {
+    const { payer, heir } = await transferredOrg("sub_seat_38");
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_38",
+        scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+      }),
+      customer: { email: payer.email },
+    });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET"]);
+  });
+
+  it("still lets any owner cancel at the period end", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_39");
+    const calls = stubPaddle({
+      answer: { scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" } },
+    });
+    const res = await call(heir, "POST", "/api/orgs/current/subscription/cancel");
+    expect(res.statusCode).toBe(200);
+    expect(calls.map((c) => c.method)).toEqual(["POST"]);
+    expect(
+      await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_scheduled" } }),
+    ).toBe(1);
+  });
+
+  it("answers BILLING_PROVIDER_READ_FAILED when the live read fails before any change", async () => {
+    const { owner } = await subscribedOrg("sub_seat_40");
+    stubPaddle({ fail: (c) => c.method === "GET" });
+    const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_READ_FAILED" });
   });
 });
 
