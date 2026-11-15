@@ -20,6 +20,7 @@ import { attachPerfMonitor } from "./perf-monitor.js";
 import { getProviderChain } from "./providers/index.js";
 import { registerApiRoutes } from "./register-api-routes.js";
 import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
+import { originalFrames } from "./report-failure.js";
 import { reportRolloutCohort } from "./routes/cohort-gate.js";
 import { warnIfKlornDriveQuotaMissing } from "./routes/klorn-drive.js";
 import { isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
@@ -608,6 +609,10 @@ try {
   // this block runs Prisma calls, whose message can quote a value, and Sentry
   // and the console both print a message and its cause.
   logDbFailure("[STARTUP] fatal: server did not start", err, { level: "error" });
+  // Where it was thrown (function and file positions, never message text):
+  // without a DSN this line is all there is to go on.
+  const frames = originalFrames(err);
+  if (frames !== null) console.error(`[STARTUP] fatal: thrown at\n${frames}`);
   captureDbFailure("[STARTUP] fatal: server did not start", err, {
     tags: { scope: "startup.fatal" },
   });

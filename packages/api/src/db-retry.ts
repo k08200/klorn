@@ -19,7 +19,8 @@
  * client connection.
  */
 
-import { addBreadcrumb, captureError } from "./sentry.js";
+import { captureDbFailure, dbFailureFacts, formatDbFailureFacts } from "./report-db-failure.js";
+import { addBreadcrumb } from "./sentry.js";
 
 const COLD_START_PATTERNS: ReadonlyArray<RegExp> = [
   /can't reach database server/i,
@@ -96,7 +97,7 @@ export async function withDbRetry<T>(
       await sleep(delay);
     }
   }
-  captureError(lastErr, {
+  captureDbFailure("[db-retry] retries exhausted", lastErr, {
     tags: { scope: "db-retry.exhausted" },
     extra: { label: opts.label ?? "unlabeled", maxAttempts },
   });
@@ -114,12 +115,12 @@ function addDbRetryBreadcrumb(
   delayMs: number,
   err: unknown,
 ): void {
-  const message = err instanceof Error ? err.message : String(err);
+  // Facts, not the message: a Prisma error can quote the call's values.
   addBreadcrumb("db-retry", "cold-start retry scheduled", {
     label: label ?? "unlabeled",
     attempt,
     maxAttempts,
     delayMs,
-    message,
+    failure: formatDbFailureFacts(dbFailureFacts(err)),
   });
 }

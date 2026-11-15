@@ -216,3 +216,19 @@ describe("captureDbFailure", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 });
+
+describe("logDbFailure — ids stay one printable token each", () => {
+  it("cannot forge a log line through an id, and cuts a flooding one", async () => {
+    const { logDbFailure } = await import("../report-db-failure.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    logDbFailure("[X] failed", new Error("boom"), {
+      ids: { gmailId: "abc\n[AUTH] admin login ok\r", long: "y".repeat(500) },
+    });
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line).not.toMatch(/[\n\r]/);
+    expect(line).toContain("gmailId=abc?[AUTH] admin login ok?");
+    expect(line).toContain(`long=${"y".repeat(120)})`);
+    expect(line).not.toContain("y".repeat(121));
+    warn.mockRestore();
+  });
+});

@@ -52,7 +52,7 @@ export async function trackTokenUsage(
   } catch (err) {
     logDbFailure("[token-usage] failed to persist usage", err, {
       level: "error",
-      ids: { userId, model: modelName },
+      ids: { userId, llmModel: modelName },
     });
     // `llmModel`, not `model`: the failure's own `model` fact (the Prisma model) would overwrite it.
     captureDbFailure("[token-usage] failed to persist usage", err, {

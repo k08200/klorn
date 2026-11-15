@@ -19,10 +19,9 @@ import { resetSchedulerHeartbeats } from "../scheduler-heartbeat.js";
 // it resolves through the test's mocks like every other module (a test that
 // mocks ontology-overrides without resetOverrideCache gets nothing reset).
 beforeEach(async () => {
-  const overrides: object = await import("../learning/ontology-overrides.js");
-  // `in`, not a property read: vitest throws on reading an export a mock factory left out.
-  if ("resetOverrideCache" in overrides) {
-    (overrides as { resetOverrideCache: () => void }).resetOverrideCache();
-  }
+  const overrides = await import("../learning/ontology-overrides.js");
+  // `in`, not a property read: vitest throws on reading an export a mock
+  // factory left out. The module's type still names it, so a rename fails tsc.
+  if ("resetOverrideCache" in overrides) overrides.resetOverrideCache();
   resetSchedulerHeartbeats();
 });

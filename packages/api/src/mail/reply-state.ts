@@ -66,7 +66,8 @@ export async function markEmailReplied(userId: string, ref: string): Promise<voi
       data: { repliedAt: new Date() },
     });
   } catch (err) {
-    logDbFailure("[REPLY-STATE] mark replied failed", err, { ids: { userId, ref } });
+    // Not `ref` on the console: the agent's tool passes it, unvalidated.
+    logDbFailure("[REPLY-STATE] mark replied failed", err, { ids: { userId } });
     captureDbFailure("[REPLY-STATE] mark replied failed", err, {
       tags: { scope: "reply-state.mark" },
       extra: { userId, ref },

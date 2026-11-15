@@ -31,6 +31,8 @@ const SANITIZERS = new Set([
   "formatDbFailureFacts",
   // pim/caldav/caldav-errors.ts: a constant class per error kind, codes held to a token shape.
   "caldavErrorClass",
+  // report-failure.ts: the stack's frame lines only, or null when the header cannot be matched.
+  "originalFrames",
 ]);
 
 /** Properties of the caught value that are safe to read into a sink. */
@@ -173,8 +175,9 @@ function sinkViolations(
   caught: string,
   source: ts.SourceFile,
   file: string,
+  followAliases = true,
 ): Violation[] {
-  const tainted = taintedNames(caught, body);
+  const tainted = followAliases ? taintedNames(caught, body) : new Set([caught]);
   const out: Violation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && sinkArguments(node).some((a) => exposes(a, tainted))) {
@@ -273,15 +276,70 @@ function registeredHandler(
   return null;
 }
 
+/** Parameter names that hold a failure handed on by a catch: `err`, `error`, `reason`, `lastErr`, … */
+const FAILURE_PARAM = /^(e|ex|err|error|reason|cause|failure|exception)$|Err$|Error$/;
+/** A parameter typed as one of these can hold a caught failure; `string`, an indexed enum, … cannot. */
+const FAILURE_TYPE = /^(unknown|any|[\w.]*(Error|Exception))(\s*\|\s*[\w.]+)*$/;
+
+/** The failure-holding parameters of a function: a helper a catch hands its error to. */
+function failureParameters(fn: ts.SignatureDeclaration): string[] {
+  return fn.parameters.flatMap((param) =>
+    ts.isIdentifier(param.name) &&
+    FAILURE_PARAM.test(param.name.text) &&
+    (param.type === undefined || FAILURE_TYPE.test(param.type.getText()))
+      ? [param.name.text]
+      : [],
+  );
+}
+
+function isFunctionWithBody(
+  node: ts.Node,
+): node is
+  | ts.FunctionDeclaration
+  | ts.FunctionExpression
+  | ts.ArrowFunction
+  | ts.MethodDeclaration {
+  return (
+    (ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isMethodDeclaration(node)) &&
+    node.body !== undefined
+  );
+}
+
+export interface ScanOptions {
+  /**
+   * Also hold every function whose failure-named parameter (`err: unknown`,
+   * `error`, `reason`, …) reaches a sink: the helper a catch hands its error
+   * to (`report(what, err)`), a listener registered by reference.
+   */
+  readonly failureParameters?: boolean;
+}
+
 /** Which catches receive the failures a guard is about: given the try block, or the chain a `.catch` hangs on. */
 export type TaintPredicate = (node: ts.Node, source: ts.SourceFile) => boolean;
 
-export function scanCatches(file: string, code: string, taints: TaintPredicate): ScanResult {
+export function scanCatches(
+  file: string,
+  code: string,
+  taints: TaintPredicate,
+  options: ScanOptions = {},
+): ScanResult {
   const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const violations: Violation[] = [];
   const constStrings = constStringNames(source);
+  /** Handlers already scanned as a `.catch` / listener, so the parameter pass skips them. */
+  const scannedHandlers = new Set<ts.Node>();
   let taintedCatches = 0;
   const visit = (node: ts.Node): void => {
+    if (options.failureParameters && isFunctionWithBody(node) && !scannedHandlers.has(node)) {
+      // The parameter itself, not locals derived from it: a helper often
+      // derives a safe class or code first, which only a sanitizer call proves.
+      for (const param of failureParameters(node)) {
+        violations.push(...sinkViolations(node.body as ts.Node, param, source, file, false));
+      }
+    }
     if (ts.isTryStatement(node) && node.catchClause?.variableDeclaration) {
       const declared = node.catchClause.variableDeclaration.name;
       if (ts.isIdentifier(declared) && taints(node.tryBlock, source)) {
@@ -293,7 +351,8 @@ export function scanCatches(file: string, code: string, taints: TaintPredicate):
       const registered = registeredHandler(node);
       if (registered !== null && taints(registered.subject, source)) {
         const handler = handlerOf(registered.handler);
-        if (handler !== null) {
+        if (handler !== null && registered.handler !== undefined) {
+          scannedHandlers.add(registered.handler);
           taintedCatches++;
           violations.push(...sinkViolations(handler.body, handler.caught, source, file));
         }

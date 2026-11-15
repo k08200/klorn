@@ -19,9 +19,12 @@
  * Every catch counts, not just those over a Prisma call: a catch over a call
  * that reaches the database a few frames down sees the same error. Scanning
  * rules are shared with the LLM guard (helpers/catch-sink-scan.ts), including
- * a reporter's `ids` / `extra`. Like it, this guard does not follow a caught
- * value into a function the handler calls, or through a value a function
- * returns; those sites have canary tests next to their features.
+ * a reporter's `ids` / `extra`. It also holds every function whose
+ * failure-named parameter (`err: unknown`, `error`, `reason`, …) reaches a
+ * sink, which covers the helper a catch hands its error to and a listener
+ * registered by reference. It does not follow a value a function returns
+ * (an `{ error: err.message }` logged later); those sites have canary tests
+ * next to their features.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -63,6 +66,12 @@ const ALLOWED: ReadonlyArray<{ file: string; fragment: string; reason: string }>
     file: "agentcore/tool-executor.ts",
     fragment: 'scope: "floor_refusal"',
     reason: "Same floor-refusal branch: a code-defined security event, kept whole for Sentry.",
+  },
+  {
+    file: "mail/imap-pinned-client.ts",
+    fragment: "refused a connection to",
+    reason:
+      "Inside `instanceof PinnedAddressError`: its code, resolver code and blocked addresses are set by our own address check (mail/pinned-address.ts), never by the server; the host is the user's own IMAP server.",
   },
 ];
 
@@ -108,7 +117,7 @@ function scanTree(files: ReadonlyArray<{ file: string; code: string }>) {
   const violations: Violation[] = [];
   const catches = new Map<string, number>();
   for (const { file, code } of files) {
-    const result = scanCatches(file, code, everyCatch);
+    const result = scanCatches(file, code, everyCatch, { failureParameters: true });
     violations.push(...result.violations);
     catches.set(file, result.taintedCatches);
   }
@@ -299,6 +308,39 @@ describe("the database guard itself", () => {
       everyCatch,
     );
     expect(result.violations).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "a helper the catch hands its error to",
+      "function report(what: string, err: unknown) { console.warn(what, err); }",
+    ],
+    [
+      "a listener registered by reference",
+      "const onError = (err: Error) => captureError(err); ws.on('error', onError);",
+    ],
+    [
+      "a helper that logs the message",
+      "function note(error) { console.error(`[X] ${error.message}`); }",
+    ],
+  ])("flags %s", (_label, code) => {
+    const result = scanCatches("bad.ts", code, everyCatch, { failureParameters: true });
+    expect(result.violations).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "a helper that reports facts",
+      "function report(err: unknown) { logDbFailure('[X] failed', err); }",
+    ],
+    [
+      "a reason that is an enum, not a failure",
+      "function report(reason: Job['reason']) { console.warn('[X] unavailable', reason); }",
+    ],
+    ["a message string", "function say(error: string) { console.warn(error); }"],
+  ])("accepts %s", (_label, code) => {
+    const result = scanCatches("good.ts", code, everyCatch, { failureParameters: true });
+    expect(result.violations).toEqual([]);
   });
 
   it("knows an importer of an allowed directory when it sees one", () => {

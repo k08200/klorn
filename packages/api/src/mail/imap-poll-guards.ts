@@ -43,8 +43,7 @@
 import type { Prisma } from "@prisma/client";
 import { imapMoveActionsEnabled } from "../config.js";
 import { prisma } from "../db.js";
-import { logDbFailure } from "../report-db-failure.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   clearRepairBackoff,
   heldAlertDue,
@@ -84,7 +83,7 @@ export function resetPollGuardState(): void {
 function capture(args: ReconcileArgs, err: unknown, scope: string): void {
   const { provider, userId, linkedInboxAccountId, stored, live } = args;
   try {
-    captureError(err, {
+    captureDbFailure("[imap] poll guard report", err, {
       tags: { scope: `${provider.logScope}.${scope}` },
       extra: { userId, linkedInboxAccountId, stored, live },
     });

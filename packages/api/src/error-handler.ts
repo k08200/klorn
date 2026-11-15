@@ -4,6 +4,7 @@ import { isLlmFailure, llmFailureFacts } from "./llm/describe-failure.js";
 import { captureLlmFailure } from "./llm/report-llm-failure.js";
 import { DataWipeFenceError, isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
 import { captureDbFailure, dbFailureFacts } from "./report-db-failure.js";
+import { originalFrames } from "./report-failure.js";
 
 /**
  * Global Fastify error handler.
@@ -85,8 +86,10 @@ export function handleError(error: FastifyError, request: FastifyRequest, reply:
   // stack frames, so the throw site stays visible. Client errors (4xx above:
   // schema validation, typed app errors with a statusCode) keep their message
   // in the response and are not logged here.
+  // The stack frames (function and file positions, never message text) keep
+  // the throw site findable where no Sentry DSN is set (self-host, dev).
   request.log.error(
-    { failure: dbFailureFacts(error) },
+    { failure: dbFailureFacts(error), frames: originalFrames(error) },
     "Unhandled failure reached the error handler",
   );
   captureDbFailure("Unhandled failure in a route", error, {
