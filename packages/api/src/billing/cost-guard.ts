@@ -25,6 +25,7 @@ import {
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { notifyCostCapTrip } from "./cost-trip-alert.js";
+import { globalDailyCapCents } from "./global-cost-ceiling.js";
 import { isEntitled } from "./stripe.js";
 import { teamPoolCapCents } from "./team-cost-pool.js";
 
@@ -312,9 +313,13 @@ export { usdToCents } from "./cents.js";
 /** Storage precision: 1 cent = 10_000 micro-cents (matches the pre-bill). */
 const MICRO_PER_CENT = 10_000;
 
-/** Check whether the global daily ceiling still allows another paid call. */
+/**
+ * Check whether the global daily ceiling still allows another paid call. The
+ * ceiling is GLOBAL_DAILY_COST_CAP_CENTS plus the paid Klorn Teams seat pools'
+ * share (global-cost-ceiling.ts; exactly the base while TEAMS_ENABLED is off).
+ */
 export async function checkGlobalCostGate(): Promise<CostGateResult> {
-  const cap = GLOBAL_DAILY_COST_CAP_CENTS;
+  const cap = await globalDailyCapCents();
   if (cap <= 0) {
     return { allowed: true, remainingCents: Number.POSITIVE_INFINITY, usedCents: 0, capCents: 0 };
   }
@@ -365,7 +370,7 @@ export async function recordGlobalCostUsage(
     select: { microCents: true },
   });
   const totalCents = row.microCents / MICRO_PER_CENT;
-  const cap = GLOBAL_DAILY_COST_CAP_CENTS;
+  const cap = await globalDailyCapCents();
   const overCap = cap > 0 && totalCents >= cap;
   if (overCap) {
     void notifyCostCapTrip({ scope: "global", usedCents: totalCents, capCents: cap });

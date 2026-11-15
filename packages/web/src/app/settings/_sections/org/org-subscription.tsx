@@ -20,7 +20,11 @@ import { useOrgAction } from "./use-org";
 
 const POST_EMPTY: RequestInit = { method: "POST", body: JSON.stringify({}) };
 
-/** The seat count field: at least two and one per member, at most 150. */
+/**
+ * The seat count field: at least two and one per member, at most 150. Adding
+ * seats is the payer's alone (it charges their card at once); the field says
+ * so up front, and the server's refusal names who can.
+ */
 function SeatCountField({
   floor,
   value,
@@ -48,6 +52,7 @@ function SeatCountField({
         onChange={(event) => onChange(event.target.value)}
       />
       {valid && <p className="text-role-caption text-ink-dim">{hint}</p>}
+      <p className="text-role-caption text-ink-dim">{t("settings.org.seats.payerOnly")}</p>
     </div>
   );
 }

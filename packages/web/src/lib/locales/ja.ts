@@ -3251,6 +3251,8 @@ const ja: Record<string, string> = {
   "settings.org.seats.changeAction": "シート数を変更",
   "settings.org.seats.floor":
     "最低 {min}：チームの最小シート数以上、メンバー 1 人につき 1 シートが必要です。差額は今回の請求期間の残り日数分を Paddle が請求またはクレジットします。",
+  "settings.org.seats.payerOnly":
+    "シートを追加すると登録済みのカードにすぐ請求されるため、チームの料金を支払っている人だけが追加できます。シートの削減はどのオーナーでもできます。",
   "settings.org.seats.pending":
     "Paddle に送信しました。Paddle が確認すると {seats} シートと表示されます。",
   "settings.org.seats.unchanged": "この組織はすでに {seats} シートです。",
@@ -3276,6 +3278,10 @@ const ja: Record<string, string> = {
     "一時停止中のサブスクリプションは請求ポータルからのみ終了できます。",
   "settings.org.error.PORTAL_PAYER_ONLY":
     "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "登録済みのカードにすぐ請求されるため、シートの追加はチームの料金を支払っているメールアドレスでのみできます。そのアドレスで Klorn にログインする人に依頼してください（Paddle の領収書メールはそのアドレスに届きます）。シートの削減は引き続きできます。",
+  "settings.org.error.SEATS_CHANGED":
+    "保存中にシート数が変わりました。現在のシート数を確認して、もう一度お試しください。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle が変更を確認しなかったため、反映されていない可能性があります。再試行する前に少し待ってから確認してください。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

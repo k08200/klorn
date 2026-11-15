@@ -3316,6 +3316,8 @@ const fr: Record<string, string> = {
   "settings.org.seats.changeAction": "Mettre à jour les sièges",
   "settings.org.seats.floor":
     "Au moins {min} : le minimum de l’équipe, et un siège par membre. Paddle facture ou crédite la différence pour le reste de cette période de facturation.",
+  "settings.org.seats.payerOnly":
+    "Ajouter des sièges débite tout de suite la carte enregistrée : seule la personne qui paie l’équipe peut en ajouter. Tout propriétaire peut en retirer.",
   "settings.org.seats.pending":
     "Envoyé à Paddle. {seats} sièges s’afficheront ici dès que Paddle confirme.",
   "settings.org.seats.unchanged": "L’organisation a déjà {seats} sièges.",
@@ -3341,6 +3343,10 @@ const fr: Record<string, string> = {
     "Un abonnement en pause ne peut être arrêté que depuis le portail de facturation.",
   "settings.org.error.PORTAL_PAYER_ONLY":
     "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "Seule l’adresse e-mail qui paie l’équipe peut ajouter des sièges, car la carte enregistrée est débitée tout de suite. Demandez-le à la personne qui se connecte à Klorn avec cette adresse (les reçus Paddle y sont envoyés). Vous pouvez toujours retirer des sièges.",
+  "settings.org.error.SEATS_CHANGED":
+    "Le nombre de sièges a changé pendant l’enregistrement. Vérifiez le nombre actuel et réessayez.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle n’a pas confirmé le changement : il n’a peut-être pas été appliqué. Vérifiez dans une minute avant de réessayer.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

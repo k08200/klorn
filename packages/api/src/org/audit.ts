@@ -23,9 +23,11 @@ export type OrgAuditAction =
   | "billing.checkout_started"
   | "billing.subscription_changed"
   | "billing.seats_change_requested"
+  | "billing.seats_increase_refused"
   | "billing.cancel_scheduled"
   | "billing.cancel_removed"
-  | "billing.portal_opened";
+  | "billing.portal_opened"
+  | "billing.portal_refused";
 
 export interface OrgAuditInput {
   orgId: string;
