@@ -17,12 +17,14 @@
  * out may still have reached Paddle; the answer says so, and a seat change is
  * "set the count to N", so retrying it is safe.
  *
- * The owner is the organization's billing admin: any owner can change seats
- * or cancel on the payment method already on the subscription (Paddle emails
- * its payer a receipt for every prorated charge). The customer portal is
- * different: it is the payer's whole Paddle account (other subscriptions,
- * invoices, address), so it opens only when the owner's verified Klorn email
- * is the Paddle customer's email.
+ * The owner is the organization's billing admin: any owner can remove seats
+ * (it lowers the charge; the member floor still holds) or cancel at the
+ * period end. Adding seats is different: it charges the payer's card on file
+ * at once (prorated), so only the payer may — the same check as the customer
+ * portal: the owner's verified Klorn email is the Paddle customer's email. The
+ * portal is the payer's whole Paddle account (other subscriptions, invoices,
+ * address). Refused payer checks are audited by reason class only, never an
+ * email.
  *
  * Status rules, from Paddle's API: a past_due subscription cannot be updated
  * (seat changes need active or trialing) except to remove a scheduled change,
@@ -36,6 +38,7 @@
 import {
   cancelPaddleSubscription,
   createPaddlePortalUrl,
+  isPaddleErrorCode,
   undoPaddleCancellation,
 } from "../billing/paddle.js";
 import {
@@ -46,9 +49,9 @@ import {
 } from "../billing/paddle-team.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { recordOrgAudit } from "./audit.js";
+import { type OrgAuditAction, recordOrgAudit } from "./audit.js";
 import { seatsActive, subscriptionBills } from "./effective-tier.js";
-import { OrgError } from "./org-error.js";
+import { isOrgError, OrgError } from "./org-error.js";
 import { type OrgTx, ownerInTx, requireVerifiedEmail, withOrgLock } from "./org-lock.js";
 import { requireOwner } from "./org-members.js";
 import { MAX_SELF_SERVE_SEATS, MIN_TEAM_SEATS } from "./org-shape.js";
@@ -119,6 +122,12 @@ const CANCEL_SCHEDULED = () =>
     "The subscription is set to end. Keep it first, then change seats.",
   );
 
+/**
+ * Paddle refuses any update to a subscription with a scheduled change pending
+ * (developer.paddle.com/errors/subscriptions/subscription_locked_pending_changes).
+ */
+const PENDING_SCHEDULED_CHANGE = "subscription_locked_pending_changes";
+
 /** A Paddle call that failed: reported, and answered without Paddle's text. */
 function providerError(err: unknown, orgId: string, step: string): OrgError {
   captureError(err, { tags: { scope: `org.billing.${step}` }, extra: { orgId } });
@@ -188,11 +197,97 @@ async function liveSeatItem(subscriptionId: string, orgId: string) {
   return { priceId: item.priceId, quantity: item.quantity };
 }
 
+const PORTAL_PAYER_ONLY = () =>
+  new OrgError(
+    409,
+    "PORTAL_PAYER_ONLY",
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
+  );
+
+const SEATS_INCREASE_PAYER_ONLY = () =>
+  new OrgError(
+    403,
+    "SEATS_INCREASE_PAYER_ONLY",
+    "Adding seats charges the payer's card right away, so only the email address that pays for the team can add them. Ask that person, or they can use the link in Paddle's receipt emails. Any owner can remove seats.",
+  );
+
+function sameEmail(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Why an owner failed the payer check: the class the audit log records, never an email. */
+type PayerRefusalReason =
+  | "email_not_verified"
+  | "no_payer_on_record"
+  | "no_payer_email"
+  | "not_payer";
+
+interface PayerRefusal {
+  reason: PayerRefusalReason;
+  error: OrgError;
+}
+
+/**
+ * The payer check (billing portal and seat increases): the owner's verified
+ * Klorn email is the Paddle customer's email. Null when it is; otherwise the
+ * reason and the refusal to answer (`notPayer` unless the email is unverified).
+ */
+async function payerRefusal(
+  userId: string,
+  orgId: string,
+  customerId: string | null,
+  notPayer: () => OrgError,
+): Promise<PayerRefusal | null> {
+  if (!customerId) return { reason: "no_payer_on_record", error: notPayer() };
+  let email: string;
+  try {
+    email = await requireVerifiedEmail(userId);
+  } catch (err) {
+    if (isOrgError(err) && err.code === "EMAIL_NOT_VERIFIED") {
+      return { reason: "email_not_verified", error: err };
+    }
+    throw err;
+  }
+  let payerEmail: string | null;
+  try {
+    payerEmail = await getPaddleCustomerEmail(customerId, CALL);
+  } catch (err) {
+    throw providerError(err, orgId, "read_customer");
+  }
+  if (!payerEmail) return { reason: "no_payer_email", error: notPayer() };
+  return sameEmail(payerEmail, email) ? null : { reason: "not_payer", error: notPayer() };
+}
+
+/**
+ * Audit a refused payer check, then refuse. A failed audit write is reported
+ * and never turns the refusal into a success.
+ */
+async function refuseAudited(
+  orgId: string,
+  userId: string,
+  action: OrgAuditAction,
+  refusal: PayerRefusal,
+  detail: Record<string, number> = {},
+): Promise<never> {
+  try {
+    await recordOrgAudit(prisma, {
+      orgId,
+      action,
+      actorUserId: userId,
+      detail: { ...detail, reason: refusal.reason },
+    });
+  } catch (err) {
+    captureError(err, { tags: { scope: "org.billing.audit_refusal" }, extra: { orgId, action } });
+  }
+  throw refusal.error;
+}
+
 /**
  * Set the organization's seat count to `seats` (owner only). At least two,
  * at most 150, and never fewer than the members. Compared with what Paddle
  * bills now, not with the stored count (which waits for the webhook): no
- * update when Paddle already holds `seats`.
+ * update when Paddle already holds `seats`. Adding seats takes the payer;
+ * removing them takes any owner.
  */
 export async function changeSeats(userId: string, body: unknown): Promise<SeatChangeResult> {
   const owner = await requireOwner(userId);
@@ -205,6 +300,20 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
   const item = await liveSeatItem(subscriptionId, orgId);
   if (item.quantity === seats) {
     return { status: stored.seatsPurchased === seats ? "unchanged" : "pending", seats };
+  }
+  if (seats > item.quantity) {
+    const refusal = await payerRefusal(
+      userId,
+      orgId,
+      stored.paddleCustomerId,
+      SEATS_INCREASE_PAYER_ONLY,
+    );
+    if (refusal) {
+      await refuseAudited(orgId, userId, "billing.seats_increase_refused", refusal, {
+        from: item.quantity,
+        to: seats,
+      });
+    }
   }
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
@@ -221,6 +330,10 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
     try {
       await setPaddleSeatQuantity({ subscriptionId, priceId: item.priceId, quantity: seats }, CALL);
     } catch (err) {
+      // A cancel made in the portal after the live read above: Paddle refuses
+      // the update while it is pending, so the change itself is the last
+      // check. An expected refusal, not a provider fault (no report).
+      if (isPaddleErrorCode(err, PENDING_SCHEDULED_CHANGE)) throw CANCEL_SCHEDULED();
       throw providerError(err, orgId, "set_seats");
     }
     return { status: "pending", seats };
@@ -327,17 +440,6 @@ export async function resumeTeamSubscription(userId: string): Promise<{ resumed:
   });
 }
 
-const PORTAL_PAYER_ONLY = () =>
-  new OrgError(
-    409,
-    "PORTAL_PAYER_ONLY",
-    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
-  );
-
-function sameEmail(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
 /** Only Paddle's own portal host, over https, is handed to the client. */
 function isPaddlePortalUrl(url: string): boolean {
   try {
@@ -352,7 +454,8 @@ function isPaddlePortalUrl(url: string): boolean {
  * A Paddle customer-portal link (payment method, invoices) while the team
  * subscription still bills, for an owner whose verified Klorn email is the
  * Paddle customer's: the portal shows that person's whole Paddle account, so
- * a later owner, or an owner who did not pay, is refused. Reads only; no lock.
+ * a later owner, or an owner who did not pay, is refused (and audited by
+ * reason class). Reads only; no lock.
  */
 export async function teamBillingPortal(userId: string): Promise<{ url: string }> {
   const owner = await requireOwner(userId);
@@ -363,14 +466,8 @@ export async function teamBillingPortal(userId: string): Promise<{ url: string }
     throw NO_SUBSCRIPTION();
   }
   requirePaddleKey();
-  const email = await requireVerifiedEmail(userId);
-  let payerEmail: string | null;
-  try {
-    payerEmail = await getPaddleCustomerEmail(customerId, CALL);
-  } catch (err) {
-    throw providerError(err, orgId, "read_customer");
-  }
-  if (!payerEmail || !sameEmail(payerEmail, email)) throw PORTAL_PAYER_ONLY();
+  const refusal = await payerRefusal(userId, orgId, customerId, PORTAL_PAYER_ONLY);
+  if (refusal) await refuseAudited(orgId, userId, "billing.portal_refused", refusal);
   let url: string;
   try {
     url = await createPaddlePortalUrl(customerId, CALL);

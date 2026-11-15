@@ -3158,6 +3158,8 @@ const en: Record<string, string> = {
   "settings.org.seats.changeAction": "Update seats",
   "settings.org.seats.floor":
     "At least {min}: the team minimum, and one seat for every member. Paddle charges or credits the difference for the rest of this billing period.",
+  "settings.org.seats.payerOnly":
+    "Adding seats charges the card on file right away, so only the person who pays for the team can add them. Any owner can remove seats.",
   "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
   "settings.org.seats.unchanged": "The organization already has {seats} seats.",
   "settings.org.subscription.cancel": "Cancel subscription",
@@ -3181,6 +3183,8 @@ const en: Record<string, string> = {
     "A paused subscription can only be ended from the billing portal.",
   "settings.org.error.PORTAL_PAYER_ONLY":
     "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "Only the email address that pays for the team can add seats, because the card on file is charged right away. Ask that person to add them; they can also use the link in Paddle's receipt emails. You can still remove seats.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle didn't confirm the change, so it may not have gone through. Check again in a minute before you retry.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

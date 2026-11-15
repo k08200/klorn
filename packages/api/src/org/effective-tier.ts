@@ -22,7 +22,9 @@ import { captureError } from "../sentry.js";
 export const TIERS = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
 export type Tier = (typeof TIERS)[number];
 
-const SEAT_BEARING_STATUSES = new Set(["active", "trialing"]);
+/** The subscription statuses whose seats carry entitlement (and a pooled LLM budget). */
+export const SEAT_BEARING_STATUS_LIST: readonly string[] = ["active", "trialing"];
+const SEAT_BEARING_STATUSES = new Set(SEAT_BEARING_STATUS_LIST);
 
 export function normalizeTier(value: unknown): Tier {
   return TIERS.includes(value as Tier) ? (value as Tier) : "FREE";

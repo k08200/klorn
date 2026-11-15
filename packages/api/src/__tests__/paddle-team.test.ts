@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isPaddleErrorCode, PaddleApiError } from "../billing/paddle.js";
 import {
   createPaddleTeamCheckout,
   getPaddleCustomerEmail,
@@ -253,5 +254,41 @@ describe("seat management calls to Paddle", () => {
       on_payment_failure: "prevent_change",
     });
     expect(SEAT_CHANGE_PRORATION).toBe("prorated_immediately");
+  });
+});
+
+describe("Paddle API refusals", () => {
+  function refuse(status: number, body: string) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status, text: async () => body })),
+    );
+  }
+
+  it("carries the status and Paddle's error code, with the message unchanged", async () => {
+    process.env.PADDLE_API_KEY = "test-key";
+    refuse(
+      400,
+      '{"error":{"type":"request_error","code":"subscription_locked_pending_changes","detail":"Cannot update subscription, pending scheduled changes."}}',
+    );
+    const err = await setPaddleSeatQuantity({
+      subscriptionId: "sub_1",
+      priceId: "pri_team_month",
+      quantity: 4,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PaddleApiError);
+    expect(err).toMatchObject({ status: 400, code: "subscription_locked_pending_changes" });
+    expect((err as Error).message).toMatch(/^Paddle API \/subscriptions\/sub_1 failed: 400 /);
+    expect(isPaddleErrorCode(err, "subscription_locked_pending_changes")).toBe(true);
+    expect(isPaddleErrorCode(err, "not_found")).toBe(false);
+  });
+
+  it("has no code when the body is not Paddle's error envelope", async () => {
+    process.env.PADDLE_API_KEY = "test-key";
+    refuse(502, "<html>bad gateway</html>");
+    const err = await getPaddleTeamSubscription("sub_1").catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 502, code: null });
+    expect(isPaddleErrorCode(err, "subscription_locked_pending_changes")).toBe(false);
+    expect(isPaddleErrorCode(new Error("x"), "subscription_locked_pending_changes")).toBe(false);
   });
 });

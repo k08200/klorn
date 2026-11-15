@@ -39,6 +39,7 @@ export type OrgErrorCode =
   | "SEATS_BELOW_MEMBERS"
   | "SEAT_CHANGE_UNSUPPORTED"
   | "PORTAL_PAYER_ONLY"
+  | "SEATS_INCREASE_PAYER_ONLY"
   | "BILLING_PROVIDER_ERROR";
 
 export class OrgError extends Error {

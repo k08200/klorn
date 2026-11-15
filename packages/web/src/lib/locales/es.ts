@@ -3232,6 +3232,8 @@ const es: Record<string, string> = {
   "settings.org.seats.changeAction": "Actualizar plazas",
   "settings.org.seats.floor":
     "Al menos {min}: el mínimo del equipo y una plaza por cada miembro. Paddle cobra o abona la diferencia por lo que queda de este periodo de facturación.",
+  "settings.org.seats.payerOnly":
+    "Añadir plazas cobra al momento en la tarjeta registrada, así que solo quien paga el equipo puede añadirlas. Cualquier propietario puede quitar plazas.",
   "settings.org.seats.pending":
     "Enviado a Paddle. Verás {seats} plazas aquí cuando Paddle lo confirme.",
   "settings.org.seats.unchanged": "La organización ya tiene {seats} plazas.",
@@ -3257,6 +3259,8 @@ const es: Record<string, string> = {
     "Una suscripción en pausa solo se puede terminar desde el portal de facturación.",
   "settings.org.error.PORTAL_PAYER_ONLY":
     "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "Solo el correo que paga el equipo puede añadir plazas, porque se cobra al momento en la tarjeta registrada. Pide a esa persona que las añada; también puede usar el enlace de los recibos de Paddle. Tú sí puedes quitar plazas.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle no confirmó el cambio, así que puede que no se haya aplicado. Compruébalo en un minuto antes de volver a intentarlo.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
