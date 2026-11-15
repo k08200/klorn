@@ -39,6 +39,12 @@ import {
   transferOwnership,
 } from "../org/org-membership-changes.js";
 import { startTeamCheckout } from "../org/seat-billing.js";
+import {
+  cancelTeamSubscription,
+  changeSeats,
+  resumeTeamSubscription,
+  teamBillingPortal,
+} from "../org/seat-management.js";
 import { transparencyFor } from "../org/transparency.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 import { cohortGate } from "./cohort-gate.js";
@@ -188,6 +194,38 @@ export async function orgRoutes(app: FastifyInstance) {
       preHandler: perUser("checkout", { max: 10, timeWindow: "1 hour" }),
     },
     async (request) => startTeamCheckout(getUserId(request), request.body),
+  );
+
+  // Seat management after purchase (owner only; org/seat-management.ts). A
+  // seat change answers 202 "pending": the stored seats move when Paddle's
+  // webhook confirms. Each is a Paddle call, so each is rate limited per user.
+  const billingLimit: RouteRateLimit = { max: 10, timeWindow: "1 hour" };
+  app.post(
+    "/current/seats",
+    { config: { rateLimit: billingLimit }, preHandler: perUser("seats", billingLimit) },
+    async (request, reply) => {
+      const result = await changeSeats(getUserId(request), request.body);
+      reply.code(result.status === "pending" ? 202 : 200);
+      return result;
+    },
+  );
+
+  app.post(
+    "/current/subscription/cancel",
+    { config: { rateLimit: billingLimit }, preHandler: perUser("cancel", billingLimit) },
+    async (request) => cancelTeamSubscription(getUserId(request)),
+  );
+
+  app.post(
+    "/current/subscription/resume",
+    { config: { rateLimit: billingLimit }, preHandler: perUser("resume", billingLimit) },
+    async (request) => resumeTeamSubscription(getUserId(request)),
+  );
+
+  app.post(
+    "/current/billing-portal",
+    { config: { rateLimit: billingLimit }, preHandler: perUser("portal", billingLimit) },
+    async (request) => teamBillingPortal(getUserId(request)),
   );
 
   app.get("/current/transparency", async (request) => {

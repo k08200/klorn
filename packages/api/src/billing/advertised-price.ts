@@ -24,3 +24,5 @@ export const ADVERTISED_PRO_PRICE_WEB = "$29.99";
  */
 export const TEAM_STANDARD_SEAT_MONTHLY_CENTS = 3000;
 export const TEAM_STANDARD_SEAT_ANNUAL_PER_MONTH_CENTS = 2600;
+/** What the annual seat price charges once a year: $312 (derived, never restated). */
+export const TEAM_STANDARD_SEAT_ANNUAL_CENTS = TEAM_STANDARD_SEAT_ANNUAL_PER_MONTH_CENTS * 12;

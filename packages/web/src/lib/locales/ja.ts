@@ -3185,6 +3185,41 @@ const ja: Record<string, string> = {
   "settings.org.checkout.annual": "年払い · 1シートあたり月 {price}",
   "settings.org.checkout.monthlyPlain": "月払い",
   "settings.org.checkout.annualPlain": "年払い",
+  "settings.org.seats.change": "シート数 ({min}–{max})",
+  "settings.org.seats.changeAction": "シート数を変更",
+  "settings.org.seats.floor":
+    "最低 {min}：チームの最小シート数以上、メンバー 1 人につき 1 シートが必要です。差額は今回の請求期間の残り日数分を Paddle が請求またはクレジットします。",
+  "settings.org.seats.pending":
+    "Paddle に送信しました。Paddle が確認すると {seats} シートと表示されます。",
+  "settings.org.seats.unchanged": "この組織はすでに {seats} シートです。",
+  "settings.org.subscription.cancel": "サブスクリプションを解約",
+  "settings.org.subscription.cancelTitle": "チームのサブスクリプションを解約しますか？",
+  "settings.org.subscription.cancelMessageNoDate":
+    "支払い済みの期間が終わるまでは全員がシートを保持します。その後、全メンバーのチームプランが終了し、以降の請求はありません。",
+  "settings.org.subscription.cancelConfirm": "期間終了時に解約",
+  "settings.org.subscription.keep": "サブスクリプションを継続",
+  "settings.org.subscription.endsOn":
+    "サブスクリプションは {date} に終了します。それまでシートは保持されます。",
+  "settings.org.subscription.endsSoon":
+    "サブスクリプションは今回の請求期間の終わりに終了します。それまでシートは保持されます。",
+  "settings.org.subscription.portal": "請求を管理",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "メンバー数がそれより多いです。シートを減らす前にメンバーを外してください。",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "シート数はサブスクリプションが有効なときだけ変更できます。支払い担当者が請求ポータルで支払い方法を修正できます。",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "サブスクリプションの解約が予約されています。先に継続してからシート数を変更してください。",
+  "settings.org.error.NO_SUBSCRIPTION": "この組織にはチームのサブスクリプションがありません。",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "一時停止中のサブスクリプションは請求ポータルからのみ終了できます。",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle が変更を確認しなかったため、反映されていない可能性があります。再試行する前に少し待ってから確認してください。",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "現在チームの請求は利用できません。何も変更されていません。",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "このサブスクリプションはここではシート数を変更できません。サポートにお問い合わせください。",
   "settings.org.transparency.title": "組織が見られるもの",
   "settings.org.transparency.can": "見られるもの",
   "settings.org.transparency.cannot": "決して見られないもの",
@@ -3193,6 +3228,9 @@ const ja: Record<string, string> = {
   "settings.org.transparency.noReads": "まだ誰もあなたの空き状況を見ていません。",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "以前のメンバー",
+  "settings.org.transparency.domains": "あなたの振り分けに使われる会社ドメイン",
+  "settings.org.transparency.domainsLine":
+    "{domains} からの認証済みメールは、振り分けの理由で「社内の同僚」と表示されます。どのメールだったかを組織が見ることはありません。",
   "settings.org.visible.roles": "名前、メールアドレス、役割",
   "settings.org.visible.seats": "有料シートの有無",
   "settings.org.visible.cost": "シート料金とサブスクリプションの状態",

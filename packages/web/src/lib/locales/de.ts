@@ -3283,6 +3283,40 @@ const de: Record<string, string> = {
   "settings.org.checkout.annual": "Jährlich zahlen · {price} pro Platz und Monat",
   "settings.org.checkout.monthlyPlain": "Monatlich zahlen",
   "settings.org.checkout.annualPlain": "Jährlich zahlen",
+  "settings.org.seats.change": "Plätze ({min}–{max})",
+  "settings.org.seats.changeAction": "Plätze ändern",
+  "settings.org.seats.floor":
+    "Mindestens {min}: das Team-Minimum und ein Platz pro Mitglied. Paddle berechnet oder erstattet die Differenz für den Rest dieses Abrechnungszeitraums.",
+  "settings.org.seats.pending":
+    "An Paddle gesendet. {seats} Plätze erscheinen hier, sobald Paddle bestätigt.",
+  "settings.org.seats.unchanged": "Die Organisation hat bereits {seats} Plätze.",
+  "settings.org.subscription.cancel": "Abo kündigen",
+  "settings.org.subscription.cancelTitle": "Team-Abo kündigen?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Alle behalten ihren Platz bis zum Ende des bereits bezahlten Zeitraums. Danach endet der Team-Plan für alle Mitglieder, und es wird nichts mehr berechnet.",
+  "settings.org.subscription.cancelConfirm": "Zum Periodenende kündigen",
+  "settings.org.subscription.keep": "Abo behalten",
+  "settings.org.subscription.endsOn": "Das Abo endet am {date}. Bis dahin bleiben die Plätze.",
+  "settings.org.subscription.endsSoon":
+    "Das Abo endet zum Ende dieses Abrechnungszeitraums. Bis dahin bleiben die Plätze.",
+  "settings.org.subscription.portal": "Abrechnung verwalten",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "Die Organisation hat mehr Mitglieder. Entferne Mitglieder, bevor du ihre Plätze entfernst.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Plätze lassen sich nur bei aktivem Abo ändern. Wer bezahlt, kann die Zahlungsmethode im Abrechnungsportal korrigieren.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "Das Abo ist gekündigt. Behalte es zuerst, dann ändere die Plätze.",
+  "settings.org.error.NO_SUBSCRIPTION": "Diese Organisation hat kein Team-Abo.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "Ein pausiertes Abo lässt sich nur im Abrechnungsportal beenden.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle hat die Änderung nicht bestätigt, sie ist also womöglich nicht durchgegangen. Prüfe es in einer Minute, bevor du es erneut versuchst.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "Die Team-Abrechnung ist gerade nicht verfügbar. Nichts wurde geändert.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "Bei diesem Abo lassen sich die Plätze hier nicht ändern. Kontaktiere den Support.",
   "settings.org.transparency.title": "Was deine Organisation sehen kann",
   "settings.org.transparency.can": "Sieht",
   "settings.org.transparency.cannot": "Sieht nie",
@@ -3291,6 +3325,9 @@ const de: Record<string, string> = {
   "settings.org.transparency.noReads": "Noch niemand hat deine Verfügbarkeit abgefragt.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "Ein ehemaliges Mitglied",
+  "settings.org.transparency.domains": "Firmen-Domains in deiner Sortierung",
+  "settings.org.transparency.domainsLine":
+    "Verifizierte Mails von {domains} werden in den Gründen deiner Sortierung als von einer Kollegin oder einem Kollegen deiner Firma genannt. Deine Organisation sieht nie, welche Mail das war.",
   "settings.org.visible.roles": "Dein Name, deine E-Mail-Adresse und deine Rolle",
   "settings.org.visible.seats": "Ob du einen bezahlten Platz hast",
   "settings.org.visible.cost": "Der Platzpreis und der Status des Abos",

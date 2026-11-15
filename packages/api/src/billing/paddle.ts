@@ -54,10 +54,16 @@ export function verifyPaddleSignature(
   return timingSafeEqualStr(h1, expected);
 }
 
+/**
+ * One Paddle API call. `body` is sent as JSON except on GET. `timeoutMs` bounds
+ * a call made while a database lock is held (org/seat-management.ts); without
+ * it the call waits as long as fetch does, as it always has.
+ */
 export async function paddleFetch(
   path: string,
   body: unknown,
-  method: "POST" | "PATCH" = "POST",
+  method: "POST" | "PATCH" | "GET" = "POST",
+  opts: { timeoutMs?: number } = {},
 ): Promise<unknown> {
   const res = await fetch(`${apiBase()}${path}`, {
     method,
@@ -65,7 +71,8 @@ export async function paddleFetch(
       Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    ...(method === "GET" ? {} : { body: JSON.stringify(body) }),
+    ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
   });
   if (!res.ok) {
     // Body may carry request ids useful for support; it never contains our key.
@@ -110,10 +117,14 @@ export async function createPaddleCheckout(opts: {
  */
 export async function cancelPaddleSubscription(
   subscriptionId: string,
+  opts: { timeoutMs?: number } = {},
 ): Promise<{ effectiveAt: string | null }> {
-  const data = (await paddleFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
-    effective_from: "next_billing_period",
-  })) as {
+  const data = (await paddleFetch(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
+    { effective_from: "next_billing_period" },
+    "POST",
+    opts,
+  )) as {
     data?: {
       scheduled_change?: { effective_at?: string | null } | null;
       current_billing_period?: { ends_at?: string | null } | null;
@@ -135,11 +146,13 @@ export async function cancelPaddleSubscription(
  */
 export async function undoPaddleCancellation(
   subscriptionId: string,
+  opts: { timeoutMs?: number } = {},
 ): Promise<{ renewsAt: string | null }> {
   const data = (await paddleFetch(
     `/subscriptions/${encodeURIComponent(subscriptionId)}`,
     { scheduled_change: null },
     "PATCH",
+    opts,
   )) as { data?: { next_billed_at?: string | null } };
   return { renewsAt: data?.data?.next_billed_at ?? null };
 }
@@ -148,10 +161,15 @@ export async function undoPaddleCancellation(
  * Create a customer-portal session (manage/cancel subscription) and return
  * the overview URL. Same contract as the Stripe billing-portal path.
  */
-export async function createPaddlePortalUrl(customerId: string): Promise<string> {
+export async function createPaddlePortalUrl(
+  customerId: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<string> {
   const data = (await paddleFetch(
     `/customers/${encodeURIComponent(customerId)}/portal-sessions`,
     {},
+    "POST",
+    opts,
   )) as { data?: { urls?: { general?: { overview?: string | null } } } };
   const url = data?.data?.urls?.general?.overview;
   if (!url) throw new Error("Paddle portal session returned no overview url");

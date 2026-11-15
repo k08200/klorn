@@ -3247,6 +3247,41 @@ const fr: Record<string, string> = {
   "settings.org.checkout.annual": "Payer à l’année · {price} par siège et par mois",
   "settings.org.checkout.monthlyPlain": "Payer au mois",
   "settings.org.checkout.annualPlain": "Payer à l’année",
+  "settings.org.seats.change": "Sièges ({min}–{max})",
+  "settings.org.seats.changeAction": "Mettre à jour les sièges",
+  "settings.org.seats.floor":
+    "Au moins {min} : le minimum de l’équipe, et un siège par membre. Paddle facture ou crédite la différence pour le reste de cette période de facturation.",
+  "settings.org.seats.pending":
+    "Envoyé à Paddle. {seats} sièges s’afficheront ici dès que Paddle confirme.",
+  "settings.org.seats.unchanged": "L’organisation a déjà {seats} sièges.",
+  "settings.org.subscription.cancel": "Résilier l’abonnement",
+  "settings.org.subscription.cancelTitle": "Résilier l’abonnement d’équipe ?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Chacun garde son siège jusqu’à la fin de la période déjà payée. Ensuite, le forfait équipe prend fin pour tous les membres, et plus rien n’est facturé.",
+  "settings.org.subscription.cancelConfirm": "Résilier en fin de période",
+  "settings.org.subscription.keep": "Garder l’abonnement",
+  "settings.org.subscription.endsOn":
+    "L’abonnement prend fin le {date}. Les sièges restent jusque-là.",
+  "settings.org.subscription.endsSoon":
+    "L’abonnement prend fin à la fin de cette période de facturation. Les sièges restent jusque-là.",
+  "settings.org.subscription.portal": "Gérer la facturation",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "L’organisation compte plus de membres. Retirez des membres avant de retirer leurs sièges.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Les sièges ne changent que si l’abonnement est actif. La personne qui paie peut corriger le moyen de paiement dans le portail de facturation.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "La résiliation de l’abonnement est programmée. Gardez-le d’abord, puis changez les sièges.",
+  "settings.org.error.NO_SUBSCRIPTION": "Cette organisation n’a pas d’abonnement d’équipe.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "Un abonnement en pause ne peut être arrêté que depuis le portail de facturation.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "Le portail de facturation ne s’ouvre que pour l’adresse e-mail qui paie l’équipe. Cette personne peut aussi utiliser le lien des reçus Paddle.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle n’a pas confirmé le changement : il n’a peut-être pas été appliqué. Vérifiez dans une minute avant de réessayer.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "La facturation d’équipe n’est pas disponible pour le moment. Rien n’a changé.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "Cet abonnement ne peut pas changer de sièges ici. Contactez le support.",
   "settings.org.transparency.title": "Ce que votre organisation peut voir",
   "settings.org.transparency.can": "Peut voir",
   "settings.org.transparency.cannot": "Ne voit jamais",
@@ -3255,6 +3290,9 @@ const fr: Record<string, string> = {
   "settings.org.transparency.noReads": "Personne n’a encore consulté vos disponibilités.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "Un ancien membre",
+  "settings.org.transparency.domains": "Domaines de l’entreprise dans votre tri",
+  "settings.org.transparency.domainsLine":
+    "Le courrier vérifié de {domains} est indiqué comme venant d’un collègue de votre entreprise dans les raisons de votre tri. Votre organisation ne voit jamais de quel courrier il s’agit.",
   "settings.org.visible.roles": "Votre nom, votre adresse e-mail et votre rôle",
   "settings.org.visible.seats": "Si vous avez un siège payant",
   "settings.org.visible.cost": "Le prix du siège et l’état de l’abonnement",

@@ -672,6 +672,31 @@ describePg("Klorn Teams refusals and races (real Postgres)", () => {
     });
   });
 
+  it("tells a member which company domains mark a sender as a colleague in their triage", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    await createOrg(owner);
+    await join(owner, member);
+    const none = await call(member, "GET", "/api/orgs/current/transparency");
+    expect(none.json()).toMatchObject({ companyDomains: [] });
+    const set = await call(owner, "PATCH", "/api/orgs/current", {
+      companyDomains: ["acme.test"],
+    });
+    expect(set.statusCode).toBe(200);
+    // Only the v3 policy shows relationship reasons: off, the page names none.
+    const policyOff = await call(member, "GET", "/api/orgs/current/transparency");
+    expect(policyOff.json()).toMatchObject({ companyDomains: [] });
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+    try {
+      const named = await call(member, "GET", "/api/orgs/current/transparency");
+      expect(named.json()).toMatchObject({ companyDomains: ["acme.test"] });
+    } finally {
+      delete process.env.JUDGE_V3_POLICY;
+      delete process.env.JUDGE_V3_SHADOW;
+    }
+  });
+
   it("stops naming a deleted account in the audit log", async () => {
     const owner = await newSession("owner");
     const member = await newSession("member");

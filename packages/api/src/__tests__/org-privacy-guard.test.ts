@@ -43,6 +43,11 @@ describe("org code reaches no member data", () => {
 
   it("finds the org sources", () => {
     expect(sources.length).toBeGreaterThanOrEqual(6);
+    // Seat management after purchase (cancel, seats, billing portal) is org
+    // code like the rest: the same allow-list holds it to the org tables.
+    expect(sources.map(({ path }) => path.split("/").pop())).toEqual(
+      expect.arrayContaining(["seat-billing.ts", "seat-management.ts"]),
+    );
   });
 
   it("queries only the org tables, the account row and calendar times", () => {

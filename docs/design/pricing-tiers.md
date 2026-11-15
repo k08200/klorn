@@ -120,6 +120,40 @@ LOCKED: pending founder confirmation, reversible — change it here and in
 7. Audit log of admin actions and cross-member free/busy reads.
 8. Member transparency screen: what the company can and cannot see.
 
+### Seat changes, cancel and the billing portal
+
+Owner only (`src/org/seat-management.ts`); members are refused. Paddle is the
+source of truth: no route writes the stored seat count or status, the
+subscription webhook does.
+
+- **Seat changes** set the quantity to N (2–150, never below the current
+  members). Billed `prorated_immediately` in both directions: an added seat is
+  charged for the rest of the current period, a removed seat is credited to
+  the customer's Paddle balance for the next renewal. The other modes charge
+  for days a seat was not held, leave seats unbilled until the renewal, or
+  never bill them. The change keeps the subscription's own price (never the
+  newest configured one, which would move the team to it without notice), and
+  a failed proration charge leaves the subscription unchanged
+  (`on_payment_failure: prevent_change`). The request is compared with what
+  Paddle bills now, not the stored count, so asking for the count Paddle
+  already holds makes no change. Only while active or trialing with nothing
+  scheduled: Paddle refuses updates to a past-due subscription.
+- **The owner is the billing admin.** Any owner, including one who took over
+  by transfer, can change seats or cancel on the payment method already on the
+  subscription; Paddle emails the payer a receipt for every prorated charge.
+- **Cancel** is at the period end only, like Pro: seats stay until Paddle's
+  final event. A past-due subscription can be canceled this way and stays
+  past due until the period ends; a paused one can only be ended immediately,
+  which is left to the portal. A scheduled cancel can be taken back, past due
+  included (removing a scheduled change is the one update Paddle allows
+  there). An organization whose subscription still bills (active, trialing,
+  past due, paused) is never closed or deleted.
+- **Billing portal** opens only while the subscription bills, and only for an
+  owner whose verified Klorn email is the Paddle customer's email. The portal
+  is the payer's whole Paddle account (other subscriptions, invoices,
+  address): a later owner, or an owner who paid from another address, is
+  refused, and the payer still has the portal link in Paddle's receipt emails.
+
 ### Later
 
 - Organization VIP domains, only as a relationship signal into the judge.

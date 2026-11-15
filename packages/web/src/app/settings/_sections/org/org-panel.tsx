@@ -113,7 +113,12 @@ function OrgDetail({
       <OrgMembers owner={owner} onChanged={refresh} />
       {owner && <OrgInvites />}
       {owner && <OrgCeilings org={org} onChanged={refresh} />}
-      <OrgSeats org={org} owner={owner} price={transparency?.seatPrice ?? null} />
+      <OrgSeats
+        org={org}
+        owner={owner}
+        price={transparency?.seatPrice ?? null}
+        onChanged={refresh}
+      />
       {transparency && <OrgTransparency data={transparency} />}
       {transparencyFailed && <LoadFailed onRetry={() => void loadTransparency()} />}
       <div className="space-y-2 border-t border-line/70 pt-4">

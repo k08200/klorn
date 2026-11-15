@@ -19,6 +19,7 @@ import {
   parseSeats,
   seatStatusKey,
 } from "./model";
+import { OrgSubscription } from "./org-subscription";
 import { useOrgAction } from "./use-org";
 
 /** Owner only: the admin ceilings, enforced by the server for everyone in the org. */
@@ -72,15 +73,20 @@ interface SeatPrice {
   annualPerMonthCents: number;
 }
 
-/** Seats: everyone sees the state; the owner can open the team checkout once billing is on. */
+/**
+ * Seats: everyone sees the state; the owner can open the team checkout once
+ * billing is on, and manage the subscription once there is one.
+ */
 export function OrgSeats({
   org,
   owner,
   price,
+  onChanged,
 }: {
   org: OrgWire;
   owner: boolean;
   price: SeatPrice | null;
+  onChanged: () => Promise<void>;
 }) {
   const { t, locale } = useT();
   const [seatsText, setSeatsText] = useState(() => String(defaultSeats(org.seats.used)));
@@ -136,6 +142,7 @@ export function OrgSeats({
         })}{" "}
         · {t(seatStatusKey(org.seats.status))}
       </p>
+      {owner && live && <OrgSubscription org={org} onChanged={onChanged} />}
       {owner && !live && available.length === 0 && (
         <p className="text-role-caption text-ink-dim">{t("settings.org.checkout.unavailable")}</p>
       )}
