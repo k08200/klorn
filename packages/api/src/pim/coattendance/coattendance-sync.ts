@@ -43,7 +43,7 @@
 
 import { calendarCoattendanceOpenTo } from "../../config.js";
 import { isDataWipeFenceError } from "../../privacy/data-wipe-fence.js";
-import { captureError } from "../../sentry.js";
+import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { withTimeout } from "../../with-timeout.js";
 import { connectLinkedCalendars, connectPrimaryCalendar } from "../calendar-providers/dispatch.js";
 import type {
@@ -111,16 +111,6 @@ function remember<K, V>(map: Map<K, V>, key: K, value: V): void {
     if (oldest !== undefined) map.delete(oldest);
   }
   map.set(key, value);
-}
-
-/** What a failure may say: its class, a code and an HTTP status, never its message. */
-function failureLabel(err: unknown): string {
-  const name = err instanceof Error ? err.name : typeof err;
-  const { code, response } = (err ?? {}) as { code?: unknown; response?: { status?: unknown } };
-  const parts = [name];
-  if (typeof code === "string" || typeof code === "number") parts.push(`code=${code}`);
-  if (typeof response?.status === "number") parts.push(`status=${response.status}`);
-  return parts.join(" ");
 }
 
 const addDays = (day: Date, n: number) => new Date(day.getTime() + n * DAY_MS);
@@ -327,12 +317,12 @@ export async function runCoAttendancePass(
     remember(retryAfter, userId, now.getTime() + COATTENDANCE_FAILURE_BACKOFF_MS);
     // The account's data is being wiped: the refusal is the fence working.
     if (isDataWipeFenceError(err)) return null;
-    const label = failureLabel(err);
-    console.warn(`[CALENDAR] co-attendance pass failed for ${userId}: ${label}`);
+    // Facts only (class, code, status, never a message): report-db-failure.ts.
+    logDbFailure("[CALENDAR] co-attendance pass failed", err, { ids: { userId } });
     if (!reported.has(userId)) {
       if (reported.size >= MAX_REMEMBERED_USERS) reported.clear();
       reported.add(userId);
-      captureError(new Error(`calendar co-attendance pass failed: ${label}`), {
+      captureDbFailure("[CALENDAR] co-attendance pass failed", err, {
         tags: { scope: "calendar.coattendance" },
         extra: { userId },
       });

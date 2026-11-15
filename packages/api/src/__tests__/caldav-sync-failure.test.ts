@@ -117,7 +117,12 @@ describe("a CalDAV account in the linked sync", () => {
     expect(m.markReconnect).not.toHaveBeenCalled();
     expect(m.captureError).toHaveBeenCalledTimes(1);
     const [, context] = m.captureError.mock.calls[0] as [Error, { extra: Record<string, string> }];
-    expect(context.extra).toEqual({ userId: "u1", accountDomain: "icloud.com" });
+    expect(context.extra).toMatchObject({
+      userId: "u1",
+      accountDomain: "icloud.com",
+      errorName: "CaldavHttpError",
+      status: 503,
+    });
     expect(JSON.stringify(m.captureError.mock.calls)).not.toContain("internal detail");
   });
 

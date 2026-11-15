@@ -20,6 +20,7 @@
  * same transition cannot create duplicate commitments on repeat clicks.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { upsertCommitment } from "./commitments.js";
 
 // CandidateIntake.status is a free-form string in the schema (see
@@ -107,15 +108,14 @@ export async function openCommitmentForCandidateTransition(
     });
     return { id: commitment.id };
   } catch (err) {
-    // Keep tainted values out of the format-string position and encode them
-    // so they cannot forge log lines (CodeQL js/tainted-format-string +
-    // js/log-injection).
-    console.warn(
-      "[candidate-commitments] failed to open commitment for candidate=%s status=%s:",
-      encodeURIComponent(candidate.id),
-      encodeURIComponent(nextStatus),
-      err,
-    );
+    // Ids encoded so they cannot forge log lines (CodeQL js/log-injection);
+    // facts only, as the upsert's arguments quote the candidate's name.
+    logDbFailure("[candidate-commitments] failed to open commitment", err, {
+      ids: {
+        candidate: encodeURIComponent(candidate.id),
+        status: encodeURIComponent(nextStatus),
+      },
+    });
     return null;
   }
 }

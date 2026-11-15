@@ -345,6 +345,14 @@ describe("Slack text", () => {
     expect(slackPlainText("unclosed <@U1 and more", 200)).toBe("unclosed <@U1 and more");
   });
 
+  it("stops at the cap, then trims and cuts a rendered token to it", () => {
+    expect(slackPlainText("ab   cd", 3)).toBe("ab");
+    expect(slackPlainText("  a\n\n b  ", 200)).toBe("a b");
+    expect(slackPlainText("<@U1> hi", 4)).toBe("@som");
+    expect(slackPlainText("&amp;&amp;&amp;", 2)).toBe("&&");
+    expect(slackPlainText("anything", 0)).toBe("");
+  });
+
   it("stays linear on adversarial markup", () => {
     expectLinear(
       (bytes) => repeatTo(bytes, "<<@|<#|<!|&amp"),

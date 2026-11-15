@@ -5,7 +5,7 @@
  * commitments, cohort, per-connection daily cap, empty episodes).
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const judge = vi.hoisted(() => ({ judgeEmail: vi.fn() }));
 vi.mock("../judge/poc-judge.js", () => ({
@@ -56,6 +56,8 @@ const db = vi.hoisted(() => ({
 vi.mock("../db.js", () => db);
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { captureError } from "../sentry.js";
+
 import { judgeSlackEpisode, slackConversationKind } from "../slack/judge-episode.js";
 import {
   judgeReadySlackEpisodes,
@@ -71,6 +73,12 @@ import {
 } from "../slack/notify.js";
 import { slackPermalink } from "../slack/permalink.js";
 import { slackPushContent } from "../slack/push-content.js";
+import { callText } from "./helpers/canary.js";
+import {
+  DB_CANARY,
+  knownErrorQuotingSubject,
+  validationErrorQuotingText,
+} from "./helpers/prisma-canary.js";
 
 const NOW = new Date("2026-11-14T10:00:00Z");
 
@@ -481,5 +489,65 @@ describe("judgeReadySlackEpisodes", () => {
     });
     await judgeReadySlackEpisodes(NOW);
     expect(commit.extractAndUpsertCommitmentsFromText).not.toHaveBeenCalled();
+  });
+  describe("a database error quoting the Slack text never reaches Sentry or the console", () => {
+    let consoleSpies: Array<ReturnType<typeof vi.spyOn>>;
+    beforeEach(() => {
+      consoleSpies = (["error", "warn", "log"] as const).map((method) =>
+        vi.spyOn(console, method).mockImplementation(() => {}),
+      );
+    });
+    afterEach(() => {
+      for (const spy of consoleSpies) spy.mockRestore();
+    });
+
+    const expectNoCanary = () => {
+      expect(callText(vi.mocked(captureError))).not.toContain(DB_CANARY);
+      for (const spy of consoleSpies) expect(callText(spy)).not.toContain(DB_CANARY);
+    };
+
+    it.each([
+      [
+        "judging (the messages read)",
+        "slack.judge",
+        () => db.prisma.slackMessage.findMany.mockRejectedValueOnce(validationErrorQuotingText()),
+      ],
+      [
+        "ringing",
+        "slack.notify",
+        () => budget.admitPushNotification.mockRejectedValueOnce(knownErrorQuotingSubject()),
+      ],
+      [
+        "the commitment pass",
+        "slack.commitments",
+        () =>
+          commit.extractAndUpsertCommitmentsFromText.mockRejectedValueOnce(
+            validationErrorQuotingText(),
+          ),
+      ],
+    ])("when %s fails: the facts under scope %s", async (_step, scope, fail) => {
+      fail();
+      await judgeReadySlackEpisodes(NOW);
+      expect(captureError).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(captureError).mock.calls[0]?.[1]).toMatchObject({
+        tags: { scope },
+        extra: { episodeId: "ep-1" },
+      });
+      expectNoCanary();
+    });
+
+    it("when queueing the unjudged episode fails too", async () => {
+      db.prisma.slackMessage.findMany.mockRejectedValueOnce(validationErrorQuotingText());
+      db.prisma.slackEpisode.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockRejectedValueOnce(knownErrorQuotingSubject());
+      await judgeReadySlackEpisodes(NOW);
+      await vi.waitFor(() => expect(captureError).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(captureError).mock.calls[1]?.[1]).toMatchObject({
+        tags: { scope: "slack.judge" },
+        extra: { code: "P2002", model: "Notification" },
+      });
+      expectNoCanary();
+    });
   });
 });

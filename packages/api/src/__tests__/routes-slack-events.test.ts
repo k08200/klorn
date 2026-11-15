@@ -40,7 +40,10 @@ import {
   slackEventsRoutes,
   verifiedByHook,
 } from "../routes/slack-events.js";
+import { captureError } from "../sentry.js";
 import { signSlackRequest } from "../slack/signature.js";
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 const SECRET = "8f742231b10e8888abcd99eeeeee85a5";
 const HOOK = "0123456789abcdef0123456789abcdef";
@@ -291,6 +294,21 @@ describe("verified events", () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).not.toContain(SECRET);
     expect(res.body).not.toContain("contract");
+  });
+
+  it("a database error quoting the message reaches Sentry as facts, never in its words", async () => {
+    // ingestSlackMessage rethrows any database error over the message it was
+    // storing; a Prisma validation error renders that message's text.
+    store.ingestSlackMessage.mockRejectedValueOnce(validationErrorQuotingText());
+    const body = dm();
+    const res = await post(body, signedHeaders(body));
+    expect(res.statusCode).toBe(500);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(captureError).mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "slack-events" },
+      extra: { stage: "ingest", model: "SlackMessage", operation: "create" },
+    });
+    expect(callText(vi.mocked(captureError))).not.toContain(DB_CANARY);
   });
 });
 

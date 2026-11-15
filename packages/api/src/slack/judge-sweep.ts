@@ -21,8 +21,8 @@
 
 import { cohortRestriction, SLACK_FLAGS } from "../config.js";
 import { prisma } from "../db.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
-import { captureError } from "../sentry.js";
 import { extractSlackCommitments } from "./commitments.js";
 import { EPISODE_MAX_MESSAGES, EPISODE_MAX_WAIT_MS, EPISODE_QUIET_MS } from "./episodes.js";
 import { judgeSlackEpisode, slackConversationKind, slackEpisodeText } from "./judge-episode.js";
@@ -39,7 +39,6 @@ export const SLACK_OPT_IN_EPISODES_PER_DAY = 120;
 export const SLACK_RING_RECENCY_MS = 6 * 3_600_000;
 /** A JUDGING claim older than this belongs to a crashed tick and is retried. */
 export const SLACK_CLAIM_TIMEOUT_MS = 10 * 60_000;
-const LOG_PREFIX = "[SLACK]";
 const DAY_MS = 86_400_000;
 
 type ReadyEpisode = {
@@ -158,11 +157,14 @@ async function ringIfPush(
       });
     }
   } catch (err) {
-    console.error(
-      `${LOG_PREFIX} ringing an episode failed:`,
-      err instanceof Error ? err.name : err,
-    );
-    captureError(err, { tags: { scope: "slack.notify" } });
+    logDbFailure("[SLACK] ringing an episode failed", err, {
+      level: "error",
+      ids: { episodeId: episode.id },
+    });
+    captureDbFailure("[SLACK] ringing an episode failed", err, {
+      tags: { scope: "slack.notify" },
+      extra: { episodeId: episode.id },
+    });
   }
 }
 
@@ -185,8 +187,14 @@ async function commitmentsIfDirect(
       referenceDate: now,
     });
   } catch (err) {
-    console.error(`${LOG_PREFIX} commitments failed:`, err instanceof Error ? err.name : err);
-    captureError(err, { tags: { scope: "slack.commitments" } });
+    logDbFailure("[SLACK] commitments failed", err, {
+      level: "error",
+      ids: { episodeId: episode.id },
+    });
+    captureDbFailure("[SLACK] commitments failed", err, {
+      tags: { scope: "slack.commitments" },
+      extra: { episodeId: episode.id },
+    });
   }
 }
 
@@ -224,17 +232,25 @@ async function judgeOrQueue(episode: ReadyEpisode, now: Date): Promise<void> {
   try {
     await judgeOne(episode, now);
   } catch (err) {
-    console.error(
-      `${LOG_PREFIX} judging an episode failed:`,
-      err instanceof Error ? err.name : err,
-    );
-    captureError(err, { tags: { scope: "slack.judge" } });
+    logDbFailure("[SLACK] judging an episode failed", err, {
+      level: "error",
+      ids: { episodeId: episode.id },
+    });
+    captureDbFailure("[SLACK] judging an episode failed", err, {
+      tags: { scope: "slack.judge" },
+      extra: { episodeId: episode.id },
+    });
     await settle(episode.id, {
       status: "JUDGED",
       tier: "QUEUE",
       reason: "Could not be judged",
       judgedAt: now,
-    }).catch((settleErr) => captureError(settleErr, { tags: { scope: "slack.judge" } }));
+    }).catch((settleErr) =>
+      captureDbFailure("[SLACK] queueing an unjudged episode failed", settleErr, {
+        tags: { scope: "slack.judge" },
+        extra: { episodeId: episode.id },
+      }),
+    );
   }
 }
 

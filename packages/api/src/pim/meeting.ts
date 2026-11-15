@@ -12,7 +12,7 @@ import type { calendar_v3 } from "googleapis";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { getAuthedClient } from "../mail/gmail.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { googleMeetingLinkOf } from "./calendar-providers/google.js";
 import { safeMeetingLink } from "./meeting-link.js";
 
@@ -101,14 +101,11 @@ export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[
   } catch (err) {
     // Never swallow silently: without a signal, a systemic calendar failure
     // (revoked scope, API outage) is indistinguishable from "no meetings".
-    // Log only the message + a clean Error: a GaxiosError carries the outbound
-    // request config (incl. the Authorization: Bearer header) on err.config, so
-    // serializing the raw error could write a live access token to stdout/Sentry.
-    // (The other googleapis catch blocks share this raw-error pattern — a global
-    // Sentry beforeSend scrub is the codebase-wide fix, tracked separately.)
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[MEETING] getUpcomingMeetings failed for user ${userId}: ${msg}`);
-    captureError(new Error(`getUpcomingMeetings: ${msg}`), {
+    // Facts only, on a fresh Error: a GaxiosError carries the outbound request
+    // config (incl. the Authorization: Bearer header) on err.config, and its
+    // message can quote the events it was asked about.
+    logDbFailure("[MEETING] getUpcomingMeetings failed", err, { ids: { userId } });
+    captureDbFailure("[MEETING] getUpcomingMeetings failed", err, {
       tags: { scope: "meeting.get-upcoming" },
     });
     return [];

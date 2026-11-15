@@ -13,6 +13,7 @@
 import { prisma } from "../db.js";
 import { isUserInFocusBlock } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { dedupeCalendarEvents } from "./calendar-dedupe.js";
 import { calendarSourceScope } from "./calendar-scope.js";
 
@@ -85,7 +86,7 @@ export async function sendFocusWindowDigests(now: Date = new Date()): Promise<nu
       sent++;
     } catch (err) {
       // One user's failure must not starve the rest of the sweep.
-      console.warn(`[FOCUS] digest failed for user ${event.userId}:`, err);
+      logDbFailure("[FOCUS] digest failed", err, { ids: { userId: event.userId } });
     }
   }
   return sent;

@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { DEVICE_SOURCE_EMAIL_PREFIX } from "./device-calendar/device-source-key.js";
 
 interface LinkedRowShape {
@@ -42,7 +43,7 @@ async function labelsById(userId: string, ids: readonly string[]): Promise<Map<s
       }),
     );
   } catch (err) {
-    console.warn("[CALENDAR] source label lookup failed:", err);
+    logDbFailure("[CALENDAR] source label lookup failed", err);
     return new Map();
   }
 }
