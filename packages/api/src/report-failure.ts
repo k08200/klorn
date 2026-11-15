@@ -7,7 +7,7 @@
  * Each reporter decides which facts are safe for its kind of failure; this
  * module only formats the line and builds the Sentry event.
  */
-import { isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
+import { isDataWipeFenceError } from "./privacy/data-wipe-fence-error.js";
 import { captureError } from "./sentry.js";
 
 export interface FailureSentryContext {

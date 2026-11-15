@@ -17,7 +17,7 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
+import { isDataWipeFenceError } from "./privacy/data-wipe-fence-error.js";
 import {
   scrubSentryBreadcrumb,
   scrubSentryErrorEvent,
