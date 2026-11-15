@@ -3154,6 +3154,71 @@ const fr: Record<string, string> = {
   "slack.error.rate-limited": "Trop de tentatives. Réessayez plus tard.",
   "slack.error.generic": "Un problème est survenu avec Slack. Réessayez.",
   "slack.retry": "Réessayer",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "Importer une conversation KakaoTalk",
+  "kakaoImport.desc":
+    "Importez une conversation exportée depuis KakaoTalk. Klorn lit ses 30 derniers jours et vous suggère des engagements à confirmer. Import ponctuel, pas une synchronisation.",
+  "kakaoImport.howTo.title": "Comment exporter une conversation",
+  "kakaoImport.howTo.mobile":
+    "Téléphone : ouvrez la conversation, touchez ≡ → Réglages (⚙) → Exporter la conversation → Exporter le texte uniquement. Si vous obtenez un .zip, décompressez-le et importez le .txt qu'il contient.",
+  "kakaoImport.howTo.pc":
+    "PC ou Mac : ouvrez la conversation, ouvrez ≡ → Exporter la conversation (Enregistrer la conversation), puis enregistrez-la en .txt ou .csv.",
+  "kakaoImport.file": "Conversation exportée (.txt ou .csv, UTF-8, 10 Mo maximum)",
+  "kakaoImport.preview": "Vérifier le fichier",
+  "kakaoImport.previewSummary":
+    "{total} messages dans le fichier. Klorn lira {window} messages texte des {days} derniers jours.",
+  "kakaoImport.truncated": "Seuls les plus récents sont lus.",
+  "kakaoImport.me.legend": "Quel nom est le vôtre ?",
+  "kakaoImport.me.count": "{count} messages récents",
+  "kakaoImport.consent":
+    "Ce fichier contient les messages d'autres personnes, et je peux partager cette conversation avec Klorn. Klorn envoie à son modèle d'IA les messages récents qui ressemblent à des promesses et supprime le texte stocké sous 7 jours au plus tard. Les engagements suggérés gardent une courte citation et le nom de la personne jusqu'à ce que vous les supprimiez.",
+  "kakaoImport.import": "Importer",
+  "kakaoImport.cancel": "Annuler",
+  "kakaoImport.imported":
+    "Import lancé. Les suggestions apparaîtront dans Engagements → À confirmer.",
+  "kakaoImport.history.title": "Imports",
+  "kakaoImport.importedAt": "Importé {time}",
+  "kakaoImport.status.PENDING": "En attente",
+  "kakaoImport.status.PROCESSING": "Lecture",
+  "kakaoImport.status.DONE": "Terminé",
+  "kakaoImport.status.FAILED": "Échec",
+  "kakaoImport.result": "{created} nouvelles suggestions à partir de {messages} messages.",
+  "kakaoImport.result.partial":
+    "{created} nouvelles suggestions à partir de {messages} messages. Arrêté plus tôt à la limite par import.",
+  "kakaoImport.result.waiting": "Lecture de {messages} messages…",
+  "kakaoImport.result.expired": "Expiré avant d'être lu. Importez à nouveau la conversation.",
+  "kakaoImport.result.failed": "Klorn n'a pas pu lire cet import. Supprimez-le et réessayez.",
+  "kakaoImport.delete": "Supprimer",
+  "kakaoImport.delete.title": "Supprimer cet import ?",
+  "kakaoImport.delete.message":
+    "Klorn supprime l'import et tous les engagements qui en sont issus, y compris ceux que vous avez déjà confirmés.",
+  "kakaoImport.deleted": "Import supprimé, avec ses suggestions.",
+  "kakaoImport.retry": "Réessayer",
+  "kakaoImport.error.empty-file": "Le fichier est vide.",
+  "kakaoImport.error.file-too-large": "Le fichier dépasse 10 Mo.",
+  "kakaoImport.error.unsupported-encoding":
+    "Le fichier n'est pas du texte UTF-8. Exportez-le à nouveau depuis KakaoTalk.",
+  "kakaoImport.error.zip-not-supported":
+    "Décompressez l'export et importez le fichier .txt ou .csv qu'il contient.",
+  "kakaoImport.error.unknown-format":
+    "Cela ne ressemble pas à un export de conversation KakaoTalk.",
+  "kakaoImport.error.no-messages": "L'export ne contient aucun message.",
+  "kakaoImport.error.too-many-lines": "Le fichier contient trop de lignes.",
+  "kakaoImport.error.too-many-messages": "Le fichier contient trop de messages.",
+  "kakaoImport.error.too-many-speakers":
+    "La conversation compte trop de participants (500 au maximum).",
+  "kakaoImport.error.invalid-upload": "Klorn n'a pas pu lire le fichier envoyé. Réessayez.",
+  "kakaoImport.error.consent-required":
+    "Confirmez d'abord que vous pouvez importer cette conversation.",
+  "kakaoImport.error.speaker-not-found": "Choisissez votre propre nom dans la liste.",
+  "kakaoImport.error.too-many-imports":
+    "Vous pouvez garder 20 imports au maximum. Supprimez d'abord un import plus ancien.",
+  "kakaoImport.error.busy": "Les imports sont occupés en ce moment. Réessayez dans une minute.",
+  "kakaoImport.error.import-in-progress":
+    "Attendez la fin de vos imports en cours avant d'en ajouter un autre.",
+  "kakaoImport.error.not-found": "Cet import n'existe plus.",
+  "kakaoImport.error.rate-limited": "Trop de tentatives. Réessayez plus tard.",
+  "kakaoImport.error.generic": "Un problème est survenu avec l'import KakaoTalk. Réessayez.",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "Règles en texte",
   "rulesDsl.desc":

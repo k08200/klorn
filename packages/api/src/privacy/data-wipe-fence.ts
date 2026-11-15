@@ -76,6 +76,10 @@ export const FENCED_MODELS = [
   "SlackConnection",
   "SlackEpisode",
   "SlackMessage",
+  // KakaoTalk import (docs/providers/kakaotalk-import.md): a processing pass
+  // running during a wipe must not re-create the import or its message text.
+  "KakaoImport",
+  "KakaoImportMessage",
   "LearnedRule",
   "SenderTrait",
   "SenderLabel",

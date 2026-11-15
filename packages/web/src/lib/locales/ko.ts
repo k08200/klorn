@@ -3054,6 +3054,65 @@ const ko: Record<string, string> = {
   "slack.error.rate-limited": "시도가 너무 많습니다. 나중에 다시 시도하세요.",
   "slack.error.generic": "Slack 처리 중 문제가 생겼습니다. 다시 시도하세요.",
   "slack.retry": "다시 시도",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "카카오톡 대화 가져오기",
+  "kakaoImport.desc":
+    "카카오톡에서 내보낸 대화 하나를 올리세요. Klorn이 최근 30일 대화를 읽고 확인할 약속을 제안합니다. 동기화가 아니라 한 번만 가져옵니다.",
+  "kakaoImport.howTo.title": "대화 내보내는 방법",
+  "kakaoImport.howTo.mobile":
+    "휴대폰: 채팅방 → ≡ 메뉴 → 설정(⚙) → 대화 내용 내보내기 → 텍스트만 보내기. .zip 파일이면 압축을 풀고 안의 .txt 파일을 올리세요.",
+  "kakaoImport.howTo.pc":
+    "PC·Mac: 채팅방 → ≡ 메뉴 → 대화 내보내기(대화 저장) → .txt 또는 .csv로 저장.",
+  "kakaoImport.file": "내보낸 대화 파일 (.txt 또는 .csv, UTF-8, 최대 10MB)",
+  "kakaoImport.preview": "파일 확인",
+  "kakaoImport.previewSummary":
+    "파일에 메시지 {total}개가 있습니다. 최근 {days}일의 텍스트 메시지 {window}개를 읽습니다.",
+  "kakaoImport.truncated": "가장 최근 메시지만 읽습니다.",
+  "kakaoImport.me.legend": "어느 이름이 본인인가요?",
+  "kakaoImport.me.count": "최근 메시지 {count}개",
+  "kakaoImport.consent":
+    "이 파일에는 다른 사람의 메시지가 들어 있으며, 이 대화를 Klorn에 공유해도 됩니다. Klorn은 약속처럼 보이는 최근 메시지를 AI 모델에 보내고, 저장한 대화 원문은 늦어도 7일 안에 삭제합니다. 제안된 약속에는 짧은 인용과 말한 사람의 이름이 남으며, 직접 삭제할 때까지 유지됩니다.",
+  "kakaoImport.import": "가져오기",
+  "kakaoImport.cancel": "취소",
+  "kakaoImport.imported": "가져오기를 시작했습니다. 제안은 약속 → 확인 필요에 표시됩니다.",
+  "kakaoImport.history.title": "가져온 대화",
+  "kakaoImport.importedAt": "{time} 가져옴",
+  "kakaoImport.status.PENDING": "대기 중",
+  "kakaoImport.status.PROCESSING": "읽는 중",
+  "kakaoImport.status.DONE": "완료",
+  "kakaoImport.status.FAILED": "실패",
+  "kakaoImport.result": "메시지 {messages}개에서 새 제안 {created}개.",
+  "kakaoImport.result.partial":
+    "메시지 {messages}개에서 새 제안 {created}개. 가져오기 한도에 닿아 일찍 멈췄습니다.",
+  "kakaoImport.result.waiting": "메시지 {messages}개를 읽는 중…",
+  "kakaoImport.result.expired": "읽기 전에 만료되었습니다. 대화를 다시 가져오세요.",
+  "kakaoImport.result.failed": "이 대화를 읽지 못했습니다. 삭제하고 다시 시도하세요.",
+  "kakaoImport.delete": "삭제",
+  "kakaoImport.delete.title": "이 가져오기를 삭제할까요?",
+  "kakaoImport.delete.message":
+    "Klorn이 이 가져오기와 여기서 나온 약속을 모두 삭제합니다. 이미 확인한 약속도 포함됩니다.",
+  "kakaoImport.deleted": "가져오기와 제안을 삭제했습니다.",
+  "kakaoImport.retry": "다시 시도",
+  "kakaoImport.error.empty-file": "파일이 비어 있습니다.",
+  "kakaoImport.error.file-too-large": "파일이 10MB보다 큽니다.",
+  "kakaoImport.error.unsupported-encoding":
+    "UTF-8 텍스트 파일이 아닙니다. 카카오톡에서 다시 내보내세요.",
+  "kakaoImport.error.zip-not-supported": "압축을 풀고 안의 .txt 또는 .csv 파일을 올리세요.",
+  "kakaoImport.error.unknown-format": "카카오톡 대화 내보내기 파일이 아닌 것 같습니다.",
+  "kakaoImport.error.no-messages": "내보낸 파일에 메시지가 없습니다.",
+  "kakaoImport.error.too-many-lines": "파일의 줄이 너무 많습니다.",
+  "kakaoImport.error.too-many-messages": "파일의 메시지가 너무 많습니다.",
+  "kakaoImport.error.too-many-speakers": "대화 참여자가 너무 많습니다(최대 500명).",
+  "kakaoImport.error.invalid-upload": "업로드를 읽지 못했습니다. 다시 시도하세요.",
+  "kakaoImport.error.consent-required": "먼저 이 대화를 가져와도 되는지 확인해 주세요.",
+  "kakaoImport.error.speaker-not-found": "목록에서 본인 이름을 고르세요.",
+  "kakaoImport.error.too-many-imports":
+    "가져오기는 최대 20개까지 보관할 수 있습니다. 오래된 것을 먼저 삭제하세요.",
+  "kakaoImport.error.busy": "지금은 가져오기가 많습니다. 잠시 후 다시 시도하세요.",
+  "kakaoImport.error.import-in-progress": "진행 중인 가져오기가 끝난 뒤에 새로 추가하세요.",
+  "kakaoImport.error.not-found": "이 가져오기는 더 이상 없습니다.",
+  "kakaoImport.error.rate-limited": "시도가 너무 많습니다. 잠시 후 다시 시도하세요.",
+  "kakaoImport.error.generic": "카카오톡 가져오기에 문제가 생겼습니다. 다시 시도하세요.",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "텍스트로 규칙 편집",
   "rulesDsl.desc":

@@ -8,7 +8,8 @@
 
 import type { CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
 import { parseLlmJson } from "../llm/llm-json.js";
-import { createCompletion, MODEL } from "../llm/openai.js";
+import { type CompletionOptions, createCompletion, MODEL } from "../llm/openai.js";
+import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { validDateKey } from "./commitment-due-calendar.js";
@@ -35,6 +36,12 @@ export interface CommitmentRefinementInput {
   timeZone?: string;
   /** When provided, the LLM call is gated by the user's daily cost cap. */
   userId?: string;
+  /** KAKAO only: whether the user wrote the message (an export holds both sides). */
+  authoredByUser?: boolean;
+  /** The user's BYOK keys; env providers when absent. */
+  credentials?: ProviderCredentials;
+  /** Usage-ledger label; read from the call stack when absent. */
+  feature?: string;
 }
 
 export interface CommitmentRefinement {
@@ -120,6 +127,23 @@ function parseRefinement(raw: RawRefinement): CommitmentRefinement {
   };
 }
 
+function authorLine(input: CommitmentRefinementInput): string {
+  if (input.authoredByUser === undefined) return "";
+  return input.authoredByUser
+    ? "\nMessage author: USER (the user wrote this message: a first-person promise in it is owed by USER)"
+    : "\nMessage author: COUNTERPARTY (someone else wrote this message: a first-person promise in it is theirs, owner=COUNTERPARTY, never USER)";
+}
+
+function completionOptions(input: CommitmentRefinementInput): CompletionOptions {
+  if (!input.userId) return {};
+  return {
+    userId: input.userId,
+    priority: "background",
+    ...(input.credentials ? { credentials: input.credentials } : {}),
+    ...(input.feature ? { feature: input.feature } : {}),
+  };
+}
+
 function promptFor(input: CommitmentRefinementInput): string {
   const referenceDate = input.referenceDate ?? new Date();
   const timeZone = input.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -133,7 +157,7 @@ Context title: ${input.contextTitle ? wrapUntrusted(input.contextTitle, "commitm
 Rule candidate:
 ${wrapUntrusted(input.candidate.text, "commitment:candidate")}
 
-Candidate owner guess: ${input.candidate.owner}
+Candidate owner guess: ${input.candidate.owner}${authorLine(input)}
 Candidate due hint: ${input.candidate.dueHint ? wrapUntrusted(input.candidate.dueHint, "commitment:dueHint") : "(none)"}
 
 Source context:
@@ -181,7 +205,7 @@ Rules:
         { role: "user", content: promptFor(input) },
       ],
     },
-    input.userId ? { userId: input.userId, priority: "background" as const } : {},
+    completionOptions(input),
   );
 
   const raw = response.choices[0]?.message?.content || "{}";

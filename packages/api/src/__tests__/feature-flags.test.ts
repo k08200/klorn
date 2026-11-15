@@ -55,6 +55,7 @@ describe("collectFeatureFlags", () => {
     "VAULT_EXPORT_ENABLED",
     "RULES_DSL_ENABLED",
     "SLACK_ENABLED",
+    "KAKAO_IMPORT_ENABLED",
   ])("lists the cohort-capable flag %s: true for true or cohort, false otherwise", (key) => {
     const at = (value?: string) =>
       collectFeatureFlags((value === undefined ? {} : { [key]: value }) as NodeJS.ProcessEnv)

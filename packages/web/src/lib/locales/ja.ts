@@ -3092,6 +3092,68 @@ const ja: Record<string, string> = {
   "slack.error.rate-limited": "試行回数が多すぎます。しばらくしてからお試しください。",
   "slack.error.generic": "Slack の処理で問題が発生しました。もう一度お試しください。",
   "slack.retry": "再試行",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "KakaoTalkのトークを取り込む",
+  "kakaoImport.desc":
+    "KakaoTalkから書き出したトークを1つアップロードしてください。Klornが直近30日分を読み、確認用の約束を提案します。同期ではなく1回限りの取り込みです。",
+  "kakaoImport.howTo.title": "トークの書き出し方",
+  "kakaoImport.howTo.mobile":
+    "スマートフォン：トークを開き、≡ → 設定（⚙）→ トーク内容を書き出す → テキストのみ送信。.zipの場合は解凍し、中の.txtをアップロードしてください。",
+  "kakaoImport.howTo.pc":
+    "PC・Mac：トークを開き、≡ → トークを書き出す（トークを保存）→ .txt または .csv で保存。",
+  "kakaoImport.file": "書き出したトーク（.txt または .csv、UTF-8、最大10MB）",
+  "kakaoImport.preview": "ファイルを確認",
+  "kakaoImport.previewSummary":
+    "ファイルには{total}件のメッセージがあります。直近{days}日のテキストメッセージ{window}件を読みます。",
+  "kakaoImport.truncated": "最新のものだけを読みます。",
+  "kakaoImport.me.legend": "あなたの名前はどれですか？",
+  "kakaoImport.me.count": "直近のメッセージ{count}件",
+  "kakaoImport.consent":
+    "このファイルには他の人のメッセージが含まれており、私はこのトークをKlornと共有してかまいません。Klornは約束のように見える直近のメッセージをAIモデルに送り、保存したトーク本文は遅くとも7日以内に削除します。提案された約束には短い引用と発言者の名前が残り、あなたが削除するまで保持されます。",
+  "kakaoImport.import": "取り込む",
+  "kakaoImport.cancel": "キャンセル",
+  "kakaoImport.imported": "取り込みを開始しました。提案は 約束 → 確認待ち に表示されます。",
+  "kakaoImport.history.title": "取り込み履歴",
+  "kakaoImport.importedAt": "{time}に取り込み",
+  "kakaoImport.status.PENDING": "待機中",
+  "kakaoImport.status.PROCESSING": "読み取り中",
+  "kakaoImport.status.DONE": "完了",
+  "kakaoImport.status.FAILED": "失敗",
+  "kakaoImport.result": "{messages}件のメッセージから新しい提案{created}件。",
+  "kakaoImport.result.partial":
+    "{messages}件のメッセージから新しい提案{created}件。取り込みごとの上限に達したため途中で停止しました。",
+  "kakaoImport.result.waiting": "{messages}件のメッセージを読み取り中…",
+  "kakaoImport.result.expired": "読み取る前に期限切れになりました。もう一度取り込んでください。",
+  "kakaoImport.result.failed":
+    "この取り込みを読み取れませんでした。削除してもう一度お試しください。",
+  "kakaoImport.delete": "削除",
+  "kakaoImport.delete.title": "この取り込みを削除しますか？",
+  "kakaoImport.delete.message":
+    "Klornはこの取り込みと、そこから生まれたすべての約束を削除します。すでに確認した約束も含まれます。",
+  "kakaoImport.deleted": "取り込みと提案を削除しました。",
+  "kakaoImport.retry": "再試行",
+  "kakaoImport.error.empty-file": "ファイルが空です。",
+  "kakaoImport.error.file-too-large": "ファイルが10MBを超えています。",
+  "kakaoImport.error.unsupported-encoding":
+    "UTF-8のテキストファイルではありません。KakaoTalkからもう一度書き出してください。",
+  "kakaoImport.error.zip-not-supported":
+    "解凍して、中の.txtまたは.csvファイルをアップロードしてください。",
+  "kakaoImport.error.unknown-format": "KakaoTalkのトーク書き出しファイルではないようです。",
+  "kakaoImport.error.no-messages": "書き出したファイルにメッセージがありません。",
+  "kakaoImport.error.too-many-lines": "ファイルの行数が多すぎます。",
+  "kakaoImport.error.too-many-messages": "ファイルのメッセージが多すぎます。",
+  "kakaoImport.error.too-many-speakers": "トークの参加者が多すぎます（最大500人）。",
+  "kakaoImport.error.invalid-upload":
+    "アップロードを読み取れませんでした。もう一度お試しください。",
+  "kakaoImport.error.consent-required": "まず、このトークを取り込んでよいことを確認してください。",
+  "kakaoImport.error.speaker-not-found": "一覧からあなたの名前を選んでください。",
+  "kakaoImport.error.too-many-imports":
+    "保存できる取り込みは最大20件です。古いものを先に削除してください。",
+  "kakaoImport.error.busy": "現在、取り込みが混み合っています。1分ほどしてからお試しください。",
+  "kakaoImport.error.import-in-progress": "処理中の取り込みが終わってから追加してください。",
+  "kakaoImport.error.not-found": "この取り込みはもう存在しません。",
+  "kakaoImport.error.rate-limited": "試行回数が多すぎます。しばらくしてからお試しください。",
+  "kakaoImport.error.generic": "KakaoTalkの取り込みで問題が発生しました。もう一度お試しください。",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "テキストでルールを編集",
   "rulesDsl.desc":

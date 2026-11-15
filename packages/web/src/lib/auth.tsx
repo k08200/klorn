@@ -72,6 +72,9 @@ interface User {
   // Server-driven client flag: the API's SLACK_ENABLED, cohort-aware. True
   // shows the Slack panel in Settings → Integrations. Undefined = off.
   slack?: boolean;
+  // Server-driven client flag: the API's KAKAO_IMPORT_ENABLED, cohort-aware.
+  // True shows the KakaoTalk import panel in Settings → Integrations.
+  kakaoImport?: boolean;
   // Server-driven client flag: the API's TEAMS_ENABLED (Klorn Teams),
   // cohort-aware. True shows the organization pages in Settings → Team and the
   // invite accept page. Undefined (older API) = off.
