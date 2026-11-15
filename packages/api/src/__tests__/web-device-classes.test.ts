@@ -181,36 +181,48 @@ describe("touch targets on the tablet widths", () => {
   });
 });
 
-describe("Fold cover screen (< 360px): Today is the Push-only 'Needs you now' view", () => {
+describe("phone Today (< 600px): the MB1 brief, compact below 360px", () => {
   const TODAY = read("app/today/today-view.tsx");
-  const COVER = read("app/today/cover-view.tsx");
-  // The Reply · Later card is shared with Today's "Held back" group.
-  const CARD = read("app/today/reply-later-card.tsx");
+  const PHONE = read("app/today/phone-today.tsx");
+  const CARD = read("app/today/push-brief-card.tsx");
+  const NEXT = read("app/today/next-events.tsx");
+  // The Reply · Later card stays on Today's "Held back" group.
+  const HELD_CARD = read("app/today/reply-later-card.tsx");
   const HELD = read("app/today/held-back.tsx");
 
-  it("switches below 360px only, so 360px and up keep the phone home", () => {
+  it("switches to the brief below 600px and its compact form below 360px", () => {
+    expect(TODAY).toContain('PHONE_QUERY = "(max-width: 599.98px)"');
     expect(TODAY).toContain('COVER_QUERY = "(max-width: 359.98px)"');
-    expect(TODAY).toMatch(/useMediaQuery\(COVER_QUERY\)/);
-    expect(TODAY).toMatch(/<CoverToday\b/);
+    expect(TODAY).toMatch(/useMediaQuery\(PHONE_QUERY\)/);
+    expect(TODAY).toMatch(/<PhoneToday time=\{time\} accounts=\{accounts\} compact=\{cover\} \/>/);
   });
 
-  it("lists PUSH through Today's locked 72h window — the same lane read as the PUSH block", () => {
-    expect(COVER).toMatch(/useLaneMail\("PUSH", true\)/);
-    expect(COVER).not.toMatch(/useLaneMail\("(MEETING|QUEUE|INFO|SILENT)"/);
+  it("counts and lists PUSH through Today's locked 72h window — the same lane read as the PUSH block", () => {
+    expect(PHONE).toMatch(/useLaneMail\("PUSH", true\)/);
+    expect(PHONE).not.toMatch(/useLaneMail\("(MEETING|QUEUE|INFO|SILENT)"/);
+    expect(PHONE).toMatch(/briefHeadlineKey\(mail\.total\)/);
   });
 
   it("gives each card Reply and Later as 44px targets wired to the existing actions", () => {
-    expect(COVER).toMatch(/<ReplyLaterCard\b/);
+    expect(PHONE).toMatch(/<PushBriefCard\b/);
     expect(CARD).toContain('t("keys.reply")');
     expect(CARD).toContain('t("mailV2.reader.later")');
-    expect(CARD.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
-    expect(COVER).toMatch(/min-h-11/);
     expect(CARD).toContain("focus=reply");
     expect(CARD).toMatch(/postReminder\(/);
+    expect(CARD).toMatch(/min-h-11/);
+    // Compact: Later is an icon with its name, still 44px.
+    expect(CARD).toMatch(/size="icon"\s+aria-label=\{laterLabel\}\s+className="size-11"/);
+    expect(HELD_CARD.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
-  it("shows the 'Held back' group below the list, collapsed behind an aria-expanded disclosure", () => {
-    expect(COVER).toMatch(/<HeldBackGroup\b/);
+  it("renders why it rang as text only, Klorn's call prefixed", () => {
+    expect(CARD).toContain('t("notifCenter.judgment", { text: why.text })');
+    expect(CARD).not.toMatch(/dangerouslySetInnerHTML/);
+    expect(NEXT).not.toMatch(/dangerouslySetInnerHTML/);
+  });
+
+  it("shows the 'Held back' group below the cards, collapsed behind an aria-expanded disclosure", () => {
+    expect(PHONE).toMatch(/<HeldBackGroup\b/);
     expect(HELD).toMatch(/aria-expanded=\{open\}/);
     expect(HELD).toMatch(/aria-controls=\{listId\}/);
     expect(HELD).toMatch(/size="lg"/);
@@ -221,14 +233,14 @@ describe("Fold cover screen (< 360px): Today is the Push-only 'Needs you now' vi
   });
 
   it("draws the interruption meter only from the server's budget, else nothing", () => {
-    expect(COVER).toMatch(/coverMeter\(mail\.interruptBudget\)/);
-    expect(COVER).toMatch(/meter && <InterruptMeter/);
-    expect(COVER).not.toMatch(/of 5|\b5\b interruptions/);
+    expect(PHONE).toMatch(/coverMeter\(mail\.interruptBudget\)/);
+    expect(PHONE).toMatch(/meter && <InterruptMeter/);
+    expect(PHONE).not.toMatch(/of 5|\b5\b interruptions/);
   });
 
-  it("ends with a full-width link to the whole inbox, never 'unfold'", () => {
-    expect(COVER).toContain('t("today.cover.openInbox")');
-    expect(COVER).not.toMatch(/unfold/i);
+  it("compact ends with a full-width link to the whole inbox, never 'unfold'", () => {
+    expect(PHONE).toContain('t("today.cover.openInbox")');
+    expect(PHONE).not.toMatch(/unfold/i);
   });
 
   it("the reader honours ?focus=reply from any entry, not only the keyboard path", () => {

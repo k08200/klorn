@@ -26,15 +26,22 @@ import { useMediaQuery } from "../../lib/use-media-query";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { AssistantColumn } from "./assistant-column";
 import { CalendarColumn } from "./calendar-column";
-import { CoverToday } from "./cover-view";
 import { RecentFilesBlock } from "./files-block";
 import { MailColumn, type TimeContext } from "./mail-column";
+import { PhoneToday } from "./phone-today";
 import { ACCOUNTS_HREF, TodayHeader } from "./today-header";
 import { useRefreshOnNewMail } from "./use-today-data";
 
 /**
- * A cover screen (a Fold's outer display, 344dp): below 360px home is the
- * Push-only "Needs you now" view (cover-view.tsx); 360px and up keep this one.
+ * A phone (below the rail step, 600px): Today is the MB1 brief
+ * (phone-today.tsx, mobile redesign PR2, LOCKED 2026-11-14). 600px and up keep
+ * the lanes layout below.
+ */
+const PHONE_QUERY = "(max-width: 599.98px)";
+/**
+ * A cover screen (a Fold's outer display, 344dp) or any phone that narrow:
+ * the brief's compact form — one-line next event, icon-only Later and the
+ * whole-inbox link in place of the lower sections.
  */
 const COVER_QUERY = "(max-width: 359.98px)";
 
@@ -62,9 +69,10 @@ export function TodayView() {
   const noSource = hasMailSource === false;
   const accounts = useConnectedAccounts(!noSource);
   useRefreshOnNewMail();
+  const phone = useMediaQuery(PHONE_QUERY);
   const cover = useMediaQuery(COVER_QUERY);
 
-  if (cover && !noSource) return <CoverToday time={time} />;
+  if (phone && !noSource) return <PhoneToday time={time} accounts={accounts} compact={cover} />;
 
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>

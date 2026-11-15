@@ -42,7 +42,7 @@ const HEALTH_TEXT: Record<AccountHealth, string> = {
   reconnect: "font-medium text-state-danger-ink",
 };
 
-function longDate(time: TimeContext): string {
+export function longDate(time: TimeContext): string {
   return new Intl.DateTimeFormat(time.locale, {
     timeZone: time.timeZone,
     weekday: "long",
@@ -133,7 +133,7 @@ function DayStrip() {
  * attention, or the retry when the list failed. Nothing while loading or when
  * every account is synced — the sidebar states health on wider screens.
  */
-function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
+export function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   const { t } = useT();
   if (accounts.failed) {
     return (
