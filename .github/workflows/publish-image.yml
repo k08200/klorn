@@ -30,7 +30,23 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # `klorn upgrade <version>` (packages/cli) pulls the images tagged <version>
+  # and waits for /api/health to report it, and the API reports the version in
+  # packages/api/package.json. An image published under any other tag can never
+  # finish an upgrade, so a tag build stops here before anything is built or
+  # pushed. A manual dispatch from a branch publishes only `latest` and skips it.
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches packages/api/package.json
+        if: github.ref_type == 'tag'
+        run: node .github/scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+
   publish:
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read

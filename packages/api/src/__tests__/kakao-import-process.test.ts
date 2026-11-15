@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   messageDeleteMany: vi.fn(),
   extract: vi.fn(),
   deleteCommitments: vi.fn(),
+  sweepOrphans: vi.fn(),
   timeZone: vi.fn(async () => "Asia/Seoul"),
   credentials: vi.fn(async () => ({ anthropicApiKey: "sk-ant-user" })),
   backgroundDisabled: vi.fn(() => false),
@@ -33,6 +34,7 @@ vi.mock("../db.js", () => ({
 vi.mock("../kakao-import/commitments.js", () => ({
   extractKakaoCommitments: mocks.extract,
   deleteKakaoImportCommitments: mocks.deleteCommitments,
+  sweepOrphanKakaoCommitments: mocks.sweepOrphans,
 }));
 vi.mock("../user-timezone.js", () => ({ getUserTimeZone: mocks.timeZone }));
 vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: mocks.credentials }));
@@ -93,6 +95,7 @@ beforeEach(() => {
     duplicatesSkipped: 0,
   });
   mocks.deleteCommitments.mockResolvedValue(0);
+  mocks.sweepOrphans.mockResolvedValue({ imports: 0, commitments: 0 });
   mocks.backgroundDisabled.mockReturnValue(false);
   resetKakaoSchedulerState();
 });
@@ -217,12 +220,28 @@ describe("processKakaoImport", () => {
     });
   });
 
+  it("does not count duplicates (no LLM call) against the candidate cap", async () => {
+    mocks.messageFindMany.mockResolvedValue(storedMessages(KAKAO_MAX_CANDIDATES_PER_IMPORT + 10));
+    mocks.extract.mockResolvedValue({
+      candidatesFound: 2,
+      commitmentsCreated: 0,
+      duplicatesSkipped: 2,
+    });
+    await processKakaoImport(claim);
+    expect(mocks.extract).toHaveBeenCalledTimes(KAKAO_MAX_CANDIDATES_PER_IMPORT + 10);
+    expect(settledData()).toMatchObject({
+      status: "DONE",
+      errorCode: null,
+      duplicatesSkipped: 100,
+    });
+  });
+
   it("never asks for more candidates than the import has left", async () => {
     mocks.messageFindMany.mockResolvedValue(storedMessages(60));
     mocks.extract.mockResolvedValue({
       candidatesFound: 3,
-      commitmentsCreated: 0,
-      duplicatesSkipped: 3,
+      commitmentsCreated: 3,
+      duplicatesSkipped: 0,
     });
     await processKakaoImport(claim);
     const asked = mocks.extract.mock.calls.map(
@@ -364,6 +383,35 @@ describe("kakaoSchedulerTick", () => {
     await kakaoSchedulerTick(NOW, lease);
     expect(mocks.messageDeleteMany).toHaveBeenCalledTimes(1);
     expect(mocks.importFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("sweeps commitments of deleted imports with the purge, even while the flag is off", async () => {
+    process.env.KAKAO_IMPORT_ENABLED = "off";
+    mocks.messageDeleteMany.mockResolvedValue({ count: 0 });
+    mocks.importUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.sweepOrphans.mockResolvedValue({ imports: 1, commitments: 2 });
+    await kakaoSchedulerTick(NOW, lease);
+    expect(mocks.sweepOrphans).toHaveBeenCalledTimes(1);
+    // On the purge's interval, not every tick.
+    await kakaoSchedulerTick(new Date(NOW.getTime() + 30_000), lease);
+    expect(mocks.sweepOrphans).toHaveBeenCalledTimes(1);
+    expect(mocks.captureError).not.toHaveBeenCalled();
+  });
+
+  it("a failing sweep is reported by name and does not stop processing", async () => {
+    mocks.sweepOrphans.mockRejectedValue(
+      Object.assign(new Error("value 'kakao-import:x' too long"), {
+        name: "PrismaClientKnownRequestError",
+      }),
+    );
+    await kakaoSchedulerTick(NOW, lease);
+    expect(mocks.importFindFirst).toHaveBeenCalledTimes(1);
+    const [error, context] = mocks.captureError.mock.calls[0] as [Error, Record<string, unknown>];
+    expect(error.message).toBe("kakao-import: orphan sweep failed (PrismaClientKnownRequestError)");
+    expect(context).toEqual({
+      tags: { scope: "kakao-import.orphan-sweep" },
+      extra: { errorName: "PrismaClientKnownRequestError" },
+    });
   });
 
   it("touches no database between purges while the flag is off", async () => {
