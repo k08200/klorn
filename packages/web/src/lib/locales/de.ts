@@ -3191,6 +3191,69 @@ const de: Record<string, string> = {
   "slack.error.rate-limited": "Zu viele Versuche. Versuche es später erneut.",
   "slack.error.generic": "Mit Slack ist etwas schiefgelaufen. Versuche es erneut.",
   "slack.retry": "Erneut versuchen",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "KakaoTalk-Chat importieren",
+  "kakaoImport.desc":
+    "Lade einen Chat hoch, den du aus KakaoTalk exportiert hast. Klorn liest die letzten 30 Tage und schlägt dir Zusagen zum Bestätigen vor. Ein einmaliger Import, keine Synchronisierung.",
+  "kakaoImport.howTo.title": "So exportierst du einen Chat",
+  "kakaoImport.howTo.mobile":
+    "Smartphone: Chat öffnen, ≡ → Einstellungen (⚙) → Chat exportieren → Nur Text exportieren. Bei einer .zip-Datei: entpacken und die .txt-Datei darin hochladen.",
+  "kakaoImport.howTo.pc":
+    "PC oder Mac: Chat öffnen, ≡ → Chat exportieren (Chat speichern) und als .txt oder .csv speichern.",
+  "kakaoImport.file": "Exportierter Chat (.txt oder .csv, UTF-8, höchstens 10 MB)",
+  "kakaoImport.preview": "Datei prüfen",
+  "kakaoImport.previewSummary":
+    "{total} Nachrichten in der Datei. Klorn liest {window} Textnachrichten der letzten {days} Tage.",
+  "kakaoImport.truncated": "Nur die neuesten werden gelesen.",
+  "kakaoImport.me.legend": "Welcher Name bist du?",
+  "kakaoImport.me.count": "{count} aktuelle Nachrichten",
+  "kakaoImport.consent":
+    "Diese Datei enthält Nachrichten anderer Personen, und ich darf diesen Chat mit Klorn teilen. Klorn sendet aktuelle Nachrichten, die wie Zusagen aussehen, an sein KI-Modell und löscht den gespeicherten Chattext spätestens nach 7 Tagen. Vorgeschlagene Zusagen behalten ein kurzes Zitat und den Namen der Person, bis du sie löschst.",
+  "kakaoImport.import": "Importieren",
+  "kakaoImport.cancel": "Abbrechen",
+  "kakaoImport.imported": "Import gestartet. Vorschläge erscheinen unter Zusagen → Zu bestätigen.",
+  "kakaoImport.history.title": "Importe",
+  "kakaoImport.importedAt": "Importiert {time}",
+  "kakaoImport.status.PENDING": "Wartet",
+  "kakaoImport.status.PROCESSING": "Wird gelesen",
+  "kakaoImport.status.DONE": "Fertig",
+  "kakaoImport.status.FAILED": "Fehlgeschlagen",
+  "kakaoImport.result": "{created} neue Vorschläge aus {messages} Nachrichten.",
+  "kakaoImport.result.partial":
+    "{created} neue Vorschläge aus {messages} Nachrichten. Vorzeitig beim Limit pro Import angehalten.",
+  "kakaoImport.result.waiting": "{messages} Nachrichten werden gelesen…",
+  "kakaoImport.result.expired": "Abgelaufen, bevor er gelesen wurde. Importiere den Chat erneut.",
+  "kakaoImport.result.failed":
+    "Klorn konnte diesen Import nicht lesen. Lösche ihn und versuche es erneut.",
+  "kakaoImport.delete": "Löschen",
+  "kakaoImport.delete.title": "Diesen Import löschen?",
+  "kakaoImport.delete.message":
+    "Klorn löscht den Import und alle daraus entstandenen Zusagen, auch bereits bestätigte.",
+  "kakaoImport.deleted": "Import samt Vorschlägen gelöscht.",
+  "kakaoImport.retry": "Erneut versuchen",
+  "kakaoImport.error.empty-file": "Die Datei ist leer.",
+  "kakaoImport.error.file-too-large": "Die Datei ist größer als 10 MB.",
+  "kakaoImport.error.unsupported-encoding":
+    "Die Datei ist kein UTF-8-Text. Exportiere sie erneut aus KakaoTalk.",
+  "kakaoImport.error.zip-not-supported":
+    "Entpacke den Export und lade die .txt- oder .csv-Datei darin hoch.",
+  "kakaoImport.error.unknown-format": "Das sieht nicht nach einem KakaoTalk-Chatexport aus.",
+  "kakaoImport.error.no-messages": "Der Export enthält keine Nachrichten.",
+  "kakaoImport.error.too-many-lines": "Die Datei hat zu viele Zeilen.",
+  "kakaoImport.error.too-many-messages": "Die Datei hat zu viele Nachrichten.",
+  "kakaoImport.error.too-many-speakers": "Der Chat hat zu viele Teilnehmende (höchstens 500).",
+  "kakaoImport.error.invalid-upload": "Klorn konnte den Upload nicht lesen. Versuche es erneut.",
+  "kakaoImport.error.consent-required": "Bestätige zuerst, dass du diesen Chat importieren darfst.",
+  "kakaoImport.error.speaker-not-found": "Wähle deinen eigenen Namen aus der Liste.",
+  "kakaoImport.error.too-many-imports":
+    "Du kannst höchstens 20 Importe behalten. Lösche zuerst einen älteren.",
+  "kakaoImport.error.busy": "Importe sind gerade ausgelastet. Versuche es in einer Minute erneut.",
+  "kakaoImport.error.import-in-progress":
+    "Warte, bis deine laufenden Importe fertig sind, bevor du einen weiteren hinzufügst.",
+  "kakaoImport.error.not-found": "Dieser Import existiert nicht mehr.",
+  "kakaoImport.error.rate-limited": "Zu viele Versuche. Versuche es später erneut.",
+  "kakaoImport.error.generic":
+    "Beim KakaoTalk-Import ist etwas schiefgelaufen. Versuche es erneut.",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "Regeln als Text",
   "rulesDsl.desc":

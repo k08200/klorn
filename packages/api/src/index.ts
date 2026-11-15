@@ -333,6 +333,7 @@ try {
     "VAULT_EXPORT_ENABLED",
     "RULES_DSL_ENABLED",
     "SLACK_ENABLED",
+    "KAKAO_IMPORT_ENABLED",
   ]);
 
   // Start autonomous background agent
@@ -456,6 +457,19 @@ try {
     .catch((err) => {
       console.error("[STARTUP] slack scheduler failed to start:", err);
       captureError(err, { tags: { context: "startup:slack" } });
+    });
+
+  // KakaoTalk import v1 (docs/providers/kakaotalk-import.md). Started even under
+  // BACKGROUND_AGENTS_DISABLED: uploaded chat text must keep expiring after 7
+  // days; the processing pass inside it (kakao-import/process.ts) stands down
+  // while the brake is set.
+  import("./kakao-import/scheduler.js")
+    .then(({ startKakaoImportScheduler }) => {
+      startKakaoImportScheduler();
+    })
+    .catch((err) => {
+      console.error("[STARTUP] kakao-import scheduler failed to start:", err);
+      captureError(err, { tags: { context: "startup:kakao-import" } });
     });
 
   // Pending account purges in object storage (step D3; hourly). While

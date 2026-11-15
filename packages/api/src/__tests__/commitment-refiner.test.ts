@@ -222,4 +222,63 @@ describe("commitment LLM refinement", () => {
     expect(system).toMatch(/8시/);
     expect(system).toMatch(/offset/i);
   });
+
+  it("tells the LLM who wrote a KakaoTalk message and runs on the user's BYOK keys", async () => {
+    process.env.COMMITMENT_LLM_REFINEMENT = "1";
+    mocks.createCompletion.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ isCommitment: true }) } }],
+    });
+    const credentials = { anthropicApiKey: "sk-ant-test" };
+
+    await maybeRefineCommitmentCandidateWithLlm({
+      candidate,
+      sourceType: "KAKAO",
+      sourceText: candidate.text,
+      userId: "user-1",
+      authoredByUser: true,
+      credentials,
+      feature: "kakao-import",
+    });
+
+    const [request, options] = mocks.createCompletion.mock.calls[0] as [
+      { messages: Array<{ role: string; content: string }> },
+      Record<string, unknown>,
+    ];
+    const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+    expect(user).toContain("Message author: USER (the user wrote this message");
+    expect(user).toContain(
+      '<untrusted_content source="commitment:sourceText">내일까지 자료 보내드릴게요.</untrusted_content>',
+    );
+    expect(options).toEqual({
+      userId: "user-1",
+      priority: "background",
+      credentials,
+      feature: "kakao-import",
+    });
+  });
+
+  it("keeps the mail prompt and call options as they were: no author line, no keys", async () => {
+    process.env.COMMITMENT_LLM_REFINEMENT = "1";
+    mocks.createCompletion.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ isCommitment: true }) } }],
+    });
+
+    await maybeRefineCommitmentCandidateWithLlm({
+      candidate,
+      sourceType: "EMAIL",
+      sourceText: candidate.text,
+      userId: "user-1",
+    });
+
+    const [request, options] = mocks.createCompletion.mock.calls[0] as [
+      { messages: Array<{ role: string; content: string }> },
+      Record<string, unknown>,
+    ];
+    const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+    const system = request.messages.find((message) => message.role === "system")?.content ?? "";
+    expect(user).not.toContain("Message author:");
+    expect(system).not.toContain("Message author");
+    expect(system).not.toContain("KAKAO");
+    expect(options).toEqual({ userId: "user-1", priority: "background" });
+  });
 });

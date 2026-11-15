@@ -123,6 +123,128 @@ describe("extractAndUpsertCommitmentsFromText", () => {
     expect(input.confidence).toBeLessThan(0.7);
   });
 
+  describe("KAKAO (imported chat export)", () => {
+    const sureRefinement = {
+      isCommitment: true,
+      title: "견적서 보내기",
+      kind: "DELIVERABLE",
+      owner: "USER",
+      counterpartyName: null,
+      dueText: "내일",
+      dueAt: null,
+      confidence: 0.97,
+    };
+
+    it("reads another speaker's first-person promise as theirs, suggested", async () => {
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "KAKAO",
+        sourceId: "kakao-import:imp-1:3",
+        threadId: "kakao-import:imp-1",
+        text: "내일까지 자료 보내드릴게요.",
+        senderIsUser: false,
+      });
+      expect(mocks.upsertCommitmentMock).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ owner: "COUNTERPARTY", sourceType: "KAKAO", confidence: 0.55 }),
+      );
+    });
+
+    it("reads the user's own first-person promise as the user's", async () => {
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "KAKAO",
+        sourceId: "kakao-import:imp-1:4",
+        threadId: "kakao-import:imp-1",
+        text: "내일까지 자료 보내드릴게요.",
+        senderIsUser: true,
+      });
+      expect(mocks.upsertCommitmentMock).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ owner: "USER", sourceType: "KAKAO" }),
+      );
+    });
+
+    it("keeps a Kakao commitment below the confirmation line even when the refiner is sure", async () => {
+      mocks.refinerEnabledMock.mockReturnValue(true);
+      mocks.refineMock.mockResolvedValue(sureRefinement);
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "KAKAO",
+        sourceId: "kakao-import:imp-1:5",
+        threadId: "kakao-import:imp-1",
+        text: "내일까지 견적서 보내드릴게요.",
+        senderIsUser: true,
+      });
+      const input = mocks.upsertCommitmentMock.mock.calls[0]?.[1] as { confidence: number };
+      expect(input.confidence).toBe(0.69);
+    });
+
+    it("hands the refiner the author, BYOK credentials and a ledger label", async () => {
+      mocks.refinerEnabledMock.mockReturnValue(true);
+      mocks.refineMock.mockResolvedValue(sureRefinement);
+      const credentials = { anthropicApiKey: "sk-ant-test" };
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "KAKAO",
+        sourceId: "kakao-import:imp-1:6",
+        threadId: "kakao-import:imp-1",
+        text: "내일까지 견적서 보내드릴게요.",
+        senderIsUser: false,
+        credentials,
+        llmFeature: "kakao-import",
+      });
+      expect(mocks.refineMock).toHaveBeenCalledWith(
+        expect.objectContaining({ authoredByUser: false, credentials, feature: "kakao-import" }),
+      );
+    });
+
+    it("scopes dedup to the message when asked, so the same words in two messages stay two", async () => {
+      const base = {
+        userId: "user-1",
+        sourceType: "KAKAO" as const,
+        threadId: "kakao-import:imp-1",
+        text: "내일까지 자료 보내드릴게요.",
+        senderIsUser: false,
+      };
+      await extractAndUpsertCommitmentsFromText({
+        ...base,
+        sourceId: "kakao-import:imp-1:1",
+        dedupScope: "kakao-import:imp-1:1",
+      });
+      await extractAndUpsertCommitmentsFromText({
+        ...base,
+        sourceId: "kakao-import:imp-1:7",
+        dedupScope: "kakao-import:imp-1:7",
+      });
+      const keys = mocks.upsertCommitmentMock.mock.calls.map(
+        ([, input]) => (input as { dedupKey: string; threadId: string }).dedupKey,
+      );
+      expect(new Set(keys).size).toBe(2);
+      expect(keys[0]).toMatch(/^kakao:kakao-import:imp-1:1:/);
+      const threads = mocks.upsertCommitmentMock.mock.calls.map(
+        ([, input]) => (input as { threadId: string }).threadId,
+      );
+      expect(threads).toEqual(["kakao-import:imp-1", "kakao-import:imp-1"]);
+    });
+
+    it("tells the refiner nothing new for mail: no author line, no credentials", async () => {
+      mocks.refinerEnabledMock.mockReturnValue(true);
+      mocks.refineMock.mockResolvedValue(sureRefinement);
+      await extractAndUpsertCommitmentsFromText({
+        userId: "user-1",
+        sourceType: "EMAIL",
+        sourceId: "email-9",
+        text: "I'll send the deck by EOD.",
+        senderIsUser: false,
+      });
+      const refinerInput = mocks.refineMock.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(refinerInput.authoredByUser).toBeUndefined();
+      expect(refinerInput.credentials).toBeUndefined();
+      expect(refinerInput.feature).toBeUndefined();
+    });
+  });
+
   it("uses deterministic dedup keys so repeated ingestion is counted as duplicate", async () => {
     const input = {
       userId: "user-1",

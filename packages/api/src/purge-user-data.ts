@@ -128,6 +128,10 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.slackMessage.deleteMany(scope);
   await tx.slackEpisode.deleteMany(scope);
   await tx.slackConnection.deleteMany(scope);
+  // KakaoTalk import (docs/providers/kakaotalk-import.md): message text awaiting
+  // processing, then the import rows (counts and timestamps, no text).
+  await tx.kakaoImportMessage.deleteMany(scope);
+  await tx.kakaoImport.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);

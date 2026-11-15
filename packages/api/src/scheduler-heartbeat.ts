@@ -39,6 +39,7 @@ export const EXPECTED_SCHEDULERS = [
   "data-wipe",
   "org-audit-retention",
   "slack-episodes",
+  "kakao-import",
 ] as const;
 
 export type SchedulerName = (typeof EXPECTED_SCHEDULERS)[number];

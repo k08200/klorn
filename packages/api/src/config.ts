@@ -793,6 +793,21 @@ export function slackOpenTo(userId: string): boolean {
   return featureOpenTo(userId, SLACK_FLAGS);
 }
 
+// KakaoTalk chat-export import v1 (docs/providers/kakaotalk-import.md): the
+// user uploads one exported chat; Klorn suggests commitments from its recent
+// window. OFF by default (repo doctrine). `cohort` opens the routes, the
+// processing pass and `user.kakaoImport` only to ROLLOUT_COHORT_USER_IDS.
+// While off every /api/kakao-import route answers the default 404, even
+// unauthenticated. Read per call: a flip needs no redeploy.
+export const KAKAO_IMPORT_FLAG = "KAKAO_IMPORT_ENABLED";
+export const KAKAO_IMPORT_FLAGS = [KAKAO_IMPORT_FLAG] as const;
+export function kakaoImportLive(): boolean {
+  return flagMode(KAKAO_IMPORT_FLAG) !== "off";
+}
+export function kakaoImportOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, KAKAO_IMPORT_FLAGS);
+}
+
 export function appleLoginEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.APPLE_LOGIN_ENABLED ?? "").trim().toLowerCase(),
