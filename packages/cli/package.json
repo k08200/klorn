@@ -1,0 +1,27 @@
+{
+  "name": "@klorn/cli",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "description": "klorn — operations CLI for self-hosted Klorn (doctor, migrate, backup, up, upgrade)",
+  "type": "module",
+  "bin": {
+    "klorn": "bin/klorn.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "klorn": "node bin/klorn.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
+}

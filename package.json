@@ -51,6 +51,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @klorn/api --filter @klorn/web --parallel dev",
+    "klorn": "node packages/cli/bin/klorn.mjs",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test"
   }
