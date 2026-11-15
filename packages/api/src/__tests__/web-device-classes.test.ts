@@ -1,7 +1,8 @@
 // Pins the web shell's device classes (docs/design/design-language-v2.md,
 // "Device classes"): bottom tabs below 600px, the navigation rail from 600px,
-// the full sidebar from 1024px, and the mail list + reader split from 700px
-// or on any two-segment (hinged) screen, with the seam on the hinge.
+// the full sidebar from 840px (a phone on its side keeps the rail to 1024px),
+// and the mail list + reader split from 600px or on any two-segment (hinged)
+// screen, with the seam on the hinge.
 // The classes are Tailwind variants, so the guard reads the source: the
 // shell pieces must switch at the same step or a width ends up with two
 // navigations, or none. Run from the api suite because the web package has no
@@ -34,24 +35,55 @@ function block(css: string, selector: string): string {
   throw new Error(`unclosed block: ${selector}`);
 }
 
+/** The sidebar step, as the `shell-wide` variant and the CSS rules state it. */
+const SHELL_WIDE =
+  /@media \(min-width: 64rem\),\s*\(min-width: 52\.5rem\) and \(min-height: 500px\),\s*\(min-width: 52\.5rem\) and \(orientation: portrait\) {/g;
+
+/** Offsets of every `shell-wide` @media query in globals.css. */
+function shellWideAt(): number[] {
+  return [...CSS.matchAll(SHELL_WIDE)].map((m) => m.index ?? -1);
+}
+
 describe("device-class breakpoints", () => {
   it("defines the rail step at 600px, in rem like Tailwind's own steps", () => {
     expect(CSS).toMatch(/--breakpoint-rail:\s*37\.5rem;/);
   });
 
-  it("gives the shell's nav column the rail and sidebar widths", () => {
-    expect(block(CSS, "@media (min-width: 37.5rem)")).toContain("72px");
-    expect(block(CSS, "@media (min-width: 64rem)")).toContain("260px");
+  it("defines the sidebar step as the shell-wide variant: 1024px, or 840px unless short and landscape", () => {
+    const [variantAt, ruleAt] = shellWideAt();
+    expect(variantAt).toBeGreaterThan(CSS.indexOf("@custom-variant shell-wide {"));
+    expect(variantAt).toBeLessThan(
+      CSS.indexOf("@slot;", CSS.indexOf("@custom-variant shell-wide {")),
+    );
+    expect(ruleAt).toBeGreaterThan(variantAt);
+  });
+
+  it("gives the shell's nav column the rail width, 220px at the sidebar step and 260px from 1024px", () => {
+    expect(block(CSS, "@media (min-width: 37.5rem) {")).toContain("72px");
+    const ruleAt = shellWideAt()[1];
+    expect(ruleAt).toBeGreaterThan(0);
+    expect(block(CSS.slice(ruleAt), "@media")).toMatch(
+      /--shell-nav-w:\s*calc\(220px \+ env\(safe-area-inset-left\)\)/,
+    );
+    expect(block(CSS, "@media (min-width: 64rem) {")).toMatch(
+      /--shell-nav-w:\s*calc\(260px \+ env\(safe-area-inset-left\)\)/,
+    );
+    // 260px must come after 220px so it wins from 1024px.
+    expect(CSS.indexOf("@media (min-width: 64rem) {")).toBeGreaterThan(ruleAt);
     expect(RAIL).toContain("w-[calc(72px+env(safe-area-inset-left))]");
-    expect(SIDEBAR).toContain("w-[calc(260px+env(safe-area-inset-left))]");
+    expect(SIDEBAR).toContain(
+      "w-[calc(220px+env(safe-area-inset-left))] lg:w-[calc(260px+env(safe-area-inset-left))]",
+    );
   });
 });
 
 describe("one navigation per width", () => {
-  it("the tab bar hides from 600px, where the rail shows; the rail gives way to the sidebar at 1024px", () => {
+  it("the tab bar hides from 600px, where the rail shows; the rail gives way to the sidebar at 840px (1024px for a phone on its side)", () => {
     expect(TABS).toMatch(/className="rail:hidden fixed bottom-0/);
-    expect(RAIL).toMatch(/\bhidden\b[^"]*\brail:flex\b[^"]*\blg:hidden\b/);
-    expect(SIDEBAR).toMatch(/<aside className="hidden lg:block /);
+    expect(RAIL).toMatch(/\bhidden\b[^"]*\brail:flex\b[^"]*\bshell-wide:hidden\b/);
+    expect(RAIL).not.toMatch(/\blg:hidden\b/);
+    expect(SIDEBAR).toMatch(/className="hidden shell-wide:block /);
+    expect(SIDEBAR).not.toMatch(/\blg:block\b/);
   });
 
   it("the phone header and the tab bar's clearances switch at the same step", () => {
@@ -68,9 +100,9 @@ describe("one navigation per width", () => {
 });
 
 describe("mail split", () => {
-  it("opens from 700px, or on any screen the browser reports as two side-by-side segments", () => {
+  it("opens from 600px (the rail step), or on any screen the browser reports as two side-by-side segments", () => {
     expect(MAIL_LAYOUT).toContain(
-      'SPLIT_QUERY = "(min-width: 700px), (horizontal-viewport-segments: 2)"',
+      'SPLIT_QUERY = "(min-width: 37.5rem), (horizontal-viewport-segments: 2)"',
     );
     expect(MAIL_LAYOUT).toContain("mail-split-list");
     expect(MAIL_LAYOUT).toContain("mail-split-reader");
@@ -233,8 +265,11 @@ describe("phone landscape (landscape, < 500px tall, from 600px wide): compact ra
     // sidebar step; the list width overrides the base clamp and yields to a hinge.
     const first = ruleAt(afterVariant);
     const second = ruleAt(first + 1);
+    const sidebarRule = shellWideAt()[1];
     expect(first).toBeGreaterThan(0);
-    expect(first).toBeLessThan(CSS.indexOf("@media (min-width: 64rem)"));
+    expect(sidebarRule).toBeGreaterThan(0);
+    expect(first).toBeLessThan(sidebarRule);
+    expect(first).toBeLessThan(CSS.indexOf("@media (min-width: 64rem) {"));
     expect(second).toBeGreaterThan(CSS.indexOf(".mail-split-list {"));
     expect(second).toBeLessThan(CSS.indexOf("@media (horizontal-viewport-segments: 2)"));
   });
