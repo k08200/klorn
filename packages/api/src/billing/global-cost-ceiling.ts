@@ -61,13 +61,16 @@ async function readSeatBreakerCents(cohort: readonly string[] | null): Promise<n
     _sum: { seatsPurchased: true },
   });
   const paid = Math.max(0, seats._sum.seatsPurchased ?? 0);
-  return paid * TEAM_SEAT_DAILY_COST_CAP_CENTS * GLOBAL_BREAKER_TARGET_MULTIPLIER;
+  // Never below 0: a misconfigured (negative) seat target must not lower or
+  // disable the base ceiling.
+  return Math.max(0, paid * TEAM_SEAT_DAILY_COST_CAP_CENTS * GLOBAL_BREAKER_TARGET_MULTIPLIER);
 }
 
 /**
  * What the paid seat pools add to the global ceiling today, in cents: 0, with
  * no query, while TEAMS_ENABLED reaches no one. A failed read is reported and
- * answers 0 (the base ceiling, never a larger one).
+ * keeps the last value read for the same organizations (so a blip cannot trip
+ * the ceiling for everyone), or 0 — the base ceiling — when there is none.
  */
 export async function teamSeatBreakerCents(now = Date.now()): Promise<number> {
   const restriction = cohortRestriction([TEAMS_FLAG]);
@@ -75,16 +78,18 @@ export async function teamSeatBreakerCents(now = Date.now()): Promise<number> {
   const cohort = restriction.kind === "only" ? restriction.userIds : null;
   if (cohort !== null && cohort.length === 0) return 0;
   const scope = cohort === null ? "all" : [...cohort].sort().join(",");
-  if (cached && cached.scope === scope && now < cached.expiresAt) return cached.cents;
+  const last = cached?.scope === scope ? cached : null;
+  if (last && now < last.expiresAt) return last.cents;
   try {
     const cents = await readSeatBreakerCents(cohort);
     cached = { scope, expiresAt: now + SEATS_TTL_MS, cents };
     return cents;
   } catch (err) {
-    console.warn("[cost-guard] seat pool sum failed, using the base global ceiling:", err);
+    console.warn("[cost-guard] seat pool sum failed, keeping the last value (or the base):", err);
     captureError(err, { tags: { scope: "cost-guard.global-seat-pools" } });
-    cached = { scope, expiresAt: now + FAILURE_TTL_MS, cents: 0 };
-    return 0;
+    const cents = last?.cents ?? 0;
+    cached = { scope, expiresAt: now + FAILURE_TTL_MS, cents };
+    return cents;
   }
 }
 

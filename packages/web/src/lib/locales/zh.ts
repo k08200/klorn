@@ -2995,7 +2995,8 @@ const zh: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "账单门户只对支付团队费用的邮箱地址开放。付款人也可以使用 Paddle 收据邮件中的链接。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的邮箱地址可以添加。请让付款人来添加；付款人也可以使用 Paddle 收据邮件中的链接。你仍然可以减少席位。",
+    "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的邮箱地址可以添加。请联系用该地址登录 Klorn 的人（Paddle 收据邮件会发送到该地址）。你仍然可以减少席位。",
+  "settings.org.error.SEATS_CHANGED": "保存期间席位数已变更。请查看当前席位数后重试。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle 未确认此更改，可能未生效。请稍等片刻确认后再重试。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE": "团队账单目前不可用。未做任何更改。",

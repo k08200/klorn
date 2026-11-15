@@ -3217,7 +3217,9 @@ const ja: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "登録済みのカードにすぐ請求されるため、シートの追加はチームの料金を支払っているメールアドレスでのみできます。その人に追加を依頼してください。支払い担当者は Paddle の領収書メールのリンクも使えます。シートの削減は引き続きできます。",
+    "登録済みのカードにすぐ請求されるため、シートの追加はチームの料金を支払っているメールアドレスでのみできます。そのアドレスで Klorn にログインする人に依頼してください（Paddle の領収書メールはそのアドレスに届きます）。シートの削減は引き続きできます。",
+  "settings.org.error.SEATS_CHANGED":
+    "保存中にシート数が変わりました。現在のシート数を確認して、もう一度お試しください。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle が変更を確認しなかったため、反映されていない可能性があります。再試行する前に少し待ってから確認してください。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

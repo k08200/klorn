@@ -155,6 +155,7 @@ describe("seat management after purchase", () => {
         "NO_SUBSCRIPTION",
         "PORTAL_PAYER_ONLY",
         "SEATS_BELOW_MEMBERS",
+        "SEATS_CHANGED",
         "SEATS_INCREASE_PAYER_ONLY",
         "SEAT_CHANGE_UNSUPPORTED",
         "SUBSCRIPTION_NOT_ACTIVE",

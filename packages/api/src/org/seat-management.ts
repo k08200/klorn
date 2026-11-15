@@ -208,7 +208,7 @@ const SEATS_INCREASE_PAYER_ONLY = () =>
   new OrgError(
     403,
     "SEATS_INCREASE_PAYER_ONLY",
-    "Adding seats charges the payer's card right away, so only the email address that pays for the team can add them. Ask that person, or they can use the link in Paddle's receipt emails. Any owner can remove seats.",
+    "Only the email address that pays for the team can add seats, because the card on file is charged right away. Ask the person who signs in to Klorn with that address (Paddle's receipt emails go to it). Any owner can remove seats.",
   );
 
 function sameEmail(a: string, b: string): boolean {
@@ -282,6 +282,100 @@ async function refuseAudited(
   throw refusal.error;
 }
 
+/** Refuse an increase unless the owner is the payer; the refusal is audited. */
+async function requirePayerForIncrease(
+  userId: string,
+  orgId: string,
+  customerId: string | null,
+  change: { from: number; to: number },
+): Promise<void> {
+  const refusal = await payerRefusal(userId, orgId, customerId, SEATS_INCREASE_PAYER_ONLY);
+  if (refusal)
+    await refuseAudited(orgId, userId, "billing.seats_increase_refused", refusal, change);
+}
+
+const SEATS_CHANGE_ACTION = "billing.seats_change_requested" satisfies OrgAuditAction;
+
+/** The newest seat change requested through Klorn, or null: a mark taken before the live read. */
+type SeatChangeMark = { id: string; createdAt: Date } | null;
+
+function lastSeatChange(orgId: string): Promise<SeatChangeMark> {
+  return prisma.orgAuditEvent.findFirst({
+    where: { orgId, action: SEATS_CHANGE_ACTION },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, createdAt: true },
+  });
+}
+
+const SEATS_CHANGED = () =>
+  new OrgError(
+    409,
+    "SEATS_CHANGED",
+    "The seat count changed while this request was waiting. Check the count and try again.",
+  );
+
+/**
+ * Under the lock: a seat change committed since `mark` (its audit row is
+ * written in the same transaction as its Paddle call) means the live quantity
+ * read before the lock is stale, and with it the increase-or-decrease call —
+ * so two concurrent decreases cannot add up to an unchecked increase.
+ */
+async function assertNoSeatChangeSince(
+  tx: OrgTx,
+  orgId: string,
+  mark: SeatChangeMark,
+): Promise<void> {
+  const since = mark
+    ? {
+        OR: [
+          { createdAt: { gt: mark.createdAt } },
+          { createdAt: mark.createdAt, id: { not: mark.id } },
+        ],
+      }
+    : {};
+  const newer = await tx.orgAuditEvent.findFirst({
+    where: { orgId, action: SEATS_CHANGE_ACTION, ...since },
+    select: { id: true },
+  });
+  if (newer) throw SEATS_CHANGED();
+}
+
+interface SeatChange {
+  userId: string;
+  orgId: string;
+  subscriptionId: string;
+  item: { priceId: string; quantity: number };
+  seats: number;
+  mark: SeatChangeMark;
+}
+
+/** The locked part of a seat change: re-check what may have moved, audit, one Paddle call. */
+async function applySeatChange(tx: OrgTx, change: SeatChange): Promise<SeatChangeResult> {
+  const { userId, orgId, subscriptionId, item, seats } = change;
+  await ownerInTx(tx, userId, orgId);
+  // What may have moved since the reads before the lock: the subscription, a
+  // cancel, a member who joined, another seat change.
+  if (seatTarget(await billingInTx(tx, orgId)) !== subscriptionId) throw NOT_ACTIVE();
+  await assertMemberFloor(tx, orgId, seats);
+  await assertNoSeatChangeSince(tx, orgId, change.mark);
+  await recordOrgAudit(tx, {
+    orgId,
+    action: SEATS_CHANGE_ACTION,
+    actorUserId: userId,
+    detail: { from: item.quantity, to: seats },
+  });
+  try {
+    await setPaddleSeatQuantity({ subscriptionId, priceId: item.priceId, quantity: seats }, CALL);
+  } catch (err) {
+    // A cancel made in the portal after the live read: Paddle refuses the
+    // update while it is pending, so the change itself is the last check. An
+    // expected refusal, not a provider fault (no report).
+    if (isPaddleErrorCode(err, PENDING_SCHEDULED_CHANGE)) throw CANCEL_SCHEDULED();
+    throw providerError(err, orgId, "set_seats");
+  }
+  return { status: "pending", seats };
+}
+
 /**
  * Set the organization's seat count to `seats` (owner only). At least two,
  * at most 150, and never fewer than the members. Compared with what Paddle
@@ -297,47 +391,20 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
   const subscriptionId = seatTarget(stored);
   await assertMemberFloor(prisma, orgId, seats);
   requirePaddleKey();
+  const mark = await lastSeatChange(orgId);
   const item = await liveSeatItem(subscriptionId, orgId);
   if (item.quantity === seats) {
     return { status: stored.seatsPurchased === seats ? "unchanged" : "pending", seats };
   }
   if (seats > item.quantity) {
-    const refusal = await payerRefusal(
-      userId,
-      orgId,
-      stored.paddleCustomerId,
-      SEATS_INCREASE_PAYER_ONLY,
-    );
-    if (refusal) {
-      await refuseAudited(orgId, userId, "billing.seats_increase_refused", refusal, {
-        from: item.quantity,
-        to: seats,
-      });
-    }
-  }
-  return withOrgLock(orgId, async (tx) => {
-    await ownerInTx(tx, userId, orgId);
-    // What may have moved since the reads above: the subscription, a cancel,
-    // a member who joined.
-    if (seatTarget(await billingInTx(tx, orgId)) !== subscriptionId) throw NOT_ACTIVE();
-    await assertMemberFloor(tx, orgId, seats);
-    await recordOrgAudit(tx, {
-      orgId,
-      action: "billing.seats_change_requested",
-      actorUserId: userId,
-      detail: { from: item.quantity, to: seats },
+    await requirePayerForIncrease(userId, orgId, stored.paddleCustomerId, {
+      from: item.quantity,
+      to: seats,
     });
-    try {
-      await setPaddleSeatQuantity({ subscriptionId, priceId: item.priceId, quantity: seats }, CALL);
-    } catch (err) {
-      // A cancel made in the portal after the live read above: Paddle refuses
-      // the update while it is pending, so the change itself is the last
-      // check. An expected refusal, not a provider fault (no report).
-      if (isPaddleErrorCode(err, PENDING_SCHEDULED_CHANGE)) throw CANCEL_SCHEDULED();
-      throw providerError(err, orgId, "set_seats");
-    }
-    return { status: "pending", seats };
-  });
+  }
+  return withOrgLock(orgId, (tx) =>
+    applySeatChange(tx, { userId, orgId, subscriptionId, item, seats, mark }),
+  );
 }
 
 /** The subscription a period-end cancel may act on: billing, and not paused. */

@@ -3260,7 +3260,9 @@ const es: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "Solo el correo que paga el equipo puede añadir plazas, porque se cobra al momento en la tarjeta registrada. Pide a esa persona que las añada; también puede usar el enlace de los recibos de Paddle. Tú sí puedes quitar plazas.",
+    "Solo el correo que paga el equipo puede añadir plazas, porque se cobra al momento en la tarjeta registrada. Pídeselo a quien entra en Klorn con ese correo (los recibos de Paddle llegan a esa dirección). Tú sí puedes quitar plazas.",
+  "settings.org.error.SEATS_CHANGED":
+    "El número de plazas cambió mientras se guardaba. Revisa el número actual e inténtalo de nuevo.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle no confirmó el cambio, así que puede que no se haya aplicado. Compruébalo en un minuto antes de volver a intentarlo.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

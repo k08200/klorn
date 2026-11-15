@@ -132,6 +132,8 @@ function stubPaddle(opts: {
   fail?: (call: PaddleCall) => boolean;
   /** The failed answer's body; Paddle's error envelope names a code. */
   failBody?: string;
+  /** Runs as each request arrives, before it is answered. */
+  onCall?: (call: PaddleCall) => Promise<void>;
 }) {
   const calls: PaddleCall[] = [];
   const fetchMock = vi.fn(
@@ -143,6 +145,7 @@ function stubPaddle(opts: {
         bounded: init?.signal instanceof AbortSignal,
       };
       calls.push(entry);
+      await opts.onCall?.(entry);
       if (opts.fail?.(entry)) {
         const text = opts.failBody ?? '{"error":{"code":"bad_request"}}';
         return { ok: false, status: 400, text: async () => text };
@@ -501,6 +504,60 @@ describePg("team seat increases: payer only (real Postgres)", () => {
         where: { orgId: noPayer.orgId, action: "billing.seats_increase_refused" },
       }),
     ).toMatchObject({ detail: { reason: "no_payer_on_record" } });
+  });
+
+  it("refuses a change whose live read went stale: two decreases cannot add up to an unchecked increase", async () => {
+    const { heir, orgId } = await transferredOrg("sub_seat_29");
+    // While this request reads Paddle (10 seats, so "8" looks like a
+    // decrease), another request lowers the count to 2 and commits.
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_29",
+        items: [{ price: { id: "pri_team_month" }, quantity: 10 }],
+      }),
+      onCall: async (c) => {
+        if (c.method !== "GET") return;
+        await prisma.orgAuditEvent.create({
+          data: {
+            orgId,
+            action: "billing.seats_change_requested",
+            actorUserId: heir.userId,
+            detail: { from: 10, to: 2 },
+          },
+        });
+      },
+    });
+
+    const res = await call(heir, "POST", "/api/orgs/current/seats", { seats: 8 });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "SEATS_CHANGED" });
+    expect(calls.map((c) => c.method)).toEqual(["GET"]);
+    expect(
+      await prisma.orgAuditEvent.count({
+        where: { orgId, action: "billing.seats_change_requested" },
+      }),
+    ).toBe(1);
+  });
+
+  it("answers 502 without changing anything when the payer lookup fails", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_30");
+    const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_30" }),
+      fail: (c) => c.url.includes("/customers/"),
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET"]);
+    expect(
+      await prisma.orgAuditEvent.count({
+        where: {
+          orgId,
+          action: { in: ["billing.seats_change_requested", "billing.seats_increase_refused"] },
+        },
+      }),
+    ).toBe(0);
   });
 
   it("answers CANCEL_SCHEDULED when a portal cancel lands between the live read and the change", async () => {

@@ -83,7 +83,8 @@ each teammate's calendar. A company that adopts Klorn also removes the
   whose subscription bears seats (active, trialing) adds 3 × the seat target
   — the breaker formula above, applied to seats. A 150-seat team raises the
   ceiling by 36000¢, so its pool (12000¢) always fits under it. The seat sum is
-  re-read at most once a minute; a failed read falls back to the base. With
+  re-read at most once a minute; a failed read keeps the last value (or the
+  base when there is none), and the share is never negative. With
   `TEAMS_ENABLED` off the ceiling is the base exactly and nothing is queried;
   in cohort mode only organizations with a cohort member count.
 
@@ -156,6 +157,11 @@ subscription webhook does.
   while a scheduled change is pending (`subscription_locked_pending_changes`),
   so a cancel made in the portal after the live read is caught by the seat
   change call itself and answered `CANCEL_SCHEDULED`, with no audit row.
+- **A stale live read is refused.** Whether a request is an increase is
+  decided from the live quantity read before the org lock. Under the lock, a
+  seat change committed since that read (its audit row commits with its
+  Paddle call) answers `SEATS_CHANGED`, so two concurrent decreases by a
+  non-payer cannot add up to an unchecked increase.
 - **Audit.** Every allowed change is `billing.seats_change_requested`; a
   refused payer check is `billing.seats_increase_refused` or
   `billing.portal_refused`, with the reason class only (`not_payer`,

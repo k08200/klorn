@@ -134,6 +134,24 @@ describe("global ceiling with Teams on", () => {
     expect(await teamSeatBreakerCents(t0 + 6_000)).toBe(480);
   });
 
+  it("keeps the last good value on a failed read, so a blip cannot trip the ceiling for everyone", async () => {
+    env({ TEAMS_ENABLED: "true" });
+    seatsBilled(10);
+    const { teamSeatBreakerCents } = await ceiling();
+    const t0 = Date.UTC(2026, 10, 15, 12);
+    expect(await teamSeatBreakerCents(t0)).toBe(2400);
+    db.organization.aggregate.mockRejectedValue(new Error("db blip"));
+    expect(await teamSeatBreakerCents(t0 + 61_000)).toBe(2400);
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+
+  it("never lowers the base, even with a negative seat target configured", async () => {
+    env({ TEAMS_ENABLED: "true", TEAM_SEAT_DAILY_COST_CAP_CENTS: "-80" });
+    seatsBilled(150);
+    const { globalDailyCapCents } = await ceiling();
+    expect(await globalDailyCapCents()).toBe(5000);
+  });
+
   it("stays disabled when the base is 0 (DB-less jobs), with no query", async () => {
     env({ TEAMS_ENABLED: "true", GLOBAL_DAILY_COST_CAP_CENTS: "0" });
     seatsBilled(150);

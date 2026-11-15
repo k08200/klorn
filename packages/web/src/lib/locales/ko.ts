@@ -3173,7 +3173,9 @@ const ko: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "등록된 카드로 바로 청구되기 때문에 시트 추가는 팀 요금을 결제하는 이메일 주소로만 할 수 있습니다. 그 사람에게 추가를 요청하세요. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다. 시트 줄이기는 지금도 할 수 있습니다.",
+    "등록된 카드로 바로 청구되기 때문에 시트 추가는 팀 요금을 결제하는 이메일 주소로만 할 수 있습니다. 그 주소로 Klorn에 로그인하는 사람에게 요청하세요(Paddle 영수증 이메일이 그 주소로 갑니다). 시트 줄이기는 지금도 할 수 있습니다.",
+  "settings.org.error.SEATS_CHANGED":
+    "저장하는 동안 시트 수가 바뀌었습니다. 현재 시트 수를 확인하고 다시 시도하세요.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle이 변경을 확인하지 않아 반영되지 않았을 수 있습니다. 다시 시도하기 전에 잠시 후 확인해 주세요.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

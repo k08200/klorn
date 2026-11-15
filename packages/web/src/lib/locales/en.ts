@@ -3184,7 +3184,9 @@ const en: Record<string, string> = {
   "settings.org.error.PORTAL_PAYER_ONLY":
     "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "Only the email address that pays for the team can add seats, because the card on file is charged right away. Ask that person to add them; they can also use the link in Paddle's receipt emails. You can still remove seats.",
+    "Only the email address that pays for the team can add seats, because the card on file is charged right away. Ask the person who signs in to Klorn with that address (Paddle's receipt emails go to it). You can still remove seats.",
+  "settings.org.error.SEATS_CHANGED":
+    "The seat count changed while this was saving. Check the current count and try again.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle didn't confirm the change, so it may not have gone through. Check again in a minute before you retry.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
