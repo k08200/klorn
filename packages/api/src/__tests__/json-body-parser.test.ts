@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import Fastify from "fastify";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 const { handleError } = await import("../error-handler.js");
 const { captureError } = await import("../sentry.js");
-const { registerJsonBodyParser } = await import("../json-body-parser.js");
+const { InvalidJsonBodyError, registerJsonBodyParser } = await import("../json-body-parser.js");
 const { callText, LLM_CANARY } = await import("./helpers/canary.js");
 
 // The real parser and the real global error handler, wired the way index.ts
@@ -17,6 +17,11 @@ const { callText, LLM_CANARY } = await import("./helpers/canary.js");
 const PINO_WARN = 40;
 
 type Wired = Awaited<ReturnType<typeof buildApp>>;
+
+const openApps: Array<{ close: () => Promise<undefined> }> = [];
+afterEach(async () => {
+  await Promise.all(openApps.splice(0).map((app) => app.close()));
+});
 
 async function buildApp(options: { bodyLimit?: number } = {}) {
   const lines: string[] = [];
@@ -35,6 +40,7 @@ async function buildApp(options: { bodyLimit?: number } = {}) {
     };
   });
   await app.ready();
+  openApps.push(app);
   return { app, lines, reached };
 }
 
@@ -70,7 +76,6 @@ describe("a malformed JSON body is the caller's mistake: 400, not 500", () => {
     expect(res.json()).toEqual({ error: "Invalid JSON body" });
     expect(wired.reached).not.toHaveBeenCalled();
     expectQuiet(wired);
-    await wired.app.close();
   });
 
   it("never quotes the body: not in the response, the log or Sentry", async () => {
@@ -88,13 +93,13 @@ describe("a malformed JSON body is the caller's mistake: 400, not 500", () => {
     expect(wired.lines.join("\n")).not.toContain(LLM_CANARY);
     expect(callText(vi.mocked(captureError))).not.toContain(LLM_CANARY);
     expectQuiet(wired);
-    await wired.app.close();
   });
 
-  it("matches Fastify's own code so a client can tell it from a handler's 400", async () => {
-    const { InvalidJsonBodyError } = await import("../json-body-parser.js");
+  it("carries the status and code of Fastify's own error for the same failure", () => {
+    const own = new Fastify.errorCodes.FST_ERR_CTP_INVALID_JSON_BODY();
     const err = new InvalidJsonBodyError();
-    expect(err).toMatchObject({ statusCode: 400, code: "FST_ERR_CTP_INVALID_JSON_BODY" });
+    expect(err).toMatchObject({ statusCode: own.statusCode, code: own.code });
+    expect(err.statusCode).toBe(400);
     expect(err.message).toBe("Invalid JSON body");
     expect(err.cause).toBeUndefined();
   });
@@ -110,7 +115,6 @@ describe("a malformed JSON body is the caller's mistake: 400, not 500", () => {
     });
     expect(res.statusCode).toBe(400);
     expectQuiet(wired);
-    await wired.app.close();
   });
 });
 
@@ -130,7 +134,6 @@ describe("a valid JSON body is parsed as before and keeps its raw bytes", () => 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ body: { b: 2, a: [1, 2], c: "é" }, rawBody: payload });
     expectQuiet(wired);
-    await wired.app.close();
   });
 
   it("treats an empty body under a JSON content-type as {}", async () => {
@@ -143,7 +146,6 @@ describe("a valid JSON body is parsed as before and keeps its raw bytes", () => 
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ body: {}, rawBody: "{}" });
-    await wired.app.close();
   });
 
   it("does not run the parser for a request with no body and no content-type", async () => {
@@ -151,7 +153,6 @@ describe("a valid JSON body is parsed as before and keeps its raw bytes", () => 
     const res = await wired.app.inject({ method: "POST", url: "/echo" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ body: null, rawBody: null });
-    await wired.app.close();
   });
 
   it("accepts a charset parameter", async () => {
@@ -164,7 +165,6 @@ describe("a valid JSON body is parsed as before and keeps its raw bytes", () => 
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ body: { ok: true }, rawBody: '{"ok":true}' });
-    await wired.app.close();
   });
 });
 
@@ -185,7 +185,6 @@ describe("Fastify's own body errors stay quiet 4xx", () => {
     expect(res.json()).toEqual({ error: "Request body is too large" });
     expect(wired.reached).not.toHaveBeenCalled();
     expectQuiet(wired);
-    await wired.app.close();
   });
 
   it("answers 413 for a chunked body that grows past the limit", async () => {
@@ -200,7 +199,6 @@ describe("Fastify's own body errors stay quiet 4xx", () => {
     expect(res.statusCode).toBe(413);
     expect(res.json()).toEqual({ error: "Request body is too large" });
     expectQuiet(wired);
-    await wired.app.close();
   });
 
   it("answers 415 for a content type with no parser", async () => {
@@ -216,7 +214,6 @@ describe("Fastify's own body errors stay quiet 4xx", () => {
     expect(res.json()).toEqual({ error: "Unsupported Media Type" });
     expect(wired.reached).not.toHaveBeenCalled();
     expectQuiet(wired);
-    await wired.app.close();
   });
 
   it("answers 415 for a body sent with no content type at all", async () => {
@@ -225,7 +222,6 @@ describe("Fastify's own body errors stay quiet 4xx", () => {
     const res = await wired.app.inject({ method: "POST", url: "/echo", payload: '{"a":1}' });
     expect(res.statusCode).toBe(415);
     expectQuiet(wired);
-    await wired.app.close();
   });
 });
 
@@ -234,6 +230,13 @@ describe("index.ts uses this parser", () => {
 
   it("registers it on the app", () => {
     expect(source).toMatch(/^registerJsonBodyParser\(app\);$/m);
+  });
+
+  it("registers it before the routes, so every route's scope inherits it", () => {
+    const parser = source.indexOf("registerJsonBodyParser(app);");
+    const routes = source.indexOf("await registerApiRoutes(app);");
+    expect(parser).toBeGreaterThan(-1);
+    expect(routes).toBeGreaterThan(parser);
   });
 
   it("does not register a JSON parser of its own beside it", () => {
