@@ -24,12 +24,15 @@ export function reachableText(value: unknown, seen: Set<unknown> = new Set()): s
   if (seen.has(value)) return "";
   seen.add(value);
   const parts: string[] = [];
-  if (value instanceof Error) {
+  const isError = value instanceof Error;
+  if (isError) {
     parts.push(value.name, value.message, value.stack ?? "");
     parts.push(reachableText((value as { cause?: unknown }).cause, seen));
   }
   for (const key of Object.getOwnPropertyNames(value)) {
-    if (key === "stack" || key === "message") continue;
+    // An Error's stack and message are read above; any other object's
+    // `message` (a logged details object, a mock's argument) is walked.
+    if (isError && (key === "stack" || key === "message")) continue;
     let child: unknown;
     try {
       child = (value as Record<string, unknown>)[key];

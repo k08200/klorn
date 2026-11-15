@@ -29,7 +29,6 @@
 
 import crypto from "node:crypto";
 import type OpenAI from "openai";
-import OpenAISDK from "openai";
 import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
@@ -48,6 +47,7 @@ import {
   createCompletionNonStreaming as geminiNonStreaming,
   createCompletionStreaming as geminiStreaming,
 } from "./gemini-native.js";
+import { createOpenAIClient } from "./openai-client.js";
 
 export type ProviderName = "openai-compat" | "gemini" | "openai" | "anthropic";
 
@@ -146,11 +146,11 @@ export interface ProviderCredentials {
  */
 function buildOpenAI(apiKey: string, scope: string, maxRetries?: number): Provider | null {
   if (!apiKey) return null;
-  const client = new OpenAISDK({
+  const client = createOpenAIClient({
     apiKey,
     baseURL: "https://api.openai.com/v1",
     timeout: llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
-    ...(maxRetries !== undefined ? { maxRetries } : {}),
+    maxRetries,
   });
   return {
     name: "openai",
@@ -187,7 +187,7 @@ function buildOpenAICompat(): Provider | null {
   // a non-empty key string.
   const apiKey = process.env.OPENAI_COMPAT_API_KEY || "local";
   const defaultModel = process.env.OPENAI_COMPAT_MODEL || "qwen3:8b";
-  const client = new OpenAISDK({
+  const client = createOpenAIClient({
     apiKey,
     baseURL: baseUrl,
     timeout: llmRequestTimeoutMs(LOCAL_LLM_TIMEOUT_MS),

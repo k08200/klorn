@@ -17,9 +17,10 @@
  * production are byte-identical until an operator opts in.
  */
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import { EMBEDDING_TIMEOUT_MS, llmRequestTimeoutMs } from "./llm/llm-timeout.js";
 import { logLlmFailure } from "./llm/report-llm-failure.js";
+import { createOpenAIClient } from "./providers/openai-client.js";
 
 // Enable by setting EMBEDDING_MODEL (e.g. "nomic-embed-text" for local Ollama).
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "";
@@ -40,7 +41,7 @@ let client: OpenAI | null = null;
 function getClient(): OpenAI | null {
   if (!isEmbeddingEnabled()) return null;
   if (!client) {
-    client = new OpenAI({
+    client = createOpenAIClient({
       baseURL: EMBEDDING_BASE_URL,
       apiKey: EMBEDDING_API_KEY,
       timeout: llmRequestTimeoutMs(EMBEDDING_TIMEOUT_MS),
