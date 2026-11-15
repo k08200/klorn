@@ -1414,7 +1414,8 @@ model Notification {
   // rings anything again. The next clear deletes rows past the longest such
   // window (notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS, 7 days); the
   // log-retention sweep deletes cleared rows after 30 days. A reader that lists
-  // the bell must filter `clearedAt: null` (or `isRead: false`).
+  // the bell must filter `clearedAt: null` (or `isRead: false`);
+  // notification-cleared-readers-guard.test.ts fails on one that does not.
   clearedAt       DateTime?
   createdAt       DateTime       @default(now())
 
