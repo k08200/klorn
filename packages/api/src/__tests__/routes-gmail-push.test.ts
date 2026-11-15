@@ -254,6 +254,33 @@ describe("gmail-push routes", () => {
     await app.close();
   });
 
+  it("logs the drained address as a keyed tag, never the address", async () => {
+    const { addressLogTag } = await import("../security/address-log-tag.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      process.env.GMAIL_PUSH_TOKEN = "secret";
+      const app = await buildApp();
+      const payload = { emailAddress: "Drained.Person@example.com", historyId: "12345" };
+      const data = Buffer.from(JSON.stringify(payload)).toString("base64");
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/gmail/push",
+        headers: { authorization: "Bearer secret" },
+        payload: { message: { data } },
+      });
+      expect(res.statusCode).toBe(204);
+      await app.close();
+
+      const lines = warn.mock.calls.map((args) => args.map(String).join(" "));
+      const drained = lines.filter((line) => line.includes("[GMAIL-PUSH] no user/linked inbox"));
+      expect(drained).toHaveLength(1);
+      expect(drained[0]).toContain(addressLogTag("drained.person@example.com"));
+      for (const line of lines) expect(line.toLowerCase()).not.toContain("drained.person");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("enables gmail watch (authenticated)", async () => {
     const app = await buildApp();
     const res = await app.inject({

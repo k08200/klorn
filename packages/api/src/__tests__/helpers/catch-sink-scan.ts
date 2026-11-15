@@ -72,7 +72,7 @@ export function calleeName(call: ts.CallExpression): string | null {
   return null;
 }
 
-function isSink(call: ts.CallExpression): boolean {
+export function isSink(call: ts.CallExpression): boolean {
   const callee = call.expression;
   if (ts.isIdentifier(callee)) return SENTRY_FUNCTIONS.has(callee.text);
   if (!ts.isPropertyAccessExpression(callee)) return false;
@@ -92,7 +92,7 @@ function isSink(call: ts.CallExpression): boolean {
  * as given. A reporter's label is held to a literal separately, and the
  * failure itself (the second argument) is what it reduces to facts.
  */
-function sinkArguments(call: ts.CallExpression): readonly ts.Expression[] {
+export function sinkArguments(call: ts.CallExpression): readonly ts.Expression[] {
   if (isSink(call)) return call.arguments;
   const name = calleeName(call);
   return name !== null && LABELLED_REPORTERS.has(name) ? call.arguments.slice(2) : [];
