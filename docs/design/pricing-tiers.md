@@ -77,9 +77,16 @@ each teammate's calendar. A company that adopts Klorn also removes the
   anomaly brake), and never less than their own plan's cap. Unfilled paid
   seats feed the pool; a member removed mid-day drops out of the sum. The sum
   reads cost cents only, re-read at most every 30 s per user.
-- Before large organizations: `GLOBAL_DAILY_COST_CAP_CENTS` (default 5000¢)
-  is below one 150-seat pool (12000¢); raise it or add a per-organization
-  share before enabling teams of that size.
+- Global ceiling (`billing/global-cost-ceiling.ts`): until the scaling
+  breaker (PR6) is built, `GLOBAL_DAILY_COST_CAP_CENTS` (default 5000¢) stays
+  the base for everyone else, and every purchased seat of an organization
+  whose subscription bears seats (active, trialing) adds 3 × the seat target
+  — the breaker formula above, applied to seats. A 150-seat team raises the
+  ceiling by 36000¢, so its pool (12000¢) always fits under it. The seat sum is
+  re-read at most once a minute; a failed read keeps the last value (or the
+  base when there is none), and the share is never negative. With
+  `TEAMS_ENABLED` off the ceiling is the base exactly and nothing is queried;
+  in cohort mode only organizations with a cohort member count.
 
 ### Personal Pro and a team seat
 
@@ -138,9 +145,28 @@ subscription webhook does.
   Paddle bills now, not the stored count, so asking for the count Paddle
   already holds makes no change. Only while active or trialing with nothing
   scheduled: Paddle refuses updates to a past-due subscription.
-- **The owner is the billing admin.** Any owner, including one who took over
-  by transfer, can change seats or cancel on the payment method already on the
-  subscription; Paddle emails the payer a receipt for every prorated charge.
+- **Adding seats is the payer's.** It charges the card on file at once
+  (prorated), so it takes the portal's payer check: the owner's verified Klorn
+  email is the Paddle customer's email. Any other owner, including one who
+  took over by transfer, gets `SEATS_INCREASE_PAYER_ONLY` and is told to ask
+  the payer (who also has the link in Paddle's receipt emails). Removing seats
+  and the period-end cancel stay open to any owner: both lower or end the
+  charge, and the member floor still holds. Paddle emails the payer a receipt
+  for every prorated charge.
+- **A portal cancel cannot race a seat change.** Paddle refuses any update
+  while a scheduled change is pending (`subscription_locked_pending_changes`),
+  so a cancel made in the portal after the live read is caught by the seat
+  change call itself and answered `CANCEL_SCHEDULED`, with no audit row.
+- **A stale live read is refused.** Whether a request is an increase is
+  decided from the live quantity read before the org lock. Under the lock, a
+  seat change committed since that read (its audit row commits with its
+  Paddle call) answers `SEATS_CHANGED`, so two concurrent decreases by a
+  non-payer cannot add up to an unchecked increase.
+- **Audit.** Every allowed change is `billing.seats_change_requested`; a
+  refused payer check is `billing.seats_increase_refused` or
+  `billing.portal_refused`, with the reason class only (`not_payer`,
+  `email_not_verified`, `no_payer_email`, `no_payer_on_record`) — never an
+  email or card detail.
 - **Cancel** is at the period end only, like Pro: seats stay until Paddle's
   final event. A past-due subscription can be canceled this way and stays
   past due until the period ends; a paused one can only be ended immediately,
@@ -215,7 +241,7 @@ not (break-even would be $31.62 / month, above the monthly price).
 | Gating | Chat models and agent by plan (flag off by default) | not started |
 | PR4 | Judge unit cost: bulk prefilter, template cache, cacheable prompt (judge gate required) | not started |
 | PR5 | Allocator replacing walls, model step-down (flag off) | not started |
-| PR6 | Scaling breaker, rate-limit handling, concurrent scheduler | not started |
+| PR6 | Scaling breaker, rate-limit handling, concurrent scheduler | not started (paid seat pools already raise the global ceiling: `billing/global-cost-ceiling.ts`) |
 | Team | Org/seat schema → seat billing → scheduling assistant → admin features | after launch and after C2 (unified plan P1) |
 
 ## Copy rules
