@@ -103,6 +103,11 @@ function added(totals: Totals, result: CommitmentIngestionResult): Totals {
   };
 }
 
+/** Candidates that cost an LLM call: a duplicate is matched before the refiner runs. */
+function spentCandidates(totals: Totals): number {
+  return totals.candidatesFound - totals.duplicatesSkipped;
+}
+
 function failed(totals: Totals): Totals {
   return {
     ...totals,
@@ -130,7 +135,7 @@ async function extractAll(claim: KakaoClaim, clock: () => number): Promise<Total
   let totals = NO_TOTALS;
   let checkNext = false;
   for (const [index, message] of messages.entries()) {
-    const remaining = KAKAO_MAX_CANDIDATES_PER_IMPORT - totals.candidatesFound;
+    const remaining = KAKAO_MAX_CANDIDATES_PER_IMPORT - spentCandidates(totals);
     const overTime = clock() - startedAt > KAKAO_PROCESS_TIME_BUDGET_MS;
     if (remaining <= 0 || overTime || totals.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
       return { ...totals, stopped: "limit" };

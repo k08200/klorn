@@ -81,11 +81,14 @@ vi.mock("../notify/desktop-catchup.js", async (importOriginal) => ({
   desktopCatchUp,
 }));
 
+// user-1's bell row; any other (id, user) pair is a row the caller cannot see.
+const OWN_ROW_ID = vi.hoisted(() => "11111111-2222-4333-8444-555555555555");
+
 vi.mock("../db.js", () => {
   const prisma = {
     notification: {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
-        if (where.id === "n1") return { id: "n1", userId: "user-1", isRead: false };
+      findFirst: vi.fn(async ({ where }: { where: { id: string; userId: string } }) => {
+        if (where.id === OWN_ROW_ID && where.userId === "user-1") return { id: OWN_ROW_ID };
         return null;
       }),
     },
@@ -196,24 +199,74 @@ describe("notification routes", () => {
   });
 
   it("marks notification as read", async () => {
+    const { markNotificationRead } = await import("../background.js");
+    vi.mocked(markNotificationRead).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/notifications/${OWN_ROW_ID}/read`,
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(204);
+    expect(markNotificationRead).toHaveBeenCalledWith(OWN_ROW_ID);
+    await app.close();
+  });
+
+  it("answers another user's row exactly as a missing one: 404, nothing marked", async () => {
+    const { markNotificationRead } = await import("../background.js");
+    vi.mocked(markNotificationRead).mockClear();
+    const app = await buildApp();
+    const foreign = await app.inject({
+      method: "PATCH",
+      url: `/api/notifications/${OWN_ROW_ID}/read`,
+      headers: auth(OTHER),
+    });
+    const missing = await app.inject({
+      method: "PATCH",
+      url: "/api/notifications/99999999-2222-4333-8444-555555555555/read",
+      headers: auth(OTHER),
+    });
+    expect([foreign.statusCode, missing.statusCode]).toEqual([404, 404]);
+    expect(foreign.body).toBe(missing.body);
+    expect(markNotificationRead).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("looks the row up among the caller's own bell rows only", async () => {
+    const { prisma } = await import("../db.js");
+    const findFirst = vi.mocked(prisma.notification.findFirst);
+    findFirst.mockClear();
+    const app = await buildApp();
+    await app.inject({
+      method: "PATCH",
+      url: `/api/notifications/${OWN_ROW_ID}/read`,
+      headers: auth(OTHER),
+    });
+    // Scoped by owner in the query itself (no fetch-then-compare), and a row
+    // cleared from the bell or a hidden claim is not a bell row either.
+    expect(findFirst.mock.calls[0]?.[0]).toMatchObject({
+      where: {
+        id: OWN_ROW_ID,
+        userId: "user-2",
+        clearedAt: null,
+        type: { not: "claim" },
+      },
+    });
+    await app.close();
+  });
+
+  it("rejects an id that is not a uuid before touching the database", async () => {
+    const { prisma } = await import("../db.js");
+    const findFirst = vi.mocked(prisma.notification.findFirst);
+    findFirst.mockClear();
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
       url: "/api/notifications/n1/read",
       headers: auth(),
     });
-    expect(res.statusCode).toBe(204);
-    await app.close();
-  });
-
-  it("returns 403 for other user's notification", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: "/api/notifications/n1/read",
-      headers: auth(OTHER),
-    });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(400);
+    expect(findFirst).not.toHaveBeenCalled();
     await app.close();
   });
 

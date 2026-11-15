@@ -16,12 +16,25 @@
  */
 export function describeLlmFailure(err: unknown): string {
   if (!(err instanceof Error)) return "UnknownError";
+  const label = llmFailureName(err);
+  const status = (err as { status?: unknown }).status;
+  return typeof status === "number" ? `${label} ${status}` : label;
+}
 
+/** The failure's class name, never its message (see describeLlmFailure). */
+export function llmFailureName(err: unknown): string {
+  if (!(err instanceof Error)) return "UnknownError";
   // A self-assigned name (AllProvidersExhaustedError, GeminiHttp404Error) is
   // already precise; only fall back to the constructor when `name` is the
   // inherited default that tells us nothing.
-  const label = err.name && err.name !== "Error" ? err.name : err.constructor?.name || "Error";
+  return err.name && err.name !== "Error" ? err.name : err.constructor?.name || "Error";
+}
 
-  const status = (err as { status?: unknown }).status;
-  return typeof status === "number" ? `${label} ${status}` : label;
+/** The provider's HTTP status, on the error or, for an exhausted chain, its cause. */
+export function llmFailureStatus(err: unknown): number | null {
+  for (const candidate of [err, (err as { cause?: unknown } | null)?.cause]) {
+    const status = (candidate as { status?: unknown } | null)?.status;
+    if (typeof status === "number") return status;
+  }
+  return null;
 }

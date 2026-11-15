@@ -45,6 +45,11 @@ export interface CommitmentIngestionInput {
   credentials?: ProviderCredentials; // the user's BYOK keys for the LLM pass; env providers when absent
   llmFeature?: string; // usage-ledger label for the LLM pass; read from the call stack when absent
   dedupScope?: string; // what one candidate text is unique within; default threadId, then sourceId
+  // A candidate whose dedupKey already has a row: "refresh" (the default)
+  // refines it again and updates the row; "reattach" leaves the row as it is
+  // (the user may have edited it), skips the LLM, and only moves its
+  // sourceId/threadId to this source (KakaoTalk re-uploads).
+  onDuplicate?: "refresh" | "reattach";
 }
 
 export interface CommitmentIngestionResult {
@@ -191,6 +196,61 @@ function optionalRefinerContext(input: CommitmentIngestionInput) {
 }
 
 /**
+ * "reattach": if the candidate's row exists, point it at this source and say
+ * so. Nothing else on the row changes, and no LLM call is made for it.
+ */
+async function reattachExisting(input: CommitmentIngestionInput, dedupKey: string) {
+  const existing = await prisma.commitment.findUnique({
+    where: { userId_dedupKey: { userId: input.userId, dedupKey } },
+    select: { id: true, sourceId: true, threadId: true },
+  });
+  if (!existing) return false;
+  const threadId = input.threadId ?? null;
+  if (existing.sourceId !== input.sourceId || existing.threadId !== threadId) {
+    await prisma.commitment.updateMany({
+      where: { id: existing.id, userId: input.userId },
+      data: { sourceId: input.sourceId, threadId },
+    });
+  }
+  return true;
+}
+
+/** One candidate into the ledger: a new row, an existing one, or none (the refiner said no). */
+async function ingestCandidate(
+  input: CommitmentIngestionInput,
+  candidate: CommitmentCandidate,
+  dueContext: DueContext,
+): Promise<"created" | "duplicate" | "rejected"> {
+  const dedupKey = buildDedupKey(input, candidate);
+  if (input.onDuplicate === "reattach" && (await reattachExisting(input, dedupKey))) {
+    return "duplicate";
+  }
+  const refinement = await maybeRefineCommitmentCandidateWithLlm({
+    candidate,
+    sourceType: input.sourceType,
+    sourceText: input.text,
+    contextTitle: input.contextTitle,
+    referenceDate: dueContext.referenceDate,
+    timeZone: dueContext.timeZone,
+    userId: input.userId,
+    ...optionalRefinerContext(input),
+  });
+  if (refinement?.isCommitment === false) return "rejected";
+  const usableRefinement = refinement?.isCommitment === true ? refinement : null;
+
+  const existing = await prisma.commitment.findUnique({
+    where: { userId_dedupKey: { userId: input.userId, dedupKey } },
+    select: { id: true },
+  });
+
+  await upsertCommitment(
+    input.userId,
+    buildCommitmentInput(input, candidate, usableRefinement, dedupKey, dueContext),
+  );
+  return existing ? "duplicate" : "created";
+}
+
+/**
  * Extract commitment candidates from a source text and upsert them into the
  * ledger. This function is idempotent for a given (source/thread, candidate)
  * because the dedupKey is deterministic.
@@ -224,32 +284,9 @@ export async function extractAndUpsertCommitmentsFromText(
   let duplicatesSkipped = 0;
 
   for (const candidate of candidates) {
-    const refinement = await maybeRefineCommitmentCandidateWithLlm({
-      candidate,
-      sourceType: input.sourceType,
-      sourceText: input.text,
-      contextTitle: input.contextTitle,
-      referenceDate: dueContext.referenceDate,
-      timeZone: dueContext.timeZone,
-      userId: input.userId,
-      ...optionalRefinerContext(input),
-    });
-    if (refinement?.isCommitment === false) continue;
-    const usableRefinement = refinement?.isCommitment === true ? refinement : null;
-
-    const dedupKey = buildDedupKey(input, candidate);
-    const existing = await prisma.commitment.findUnique({
-      where: { userId_dedupKey: { userId: input.userId, dedupKey } },
-      select: { id: true },
-    });
-
-    await upsertCommitment(
-      input.userId,
-      buildCommitmentInput(input, candidate, usableRefinement, dedupKey, dueContext),
-    );
-
-    if (existing) duplicatesSkipped++;
-    else commitmentsCreated++;
+    const outcome = await ingestCandidate(input, candidate, dueContext);
+    if (outcome === "created") commitmentsCreated++;
+    else if (outcome === "duplicate") duplicatesSkipped++;
   }
 
   return {

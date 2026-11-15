@@ -18,6 +18,7 @@ import {
   isCommitmentLlmRefinementEnabled,
   maybeRefineCommitmentCandidateWithLlm,
 } from "../pim/commitment-refiner.js";
+import { DataWipeFenceError } from "../privacy/data-wipe-fence.js";
 
 const ORIGINAL_FLAG = process.env.COMMITMENT_LLM_REFINEMENT;
 
@@ -112,6 +113,90 @@ describe("commitment LLM refinement", () => {
         tags: { scope: "commitment.llm_refinement" },
       }),
     );
+  });
+
+  describe("what a failure tells Sentry (the text is someone else's)", () => {
+    const sourceText = `Re: 자료 요청 — ${candidate.text} 감사합니다.`;
+    const input = {
+      candidate,
+      sourceType: "KAKAO" as const,
+      sourceText,
+      contextTitle: "KakaoTalk · 이민호",
+    };
+
+    function reported(): { error: Error; context: { extra: Record<string, unknown> } } {
+      const [error, context] = mocks.captureError.mock.calls[0] as [
+        Error,
+        { extra: Record<string, unknown> },
+      ];
+      return { error, context };
+    }
+
+    function expectNoText(value: unknown): void {
+      const serialized = JSON.stringify(value);
+      for (const text of [candidate.text, "자료 요청", "이민호", "messages[1]"]) {
+        expect(serialized).not.toContain(text);
+      }
+    }
+
+    it("sends a provider error's name, status and the sizes, never the error itself", async () => {
+      process.env.COMMITMENT_LLM_REFINEMENT = "1";
+      const providerError = Object.assign(
+        new Error(`400 messages[1].content: invalid input near "${candidate.text}"`),
+        { name: "BadRequestError", status: 400, error: { prompt: sourceText } },
+      );
+      mocks.createCompletion.mockRejectedValueOnce(providerError);
+
+      expect(await maybeRefineCommitmentCandidateWithLlm(input)).toBeNull();
+
+      const { error, context } = reported();
+      expect(error).not.toBe(providerError);
+      expect(error.message).toBe("commitment refiner failed (BadRequestError)");
+      expect(context).toEqual({
+        tags: { scope: "commitment.llm_refinement" },
+        extra: {
+          errorName: "BadRequestError",
+          status: 400,
+          sourceType: "KAKAO",
+          contextTitleLength: input.contextTitle.length,
+          candidateTextLength: candidate.text.length,
+          sourceTextLength: sourceText.length,
+        },
+      });
+      expectNoText({ message: error.message, stack: error.stack, cause: error.cause, context });
+    });
+
+    it("reports a reply it cannot parse by name only, though JSON.parse quotes the reply", async () => {
+      process.env.COMMITMENT_LLM_REFINEMENT = "1";
+      mocks.createCompletion.mockResolvedValueOnce({
+        choices: [{ message: { content: `${candidate.text} (not json)` } }],
+      });
+
+      expect(await maybeRefineCommitmentCandidateWithLlm(input)).toBeNull();
+
+      const { error, context } = reported();
+      expect(context.extra).toMatchObject({ errorName: "SyntaxError", status: null });
+      expectNoText({ message: error.message, stack: error.stack, context });
+    });
+
+    it("reads the status off an exhausted provider chain's cause", async () => {
+      process.env.COMMITMENT_LLM_REFINEMENT = "1";
+      mocks.createCompletion.mockRejectedValueOnce(
+        new Error("every provider failed", { cause: { status: 429 } }),
+      );
+
+      await maybeRefineCommitmentCandidateWithLlm(input);
+
+      expect(reported().context.extra).toMatchObject({ errorName: "Error", status: 429 });
+    });
+
+    it("stays quiet about the data-wipe fence, as captureError would", async () => {
+      process.env.COMMITMENT_LLM_REFINEMENT = "1";
+      mocks.createCompletion.mockRejectedValueOnce(new DataWipeFenceError());
+
+      expect(await maybeRefineCommitmentCandidateWithLlm(input)).toBeNull();
+      expect(mocks.captureError).not.toHaveBeenCalled();
+    });
   });
 
   it("does not treat malformed JSON shape as an explicit rejection", async () => {

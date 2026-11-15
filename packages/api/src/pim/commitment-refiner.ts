@@ -7,8 +7,10 @@
  */
 
 import type { CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
+import { llmFailureName, llmFailureStatus } from "../llm/describe-failure.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { type CompletionOptions, createCompletion, MODEL } from "../llm/openai.js";
+import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -212,6 +214,30 @@ Rules:
   return parseRefinement(parseLlmJson<RawRefinement>(raw));
 }
 
+/**
+ * A failed refinement, told to Sentry as the error's name, the provider's HTTP
+ * status and the sizes of what was sent. Never the error itself: a provider
+ * error can quote the request, and JSON.parse's message quotes the model's
+ * reply, both carrying someone else's mail, Slack or KakaoTalk text (as the
+ * Slack and Kakao paths report). A write the data-wipe fence refused is left
+ * out, as captureError leaves it out.
+ */
+function reportRefinementFailure(err: unknown, input: CommitmentRefinementInput): void {
+  if (isDataWipeFenceError(err)) return;
+  const errorName = llmFailureName(err);
+  captureError(new Error(`commitment refiner failed (${errorName})`), {
+    tags: { scope: "commitment.llm_refinement" },
+    extra: {
+      errorName,
+      status: llmFailureStatus(err),
+      sourceType: input.sourceType,
+      contextTitleLength: input.contextTitle?.length ?? 0,
+      candidateTextLength: input.candidate.text.length,
+      sourceTextLength: input.sourceText.length,
+    },
+  });
+}
+
 export async function maybeRefineCommitmentCandidateWithLlm(
   input: CommitmentRefinementInput,
 ): Promise<CommitmentRefinement | null> {
@@ -219,15 +245,7 @@ export async function maybeRefineCommitmentCandidateWithLlm(
   try {
     return await refineCommitmentCandidateWithLlm(input);
   } catch (err) {
-    captureError(err, {
-      tags: { scope: "commitment.llm_refinement" },
-      // Sizes only: the text is someone else's mail or Slack message.
-      extra: {
-        sourceType: input.sourceType,
-        contextTitleLength: input.contextTitle?.length ?? 0,
-        candidateTextLength: input.candidate.text.length,
-      },
-    });
+    reportRefinementFailure(err, input);
     return null;
   }
 }

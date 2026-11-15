@@ -9,8 +9,11 @@ const mocks = vi.hoisted(() => {
     },
   );
   const findUniqueMock = vi.fn(({ where }: { where: { userId_dedupKey: { dedupKey: string } } }) =>
-    existingDedupKeys.has(where.userId_dedupKey.dedupKey) ? { id: "existing" } : null,
+    existingDedupKeys.has(where.userId_dedupKey.dedupKey)
+      ? { id: "existing", sourceId: "kakao-import:imp-1:1", threadId: "kakao-import:imp-1" }
+      : null,
   );
+  const updateManyMock = vi.fn(async (_args: unknown) => ({ count: 1 }));
   const getUserTimeZoneMock = vi.fn(async (_userId: string) => "America/New_York");
   const refineMock = vi.fn(async (_input: unknown): Promise<unknown> => null);
   const refinerEnabledMock = vi.fn(() => false);
@@ -18,6 +21,7 @@ const mocks = vi.hoisted(() => {
     existingDedupKeys,
     upsertCommitmentMock,
     findUniqueMock,
+    updateManyMock,
     getUserTimeZoneMock,
     refineMock,
     refinerEnabledMock,
@@ -28,6 +32,7 @@ vi.mock("../db.js", () => ({
   prisma: {
     commitment: {
       findUnique: mocks.findUniqueMock,
+      updateMany: mocks.updateManyMock,
     },
   },
 }));
@@ -52,6 +57,7 @@ describe("extractAndUpsertCommitmentsFromText", () => {
     mocks.existingDedupKeys.clear();
     mocks.upsertCommitmentMock.mockClear();
     mocks.findUniqueMock.mockClear();
+    mocks.updateManyMock.mockClear();
     mocks.getUserTimeZoneMock.mockClear();
     mocks.refineMock.mockReset();
     mocks.refineMock.mockResolvedValue(null);
@@ -226,6 +232,61 @@ describe("extractAndUpsertCommitmentsFromText", () => {
         ([, input]) => (input as { threadId: string }).threadId,
       );
       expect(threads).toEqual(["kakao-import:imp-1", "kakao-import:imp-1"]);
+    });
+
+    describe('onDuplicate: "reattach" (a KakaoTalk re-upload)', () => {
+      const first = {
+        userId: "user-1",
+        sourceType: "KAKAO" as const,
+        sourceId: "kakao-import:imp-1:1",
+        threadId: "kakao-import:imp-1",
+        dedupScope: "kakao-message:abc",
+        text: "내일까지 자료 보내드릴게요.",
+        senderIsUser: false,
+        onDuplicate: "reattach" as const,
+      };
+
+      it("moves an existing row to the new upload and changes nothing else, with no LLM call", async () => {
+        mocks.refinerEnabledMock.mockReturnValue(true);
+        mocks.refineMock.mockResolvedValue(sureRefinement);
+        await extractAndUpsertCommitmentsFromText(first);
+        mocks.refineMock.mockClear();
+        mocks.upsertCommitmentMock.mockClear();
+
+        const again = await extractAndUpsertCommitmentsFromText({
+          ...first,
+          sourceId: "kakao-import:imp-2:4",
+          threadId: "kakao-import:imp-2",
+        });
+
+        expect(again).toEqual({ candidatesFound: 1, commitmentsCreated: 0, duplicatesSkipped: 1 });
+        expect(mocks.refineMock).not.toHaveBeenCalled();
+        // No upsert: the title, due text and confidence the user may have edited stay.
+        expect(mocks.upsertCommitmentMock).not.toHaveBeenCalled();
+        expect(mocks.updateManyMock).toHaveBeenCalledWith({
+          where: { id: "existing", userId: "user-1" },
+          data: { sourceId: "kakao-import:imp-2:4", threadId: "kakao-import:imp-2" },
+        });
+      });
+
+      it("writes nothing when the row is already this upload's (a re-run of the same import)", async () => {
+        await extractAndUpsertCommitmentsFromText(first);
+        mocks.upsertCommitmentMock.mockClear();
+
+        const rerun = await extractAndUpsertCommitmentsFromText(first);
+
+        expect(rerun.duplicatesSkipped).toBe(1);
+        expect(mocks.upsertCommitmentMock).not.toHaveBeenCalled();
+        expect(mocks.updateManyMock).not.toHaveBeenCalled();
+      });
+
+      it("leaves the default refresh path as it was for every other source", async () => {
+        const mail = { userId: "user-1", sourceType: "EMAIL" as const, sourceId: "email-1" };
+        await extractAndUpsertCommitmentsFromText({ ...mail, text: "I'll send the deck by EOD." });
+        await extractAndUpsertCommitmentsFromText({ ...mail, text: "I'll send the deck by EOD." });
+        expect(mocks.upsertCommitmentMock).toHaveBeenCalledTimes(2);
+        expect(mocks.updateManyMock).not.toHaveBeenCalled();
+      });
     });
 
     it("tells the refiner nothing new for mail: no author line, no credentials", async () => {
