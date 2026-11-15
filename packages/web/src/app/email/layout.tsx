@@ -2,13 +2,13 @@
 
 /**
  * Mail split view (design detail pass X3, Reader.dc; MAIL_V2 only): from
- * 700px — a Fold opened, an iPad in portrait, anything wider — the list
+ * 600px (the rail step) — a Fold opened, an iPad in portrait, anything wider — the list
  * stays on the left and the reader opens beside it. The list takes 45% of
  * the space beside the shell's navigation, 280–440px (globals.css,
  * .mail-split-list); on a two-segment screen (a book-style foldable or a
  * dual-screen phone) the seam sits on the hinge instead, and the split is on
  * whatever the width. A layout, so the list — its scroll, view and
- * selection — survives moving between mails. Below 700px, without MAIL_V2,
+ * selection — survives moving between mails. Below 600px, without MAIL_V2,
  * and on /email/candidates this renders the route alone: the list → page
  * flow is unchanged.
  *
@@ -24,7 +24,8 @@ import { useT } from "../../lib/i18n";
 import { useMediaQuery } from "../../lib/use-media-query";
 import { MailV2 } from "./_v2/mail-v2";
 
-const SPLIT_QUERY = "(min-width: 700px), (horizontal-viewport-segments: 2)";
+// From the rail step (globals.css, --breakpoint-rail), or on a hinge.
+const SPLIT_QUERY = "(min-width: 37.5rem), (horizontal-viewport-segments: 2)";
 const READER_PATH = /^\/email\/([^/]+)$/;
 
 function openEmailId(pathname: string): string | null {

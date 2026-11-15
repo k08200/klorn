@@ -41,7 +41,18 @@ type Notification = CenterNotification;
 const LATER_KEY: ReminderKey = "later-today";
 const ROW_SELECTOR = "[data-nc-row]";
 
-export default function NotificationBell({ userId }: { userId: string }) {
+/**
+ * `touch`: the phone header's bell (app-shell.tsx, below 600px) — a 44px
+ * target whatever the pointer, since a narrow window on a laptop still shows
+ * the phone shell.
+ */
+export default function NotificationBell({
+  userId,
+  touch = false,
+}: {
+  userId: string;
+  touch?: boolean;
+}) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [budget, setBudget] = useState<NotificationBudget | null>(null);
   // The header's overflow menu (holds "Clear").
@@ -99,8 +110,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
   });
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    // The bell lives in the rail (600px+) and the sidebar; below 600px is
-    // the full-width fallback (globals.css, --breakpoint-rail).
+    // The bell lives in the phone header below 600px, the rail from 600px
+    // and the sidebar from 840px; below 600px the panel spans the viewport
+    // (globals.css, --breakpoint-rail).
     const update = () => setIsMobile(window.innerWidth < 600);
     update();
     window.addEventListener("resize", update);
@@ -490,7 +502,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         ref={bellRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`focus-ring relative inline-flex items-center justify-center rounded-chip text-ink-mid hover:text-ink transition p-1 pointer-coarse:size-11 ${flash ? "animate-bounce" : ""}`}
+        className={`focus-ring relative inline-flex items-center justify-center rounded-chip text-ink-mid hover:text-ink transition ${touch ? "size-11" : "p-1 pointer-coarse:size-11"} ${flash ? "animate-bounce" : ""}`}
         aria-label={
           badgeCount > 0
             ? `${t("notif.title")} · ${t("notifCenter.unread", { count: String(badgeCount) })}`
@@ -516,7 +528,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         {badgeCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -top-1 -right-1 bg-danger-solid text-danger-solid-ink text-role-caption font-bold rounded-full w-4 h-4 flex items-center justify-center"
+            className={`absolute ${touch ? "top-1.5 right-1.5" : "-top-1 -right-1"} bg-danger-solid text-danger-solid-ink text-role-caption font-bold rounded-full w-4 h-4 flex items-center justify-center`}
           >
             {badgeCount > 9 ? "9+" : badgeCount}
           </span>
@@ -534,7 +546,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
             onKeyDown={onPanelKeyDown}
             style={
               isMobile
-                ? { position: "fixed", top: dropdownPos.top, left: 8, right: 8, zIndex: 9999 }
+                ? {
+                    position: "fixed",
+                    top: dropdownPos.top,
+                    left: 8,
+                    right: 8,
+                    zIndex: 9999,
+                    // Down to just above the bottom tab bar (62px + the home
+                    // indicator), so the phone gets a full-height panel.
+                    maxHeight: `calc(100dvh - ${dropdownPos.top}px - 62px - env(safe-area-inset-bottom) - 8px)`,
+                  }
                 : { position: "fixed", top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }
             }
             className="rail:w-[min(26.25rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-card shadow-sheet overflow-hidden flex flex-col max-h-[min(80vh,calc(100vh-6rem))] rail:max-h-[45rem] outline-none"

@@ -16,6 +16,18 @@
   }
 }
 
+/* The sidebar step (mobile redesign MB4): from 840px the sidebar replaces the
+   navigation rail — except a phone on its side (phone-landscape: under 500px
+   tall), which keeps the compact rail until 1024px, as before, so an iPhone
+   in landscape (844–932px wide) does not lose a third of its width to the
+   sidebar. Keep in step with the --shell-nav-w block below. */
+@custom-variant shell-wide {
+  @media (min-width: 64rem), (min-width: 52.5rem) and (min-height: 500px),
+    (min-width: 52.5rem) and (orientation: portrait) {
+    @slot;
+  }
+}
+
 /* ── Theme palettes ─────────────────────────────────────────────────
    Semantic tokens carry the theme: light values here are byte-identical to
    what the app hardcoded before dark mode, so the light theme cannot drift.
@@ -305,7 +317,12 @@
      shell adds one step: from 600px (a Fold opened, a phone on its side, an
      iPad in split view) the bottom tab bar gives way to the navigation rail.
      `rail:` / `max-rail:` name that step. The full sidebar replaces the rail
-     at lg (1024). Same unit (rem) as the defaults so the variants sort. */
+     from 840px (`shell-wide:`, a custom variant at the top of this file;
+     220px wide up to lg, 260px from lg 1024). Below 360px (`max-tiny:` — an
+     iPad slide-over, a Fold's cover screen) the tab bar drops to icons and
+     the page title steps down. Same unit (rem) as the defaults so the
+     variants sort. */
+  --breakpoint-tiny: 22.5rem;
   --breakpoint-rail: 37.5rem;
 
   /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
@@ -375,34 +392,38 @@
 
   /* Design Language v2 type roles (web column,
      docs/design/design-language-v2.md § Type roles). Pick by meaning, not
-     nearest pixel. mono pairs with `font-mono`. */
-  --text-role-page: 34px;
-  --text-role-page--line-height: 40px;
+     nearest pixel. mono pairs with `font-mono`. In rem — at a 16px root:
+     page 34 · title 22 · head 17 · body 15 · label/meta/mono 13 · caption
+     12 — so the roles follow the user's font size; below
+     600px the mobile scale (MB1F) overrides them — see "Mobile type scale"
+     after this block. */
+  --text-role-page: 2.125rem;
+  --text-role-page--line-height: 2.5rem;
   --text-role-page--font-weight: 650;
   --text-role-page--letter-spacing: -0.025em;
-  --text-role-title: 22px;
-  --text-role-title--line-height: 28px;
+  --text-role-title: 1.375rem;
+  --text-role-title--line-height: 1.75rem;
   --text-role-title--font-weight: 650;
-  --text-role-head: 17px;
-  --text-role-head--line-height: 24px;
+  --text-role-head: 1.0625rem;
+  --text-role-head--line-height: 1.5rem;
   --text-role-head--font-weight: 600;
-  --text-role-body: 15px;
-  --text-role-body--line-height: 22px;
+  --text-role-body: 0.9375rem;
+  --text-role-body--line-height: 1.375rem;
   --text-role-body--font-weight: 400;
-  --text-role-label: 13px;
-  --text-role-label--line-height: 18px;
+  --text-role-label: 0.8125rem;
+  --text-role-label--line-height: 1.125rem;
   --text-role-label--font-weight: 500;
   /* Secondary metadata (sender · time rows, one-line reasons): role-label's
      size and leading at regular weight. Replaces `text-role-label
      font-normal` (guarded: label-as-meta). */
-  --text-role-meta: 13px;
-  --text-role-meta--line-height: 18px;
+  --text-role-meta: 0.8125rem;
+  --text-role-meta--line-height: 1.125rem;
   --text-role-meta--font-weight: 400;
-  --text-role-caption: 12px;
-  --text-role-caption--line-height: 16px;
+  --text-role-caption: 0.75rem;
+  --text-role-caption--line-height: 1rem;
   --text-role-caption--font-weight: 400;
-  --text-role-mono: 13px;
-  --text-role-mono--line-height: 20px;
+  --text-role-mono: 0.8125rem;
+  --text-role-mono--line-height: 1.25rem;
   --text-role-mono--font-weight: 400;
 
   /* Spacing: 4/8/12/16/24/32/48 — Tailwind's default 4px scale already is
@@ -558,6 +579,30 @@ body {
 .pt-safe {
   padding-top: env(safe-area-inset-top);
 }
+/* Mobile type scale (MB1F, mobile redesign 2026-11-14). Below the rail
+   step (600px) the roles step down to a phone's reading distance; from 600px
+   the desktop values in @theme stand. body/label/caption keep their size;
+   page drops again under 360px (an iPad slide-over, a Fold's cover screen).
+   Overrides the theme variables, so every text-role-* utility follows.
+   --text-field stays 16px (px, not rem) so iOS never zooms into a field. */
+@media (width < 37.5rem) {
+  :root {
+    --text-role-page: 1.375rem;
+    --text-role-page--line-height: 1.75rem;
+    --text-role-title: 1.1875rem;
+    --text-role-title--line-height: 1.5rem;
+    --text-role-head: 1rem;
+    --text-role-head--line-height: 1.375rem;
+    --text-role-meta: 0.78125rem;
+    --text-role-meta--line-height: 1.125rem;
+  }
+}
+@media (width < 22.5rem) {
+  :root {
+    --text-role-page: 1.25rem;
+    --text-role-page--line-height: 1.625rem;
+  }
+}
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -568,9 +613,10 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 /* Width of the shell's navigation column: nothing on a phone (bottom tabs),
-   the rail from 600px, the sidebar from 1024px. The mail split reads it to
-   put its list/reader seam on a fold's hinge. Keep in step with
-   components/nav-rail.tsx (w-[72px]) and components/sidebar.tsx (w-[260px]). */
+   the rail from 600px, the sidebar from 840px (220px, then 260px from
+   1024px). The mail split reads it to put its list/reader seam on a fold's
+   hinge. Keep in step with components/nav-rail.tsx (w-[72px]) and
+   components/sidebar.tsx (w-[220px] / lg:w-[260px]). */
 :root {
   --shell-nav-w: 0px;
 }
@@ -584,6 +630,12 @@ body {
 @media (orientation: landscape) and (max-height: 499px) and (min-width: 37.5rem) {
   :root {
     --shell-nav-w: calc(56px + env(safe-area-inset-left));
+  }
+}
+@media (min-width: 64rem), (min-width: 52.5rem) and (min-height: 500px),
+  (min-width: 52.5rem) and (orientation: portrait) {
+  :root {
+    --shell-nav-w: calc(220px + env(safe-area-inset-left));
   }
 }
 @media (min-width: 64rem) {
