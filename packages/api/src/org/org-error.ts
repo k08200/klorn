@@ -41,6 +41,8 @@ export type OrgErrorCode =
   | "PORTAL_PAYER_ONLY"
   | "SEATS_INCREASE_PAYER_ONLY"
   | "SEATS_CHANGED"
+  | "RESUME_PAYER_ONLY"
+  | "BILLING_PROVIDER_READ_FAILED"
   | "BILLING_PROVIDER_ERROR";
 
 export class OrgError extends Error {

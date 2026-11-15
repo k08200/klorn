@@ -3361,6 +3361,8 @@ const de: Record<string, string> = {
     "Alle behalten ihren Platz bis zum Ende des bereits bezahlten Zeitraums. Danach endet der Team-Plan für alle Mitglieder, und es wird nichts mehr berechnet.",
   "settings.org.subscription.cancelConfirm": "Zum Periodenende kündigen",
   "settings.org.subscription.keep": "Abo behalten",
+  "settings.org.subscription.keepPayerOnly":
+    "Nur die Person, die für das Team bezahlt, kann das Abo behalten, weil ihre Karte dann wieder belastet wird.",
   "settings.org.subscription.endsOn": "Das Abo endet am {date}. Bis dahin bleiben die Plätze.",
   "settings.org.subscription.endsSoon":
     "Das Abo endet zum Ende dieses Abrechnungszeitraums. Bis dahin bleiben die Plätze.",
@@ -3375,11 +3377,15 @@ const de: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "Ein pausiertes Abo lässt sich nur im Abrechnungsportal beenden.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
+    "Das Abrechnungsportal öffnet sich nur für die Person, die für das Team bezahlt. Sie kann auch den Link in den Paddle-Belegen nutzen.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "Nur die E-Mail-Adresse, die für das Team bezahlt, kann Plätze hinzufügen, weil die hinterlegte Karte sofort belastet wird. Bitte die Person darum, die sich mit dieser Adresse bei Klorn anmeldet (an sie gehen die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
+    "Nur die Person, die für das Team bezahlt, kann Plätze hinzufügen, weil die hinterlegte Karte sofort belastet wird. Bitte sie, die Plätze in ihrem eigenen Klorn-Konto hinzuzufügen (sie erhält die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
   "settings.org.error.SEATS_CHANGED":
     "Die Anzahl der Plätze hat sich beim Speichern geändert. Prüfe die aktuelle Anzahl und versuche es erneut.",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "Wenn das Abo bleibt, wird die Karte der zahlenden Person wieder belastet, deshalb kann nur sie das tun. Bitte sie, das Abo in ihrem eigenen Klorn-Konto zu behalten (sie erhält die Paddle-Belege).",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle hat nicht geantwortet, deshalb wurde nichts geändert. Versuche es in einer Minute erneut.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle hat die Änderung nicht bestätigt, sie ist also womöglich nicht durchgegangen. Prüfe es in einer Minute, bevor du es erneut versuchst.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":

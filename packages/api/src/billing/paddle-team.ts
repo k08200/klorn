@@ -6,8 +6,8 @@
  *   PADDLE_TEAM_PRICE_ID_MONTHLY  standard seat, $30 / seat / month
  *   PADDLE_TEAM_PRICE_ID_ANNUAL   standard seat, $312 / seat / year
  * (docs/design/pricing-tiers.md). The checkout's custom_data names the
- * organization and never a user, so the Pro webhook path (which maps
- * custom_data.userId to an account and writes User.plan) can never take it.
+ * organization and the buyer as payerUserId — never as userId, the key the
+ * Pro webhook path maps to an account to write User.plan.
  */
 
 import { paddleFetch } from "./paddle.js";
@@ -32,14 +32,20 @@ export function teamCheckoutIntervals(): TeamInterval[] {
   return TEAM_INTERVALS.filter((interval) => teamPriceIdFor(interval) !== null);
 }
 
+/**
+ * A hosted team checkout. `payerUserId` (the owner opening it) travels in the
+ * custom data, which Paddle copies onto the subscription; the webhook stores
+ * it as the organization's payer (seat-billing.ts).
+ */
 export async function createPaddleTeamCheckout(opts: {
   orgId: string;
   priceId: string;
   quantity: number;
+  payerUserId: string;
 }): Promise<string> {
   const data = (await paddleFetch("/transactions", {
     items: [{ price_id: opts.priceId, quantity: opts.quantity }],
-    custom_data: { orgId: opts.orgId, kind: TEAM_SEATS_KIND },
+    custom_data: { orgId: opts.orgId, kind: TEAM_SEATS_KIND, payerUserId: opts.payerUserId },
   })) as { data?: { checkout?: { url?: string | null } } };
   const url = data?.data?.checkout?.url;
   if (!url) {
@@ -149,7 +155,12 @@ export interface TeamSubscriptionData {
   id?: string;
   status?: string;
   customer_id?: string;
-  custom_data?: { orgId?: unknown; kind?: unknown; userId?: unknown } | null;
+  custom_data?: {
+    orgId?: unknown;
+    kind?: unknown;
+    userId?: unknown;
+    payerUserId?: unknown;
+  } | null;
   items?: Array<{ price?: { id?: string } | null; quantity?: number }> | null;
   billing_cycle?: { interval?: string; frequency?: number } | null;
   scheduled_change?: { action?: string; effective_at?: string | null } | null;

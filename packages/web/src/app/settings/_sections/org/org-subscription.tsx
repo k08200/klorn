@@ -59,7 +59,9 @@ function SeatCountField({
 
 /**
  * Owner only, once a team subscription exists: change the seat count, cancel
- * at the period end (or keep the subscription), open the Paddle portal. The
+ * at the period end (or keep the subscription), open the Paddle portal.
+ * Adding seats, keeping a canceled subscription and the portal are the
+ * payer's alone; the page says so and the server enforces it. The
  * server enforces every rule again (org/seat-management.ts); a seat change
  * shows as pending until Paddle's webhook moves the stored count.
  */
@@ -138,11 +140,16 @@ export function OrgSubscription({
   return (
     <div className="space-y-3">
       {actions.resume && (
-        <p className="text-role-body text-ink-mid">
-          {endDate
-            ? t("settings.org.subscription.endsOn", { date: endDate })
-            : t("settings.org.subscription.endsSoon")}
-        </p>
+        <>
+          <p className="text-role-body text-ink-mid">
+            {endDate
+              ? t("settings.org.subscription.endsOn", { date: endDate })
+              : t("settings.org.subscription.endsSoon")}
+          </p>
+          <p className="text-role-caption text-ink-dim">
+            {t("settings.org.subscription.keepPayerOnly")}
+          </p>
+        </>
       )}
       {actions.changeSeats && (
         <SeatCountField floor={floor} value={seatsText} onChange={setSeatsText} />

@@ -25,6 +25,7 @@ import {
 
 const ORIGINAL_ENV = { ...process.env };
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
+const PAYER_ID = "33333333-3333-4333-8333-333333333333";
 
 beforeEach(() => {
   delete process.env.PADDLE_PRO_PRICE_ID;
@@ -60,7 +61,7 @@ describe("team prices from env", () => {
 });
 
 describe("team checkout", () => {
-  it("creates a quantity-based transaction that names the organization, not a user", async () => {
+  it("creates a quantity-based transaction that names the organization and its payer, never a Pro userId", async () => {
     process.env.PADDLE_API_KEY = "test-key";
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -71,14 +72,17 @@ describe("team checkout", () => {
       orgId: ORG_ID,
       priceId: "pri_team_month",
       quantity: 7,
+      payerUserId: PAYER_ID,
     });
     expect(url).toBe("https://pay.example/checkout");
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
     const body = JSON.parse(init.body);
     expect(body).toEqual({
       items: [{ price_id: "pri_team_month", quantity: 7 }],
-      custom_data: { orgId: ORG_ID, kind: "team_seats" },
+      custom_data: { orgId: ORG_ID, kind: "team_seats", payerUserId: PAYER_ID },
     });
+    // The Pro webhook path maps custom_data.userId to an account and writes
+    // User.plan: the team checkout never sets that key.
     expect(body.custom_data).not.toHaveProperty("userId");
   });
 
@@ -89,7 +93,12 @@ describe("team checkout", () => {
       vi.fn(async () => ({ ok: true, json: async () => ({ data: {} }) })),
     );
     await expect(
-      createPaddleTeamCheckout({ orgId: ORG_ID, priceId: "pri_team_month", quantity: 2 }),
+      createPaddleTeamCheckout({
+        orgId: ORG_ID,
+        priceId: "pri_team_month",
+        quantity: 2,
+        payerUserId: PAYER_ID,
+      }),
     ).rejects.toThrow(/no checkout url/);
   });
 });

@@ -2957,6 +2957,14 @@ model Organization {
   /// null. Written by the owner's cancel route and confirmed by the webhook;
   /// the seats stay until Paddle's final canceled event.
   subscriptionCancelAt DateTime?
+  /// The Klorn user who bought the team subscription (the checkout's
+  /// custom_data.payerUserId), stored by the webhook only when they are an
+  /// owner of this organization at that moment; null for subscriptions bought
+  /// before it was recorded, or when it ends. Seat increases, the billing
+  /// portal and resume accept it (while that user is still an owner) before
+  /// falling back to the Paddle customer email (src/org/seat-management.ts).
+  /// A plain id, no relation: a deleted user can never call.
+  payerUserId          String?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   memberships          OrgMembership[]

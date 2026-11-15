@@ -3216,6 +3216,8 @@ const ko: Record<string, string> = {
     "이미 결제한 기간이 끝날 때까지는 모두 시트를 유지합니다. 그 후 모든 멤버의 팀 플랜이 끝나고 더 이상 청구되지 않습니다.",
   "settings.org.subscription.cancelConfirm": "기간 종료 시 해지",
   "settings.org.subscription.keep": "구독 유지",
+  "settings.org.subscription.keepPayerOnly":
+    "구독을 유지하면 결제하는 사람의 카드로 청구가 다시 시작되므로, 팀 요금을 결제하는 사람만 유지할 수 있습니다.",
   "settings.org.subscription.endsOn": "구독이 {date}에 끝납니다. 그때까지 시트는 유지됩니다.",
   "settings.org.subscription.endsSoon":
     "구독이 이번 결제 기간이 끝날 때 종료됩니다. 그때까지 시트는 유지됩니다.",
@@ -3230,11 +3232,15 @@ const ko: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED":
     "일시 중지된 구독은 결제 포털에서만 종료할 수 있습니다.",
   "settings.org.error.PORTAL_PAYER_ONLY":
-    "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
+    "결제 포털은 팀 요금을 결제하는 사람에게만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
-    "등록된 카드로 바로 청구되기 때문에 시트 추가는 팀 요금을 결제하는 이메일 주소로만 할 수 있습니다. 그 주소로 Klorn에 로그인하는 사람에게 요청하세요(Paddle 영수증 이메일이 그 주소로 갑니다). 시트 줄이기는 지금도 할 수 있습니다.",
+    "등록된 카드로 바로 청구되기 때문에 시트 추가는 팀 요금을 결제하는 사람만 할 수 있습니다. 그 사람에게 본인 Klorn 계정에서 추가해 달라고 요청하세요(Paddle 영수증 이메일을 받는 사람입니다). 시트 줄이기는 지금도 할 수 있습니다.",
   "settings.org.error.SEATS_CHANGED":
     "저장하는 동안 시트 수가 바뀌었습니다. 현재 시트 수를 확인하고 다시 시도하세요.",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "구독을 유지하면 결제하는 사람의 카드로 청구가 다시 시작되므로, 팀 요금을 결제하는 사람만 할 수 있습니다. 그 사람에게 본인 Klorn 계정에서 유지해 달라고 요청하세요(Paddle 영수증 이메일을 받는 사람입니다).",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle이 응답하지 않아 아무것도 변경되지 않았습니다. 잠시 후 다시 시도하세요.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle이 변경을 확인하지 않아 반영되지 않았을 수 있습니다. 다시 시도하기 전에 잠시 후 확인해 주세요.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
