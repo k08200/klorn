@@ -35,8 +35,10 @@ hours allow that category, the same gate Web Push uses
 frames to `packages/web/src/lib/native/tauri-notify.ts`, which banners tagged
 frames once per notification id by invoking the shell's `show_banner` command.
 Untagged frames (QUEUE / INFO / SILENT, agent notes, briefings) never banner;
-an untagged PUSH / meeting frame (the gate said no) is recorded as seen so it
-can never banner later.
+an untagged meeting frame, or an untagged PUSH frame that names no single
+mail (the gate said no), is recorded as seen so it can never banner later. An
+untagged PUSH frame about one mail is **held** instead — see *Quiet hours
+while Klorn is running* below.
 
 The ids live in a per-account ledger — in memory for the session, persisted
 to `localStorage` (`klorn.desktopAlerts.ledger:<userId>`: the user id plus
@@ -135,10 +137,10 @@ app's `PushLedger`):
 - **each id once**, across restarts; rows younger than 30 s are left to their
   live frame;
 - **each mail once**: a mail toast also records `mail:<emailId>`, so a second
-  bell row for the same mail (the urgent sweep re-rings unread mail once
-  "Clear all" deleted the rows its dedupe reads) neither toasts live nor is
-  caught up — the Mac keys its ledger on the mail's attention item the same
-  way.
+  bell row for the same mail (a re-ring from before 2026-11-15, when "Clear
+  all" still deleted the rows the sweep's dedupe reads, or a race between the
+  two ring paths) neither toasts live nor is caught up — the Mac keys its
+  ledger on the mail's attention item the same way.
 
 **Urgent mail (decision N6,
 `packages/web/src/lib/native/desktop-push-catchup.ts`).** For unseen,
@@ -159,11 +161,37 @@ Mac), shapes each like every mail notification
 - urgent-mail alerts turned off → nothing.
 
 Not caught up: rows written before this change and urgent-sweep rows that
-batch several mails (neither names one mail). Quiet hours while Klorn is
-**running** follow the live gate instead: the frame arrives untagged, is
-recorded, and never toasts later — the same as Web Push, which drops (does not
-defer) an alert during quiet hours. Only mail missed while Klorn was closed or
-asleep is held until quiet hours end.
+batch several mails (neither names one mail).
+
+**Quiet hours while Klorn is running** (as the Mac's `HeldBanners`). The
+server sends an urgent mail's frame untagged. Unless that mail was already
+toasted, its id is not recorded but *held* (`AlertLedger.held`, at most 200,
+newest kept), so the catch-up above asks about the row on the first bell
+refetch after it is 30 s old, gets `held`, and asks again at most every 5
+minutes. The first answer after quiet hours end shows it the N6 way: one mail
+as itself; two or more as ONE summary, titled "N urgent emails during quiet
+hours" when every mail in it rang live (the response's `heldSummaryTitle`, in
+the user's notification language), "…while Klorn was closed" as soon as one of
+them came without a live frame (Klorn closed, asleep or offline).
+
+- The server drops what no longer deserves a toast: mail already read in the
+  mailbox, handled, or no longer an open PUSH item (so held MEETING-lane mail
+  never toasts late, as on the Mac). "Clear all" marks the rows read and hides
+  them from the bell, so cleared mail is never asked about.
+- A mail toasted once — live or caught up — never toasts again.
+- The held ids live in the persisted ledger, so a restart during quiet hours
+  keeps them: the first catch-up after relaunch asks about the same rows (any
+  missed while Klorn was down switch the summary to the "closed" title).
+- The server's own quiet-hours summary (`notify/quiet-hours-summary.ts`) rings
+  only Web Push / Telegram / FCM / APNs, never this shell: the desktop toasts
+  once and the phone once.
+- Any untagged frame about one mail is held, whatever the gate's reason. With
+  urgent-mail alerts turned off the answer is empty and the row is recorded
+  (one extra catch-up request per urgent mail); a gate lookup error, which
+  also untags the frame, now toasts about a minute late instead of never (two
+  or more such mails would carry the quiet-hours title — accepted, rare).
+- Meeting reminders held by quiet hours stay dropped — stale by morning, as on
+  the Mac.
 
 **Meetings (`desktop-catchup.ts`).** At most 5 banners per pass, newest
 first; reminders older than 2 minutes (they are written 1–5 minutes before the
