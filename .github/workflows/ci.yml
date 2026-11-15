@@ -154,6 +154,10 @@ jobs:
       # cheap fast signal on every PR.
       - name: Typecheck Web
         run: pnpm --filter @klorn/web typecheck
+      # packages/cli (`klorn`, the self-host operations CLI) has no build step —
+      # bin/klorn.mjs runs src/ through tsx — so typecheck is its only tsc gate.
+      - name: Typecheck CLI
+        run: pnpm --filter @klorn/cli typecheck
 
   test:
     name: Test
@@ -189,6 +193,11 @@ jobs:
         run: cd packages/api && pnpm exec prisma generate
       - name: Run tests
         run: cd packages/api && pnpm exec vitest run
+      # The CLI unit suites fake child_process and the network. Its Postgres
+      # suite (cli-pg.test.ts) self-skips here: it needs KLORN_CLI_IT_* and a
+      # Postgres container to shim the client tools from (see that file).
+      - name: Run CLI tests
+        run: pnpm --filter @klorn/cli test
       - name: Run Postgres integration tests (every migration applied)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/klorn_test
