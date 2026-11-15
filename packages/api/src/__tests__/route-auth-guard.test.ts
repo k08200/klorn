@@ -57,6 +57,7 @@ const { signToken, getUserId, requireAuth, AuthenticationRequiredError } = await
   "../auth.js"
 );
 const { handleError } = await import("../error-handler.js");
+const { registerJsonBodyParser } = await import("../json-body-parser.js");
 const { registerApiRoutes } = await import("../register-api-routes.js");
 const { installRouteAuthGuard, requireActiveSession } = await import(
   "../security/route-auth-guard.js"
@@ -90,11 +91,7 @@ beforeAll(async () => {
   app = Fastify();
   app.setErrorHandler(handleError);
   // index.ts's raw-body JSON parser: the Stripe/Paddle signature checks read it.
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
-    const str = (body as string) || "{}";
-    (req as unknown as { rawBody: string }).rawBody = str;
-    done(null, JSON.parse(str));
-  });
+  registerJsonBodyParser(app);
   await registerApiRoutes(app);
   await app.ready();
 });
@@ -152,6 +149,40 @@ describe("no or invalid token → 401, never 500", () => {
   it("answers a HEAD probe of a guarded GET with 401 too", async () => {
     const res = await app.inject({ method: "HEAD", url: "/api/briefing/status" });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// A body that is not JSON is the caller's mistake, and the parser runs before
+// the guard, so it is answered 400 with or without a token. It used to reach the
+// error handler as a bare SyntaxError: a 500, a log line and a Sentry event per
+// garbage request.
+describe("a malformed JSON body on the real route set is 400, never 500", () => {
+  const MALFORMED_BODY = "{bad";
+  const ROUTES = ["/api/auth/login", "/api/notifications/clear-all"] as const;
+
+  it.each(ROUTES)("POST %s without a token", async (url) => {
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: { "content-type": "application/json" },
+      payload: MALFORMED_BODY,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid JSON body" });
+  });
+
+  it.each(ROUTES)("POST %s with a live session", async (url) => {
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: {
+        "content-type": "application/json",
+        ...bearer(signToken({ userId: USER_ID, email: "guard@example.com" })),
+      },
+      payload: MALFORMED_BODY,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid JSON body" });
   });
 });
 

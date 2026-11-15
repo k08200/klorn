@@ -13,6 +13,7 @@ import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
+import { registerJsonBodyParser } from "./json-body-parser.js";
 import { warnRetiredJudgeHealthEnv } from "./judge/judge-fallback-check.js";
 import { reportJudgeModelResolution, reportJudgeServing } from "./llm/judge-model-gate.js";
 import { JUDGE_MODEL, JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
@@ -184,16 +185,8 @@ if (scannerAllowRules.length > 0) {
 
 await app.register(rateLimit, rateLimitOptions(scannerAllowRules));
 
-// Raw body support for Stripe webhook signature verification
-app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
-  try {
-    const str = (body as string) || "{}";
-    (req as unknown as { rawBody: string }).rawBody = str;
-    done(null, JSON.parse(str));
-  } catch (err) {
-    done(err as Error, undefined);
-  }
-});
+// Raw body support for webhook signature verification (json-body-parser.ts).
+registerJsonBodyParser(app);
 
 // Every route, behind the default-deny route-auth guard (register-api-routes.ts).
 // Declare new routes there, not here: one declared on `app` before this call
