@@ -191,6 +191,10 @@ docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d
 Open `http://localhost:3000`. The API is on `:3001`; Postgres stays internal
 to the compose network (not published to the host).
 
+`pnpm klorn doctor` (after `pnpm install --filter @klorn/cli`) checks the env
+file, Postgres, migrations, the API and the web app in one pass — see
+[the `klorn` CLI](self-host-cli.md).
+
 Notes:
 
 - **Schema is automatic.** The API entrypoint runs `prisma migrate deploy`
@@ -450,6 +454,12 @@ in the same override.
 
 ## Backup & restore
 
+The [`klorn` CLI](self-host-cli.md) does all of this with checksums and
+guard rails: `pnpm klorn backup create`, `pnpm klorn backup list`, and
+`pnpm klorn backup restore <file> --target compose` (see its
+[restore safety rules](self-host-cli.md#restore-safety-rules)). The manual
+commands below are what it automates.
+
 Two things, and the second is the one people lose.
 
 1. **The Postgres volume** — `klorn-selfhost-pgdata`. All mail metadata,
@@ -519,6 +529,12 @@ configured and keeps polling.
 
 ## Updating
 
+`pnpm klorn upgrade <version>` (for example `0.4.1`) runs the whole sequence —
+pull, back up, migrate with the new image, pin `KLORN_VERSION` in
+`.env.selfhost`, restart, and wait for `/api/health` to report the new
+version; see [`klorn upgrade`](self-host-cli.md#klorn-up-and-klorn-upgrade).
+By hand:
+
 ```bash
 git pull   # picks up compose/doc changes
 docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml pull
@@ -527,6 +543,9 @@ docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d
 
 (If you switched a service to the source-build path, use `up -d --build`
 instead of `pull`.)
+
+With `KLORN_VERSION` set in `.env.selfhost`, `pull` fetches that pinned
+release; change the pin (or run `klorn upgrade`) to move to another one.
 
 Database migrations apply automatically on the next API boot (additive,
 checked into `packages/api/prisma/migrations/`). For the Render path, pushes
