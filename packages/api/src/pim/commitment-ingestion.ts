@@ -87,17 +87,31 @@ function confidenceForCandidate(candidate: CommitmentCandidate): number {
  * email ("I'll push it back to them now") is the sender's commitment, not the
  * user's — the rule extractor's USER owner is a perspective it cannot know.
  * Only when the user authored the message themselves (senderIsUser) does
- * first-person mean the user. Non-email sources (chat, notes) are the user's
- * own voice, so the candidate owner stands.
+ * first-person mean the user. SLACK text is the same: Klorn stores only other
+ * people's Slack messages (docs/providers/slack.md §10). Other sources (chat,
+ * notes) are the user's own voice, so the candidate owner stands.
  */
 function ownerForCandidate(
   input: CommitmentIngestionInput,
   candidate: CommitmentCandidate,
 ): CommitmentInput["owner"] {
-  if (input.sourceType === "EMAIL" && candidate.owner === "USER" && input.senderIsUser !== true) {
+  const sendersVoice = input.sourceType === "EMAIL" || input.sourceType === "SLACK";
+  if (sendersVoice && candidate.owner === "USER" && input.senderIsUser !== true) {
     return "COUNTERPARTY";
   }
   return candidate.owner;
+}
+
+/** Below the 0.7 confirmation line (pim/commitment-confirmation.ts). */
+const SLACK_MAX_CONFIDENCE = 0.69;
+
+/**
+ * Slack commitments stay suggested until the user confirms one
+ * (docs/providers/slack.md §10): Slack text is someone else's and may be
+ * written to steer the refiner, so it never lands as confirmed on its own.
+ */
+function capSuggested(input: CommitmentIngestionInput, confidence: number): number {
+  return input.sourceType === "SLACK" ? Math.min(confidence, SLACK_MAX_CONFIDENCE) : confidence;
 }
 
 function buildCommitmentInput(
@@ -123,7 +137,7 @@ function buildCommitmentInput(
     sourceId: input.sourceId,
     threadId: input.threadId ?? null,
     evidenceText: compactText(candidate.text, 500),
-    confidence: refinement?.confidence ?? confidenceForCandidate(candidate),
+    confidence: capSuggested(input, refinement?.confidence ?? confidenceForCandidate(candidate)),
     dedupKey,
   };
 }

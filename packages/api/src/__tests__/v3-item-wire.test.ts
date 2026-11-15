@@ -191,6 +191,24 @@ describe("v3ItemWire", () => {
     expect(w.reasons[0]?.params).toEqual({ sentCount: 4 });
   });
 
+  it("carries the org company-domain fact as a boolean (true and false), nothing else of the org", () => {
+    for (const orgCompanyDomain of [true, false]) {
+      const w = wire(
+        row({
+          v3Decision: {
+            reasons: [
+              {
+                code: "relationship",
+                params: { sentCount: 1, orgCompanyDomain, orgDomains: "acme.com", orgName: "Acme" },
+              },
+            ],
+          },
+        }),
+      );
+      expect(w.reasons[0]?.params).toEqual({ sentCount: 1, orgCompanyDomain });
+    }
+  });
+
   it("tolerates a malformed decision column", () => {
     for (const v3Decision of ["text", 7, [], { reasons: "nope" }]) {
       expect(wire(row({ v3Decision })).reasons).toEqual([]);

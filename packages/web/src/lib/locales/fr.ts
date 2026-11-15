@@ -3102,6 +3102,56 @@ const fr: Record<string, string> = {
     "Les exports sont très demandés en ce moment. Réessayez dans une minute.",
   "vaultExport.error.unavailable": "L'export Markdown n'est pas disponible pour ce compte.",
   "vaultExport.error.failed": "L'export Markdown a échoué. Réessayez.",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn lit vos messages directs Slack, vos messages de groupe et les mentions, et les classe dans vos voies. Il ne publie jamais, ne réagit pas et ne marque rien comme lu.",
+  "slack.start": "Commencer la configuration",
+  "slack.step.manifest": "Téléchargez le manifeste de l'app. Il contient déjà votre Request URL.",
+  "slack.downloadManifest": "Télécharger le manifeste",
+  "slack.requestUrl": "URL de requête (Request URL)",
+  "slack.step.create":
+    "Dans Slack, créez une app depuis le manifeste (Create New App → From a manifest) et installez-la dans votre espace de travail.",
+  "slack.openSlackApps": "Ouvrir les apps Slack",
+  "slack.step.paste":
+    "Collez le Signing Secret de l'app (Basic Information) et le User OAuth Token (OAuth & Permissions). Klorn vérifie le jeton et ne le conserve pas.",
+  "slack.signingSecret": "Secret de signature (Signing Secret)",
+  "slack.userToken": "Jeton OAuth utilisateur",
+  "slack.connect": "Connecter",
+  "slack.step.verify":
+    "Dans Event Subscriptions de Slack, cliquez sur Retry pour que Slack vérifie la Request URL.",
+  "slack.setupAgain": "Étapes de configuration",
+  "slack.connected": "Slack connecté",
+  "slack.status.connected": "Connecté à {workspace}",
+  "slack.status.waiting": "En attente de la vérification de la Request URL par Slack.",
+  "slack.status.lastEvent": "Dernier événement Slack : {time}",
+  "slack.channels.title": "Canaux à suivre",
+  "slack.channels.desc":
+    "Tous les messages de ces canaux sont classés, pas seulement vos mentions. Collez les identifiants de canal (détails du canal → À propos), séparés par des virgules ou des espaces.",
+  "slack.channels.save": "Enregistrer les canaux",
+  "slack.channels.saved": "Canaux enregistrés",
+  "slack.disconnect": "Déconnecter",
+  "slack.disconnect.title": "Déconnecter Slack ?",
+  "slack.disconnect.message":
+    "Klorn supprime le secret de signature, tous les messages et verdicts Slack conservés et les engagements trouvés dans Slack. Supprimez aussi l'app dans Slack.",
+  "slack.disconnected": "Slack déconnecté. Klorn a supprimé ce qu'il avait conservé.",
+  "slack.error.invalid-signing-secret": "Ce n'est pas un secret de signature Slack.",
+  "slack.error.bot-token": "C'est un jeton de bot. Collez le User OAuth Token (xoxp-…).",
+  "slack.error.invalid-user-token": "Ce n'est pas un jeton utilisateur Slack (xoxp-…).",
+  "slack.error.slack-rejected-token": "Slack n'a pas accepté ce jeton.",
+  "slack.error.slack-unreachable": "Impossible de joindre Slack. Réessayez.",
+  "slack.error.bad-response":
+    "Slack a répondu d'une manière que Klorn ne peut pas utiliser. Réessayez.",
+  "slack.error.missing-scopes":
+    "Il manque au jeton des autorisations dont Klorn a besoin : {scopes}",
+  "slack.error.extra-scopes":
+    "Le jeton a des autorisations que Klorn ne doit pas détenir : {scopes}. Retirez-les de l'app et réinstallez-la.",
+  "slack.error.invalid-channels": "Utilisez jusqu'à 50 identifiants de canal comme C0123456789.",
+  "slack.error.public-url-missing":
+    "Ce serveur Klorn n'a pas d'URL publique : Slack ne peut pas le joindre.",
+  "slack.error.not-started": "Commencez d'abord la configuration de Slack.",
+  "slack.error.rate-limited": "Trop de tentatives. Réessayez plus tard.",
+  "slack.error.generic": "Un problème est survenu avec Slack. Réessayez.",
+  "slack.retry": "Réessayer",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "Règles en texte",
   "rulesDsl.desc":

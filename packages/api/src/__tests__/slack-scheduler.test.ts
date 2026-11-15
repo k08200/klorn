@@ -10,6 +10,8 @@ const purge = vi.hoisted(() => ({
   purgeExpiredSlackData: vi.fn(async () => ({ messages: 0, episodes: 0 })),
 }));
 vi.mock("../slack/purge.js", () => purge);
+const sweep = vi.hoisted(() => ({ judgeReadySlackEpisodes: vi.fn(async () => 0) }));
+vi.mock("../slack/judge-sweep.js", () => sweep);
 vi.mock("../scheduler-lease.js", () => ({
   createSchedulerLease: () => ({
     runExclusive: async (work: () => Promise<void>) => (await work(), true),
@@ -63,6 +65,15 @@ describe("slackSchedulerTick", () => {
     await slackSchedulerTick(at(30_000), lease);
     expect(lease.runExclusive).toHaveBeenCalledTimes(2);
     expect(purge.purgeExpiredSlackData).toHaveBeenCalledTimes(1);
+  });
+
+  it("judges ready episodes on every tick while on, never while off", async () => {
+    await slackSchedulerTick(T0);
+    expect(sweep.judgeReadySlackEpisodes).not.toHaveBeenCalled();
+    process.env.SLACK_ENABLED = "true";
+    await slackSchedulerTick(at(30_000));
+    await slackSchedulerTick(at(60_000));
+    expect(sweep.judgeReadySlackEpisodes).toHaveBeenCalledTimes(2);
   });
 
   it("a failing purge is reported, not thrown, and retried after the interval, not every tick", async () => {

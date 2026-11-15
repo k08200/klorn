@@ -37,6 +37,7 @@ export const EXPECTED_SCHEDULERS = [
   "drive-summary",
   "drive-google-refresh",
   "data-wipe",
+  "org-audit-retention",
   "slack-episodes",
 ] as const;
 
