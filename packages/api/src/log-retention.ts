@@ -40,6 +40,14 @@ export const MCP_WRITE_AUDIT_RETENTION_DAYS = 90;
 export const DATA_EXPORT_AUDIT_RETENTION_DAYS = 90;
 /** Rules DSL apply audit rows (mail/rules-dsl-store.ts): who applied, when, counts. */
 export const RULE_CHANGE_AUDIT_RETENTION_DAYS = 90;
+/**
+ * Bell rows the user cleared (Notification.clearedAt). "Clear all" keeps them,
+ * read and out of the bell, only so the "already notified?" reads (7 days at
+ * most, notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS) still see them; the next
+ * clear deletes those past that window, and this deletes the rest of a user who
+ * never clears again. The shortest window this sweep allows.
+ */
+export const CLEARED_NOTIFICATION_RETENTION_DAYS = 30;
 
 export interface LogRetentionPolicy {
   name: string;
@@ -179,6 +187,23 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.imapMovedMessage.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // Cleared bell rows only (clearedAt set); a row still in the bell is never
+    // touched here.
+    name: "notification",
+    column: "createdAt",
+    days: CLEARED_NOTIFICATION_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.notification
+        .findMany({
+          where: { createdAt: { lt: cutoff }, clearedAt: { not: null } },
+          select: { id: true },
+          take,
+        })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) =>
+      prisma.notification.deleteMany({ where: { id: { in: ids }, clearedAt: { not: null } } }),
   },
 ];
 

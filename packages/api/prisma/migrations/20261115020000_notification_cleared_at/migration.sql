@@ -3,6 +3,8 @@
 -- The "already notified?" reads that look back over bell rows (urgent mail,
 -- the day's briefing, proactive nudges) keep seeing a cleared row, so clearing
 -- never makes Klorn ring the same thing again (background.ts clearNotifications).
+-- Cleared rows go at the next clear once past 7 days, and in the log-retention
+-- sweep after 30 days (log-retention.ts CLEARED_NOTIFICATION_RETENTION_DAYS).
 --
 -- EXPAND ONLY. One nullable column, no default: a catalog update, no table
 -- rewrite, no backfill. The previous instance keeps deleting on clear during

@@ -172,7 +172,9 @@ async function heldPushMail(
     take: QUIET_SUMMARY_MAX_MAIL,
   });
   const mail = await openPushMail(userId, rows, language, { skipReadMail: true });
-  // Two urgent rows can name one mail (a re-ring after a cleared bell): count it once.
+  // Two urgent rows can name one mail (a re-ring from before 2026-11-15, when
+  // Clear all still deleted rows, or a race between the two ring paths): count
+  // it once.
   const seen = new Set<string>();
   return mail.filter((m) => {
     if (seen.has(m.emailId)) return false;

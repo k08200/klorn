@@ -159,7 +159,8 @@ const KEPT_NOTIFICATION_ROWS = {
  * day, a meeting alert by its event), so a row still inside that look-back is
  * hidden, not deleted: read, with clearedAt set, and kept as it was otherwise.
  * Deleting those rows made the urgent sweep ring the same unread mail again on
- * every channel (2026-11-14). Older rows no read looks at are deleted.
+ * every channel (2026-11-14). Older rows no read looks at are deleted, and the
+ * log-retention sweep deletes cleared rows after 30 days.
  */
 export async function clearNotifications(userId: string): Promise<void> {
   const now = new Date();

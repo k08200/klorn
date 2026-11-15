@@ -117,7 +117,8 @@ export async function firewallPushGatesPass(
   // below still covers an interrupt the hold gates held (no ring recorded).
   if ((await findRungEmailIds(userId, [email.id])).has(email.id)) {
     console.log(
-      `[PUSH] Firewall PUSH deduped (already rang) for email ${email.gmailId} user ${userId}`,
+      // The row id, not gmailId: an IMAP gmailId carries the mailbox address.
+      `[PUSH] Firewall PUSH deduped (already rang) for email ${email.id} user ${userId}`,
     );
     return false;
   }

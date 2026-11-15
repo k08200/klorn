@@ -1359,8 +1359,10 @@ model Notification {
   // A cleared row is kept, read, out of the bell, so the "already notified?"
   // reads that look back over bell rows (urgent mail, the day's briefing,
   // proactive nudges, ...) still see it: clearing is a UI action and never
-  // rings anything again. clearNotifications deletes rows past the longest
-  // such window instead (notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS).
+  // rings anything again. The next clear deletes rows past the longest such
+  // window (notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS, 7 days); the
+  // log-retention sweep deletes cleared rows after 30 days. A reader that lists
+  // the bell must filter `clearedAt: null` (or `isRead: false`).
   clearedAt       DateTime?
   createdAt       DateTime       @default(now())
 
