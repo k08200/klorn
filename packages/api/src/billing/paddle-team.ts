@@ -73,6 +73,8 @@ export interface PaddleTeamSubscription {
   status: string | null;
   /** The scheduled change's action ("cancel", "pause", …), or null. */
   scheduledChange: string | null;
+  /** When a scheduled cancel takes effect (Paddle's ISO string), or null. */
+  cancelEffectiveAt: string | null;
   items: Array<{ priceId: string | null; quantity: number | null }>;
 }
 
@@ -88,12 +90,13 @@ export async function getPaddleTeamSubscription(
   )) as {
     data?: {
       status?: unknown;
-      scheduled_change?: { action?: unknown } | null;
+      scheduled_change?: { action?: unknown; effective_at?: unknown } | null;
       items?: Array<{ price?: { id?: unknown } | null; quantity?: unknown }> | null;
     };
   };
   const data = body?.data ?? {};
   const action = data.scheduled_change?.action;
+  const effectiveAt = data.scheduled_change?.effective_at;
   return {
     status: typeof data.status === "string" ? data.status : null,
     scheduledChange: data.scheduled_change
@@ -101,6 +104,7 @@ export async function getPaddleTeamSubscription(
         ? action
         : "unknown"
       : null,
+    cancelEffectiveAt: action === "cancel" && typeof effectiveAt === "string" ? effectiveAt : null,
     items: (data.items ?? []).map((item) => ({
       priceId: typeof item.price?.id === "string" ? item.price.id : null,
       quantity: Number.isInteger(item.quantity) ? (item.quantity as number) : null,

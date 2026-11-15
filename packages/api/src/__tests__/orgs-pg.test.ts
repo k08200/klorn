@@ -446,16 +446,25 @@ describePg("Klorn Teams lifecycle (real Postgres)", () => {
     await join(owner, second);
     await prisma.organization.update({
       where: { id: org.id },
-      data: { payerUserId: owner.userId },
+      data: {
+        payerUserId: owner.userId,
+        cancelRequestedByUserId: owner.userId,
+        cancelRequestedAt: new Date(),
+      },
     });
     await deleteUserAndAllData(owner.userId);
     const owners = await prisma.orgMembership.findMany({
       where: { orgId: org.id, role: "OWNER" },
     });
     expect(owners.map((m) => m.userId)).toEqual([first.userId]);
-    // The organization stops naming the deleted account as its payer.
+    // The organization stops naming the deleted account as its payer, or as
+    // the owner who scheduled its cancel.
     const after = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
-    expect(after.payerUserId).toBeNull();
+    expect(after).toMatchObject({
+      payerUserId: null,
+      cancelRequestedByUserId: null,
+      cancelRequestedAt: null,
+    });
   });
 
   it("deletes an organization with no other member and no subscription with its owner's account", async () => {

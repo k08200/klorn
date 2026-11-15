@@ -227,13 +227,14 @@ describe("seat management calls to Paddle", () => {
     process.env.PADDLE_API_KEY = "test-key";
     const calls = stub({
       status: "active",
-      scheduled_change: { action: "cancel" },
+      scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
       email: "payer@example.com",
       items: [{ price: { id: "pri_team_month" }, quantity: 4 }],
     });
     expect(await getPaddleTeamSubscription("sub_1", { timeoutMs: 6000 })).toEqual({
       status: "active",
       scheduledChange: "cancel",
+      cancelEffectiveAt: "2026-12-14T00:00:00Z",
       items: [{ priceId: "pri_team_month", quantity: 4 }],
     });
     expect(await getPaddleCustomerEmail("ctm_1", { timeoutMs: 6000 })).toBe("payer@example.com");

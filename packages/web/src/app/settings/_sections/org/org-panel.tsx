@@ -116,6 +116,7 @@ function OrgDetail({
       <OrgSeats
         org={org}
         owner={owner}
+        billing={me.billing}
         price={transparency?.seatPrice ?? null}
         onChanged={refresh}
       />
