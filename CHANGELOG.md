@@ -12,6 +12,28 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Self-hosting
+- `klorn`, an operations CLI for self-hosters (`packages/cli`, run as
+  `pnpm klorn <command>`; not published to npm). Guide:
+  `docs/self-host-cli.md`.
+  - `doctor` — read-only checks of the env (values never printed),
+    Docker, Postgres, `pg_dump`, migrations, disk, API health, clock skew
+    and the web app; `--json`; exit 1 on any fail.
+  - `migrate status|deploy` — status from `_prisma_migrations`; deploy
+    wraps `prisma migrate deploy` with a backup and a confirmation first.
+  - `backup create|list|restore` — `pg_dump` custom format with a sha256,
+    0700/0600 permissions. Restore needs an explicit `--target`, refuses
+    Klorn's hosted production database without `--i-know`, verifies the
+    checksum, asks for the database name (or `--yes`), stops the api,
+    snapshots the target, and replaces its `public` schema in a single
+    transaction (so rolling back over newer migrations works).
+  - `up` / `upgrade <version>` — compose up with a health wait; upgrade
+    pulls, backs up, migrates with the new image, pins `KLORN_VERSION`,
+    restarts and waits for the new version.
+- `docker-compose.selfhost.yml` takes the image tag from `KLORN_VERSION`
+  (default `latest`, so existing setups are unchanged).
+- `.env.selfhost` is now git-ignored.
+
 ### Added — Classification and learning
 - Provider-side engagement on the decision ledger (#1664):
   - `DecisionLabel` records when the user replied to a judged mail from

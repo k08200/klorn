@@ -4,6 +4,9 @@ dist/
 .DS_Store
 *.log
 .env
+# The self-host env file holds the JWT secret, the token encryption key and
+# the OAuth client secret (docker-compose.selfhost.yml, docs/self-hosting.md).
+.env.selfhost
 results/
 test-results/
 .next/
