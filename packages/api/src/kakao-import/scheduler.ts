@@ -13,6 +13,7 @@
  */
 
 import { kakaoImportLive } from "../config.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { createSchedulerLease } from "../scheduler-lease.js";
 import { captureError } from "../sentry.js";
@@ -78,8 +79,8 @@ export async function kakaoSchedulerTick(
     if (kakaoImportLive() || purgeDue) await lease.runExclusive(() => runKakaoWork(now));
     recordSchedulerTick("kakao-import");
   } catch (err) {
-    console.error(`${LOG_PREFIX} tick failed:`, err);
-    captureError(err, { tags: { scope: "kakao-import.scheduler" } });
+    logDbFailure("[KAKAO] tick failed", err, { level: "error" });
+    captureDbFailure("[KAKAO] tick failed", err, { tags: { scope: "kakao-import.scheduler" } });
   }
 }
 

@@ -11,6 +11,7 @@
 
 import { prisma } from "../db.js";
 import { displayNameOf, isPlainAddress, parseAddress } from "../mail/email-address.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 /**
  * How far back the work graph reaches when scanning mail. Active contexts
@@ -430,7 +431,7 @@ async function persistWorkContextSnapshots(
             generatedAt: new Date(now),
           },
         })
-        .catch((err) => console.warn("[WORK-GRAPH] context snapshot upsert failed:", err)),
+        .catch((err) => logDbFailure("[WORK-GRAPH] context snapshot upsert failed", err)),
     ),
   );
 }

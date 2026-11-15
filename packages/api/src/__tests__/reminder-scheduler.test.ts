@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendPushNotification } from "../notify/push.js";
 import {
   deliverDueReminderById,
@@ -7,6 +7,8 @@ import {
 } from "../pim/reminder-scheduler.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 type ReminderRow = {
   id: string;
@@ -201,6 +203,76 @@ describe("reminder scheduler delivery", () => {
     const payload = vi.mocked(sendPushNotification).mock.calls[0]?.[1] as PushPayload;
     expect(payload.url).toBe("/chat");
     expect(payload.emailId).toBeUndefined();
+  });
+});
+
+describe("a database error quoting the reminder never reaches Sentry or the console", () => {
+  // A mail reminder's title is the mail's subject, and a Prisma error renders
+  // the rejected call's arguments, title included.
+  let error: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    state.reminders.clear();
+    state.notifications.length = 0;
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    error.mockRestore();
+    vi.useRealTimers();
+  });
+
+  const expectNoCanary = () => {
+    expect(callText(vi.mocked(captureError))).not.toContain(DB_CANARY);
+    expect(callText(error)).not.toContain(DB_CANARY);
+  };
+
+  it("when the bell row cannot be written", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.notification.create).mockRejectedValueOnce(validationErrorQuotingText());
+    // The claim runs the in-memory store; the revert to PENDING is awaited as a promise.
+    const updateMany = vi.mocked(prisma.reminder.updateMany);
+    const claim = updateMany.getMockImplementation();
+    updateMany
+      .mockImplementationOnce((args) => claim?.(args) as never)
+      .mockImplementationOnce(async () => ({ count: 1 }) as never);
+    const reminder = seedReminder({ title: `Re: ${DB_CANARY}` });
+
+    await expect(deliverDueReminderById(reminder.id)).resolves.toBe(false);
+
+    expect(vi.mocked(captureError).mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "reminder.deliver" },
+      extra: { reminderId: reminder.id, errorName: "PrismaClientValidationError" },
+    });
+    expectNoCanary();
+  });
+
+  it("when the push fails", async () => {
+    vi.mocked(sendPushNotification).mockRejectedValueOnce(validationErrorQuotingText());
+    const reminder = seedReminder();
+
+    await deliverDueReminderById(reminder.id);
+
+    await vi.waitFor(() => expect(captureError).toHaveBeenCalled());
+    expect(vi.mocked(captureError).mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "reminder.push" },
+    });
+    expectNoCanary();
+  });
+
+  it("when the direct delivery check fails", async () => {
+    vi.useFakeTimers();
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.reminder.findFirst).mockRejectedValueOnce(validationErrorQuotingText());
+    const reminder = seedReminder({ remindAt: new Date(Date.now() + 1_000) });
+
+    scheduleReminderDeliveryCheck(reminder.id, reminder.remindAt);
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(vi.mocked(captureError).mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "reminder.direct-delivery" },
+    });
+    expectNoCanary();
   });
 });
 

@@ -517,7 +517,7 @@ describe("two refreshes of one account at once (compare-and-swap on the refresh 
   });
 });
 
-describe("a failed save logs a sanitised summary, never the raw database error", () => {
+describe("a failed save logs the failure's facts, never the raw database error", () => {
   const SECRET = "enc:super-secret-cipher-value";
   const longTail = "x".repeat(2000);
 
@@ -530,7 +530,7 @@ describe("a failed save logs a sanitised summary, never the raw database error",
     );
   }
 
-  it("the log line has the class, the code and the first line only", async () => {
+  it("the log line has the class, the code, the model and the operation only", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     m.updateMany.mockRejectedValueOnce(prismaError());
 
@@ -541,26 +541,29 @@ describe("a failed save logs a sanitised summary, never the raw database error",
       .find((l) => l.includes("persist failed"));
     expect(line).toContain("PrismaClientKnownRequestError");
     expect(line).toContain("P2034");
-    expect(line).toContain("updateMany()");
+    expect(line).toContain("model=LinkedCalendarAccount, operation=updateMany");
     expect(line).not.toContain(SECRET);
     expect(line?.length).toBeLessThan(400);
     // No second argument carrying the raw error object.
     expect(warn.mock.calls.find((c) => String(c[0]).includes("persist failed"))).toHaveLength(1);
   });
 
-  it("Sentry gets the same summary, as an error without the row values", async () => {
+  it("Sentry gets the same facts, on an error without the row values", async () => {
     m.updateMany.mockRejectedValueOnce(prismaError());
 
     await source({ expiresAt: null })?.accessToken();
 
     const captured = m.captureError.mock.calls[0]?.[0] as Error;
     expect(captured).toBeInstanceOf(Error);
-    expect(captured.message).toContain("P2034");
+    expect(captured.message).toContain("PrismaClientKnownRequestError");
     expect(captured.message).not.toContain(SECRET);
+    expect(captured.stack ?? "").not.toContain(SECRET);
     expect(captured.message.length).toBeLessThan(400);
     expect(m.captureError.mock.calls[0]?.[1]).toMatchObject({
       tags: { scope: "outlook-calendar.token-persist" },
+      extra: { code: "P2034", model: "LinkedCalendarAccount", operation: "updateMany" },
     });
+    expect(JSON.stringify(m.captureError.mock.calls[0]?.[1])).not.toContain(SECRET);
   });
 
   it("a thrown value that is not an Error is logged by its type only", async () => {

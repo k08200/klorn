@@ -16,7 +16,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { callText } from "./helpers/canary.js";
 import { cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 const h = vi.hoisted(() => {
   type Rec = Record<string, unknown>;
@@ -1112,7 +1114,11 @@ describe("a failing cancellation step never fails the sync", () => {
     expect([written, writtenAgain]).toEqual([1, 1]);
     expect(h.prisma.calendarEvent.upsert).toHaveBeenCalledTimes(2);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("quota");
+    // The failure's facts, never its message: a provider or Prisma error can
+    // quote the events it was handling.
+    expect(String(warn.mock.calls[0]?.[0])).toContain("cancelled-event scan failed");
+    expect(String(warn.mock.calls[0]?.[0])).toContain("Error, message 5 chars");
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain("quota");
   });
 
   it("logs again after a scan succeeded and a later one fails", async () => {
@@ -1188,6 +1194,22 @@ describe("a non-transient failure reaches Sentry once per process", () => {
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
     expect(h.captureError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "a refusal quoting an event",
+      () => Object.assign(new Error(`bad event ${DB_CANARY}`), { response: { status: 400 } }),
+    ],
+    ["a Prisma error quoting a row", validationErrorQuotingText],
+  ])("%s reaches neither Sentry nor the log in its own words", async (_label, make) => {
+    const { session } = makeSession({ cancelled: make() });
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(callText(warn)).not.toContain(DB_CANARY);
+    expect(callText(h.captureError)).not.toContain(DB_CANARY);
   });
 
   it("is once per process, across accounts and across syncs", async () => {

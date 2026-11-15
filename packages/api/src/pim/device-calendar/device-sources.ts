@@ -10,7 +10,7 @@
  */
 
 import { prisma } from "../../db.js";
-import { captureError } from "../../sentry.js";
+import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { unlinkCalendarAccount } from "../linked-calendar-unlink.js";
 import { deviceKeyOfEmail, deviceSourceEmail, isDeviceSourceKey } from "./device-source-key.js";
 
@@ -96,11 +96,10 @@ export async function expireStaleDeviceSources(now: Date): Promise<number> {
     try {
       if (await unlinkCalendarAccount(source.userId, source.id, "DEVICE")) removed += 1;
     } catch (err) {
-      console.warn(
-        `[CALENDAR] device source expiry failed for ${source.userId}:${source.id}:`,
-        err,
-      );
-      captureError(err, {
+      logDbFailure("[CALENDAR] device source expiry failed", err, {
+        ids: { userId: source.userId, linkedAccountId: source.id },
+      });
+      captureDbFailure("[CALENDAR] device source expiry failed", err, {
         tags: { scope: "calendar.device.source_expiry" },
         extra: { userId: source.userId, linkedAccountId: source.id },
       });

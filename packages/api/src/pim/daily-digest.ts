@@ -41,7 +41,7 @@ import {
   getUserNotificationLanguage,
   type NotificationLanguage,
 } from "../notify/notification-strings.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -119,10 +119,7 @@ export async function collectDigest(userId: string, now: Date): Promise<DigestSt
     try {
       pendingScreener = (await listPendingScreener(userId)).length;
     } catch (err) {
-      console.warn(
-        "[digest] screener lookup failed, sending without it:",
-        err instanceof Error ? err.message : String(err),
-      );
+      logDbFailure("[digest] screener lookup failed, sending without it", err, { ids: { userId } });
     }
   }
 
@@ -243,8 +240,11 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
       sent++;
     } catch (err) {
       // One user's bad address or provider blip must not end the sweep.
-      console.warn(`[DIGEST] daily digest failed for user ${user.id}:`, err);
-      captureError(err, { tags: { scope: "daily-digest" }, extra: { userId: user.id } });
+      logDbFailure("[DIGEST] daily digest failed", err, { ids: { userId: user.id } });
+      captureDbFailure("[DIGEST] daily digest failed", err, {
+        tags: { scope: "daily-digest" },
+        extra: { userId: user.id },
+      });
     }
   }
   return sent;

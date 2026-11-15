@@ -19,6 +19,7 @@ import { createCompletion, MODEL } from "../llm/openai.js";
 import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendPushNotification } from "../notify/push.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
@@ -321,7 +322,7 @@ async function healFallbackBriefing(
     });
     return { content, llm };
   } catch (err) {
-    console.warn(`[BRIEFING] fallback self-heal failed for ${userId}:`, err);
+    logDbFailure("[BRIEFING] fallback self-heal failed", err, { ids: { userId } });
     return null;
   }
 }
@@ -607,10 +608,7 @@ export function briefingRoutes(app: FastifyInstance) {
       const { buildBriefingStructure } = await import("./briefing-structure.js");
       structured = await buildBriefingStructure(userId);
     } catch (err) {
-      console.warn(
-        "[BRIEFING] structure build failed:",
-        err instanceof Error ? err.message : String(err),
-      );
+      logDbFailure("[BRIEFING] structure build failed", err, { ids: { userId } });
     }
 
     const meetingPrep = await prepWork;

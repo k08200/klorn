@@ -2,6 +2,7 @@ import { unifiedCalendarReadEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { type BusyConflict, toAbsoluteInstant } from "../google-calendar-time.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { connectLinkedCalendars, connectPrimaryCalendar } from "./calendar-providers/dispatch.js";
@@ -50,7 +51,7 @@ async function connectPrimaryCalendarOrNull(userId: string) {
   try {
     return await connectPrimaryCalendar(userId);
   } catch (err) {
-    console.warn("[CALENDAR] primary connection check failed:", err);
+    logDbFailure("[CALENDAR] primary connection check failed", err, { ids: { userId } });
     return null;
   }
 }
@@ -75,7 +76,7 @@ async function listEventsFromRows(userId: string, maxResults: number) {
     const events = rows.map((row) => toToolEvent(row, timeZone));
     return session ? { events } : { events, warning: `${LIST_NOT_CONNECTED} ${STALE_ROWS_NOTICE}` };
   } catch (err) {
-    console.error("[CALENDAR] listEvents (rows) failed:", err);
+    logDbFailure("[CALENDAR] listEvents (rows) failed", err, { level: "error", ids: { userId } });
     return { error: ROWS_UNREADABLE };
   }
 }
@@ -110,7 +111,7 @@ export async function listEvents(userId: string, maxResults = 10) {
     };
     const status = gaxiosErr.response?.status;
     const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
-    console.error(`[CALENDAR] listEvents failed (HTTP ${status}):`, apiMsg);
+    logDbFailure("[CALENDAR] listEvents failed", err, { level: "error", ids: { userId } });
     return { error: `Calendar API error (${status}): ${apiMsg}` };
   }
 }
@@ -176,7 +177,7 @@ export async function createEvent(
     };
     const status = gaxiosErr.response?.status;
     const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
-    console.error(`[CALENDAR] createEvent failed (HTTP ${status}):`, apiMsg);
+    logDbFailure("[CALENDAR] createEvent failed", err, { level: "error", ids: { userId } });
     return { error: `Calendar API error (${status}): ${apiMsg}` };
   }
 }
@@ -221,7 +222,7 @@ export async function updateEvent(userId: string, eventId: string, patch: Google
     };
     const status = gaxiosErr.response?.status;
     const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
-    console.error(`[CALENDAR] updateEvent failed (HTTP ${status}):`, apiMsg);
+    logDbFailure("[CALENDAR] updateEvent failed", err, { level: "error", ids: { userId } });
     return { error: `Calendar API error (${status}): ${apiMsg}` };
   }
 }
@@ -326,7 +327,7 @@ export async function checkAttendeeBusy(
     // A calendar we cannot see (blocks null) is unknown — omitted, never "free".
     return people.flatMap((p) => (p.blocks ? [{ email: p.email, busy: p.anyBusy }] : []));
   } catch (err) {
-    console.warn(`[CALENDAR] attendee freebusy failed for ${userId}:`, err);
+    logDbFailure("[CALENDAR] attendee freebusy failed", err, { ids: { userId } });
     return [];
   }
 }
@@ -353,7 +354,7 @@ export async function getAttendeeBusyBlocks(
     });
     return people.flatMap((p) => p.blocks ?? []);
   } catch (err) {
-    console.warn(`[CALENDAR] attendee busy-block query failed for ${userId}:`, err);
+    logDbFailure("[CALENDAR] attendee busy-block query failed", err, { ids: { userId } });
     return [];
   }
 }
@@ -379,7 +380,7 @@ export async function getAttendeeBusyByMember(
     });
     return people.map(({ email, blocks }) => ({ email, blocks }));
   } catch (err) {
-    console.warn(`[CALENDAR] per-member busy query failed for ${userId}:`, err);
+    logDbFailure("[CALENDAR] per-member busy query failed", err, { ids: { userId } });
     return attendeeEmails.map((email) => ({ email, blocks: null }));
   }
 }
@@ -465,8 +466,8 @@ async function withRowConflicts(
     });
   } catch (err) {
     // The tool executor hands an error's message to the model and to MCP clients:
-    // log the real one here and throw a constant (still fail-closed).
-    console.error("[CALENDAR] conflict rows read failed:", err);
+    // log the facts here and throw a constant (still fail-closed).
+    logDbFailure("[CALENDAR] conflict rows read failed", err, { level: "error", ids: { userId } });
     throw new Error(ROWS_UNREADABLE);
   }
   const rowConflicts = rows.map((row) => toRowConflict(row, window.userZone));

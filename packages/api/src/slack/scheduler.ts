@@ -12,9 +12,9 @@
  */
 
 import { slackLive } from "../config.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { createSchedulerLease } from "../scheduler-lease.js";
-import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { judgeReadySlackEpisodes } from "./judge-sweep.js";
 import { purgeExpiredSlackData } from "./purge.js";
@@ -56,8 +56,8 @@ export async function slackSchedulerTick(
     if (slackLive() || purgeDue) await lease.runExclusive(() => runSlackWork(now));
     recordSchedulerTick("slack-episodes");
   } catch (err) {
-    console.error(`${LOG_PREFIX} tick failed:`, err);
-    captureError(err, { tags: { scope: "slack.scheduler" } });
+    logDbFailure("[SLACK] tick failed", err, { level: "error" });
+    captureDbFailure("[SLACK] tick failed", err, { tags: { scope: "slack.scheduler" } });
   }
 }
 

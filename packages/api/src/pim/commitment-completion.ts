@@ -30,7 +30,7 @@
 import type { CommitmentOwner } from "@prisma/client";
 import { prisma } from "../db.js";
 import { extractEmailAddress } from "../mail/email-address.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 /** Open rows examined per read — the ledger's own list cap. */
 const SWEEP_LIMIT = 200;
@@ -312,7 +312,10 @@ export async function refreshCompletionSuggestions(userId: string): Promise<numb
     }
     return stamped;
   } catch (err) {
-    captureError(err, { tags: { scope: "commitment.completion_suggest" }, extra: { userId } });
+    captureDbFailure("[COMMITMENT] completion suggestion failed", err, {
+      tags: { scope: "commitment.completion_suggest" },
+      extra: { userId },
+    });
     return 0;
   }
 }

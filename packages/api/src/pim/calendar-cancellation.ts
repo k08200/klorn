@@ -21,7 +21,7 @@
 import { calendarCancellationSyncEnabled } from "../config.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, dbFailureFacts, formatDbFailureFacts } from "../report-db-failure.js";
 import type { CalendarSession, CancelledEventsResult } from "./calendar-providers/types.js";
 import { googleSourceScope, sourceKeyFor } from "./calendar-rows.js";
 
@@ -242,9 +242,12 @@ function reportFailure(key: string, err: unknown): void {
   const status = httpStatusOf(err);
   if (isNonTransient(status) && !reportedNonTransient) {
     reportedNonTransient = true;
-    captureError(err, { tags: { scope: "calendar.cancelled_scan" }, extra: { status } });
+    captureDbFailure("[CALENDAR] cancelled-event scan failed", err, {
+      tags: { scope: "calendar.cancelled_scan" },
+      extra: { status },
+    });
   }
-  const reason = err instanceof Error ? err.message : String(err);
+  const reason = formatDbFailureFacts(dbFailureFacts(err));
   warnOnce(
     "failure",
     key,

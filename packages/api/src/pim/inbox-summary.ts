@@ -33,7 +33,7 @@ import {
   upsertAttentionForPendingAction,
   upsertAttentionForTask,
 } from "../judge/attention-mirror.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { dedupeCalendarEvents } from "./calendar-dedupe.js";
 import { calendarSourceScope } from "./calendar-scope.js";
 
@@ -417,8 +417,10 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
     ...commitmentRows.map((c) => upsertAttentionForCommitment(c, now)),
   ]).catch((err) => {
     // A swallowed batch failure here makes the attention queue silently go dark.
-    console.warn("[INBOX] Attention backfill failed:", err);
-    captureError(err, { tags: { scope: "inbox.attention-backfill" } });
+    logDbFailure("[INBOX] Attention backfill failed", err);
+    captureDbFailure("[INBOX] Attention backfill failed", err, {
+      tags: { scope: "inbox.attention-backfill" },
+    });
   });
 
   // Single queue read replaces the per-source merge in the old pickTop3.

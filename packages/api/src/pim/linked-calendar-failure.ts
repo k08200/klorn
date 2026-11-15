@@ -24,7 +24,7 @@
  */
 
 import { markLinkedCalendarForReconnect } from "../mail/gmail.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { caldavErrorClass } from "./caldav/caldav-errors.js";
 import { isCaldavProviderKey } from "./caldav/caldav-providers.js";
 import type { CalendarProviderName } from "./calendar-rows.js";
@@ -116,16 +116,15 @@ function shouldWarnAuthFailure(linkedAccountId: string, now: number): boolean {
 /** Best-effort: a DB blip in the flag write must not abort the caller's loop or hide the condition. */
 async function flagForReconnect(userId: string, linkedAccountId: string): Promise<void> {
   await markLinkedCalendarForReconnect(userId, linkedAccountId).catch((markErr) => {
-    console.error(
-      `[CALENDAR] Failed to flag linked calendar ${linkedAccountId} for reconnect:`,
-      markErr,
-    );
-    captureError(markErr, { tags: { scope: "calendar.linked.mark-reconnect" } });
+    logDbFailure("[CALENDAR] Failed to flag linked calendar for reconnect", markErr, {
+      level: "error",
+      ids: { linkedAccountId },
+    });
+    captureDbFailure("[CALENDAR] Failed to flag linked calendar for reconnect", markErr, {
+      tags: { scope: "calendar.linked.mark-reconnect" },
+      extra: { linkedAccountId },
+    });
   });
-}
-
-function describeError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 /** True the first time this account fails this way in this process (CalDAV). */
@@ -146,17 +145,21 @@ export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure
   if (isRevokedGrantError(err)) {
     await flagForReconnect(userId, linkedAccountId);
     if (shouldWarnAuthFailure(linkedAccountId, Date.now())) {
-      console.warn(
-        `[CALENDAR] linked-account ${action} needs a re-link (skipped): ${describeError(err)}`,
-      );
+      logDbFailure("[CALENDAR] linked-account needs a re-link (skipped)", err, {
+        ids: { action, linkedAccountId },
+      });
     }
     return;
   }
 
-  console.warn(`[CALENDAR] linked-account ${action} failed (skipped): ${describeError(err)}`);
+  // Facts only: a sync failure can be a Prisma error over the events being
+  // written (titles, attendees) or a provider error quoting them.
+  logDbFailure("[CALENDAR] linked-account call failed (skipped)", err, {
+    ids: { action, linkedAccountId },
+  });
   const caldav = failure.provider !== undefined && isCaldavProviderKey(failure.provider);
   if (caldav && !firstCaldavFailure(linkedAccountId, err)) return;
-  captureError(err, {
+  captureDbFailure("[CALENDAR] linked-account call failed", err, {
     tags: { scope },
     // Domain only — never send the full linked email (PII) to Sentry.
     extra: { userId, accountDomain: email.split("@")[1] ?? "unknown" },

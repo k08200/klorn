@@ -20,6 +20,9 @@ vi.mock("../mail/gmail.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
+
 import {
   _linkedCalendarFailureLogSizeForTests,
   _resetLinkedCalendarFailureLogForTests,
@@ -113,8 +116,35 @@ describe("handleLinkedCalendarFailure — any other error", () => {
       { tags: { scope: string }; extra: Record<string, unknown> },
     ];
     expect(options.tags.scope).toBe("calendar.linked_sync_failed");
-    expect(options.extra).toEqual({ userId: "u1", accountDomain: "work.com" });
+    expect(options.extra).toMatchObject({ userId: "u1", accountDomain: "work.com" });
     expect(JSON.stringify(m.captureError.mock.calls)).not.toContain("me@work.com");
+  });
+
+  it.each([
+    ["a Prisma error over the events being written", validationErrorQuotingText],
+    [
+      "a provider error quoting an event",
+      () => Object.assign(new Error(`bad attendee ${DB_CANARY}`), { response: { status: 400 } }),
+    ],
+  ])("reports %s as facts: its words reach neither Sentry nor the log", async (_label, make) => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await handleLinkedCalendarFailure(failure({ err: make() }));
+
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    expect(callText(m.captureError)).not.toContain(DB_CANARY);
+    expect(callText(warn)).not.toContain(DB_CANARY);
+    expect(callText(errSpy)).not.toContain(DB_CANARY);
+  });
+
+  it("a failing reconnect flag write is reported as facts too", async () => {
+    m.markLinkedCalendarForReconnect.mockRejectedValueOnce(validationErrorQuotingText());
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await handleLinkedCalendarFailure(failure({ err: AUTH_ERROR }));
+
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    expect(callText(m.captureError)).not.toContain(DB_CANARY);
+    expect(callText(errSpy)).not.toContain(DB_CANARY);
   });
 
   it("does not flag the account for reconnect: a transient failure must not demand a re-link", async () => {

@@ -14,6 +14,7 @@
 import { prisma } from "../db.js";
 import { normalizeTier, TIERS, type Tier } from "../judge/tiers.js";
 import { sendPushNotification } from "../notify/push.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 export const WEEK_MS = 7 * 24 * 60 * 60_000;
 
@@ -157,7 +158,7 @@ export async function sendWeeklySignalReports(now: Date = new Date()): Promise<n
       );
       sent++;
     } catch (err) {
-      console.warn(`[WEEKLY] report failed for user ${userId}:`, err);
+      logDbFailure("[WEEKLY] report failed", err, { ids: { userId } });
     }
   }
   return sent;
