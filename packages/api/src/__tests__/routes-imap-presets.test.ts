@@ -206,6 +206,88 @@ describe("flag turned off after users connected: the way out stays open to the o
   });
 });
 
+describe("the way out behind the production route guard (flag off)", () => {
+  async function buildGuardedApp() {
+    vi.resetModules();
+    const { signToken } = await import("../auth.js");
+    const { installRouteAuthGuard } = await import("../security/route-auth-guard.js");
+    const { registerImapPresetRoutes } = await import("../routes/imap-preset-routes.js");
+    const { prisma } = await import("../db.js");
+    const app = Fastify();
+    installRouteAuthGuard(app);
+    await registerImapPresetRoutes(app);
+    await app.ready();
+    const token = signToken({ userId: "user-1", email: "test@example.com" });
+    return { app, prisma, headers: { authorization: `Bearer ${token}` } };
+  }
+
+  beforeEach(() => {
+    delete process.env.IMAP_PRESETS_ENABLED;
+  });
+
+  it("no session: the cloaked 404 comes before the guard's 401", async () => {
+    ownsOnly("YAHOO");
+    const { app } = await buildGuardedApp();
+    for (const [method, path] of [
+      ["GET", "status"],
+      ["POST", "disconnect"],
+      ["POST", "connect"],
+    ] as const) {
+      const res = await app.inject({ method, url: `/api/yahoo-imap/${path}`, payload: BODY });
+      expect(res.statusCode).toBe(404);
+    }
+    expect(db.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("an owner whose session ended gets the guard's 401, and nothing is deleted", async () => {
+    ownsOnly("YAHOO");
+    const { app, prisma, headers } = await buildGuardedApp();
+    vi.mocked(prisma.device.findUnique).mockResolvedValueOnce(null as never);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/disconnect",
+      headers,
+      payload: { email: "me@example.com" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(db.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("an owner with a live session gets through the guard", async () => {
+    ownsOnly("YAHOO");
+    db.deleteMany.mockResolvedValue({ count: 1 });
+    const { app, headers } = await buildGuardedApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/disconnect",
+      headers,
+      payload: { email: "me@example.com" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(db.deleteMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("a signed-in non-owner gets the 404, and the answer is remembered (one lookup)", async () => {
+    const { app, headers } = await buildGuardedApp();
+    for (let probe = 0; probe < 5; probe++) {
+      const res = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+      expect(res.statusCode).toBe(404);
+    }
+    expect(db.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it("an owner is never remembered: each probe asks again", async () => {
+    ownsOnly("YAHOO");
+    const { app, headers } = await buildGuardedApp();
+    for (let probe = 0; probe < 3; probe++) {
+      const res = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+      expect(res.statusCode).toBe(200);
+    }
+    // Once in onRequest per probe (the flag is off, so no cohort check follows).
+    expect(db.findFirst).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("cohort mode", () => {
   it("an owner outside the cohort can still list and disconnect, but not connect", async () => {
     process.env.IMAP_PRESETS_ENABLED = "cohort";

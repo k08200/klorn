@@ -202,6 +202,7 @@ describe("authBackoffVerdict", () => {
     ],
     ["at the limit", { imapAuthFailures: 4, imapAuthRetryAt: null }, at(1000 * HOUR), "stopped"],
     ["past the limit", { imapAuthFailures: 7, imapAuthRetryAt: at(MINUTE) }, at(HOUR), "stopped"],
+    ["a count without a retry time", { imapAuthFailures: 2, imapAuthRetryAt: null }, T0, "poll"],
   ] as const)("%s: %s", (_label, state, now, verdict) => {
     expect(authBackoffVerdict(state, now)).toBe(verdict);
   });
@@ -264,12 +265,32 @@ describe("the poll of a fixed-host mailbox whose password is refused", () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringMatching(/row row-y.*polling stopped until the mailbox is reconnected/),
     );
+    // The row was flagged at the 1st refusal; the stop says "reconnect" once more.
+    expect(fake.notify).toHaveBeenCalledTimes(1);
+    expect(fake.notify).toHaveBeenCalledWith("u1", "row-y", "YAHOO");
 
     for (const hours of [1, 6, 24, 24 * 30]) {
       vi.setSystemTime(at(hours * HOUR));
       await syncImapAccountsForUser("u1", YAHOO);
     }
     expect(fake.syncImapInbox).toHaveBeenCalledTimes(1);
+    expect(fake.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stop that also sets the reconnect flag alerts once, not twice", async () => {
+    seedRow({ imapAuthFailures: 3, imapAuthRetryAt: at(0), needsReconnect: false });
+    await syncImapAccountsForUser("u1", YAHOO);
+    expect(row()).toMatchObject({ imapAuthFailures: 4, needsReconnect: true });
+    expect(fake.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("the 2nd and 3rd refusals of a flagged row send no new alert", async () => {
+    seedRow({ imapAuthFailures: 1, imapAuthRetryAt: at(0), needsReconnect: true });
+    await syncImapAccountsForUser("u1", YAHOO);
+    vi.setSystemTime(at(2 * HOUR));
+    await syncImapAccountsForUser("u1", YAHOO);
+    expect(row()).toMatchObject({ imapAuthFailures: 3 });
+    expect(fake.notify).not.toHaveBeenCalled();
   });
 
   it("a stopped row stays stopped even if its reconnect flag was cleared by hand", async () => {
@@ -310,7 +331,46 @@ describe("the poll of a fixed-host mailbox whose password is refused", () => {
       throw refused();
     });
     await syncImapAccountsForUser("u1", YAHOO);
-    expect(row()).toMatchObject({ imapPasswordCipher: "v2:new", imapAuthFailures: 0 });
+    expect(row()).toMatchObject({
+      imapPasswordCipher: "v2:new",
+      imapAuthFailures: 0,
+      needsReconnect: false,
+    });
+  });
+
+  it("a database failure recording the refusal still flags the row and records why", async () => {
+    seedRow();
+    const { prisma } = await import("../db.js");
+    const updateMany = prisma.linkedInboxAccount.updateMany;
+    const spy = vi.spyOn(prisma.linkedInboxAccount, "updateMany").mockImplementation((async (args: {
+      data: Record<string, unknown>;
+    }) => {
+      if ("imapAuthFailures" in args.data) throw new Error("db down");
+      return (updateMany as (a: unknown) => Promise<{ count: number }>)(args);
+    }) as never);
+    await syncImapAccountsForUser("u1", YAHOO);
+    spy.mockRestore();
+    expect(row()).toMatchObject({
+      imapAuthFailures: 0,
+      needsReconnect: true,
+      syncErrorCode: "auth",
+    });
+    expect(fake.notify).toHaveBeenCalledWith("u1", "row-y", "YAHOO");
+  });
+
+  it("a generic (user-supplied host) row counts too, and its reconnect flag pauses it", async () => {
+    fake.rows = [
+      {
+        ...(seedRow(), row()),
+        provider: "IMAP",
+        imapHost: "imap.purelymail.com:993",
+      },
+    ];
+    await syncImapAccountsForUser("u1", IMAP_PROVIDERS.IMAP);
+    expect(row()).toMatchObject({ imapAuthFailures: 1, needsReconnect: true });
+    vi.setSystemTime(at(HOUR));
+    await syncImapAccountsForUser("u1", IMAP_PROVIDERS.IMAP);
+    expect(fake.syncImapInbox).toHaveBeenCalledTimes(1);
   });
 });
 

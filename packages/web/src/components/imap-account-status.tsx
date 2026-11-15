@@ -92,7 +92,8 @@ export function ImapAccountStatus({
   return (
     <div className="mt-2 space-y-2">
       <p className="text-role-caption text-ink-mid">{t(sync.key, sync.vars)}</p>
-      {problem && (
+      {/* A paused provider is not polled: its last failure is stale news. */}
+      {problem && canReconnect && (
         <p
           role={status === "reconnect" ? "alert" : undefined}
           className="text-role-body text-state-danger-ink"

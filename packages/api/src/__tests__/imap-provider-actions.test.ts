@@ -333,6 +333,8 @@ describe("read and star over IMAP flags — NAVER", () => {
         imapHost: true,
         imapPasswordCipher: true,
         inboxUidValidity: true,
+        imapAuthFailures: true,
+        imapAuthRetryAt: true,
       },
     });
     expect(h.decryptToken).toHaveBeenCalledWith(CIPHER);
@@ -438,6 +440,29 @@ describe("guards that must refuse before any connection", () => {
     const result = await run(NAVER_MSG);
     expect(result).toMatchObject({ error: expect.any(String) });
     expectNoConnection();
+  });
+
+  // The poll gave up on this password after 4 refused logins (mail/imap-auth-backoff.ts):
+  // an action must not send it to the provider again either. Only a reconnect helps.
+  it("refuses, without connecting, a row whose password the poll stopped sending", async () => {
+    armAccount({ ...NAVER_ROW, imapAuthFailures: 4, imapAuthRetryAt: null });
+    const result = await run(NAVER_MSG);
+    expect(result).toMatchObject({
+      error: expect.stringMatching(/rejected the saved app password.*Reconnect/),
+    });
+    expect(h.decryptToken).not.toHaveBeenCalled();
+    expectNoConnection();
+  });
+
+  it("still acts on a row the poll is only backing off (1 to 3 refusals)", async () => {
+    armAccount({
+      ...NAVER_ROW,
+      imapAuthFailures: 3,
+      imapAuthRetryAt: new Date(Date.now() + 60 * 60_000),
+    });
+    armServer();
+    const result = await run(NAVER_MSG);
+    expect(result).not.toHaveProperty("error");
   });
 
   it("refuses a row that lost its credentials", async () => {

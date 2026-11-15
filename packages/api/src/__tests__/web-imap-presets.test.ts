@@ -370,6 +370,7 @@ describe("a preset whose flag was turned off after the user connected it", () =>
     expect(icloud).toContain("canReconnect={status.connectOpen !== false}");
     const row = read("components/imap-account-status.tsx");
     expect(row).toContain('{canReconnect && status === "reconnect" && (');
+    expect(row).toContain("{problem && canReconnect && (");
     expect(row).toContain('t("imap.connectPaused", { provider: PROVIDER_LABEL[provider] })');
     for (const [locale, table] of Object.entries(LOCALES)) {
       const text = (table as Record<string, string>)["imap.connectPaused"];
