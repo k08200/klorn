@@ -193,6 +193,8 @@ model User {
   slackConnection            SlackConnection?
   slackEpisodes              SlackEpisode[]
   slackMessages              SlackMessage[]
+  kakaoImports               KakaoImport[]
+  kakaoImportMessages        KakaoImportMessage[]
 }
 
 enum UserRole {
@@ -408,6 +410,56 @@ model SlackMessage {
   @@index([connectionId, channelId, ts])
   @@index([connectionId, createdAt]) // the per-connection storage caps
   @@index([episodeId])
+  @@index([createdAt]) // the 7-day purge
+}
+
+/// One uploaded KakaoTalk chat export (docs/providers/kakaotalk-import.md).
+/// Counts and timestamps only: no file name, no chat title, no speaker names.
+/// status: PENDING (messages stored, waiting) | PROCESSING | DONE | FAILED.
+/// Derived commitments carry threadId "kakao-import:<id>", so deleting an import can
+/// remove everything made from it.
+model KakaoImport {
+  id                 String               @id @default(uuid())
+  userId             String
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             String               @default("PENDING")
+  format             String
+  totalMessages      Int
+  windowMessages     Int
+  speakerCount       Int
+  windowStart        DateTime
+  windowEnd          DateTime
+  candidatesFound    Int                  @default(0)
+  commitmentsCreated Int                  @default(0)
+  duplicatesSkipped  Int                  @default(0)
+  errorCode          String?
+  claimedAt          DateTime?
+  processedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  messages           KakaoImportMessage[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt]) // the processing pass picks the oldest PENDING
+}
+
+/// One in-window message of an import awaiting processing: deleted when the
+/// import is processed, and in any case 7 days after upload (the purge).
+model KakaoImportMessage {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importId  String
+  import    KakaoImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  seq       Int
+  sentAt    DateTime
+  speaker   String
+  fromMe    Boolean
+  text      String
+  createdAt DateTime    @default(now())
+
+  @@unique([importId, seq])
+  @@index([userId])
   @@index([createdAt]) // the 7-day purge
 }
 
@@ -2658,6 +2710,7 @@ enum CommitmentSource {
   SLACK
   NOTE
   CALENDAR
+  KAKAO
 }
 
 // ─── Feedback Ledger ───────────────────────────────────────────────────────

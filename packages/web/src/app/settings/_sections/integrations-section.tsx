@@ -3,6 +3,7 @@
 import { ApiKeysSection } from "../../../components/api-keys-section";
 import { TelegramSection } from "../../../components/telegram-section";
 import { useT } from "../../../lib/i18n";
+import { KakaoImportPanel } from "./kakao-import-panel";
 import { PANEL, SECTION_TITLE } from "./shared";
 import { SlackPanel } from "./slack-panel";
 
@@ -20,6 +21,9 @@ export function IntegrationsSection() {
 
       {/* Slack (renders nothing unless /me user.slack) */}
       <SlackPanel />
+
+      {/* KakaoTalk chat-export import (renders nothing unless /me user.kakaoImport) */}
+      <KakaoImportPanel />
 
       {/* Telegram channel */}
       <section className="mb-8">

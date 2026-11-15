@@ -41,6 +41,7 @@ import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../billing/
 import {
   appleLoginEnabled,
   INIT_SYNC_EMAIL_COUNT,
+  kakaoImportOpenTo,
   keyboardTriageEnabled,
   mailV2Enabled,
   naverLoginEnabled,
@@ -755,6 +756,10 @@ export function authRoutes(app: FastifyInstance) {
           // shows the Slack panel in Settings → Integrations only when this
           // is true — the same answer the /api/slack routes give this user.
           slack: slackOpenTo(user.id),
+          // Server-driven client flag (KAKAO_IMPORT_ENABLED, cohort-aware): the
+          // web shows the KakaoTalk import panel in Settings → Integrations
+          // only when this is true — the same answer /api/kakao-import gives.
+          kakaoImport: kakaoImportOpenTo(user.id),
         },
       });
     } catch {

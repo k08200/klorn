@@ -37,6 +37,7 @@ import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "./routes/google
 import { imapConnectRoutes } from "./routes/imap-connect.js";
 import { registerImapPresetRoutes } from "./routes/imap-preset-routes.js";
 import { inboxRoutes } from "./routes/inbox.js";
+import { kakaoImportRoutes } from "./routes/kakao-import.js";
 import { klornDriveRoutes, klornDriveRoutesEnabled } from "./routes/klorn-drive.js";
 import { klornMailboxInboundRoutes } from "./routes/klorn-mailbox-inbound.js";
 import { linkCompleteRoutes } from "./routes/link-complete.js";
@@ -171,6 +172,9 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   // other route, and it verifies Slack's signature before parsing anything.
   await app.register(slackEventsRoutes, { prefix: "/api/slack" });
   await app.register(slackConnectionRoutes, { prefix: "/api/slack" });
+  // KakaoTalk chat-export import v1 (docs/providers/kakaotalk-import.md), dark
+  // until KAKAO_IMPORT_ENABLED. Its multipart parser is scoped to the plugin.
+  await app.register(kakaoImportRoutes, { prefix: "/api/kakao-import" });
   // Which account types this deployment can connect, for the first run's provider
   // grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
   await app.register(providersAvailableRoutes, { prefix: "/api/providers" });
