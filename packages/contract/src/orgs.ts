@@ -43,9 +43,17 @@ export interface OrgBillingAccessWire {
   isPayer: boolean | null;
   /** The billing portal opens for this owner (their verified email is Paddle's). */
   portal: boolean | null;
-  /** The most seats this owner can set without the paying email; null when no such cap applies. */
+  /**
+   * The most seats this owner can set without the paying email (a recorded
+   * payer whose email Paddle does not bill, or cannot confirm now); null when
+   * no such cap applies.
+   */
   seatCap: number | null;
-  /** This owner can take back a scheduled cancel (the payer, or the owner who scheduled it in Klorn). */
+  /**
+   * This owner could take back the pending cancel as it stands: the owner who
+   * scheduled it in Klorn, the paying email, or the recorded payer for a cancel
+   * scheduled through Klorn (a portal cancel takes the paying email).
+   */
   canResume: boolean | null;
 }
 

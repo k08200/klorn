@@ -840,6 +840,39 @@ describePg("team payer recorded at checkout (real Postgres)", () => {
     ).toMatchObject({ actorUserId: owner.userId, detail: { payer: "recorded" } });
   });
 
+  it("re-checks the recorded payer's Klorn-cancel basis under the lock", async () => {
+    const { owner, orgId } = await ownedOrg("buyer");
+    await webhook(checkoutEvent(orgId, "sub_seat_46", owner.userId));
+    const heir = await addMember(orgId, "heir");
+    await transferTo(owner, heir);
+    await cancelInKlorn(heir, "sub_seat_46");
+    await transferTo(heir, owner);
+    // No stored date (a late event), so resume asks Paddle; meanwhile the
+    // webhook forgets the Klorn cancel (removed, then re-made in the portal).
+    await prisma.organization.update({
+      where: { id: orgId },
+      data: { subscriptionCancelAt: null },
+    });
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_46",
+        scheduled_change: { action: "cancel", effective_at: CANCEL_END },
+      }),
+      customer: { email: "accounts@company.test" },
+      onCall: async (c) => {
+        if (c.method !== "GET" || !c.url.includes("/subscriptions/")) return;
+        await prisma.organization.update({
+          where: { id: orgId },
+          data: { cancelRequestedByUserId: null, cancelRequestedAt: null },
+        });
+      },
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: "RESUME_PAYER_ONLY" });
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
   it("does not take back a cancel on a subscription that was replaced after the payer check", async () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_42", {
       scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
