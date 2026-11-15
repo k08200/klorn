@@ -26,7 +26,7 @@
 import { prisma } from "../db.js";
 import { URGENT_EMAIL_TITLES } from "../notify/notification-strings.js";
 import { latestNotifiedAt, markerCountsFor, NOTIFIED_LOOKBACK_MS } from "../notify/urgent-dedup.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { HIDDEN_CLAIM_TYPE } from "./auto-reply-ledger-keys.js";
 
 /** The firewall push dedupe window (firewall-push.ts PUSH_DEDUP_WINDOW_MS). */
@@ -116,11 +116,13 @@ export async function notifyRepeatsUrgentMail(
     const rung = await urgentRungEmailIds(userId, targets);
     return targets.every((email) => rung.has(email.id));
   } catch (err) {
-    console.warn(
-      "[AGENT] urgent-mail overlap lookup failed (notification rings):",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "agent.urgent-overlap" }, extra: { userId } });
+    logDbFailure("[AGENT] urgent-mail overlap lookup failed (notification rings)", err, {
+      ids: { userId },
+    });
+    captureDbFailure("[AGENT] urgent-mail overlap lookup failed (notification rings)", err, {
+      tags: { scope: "agent.urgent-overlap" },
+      extra: { userId },
+    });
     return false;
   }
 }

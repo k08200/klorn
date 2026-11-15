@@ -18,12 +18,13 @@
 
 import { decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
+import { logDbFailure } from "../../report-db-failure.js";
 import { captureError } from "../../sentry.js";
 import { checkImapRow } from "../imap-connection.js";
 import { parseImapMessageId } from "../imap-message-id.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
 import { canonicalUidValidity } from "../imap-uidvalidity.js";
-import { errorMessage, fail } from "./action-failure.js";
+import { fail } from "./action-failure.js";
 import type { SessionAccount } from "./imap-session.js";
 import type { MailActionFailure } from "./types.js";
 
@@ -82,9 +83,9 @@ function decryptPassword(
   try {
     return decryptToken(cipher);
   } catch (err) {
-    console.warn(
-      `[${provider.logScope}] action skipped — stored password unreadable for row ${rowId}: ${errorMessage(err)}`,
-    );
+    logDbFailure("[imap] action skipped — stored password unreadable", err, {
+      ids: { logScope: provider.logScope, rowId },
+    });
     return null;
   }
 }

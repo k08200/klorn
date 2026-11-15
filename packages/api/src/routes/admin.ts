@@ -34,6 +34,7 @@ import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { cohortReadout, pmfSummary } from "../product/cohort.js";
 import { getProviderChain } from "../providers/index.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 
@@ -641,7 +642,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     if (status === "APPROVED" && previous.status !== "APPROVED") {
       sendBetaInviteEmail(entry.email, entry.name).catch((err) => {
-        console.error("[ADMIN] Failed to send beta invite email:", err);
+        logDbFailure("[ADMIN] Failed to send beta invite email", err, { level: "error" });
       });
     }
 

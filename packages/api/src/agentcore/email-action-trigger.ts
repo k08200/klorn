@@ -16,6 +16,7 @@
 
 import { prisma } from "../db.js";
 import type { PocTier } from "../judge/poc-judge.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { normalizeAgentMode } from "./agent-mode.js";
 import { runAgentForUser } from "./autonomous-agent.js";
 
@@ -58,7 +59,7 @@ export function scheduleAgentForActionableEmail(userId: string, tier: PocTier): 
 
   setImmediate(() => {
     runAgentForActionableEmail(userId).catch((err) => {
-      console.warn(`[AGENT] Immediate trigger failed for ${userId}:`, err);
+      logLlmFailure("[AGENT] Immediate trigger failed", err, { ids: { userId } });
     });
   });
 }

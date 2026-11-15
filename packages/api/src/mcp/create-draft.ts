@@ -42,7 +42,7 @@ import { replyTargetFor } from "../mail/providers/reply-target.js";
 import type { ReplyHeadersResult, ReplyThreadingHeaders } from "../mail/providers/types.js";
 import { checkedSubject, MAX_SUBJECT_LENGTH, replySubject } from "../mail/reply-subject.js";
 import { parseSingleAddress } from "../mail/single-address.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { draftKey, findRecentDraft, type RememberedDraft, rememberDraft } from "./draft-dedupe.js";
 import { auditIdOf, type DraftIdentity, sha256Hex } from "./write-audit.js";
 
@@ -316,7 +316,10 @@ export async function executeCreateDraft(ctx: CreateDraftContext, args: unknown)
   try {
     return await createReplyDraft(ctx, parsed.input);
   } catch (err) {
-    captureError(err, { tags: { scope: "mcp.create-draft" }, extra: { userId: ctx.userId } });
+    captureDbFailure("[MCP] create_draft failed", err, {
+      tags: { scope: "mcp.create-draft" },
+      extra: { userId: ctx.userId },
+    });
     return fail("UNAVAILABLE", UNAVAILABLE_ERROR);
   }
 }

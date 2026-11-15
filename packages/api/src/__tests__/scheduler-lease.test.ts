@@ -272,7 +272,7 @@ describe("scheduler lease: a skipped tick is never silent", () => {
     expect(log.mock.calls.some((call) => String(call[0]).includes("acquired after"))).toBe(true);
   });
 
-  it("an acquire that throws skips the tick and logs the error", async () => {
+  it("an acquire that throws skips the tick and logs the failure's facts", async () => {
     const { store } = memoryStore();
     const failing: LeaseStore = {
       ...store,
@@ -286,7 +286,9 @@ describe("scheduler lease: a skipped tick is never silent", () => {
 
     expect(work).not.toHaveBeenCalled();
     const line = warn.mock.calls.find((call) => String(call[0]).includes("not acquired"));
-    expect(line?.map(String).join(" ")).toContain("db unreachable");
+    // The line carries the failure's facts, never its message.
+    expect(line?.map(String).join(" ")).toContain("Error, message 14 chars");
+    expect(line?.map(String).join(" ")).not.toContain("db unreachable");
   });
 });
 

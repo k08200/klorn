@@ -17,8 +17,8 @@ import { prisma } from "../db.js";
 import { authenticateApiKey } from "../mcp/api-keys.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { effectivePlan } from "../org/effective-tier.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { clientAddress } from "../security/client-address.js";
-import { captureError } from "../sentry.js";
 
 /**
  * Per-key buckets ONLY for syntactically valid klorn_sk_ tokens — anything
@@ -94,7 +94,10 @@ export async function mcpRoutes(app: FastifyInstance) {
       await server.connect(transport);
       await transport.handleRequest(request.raw, reply.raw, request.body);
     } catch (err) {
-      captureError(err, { tags: { scope: "mcp.transport" }, extra: { userId: key.userId } });
+      captureDbFailure("[MCP] transport failed", err, {
+        tags: { scope: "mcp.transport" },
+        extra: { userId: key.userId },
+      });
       if (!reply.raw.headersSent) {
         reply.raw.writeHead(500, { "content-type": "application/json" });
         reply.raw.end(JSON.stringify({ error: "MCP transport failure." }));

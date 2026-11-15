@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
 import { parseAddress } from "./email-address.js";
@@ -87,7 +88,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
     console.log("[EMAIL] Password reset email sent to", safeAddr);
     return true;
   } catch (err) {
-    console.error("[EMAIL] Failed to send reset email:", err);
+    logDbFailure("[EMAIL] Failed to send reset email", err, { level: "error" });
     return false;
   }
 }
@@ -139,7 +140,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
     console.log("[EMAIL] Beta invite email sent to", safeAddr);
     return true;
   } catch (err) {
-    console.error("[EMAIL] Failed to send invite email:", err);
+    logDbFailure("[EMAIL] Failed to send invite email", err, { level: "error" });
     return false;
   }
 }
@@ -198,7 +199,7 @@ export async function sendOrgInviteEmail(input: {
     console.log("[EMAIL] Organization invite sent to", safeAddr);
     return true;
   } catch (err) {
-    console.error("[EMAIL] Failed to send organization invite:", err);
+    logDbFailure("[EMAIL] Failed to send organization invite", err, { level: "error" });
     return false;
   }
 }
@@ -239,7 +240,7 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
     console.log("[EMAIL] Verification email sent to", safeAddr);
     return true;
   } catch (err) {
-    console.error("[EMAIL] Failed to send verification email:", err);
+    logDbFailure("[EMAIL] Failed to send verification email", err, { level: "error" });
     return false;
   }
 }
@@ -386,8 +387,10 @@ export async function sendWelcomeEmail(
   } catch (err) {
     // Log + capture the REAL Resend error here so Sentry gets the actual cause
     // and stack, not a synthetic one reconstructed by the caller.
-    console.error("[EMAIL] Failed to send welcome email:", err);
-    captureError(err, { tags: { scope: "email.welcome-send" } });
+    logDbFailure("[EMAIL] Failed to send welcome email", err, { level: "error" });
+    captureDbFailure("[EMAIL] Failed to send welcome email", err, {
+      tags: { scope: "email.welcome-send" },
+    });
     return "failed";
   }
 }
@@ -469,8 +472,8 @@ export async function sendDigestEmail(
     });
     return true;
   } catch (err) {
-    console.warn("[EMAIL] digest send failed for", maskEmail(to));
-    captureError(err, { tags: { scope: "digest-email" } });
+    logDbFailure("[EMAIL] digest send failed", err);
+    captureDbFailure("[EMAIL] digest send failed", err, { tags: { scope: "digest-email" } });
     return false;
   }
 }

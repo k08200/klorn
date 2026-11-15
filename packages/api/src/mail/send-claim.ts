@@ -20,7 +20,7 @@
 
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 /**
  * A claim this old belongs to a request that died. It spans the repeat check
@@ -74,7 +74,7 @@ export async function releaseSend(claim: SendClaim): Promise<void> {
       },
     });
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[SEND-CLAIM] release failed", err, {
       tags: { scope: "send-claim.release" },
       extra: { userId: claim.userId, emailId: claim.emailId },
     });

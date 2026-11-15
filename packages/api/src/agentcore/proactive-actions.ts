@@ -34,7 +34,7 @@ import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   isLocalTimeWithin,
   localDayOfWeek,
@@ -157,8 +157,10 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     // Admin-only SMS escalation for time-sensitive meeting alerts. Gated
     // inside sendSms (admin + phone + daily cap). Best-effort: never throws.
     sendSms(userId, `Urgent: ${event.title} starting at ${time}`).catch((err) => {
-      console.warn(`[PROACTIVE] Meeting SMS failed for ${userId}:`, err);
-      captureError(err, { tags: { scope: "proactive.sms", userId } });
+      logDbFailure("[PROACTIVE] Meeting SMS failed", err, { ids: { userId } });
+      captureDbFailure("[PROACTIVE] Meeting SMS failed", err, {
+        tags: { scope: "proactive.sms", userId },
+      });
     });
   }
 }
@@ -467,8 +469,10 @@ async function notify(
     // room real meeting alerts and urgent mail need (push-bucket.ts).
     { bucket: "ambient" },
   ).catch((err) => {
-    console.warn(`[PROACTIVE] push failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "proactive.push", userId } });
+    logDbFailure("[PROACTIVE] push failed", err, { ids: { userId } });
+    captureDbFailure("[PROACTIVE] push failed", err, {
+      tags: { scope: "proactive.push", userId },
+    });
   });
 }
 
@@ -500,7 +504,7 @@ export async function runProactiveActions(userId: string): Promise<void> {
   // Each check is independent: one failing must not sink the others, and a
   // rejected check must leave a signal. allSettled never rejects, so an outer
   // try/catch can't see inner failures — inspect each settled result and
-  // surface it (console for when Sentry is off, captureError for when it's on).
+  // surface it (console for when Sentry is off, Sentry for when it's on), as facts.
   // Resolve the user's timezone once per tick and thread it into every check,
   // so each check fires/queries against the user's local day, not the server's
   // UTC day — and we don't issue one automationConfig lookup per check.
@@ -519,8 +523,10 @@ export async function runProactiveActions(userId: string): Promise<void> {
   results.forEach((r, i) => {
     if (r.status === "rejected") {
       const label = checks[i][0];
-      console.warn(`[PROACTIVE] check.${label} failed for ${userId}:`, r.reason);
-      captureError(r.reason, { tags: { scope: `proactive.${label}`, userId } });
+      logDbFailure("[PROACTIVE] check failed", r.reason, { ids: { check: label, userId } });
+      captureDbFailure("[PROACTIVE] check failed", r.reason, {
+        tags: { scope: `proactive.${label}`, userId },
+      });
     }
   });
 }

@@ -428,7 +428,7 @@ describe("generic client: what is logged when a name is refused", () => {
     expect(line).toContain("169.254.169.254");
   });
 
-  it("an error the library reports on a generic connection is logged on one line, capped", () => {
+  it("an error the library reports on a generic connection is logged on one line, facts only", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     build();
     const onError = fake.on.mock.calls.find((call) => call[0] === "error")?.[1] as (
@@ -438,6 +438,7 @@ describe("generic client: what is logged when a name is refused", () => {
     const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
     expect(line).not.toMatch(/[\r\n]/);
     expect(line.length).toBeLessThan(600);
+    expect(line).not.toContain("FORGED");
   });
 });
 

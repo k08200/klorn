@@ -18,6 +18,7 @@
  */
 
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 export type TrustBadge = "reliable" | "mostly_reliable" | "unreliable" | "unknown";
 
@@ -97,7 +98,7 @@ export async function updateTrustScore(
       },
     });
   } catch (err) {
-    console.warn("[trust-score] updateTrustScore failed:", contactEmail, err);
+    logDbFailure("[trust-score] updateTrustScore failed", err, { ids: { userId } });
   }
 }
 

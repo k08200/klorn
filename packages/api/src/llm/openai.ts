@@ -28,6 +28,7 @@ import {
   markCreditExhausted,
   markKeyLimited,
 } from "./model-fallback.js";
+import { captureLlmFailure } from "./report-llm-failure.js";
 
 export { UserRateLimitedError };
 
@@ -756,7 +757,9 @@ async function createCompletionWithFailover(
         ownedByUser: provider.ownedByUser === true,
       });
     } catch (err) {
-      captureError(err, { tags: { scope: "llm.on-served" } });
+      captureLlmFailure("[LLM] onServed callback failed", err, {
+        tags: { scope: "llm.on-served" },
+      });
     }
     return result;
   };

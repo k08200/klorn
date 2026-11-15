@@ -19,6 +19,7 @@
  */
 
 import type { DesktopAlertKind } from "@klorn/contract";
+import { logDbFailure } from "../report-db-failure.js";
 import {
   evaluateNotificationGate,
   type NotifCategory,
@@ -41,7 +42,7 @@ export async function desktopAlertTag(
     const gate = await evaluateNotificationGate(userId, CATEGORY[kind]);
     return gate.allowed ? { alert: kind } : {};
   } catch (err) {
-    console.warn(`[NOTIFY] desktop alert gate failed (${kind}) for user ${userId}:`, err);
+    logDbFailure("[NOTIFY] desktop alert gate failed", err, { ids: { kind, userId } });
     return {};
   }
 }

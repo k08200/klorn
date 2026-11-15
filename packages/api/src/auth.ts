@@ -7,7 +7,7 @@ import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
 import { effectivePlan } from "./org/effective-tier.js";
 import { localEventSource } from "./pim/calendar-rows.js";
-import { captureError } from "./sentry.js";
+import { captureDbFailure, dbFailureFacts, logDbFailure } from "./report-db-failure.js";
 
 /**
  * The signing secret for every JWT. Falls back to a hardcoded string that is
@@ -266,7 +266,9 @@ export function reportSessionCheckFailure(err: unknown): void {
   const now = Date.now();
   if (now - lastSessionCheckReportAt < SESSION_CHECK_REPORT_INTERVAL_MS) return;
   lastSessionCheckReportAt = now;
-  captureError(err, { tags: { scope: "auth.session-check" } });
+  captureDbFailure("[AUTH] session check failed", err, {
+    tags: { scope: "auth.session-check" },
+  });
 }
 
 /**
@@ -277,7 +279,7 @@ export function reportSessionCheckFailure(err: unknown): void {
  * never reaches the caller.
  */
 function sendSessionCheckUnavailable(request: FastifyRequest, reply: FastifyReply, err: unknown) {
-  request.log.error({ err }, "session check failed: database unavailable");
+  request.log.error({ failure: dbFailureFacts(err) }, "session check failed: database unavailable");
   reportSessionCheckFailure(err);
   return reply.code(503).header("Retry-After", String(SESSION_CHECK_RETRY_AFTER_SECONDS)).send({
     error: "Couldn't verify your session right now. Please try again.",
@@ -421,8 +423,14 @@ async function deviceLimitFor(
     const plan = await effectivePlan({ id: userId, plan: user?.plan || "FREE" });
     return getEffectivePlan(plan, user?.role ?? undefined).deviceLimit;
   } catch (err) {
-    console.warn("[AUTH] device-limit seat lookup failed — evicting nothing this sign-in:", err);
-    captureError(err, { tags: { scope: "auth.device-limit.seat-lookup" }, extra: { userId } });
+    logDbFailure("[AUTH] device-limit seat lookup failed — evicting nothing this sign-in", err, {
+      ids: { userId },
+    });
+    captureDbFailure(
+      "[AUTH] device-limit seat lookup failed — evicting nothing this sign-in",
+      err,
+      { tags: { scope: "auth.device-limit.seat-lookup" }, extra: { userId } },
+    );
     return Number.POSITIVE_INFINITY;
   }
 }

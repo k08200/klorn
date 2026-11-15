@@ -563,9 +563,21 @@ describe("revokeGoogleGrantsInBackground (retries)", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(prisma.linkedInboxAccount.count).toHaveBeenCalledTimes(DELAYS.length + 1);
     expect(captureError).toHaveBeenCalledTimes(1);
-    expect(captureError).toHaveBeenCalledWith(down, {
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
       tags: { scope: "google.revoke", userId: "u1" },
+      extra: {
+        errorName: "Error",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: down.message.length,
+      },
     });
+    // Sentry gets a fresh Error built from the label, never the original.
+    const reported = captureError.mock.calls[0]?.[0] as Error;
+    expect(reported).not.toBe(down);
+    expect(reported.message).toBe("[GOOGLE-REVOKE] Revoking the grants failed (Error)");
   });
 
   it("counts every row on a retry: a removed row still there holds the account", async () => {
@@ -615,8 +627,7 @@ describe("revokeGoogleGrantsInBackground (retries)", () => {
       revokeGoogleGrantsInBackground("u1", [grant({})], [1_000]);
       await vi.advanceTimersByTimeAsync(1_000);
       expect(console.error).toHaveBeenCalledWith(
-        "[GOOGLE-REVOKE] The revoke of u1's grants stopped:",
-        expect.any(Error),
+        "[GOOGLE-REVOKE] The revoke of the grants stopped (userId=u1): Error, message 11 chars",
       );
     } finally {
       captureError.mockReset();

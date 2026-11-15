@@ -20,7 +20,7 @@ import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
-import { captureLlmFailure } from "../llm/report-llm-failure.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import {
   buildAttachmentCandidateProfile,
@@ -40,7 +40,7 @@ import {
 import { SEND_RECEIPT_UNAVAILABLE_MESSAGE } from "../mail/send-receipt.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
 import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { parseJsonArray, safeAttachmentFilename } from "./email.js";
 import { buildEmailAttachmentBrief } from "./email-attachments.js";
@@ -120,7 +120,7 @@ async function senderContextFor(
   try {
     return await senderDossierFacts(uid, sender);
   } catch (err) {
-    console.warn("[EMAIL] sender dossier unavailable:", err);
+    logDbFailure("[EMAIL] sender dossier unavailable", err, { ids: { userId: uid } });
     return null;
   }
 }
@@ -136,7 +136,7 @@ async function threadBriefFor(uid: string, threadId: string | null): Promise<str
     const brief = await cachedThreadBrief(uid, threadId);
     return threadBriefFacts(brief) || null;
   } catch (err) {
-    console.warn("[EMAIL] thread brief unavailable:", err);
+    logDbFailure("[EMAIL] thread brief unavailable", err, { ids: { userId: uid } });
     return null;
   }
 }
@@ -165,7 +165,7 @@ async function calendarFactsFor(
     });
     return context ? formatCalendarFacts(context) : null;
   } catch (err) {
-    console.warn(`[EMAIL] calendar facts unavailable for ${dbEmail.id}:`, err);
+    logLlmFailure("[EMAIL] calendar facts unavailable", err, { ids: { emailId: dbEmail.id } });
     return null;
   }
 }
@@ -601,8 +601,10 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // Best-effort status write — the draft already succeeded, so don't fail
         // the request. But log a signal instead of swallowing: a systemic
         // failure here silently stops candidate intake tracking.
-        console.warn("[email-replies] failed to update candidate intake status:", err);
-        captureError(err, {
+        logDbFailure("[email-replies] failed to update candidate intake status", err, {
+          ids: { userId: uid, emailId: dbEmail.id },
+        });
+        captureDbFailure("[email-replies] failed to update candidate intake status", err, {
           tags: { scope: "email-replies.intake-status" },
           extra: { userId: uid, emailId: dbEmail.id },
         });

@@ -28,7 +28,7 @@ import {
   effectivePlanOrOwn,
   seatCoversPersonalPlan,
 } from "../org/effective-tier.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;
@@ -50,8 +50,11 @@ async function persistOrReportDrift(
   try {
     await prisma.user.update({ where: { id: userId }, data });
   } catch (err) {
-    console.error("[BILLING] provider action applied but local write failed", err);
-    captureError(err, {
+    logDbFailure("[BILLING] provider action applied but local write failed", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[BILLING] provider action applied but local write failed", err, {
       tags: { scope: "billing.subscription.persist_drift" },
       extra: { userId, ...data },
     });
@@ -110,8 +113,10 @@ export async function billingRoutes(app: FastifyInstance) {
           // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
           // a distinct customer and bypasses this guard; that needs Stripe Radar /
           // address canonicalization (product control), not just code.
-          console.warn("[BILLING] customer lookup by email failed", err);
-          captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
+          logDbFailure("[BILLING] customer lookup by email failed", err, { ids: { userId } });
+          captureDbFailure("[BILLING] customer lookup by email failed", err, {
+            tags: { scope: "billing.checkout.customer_lookup" },
+          });
         }
       }
 

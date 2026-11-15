@@ -26,7 +26,7 @@ import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { handOverOrgBeforeAccountDeletion } from "./org/account-deletion.js";
 import { DATA_WIPE_FENCE_MS, rememberDataWipe } from "./privacy/data-wipe-fence.js";
 import { purgeUserData, revokeUserAccess } from "./purge-user-data.js";
-import { captureError } from "./sentry.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { purgeUserObjects } from "./storage/runtime.js";
 
 /**
@@ -80,8 +80,13 @@ async function googleGrantsBeforeRemoval(userId: string): Promise<HeldGoogleGran
   try {
     return await collectGoogleGrants(userId);
   } catch (err) {
-    console.error(`[USER-DELETION] Could not read ${userId}'s Google grants to revoke:`, err);
-    captureError(err, { tags: { scope: "user-deletion.google-grants", userId } });
+    logDbFailure("[USER-DELETION] Could not read the Google grants to revoke", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[USER-DELETION] Could not read the Google grants to revoke", err, {
+      tags: { scope: "user-deletion.google-grants", userId },
+    });
     return [];
   }
 }
@@ -165,11 +170,13 @@ export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome>
     await finishDataWipe(userId);
     return "purged";
   } catch (err) {
-    console.error(
-      `[USER-DELETION] Data wipe purge failed for ${userId}; the sweep finishes it:`,
-      err,
-    );
-    captureError(err, { tags: { scope: "user-deletion.purge", userId } });
+    logDbFailure("[USER-DELETION] Data wipe purge failed; the sweep finishes it", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[USER-DELETION] Data wipe purge failed; the sweep finishes it", err, {
+      tags: { scope: "user-deletion.purge", userId },
+    });
     return "pending";
   }
 }

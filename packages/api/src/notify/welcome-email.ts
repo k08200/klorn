@@ -1,6 +1,6 @@
 import { prisma } from "../db.js";
 import { sendWelcomeEmail } from "../mail/email.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export interface WelcomeRecipient {
   id: string;
@@ -48,8 +48,14 @@ export async function maybeSendWelcomeEmail(user: WelcomeRecipient): Promise<voi
     }
   } catch (err) {
     if (claimed) await releaseClaim(user.id);
-    console.error(`[WELCOME] unexpected error welcoming user ${user.id}:`, err);
-    captureError(err, { tags: { scope: "welcome-email.orchestrate" }, extra: { userId: user.id } });
+    logDbFailure("[WELCOME] unexpected error welcoming user", err, {
+      level: "error",
+      ids: { userId: user.id },
+    });
+    captureDbFailure("[WELCOME] unexpected error welcoming user", err, {
+      tags: { scope: "welcome-email.orchestrate" },
+      extra: { userId: user.id },
+    });
   }
 }
 
@@ -58,7 +64,13 @@ async function releaseClaim(userId: string): Promise<void> {
   await prisma.user
     .updateMany({ where: { id: userId }, data: { welcomeEmailSentAt: null } })
     .catch((err) => {
-      console.error(`[WELCOME] failed to release claim for user ${userId}:`, err);
-      captureError(err, { tags: { scope: "welcome-email.release" }, extra: { userId } });
+      logDbFailure("[WELCOME] failed to release claim for user", err, {
+        level: "error",
+        ids: { userId },
+      });
+      captureDbFailure("[WELCOME] failed to release claim for user", err, {
+        tags: { scope: "welcome-email.release" },
+        extra: { userId },
+      });
     });
 }

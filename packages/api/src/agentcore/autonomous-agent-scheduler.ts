@@ -13,15 +13,16 @@ import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "../config.js";
 import { db, prisma } from "../db.js";
 import { bulkResolveAttentionForPendingActions } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { effectivePlansOrOwn } from "../org/effective-tier.js";
 import { hasLlmProvider } from "../providers/index.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
   registerScheduler,
 } from "../scheduler-heartbeat.js";
 import { createSchedulerLease } from "../scheduler-lease.js";
-import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { isUserIdleForAgent } from "./agent-idle.js";
 import { type AgentMode, normalizeAgentMode } from "./agent-mode.js";
@@ -100,8 +101,10 @@ async function expireStalePendingActions() {
     // failure here strands stale PENDING actions (deadlocking the loop) and
     // loses the IGNORED feedback signal, so leave a trace. console is the
     // signal when Sentry is off (captureError is then a no-op).
-    console.error("[AGENT] expireStalePendingActions failed:", err);
-    captureError(err, { tags: { scope: "agent.expire-pending" } });
+    logDbFailure("[AGENT] expireStalePendingActions failed", err, { level: "error" });
+    captureDbFailure("[AGENT] expireStalePendingActions failed", err, {
+      tags: { scope: "agent.expire-pending" },
+    });
   }
 }
 
@@ -123,8 +126,8 @@ async function runAutonomousAgent() {
   } catch (err) {
     // runAgentTick catches its own errors; this keeps anything that escapes
     // from becoming an unhandled rejection of the interval callback.
-    console.error("[AGENT] Scheduler tick failed:", err);
-    captureError(err, { tags: { scope: "agent.scheduler" } });
+    logDbFailure("[AGENT] Scheduler tick failed", err, { level: "error" });
+    captureDbFailure("[AGENT] Scheduler tick failed", err, { tags: { scope: "agent.scheduler" } });
   } finally {
     agentTickInFlight = false;
   }
@@ -230,15 +233,17 @@ async function runAgentTick() {
       await Promise.allSettled(
         batch.map(({ userId, mode }) =>
           runAgentForUser(userId, mode).catch((err) => {
-            console.error(`[AGENT] Unhandled error for ${userId}:`, err);
-            captureError(err, { tags: { scope: "agent.run", userId } });
+            logLlmFailure("[AGENT] Unhandled error", err, { level: "error", ids: { userId } });
+            captureLlmFailure("[AGENT] Unhandled error", err, {
+              tags: { scope: "agent.run", userId },
+            });
           }),
         ),
       );
     }
   } catch (err) {
-    console.error("[AGENT] Scheduler error:", err);
-    captureError(err, { tags: { scope: "agent.scheduler" } });
+    logDbFailure("[AGENT] Scheduler error", err, { level: "error" });
+    captureDbFailure("[AGENT] Scheduler error", err, { tags: { scope: "agent.scheduler" } });
   }
 }
 

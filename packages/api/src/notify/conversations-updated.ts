@@ -1,3 +1,4 @@
+import { logDbFailure } from "../report-db-failure.js";
 import { pushNotification } from "../websocket.js";
 
 /**
@@ -45,6 +46,6 @@ function send(userId: string): void {
       createdAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.warn(`[WS] conversations-updated emit failed for ${userId}:`, err);
+    logDbFailure("[WS] conversations-updated emit failed", err, { ids: { userId } });
   }
 }

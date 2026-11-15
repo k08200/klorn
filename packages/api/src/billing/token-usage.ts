@@ -1,6 +1,6 @@
 import { db } from "../db.js";
 import { estimateModelCostUsd, promptCacheUsageOf } from "../llm/model-fallback.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 /** OpenAI-shaped usage block returned alongside a completion. */
 export interface LlmUsage {
@@ -50,10 +50,14 @@ export async function trackTokenUsage(
       },
     });
   } catch (err) {
-    console.error(`[token-usage] failed to persist usage for ${userId}/${modelName}:`, err);
-    captureError(err, {
+    logDbFailure("[token-usage] failed to persist usage", err, {
+      level: "error",
+      ids: { userId, model: modelName },
+    });
+    // `llmModel`, not `model`: the failure's own `model` fact (the Prisma model) would overwrite it.
+    captureDbFailure("[token-usage] failed to persist usage", err, {
       tags: { scope: "agent.track_token_usage" },
-      extra: { userId, model: modelName },
+      extra: { userId, llmModel: modelName },
     });
   }
 }

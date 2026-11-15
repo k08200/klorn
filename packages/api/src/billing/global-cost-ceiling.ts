@@ -29,7 +29,7 @@ import {
 } from "../config.js";
 import { prisma } from "../db.js";
 import { SEAT_BEARING_STATUS_LIST } from "../org/effective-tier.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 /** pricing-tiers.md "global breaker": 3 × the sum of active users' targets. */
 export const GLOBAL_BREAKER_TARGET_MULTIPLIER = 3;
@@ -85,8 +85,12 @@ export async function teamSeatBreakerCents(now = Date.now()): Promise<number> {
     cached = { scope, expiresAt: now + SEATS_TTL_MS, cents };
     return cents;
   } catch (err) {
-    console.warn("[cost-guard] seat pool sum failed, keeping the last value (or the base):", err);
-    captureError(err, { tags: { scope: "cost-guard.global-seat-pools" } });
+    logDbFailure("[cost-guard] seat pool sum failed, keeping the last value (or the base)", err);
+    captureDbFailure(
+      "[cost-guard] seat pool sum failed, keeping the last value (or the base)",
+      err,
+      { tags: { scope: "cost-guard.global-seat-pools" } },
+    );
     const cents = last?.cents ?? 0;
     cached = { scope, expiresAt: now + FAILURE_TTL_MS, cents };
     return cents;

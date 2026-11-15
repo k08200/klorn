@@ -1,4 +1,5 @@
 import { prisma } from "./db.js";
+import { logDbFailure } from "./report-db-failure.js";
 
 /**
  * Phase 1 retention instrumentation — first-party product analytics.
@@ -44,7 +45,7 @@ export async function recordEvent(
     });
   } catch (err) {
     // Never propagate — a missing analytics row is not worth a failed request.
-    console.warn("[ANALYTICS] recordEvent failed:", (err as Error)?.message);
+    logDbFailure("[ANALYTICS] recordEvent failed", err);
   }
 }
 

@@ -19,10 +19,9 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isImapMessageId } from "./imap-message-id.js";
 import { isTombstonedId } from "./imap-tombstone.js";
-import { describeFailure } from "./providers/action-failure.js";
 
 export interface HistoryCandidate {
   id: string;
@@ -106,10 +105,12 @@ export async function findReingestedHistoryFailClosed(
   } catch (err) {
     if (!reportedLookupFailures.has(path)) {
       reportedLookupFailures.add(path);
-      console.warn(
-        `[imap-history] reset lookup failed (${path}) for ${userId}; IMAP rows count as history this time: ${describeFailure(err)}`,
-      );
-      captureError(err, { tags: { scope: `imap-history.${path}` }, extra: { userId } });
+      const label = "[imap-history] reset lookup failed; IMAP rows count as history this time";
+      logDbFailure(label, err, { ids: { path, userId } });
+      captureDbFailure(label, err, {
+        tags: { scope: `imap-history.${path}` },
+        extra: { userId },
+      });
     }
     return new Set(rows.filter((row) => isImapMessageId(row.gmailId)).map((row) => row.id));
   }

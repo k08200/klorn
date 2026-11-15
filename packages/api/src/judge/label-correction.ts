@@ -22,7 +22,7 @@
 
 import { prisma } from "../db.js";
 import { isLabelModeEnabled, laneForLabelIds } from "../mail/gmail-labels.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { overrideAttentionTier } from "./attention-override.js";
 
 export type LabelCorrectionResult = "corrected" | "unchanged" | "skipped";
@@ -71,11 +71,8 @@ export async function reconcileLabelCorrection(
     const result = await overrideAttentionTier(userId, item.id, lane);
     return result.ok ? "corrected" : "skipped";
   } catch (err) {
-    console.warn(
-      "[label-correction] could not reconcile:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, {
+    logDbFailure("[label-correction] could not reconcile", err);
+    captureDbFailure("[label-correction] could not reconcile", err, {
       tags: { scope: "label-correction" },
       extra: { userId, emailDbId },
     });

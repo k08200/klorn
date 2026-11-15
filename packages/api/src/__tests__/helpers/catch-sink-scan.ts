@@ -3,9 +3,12 @@
  * (llm-failure-redaction-guard, db-failure-redaction-guard).
  *
  * scanCatches parses one source file and reports every catch (and
- * `.catch(handler)` on a call chain) that the caller's `taints` predicate
- * selects and that hands the caught value, an alias of it, or its message to
- * a sink: captureError / Sentry / addBreadcrumb, console.*, or a pino logger.
+ * `.catch(handler)` on a call chain, an `.on("error", handler)` listener, a
+ * `setErrorHandler(handler)`) that the caller's `taints` predicate selects and
+ * that hands the caught value, an alias of it, or its message to a sink:
+ * captureError / Sentry / addBreadcrumb, console.*, or a pino logger.
+ * scanFunctionSinks does the same for a named function's first parameter (the
+ * global error handler, which receives whatever a route throws).
  * Handing it to a sanitizer (the facts helpers) or reading `.name` /
  * `.status` is fine. It also holds every labelled reporter's label to a
  * string literal, so content cannot be interpolated into it.
@@ -237,6 +240,39 @@ function labelViolation(
   return { file, line: line + 1, text: `label must be a string literal: ${call.getText(source)}` };
 }
 
+/** Events whose listener receives a failure: an emitter's error, a process-level rejection. */
+const ERROR_EVENTS = new Set(["error", "unhandledRejection", "uncaughtException"]);
+
+/**
+ * The failure handler a call registers, with the expression the guard's
+ * predicate judges: `.catch(h)` on a chain, `.on("error", h)` / `.once(...)` on
+ * an emitter (the predicate sees the emitter), `setErrorHandler(h)`.
+ */
+function registeredHandler(
+  call: ts.CallExpression,
+): { handler: ts.Expression | undefined; subject: ts.Expression } | null {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee) && callee.text === "setErrorHandler") {
+    return { handler: call.arguments[0], subject: callee };
+  }
+  if (!ts.isPropertyAccessExpression(callee)) return null;
+  const method = callee.name.text;
+  if (method === "catch") return { handler: call.arguments[0], subject: callee.expression };
+  if (method === "setErrorHandler") {
+    return { handler: call.arguments[0], subject: callee.expression };
+  }
+  const event = call.arguments[0];
+  if (
+    (method === "on" || method === "once") &&
+    event !== undefined &&
+    ts.isStringLiteralLike(event) &&
+    ERROR_EVENTS.has(event.text)
+  ) {
+    return { handler: call.arguments[1], subject: callee.expression };
+  }
+  return null;
+}
+
 /** Which catches receive the failures a guard is about: given the try block, or the chain a `.catch` hangs on. */
 export type TaintPredicate = (node: ts.Node, source: ts.SourceFile) => boolean;
 
@@ -254,13 +290,9 @@ export function scanCatches(file: string, code: string, taints: TaintPredicate):
       }
     }
     if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      if (
-        ts.isPropertyAccessExpression(callee) &&
-        callee.name.text === "catch" &&
-        taints(callee.expression, source)
-      ) {
-        const handler = handlerOf(node.arguments[0]);
+      const registered = registeredHandler(node);
+      if (registered !== null && taints(registered.subject, source)) {
+        const handler = handlerOf(registered.handler);
         if (handler !== null) {
           taintedCatches++;
           violations.push(...sinkViolations(handler.body, handler.caught, source, file));
@@ -273,6 +305,27 @@ export function scanCatches(file: string, code: string, taints: TaintPredicate):
   };
   visit(source);
   return { violations, taintedCatches };
+}
+
+/**
+ * Sinks in the named function declaration that expose its first parameter:
+ * for a handler that receives a failure as an argument rather than in a catch
+ * (error-handler.ts's handleError). Throws when the function is missing, so a
+ * rename cannot pass the guard vacuously.
+ */
+export function scanFunctionSinks(file: string, code: string, functionName: string): Violation[] {
+  const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  let found: ts.FunctionDeclaration | undefined;
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === functionName) found = node;
+    if (found === undefined) ts.forEachChild(node, visit);
+  };
+  visit(source);
+  const param = found?.parameters[0];
+  if (found?.body === undefined || param === undefined || !ts.isIdentifier(param.name)) {
+    throw new Error(`${file}: no function ${functionName}(failure, …) to scan`);
+  }
+  return sinkViolations(found.body, param.name.text, source, file);
 }
 
 /** The API's source files under `dir`: no tests, fixtures, declarations or node_modules. */

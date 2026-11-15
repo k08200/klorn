@@ -24,6 +24,7 @@
 
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import {
   assertLeaseTtl,
   createPrismaLeaseStore,
@@ -167,22 +168,32 @@ function reportRefusal(
 ): void {
   const skippedFor = minutes(now - step.run.since);
   if (step.log) {
-    const why =
-      refusal.kind === "held"
-        ? `held by ${refusal.holderId ?? "nobody"} until ${refusal.expiresAt?.toISOString() ?? "?"}`
-        : "the acquire failed";
-    const line = `${ctx.logPrefix} scheduler lease "${ctx.name}" not acquired (${why}) — skipping tick; ticks skipped for ${skippedFor}`;
-    console.warn(line, ...(refusal.kind === "error" ? [refusal.error] : []));
+    if (refusal.kind === "error") {
+      logDbFailure(
+        "[SCHEDULER-LEASE] lease not acquired (the acquire failed) — skipping tick",
+        refusal.error,
+        {
+          ids: { logPrefix: ctx.logPrefix, lease: ctx.name, skippedFor },
+        },
+      );
+    } else {
+      const why = `held by ${refusal.holderId ?? "nobody"} until ${refusal.expiresAt?.toISOString() ?? "?"}`;
+      console.warn(
+        `${ctx.logPrefix} scheduler lease "${ctx.name}" not acquired (${why}) — skipping tick; ticks skipped for ${skippedFor}`,
+      );
+    }
   }
   if (step.alert) {
-    const error =
-      refusal.kind === "error"
-        ? refusal.error
-        : new Error(`scheduler lease "${ctx.name}" not acquired for ${skippedFor}`);
-    captureError(error, {
-      tags: tags(ctx),
-      extra: refusal.kind === "held" ? { holderId: refusal.holderId } : {},
-    });
+    if (refusal.kind === "error") {
+      captureDbFailure("[SCHEDULER-LEASE] lease not acquired (the acquire failed)", refusal.error, {
+        tags: tags(ctx),
+      });
+    } else {
+      captureError(new Error(`scheduler lease "${ctx.name}" not acquired for ${skippedFor}`), {
+        tags: tags(ctx),
+        extra: { holderId: refusal.holderId },
+      });
+    }
   }
 }
 
@@ -271,13 +282,17 @@ class LeaseRenewal {
   private onRenewFailed(err: unknown): void {
     if (this.stopped) return;
     const { ctx } = this;
-    console.warn(`${ctx.logPrefix} scheduler lease "${ctx.name}" renewal failed, retrying:`, err);
+    logDbFailure("[SCHEDULER-LEASE] renewal failed, retrying", err, {
+      ids: { logPrefix: ctx.logPrefix, lease: ctx.name },
+    });
     if (this.failingReported || Date.now() - this.lastRenewedAt < ctx.ttlMs / 2) return;
     this.failingReported = true;
     console.error(
       `${ctx.logPrefix} scheduler lease "${ctx.name}" renewals failing for ${minutes(Date.now() - this.lastRenewedAt)}: it expires mid-tick unless one succeeds`,
     );
-    captureError(err, { tags: tags(ctx, { during: "renew" }) });
+    captureDbFailure("[SCHEDULER-LEASE] renewals failing", err, {
+      tags: tags(ctx, { during: "renew" }),
+    });
   }
 
   private reportLongHold(): void {
@@ -304,10 +319,9 @@ async function releaseLease(ctx: LeaseContext, alreadyLost: boolean): Promise<vo
   } catch (err) {
     // Not a wedge: this process re-takes its own lease on its next tick, and
     // any other instance gets it once it expires.
-    console.warn(
-      `${ctx.logPrefix} scheduler lease "${ctx.name}" release failed; it expires within ${minutes(ctx.ttlMs)}:`,
-      err,
-    );
+    logDbFailure("[SCHEDULER-LEASE] release failed; the lease expires on its own", err, {
+      ids: { logPrefix: ctx.logPrefix, lease: ctx.name, expiresWithin: minutes(ctx.ttlMs) },
+    });
   }
 }
 

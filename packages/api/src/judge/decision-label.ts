@@ -20,7 +20,7 @@ import type { LiveTier } from "@klorn/contract";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import type { TierFeatures } from "./tier-policy.js";
 import type { Tier } from "./tiers.js";
 
@@ -76,8 +76,12 @@ export type AttentionSourceName =
 function logRecorderError(op: string, sourceId: string, err: unknown): void {
   // console first: captureError is a no-op when Sentry is uninitialized, so a
   // bare captureError would be silent in dev / self-host. (CLAUDE.md rule.)
-  console.warn(`[decision-label] ${op} failed for ${sourceId}`, err);
-  captureError(err, { tags: { area: "decision-label", op }, extra: { sourceId } });
+  // The failure's facts only, never the error object; `op` names the step.
+  logDbFailure("[decision-label] recorder step failed", err, { ids: { op, sourceId } });
+  captureDbFailure("[decision-label] recorder step failed", err, {
+    tags: { area: "decision-label", op },
+    extra: { sourceId },
+  });
 }
 
 /**

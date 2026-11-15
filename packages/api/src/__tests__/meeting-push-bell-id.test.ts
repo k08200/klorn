@@ -4,7 +4,9 @@
  * the same meeting one OS tag instead of showing it twice.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY } from "./helpers/prisma-canary.js";
 
 const NOW = new Date("2026-11-07T09:00:00Z");
 
@@ -13,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   sendPushNotification: vi.fn(async () => ({ status: "sent" })),
   notificationCreate: vi.fn(async () => ({ id: "notif-m1", createdAt: new Date() })),
   getUpcomingMeetings: vi.fn(),
+  captureError: vi.fn(),
 }));
 
 vi.mock("../db.js", () => ({
@@ -33,7 +36,7 @@ vi.mock("../scheduler-heartbeat.js", () => ({
   recordSchedulerTick: vi.fn(),
   registerScheduler: vi.fn(),
 }));
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError: mocks.captureError }));
 
 import { startBackgroundAgent, stopBackgroundAgent } from "../background.js";
 
@@ -72,5 +75,50 @@ describe("meeting-starting-soon push", () => {
       url: "/calendar",
       bellNotificationId: frame.id,
     });
+  });
+});
+
+describe("a failed meeting push", () => {
+  let consoleSpies: Array<ReturnType<typeof vi.spyOn>>;
+
+  beforeEach(() => {
+    consoleSpies = (["log", "info", "warn", "error"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {}),
+    );
+  });
+
+  afterEach(() => {
+    for (const spy of consoleSpies) spy.mockRestore();
+  });
+
+  const sinkText = () =>
+    `${consoleSpies.map((spy) => callText(spy)).join("\n")}\n${callText(mocks.captureError)}`;
+
+  it("is logged as facts: the web-push error quotes the payload (the meeting title), the report never does", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW.getTime());
+    mocks.getUpcomingMeetings.mockResolvedValue([
+      {
+        id: "evt-push-fails",
+        summary: `${DB_CANARY} board review`,
+        start: new Date(NOW.getTime() + 3 * 60_000).toISOString(),
+        meetingLink: null,
+      },
+    ]);
+    // web-push raises WebPushError with the endpoint's reply and the payload it sent.
+    mocks.sendPushNotification.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          `Received unexpected response code: payload {"title":"Meeting in 3 min","body":"${DB_CANARY} board review"}`,
+        ),
+        { name: "WebPushError", statusCode: 400 },
+      ),
+    );
+
+    startBackgroundAgent();
+    await vi.waitFor(() => expect(sinkText()).toContain("[BACKGROUND] meeting push failed"));
+
+    expect(sinkText()).not.toContain(DB_CANARY);
+    expect(sinkText()).toContain("userId=u1");
+    expect(sinkText()).toContain("WebPushError");
   });
 });

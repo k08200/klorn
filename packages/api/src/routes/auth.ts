@@ -88,13 +88,13 @@ import {
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { clientAddress } from "../security/client-address.js";
 import {
   clearLoginAttempts,
   loginThrottleRemainingMs,
   recordLoginAttempt,
 } from "../security/login-throttle.js";
-import { captureError } from "../sentry.js";
 import { localMinuteOfDay, normalizeTimeZone, normalizeTimeZoneMode } from "../time-zone.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 import { isGoogleLinkMarker } from "./google-link-finish.js";
@@ -315,7 +315,7 @@ export async function runLoginBriefingCatchUp(userId: string): Promise<void> {
 export function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
   const timer = setTimeout(() => {
     runLoginBriefingCatchUp(userId).catch((err) => {
-      console.warn(`[AUTH] Login briefing catch-up failed for ${userId}:`, err);
+      logDbFailure("[AUTH] Login briefing catch-up failed", err, { ids: { userId } });
     });
   }, delayMs);
   timer.unref?.();
@@ -333,7 +333,10 @@ export async function effectiveTierOrOwnPlan(userId: string, plan: string): Prom
       label: "me.effective_tier",
     });
   } catch (err) {
-    captureError(err, { tags: { scope: "auth.me.effective-tier" }, extra: { userId } });
+    captureDbFailure("[AUTH] effective tier lookup failed", err, {
+      tags: { scope: "auth.me.effective-tier" },
+      extra: { userId },
+    });
     return normalizeTier(plan);
   }
 }
@@ -433,7 +436,10 @@ export function authRoutes(app: FastifyInstance) {
       // failure here strands the user unverified (and so never welcomed), so
       // leave a console signal even though the request still succeeds.
       sendVerificationEmail(normalizedEmail, rawVerifyToken).catch((err) =>
-        console.error(`[AUTH] verification email failed for ${user.id}:`, err),
+        logDbFailure("[AUTH] verification email failed", err, {
+          level: "error",
+          ids: { userId: user.id },
+        }),
       );
 
       // Auto-create AutomationConfig with defaults. Fire-and-forget, but never
@@ -441,7 +447,9 @@ export function authRoutes(app: FastifyInstance) {
       // failed create must leave a trace (login init-sync also self-heals it).
       prisma.automationConfig
         .create({ data: { userId: user.id } })
-        .catch((err) => console.warn(`[AUTH] automationConfig create failed for ${user.id}`, err));
+        .catch((err) =>
+          logDbFailure("[AUTH] automationConfig create failed", err, { ids: { userId: user.id } }),
+        );
 
       const token = signToken({ userId: user.id, email: user.email });
 
@@ -571,7 +579,10 @@ export function authRoutes(app: FastifyInstance) {
             }),
           )
           .catch((err) =>
-            captureError(err, { tags: { scope: "auth.rehash" }, extra: { userId: user.id } }),
+            captureDbFailure("[AUTH] password rehash failed", err, {
+              tags: { scope: "auth.rehash" },
+              extra: { userId: user.id },
+            }),
           )
           .finally(() => rehashInFlight.delete(user.id));
       }
@@ -646,11 +657,13 @@ export function authRoutes(app: FastifyInstance) {
         await prisma.user
           .update({ where: { id: user.id }, data: { role: "ADMIN" } })
           .catch((err) => {
-            console.error(
-              `[AUTH] Failed to promote ADMIN_EMAILS user ${user.id} to role ADMIN:`,
-              err,
-            );
-            captureError(err, { tags: { scope: "auth.admin-promote", userId: user.id } });
+            logDbFailure("[AUTH] Failed to promote ADMIN_EMAILS user to role ADMIN", err, {
+              level: "error",
+              ids: { userId: user.id },
+            });
+            captureDbFailure("[AUTH] Failed to promote ADMIN_EMAILS user to role ADMIN", err, {
+              tags: { scope: "auth.admin-promote", userId: user.id },
+            });
           });
         user.role = "ADMIN";
       }
@@ -1430,7 +1443,10 @@ export function authRoutes(app: FastifyInstance) {
           if (isNewGoogleUser) {
             void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch(
               (err) =>
-                console.error(`[WELCOME] google sign-in welcome failed for ${user!.id}:`, err),
+                logDbFailure("[WELCOME] google sign-in welcome failed", err, {
+                  level: "error",
+                  ids: { userId: user!.id },
+                }),
             );
           }
 
@@ -1508,8 +1524,10 @@ export function authRoutes(app: FastifyInstance) {
         // internal infrastructure detail (hostnames, library internals, stack
         // fragments). Log the real error server-side; show a generic message. The
         // message is now a constant, so the desktop HTML needs no escaping.
-        console.error("[OAUTH] callback failed:", err instanceof Error ? err.message : String(err));
-        captureError(err, { tags: { scope: "auth.oauth.callback" } });
+        logDbFailure("[OAUTH] callback failed", err, { level: "error" });
+        captureDbFailure("[OAUTH] callback failed", err, {
+          tags: { scope: "auth.oauth.callback" },
+        });
         const message = "Google authorization failed. Please try again.";
         if (statePayload.email === "__google_login__") {
           return reply.redirect(`${webUrl}/login?error=${encodeURIComponent(message)}`);
@@ -1802,7 +1820,10 @@ export function authRoutes(app: FastifyInstance) {
       // welcome (once per user, enforced inside the helper). Fire-and-forget so
       // it never delays the redirect, but log on rejection — never silent.
       void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch((err) =>
-        console.error(`[WELCOME] post-verify welcome failed for ${user.id}:`, err),
+        logDbFailure("[WELCOME] post-verify welcome failed", err, {
+          level: "error",
+          ids: { userId: user.id },
+        }),
       );
 
       // Validate WEB_URL to prevent open redirect — only allow http(s) origins
@@ -1888,8 +1909,11 @@ export function authRoutes(app: FastifyInstance) {
     // reliable app-triggered path for linked mail to appear. Gated + per-account
     // isolated inside the helper; a failure is logged (and surfaces here), never fatal.
     await syncLinkedInboxesForUser(userId).catch((err) => {
-      console.warn(`[INIT-SYNC] linked inbox fan-out failed for ${userId}:`, err);
-      captureError(err, { tags: { scope: "auth.init-sync.linked" }, extra: { userId } });
+      logDbFailure("[INIT-SYNC] linked inbox fan-out failed", err, { ids: { userId } });
+      captureDbFailure("[INIT-SYNC] linked inbox fan-out failed", err, {
+        tags: { scope: "auth.init-sync.linked" },
+        extra: { userId },
+      });
     });
 
     // 1. Sync Google Calendar events (next 30 days)
@@ -1905,7 +1929,7 @@ export function authRoutes(app: FastifyInstance) {
       );
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
-      console.warn("[AUTH] init-sync calendar sync failed (non-auth):", err);
+      logDbFailure("[AUTH] init-sync calendar sync failed (non-auth)", err, { ids: { userId } });
       // Calendar sync failed — continue with other syncs
     }
 
@@ -1960,7 +1984,9 @@ export function authRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
-      console.warn("[AUTH] init-sync Gmail contact sync failed (non-auth):", err);
+      logDbFailure("[AUTH] init-sync Gmail contact sync failed (non-auth)", err, {
+        ids: { userId },
+      });
       // Gmail contact sync failed — skip
     }
 
@@ -1976,13 +2002,16 @@ export function authRoutes(app: FastifyInstance) {
       // Sync button. Sweep a floor of 10 (not just newCount): mail ingested by
       // an earlier login that never got summarized must not be stranded forever.
       summarizeUnsummarizedEmails(userId, Math.max(emailResult.newCount, 10)).catch((err) => {
-        console.warn("[AUTH] init-sync background summarize failed:", err);
+        logDbFailure("[AUTH] init-sync background summarize failed", err, { ids: { userId } });
         // The daily budget line is expected back-pressure, not a fault.
         if (err instanceof Error && err.name === "DailyCostCapExceededError") return;
-        captureError(err, { tags: { scope: "auth.init-sync.summarize" }, extra: { userId } });
+        captureDbFailure("[AUTH] init-sync background summarize failed", err, {
+          tags: { scope: "auth.init-sync.summarize" },
+          extra: { userId },
+        });
       });
     } catch (err) {
-      console.warn("[AUTH] init-sync email sync failed:", err);
+      logDbFailure("[AUTH] init-sync email sync failed", err, { ids: { userId } });
       // Email sync failed — skip
     }
 

@@ -19,6 +19,7 @@ import { JUDGE_MODEL, JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { getProviderChain } from "./providers/index.js";
 import { registerApiRoutes } from "./register-api-routes.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { reportRolloutCohort } from "./routes/cohort-gate.js";
 import { warnIfKlornDriveQuotaMissing } from "./routes/klorn-drive.js";
 import { isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
@@ -29,7 +30,7 @@ import {
 import { rateLimitOptions } from "./security/rate-limit-identity.js";
 import { serializeRequestForLog } from "./security/request-log.js";
 import { parseAllowedCidrs } from "./security/scanner-allowlist.js";
-import { captureError, flushSentry, initSentry } from "./sentry.js";
+import { flushSentry, initSentry } from "./sentry.js";
 import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
 import { checkObjectStorageAtStartup } from "./storage/runtime.js";
 import { initWebSocket } from "./websocket.js";
@@ -228,12 +229,12 @@ warnRetiredJudgeHealthEnv();
 // must not sit in front of the server accepting connections. It warns and
 // returns; it never throws and never blocks startup.
 void checkPaddlePriceMatchesAdvertised({ advertised: ADVERTISED_PRO_PRICE_WEB }).catch((err) => {
-  console.warn(`[PADDLE] price check failed unexpectedly: ${(err as Error).message}`);
+  logDbFailure("[PADDLE] price check failed unexpectedly", err);
 });
 // The team seat prices ($30 / seat / month, $312 / seat / year), the same way.
 // A no-op until PADDLE_TEAM_PRICE_ID_MONTHLY / _ANNUAL are set.
 void checkTeamPaddlePrices().catch((err) => {
-  console.warn(`[PADDLE] team price check failed unexpectedly: ${(err as Error).message}`);
+  logDbFailure("[PADDLE] team price check failed unexpectedly", err);
 });
 
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
@@ -279,7 +280,7 @@ try {
       );
     }
   } catch (err) {
-    console.warn("[STARTUP] ontology override cache load failed:", err);
+    logDbFailure("[STARTUP] ontology override cache load failed", err);
   }
 
   const port = Number(process.env.PORT) || 3001;
@@ -346,8 +347,10 @@ try {
         startReminderScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] reminder-scheduler failed to start:", err);
-        captureError(err, { tags: { context: "startup:reminder-scheduler" } });
+        logDbFailure("[STARTUP] reminder-scheduler failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] reminder-scheduler failed to start", err, {
+          tags: { context: "startup:reminder-scheduler" },
+        });
       });
   }
 
@@ -358,8 +361,10 @@ try {
         startAutomationScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] automation-scheduler failed to start:", err);
-        captureError(err, { tags: { context: "startup:automation-scheduler" } });
+        logDbFailure("[STARTUP] automation-scheduler failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] automation-scheduler failed to start", err, {
+          tags: { context: "startup:automation-scheduler" },
+        });
       });
   }
 
@@ -368,8 +373,10 @@ try {
   void import("./judge/github-legacy-cleanup.js")
     .then(({ purgeLegacyGitHubAttention }) => purgeLegacyGitHubAttention())
     .catch((err) => {
-      console.error("[STARTUP] github legacy purge failed:", err);
-      captureError(err, { tags: { context: "startup:github-purge" } });
+      logDbFailure("[STARTUP] github legacy purge failed", err, { level: "error" });
+      captureDbFailure("[STARTUP] github legacy purge failed", err, {
+        tags: { context: "startup:github-purge" },
+      });
     });
 
   // Start IMAP polling scheduler (5min interval per connected user; covers
@@ -380,8 +387,10 @@ try {
         startImapScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] imap-scheduler failed to start:", err);
-        captureError(err, { tags: { context: "startup:imap-scheduler" } });
+        logDbFailure("[STARTUP] imap-scheduler failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] imap-scheduler failed to start", err, {
+          tags: { context: "startup:imap-scheduler" },
+        });
       });
   }
 
@@ -393,8 +402,10 @@ try {
         startOutlookScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] outlook-scheduler failed to start:", err);
-        captureError(err, { tags: { context: "startup:outlook-scheduler" } });
+        logDbFailure("[STARTUP] outlook-scheduler failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] outlook-scheduler failed to start", err, {
+          tags: { context: "startup:outlook-scheduler" },
+        });
       });
   }
 
@@ -405,8 +416,10 @@ try {
         startAutonomousAgent();
       })
       .catch((err) => {
-        console.error("[STARTUP] autonomous-agent failed to start:", err);
-        captureError(err, { tags: { context: "startup:autonomous-agent" } });
+        logDbFailure("[STARTUP] autonomous-agent failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] autonomous-agent failed to start", err, {
+          tags: { context: "startup:autonomous-agent" },
+        });
       });
   }
 
@@ -427,8 +440,10 @@ try {
         startLogRetentionScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] log-retention failed to start:", err);
-        captureError(err, { tags: { context: "startup:log-retention" } });
+        logDbFailure("[STARTUP] log-retention failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] log-retention failed to start", err, {
+          tags: { context: "startup:log-retention" },
+        });
       });
   }
 
@@ -441,8 +456,10 @@ try {
         startOrgAuditRetentionScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] org-audit-retention failed to start:", err);
-        captureError(err, { tags: { context: "startup:org-audit-retention" } });
+        logDbFailure("[STARTUP] org-audit-retention failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] org-audit-retention failed to start", err, {
+          tags: { context: "startup:org-audit-retention" },
+        });
       });
   }
 
@@ -455,8 +472,10 @@ try {
       startSlackScheduler();
     })
     .catch((err) => {
-      console.error("[STARTUP] slack scheduler failed to start:", err);
-      captureError(err, { tags: { context: "startup:slack" } });
+      logDbFailure("[STARTUP] slack scheduler failed to start", err, { level: "error" });
+      captureDbFailure("[STARTUP] slack scheduler failed to start", err, {
+        tags: { context: "startup:slack" },
+      });
     });
 
   // KakaoTalk import v1 (docs/providers/kakaotalk-import.md). Started even under
@@ -468,8 +487,10 @@ try {
       startKakaoImportScheduler();
     })
     .catch((err) => {
-      console.error("[STARTUP] kakao-import scheduler failed to start:", err);
-      captureError(err, { tags: { context: "startup:kakao-import" } });
+      logDbFailure("[STARTUP] kakao-import scheduler failed to start", err, { level: "error" });
+      captureDbFailure("[STARTUP] kakao-import scheduler failed to start", err, {
+        tags: { context: "startup:kakao-import" },
+      });
     });
 
   // Pending account purges in object storage (step D3; hourly). While
@@ -481,8 +502,10 @@ try {
         startStoragePurgeScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] storage-purge sweep failed to start:", err);
-        captureError(err, { tags: { context: "startup:storage-purge" } });
+        logDbFailure("[STARTUP] storage-purge sweep failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] storage-purge sweep failed to start", err, {
+          tags: { context: "startup:storage-purge" },
+        });
       });
   }
 
@@ -494,8 +517,10 @@ try {
       startDataWipeRefresh();
     })
     .catch((err) => {
-      console.error("[STARTUP] data-wipe snapshot refresh failed to start:", err);
-      captureError(err, { tags: { context: "startup:data-wipe-refresh" } });
+      logDbFailure("[STARTUP] data-wipe snapshot refresh failed to start", err, { level: "error" });
+      captureDbFailure("[STARTUP] data-wipe snapshot refresh failed to start", err, {
+        tags: { context: "startup:data-wipe-refresh" },
+      });
     });
 
   // Primary grants' Google addresses, for the revoke's shared-grant check
@@ -506,8 +531,10 @@ try {
         startGoogleAddressBackfill();
       })
       .catch((err) => {
-        console.error("[STARTUP] Google address backfill failed to start:", err);
-        captureError(err, { tags: { context: "startup:google-address-backfill" } });
+        logDbFailure("[STARTUP] Google address backfill failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] Google address backfill failed to start", err, {
+          tags: { context: "startup:google-address-backfill" },
+        });
       });
   }
 
@@ -519,8 +546,10 @@ try {
         startDataWipeSweep();
       })
       .catch((err) => {
-        console.error("[STARTUP] data-wipe sweep failed to start:", err);
-        captureError(err, { tags: { context: "startup:data-wipe" } });
+        logDbFailure("[STARTUP] data-wipe sweep failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] data-wipe sweep failed to start", err, {
+          tags: { context: "startup:data-wipe" },
+        });
       });
   }
 
@@ -532,8 +561,10 @@ try {
         startDriveSummaryScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] drive-summary job failed to start:", err);
-        captureError(err, { tags: { context: "startup:drive-summary" } });
+        logDbFailure("[STARTUP] drive-summary job failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] drive-summary job failed to start", err, {
+          tags: { context: "startup:drive-summary" },
+        });
       });
   }
 
@@ -545,8 +576,10 @@ try {
         startDriveGoogleRefreshScheduler();
       })
       .catch((err) => {
-        console.error("[STARTUP] drive-google-refresh job failed to start:", err);
-        captureError(err, { tags: { context: "startup:drive-google-refresh" } });
+        logDbFailure("[STARTUP] drive-google-refresh job failed to start", err, { level: "error" });
+        captureDbFailure("[STARTUP] drive-google-refresh job failed to start", err, {
+          tags: { context: "startup:drive-google-refresh" },
+        });
       });
   }
 
@@ -570,8 +603,14 @@ try {
   // console.error first: Sentry is initialised at the top of this file, but
   // captureError is a no-op without a DSN and the flush below is best-effort,
   // so the platform log is the one channel guaranteed to survive.
-  console.error("[STARTUP] fatal: server did not start —", err);
-  captureError(err, { tags: { scope: "startup.fatal" } });
+  //
+  // Facts only (class, code, model, operation, message length), not the error:
+  // this block runs Prisma calls, whose message can quote a value, and Sentry
+  // and the console both print a message and its cause.
+  logDbFailure("[STARTUP] fatal: server did not start", err, { level: "error" });
+  captureDbFailure("[STARTUP] fatal: server did not start", err, {
+    tags: { scope: "startup.fatal" },
+  });
   // Give Sentry a moment to ship it, then exit so Render restarts the
   // container. A permanent fallback 503 server would mask DB recovery and
   // require a manual redeploy to clear.

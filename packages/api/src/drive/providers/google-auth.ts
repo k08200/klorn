@@ -32,6 +32,7 @@ import { prisma } from "../../db.js";
 import { decideRefreshTokenWrite, getGoogleUserInfo, getOAuth2Client } from "../../mail/gmail.js";
 import { effectivePlan } from "../../org/effective-tier.js";
 import { isRevokedGrantError } from "../../pim/linked-calendar-failure.js";
+import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { captureError } from "../../sentry.js";
 import { driveProvidersFor, googleDriveRoutesEnabled } from "../drive-scope.js";
 import {
@@ -194,22 +195,23 @@ export async function completeGoogleDriveLink(params: {
     return await linkDriveAccount(params.code, params.userId);
   } catch (err) {
     // console first: captureError is a no-op without a Sentry DSN.
-    console.error(
-      "[GOOGLE-DRIVE] link callback failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "drive.google.link-callback" } });
+    logDbFailure("[GOOGLE-DRIVE] link callback failed", err, { level: "error" });
+    captureDbFailure("[GOOGLE-DRIVE] link callback failed", err, {
+      tags: { scope: "drive.google.link-callback" },
+    });
     return "failed";
   }
 }
 
 function flagForReconnect(userId: string, accountId: string): void {
   void markDriveAccountForReconnect(userId, accountId).catch((markErr) => {
-    console.error(
-      `[GOOGLE-DRIVE] Failed to flag drive account ${accountId} for reconnect:`,
-      markErr,
-    );
-    captureError(markErr, { tags: { scope: "drive.google.mark-reconnect" } });
+    logDbFailure("[GOOGLE-DRIVE] Failed to flag a drive account for reconnect", markErr, {
+      level: "error",
+      ids: { accountId },
+    });
+    captureDbFailure("[GOOGLE-DRIVE] Failed to flag a drive account for reconnect", markErr, {
+      tags: { scope: "drive.google.mark-reconnect" },
+    });
   });
 }
 
@@ -275,11 +277,11 @@ export function buildLinkedDriveClient(
     try {
       await persistRefreshedDriveTokens(userId, account.id, newTokens);
     } catch (err) {
-      console.error(
-        `[GOOGLE-DRIVE] Failed to persist a refreshed drive token for user ${userId}:`,
-        err instanceof Error ? err.message : err,
-      );
-      captureError(err, {
+      logDbFailure("[GOOGLE-DRIVE] Failed to persist a refreshed drive token", err, {
+        level: "error",
+        ids: { userId, accountId: account.id },
+      });
+      captureDbFailure("[GOOGLE-DRIVE] Failed to persist a refreshed drive token", err, {
         tags: { scope: "drive.google.refresh_persist" },
         extra: { userId, accountId: account.id },
       });
@@ -302,11 +304,13 @@ export async function handleDriveGrantFailure(
 ): Promise<boolean> {
   if (!isRevokedGrantError(err)) return false;
   await markDriveAccountForReconnect(userId, accountId).catch((markErr) => {
-    console.error(
-      `[GOOGLE-DRIVE] Failed to flag drive account ${accountId} for reconnect:`,
-      markErr,
-    );
-    captureError(markErr, { tags: { scope: "drive.google.mark-reconnect" } });
+    logDbFailure("[GOOGLE-DRIVE] Failed to flag a drive account for reconnect", markErr, {
+      level: "error",
+      ids: { accountId },
+    });
+    captureDbFailure("[GOOGLE-DRIVE] Failed to flag a drive account for reconnect", markErr, {
+      tags: { scope: "drive.google.mark-reconnect" },
+    });
   });
   return true;
 }

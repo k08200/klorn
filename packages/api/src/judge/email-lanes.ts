@@ -11,7 +11,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { likeContainsPattern } from "../db-like.js";
 import { withStatementTimeout } from "../db-statement-timeout.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { toLiveTier } from "./tiers.js";
 import { heldTodaySql } from "./v3/held-today.js";
 import { V3_ITEM_SELECT, type V3ItemRow } from "./v3/item-wire.js";
@@ -40,7 +40,10 @@ export async function listLaneTiersByEmail(
     }
     return laneBySourceId;
   } catch (err) {
-    captureError(err, { tags: { scope: "email.lane_lookup" }, extra: { userId } });
+    captureDbFailure("[email-lanes] lane lookup failed", err, {
+      tags: { scope: "email.lane_lookup" },
+      extra: { userId },
+    });
     return new Map();
   }
 }
@@ -74,7 +77,10 @@ export async function listLaneInfoByEmail(
       ]),
     );
   } catch (err) {
-    captureError(err, { tags: { scope: "email.lane_lookup" }, extra: { userId } });
+    captureDbFailure("[email-lanes] lane lookup failed", err, {
+      tags: { scope: "email.lane_lookup" },
+      extra: { userId },
+    });
     return new Map();
   }
 }
@@ -96,7 +102,10 @@ export async function listV3RowsByEmail(
     });
     return new Map(rows.map(({ sourceId, ...row }) => [sourceId, row]));
   } catch (err) {
-    captureError(err, { tags: { scope: "email.v3_lookup" }, extra: { userId } });
+    captureDbFailure("[email-lanes] v3 lookup failed", err, {
+      tags: { scope: "email.v3_lookup" },
+      extra: { userId },
+    });
     return new Map();
   }
 }

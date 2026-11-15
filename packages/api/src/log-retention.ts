@@ -22,12 +22,12 @@
 
 import { prisma } from "./db.js";
 import { MOVED_MESSAGE_RETENTION_DAYS } from "./mail/providers/imap-moved.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
   registerScheduler,
 } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
 import { newWork } from "./work-context.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -260,8 +260,14 @@ export async function runLogRetentionSweep(
       }
     } catch (err) {
       result[policy.name] = -1;
-      console.error(`[RETENTION] sweep failed for ${policy.name}:`, err);
-      captureError(err, { tags: { scope: "log-retention" }, extra: { table: policy.name } });
+      logDbFailure("[RETENTION] sweep failed", err, {
+        level: "error",
+        ids: { table: policy.name },
+      });
+      captureDbFailure("[RETENTION] sweep failed", err, {
+        tags: { scope: "log-retention" },
+        extra: { table: policy.name },
+      });
     }
   }
   return result;
@@ -287,13 +293,17 @@ export function startLogRetentionScheduler(): void {
       firstRunTimer = null;
       recordSchedulerTick("log-retention");
       runLogRetentionSweep().catch((err) =>
-        captureError(err, { tags: { scope: "log-retention.first-sweep" } }),
+        captureDbFailure("[RETENTION] first sweep failed", err, {
+          tags: { scope: "log-retention.first-sweep" },
+        }),
       );
       intervalId = setInterval(
         newWork(() => {
           recordSchedulerTick("log-retention");
           runLogRetentionSweep().catch((err) =>
-            captureError(err, { tags: { scope: "log-retention.sweep" } }),
+            captureDbFailure("[RETENTION] sweep failed", err, {
+              tags: { scope: "log-retention.sweep" },
+            }),
           );
         }),
         SWEEP_INTERVAL_MS,

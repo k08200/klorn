@@ -1,82 +1,205 @@
 /**
- * In the Slack, KakaoTalk-import and PIM modules (and the Slack and KakaoTalk
- * routes), a caught failure reaches Sentry and the console as facts, never as
- * itself.
+ * Across packages/api/src, a caught failure reaches Sentry and the console as
+ * facts, never as itself.
  *
- * Their catches wrap Prisma calls over other people's words: a Slack message,
- * an imported KakaoTalk line, a reminder whose title quotes a mail subject, a
- * calendar event. A PrismaClientValidationError renders the rejected call's
- * arguments into its message, and a raw-query failure carries Postgres's
- * message, which can quote a value; Sentry sends the message and Node's
- * console prints it. So every catch in these directories reports through
- * report-db-failure.ts (a fixed label plus dbFailureFacts) or the LLM
- * reporters, and never hands the caught value, an alias of it, or its message
- * to captureError / Sentry, console.* or a pino logger.
+ * A catch in this API almost always wraps a Prisma call over someone's words
+ * (a mail, a Slack message, an imported KakaoTalk line, a title that quotes a
+ * subject) or a provider call carrying them (Google, Graph, CalDAV, IMAP, web
+ * push). A PrismaClientValidationError renders the rejected call's arguments
+ * into its message in every errorFormat, a raw-query failure carries
+ * Postgres's message (which quotes the value), and a provider error carries
+ * the request it sent; Sentry sends the message and cause, and Node's console
+ * prints every own property. So every catch, `.catch` handler, error-event
+ * listener and Fastify error handler reports through report-db-failure.ts or
+ * llm/report-llm-failure.ts (a fixed label plus facts) and never hands the
+ * caught value, an alias of it, or its message to captureError / Sentry,
+ * console.* or a pino logger. The global error handler (error-handler.ts),
+ * which receives whatever a route rethrows, is held to the same rule.
  *
- * Unlike the LLM guard, every catch here counts: these modules do little else
- * than read and write such rows. Scanning rules are shared
- * (helpers/catch-sink-scan.ts), including a reporter's `ids` / `extra`. Like
- * the LLM guard it does not follow a caught value into a function the handler
- * calls (pim/linked-calendar-failure.ts and the cancelled-event scan take the
- * error as a parameter; their canary tests cover them) or into the global
- * error handler, which receives what a route rethrows.
+ * Every catch counts, not just those over a Prisma call: a catch over a call
+ * that reaches the database a few frames down sees the same error. Scanning
+ * rules are shared with the LLM guard (helpers/catch-sink-scan.ts), including
+ * a reporter's `ids` / `extra`. Like it, this guard does not follow a caught
+ * value into a function the handler calls, or through a value a function
+ * returns; those sites have canary tests next to their features.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { scanCatches, type Violation, walk } from "./helpers/catch-sink-scan.js";
+import { scanCatches, scanFunctionSinks, type Violation, walk } from "./helpers/catch-sink-scan.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..");
 
-/** The modules whose catches all handle content-bearing rows. */
-const GUARDED_DIRS = ["slack", "kakao-import", "pim"] as const;
 /**
- * Their routes: the Slack webhook catches what ingestSlackMessage rethrows (any
- * database error over the message being stored), the KakaoTalk import route
- * what the store and parser throw over the uploaded lines.
+ * Directories whose sinks may print a failure whole, each with its reason. The
+ * reason is checked below: nothing outside the directory imports it.
  */
-const GUARDED_FILES = [
-  "routes/slack-events.ts",
-  "routes/slack-connection.ts",
+const OPERATOR_ONLY_DIRS: ReadonlyArray<{ dir: string; reason: string }> = [
+  {
+    dir: "scripts/",
+    reason:
+      "Operator CLIs run by hand (`tsx src/scripts/<name>.ts`): no server module imports them, render.yaml starts only the web service, and nothing here imports Sentry, so their output is the operator's own terminal.",
+  },
+];
+
+/** Single sinks that may print a failure's words, matched by file and a fragment of the call. */
+const ALLOWED: ReadonlyArray<{ file: string; fragment: string; reason: string }> = [
+  {
+    file: "eval-v3/extract.ts",
+    fragment: "[V3-FACTS] attempt",
+    reason:
+      "Offline bench (packages/api/scripts/v3-fact-eval.ts; no server importer, checked below): the operator owns the sample and the key, and needs the provider's words. The LLM guard allows it too.",
+  },
+  {
+    file: "agentcore/tool-executor.ts",
+    fragment: "[FLOOR] refused",
+    reason:
+      "Inside `instanceof` checks on the floor-refusal classes, whose messages are code-defined: a FLOOR_ACTIONS tool name, a receipt schema version, 12-character hash prefixes. The LLM guard allows it too.",
+  },
+  {
+    file: "agentcore/tool-executor.ts",
+    fragment: 'scope: "floor_refusal"',
+    reason: "Same floor-refusal branch: a code-defined security event, kept whole for Sentry.",
+  },
+];
+
+/** Places the scan must see catches in, so a moved directory cannot pass vacuously. */
+const MUST_SEE = [
+  "slack/",
+  "kakao-import/",
+  "pim/",
+  "mail/",
+  "judge/",
+  "routes/",
+  "agentcore/",
+  "learning/",
+  "notify/",
+  "billing/",
+  "drive/",
+  "automation-scheduler.ts",
+  "background.ts",
+  "index.ts",
+  "routes/calendar.ts",
+  "routes/commitments.ts",
   "routes/kakao-import.ts",
+  "routes/slack-events.ts",
 ] as const;
 
 const everyCatch = () => true;
 
-function scanGuardedDirs(): { violations: Violation[]; catches: Map<string, number> } {
+function sourceFiles(): Array<{ file: string; code: string }> {
+  return walk(srcDir).map((full) => ({
+    file: relative(srcDir, full).split("\\").join("/"),
+    code: readFileSync(full, "utf8"),
+  }));
+}
+
+function isAllowed(v: Violation): boolean {
+  return (
+    OPERATOR_ONLY_DIRS.some((d) => v.file.startsWith(d.dir)) ||
+    ALLOWED.some((a) => a.file === v.file && v.text.includes(a.fragment))
+  );
+}
+
+function scanTree(files: ReadonlyArray<{ file: string; code: string }>) {
   const violations: Violation[] = [];
   const catches = new Map<string, number>();
-  for (const dir of GUARDED_DIRS) {
-    for (const full of walk(join(srcDir, dir))) {
-      const file = relative(srcDir, full).split("\\").join("/");
-      const result = scanCatches(file, readFileSync(full, "utf8"), everyCatch);
-      violations.push(...result.violations);
-      catches.set(dir, (catches.get(dir) ?? 0) + result.taintedCatches);
-    }
-  }
-  for (const file of GUARDED_FILES) {
-    const result = scanCatches(file, readFileSync(join(srcDir, file), "utf8"), everyCatch);
+  for (const { file, code } of files) {
+    const result = scanCatches(file, code, everyCatch);
     violations.push(...result.violations);
     catches.set(file, result.taintedCatches);
   }
   return { violations, catches };
 }
 
-describe("database failure redaction guard (slack, kakao-import, pim)", () => {
-  const scan = scanGuardedDirs();
+/** Module specifiers a file imports or re-exports, static or dynamic. */
+function importedSpecifiers(file: string, code: string): string[] {
+  const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const out: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      out.push(node.moduleSpecifier.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] !== undefined &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      out.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return out;
+}
+
+/** src-relative paths of the files outside `dir` that import a module inside it. */
+function importersOf(dir: string, files: ReadonlyArray<{ file: string; code: string }>): string[] {
+  return files
+    .filter(({ file }) => !file.startsWith(dir))
+    .filter(({ file, code }) =>
+      importedSpecifiers(file, code).some((spec) => {
+        if (!spec.startsWith(".")) return false;
+        const target = relative(srcDir, join(srcDir, dirname(file), spec))
+          .split("\\")
+          .join("/");
+        return target.startsWith(dir);
+      }),
+    )
+    .map(({ file }) => file);
+}
+
+describe("database failure redaction guard (all of packages/api/src)", () => {
+  const files = sourceFiles();
+  const scan = scanTree(files);
 
   it("finds no catch that hands a caught failure to Sentry, the console or the log", () => {
-    const offenders = scan.violations.map((v) => `${v.file}:${v.line}  ${v.text.slice(0, 160)}`);
+    const offenders = scan.violations
+      .filter((v) => !isAllowed(v))
+      .map((v) => `${v.file}:${v.line}  ${v.text.slice(0, 160)}`);
     expect(offenders).toEqual([]);
   });
 
-  it("cannot pass vacuously: it sees catches in every guarded directory and route", () => {
-    // routes/slack-connection.ts has no catch today; it is scanned for the next one.
-    for (const place of [...GUARDED_DIRS, "routes/slack-events.ts", "routes/kakao-import.ts"]) {
-      expect(scan.catches.get(place) ?? 0, place).toBeGreaterThan(0);
+  it("holds the global error handler to the same rule", () => {
+    const file = "error-handler.ts";
+    const violations = scanFunctionSinks(
+      file,
+      readFileSync(join(srcDir, file), "utf8"),
+      "handleError",
+    );
+    expect(violations.map((v) => `${v.file}:${v.line}  ${v.text}`)).toEqual([]);
+  });
+
+  it("cannot pass vacuously: it sees catches everywhere that writes content", () => {
+    const total = [...scan.catches.values()].reduce((sum, n) => sum + n, 0);
+    expect(total).toBeGreaterThan(700);
+    for (const place of MUST_SEE) {
+      const seen = [...scan.catches.entries()]
+        .filter(([file]) => file === place || (place.endsWith("/") && file.startsWith(place)))
+        .reduce((sum, [, n]) => sum + n, 0);
+      expect(seen, place).toBeGreaterThan(0);
     }
+  });
+
+  it("keeps every allowlist entry live, and each allowed directory unimported by the server", () => {
+    for (const entry of ALLOWED) {
+      const live = scan.violations.some(
+        (v) => v.file === entry.file && v.text.includes(entry.fragment),
+      );
+      expect(live, `${entry.file}: ${entry.fragment}`).toBe(true);
+    }
+    for (const { dir } of OPERATOR_ONLY_DIRS) {
+      expect(importersOf(dir, files), dir).toEqual([]);
+    }
+    expect(importersOf("eval-v3/", files), "eval-v3/").toEqual([]);
   });
 });
 
@@ -92,6 +215,7 @@ describe("the database guard itself", () => {
     ["captureError(err)", "captureError(err, { tags: { scope: 'x' } });"],
     ["console.error with the error", "console.error('[X] failed:', err);"],
     ["the message in a template", "console.warn(`[X] failed: ${(err as Error).message}`);"],
+    ["a pino logger", "request.log.error(err, 'x');"],
   ])("flags %s", (_label, body) => {
     expect(scanned(body)).toHaveLength(1);
   });
@@ -106,6 +230,37 @@ describe("the database guard itself", () => {
   });
 
   it.each([
+    ["an emitter's error listener", "client.on('error', (err) => console.error('[X]', err));"],
+    [
+      "a process-level listener",
+      "process.on('unhandledRejection', (reason) => captureError(reason));",
+    ],
+    [
+      "a Fastify error handler",
+      "app.setErrorHandler((error, request, reply) => { request.log.error(error); reply.send(); });",
+    ],
+  ])("flags %s", (_label, code) => {
+    const result = scanCatches("bad.ts", `function f() { ${code} }`, everyCatch);
+    expect(result.violations).toHaveLength(1);
+  });
+
+  it("flags a named handler that logs its failure parameter, and passes one that reports facts", () => {
+    const bad = scanFunctionSinks(
+      "bad.ts",
+      "export function handleError(error, request, reply) { request.log.error(error); }",
+      "handleError",
+    );
+    expect(bad).toHaveLength(1);
+    const good = scanFunctionSinks(
+      "good.ts",
+      "export function handleError(error, request, reply) { request.log.error({ failure: dbFailureFacts(error) }, 'x'); captureDbFailure('x', error, { tags: {} }); }",
+      "handleError",
+    );
+    expect(good).toEqual([]);
+    expect(() => scanFunctionSinks("gone.ts", "export const x = 1;", "handleError")).toThrow();
+  });
+
+  it.each([
     [
       "the helpers",
       "logDbFailure('[X] failed', err); captureDbFailure('[X] failed', err, { tags: { scope: 'x' } });",
@@ -114,6 +269,7 @@ describe("the database guard itself", () => {
       "the facts",
       "const facts = dbFailureFacts(err); console.warn(`[X] ${formatDbFailureFacts(facts)}`);",
     ],
+    ["the facts in pino", "request.log.error({ failure: dbFailureFacts(err) }, 'x');"],
     ["the class name", "console.warn(`[X] ${err instanceof Error ? err.name : 'unknown'}`);"],
   ])("accepts %s", (_label, body) => {
     expect(scanned(body)).toEqual([]);
@@ -143,5 +299,15 @@ describe("the database guard itself", () => {
       everyCatch,
     );
     expect(result.violations).toHaveLength(1);
+  });
+
+  it("knows an importer of an allowed directory when it sees one", () => {
+    const files = [
+      { file: "scripts/tool.ts", code: "export const x = 1;" },
+      { file: "routes/a.ts", code: 'import { x } from "../scripts/tool.js";' },
+      { file: "routes/b.ts", code: 'const m = await import("../scripts/tool.js");' },
+      { file: "routes/c.ts", code: '// see scripts/tool.ts\nimport { y } from "./y.js";' },
+    ];
+    expect(importersOf("scripts/", files)).toEqual(["routes/a.ts", "routes/b.ts"]);
   });
 });

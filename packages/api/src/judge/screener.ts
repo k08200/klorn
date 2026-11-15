@@ -25,7 +25,7 @@
  */
 
 import { db } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export type ScreenerVerdict = "ALLOW" | "BLOCK";
 
@@ -86,11 +86,11 @@ export async function isFirstContact(userId: string, fromAddress: string): Promi
     });
     return seen === 0;
   } catch (err) {
-    console.warn(
-      "[screener] first-contact lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "screener-first-contact" }, extra: { userId } });
+    logDbFailure("[screener] first-contact lookup failed", err);
+    captureDbFailure("[screener] first-contact lookup failed", err, {
+      tags: { scope: "screener-first-contact" },
+      extra: { userId },
+    });
     return false;
   }
 }
@@ -109,11 +109,11 @@ export async function screenerVerdictFor(
     });
     return (row?.verdict as ScreenerVerdict | undefined) ?? null;
   } catch (err) {
-    console.warn(
-      "[screener] verdict lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "screener-verdict" }, extra: { userId } });
+    logDbFailure("[screener] verdict lookup failed", err);
+    captureDbFailure("[screener] verdict lookup failed", err, {
+      tags: { scope: "screener-verdict" },
+      extra: { userId },
+    });
     return null;
   }
 }
@@ -224,11 +224,11 @@ export async function listPendingScreener(
     );
     return undecided.filter((c) => !knownBefore.has(c.sender)).slice(0, limit);
   } catch (err) {
-    console.warn(
-      "[screener] pending list failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "screener-pending" }, extra: { userId } });
+    logDbFailure("[screener] pending list failed", err);
+    captureDbFailure("[screener] pending list failed", err, {
+      tags: { scope: "screener-pending" },
+      extra: { userId },
+    });
     return [];
   }
 }

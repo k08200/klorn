@@ -45,6 +45,7 @@ import { decryptOptional } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { countGoogleDriveGrantsFor, googleDriveGrantsOf } from "../drive/linked-drive-accounts.js";
 import { getOAuth2Client } from "../mail/gmail.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 
 export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
@@ -479,8 +480,13 @@ function finish(
   carried: readonly RevokeResult[],
 ): RevokeResult[] {
   if (pass.error !== undefined) {
-    console.error(`[GOOGLE-REVOKE] Revoking ${userId}'s grants failed:`, pass.error);
-    captureError(pass.error, { tags: { scope: "google.revoke", userId } });
+    logDbFailure("[GOOGLE-REVOKE] Revoking the grants failed", pass.error, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[GOOGLE-REVOKE] Revoking the grants failed", pass.error, {
+      tags: { scope: "google.revoke", userId },
+    });
   }
   const results = [...carried, ...resultsOf(pass.decided)];
   reportUnrevoked(userId, results);
@@ -488,7 +494,10 @@ function finish(
 }
 
 function reportStopped(userId: string, err: unknown): void {
-  console.error(`[GOOGLE-REVOKE] The revoke of ${userId}'s grants stopped:`, err);
+  logDbFailure("[GOOGLE-REVOKE] The revoke of the grants stopped", err, {
+    level: "error",
+    ids: { userId },
+  });
 }
 
 /**
@@ -638,8 +647,13 @@ export async function removeAndRevokeGoogle<T>(
   removed: (result: T) => boolean,
 ): Promise<T> {
   const grants = await collectGoogleGrants(userId, selection).catch((err: unknown) => {
-    console.error(`[GOOGLE-REVOKE] Could not read ${userId}'s grants before removing them:`, err);
-    captureError(err, { tags: { scope: "google.revoke.collect", userId } });
+    logDbFailure("[GOOGLE-REVOKE] Could not read the grants before removing them", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[GOOGLE-REVOKE] Could not read the grants before removing them", err, {
+      tags: { scope: "google.revoke.collect", userId },
+    });
     return [] as HeldGoogleGrant[];
   });
   const result = await remove();
@@ -666,7 +680,7 @@ export async function rememberPrimaryGoogleAddress(
       data: { googleEmail: lookup.email },
     })
     .catch((err: unknown) => {
-      console.warn(`[GOOGLE-REVOKE] Could not store ${userId}'s Google address:`, err);
+      logDbFailure("[GOOGLE-REVOKE] Could not store the Google address", err, { ids: { userId } });
     });
 }
 

@@ -231,8 +231,9 @@ export async function extractSenderTraitsForAllUsers(): Promise<void> {
     try {
       summaries.push(await extractSenderTraitsForUser(u.id));
     } catch (err) {
-      console.error("[TRAITS] batch failed for user", u.id, err);
-      captureError(err, { tags: { scope: "sender-traits.batch", userId: u.id } });
+      const label = "[TRAITS] batch failed for user";
+      logLlmFailure(label, err, { level: "error", ids: { userId: u.id } });
+      captureLlmFailure(label, err, { tags: { scope: "sender-traits.batch", userId: u.id } });
     }
   }
   // One line per weekly run, success or not — the store sat empty for weeks

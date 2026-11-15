@@ -17,6 +17,7 @@
 
 import { cancelPaddleSubscription } from "../billing/paddle.js";
 import { prisma } from "../db.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { recordOrgAudit } from "./audit.js";
 import { subscriptionBills } from "./effective-tier.js";
@@ -74,7 +75,7 @@ async function cancelOrphanedSubscription(orgId: string, subscriptionId: string)
   try {
     await cancelPaddleSubscription(subscriptionId);
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[ORG] cancelling the orphaned team subscription failed", err, {
       tags: { scope: "org.account-deletion" },
       extra: { orgId, note: "team subscription left without members; cancel it in Paddle" },
     });

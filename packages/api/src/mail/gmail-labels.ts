@@ -32,7 +32,7 @@
  */
 
 import { google } from "googleapis";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isGoogleAuthError, markLinkedInboxForReconnect, resolveMailClient } from "./gmail.js";
 
 /** Lanes, as Gmail label names. `/` is how Gmail nests, so these appear under one parent. */
@@ -231,10 +231,9 @@ export async function laneForLabelIds(
     });
     return matched.length === 1 ? matched[0] : null;
   } catch (err) {
-    console.warn(
-      "[gmail-labels] could not resolve lane from label ids:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[gmail-labels] could not resolve lane from label ids", err, {
+      ids: { userId, linkedInboxAccountId },
+    });
     return null;
   }
 }
@@ -294,11 +293,10 @@ export async function applyLaneLabel(
     // next message rebuilds it rather than failing forever against the same
     // dead label.
     labelCache.delete(cacheKey(userId, linkedInboxAccountId));
-    console.warn(
-      "[gmail-labels] could not apply lane label:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, {
+    logDbFailure("[gmail-labels] could not apply lane label", err, {
+      ids: { userId, gmailMessageId, linkedInboxAccountId },
+    });
+    captureDbFailure("[gmail-labels] could not apply lane label", err, {
       tags: { scope: "gmail-label-mode" },
       extra: { userId, gmailMessageId, tier },
     });

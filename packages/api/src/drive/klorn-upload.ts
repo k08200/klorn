@@ -24,7 +24,7 @@
 
 import { createHash, type Hash, randomUUID } from "node:crypto";
 import type { DriveFileWire } from "@klorn/contract";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { StorageError } from "../storage/errors.js";
 import { MAX_OBJECT_BYTES } from "../storage/limits.js";
 import { isStoragePurgePending } from "../storage/purge-queue.js";
@@ -269,7 +269,7 @@ export async function discardKlornUpload(upload: StoredKlornUpload): Promise<voi
     console.error(
       `[DRIVE] could not delete an upload left without a row for user ${upload.userId}`,
     );
-    captureError(err, {
+    captureDbFailure("[DRIVE] could not delete an upload left without a row", err, {
       tags: { scope: "drive.upload.cleanup" },
       extra: { userId: upload.userId },
     });

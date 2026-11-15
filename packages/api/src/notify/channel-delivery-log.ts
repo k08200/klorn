@@ -17,6 +17,7 @@
 
 import { prisma } from "../db.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
+import { logDbFailure } from "../report-db-failure.js";
 import type { DesktopApp } from "./alert-endpoints.js";
 import {
   type DeliveryChannel,
@@ -66,7 +67,9 @@ export async function recordChannelSend(input: ChannelSendInput): Promise<string
     });
     return row.id;
   } catch (err) {
-    console.warn(`[PUSH] Could not record ${input.channel} delivery for ${input.userId}:`, err);
+    logDbFailure("[PUSH] Could not record delivery", err, {
+      ids: { channel: input.channel, userId: input.userId },
+    });
     return null;
   }
 }

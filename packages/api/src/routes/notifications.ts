@@ -30,7 +30,7 @@ import { remindLaterFromPush } from "../notify/push-later.js";
 import { verifyPushLaterToken } from "../notify/push-later-token.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 const listNotificationsQuerySchema = {
   type: "object",
@@ -302,8 +302,11 @@ export async function notificationRoutes(app: FastifyInstance) {
     try {
       return { alerts: await desktopAlertState(userId) };
     } catch (err) {
-      console.error(`[NOTIFY] alert-state gate failed for user ${userId}:`, err);
-      captureError(err, { tags: { scope: "notify.alert-state" }, extra: { userId } });
+      logDbFailure("[NOTIFY] alert-state gate failed", err, { level: "error", ids: { userId } });
+      captureDbFailure("[NOTIFY] alert-state gate failed", err, {
+        tags: { scope: "notify.alert-state" },
+        extra: { userId },
+      });
       return reply.code(503).send({ error: "Alert state unavailable" });
     }
   });
@@ -658,8 +661,14 @@ async function withCenterFields(
   try {
     return await enrichNotifications(userId, rows, { language });
   } catch (err) {
-    console.error(`[NOTIFY] notification center enrichment failed for user ${userId}:`, err);
-    captureError(err, { tags: { scope: "notify.center-enrich" }, extra: { userId } });
+    logDbFailure("[NOTIFY] notification center enrichment failed", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[NOTIFY] notification center enrichment failed", err, {
+      tags: { scope: "notify.center-enrich" },
+      extra: { userId },
+    });
     return rows;
   }
 }
@@ -669,8 +678,14 @@ async function budgetIfApplies(userId: string) {
   try {
     return await notificationBudget(userId);
   } catch (err) {
-    console.error(`[NOTIFY] interrupt budget read failed for user ${userId}:`, err);
-    captureError(err, { tags: { scope: "notify.center-budget" }, extra: { userId } });
+    logDbFailure("[NOTIFY] interrupt budget read failed", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[NOTIFY] interrupt budget read failed", err, {
+      tags: { scope: "notify.center-budget" },
+      extra: { userId },
+    });
     return null;
   }
 }

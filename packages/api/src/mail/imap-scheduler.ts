@@ -15,8 +15,8 @@
 import { featureOpenTo, IMAP_PRESETS_FLAGS } from "../config.js";
 import { prisma } from "../db.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
-import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { syncImapAccountsForUser } from "./imap-accounts.js";
 import { isImapPresetKey } from "./imap-preset-keys.js";
@@ -61,8 +61,10 @@ async function tickOnce(): Promise<void> {
     } catch (err) {
       // Terminal handler for the per-user sync — console first so a
       // failure is visible without a Sentry DSN (self-host / dev).
-      console.warn(`[imap-scheduler] sync failed for user ${owner.userId}:`, err);
-      captureError(err, {
+      logDbFailure("[imap-scheduler] sync failed", err, {
+        ids: { userId: owner.userId, provider: owner.provider },
+      });
+      captureDbFailure("[imap-scheduler] sync failed", err, {
         tags: { scope: "imap-scheduler" },
         extra: { userId: owner.userId, provider: owner.provider },
       });
@@ -97,12 +99,16 @@ export function startImapScheduler(): void {
     newWork(() => {
       firstTickTimer = null;
       runImapTick().catch((err) =>
-        captureError(err, { tags: { scope: "imap-scheduler.first-tick" } }),
+        captureDbFailure("[imap-scheduler] first tick failed", err, {
+          tags: { scope: "imap-scheduler.first-tick" },
+        }),
       );
       intervalId = setInterval(
         newWork(() => {
           runImapTick().catch((err) =>
-            captureError(err, { tags: { scope: "imap-scheduler.tick" } }),
+            captureDbFailure("[imap-scheduler] tick failed", err, {
+              tags: { scope: "imap-scheduler.tick" },
+            }),
           );
         }),
         POLL_INTERVAL_MS,

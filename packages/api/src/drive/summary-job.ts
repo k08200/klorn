@@ -20,8 +20,8 @@
  */
 
 import { cohortRestriction, DRIVE_SUMMARY_FLAGS } from "../config.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
-import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { driveSummariesLive } from "./summary-policy.js";
 import { runClaimedSummary, type SummaryRunOutcome } from "./summary-run.js";
@@ -59,7 +59,7 @@ async function runSafely(lease: SummaryLease, now: Date): Promise<SummaryRunOutc
     return await runClaimedSummary(lease, { priority: "background", now });
   } catch (err) {
     console.error("[DRIVE] summary run failed; the row is retried after its lease");
-    captureError(err, {
+    captureDbFailure("[DRIVE] summary run failed", err, {
       tags: { scope: "drive.summary.sweep" },
       extra: { userId: lease.row.userId },
     });
@@ -130,8 +130,10 @@ export async function driveSummaryTick(): Promise<void> {
     const result = await runDriveSummarySweep();
     if (result.state !== "busy") recordSchedulerTick("drive-summary");
   } catch (err) {
-    console.error("[DRIVE] summary sweep failed:", err);
-    captureError(err, { tags: { scope: "drive.summary.sweep" } });
+    logDbFailure("[DRIVE] summary sweep failed", err, { level: "error" });
+    captureDbFailure("[DRIVE] summary sweep failed", err, {
+      tags: { scope: "drive.summary.sweep" },
+    });
   }
 }
 

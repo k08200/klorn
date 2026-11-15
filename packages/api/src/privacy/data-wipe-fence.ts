@@ -39,6 +39,7 @@
  * reference it.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { newWork, workStartedAt } from "../work-context.js";
 
 /** Fence window after the purge commits; far above the snapshot's refresh plus a pool wait. */
@@ -244,7 +245,7 @@ export function startDataWipeRefresh(): void {
   if (refreshTimer) return;
   const refresh = () =>
     refreshDataWipes().catch((err: unknown) => {
-      console.error("[DATA-WIPE] Could not refresh the wipe snapshot:", err);
+      logDbFailure("[DATA-WIPE] Could not refresh the wipe snapshot", err, { level: "error" });
     });
   void refresh();
   refreshTimer = setInterval(newWork(refresh), FENCE_REFRESH_MS);
@@ -274,7 +275,7 @@ function blocks(state: DataWipeState, startedAt: Date): boolean {
 function refreshIfStale(): void {
   if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) {
     refreshDataWipes().catch((err: unknown) => {
-      console.error("[DATA-WIPE] Could not refresh the wipe snapshot:", err);
+      logDbFailure("[DATA-WIPE] Could not refresh the wipe snapshot", err, { level: "error" });
     });
   }
 }

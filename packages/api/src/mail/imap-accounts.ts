@@ -13,6 +13,7 @@
 
 import { decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { notifyLinkedInboxReconnect } from "./gmail.js";
 import { checkImapRow } from "./imap-connection.js";
@@ -27,7 +28,6 @@ import { beginPoll, endPoll, isPollInFlight, noteSkippedPoll } from "./imap-poll
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox, syncImapMessage } from "./imap-sync.js";
 import { canonicalUidValidity } from "./imap-uidvalidity.js";
-import { sanitizeLogText } from "./log-text.js";
 import { isCredentialCoolingDown, startCredentialCooldown } from "./providers/imap-session.js";
 import {
   imapSyncErrorCode,
@@ -107,9 +107,9 @@ async function flagForReconnect(
     });
     if (count > 0) await notifyLinkedInboxReconnect(userId, rowId, provider.provider);
   } catch (flagErr) {
-    console.warn(
-      `[${provider.logScope}] could not flag row ${rowId} for reconnect: ${sanitizeLogText(flagErr)}`,
-    );
+    logDbFailure("[imap] could not flag row for reconnect", flagErr, {
+      ids: { logScope: provider.logScope, rowId },
+    });
   }
 }
 
@@ -135,13 +135,11 @@ async function handlePollFailure(
   const scope = provider.logScope;
   const userHost = provider.hostPolicy === "user-supplied";
   const kind = pollFailureKind(err);
-  if (userHost) {
-    console.warn(`[${scope}] sync failed for row ${rowId} (${kind}): ${sanitizeLogText(err)}`);
-  } else {
-    // console first — captureError is a no-op without a Sentry DSN, and a
-    // silent per-account failure here would strand one mailbox invisibly.
-    console.warn(`[${scope}] sync failed for row ${rowId} (${kind}):`, err);
-  }
+  // console first — captureError is a no-op without a Sentry DSN, and a
+  // silent per-account failure here would strand one mailbox invisibly. Facts
+  // only: a generic host's error text is whatever the server chose to send, and
+  // a fixed provider's can still quote a mailbox or message.
+  logDbFailure("[imap] sync failed", err, { ids: { logScope: scope, rowId, kind } });
   if (!isCredentialRefusal(err)) {
     if (userHost) notePollBackoff(rowId);
   } else {
@@ -152,7 +150,7 @@ async function handlePollFailure(
   }
   await recordSyncError(userId, rowId, imapSyncErrorCode(err), passwordCipher);
   if (shouldReportPollFailure(rowId, kind)) {
-    captureError(err, {
+    captureDbFailure("[imap] sync failed", err, {
       tags: { scope: `${scope}.account-sync` },
       extra: { userId, linkedInboxAccountId: rowId, failureKind: kind },
     });

@@ -16,7 +16,7 @@
  */
 
 import { objectStorageEnabled } from "../config.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { printableStorageError, type StorageErrorCode } from "./errors.js";
 import type { ObjectStore } from "./object-store.js";
 import { readS3StoreConfig, S3_ENV_NAMES } from "./s3-config.js";
@@ -85,7 +85,9 @@ export type StorageHealth =
 function report(state: "misconfigured" | "failing", err: unknown): StorageHealth {
   const { code, message } = printableStorageError(err);
   console.error(`${LOG_PREFIX} ${state} (${code}): ${message}`);
-  captureError(err, { tags: { scope: "storage.startup", storageCode: code } });
+  captureDbFailure("[STORAGE] startup check failed", err, {
+    tags: { scope: "storage.startup", storageCode: code },
+  });
   return { state, code, message };
 }
 

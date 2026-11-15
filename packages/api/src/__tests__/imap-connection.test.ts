@@ -165,7 +165,7 @@ describe("createImapClient", () => {
       expect(() => listener?.(new Error("read ECONNRESET"))).not.toThrow();
     });
 
-    it("logs the provider scope and account id but never credentials or the email", () => {
+    it("logs the provider scope and account id, facts only: never the error text, credentials or the email", () => {
       const listener = client("row-9");
       listener?.(new Error("read ECONNRESET"));
       const logged = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls
@@ -173,7 +173,8 @@ describe("createImapClient", () => {
         .join("\n");
       expect(logged).toContain("naver-imap");
       expect(logged).toContain("row-9");
-      expect(logged).toContain("read ECONNRESET");
+      expect(logged).toContain("connection error");
+      expect(logged).not.toContain("read ECONNRESET");
       expect(logged).not.toContain("super-secret");
       expect(logged).not.toContain("me@naver.com");
     });

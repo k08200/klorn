@@ -398,7 +398,7 @@ describe("generic poll failures reach Sentry once per account and kind", () => {
     expect(fake.captureError.mock.calls[0][1]).toMatchObject({ extra: { failureKind: "error" } });
   });
 
-  it("the log line for a failed generic account is one capped line", async () => {
+  it("the log line for a failed generic account is one line of facts, never the server's text", async () => {
     fake.connect.mockRejectedValue(new Error(`bad\r\nFORGED ${"Y".repeat(20_000)}`));
     await syncImapAccountsForUser("u1", GENERIC);
     const lines = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls
@@ -408,6 +408,7 @@ describe("generic poll failures reach Sentry once per account and kind", () => {
     for (const line of lines) {
       expect(line).not.toMatch(/[\r\n]/);
       expect(line.length).toBeLessThan(700);
+      expect(line).not.toContain("FORGED");
     }
   });
 });

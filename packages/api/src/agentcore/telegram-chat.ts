@@ -18,7 +18,7 @@ import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendTelegramMessage } from "../notify/telegram.js";
 import { findUserIdByTelegramChatId } from "../notify/telegram-link.js";
 import { effectivePlan } from "../org/effective-tier.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { recordDedupKey, wasRecentlyDeduped } from "./agent-dedup.js";
 import { runChatTurn } from "./chat-engine.js";
 
@@ -297,7 +297,10 @@ export async function handleTelegramChatMessage(input: {
         },
       });
     } catch (err) {
-      captureError(err, { tags: { scope: "telegram-chat.persist" }, extra: { userId } });
+      captureDbFailure("[TELEGRAM-CHAT] persist failed", err, {
+        tags: { scope: "telegram-chat.persist" },
+        extra: { userId },
+      });
     }
 
     for (const chunk of chunkTelegramReply(reply)) {
@@ -309,6 +312,8 @@ export async function handleTelegramChatMessage(input: {
     }
   } catch (err) {
     // Fire-and-forget contract: nothing here may reach the webhook handler.
-    captureError(err, { tags: { scope: "telegram-chat.turn" } });
+    captureDbFailure("[TELEGRAM-CHAT] turn failed", err, {
+      tags: { scope: "telegram-chat.turn" },
+    });
   }
 }

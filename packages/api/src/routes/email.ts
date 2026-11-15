@@ -57,7 +57,7 @@ import {
 } from "../learning/trust-score.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
-import { captureLlmFailure } from "../llm/report-llm-failure.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { listAccountHealth } from "../mail/account-health.js";
 import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
@@ -103,7 +103,7 @@ import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { effectivePlan } from "../org/effective-tier.js";
 import { createTask } from "../pim/tasks.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
@@ -144,8 +144,11 @@ function projectHtmlBody(htmlBody: string | null, emailId: string, userId: strin
   try {
     return htmlToPlainText(htmlBody);
   } catch (err) {
-    console.error("[EMAIL] htmlBody projection failed:", { emailId }, err);
-    captureError(err, { tags: { scope: "email.detail.html_project", userId }, extra: { emailId } });
+    logDbFailure("[EMAIL] htmlBody projection failed", err, { level: "error", ids: { emailId } });
+    captureDbFailure("[EMAIL] htmlBody projection failed", err, {
+      tags: { scope: "email.detail.html_project", userId },
+      extra: { emailId },
+    });
     return null;
   }
 }
@@ -166,8 +169,11 @@ function serveBody(
     const coerced = coercePlainBody(body, htmlBody);
     if (coerced !== null) return coerced;
   } catch (err) {
-    console.error("[EMAIL] body coercion failed:", { emailId }, err);
-    captureError(err, { tags: { scope: "email.detail.body_coerce", userId }, extra: { emailId } });
+    logDbFailure("[EMAIL] body coercion failed", err, { level: "error", ids: { emailId } });
+    captureDbFailure("[EMAIL] body coercion failed", err, {
+      tags: { scope: "email.detail.body_coerce", userId },
+      extra: { emailId },
+    });
     if (body) return body;
   }
   return projectHtmlBody(htmlBody, emailId, userId);
@@ -1322,7 +1328,7 @@ export async function emailRoutes(app: FastifyInstance) {
           .header("cache-control", "private, max-age=3600")
           .send(fetched.bytes);
       } catch (err) {
-        console.warn(`[EMAIL] inline image fetch failed for ${dbEmail.id}/${cid}:`, err);
+        logDbFailure("[EMAIL] inline image fetch failed", err, { ids: { emailId: dbEmail.id } });
         return reply.code(404).send({ error: "Inline image not found" });
       }
     },
@@ -1439,7 +1445,10 @@ export async function emailRoutes(app: FastifyInstance) {
           try {
             return renderableEmailHtmlFor(dbEmail.body, dbEmail.htmlBody);
           } catch (err) {
-            console.error("[EMAIL] renderHtml sanitize failed:", { emailId: dbEmail.id }, err);
+            logDbFailure("[EMAIL] renderHtml sanitize failed", err, {
+              level: "error",
+              ids: { emailId: dbEmail.id },
+            });
             return null;
           }
         })(),
@@ -1532,8 +1541,13 @@ export async function emailRoutes(app: FastifyInstance) {
         // only refreshed the primary account and linked inboxes stayed
         // "Not yet synced" until a scheduler tick (which needs automation enabled).
         await syncLinkedInboxesForUser(uid).catch((err) => {
-          console.warn(`[EMAIL-SYNC] on-demand linked fan-out failed for user ${uid}`, err);
-          captureError(err, { tags: { scope: "email.sync.linked" }, extra: { userId: uid } });
+          logDbFailure("[EMAIL-SYNC] on-demand linked fan-out failed", err, {
+            ids: { userId: uid },
+          });
+          captureDbFailure("[EMAIL-SYNC] on-demand linked fan-out failed", err, {
+            tags: { scope: "email.sync.linked" },
+            extra: { userId: uid },
+          });
         });
 
         // Reconcile (remove archived/deleted, refresh read-status) makes one Gmail
@@ -1543,8 +1557,14 @@ export async function emailRoutes(app: FastifyInstance) {
         // background and on the next scheduler tick. Fire-and-forget, but never
         // swallowed — log a signal so a broken reconcile is visible.
         reconcileEmails(uid).catch((err) => {
-          console.error(`[EMAIL-SYNC] Background reconcile failed for user ${uid}:`, err);
-          captureError(err, { tags: { scope: "email.sync.reconcile" }, extra: { userId: uid } });
+          logDbFailure("[EMAIL-SYNC] Background reconcile failed", err, {
+            level: "error",
+            ids: { userId: uid },
+          });
+          captureDbFailure("[EMAIL-SYNC] Background reconcile failed", err, {
+            tags: { scope: "email.sync.reconcile" },
+            extra: { userId: uid },
+          });
         });
 
         // Trigger AI summarization (non-blocking, but never silent — the manual
@@ -1553,19 +1573,21 @@ export async function emailRoutes(app: FastifyInstance) {
         // login init-sync) that never got summarized would otherwise be stranded
         // as "not analyzed" forever — pressing Sync with 0 new mail summarized 0.
         summarizeUnsummarizedEmails(uid, Math.max(result.newCount, 10)).catch((err) => {
-          console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
+          logLlmFailure("[EMAIL-SYNC] background summarize failed", err, { ids: { userId: uid } });
           // The daily budget line is expected back-pressure, not a fault.
           if (err instanceof Error && err.name === "DailyCostCapExceededError") return;
-          captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
+          captureLlmFailure("[EMAIL-SYNC] background summarize failed", err, {
+            tags: { scope: "email.sync.summarize" },
+            extra: { userId: uid },
+          });
         });
         analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))
           .then(() => syncRecentCandidateIntakes(uid, Math.max(10, result.newCount)))
           .catch((err) => {
-            console.warn(
-              `[EMAIL-SYNC] background attachment/intake analysis failed for user ${uid}`,
-              err,
-            );
-            captureError(err, {
+            logLlmFailure("[EMAIL-SYNC] background attachment/intake analysis failed", err, {
+              ids: { userId: uid },
+            });
+            captureLlmFailure("[EMAIL-SYNC] background attachment/intake analysis failed", err, {
               tags: { scope: "email.sync.attachments" },
               extra: { userId: uid },
             });
@@ -1769,8 +1791,14 @@ export async function emailRoutes(app: FastifyInstance) {
     } catch (err) {
       // Was returning HTTP 200 with an {error} body — a failed reconcile read as
       // success to any caller checking status. Surface it (status + signal).
-      console.error(`[EMAIL-SYNC] Manual reconcile failed for ${uid}:`, err);
-      captureError(err, { tags: { scope: "email.reconcile.manual" }, extra: { userId: uid } });
+      logDbFailure("[EMAIL-SYNC] Manual reconcile failed", err, {
+        level: "error",
+        ids: { userId: uid },
+      });
+      captureDbFailure("[EMAIL-SYNC] Manual reconcile failed", err, {
+        tags: { scope: "email.reconcile.manual" },
+        extra: { userId: uid },
+      });
       return reply
         .code(500)
         .send({ error: err instanceof Error ? err.message : "Reconcile failed" });

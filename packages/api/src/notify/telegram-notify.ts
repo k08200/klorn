@@ -12,6 +12,7 @@
  * rates read web rows only, so the channels do not mix.
  */
 
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import {
   isTelegramConfigured,
@@ -95,8 +96,11 @@ export async function sendTelegramForPush(
     console.log(`[TELEGRAM] Sent to linked chat for ${userId} (${category})`);
     return "sent";
   } catch (err) {
-    console.warn(`[TELEGRAM] Send error for ${userId} (${category}):`, err);
-    captureError(err, { tags: { scope: "telegram.push" }, extra: { userId, category } });
+    logDbFailure("[TELEGRAM] Send error", err, { ids: { userId, category } });
+    captureDbFailure("[TELEGRAM] Send error", err, {
+      tags: { scope: "telegram.push" },
+      extra: { userId, category },
+    });
     return "failed";
   }
 }

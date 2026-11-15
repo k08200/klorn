@@ -46,6 +46,14 @@ describe("runDataWipeSweep", () => {
     });
     expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
       tags: { scope: "data-wipe.sweep", userId: "u1" },
+      extra: {
+        errorName: "Error",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: "timed out".length,
+      },
     });
   });
 

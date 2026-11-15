@@ -25,8 +25,8 @@ import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { hasBriefingBeenSentToday, isBriefingDue } from "../automation-scheduler.js";
 import { prisma } from "../db.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { createDailyBriefingDelivery } from "../pim/briefing.js";
-import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
 
 interface BriefingTickResult {
@@ -108,7 +108,7 @@ export async function cronRoutes(app: FastifyInstance) {
           continue;
         }
         failed += 1;
-        captureError(err, {
+        captureLlmFailure("[CRON] briefing tick failed", err, {
           tags: { scope: "cron.briefing-tick" },
           extra: { userId: config.userId },
         });

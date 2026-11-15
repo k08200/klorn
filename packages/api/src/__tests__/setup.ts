@@ -1,5 +1,4 @@
 import { beforeEach } from "vitest";
-import { resetOverrideCache } from "../learning/ontology-overrides.js";
 import { resetSchedulerHeartbeats } from "../scheduler-heartbeat.js";
 
 // The classifier reads a module-global effective-threshold cache
@@ -11,7 +10,19 @@ import { resetSchedulerHeartbeats } from "../scheduler-heartbeat.js";
 // scheduler-heartbeat's registry is the same category of shared module state:
 // any test that calls a real start*Scheduler() would otherwise leak
 // registrations into every later test file.
-beforeEach(() => {
-  resetOverrideCache();
+//
+// ontology-overrides is imported here, not at the top: it pulls in db.ts, the
+// data-wipe fence and the failure reporters, and a module this file loads is
+// evaluated before the test file registers its vi.mock calls. A reporter
+// loaded that early binds the real sentry.ts, so a test's
+// `vi.mock("../sentry.js")` would never see what it captures. Imported here,
+// it resolves through the test's mocks like every other module (a test that
+// mocks ontology-overrides without resetOverrideCache gets nothing reset).
+beforeEach(async () => {
+  const overrides: object = await import("../learning/ontology-overrides.js");
+  // `in`, not a property read: vitest throws on reading an export a mock factory left out.
+  if ("resetOverrideCache" in overrides) {
+    (overrides as { resetOverrideCache: () => void }).resetOverrideCache();
+  }
   resetSchedulerHeartbeats();
 });

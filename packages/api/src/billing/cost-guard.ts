@@ -23,7 +23,7 @@ import {
   teamsOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { notifyCostCapTrip } from "./cost-trip-alert.js";
 import { globalDailyCapCents } from "./global-cost-ceiling.js";
 import { isEntitled } from "./stripe.js";
@@ -67,8 +67,11 @@ async function resolveCapCents(userId: string): Promise<ResolvedCap> {
     pool = await teamPoolCapCents(userId);
   } catch (err) {
     // Fall back to the own plan's cap (never to a larger one) and say so.
-    console.warn("[cost-guard] team pool lookup failed, using the own plan's cap:", err);
-    captureError(err, { tags: { scope: "cost-guard.team-pool" }, extra: { userId } });
+    logDbFailure("[cost-guard] team pool lookup failed, using the own plan's cap", err);
+    captureDbFailure("[cost-guard] team pool lookup failed, using the own plan's cap", err, {
+      tags: { scope: "cost-guard.team-pool" },
+      extra: { userId },
+    });
     return own;
   }
   if (pool === null) return own;
@@ -101,10 +104,13 @@ async function ownPlanCapCents(userId: string): Promise<ResolvedCap> {
     // outage already fails closed downstream: checkCostGate's ledger read
     // throws and blocks the call. The residual exposure — a narrow partial
     // failure letting a free user spend at the paid cap — is bounded by the
-    // GLOBAL daily cap and surfaced via captureError so an operator can act on
-    // a sustained fault. captureError no-ops when Sentry is off.
-    console.warn("[cost-guard] plan lookup failed, using default cap:", err);
-    captureError(err, { tags: { scope: "cost-guard.resolve-cap" }, extra: { userId } });
+    // GLOBAL daily cap and surfaced via captureDbFailure so an operator can act on
+    // a sustained fault. It no-ops when Sentry is off.
+    logDbFailure("[cost-guard] plan lookup failed, using default cap", err);
+    captureDbFailure("[cost-guard] plan lookup failed, using default cap", err, {
+      tags: { scope: "cost-guard.resolve-cap" },
+      extra: { userId },
+    });
   }
   return { capCents: DAILY_COST_CAP_CENTS, freeCapApplied: false };
 }
@@ -277,10 +283,11 @@ export async function recordCostUsage(
     // The ledger is best-effort accounting; never fail the user-facing call
     // because of a write here. But a sustained failure means we're silently
     // dropping all cost accounting (and the cap can't bite) — surface it.
-    console.warn("[cost-guard] failed to record usage:", err);
-    captureError(err, {
+    logDbFailure("[cost-guard] failed to record usage", err);
+    // `llmModel`, not `model`: the failure's own `model` fact (the Prisma model) would overwrite it.
+    captureDbFailure("[cost-guard] failed to record usage", err, {
       tags: { scope: "cost-guard.record-usage" },
-      extra: { userId, cents: safeCents, model },
+      extra: { userId, cents: safeCents, llmModel: model },
     });
     return null;
   }

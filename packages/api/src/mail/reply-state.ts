@@ -16,7 +16,7 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export type ReplyState = "needsReply" | "replied";
 
@@ -66,7 +66,10 @@ export async function markEmailReplied(userId: string, ref: string): Promise<voi
       data: { repliedAt: new Date() },
     });
   } catch (err) {
-    console.warn("[REPLY-STATE] mark replied failed:", err instanceof Error ? err.message : err);
-    captureError(err, { tags: { scope: "reply-state.mark" }, extra: { userId, ref } });
+    logDbFailure("[REPLY-STATE] mark replied failed", err, { ids: { userId, ref } });
+    captureDbFailure("[REPLY-STATE] mark replied failed", err, {
+      tags: { scope: "reply-state.mark" },
+      extra: { userId, ref },
+    });
   }
 }

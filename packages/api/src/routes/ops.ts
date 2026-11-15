@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { snapshotUserProviderCooldowns } from "../llm/model-fallback.js";
 import { getBriefingStatus } from "../pim/briefing-status.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 type CheckStatus = "ok" | "warning" | "error";
 
@@ -362,7 +363,7 @@ async function checkDatabase(): Promise<{ connected: boolean }> {
     // Log the driver error server-side (it can embed the DB host:port / pooler
     // name) — never return it to the client: /ops/readiness is requireAuth, not
     // admin, so any logged-in user can call it.
-    console.error("[OPS] readiness DB check failed:", err instanceof Error ? err.message : err);
+    logDbFailure("[OPS] readiness DB check failed", err, { level: "error" });
     return { connected: false };
   }
 }

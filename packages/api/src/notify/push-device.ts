@@ -24,6 +24,7 @@ import { type App, cert, getApps, initializeApp } from "firebase-admin/app";
 import { type BatchResponse, getMessaging, type Message } from "firebase-admin/messaging";
 import { androidDataPushEnabled } from "../config.js";
 import { prisma } from "../db.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
 
@@ -108,11 +109,17 @@ function getFirebaseApp(): App | null {
     // native push silently no-ops and "notifications don't work" is untraceable.
     // console.error so it shows even with Sentry off; captureError so it pages
     // when Sentry is on (a bad Render secret disables FCM for the whole deploy).
-    console.error(
-      "[PUSH-DEVICE] Failed to init Firebase Admin (check FIREBASE_SERVICE_ACCOUNT JSON):",
+    // Facts only: JSON.parse's message quotes a slice of the service-account JSON.
+    logDbFailure(
+      "[PUSH-DEVICE] Failed to init Firebase Admin (check FIREBASE_SERVICE_ACCOUNT JSON)",
       err,
+      { level: "error" },
     );
-    captureError(err, { tags: { scope: "push-device.init" } });
+    captureDbFailure(
+      "[PUSH-DEVICE] Failed to init Firebase Admin (check FIREBASE_SERVICE_ACCOUNT JSON)",
+      err,
+      { tags: { scope: "push-device.init" } },
+    );
     firebaseApp = null;
     return firebaseApp;
   }
@@ -220,8 +227,11 @@ export async function sendDevicePush(
   try {
     res = await getMessaging(app).sendEach(messages);
   } catch (err) {
-    console.error(`[PUSH-DEVICE] FCM sendEach failed (systemic) for ${userId}:`, err);
-    captureError(err, {
+    logDbFailure("[PUSH-DEVICE] FCM sendEach failed (systemic)", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[PUSH-DEVICE] FCM sendEach failed (systemic)", err, {
       tags: { scope: "push-device.send" },
       extra: { userId, tokenCount: messages.length },
     });

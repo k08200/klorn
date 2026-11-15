@@ -16,6 +16,7 @@
  * and updates are idempotent and account-scoped, so that costs only Gmail reads.
  */
 
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { reconcileEmails, reconcileLinkedInboxes } from "./email-sync.js";
 
@@ -58,7 +59,10 @@ export function startDetachedReconcile(
     .catch((err) => {
       // Backstop only: reconcileUser catches its own failures. The caller drops
       // this promise, and an unhandled rejection would take the process down.
-      console.error(`[AUTOMATION] Reconcile run escaped its handlers for ${userId}:`, err);
+      logDbFailure("[AUTOMATION] Reconcile run escaped its handlers", err, {
+        level: "error",
+        ids: { userId },
+      });
     })
     .finally(() => {
       // A run released as stale must not free the slot of the run that replaced it.
@@ -85,14 +89,21 @@ async function reconcileUser(userId: string, opts: ReconcileJobOptions): Promise
   try {
     await reconcileEmails(userId);
   } catch (err) {
-    console.error(`[AUTOMATION] Reconcile failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "automation.reconcile", userId } });
+    logDbFailure("[AUTOMATION] Reconcile failed", err, { level: "error", ids: { userId } });
+    captureDbFailure("[AUTOMATION] Reconcile failed", err, {
+      tags: { scope: "automation.reconcile", userId },
+    });
   }
   if (!opts.includeLinked) return;
   try {
     await reconcileLinkedInboxes(userId);
   } catch (err) {
-    console.error(`[AUTOMATION] Linked-inbox reconcile failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "automation.reconcile.linked", userId } });
+    logDbFailure("[AUTOMATION] Linked-inbox reconcile failed", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[AUTOMATION] Linked-inbox reconcile failed", err, {
+      tags: { scope: "automation.reconcile.linked", userId },
+    });
   }
 }

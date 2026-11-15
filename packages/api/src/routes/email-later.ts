@@ -15,7 +15,7 @@ import { getUserId } from "../auth.js";
 import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { PUSH_LATER_HOURS } from "../notify/push-later.js";
 import { setMailReminder } from "../pim/mail-reminder.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { rateLimitHook } from "./rate-limit-hook.js";
 
 const HOUR_MS = 3_600_000;
@@ -81,7 +81,10 @@ export function registerEmailLaterRoutes(app: FastifyInstance) {
         noteEmailOutcome(userId, id, "SNOOZED");
         return { ok: true, created: result.created, reminder: result.reminder };
       } catch (err) {
-        captureError(err, { tags: { scope: "email.later" }, extra: { emailId: id } });
+        captureDbFailure("[EMAIL] set reminder (Later) failed", err, {
+          tags: { scope: "email.later" },
+          extra: { emailId: id },
+        });
         return reply.code(500).send({ error: "Could not set the reminder" });
       }
     },

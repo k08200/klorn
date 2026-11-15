@@ -29,7 +29,7 @@ import { withDbRetry } from "../db-retry.js";
 import { getGoogleUserInfo, getOAuth2Client, registerGmailWatch } from "../mail/gmail.js";
 import { effectivePlan } from "../org/effective-tier.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 /** The Google markers whose callback parks the code instead of exchanging it. */
 export const GOOGLE_LINK_MARKERS = [
@@ -321,8 +321,10 @@ export async function finishGooglePrimaryConnect(
     // Connect is now the ONLY place a fresh watch is registered — a silent
     // failure here leaves a brand-new connection push-less until the next
     // renewal sweep, so alert like the sweep does instead of stdout-only.
-    console.warn(`[GMAIL-WATCH] register on connect failed for ${user.id}:`, err);
-    captureError(err, { tags: { scope: "auth.oauth.connect.watch" } });
+    logDbFailure("[GMAIL-WATCH] register on connect failed", err, { ids: { userId: user.id } });
+    captureDbFailure("[GMAIL-WATCH] register on connect failed", err, {
+      tags: { scope: "auth.oauth.connect.watch" },
+    });
   });
 
   return { next: "/settings?google=connected" };
@@ -355,8 +357,8 @@ export async function exchangeAndFinishGoogleLink(
     // The account's data was wiped minutes ago: the fence refuses new grants
     // until it lifts. Say so instead of a generic failure.
     if (isDataWipeFenceError(err)) return { next: "/settings?google=wipe_in_progress" };
-    console.error("[OAUTH] callback failed:", err instanceof Error ? err.message : String(err));
-    captureError(err, { tags: { scope: "auth.oauth.callback" } });
+    logDbFailure("[OAUTH] callback failed", err, { level: "error" });
+    captureDbFailure("[OAUTH] callback failed", err, { tags: { scope: "auth.oauth.callback" } });
     return { status: 500, error: GOOGLE_LINK_FAILED };
   }
 }

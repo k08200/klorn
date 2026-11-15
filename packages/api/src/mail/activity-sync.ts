@@ -22,7 +22,7 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 const mailSyncLastRun = new Map<string, number>();
 const MAIL_SYNC_DEBOUNCE_MS = 60_000;
@@ -91,8 +91,11 @@ export async function ensureRecentMailSync(
     // here every 60 s. Anything else is a real fault worth a breadcrumb.
     const msg = err instanceof Error ? err.message : String(err);
     if (!/not connected/i.test(msg)) {
-      console.warn(`[MAIL-SYNC] activity sync failed for ${userId}: ${msg}`);
-      captureError(err, { tags: { scope: "mail.activity-sync" }, extra: { userId } });
+      logDbFailure("[MAIL-SYNC] activity sync failed", err, { ids: { userId } });
+      captureDbFailure("[MAIL-SYNC] activity sync failed", err, {
+        tags: { scope: "mail.activity-sync" },
+        extra: { userId },
+      });
     }
   }
 }

@@ -20,6 +20,7 @@
  * the precedent here is the judge model gate: degrade, not amputate.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 
 /** Minor units per major unit. Paddle returns amounts as integer cents. */
@@ -295,7 +296,7 @@ export async function fetchPaddlePrice(
     }
     return await res.json();
   } catch (err) {
-    console.warn(`[PADDLE] price check could not reach Paddle: ${(err as Error).message}`);
+    logDbFailure("[PADDLE] price check could not reach Paddle", err);
     return null;
   }
 }

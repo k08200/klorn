@@ -24,7 +24,7 @@ import { prisma } from "../db.js";
 import { getSuppressionSet, isSuppressed } from "../learning/feedback-adaptor.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
 import { isConfirmedCommitment } from "../pim/commitment-confirmation.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { CLEAR_AGENT_TIER, NOT_AGENT_SET } from "./agent-tier.js";
 import { attentionHashInputOf, computeAttentionInputHash } from "./attention-input-hash.js";
 import { CLEAR_OVERRIDE_UNDO } from "./attention-override.js";
@@ -281,7 +281,9 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
       },
     });
   } catch (err) {
-    console.warn("[attention-mirror] upsert failed for PendingAction", pa.id, err);
+    logDbFailure("[attention-mirror] upsert failed for PendingAction", err, {
+      ids: { pendingActionId: pa.id },
+    });
   }
 }
 
@@ -313,11 +315,9 @@ export async function bulkResolveAttentionForPendingActions(
       },
     });
   } catch (err) {
-    console.warn(
-      "[attention-mirror] bulkResolveAttentionForPendingActions failed",
-      pendingActionIds.length,
-      err,
-    );
+    logDbFailure("[attention-mirror] bulkResolveAttentionForPendingActions failed", err, {
+      ids: { count: pendingActionIds.length },
+    });
   }
 }
 
@@ -444,7 +444,7 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
       },
     });
   } catch (err) {
-    console.warn("[attention-mirror] upsert failed for Task", task.id, err);
+    logDbFailure("[attention-mirror] upsert failed for Task", err, { ids: { taskId: task.id } });
   }
 }
 
@@ -457,7 +457,7 @@ export async function deleteAllAttentionForUser(userId: string): Promise<void> {
   try {
     await prisma.attentionItem.deleteMany({ where: { userId } });
   } catch (err) {
-    console.warn("[attention-mirror] deleteAllAttentionForUser failed", userId, err);
+    logDbFailure("[attention-mirror] deleteAllAttentionForUser failed", err, { ids: { userId } });
   }
 }
 
@@ -566,7 +566,9 @@ export async function upsertAttentionForCalendarEvent(
       },
     });
   } catch (err) {
-    console.warn("[attention-mirror] upsert failed for CalendarEvent", event.id, err);
+    logDbFailure("[attention-mirror] upsert failed for CalendarEvent", err, {
+      ids: { calendarEventId: event.id },
+    });
   }
 }
 
@@ -583,7 +585,9 @@ export async function deleteAttentionForCalendarEvents(
       where: { userId, source: "CALENDAR_EVENT", sourceId: { in: eventIds } },
     });
   } catch (err) {
-    console.warn("[attention-mirror] deleteAttentionForCalendarEvents failed", err);
+    logDbFailure("[attention-mirror] deleteAttentionForCalendarEvents failed", err, {
+      ids: { userId, count: eventIds.length },
+    });
   }
 }
 
@@ -677,7 +681,9 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
       },
     });
   } catch (err) {
-    console.warn("[attention-mirror] upsert failed for Notification", notif.id, err);
+    logDbFailure("[attention-mirror] upsert failed for Notification", err, {
+      ids: { notificationId: notif.id },
+    });
   }
 }
 
@@ -821,7 +827,9 @@ export async function upsertAttentionForCommitment(
       },
     });
   } catch (err) {
-    console.warn("[attention-mirror] upsert failed for Commitment", c.id, err);
+    logDbFailure("[attention-mirror] upsert failed for Commitment", err, {
+      ids: { commitmentId: c.id },
+    });
   }
 }
 
@@ -836,7 +844,9 @@ export async function deleteAttentionForCommitments(
       where: { userId, source: "COMMITMENT", sourceId: { in: commitmentIds } },
     });
   } catch (err) {
-    console.warn("[attention-mirror] deleteAttentionForCommitments failed", err);
+    logDbFailure("[attention-mirror] deleteAttentionForCommitments failed", err, {
+      ids: { userId, count: commitmentIds.length },
+    });
   }
 }
 
@@ -1040,8 +1050,8 @@ export async function upsertAttentionForEmailJudgement(
     // can see it" silently diverge (the push may fire with no item behind it),
     // and defeats the callers' "never silently dropped from triage" catch,
     // which can only observe a throw. Capture and rethrow.
-    console.warn("[attention-mirror] upsert failed for Email", email.id, err);
-    captureError(err, {
+    logDbFailure("[attention-mirror] upsert failed for Email", err, { ids: { emailId: email.id } });
+    captureDbFailure("[attention-mirror] upsert failed for Email", err, {
       tags: { scope: "attention-mirror.email-upsert" },
       extra: { emailId: email.id, tier: judgement.tier },
     });

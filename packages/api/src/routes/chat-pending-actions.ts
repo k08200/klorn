@@ -25,6 +25,7 @@ import {
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
 import { noteReplyIfSent } from "../judge/user-outcome.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 /**
  * Mint an ActionReceipt for the about-to-execute floor action. The receipt
@@ -411,7 +412,11 @@ export async function chatRoutes(app: FastifyInstance) {
         .then(({ learnFromRejection }) =>
           learnFromRejection(userId, action.toolName, action.reasoning || "", trimmedReason || ""),
         )
-        .catch((err) => console.warn(`[PENDING-ACTION] learnFromRejection failed`, err));
+        .catch((err) =>
+          logDbFailure("[PENDING-ACTION] learnFromRejection failed", err, {
+            ids: { userId, actionId },
+          }),
+        );
 
       await recordFeedback({
         userId,
@@ -437,7 +442,11 @@ export async function chatRoutes(app: FastifyInstance) {
               "user",
             ),
           )
-          .catch((err) => console.warn(`[PENDING-ACTION] never-suggest remember failed`, err));
+          .catch((err) =>
+            logDbFailure("[PENDING-ACTION] never-suggest remember failed", err, {
+              ids: { userId, actionId },
+            }),
+          );
       }
 
       return { success: true, neverSuggested: !!neverSuggest };
@@ -492,7 +501,11 @@ export async function chatRoutes(app: FastifyInstance) {
         )
         // recordFeedback trains the suppression policy — a silent failure here
         // quietly corrupts the calibration signal, so log a trace.
-        .catch((err) => console.warn(`[PENDING-ACTION] snooze recordFeedback failed`, err));
+        .catch((err) =>
+          logDbFailure("[PENDING-ACTION] snooze recordFeedback failed", err, {
+            ids: { userId, actionId },
+          }),
+        );
 
       return { success: true, snoozedUntil: snoozeDate.toISOString() };
     },

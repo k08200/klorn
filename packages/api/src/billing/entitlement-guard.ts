@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { effectiveTier } from "../org/effective-tier.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { isEntitled, isHardPaywalled } from "./stripe.js";
 
 async function loadPlanRole(
@@ -26,8 +26,11 @@ async function loadPlanRole(
   } catch (err) {
     // Fail CLOSED (re-throw → Fastify 500): an access guard must not admit a
     // request when it can't determine entitlement. Surface it so a DB fault on
-    // the guard path isn't invisible. captureError no-ops when Sentry is off.
-    captureError(err, { tags: { scope: "entitlement-guard.load-plan" }, extra: { userId } });
+    // the guard path isn't invisible. captureDbFailure no-ops when Sentry is off.
+    captureDbFailure("[entitlement-guard] plan load failed", err, {
+      tags: { scope: "entitlement-guard.load-plan" },
+      extra: { userId },
+    });
     throw err;
   }
 }

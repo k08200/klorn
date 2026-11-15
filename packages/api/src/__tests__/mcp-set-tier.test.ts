@@ -367,7 +367,7 @@ describe("side effects an injected agent must not trigger", () => {
       /push|websocket|telegram|notify|gmail|providers|attention-override|attention-mirror|decision-label|label-correction/;
     expect(imported.filter((spec) => forbidden.test(spec))).toEqual([]);
     expect(imported).toEqual(
-      expect.arrayContaining(["../db.js", "../judge/agent-tier.js", "../sentry.js"]),
+      expect.arrayContaining(["../db.js", "../judge/agent-tier.js", "../report-db-failure.js"]),
     );
   });
 });

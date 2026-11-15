@@ -27,7 +27,7 @@
 
 import { FALLBACK_REJUDGE_LOOKBACK_DAYS, FALLBACK_REJUDGE_SWEEP } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
 import { recordEmailDecision } from "./decision-label.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
@@ -217,8 +217,8 @@ export async function rejudgeFallbackItems(
         }
       }
     } catch (err) {
-      console.warn("[FALLBACK-REJUDGE] row failed (id in Sentry extra)", err);
-      captureError(err, {
+      logLlmFailure("[FALLBACK-REJUDGE] row failed (id in Sentry extra)", err);
+      captureLlmFailure("[FALLBACK-REJUDGE] row failed (id in Sentry extra)", err, {
         tags: { scope: "fallback-rejudge" },
         extra: { userId, sourceId: row.sourceId },
       });

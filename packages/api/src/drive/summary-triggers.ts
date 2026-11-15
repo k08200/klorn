@@ -15,7 +15,7 @@
  */
 
 import type { DriveFileSummaryWire } from "@klorn/contract";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { type DriveProviderEnabledMap, driveProvidersFor } from "./drive-scope.js";
 import { driveSummariesOpenTo } from "./summary-policy.js";
 import { findSummarySource } from "./summary-source.js";
@@ -37,7 +37,10 @@ export async function enqueueSummaryOnWrite(
     await enqueueDriveFileSummary(userId, driveFileId, etag);
   } catch (err) {
     console.error(`[DRIVE] could not queue a file summary for user ${userId}`);
-    captureError(err, { tags: { scope: "drive.summary.enqueue" }, extra: { userId } });
+    captureDbFailure("[DRIVE] could not queue a file summary", err, {
+      tags: { scope: "drive.summary.enqueue" },
+      extra: { userId },
+    });
   }
 }
 
