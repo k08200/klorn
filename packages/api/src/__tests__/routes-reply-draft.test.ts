@@ -43,6 +43,12 @@ vi.mock("../mail/gmail.js", () => ({
 }));
 
 import { draftReplyForEmailId, registerEmailRepliesRoutes } from "../routes/email-replies.js";
+import {
+  callText,
+  exhaustedOverQuotingError,
+  LLM_CANARY,
+  providerErrorQuotingMail,
+} from "./helpers/canary.js";
 
 const EMAIL = {
   id: "e1",
@@ -270,6 +276,55 @@ describe("POST /api/email/:id/reply-draft reply tone", () => {
     await app.inject({ method: "POST", url: "/api/email/e1/reply-draft", payload: {} });
 
     expect(systemPrompt()).toMatch(/same language as the incoming email/i);
+    await app.close();
+  });
+});
+
+/**
+ * The exhausted chain's cause, and a provider error rethrown raw, can quote
+ * this mail: Sentry gets the facts, the client the same answer as before.
+ */
+describe("reply drafting failure reports carry no provider text", () => {
+  it.each([
+    [
+      "reply-draft",
+      "an exhausted chain",
+      exhaustedOverQuotingError,
+      "reply-draft.providers-exhausted",
+      /model provider is unavailable/i,
+    ],
+    [
+      "reply-draft",
+      "a raw provider error",
+      providerErrorQuotingMail,
+      "reply-draft",
+      /temporarily unavailable \(Error 429\)/,
+    ],
+    [
+      "reply-options",
+      "an exhausted chain",
+      exhaustedOverQuotingError,
+      "reply-draft.providers-exhausted",
+      /model provider is unavailable/i,
+    ],
+    [
+      "reply-options",
+      "a raw provider error",
+      providerErrorQuotingMail,
+      "reply-options",
+      /temporarily unavailable \(Error 429\)/,
+    ],
+  ] as const)("%s, %s: scope kept, 503 kept, no canary", async (route, _label, make, scope, answer) => {
+    createCompletion.mockRejectedValue(make());
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "POST", url: `/api/email/e1/${route}`, payload: {} });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toMatch(answer);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError.mock.calls[0][1].tags.scope).toBe(scope);
+    expect(callText(captureError)).not.toContain(LLM_CANARY);
     await app.close();
   });
 });

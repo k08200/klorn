@@ -12,7 +12,11 @@
 import type { DesktopMailToast } from "@klorn/contract";
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
-import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
+import {
+  autoModeReplyFailureReporter,
+  recipientFromHeader,
+  runAutoModeSweep,
+} from "./agentcore/auto-mode-sweep.js";
 import {
   HIDDEN_CLAIM_TYPE,
   replyLedgerKey,
@@ -53,6 +57,7 @@ import {
   effectiveAutoReplyGuideline,
   normalizeAttentionMode,
 } from "./learning/auto-reply-guideline.js";
+import { captureLlmFailure, logLlmFailure } from "./llm/report-llm-failure.js";
 import { autoReplyEmailWhere } from "./mail/auto-reply-scope.js";
 import { syncRecentCandidateIntakes } from "./mail/email-candidate-intake.js";
 import { generateGuidelineReply } from "./mail/email-reply.js";
@@ -1891,12 +1896,13 @@ async function runUserCycle(
               // Auto-reply touches an outbound send — a silent failure
               // here means a configured rule fired nothing with no trace.
               // The claim row keeps the mail from being retried. console
-              // first: captureError is a no-op without a Sentry DSN.
-              console.warn(
-                `[AUTOMATION] auto-reply failed for ${email.gmailId} (user ${config.userId})`,
-                err,
-              );
-              captureError(err, {
+              // first: captureError is a no-op without a Sentry DSN. Facts
+              // only: the reply model's error can quote this mail.
+              const label = "[AUTOMATION] auto-reply failed";
+              logLlmFailure(label, err, {
+                ids: { gmailId: email.gmailId, userId: config.userId },
+              });
+              captureLlmFailure(label, err, {
                 tags: { scope: "automation.auto-reply" },
                 extra: { userId: config.userId, gmailId: email.gmailId },
               });
@@ -1956,11 +1962,7 @@ async function runUserCycle(
                 );
             },
             warn: (message) => console.warn(message),
-            reportError: (err, itemId) =>
-              captureError(err, {
-                tags: { scope: "automation.auto-mode-reply" },
-                extra: { userId: config.userId, itemId },
-              }),
+            reportError: autoModeReplyFailureReporter(config.userId),
             now: Date.now,
           });
         }

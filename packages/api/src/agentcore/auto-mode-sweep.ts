@@ -17,6 +17,7 @@
  * caller already decided the sweep should run.
  */
 
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { parseAddress } from "../mail/email-address.js";
 
 /// Sweep bounds: only items judged within the lookback are candidates (older
@@ -89,6 +90,20 @@ export interface AutoModeSweepDeps {
   warn: (message: string) => void;
   reportError: (err: unknown, itemId: string) => void;
   now: () => number;
+}
+
+/**
+ * The sweep's production `reportError`: facts only (class, status, provider
+ * code, the throw site's frames). The failure is usually the guideline reply's
+ * model call, whose error can quote the mail. A send or ledger failure keeps
+ * its class, status and frames but loses its message too.
+ */
+export function autoModeReplyFailureReporter(userId: string): AutoModeSweepDeps["reportError"] {
+  return (err, itemId) =>
+    captureLlmFailure("[AUTOMATION] auto-mode reply failed", err, {
+      tags: { scope: "automation.auto-mode-reply" },
+      extra: { userId, itemId },
+    });
 }
 
 /** Extract the reply-to address from a From header. Pure for the tests. */

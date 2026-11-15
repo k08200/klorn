@@ -27,9 +27,9 @@ import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { listTierPins, replaceTierPins, validateTierPin } from "../mail/pin-rules.js";
 import { compileRuleText, RULE_TEXT_MAX_CHARS } from "../mail/rule-compile.js";
-import { captureError } from "../sentry.js";
 
 /**
  * Shape gate for PIN_TIER rows on the generic CRUD: the judge's read-side
@@ -114,7 +114,11 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
           return reply.code(429).send({ error: err.message });
         }
-        captureError(err, { tags: { scope: "email-rules.compile" }, extra: { userId: uid } });
+        // Facts only: the provider's error can quote the rule text.
+        captureLlmFailure("Rule compile failed", err, {
+          tags: { scope: "email-rules.compile" },
+          extra: { userId: uid },
+        });
         return reply.code(503).send({
           error: `Rule compilation is temporarily unavailable (${describeLlmFailure(err)}).`,
         });

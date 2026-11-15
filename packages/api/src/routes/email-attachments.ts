@@ -695,7 +695,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           // Leave a detection trail: a misclassified content image silently skipped
           // here would be permanently un-OCR'd with no signal. `force` re-runs it.
           console.log(
-            `[ATTACHMENTS] decorative skip (no OCR): ${row.filename} (${row.size ?? "?"}B) attachment ${row.id}`,
+            `[ATTACHMENTS] decorative skip (no OCR): ${row.size ?? "?"}B attachment ${row.id}`,
           );
           await prisma.emailAttachment.update({
             where: { id: row.id },

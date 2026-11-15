@@ -21,6 +21,7 @@ import { asString, asStringArray } from "../llm/llm-coerce.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { getProviderChain } from "../providers/index.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { extractEmailAddress } from "./email-address.js";
@@ -221,7 +222,9 @@ export async function getThreadBrief(
       parsed = raw as Record<string, unknown>;
     }
   } catch (err) {
-    console.warn(`[THREAD-BRIEF] generation failed for ${threadId}:`, err);
+    // Facts only: the provider's error can quote the thread, and
+    // parseLlmJson's SyntaxError quotes the model's reply.
+    logLlmFailure("[THREAD-BRIEF] generation failed", err, { ids: { threadId } });
     return (await cachedThreadBrief(userId, threadId)) ?? EMPTY_BRIEF;
   }
 

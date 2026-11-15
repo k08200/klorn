@@ -19,6 +19,7 @@
 
 import { prisma } from "../db.js";
 import { parseEventText } from "../event-parse.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { checkAttendeeBusy, checkConflicts, getAttendeeBusyBlocks } from "../pim/calendar.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
@@ -127,8 +128,9 @@ export async function getMeetingContext(
       proposed = { title: parsed.title, startTime: parsed.startTime, endTime: parsed.endTime };
     }
   } catch (err) {
-    // LLM transport failure — the reading pane must still open.
-    console.warn(`[MEETING-CTX] parse failed for email ${email.id}:`, err);
+    // LLM transport failure — the reading pane must still open. Facts only:
+    // the provider's error can quote this mail.
+    logLlmFailure("[MEETING-CTX] parse failed", err, { ids: { emailId: email.id } });
   }
 
   if (!proposed) {

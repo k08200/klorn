@@ -1,3 +1,5 @@
+import { redactCredentials } from "../security/credential-redaction.js";
+
 /**
  * Name an LLM failure in a way an operator can act on.
  *
@@ -46,8 +48,14 @@ export function llmFailureStatus(err: unknown): number | null {
  */
 const PROVIDER_CODE_SHAPE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 
+/**
+ * A credential fits the token shape too (a Gemini key is 39 such characters),
+ * so a value the credential redactor would touch is dropped as well, in case a
+ * provider ever echoes the rejected key back as its code.
+ */
 function enumLike(value: unknown): string | null {
-  return typeof value === "string" && PROVIDER_CODE_SHAPE.test(value) ? value : null;
+  if (typeof value !== "string" || !PROVIDER_CODE_SHAPE.test(value)) return null;
+  return redactCredentials(value) === value ? value : null;
 }
 
 interface ProviderErrorFields {
@@ -56,8 +64,12 @@ interface ProviderErrorFields {
   readonly errorCode?: unknown;
 }
 
-/** How far down `cause` the codes are looked for: exhausted chain → 402 wrapper → SDK error. */
-const CAUSE_DEPTH = 2;
+/**
+ * How far down `cause` the codes and the LLM shapes are looked for: exhausted
+ * chain → 402 wrapper → SDK error is two; the rest is room for a caller's own
+ * wrapper around that.
+ */
+const CAUSE_DEPTH = 4;
 
 function causeOf(err: unknown): unknown {
   return (err as { cause?: unknown } | null | undefined)?.cause;
@@ -140,4 +152,39 @@ export function formatLlmFailureFacts(facts: LlmFailureFacts): string {
   ]
     .filter((part): part is string => part !== null)
     .join(", ");
+}
+
+/** Base classes of the OpenAI and Anthropic SDK errors, matched by name so a test's SDK mock cannot break the check. */
+const SDK_ERROR_BASES = new Set(["APIError", "OpenAIError", "AnthropicError"]);
+const GEMINI_HTTP_ERROR = /^GeminiHttp\d+Error$/;
+
+function hasSdkErrorBase(err: unknown): boolean {
+  for (let proto = Object.getPrototypeOf(err); proto; proto = Object.getPrototypeOf(proto)) {
+    const name = (proto as { constructor?: { name?: unknown } }).constructor?.name;
+    if (typeof name === "string" && SDK_ERROR_BASES.has(name)) return true;
+  }
+  return false;
+}
+
+function isLlmFailureShape(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return (
+    hasSdkErrorBase(err) ||
+    GEMINI_HTTP_ERROR.test(err.name) ||
+    err.name === "AllProvidersExhaustedError" ||
+    // JSON.parse quotes the start of its input, which on an LLM path is the
+    // model's reply. A request body that fails to parse is a 4xx with its own
+    // status, so a SyntaxError that reaches a 5xx path is an internal parse.
+    err.name === "SyntaxError"
+  );
+}
+
+/**
+ * Whether an error that reached a catch-all (the Fastify error handler) is an
+ * LLM failure, or wraps one, whose message must not be logged or sent:
+ * an OpenAI/Anthropic SDK error, a Gemini HTTP error, an exhausted chain, or
+ * a SyntaxError (JSON.parse quotes its input).
+ */
+export function isLlmFailure(err: unknown): boolean {
+  return causeChain(err).some(isLlmFailureShape);
 }

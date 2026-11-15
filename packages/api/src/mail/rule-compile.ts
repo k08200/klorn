@@ -12,7 +12,7 @@ import type { CompileRulesResponse, TierPinInput } from "@klorn/contract";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
-import { captureError } from "../sentry.js";
+import { captureLlmFailure, offeredKeyKind } from "../llm/report-llm-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { validateTierPin } from "./pin-rules.js";
 
@@ -73,7 +73,11 @@ export async function compileRuleText(
   try {
     raw = parseLlmJson<{ pins?: unknown; unsupported?: unknown }>(content);
   } catch (err) {
-    captureError(err, { tags: { scope: "rule_compile.json", userId } });
+    // JSON.parse's SyntaxError quotes the start of the model's reply.
+    captureLlmFailure("[RULE-COMPILE] malformed model output", err, {
+      tags: { scope: "rule_compile.json", userId },
+      extra: { contentLength: content.length, keyKind: offeredKeyKind(credentials) },
+    });
     return null;
   }
 

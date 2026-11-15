@@ -1,11 +1,17 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+
 import {
   AUTO_MODE_MAX_DRAFT_ATTEMPTS,
   type AutoModeSweepDeps,
+  autoModeReplyFailureReporter,
   recipientFromHeader,
   resetAutoModeDraftAttempts,
   runAutoModeSweep,
 } from "../agentcore/auto-mode-sweep.js";
+import { captureError } from "../sentry.js";
+import { callText, exhaustedOverQuotingError, LLM_CANARY } from "./helpers/canary.js";
 
 /** Fake deps that record every call in order and can be steered per test. */
 function makeDeps(overrides: Partial<AutoModeSweepDeps> = {}) {
@@ -213,5 +219,28 @@ describe("runAutoModeSweep — shared unattended-reply guards", () => {
     expect(calls).not.toContain("draftReply");
     expect(calls).not.toContain("writeLedger");
     expect(calls).not.toContain("send");
+  });
+});
+
+describe("autoModeReplyFailureReporter", () => {
+  it("reports a reply-model failure that quotes the mail as facts only", async () => {
+    vi.mocked(captureError).mockClear();
+    const { deps } = makeDeps({
+      draftReply: async () => {
+        throw exhaustedOverQuotingError();
+      },
+      reportError: autoModeReplyFailureReporter("u1"),
+    });
+
+    await runAutoModeSweep("u1", "guideline", deps);
+
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: { scope: "automation.auto-mode-reply" },
+        extra: expect.objectContaining({ userId: "u1", itemId: "item-1" }),
+      }),
+    );
+    expect(callText(vi.mocked(captureError))).not.toContain(LLM_CANARY);
   });
 });

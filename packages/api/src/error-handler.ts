@@ -1,5 +1,7 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "./llm/cost-cap-refusal.js";
+import { isLlmFailure, llmFailureFacts } from "./llm/describe-failure.js";
+import { captureLlmFailure } from "./llm/report-llm-failure.js";
 import { DataWipeFenceError, isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
 import { captureError } from "./sentry.js";
 
@@ -14,7 +16,8 @@ import { captureError } from "./sentry.js";
  *     rate-limit, and explicit `reply.code(4xx)` carry safe, intentional
  *     messages the caller needs;
  *   - logs SERVER (5xx) errors in full (+ Sentry) but replaces the response
- *     body with a generic message;
+ *     body with a generic message — an LLM failure as facts only (class,
+ *     status, provider code), never its message or cause;
  *   - answers a write the data-wipe fence rejected with 409
  *     DATA_WIPE_IN_PROGRESS;
  *   - answers an LLM call the daily cost cap refused with 429 and the cap's
@@ -46,6 +49,23 @@ export function handleError(error: FastifyError, request: FastifyRequest, reply:
 
   if (status < 500) {
     return reply.code(status).send({ error: error.message });
+  }
+
+  // An LLM failure no route caught (GET /api/commitments/:id/path and
+  // POST /api/commitments/:id/path/rebuild build the path with the model and
+  // have no catch). pino, like Sentry, prints the
+  // message and the cause chain, and a provider's message can quote the
+  // request's mail, so both get the facts only. The response is the same.
+  if (isLlmFailure(error)) {
+    request.log.error(
+      { llmFailure: llmFailureFacts(error) },
+      "LLM failure reached the error handler",
+    );
+    captureLlmFailure("Unhandled LLM failure in a route", error, {
+      tags: { scope: "fastify.errorHandler" },
+      extra: { method: request.method, route: request.routeOptions?.url ?? null },
+    });
+    return reply.code(status).send({ error: "Internal server error" });
   }
 
   request.log.error(error);

@@ -11,10 +11,10 @@ import { asEnum, asString, asStringArray } from "../llm/llm-coerce.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { captureLlmFailure, logLlmFailure, offeredKeyKind } from "../llm/report-llm-failure.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getProviderChain, type ProviderCredentials } from "../providers/index.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
-import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { htmlToPlainText } from "./email-text.js";
@@ -347,12 +347,14 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
       // Skip this email and retry next cycle, but don't go fully silent: a
       // persistent failure (e.g. the :free model is quota-locked for ~an hour,
       // or a misconfigured BYOK key 401s every call) would otherwise re-fail
-      // every minute with zero signal. console first — captureError is a no-op
-      // without a Sentry DSN (self-host / dev).
-      console.warn("[SUMMARIZE] per-email summarize failed (id in Sentry extra)", err);
-      captureError(err, {
+      // every minute with zero signal. console first — Sentry is a no-op
+      // without a DSN (self-host / dev). Facts only: the provider's error can
+      // quote this mail.
+      const label = "[SUMMARIZE] per-email summarize failed (id in Sentry extra)";
+      logLlmFailure(label, err);
+      captureLlmFailure(label, err, {
         tags: { scope: "email.summarize", userId },
-        extra: { emailId: email.id },
+        extra: { emailId: email.id, keyKind: offeredKeyKind(credentials) },
       });
     }
   }

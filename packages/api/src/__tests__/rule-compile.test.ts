@@ -23,6 +23,8 @@ vi.mock("../llm/llm-credentials.js", () => ({
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { compileRuleText } from "../mail/rule-compile.js";
+import { captureError } from "../sentry.js";
+import { callText, LLM_CANARY, NON_JSON_REPLY } from "./helpers/canary.js";
 
 function llmReturns(payload: unknown) {
   createCompletionMock.mockResolvedValue({
@@ -156,5 +158,23 @@ describe("pin overflow", () => {
     const out = await compileRuleText("u1", `silence ${domains.join(" ")}`);
     expect(out?.pins).toHaveLength(20);
     expect(out?.unsupported).toEqual(expect.arrayContaining(["d20.example", "d21.example"]));
+  });
+});
+
+describe("compileRuleText failure reports carry no model text", () => {
+  it("sends Sentry the parse failure's facts, not the reply JSON.parse quotes", async () => {
+    vi.mocked(captureError).mockClear();
+    createCompletionMock.mockResolvedValue({ choices: [{ message: { content: NON_JSON_REPLY } }] });
+
+    expect(await compileRuleText("u1", "boss@acme.com is urgent")).toBeNull();
+
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: { scope: "rule_compile.json", userId: "u1" },
+        extra: expect.objectContaining({ errorName: "SyntaxError" }),
+      }),
+    );
+    expect(callText(vi.mocked(captureError))).not.toContain(LLM_CANARY);
   });
 });

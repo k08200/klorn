@@ -20,6 +20,14 @@ vi.mock("../sentry.js", () => ({
 }));
 
 import { classifyEmailBatch } from "../judge/email-classifier.js";
+import { captureError } from "../sentry.js";
+import {
+  callText,
+  exhaustedOverQuotingError,
+  LLM_CANARY,
+  NON_JSON_REPLY,
+  providerErrorQuotingMail,
+} from "./helpers/canary.js";
 
 const HUMAN_EMAIL = {
   id: "e1",
@@ -120,5 +128,40 @@ describe("classifyEmailBatch — model routing", () => {
 
     expect(labels[0]?.category).toBe("customer");
     expect(labels[0]?.priority).toBe("high");
+  });
+});
+
+describe("classifyEmailBatch failure reports carry no provider or model text", () => {
+  it.each([
+    [
+      "a provider error quoting the batch",
+      () => createCompletionMock.mockRejectedValue(providerErrorQuotingMail()),
+    ],
+    [
+      "an exhausted chain over it",
+      () => createCompletionMock.mockRejectedValue(exhaustedOverQuotingError()),
+    ],
+    [
+      "a non-JSON reply",
+      () =>
+        createCompletionMock.mockResolvedValue({
+          choices: [{ message: { content: NON_JSON_REPLY } }],
+        }),
+    ],
+  ])("falls back on %s and reports facts only", async (_label, arrange) => {
+    vi.mocked(captureError).mockClear();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    arrange();
+
+    const labels = await classifyEmailBatch([HUMAN_EMAIL], "u1");
+
+    expect(labels).toHaveLength(1);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ tags: { scope: "email-classifier.llm" } }),
+    );
+    expect(warn).toHaveBeenCalled();
+    expect(callText(vi.mocked(captureError)) + callText(warn)).not.toContain(LLM_CANARY);
+    warn.mockRestore();
   });
 });
