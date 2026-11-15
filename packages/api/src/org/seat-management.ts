@@ -19,12 +19,14 @@
  *
  * The owner is the organization's billing admin: any owner can remove seats
  * (it lowers the charge; the member floor still holds) or cancel at the
- * period end. Adding seats is different: it charges the payer's card on file
- * at once (prorated), so only the payer may — the same check as the customer
- * portal: the owner's verified Klorn email is the Paddle customer's email. The
- * portal is the payer's whole Paddle account (other subscriptions, invoices,
- * address). Refused payer checks are audited by reason class only, never an
- * email.
+ * period end. Adding seats charges the subscription's payment method at
+ * once (prorated) and taking a cancel back restarts billing on it, so only
+ * the payer may do either: the owner the team checkout recorded
+ * (Organization.payerUserId, stored by the webhook) or, failing that, the
+ * owner whose verified Klorn email is the Paddle customer's email. The
+ * customer portal is the Paddle customer's whole account (other
+ * subscriptions, invoices, address), so it takes the email match only.
+ * Refused payer checks are audited by reason class only, never an email.
  *
  * Status rules, from Paddle's API: a past_due subscription cannot be updated
  * (seat changes need active or trialing) except to remove a scheduled change,
@@ -64,6 +66,7 @@ export type SeatChangeResult = { status: "pending" | "unchanged"; seats: number 
 
 interface BillingRow {
   seatsPurchased: number;
+  payerUserId: string | null;
   subscriptionStatus: string | null;
   paddleSubscriptionId: string | null;
   paddleCustomerId: string | null;
@@ -72,6 +75,7 @@ interface BillingRow {
 
 const BILLING_SELECT = {
   seatsPurchased: true,
+  payerUserId: true,
   subscriptionStatus: true,
   paddleSubscriptionId: true,
   paddleCustomerId: true,
@@ -121,6 +125,19 @@ const CANCEL_SCHEDULED = () =>
     "CANCEL_SCHEDULED",
     "The subscription is set to end. Keep it first, then change seats.",
   );
+
+/**
+ * A Paddle call that failed before anything was asked to change (a read, or
+ * a portal link): reported, and answered as "nothing was changed".
+ */
+function readError(err: unknown, orgId: string, step: string): OrgError {
+  captureError(err, { tags: { scope: `org.billing.${step}` }, extra: { orgId } });
+  return new OrgError(
+    502,
+    "BILLING_PROVIDER_READ_FAILED",
+    "Paddle didn't answer, so nothing was changed. Try again in a minute.",
+  );
+}
 
 /**
  * Paddle refuses any update to a subscription with a scheduled change pending
@@ -178,7 +195,7 @@ async function liveSeatItem(subscriptionId: string, orgId: string) {
   try {
     live = await getPaddleTeamSubscription(subscriptionId, CALL);
   } catch (err) {
-    throw providerError(err, orgId, "read_subscription");
+    throw readError(err, orgId, "read_subscription");
   }
   if (live.scheduledChange !== null) throw CANCEL_SCHEDULED();
   if (!seatsActive(live.status)) throw NOT_ACTIVE();
@@ -208,7 +225,7 @@ const SEATS_INCREASE_PAYER_ONLY = () =>
   new OrgError(
     403,
     "SEATS_INCREASE_PAYER_ONLY",
-    "Only the email address that pays for the team can add seats, because the card on file is charged right away. Ask the person who signs in to Klorn with that address (Paddle's receipt emails go to it). Any owner can remove seats.",
+    "Only the person who pays for the team can add seats, because the card on file is charged right away. Ask them to add seats from their own Klorn account (Paddle's receipt emails go to them). Any owner can remove seats.",
   );
 
 function sameEmail(a: string, b: string): boolean {
@@ -227,12 +244,27 @@ interface PayerRefusal {
   error: OrgError;
 }
 
+/** How an owner passed the payer check, as the audit detail records it. */
+type PayerBasis = "recorded" | "email";
+
 /**
- * The payer check (billing portal and seat increases): the owner's verified
- * Klorn email is the Paddle customer's email. Null when it is; otherwise the
- * reason and the refusal to answer (`notPayer` unless the email is unverified).
+ * The owner the team checkout recorded as its buyer (Organization.payerUserId).
+ * Callers have already checked that `userId` is an owner (and re-check it
+ * under the lock). Enough for a seat increase or a resume, which act on the
+ * subscription's own payment method; never for the billing portal, which is
+ * the Paddle customer's whole account — and the customer is whoever's email
+ * was typed at checkout, which Klorn does not bind to the buyer.
  */
-async function payerRefusal(
+function isRecordedPayer(userId: string, billing: Pick<BillingRow, "payerUserId">): boolean {
+  return billing.payerUserId !== null && billing.payerUserId === userId;
+}
+
+/**
+ * The email payer check: the owner's verified Klorn email is the Paddle
+ * customer's email. Null when it is; otherwise the reason and the refusal to
+ * answer (`notPayer` unless the email is unverified).
+ */
+async function emailPayerRefusal(
   userId: string,
   orgId: string,
   customerId: string | null,
@@ -252,7 +284,7 @@ async function payerRefusal(
   try {
     payerEmail = await getPaddleCustomerEmail(customerId, CALL);
   } catch (err) {
-    throw providerError(err, orgId, "read_customer");
+    throw readError(err, orgId, "read_customer");
   }
   if (!payerEmail) return { reason: "no_payer_email", error: notPayer() };
   return sameEmail(payerEmail, email) ? null : { reason: "not_payer", error: notPayer() };
@@ -282,16 +314,26 @@ async function refuseAudited(
   throw refusal.error;
 }
 
-/** Refuse an increase unless the owner is the payer; the refusal is audited. */
-async function requirePayerForIncrease(
+/**
+ * The payer check for a change billed to the subscription's payment method
+ * (seat increase, resume): the recorded payer, else the email payer. Answers
+ * how it passed; a refusal is audited (reason class only) and thrown.
+ */
+async function requirePayer(
   userId: string,
   orgId: string,
-  customerId: string | null,
-  change: { from: number; to: number },
-): Promise<void> {
-  const refusal = await payerRefusal(userId, orgId, customerId, SEATS_INCREASE_PAYER_ONLY);
-  if (refusal)
-    await refuseAudited(orgId, userId, "billing.seats_increase_refused", refusal, change);
+  billing: BillingRow,
+  refused: { action: OrgAuditAction; notPayer: () => OrgError; detail?: Record<string, number> },
+): Promise<PayerBasis> {
+  if (isRecordedPayer(userId, billing)) return "recorded";
+  const refusal = await emailPayerRefusal(
+    userId,
+    orgId,
+    billing.paddleCustomerId,
+    refused.notPayer,
+  );
+  if (refusal) await refuseAudited(orgId, userId, refused.action, refusal, refused.detail);
+  return "email";
 }
 
 const SEATS_CHANGE_ACTION = "billing.seats_change_requested" satisfies OrgAuditAction;
@@ -347,6 +389,8 @@ interface SeatChange {
   item: { priceId: string; quantity: number };
   seats: number;
   mark: SeatChangeMark;
+  /** How the payer check passed (increases only). */
+  payer: PayerBasis | null;
 }
 
 /** The locked part of a seat change: re-check what may have moved, audit, one Paddle call. */
@@ -362,7 +406,7 @@ async function applySeatChange(tx: OrgTx, change: SeatChange): Promise<SeatChang
     orgId,
     action: SEATS_CHANGE_ACTION,
     actorUserId: userId,
-    detail: { from: item.quantity, to: seats },
+    detail: { from: item.quantity, to: seats, ...(change.payer ? { payer: change.payer } : {}) },
   });
   try {
     await setPaddleSeatQuantity({ subscriptionId, priceId: item.priceId, quantity: seats }, CALL);
@@ -396,14 +440,16 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
   if (item.quantity === seats) {
     return { status: stored.seatsPurchased === seats ? "unchanged" : "pending", seats };
   }
-  if (seats > item.quantity) {
-    await requirePayerForIncrease(userId, orgId, stored.paddleCustomerId, {
-      from: item.quantity,
-      to: seats,
-    });
-  }
+  const payer =
+    seats > item.quantity
+      ? await requirePayer(userId, orgId, stored, {
+          action: "billing.seats_increase_refused",
+          notPayer: SEATS_INCREASE_PAYER_ONLY,
+          detail: { from: item.quantity, to: seats },
+        })
+      : null;
   return withOrgLock(orgId, (tx) =>
-    applySeatChange(tx, { userId, orgId, subscriptionId, item, seats, mark }),
+    applySeatChange(tx, { userId, orgId, subscriptionId, item, seats, mark, payer }),
   );
 }
 
@@ -465,34 +511,54 @@ export async function cancelTeamSubscription(userId: string): Promise<{ cancelAt
   });
 }
 
+const RESUME_PAYER_ONLY = () =>
+  new OrgError(
+    403,
+    "RESUME_PAYER_ONLY",
+    "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team can do it. Ask them to keep it from their own Klorn account (Paddle's receipt emails go to them).",
+  );
+
 /**
- * Take back a scheduled cancel (owner only): billing resumes on the original
- * schedule. Paddle allows this on a past-due subscription too. With no cancel
- * stored, Paddle is asked: one made in the portal (or whose webhook is late)
- * is still taken back, and nothing to take back answers the same, so a retry
- * after a lost answer is not an error.
+ * Take back a scheduled cancel (the payer only: it restarts billing on their
+ * card): billing resumes on the original schedule. Paddle allows this on a
+ * past-due subscription too. With no cancel stored, Paddle is asked: one made
+ * in the portal (or whose webhook is late) is still taken back, and nothing
+ * to take back answers the same (no payer check: nothing changes), so a
+ * retry after a lost answer is not an error.
  */
 export async function resumeTeamSubscription(userId: string): Promise<{ resumed: true }> {
   const owner = await requireOwner(userId);
   const orgId = owner.orgId;
   const stored = await readBilling(orgId);
   if (!stored.paddleSubscriptionId) throw NO_SUBSCRIPTION();
+  requirePaddleKey();
   if (!stored.subscriptionCancelAt) {
-    requirePaddleKey();
     let live: PaddleTeamSubscription;
     try {
       live = await getPaddleTeamSubscription(stored.paddleSubscriptionId, CALL);
     } catch (err) {
-      throw providerError(err, orgId, "read_subscription");
+      throw readError(err, orgId, "read_subscription");
     }
     if (live.scheduledChange !== "cancel") return { resumed: true as const };
   }
+  const payer = await requirePayer(userId, orgId, stored, {
+    action: "billing.resume_refused",
+    notPayer: RESUME_PAYER_ONLY,
+  });
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
     const org = await billingInTx(tx, orgId);
-    if (!org.paddleSubscriptionId) throw NO_SUBSCRIPTION();
-    requirePaddleKey();
-    await recordOrgAudit(tx, { orgId, action: "billing.cancel_removed", actorUserId: userId });
+    // The payer check above was for this subscription: one that ended and was
+    // replaced meanwhile (another payer) is not taken back on its strength.
+    if (!org.paddleSubscriptionId || org.paddleSubscriptionId !== stored.paddleSubscriptionId) {
+      throw NO_SUBSCRIPTION();
+    }
+    await recordOrgAudit(tx, {
+      orgId,
+      action: "billing.cancel_removed",
+      actorUserId: userId,
+      detail: { payer },
+    });
     try {
       await undoPaddleCancellation(org.paddleSubscriptionId, CALL);
     } catch (err) {
@@ -533,16 +599,17 @@ export async function teamBillingPortal(userId: string): Promise<{ url: string }
     throw NO_SUBSCRIPTION();
   }
   requirePaddleKey();
-  const refusal = await payerRefusal(userId, orgId, customerId, PORTAL_PAYER_ONLY);
+  // Email only, never the recorded payer (see isRecordedPayer).
+  const refusal = await emailPayerRefusal(userId, orgId, customerId, PORTAL_PAYER_ONLY);
   if (refusal) await refuseAudited(orgId, userId, "billing.portal_refused", refusal);
   let url: string;
   try {
     url = await createPaddlePortalUrl(customerId, CALL);
   } catch (err) {
-    throw providerError(err, orgId, "portal");
+    throw readError(err, orgId, "portal");
   }
   if (!isPaddlePortalUrl(url)) {
-    throw providerError(new Error("Paddle portal url outside paddle.com"), orgId, "portal_url");
+    throw readError(new Error("Paddle portal url outside paddle.com"), orgId, "portal_url");
   }
   await recordOrgAudit(prisma, { orgId, action: "billing.portal_opened", actorUserId: userId });
   return { url };

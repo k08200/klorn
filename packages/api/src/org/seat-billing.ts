@@ -29,7 +29,7 @@ import { captureError } from "../sentry.js";
 import { recordOrgAudit } from "./audit.js";
 import { subscriptionBills } from "./effective-tier.js";
 import { OrgError } from "./org-error.js";
-import { withOrgLock } from "./org-lock.js";
+import { type OrgTx, withOrgLock } from "./org-lock.js";
 import { requireOwner } from "./org-members.js";
 import { MAX_SELF_SERVE_SEATS, MIN_TEAM_SEATS } from "./org-shape.js";
 
@@ -74,7 +74,12 @@ export async function startTeamCheckout(userId: string, body: unknown): Promise<
       "This organization already has a team subscription.",
     );
   }
-  const url = await createPaddleTeamCheckout({ orgId: owner.orgId, priceId, quantity: seats });
+  const url = await createPaddleTeamCheckout({
+    orgId: owner.orgId,
+    priceId,
+    quantity: seats,
+    payerUserId: userId,
+  });
   await recordOrgAudit(prisma, {
     orgId: owner.orgId,
     action: "billing.checkout_started",
@@ -141,6 +146,7 @@ interface StoredSubscription {
   subscriptionEventAt: Date | null;
   paddleSubscriptionId: string | null;
   subscriptionStatus: string | null;
+  payerUserId: string | null;
 }
 
 /** Why an event must not be applied to this organization, or null to apply it. */
@@ -180,6 +186,63 @@ function updateFor(data: TeamSubscriptionData, own: boolean, eventAt: Date | nul
 }
 
 /**
+ * The payer to store from this event: the buyer the organization's own
+ * checkout named (custom_data.payerUserId with custom_data.orgId = this
+ * organization), accepted only while they are an owner of it. Written when a
+ * subscription first attaches (null when its checkout named no owner) or when
+ * the attached one has none yet; never moved by a later event. A canceled
+ * subscription clears it. Undefined leaves it as stored. A non-owner payer is
+ * reported once, when the subscription attaches.
+ */
+async function payerFor(
+  tx: OrgTx,
+  orgId: string,
+  stored: StoredSubscription,
+  event: TeamSubscriptionEvent,
+  own: boolean,
+): Promise<string | null | undefined> {
+  const { data } = event;
+  if (data.status === "canceled") return null;
+  if (own && stored.payerUserId !== null) return undefined;
+  const claimed = data.custom_data?.payerUserId;
+  const named =
+    data.custom_data?.orgId === orgId && typeof claimed === "string" && UUID_RE.test(claimed);
+  if (!named) return own ? undefined : null;
+  const owner = await tx.orgMembership.findFirst({
+    where: { orgId, userId: claimed, role: "OWNER" },
+    select: { id: true },
+  });
+  if (owner) return claimed;
+  if (own) return undefined;
+  report("team checkout payer is not an owner of the organization", event.eventId);
+  return null;
+}
+
+/**
+ * paddleSubscriptionId is unique: a drifted copy on another organization
+ * would fail the event's update on every retry. That organization loses it,
+ * with its seats and payer, and the drift is reported.
+ */
+async function detachDrifted(
+  tx: OrgTx,
+  orgId: string,
+  subscriptionId: string,
+  eventId: string,
+): Promise<void> {
+  const drifted = await tx.organization.updateMany({
+    where: { paddleSubscriptionId: subscriptionId, id: { not: orgId } },
+    data: {
+      paddleSubscriptionId: null,
+      subscriptionStatus: null,
+      seatsPurchased: 0,
+      subscriptionCancelAt: null,
+      payerUserId: null,
+    },
+  });
+  if (drifted.count > 0) report("team subscription id moved between organizations", eventId);
+}
+
+/**
  * Apply a team subscription event to its organization, under the
  * organization's lock. Order-safe: an event older than the last one applied
  * is skipped, checked inside the lock. An event that maps to no organization,
@@ -199,7 +262,12 @@ export async function applyTeamSubscriptionEvent(
   return withOrgLock(orgId, async (tx) => {
     const stored = await tx.organization.findUniqueOrThrow({
       where: { id: orgId },
-      select: { subscriptionEventAt: true, paddleSubscriptionId: true, subscriptionStatus: true },
+      select: {
+        subscriptionEventAt: true,
+        paddleSubscriptionId: true,
+        subscriptionStatus: true,
+        payerUserId: true,
+      },
     });
     if (eventAt && stored.subscriptionEventAt && eventAt < stored.subscriptionEventAt) {
       return "stale";
@@ -211,28 +279,23 @@ export async function applyTeamSubscriptionEvent(
     }
     const own = Boolean(event.data.id) && stored.paddleSubscriptionId === event.data.id;
     const { update, seats, interval } = updateFor(event.data, own, eventAt);
-    if (event.data.id && !own) {
-      // paddleSubscriptionId is unique: a drifted copy on another organization
-      // would fail this update on every retry. That organization loses it,
-      // with its seats, and the drift is reported.
-      const drifted = await tx.organization.updateMany({
-        where: { paddleSubscriptionId: event.data.id, id: { not: orgId } },
-        data: {
-          paddleSubscriptionId: null,
-          subscriptionStatus: null,
-          seatsPurchased: 0,
-          subscriptionCancelAt: null,
-        },
-      });
-      if (drifted.count > 0)
-        report("team subscription id moved between organizations", event.eventId);
-    }
-    await tx.organization.update({ where: { id: orgId }, data: update, select: { id: true } });
+    const payerUserId = await payerFor(tx, orgId, stored, event, own);
+    if (event.data.id && !own) await detachDrifted(tx, orgId, event.data.id, event.eventId);
+    await tx.organization.update({
+      where: { id: orgId },
+      data: payerUserId === undefined ? update : { ...update, payerUserId },
+      select: { id: true },
+    });
     await recordOrgAudit(tx, {
       orgId,
       action: "billing.subscription_changed",
       actorUserId: null,
-      detail: { status: event.data.status ?? null, seats, interval },
+      detail: {
+        status: event.data.status ?? null,
+        seats,
+        interval,
+        ...(payerUserId === undefined ? {} : { payer: payerUserId ? "recorded" : "none" }),
+      },
     });
     return "applied";
   });

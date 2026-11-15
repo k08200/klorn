@@ -199,7 +199,7 @@ describePg("team seat checkout (real Postgres)", () => {
     );
     expect(body).toEqual({
       items: [{ price_id: "pri_team_month", quantity: 4 }],
-      custom_data: { orgId, kind: "team_seats" },
+      custom_data: { orgId, kind: "team_seats", payerUserId: owner.userId },
     });
     const audit = await prisma.orgAuditEvent.findFirst({
       where: { orgId, action: "billing.checkout_started" },

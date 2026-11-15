@@ -8,7 +8,8 @@
  * Paddle's webhook says so), never silently left billing.
  *
  * The organization's audit and invite rows keep their history but stop
- * naming the deleted account (its user id is cleared).
+ * naming the deleted account (its user id is cleared), and an organization
+ * stops naming it as its recorded payer.
  *
  * Runs whatever TEAMS_ENABLED says: rows made while the flag was on must
  * still get an owner when that owner deletes their account.
@@ -109,5 +110,9 @@ export async function handOverOrgBeforeAccountDeletion(userId: string): Promise<
   await prisma.orgInvite.updateMany({
     where: { acceptedById: userId },
     data: { acceptedById: null },
+  });
+  await prisma.organization.updateMany({
+    where: { payerUserId: userId },
+    data: { payerUserId: null },
   });
 }
