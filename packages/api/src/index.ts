@@ -425,6 +425,20 @@ try {
       });
   }
 
+  // Organization audit log retention (daily, under the "org-audit-retention"
+  // scheduler lease). Not behind TEAMS_ENABLED: rows written while Teams was
+  // open must still age out (org/audit-retention.ts).
+  if (!BG_DISABLED) {
+    import("./org/audit-retention.js")
+      .then(({ startOrgAuditRetentionScheduler }) => {
+        startOrgAuditRetentionScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] org-audit-retention failed to start:", err);
+        captureError(err, { tags: { context: "startup:org-audit-retention" } });
+      });
+  }
+
   // Slack v1 (docs/providers/slack.md). Started even under
   // BACKGROUND_AGENTS_DISABLED: the webhook keeps storing while the brake is on,
   // so the 7-day text purge must keep running; the judge pass inside it
