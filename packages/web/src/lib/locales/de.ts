@@ -3352,6 +3352,10 @@ const de: Record<string, string> = {
     "Mindestens {min}: das Team-Minimum und ein Platz pro Mitglied. Paddle berechnet oder erstattet die Differenz für den Rest dieses Abrechnungszeitraums.",
   "settings.org.seats.payerOnly":
     "Zusätzliche Plätze werden sofort von der hinterlegten Karte abgebucht, deshalb kann nur die Person, die für das Team bezahlt, Plätze hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+  "settings.org.seats.capped":
+    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du mit dieser Änderung höchstens auf {max} Plätze erhöhen. Die Person mit der zahlenden E-Mail-Adresse kann mehr hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+  "settings.org.seats.cappedNone":
+    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du gerade keine Plätze hinzufügen. Die Person mit der zahlenden E-Mail-Adresse kann welche hinzufügen. Jeder Inhaber kann Plätze entfernen.",
   "settings.org.seats.pending":
     "An Paddle gesendet. {seats} Plätze erscheinen hier, sobald Paddle bestätigt.",
   "settings.org.seats.unchanged": "Die Organisation hat bereits {seats} Plätze.",
@@ -3362,7 +3366,9 @@ const de: Record<string, string> = {
   "settings.org.subscription.cancelConfirm": "Zum Periodenende kündigen",
   "settings.org.subscription.keep": "Abo behalten",
   "settings.org.subscription.keepPayerOnly":
-    "Nur die Person, die für das Team bezahlt, kann das Abo behalten, weil ihre Karte dann wieder belastet wird.",
+    "Nur die Person, die für das Team bezahlt, oder der Inhaber, der das Ende hier eingestellt hat, kann das Abo behalten, weil die Karte der zahlenden Person dann wieder belastet wird.",
+  "settings.org.subscription.portalPayerOnly":
+    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
   "settings.org.subscription.endsOn": "Das Abo endet am {date}. Bis dahin bleiben die Plätze.",
   "settings.org.subscription.endsSoon":
     "Das Abo endet zum Ende dieses Abrechnungszeitraums. Bis dahin bleiben die Plätze.",
@@ -3380,10 +3386,12 @@ const de: Record<string, string> = {
     "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Nur die Person, die für das Team bezahlt, kann Plätze hinzufügen, weil die hinterlegte Karte sofort belastet wird. Bitte sie, die Plätze in ihrem eigenen Klorn-Konto hinzuzufügen (sie erhält die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "Das sind mehr Plätze, als du ohne die zahlende E-Mail-Adresse hinzufügen kannst. Die Person mit dieser E-Mail-Adresse kann in ihrem eigenen Klorn-Konto mehr hinzufügen (sie erhält die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
   "settings.org.error.SEATS_CHANGED":
     "Die Anzahl der Plätze hat sich beim Speichern geändert. Prüfe die aktuelle Anzahl und versuche es erneut.",
   "settings.org.error.RESUME_PAYER_ONLY":
-    "Wenn das Abo bleibt, wird die Karte der zahlenden Person wieder belastet, deshalb kann nur sie das tun. Bitte sie, das Abo in ihrem eigenen Klorn-Konto zu behalten (sie erhält die Paddle-Belege).",
+    "Wenn das Abo bleibt, wird die Karte der zahlenden Person wieder belastet, deshalb können das nur sie oder der Inhaber, der das Ende in Klorn eingestellt hat. Bitte die zahlende Person, das Abo in ihrem eigenen Klorn-Konto zu behalten (sie erhält die Paddle-Belege).",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
     "Paddle hat nicht geantwortet, deshalb wurde nichts geändert. Versuche es in einer Minute erneut.",
   "settings.org.error.BILLING_PROVIDER_ERROR":

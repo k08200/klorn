@@ -9,6 +9,8 @@ import { describe, expect, it } from "vitest";
 import {
   apiErrorCode,
   CAP_OPTIONS,
+  canKeepSubscription,
+  canOpenPortal,
   capFromOption,
   ceilingKeys,
   clampSeats,
@@ -22,7 +24,9 @@ import {
   parseSeatsFrom,
   SEAT_MANAGEMENT_CODES,
   INVITE_TOKEN_STORAGE_KEY as STORED_TOKEN_KEY,
+  seatCeiling,
   seatFloor,
+  seatNoteKey,
   seatStatusKey,
   showTeamSection,
   subscriptionActions,
@@ -159,6 +163,7 @@ describe("seat management after purchase", () => {
         "RESUME_PAYER_ONLY",
         "BILLING_PROVIDER_READ_FAILED",
         "SEATS_INCREASE_PAYER_ONLY",
+        "SEATS_INCREASE_CAPPED",
         "SEAT_CHANGE_UNSUPPORTED",
         "SUBSCRIPTION_NOT_ACTIVE",
         "SUBSCRIPTION_PAUSED",
@@ -170,6 +175,54 @@ describe("seat management after purchase", () => {
       expect(key).toBe(`settings.org.error.${code}`);
       expect(en[key], key).toBeTypeOf("string");
     }
+  });
+});
+
+describe("what the owner is told before a click (me.billing)", () => {
+  const payer = { isPayer: true, portal: true, seatCap: null, canResume: true };
+  const recordedOnly = { isPayer: true, portal: false, seatCap: 6, canResume: true };
+  const notPayer = { isPayer: false, portal: false, seatCap: null, canResume: false };
+  const unknown = { isPayer: null, portal: null, seatCap: null, canResume: null };
+
+  it("bounds the seat field by what this owner can set", () => {
+    expect(seatCeiling(3, undefined)).toBe(150);
+    expect(seatCeiling(3, payer)).toBe(150);
+    expect(seatCeiling(3, unknown)).toBe(150);
+    expect(seatCeiling(3, recordedOnly)).toBe(6);
+    // Not the payer: removing seats only.
+    expect(seatCeiling(3, notPayer)).toBe(3);
+  });
+
+  it("explains the cap, the payer-only rule, or nothing for a payer without a cap", () => {
+    expect(seatNoteKey(recordedOnly, 3)).toBe("settings.org.seats.capped");
+    // The cap leaves no room: no seat can be added now.
+    expect(seatNoteKey(recordedOnly, 6)).toBe("settings.org.seats.cappedNone");
+    expect(seatNoteKey(payer, 3)).toBeNull();
+    expect(seatNoteKey(notPayer, 3)).toBe("settings.org.seats.payerOnly");
+    expect(seatNoteKey(unknown, 3)).toBe("settings.org.seats.payerOnly");
+    expect(seatNoteKey(undefined, 3)).toBe("settings.org.seats.payerOnly");
+    for (const key of [
+      "settings.org.seats.capped",
+      "settings.org.seats.cappedNone",
+      "settings.org.seats.payerOnly",
+    ]) {
+      expect(en[key], key).toBeTypeOf("string");
+    }
+    expect(en["settings.org.seats.capped"]).toContain("{max}");
+  });
+
+  it("offers Keep subscription and Manage billing unless the server says they are not this owner's", () => {
+    expect([payer, recordedOnly, unknown, undefined].map(canKeepSubscription)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(canKeepSubscription(notPayer)).toBe(false);
+    expect(canKeepSubscription({ ...notPayer, canResume: true })).toBe(true);
+    expect([payer, unknown, undefined].map(canOpenPortal)).toEqual([true, true, true]);
+    expect([recordedOnly, notPayer].map(canOpenPortal)).toEqual([false, false]);
+    expect(en["settings.org.subscription.portalPayerOnly"]).toBeTypeOf("string");
   });
 });
 

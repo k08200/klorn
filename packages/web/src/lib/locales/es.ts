@@ -3300,6 +3300,10 @@ const es: Record<string, string> = {
     "Al menos {min}: el mínimo del equipo y una plaza por cada miembro. Paddle cobra o abona la diferencia por lo que queda de este periodo de facturación.",
   "settings.org.seats.payerOnly":
     "Añadir plazas cobra al momento en la tarjeta registrada, así que solo quien paga el equipo puede añadirlas. Cualquier propietario puede quitar plazas.",
+  "settings.org.seats.capped":
+    "Sin el correo que paga el equipo, en este cambio puedes subir hasta {max} plazas como máximo. Quien tiene ese correo puede añadir más. Cualquier propietario puede quitar plazas.",
+  "settings.org.seats.cappedNone":
+    "Sin el correo que paga el equipo, ahora no puedes añadir plazas. Quien tiene ese correo sí puede. Cualquier propietario puede quitar plazas.",
   "settings.org.seats.pending":
     "Enviado a Paddle. Verás {seats} plazas aquí cuando Paddle lo confirme.",
   "settings.org.seats.unchanged": "La organización ya tiene {seats} plazas.",
@@ -3310,7 +3314,9 @@ const es: Record<string, string> = {
   "settings.org.subscription.cancelConfirm": "Cancelar al final del periodo",
   "settings.org.subscription.keep": "Mantener suscripción",
   "settings.org.subscription.keepPayerOnly":
-    "Solo quien paga el equipo puede mantenerla, porque se vuelve a cobrar en su tarjeta.",
+    "Solo quien paga el equipo, o el propietario que programó el fin aquí, puede mantenerla, porque se vuelve a cobrar en la tarjeta de quien paga.",
+  "settings.org.subscription.portalPayerOnly":
+    "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
   "settings.org.subscription.endsOn":
     "La suscripción termina el {date}. Las plazas se mantienen hasta entonces.",
   "settings.org.subscription.endsSoon":
@@ -3329,10 +3335,12 @@ const es: Record<string, string> = {
     "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "Solo quien paga el equipo puede añadir plazas, porque se cobra al momento en la tarjeta registrada. Pídele que las añada desde su propia cuenta de Klorn (es quien recibe los recibos de Paddle). Tú sí puedes quitar plazas.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "Son más plazas de las que puedes añadir sin el correo que paga el equipo. Quien tiene ese correo puede añadir más desde su propia cuenta de Klorn (es quien recibe los recibos de Paddle). Tú sí puedes quitar plazas.",
   "settings.org.error.SEATS_CHANGED":
     "El número de plazas cambió mientras se guardaba. Revisa el número actual e inténtalo de nuevo.",
   "settings.org.error.RESUME_PAYER_ONLY":
-    "Mantener la suscripción vuelve a cobrar en la tarjeta de quien paga, así que solo esa persona puede hacerlo. Pídele que la mantenga desde su propia cuenta de Klorn (es quien recibe los recibos de Paddle).",
+    "Mantener la suscripción vuelve a cobrar en la tarjeta de quien paga, así que solo esa persona, o el propietario que programó el fin en Klorn, puede hacerlo. Pide a quien paga que la mantenga desde su propia cuenta de Klorn (es quien recibe los recibos de Paddle).",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
     "Paddle no respondió, así que no se cambió nada. Inténtalo de nuevo en un minuto.",
   "settings.org.error.BILLING_PROVIDER_ERROR":

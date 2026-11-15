@@ -4,7 +4,12 @@
  * (web-files-orgs.test.ts) like the other web models.
  */
 
-import type { AgentModeCapWire, OrgMeWire, OrgRoleWire } from "@klorn/contract";
+import type {
+  AgentModeCapWire,
+  OrgBillingAccessWire,
+  OrgMeWire,
+  OrgRoleWire,
+} from "@klorn/contract";
 
 /** Where the accept page keeps the invite token across the sign-in redirect. */
 export const INVITE_TOKEN_STORAGE_KEY = "klorn.teamInviteToken";
@@ -143,6 +148,48 @@ export function subscriptionActions(seats: {
   };
 }
 
+/**
+ * The most seats this owner can ask for, from what the server says about them
+ * (`me.billing`): 150 when they pay or it is unknown, the cap when they are
+ * the recorded payer without the paying email, and the current count when
+ * only someone else can add seats. The server checks again on submit.
+ */
+export function seatCeiling(purchased: number, billing: OrgBillingAccessWire | undefined): number {
+  if (billing?.isPayer === false) return Math.min(MAX_SEATS, purchased);
+  if (billing?.seatCap !== null && billing?.seatCap !== undefined) {
+    return Math.min(MAX_SEATS, billing.seatCap);
+  }
+  return MAX_SEATS;
+}
+
+/**
+ * The note under the seat field: the cap when one applies (or that no seat can
+ * be added now, when the cap leaves no room), nothing for a payer without one,
+ * and the general payer-only rule otherwise (not the payer, or not known).
+ */
+export function seatNoteKey(
+  billing: OrgBillingAccessWire | undefined,
+  purchased: number,
+): string | null {
+  if (billing?.seatCap !== null && billing?.seatCap !== undefined) {
+    return billing.seatCap > purchased
+      ? "settings.org.seats.capped"
+      : "settings.org.seats.cappedNone";
+  }
+  if (billing?.isPayer === true) return null;
+  return "settings.org.seats.payerOnly";
+}
+
+/** Whether Keep subscription is offered: not when the server says this owner cannot. */
+export function canKeepSubscription(billing: OrgBillingAccessWire | undefined): boolean {
+  return billing?.canResume !== false;
+}
+
+/** Whether Manage billing is offered: not when the server says the portal is not this owner's. */
+export function canOpenPortal(billing: OrgBillingAccessWire | undefined): boolean {
+  return billing?.portal !== false;
+}
+
 /** Refusals of the seat, cancel and billing portal routes (org/seat-management.ts). */
 export const SEAT_MANAGEMENT_CODES: ReadonlySet<string> = new Set([
   "SEATS_BELOW_MEMBERS",
@@ -152,6 +199,7 @@ export const SEAT_MANAGEMENT_CODES: ReadonlySet<string> = new Set([
   "SUBSCRIPTION_PAUSED",
   "PORTAL_PAYER_ONLY",
   "SEATS_INCREASE_PAYER_ONLY",
+  "SEATS_INCREASE_CAPPED",
   "SEATS_CHANGED",
   "RESUME_PAYER_ONLY",
   "BILLING_PROVIDER_READ_FAILED",

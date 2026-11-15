@@ -2934,44 +2934,57 @@ model Team {
 /// Seat entitlement is derived from OrgMembership at read time
 /// (src/org/effective-tier.ts) and is never written to User.plan.
 model Organization {
-  id                   String              @id @default(uuid())
-  name                 String              @db.VarChar(80)
-  slug                 String              @unique @db.VarChar(48)
+  id                      String              @id @default(uuid())
+  name                    String              @db.VarChar(80)
+  slug                    String              @unique @db.VarChar(48)
   /// Lowercase domains the company sends from. A member's judge reads them as
   /// one relationship fact, orgCompanyDomain (src/org/org-domains.ts), never as
   /// a lane or a pin (pricing-tiers.md launch feature 6).
-  companyDomains       String[]            @default([])
+  companyDomains          String[]            @default([])
   /// Admin ceiling: no unattended reply leaves any member's account.
-  autoReplyDisabled    Boolean             @default(false)
+  autoReplyDisabled       Boolean             @default(false)
   /// Admin ceiling: the highest agent mode a member runs. null = no cap;
   /// "OFF" | "SHADOW" | "SUGGEST" (src/org/ceilings.ts).
-  agentModeCap         String?             @db.VarChar(16)
+  agentModeCap            String?             @db.VarChar(16)
   /// Seat billing (Paddle, quantity-based). Written only by the team
   /// subscription webhook; seatsPurchased is the subscription quantity.
-  seatsPurchased       Int                 @default(0)
-  billingInterval      String?             @db.VarChar(8)
-  subscriptionStatus   String?             @db.VarChar(16)
-  paddleCustomerId     String?
-  paddleSubscriptionId String?             @unique
-  subscriptionEventAt  DateTime?
+  seatsPurchased          Int                 @default(0)
+  billingInterval         String?             @db.VarChar(8)
+  subscriptionStatus      String?             @db.VarChar(16)
+  paddleCustomerId        String?
+  paddleSubscriptionId    String?             @unique
+  subscriptionEventAt     DateTime?
   /// When a period-end cancel takes effect (Paddle scheduled_change), or
   /// null. Written by the owner's cancel route and confirmed by the webhook;
   /// the seats stay until Paddle's final canceled event.
-  subscriptionCancelAt DateTime?
+  subscriptionCancelAt    DateTime?
   /// The Klorn user who bought the team subscription (the checkout's
   /// custom_data.payerUserId), stored by the webhook only when they are an
   /// owner of this organization at that moment; null for subscriptions bought
-  /// before it was recorded, or when it ends. Seat increases, the billing
-  /// portal and resume accept it (while that user is still an owner) before
-  /// falling back to the Paddle customer email (src/org/seat-management.ts).
+  /// before it was recorded, or when it ends. Seat increases and resume accept
+  /// it (while that user is still an owner) before falling back to the Paddle
+  /// customer email; the billing portal never does (src/org/seat-management.ts).
   /// A plain id, no relation: a deleted user can never call.
-  payerUserId          String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  memberships          OrgMembership[]
-  invites              OrgInvite[]
-  availabilityGrants   AvailabilityGrant[]
-  auditEvents          OrgAuditEvent[]
+  payerUserId             String?
+  /// The seat quantity the subscription reported when it attached to this
+  /// organization (its checkout's count), stored by the webhook; null when it
+  /// attached before this was recorded, reported no quantity, or ended. Bounds
+  /// what a recorded payer whose email Paddle does not bill can add
+  /// (recordedPayerSeatCap, src/org/seat-cap.ts).
+  seatsAtAttach           Int?
+  /// The owner who scheduled the pending period-end cancel through Klorn, and
+  /// when, or null (a cancel made in Paddle's portal has no Klorn actor). That
+  /// owner may take back this cancel while still an owner; cleared when the
+  /// cancel is taken back, removed in Paddle, or takes effect. A plain id, no
+  /// relation, like payerUserId.
+  cancelRequestedByUserId String?
+  cancelRequestedAt       DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  memberships             OrgMembership[]
+  invites                 OrgInvite[]
+  availabilityGrants      AvailabilityGrant[]
+  auditEvents             OrgAuditEvent[]
 }
 
 /// Never ADMIN: that name means a Klorn operator in User.role.

@@ -3031,6 +3031,10 @@ const zh: Record<string, string> = {
     "至少 {min} 个：不少于团队最低席位数，且每位成员一个。差额按本计费周期剩余天数由 Paddle 补收或计入余额。",
   "settings.org.seats.payerOnly":
     "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的人可以添加。任何所有者都可以减少席位。",
+  "settings.org.seats.capped":
+    "如果不是支付团队费用的邮箱地址，这次最多只能把席位增加到 {max} 个。付款邮箱的主人可以添加更多。任何所有者都可以减少席位。",
+  "settings.org.seats.cappedNone":
+    "如果不是支付团队费用的邮箱地址，现在无法添加席位。付款邮箱的主人可以添加。任何所有者都可以减少席位。",
   "settings.org.seats.pending": "已提交给 Paddle。Paddle 确认后这里会显示 {seats} 个席位。",
   "settings.org.seats.unchanged": "组织已有 {seats} 个席位。",
   "settings.org.subscription.cancel": "取消订阅",
@@ -3040,7 +3044,9 @@ const zh: Record<string, string> = {
   "settings.org.subscription.cancelConfirm": "在周期结束时取消",
   "settings.org.subscription.keep": "保留订阅",
   "settings.org.subscription.keepPayerOnly":
-    "保留订阅会重新从付款人的银行卡扣款，因此只有支付团队费用的人可以保留。",
+    "保留订阅会重新从付款人的银行卡扣款，因此只有支付团队费用的人，或在这里设置结束的所有者，可以保留。",
+  "settings.org.subscription.portalPayerOnly":
+    "账单门户只对支付团队费用的邮箱地址开放。付款人也可以使用 Paddle 收据邮件中的链接。",
   "settings.org.subscription.endsOn": "订阅将于 {date} 结束。在此之前席位保留。",
   "settings.org.subscription.endsSoon": "订阅将在本计费周期结束时终止。在此之前席位保留。",
   "settings.org.subscription.portal": "管理账单",
@@ -3054,9 +3060,11 @@ const zh: Record<string, string> = {
     "账单门户只对支付团队费用的邮箱地址开放。付款人也可以使用 Paddle 收据邮件中的链接。",
   "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
     "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的人可以添加。请让付款人用自己的 Klorn 账户添加（即接收 Paddle 收据邮件的人）。你仍然可以减少席位。",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "这超出了不用付款邮箱地址时可以添加的席位数。付款邮箱的主人可以用自己的 Klorn 账户添加更多（即接收 Paddle 收据邮件的人）。你仍然可以减少席位。",
   "settings.org.error.SEATS_CHANGED": "保存期间席位数已变更。请查看当前席位数后重试。",
   "settings.org.error.RESUME_PAYER_ONLY":
-    "保留订阅会重新开始从付款人的银行卡扣款，因此只有支付团队费用的人可以操作。请让付款人用自己的 Klorn 账户保留订阅（即接收 Paddle 收据邮件的人）。",
+    "保留订阅会重新开始从付款人的银行卡扣款，因此只有支付团队费用的人，或在 Klorn 中设置结束的所有者，可以操作。请让付款人用自己的 Klorn 账户保留订阅（即接收 Paddle 收据邮件的人）。",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
     "Paddle 没有响应，因此没有做任何更改。请稍后重试。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
