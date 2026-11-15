@@ -55,8 +55,13 @@ const WRITE_METHODS = new Set([
   "delete",
   "deleteMany",
 ]);
-/** The names a Prisma client (or transaction client) goes by in this codebase. */
-const CLIENTS = new Set(["prisma", "tx", "db", "client"]);
+/**
+ * The names a Prisma client (or transaction client) goes by. A read through any
+ * receiver is found by its method (`<anything>.notification.findMany(...)`);
+ * these names also flag other uses of the delegate (aliases, `["notification"]`,
+ * destructuring), which would hide reads from the scan.
+ */
+const CLIENTS = new Set(["prisma", "tx", "trx", "db", "client"]);
 
 /** Helpers whose returned where-object hides cleared rows (checked below). */
 const HIDING_HELPERS: Record<string, string> = {
@@ -260,7 +265,7 @@ function whereHidesCleared(where: ts.ObjectLiteralExpression): boolean {
   return where.properties.some((prop) => {
     if (ts.isSpreadAssignment(prop)) {
       const spread = unwrap(prop.expression);
-      return ts.isCallExpression(spread) && (calleeName(spread) ?? "") in HIDING_HELPERS;
+      return ts.isCallExpression(spread) && Object.hasOwn(HIDING_HELPERS, calleeName(spread) ?? "");
     }
     if (!ts.isPropertyAssignment(prop)) return false;
     const name = propName(prop.name);
@@ -293,13 +298,35 @@ function callOf(access: ts.Node): ts.CallExpression | null {
   return ts.isCallExpression(parent) && parent.expression === callee ? parent : null;
 }
 
+/** `prisma`, `tx`, `this.prisma`, `deps.db`...: an expression naming a Prisma client. */
+function isClient(expr: ts.Expression): boolean {
+  const value = unwrap(expr);
+  if (ts.isIdentifier(value)) return CLIENTS.has(value.text);
+  return ts.isPropertyAccessExpression(value) && CLIENTS.has(value.name.text);
+}
+
+/** `<x>.notification` followed by a Prisma method, or on a client whatever follows. */
 function isNotificationDelegate(node: ts.Node): node is ts.PropertyAccessExpression {
+  if (!ts.isPropertyAccessExpression(node) || node.name.text !== "notification") return false;
+  if (isClient(node.expression)) return true;
+  const access = outermostCast(node).parent;
   return (
-    ts.isPropertyAccessExpression(node) &&
-    node.name.text === "notification" &&
-    ts.isIdentifier(node.expression) &&
-    CLIENTS.has(node.expression.text)
+    ts.isPropertyAccessExpression(access) &&
+    (READ_METHODS.has(access.name.text) || WRITE_METHODS.has(access.name.text))
   );
+}
+
+/** `client["notification"]` or `const { notification } = client`: a delegate out of sight. */
+function isHiddenDelegate(node: ts.Node): boolean {
+  if (ts.isElementAccessExpression(node)) {
+    const key = node.argumentExpression;
+    return ts.isStringLiteralLike(key) && key.text === "notification" && isClient(node.expression);
+  }
+  if (!ts.isVariableDeclaration(node) || !ts.isObjectBindingPattern(node.name)) return false;
+  const named = node.name.elements.some(
+    (element) => (element.propertyName ?? element.name).getText() === "notification",
+  );
+  return named && node.initializer !== undefined && isClient(node.initializer);
 }
 
 function isRelationRead(node: ts.Node): boolean {
@@ -345,6 +372,7 @@ function scanSource({ path, text }: Source): Scan {
   walk(file, (node) => {
     if (isRelationRead(node)) unreadable.push(`${where(node)} relation read`);
     if (isRawNotificationSql(node)) unreadable.push(`${where(node)} raw SQL`);
+    if (isHiddenDelegate(node)) unreadable.push(`${where(node)} delegate out of sight`);
     if (!isNotificationDelegate(node)) return;
     const use = delegateUse(node);
     if (use === "write") return;
@@ -384,7 +412,7 @@ const sources: Source[] = sourceFiles(srcDir).map((full) => ({
   path: relative(srcDir, full).split("\\").join("/"),
   text: readFileSync(full, "utf8"),
 }));
-const scans = sources.filter((s) => s.text.includes("notification")).map(scanSource);
+const scans = sources.filter((s) => /notification/i.test(s.text)).map(scanSource);
 const allReads = scans.flatMap((scan) => scan.reads);
 
 function countsOf(reads: readonly NotificationRead[]): Record<string, number> {
@@ -423,6 +451,38 @@ describe("the scan catches bad readers (self-test)", () => {
     );
     expect(scan.reads.map((read) => read.hides)).toEqual([false]);
     expect(scan.unreadable).toEqual([]);
+  });
+
+  it("finds a read through any receiver, and ignores a `notification` field that is no delegate", () => {
+    const scan = fixture(
+      [
+        "export async function bell(userId: string) {",
+        "  await this.prisma.notification.findMany({ where: { userId } });",
+        "  await trx.notification.count({ where: { userId } });",
+        "  await deps.store.notification.findFirst({ where: { userId } });",
+        "  return payload.push.notification.id;",
+        "}",
+      ].join("\n"),
+    );
+    expect(scan.reads.map((read) => read.hides)).toEqual([false, false, false]);
+    expect(scan.unreadable).toEqual([]);
+  });
+
+  it("flags a delegate taken by key or destructured", () => {
+    const scan = fixture(
+      [
+        'export const byKey = (userId: string) => prisma["notification"].findMany({ where: { userId } });',
+        "export async function viaTx() {",
+        "  const { notification } = tx;",
+        "  const { notification: n } = this.prisma;",
+        "}",
+      ].join("\n"),
+    );
+    expect(scan.unreadable).toEqual([
+      "fixture.ts:1 delegate out of sight",
+      "fixture.ts:3 delegate out of sight",
+      "fixture.ts:4 delegate out of sight",
+    ]);
   });
 
   it("flags a read whose arguments it cannot read", () => {
