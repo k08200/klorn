@@ -207,6 +207,32 @@ describePg("Slack storage on Postgres", () => {
     expect(await prisma.slackConnection.count({ where: { userId: b.userId } })).toBe(1);
   });
 
+  it("disconnect deletes Slack commitments and Slack bell rows, not mail ones", async () => {
+    const ids = await newConnection();
+    const base = { userId: ids.userId, title: "send the deck", owner: "COUNTERPARTY" as const };
+    await prisma.commitment.create({
+      data: { ...base, sourceType: "SLACK", sourceId: "D0DM:1.0" },
+    });
+    await prisma.commitment.create({ data: { ...base, sourceType: "EMAIL", sourceId: "mail-1" } });
+    await prisma.notification.create({
+      data: { userId: ids.userId, type: "slack", title: "Slack", message: "hi" },
+    });
+    await prisma.notification.create({
+      data: { userId: ids.userId, type: "email", title: "Mail", message: "hi" },
+    });
+    await disconnectSlack(ids.userId);
+    const left = await prisma.commitment.findMany({
+      where: { userId: ids.userId },
+      select: { sourceType: true },
+    });
+    expect(left).toEqual([{ sourceType: "EMAIL" }]);
+    const bells = await prisma.notification.findMany({
+      where: { userId: ids.userId },
+      select: { type: true },
+    });
+    expect(bells).toEqual([{ type: "email" }]);
+  });
+
   it("has row-level security on every Slack table", async () => {
     const rows = await prisma.$queryRaw<Array<{ relname: string; relrowsecurity: boolean }>>`
       SELECT relname, relrowsecurity FROM pg_class

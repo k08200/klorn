@@ -3042,6 +3042,54 @@ const ja: Record<string, string> = {
   "vaultExport.error.busy": "現在、書き出しが混み合っています。1 分ほどしてからお試しください。",
   "vaultExport.error.unavailable": "このアカウントでは Markdown の書き出しを利用できません。",
   "vaultExport.error.failed": "Markdown の書き出しに失敗しました。もう一度お試しください。",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn は Slack の DM、グループ DM、あなたへのメンションを読み、レーンに振り分けます。投稿・リアクション・既読化は一切しません。",
+  "slack.start": "設定を開始",
+  "slack.step.manifest": "アプリのマニフェストをダウンロードします。Request URL は記入済みです。",
+  "slack.downloadManifest": "マニフェストをダウンロード",
+  "slack.requestUrl": "リクエスト URL（Request URL）",
+  "slack.step.create":
+    "Slack でマニフェストからアプリを作成し（Create New App → From a manifest）、ワークスペースにインストールします。",
+  "slack.openSlackApps": "Slack のアプリページを開く",
+  "slack.step.paste":
+    "アプリの Signing Secret（Basic Information）と User OAuth Token（OAuth & Permissions）を貼り付けます。Klorn はトークンを確認するだけで保存しません。",
+  "slack.signingSecret": "署名シークレット（Signing Secret）",
+  "slack.userToken": "ユーザー OAuth トークン",
+  "slack.connect": "接続",
+  "slack.step.verify": "Slack の Event Subscriptions で Retry を押し、Request URL を検証させます。",
+  "slack.setupAgain": "設定手順",
+  "slack.connected": "Slack を接続しました",
+  "slack.status.connected": "{workspace} に接続済み",
+  "slack.status.waiting": "Slack による Request URL の検証を待っています。",
+  "slack.status.lastEvent": "Slack からの最新イベント: {time}",
+  "slack.channels.title": "フォローするチャンネル",
+  "slack.channels.desc":
+    "これらのチャンネルでは、メンションだけでなくすべてのメッセージを振り分けます。チャンネル ID（チャンネル詳細 → 概要）をカンマか空白で区切って貼り付けます。",
+  "slack.channels.save": "チャンネルを保存",
+  "slack.channels.saved": "チャンネルを保存しました",
+  "slack.disconnect": "接続を解除",
+  "slack.disconnect.title": "Slack の接続を解除しますか？",
+  "slack.disconnect.message":
+    "Klorn は署名シークレット、保存したすべての Slack メッセージと判定、Slack から見つけた約束を削除します。Slack 側でもアプリを削除してください。",
+  "slack.disconnected": "Slack の接続を解除しました。Klorn は保存したデータを削除しました。",
+  "slack.error.invalid-signing-secret": "Slack の署名シークレットではありません。",
+  "slack.error.bot-token":
+    "これはボットトークンです。User OAuth Token（xoxp-…）を貼り付けてください。",
+  "slack.error.invalid-user-token": "Slack のユーザートークン（xoxp-…）ではありません。",
+  "slack.error.slack-rejected-token": "Slack がこのトークンを受け付けませんでした。",
+  "slack.error.slack-unreachable": "Slack に接続できませんでした。もう一度お試しください。",
+  "slack.error.bad-response": "Slack の応答を処理できませんでした。もう一度お試しください。",
+  "slack.error.missing-scopes": "トークンに Klorn が必要なスコープがありません: {scopes}",
+  "slack.error.extra-scopes":
+    "トークンに Klorn が持つべきでないスコープがあります: {scopes}。アプリから削除して再インストールしてください。",
+  "slack.error.invalid-channels": "C0123456789 のようなチャンネル ID を最大 50 個まで使えます。",
+  "slack.error.public-url-missing":
+    "この Klorn サーバーには公開 URL がないため、Slack から到達できません。",
+  "slack.error.not-started": "先に Slack の設定を開始してください。",
+  "slack.error.rate-limited": "試行回数が多すぎます。しばらくしてからお試しください。",
+  "slack.error.generic": "Slack の処理で問題が発生しました。もう一度お試しください。",
+  "slack.retry": "再試行",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "テキストでルールを編集",
   "rulesDsl.desc":

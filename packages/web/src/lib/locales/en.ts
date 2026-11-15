@@ -3017,6 +3017,54 @@ const en: Record<string, string> = {
   "vaultExport.error.busy": "Exports are busy right now. Try again in a minute.",
   "vaultExport.error.unavailable": "Markdown export isn't available for this account.",
   "vaultExport.error.failed": "Markdown export failed. Try again.",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn reads your Slack DMs, group DMs and mentions of you, and judges them into your lanes. It never posts, reacts or marks anything read.",
+  "slack.start": "Start setup",
+  "slack.step.manifest": "Download the app manifest. It already holds your Request URL.",
+  "slack.downloadManifest": "Download manifest",
+  "slack.requestUrl": "Request URL",
+  "slack.step.create":
+    "In Slack, create an app from the manifest (Create New App → From a manifest) and install it to your workspace.",
+  "slack.openSlackApps": "Open Slack apps",
+  "slack.step.paste":
+    "Paste the app's Signing Secret (Basic Information) and User OAuth Token (OAuth & Permissions). Klorn checks the token and does not keep it.",
+  "slack.signingSecret": "Signing secret",
+  "slack.userToken": "User OAuth Token",
+  "slack.connect": "Connect",
+  "slack.step.verify":
+    "In Slack's Event Subscriptions, press Retry so Slack verifies the Request URL.",
+  "slack.setupAgain": "Setup steps",
+  "slack.connected": "Slack connected",
+  "slack.status.connected": "Connected to {workspace}",
+  "slack.status.waiting": "Waiting for Slack to verify the Request URL.",
+  "slack.status.lastEvent": "Last event from Slack: {time}",
+  "slack.channels.title": "Channels to follow",
+  "slack.channels.desc":
+    "Every message in these channels is judged, not only mentions of you. Paste channel IDs (channel details → About), separated by commas or spaces.",
+  "slack.channels.save": "Save channels",
+  "slack.channels.saved": "Channels saved",
+  "slack.disconnect": "Disconnect",
+  "slack.disconnect.title": "Disconnect Slack?",
+  "slack.disconnect.message":
+    "Klorn deletes the signing secret, every Slack message and verdict it stored, and the commitments it found in Slack. Delete the app in Slack too.",
+  "slack.disconnected": "Slack disconnected. Klorn deleted what it stored.",
+  "slack.error.invalid-signing-secret": "That is not a Slack signing secret.",
+  "slack.error.bot-token": "That is a bot token. Paste the User OAuth Token (xoxp-…).",
+  "slack.error.invalid-user-token": "That is not a Slack user token (xoxp-…).",
+  "slack.error.slack-rejected-token": "Slack did not accept this token.",
+  "slack.error.slack-unreachable": "Could not reach Slack. Try again.",
+  "slack.error.bad-response": "Slack answered in a way Klorn could not use. Try again.",
+  "slack.error.missing-scopes": "The token is missing scopes Klorn needs: {scopes}",
+  "slack.error.extra-scopes":
+    "The token has scopes Klorn must not hold: {scopes}. Remove them from the app and reinstall it.",
+  "slack.error.invalid-channels": "Use up to 50 channel IDs like C0123456789.",
+  "slack.error.public-url-missing":
+    "This Klorn server has no public URL, so Slack cannot reach it.",
+  "slack.error.not-started": "Start the Slack setup first.",
+  "slack.error.rate-limited": "Too many attempts. Try again later.",
+  "slack.error.generic": "Something went wrong with Slack. Try again.",
+  "slack.retry": "Try again",
   // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
   "rulesDsl.title": "Rules as text",
   "rulesDsl.desc":
