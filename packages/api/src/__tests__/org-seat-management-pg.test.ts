@@ -459,7 +459,7 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     expect(calls).toEqual([]);
   });
 
-  it("takes a scheduled cancel back once; a repeat answers the same without Paddle", async () => {
+  it("takes a scheduled cancel back once; a repeat finds nothing at Paddle and answers the same", async () => {
     const { owner, orgId } = await subscribedOrg("sub_seat_14", {
       scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
     });
@@ -476,7 +476,24 @@ describePg("team subscription cancel and resume (real Postgres)", () => {
     const twice = await call(owner, "POST", "/api/orgs/current/subscription/resume");
     expect(twice.statusCode).toBe(200);
     expect(twice.json()).toEqual({ resumed: true });
-    expect(calls).toHaveLength(1);
+    expect(calls.map((c) => c.method)).toEqual(["PATCH", "GET"]);
+  });
+
+  it("takes back a cancel made in the portal before its webhook arrives", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_19");
+    const calls = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_19",
+        scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+      }),
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/subscription/resume");
+    expect(res.statusCode).toBe(200);
+    expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
+    expect(calls[1]?.body).toEqual({ scheduled_change: null });
+    expect(
+      await prisma.orgAuditEvent.count({ where: { orgId, action: "billing.cancel_removed" } }),
+    ).toBe(1);
   });
 });
 

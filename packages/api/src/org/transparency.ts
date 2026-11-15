@@ -9,6 +9,7 @@ import {
   TEAM_STANDARD_SEAT_ANNUAL_PER_MONTH_CENTS,
   TEAM_STANDARD_SEAT_MONTHLY_CENTS,
 } from "../billing/advertised-price.js";
+import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { currentOrgView, recentFreeBusyReads } from "./org-members.js";
 import { NEVER_VISIBLE_TO_ORG, VISIBLE_TO_ORG } from "./privacy.js";
 
@@ -29,9 +30,11 @@ export async function transparencyFor(userId: string) {
       appliesToEveryone: true,
     },
     // Verified mail from these domains is named "a colleague at your company"
-    // in this member's triage reasons (judge/v3 orgCompanyDomain). The
+    // in this member's triage reasons (judge/v3 orgCompanyDomain), which only
+    // the v3 policy shows: empty while it does not decide this member's
+    // lanes, so the page never claims a reason the member cannot see. The
     // organization never learns which mail matched.
-    companyDomains: org.companyDomains,
+    companyDomains: isJudgeV3PolicyEnabled(userId) ? org.companyDomains : [],
     // Who read your free/busy lately, and for which window: the same rows the
     // owner sees in the audit log.
     freeBusyReads: await recentFreeBusyReads(userId, org.id),

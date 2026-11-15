@@ -118,7 +118,11 @@ export interface OrgTransparencyResponse {
   };
   freeBusyReads: Array<{ by: string | null; window: unknown; at: string }>;
   seatPrice: { currency: "USD"; monthlyCents: number; annualPerMonthCents: number };
-  /** The organization's company domains: verified mail from them is named "a colleague at your company" in this member's triage reasons. */
+  /**
+   * The organization's company domains while they shape this member's triage
+   * reasons (verified mail from them is named "a colleague at your company");
+   * empty when the judge does not show those reasons for this member.
+   */
   companyDomains: string[];
 }
 

@@ -683,8 +683,18 @@ describePg("Klorn Teams refusals and races (real Postgres)", () => {
       companyDomains: ["acme.test"],
     });
     expect(set.statusCode).toBe(200);
-    const named = await call(member, "GET", "/api/orgs/current/transparency");
-    expect(named.json()).toMatchObject({ companyDomains: ["acme.test"] });
+    // Only the v3 policy shows relationship reasons: off, the page names none.
+    const policyOff = await call(member, "GET", "/api/orgs/current/transparency");
+    expect(policyOff.json()).toMatchObject({ companyDomains: [] });
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+    try {
+      const named = await call(member, "GET", "/api/orgs/current/transparency");
+      expect(named.json()).toMatchObject({ companyDomains: ["acme.test"] });
+    } finally {
+      delete process.env.JUDGE_V3_POLICY;
+      delete process.env.JUDGE_V3_SHADOW;
+    }
   });
 
   it("stops naming a deleted account in the audit log", async () => {

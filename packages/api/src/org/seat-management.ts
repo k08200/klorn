@@ -287,17 +287,30 @@ export async function cancelTeamSubscription(userId: string): Promise<{ cancelAt
 
 /**
  * Take back a scheduled cancel (owner only): billing resumes on the original
- * schedule. Paddle allows this on a past-due subscription too. Nothing to take
- * back answers the same, so a retry after a lost answer is not an error.
+ * schedule. Paddle allows this on a past-due subscription too. With no cancel
+ * stored, Paddle is asked: one made in the portal (or whose webhook is late)
+ * is still taken back, and nothing to take back answers the same, so a retry
+ * after a lost answer is not an error.
  */
 export async function resumeTeamSubscription(userId: string): Promise<{ resumed: true }> {
   const owner = await requireOwner(userId);
   const orgId = owner.orgId;
+  const stored = await readBilling(orgId);
+  if (!stored.paddleSubscriptionId) throw NO_SUBSCRIPTION();
+  if (!stored.subscriptionCancelAt) {
+    requirePaddleKey();
+    let live: PaddleTeamSubscription;
+    try {
+      live = await getPaddleTeamSubscription(stored.paddleSubscriptionId, CALL);
+    } catch (err) {
+      throw providerError(err, orgId, "read_subscription");
+    }
+    if (live.scheduledChange !== "cancel") return { resumed: true as const };
+  }
   return withOrgLock(orgId, async (tx) => {
     await ownerInTx(tx, userId, orgId);
     const org = await billingInTx(tx, orgId);
     if (!org.paddleSubscriptionId) throw NO_SUBSCRIPTION();
-    if (!org.subscriptionCancelAt) return { resumed: true as const };
     requirePaddleKey();
     await recordOrgAudit(tx, { orgId, action: "billing.cancel_removed", actorUserId: userId });
     try {
