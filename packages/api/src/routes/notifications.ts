@@ -1,5 +1,6 @@
 import type { NotificationListResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
+import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { getUserId, requireAuth } from "../auth.js";
 import {
   clearNotifications,
@@ -254,16 +255,25 @@ export async function notificationRoutes(app: FastifyInstance) {
     },
   );
 
-  // PATCH /api/notifications/:id/read — Mark single notification as read
-  app.patch("/:id/read", async (request, reply) => {
-    const userId = getUserId(request);
-    const { id } = request.params as { id: string };
-    const notif = await prisma.notification.findUnique({ where: { id } });
-    if (!notif) return reply.code(404).send({ error: "Notification not found" });
-    if (notif.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
-    await markNotificationRead(id);
-    return reply.code(204).send();
-  });
+  // PATCH /api/notifications/:id/read — Mark single notification as read.
+  // The lookup is scoped to the caller's own bell rows, so another user's row,
+  // a missing one, a hidden claim and a row cleared from the bell all get the
+  // same 404: the answer never says whether someone else's id exists.
+  app.patch(
+    "/:id/read",
+    { schema: { params: notificationIdParamsSchema } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { id } = request.params as { id: string };
+      const notif = await prisma.notification.findFirst({
+        where: { id, userId, type: { not: HIDDEN_CLAIM_TYPE }, clearedAt: null },
+        select: { id: true },
+      });
+      if (!notif) return reply.code(404).send({ error: "Notification not found" });
+      await markNotificationRead(id);
+      return reply.code(204).send();
+    },
+  );
 
   // PATCH /api/notifications/read-all — Mark all as read
   app.patch("/read-all", async (request, reply) => {
