@@ -18,6 +18,7 @@ import { teamAvailabilityOpenTo } from "../config.js";
 import { costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { AGENT_MODEL, createCompletion, type DailyCostCapCode } from "../llm/openai.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { captureError } from "../sentry.js";
 import { ALL_TOOLS, executeToolCall } from "./tool-executor.js";
 
@@ -258,9 +259,15 @@ export async function runChatTurn(opts: {
     if (capped) {
       return { reply: capped.error, eventDraft: null, error: capped.error, errorCode: capped.code };
     }
+    // The user gets the message back (it is their chat and mail); the log
+    // and Sentry get facts only, since the provider's error can quote both.
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[CHAT] turn failed for user ${userId}:`, msg);
-    captureError(err, { tags: { scope: "chat.turn", userId } });
+    const label = "[CHAT] turn failed";
+    logLlmFailure(label, err, { level: "error", ids: { userId } });
+    captureLlmFailure(label, err, {
+      tags: { scope: "chat.turn", userId },
+      extra: { model: AGENT_MODEL },
+    });
     return {
       reply: "Sorry — I couldn't process that right now. Please try again in a moment.",
       eventDraft: null,

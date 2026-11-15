@@ -28,6 +28,7 @@ import {
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { remember } from "./memory.js";
 
 const VOICE_PROFILE_KEY = "voice_profile_v1";
@@ -122,7 +123,9 @@ export async function getVoiceProfile(userId: string): Promise<VoiceProfile | nu
     // prompt context. Malformed JSON throws → caught → null.
     return coerceVoiceProfile(JSON.parse(mem.content));
   } catch (err) {
-    console.warn("[VOICE] getVoiceProfile read failed:", err);
+    // The stored profile is model output; JSON.parse's SyntaxError would
+    // quote it.
+    logLlmFailure("[VOICE] getVoiceProfile read failed", err, { ids: { userId } });
     return null;
   }
 }
@@ -287,7 +290,9 @@ Return exactly this JSON shape:
     // coerceVoiceProfile stamps a fresh timestamp here.
     return coerceVoiceProfile(parsed);
   } catch (err) {
-    console.warn("[VOICE] LLM analysis failed:", err);
+    // Facts only: the provider's error can quote the sent mail sampled, and
+    // parseLlmJson's SyntaxError quotes the model's reply.
+    logLlmFailure("[VOICE] LLM analysis failed", err);
     return null;
   }
 }

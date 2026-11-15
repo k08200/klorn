@@ -13,6 +13,7 @@ import {
   upsertAttentionForCalendarEvent,
 } from "../judge/attention-mirror.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import {
   createEvent as googleCreateEvent,
@@ -248,8 +249,11 @@ export async function calendarRoutes(app: FastifyInstance) {
         // other LLM surface (429 + code), with no alert.
         const capped = costCapRefusal(err);
         if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
-        console.error(`[CALENDAR] parse-event failed for user ${userId}:`, err);
-        captureError(err, { tags: { scope: "calendar.parse_event", userId } });
+        // Facts only: the provider's error can quote the text, which may be
+        // pasted mail.
+        const label = "[CALENDAR] parse-event failed";
+        logLlmFailure(label, err, { level: "error", ids: { userId } });
+        captureLlmFailure(label, err, { tags: { scope: "calendar.parse_event", userId } });
         return reply.code(502).send({ error: "Could not parse the text right now" });
       }
     },

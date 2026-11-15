@@ -17,6 +17,7 @@ import {
 } from "../judge/attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { findUserEmail } from "../mail/email-lookup.js";
 import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmail.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
@@ -666,8 +667,12 @@ async function executeToolCallInternal(
       });
       throw err;
     }
+    // The model gets the message back as the tool result; Sentry gets facts
+    // only. LLM-backed tools (sender_context, summarize_meeting) throw
+    // provider errors that can quote mail, and every tool runs on
+    // model-written arguments that an error message can echo.
     const message = err instanceof Error ? err.message : "Unknown error";
-    captureError(err, {
+    captureLlmFailure("Agent tool failed", err, {
       tags: { area: "tool_executor", tool: functionName },
       extra: { userId, argKeys: Object.keys(args) },
     });

@@ -108,7 +108,8 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     });
   });
 
-  console.log(`[REMINDER] Delivered: "${reminder.title}" to user ${reminder.userId}`);
+  // Id, not title: a mail reminder's title quotes the mail's subject.
+  console.log(`[REMINDER] Delivered ${reminder.id} to user ${reminder.userId}`);
   return true;
 }
 

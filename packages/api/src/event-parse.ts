@@ -10,7 +10,7 @@
 import { getUserLlmCredentials } from "./llm/llm-credentials.js";
 import { parseLlmJson } from "./llm/llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./llm/openai.js";
-import { captureError } from "./sentry.js";
+import { captureLlmFailure, offeredKeyKind } from "./llm/report-llm-failure.js";
 import { offsetStringFor } from "./time-zone.js";
 import { wrapUntrusted } from "./untrusted.js";
 import { getUserTimeZone } from "./user-timezone.js";
@@ -88,11 +88,15 @@ export async function parseEventText(
   try {
     parsed = parseLlmJson<Record<string, unknown>>(content);
   } catch (err) {
-    // Length only: the output can echo the utterance, which may be mail text.
+    // Length only: the output can echo the utterance, which may be mail text,
+    // and JSON.parse's SyntaxError quotes the start of it.
     console.error(
       `[PARSE-EVENT] malformed model output for user ${userId} (${content.length} chars)`,
     );
-    captureError(err, { tags: { scope: "parse_event.json", userId } });
+    captureLlmFailure("[PARSE-EVENT] malformed model output", err, {
+      tags: { scope: "parse_event.json", userId },
+      extra: { contentLength: content.length, keyKind: offeredKeyKind(credentials) },
+    });
     return null;
   }
 

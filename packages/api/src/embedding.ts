@@ -19,6 +19,7 @@
 
 import OpenAI from "openai";
 import { EMBEDDING_TIMEOUT_MS, llmRequestTimeoutMs } from "./llm/llm-timeout.js";
+import { logLlmFailure } from "./llm/report-llm-failure.js";
 
 // Enable by setting EMBEDDING_MODEL (e.g. "nomic-embed-text" for local Ollama).
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "";
@@ -95,10 +96,8 @@ export async function embedTexts(texts: readonly string[]): Promise<(number[] | 
   } catch (err) {
     // Log a signal (invisible via captureError alone when Sentry is off) and
     // leave the missing slots null — caller falls back to lexical ranking.
-    console.warn(
-      "[embedding] embedTexts failed, falling back to lexical:",
-      err instanceof Error ? err.message : String(err),
-    );
+    // Facts only: the input is mail text, and an endpoint's error can echo it.
+    logLlmFailure("[embedding] embedTexts failed, falling back to lexical", err);
   }
   return out;
 }

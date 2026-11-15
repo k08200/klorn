@@ -57,6 +57,7 @@ import {
 } from "../learning/trust-score.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { listAccountHealth } from "../mail/account-health.js";
 import { fetchStoredAttachmentBytes } from "../mail/attachment-bytes.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
@@ -2037,7 +2038,8 @@ export async function emailRoutes(app: FastifyInstance) {
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
           return reply.code(429).send({ error: err.message });
         }
-        captureError(err, {
+        // Facts only: the provider's error can quote this sender's mail.
+        captureLlmFailure("Sender dossier failed", err, {
           tags: { scope: "email.sender-dossier" },
           extra: { userId: uid, emailId: dbEmail.id },
         });
@@ -2091,7 +2093,9 @@ export async function emailRoutes(app: FastifyInstance) {
           return reply.code(429).send({ error: err.message });
         }
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
-          captureError(err, {
+          // Facts only, here and below: the exhausted chain's cause is the
+          // provider's error, which can quote this mail.
+          captureLlmFailure("Summarize: every provider refused", err, {
             tags: { scope: "email.summarize-detail.providers-exhausted" },
             extra: { userId: uid, emailId: dbEmail.id },
           });
@@ -2099,7 +2103,7 @@ export async function emailRoutes(app: FastifyInstance) {
             error: "The AI model provider is unavailable right now. Please try again shortly.",
           });
         }
-        captureError(err, {
+        captureLlmFailure("Summarize failed", err, {
           tags: { scope: "email.summarize-detail" },
           extra: { userId: uid, emailId: dbEmail.id },
         });

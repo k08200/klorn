@@ -404,7 +404,8 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
         "routes/calendar.ts",
         // event-parse: dynamic import in POST /parse-event. cost-cap-refusal:
         // maps a cap-refused call's error to its 429 body — no prompt.
-        ["../event-parse.js", "../llm/cost-cap-refusal.js"],
+        // report-llm-failure: logs a failed parse as facts — no prompt.
+        ["../event-parse.js", "../llm/cost-cap-refusal.js", "../llm/report-llm-failure.js"],
         "event-parse sends the user's own spoken or typed utterance to the model, never a row",
       ],
       [

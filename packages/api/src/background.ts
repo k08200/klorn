@@ -312,8 +312,9 @@ async function checkUpcomingMeetings() {
               console.warn("[BACKGROUND] meeting push failed", err);
             }
 
+            // Id, not title: an invite's title can quote a mail subject.
             console.log(
-              `[BG] Upcoming meeting: "${meeting.summary}" in ${Math.ceil(minutesUntil)}min for user ${userId}`,
+              `[BG] Upcoming meeting ${meeting.id} in ${Math.ceil(minutesUntil)}min for user ${userId}`,
             );
           }
         }
