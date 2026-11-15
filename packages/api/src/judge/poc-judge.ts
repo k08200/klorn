@@ -912,6 +912,11 @@ export async function judgeEmail(
   context: JudgeContext = EMPTY_JUDGE_CONTEXT,
   credentials?: ProviderCredentials,
   modelOverride?: string,
+  /**
+   * Gets the failure in the provider's own words (credential-redacted), which
+   * can quote the mail judged. Only for a caller whose reader owns that mail
+   * and key: the playground. Never wire it to production mail.
+   */
   onLlmError?: (message: string) => void,
   language?: string | null,
   /**

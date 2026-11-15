@@ -228,8 +228,10 @@ export function markKeyLimited(
   }
   s.keyLimitedUntil = until;
   // The failure's facts, never the provider's message: it can quote the
-  // request (someone's mail or chat on a BYOK call). The cooldown label above
-  // already says which quota window the message pointed at.
+  // request (someone's mail or chat on a BYOK call). The label above names the
+  // quota window when the message stated one; an "ambiguous" trip is told
+  // apart (RPM vs spend cap vs account limit) by the provider's type/code
+  // where it sends one (Anthropic, OpenAI), otherwise by its dashboard.
   const facts = error === undefined ? "" : ` (${formatLlmFailureFacts(llmFailureFacts(error))})`;
   console.warn(
     `[MODEL-FALLBACK] ${safeLogToken(provider)} hit ${label} — locked out until ${new Date(until).toISOString()}${facts}`,
