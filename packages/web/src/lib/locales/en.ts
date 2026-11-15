@@ -1084,6 +1084,8 @@ const en: Record<string, string> = {
     "This plan isn't billed on the web, so there is nothing to cancel here. If you subscribed in the mobile app, manage it there.",
   "billing.enterpriseBilling":
     "Enterprise is billed by agreement — contact sales to change the plan.",
+  "billing.teamSeatCoversPro":
+    "Your team seat already includes everything in Pro. Your personal Pro still renews — cancel it if you no longer need both.",
   "billing.keepSubscription": "Keep subscription",
   "billing.renewsOn": "Renews on {date}",
   "billing.trialFirstCharge": "Free trial · first charge on {date}",

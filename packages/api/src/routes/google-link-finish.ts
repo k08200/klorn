@@ -27,6 +27,7 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { getGoogleUserInfo, getOAuth2Client, registerGmailWatch } from "../mail/gmail.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { captureError } from "../sentry.js";
 
@@ -82,7 +83,11 @@ export async function finishGoogleCalendarLink(
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  if (!calLinker || !isEntitled(calLinker.plan, calLinker.role)) {
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  if (
+    !calLinker ||
+    !isEntitled(await effectivePlan({ id: userId, plan: calLinker.plan }), calLinker.role)
+  ) {
     return { next: "/calendar?linked=failed" };
   }
   const linkedEmail = normalizeEmail(profile.email);

@@ -1103,6 +1103,8 @@ const fr: Record<string, string> = {
     "Ce forfait n'est pas facturé sur le web, il n'y a donc rien à annuler ici. Si vous vous êtes abonné dans l'app mobile, gérez-le là-bas.",
   "billing.enterpriseBilling":
     "Enterprise est facturé par contrat — contactez le service commercial pour changer de forfait.",
+  "billing.teamSeatCoversPro":
+    "Votre siège d'équipe inclut déjà tout Pro. Votre Pro personnel continue de se renouveler — résiliez-le si vous n'avez plus besoin des deux.",
   "billing.keepSubscription": "Conserver l'abonnement",
   "billing.renewsOn": "Renouvellement le {date}",
   "billing.trialFirstCharge": "Essai gratuit · premier prélèvement le {date}",

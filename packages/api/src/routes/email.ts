@@ -100,6 +100,7 @@ import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
 import { noteEmailBellRowsRead } from "../notify/email-bell.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
@@ -1600,7 +1601,14 @@ export async function emailRoutes(app: FastifyInstance) {
     return {
       flagEnabled: MULTI_INBOX_SYNC_ENABLED,
       account: { email: user?.email, plan: user?.plan, role: user?.role },
-      hasMultiAccountFeature: user ? planHasFeature(user.plan, "multi_account", user.role) : false,
+      // The gate the sync itself applies: a Klorn Teams seat counts.
+      hasMultiAccountFeature: user
+        ? planHasFeature(
+            await effectivePlan({ id: uid, plan: user.plan }),
+            "multi_account",
+            user.role,
+          )
+        : false,
       linkedInboxes: rows.map((r) => ({ ...r, tokenLoads: loadableIds.has(r.id) })),
       persistedLinkedEmailCount,
     };

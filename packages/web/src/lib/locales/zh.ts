@@ -1016,6 +1016,8 @@ const zh: Record<string, string> = {
   "billing.noWebSubscription":
     "此套餐不是在网页上计费的，因此这里没有可取消的内容。如果你是在手机应用中订阅的，请到那里管理。",
   "billing.enterpriseBilling": "Enterprise 按协议计费 — 如需变更套餐请联系销售。",
+  "billing.teamSeatCoversPro":
+    "你的团队席位已包含 Pro 的全部功能。个人 Pro 仍会续订——如果不再需要两者，请取消它。",
   "billing.keepSubscription": "保留订阅",
   "billing.renewsOn": "{date} 续订",
   "billing.trialFirstCharge": "免费试用中 · 首次扣款为 {date}",

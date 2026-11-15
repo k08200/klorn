@@ -45,6 +45,7 @@ import { notificationSuppressionReason } from "../notify/notification-policy.js"
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { agentModeUnderOrgCeiling } from "../org/ceilings.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
@@ -315,7 +316,9 @@ export async function runAgentForUser(
   try {
     // Load user plan and model for tool gating
     const agentUser = await prisma.user.findUnique({ where: { id: userId } });
-    const userPlan = agentUser?.plan || "FREE";
+    // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+    // TEAMS_ENABLED is closed to the user.
+    const userPlan = await effectivePlan({ id: userId, plan: agentUser?.plan || "FREE" });
     // Thread role so planHasFeature's ADMIN bypass applies to the in-loop tool
     // gate too — without it an ADMIN on a FREE plan has every tool rejected
     // mid-loop once the paywall locks FREE (the scheduler already passes role).
