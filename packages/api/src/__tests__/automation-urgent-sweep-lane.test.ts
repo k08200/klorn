@@ -193,6 +193,8 @@ interface Label {
   sourceId: string;
   decidedBy: string | null;
   outcome: string | null;
+  /** When Klorn's interrupt for the mail rang (null = never). */
+  rangAt: Date | null;
 }
 
 const urgent = (id: string, gmailId: string): UrgentRow => ({
@@ -233,6 +235,7 @@ const label = (
   sourceId: emailId,
   decidedBy,
   outcome,
+  rangAt: null,
 });
 
 /** An urgent mail received `ageMs` ago and synced just now. */
@@ -249,9 +252,12 @@ function override(key: string, fn: (...args: unknown[]) => unknown) {
 
 const argsOf = (key: string) => m.calls.filter((c) => c.key === key).map((c) => c.args[0]);
 
-/** A where value as Prisma reads it: a literal, `{ in: [...] }` or `{ gte: Date }`. */
+/** A where value as Prisma reads it: a literal, `{ in: [...] }`, `{ gte: Date }` or `{ not: null }`. */
 function matches(value: unknown, condition: unknown): boolean {
   if (condition === undefined) return true;
+  if (condition && typeof condition === "object" && "not" in condition) {
+    return (value ?? null) !== (condition as { not: unknown }).not;
+  }
   if (condition && typeof condition === "object" && "in" in condition) {
     return (condition as { in: unknown[] }).in.includes(value);
   }
@@ -283,7 +289,13 @@ const ITEM_COLUMNS = [
   "isManualOverride",
   "agentTierSetAt",
 ] as const;
-const LABEL_COLUMNS = ["userId", "source", "sourceId", "decidedBy", "outcome"] as const;
+const LABEL_COLUMNS = ["userId", "source", "sourceId", "decidedBy", "outcome", "rangAt"] as const;
+
+/** The keyword-fallback lane reads of the ledger, not its "already rang" read. */
+const laneLedgerReads = () =>
+  argsOf("decisionLabel.findMany").filter(
+    (a) => !("rangAt" in ((a as { where?: Record<string, unknown> }).where ?? {})),
+  );
 
 /**
  * The firewall items of mail, answered as the database would for a lookup by mail id
@@ -463,6 +475,29 @@ describe("the urgent sweep rings only for mail the judge put in the PUSH lane", 
 
     expect(urgentRows()).toEqual([]);
     expect(urgentPushes()).toEqual([]);
+  });
+
+  it("a PUSH mail whose ledger says it rang does not ring again, with no bell row left (Clear all)", async () => {
+    arrange(
+      [urgent("mail-1", "18abc"), urgent("mail-2", "18def")],
+      [item("mail-1", "PUSH"), item("mail-2", "PUSH")],
+    );
+    arrangeLedger([
+      { ...label("mail-1", "llm"), rangAt: new Date(NOW.getTime() - 30_000) },
+      label("mail-2", "llm"),
+    ]);
+
+    const log = vi.spyOn(console, "log");
+
+    await runOneTick();
+
+    const rows = urgentRows();
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].message)).toMatch(/\[18def\]$/);
+    expect(urgentPushes()).toHaveLength(1);
+    // The ledger skip is logged, never silent.
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/skipped 1 mail that already rang/));
+    log.mockRestore();
   });
 
   it("a mail the judge has not reached yet (no item) does not ring", async () => {
@@ -676,7 +711,7 @@ describe("a judge outage: urgent mail the keyword fallback put in QUEUE still ri
         (a) => (a as { where?: Record<string, unknown> }).where?.source === "EMAIL",
       );
     expect(emailReads("attentionItem.findMany")).toHaveLength(1);
-    expect(emailReads("decisionLabel.findMany")).toHaveLength(1);
+    expect(laneLedgerReads()).toHaveLength(1);
   });
 
   it("does not read the ledger when no urgent mail sits in QUEUE", async () => {
@@ -685,7 +720,7 @@ describe("a judge outage: urgent mail the keyword fallback put in QUEUE still ri
     await runOneTick();
 
     expect(urgentRows()).toHaveLength(1);
-    expect(argsOf("decisionLabel.findMany")).toEqual([]);
+    expect(laneLedgerReads()).toEqual([]);
   });
 
   it("a keyword-fallback QUEUE mail from an automated sender does not ring (its floor never interrupts)", async () => {
@@ -696,7 +731,7 @@ describe("a judge outage: urgent mail the keyword fallback put in QUEUE still ri
     await runOneTick();
 
     expect(urgentRows()).toEqual([]);
-    expect(argsOf("decisionLabel.findMany")).toEqual([]);
+    expect(laneLedgerReads()).toEqual([]);
   });
 
   it("a PUSH mail from an automated sender (a pin or rule put it there) still rings", async () => {

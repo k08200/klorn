@@ -18,6 +18,7 @@ import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
@@ -81,11 +82,17 @@ export async function getNotifications(
   userId: string,
   options?: { unreadOnly?: boolean; limit?: number },
 ): Promise<NotificationDTO[]> {
-  // Hidden claims (in-flight or cleared unattended-reply locks) are not bell
-  // entries.
-  const where: { userId: string; type: { not: string }; isRead?: boolean } = {
+  // Hidden claims (in-flight or cleared unattended-reply locks) and rows the
+  // user cleared are not bell entries.
+  const where: {
+    userId: string;
+    type: { not: string };
+    clearedAt: null;
+    isRead?: boolean;
+  } = {
     userId,
     type: { not: HIDDEN_CLAIM_TYPE },
+    clearedAt: null,
   };
   if (options?.unreadOnly) where.isRead = false;
 
@@ -145,24 +152,42 @@ const KEPT_NOTIFICATION_ROWS = {
   OR: [...REPLY_CLAIM_ROWS.OR, { dedupeKey: { startsWith: INTERRUPT_SLOT_ROOT } }],
 };
 
+/**
+ * "Clear all": empty the bell. A UI action only, so it never makes anything ring
+ * again. The "already notified?" reads look back over bell rows (urgent mail by
+ * its marker, the day's briefing by its dedupeKey, proactive nudges by type and
+ * day, a meeting alert by its event), so a row still inside that look-back is
+ * hidden, not deleted: read, with clearedAt set, and kept as it was otherwise.
+ * Deleting those rows made the urgent sweep ring the same unread mail again on
+ * every channel (2026-11-14). Older rows no read looks at are deleted, and the
+ * log-retention sweep deletes cleared rows after 30 days.
+ */
 export async function clearNotifications(userId: string): Promise<void> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - NOTIFIED_LOOKBACK_MS);
   // Unattended-reply claims (`auto-reply:` / legacy `auto-mode-reply:`) are
   // at-most-once LOCKS: deleting one lets a still-OPEN failed item be
-  // re-drafted and re-sent. Delete everything else; hide the claims instead
-  // (read + hidden type), so the bell is visually cleared and the lock stays.
+  // re-drafted and re-sent. They are hidden instead (read + hidden type) at
+  // any age, so the bell is visually cleared and the lock stays.
   // Interrupt-budget slots (`interrupt:<day>:<n>`, attention engine v3) are
   // kept the same way: deleting one would hand the day's spent budget back.
   // The explicit `dedupeKey: null` branch matters: SQL `NOT (col LIKE ..)` is
   // NULL, not true, for a NULL column, so ordinary rows would otherwise survive.
+  const ordinaryRows = { OR: [{ dedupeKey: null }, { NOT: KEPT_NOTIFICATION_ROWS.OR }] };
   await prisma.notification.deleteMany({
-    where: { userId, OR: [{ dedupeKey: null }, { NOT: KEPT_NOTIFICATION_ROWS.OR }] },
+    where: { userId, ...ordinaryRows, createdAt: { lt: cutoff } },
+  });
+  await prisma.notification.updateMany({
+    // Up to the click: a row written while this runs is not one the user saw.
+    where: { userId, ...ordinaryRows, createdAt: { gte: cutoff, lte: now }, clearedAt: null },
+    data: { clearedAt: now, isRead: true },
   });
   await prisma.notification.updateMany({
     where: { userId, ...KEPT_NOTIFICATION_ROWS, type: { not: HIDDEN_CLAIM_TYPE } },
     data: { type: HIDDEN_CLAIM_TYPE, isRead: true },
   });
   // Drop the mirrored queue entries — without this, the queue keeps showing
-  // FOLLOWUP rows pointing at notifications that no longer exist.
+  // FOLLOWUP rows pointing at notifications the bell no longer shows.
   await prisma.attentionItem.deleteMany({ where: { userId, source: "NOTIFICATION" } });
 }
 

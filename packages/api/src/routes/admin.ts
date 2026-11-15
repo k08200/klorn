@@ -411,8 +411,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
     // Notification read rate
     const [notifSent, notifRead] = await Promise.all([
-      prisma.notification.count({ where: { createdAt: { gte: last7d } } }),
-      prisma.notification.count({ where: { createdAt: { gte: last7d }, isRead: true } }),
+      // Rows cleared from the bell are read but were never engaged with: left
+      // out of both counts, as when clearing deleted them.
+      prisma.notification.count({ where: { createdAt: { gte: last7d }, clearedAt: null } }),
+      prisma.notification.count({
+        where: { createdAt: { gte: last7d }, isRead: true, clearedAt: null },
+      }),
     ]);
     const readRate = notifSent > 0 ? notifRead / notifSent : 0;
 

@@ -348,6 +348,9 @@ async function analyzeNotificationPatterns(userId: string): Promise<LearnedPatte
         { title: { startsWith: LEGACY_AGENT_NOTIFICATION_PREFIX } },
       ],
       createdAt: { gte: since },
+      // Cleared from the bell: marked read but not engaged with; left out, as
+      // when clearing deleted the row.
+      clearedAt: null,
     },
     select: { type: true, isRead: true },
   });

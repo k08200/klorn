@@ -132,6 +132,9 @@ async function getAgentFeedback(userId: string): Promise<string> {
           { title: { startsWith: LEGACY_AGENT_NOTIFICATION_PREFIX } },
         ],
         createdAt: { gte: since },
+        // Cleared from the bell: marked read but not engaged with; left out, as
+        // when clearing deleted the row.
+        clearedAt: null,
       },
       select: { title: true, isRead: true, type: true },
     });

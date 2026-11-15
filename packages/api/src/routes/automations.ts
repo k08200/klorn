@@ -409,6 +409,9 @@ export async function automationRoutes(app: FastifyInstance) {
           type: "email",
           createdAt: { gte: sinceUtc },
           title: { in: [...URGENT_EMAIL_TITLES] },
+          // A row cleared from the bell leaves this card too, as when clearing
+          // deleted it (the row is kept only for the dedupe reads).
+          clearedAt: null,
         },
         orderBy: { createdAt: "desc" },
         select: { id: true, message: true, link: true, createdAt: true },

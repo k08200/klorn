@@ -328,7 +328,7 @@ never land as confirmed on its own.
 | team id, Slack user id, workspace URL, opted-in channel ids | `SlackConnection` | until disconnect | routing, own-message and mention checks, permalinks |
 | message text (≤ 4,000 chars each), sender id, ts, event_id | `SlackMessage` | **7 days** after receipt | judging and commitment extraction; event_id dedupe for retries |
 | episode: channel, thread ts, counts, lane, short reason (≤ 200 chars), timestamps | `SlackEpisode` | **90 days** | what was decided and why, without the text |
-| PUSH notification preview (≤ 180 chars) | `Notification` | with the notification | the bell row |
+| PUSH notification preview (≤ 180 chars) | `Notification` | with the notification; after "Clear all", hidden and deleted within 30 days | the bell row |
 | suggested commitments (title, short evidence) | `Commitment` (`SLACK`) | until the user acts or disconnects | the ledger |
 
 Dropped events are never stored. Per connection at most **300 new messages

@@ -217,7 +217,8 @@ export async function notificationDelivery(
   notificationId: string,
 ): Promise<NotificationDelivery | null> {
   const bellRow = await prisma.notification.findFirst({
-    where: { id: notificationId, userId, type: { not: HIDDEN_CLAIM_TYPE } },
+    // A row the user cleared is no longer a bell entry, as a hidden claim never is.
+    where: { id: notificationId, userId, type: { not: HIDDEN_CLAIM_TYPE }, clearedAt: null },
     select: { id: true, sourceEmailId: true, createdAt: true },
   });
   if (!bellRow) return null;
