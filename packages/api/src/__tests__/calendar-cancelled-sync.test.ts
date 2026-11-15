@@ -1200,13 +1200,16 @@ describe("a non-transient failure reaches Sentry once per process", () => {
     [
       "a refusal quoting an event",
       () => Object.assign(new Error(`bad event ${DB_CANARY}`), { response: { status: 400 } }),
+      1,
     ],
-    ["a Prisma error quoting a row", validationErrorQuotingText],
-  ])("%s reaches neither Sentry nor the log in its own words", async (_label, make) => {
+    // No HTTP status: transient by this policy, so logged only.
+    ["a Prisma error quoting a row", validationErrorQuotingText, 0],
+  ])("%s reaches neither Sentry nor the log in its own words", async (_label, make, reports) => {
     const { session } = makeSession({ cancelled: make() });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
+    expect(h.captureError).toHaveBeenCalledTimes(reports);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(callText(warn)).not.toContain(DB_CANARY);
     expect(callText(h.captureError)).not.toContain(DB_CANARY);

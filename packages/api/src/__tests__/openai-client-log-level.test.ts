@@ -10,7 +10,7 @@
  * the three OpenAI clients (embeddings, self-host compat, playground BYOK) did
  * not, until createOpenAIClient.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAnthropicClient } from "../providers/anthropic-native.js";
 import { createOpenAIClient } from "../providers/openai-client.js";
 import { callText, LLM_CANARY } from "./helpers/canary.js";
+import { walk } from "./helpers/catch-sink-scan.js";
 
 const CONSOLE_METHODS = ["debug", "info", "log", "warn", "error"] as const;
 
@@ -154,17 +155,8 @@ describe("no OpenAI client is built around the factory", () => {
   const FACTORY = "providers/openai-client.ts";
   const CONSTRUCTION = /new\s+(?:OpenAI|OpenAISDK|AzureOpenAI)\s*\(/;
 
-  function sources(dir: string): string[] {
-    return readdirSync(dir).flatMap((entry) => {
-      if (entry === "__tests__" || entry === "node_modules") return [];
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) return sources(full);
-      return entry.endsWith(".ts") && !entry.endsWith(".d.ts") ? [full] : [];
-    });
-  }
-
   it("constructs the SDK only in providers/openai-client.ts", () => {
-    const offenders = sources(srcDir)
+    const offenders = walk(srcDir)
       .map((full) => relative(srcDir, full).split("\\").join("/"))
       .filter((file) => file !== FACTORY)
       .filter((file) => CONSTRUCTION.test(readFileSync(join(srcDir, file), "utf8")));

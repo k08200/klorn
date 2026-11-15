@@ -23,8 +23,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { slackLive, slackOpenTo } from "../config.js";
 import { decryptToken } from "../crypto-tokens.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { clientAddressBucket } from "../security/client-address.js";
-import { captureError } from "../sentry.js";
 import { findSlackHook, type SlackHook, touchSlackHook } from "../slack/connection-store.js";
 import { parseSlackEnvelope, type SlackEventCallback } from "../slack/envelope.js";
 import {
@@ -119,7 +119,10 @@ function signingSecretOf(hook: SlackHook): string | null {
   try {
     return decryptToken(hook.signingSecretCipher);
   } catch (err) {
-    captureError(err, { tags: { scope: "slack-events" }, extra: { stage: "decrypt" } });
+    captureDbFailure("[SLACK] signing secret unreadable", err, {
+      tags: { scope: "slack-events" },
+      extra: { stage: "decrypt" },
+    });
     return null;
   }
 }
@@ -206,7 +209,12 @@ async function handleSlackEvent(request: FastifyRequest, reply: FastifyReply) {
   try {
     return await answerVerified(reply, hook, rawBody);
   } catch (err) {
-    captureError(err, { tags: { scope: "slack-events" }, extra: { stage: "ingest" } });
+    // Facts only: ingestSlackMessage rethrows any database error over the
+    // message it was storing, and a Prisma error quotes the call's values.
+    captureDbFailure("[SLACK] event ingest failed", err, {
+      tags: { scope: "slack-events" },
+      extra: { stage: "ingest" },
+    });
     return reply.code(HTTP_SERVER_ERROR).send({ error: "Temporarily unavailable" });
   }
 }

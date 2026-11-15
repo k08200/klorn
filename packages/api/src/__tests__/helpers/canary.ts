@@ -1,5 +1,6 @@
 /**
- * Canary checks for the LLM failure redaction tests.
+ * Canary checks for the redaction tests (LLM failures, database failures, SDK
+ * log levels).
  *
  * A provider error can quote the request (someone's mail or chat), and a
  * JSON.parse SyntaxError quotes the start of the model's reply. The tests put

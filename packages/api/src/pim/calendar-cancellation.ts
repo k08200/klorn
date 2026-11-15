@@ -242,9 +242,9 @@ function reportFailure(key: string, err: unknown): void {
   const status = httpStatusOf(err);
   if (isNonTransient(status) && !reportedNonTransient) {
     reportedNonTransient = true;
+    // The facts carry the HTTP status (response.status, or googleapis' numeric code).
     captureDbFailure("[CALENDAR] cancelled-event scan failed", err, {
       tags: { scope: "calendar.cancelled_scan" },
-      extra: { status },
     });
   }
   const reason = formatDbFailureFacts(dbFailureFacts(err));

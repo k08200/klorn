@@ -194,6 +194,23 @@ describe("captureDbFailure", () => {
     expect(reported.stack).not.toContain(DB_CANARY);
   });
 
+  it("keeps the frames of a real Prisma error, whose stack names its class", () => {
+    const err = validationErrorQuotingText();
+    expect(err.stack?.startsWith("PrismaClientValidationError: ")).toBe(true);
+    captureDbFailure("[X] failed", err, { tags: { scope: "x" } });
+    const reported = vi.mocked(captureError).mock.calls[0]?.[0] as Error;
+    expect(reported.stack).toMatch(/\n\s+at /);
+    expect(reported.stack).not.toContain(DB_CANARY);
+  });
+
+  it("does not throw on an error whose name or message is not a string", () => {
+    const odd = Object.assign(new Error("x"), { name: 42, message: { text: DB_CANARY } });
+    expect(() => dbFailureFacts(odd)).not.toThrow();
+    expect(dbFailureFacts(odd)).toMatchObject({ errorName: "Error", messageLength: 0 });
+    expect(() => logDbFailure("[X] failed", odd)).not.toThrow();
+    expect(callText(warn)).not.toContain(DB_CANARY);
+  });
+
   it("skips a data-wipe fence rejection, as captureError does", () => {
     captureDbFailure("[X] failed", new DataWipeFenceError(), { tags: { scope: "x" } });
     expect(captureError).not.toHaveBeenCalled();

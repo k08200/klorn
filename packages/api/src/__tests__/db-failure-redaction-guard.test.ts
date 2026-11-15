@@ -1,6 +1,7 @@
 /**
- * In the Slack, KakaoTalk-import and PIM modules, a caught failure reaches
- * Sentry and the console as facts, never as itself.
+ * In the Slack, KakaoTalk-import and PIM modules (and the Slack and KakaoTalk
+ * routes), a caught failure reaches Sentry and the console as facts, never as
+ * itself.
  *
  * Their catches wrap Prisma calls over other people's words: a Slack message,
  * an imported KakaoTalk line, a reminder whose title quotes a mail subject, a
@@ -14,7 +15,11 @@
  *
  * Unlike the LLM guard, every catch here counts: these modules do little else
  * than read and write such rows. Scanning rules are shared
- * (helpers/catch-sink-scan.ts).
+ * (helpers/catch-sink-scan.ts), including a reporter's `ids` / `extra`. Like
+ * the LLM guard it does not follow a caught value into a function the handler
+ * calls (pim/linked-calendar-failure.ts and the cancelled-event scan take the
+ * error as a parameter; their canary tests cover them) or into the global
+ * error handler, which receives what a route rethrows.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -27,6 +32,16 @@ const srcDir = join(here, "..");
 
 /** The modules whose catches all handle content-bearing rows. */
 const GUARDED_DIRS = ["slack", "kakao-import", "pim"] as const;
+/**
+ * Their routes: the Slack webhook catches what ingestSlackMessage rethrows (any
+ * database error over the message being stored), the KakaoTalk import route
+ * what the store and parser throw over the uploaded lines.
+ */
+const GUARDED_FILES = [
+  "routes/slack-events.ts",
+  "routes/slack-connection.ts",
+  "routes/kakao-import.ts",
+] as const;
 
 const everyCatch = () => true;
 
@@ -41,6 +56,11 @@ function scanGuardedDirs(): { violations: Violation[]; catches: Map<string, numb
       catches.set(dir, (catches.get(dir) ?? 0) + result.taintedCatches);
     }
   }
+  for (const file of GUARDED_FILES) {
+    const result = scanCatches(file, readFileSync(join(srcDir, file), "utf8"), everyCatch);
+    violations.push(...result.violations);
+    catches.set(file, result.taintedCatches);
+  }
   return { violations, catches };
 }
 
@@ -52,9 +72,10 @@ describe("database failure redaction guard (slack, kakao-import, pim)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("cannot pass vacuously: it sees catches in every guarded directory", () => {
-    for (const dir of GUARDED_DIRS) {
-      expect(scan.catches.get(dir) ?? 0, dir).toBeGreaterThan(0);
+  it("cannot pass vacuously: it sees catches in every guarded directory and route", () => {
+    // routes/slack-connection.ts has no catch today; it is scanned for the next one.
+    for (const place of [...GUARDED_DIRS, "routes/slack-events.ts", "routes/kakao-import.ts"]) {
+      expect(scan.catches.get(place) ?? 0, place).toBeGreaterThan(0);
     }
   });
 });
@@ -96,6 +117,23 @@ describe("the database guard itself", () => {
     ["the class name", "console.warn(`[X] ${err instanceof Error ? err.name : 'unknown'}`);"],
   ])("accepts %s", (_label, body) => {
     expect(scanned(body)).toEqual([]);
+  });
+
+  it.each([
+    [
+      "the message in ids",
+      "logDbFailure('[X] failed', err, { ids: { m: (err as Error).message } });",
+    ],
+    [
+      "the error in Sentry extra",
+      "captureDbFailure('[X] failed', err, { tags: { scope: 'x' }, extra: { detail: String(err) } });",
+    ],
+    [
+      "an alias in the LLM reporter's extra",
+      "const msg = (err as Error).message; captureLlmFailure('[X] failed', err, { tags: {}, extra: { msg } });",
+    ],
+  ])("flags %s", (_label, body) => {
+    expect(scanned(body)).toHaveLength(1);
   });
 
   it("flags an interpolated label", () => {

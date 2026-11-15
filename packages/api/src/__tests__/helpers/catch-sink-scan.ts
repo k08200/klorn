@@ -81,6 +81,18 @@ function isSink(call: ts.CallExpression): boolean {
   );
 }
 
+/**
+ * The arguments of `call` that reach a log or Sentry: all of a sink's, and a
+ * labelled reporter's options (its `ids` / `extra`), which it prints and sends
+ * as given. A reporter's label is held to a literal separately, and the
+ * failure itself (the second argument) is what it reduces to facts.
+ */
+function sinkArguments(call: ts.CallExpression): readonly ts.Expression[] {
+  if (isSink(call)) return call.arguments;
+  const name = calleeName(call);
+  return name !== null && LABELLED_REPORTERS.has(name) ? call.arguments.slice(2) : [];
+}
+
 /** Whether `expr` carries a tainted value's text (not just its class or status). */
 function exposes(expr: ts.Node, tainted: ReadonlySet<string>): boolean {
   if (ts.isIdentifier(expr)) return tainted.has(expr.text);
@@ -109,7 +121,6 @@ function exposes(expr: ts.Node, tainted: ReadonlySet<string>): boolean {
   return found;
 }
 
-/** The caught name plus any local declared in the handler from an exposing initializer. */
 /** Identifiers a declaration binds: `x`, or every name in `{ a, b: c }` / `[d, e]`. */
 function boundNames(name: ts.BindingName): string[] {
   if (ts.isIdentifier(name)) return [name.text];
@@ -163,11 +174,7 @@ function sinkViolations(
   const tainted = taintedNames(caught, body);
   const out: Violation[] = [];
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      isSink(node) &&
-      node.arguments.some((a) => exposes(a, tainted))
-    ) {
+    if (ts.isCallExpression(node) && sinkArguments(node).some((a) => exposes(a, tainted))) {
       const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
       out.push({ file, line: line + 1, text: node.getText(source).replace(/\s+/g, " ") });
     }

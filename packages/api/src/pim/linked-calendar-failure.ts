@@ -146,7 +146,7 @@ export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure
     await flagForReconnect(userId, linkedAccountId);
     if (shouldWarnAuthFailure(linkedAccountId, Date.now())) {
       logDbFailure("[CALENDAR] linked-account needs a re-link (skipped)", err, {
-        ids: { action, linkedAccountId },
+        ids: { action, linkedAccountId, kind: caldavErrorClass(err) },
       });
     }
     return;
@@ -155,7 +155,7 @@ export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure
   // Facts only: a sync failure can be a Prisma error over the events being
   // written (titles, attendees) or a provider error quoting them.
   logDbFailure("[CALENDAR] linked-account call failed (skipped)", err, {
-    ids: { action, linkedAccountId },
+    ids: { action, linkedAccountId, kind: caldavErrorClass(err) },
   });
   const caldav = failure.provider !== undefined && isCaldavProviderKey(failure.provider);
   if (caldav && !firstCaldavFailure(linkedAccountId, err)) return;

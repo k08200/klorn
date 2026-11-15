@@ -13,7 +13,11 @@ import { captureError } from "./sentry.js";
 export interface FailureSentryContext {
   /** Sentry tags, e.g. the existing `scope`. Keep a site's scope unchanged so its alerts keep matching. */
   readonly tags: Readonly<Record<string, string>>;
-  /** Ids and operational context (provider, key kind, model, route). Never content. */
+  /**
+   * Ids and operational context (provider, key kind, model, route). Never
+   * content. A key a fact also uses (errorName, status, …) is overwritten by
+   * the fact.
+   */
   readonly extra?: Readonly<Record<string, unknown>>;
 }
 
@@ -61,6 +65,7 @@ function originalFrames(err: unknown): string | null {
 export function captureFailureFacts(
   label: string,
   err: unknown,
+  /** Spread whole into `extra`; every field must be safe to send. */
   facts: Readonly<{ errorName: string }>,
   context: FailureSentryContext,
 ): void {

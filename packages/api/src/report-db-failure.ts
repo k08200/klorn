@@ -11,6 +11,11 @@
  * class, code, model, operation, status, message length) and the
  * caller's ids. Never the error object itself.
  *
+ * Those catches also wrap the calls beside the database ones (Google, Outlook
+ * and CalDAV calendars, web push, mail sends), whose errors can quote the
+ * events or addresses they carried; the same facts cover them (the HTTP
+ * status, a system code such as ECONNRESET).
+ *
  * The label is operator text written in code. Never interpolate content into
  * it; put ids in `ids` / `extra` (db-failure-redaction-guard.test.ts holds
  * every call to a string literal).
@@ -63,7 +68,7 @@ function errorName(err: unknown): string {
   // A self-assigned name (PrismaClientKnownRequestError) is precise; fall back
   // to the constructor only when `name` is the inherited default.
   const name = err.name && err.name !== "Error" ? err.name : err.constructor?.name || "Error";
-  return IDENTIFIER.test(name) ? name : "Error";
+  return typeof name === "string" && IDENTIFIER.test(name) ? name : "Error";
 }
 
 /** Prisma puts its code in `code` (`errorCode` on an initialization error), Node in `code`. */
@@ -76,7 +81,8 @@ function errorCode(err: unknown): string | null {
 }
 
 function invocation(err: unknown): { model: string | null; operation: string } | null {
-  if (!(err instanceof Error) || !err.name.startsWith("PrismaClient")) return null;
+  if (!(err instanceof Error) || typeof err.message !== "string") return null;
+  if (typeof err.name !== "string" || !err.name.startsWith("PrismaClient")) return null;
   const head = err.message.slice(0, HEADER_SCAN_CHARS).replace(ANSI_COLOR, "");
   const match = INVOCATION_HEADER.exec(head);
   if (!match?.[2]) return null;
@@ -126,7 +132,7 @@ export function dbFailureFacts(err: unknown): DbFailureFacts {
     model: metaModel(err) ?? call?.model ?? null,
     operation: call?.operation ?? null,
     status: httpStatus(err),
-    messageLength: err instanceof Error ? err.message.length : 0,
+    messageLength: err instanceof Error && typeof err.message === "string" ? err.message.length : 0,
   };
 }
 
