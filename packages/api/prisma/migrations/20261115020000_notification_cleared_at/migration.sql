@@ -11,7 +11,7 @@
 -- No new table, so no new RLS policy: Notification already has RLS enabled.
 --
 -- If it fails on lock_timeout, Prisma records the migration as failed: run
--- `prisma migrate resolve --rolled-back 20261114230000_notification_cleared_at`
+-- `prisma migrate resolve --rolled-back 20261115020000_notification_cleared_at`
 -- and redeploy.
 SET LOCAL lock_timeout = '5s';
 
