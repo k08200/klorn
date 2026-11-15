@@ -27,10 +27,23 @@ export interface FailureLogOptions {
   readonly ids?: Readonly<Record<string, string | number | null | undefined>>;
 }
 
+const CONTROL_CHARS = new RegExp(
+  `[${String.fromCharCode(0)}-${String.fromCharCode(0x1f)}${String.fromCharCode(0x7f)}]`,
+  "g",
+);
+/** An id longer than this is not an id; cut, so one value cannot flood the line. */
+const MAX_ID_CHARS = 120;
+
+/** An id as one printable token: no line breaks to forge a log line with, bounded. */
+function printableId(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "-";
+  return String(value).replace(CONTROL_CHARS, "?").slice(0, MAX_ID_CHARS);
+}
+
 /** One console line: `<label> (userId=u1): <facts>`. */
 export function logFailureFacts(label: string, facts: string, options: FailureLogOptions): void {
   const ids = Object.entries(options.ids ?? {})
-    .map(([key, value]) => `${key}=${value ?? "-"}`)
+    .map(([key, value]) => `${key}=${printableId(value)}`)
     .join(", ");
   const head = ids === "" ? label : `${label} (${ids})`;
   const line = `${head}: ${facts}`;
@@ -49,7 +62,7 @@ const STACK_FRAME = /^\s+at /;
  * after it is not a frame line, no frames are kept rather than risk message
  * text, which can span lines.
  */
-function originalFrames(err: unknown): string | null {
+export function originalFrames(err: unknown): string | null {
   if (!(err instanceof Error) || typeof err.stack !== "string") return null;
   const header = err.message ? `${err.name}: ${err.message}` : err.name;
   if (!err.stack.startsWith(`${header}\n`)) return null;

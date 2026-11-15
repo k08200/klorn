@@ -129,8 +129,21 @@ describe("auto-unsubscribe hook", () => {
     await vi.waitFor(() =>
       expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
         tags: { scope: "firewall.auto_unsubscribe_quota" },
-        extra: { userId: "u1" },
+        extra: {
+          userId: "u1",
+          errorName: "Error",
+          code: null,
+          model: null,
+          operation: null,
+          status: null,
+          messageLength: "db down".length,
+        },
       }),
+    );
+    // Sentry gets a fresh Error built from the label, never the original.
+    const reported = captureError.mock.calls[0][0] as Error;
+    expect(reported.message).toBe(
+      "[FIREWALL] auto-unsubscribe skipped: quota check failed (Error)",
     );
     expect(oneClickMock).not.toHaveBeenCalled();
   });

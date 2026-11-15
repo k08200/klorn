@@ -14,6 +14,7 @@ import { scheduleAgentForActionableEmail } from "../agentcore/email-action-trigg
 import { prisma } from "../db.js";
 import { engagementKindOf } from "../learning/sender-policy.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import {
   analyzePendingEmailAttachments,
@@ -30,8 +31,8 @@ import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 import type { ProviderCredentials } from "../providers/index.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
-import { captureError } from "../sentry.js";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { deliverFirewallPush, pushForFirewallEmail } from "./firewall-push.js";
 import { buildJudgeContext } from "./judge-context.js";
@@ -144,7 +145,7 @@ export async function persistGmailEmail(
       email.labels,
       options.linkedInboxAccountId ?? null,
     ).catch((err) =>
-      captureError(err, {
+      captureDbFailure("[FIREWALL] sync label correction failed", err, {
         tags: { scope: "sync-label-correction" },
         extra: { userId, emailId: existing.id },
       }),
@@ -205,8 +206,8 @@ export async function persistGmailEmail(
       attachments: email.attachments,
     });
     analyzePendingEmailAttachments(userId, email.attachments.length).catch((err) => {
-      console.warn("[FIREWALL] attachment analysis failed:", err);
-      captureError(err, {
+      logLlmFailure("[FIREWALL] attachment analysis failed", err);
+      captureLlmFailure("[FIREWALL] attachment analysis failed", err, {
         tags: { scope: "email_attachment.analysis" },
         extra: { userId, emailId: createdEmail.id, gmailId: email.gmailId },
       });
@@ -236,7 +237,7 @@ export async function persistGmailEmail(
         userEmail != null && normalizedFromAddress(email.from) === userEmail.toLowerCase(),
       listUnsubscribe: email.hasListUnsubscribe === true,
     }).catch((err) => {
-      captureError(err, {
+      captureLlmFailure("[FIREWALL] email commitment ingestion failed", err, {
         tags: { scope: "commitment.email_ingestion" },
         extra: { userId, emailId: createdEmail.id, gmailId: email.gmailId },
       });
@@ -307,10 +308,11 @@ export async function persistGmailEmail(
       // console first: captureError is a no-op without a Sentry DSN, so in
       // dev/self-host a classify+mirror failure would drop this email from the
       // firewall (the user silently misses it) with no trace. Static message +
-      // the error only — the ids live in the Sentry `extra` below, never
-      // interpolated into the log sink (log-injection / format-string safe).
-      console.warn("[FIREWALL] classify+mirror failed (ids in Sentry extra)", err);
-      captureError(err, {
+      // the failure's facts only (never the error object) — the ids live in
+      // the Sentry `extra` below, never interpolated into the log sink
+      // (log-injection / format-string safe).
+      logLlmFailure("[FIREWALL] classify+mirror failed (ids in Sentry extra)", err);
+      captureLlmFailure("[FIREWALL] classify+mirror failed (ids in Sentry extra)", err, {
         tags: { scope: "poc-judge.email_sync" },
         extra: { userId, emailId: createdEmail.id, gmailId: email.gmailId },
       });
@@ -346,8 +348,8 @@ async function markPromotionalEmailRead(
       console.warn(`[FIREWALL] promo auto-read skipped (user ${userId}): ${result.error}`);
     }
   } catch (err) {
-    console.warn("[FIREWALL] promo auto-read failed (ids in Sentry extra)", err);
-    captureError(err, {
+    logDbFailure("[FIREWALL] promo auto-read failed (ids in Sentry extra)", err);
+    captureDbFailure("[FIREWALL] promo auto-read failed (ids in Sentry extra)", err, {
       tags: { scope: "firewall.promo_auto_read" },
       extra: { userId, emailId: email.id, gmailId: email.gmailId },
     });
@@ -367,8 +369,11 @@ async function autoUnsubscribePromotional(userId: string, url: string): Promise<
   try {
     quota = await reserveAutoUnsubscribe(userId, url);
   } catch (err) {
-    console.warn("[FIREWALL] auto-unsubscribe skipped: quota check failed", err);
-    captureError(err, { tags: { scope: "firewall.auto_unsubscribe_quota" }, extra: { userId } });
+    logDbFailure("[FIREWALL] auto-unsubscribe skipped: quota check failed", err);
+    captureDbFailure("[FIREWALL] auto-unsubscribe skipped: quota check failed", err, {
+      tags: { scope: "firewall.auto_unsubscribe_quota" },
+      extra: { userId },
+    });
     return;
   }
   if (!quota.ok) {
@@ -377,8 +382,19 @@ async function autoUnsubscribePromotional(userId: string, url: string): Promise<
   }
   const result = await executeOneClickUnsubscribe(url);
   if (!result.ok) {
-    console.warn(`[FIREWALL] auto-unsubscribe failed: ${result.reason}`);
+    console.warn(`[FIREWALL] auto-unsubscribe failed: ${unsubscribeFailureReason(result.reason)}`);
   }
+}
+
+/**
+ * The code-defined reasons executeOneClickUnsubscribe returns. Any other
+ * reason is a transport error's message, which can quote the unsubscribe URL
+ * (a per-recipient token) or the host, so only its presence is logged.
+ */
+const KNOWN_UNSUBSCRIBE_REASON = /^(?:unsafe-endpoint|request-failed|http-\d{3})$/;
+
+function unsubscribeFailureReason(reason: string): string {
+  return KNOWN_UNSUBSCRIBE_REASON.test(reason) ? reason : "request-error";
 }
 
 /** A judgeable row as SELECTed from the DB (re-judge paths): the stored
@@ -437,7 +453,10 @@ async function startFactsShadow(
     const { runFactsShadow, shadowMailFromRaw } = await import("./v3/shadow.js");
     await runFactsShadow(userId, shadowMailFromRaw(emailId, email), tier);
   } catch (err) {
-    captureError(err, { tags: { scope: "judge-v3-shadow-load" }, extra: { userId, emailId } });
+    captureLlmFailure("[FIREWALL] v3 facts shadow failed", err, {
+      tags: { scope: "judge-v3-shadow-load" },
+      extra: { userId, emailId },
+    });
   }
 }
 
@@ -500,8 +519,10 @@ export async function judgeAndMirrorEmail(
   try {
     recordJudgeSource(judgement.source);
   } catch (err) {
-    console.warn("[JUDGE-HEALTH] recordJudgeSource failed:", err);
-    captureError(err, { tags: { scope: "judge-health.record" } });
+    logDbFailure("[JUDGE-HEALTH] recordJudgeSource failed", err);
+    captureDbFailure("[JUDGE-HEALTH] recordJudgeSource failed", err, {
+      tags: { scope: "judge-health.record" },
+    });
   }
   // Attention engine v3 (JUDGE_V3_POLICY, for the users it covers): the lane
   // and any interrupt-budget hold are decided here, before the item is written.
@@ -545,7 +566,7 @@ export async function judgeAndMirrorEmail(
     written.tier,
     email.linkedInboxAccountId ?? null,
   ).catch((err) =>
-    captureError(err, {
+    captureDbFailure("[FIREWALL] lane label failed", err, {
       tags: { scope: "firewall-label-mode" },
       extra: { userId, emailId: email.id },
     }),
@@ -587,8 +608,11 @@ async function v3PlanFor(
     });
     return { written: judgementUnderPlan(judgement, plan), v3: plan.v3, push: plan.push };
   } catch (err) {
-    console.warn("[FIREWALL] v3 plan failed; writing the v2 lane (ids in Sentry extra)", err);
-    captureError(err, { tags: { scope: "judge-v3-plan" }, extra: { userId, emailId: email.id } });
+    logLlmFailure("[FIREWALL] v3 plan failed; writing the v2 lane (ids in Sentry extra)", err);
+    captureLlmFailure("[FIREWALL] v3 plan failed; writing the v2 lane (ids in Sentry extra)", err, {
+      tags: { scope: "judge-v3-plan" },
+      extra: { userId, emailId: email.id },
+    });
     const push: V3PushPlan = judgement.tier === "MEETING" ? { kind: "meeting" } : { kind: "none" };
     return { written: judgement, push };
   }
@@ -618,7 +642,7 @@ async function writeJudgedItem(
     if (v3?.push.kind === "deliver") {
       const { releaseClaimedBellRow } = await import("./v3/push-budget-gate.js");
       await releaseClaimedBellRow(userId, v3.push.notification.id).catch((releaseErr) =>
-        captureError(releaseErr, {
+        captureDbFailure("[FIREWALL] v3 release claimed bell row failed", releaseErr, {
           tags: { scope: "judge-v3-release-claim" },
           extra: { userId, emailId: email.id },
         }),
@@ -647,7 +671,10 @@ async function ringForFirewallEmail(
     if (push.kind === "deliver") await deliverFirewallPush(userId, email, push.notification);
     else if (push.kind === "meeting") await pushForFirewallEmail(userId, email, true);
   } catch (err) {
-    captureError(err, { tags: { scope: "firewall-push" }, extra: { userId, emailId: email.id } });
+    captureDbFailure("[FIREWALL] push failed", err, {
+      tags: { scope: "firewall-push" },
+      extra: { userId, emailId: email.id },
+    });
   }
 }
 
@@ -728,9 +755,9 @@ export async function backfillEmailAttentionItems(userId: string): Promise<numbe
     } catch (err) {
       // console first: captureError is silent without a Sentry DSN, and a
       // backfill that fails every email would otherwise look like a no-op.
-      // Static message + error only; the id lives in the Sentry `extra`.
-      console.warn("[FIREWALL] backfill judge+mirror failed (id in Sentry extra)", err);
-      captureError(err, {
+      // Static message + the failure's facts only; the id lives in the Sentry `extra`.
+      logLlmFailure("[FIREWALL] backfill judge+mirror failed (id in Sentry extra)", err);
+      captureLlmFailure("[FIREWALL] backfill judge+mirror failed (id in Sentry extra)", err, {
         tags: { scope: "email-backfill" },
         extra: { userId, emailId: email.id },
       });

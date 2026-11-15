@@ -31,6 +31,7 @@
 import { randomUUID } from "node:crypto";
 import twilio from "twilio";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { buildEscalationTwiml, publicBaseUrl, sanitizeTitleForSpeech } from "./phone-twiml.js";
 import { isWithinQuietHours } from "./quiet-hours.js";
@@ -259,8 +260,7 @@ export async function placeEscalationCall(
   } catch (err) {
     // Best-effort, mirroring sms.ts: warn (not Sentry) so a flaky number
     // can't flood the error stream; the FAILED row still burns daily budget.
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[PHONE] Twilio call failed for user ${userId}: ${message}`);
+    logDbFailure("[PHONE] Twilio call failed", err, { ids: { userId } });
     await prisma.phoneEscalation
       .update({ where: { id: escalationId }, data: { status: "FAILED" } })
       .catch(() => {});

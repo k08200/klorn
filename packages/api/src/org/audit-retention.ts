@@ -24,6 +24,7 @@
  */
 
 import { withSystem } from "../db-tenant.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
@@ -179,8 +180,10 @@ export async function orgAuditRetentionTick(
     reportRun(run.result);
     return "ran";
   } catch (err) {
-    console.error("[ORG-AUDIT] retention run failed:", err);
-    captureError(err, { tags: { scope: "org-audit-retention" } });
+    logDbFailure("[ORG-AUDIT] retention run failed", err, { level: "error" });
+    captureDbFailure("[ORG-AUDIT] retention run failed", err, {
+      tags: { scope: "org-audit-retention" },
+    });
     return "failed";
   }
 }

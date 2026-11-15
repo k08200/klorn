@@ -27,7 +27,7 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export const PMF_ANSWERS = ["VERY", "SOMEWHAT", "NOT"] as const;
 export type PmfAnswer = (typeof PMF_ANSWERS)[number];
@@ -84,11 +84,11 @@ export async function isPmfEligible(userId: string, now: Date = new Date()): Pro
     const decisions = await prisma.decisionLabel.count({ where: { userId } });
     return decisions >= MIN_DECISIONS;
   } catch (err) {
-    console.warn(
-      "[cohort] PMF eligibility check failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "pmf-eligible" }, extra: { userId } });
+    logDbFailure("[cohort] PMF eligibility check failed", err, { ids: { userId } });
+    captureDbFailure("[cohort] PMF eligibility check failed", err, {
+      tags: { scope: "pmf-eligible" },
+      extra: { userId },
+    });
     return false;
   }
 }
@@ -159,8 +159,8 @@ export async function pmfSummary(): Promise<PmfSummary> {
       gateMet: veryPct >= GATE_PCT && !belowMinimumSample,
     };
   } catch (err) {
-    console.warn("[cohort] PMF summary failed:", err instanceof Error ? err.message : String(err));
-    captureError(err, { tags: { scope: "pmf-summary" } });
+    logDbFailure("[cohort] PMF summary failed", err);
+    captureDbFailure("[cohort] PMF summary failed", err, { tags: { scope: "pmf-summary" } });
     return base;
   }
 }
@@ -234,8 +234,8 @@ export async function cohortReadout(now: Date = new Date()): Promise<CohortRow[]
       }))
       .sort((a, b) => b.mailVolume30d - a.mailVolume30d);
   } catch (err) {
-    console.warn("[cohort] readout failed:", err instanceof Error ? err.message : String(err));
-    captureError(err, { tags: { scope: "cohort-readout" } });
+    logDbFailure("[cohort] readout failed", err);
+    captureDbFailure("[cohort] readout failed", err, { tags: { scope: "cohort-readout" } });
     return [];
   }
 }

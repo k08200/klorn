@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from "jose";
+import { logDbFailure } from "../report-db-failure.js";
 
 /**
  * Sign in with Apple. Dark until APPLE_LOGIN_ENABLED flips (config.ts); the
@@ -108,7 +109,7 @@ export async function exchangeAppleCode(code: string): Promise<AppleExchangeResu
     clientSecret = await makeAppleClientSecret();
   } catch (err) {
     // An unparseable .p8 — wrong file, truncated paste, or PEM newlines lost.
-    console.warn("[APPLE] client secret could not be signed:", err);
+    logDbFailure("[APPLE] client secret could not be signed", err);
     return { ok: false, reason: "config", detail: "APPLE_PRIVATE_KEY is not a usable ES256 key" };
   }
 
@@ -168,7 +169,7 @@ export async function verifyAppleIdToken(idToken: string): Promise<AppleVerifyRe
   } catch (err) {
     // Signature, issuer or audience — audience being the one a misconfigured
     // Services ID trips, since `aud` must equal APPLE_CLIENT_ID exactly.
-    console.warn("[APPLE] id_token verification failed:", err);
+    logDbFailure("[APPLE] id_token verification failed", err);
     return { ok: false, reason: "token", detail: (err as Error).message };
   }
   const claims = parseAppleClaims(payload);

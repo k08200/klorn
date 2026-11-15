@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../sentry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../sentry.js")>()),
+  captureError: vi.fn(),
+}));
 vi.mock("../event-parse.js", () => ({
   parseEventText: vi.fn(),
 }));
@@ -24,6 +28,9 @@ import {
   getMeetingContext,
 } from "../mail/meeting-context.js";
 import { checkAttendeeBusy, checkConflicts, getAttendeeBusyBlocks } from "../pim/calendar.js";
+import { captureError } from "../sentry.js";
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 const RECEIVED_AT = new Date("2026-08-12T19:58:00+09:00");
 
@@ -284,6 +291,99 @@ describe("getMeetingContext", () => {
     vi.mocked(parseEventText).mockRejectedValueOnce(new Error("upstream 502"));
     const ctx = await getMeetingContext("user-1", meetingEmail());
     expect(ctx?.proposed).toBeNull();
+  });
+});
+
+describe("getMeetingContext — a failed calendar step is logged as facts", () => {
+  // Each step's error can quote the proposal it carried (a Prisma validation
+  // error renders the rejected call's values); the reading pane degrades and
+  // the report names the step and the email, never the error's words.
+  let consoleSpies: Array<ReturnType<typeof vi.spyOn>>;
+
+  beforeEach(() => {
+    _resetMeetingContextCacheForTests();
+    vi.mocked(captureError).mockClear();
+    consoleSpies = (["log", "info", "warn", "error"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {}),
+    );
+    vi.mocked(parseEventText).mockReset();
+    vi.mocked(parseEventText).mockResolvedValue({
+      title: "Meeting with Terry",
+      startTime: "2026-08-13T16:00:00+09:00",
+      endTime: "2026-08-13T17:00:00+09:00",
+    });
+    vi.mocked(checkConflicts).mockReset();
+    vi.mocked(checkConflicts).mockResolvedValue({
+      hasConflicts: false,
+      conflicts: [],
+      message: "No conflicts.",
+    } as never);
+    vi.mocked(checkAttendeeBusy).mockReset();
+    vi.mocked(checkAttendeeBusy).mockResolvedValue([]);
+    vi.mocked(getAttendeeBusyBlocks).mockReset();
+    vi.mocked(getAttendeeBusyBlocks).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    for (const spy of consoleSpies) spy.mockRestore();
+  });
+
+  const sinkText = () =>
+    `${consoleSpies.map((spy) => callText(spy)).join("\n")}\n${callText(vi.mocked(captureError))}`;
+
+  it.each([
+    [
+      "the conflict check",
+      "[MEETING-CTX] conflict check failed",
+      () => {
+        vi.mocked(checkConflicts).mockRejectedValueOnce(validationErrorQuotingText());
+      },
+    ],
+    [
+      "the attendee busy check",
+      "[MEETING-CTX] attendee busy check failed",
+      () => {
+        vi.mocked(checkAttendeeBusy).mockRejectedValueOnce(validationErrorQuotingText());
+      },
+    ],
+    [
+      "the alternative slots",
+      "[MEETING-CTX] alternative slots failed",
+      async () => {
+        // A clash is what asks for alternatives; their first query is the one that fails.
+        vi.mocked(checkConflicts).mockResolvedValue({
+          hasConflicts: true,
+          conflicts: [],
+          message: "Conflicts with Standup.",
+        } as never);
+        const { prisma } = await import("../db.js");
+        vi.mocked(prisma.calendarEvent.findMany).mockRejectedValueOnce(
+          validationErrorQuotingText(),
+        );
+      },
+    ],
+    [
+      "the nearby lookup",
+      "[MEETING-CTX] nearby lookup failed",
+      async () => {
+        // No clash, so the nearby query is the first findMany.
+        const { prisma } = await import("../db.js");
+        vi.mocked(prisma.calendarEvent.findMany).mockRejectedValueOnce(
+          validationErrorQuotingText(),
+        );
+      },
+    ],
+  ])("%s", async (_step, label, arrange) => {
+    await arrange();
+
+    const ctx = await getMeetingContext("user-1", meetingEmail({ from: "Terry <terry@corp.com>" }));
+
+    // The step degrades; the pane still opens with the parsed proposal.
+    expect(ctx?.proposed).not.toBeNull();
+    expect(sinkText()).toContain(label);
+    expect(sinkText()).not.toContain(DB_CANARY);
+    expect(sinkText()).toContain("emailId=email-1");
+    expect(sinkText()).toContain("PrismaClientValidationError");
   });
 });
 

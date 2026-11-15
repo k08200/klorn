@@ -33,7 +33,7 @@ import {
 } from "../mail/send-receipt.js";
 import { recordSentMessage } from "../mail/sent-messages.js";
 import { noteEmailBellRowsRead } from "../notify/email-bell.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { safeAttachmentFilename } from "./email.js";
 import { completeUndo, findParkedInbox } from "./email-undo.js";
 
@@ -325,7 +325,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
           emailId: original?.id ?? null,
         });
       } catch (err) {
-        captureError(err, { tags: { scope: "email.send.receipt" }, extra: { userId: uid } });
+        captureDbFailure("[EMAIL] send receipt open failed", err, {
+          tags: { scope: "email.send.receipt" },
+          extra: { userId: uid },
+        });
         return reply.code(503).send({ error: SEND_RECEIPT_UNAVAILABLE_MESSAGE });
       }
 
@@ -346,7 +349,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         if (!(err instanceof SendOutcomeUnknownError)) throw err;
         // The provider could not say whether the message went out (a linked
         // Outlook mailbox, step B0b). The user is told not to simply retry.
-        captureError(err, {
+        captureDbFailure("[EMAIL] send outcome unknown", err, {
           tags: { scope: "email.send.send-outcome-unknown" },
           extra: { userId: uid },
         });
@@ -459,8 +462,14 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
           return reply.code(400).send({ error: "Malformed message form data." });
         }
         // Unknown parse failure — never swallow: log a signal and report.
-        console.error(`[EMAIL] compose multipart parse failed for user ${uid}:`, err);
-        captureError(err, { tags: { scope: "email.compose.multipart" }, extra: { userId: uid } });
+        logDbFailure("[EMAIL] compose multipart parse failed", err, {
+          level: "error",
+          ids: { userId: uid },
+        });
+        captureDbFailure("[EMAIL] compose multipart parse failed", err, {
+          tags: { scope: "email.compose.multipart" },
+          extra: { userId: uid },
+        });
         return reply.code(400).send({ error: "Could not read the message form data." });
       }
 
@@ -478,8 +487,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       } catch (err) {
         // A non-auth Gmail failure (timeout, 5xx) would otherwise surface as an
         // untagged 500. Tag it with send context so it's diagnosable.
-        console.error(`[EMAIL] compose sendEmail threw for user ${uid}:`, err);
-        captureError(err, {
+        logDbFailure("[EMAIL] compose sendEmail threw", err, {
+          level: "error",
+          ids: { userId: uid },
+        });
+        captureDbFailure("[EMAIL] compose sendEmail threw", err, {
           tags: { scope: "email.compose.send" },
           extra: { userId: uid, attachedCount: attachments.length },
         });
@@ -534,8 +546,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       .catch((err) => {
         // Provider sync failed — still update local DB, but surface the divergence
         // (DB will say read while the mailbox still shows unread) instead of hiding it.
-        console.warn(`[EMAIL] toggleRead failed for ${email.id}:`, err);
-        captureError(err, { tags: { scope: "email.read-sync" }, extra: { userId: uid } });
+        logDbFailure("[EMAIL] toggleRead failed", err, { ids: { emailId: email.id } });
+        captureDbFailure("[EMAIL] toggleRead failed", err, {
+          tags: { scope: "email.read-sync" },
+          extra: { userId: uid },
+        });
       });
     await prisma.emailMessage.update({
       where: { id: email.id },
@@ -573,8 +588,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         logProviderSoftFailure("EMAIL", email.id, result);
       })
       .catch((err) => {
-        console.warn(`[EMAIL] toggleStar failed for ${email.id}:`, err);
-        captureError(err, { tags: { scope: "email.star-sync" }, extra: { userId: uid } });
+        logDbFailure("[EMAIL] toggleStar failed", err, { ids: { emailId: email.id } });
+        captureDbFailure("[EMAIL] toggleStar failed", err, {
+          tags: { scope: "email.star-sync" },
+          extra: { userId: uid },
+        });
       });
     await prisma.emailMessage.update({
       where: { id: email.id },
@@ -618,7 +636,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       const gErr = err as { message?: string };
-      console.error(`[EMAIL] Gmail trash failed for ${email.gmailId}:`, gErr.message);
+      logDbFailure("[EMAIL] Gmail trash failed", err, {
+        level: "error",
+        ids: { emailId: email.id },
+      });
       return reply.code(502).send({ error: `Gmail delete failed: ${gErr.message || "unknown"}` });
     }
 
@@ -685,7 +706,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       const gErr = err as { message?: string };
-      console.error(`[EMAIL] Gmail archive failed for ${email.gmailId}:`, gErr.message);
+      logDbFailure("[EMAIL] Gmail archive failed", err, {
+        level: "error",
+        ids: { emailId: email.id },
+      });
       return reply.code(502).send({ error: `Gmail archive failed: ${gErr.message || "unknown"}` });
     }
 

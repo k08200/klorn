@@ -16,7 +16,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import type { AttachmentExtractJob } from "./attachment-extract-worker.js";
 import {
   type ExtractedAttachmentContent,
@@ -167,11 +167,14 @@ function runInWorker(
     err: unknown,
   ) => {
     const type = loggableType(job.mimeType);
-    console.warn(`[ATTACHMENT] ${what} (${type}, ${job.bytes.byteLength} bytes)`, err);
+    // Facts only: a parser error can quote the attachment's bytes.
+    logDbFailure("[ATTACHMENT] extraction unavailable", err, {
+      ids: { what, reason, mimeType: type, bytes: job.bytes.byteLength },
+    });
     const now = Date.now();
     if (now - (lastReportedAt.get(reason) ?? 0) < REPORT_INTERVAL_MS) return;
     lastReportedAt.set(reason, now);
-    captureError(err, {
+    captureDbFailure("[ATTACHMENT] extraction unavailable", err, {
       tags: { scope: "attachment-extract.worker", reason },
       extra: { mimeType: type, bytes: job.bytes.byteLength },
     });

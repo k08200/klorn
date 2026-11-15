@@ -18,6 +18,7 @@ import { PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS, PATTERN_MIN_OCCURRENCES } 
 import { db, prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
 import { effectivePlansOrOwn } from "../org/effective-tier.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { newWork } from "../work-context.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
@@ -119,7 +120,7 @@ export async function learnFromRejection(
       `[PATTERN] Learned from rejection: ${toolName} for user ${userId} (${rejectionCount} total)`,
     );
   } catch (err) {
-    console.error("[PATTERN] Failed to learn from rejection:", err);
+    logDbFailure("[PATTERN] Failed to learn from rejection", err, { level: "error" });
   }
 }
 
@@ -186,7 +187,7 @@ export async function learnFromApproval(
       );
     }
   } catch (err) {
-    console.error("[PATTERN] Failed to learn from approval:", err);
+    logDbFailure("[PATTERN] Failed to learn from approval", err, { level: "error" });
   }
 }
 
@@ -412,7 +413,7 @@ export async function analyzePatterns(userId: string): Promise<string> {
 
     return result;
   } catch (err) {
-    console.error("[PATTERN] Analysis failed:", err);
+    logDbFailure("[PATTERN] Analysis failed", err, { level: "error" });
     return "";
   }
 }
@@ -463,7 +464,7 @@ export async function persistLearnedPatterns(userId: string): Promise<void> {
       console.log(`[PATTERN] Persisted ${strongPatterns.length} patterns for user ${userId}`);
     }
   } catch (err) {
-    console.error("[PATTERN] Persistence failed:", err);
+    logDbFailure("[PATTERN] Persistence failed", err, { level: "error" });
   }
 }
 
@@ -493,7 +494,7 @@ export async function updateConfidence(
       data: { confidence: newConfidence, updatedAt: new Date() },
     });
   } catch (err) {
-    console.warn("[PATTERN] updateConfidence failed:", err);
+    logDbFailure("[PATTERN] updateConfidence failed", err);
     // Non-critical, ignore errors
   }
 }
@@ -595,14 +596,14 @@ async function runPatternAnalysisForAllUsers() {
       try {
         await persistLearnedPatterns(userId);
       } catch (err) {
-        console.warn("[PATTERN] persistLearnedPatterns failed for user", userId, err);
+        logDbFailure("[PATTERN] persistLearnedPatterns failed for user", err, { ids: { userId } });
         // Skip individual user failures
       }
     }
 
     // Attention priority decay — run every 6h tick for all users
     await amplifyStaleAttentionItems().catch((err) =>
-      console.warn("[PATTERN] Priority decay failed:", err),
+      logDbFailure("[PATTERN] Priority decay failed", err),
     );
 
     // Weekly jobs (Sunday only) — avoid running on every 6h tick
@@ -610,11 +611,11 @@ async function runPatternAnalysisForAllUsers() {
       await detectSkillsForAllUsers();
       await runFeedbackAdaptationForAllUsers();
       await buildInteractionGraphsForAllUsers().catch((err) =>
-        console.warn("[PATTERN] Interaction graph batch failed:", err),
+        logDbFailure("[PATTERN] Interaction graph batch failed", err),
       );
     }
   } catch (err) {
-    console.error("[PATTERN] Batch analysis failed:", err);
+    logDbFailure("[PATTERN] Batch analysis failed", err, { level: "error" });
   }
 }
 
@@ -701,7 +702,7 @@ async function amplifyStaleAttentionItems(): Promise<void> {
           where: { id: item.id },
           data: { priority: newPriority, lastAmplifiedAt: new Date() },
         })
-        .catch((err) => console.warn("[PATTERN] amplify stale item update failed:", err)),
+        .catch((err) => logDbFailure("[PATTERN] amplify stale item update failed", err)),
     );
   }
 

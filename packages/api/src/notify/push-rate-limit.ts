@@ -35,6 +35,7 @@ import {
   PUSH_INTERRUPT_CAP_60MIN,
 } from "../config.js";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import type { PushBucket } from "./push-bucket.js";
 
 // Re-export so existing callers (and tests) keep their named imports working.
@@ -96,7 +97,9 @@ export async function recordPushAttempt(
     });
     return { allowed: true };
   } catch (err) {
-    console.warn(`[PUSH] Rate-limit check failed for ${userId} (${bucket}) — failing open:`, err);
+    logDbFailure("[PUSH] Rate-limit check failed — failing open", err, {
+      ids: { userId, bucket },
+    });
     return { allowed: true };
   }
 }

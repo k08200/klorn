@@ -54,6 +54,7 @@ import {
   setPaddleSeatQuantity,
 } from "../billing/paddle-team.js";
 import { prisma } from "../db.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { type OrgAuditAction, recordOrgAudit } from "./audit.js";
 import { seatsActive, subscriptionBills } from "./effective-tier.js";
@@ -140,7 +141,10 @@ const CANCEL_SCHEDULED = () =>
  * a portal link): reported, and answered as "nothing was changed".
  */
 function readError(err: unknown, orgId: string, step: string): OrgError {
-  captureError(err, { tags: { scope: `org.billing.${step}` }, extra: { orgId } });
+  captureDbFailure("[ORG] Paddle read failed", err, {
+    tags: { scope: `org.billing.${step}` },
+    extra: { orgId },
+  });
   return new OrgError(
     502,
     "BILLING_PROVIDER_READ_FAILED",
@@ -156,7 +160,10 @@ const PENDING_SCHEDULED_CHANGE = "subscription_locked_pending_changes";
 
 /** A Paddle call that failed: reported, and answered without Paddle's text. */
 function providerError(err: unknown, orgId: string, step: string): OrgError {
-  captureError(err, { tags: { scope: `org.billing.${step}` }, extra: { orgId } });
+  captureDbFailure("[ORG] Paddle call failed", err, {
+    tags: { scope: `org.billing.${step}` },
+    extra: { orgId },
+  });
   return new OrgError(
     502,
     "BILLING_PROVIDER_ERROR",
@@ -329,7 +336,10 @@ async function refuseAudited(
       detail: { ...detail, reason: refusal.reason },
     });
   } catch (err) {
-    captureError(err, { tags: { scope: "org.billing.audit_refusal" }, extra: { orgId, action } });
+    captureDbFailure("[ORG] audit of a refused billing change failed", err, {
+      tags: { scope: "org.billing.audit_refusal" },
+      extra: { orgId, action },
+    });
   }
   throw refusal.error;
 }

@@ -185,27 +185,38 @@ describe("a failed poll", () => {
     expect(fake.captureError).not.toHaveBeenCalled();
   });
 
-  it("generic: logs one capped line whatever the server said", async () => {
+  it("generic: logs one line of facts whatever the server said", async () => {
     failWith(`bad\r\n[generic-imap] FORGED ${"Q".repeat(20_000)}`);
     await expect(syncImapInbox(args())).rejects.toThrow();
     const failed = loggedLines().filter((line) => line.includes("sync failed"));
     expect(failed).toHaveLength(1);
     expect(failed[0]).not.toMatch(/[\r\n]/);
     expect(failed[0].length).toBeLessThan(600);
+    expect(failed[0]).not.toContain("FORGED");
   });
 
-  it("Naver: reported from here exactly as before, with the raw message logged", async () => {
+  it("Naver: reported from here as facts, the raw message reaches neither the log nor Sentry", async () => {
     failWith("boom\r\nraw text");
     await expect(syncImapInbox(args(NAVER))).rejects.toThrow("boom");
     expect(fake.captureError).toHaveBeenCalledTimes(1);
-    expect(fake.captureError).toHaveBeenCalledWith(expect.any(Error), {
-      tags: { scope: "naver-imap.sync" },
-      extra: { userId: "u1" },
-    });
-    const warn = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.find(
-      (call) => String(call[0]).includes("sync failed"),
+    expect(fake.captureError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "[imap] sync failed (Error)" }),
+      {
+        tags: { scope: "naver-imap.sync" },
+        extra: {
+          userId: "u1",
+          errorName: "Error",
+          code: null,
+          model: null,
+          operation: null,
+          status: null,
+          messageLength: 14,
+        },
+      },
     );
-    expect(warn?.[1]).toBe("boom\r\nraw text");
+    const failed = loggedLines().filter((line) => line.includes("sync failed"));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).not.toContain("raw text");
   });
 });
 

@@ -23,6 +23,7 @@ import {
   parseWsClientType,
   type WsClientType,
 } from "./notify/desktop-presence.js";
+import { logDbFailure } from "./report-db-failure.js";
 
 interface WsClient {
   ws: WebSocket;
@@ -122,7 +123,9 @@ async function authenticateSocket(req: IncomingMessage, url: URL): Promise<Socke
     // so this is not 4001 (which reads as "signed out"): a retryable close
     // that admits nothing. Logged and reported (rate-limited, shared with the
     // HTTP path); the error text stays server-side.
-    console.error("[WS] session check failed: database unavailable", verdict.error);
+    logDbFailure("[WS] session check failed: database unavailable", verdict.error, {
+      level: "error",
+    });
     reportSessionCheckFailure(verdict.error);
     return {
       ok: false,
@@ -152,7 +155,7 @@ export function initWebSocket(server: Server): WebSocketServer {
     // runs emits 'error', and an 'error' with no listener crashes the process.
     // Replaced by the client's own handler once the socket is admitted.
     const onEarlyError = (err: Error) => {
-      console.warn("[WS] socket error before admission:", err.message);
+      logDbFailure("[WS] socket error before admission", err);
     };
     ws.on("error", onEarlyError);
     // A fixed base: only the query is read, and a client-sent Host header that
@@ -168,7 +171,7 @@ export function initWebSocket(server: Server): WebSocketServer {
       auth = await authenticateSocket(req, url);
     } catch (err) {
       // Nothing decided the session: retryable, never 4001, admits nothing.
-      console.error("[WS] session check failed unexpectedly:", err);
+      logDbFailure("[WS] session check failed unexpectedly", err, { level: "error" });
       auth = {
         ok: false,
         code: WS_CLOSE_SESSION_CHECK_UNAVAILABLE,
@@ -244,7 +247,7 @@ export function initWebSocket(server: Server): WebSocketServer {
       // A send() to a broken socket surfaces here — without a log, a realtime
       // notification can vanish with zero trace (the web-push channel is
       // independent, so the user isn't fully unnotified, but ops must see it).
-      console.warn(`[WS] socket error for ${clientId}:`, err.message);
+      logDbFailure("[WS] socket error", err, { ids: { clientId } });
       clients.delete(clientId);
       desktopPresence.disconnected(userId, clientId, Date.now());
     });

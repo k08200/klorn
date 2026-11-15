@@ -31,7 +31,7 @@ import {
 } from "../mail/outlook-oauth.js";
 import { effectivePlan } from "../org/effective-tier.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { linkStartScheme } from "./link-handoff.js";
 
@@ -160,8 +160,10 @@ export async function finishOutlookCalendarLink(params: {
       return calendarLinkPath("failed");
     }
     // console first — captureError is a no-op without a Sentry DSN.
-    console.error("[outlook-oauth] calendar callback failed:", err);
-    captureError(err, { tags: { scope: "outlook-oauth.calendar-callback" } });
+    logDbFailure("[outlook-oauth] calendar callback failed", err, { level: "error" });
+    captureDbFailure("[outlook-oauth] calendar callback failed", err, {
+      tags: { scope: "outlook-oauth.calendar-callback" },
+    });
     return calendarLinkPath("failed");
   }
 }

@@ -15,7 +15,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 
 const MAX_TEXT_LENGTH = 4000;
@@ -66,7 +66,7 @@ async function buildViewContext(userId: string, rawEmailId: unknown): Promise<st
   } catch (err) {
     // Context is an enhancement: a lookup failure must degrade to a normal
     // turn, never fail the message the user just sent.
-    console.warn("[CHAT] view-context lookup failed:", err);
+    logDbFailure("[CHAT] view-context lookup failed", err, { ids: { userId } });
     return null;
   }
 }
@@ -192,8 +192,13 @@ export async function chatConversationRoutes(app: FastifyInstance) {
       } catch (err) {
         // The id is a path param — keep user-provided values out of the format
         // string (log-injection / tainted-format-string).
-        console.error("[CHAT] failed to persist chat turn:", { conversationId: id }, err);
-        captureError(err, { tags: { scope: "chat.persist", userId, conversationId: id } });
+        logDbFailure("[CHAT] failed to persist chat turn", err, {
+          level: "error",
+          ids: { conversationId: id },
+        });
+        captureDbFailure("[CHAT] failed to persist chat turn", err, {
+          tags: { scope: "chat.persist", userId, conversationId: id },
+        });
       }
 
       return {

@@ -382,10 +382,20 @@ describe("buildLinkedDriveClient", () => {
     await google.clients[0]?.listeners[0]?.({ access_token: "at-4", refresh_token: "rt-4" });
     expect(google.captureError).toHaveBeenCalledTimes(1);
     const [err, context] = google.captureError.mock.calls[0] as [Error, Record<string, unknown>];
-    expect(err.message).toBe("database unavailable");
+    // Sentry gets a fresh Error built from the label, never the original.
+    expect(err.message).toBe("[GOOGLE-DRIVE] Failed to persist a refreshed drive token (Error)");
     expect(context).toEqual({
       tags: { scope: "drive.google.refresh_persist" },
-      extra: { userId: "user-1", accountId: "acct-1" },
+      extra: {
+        userId: "user-1",
+        accountId: "acct-1",
+        errorName: "Error",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: "database unavailable".length,
+      },
     });
     expect(JSON.stringify(google.captureError.mock.calls)).not.toMatch(
       /at-4|rt-4|at-plain|rt-plain/,

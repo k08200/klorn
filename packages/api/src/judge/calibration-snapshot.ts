@@ -27,7 +27,8 @@ import { prisma } from "../db.js";
 // Type-only: the implementation is dynamically imported in the Sunday
 // branch so the daily snapshot path never loads the LLM provider stack.
 import type { CorrectionEvalPayload } from "../learning/correction-eval.js";
-import { captureError } from "../sentry.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
 import {
   type AttentionRow,
@@ -235,8 +236,11 @@ export async function snapshotUserCalibration(
   try {
     payload.decisionMetrics = await getDecisionDailySummary(userId, windowStart, now);
   } catch (err) {
-    console.warn(`[calibration] decision-metrics read failed for ${userId}`, err);
-    captureError(err, { tags: { area: "calibration", op: "decision-metrics" }, extra: { userId } });
+    logDbFailure("[calibration] decision-metrics read failed", err, { ids: { userId } });
+    captureDbFailure("[calibration] decision-metrics read failed", err, {
+      tags: { area: "calibration", op: "decision-metrics" },
+      extra: { userId },
+    });
   }
 
   const dayKey = now.toISOString().slice(0, 10);
@@ -323,7 +327,11 @@ export async function runDailyCalibrationSnapshots(now: Date = new Date()): Prom
         await snapshotUserCalibration(userId, now);
         if (isSundayUtc) await maybeMergeWeeklyCorrectionEval(userId, now);
       } catch (err) {
-        captureError(err, { tags: { scope: "calibration-snapshot" }, extra: { userId } });
+        // The weekly correction eval runs the judge, so this block is an LLM path.
+        captureLlmFailure("[calibration] user snapshot failed", err, {
+          tags: { scope: "calibration-snapshot" },
+          extra: { userId },
+        });
       }
     }
     processed += page.length;

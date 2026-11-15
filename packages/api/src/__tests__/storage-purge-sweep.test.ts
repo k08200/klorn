@@ -239,6 +239,14 @@ describe("the scheduler", () => {
     await storagePurgeTick();
     expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
       tags: { scope: "storage.purge.sweep" },
+      extra: {
+        errorName: "Error",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: "database is down".length,
+      },
     });
     const after = getSchedulerHealth().schedulers.find(
       (s) => s.name === "storage-purge",

@@ -22,6 +22,7 @@ import { prisma } from "../db.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { orgCeilingsFor } from "../org/ceilings.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { REPLY_LEDGER_PREFIX } from "./auto-reply-ledger-keys.js";
 
 export const MAX_UNATTENDED_REPLIES_PER_DAY = 20;
@@ -93,7 +94,7 @@ async function noteDailyCap(userId: string, now: Date): Promise<void> {
     });
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code;
-    if (code !== "P2002") console.warn("[AUTOMATION] auto-reply cap notice failed:", err);
+    if (code !== "P2002") logDbFailure("[AUTOMATION] auto-reply cap notice failed", err);
   }
 }
 

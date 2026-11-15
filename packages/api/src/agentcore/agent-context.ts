@@ -35,7 +35,7 @@ import { db, prisma } from "../db.js";
 import { isNoReplyAddress } from "../mail/gmail.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { offsetStringFor } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
@@ -84,15 +84,17 @@ function formatActionItems(value: unknown): string {
  * after a migration) left the agent reasoning on silently-incomplete context
  * forever, with zero operator signal. Log every degradation the way the
  * judge-context siblings do: console first (visible without a Sentry DSN on
- * self-host / dev), then captureError. Message-only to keep any PII a raw
- * Prisma error might embed out of the console line.
+ * self-host / dev), then Sentry. Facts only (report-db-failure.ts), to keep any
+ * PII a raw Prisma error might embed out of the console line and the event.
  */
 function logContextBranchFailure(branch: string, err: unknown, userId: string): void {
-  console.warn(
-    `[agent-context] ${branch} fetch failed (degrading to empty):`,
-    err instanceof Error ? err.message : String(err),
-  );
-  captureError(err, { tags: { scope: `agent-context.${branch}` }, extra: { userId } });
+  logDbFailure("[agent-context] branch fetch failed (degrading to empty)", err, {
+    ids: { branch },
+  });
+  captureDbFailure("[agent-context] branch fetch failed (degrading to empty)", err, {
+    tags: { scope: `agent-context.${branch}` },
+    extra: { userId },
+  });
 }
 
 /**

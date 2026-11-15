@@ -38,7 +38,7 @@ import {
 } from "../judge/agent-tier.js";
 import { normalizeTier, type Tier } from "../judge/tiers.js";
 import { findUserEmail, MAX_EMAIL_ID_LENGTH, parseEmailIdArg } from "../mail/email-lookup.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 export const SET_TIER_TOOL_NAME = "set_tier";
 
@@ -197,7 +197,7 @@ export async function executeSetTier(
   try {
     return await changeLane(ctx, parsed.emailId, parsed.tier);
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[MCP] set_tier failed", err, {
       tags: { scope: "mcp.set-tier" },
       extra: { userId: ctx.userId, apiKeyId: ctx.apiKeyId },
     });

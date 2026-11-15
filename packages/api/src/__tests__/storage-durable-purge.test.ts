@@ -95,9 +95,21 @@ describe("flag on", () => {
       outcome: "failed",
     });
     expect(record()).toMatchObject({ userId: "user-1", attempts: 1, lastError: "unreachable" });
-    expect(captureError).toHaveBeenCalledWith(failure, {
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
       tags: { scope: "storage.purge", storageCode: "unreachable", retryable: "true" },
+      extra: {
+        errorName: "StorageError",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: failure.message.length,
+      },
     });
+    // Sentry gets a fresh Error built from the label, never the original.
+    const reported = captureError.mock.calls[0]?.[0] as Error;
+    expect(reported).not.toBe(failure);
+    expect(reported.message).toBe("[STORAGE] purge failed (StorageError)");
     const output = errorSpy.mock.calls.flat().join("\n");
     expect(output).toContain("[STORAGE] purge failed (unreachable)");
     expect(output).not.toContain("durable-secret");

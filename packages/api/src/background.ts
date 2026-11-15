@@ -21,8 +21,8 @@ import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
 import { newWork } from "./work-context.js";
 
@@ -213,10 +213,7 @@ async function meetingPushPath(userId: string, googleEventId: string): Promise<s
     if (!row || !isCalendarRowVisible(row)) return CALENDAR_PATH;
     return `${CALENDAR_PATH}/${encodeURIComponent(row.id)}`;
   } catch (err) {
-    console.warn(
-      "[BACKGROUND] meeting event lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[BACKGROUND] meeting event lookup failed", err, { ids: { userId } });
     return CALENDAR_PATH;
   }
 }
@@ -309,7 +306,8 @@ async function checkUpcomingMeetings() {
                 { bucket: "interrupt" },
               );
             } catch (err) {
-              console.warn("[BACKGROUND] meeting push failed", err);
+              // A web-push error can quote the payload (the meeting title).
+              logDbFailure("[BACKGROUND] meeting push failed", err, { ids: { userId } });
             }
 
             // Id, not title: an invite's title can quote a mail subject.
@@ -322,15 +320,19 @@ async function checkUpcomingMeetings() {
         // A single user's check can fail (expired Google token, transient DB
         // error) — skip that user, but never silently: a systemic failure
         // (DB down, every token bad) must still surface a signal.
-        console.warn(`[BACKGROUND] meeting check failed for user ${userId}:`, err);
-        captureError(err, { tags: { scope: "background.meeting-check-user" } });
+        logDbFailure("[BACKGROUND] meeting check failed for user", err, { ids: { userId } });
+        captureDbFailure("[BACKGROUND] meeting check failed for user", err, {
+          tags: { scope: "background.meeting-check-user" },
+        });
       }
     }
   } catch (err) {
     // The whole sweep is best-effort, but a throw here aborted it for everyone
     // — surface it rather than hiding the outage.
-    console.warn("[BACKGROUND] meeting check sweep failed:", err);
-    captureError(err, { tags: { scope: "background.meeting-check" } });
+    logDbFailure("[BACKGROUND] meeting check sweep failed", err);
+    captureDbFailure("[BACKGROUND] meeting check sweep failed", err, {
+      tags: { scope: "background.meeting-check" },
+    });
   } finally {
     meetingCheckInFlight = false;
   }

@@ -485,12 +485,12 @@ describe("transport-failure reporting", () => {
     vi.setSystemTime(Date.now() + 60_000);
     const warnsBefore = warnedText()
       .split("\n")
-      .filter((l) => /ETIMEDOUT/.test(l)).length;
+      .filter((l) => /action session failed/.test(l)).length;
     await actions.markAsRead("u1", msg("a", 1), "a");
     expect(h.captureError).toHaveBeenCalledTimes(1);
     const warnsAfter = warnedText()
       .split("\n")
-      .filter((l) => /ETIMEDOUT/.test(l)).length;
+      .filter((l) => /action session failed/.test(l)).length;
     expect(warnsAfter).toBe(warnsBefore + 1);
 
     vi.setSystemTime(Date.now() + IMAP_TRANSPORT_CAPTURE_INTERVAL_MS);

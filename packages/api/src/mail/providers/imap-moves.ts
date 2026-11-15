@@ -33,6 +33,7 @@
  */
 
 import { prisma } from "../../db.js";
+import { logDbFailure } from "../../report-db-failure.js";
 import type { EnvelopeFacts } from "../imap-envelope.js";
 import { formatImapMessageId } from "../imap-message-id.js";
 import {
@@ -40,7 +41,7 @@ import {
   type ImapProviderConfig,
   type ImapProviderKey,
 } from "../imap-providers.js";
-import { describeFailure, fail } from "./action-failure.js";
+import { fail } from "./action-failure.js";
 import { databaseFailure, resolveTarget } from "./imap-account.js";
 import type { MoveRole } from "./imap-folders.js";
 import type { MovedTo, MoveOpResult } from "./imap-move-run.js";
@@ -78,7 +79,7 @@ async function neverThrow(
   try {
     return await work();
   } catch (err) {
-    console.warn(`[${provider.logScope}] could not ${what} (${describeFailure(err)})`);
+    logDbFailure("[imap] move action failed", err, { ids: { logScope: provider.logScope, what } });
     return fail(`Could not ${what}. Try again shortly.`);
   }
 }

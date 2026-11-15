@@ -32,7 +32,7 @@ import { withSourceLabels } from "../pim/calendar-source-label.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { safeMeetingLink } from "../pim/meeting-link.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 const listEventsQuerySchema = {
   type: "object",
@@ -131,14 +131,12 @@ export async function createUserCalendarEvent(
       googleId = result.eventId;
     }
   } catch (err) {
-    const gaxiosErr = err as {
-      response?: { status?: number; data?: { error?: { message?: string } } };
-      message?: string;
-    };
-    console.error(
-      `[CALENDAR] Google sync on create failed (HTTP ${gaxiosErr.response?.status}):`,
-      gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
-    );
+    // Facts only (the HTTP status among them): the API's message can name an
+    // attendee, and the error carries the event it sent.
+    logDbFailure("[CALENDAR] Google sync on create failed", err, {
+      level: "error",
+      ids: { userId },
+    });
   }
 
   const event = await prisma.calendarEvent.create({
@@ -367,14 +365,15 @@ export async function calendarRoutes(app: FastifyInstance) {
             : {}),
         });
         if ("error" in result) {
-          console.warn(
-            "[calendar] Google update failed, proceeding with local update:",
-            result.error,
-          );
+          // result.error quotes the API's message; pim/calendar.ts already
+          // logged the failure's facts.
+          console.warn("[calendar] Google update failed, proceeding with local update");
         }
       } catch (err) {
-        console.warn("[calendar] Google update threw, proceeding with local update:", err);
-        captureError(err, {
+        logDbFailure("[calendar] Google update threw, proceeding with local update", err, {
+          ids: { userId: uid },
+        });
+        captureDbFailure("[calendar] Google update threw, proceeding with local update", err, {
           tags: { scope: "calendar.update.google-sync" },
           extra: { userId: uid, googleId: existing.googleId },
         });
@@ -408,8 +407,10 @@ export async function calendarRoutes(app: FastifyInstance) {
         // Best-effort: still delete locally. But don't swallow silently — a
         // systemic Google-delete failure (token/quota/API) would otherwise be
         // invisible while events resurface on the next sync.
-        console.warn("[calendar] Google delete failed, proceeding with local delete:", err);
-        captureError(err, {
+        logDbFailure("[calendar] Google delete failed, proceeding with local delete", err, {
+          ids: { userId },
+        });
+        captureDbFailure("[calendar] Google delete failed, proceeding with local delete", err, {
           tags: { scope: "calendar.delete.google-sync" },
           extra: { userId, googleId: event.googleId },
         });
@@ -445,18 +446,15 @@ export async function calendarRoutes(app: FastifyInstance) {
         return { error: "Google not connected. Please reconnect your Google account.", synced: 0 };
       }
       const gaxiosErr = err as {
-        response?: { status?: number; data?: { error?: { message?: string; errors?: unknown[] } } };
+        response?: { status?: number; data?: { error?: { message?: string } } };
         message?: string;
       };
       const status = gaxiosErr.response?.status;
       const apiMsg =
         gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
-      const apiErrors = gaxiosErr.response?.data?.error?.errors;
-      console.error(
-        `[CALENDAR SYNC] Failed (HTTP ${status}):`,
-        apiMsg,
-        apiErrors ? JSON.stringify(apiErrors) : "",
-      );
+      // The log gets facts (the status among them), never the API's message
+      // or its `errors` list, which can quote an event.
+      logDbFailure("[CALENDAR SYNC] Failed", err, { level: "error", ids: { userId: uid } });
       return { error: `Sync failed (${status}): ${apiMsg}`, synced: 0 };
     }
   });

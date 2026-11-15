@@ -120,7 +120,9 @@ function archiveStream(input: VaultExportInput, run: ExportRun): Readable {
       const name = err instanceof Error ? err.name : "unknown";
       console.error("[VAULT-EXPORT] export failed:", name);
       captureError(new Error(`vault export failed: ${name}`), { tags: { area: "vault-export" } });
-      throw err;
+      // A fresh error, not the original: after the headers are sent, Fastify
+      // logs a stream's error itself, message and cause included.
+      throw new Error("vault export failed");
     } finally {
       // Not awaited: the download must not wait on the audit write.
       void run.finish(outcome);

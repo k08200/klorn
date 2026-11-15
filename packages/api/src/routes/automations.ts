@@ -17,7 +17,7 @@ import {
 import { listReplyTonePolicies, normalizeReplyTone } from "../learning/reply-tone.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
-import { captureLlmFailure } from "../llm/report-llm-failure.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import {
   NOTIFICATION_LANGUAGES,
   resolveNotificationLanguage,
@@ -348,7 +348,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
       // Run in background so the response returns immediately
       runAgentForUser(userId, mode).catch((err) => {
-        console.error(`[AGENT] Manual run failed for ${userId}:`, err);
+        logLlmFailure("[AGENT] Manual run failed", err, { level: "error", ids: { userId } });
       });
 
       return { triggered: true, mode };

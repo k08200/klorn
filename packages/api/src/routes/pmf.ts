@@ -19,7 +19,7 @@ import {
   PMF_ANSWERS,
   recordPmfResponse,
 } from "../product/cohort.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 const responseBodySchema = {
   type: "object",
@@ -56,7 +56,10 @@ export async function pmfRoutes(app: FastifyInstance): Promise<void> {
         await recordPmfResponse(userId, req.body.answer);
         return reply.send({ ok: true });
       } catch (err) {
-        captureError(err, { tags: { scope: "pmf-response" }, extra: { userId } });
+        captureDbFailure("[PMF] response record failed", err, {
+          tags: { scope: "pmf-response" },
+          extra: { userId },
+        });
         return reply.code(500).send({ error: "Could not record the answer" });
       }
     },

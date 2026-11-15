@@ -2,6 +2,7 @@ import { isDemoAccessEnabled, registerDevice, signToken } from "../auth.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
+import { logDbFailure } from "../report-db-failure.js";
 import {
   isDemoUser,
   normalizeEmail,
@@ -89,7 +90,9 @@ export async function completeSocialLogin(
         await prisma.userIdentity
           .update({ where: { id: identityRow.id }, data: { email } })
           .catch((err) =>
-            console.warn(`[SOCIAL] identity email-drift update failed for ${identityRow.id}:`, err),
+            logDbFailure("[SOCIAL] identity email-drift update failed", err, {
+              ids: { identityId: identityRow.id },
+            }),
           );
       }
       break;
@@ -187,7 +190,10 @@ export async function completeSocialLogin(
   );
   if (isNewUser) {
     void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch((err) =>
-      console.error(`[WELCOME] ${identity.provider} sign-in welcome failed for ${user.id}:`, err),
+      logDbFailure("[WELCOME] sign-in welcome failed", err, {
+        level: "error",
+        ids: { provider: identity.provider, userId: user.id },
+      }),
     );
   }
 

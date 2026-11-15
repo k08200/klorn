@@ -18,7 +18,7 @@
 
 import { getPaddleCustomerEmail } from "../billing/paddle-team.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { subscriptionBills } from "./effective-tier.js";
 import { currentOrgView, type MeWire } from "./org-members.js";
 import type { OrgWire } from "./org-shape.js";
@@ -85,7 +85,10 @@ async function readEmailMatch(
     });
     match = payerEmail !== null && sameEmail(payerEmail, read.email);
   } catch (err) {
-    captureError(err, { tags: { scope: "org.billing.access_hint" }, extra: { orgId: read.orgId } });
+    captureDbFailure("[ORG] billing access hint failed", err, {
+      tags: { scope: "org.billing.access_hint" },
+      extra: { orgId: read.orgId },
+    });
     match = null;
   }
   rememberMatch(key, match, Date.now());
@@ -175,7 +178,7 @@ export async function currentOrgViewWithBilling(userId: string): Promise<OrgView
   try {
     billing = await ownerBillingAccess(userId, view.org.id);
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[ORG] billing access hint failed", err, {
       tags: { scope: "org.billing.access_hint" },
       extra: { orgId: view.org.id },
     });

@@ -36,7 +36,7 @@ import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { KLORN_PROVIDER, NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
 import { effectivePlan } from "../org/effective-tier.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { planHasFeature } from "./stripe.js";
 
 export interface MailAccountKey {
@@ -179,15 +179,24 @@ async function keepOrRollBack(
   try {
     keep = await allowed();
   } catch (err) {
-    console.warn(`[MAIL-ENTITLEMENT] ${scope} re-check failed for ${userId}; rolling back:`, err);
-    captureError(err, { tags: { scope: `mail-entitlement.${scope}.recheck`, userId } });
+    logDbFailure("[MAIL-ENTITLEMENT] re-check failed; rolling back", err, {
+      ids: { scope, userId },
+    });
+    captureDbFailure("[MAIL-ENTITLEMENT] re-check failed; rolling back", err, {
+      tags: { scope: `mail-entitlement.${scope}.recheck`, userId },
+    });
   }
   if (keep) return true;
   try {
     await rollBack();
   } catch (err) {
-    console.error(`[MAIL-ENTITLEMENT] ${scope} rollback failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: `mail-entitlement.${scope}.rollback`, userId } });
+    logDbFailure("[MAIL-ENTITLEMENT] rollback failed", err, {
+      level: "error",
+      ids: { scope, userId },
+    });
+    captureDbFailure("[MAIL-ENTITLEMENT] rollback failed", err, {
+      tags: { scope: `mail-entitlement.${scope}.rollback`, userId },
+    });
   }
   return false;
 }

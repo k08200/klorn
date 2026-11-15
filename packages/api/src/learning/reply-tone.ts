@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 export const REPLY_TONES = ["MATCH_ME", "FORMAL", "FRIENDLY", "CASUAL"] as const;
 
@@ -91,7 +92,7 @@ export async function buildReplyToneHint(userId: string): Promise<string> {
     });
     return buildReplyTonePromptHint(config?.replyTone);
   } catch (err) {
-    console.warn("[TONE] buildReplyToneHint read failed:", err);
+    logDbFailure("[TONE] buildReplyToneHint read failed", err);
     return "";
   }
 }

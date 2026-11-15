@@ -6,7 +6,7 @@
  */
 
 import type { V3ItemBlock, V3TodayFields } from "@klorn/contract";
-import { captureError } from "../../sentry.js";
+import { captureDbFailure } from "../../report-db-failure.js";
 import { listV3RowsByEmail, pageEmailIdsInLane, resolveInboxScope } from "../email-lanes.js";
 import { UNDECIDED_V3_ROW, v3ItemWire } from "./item-wire.js";
 import { interruptBudgetStatus } from "./push-budget-gate.js";
@@ -56,7 +56,10 @@ export async function v3TodayFields(
     ]);
     return { interruptBudget, queueTotal: queue.total, rankedAt: rankedAt.toISOString() };
   } catch (err) {
-    captureError(err, { tags: { scope: "judge-v3-today-fields" }, extra: { userId } });
+    captureDbFailure("[judge-v3] today fields read failed", err, {
+      tags: { scope: "judge-v3-today-fields" },
+      extra: { userId },
+    });
     return {};
   }
 }

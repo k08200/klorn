@@ -15,7 +15,7 @@ import { prisma } from "../../db.js";
 import type { GmailRawEmail } from "../../mail/gmail-fetch.js";
 import { getUserNotificationLanguage } from "../../notify/notification-strings.js";
 import type { ProviderCredentials } from "../../providers/index.js";
-import { captureError } from "../../sentry.js";
+import { captureDbFailure } from "../../report-db-failure.js";
 import type { JudgeableEmailRow } from "../email-firewall.js";
 import { firewallBellRow, firewallPushGatesPass } from "../firewall-push.js";
 import type { StaticTierReasonKey } from "../tier-reason-strings.js";
@@ -262,7 +262,7 @@ async function withSenderTrust(
       importance: importancePrior(relationship, now),
     };
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[judge-v3] sender trust lookup failed", err, {
       tags: { scope: "judge-v3-sender-trust" },
       extra: { userId: input.userId, emailId: input.email.id },
     });

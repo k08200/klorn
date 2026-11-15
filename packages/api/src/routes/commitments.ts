@@ -25,6 +25,7 @@ import {
   listCommitments,
   updateCommitment,
 } from "../pim/commitments.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "DISMISSED", "SNOOZED"]);
 
@@ -179,7 +180,11 @@ export async function commitmentRoutes(app: FastifyInstance) {
             evidence: "User dismissed commitment from inbox",
           });
         })
-        .catch((err) => console.warn("[COMMITMENTS] recordFeedback DISMISSED failed:", err));
+        .catch((err) =>
+          logDbFailure("[COMMITMENTS] recordFeedback DISMISSED failed", err, {
+            ids: { userId, commitmentId: id },
+          }),
+        );
     }
 
     // When a COUNTERPARTY commitment is marked DONE, record the outcome for
@@ -206,7 +211,12 @@ export async function commitmentRoutes(app: FastifyInstance) {
           row.counterpartyName ?? null,
           wasOnTime,
           daysLate,
-        ).catch((err) => console.warn("[COMMITMENTS] updateTrustScore failed:", err));
+        ).catch((err) =>
+          // A failed write over the counterparty's address and name: facts only.
+          logDbFailure("[COMMITMENTS] updateTrustScore failed", err, {
+            ids: { userId, commitmentId: id },
+          }),
+        );
       }
     }
 

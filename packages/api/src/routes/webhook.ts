@@ -12,6 +12,7 @@ import {
   isTeamSubscription,
   teamOwnerForTransaction,
 } from "../org/seat-billing.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 import { pushNotification } from "../websocket.js";
@@ -392,20 +393,24 @@ export async function webhookRoutes(app: FastifyInstance) {
             advertised: ADVERTISED_PRO_PRICE_WEB,
           });
         } catch (err) {
-          captureError(err, { tags: { scope: "paddle.webhook.price_check" } });
+          captureDbFailure("[PADDLE] webhook price check failed", err, {
+            tags: { scope: "paddle.webhook.price_check" },
+          });
         }
         // The team seat prices, separately: a failure above must not skip it.
         try {
           checkTeamPaddlePriceEvent({ eventType: body.event_type, data: body.data });
         } catch (err) {
-          captureError(err, { tags: { scope: "paddle.webhook.team_price_check" } });
+          captureDbFailure("[PADDLE] webhook team price check failed", err, {
+            tags: { scope: "paddle.webhook.team_price_check" },
+          });
         }
       }
       // Other event types are acknowledged and ignored.
 
       await prisma.webhookEvent.create({ data: { id: body.event_id } }).catch((err) => {
         if ((err as { code?: string })?.code !== "P2002") {
-          captureError(err, {
+          captureDbFailure("[PADDLE] webhook dedup write failed", err, {
             tags: { scope: "paddle.webhook.dedup" },
             extra: { id: body.event_id },
           });
@@ -474,7 +479,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       await prisma.webhookEvent.create({ data: { id: event.id } }).catch((err) => {
         // A PK conflict from a raced duplicate is expected; surface anything else.
         if ((err as { code?: string })?.code !== "P2002") {
-          captureError(err, {
+          captureDbFailure("[REVENUECAT] webhook dedup write failed", err, {
             tags: { scope: "revenuecat.webhook.dedup" },
             extra: { id: event.id },
           });
@@ -540,7 +545,7 @@ async function notifyUser(
   // work inside sendPushNotification can crash the dyno (no unhandledRejection
   // handler) — same guard every other call site uses.
   sendPushNotification(userId, { title, body: message, url }).catch((err) => {
-    console.warn("[WEBHOOK] push failed", err);
-    captureError(err, { tags: { scope: "webhook.push", userId } });
+    logDbFailure("[WEBHOOK] push failed", err, { ids: { userId } });
+    captureDbFailure("[WEBHOOK] push failed", err, { tags: { scope: "webhook.push", userId } });
   });
 }

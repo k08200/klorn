@@ -45,7 +45,7 @@ import { getTrustScore } from "../learning/trust-score.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { pinnedTierFromRules } from "../mail/pin-match.js";
 import { fetchTriagePriorities } from "../mail/triage-priorities.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import { isTier, type Tier } from "./tiers.js";
@@ -220,11 +220,11 @@ async function fetchCorrections(
     }
     return rankCorrections(rows, emailsById, senderAddress);
   } catch (err) {
-    console.warn(
-      "[judge-context] corrections fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "judge-context-corrections" }, extra: { userId } });
+    logDbFailure("[judge-context] corrections fetch failed", err);
+    captureDbFailure("[judge-context] corrections fetch failed", err, {
+      tags: { scope: "judge-context-corrections" },
+      extra: { userId },
+    });
     return [];
   }
 }
@@ -349,11 +349,11 @@ async function fetchSenderItems(
       },
     })) as SenderItemRow[];
   } catch (err) {
-    console.warn(
-      "[judge-context] sender-items fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "judge-context-sender-items" }, extra: { userId } });
+    logDbFailure("[judge-context] sender-items fetch failed", err);
+    captureDbFailure("[judge-context] sender-items fetch failed", err, {
+      tags: { scope: "judge-context-sender-items" },
+      extra: { userId },
+    });
     return [];
   }
 }
@@ -449,8 +449,11 @@ async function fetchLearnedImportanceFact(
     }
     return null;
   } catch (err) {
-    console.warn("[JUDGE-CONTEXT] fetchLearnedImportanceFact failed:", err);
-    captureError(err, { tags: { scope: "judge-context-engagement" }, extra: { userId } });
+    logDbFailure("[JUDGE-CONTEXT] fetchLearnedImportanceFact failed", err);
+    captureDbFailure("[JUDGE-CONTEXT] fetchLearnedImportanceFact failed", err, {
+      tags: { scope: "judge-context-engagement" },
+      extra: { userId },
+    });
     return null;
   }
 }
@@ -480,13 +483,13 @@ async function fetchSenderTraits(
   try {
     return await getActiveSenderTraits(userId, senderAddress);
   } catch (err) {
-    // Log the message only — a raw Prisma error can embed the sender address
-    // (PII) in its meta; captureError still gets the full error for Sentry.
-    console.warn(
-      "[judge-context] sender-trait fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "judge-context-traits" }, extra: { userId } });
+    // A raw Prisma error can embed the sender address (PII) in its message and
+    // meta; both sinks get the failure's facts only, never the error object.
+    logDbFailure("[judge-context] sender-trait fetch failed", err);
+    captureDbFailure("[judge-context] sender-trait fetch failed", err, {
+      tags: { scope: "judge-context-traits" },
+      extra: { userId },
+    });
     return [];
   }
 }
@@ -554,11 +557,11 @@ async function fetchReadBehaviorFact(
     if (total < READ_BEHAVIOR.minSample) return null;
     return { read, total };
   } catch (err) {
-    console.warn(
-      "[judge-context] read-behavior fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "judge-context-read-behavior" }, extra: { userId } });
+    logDbFailure("[judge-context] read-behavior fetch failed", err);
+    captureDbFailure("[judge-context] read-behavior fetch failed", err, {
+      tags: { scope: "judge-context-read-behavior" },
+      extra: { userId },
+    });
     return null;
   }
 }
@@ -576,11 +579,11 @@ async function fetchUserPriorities(userId: string): Promise<string | null> {
   try {
     return await fetchTriagePriorities(userId);
   } catch (err) {
-    console.warn(
-      "[judge-context] priorities fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "judge-context-priorities" }, extra: { userId } });
+    logDbFailure("[judge-context] priorities fetch failed", err);
+    captureDbFailure("[judge-context] priorities fetch failed", err, {
+      tags: { scope: "judge-context-priorities" },
+      extra: { userId },
+    });
     return null;
   }
 }
@@ -590,11 +593,11 @@ async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
   try {
     return await getAppliedRulesForMatch(userId);
   } catch (err) {
-    console.warn(
-      "[judge-context] learned-rule fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "judge-context-learned-rules" }, extra: { userId } });
+    logDbFailure("[judge-context] learned-rule fetch failed", err);
+    captureDbFailure("[judge-context] learned-rule fetch failed", err, {
+      tags: { scope: "judge-context-learned-rules" },
+      extra: { userId },
+    });
     return [];
   }
 }
@@ -608,10 +611,7 @@ export async function fetchPinnedTier(userId: string, senderAddress: string): Pr
   try {
     return await lookupPinnedTier(userId, senderAddress);
   } catch (err) {
-    console.warn(
-      "[judge-context] pin fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[judge-context] pin fetch failed", err);
     return null;
   }
 }
@@ -705,8 +705,13 @@ export async function buildJudgeContext(
   } catch (err) {
     // console + captureError: captureError is a no-op when Sentry is off, so a
     // failed judge-context build would otherwise degrade silently (CLAUDE.md).
-    console.error("[JUDGE-CONTEXT] buildJudgeContext failed, using empty context:", err);
-    captureError(err, { tags: { scope: "judge-context" }, extra: { userId } });
+    logDbFailure("[JUDGE-CONTEXT] buildJudgeContext failed, using empty context", err, {
+      level: "error",
+    });
+    captureDbFailure("[JUDGE-CONTEXT] buildJudgeContext failed, using empty context", err, {
+      tags: { scope: "judge-context" },
+      extra: { userId },
+    });
     return EMPTY_JUDGE_CONTEXT;
   }
 }

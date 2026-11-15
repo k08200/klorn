@@ -9,6 +9,7 @@
  */
 
 import { google } from "googleapis";
+import { logDbFailure } from "./report-db-failure.js";
 
 export interface GoogleOidcClaims {
   email?: string;
@@ -38,8 +39,9 @@ export async function verifyGoogleOidcToken(token: string): Promise<GoogleOidcCl
     // Distinguish "forged token" from a misconfigured audience / cert-fetch
     // failure / clock skew — all of which surface here as a verification error.
     // Without this log, every push silently 401s with no server-side signal.
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[GOOGLE-OIDC] Token verification failed: ${msg}`);
+    // Facts only: the library quotes the token's claims (an expired token's
+    // message carries its whole payload, email included).
+    logDbFailure("[GOOGLE-OIDC] Token verification failed", err);
     return null;
   }
 }

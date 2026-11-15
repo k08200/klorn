@@ -51,6 +51,7 @@
 
 import type { ImapFlow, ListResponse } from "imapflow";
 
+import { logDbFailure } from "../../report-db-failure.js";
 import { parseImapMessageId } from "../imap-message-id.js";
 import {
   type FixedHostImapProviderKey,
@@ -68,7 +69,7 @@ import {
   toSmtpAddress,
 } from "../outbound-message.js";
 import { classifySmtpFailure, openSmtpSession, type SmtpSession } from "../smtp-transport.js";
-import { describeFailure, fail } from "./action-failure.js";
+import { fail } from "./action-failure.js";
 import { findCheckedAccount, sessionAccountFor } from "./imap-account.js";
 import { fetchReplyHeaders } from "./imap-reply-headers.js";
 import {
@@ -149,7 +150,7 @@ function compose(
 /** The server's own answer to a message it refused: a definite "no". */
 function refusalFor(err: unknown, provider: ImapProviderConfig): MailActionFailure {
   const { code, command } = (err ?? {}) as { code?: unknown; command?: unknown };
-  console.warn(`[${provider.logScope}] send refused by the server (${describeFailure(err)})`);
+  logDbFailure("[imap] send refused by the server", err, { ids: { logScope: provider.logScope } });
   if (code === "EMESSAGE") return fail(`${provider.label} refused the message.`);
   return command === "MAIL FROM"
     ? fail(`${provider.label} did not accept the sending address.`)
@@ -486,7 +487,9 @@ async function neverThrow<T>(
   try {
     return await work();
   } catch (err) {
-    console.warn(`[${provider.logScope}] ${what} failed unexpectedly (${describeFailure(err)})`);
+    logDbFailure("[imap] action failed unexpectedly", err, {
+      ids: { logScope: provider.logScope, what },
+    });
     return fail(`Could not ${what}. Try again shortly.`);
   }
 }
@@ -505,7 +508,7 @@ export function imapSendActions(providerKey: FixedHostImapProviderKey): SendSurf
       try {
         return await readReplyHeaders(provider, userId, messageId, linkedInboxAccountId);
       } catch (err) {
-        console.warn(`[${provider.logScope}] reply headers failed (${describeFailure(err)})`);
+        logDbFailure("[imap] reply headers failed", err, { ids: { logScope: provider.logScope } });
         return {};
       }
     },

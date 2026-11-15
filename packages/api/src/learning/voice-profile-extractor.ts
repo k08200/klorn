@@ -29,6 +29,7 @@ import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { logLlmFailure } from "../llm/report-llm-failure.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { remember } from "./memory.js";
 
 const VOICE_PROFILE_KEY = "voice_profile_v1";
@@ -107,7 +108,7 @@ export async function extractVoiceProfile(
       `[VOICE] Profile persisted for user ${userId}: tone=${profile.tone}, confidence=${profile.confidence}`,
     );
   } catch (err) {
-    console.warn("[VOICE] extractVoiceProfile failed for user", userId, err);
+    logLlmFailure("[VOICE] extractVoiceProfile failed for user", err, { ids: { userId } });
   }
 }
 
@@ -176,12 +177,12 @@ async function fetchSentMailBodies(userId: string): Promise<string[]> {
   try {
     refreshToken = decryptToken(token.refreshToken);
   } catch (err) {
-    // Log the message only — never the raw error, so token ciphertext can never
-    // leak into logs even if decryptToken's error shape changes (CASA Tier 2).
-    console.warn(
-      "[VOICE] decryptToken failed for user — skipping sent mail sample:",
-      err instanceof Error ? err.message : "decryption error",
-    );
+    // Facts only — never the raw error or its message, so token ciphertext can
+    // never leak into logs even if decryptToken's error shape changes (CASA
+    // Tier 2).
+    logDbFailure("[VOICE] decryptToken failed for user — skipping sent mail sample", err, {
+      ids: { userId },
+    });
     return [];
   }
 
@@ -198,7 +199,7 @@ async function fetchSentMailBodies(userId: string): Promise<string[]> {
     });
     messageIds = (listRes.data.messages || []).map((m) => m.id!).filter(Boolean);
   } catch (err) {
-    console.warn("[VOICE] Gmail SENT list fetch failed:", err);
+    logDbFailure("[VOICE] Gmail SENT list fetch failed", err, { ids: { userId } });
     return [];
   }
 
@@ -328,11 +329,11 @@ export async function extractVoiceProfilesForAllUsers(): Promise<void> {
       try {
         await extractVoiceProfile(userId);
       } catch (err) {
-        console.warn("[VOICE] extractVoiceProfile failed for user", userId, err);
+        logLlmFailure("[VOICE] extractVoiceProfile failed for user", err, { ids: { userId } });
         // skip individual failures silently
       }
     }
   } catch (err) {
-    console.error("[VOICE] Batch extraction failed:", err);
+    logDbFailure("[VOICE] Batch extraction failed", err, { level: "error" });
   }
 }

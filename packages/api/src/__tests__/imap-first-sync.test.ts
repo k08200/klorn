@@ -64,11 +64,17 @@ describe("startFirstImapSync", () => {
     expect(() => startFirstImapSync("user-1", IMAP_PROVIDERS.ICLOUD, "row-9")).not.toThrow();
     await flush();
     expect(m.captureError).toHaveBeenCalledWith(
-      expect.any(Error),
+      expect.objectContaining({ message: "[imap] first sync failed (Error)" }),
       expect.objectContaining({
         tags: { scope: "imap-first-sync" },
-        extra: { userId: "user-1", linkedInboxAccountId: "row-9" },
+        extra: expect.objectContaining({
+          userId: "user-1",
+          linkedInboxAccountId: "row-9",
+          errorName: "Error",
+        }),
       }),
     );
+    // The error's message ("LOGIN failed") reaches neither the log nor Sentry.
+    expect(JSON.stringify(m.captureError.mock.calls)).not.toContain("LOGIN failed");
   });
 });

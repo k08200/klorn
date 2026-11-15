@@ -8,7 +8,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import { callText } from "./helpers/canary.js";
 import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 const m = vi.hoisted(() => ({
   eventsList: vi.fn(),
@@ -18,6 +20,7 @@ const m = vi.hoisted(() => ({
   buildLinkedCalendarClient: vi.fn(),
   isEntitled: vi.fn((_plan: string, _role?: string) => true),
   captureError: vi.fn(),
+  sendDailyDigests: vi.fn(async () => {}),
   runJudgeFallbackCheck: vi.fn(async () => {}),
   runDbSizeCheck: vi.fn(async () => {}),
   overrides: new Map<string, (...args: unknown[]) => unknown>(),
@@ -56,7 +59,7 @@ vi.mock("../billing/stripe.js", async (importOriginal) => ({
 
 // Fire-and-forget jobs a tick launches; none of them is under test and several
 // would reach the network.
-vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: vi.fn(async () => {}) }));
+vi.mock("../pim/daily-digest.js", () => ({ sendDailyDigests: m.sendDailyDigests }));
 vi.mock("../pim/weekly-report.js", () => ({ sendWeeklySignalReports: vi.fn(async () => {}) }));
 vi.mock("../judge/calibration-snapshot.js", () => ({
   runDailyCalibrationSnapshots: vi.fn(async () => {}),
@@ -725,5 +728,60 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
         expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
       });
     });
+  });
+});
+
+describe("scheduler failure reports carry facts, never the Prisma error's words", () => {
+  const LINKED_KEY = "LINKED_CALENDAR_SYNC_ENABLED";
+  const originalLinked = process.env[LINKED_KEY];
+  let consoleSpies: Array<ReturnType<typeof vi.spyOn>>;
+
+  beforeEach(() => {
+    consoleSpies = (["log", "info", "warn", "error"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {}),
+    );
+  });
+
+  afterEach(() => {
+    if (originalLinked === undefined) delete process.env[LINKED_KEY];
+    else process.env[LINKED_KEY] = originalLinked;
+  });
+
+  const consoleText = () => consoleSpies.map((spy) => callText(spy)).join("\n");
+  const sinkText = () => `${consoleText()}\n${callText(m.captureError)}`;
+
+  /** The digest is fire-and-forget, so its failure lands after the tick ends. Polls with the real setTimeout, like untilTickEnds. */
+  async function untilReported(label: string, timeoutMs = 4000): Promise<void> {
+    const deadline = performance.now() + timeoutMs;
+    while (!sinkText().includes(label)) {
+      if (performance.now() > deadline) throw new Error(`"${label}" was never reported`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  it("a failed daily digest", async () => {
+    m.sendDailyDigests.mockRejectedValueOnce(validationErrorQuotingText());
+
+    await runOneTick();
+    await untilReported("[AUTOMATION] Daily digest failed");
+
+    expect(m.sendDailyDigests).toHaveBeenCalledOnce();
+    expect(sinkText()).not.toContain(DB_CANARY);
+    expect(sinkText()).toContain("PrismaClientValidationError");
+  });
+
+  it("a failed linked calendar sync, in the console and in Sentry", async () => {
+    process.env[LINKED_KEY] = "true";
+    override("linkedCalendarAccount.findMany", () => {
+      throw validationErrorQuotingText();
+    });
+
+    await runOneTick();
+
+    expect(consoleText()).toContain("[AUTOMATION] Linked calendar sync failed");
+    expect(sinkText()).not.toContain(DB_CANARY);
+    expect(callText(m.captureError)).toContain("[AUTOMATION] Linked calendar sync failed");
+    expect(callText(m.captureError)).toContain("automation.linked-calendar-sync");
+    expect(sinkText()).toContain("PrismaClientValidationError");
   });
 });

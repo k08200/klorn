@@ -6,7 +6,7 @@
  * stops the revoke; this keeps that set small.
  */
 
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { newWork } from "../work-context.js";
 import { backfillPrimaryGoogleAddresses } from "./google-grant-revoke.js";
 
@@ -18,8 +18,10 @@ async function tick(): Promise<void> {
     const { filled } = await backfillPrimaryGoogleAddresses();
     if (filled > 0) console.log(`[GOOGLE-REVOKE] Stored ${filled} primary grant address(es).`);
   } catch (err) {
-    console.error("[GOOGLE-REVOKE] Address backfill failed:", err);
-    captureError(err, { tags: { scope: "google.revoke.backfill" } });
+    logDbFailure("[GOOGLE-REVOKE] Address backfill failed", err, { level: "error" });
+    captureDbFailure("[GOOGLE-REVOKE] Address backfill failed", err, {
+      tags: { scope: "google.revoke.backfill" },
+    });
   }
 }
 

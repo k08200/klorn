@@ -9,6 +9,7 @@
  */
 
 import { prisma } from "../db.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { finishDataWipe } from "../user-deletion.js";
@@ -38,12 +39,20 @@ export async function runDataWipeSweep(
       if ((await finishDataWipe(userId)) === "purged") finished++;
     } catch (err) {
       failed++;
-      console.error(`[DATA-WIPE] Sweep could not finish the wipe of ${userId}:`, err);
-      captureError(err, { tags: { scope: "data-wipe.sweep", userId } });
+      logDbFailure("[DATA-WIPE] Sweep could not finish a wipe", err, {
+        level: "error",
+        ids: { userId },
+      });
+      captureDbFailure("[DATA-WIPE] Sweep could not finish a wipe", err, {
+        tags: { scope: "data-wipe.sweep", userId },
+      });
       await prisma.dataWipe
         .update({ where: { userId }, data: { attempts: { increment: 1 } } })
         .catch((countErr: unknown) => {
-          console.error(`[DATA-WIPE] Could not count the failed attempt for ${userId}:`, countErr);
+          logDbFailure("[DATA-WIPE] Could not count the failed attempt", countErr, {
+            level: "error",
+            ids: { userId },
+          });
         });
       if (now.getTime() - requestedAt.getTime() > STUCK_AFTER_MS) {
         const stuck = new Error("data wipe pending for over 30 minutes");
@@ -62,8 +71,8 @@ async function tick(): Promise<void> {
     await runDataWipeSweep();
     recordSchedulerTick("data-wipe");
   } catch (err) {
-    console.error("[DATA-WIPE] Sweep failed:", err);
-    captureError(err, { tags: { scope: "data-wipe.sweep" } });
+    logDbFailure("[DATA-WIPE] Sweep failed", err, { level: "error" });
+    captureDbFailure("[DATA-WIPE] Sweep failed", err, { tags: { scope: "data-wipe.sweep" } });
   }
 }
 

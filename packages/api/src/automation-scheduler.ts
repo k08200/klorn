@@ -106,6 +106,7 @@ import {
 import { enqueueCoAttendance } from "./pim/coattendance/coattendance-job.js";
 import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { createSchedulerLease } from "./scheduler-lease.js";
@@ -354,8 +355,10 @@ async function notifyCandidateEmails(userId: string): Promise<void> {
       },
       "email_candidate",
     ).catch((err) => {
-      console.warn(`[AUTOMATION] Candidate email push failed for ${userId}:`, err);
-      captureError(err, { tags: { scope: "automation.candidate-push", userId } });
+      logDbFailure("[AUTOMATION] Candidate email push failed", err, { ids: { userId } });
+      captureDbFailure("[AUTOMATION] Candidate email push failed", err, {
+        tags: { scope: "automation.candidate-push", userId },
+      });
     });
   }
 }
@@ -402,7 +405,7 @@ async function dbHeartbeat(): Promise<void> {
     });
   } catch (err) {
     // Don't crash the scheduler on a stuck DB — the next tick will try again.
-    console.warn("[AUTOMATION] DB heartbeat failed (will retry next tick):", err);
+    logDbFailure("[AUTOMATION] DB heartbeat failed (will retry next tick)", err);
   }
 }
 
@@ -483,9 +486,11 @@ export async function maybeNudgeFreeDailyLimit(
     });
   } catch (err) {
     // The nudge is best-effort UX — never let it break the classify tick or
-    // spam retries. Log a signal (console + captureError) instead of swallowing.
-    console.warn(`[AUTOMATION] free-limit nudge failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "automation.free-limit-nudge", userId } });
+    // spam retries. Log a signal (console + Sentry) instead of swallowing.
+    logDbFailure("[AUTOMATION] free-limit nudge failed", err, { ids: { userId } });
+    captureDbFailure("[AUTOMATION] free-limit nudge failed", err, {
+      tags: { scope: "automation.free-limit-nudge", userId },
+    });
   }
 }
 
@@ -612,8 +617,11 @@ async function rewriteLedgerAsFailed(
   try {
     await prisma.notification.update({ where: { id: ledgerId }, data });
   } catch (err) {
-    console.warn(`[AUTOMATION] ${scope}: failure-ledger update failed`, err);
-    captureError(err, { tags: { scope }, extra: { ledgerId } });
+    logDbFailure("[AUTOMATION] failure-ledger update failed", err, { ids: { scope, ledgerId } });
+    captureDbFailure("[AUTOMATION] failure-ledger update failed", err, {
+      tags: { scope },
+      extra: { ledgerId },
+    });
   }
 }
 
@@ -1061,8 +1069,10 @@ export async function sweepUrgentEmails(config: {
               : undefined,
           )
           .catch((err) => {
-            console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
-            captureError(err, {
+            logDbFailure("[AUTOMATION] Urgent email push failed", err, {
+              ids: { userId: config.userId },
+            });
+            captureDbFailure("[AUTOMATION] Urgent email push failed", err, {
               tags: { scope: "automation.urgent-push", userId: config.userId },
             });
           });
@@ -1075,8 +1085,10 @@ export async function sweepUrgentEmails(config: {
         const lead = newUrgent[0];
         const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
         sendSms(config.userId, smsBody).catch((err) => {
-          console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
-          captureError(err, {
+          logDbFailure("[AUTOMATION] Urgent email SMS failed", err, {
+            ids: { userId: config.userId },
+          });
+          captureDbFailure("[AUTOMATION] Urgent email SMS failed", err, {
             tags: { scope: "automation.urgent-sms", userId: config.userId },
           });
         });
@@ -1100,8 +1112,10 @@ async function runAutomations() {
   } catch (err) {
     // The tick catches its own errors; this keeps anything that escapes from
     // becoming an unhandled rejection of the interval callback.
-    console.error("[AUTOMATION] Scheduler tick failed:", err);
-    captureError(err, { tags: { scope: "automation.scheduler" } });
+    logDbFailure("[AUTOMATION] Scheduler tick failed", err, { level: "error" });
+    captureDbFailure("[AUTOMATION] Scheduler tick failed", err, {
+      tags: { scope: "automation.scheduler" },
+    });
   } finally {
     schedulerInFlight = false;
   }
@@ -1127,8 +1141,10 @@ async function runAutomationTick(): Promise<void> {
     } catch (err) {
       // Escalate: a systemic outbox failure must not look like a routine
       // skipped tick. Contained so the rest of the tick runs.
-      console.error("[OUTBOX] drain errored:", err);
-      captureError(err, { tags: { scope: "automation.outbox-drain" } });
+      logDbFailure("[OUTBOX] drain errored", err, { level: "error" });
+      captureDbFailure("[OUTBOX] drain errored", err, {
+        tags: { scope: "automation.outbox-drain" },
+      });
     }
 
     // Attention aging (flag-gated, hourly): resolve items the user already
@@ -1145,8 +1161,10 @@ async function runAutomationTick(): Promise<void> {
           }
         })
         .catch((err) => {
-          console.warn("[ATTENTION-AGING] sweep errored:", err);
-          captureError(err, { tags: { scope: "automation.attention-aging" } });
+          logDbFailure("[ATTENTION-AGING] sweep errored", err);
+          captureDbFailure("[ATTENTION-AGING] sweep errored", err, {
+            tags: { scope: "automation.attention-aging" },
+          });
         });
     }
 
@@ -1158,8 +1176,10 @@ async function runAutomationTick(): Promise<void> {
     ) {
       lastOverrideUndoSweepAt = Date.now();
       sweepOverrideUndoSnapshots().catch((err) => {
-        console.warn("[OVERRIDE-UNDO] snapshot sweep errored:", err);
-        captureError(err, { tags: { scope: "automation.override-undo-sweep" } });
+        logDbFailure("[OVERRIDE-UNDO] snapshot sweep errored", err);
+        captureDbFailure("[OVERRIDE-UNDO] snapshot sweep errored", err, {
+          tags: { scope: "automation.override-undo-sweep" },
+        });
       });
     }
 
@@ -1180,8 +1200,10 @@ async function runAutomationTick(): Promise<void> {
           if (removed > 0) console.log(`[CALENDAR] expired device calendar sources=${removed}`);
         })
         .catch((err) => {
-          console.warn("[CALENDAR] device source expiry errored:", err);
-          captureError(err, { tags: { scope: "automation.device-source-expiry" } });
+          logDbFailure("[CALENDAR] device source expiry errored", err);
+          captureDbFailure("[CALENDAR] device source expiry errored", err, {
+            tags: { scope: "automation.device-source-expiry" },
+          });
         });
     }
 
@@ -1195,8 +1217,10 @@ async function runAutomationTick(): Promise<void> {
       import("./judge/judge-fallback-check.js")
         .then(({ runJudgeFallbackCheck }) => runJudgeFallbackCheck())
         .catch((err) => {
-          console.warn("[AUTOMATION] Judge fallback check failed:", err);
-          captureError(err, { tags: { scope: "automation.judge-fallback-check" } });
+          logDbFailure("[AUTOMATION] Judge fallback check failed", err);
+          captureDbFailure("[AUTOMATION] Judge fallback check failed", err, {
+            tags: { scope: "automation.judge-fallback-check" },
+          });
         });
     }
 
@@ -1208,8 +1232,10 @@ async function runAutomationTick(): Promise<void> {
       import("./ops/db-size-check.js")
         .then(({ runDbSizeCheck }) => runDbSizeCheck())
         .catch((err) => {
-          console.warn("[AUTOMATION] Database size check failed:", err);
-          captureError(err, { tags: { scope: "automation.db-size-check" } });
+          logDbFailure("[AUTOMATION] Database size check failed", err);
+          captureDbFailure("[AUTOMATION] Database size check failed", err, {
+            tags: { scope: "automation.db-size-check" },
+          });
         });
     }
 
@@ -1224,8 +1250,10 @@ async function runAutomationTick(): Promise<void> {
           }
         })
         .catch((err) => {
-          console.warn("[GMAIL-WATCH] Renewal sweep errored:", err);
-          captureError(err, { tags: { scope: "automation.gmail-watch-renewal" } });
+          logDbFailure("[GMAIL-WATCH] Renewal sweep errored", err);
+          captureDbFailure("[GMAIL-WATCH] Renewal sweep errored", err, {
+            tags: { scope: "automation.gmail-watch-renewal" },
+          });
         });
     }
 
@@ -1321,11 +1349,10 @@ async function runAutomationTick(): Promise<void> {
             config.userId,
           );
         } catch (err) {
-          console.warn(
-            `[scheduler] user cycle skipped (timeout or error) for ${config.userId}:`,
-            err instanceof Error ? err.message : String(err),
-          );
-          captureError(err, {
+          logLlmFailure("[scheduler] user cycle skipped (timeout or error)", err, {
+            ids: { userId: config.userId },
+          });
+          captureLlmFailure("[scheduler] user cycle skipped (timeout or error)", err, {
             tags: { scope: "scheduler.user-cycle" },
             extra: { userId: config.userId },
           });
@@ -1351,7 +1378,7 @@ async function runAutomationTick(): Promise<void> {
     try {
       await sendFocusWindowDigests();
     } catch (err) {
-      console.warn("[SCHEDULER] focus digest sweep failed:", err);
+      logDbFailure("[SCHEDULER] focus digest sweep failed", err);
     }
 
     // --- Quiet hours: ring held urgent mail once when the window ends ---
@@ -1360,7 +1387,7 @@ async function runAutomationTick(): Promise<void> {
     try {
       await sendQuietHoursSummaries();
     } catch (err) {
-      console.warn("[SCHEDULER] quiet-hours summary sweep failed:", err);
+      logDbFailure("[SCHEDULER] quiet-hours summary sweep failed", err);
     }
 
     const todayUtc = new Date().toISOString().slice(0, 10);
@@ -1374,7 +1401,7 @@ async function runAutomationTick(): Promise<void> {
       import("./pim/daily-digest.js")
         .then(({ sendDailyDigests }) => sendDailyDigests())
         .catch((err) => {
-          console.error("[AUTOMATION] Daily digest failed:", err);
+          logDbFailure("[AUTOMATION] Daily digest failed", err, { level: "error" });
         });
     }
 
@@ -1388,8 +1415,10 @@ async function runAutomationTick(): Promise<void> {
       import("./pim/weekly-report.js")
         .then(({ sendWeeklySignalReports }) => sendWeeklySignalReports())
         .catch((err) => {
-          console.error("[AUTOMATION] Weekly signal report failed:", err);
-          captureError(err, { tags: { scope: "automation.weekly-report" } });
+          logDbFailure("[AUTOMATION] Weekly signal report failed", err, { level: "error" });
+          captureDbFailure("[AUTOMATION] Weekly signal report failed", err, {
+            tags: { scope: "automation.weekly-report" },
+          });
         });
     }
 
@@ -1401,8 +1430,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/voice-profile-extractor.js")
         .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
         .catch((err) => {
-          console.error("[AUTOMATION] Voice profile extraction failed:", err);
-          captureError(err, { tags: { scope: "automation.voice-profile" } });
+          logLlmFailure("[AUTOMATION] Voice profile extraction failed", err, { level: "error" });
+          captureLlmFailure("[AUTOMATION] Voice profile extraction failed", err, {
+            tags: { scope: "automation.voice-profile" },
+          });
         });
     }
 
@@ -1414,8 +1445,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/sender-trait-extractor.js")
         .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
         .catch((err) => {
-          console.error("[AUTOMATION] Sender trait extraction failed:", err);
-          captureError(err, { tags: { scope: "automation.sender-traits" } });
+          logLlmFailure("[AUTOMATION] Sender trait extraction failed", err, { level: "error" });
+          captureLlmFailure("[AUTOMATION] Sender trait extraction failed", err, {
+            tags: { scope: "automation.sender-traits" },
+          });
         });
     }
 
@@ -1428,8 +1461,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/learned-rule-store.js")
         .then(({ recomputeLearnedRulesForAllUsers }) => recomputeLearnedRulesForAllUsers())
         .catch((err) => {
-          console.error("[AUTOMATION] Learned-rule recompute failed:", err);
-          captureError(err, { tags: { scope: "automation.learned-rules" } });
+          logDbFailure("[AUTOMATION] Learned-rule recompute failed", err, { level: "error" });
+          captureDbFailure("[AUTOMATION] Learned-rule recompute failed", err, {
+            tags: { scope: "automation.learned-rules" },
+          });
         });
     }
 
@@ -1443,8 +1478,10 @@ async function runAutomationTick(): Promise<void> {
       import("./judge/calibration-snapshot.js")
         .then(({ runDailyCalibrationSnapshots }) => runDailyCalibrationSnapshots())
         .catch((err) => {
-          console.warn("[AUTOMATION] Calibration snapshot failed:", err);
-          captureError(err, { tags: { scope: "automation.calibration-snapshot" } });
+          logDbFailure("[AUTOMATION] Calibration snapshot failed", err);
+          captureDbFailure("[AUTOMATION] Calibration snapshot failed", err, {
+            tags: { scope: "automation.calibration-snapshot" },
+          });
         });
       // --- Daily: ontology write-side proposals ---
       // Turn the same override ledger into advisory threshold-change proposals
@@ -1453,8 +1490,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/ontology-proposals-store.js")
         .then(({ recomputeOntologyProposalsSafe }) => recomputeOntologyProposalsSafe())
         .catch((err) => {
-          console.warn("[AUTOMATION] Ontology proposal recompute failed:", err);
-          captureError(err, { tags: { scope: "automation.ontology-proposals" } });
+          logDbFailure("[AUTOMATION] Ontology proposal recompute failed", err);
+          captureDbFailure("[AUTOMATION] Ontology proposal recompute failed", err, {
+            tags: { scope: "automation.ontology-proposals" },
+          });
         });
 
       // --- Daily: judge-health heartbeat ---
@@ -1465,19 +1504,25 @@ async function runAutomationTick(): Promise<void> {
       import("./judge/judge-health.js")
         .then(({ runJudgeHeartbeatCheck }) => runJudgeHeartbeatCheck())
         .catch((err) => {
-          console.warn("[AUTOMATION] Judge heartbeat check failed:", err);
-          captureError(err, { tags: { scope: "automation.judge-heartbeat" } });
+          logDbFailure("[AUTOMATION] Judge heartbeat check failed", err);
+          captureDbFailure("[AUTOMATION] Judge heartbeat check failed", err, {
+            tags: { scope: "automation.judge-heartbeat" },
+          });
         });
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
     await resurrectSnoozedItems().catch((err) => {
-      console.warn("[AUTOMATION] Snooze resurrection failed:", err);
-      captureError(err, { tags: { scope: "automation.snooze-resurrection" } });
+      logDbFailure("[AUTOMATION] Snooze resurrection failed", err);
+      captureDbFailure("[AUTOMATION] Snooze resurrection failed", err, {
+        tags: { scope: "automation.snooze-resurrection" },
+      });
     });
   } catch (err) {
-    console.error("[AUTOMATION] Scheduler error:", err);
-    captureError(err, { tags: { scope: "automation.scheduler" } });
+    logDbFailure("[AUTOMATION] Scheduler error", err, { level: "error" });
+    captureDbFailure("[AUTOMATION] Scheduler error", err, {
+      tags: { scope: "automation.scheduler" },
+    });
   }
 }
 
@@ -1516,8 +1561,10 @@ async function syncLinkedOnlyMailbox(userId: string): Promise<void> {
     if (newCount > 0) notifyConversationsUpdated(userId);
     await backfillEmailAttentionItems(userId);
   } catch (err) {
-    console.warn(`[AUTOMATION] Linked-only mailbox sync failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "automation.linked-only-sync", userId } });
+    logLlmFailure("[AUTOMATION] Linked-only mailbox sync failed", err, { ids: { userId } });
+    captureLlmFailure("[AUTOMATION] Linked-only mailbox sync failed", err, {
+      tags: { scope: "automation.linked-only-sync", userId },
+    });
   }
 }
 
@@ -1570,8 +1617,11 @@ async function runUserCycle(
             console.log(`[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`);
             briefingSentToday.set(config.userId, today);
           } else {
-            console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
-            captureError(err, {
+            logLlmFailure("[AUTOMATION] Briefing failed", err, {
+              level: "error",
+              ids: { userId: config.userId },
+            });
+            captureLlmFailure("[AUTOMATION] Briefing failed", err, {
               tags: { scope: "automation.briefing", userId: config.userId },
               extra: { briefingTime: config.briefingTime, timeZone },
             });
@@ -1594,15 +1644,13 @@ async function runUserCycle(
         await syncPrimaryCalendarWindow(session, config.userId, userTimezone);
       }
     } catch (err) {
-      const gaxiosErr = err as {
-        response?: { status?: number; data?: { error?: { message?: string } } };
-        message?: string;
-      };
-      const status = gaxiosErr.response?.status;
-      console.error(
-        `[AUTOMATION] Calendar sync failed for ${config.userId} (HTTP ${status}):`,
-        gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
-      );
+      const status = (err as { response?: { status?: number } }).response?.status;
+      // The provider's message can quote the event it rejected; the facts
+      // carry the HTTP status.
+      logDbFailure("[AUTOMATION] Calendar sync failed", err, {
+        level: "error",
+        ids: { userId: config.userId },
+      });
 
       // 401/403 = token invalid — notify user to reconnect. Atomic + winner-only
       // (dedupeKey = "calendar-disconnect:<dayKey>") so concurrent ticks can't
@@ -1623,8 +1671,10 @@ async function runUserCycle(
       try {
         await syncLinkedCalendars(config.userId);
       } catch (err) {
-        console.warn(`[AUTOMATION] Linked calendar sync failed for ${config.userId}:`, err);
-        captureError(err, {
+        logDbFailure("[AUTOMATION] Linked calendar sync failed", err, {
+          ids: { userId: config.userId },
+        });
+        captureDbFailure("[AUTOMATION] Linked calendar sync failed", err, {
           tags: { scope: "automation.linked-calendar-sync", userId: config.userId },
         });
       }
@@ -1691,10 +1741,9 @@ async function runUserCycle(
           console.log(`[AUTOMATION] Summaries paused for ${config.userId} — daily cost cap`);
           await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
             (nudgeErr) => {
-              console.warn(
-                `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
-                nudgeErr,
-              );
+              logDbFailure("[AUTOMATION] free-limit nudge threw unexpectedly", nudgeErr, {
+                ids: { userId: config.userId },
+              });
             },
           );
         }
@@ -1725,13 +1774,18 @@ async function runUserCycle(
           try {
             linkedInboxes = await getLinkedInboxClients(config.userId);
           } catch (err) {
-            console.warn(
-              `[AUTOMATION] Linked-inbox lookup failed for ${config.userId} — skipping fan-out this tick:`,
+            logDbFailure(
+              "[AUTOMATION] Linked-inbox lookup failed — skipping fan-out this tick",
               err,
+              {
+                ids: { userId: config.userId },
+              },
             );
-            captureError(err, {
-              tags: { scope: "automation.linked-inbox-lookup", userId: config.userId },
-            });
+            captureDbFailure(
+              "[AUTOMATION] Linked-inbox lookup failed — skipping fan-out this tick",
+              err,
+              { tags: { scope: "automation.linked-inbox-lookup", userId: config.userId } },
+            );
           }
           for (const inbox of linkedInboxes) {
             try {
@@ -1772,15 +1826,14 @@ async function runUserCycle(
               }
               if (err instanceof Error && err.message === "Gmail not connected") {
                 console.warn(
-                  `[AUTOMATION] Linked inbox ${inbox.email} not connected (revoked?) for ${config.userId}`,
+                  `[AUTOMATION] Linked inbox ${inbox.id} not connected (revoked?) for ${config.userId}`,
                 );
                 continue;
               }
-              console.warn(
-                `[AUTOMATION] Linked-inbox sync failed for ${config.userId} / ${inbox.email}:`,
-                err,
-              );
-              captureError(err, {
+              logLlmFailure("[AUTOMATION] Linked-inbox sync failed", err, {
+                ids: { userId: config.userId, linkedInboxAccountId: inbox.id },
+              });
+              captureLlmFailure("[AUTOMATION] Linked-inbox sync failed", err, {
                 tags: { scope: "automation.linked-inbox-sync", userId: config.userId },
                 extra: { linkedInboxAccountId: inbox.id },
               });
@@ -1958,7 +2011,9 @@ async function runUserCycle(
               await prisma.attentionItem
                 .update({ where: { id: itemId }, data: { status: "RESOLVED" } })
                 .catch((err) =>
-                  console.warn(`[AUTOMATION] auto-mode resolve failed for ${itemId}`, err),
+                  logDbFailure("[AUTOMATION] auto-mode resolve failed", err, {
+                    ids: { attentionItemId: itemId },
+                  }),
                 );
             },
             warn: (message) => console.warn(message),
@@ -2010,18 +2065,20 @@ async function runUserCycle(
           // would abort the rest of this tick's users. Belt and suspenders.
           await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
             (nudgeErr) => {
-              console.warn(
-                `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
-                nudgeErr,
-              );
+              logDbFailure("[AUTOMATION] free-limit nudge threw unexpectedly", nudgeErr, {
+                ids: { userId: config.userId },
+              });
             },
           );
         } else {
           // Token expired, rate-limited, or network flake — log +
           // capture so "Eve stopped reading email" doesn't become an
           // invisible outage. Returns early so the next tick still tries.
-          console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
-          captureError(err, {
+          logLlmFailure("[AUTOMATION] Email sync failed", err, {
+            level: "error",
+            ids: { userId: config.userId },
+          });
+          captureLlmFailure("[AUTOMATION] Email sync failed", err, {
             tags: { scope: "automation.email-sync", userId: config.userId },
           });
         }
@@ -2053,8 +2110,8 @@ async function runUserCycle(
   const perUserProactive = config.proactiveActions === true;
   if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
     runProactiveActions(config.userId).catch((err) => {
-      console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
-      captureError(err, {
+      logDbFailure("[PROACTIVE] Failed", err, { level: "error", ids: { userId: config.userId } });
+      captureDbFailure("[PROACTIVE] Failed", err, {
         tags: { scope: "automation.proactive", userId: config.userId },
       });
     });
@@ -2069,8 +2126,8 @@ async function runUserCycle(
   const phoneOptIn = (config as unknown as Record<string, unknown>).phoneEscalationEnabled === true;
   if (PHONE_ESCALATION_ENABLED && phoneOptIn) {
     escalateUnackedPush(config.userId).catch((err) => {
-      console.warn(`[PHONE] Escalation sweep failed for ${config.userId}:`, err);
-      captureError(err, {
+      logDbFailure("[PHONE] Escalation sweep failed", err, { ids: { userId: config.userId } });
+      captureDbFailure("[PHONE] Escalation sweep failed", err, {
         tags: { scope: "automation.phone-escalation", userId: config.userId },
       });
     });

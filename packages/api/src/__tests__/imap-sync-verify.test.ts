@@ -335,7 +335,7 @@ describe("verifyImapCredentials: what is logged", () => {
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   const logged = () => warn.mock.calls.map((call) => call.map(String).join(" ")).join("\n");
 
-  it("logs the raw failure on the server, as one capped line", async () => {
+  it("logs the failure on the server as one line of facts, never the server's text", async () => {
     warn.mockClear();
     connectFn.mockRejectedValueOnce(
       codedError("ERR_X", `weird\r\n[icloud-imap] FORGED ${"A".repeat(50_000)}`),
@@ -347,7 +347,7 @@ describe("verifyImapCredentials: what is logged", () => {
       expect(String(line).length).toBeLessThan(800);
     }
     expect(logged()).toContain("ERR_X");
-    expect(logged()).toContain("FORGED");
+    expect(logged()).not.toContain("FORGED");
   });
 
   it("never logs the password, even if the library echoes it", async () => {

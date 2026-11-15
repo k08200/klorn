@@ -42,6 +42,7 @@
 import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../db.js";
 import { stampDecisionRang } from "../judge/decision-label.js";
+import { logDbFailure } from "../report-db-failure.js";
 import type { MailPushLane } from "./mail-push-content.js";
 import {
   type NotificationLanguage,
@@ -117,7 +118,7 @@ export async function sendQuietHoursSummaries(now: Date = new Date()): Promise<n
       // starve the rest of the sweep. Before the claim the next tick retries;
       // after it the window is spent. The kind only: a Prisma message can echo
       // what it was given, and the single-mail push carries a sender's name.
-      console.warn(`[QUIET] summary failed for user ${config.userId}: ${errorKind(err)}`);
+      logDbFailure("[QUIET] summary failed", err, { ids: { userId: config.userId } });
     }
   }
   return rung;
@@ -254,11 +255,4 @@ async function claimWindow(userId: string, dedupeKey: string, count: number): Pr
     if ((err as { code?: string })?.code === "P2002") return false; // already rung
     throw err;
   }
-}
-
-/** The error's class and Prisma code, never its message. */
-function errorKind(err: unknown): string {
-  if (!(err instanceof Error)) return "unknown";
-  const code = (err as { code?: unknown }).code;
-  return typeof code === "string" ? `${err.name} ${code}` : err.name;
 }

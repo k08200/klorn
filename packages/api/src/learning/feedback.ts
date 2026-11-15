@@ -8,6 +8,7 @@
 
 import type { FeedbackSignal, FeedbackSource } from "@prisma/client";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 export interface FeedbackInput {
   userId: string;
@@ -35,7 +36,9 @@ export async function recordFeedback(input: FeedbackInput): Promise<void> {
       },
     });
   } catch (err) {
-    console.warn("[feedback] recordFeedback failed", input.signal, input.sourceId, err);
+    logDbFailure("[feedback] recordFeedback failed", err, {
+      ids: { signal: input.signal, sourceId: input.sourceId },
+    });
   }
 }
 

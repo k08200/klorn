@@ -31,7 +31,6 @@ import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { effectivePlan } from "../org/effective-tier.js";
-import { captureError } from "../sentry.js";
 
 export function isProactiveDraftEnabled(): boolean {
   return process.env.PROACTIVE_DRAFT_ENABLED === "true";
@@ -247,8 +246,13 @@ export async function runProactiveDrafts(
   try {
     return await sweep(userId, draftFor, now);
   } catch (err) {
-    console.warn("[PROACTIVE-DRAFT] sweep failed:", err instanceof Error ? err.message : err);
-    captureError(err, { tags: { scope: "proactive-drafts.sweep" }, extra: { userId } });
+    // Facts only: the sweep drafts over this user's mail, so a provider or
+    // database error that escapes it can quote that mail.
+    logLlmFailure("[PROACTIVE-DRAFT] sweep failed", err, { ids: { userId } });
+    captureLlmFailure("[PROACTIVE-DRAFT] sweep failed", err, {
+      tags: { scope: "proactive-drafts.sweep" },
+      extra: { userId },
+    });
     return 0;
   } finally {
     sweeping.delete(userId);

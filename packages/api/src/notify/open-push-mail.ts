@@ -20,8 +20,7 @@ import { NOT_AGENT_SET } from "../judge/agent-tier.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
 import type { PocJudgement } from "../judge/poc-judge.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
-import { describeFailure } from "../mail/providers/action-failure.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { type MailPushContent, mailPushContent } from "./mail-push-content.js";
 import {
   type MailForReason,
@@ -144,12 +143,15 @@ const reportedLookupFailures = new Set<LaneLookup>();
 function reportLaneLookupFailure(lookup: LaneLookup, userId: string, err: unknown): void {
   if (reportedLookupFailures.has(lookup)) return;
   reportedLookupFailures.add(lookup);
-  // describeFailure: the error's class and code only, never a message that
-  // could quote the query's arguments.
-  console.warn(
-    `[urgent-sweep] ${lookup} lookup failed for ${userId}; mail it could not check does not ring this time: ${describeFailure(err)}`,
-  );
-  captureError(err, { tags: { scope: "automation.urgent-lane" }, extra: { userId, lookup } });
+  // The failure's facts only (class, code, model, operation), never a message
+  // that could quote the query's arguments.
+  const label =
+    "[urgent-sweep] lane lookup failed; mail it could not check does not ring this time";
+  logDbFailure(label, err, { ids: { lookup, userId } });
+  captureDbFailure(label, err, {
+    tags: { scope: "automation.urgent-lane" },
+    extra: { userId, lookup },
+  });
 }
 
 /** An urgent mail the sweep is considering: its id and its sender. */
@@ -272,10 +274,13 @@ async function reasonsOrNone(
       policyUser: isJudgeV3PolicyEnabled(userId),
     });
   } catch (err) {
-    console.warn(
-      `[NOTIFY] reason lookup failed for ${userId}; ringing without a reason line: ${describeFailure(err)}`,
-    );
-    captureError(err, { tags: { scope: "notify.mail-reason" }, extra: { userId } });
+    logDbFailure("[NOTIFY] reason lookup failed; ringing without a reason line", err, {
+      ids: { userId },
+    });
+    captureDbFailure("[NOTIFY] reason lookup failed; ringing without a reason line", err, {
+      tags: { scope: "notify.mail-reason" },
+      extra: { userId },
+    });
     return new Map();
   }
 }
@@ -292,10 +297,13 @@ export async function urgentLeadPushContent(
       select: { sourceId: true, ...REASON_ITEM_SELECT },
     });
   } catch (err) {
-    console.warn(
-      `[urgent-sweep] reason lookup failed for ${userId}; ringing without a reason line: ${describeFailure(err)}`,
-    );
-    captureError(err, { tags: { scope: "automation.urgent-reason" }, extra: { userId } });
+    logDbFailure("[urgent-sweep] reason lookup failed; ringing without a reason line", err, {
+      ids: { userId },
+    });
+    captureDbFailure("[urgent-sweep] reason lookup failed; ringing without a reason line", err, {
+      tags: { scope: "automation.urgent-reason" },
+      extra: { userId },
+    });
   }
   const reasons = await reasonsOrNone(
     userId,

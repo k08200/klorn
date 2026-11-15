@@ -16,9 +16,9 @@ import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { effectivePlan } from "../org/effective-tier.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
 import { Semaphore } from "../semaphore.js";
-import { captureError } from "../sentry.js";
 import { summarizeUnsummarizedEmails } from "./email-summarize.js";
 import {
   getAuthedClient,
@@ -201,11 +201,10 @@ async function persistEmailBatch(
     } catch (err) {
       // console first — captureError is silent without a Sentry DSN (self-host/
       // dev), and the sibling reconcile catch follows the same console discipline.
-      console.warn(
-        "[EMAIL-SYNC] persist failed (gmailId in Sentry extra):",
-        err instanceof Error ? err.message : String(err),
-      );
-      captureError(err, {
+      logDbFailure("[EMAIL-SYNC] persist failed (gmailId in Sentry extra)", err, {
+        ids: { userId },
+      });
+      captureDbFailure("[EMAIL-SYNC] persist failed (gmailId in Sentry extra)", err, {
         tags: { scope: "email.sync.persist", userId },
         extra: { gmailId: email.gmailId },
       });
@@ -287,7 +286,7 @@ async function stampPrimarySynced(userId: string): Promise<void> {
       data: { lastSyncedAt: new Date() },
     });
   } catch (err) {
-    console.warn(`[EMAIL] could not stamp lastSyncedAt for ${userId}:`, err);
+    logDbFailure("[EMAIL] could not stamp lastSyncedAt", err, { ids: { userId } });
   }
 }
 
@@ -363,7 +362,7 @@ export async function syncSpamLane(userId: string): Promise<number> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!/not connected/i.test(msg)) {
-      console.warn(`[MAIL-SYNC] spam lane failed for ${userId}: ${msg}`);
+      logDbFailure("[MAIL-SYNC] spam lane failed", err, { ids: { userId } });
     }
     return 0;
   }
@@ -424,11 +423,10 @@ export async function syncLinkedInboxesForUser(userId: string): Promise<{ newCou
       // Isolate per-account failures — one revoked/erroring linked inbox must not
       // sink the others or the request. Never silent (captureError is a no-op
       // without a Sentry DSN).
-      console.warn(
-        `[EMAIL-SYNC] on-demand linked sync failed for ${userId} (account ${inbox.id}):`,
-        err instanceof Error ? err.message : String(err),
-      );
-      captureError(err, {
+      logDbFailure("[EMAIL-SYNC] on-demand linked sync failed", err, {
+        ids: { userId, linkedInboxAccountId: inbox.id },
+      });
+      captureDbFailure("[EMAIL-SYNC] on-demand linked sync failed", err, {
         tags: { scope: "email.sync.linked-ondemand", userId },
         extra: { linkedInboxAccountId: inbox.id },
       });
@@ -477,11 +475,10 @@ export async function reconcileLinkedInboxes(
       // Isolate per-account failures (e.g. a revoked linked token) so one bad
       // inbox never strands the rest — and never silently: console first
       // (captureError is a no-op without a Sentry DSN).
-      console.warn(
-        `[EMAIL-SYNC] linked-inbox reconcile failed for user ${userId} (account ${account.id}):`,
-        err instanceof Error ? err.message : String(err),
-      );
-      captureError(err, {
+      logDbFailure("[EMAIL-SYNC] linked-inbox reconcile failed", err, {
+        ids: { userId, linkedInboxAccountId: account.id },
+      });
+      captureDbFailure("[EMAIL-SYNC] linked-inbox reconcile failed", err, {
         tags: { scope: "email.reconcile.linked", userId },
         extra: { linkedInboxAccountId: account.id },
       });
@@ -681,8 +678,8 @@ async function refreshReadStatus(
         // this one message so a single failure doesn't sink the whole reconcile,
         // but leave a signal — a bare swallow here would hide a quota or
         // connectivity problem behind an under-counted `updated`.
-        console.warn(`[EMAIL-SYNC] refreshReadStatus skipped ${gmailId} for user ${userId}:`, err);
-        captureError(err, {
+        logDbFailure("[EMAIL-SYNC] refreshReadStatus skipped", err, { ids: { userId, gmailId } });
+        captureDbFailure("[EMAIL-SYNC] refreshReadStatus skipped", err, {
           tags: { scope: "email.sync.reconcile.readstatus" },
           extra: { userId, gmailId },
         });

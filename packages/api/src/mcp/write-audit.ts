@@ -25,7 +25,7 @@
 import crypto from "node:crypto";
 import { mcpWriteToolsEnabled } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { stableStringify } from "../stable-json.js";
 
 /** Longest id kept as targetId. Gmail ids are 16 hex chars; anything longer is not an id. */
@@ -174,7 +174,7 @@ export async function settleWriteAudit(
       },
     });
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[MCP] write audit settle failed", err, {
       tags: { scope: "mcp.write-audit.settle" },
       extra: failureExtra(input, { auditId }),
     });
@@ -221,7 +221,7 @@ export async function recordRefusedWrite(
       select: { id: true },
     });
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[MCP] write audit of a refused write failed", err, {
       tags: { scope: "mcp.write-audit.refused" },
       extra: failureExtra(input),
     });

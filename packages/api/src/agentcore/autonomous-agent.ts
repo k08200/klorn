@@ -47,6 +47,7 @@ import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { agentModeUnderOrgCeiling } from "../org/ceilings.js";
 import { effectivePlan } from "../org/effective-tier.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
 import { type AgentContext, gatherAgentContext } from "./agent-context.js";
@@ -115,7 +116,7 @@ async function logAgentAction(
       data: { userId, action, summary, tool, reasoning },
     });
   } catch (err) {
-    console.warn("[AGENT] logAgentAction failed (audit gap):", err);
+    logDbFailure("[AGENT] logAgentAction failed (audit gap)", err);
     // Logging is non-critical — silently fail before migration
   }
 }
@@ -174,7 +175,7 @@ async function getAgentFeedback(userId: string): Promise<string> {
 
     return feedback;
   } catch (err) {
-    console.warn("[AGENT] getAgentFeedback failed:", err);
+    logDbFailure("[AGENT] getAgentFeedback failed", err);
     return "";
   }
 }
@@ -226,7 +227,7 @@ async function getProposalHistory(userId: string): Promise<string> {
 
     return summary;
   } catch (err) {
-    console.warn("[AGENT] getProposalHistory failed:", err);
+    logDbFailure("[AGENT] getProposalHistory failed", err);
     return "";
   }
 }
@@ -833,7 +834,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   "agent_proposal",
                   // Agent-originated: always ambient (push-bucket.ts).
                   { bucket: "ambient" },
-                ).catch((err) => console.warn("[AGENT] proposal push failed", err));
+                ).catch((err) => logDbFailure("[AGENT] proposal push failed", err));
               }
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
@@ -986,7 +987,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 // it cannot use up the interrupt room the firewall's PUSH
                 // mail, meeting alerts and reminders need (push-bucket.ts).
                 { bucket: "ambient" },
-              ).catch((err) => console.warn("[AGENT] notify push failed", err));
+              ).catch((err) => logDbFailure("[AGENT] notify push failed", err));
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
 
@@ -1161,7 +1162,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 "agent_proposal",
                 // Agent-originated: always ambient (push-bucket.ts).
                 { bucket: "ambient" },
-              ).catch((err) => console.warn("[AGENT] risk push failed", err));
+              ).catch((err) => logDbFailure("[AGENT] risk push failed", err));
 
               // Notify sidebar to refresh
               pushNotification(userId, {
@@ -1316,7 +1317,9 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                           actions.markAsRead(userId, ue.gmailId, ue.linkedInboxAccountId),
                         )
                         .catch((err: unknown) =>
-                          console.warn(`[AGENT] Failed to mark ${ue.gmailId} as read:`, err),
+                          logDbFailure("[AGENT] Failed to mark message as read", err, {
+                            ids: { gmailId: ue.gmailId },
+                          }),
                         );
                       console.log(`[AGENT] Marked Gmail message as read: ${ue.gmailId}`);
                     } else {
@@ -1343,12 +1346,12 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                         },
                       })
                       .catch((err: unknown) =>
-                        console.warn("[AGENT] EmailProcessingLog insert failed:", err),
+                        logDbFailure("[AGENT] EmailProcessingLog insert failed", err),
                       );
                   }
                 }
               } catch (err) {
-                console.warn(`[AGENT] Failed to mark email as read in Gmail:`, err);
+                logDbFailure("[AGENT] Failed to mark email as read in Gmail", err);
               }
             } else {
               console.log(

@@ -21,7 +21,7 @@ import http2 from "node:http2";
 import type { ApnsMailCategory } from "@klorn/contract";
 import jwt from "jsonwebtoken";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { type DevicePushPayload, type DevicePushSummary, mailPushTarget } from "./push-device.js";
 
@@ -111,7 +111,7 @@ function sendOne(
       respBody += chunk;
     });
     req.on("error", (err) => {
-      console.error("[PUSH-APNS] request error:", err);
+      logDbFailure("[PUSH-APNS] request error", err, { level: "error" });
       done({ ok: false, prune: false });
     });
     // Safety net: stream closed without end/error (e.g. RST) must still resolve
@@ -204,8 +204,12 @@ export async function sendApnsPush(
   try {
     jwtToken = providerToken();
   } catch (err) {
-    console.error("[PUSH-APNS] Failed to mint provider JWT (check APNS_KEY_P8/ID/TEAM):", err);
-    captureError(err, { tags: { scope: "push-apns.jwt" } });
+    logDbFailure("[PUSH-APNS] Failed to mint provider JWT (check APNS_KEY_P8/ID/TEAM)", err, {
+      level: "error",
+    });
+    captureDbFailure("[PUSH-APNS] Failed to mint provider JWT (check APNS_KEY_P8/ID/TEAM)", err, {
+      tags: { scope: "push-apns.jwt" },
+    });
     return skipped("apns_jwt_error");
   }
 
@@ -215,13 +219,13 @@ export async function sendApnsPush(
   try {
     client = http2.connect(APNS_HOST);
   } catch (err) {
-    console.error("[PUSH-APNS] connect failed:", err);
-    captureError(err, { tags: { scope: "push-apns.connect" } });
+    logDbFailure("[PUSH-APNS] connect failed", err, { level: "error" });
+    captureDbFailure("[PUSH-APNS] connect failed", err, { tags: { scope: "push-apns.connect" } });
     return skipped("apns_connect_error");
   }
   client.on("error", (err) => {
-    console.error("[PUSH-APNS] session error:", err);
-    captureError(err, { tags: { scope: "push-apns.session" } });
+    logDbFailure("[PUSH-APNS] session error", err, { level: "error" });
+    captureDbFailure("[PUSH-APNS] session error", err, { tags: { scope: "push-apns.session" } });
   });
 
   let accepted = 0;

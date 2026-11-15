@@ -24,7 +24,7 @@ import { prisma } from "../db.js";
 import { displayNameOf, isPlainAddress, parseAddress } from "../mail/email-address.js";
 import { orgDomainOf } from "../mail/public-mail-domains.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { remember } from "./memory.js";
 
 const GRAPH_KEY = "interaction_graph_v1";
@@ -104,7 +104,7 @@ export async function getInteractionGraph(userId: string): Promise<InteractionGr
       if (ageMs < GRAPH_TTL_DAYS * 24 * 60 * 60 * 1000) return parsed;
     }
   } catch (err) {
-    console.warn("[INTERACTION-GRAPH] stale-check read failed (rebuilding):", err);
+    logDbFailure("[INTERACTION-GRAPH] stale-check read failed (rebuilding)", err);
     // rebuild below
   }
   return buildAndCacheGraph(userId);
@@ -140,9 +140,11 @@ export async function getCachedInteractionGraph(userId: string): Promise<Interac
     if (!Array.isArray(parsed.nodes)) return null;
     return parsed;
   } catch (err) {
-    // console + captureError: captureError alone is silent when Sentry is off.
-    console.warn("[INTERACTION-GRAPH] getCachedInteractionGraph failed:", err);
-    captureError(err, { tags: { scope: "interaction-graph-cache-read" } });
+    // console + Sentry: Sentry alone is silent when it is off.
+    logDbFailure("[INTERACTION-GRAPH] getCachedInteractionGraph failed", err);
+    captureDbFailure("[INTERACTION-GRAPH] getCachedInteractionGraph failed", err, {
+      tags: { scope: "interaction-graph-cache-read" },
+    });
     return null;
   }
 }
@@ -207,7 +209,7 @@ export async function buildInteractionHintForPrompt(userId: string): Promise<str
 Who you email and meet with most. Use this to prioritize proposals and replies.
 ${lines.join("\n")}`;
   } catch (err) {
-    console.warn("[INTERACTION-GRAPH] buildInteractionHintForPrompt failed:", err);
+    logDbFailure("[INTERACTION-GRAPH] buildInteractionHintForPrompt failed", err);
     return "";
   }
 }
@@ -225,12 +227,12 @@ export async function buildInteractionGraphsForAllUsers(): Promise<void> {
       try {
         await buildAndCacheGraph(userId);
       } catch (err) {
-        console.warn("[INTERACTION-GRAPH] per-user build failed for", userId, err);
+        logDbFailure("[INTERACTION-GRAPH] per-user build failed", err, { ids: { userId } });
         // skip individual failures
       }
     }
   } catch (err) {
-    console.error("[INTERACTION-GRAPH] Batch build failed:", err);
+    logDbFailure("[INTERACTION-GRAPH] Batch build failed", err, { level: "error" });
   }
 }
 

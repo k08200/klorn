@@ -29,6 +29,7 @@ import { syncEmails } from "../mail/email-sync.js";
 import { getAuthedInboxClient, registerGmailWatch, stopGmailWatch } from "../mail/gmail.js";
 import { createSingleFlight } from "../mail/sync-single-flight.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
@@ -157,8 +158,11 @@ export async function gmailPushRoutes(app: FastifyInstance) {
           }
         })
         .catch((err) => {
-          console.warn(`[GMAIL-PUSH] sync failed for ${uid}: ${String(err)}`);
-          captureError(err, { tags: { scope: "gmail-push.sync" }, extra: { userId: uid } });
+          logDbFailure("[GMAIL-PUSH] sync failed", err, { ids: { userId: uid } });
+          captureDbFailure("[GMAIL-PUSH] sync failed", err, {
+            tags: { scope: "gmail-push.sync" },
+            extra: { userId: uid },
+          });
         });
     };
 

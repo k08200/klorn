@@ -8,7 +8,7 @@
 
 import { decryptOptional, decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { markLinkedInboxForReconnect } from "./gmail.js";
 import { refreshOutlookTokens } from "./outlook-oauth.js";
 import { refreshedTokenUpdate } from "./outlook-token-update.js";
@@ -42,9 +42,9 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
   } catch (err) {
     // Undecryptable cipher (key rotation gap, hand-edited row): durable flag,
     // fire-and-forget — same contract as the Google linked path.
-    console.warn(`[outlook-accounts] undecryptable token for row ${row.id}:`, err);
+    logDbFailure("[outlook-accounts] undecryptable token", err, { ids: { rowId: row.id } });
     void markLinkedInboxForReconnect(userId, row.id, "OUTLOOK").catch((markErr) => {
-      console.warn(`[outlook-accounts] reconnect mark failed for row ${row.id}:`, markErr);
+      logDbFailure("[outlook-accounts] reconnect mark failed", markErr, { ids: { rowId: row.id } });
     });
     return null;
   }
@@ -55,7 +55,9 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
     // A rotten refresh cipher alone must not discard a still-valid access
     // token: sync with it now; the refresh-needed branch below flags
     // reconnect once the access token actually runs out.
-    console.warn(`[outlook-accounts] undecryptable refresh cipher for row ${row.id}:`, err);
+    logDbFailure("[outlook-accounts] undecryptable refresh cipher", err, {
+      ids: { rowId: row.id },
+    });
   }
 
   const fresh = row.expiresAt && row.expiresAt.getTime() > Date.now() + EXPIRY_SLACK_MS;
@@ -64,7 +66,7 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
   if (!refreshToken) {
     // Expired with no refresh token — nothing to do but ask the user.
     void markLinkedInboxForReconnect(userId, row.id, "OUTLOOK").catch((markErr) => {
-      console.warn(`[outlook-accounts] reconnect mark failed for row ${row.id}:`, markErr);
+      logDbFailure("[outlook-accounts] reconnect mark failed", markErr, { ids: { rowId: row.id } });
     });
     return null;
   }
@@ -74,7 +76,7 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
     // invalid_grant = revoked/aged-out; any other code is equally terminal
     // for this tick — flag and let the user re-link.
     void markLinkedInboxForReconnect(userId, row.id, "OUTLOOK").catch((markErr) => {
-      console.warn(`[outlook-accounts] reconnect mark failed for row ${row.id}:`, markErr);
+      logDbFailure("[outlook-accounts] reconnect mark failed", markErr, { ids: { rowId: row.id } });
     });
     return null;
   }
@@ -97,11 +99,10 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
     // in memory and valid. Worst case the rotated refresh cipher is lost and
     // the NEXT refresh invalid_grants into a reconnect prompt; log loudly so
     // that shows up as this write failing, not as a mystery reconnect.
-    console.warn(
-      `[outlook-accounts] token persist failed for row ${row.id} (syncing anyway):`,
-      err,
-    );
-    captureError(err, {
+    logDbFailure("[outlook-accounts] token persist failed (syncing anyway)", err, {
+      ids: { rowId: row.id },
+    });
+    captureDbFailure("[outlook-accounts] token persist failed (syncing anyway)", err, {
       tags: { scope: "outlook-accounts.token-persist" },
       extra: { userId, linkedInboxAccountId: row.id },
     });

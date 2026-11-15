@@ -42,6 +42,7 @@ import type {
   GoogleDrivePickRefusalCode,
 } from "@klorn/contract";
 import { googlePickerConfig } from "../config.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { type ConnectedAccountRows, connectedAccountRows } from "./drive-read.js";
 import { connectedDriveSource, type DriveFileInput, upsertDriveFileRow } from "./drive-rows.js";
@@ -143,12 +144,9 @@ async function verifyTokenScopes(
     const scopes = Array.isArray(info.scopes) ? info.scopes.join(" ") : "";
     return isDriveFileOnlyGrant(scopes) ? "ok" : "grant-too-broad";
   } catch (err) {
-    const status = googleErrorStatus(err) ?? "no response";
-    console.warn(
-      `[GOOGLE-DRIVE] picker tokeninfo failed for drive account ${accountId}: ${status}`,
-    );
-    // A new Error, never `err`: its request carries the token.
-    captureError(new Error(`Google Drive picker tokeninfo failed: ${status}`), {
+    // The reporter sends facts (class, HTTP status), never `err`: its request carries the token.
+    logDbFailure("[GOOGLE-DRIVE] picker tokeninfo failed", err, { ids: { accountId } });
+    captureDbFailure("[GOOGLE-DRIVE] picker tokeninfo failed", err, {
       tags: { scope: "drive.google.picker-tokeninfo" },
       extra: { accountId },
     });

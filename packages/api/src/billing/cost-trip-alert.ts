@@ -17,6 +17,7 @@
  */
 
 import { createAdminOpsNotifications } from "../ops/admin-ops-notification.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 
 export interface CostCapTripInput {
@@ -103,7 +104,7 @@ export async function notifyCostCapTrip(input: CostCapTripInput): Promise<void> 
   } catch (err) {
     // One attempt per day: console+Sentry already fired above, and the next
     // UTC day resets the dedupe. Alerting must never throw into a call path.
-    console.warn("[cost-guard] cap-trip admin notification failed:", err);
+    logDbFailure("[cost-guard] cap-trip admin notification failed", err);
   }
 }
 

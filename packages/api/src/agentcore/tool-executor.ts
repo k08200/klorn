@@ -42,6 +42,7 @@ import {
 } from "../pim/meeting.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 import { teamAvailabilityMembers } from "../pim/team-availability-members.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
@@ -368,7 +369,10 @@ async function executeToolCallInternal(
               origin: opts.sentOrigin ?? "approved",
             });
           } catch (err) {
-            captureError(err, { tags: { scope: "tool-executor.sent-record" }, extra: { userId } });
+            captureDbFailure("[TOOL-EXECUTOR] sent-record failed", err, {
+              tags: { scope: "tool-executor.sent-record" },
+              extra: { userId },
+            });
           }
         }
         return JSON.stringify(sent);

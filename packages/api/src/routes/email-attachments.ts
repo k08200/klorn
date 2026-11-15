@@ -41,6 +41,7 @@ import {
   MAX_VISION_ATTACHMENT_BYTES,
   VISION_OCR_MAX_TOKENS,
 } from "../mail/vision-attachment-policy.js";
+import { dbFailureFacts } from "../report-db-failure.js";
 import { attachmentDisposition } from "../storage/download-name.js";
 import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
 
@@ -565,7 +566,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
         if (err instanceof FileConversionError) {
           return reply.code(err.statusCode).send({ error: err.message, code: err.code });
         }
-        request.log.error({ err }, "Attachment conversion failed");
+        request.log.error({ failure: dbFailureFacts(err) }, "Attachment conversion failed");
         return reply.code(500).send({ error: "Attachment conversion failed" });
       }
     },

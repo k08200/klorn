@@ -17,7 +17,7 @@ import {
   recordScreenerDecision,
   type ScreenerVerdict,
 } from "../judge/screener.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 const decisionBodySchema = {
   type: "object",
@@ -65,7 +65,10 @@ export async function screenerRoutes(app: FastifyInstance): Promise<void> {
         await recordScreenerDecision(userId, sender, verdict);
         return reply.send({ ok: true, sender: sender.trim().toLowerCase(), verdict });
       } catch (err) {
-        captureError(err, { tags: { scope: "screener-decision" }, extra: { userId } });
+        captureDbFailure("[SCREENER] decision record failed", err, {
+          tags: { scope: "screener-decision" },
+          extra: { userId },
+        });
         return reply.code(500).send({ error: "Could not record the decision" });
       }
     },

@@ -47,7 +47,7 @@ import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
 import type { DriveProviderEnabledMap } from "../drive/drive-scope.js";
 import { driveSummariesLive, driveSummariesOpenTo } from "../drive/summary-policy.js";
 import { requestDriveSummary, summaryForFile } from "../drive/summary-triggers.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { rateLimitHook } from "./rate-limit-hook.js";
@@ -118,7 +118,9 @@ function reportSummarySearchFailure(err: unknown): void {
   if (summarySearchFailureReported) return;
   summarySearchFailureReported = true;
   console.error("[DRIVE] summary search failed; answering name matches only");
-  captureError(err, { tags: { scope: "drive.summary.search" } });
+  captureDbFailure("[DRIVE] summary search failed", err, {
+    tags: { scope: "drive.summary.search" },
+  });
 }
 
 /** A summary read that failed leaves the file without it; said once per process. */
@@ -126,7 +128,7 @@ function reportSummaryReadFailure(err: unknown): void {
   if (summaryReadFailureReported) return;
   summaryReadFailureReported = true;
   console.error("[DRIVE] summary read failed; answering the file without its summary");
-  captureError(err, { tags: { scope: "drive.summary.read" } });
+  captureDbFailure("[DRIVE] summary read failed", err, { tags: { scope: "drive.summary.read" } });
 }
 
 export function driveRoutes(opts: {

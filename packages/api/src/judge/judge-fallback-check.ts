@@ -57,6 +57,7 @@ import {
   type AdminOpsDelivery,
   createAdminOpsNotifications,
 } from "../ops/admin-ops-notification.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import type { JudgeSource } from "./judge-health.js";
 
@@ -280,7 +281,7 @@ async function raiseAlarm(
   try {
     delivery = await createAdminOpsNotifications({ dedupeKey, title: ALARM_TITLE, message });
   } catch (err) {
-    console.warn("[JUDGE-HEALTH] ops notification failed:", err);
+    logDbFailure("[JUDGE-HEALTH] ops notification failed", err);
   }
   if (!shouldBeLoud(delivery, dedupeKey)) return;
 
@@ -337,7 +338,7 @@ function refreshIfStale(now: number): void {
   refreshing = measure(now)
     .then(() => undefined)
     .catch((err: unknown) => {
-      console.warn("[JUDGE-HEALTH] fallback snapshot refresh failed:", err);
+      logDbFailure("[JUDGE-HEALTH] fallback snapshot refresh failed", err);
     })
     .finally(() => {
       refreshing = null;

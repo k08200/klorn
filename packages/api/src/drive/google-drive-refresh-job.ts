@@ -27,8 +27,8 @@
  */
 
 import { cohortRestriction, GOOGLE_DRIVE_FLAGS } from "../config.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
-import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
 import { googleDriveRoutesEnabled } from "./drive-scope.js";
 import { type AccountRefreshOutcome, refreshGoogleDriveAccount } from "./google-drive-refresh.js";
@@ -64,7 +64,7 @@ async function refreshSafely(
     return await refreshGoogleDriveAccount(account.userId, account.id, now);
   } catch (err) {
     console.error(`[GOOGLE-DRIVE] refresh of drive account ${account.id} failed; due again`);
-    captureError(err, {
+    captureDbFailure("[GOOGLE-DRIVE] refresh of a drive account failed", err, {
       tags: { scope: "drive.google.refresh.account" },
       extra: { userId: account.userId, accountId: account.id },
     });
@@ -121,8 +121,10 @@ export async function driveGoogleRefreshTick(): Promise<void> {
     const result = await runGoogleDriveRefreshSweep();
     if (result.state !== "busy") recordSchedulerTick(SCHEDULER_NAME);
   } catch (err) {
-    console.error("[GOOGLE-DRIVE] refresh sweep failed:", err);
-    captureError(err, { tags: { scope: "drive.google.refresh.sweep" } });
+    logDbFailure("[GOOGLE-DRIVE] refresh sweep failed", err, { level: "error" });
+    captureDbFailure("[GOOGLE-DRIVE] refresh sweep failed", err, {
+      tags: { scope: "drive.google.refresh.sweep" },
+    });
   }
 }
 

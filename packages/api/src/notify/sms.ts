@@ -26,6 +26,7 @@
 
 import twilio from "twilio";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { isUserInQuietHours } from "./notification-prefs.js";
 import { checkAndRecordSmsSend } from "./sms-limiter.js";
 import { getPhoneNumber } from "./sms-phone.js";
@@ -161,8 +162,7 @@ export async function sendSms(userId: string, body: string): Promise<SmsResult> 
   } catch (err) {
     // Best-effort. Warn (not error) and don't capture to Sentry — a single
     // bad phone number would otherwise flood the error stream.
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[SMS] Twilio send failed for user ${userId}: ${message}`);
+    logDbFailure("[SMS] Twilio send failed", err, { ids: { userId } });
     return { sent: false, reason: "twilio_error" };
   }
 }

@@ -29,6 +29,7 @@
  */
 
 import { objectStorageEnabled } from "../config.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
@@ -93,8 +94,10 @@ export async function checkStoragePurgesAtStartup(opts: {
   try {
     await reportStalledPurges(reason);
   } catch (err) {
-    console.error("[STORAGE] could not count pending purges at startup:", err);
-    captureError(err, { tags: { scope: "storage.purge.startup" } });
+    logDbFailure("[STORAGE] could not count pending purges at startup", err, { level: "error" });
+    captureDbFailure("[STORAGE] could not count pending purges at startup", err, {
+      tags: { scope: "storage.purge.startup" },
+    });
   }
 }
 
@@ -150,8 +153,10 @@ export async function storagePurgeTick(): Promise<void> {
     const result = await runStoragePurgeSweep();
     if (result.state !== "busy") recordSchedulerTick("storage-purge");
   } catch (err) {
-    console.error("[STORAGE] purge sweep failed:", err);
-    captureError(err, { tags: { scope: "storage.purge.sweep" } });
+    logDbFailure("[STORAGE] purge sweep failed", err, { level: "error" });
+    captureDbFailure("[STORAGE] purge sweep failed", err, {
+      tags: { scope: "storage.purge.sweep" },
+    });
   }
 }
 

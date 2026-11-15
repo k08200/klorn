@@ -273,9 +273,21 @@ describe("__link_calendar__ pins", () => {
     const app = await buildApp();
     await expectPinned(app, MARKER, { status: 500, error: GENERIC });
     expectNoWrites();
-    expect(m.captureError).toHaveBeenCalledWith(expect.any(Error), {
-      tags: { scope: "auth.oauth.callback" },
-    });
+    // A fresh Error and the failure's facts: never the exchange error itself.
+    expect(m.captureError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "[OAUTH] callback failed (Error)" }),
+      {
+        tags: { scope: "auth.oauth.callback" },
+        extra: {
+          errorName: "Error",
+          code: null,
+          model: null,
+          operation: null,
+          status: null,
+          messageLength: 21,
+        },
+      },
+    );
     await app.close();
   });
 });

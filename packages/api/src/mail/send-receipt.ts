@@ -37,7 +37,7 @@ import {
   sendEmailPayloadHash,
   verifyReceipt,
 } from "../judge/attention-floor.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 export interface SendReceiptInput {
   userId: string;
@@ -177,7 +177,7 @@ export async function settleSendReceipt(
       },
     });
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[SEND-RECEIPT] settle failed", err, {
       tags: { scope: "send-receipt.settle" },
       extra: { userId, receiptId: handle.id },
     });

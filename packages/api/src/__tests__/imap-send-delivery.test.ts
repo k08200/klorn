@@ -153,7 +153,7 @@ describe("after the connection was established: 'delivery not confirmed'", () =>
   it("is still logged and reported (throttled) without the server's text", async () => {
     failAfterConnect(err("ETIMEDOUT", { command: "CONN" }));
     await send();
-    expect(loggedText()).toContain("code=ETIMEDOUT");
+    expect(loggedText()).toContain("ETIMEDOUT");
     expect(loggedText()).not.toContain(PASSWORD);
     expect(loggedText()).not.toContain("bob@example.com");
     expect(h.captureError).toHaveBeenCalledTimes(1);

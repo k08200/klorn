@@ -184,9 +184,10 @@ describe("POST /api/email/bulk (mark-read)", () => {
     });
     const text = warned();
     expect(text).toContain(PROVIDER_ERROR);
-    expect(text).toContain("socket hang up");
     expect(text).toContain("r2");
-    expect(text).toContain("r3");
+    // The thrown error is reported as facts (class, message length), never its message.
+    expect(text).toContain("[EMAIL-BULK] toggleRead threw (emailId=r3): Error, message 14 chars");
+    expect(text).not.toContain("socket hang up");
     expect(text).not.toContain("secret-mailbox@naver.com");
   });
 

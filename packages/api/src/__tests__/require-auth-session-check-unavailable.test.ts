@@ -182,10 +182,20 @@ describe("requireAuth: the database cannot answer → 503, never 401", () => {
     store.deviceError = err;
     await app.inject({ method: "GET", url: "/user", headers: bearer() });
 
+    // A fresh Error built from the label and the facts, never the original.
     expect(captureError).toHaveBeenCalledWith(
-      err,
-      expect.objectContaining({ tags: expect.objectContaining({ scope: "auth.session-check" }) }),
+      expect.any(Error),
+      expect.objectContaining({
+        tags: expect.objectContaining({ scope: "auth.session-check" }),
+        extra: expect.objectContaining({
+          errorName: "PrismaClientKnownRequestError",
+          code: "P2024",
+        }),
+      }),
     );
+    const reported = captureError.mock.calls[0]?.[0] as Error;
+    expect(reported).not.toBe(err);
+    expect(reported.message).toBe("[AUTH] session check failed (PrismaClientKnownRequestError)");
   });
 
   it("reports to Sentry at most once per 30 seconds, while answering every request 503", async () => {

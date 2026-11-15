@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { pollFailureKind } from "./imap-poll-failures.js";
 import { isImapAuthFailure } from "./providers/imap-session.js";
 
@@ -84,8 +85,9 @@ export async function recordSyncError(
       data: { syncErrorCode: code, syncErrorAt: new Date() },
     });
   } catch (err) {
-    const name = (err as { name?: unknown } | null)?.name;
-    console.warn(`[sync-status] could not record ${code} for row ${rowId} (${String(name)})`);
+    logDbFailure("[sync-status] could not record the sync error code", err, {
+      ids: { userId, rowId, code },
+    });
   }
 }
 

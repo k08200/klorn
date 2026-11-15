@@ -29,6 +29,7 @@
  *    new limit so the alarm tracks it.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { type AdminOpsDelivery, createAdminOpsNotifications } from "./admin-ops-notification.js";
 
@@ -116,7 +117,7 @@ async function raiseAlarm(status: DbSizeStatus): Promise<void> {
   try {
     delivery = await createAdminOpsNotifications({ dedupeKey, title: ALARM_TITLE, message });
   } catch (err) {
-    console.warn("[DB-SIZE] ops notification failed:", err);
+    logDbFailure("[DB-SIZE] ops notification failed", err);
   }
   if (status.level !== "critical" || !shouldBeLoud(delivery, dedupeKey)) return;
 

@@ -26,6 +26,7 @@
  */
 
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { remember } from "./memory.js";
 
 const SUPPRESSION_KEY = "attention_suppression_v2";
@@ -92,15 +93,15 @@ export async function getSuppressionSet(userId: string): Promise<Set<string>> {
           set.add(suppressionKey(e.source, e.type, e.bucket ?? null));
         }
       } catch (err) {
-        console.warn("[FEEDBACK-ADAPTOR] malformed memory blob skipped:", err);
+        logDbFailure("[FEEDBACK-ADAPTOR] malformed memory blob skipped", err);
         // Skip malformed memory blobs; the next adaptation run will repair them.
       }
     }
     cache.set(userId, { set, expiresAt: Date.now() + CACHE_TTL_MS });
     return set;
   } catch (err) {
-    console.warn(
-      "[FEEDBACK-ADAPTOR] getSuppressionSet failed (suppression disabled this cycle):",
+    logDbFailure(
+      "[FEEDBACK-ADAPTOR] getSuppressionSet failed (suppression disabled this cycle)",
       err,
     );
     return new Set();
@@ -228,7 +229,7 @@ export async function runFeedbackAdaptation(userId: string): Promise<number> {
 
     return suppressed.length;
   } catch (err) {
-    console.warn("[FEEDBACK-ADAPTOR] runFeedbackAdaptation failed for", userId, err);
+    logDbFailure("[FEEDBACK-ADAPTOR] runFeedbackAdaptation failed", err, { ids: { userId } });
     return 0;
   }
 }
@@ -245,11 +246,11 @@ export async function runFeedbackAdaptationForAllUsers(): Promise<void> {
       try {
         await runFeedbackAdaptation(userId);
       } catch (err) {
-        console.warn("[FEEDBACK-ADAPTOR] per-user adaptation failed for", userId, err);
+        logDbFailure("[FEEDBACK-ADAPTOR] per-user adaptation failed", err, { ids: { userId } });
         // skip individual failures
       }
     }
   } catch (err) {
-    console.error("[FEEDBACK-ADAPTOR] Batch run failed:", err);
+    logDbFailure("[FEEDBACK-ADAPTOR] Batch run failed", err, { level: "error" });
   }
 }

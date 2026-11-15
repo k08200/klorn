@@ -48,13 +48,13 @@
  */
 
 import type { ImapFlow } from "imapflow";
+import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { Semaphore } from "../../semaphore.js";
-import { captureError } from "../../sentry.js";
 import { createImapClient, endImapSession } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
 import { checkLiveValidity, resetUidValidityLogState } from "../imap-uidvalidity.js";
 import { isSmtpAuthRejection } from "../smtp-transport.js";
-import { errorMessage, fail, sanitizedError } from "./action-failure.js";
+import { fail } from "./action-failure.js";
 import { applyFlagRun, type FlagChange, type ServerOutcome, sameChange } from "./imap-flags.js";
 import { createFolderFinder } from "./imap-folders.js";
 import { createMailboxSwitch } from "./imap-mailbox-switch.js";
@@ -252,11 +252,11 @@ function shouldCapture(rowId: string): boolean {
  * Telemetry is best-effort: a capture that throws (transport down, bad DSN)
  * must never decide whether a caller gets its result.
  */
-function captureSafely(err: unknown, context: Parameters<typeof captureError>[1]): void {
+function captureSafely(err: unknown, context: Parameters<typeof captureDbFailure>[2]): void {
   try {
-    captureError(err, context);
+    captureDbFailure("[imap] action failure", err, context);
   } catch (captureFailure) {
-    console.warn(`[imap-session] error capture failed: ${errorMessage(captureFailure)}`);
+    logDbFailure("[imap-session] error capture failed", captureFailure);
   }
 }
 
@@ -268,18 +268,18 @@ function rejectLogin(provider: ImapProviderConfig, account: SessionAccount): Mai
 
 /**
  * A session failure that is not a rejected login: log once, report to Sentry at
- * most once per account per interval, answer the generic transport error. `err`
- * is logged and reported as given, so B3 tasks, whose errors may quote a
- * recipient, pass a sanitized one.
+ * most once per account per interval, answer the generic transport error. Only
+ * the error's facts are logged and reported (class, code, status, message
+ * length): imapflow and nodemailer errors can quote a recipient or a mailbox.
  */
 function softFailure(
   err: unknown,
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure {
-  console.warn(
-    `[${provider.logScope}] action session failed for row ${account.rowId}: ${errorMessage(err)}`,
-  );
+  logDbFailure("[imap] action session failed", err, {
+    ids: { logScope: provider.logScope, rowId: account.rowId },
+  });
   if (shouldCapture(account.rowId)) {
     captureSafely(err, {
       tags: { scope: `${provider.logScope}.action` },
@@ -470,9 +470,9 @@ async function drain(provider: ImapProviderConfig, rowId: string): Promise<void>
     // Not reachable in normal operation; a caller must never be left waiting,
     // so everyone is settled BEFORE anything is reported.
     failAll(rowId, [], fail(`Could not reach ${provider.label}. Try again shortly.`));
-    console.warn(
-      `[${provider.logScope}] action worker crashed for row ${rowId}: ${errorMessage(err)}`,
-    );
+    logDbFailure("[imap] action worker crashed", err, {
+      ids: { logScope: provider.logScope, rowId },
+    });
     captureSafely(err, { tags: { scope: `${provider.logScope}.action-worker` } });
   } finally {
     queues.delete(rowId);
@@ -510,7 +510,7 @@ function submit<R>(
       // drain() handles its own failures; this is the last net, so a detached
       // worker can never become an unhandled rejection.
       serially(account.rowId, () => drain(provider, account.rowId)).catch((err) => {
-        console.warn(`[${provider.logScope}] action worker failed: ${errorMessage(err)}`);
+        logDbFailure("[imap] action worker failed", err, { ids: { logScope: provider.logScope } });
       });
     }
   });
@@ -558,7 +558,7 @@ function failureFor(
 ): MailActionFailure {
   return isAuthFailure(err) || isSmtpAuthRejection(err)
     ? rejectLogin(provider, account)
-    : softFailure(sanitizedError(err), provider, account);
+    : softFailure(err, provider, account);
 }
 
 /**
@@ -715,7 +715,7 @@ export function runAccountTask<T>(
       });
     };
     serially(account.rowId, takeTurn).catch((err: unknown) => {
-      finish(softFailure(sanitizedError(err), provider, account));
+      finish(softFailure(err, provider, account));
     });
   });
 }

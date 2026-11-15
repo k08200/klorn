@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import {
   DELIVERY_CHANNELS,
   type DeliveryChannel,
@@ -243,7 +244,9 @@ export async function recordPushReceipt(
   }
   if (row.subscriptionId) {
     await clearZombieFlag(row.subscriptionId).catch((err) => {
-      console.warn(`[PUSH] Could not clear needs-resubscribe on ${row.subscriptionId}:`, err);
+      logDbFailure("[PUSH] Could not clear needs-resubscribe", err, {
+        ids: { subscriptionId: row.subscriptionId },
+      });
     });
   }
   return true;

@@ -15,6 +15,7 @@ import webPush from "web-push";
 import { recordEvent } from "../analytics.js";
 import { pushZombieEvictionEnabled } from "../config.js";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { Semaphore } from "../semaphore.js";
 import {
   type ChannelSendOutcome,
@@ -317,7 +318,7 @@ export async function sendPushNotification(
     // logs/captures its own failures. If it ever does throw, this must not
     // sink the web-push path below — but don't swallow it silently either,
     // or a Telegram-only self-hoster loses every PUSH alert with no trace.
-    console.warn(`[PUSH] Telegram secondary channel threw for ${userId}:`, err);
+    logDbFailure("[PUSH] Telegram secondary channel threw", err, { ids: { userId } });
     return "failed" as const;
   });
   // Delivery lifecycle: a Telegram send that went out (or failed) is one
@@ -351,12 +352,12 @@ export async function sendPushNotification(
     sendDevicePush(userId, nativePayload, category)
       .then(recordNative("fcm"))
       .catch((err) => {
-        console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
+        logDbFailure("[PUSH] FCM device channel threw", err, { ids: { userId } });
       }),
     sendApnsPush(userId, nativePayload, category)
       .then(recordNative("apns"))
       .catch((err) => {
-        console.warn(`[PUSH] APNs device channel threw for ${userId}:`, err);
+        logDbFailure("[PUSH] APNs device channel threw", err, { ids: { userId } });
       }),
   ]);
 
@@ -513,9 +514,10 @@ async function deliverToSubscription(
       if (!shouldRetryPushError(lastStatusCode)) break;
       const nextDelay = PUSH_RETRY_DELAYS_MS[attempt];
       if (nextDelay === undefined) break;
-      console.warn(
-        `[PUSH] Transient failure status=${lastStatusCode ?? "network"} for ${sub.id}; retrying in ${nextDelay}ms`,
-      );
+      // The status is in the failure's facts (a network error has none).
+      logDbFailure("[PUSH] Transient failure; retrying", err, {
+        ids: { subscriptionId: sub.id, retryInMs: nextDelay },
+      });
       await sleep(nextDelay);
     }
   }
@@ -535,9 +537,11 @@ async function deliverToSubscription(
   }
 
   await markPushFailed(deliveryId, { statusCode: lastStatusCode, body: lastBody }, queuedAt);
-  console.error(
-    `[PUSH] Failed to send to subscription ${sub.id} after ${maxAttempts} attempts: status=${lastStatusCode}, body=${lastBody}, error=${lastError}`,
-  );
+  // Facts only: the push service's body and the error's message are not logged.
+  logDbFailure("[PUSH] Failed to send to subscription", lastError, {
+    level: "error",
+    ids: { subscriptionId: sub.id, attempts: maxAttempts },
+  });
   // Budgeted eviction: 410/404 → delete now; otherwise count the consecutive
   // failure and delete once it crosses the threshold (stops a dead endpoint
   // from burning the retry budget every tick).
@@ -578,7 +582,7 @@ async function checkZombie(subscriptionId: string, endpointSince: Date | null): 
   try {
     await evaluateZombieSubscription(subscriptionId, new Date(), endpointSince);
   } catch (err) {
-    console.warn(`[PUSH] Zombie check failed for subscription ${subscriptionId}:`, err);
+    logDbFailure("[PUSH] Zombie check failed", err, { ids: { subscriptionId } });
   }
 }
 

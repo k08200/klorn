@@ -17,7 +17,7 @@
 
 import { teamsOpenTo } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export const TIERS = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
 export type Tier = (typeof TIERS)[number];
@@ -197,9 +197,18 @@ export async function effectiveTier(user: { id: string; plan: string }): Promise
   return normalizeTier(await effectivePlan(user));
 }
 
-function reportSeatLookup(err: unknown, scope: string, extra: Record<string, unknown>): void {
-  console.warn(`[effective-tier] seat lookup failed (${scope}) — using the own plan:`, err);
-  captureError(err, { tags: { scope: `effective-tier.${scope}` }, extra });
+function reportSeatLookup(
+  err: unknown,
+  scope: string,
+  extra: Record<string, string | number>,
+): void {
+  logDbFailure("[effective-tier] seat lookup failed — using the own plan", err, {
+    ids: { scope, ...extra },
+  });
+  captureDbFailure("[effective-tier] seat lookup failed — using the own plan", err, {
+    tags: { scope: `effective-tier.${scope}` },
+    extra,
+  });
 }
 
 /**

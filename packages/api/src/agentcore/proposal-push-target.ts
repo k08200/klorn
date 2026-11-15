@@ -17,6 +17,7 @@
  * never echoed: an id that is not one of the user's stored mails yields {}.
  */
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 export interface ProposalPushMailFields {
   emailId?: string;
@@ -49,10 +50,7 @@ export async function proposalPushMailFields(
   } catch (err) {
     // A deep link is a convenience: the push still goes out, just as it did
     // before this existed (opening the proposal's chat).
-    console.warn(
-      "[AGENT] proposal push mail link failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[AGENT] proposal push mail link failed", err);
     return {};
   }
 }

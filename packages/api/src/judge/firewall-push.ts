@@ -33,6 +33,7 @@ import {
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
 import { NOTIFIED_LOOKBACK_MS } from "../notify/urgent-dedup.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { findRungEmailIds, stampDecisionRang } from "./decision-label.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
 import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
@@ -194,10 +195,7 @@ async function findOpenMailItem(
       select: { id: true, ...REASON_ITEM_SELECT },
     });
   } catch (err) {
-    console.warn(
-      "[PUSH] open firewall item lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[PUSH] open firewall item lookup failed", err);
     return null;
   }
   if (!row) return null;
@@ -227,10 +225,7 @@ async function mailReason(
     );
     return reasons.get(email.id) ?? null;
   } catch (err) {
-    console.warn(
-      "[PUSH] firewall reason lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[PUSH] firewall reason lookup failed", err);
     return null;
   }
 }

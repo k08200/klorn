@@ -45,7 +45,7 @@ import { createHash } from "node:crypto";
 import { db } from "../db.js";
 import type { ActionReceipt } from "../judge/attention-floor.js";
 import { isConnectionError, isKeyLimitError } from "../llm/model-fallback.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { stableStringify } from "../stable-json.js";
 import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
@@ -371,7 +371,10 @@ export async function drainActionOutbox(now: Date = new Date()): Promise<{
       // snapshot, so row.attempts+1 is the attempt that just ran — its
       // attempts counter was already advanced by the claim CAS, so this can't
       // loop past maxAttempts.
-      captureError(err, { tags: { scope: "action-outbox.drain" }, extra: { rowId: row.id } });
+      captureDbFailure("[OUTBOX] drain row failed", err, {
+        tags: { scope: "action-outbox.drain" },
+        extra: { rowId: row.id },
+      });
       await db.actionOutbox
         .update({
           where: { id: row.id },
@@ -381,7 +384,9 @@ export async function drainActionOutbox(now: Date = new Date()): Promise<{
           },
         })
         .catch((err) =>
-          console.warn("[OUTBOX] reset-to-QUEUED after infra failure also failed:", err),
+          logDbFailure("[OUTBOX] reset-to-QUEUED after infra failure also failed", err, {
+            ids: { rowId: row.id },
+          }),
         );
     }
   }
@@ -420,8 +425,13 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
         learnFromApproval(row.userId, row.toolName, asRecord(row.toolArgs)),
       )
       .catch((err) => {
-        console.warn(`[OUTBOX] learnFromApproval failed for ${row.toolName}:`, err);
-        captureError(err, { tags: { scope: "action-outbox.learn" }, extra: { rowId: row.id } });
+        logDbFailure("[OUTBOX] learnFromApproval failed", err, {
+          ids: { rowId: row.id, toolName: row.toolName },
+        });
+        captureDbFailure("[OUTBOX] learnFromApproval failed", err, {
+          tags: { scope: "action-outbox.learn" },
+          extra: { rowId: row.id },
+        });
       });
     // APPROVED feedback fires on successful execution (mutually exclusive
     // with the FAILED signal in onOutboxDead), matching the pre-outbox
@@ -438,8 +448,14 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
       threadId: (await conversationIdFor(row)) ?? row.pendingActionId,
     });
   } catch (err) {
-    console.error(`[OUTBOX] onOutboxCompleted side-effects failed for row ${row.id}:`, err);
-    captureError(err, { tags: { scope: "action-outbox.completed" }, extra: { rowId: row.id } });
+    logDbFailure("[OUTBOX] onOutboxCompleted side-effects failed", err, {
+      level: "error",
+      ids: { rowId: row.id },
+    });
+    captureDbFailure("[OUTBOX] onOutboxCompleted side-effects failed", err, {
+      tags: { scope: "action-outbox.completed" },
+      extra: { rowId: row.id },
+    });
   }
 }
 
@@ -488,8 +504,14 @@ async function onOutboxDead(row: OutboxRow, error: string): Promise<void> {
       createdAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.error(`[OUTBOX] onOutboxDead side-effects failed for row ${row.id}:`, err);
-    captureError(err, { tags: { scope: "action-outbox.dead" }, extra: { rowId: row.id } });
+    logDbFailure("[OUTBOX] onOutboxDead side-effects failed", err, {
+      level: "error",
+      ids: { rowId: row.id },
+    });
+    captureDbFailure("[OUTBOX] onOutboxDead side-effects failed", err, {
+      tags: { scope: "action-outbox.dead" },
+      extra: { rowId: row.id },
+    });
   }
 }
 
