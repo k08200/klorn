@@ -3182,6 +3182,9 @@ const ko: Record<string, string> = {
   "settings.org.transparency.noReads": "아직 아무도 내 바쁜 시간을 조회하지 않았습니다.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "이전 멤버",
+  "settings.org.transparency.domains": "내 분류에 쓰이는 회사 도메인",
+  "settings.org.transparency.domainsLine":
+    "{domains}에서 온 인증된 메일은 분류 이유에 '회사 동료'로 표시됩니다. 조직은 어떤 메일이었는지 볼 수 없습니다.",
   "settings.org.visible.roles": "이름, 이메일 주소, 역할",
   "settings.org.visible.seats": "유료 시트 보유 여부",
   "settings.org.visible.cost": "시트 가격과 구독 상태",

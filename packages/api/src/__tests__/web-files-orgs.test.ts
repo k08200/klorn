@@ -219,6 +219,8 @@ describe("org refusals", () => {
       "settings.org.subscription.endsOn",
       "settings.org.subscription.endsSoon",
       "settings.org.subscription.portal",
+      "settings.org.transparency.domains",
+      "settings.org.transparency.domainsLine",
     ];
     for (const key of keys) expect(en[key], key).toBeTypeOf("string");
   });

@@ -672,6 +672,21 @@ describePg("Klorn Teams refusals and races (real Postgres)", () => {
     });
   });
 
+  it("tells a member which company domains mark a sender as a colleague in their triage", async () => {
+    const owner = await newSession("owner");
+    const member = await newSession("member");
+    await createOrg(owner);
+    await join(owner, member);
+    const none = await call(member, "GET", "/api/orgs/current/transparency");
+    expect(none.json()).toMatchObject({ companyDomains: [] });
+    const set = await call(owner, "PATCH", "/api/orgs/current", {
+      companyDomains: ["acme.test"],
+    });
+    expect(set.statusCode).toBe(200);
+    const named = await call(member, "GET", "/api/orgs/current/transparency");
+    expect(named.json()).toMatchObject({ companyDomains: ["acme.test"] });
+  });
+
   it("stops naming a deleted account in the audit log", async () => {
     const owner = await newSession("owner");
     const member = await newSession("member");

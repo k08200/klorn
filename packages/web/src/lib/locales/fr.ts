@@ -3288,6 +3288,9 @@ const fr: Record<string, string> = {
   "settings.org.transparency.noReads": "Personne n’a encore consulté vos disponibilités.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "Un ancien membre",
+  "settings.org.transparency.domains": "Domaines de l’entreprise dans votre tri",
+  "settings.org.transparency.domainsLine":
+    "Le courrier vérifié de {domains} est indiqué comme venant d’un collègue de votre entreprise dans les raisons de votre tri. Votre organisation ne voit jamais de quel courrier il s’agit.",
   "settings.org.visible.roles": "Votre nom, votre adresse e-mail et votre rôle",
   "settings.org.visible.seats": "Si vous avez un siège payant",
   "settings.org.visible.cost": "Le prix du siège et l’état de l’abonnement",

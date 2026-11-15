@@ -3226,6 +3226,9 @@ const ja: Record<string, string> = {
   "settings.org.transparency.noReads": "まだ誰もあなたの空き状況を見ていません。",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "以前のメンバー",
+  "settings.org.transparency.domains": "あなたの振り分けに使われる会社ドメイン",
+  "settings.org.transparency.domainsLine":
+    "{domains} からの認証済みメールは、振り分けの理由で「社内の同僚」と表示されます。どのメールだったかを組織が見ることはありません。",
   "settings.org.visible.roles": "名前、メールアドレス、役割",
   "settings.org.visible.seats": "有料シートの有無",
   "settings.org.visible.cost": "シート料金とサブスクリプションの状態",

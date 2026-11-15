@@ -28,6 +28,10 @@ export async function transparencyFor(userId: string) {
       agentModeCap: org.agentModeCap,
       appliesToEveryone: true,
     },
+    // Verified mail from these domains is named "a colleague at your company"
+    // in this member's triage reasons (judge/v3 orgCompanyDomain). The
+    // organization never learns which mail matched.
+    companyDomains: org.companyDomains,
     // Who read your free/busy lately, and for which window: the same rows the
     // owner sees in the audit log.
     freeBusyReads: await recentFreeBusyReads(userId, org.id),

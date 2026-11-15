@@ -3193,6 +3193,9 @@ const en: Record<string, string> = {
   "settings.org.transparency.noReads": "No one has read your free/busy yet.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "A former member",
+  "settings.org.transparency.domains": "Company domains in your triage",
+  "settings.org.transparency.domainsLine":
+    "Verified mail from {domains} is named as from a colleague at your company in your triage reasons. Your organization never sees which mail that was.",
   "settings.org.visible.roles": "Your name, email address and role",
   "settings.org.visible.seats": "Whether you hold a paid seat",
   "settings.org.visible.cost": "The seat price and the subscription's state",

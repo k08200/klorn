@@ -3269,6 +3269,9 @@ const es: Record<string, string> = {
   "settings.org.transparency.noReads": "Nadie ha consultado tu disponibilidad todavía.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "Un antiguo miembro",
+  "settings.org.transparency.domains": "Dominios de empresa en tu clasificación",
+  "settings.org.transparency.domainsLine":
+    "El correo verificado de {domains} aparece como de un colega de tu empresa en los motivos de tu clasificación. Tu organización nunca ve qué correo fue.",
   "settings.org.visible.roles": "Tu nombre, tu dirección de correo y tu rol",
   "settings.org.visible.seats": "Si tienes una plaza de pago",
   "settings.org.visible.cost": "El precio por plaza y el estado de la suscripción",

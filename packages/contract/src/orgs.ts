@@ -118,6 +118,8 @@ export interface OrgTransparencyResponse {
   };
   freeBusyReads: Array<{ by: string | null; window: unknown; at: string }>;
   seatPrice: { currency: "USD"; monthlyCents: number; annualPerMonthCents: number };
+  /** The organization's company domains: verified mail from them is named "a colleague at your company" in this member's triage reasons. */
+  companyDomains: string[];
 }
 
 /** `POST /api/orgs/current/checkout` with `{ interval, seats }` (owner only). */

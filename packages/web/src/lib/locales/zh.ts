@@ -3002,6 +3002,9 @@ const zh: Record<string, string> = {
   "settings.org.transparency.noReads": "还没有人查看过你的忙闲。",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "前成员",
+  "settings.org.transparency.domains": "用于你分类的公司域名",
+  "settings.org.transparency.domainsLine":
+    "来自 {domains} 的已验证邮件会在分类原因中标为“公司同事”。组织永远看不到是哪封邮件。",
   "settings.org.visible.roles": "你的姓名、邮箱地址和角色",
   "settings.org.visible.seats": "你是否拥有付费席位",
   "settings.org.visible.cost": "席位价格和订阅状态",

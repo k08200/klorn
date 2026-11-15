@@ -3323,6 +3323,9 @@ const de: Record<string, string> = {
   "settings.org.transparency.noReads": "Noch niemand hat deine Verfügbarkeit abgefragt.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "Ein ehemaliges Mitglied",
+  "settings.org.transparency.domains": "Firmen-Domains in deiner Sortierung",
+  "settings.org.transparency.domainsLine":
+    "Verifizierte Mails von {domains} werden in den Gründen deiner Sortierung als von einer Kollegin oder einem Kollegen deiner Firma genannt. Deine Organisation sieht nie, welche Mail das war.",
   "settings.org.visible.roles": "Dein Name, deine E-Mail-Adresse und deine Rolle",
   "settings.org.visible.seats": "Ob du einen bezahlten Platz hast",
   "settings.org.visible.cost": "Der Platzpreis und der Status des Abos",
