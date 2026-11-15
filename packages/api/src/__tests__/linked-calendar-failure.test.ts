@@ -20,9 +20,6 @@ vi.mock("../mail/gmail.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
-import { callText } from "./helpers/canary.js";
-import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
-
 import {
   _linkedCalendarFailureLogSizeForTests,
   _resetLinkedCalendarFailureLogForTests,
@@ -30,6 +27,8 @@ import {
   isRevokedGrantError,
   LINKED_AUTH_WARN_WINDOW_MS,
 } from "../pim/linked-calendar-failure.js";
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 const AUTH_ERROR = { response: { status: 401 }, message: "invalid_grant" };
 const failure = (overrides: Partial<Parameters<typeof handleLinkedCalendarFailure>[0]> = {}) => ({
