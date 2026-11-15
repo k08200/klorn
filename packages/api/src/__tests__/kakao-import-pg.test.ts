@@ -2,8 +2,10 @@
  * Real-Postgres proof of KakaoTalk import storage
  * (docs/providers/kakaotalk-import.md §4, §5): an import's messages become
  * suggested KAKAO commitments and are deleted on processing; "delete this
- * import" removes everything it made and nothing of another user's; the 7-day
- * purge; RLS and the data-wipe fence on both tables. Skipped unless
+ * import" removes everything it made and nothing of another user's; a second
+ * upload of the same chat adds no duplicate; the sweep of what a deleted import
+ * left behind; the 7-day purge; RLS and the data-wipe fence on both tables.
+ * Skipped unless
  * KLORN_TEST_PG_URL points at a database with every migration applied.
  */
 
@@ -19,7 +21,7 @@ const url = vi.hoisted(() => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
-import { kakaoImportThreadId } from "../kakao-import/commitments.js";
+import { kakaoImportThreadId, sweepOrphanKakaoCommitments } from "../kakao-import/commitments.js";
 import { processNextKakaoImport } from "../kakao-import/process.js";
 import {
   KAKAO_MESSAGE_RETENTION_DAYS,
@@ -39,8 +41,10 @@ async function newUser(): Promise<string> {
   return user.id;
 }
 
-async function newImport(userId: string) {
-  const now = new Date();
+const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000);
+
+/** One chat's upload, its messages dated before `now`; the same `now` is the same chat. */
+async function newImport(userId: string, now: Date = new Date()) {
   const created = await createKakaoImport({
     userId,
     format: "mobile-dotted",
@@ -125,7 +129,7 @@ describePg("KakaoTalk import storage on Postgres", () => {
     const userId = await newUser();
     const otherId = await newUser();
     const mine = await newImport(userId);
-    const keep = await newImport(userId);
+    const keep = await newImport(userId, hoursAgo(5));
     const theirs = await newImport(otherId);
     await processAll();
     const mineIds = (
@@ -156,6 +160,74 @@ describePg("KakaoTalk import storage on Postgres", () => {
         await prisma.commitment.count({ where: { threadId: kakaoImportThreadId(other.id) } }),
       ).toBe(2);
     }
+  });
+
+  it("a second upload of the same chat makes no duplicate commitments", async () => {
+    const userId = await newUser();
+    const otherId = await newUser();
+    const chatAt = hoursAgo(2);
+    const first = await newImport(userId, chatAt);
+    await processAll();
+    const again = await newImport(userId, chatAt);
+    await newImport(otherId, chatAt);
+    await processAll();
+
+    expect(await prisma.commitment.count({ where: { userId, sourceType: "KAKAO" } })).toBe(2);
+    expect(await prisma.kakaoImport.findUniqueOrThrow({ where: { id: again.id } })).toMatchObject({
+      status: "DONE",
+      commitmentsCreated: 0,
+      duplicatesSkipped: 2,
+    });
+    // The rows stay the first upload's; another user's identical chat is theirs.
+    expect(
+      await prisma.commitment.count({ where: { threadId: kakaoImportThreadId(first.id) } }),
+    ).toBe(2);
+    expect(await prisma.commitment.count({ where: { userId: otherId, sourceType: "KAKAO" } })).toBe(
+      2,
+    );
+    const keys = await prisma.commitment.findMany({
+      where: { userId, sourceType: "KAKAO" },
+      select: { dedupKey: true },
+    });
+    for (const { dedupKey } of keys) {
+      expect(dedupKey).toMatch(/^kakao:kakao-message:[0-9a-f]{32}:[0-9a-f]{16}$/);
+    }
+  });
+
+  it("sweeps what a deleted import left behind, and only that, idempotently", async () => {
+    const userId = await newUser();
+    const live = await newImport(userId, hoursAgo(7));
+    const crashed = await newImport(userId, hoursAgo(9));
+    await processAll();
+    // The sweep runs whatever the flag says.
+    process.env.KAKAO_IMPORT_ENABLED = "off";
+    const orphanIds = (
+      await prisma.commitment.findMany({
+        where: { threadId: kakaoImportThreadId(crashed.id) },
+        select: { id: true },
+      })
+    ).map((row) => row.id);
+    expect(orphanIds).toHaveLength(2);
+    // The import row went while a pass that had written these died before it
+    // could notice: the commitments outlive it.
+    await prisma.kakaoImport.delete({ where: { id: crashed.id } });
+    const unrelated = await prisma.commitment.create({
+      data: { userId, title: "Send the deck", sourceType: "EMAIL", threadId: "kakao-import:x" },
+    });
+
+    expect(await sweepOrphanKakaoCommitments()).toEqual({ imports: 1, commitments: 2 });
+
+    expect(await prisma.commitment.count({ where: { id: { in: orphanIds } } })).toBe(0);
+    expect(
+      await prisma.attentionItem.count({
+        where: { source: "COMMITMENT", sourceId: { in: orphanIds } },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.commitment.count({ where: { threadId: kakaoImportThreadId(live.id) } }),
+    ).toBe(2);
+    expect(await prisma.commitment.count({ where: { id: unrelated.id } })).toBe(1);
+    expect(await sweepOrphanKakaoCommitments()).toEqual({ imports: 0, commitments: 0 });
   });
 
   it(`purges text older than ${KAKAO_MESSAGE_RETENTION_DAYS} days and expires the waiting import`, async () => {

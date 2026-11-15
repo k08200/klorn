@@ -5,7 +5,8 @@
  *
  * - The retention purge runs at most every 10 minutes and runs even while
  *   KAKAO_IMPORT_ENABLED is off: switching the flag off must not stop stored
- *   chat text from expiring.
+ *   chat text from expiring. The orphan sweep (commitments of deleted
+ *   imports, commitments.ts) runs with it, on the same terms.
  * - While the flag is on, each tick also processes one waiting import
  *   (process.ts), which itself stands down under BACKGROUND_AGENTS_DISABLED.
  * - While the flag is off, ticks between purges touch no database at all.
@@ -16,6 +17,7 @@ import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.j
 import { createSchedulerLease } from "../scheduler-lease.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
+import { sweepOrphanKakaoCommitments } from "./commitments.js";
 import { processNextKakaoImport } from "./process.js";
 import { purgeExpiredKakaoImportText } from "./purge.js";
 
@@ -41,6 +43,12 @@ export async function runKakaoWork(now: Date = new Date()): Promise<void> {
     if (purged.messages > 0 || purged.expired > 0) {
       console.log(
         `${LOG_PREFIX} retention: deleted ${purged.messages} messages, expired ${purged.expired} imports`,
+      );
+    }
+    const swept = await sweepOrphanKakaoCommitments();
+    if (swept.commitments > 0) {
+      console.log(
+        `${LOG_PREFIX} orphan sweep: deleted ${swept.commitments} commitments of ${swept.imports} deleted imports`,
       );
     }
   }
