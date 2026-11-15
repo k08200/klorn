@@ -96,9 +96,16 @@ function renderToken(body: string): string {
 /**
  * Slack markup as one line of plain text: mentions, channel links and URLs
  * rendered, `&amp;` / `&lt;` / `&gt;` decoded, whitespace collapsed, capped.
+ *
+ * The output is collected as pieces and joined once. Grown with `+=` one
+ * character at a time it was a rope of one string node per character, all
+ * live until the end: at a megabyte the collector's work on it grew faster
+ * than the input, which is what the linear-time guard measured instead of the
+ * scan (slack-ingest-pure.test.ts).
  */
 export function slackPlainText(text: string, max: number): string {
-  let out = "";
+  const out: string[] = [];
+  let length = 0;
   let i = 0;
   let lastWasSpace = true;
   const push = (piece: string) => {
@@ -106,15 +113,19 @@ export function slackPlainText(text: string, max: number): string {
       const ch = piece.charAt(k);
       const space = ch === " " || ch === "\n" || ch === "\t" || ch === "\r";
       if (space) {
-        if (!lastWasSpace) out += " ";
+        if (!lastWasSpace) {
+          out.push(" ");
+          length += 1;
+        }
         lastWasSpace = true;
       } else {
-        out += ch;
+        out.push(ch);
+        length += 1;
         lastWasSpace = false;
       }
     }
   };
-  while (i < text.length && out.length < max) {
+  while (i < text.length && length < max) {
     const ch = text.charAt(i);
     if (ch === "<") {
       const close = tokenEnd(text, i);
@@ -134,5 +145,5 @@ export function slackPlainText(text: string, max: number): string {
     push(ch);
     i += 1;
   }
-  return capSlackText(out.trimEnd(), max);
+  return capSlackText(out.join("").trimEnd(), max);
 }
