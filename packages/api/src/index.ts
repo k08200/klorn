@@ -7,6 +7,7 @@ import { ensureDemoUser, revokeDemoAccessIfDisabled } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
 import { ADVERTISED_PRO_PRICE_WEB } from "./billing/advertised-price.js";
 import { checkPaddlePriceMatchesAdvertised } from "./billing/paddle-price-check.js";
+import { checkTeamPaddlePrices } from "./billing/paddle-team-price-check.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
 import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
@@ -228,6 +229,11 @@ warnRetiredJudgeHealthEnv();
 // returns; it never throws and never blocks startup.
 void checkPaddlePriceMatchesAdvertised({ advertised: ADVERTISED_PRO_PRICE_WEB }).catch((err) => {
   console.warn(`[PADDLE] price check failed unexpectedly: ${(err as Error).message}`);
+});
+// The team seat prices ($30 / seat / month, $312 / seat / year), the same way.
+// A no-op until PADDLE_TEAM_PRICE_ID_MONTHLY / _ANNUAL are set.
+void checkTeamPaddlePrices().catch((err) => {
+  console.warn(`[PADDLE] team price check failed unexpectedly: ${(err as Error).message}`);
 });
 
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended

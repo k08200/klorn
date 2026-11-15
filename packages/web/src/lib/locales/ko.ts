@@ -1073,6 +1073,8 @@ const ko: Record<string, string> = {
     "이 플랜은 웹에서 결제된 것이 아니라 여기서 취소할 것이 없습니다. 모바일 앱에서 구독했다면 앱에서 관리하세요.",
   "billing.enterpriseBilling":
     "엔터프라이즈는 별도 계약으로 청구됩니다 — 플랜 변경은 영업팀에 문의하세요.",
+  "billing.teamSeatCoversPro":
+    "팀 좌석에 Pro 기능이 모두 포함되어 있습니다. 개인 Pro는 계속 갱신되니, 둘 다 필요하지 않다면 해지하세요.",
   "billing.keepSubscription": "구독 유지",
   "billing.renewsOn": "{date}에 갱신",
   "billing.trialFirstCharge": "무료 체험 · {date}에 첫 결제",
@@ -3140,6 +3142,40 @@ const ko: Record<string, string> = {
   "settings.org.checkout.annual": "연간 결제 · 시트당 월 {price}",
   "settings.org.checkout.monthlyPlain": "월간 결제",
   "settings.org.checkout.annualPlain": "연간 결제",
+  "settings.org.seats.change": "시트 수 ({min}–{max})",
+  "settings.org.seats.changeAction": "시트 변경",
+  "settings.org.seats.floor":
+    "최소 {min}개: 팀 최소 시트 수 이상, 멤버마다 1개씩 필요합니다. 차액은 이번 결제 기간의 남은 날짜만큼 Paddle이 청구하거나 크레딧으로 돌려줍니다.",
+  "settings.org.seats.pending":
+    "Paddle에 보냈습니다. Paddle이 확인하면 시트 {seats}개로 표시됩니다.",
+  "settings.org.seats.unchanged": "조직에 이미 시트 {seats}개가 있습니다.",
+  "settings.org.subscription.cancel": "구독 해지",
+  "settings.org.subscription.cancelTitle": "팀 구독을 해지할까요?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "이미 결제한 기간이 끝날 때까지는 모두 시트를 유지합니다. 그 후 모든 멤버의 팀 플랜이 끝나고 더 이상 청구되지 않습니다.",
+  "settings.org.subscription.cancelConfirm": "기간 종료 시 해지",
+  "settings.org.subscription.keep": "구독 유지",
+  "settings.org.subscription.endsOn": "구독이 {date}에 끝납니다. 그때까지 시트는 유지됩니다.",
+  "settings.org.subscription.endsSoon":
+    "구독이 이번 결제 기간이 끝날 때 종료됩니다. 그때까지 시트는 유지됩니다.",
+  "settings.org.subscription.portal": "결제 관리",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "멤버 수가 그보다 많습니다. 시트를 줄이기 전에 멤버를 먼저 내보내 주세요.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "구독이 활성 상태일 때만 시트를 바꿀 수 있습니다. 결제하는 사람이 결제 포털에서 결제 수단을 고칠 수 있습니다.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "구독 해지가 예약되어 있습니다. 먼저 구독을 유지한 뒤 시트를 바꿔 주세요.",
+  "settings.org.error.NO_SUBSCRIPTION": "이 조직에는 팀 구독이 없습니다.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "일시 중지된 구독은 결제 포털에서만 종료할 수 있습니다.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle이 변경을 확인하지 않아 반영되지 않았을 수 있습니다. 다시 시도하기 전에 잠시 후 확인해 주세요.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "지금은 팀 결제를 이용할 수 없습니다. 바뀐 것은 없습니다.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "이 구독은 여기서 시트를 바꿀 수 없습니다. 지원팀에 문의해 주세요.",
   "settings.org.transparency.title": "조직이 볼 수 있는 것",
   "settings.org.transparency.can": "볼 수 있음",
   "settings.org.transparency.cannot": "절대 볼 수 없음",
@@ -3148,6 +3184,9 @@ const ko: Record<string, string> = {
   "settings.org.transparency.noReads": "아직 아무도 내 바쁜 시간을 조회하지 않았습니다.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "이전 멤버",
+  "settings.org.transparency.domains": "내 분류에 쓰이는 회사 도메인",
+  "settings.org.transparency.domainsLine":
+    "{domains}에서 온 인증된 메일은 분류 이유에 '회사 동료'로 표시됩니다. 조직은 어떤 메일이었는지 볼 수 없습니다.",
   "settings.org.visible.roles": "이름, 이메일 주소, 역할",
   "settings.org.visible.seats": "유료 시트 보유 여부",
   "settings.org.visible.cost": "시트 가격과 구독 상태",

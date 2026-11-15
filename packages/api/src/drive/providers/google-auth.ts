@@ -30,6 +30,7 @@ import { isEntitled } from "../../billing/stripe.js";
 import { decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
 import { decideRefreshTokenWrite, getGoogleUserInfo, getOAuth2Client } from "../../mail/gmail.js";
+import { effectivePlan } from "../../org/effective-tier.js";
 import { isRevokedGrantError } from "../../pim/linked-calendar-failure.js";
 import { captureError } from "../../sentry.js";
 import { driveProvidersFor, googleDriveRoutesEnabled } from "../drive-scope.js";
@@ -140,7 +141,9 @@ async function isLinkerEntitled(userId: string): Promise<boolean> {
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  return linker !== null && isEntitled(linker.plan, linker.role);
+  if (linker === null) return false;
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  return isEntitled(await effectivePlan({ id: userId, plan: linker.plan }), linker.role);
 }
 
 /** The cap applies to NEW accounts only: a re-link must always be allowed. */

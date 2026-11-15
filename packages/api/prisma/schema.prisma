@@ -2900,6 +2900,10 @@ model Organization {
   paddleCustomerId     String?
   paddleSubscriptionId String?             @unique
   subscriptionEventAt  DateTime?
+  /// When a period-end cancel takes effect (Paddle scheduled_change), or
+  /// null. Written by the owner's cancel route and confirmed by the webhook;
+  /// the seats stay until Paddle's final canceled event.
+  subscriptionCancelAt DateTime?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   memberships          OrgMembership[]

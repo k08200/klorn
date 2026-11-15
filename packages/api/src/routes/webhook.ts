@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { ADVERTISED_PRO_PRICE_WEB } from "../billing/advertised-price.js";
 import { verifyPaddleSignature } from "../billing/paddle.js";
 import { checkPaddlePriceEvent } from "../billing/paddle-price-check.js";
+import { checkTeamPaddlePriceEvent } from "../billing/paddle-team-price-check.js";
 import { PLANS, stripe } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
@@ -392,6 +393,12 @@ export async function webhookRoutes(app: FastifyInstance) {
           });
         } catch (err) {
           captureError(err, { tags: { scope: "paddle.webhook.price_check" } });
+        }
+        // The team seat prices, separately: a failure above must not skip it.
+        try {
+          checkTeamPaddlePriceEvent({ eventType: body.event_type, data: body.data });
+        } catch (err) {
+          captureError(err, { tags: { scope: "paddle.webhook.team_price_check" } });
         }
       }
       // Other event types are acknowledged and ignored.

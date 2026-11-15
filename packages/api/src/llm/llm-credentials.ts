@@ -1,6 +1,7 @@
 import { isEntitled } from "../billing/stripe.js";
 import { decryptOptional } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { isCuratedModel } from "./model-catalog.js";
@@ -83,7 +84,8 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
   // key is ignored (resolves to the shared env key, which the locked FREE tier
   // can't reach anyway). Entitled users (paid/trial/comped/admin) keep BYOK.
   // The model choice above survives either way.
-  if (!isEntitled(user.plan ?? "FREE", user.role ?? undefined)) {
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  if (!(await byokEntitled(userId, user))) {
     return { userModel: chosenModel };
   }
 
@@ -92,4 +94,28 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
   // serving until the user clears it.
   const geminiApiKey = safeDecrypt(user.geminiApiKey, "geminiApiKey", userId);
   return { anthropicApiKey, geminiApiKey, quotaScope: userId, userModel: chosenModel };
+}
+
+/**
+ * Whether the user may bring their own key: the effective plan (own plan or a
+ * Klorn Teams seat) is entitled. TOTAL like its caller: a failed seat lookup
+ * is reported and counts as no seat, never as a throw.
+ */
+async function byokEntitled(
+  userId: string,
+  user: { plan?: string | null; role?: string | null },
+): Promise<boolean> {
+  const role = user.role ?? undefined;
+  // Hot path: a seat only ever raises the plan, so an entitled own plan needs
+  // no seat lookup.
+  // effective-tier: own plan
+  const ownPlan = user.plan ?? "FREE";
+  if (isEntitled(ownPlan, role)) return true;
+  try {
+    return isEntitled(await effectivePlan({ id: userId, plan: ownPlan }), role);
+  } catch (err) {
+    console.warn("[BYOK] seat lookup failed — treating the user as seatless", err);
+    captureError(err, { tags: { scope: "byok.seat-lookup" }, extra: { userId } });
+    return false;
+  }
 }

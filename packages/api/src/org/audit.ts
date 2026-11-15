@@ -21,7 +21,11 @@ export type OrgAuditAction =
   | "availability.grant_changed"
   | "availability.read"
   | "billing.checkout_started"
-  | "billing.subscription_changed";
+  | "billing.subscription_changed"
+  | "billing.seats_change_requested"
+  | "billing.cancel_scheduled"
+  | "billing.cancel_removed"
+  | "billing.portal_opened";
 
 export interface OrgAuditInput {
   orgId: string;

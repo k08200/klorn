@@ -9,8 +9,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createPaddleTeamCheckout,
+  getPaddleCustomerEmail,
+  getPaddleTeamSubscription,
   isTeamSubscriptionEvent,
+  SEAT_CHANGE_PRORATION,
+  setPaddleSeatQuantity,
   teamBillingInterval,
+  teamCancelAt,
   teamCheckoutIntervals,
   teamPriceIdFor,
   teamPriceIds,
@@ -163,5 +168,90 @@ describe("recognising a team subscription event", () => {
     expect(isTeamSubscriptionEvent({ items: [{ price: { id: "pri_same" }, quantity: 1 }] })).toBe(
       false,
     );
+  });
+});
+
+describe("a scheduled cancel on a team subscription event", () => {
+  it("reads the cancel date, clears it when Paddle says none, and keeps it when the event is silent", () => {
+    expect(
+      teamCancelAt({
+        status: "active",
+        scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+      })?.toISOString(),
+    ).toBe("2026-12-14T00:00:00.000Z");
+    expect(teamCancelAt({ status: "active", scheduled_change: null })).toBeNull();
+    // A pause is a scheduled change, not a cancel.
+    expect(
+      teamCancelAt({
+        status: "active",
+        scheduled_change: { action: "pause", effective_at: "2026-12-14T00:00:00Z" },
+      }),
+    ).toBeNull();
+    expect(
+      teamCancelAt({ status: "active", scheduled_change: { action: "cancel", effective_at: "x" } }),
+    ).toBeNull();
+    expect(teamCancelAt({ status: "active" })).toBeUndefined();
+    expect(
+      teamCancelAt({
+        status: "canceled",
+        scheduled_change: { action: "cancel", effective_at: "2026-12-14T00:00:00Z" },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("seat management calls to Paddle", () => {
+  function stub(data: unknown) {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return { ok: true, status: 200, json: async () => ({ data }) };
+      }),
+    );
+    return calls;
+  }
+
+  it("reads the live subscription and customer with a bounded GET and no body", async () => {
+    process.env.PADDLE_API_KEY = "test-key";
+    const calls = stub({
+      status: "active",
+      scheduled_change: { action: "cancel" },
+      email: "payer@example.com",
+      items: [{ price: { id: "pri_team_month" }, quantity: 4 }],
+    });
+    expect(await getPaddleTeamSubscription("sub_1", { timeoutMs: 6000 })).toEqual({
+      status: "active",
+      scheduledChange: "cancel",
+      items: [{ priceId: "pri_team_month", quantity: 4 }],
+    });
+    expect(await getPaddleCustomerEmail("ctm_1", { timeoutMs: 6000 })).toBe("payer@example.com");
+    for (const { init } of calls) {
+      expect(init.method).toBe("GET");
+      expect(init.body).toBeUndefined();
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    }
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://api.paddle.com/subscriptions/sub_1",
+      "https://api.paddle.com/customers/ctm_1",
+    ]);
+  });
+
+  it("sets the quantity on the given price, prorated now, and never applies a failed charge", async () => {
+    process.env.PADDLE_API_KEY = "test-key";
+    const calls = stub({});
+    await setPaddleSeatQuantity(
+      { subscriptionId: "sub_1", priceId: "pri_team_month", quantity: 7 },
+      { timeoutMs: 6000 },
+    );
+    expect(calls[0]?.init.method).toBe("PATCH");
+    expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      items: [{ price_id: "pri_team_month", quantity: 7 }],
+      proration_billing_mode: SEAT_CHANGE_PRORATION,
+      on_payment_failure: "prevent_change",
+    });
+    expect(SEAT_CHANGE_PRORATION).toBe("prorated_immediately");
   });
 });

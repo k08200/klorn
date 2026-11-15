@@ -85,6 +85,20 @@ describe("/api/orgs gating", () => {
     expect(service.currentOrgView).not.toHaveBeenCalled();
   });
 
+  it("keeps the seat, cancel and billing portal routes dark while TEAMS_ENABLED is off", async () => {
+    auth.authed = false;
+    for (const url of [
+      "/api/orgs/current/seats",
+      "/api/orgs/current/subscription/cancel",
+      "/api/orgs/current/subscription/resume",
+      "/api/orgs/current/billing-portal",
+    ]) {
+      const res = await app.inject({ method: "POST", url, payload: { seats: 3 } });
+      expect(res.statusCode, url).toBe(404);
+      expect(res.json(), url).toMatchObject({ message: `Route POST:${url} not found` });
+    }
+  });
+
   it("serves a signed-in user once the flag is on, and requires a session", async () => {
     process.env.TEAMS_ENABLED = "true";
     expect((await app.inject({ method: "GET", url: "/api/orgs/current" })).json()).toEqual({

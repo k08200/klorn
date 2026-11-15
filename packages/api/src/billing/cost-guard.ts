@@ -20,11 +20,13 @@ import {
   GLOBAL_DAILY_COST_CAP_CENTS,
   JUDGE_BUDGET_RESERVE_CENTS,
   PAYWALL_ENABLED,
+  teamsOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { notifyCostCapTrip } from "./cost-trip-alert.js";
 import { isEntitled } from "./stripe.js";
+import { teamPoolCapCents } from "./team-cost-pool.js";
 
 export interface CostGateResult {
   allowed: boolean;
@@ -44,20 +46,49 @@ function utcDayKey(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+interface ResolvedCap {
+  capCents: number;
+  freeCapApplied: boolean;
+}
+
+/**
+ * The daily cap in force for a user: their own plan's cap, raised to what the
+ * Klorn Teams pool has left when they hold a paid seat (team-cost-pool.ts).
+ * The higher of the two wins, so a seat never lowers anyone's cap, and a
+ * disabled gate (cap 0) stays disabled. While TEAMS_ENABLED is closed to the
+ * user this is ownPlanCapCents exactly, with no extra lookup.
+ */
+async function resolveCapCents(userId: string): Promise<ResolvedCap> {
+  const own = await ownPlanCapCents(userId);
+  if (own.capCents <= 0 || !teamsOpenTo(userId)) return own;
+  let pool: number | null;
+  try {
+    pool = await teamPoolCapCents(userId);
+  } catch (err) {
+    // Fall back to the own plan's cap (never to a larger one) and say so.
+    console.warn("[cost-guard] team pool lookup failed, using the own plan's cap:", err);
+    captureError(err, { tags: { scope: "cost-guard.team-pool" }, extra: { userId } });
+    return own;
+  }
+  if (pool === null) return own;
+  // A seat holder is entitled: the upgrade nudge never applies to them.
+  return { capCents: Math.max(own.capCents, pool), freeCapApplied: false };
+}
+
 // The free tier's daily limit: when the paywall is on, a non-entitled (free)
 // user gets FREE_DAILY_COST_CAP_CENTS instead of the full cap — this is what
 // bounds free classification/AUTO volume. When the paywall is off, or the user
 // is entitled (paid/trial/admin), the normal cap applies and no extra lookup
-// happens.
-async function resolveCapCents(
-  userId: string,
-): Promise<{ capCents: number; freeCapApplied: boolean }> {
+// happens. A Klorn Teams seat's share is added by resolveCapCents above.
+async function ownPlanCapCents(userId: string): Promise<ResolvedCap> {
   if (!PAYWALL_ENABLED) return { capCents: DAILY_COST_CAP_CENTS, freeCapApplied: false };
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { plan: true, role: true },
     });
+    // The own plan on purpose: resolveCapCents layers the seat's pool on top.
+    // effective-tier: own plan
     if (user && !isEntitled(user.plan, user.role ?? undefined)) {
       return { capCents: FREE_DAILY_COST_CAP_CENTS, freeCapApplied: true };
     }

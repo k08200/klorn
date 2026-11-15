@@ -56,6 +56,18 @@ export function OrgTransparency({ data }: { data: OrgTransparencyResponse }) {
           </ul>
         )}
       </div>
+      {data.companyDomains.length > 0 && (
+        <div>
+          <h4 className="text-role-caption font-semibold text-ink-mid">
+            {t("settings.org.transparency.domains")}
+          </h4>
+          <p className="text-role-body text-ink">
+            {t("settings.org.transparency.domainsLine", {
+              domains: data.companyDomains.join(", "),
+            })}
+          </p>
+        </div>
+      )}
       <div>
         <h4 className="text-role-caption font-semibold text-ink-mid">
           {t("settings.org.transparency.reads")}

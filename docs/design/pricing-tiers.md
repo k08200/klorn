@@ -52,6 +52,58 @@ each teammate's calendar. A company that adopts Klorn also removes the
 - Pooled means the team shares (number of seats × seat target); one person
   can use more on a day the others use less.
 
+### Seat entitlement in code (Teams v1.1)
+
+- `effectivePlan` (`packages/api/src/org/effective-tier.ts`) is the one
+  resolver every plan gate reads: the user's own plan, raised to TEAM by a
+  held paid seat. Its batch form `effectivePlans` serves the schedulers in two
+  queries. While `TEAMS_ENABLED` is closed to a user it returns the own plan
+  value untouched and runs no query, so every gate answers exactly as before
+  seats. A static guard (`effective-tier-wiring-guard.test.ts`) catches the
+  common bypasses (a raw `.plan` handed to a gate helper, a raw plan aliased
+  outside a resolver call, a gate-calling file that never imports the
+  resolver); it is pattern-based, not a type-level proof.
+- Access gates use the strict resolver, which throws on a lookup failure
+  (fail closed). Displayed plans, the device list and the schedulers use the
+  `...OrOwn` variants, which report the failure and keep the own plan. A
+  sign-in whose seat lookup fails proceeds but evicts no device that time.
+- A seat holder carries `PLANS.TEAM`'s limits (device count, message and
+  token allowances) wherever the code reads plan limits.
+- Pooled LLM cap (`billing/team-cost-pool.ts`): a seat holder may spend
+  purchased seats × `TEAM_SEAT_DAILY_COST_CAP_CENTS` (default 80¢) minus
+  today's spend by the organization's other seated members, each counted as
+  at least half a seat target (so one member cannot drain the others down to
+  their own-plan caps), bounded per member at 10× the seat target (the
+  anomaly brake), and never less than their own plan's cap. Unfilled paid
+  seats feed the pool; a member removed mid-day drops out of the sum. The sum
+  reads cost cents only, re-read at most every 30 s per user.
+- Before large organizations: `GLOBAL_DAILY_COST_CAP_CENTS` (default 5000¢)
+  is below one 150-seat pool (12000¢); raise it or add a per-organization
+  share before enabling teams of that size.
+
+### Personal Pro and a team seat
+
+*Default chosen on the founder's behalf on 2026-11-14 (Teams v1.1). Not
+LOCKED: pending founder confirmation, reversible — change it here and in
+`seatCoversPersonalPlan`.*
+
+- Entitlement is the higher of the two: TEAM. The LLM cap is the higher of
+  the personal cap and the pool's remainder.
+- Klorn never cancels the personal subscription by itself. A cancel is a
+  money action, and the seat can lapse (the organization stops paying, or the
+  member is removed), which would leave the user without the plan they paid
+  for.
+- Not silent: while a live personal Paddle Pro still renews (active or
+  trialing, no cancel scheduled), `/me` and `/api/billing/status` carry
+  `teamSeatCoversPersonalPlan: true`, and Settings → Billing says the seat
+  already covers Pro next to the personal cancel. Only the Paddle path stores
+  renewal state, so a Stripe or App Store / Play subscriber with a seat is
+  not detected (no notice) — a known gap. That cancel is the existing one: Paddle in-app cancel at the end of
+  the billing period (`POST /api/billing/cancel`, undo with
+  `POST /api/billing/resume`); Stripe customers use the portal; App Store and
+  Google Play subscriptions are managed in the store.
+- No automatic refund or proration of the personal plan.
+
 ### Launch features
 
 1. Organization, members, invites. No organization role is named `ADMIN`
@@ -67,6 +119,40 @@ each teammate's calendar. A company that adopts Klorn also removes the
 6. Organization company domains, pushed to every member.
 7. Audit log of admin actions and cross-member free/busy reads.
 8. Member transparency screen: what the company can and cannot see.
+
+### Seat changes, cancel and the billing portal
+
+Owner only (`src/org/seat-management.ts`); members are refused. Paddle is the
+source of truth: no route writes the stored seat count or status, the
+subscription webhook does.
+
+- **Seat changes** set the quantity to N (2–150, never below the current
+  members). Billed `prorated_immediately` in both directions: an added seat is
+  charged for the rest of the current period, a removed seat is credited to
+  the customer's Paddle balance for the next renewal. The other modes charge
+  for days a seat was not held, leave seats unbilled until the renewal, or
+  never bill them. The change keeps the subscription's own price (never the
+  newest configured one, which would move the team to it without notice), and
+  a failed proration charge leaves the subscription unchanged
+  (`on_payment_failure: prevent_change`). The request is compared with what
+  Paddle bills now, not the stored count, so asking for the count Paddle
+  already holds makes no change. Only while active or trialing with nothing
+  scheduled: Paddle refuses updates to a past-due subscription.
+- **The owner is the billing admin.** Any owner, including one who took over
+  by transfer, can change seats or cancel on the payment method already on the
+  subscription; Paddle emails the payer a receipt for every prorated charge.
+- **Cancel** is at the period end only, like Pro: seats stay until Paddle's
+  final event. A past-due subscription can be canceled this way and stays
+  past due until the period ends; a paused one can only be ended immediately,
+  which is left to the portal. A scheduled cancel can be taken back, past due
+  included (removing a scheduled change is the one update Paddle allows
+  there). An organization whose subscription still bills (active, trialing,
+  past due, paused) is never closed or deleted.
+- **Billing portal** opens only while the subscription bills, and only for an
+  owner whose verified Klorn email is the Paddle customer's email. The portal
+  is the payer's whole Paddle account (other subscriptions, invoices,
+  address): a later owner, or an owner who paid from another address, is
+  refused, and the payer still has the portal link in Paddle's receipt emails.
 
 ### Later
 

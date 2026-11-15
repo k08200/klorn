@@ -35,6 +35,7 @@ import { getUserId } from "../auth.js";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { KLORN_PROVIDER, NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { captureError } from "../sentry.js";
 import { planHasFeature } from "./stripe.js";
 
@@ -67,7 +68,9 @@ async function hasMultiAccount(userId: string): Promise<boolean> {
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  return planHasFeature(user?.plan ?? "FREE", "multi_account", user?.role ?? undefined);
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  const plan = await effectivePlan({ id: userId, plan: user?.plan ?? "FREE" });
+  return planHasFeature(plan, "multi_account", user?.role ?? undefined);
 }
 
 async function hasPrimaryGoogleToken(userId: string): Promise<boolean> {

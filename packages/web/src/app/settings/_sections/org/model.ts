@@ -104,7 +104,60 @@ export function formatUsd(cents: number, locale: string): string {
   }).format(cents / 100);
 }
 
+/** The least seats an organization can hold: two, and one for each member. */
+export function seatFloor(memberCount: number): number {
+  return Math.min(MAX_SEATS, Math.max(MIN_SEATS, Math.floor(memberCount)));
+}
+
+/** A typed seat change: a whole number from `floor` to 150, or null. */
+export function parseSeatsFrom(raw: string, floor: number): number | null {
+  const seats = parseSeats(raw);
+  return seats !== null && seats >= floor ? seats : null;
+}
+
+export interface SubscriptionActions {
+  changeSeats: boolean;
+  cancel: boolean;
+  resume: boolean;
+  portal: boolean;
+}
+
+/**
+ * Which owner actions the subscription's state allows, as Paddle does: seats
+ * change only while active or trialing with no cancel scheduled; a past-due
+ * subscription can still be canceled at the period end; a paused one only
+ * from the portal; a canceled one (or none) offers nothing.
+ */
+export function subscriptionActions(seats: {
+  status: string | null;
+  cancelAt: string | null;
+}): SubscriptionActions {
+  const { status, cancelAt } = seats;
+  const live = status !== null && status !== "canceled";
+  const seated = status === "active" || status === "trialing";
+  return {
+    changeSeats: seated && !cancelAt,
+    cancel: (seated || status === "past_due") && !cancelAt,
+    resume: live && Boolean(cancelAt),
+    portal: live,
+  };
+}
+
+/** Refusals of the seat, cancel and billing portal routes (org/seat-management.ts). */
+export const SEAT_MANAGEMENT_CODES: ReadonlySet<string> = new Set([
+  "SEATS_BELOW_MEMBERS",
+  "SUBSCRIPTION_NOT_ACTIVE",
+  "CANCEL_SCHEDULED",
+  "NO_SUBSCRIPTION",
+  "SUBSCRIPTION_PAUSED",
+  "PORTAL_PAYER_ONLY",
+  "BILLING_PROVIDER_ERROR",
+  "TEAM_BILLING_UNAVAILABLE",
+  "SEAT_CHANGE_UNSUPPORTED",
+]);
+
 const KNOWN_CODES = new Set([
+  ...SEAT_MANAGEMENT_CODES,
   "EMAIL_NOT_VERIFIED",
   "ALREADY_IN_ORG",
   "ALREADY_MEMBER",

@@ -17,6 +17,7 @@ import { planHasFeature } from "../billing/stripe.js";
 import { PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS, PATTERN_MIN_OCCURRENCES } from "../config.js";
 import { db, prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
+import { effectivePlansOrOwn } from "../org/effective-tier.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { newWork } from "../work-context.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
@@ -579,9 +580,14 @@ async function runPatternAnalysisForAllUsers() {
       where: { id: { in: patternUserIds } },
       select: { id: true, plan: true, role: true },
     });
+    // A Klorn Teams seat counts (org/effective-tier.ts); one batch lookup,
+    // none while TEAMS_ENABLED is off.
+    const plans = await effectivePlansOrOwn(patternUsers);
     const eligibleUserIds = new Set(
       patternUsers
-        .filter((u) => planHasFeature(u.plan, "pattern_learning", u.role ?? undefined))
+        .filter((u) =>
+          planHasFeature(plans.get(u.id) ?? "FREE", "pattern_learning", u.role ?? undefined),
+        )
         .map((u) => u.id),
     );
 

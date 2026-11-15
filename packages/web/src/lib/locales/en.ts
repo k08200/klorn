@@ -1084,6 +1084,8 @@ const en: Record<string, string> = {
     "This plan isn't billed on the web, so there is nothing to cancel here. If you subscribed in the mobile app, manage it there.",
   "billing.enterpriseBilling":
     "Enterprise is billed by agreement — contact sales to change the plan.",
+  "billing.teamSeatCoversPro":
+    "Your team seat already includes everything in Pro. Your personal Pro still renews — cancel it if you no longer need both.",
   "billing.keepSubscription": "Keep subscription",
   "billing.renewsOn": "Renews on {date}",
   "billing.trialFirstCharge": "Free trial · first charge on {date}",
@@ -3152,6 +3154,39 @@ const en: Record<string, string> = {
   "settings.org.checkout.annual": "Pay yearly · {price} per seat per month",
   "settings.org.checkout.monthlyPlain": "Pay monthly",
   "settings.org.checkout.annualPlain": "Pay yearly",
+  "settings.org.seats.change": "Seats ({min}–{max})",
+  "settings.org.seats.changeAction": "Update seats",
+  "settings.org.seats.floor":
+    "At least {min}: the team minimum, and one seat for every member. Paddle charges or credits the difference for the rest of this billing period.",
+  "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
+  "settings.org.seats.unchanged": "The organization already has {seats} seats.",
+  "settings.org.subscription.cancel": "Cancel subscription",
+  "settings.org.subscription.cancelTitle": "Cancel the team subscription?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Everyone keeps their seat until the end of the period already paid for. Then the team plan ends for every member, and nothing more is charged.",
+  "settings.org.subscription.cancelConfirm": "Cancel at period end",
+  "settings.org.subscription.keep": "Keep subscription",
+  "settings.org.subscription.endsOn": "The subscription ends on {date}. Seats stay until then.",
+  "settings.org.subscription.endsSoon":
+    "The subscription ends at the end of this billing period. Seats stay until then.",
+  "settings.org.subscription.portal": "Manage billing",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "The organization has more members than that. Remove members before you remove their seats.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Seats can change only while the subscription is active. Whoever pays can fix the payment method in the billing portal.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "The subscription is set to end. Keep it first, then change seats.",
+  "settings.org.error.NO_SUBSCRIPTION": "This organization has no team subscription.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "A paused subscription can only be ended from the billing portal.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle didn't confirm the change, so it may not have gone through. Check again in a minute before you retry.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "Team billing isn't available right now. Nothing was changed.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "This subscription can't change seats here. Contact support.",
   "settings.org.transparency.title": "What your organization can see",
   "settings.org.transparency.can": "Can see",
   "settings.org.transparency.cannot": "Never sees",
@@ -3160,6 +3195,9 @@ const en: Record<string, string> = {
   "settings.org.transparency.noReads": "No one has read your free/busy yet.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "A former member",
+  "settings.org.transparency.domains": "Company domains in your triage",
+  "settings.org.transparency.domainsLine":
+    "Verified mail from {domains} is named as from a colleague at your company in your triage reasons. Your organization never sees which mail that was.",
   "settings.org.visible.roles": "Your name, email address and role",
   "settings.org.visible.seats": "Whether you hold a paid seat",
   "settings.org.visible.cost": "The seat price and the subscription's state",

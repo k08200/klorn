@@ -1095,6 +1095,8 @@ const es: Record<string, string> = {
     "Este plan no se factura en la web, así que aquí no hay nada que cancelar. Si te suscribiste en la app móvil, gestiónalo allí.",
   "billing.enterpriseBilling":
     "Enterprise se factura por acuerdo: contacta con ventas para cambiar de plan.",
+  "billing.teamSeatCoversPro":
+    "Tu puesto de equipo ya incluye todo Pro. Tu Pro personal se sigue renovando: cancélalo si ya no necesitas ambos.",
   "billing.keepSubscription": "Mantener la suscripción",
   "billing.renewsOn": "Se renueva el {date}",
   "billing.trialFirstCharge": "Prueba gratis · primer cargo el {date}",
@@ -3226,6 +3228,41 @@ const es: Record<string, string> = {
   "settings.org.checkout.annual": "Pago anual · {price} por plaza al mes",
   "settings.org.checkout.monthlyPlain": "Pago mensual",
   "settings.org.checkout.annualPlain": "Pago anual",
+  "settings.org.seats.change": "Plazas ({min}–{max})",
+  "settings.org.seats.changeAction": "Actualizar plazas",
+  "settings.org.seats.floor":
+    "Al menos {min}: el mínimo del equipo y una plaza por cada miembro. Paddle cobra o abona la diferencia por lo que queda de este periodo de facturación.",
+  "settings.org.seats.pending":
+    "Enviado a Paddle. Verás {seats} plazas aquí cuando Paddle lo confirme.",
+  "settings.org.seats.unchanged": "La organización ya tiene {seats} plazas.",
+  "settings.org.subscription.cancel": "Cancelar suscripción",
+  "settings.org.subscription.cancelTitle": "¿Cancelar la suscripción de equipo?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Todos conservan su plaza hasta el final del periodo ya pagado. Después, el plan de equipo termina para todos los miembros y no se cobra nada más.",
+  "settings.org.subscription.cancelConfirm": "Cancelar al final del periodo",
+  "settings.org.subscription.keep": "Mantener suscripción",
+  "settings.org.subscription.endsOn":
+    "La suscripción termina el {date}. Las plazas se mantienen hasta entonces.",
+  "settings.org.subscription.endsSoon":
+    "La suscripción termina al final de este periodo de facturación. Las plazas se mantienen hasta entonces.",
+  "settings.org.subscription.portal": "Gestionar facturación",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "La organización tiene más miembros. Quita miembros antes de quitar sus plazas.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Las plazas solo cambian con la suscripción activa. Quien paga puede corregir el método de pago en el portal de facturación.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "La suscripción está programada para terminar. Mantenla primero y luego cambia las plazas.",
+  "settings.org.error.NO_SUBSCRIPTION": "Esta organización no tiene suscripción de equipo.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "Una suscripción en pausa solo se puede terminar desde el portal de facturación.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "El portal de facturación solo se abre para el correo que paga el equipo. Esa persona también puede usar el enlace de los recibos de Paddle.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle no confirmó el cambio, así que puede que no se haya aplicado. Compruébalo en un minuto antes de volver a intentarlo.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "La facturación de equipo no está disponible ahora. No se cambió nada.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "Esta suscripción no puede cambiar plazas aquí. Contacta con soporte.",
   "settings.org.transparency.title": "Lo que tu organización puede ver",
   "settings.org.transparency.can": "Puede ver",
   "settings.org.transparency.cannot": "Nunca ve",
@@ -3234,6 +3271,9 @@ const es: Record<string, string> = {
   "settings.org.transparency.noReads": "Nadie ha consultado tu disponibilidad todavía.",
   "settings.org.transparency.read": "{who} · {date}",
   "settings.org.transparency.formerMember": "Un antiguo miembro",
+  "settings.org.transparency.domains": "Dominios de empresa en tu clasificación",
+  "settings.org.transparency.domainsLine":
+    "El correo verificado de {domains} aparece como de un colega de tu empresa en los motivos de tu clasificación. Tu organización nunca ve qué correo fue.",
   "settings.org.visible.roles": "Tu nombre, tu dirección de correo y tu rol",
   "settings.org.visible.seats": "Si tienes una plaza de pago",
   "settings.org.visible.cost": "El precio por plaza y el estado de la suscripción",

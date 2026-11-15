@@ -5,8 +5,9 @@
  * derived from membership at read time (effective-tier.ts) — nothing here
  * ever writes User.plan.
  *
- * Seat changes after purchase (adding or removing seats) are not built yet:
- * see the proration notes in the PR that added this file.
+ * Changes after purchase (seat count, cancel, billing portal) live in
+ * seat-management.ts; they ask Paddle, and this file's webhook path still
+ * writes what Paddle reports.
  */
 
 import type { Prisma } from "@prisma/client";
@@ -18,6 +19,7 @@ import {
   type TeamInterval,
   type TeamSubscriptionData,
   teamBillingInterval,
+  teamCancelAt,
   teamCheckoutIntervals,
   teamPriceIdFor,
   teamSeatQuantity,
@@ -163,6 +165,7 @@ function refusal(stored: StoredSubscription, data: TeamSubscriptionData): string
 function updateFor(data: TeamSubscriptionData, own: boolean, eventAt: Date | null) {
   const seats = teamSeatQuantity(data, { anyPrice: own });
   const interval = teamBillingInterval(data);
+  const cancelAt = teamCancelAt(data);
   const update: Prisma.OrganizationUpdateInput = {
     subscriptionStatus: data.status ?? null,
     // canceled is terminal: the id is freed so it cannot be targeted again.
@@ -170,6 +173,7 @@ function updateFor(data: TeamSubscriptionData, own: boolean, eventAt: Date | nul
     paddleCustomerId: data.customer_id ?? undefined,
     ...(seats === null ? {} : { seatsPurchased: seats }),
     ...(interval === null ? {} : { billingInterval: interval }),
+    ...(cancelAt === undefined ? {} : { subscriptionCancelAt: cancelAt }),
     ...(eventAt ? { subscriptionEventAt: eventAt } : {}),
   };
   return { update, seats, interval };
@@ -213,7 +217,12 @@ export async function applyTeamSubscriptionEvent(
       // with its seats, and the drift is reported.
       const drifted = await tx.organization.updateMany({
         where: { paddleSubscriptionId: event.data.id, id: { not: orgId } },
-        data: { paddleSubscriptionId: null, subscriptionStatus: null, seatsPurchased: 0 },
+        data: {
+          paddleSubscriptionId: null,
+          subscriptionStatus: null,
+          seatsPurchased: 0,
+          subscriptionCancelAt: null,
+        },
       });
       if (drifted.count > 0)
         report("team subscription id moved between organizations", event.eventId);
