@@ -55,6 +55,37 @@ export function verifyPaddleSignature(
 }
 
 /**
+ * A refused Paddle API call: the HTTP status and Paddle's error code
+ * (`{"error":{"code":…}}`, null when the body is not that envelope), so a
+ * caller can tell an expected refusal from a fault. The message is the one
+ * paddleFetch has always thrown.
+ */
+export class PaddleApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = "PaddleApiError";
+  }
+}
+
+function paddleErrorCode(body: string): string | null {
+  try {
+    const code = (JSON.parse(body) as { error?: { code?: unknown } } | null)?.error?.code;
+    return typeof code === "string" ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when `err` is Paddle refusing the call with this error code. */
+export function isPaddleErrorCode(err: unknown, code: string): boolean {
+  return err instanceof PaddleApiError && err.code === code;
+}
+
+/**
  * One Paddle API call. `body` is sent as JSON except on GET. `timeoutMs` bounds
  * a call made while a database lock is held (org/seat-management.ts); without
  * it the call waits as long as fetch does, as it always has.
@@ -77,7 +108,11 @@ export async function paddleFetch(
   if (!res.ok) {
     // Body may carry request ids useful for support; it never contains our key.
     const detail = await res.text().catch(() => "");
-    throw new Error(`Paddle API ${path} failed: ${res.status} ${detail.slice(0, 300)}`);
+    throw new PaddleApiError(
+      res.status,
+      paddleErrorCode(detail),
+      `Paddle API ${path} failed: ${res.status} ${detail.slice(0, 300)}`,
+    );
   }
   return res.json();
 }

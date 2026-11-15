@@ -3029,6 +3029,8 @@ const zh: Record<string, string> = {
   "settings.org.seats.changeAction": "更新席位",
   "settings.org.seats.floor":
     "至少 {min} 个：不少于团队最低席位数，且每位成员一个。差额按本计费周期剩余天数由 Paddle 补收或计入余额。",
+  "settings.org.seats.payerOnly":
+    "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的人可以添加。任何所有者都可以减少席位。",
   "settings.org.seats.pending": "已提交给 Paddle。Paddle 确认后这里会显示 {seats} 个席位。",
   "settings.org.seats.unchanged": "组织已有 {seats} 个席位。",
   "settings.org.subscription.cancel": "取消订阅",
@@ -3048,6 +3050,9 @@ const zh: Record<string, string> = {
   "settings.org.error.SUBSCRIPTION_PAUSED": "已暂停的订阅只能在账单门户中结束。",
   "settings.org.error.PORTAL_PAYER_ONLY":
     "账单门户只对支付团队费用的邮箱地址开放。付款人也可以使用 Paddle 收据邮件中的链接。",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "添加席位会立即从已绑定的银行卡扣款，因此只有支付团队费用的邮箱地址可以添加。请联系用该地址登录 Klorn 的人（Paddle 收据邮件会发送到该地址）。你仍然可以减少席位。",
+  "settings.org.error.SEATS_CHANGED": "保存期间席位数已变更。请查看当前席位数后重试。",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle 未确认此更改，可能未生效。请稍等片刻确认后再重试。",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE": "团队账单目前不可用。未做任何更改。",

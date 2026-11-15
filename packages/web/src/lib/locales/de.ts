@@ -3350,6 +3350,8 @@ const de: Record<string, string> = {
   "settings.org.seats.changeAction": "Plätze ändern",
   "settings.org.seats.floor":
     "Mindestens {min}: das Team-Minimum und ein Platz pro Mitglied. Paddle berechnet oder erstattet die Differenz für den Rest dieses Abrechnungszeitraums.",
+  "settings.org.seats.payerOnly":
+    "Zusätzliche Plätze werden sofort von der hinterlegten Karte abgebucht, deshalb kann nur die Person, die für das Team bezahlt, Plätze hinzufügen. Jeder Inhaber kann Plätze entfernen.",
   "settings.org.seats.pending":
     "An Paddle gesendet. {seats} Plätze erscheinen hier, sobald Paddle bestätigt.",
   "settings.org.seats.unchanged": "Die Organisation hat bereits {seats} Plätze.",
@@ -3374,6 +3376,10 @@ const de: Record<string, string> = {
     "Ein pausiertes Abo lässt sich nur im Abrechnungsportal beenden.",
   "settings.org.error.PORTAL_PAYER_ONLY":
     "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "Nur die E-Mail-Adresse, die für das Team bezahlt, kann Plätze hinzufügen, weil die hinterlegte Karte sofort belastet wird. Bitte die Person darum, die sich mit dieser Adresse bei Klorn anmeldet (an sie gehen die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
+  "settings.org.error.SEATS_CHANGED":
+    "Die Anzahl der Plätze hat sich beim Speichern geändert. Prüfe die aktuelle Anzahl und versuche es erneut.",
   "settings.org.error.BILLING_PROVIDER_ERROR":
     "Paddle hat die Änderung nicht bestätigt, sie ist also womöglich nicht durchgegangen. Prüfe es in einer Minute, bevor du es erneut versuchst.",
   "settings.org.error.TEAM_BILLING_UNAVAILABLE":
