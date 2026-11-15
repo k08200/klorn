@@ -113,6 +113,46 @@ describe("org code reaches no member data", () => {
   });
 });
 
+function sourcesUnder(dir: string): Array<{ path: string; text: string }> {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourcesUnder(path);
+    return entry.name.endsWith(".ts") ? [{ path, text: readFileSync(path, "utf8") }] : [];
+  });
+}
+
+describe("the judge's one read of the organization (company domains)", () => {
+  it("judge code imports only orgCompanyDomainsFor from the org code", () => {
+    const imports: string[] = [];
+    for (const { path, text } of sourcesUnder(join(srcDir, "judge"))) {
+      // Static imports, re-exports and dynamic import() of anything under org/.
+      for (const [statement] of text.matchAll(
+        /(?:(?:import|export)[^;]*from\s+|import\(\s*)"[./]*org\/[^"]+"/g,
+      )) {
+        imports.push(`${path.slice(srcDir.length)}: ${statement.replace(/\s+/g, " ")}`);
+      }
+    }
+    expect(imports).toEqual([
+      '/judge/v3/relationship-loader.ts: import { orgCompanyDomainsFor } from "../../org/org-domains.js"',
+    ]);
+  });
+
+  it("reads the member's own organization's companyDomains and nothing else", () => {
+    const text = readFileSync(join(srcDir, "org", "org-domains.ts"), "utf8");
+    const calls = [...text.matchAll(/(?<![/\w.])(?:prisma|tx|db|client)\.\w+\.\w+\(/g)].map(
+      ([call]) => call,
+    );
+    expect(calls).toEqual(["prisma.orgMembership.findUnique("]);
+    expect(text).toMatch(/where:\s*\{\s*userId\s*\}/);
+    expect(text).toMatch(
+      /select:\s*\{\s*org:\s*\{\s*select:\s*\{\s*companyDomains:\s*true\s*\}\s*\}\s*\}/,
+    );
+    // The flag gate comes before the query: closed, no read at all.
+    expect(text.indexOf("teamsOpenTo(userId)")).toBeGreaterThan(-1);
+    expect(text.indexOf("teamsOpenTo(userId)")).toBeLessThan(text.indexOf("prisma.orgMembership"));
+  });
+});
+
 describe("member transparency (static truth)", () => {
   it("lists mail, attention items and commitments as never visible to the org", () => {
     expect(NEVER_VISIBLE_TO_ORG).toEqual(
