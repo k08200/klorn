@@ -778,6 +778,12 @@ model LinkedInboxAccount {
   // and when. Cleared by the next successful poll. Null = the last poll succeeded.
   syncErrorCode             String?
   syncErrorAt               DateTime?
+  // IMAP providers: consecutive polls whose login the provider refused with the
+  // stored app password, and when the poll may log in again (mail/imap-auth-backoff.ts).
+  // 15 min, 1 h, 6 h after the 1st, 2nd, 3rd; the 4th stops the poll (retry time
+  // null) until a reconnect. Reset by a login that works and by a reconnect.
+  imapAuthFailures          Int                @default(0)
+  imapAuthRetryAt           DateTime?
   // Same as UserToken.sentHistoryImportedAt, for this linked GOOGLE inbox.
   sentHistoryImportedAt     DateTime?
   // Set true when this linked inbox's token is found revoked/undecryptable so the

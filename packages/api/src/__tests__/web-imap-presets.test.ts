@@ -22,6 +22,7 @@ import {
   type PresetProbe,
   type PresetStatus,
   presetCardView,
+  presetConnectOpen,
   presetProbeReducer,
 } from "../../../web/src/lib/imap-preset-status";
 import { IMAP_PRESETS, imapPresetFor } from "../../../web/src/lib/imap-presets";
@@ -332,6 +333,49 @@ describe("preset card status probe", () => {
     expect(source).toContain("guard.isCurrent(token)");
     expect(source).not.toContain("-imap.status`");
     expect(source).toContain('if (view === "hidden") return null;');
+  });
+});
+
+describe("a preset whose flag was turned off after the user connected it", () => {
+  it("offers connect and reconnect only when /status says connect is open", () => {
+    expect(presetConnectOpen({ connectOpen: true })).toBe(true);
+    expect(presetConnectOpen({ connectOpen: false })).toBe(false);
+    // An older API answered /status only while connect was open.
+    expect(presetConnectOpen({})).toBe(true);
+    expect(presetConnectOpen(null)).toBe(true);
+  });
+
+  it("still lists the mailbox with its disconnect button", () => {
+    const owned: PresetStatus = {
+      connectOpen: false,
+      canConnect: true,
+      accounts: [
+        {
+          email: "me@example.com",
+          host: "imap.mail.yahoo.com:993",
+          connectedAt: "2026-11-14T00:00:00Z",
+          lastSyncedAt: null,
+          needsReconnect: true,
+        },
+      ],
+    };
+    const probe = presetProbeReducer(INITIAL_PRESET_PROBE, { type: "loaded", status: owned });
+    expect(presetCardView(probe, true)).toBe("accounts");
+  });
+
+  it("hides the reconnect form and says the mailbox is paused, in all 7 locales", () => {
+    const card = read("components/imap-preset-section.tsx");
+    expect(card).toContain("canReconnect={presetConnectOpen(probe.status)}");
+    const icloud = read("components/icloud-imap-section.tsx");
+    expect(icloud).toContain("canReconnect={status.connectOpen !== false}");
+    const row = read("components/imap-account-status.tsx");
+    expect(row).toContain('{canReconnect && status === "reconnect" && (');
+    expect(row).toContain('t("imap.connectPaused", { provider: PROVIDER_LABEL[provider] })');
+    for (const [locale, table] of Object.entries(LOCALES)) {
+      const text = (table as Record<string, string>)["imap.connectPaused"];
+      expect(text, locale).toContain("{provider}");
+      expect(text, locale).toContain("Klorn");
+    }
   });
 });
 

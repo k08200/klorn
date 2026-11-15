@@ -2268,6 +2268,8 @@ const fr: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Connecter un autre agenda nécessite un abonnement Pro.",
   "imap.error.connectFailed": "La connexion a échoué.",
   "imap.error.disconnectFailed": "La déconnexion a échoué.",
+  "imap.connectPaused":
+    "Klorn a mis en pause la synchronisation {provider}. Vous pouvez toujours déconnecter cette boîte.",
   "imap.confirmDisconnect.message":
     "Les e-mails déjà classés sont conservés. Vous pouvez reconnecter la boîte à tout moment.",
   "imap.hostSince": "Hôte : {host} · depuis",

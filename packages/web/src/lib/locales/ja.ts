@@ -2212,6 +2212,8 @@ const ja: Record<string, string> = {
     "別のカレンダーを接続するには Pro サブスクリプションが必要です。",
   "imap.error.connectFailed": "接続に失敗しました。",
   "imap.error.disconnectFailed": "接続の解除に失敗しました。",
+  "imap.connectPaused":
+    "Klorn は {provider} の同期を一時停止しています。このメールボックスの接続解除は引き続き行えます。",
   "imap.confirmDisconnect.message":
     "分類済みのメールはそのまま残ります。メールボックスはいつでも再接続できます。",
   "imap.hostSince": "ホスト: {host} · 接続日時",

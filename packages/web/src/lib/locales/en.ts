@@ -2209,6 +2209,7 @@ const en: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Connecting another calendar needs a Pro subscription.",
   "imap.error.connectFailed": "Connection failed.",
   "imap.error.disconnectFailed": "Disconnect failed.",
+  "imap.connectPaused": "Klorn has paused {provider} sync. You can still disconnect this mailbox.",
   "imap.confirmDisconnect.message":
     "Existing classified emails stay. You can reconnect the mailbox any time.",
   "imap.hostSince": "Host: {host} · since",

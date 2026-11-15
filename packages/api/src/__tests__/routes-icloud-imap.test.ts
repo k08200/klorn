@@ -74,6 +74,7 @@ async function buildApp() {
 beforeEach(() => {
   vi.clearAllMocks();
   db.findMany.mockResolvedValue([]);
+  db.findFirst.mockResolvedValue(null);
   db.findUnique.mockResolvedValue(null);
   db.count.mockResolvedValue(0);
   state.plan = "PRO";
@@ -83,6 +84,36 @@ afterEach(() => {
   if (ORIGINAL_FLAG === undefined) delete process.env.ICLOUD_INBOX_ENABLED;
   else process.env.ICLOUD_INBOX_ENABLED = ORIGINAL_FLAG;
   vi.resetModules();
+});
+
+describe("flag OFF after a user connected — the way out stays open to that user", () => {
+  it("status and disconnect answer the owner; connect stays 404", async () => {
+    delete process.env.ICLOUD_INBOX_ENABLED;
+    db.findFirst.mockResolvedValue({ id: "row-1" } as never);
+    db.deleteMany.mockResolvedValue({ count: 1 });
+    const { app, headers } = await buildApp();
+    const status = await app.inject({ method: "GET", url: "/api/icloud-imap/status", headers });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({ connectOpen: false });
+    const disconnect = await app.inject({
+      method: "POST",
+      url: "/api/icloud-imap/disconnect",
+      headers,
+      payload: { email: "a@icloud.com" },
+    });
+    expect(disconnect.statusCode).toBe(200);
+    expect(db.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", provider: "ICLOUD", email: "a@icloud.com" },
+    });
+    const connect = await app.inject({
+      method: "POST",
+      url: "/api/icloud-imap/connect",
+      headers,
+      payload: { email: "a@icloud.com", password: "app-pass" },
+    });
+    expect(connect.statusCode).toBe(404);
+    await app.close();
+  });
 });
 
 describe("flag OFF (default) — the surface does not exist", () => {

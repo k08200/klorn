@@ -16,6 +16,12 @@ import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { notifyLinkedInboxReconnect } from "./gmail.js";
+import {
+  AUTH_BACKOFF_CLEARED,
+  authBackoffVerdict,
+  IMAP_AUTH_FAILURE_LIMIT,
+  recordImapAuthRefusal,
+} from "./imap-auth-backoff.js";
 import { checkImapRow } from "./imap-connection.js";
 import { parseImapMessageId } from "./imap-message-id.js";
 import { clearPollBackoff, isPollBackedOff, notePollBackoff } from "./imap-poll-backoff.js";
@@ -76,8 +82,9 @@ const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
  * in-process cooldown it shares with the actions: a revoked password is not sent to
  * the host again on every tick) and while it is backed off after failing in another way
  * (imap-poll-backoff.ts: a stalling host costs a serial tick up to ~105 s). A fixed-host
- * row (iCloud, Naver) is polled every tick as before, flagged or not: a refusal is
- * flagged on the poll that meets it, and a later successful poll clears the flag.
+ * row (iCloud, Naver, the presets) is flagged on the poll that meets a refusal, and a
+ * later successful poll clears the flag; between the two its logins are spaced out by
+ * the persisted login backoff (imap-auth-backoff.ts), which every row obeys.
  */
 function isPausedForPolling(
   row: { id: string; needsReconnect?: boolean | null },
@@ -114,11 +121,29 @@ async function flagForReconnect(
 }
 
 /**
+ * Back the refused password off (imap-auth-backoff.ts): the next login waits, and
+ * the refusal that reaches the limit stops the poll until the user reconnects.
+ * Every IMAP row counts; a generic row is paused by its reconnect flag anyway.
+ */
+async function backOffRefusedLogin(
+  provider: ImapProviderConfig,
+  ids: { userId: string; rowId: string },
+  credential: { passwordCipher: string; failuresBefore: number | null | undefined },
+): Promise<void> {
+  const written = await recordImapAuthRefusal({ ...ids, ...credential, now: new Date() });
+  if (written && written.imapAuthFailures >= IMAP_AUTH_FAILURE_LIMIT) {
+    console.warn(
+      `[${provider.logScope}] login refused ${IMAP_AUTH_FAILURE_LIMIT} times in a row for row ${ids.rowId}; polling stopped until the mailbox is reconnected`,
+    );
+  }
+}
+
+/**
  * A poll failed. Log it (one capped line for a generic host: the text came from a
  * server the user chose), flag a row whose password was refused for reconnect at once (Apple revokes app-specific passwords when the account password
- * changes: Settings says "reconnect" after this one poll), record why for Settings,
- * and report to Sentry once per account and failure kind instead of on every tick.
- * Never throws.
+ * changes: Settings says "reconnect" after this one poll) and back its next login
+ * off, record why for Settings, and report to Sentry once per account and failure
+ * kind instead of on every tick. Never throws.
  */
 async function handlePollFailure(
   err: unknown,
@@ -129,6 +154,8 @@ async function handlePollFailure(
     credentialKey: string;
     /** The stored cipher the poll STARTED with: a flag is only written against that credential. */
     passwordCipher: string;
+    /** The row's consecutive refused logins when the poll started. */
+    authFailuresBefore: number | null | undefined;
   },
 ): Promise<void> {
   const { provider, userId, rowId, credentialKey, passwordCipher } = ctx;
@@ -144,8 +171,14 @@ async function handlePollFailure(
     if (userHost) notePollBackoff(rowId);
   } else {
     // The shared cooldown stops a generic host being sent the rejected password every
-    // tick; a fixed host keeps its every-tick poll (and its actions keep their own).
+    // tick; a fixed host's poll waits out the login backoff below instead (and its
+    // actions keep their own cooldown).
     if (userHost) startCredentialCooldown(provider, rowId, credentialKey);
+    await backOffRefusedLogin(
+      provider,
+      { userId, rowId },
+      { passwordCipher, failuresBefore: ctx.authFailuresBefore },
+    );
     await flagForReconnect(provider, { userId, rowId }, passwordCipher);
   }
   await recordSyncError(userId, rowId, imapSyncErrorCode(err), passwordCipher);
@@ -187,17 +220,14 @@ export async function syncImapAccountsForUser(
     // .ts): a row without credentials is half-migrated or hand-edited — skipped
     // silently (it surfaces as needsReconnect through the UI), never thrown; a
     // host outside the allowlist, or one pinned to the other provider, must
-    // never open a TLS connection.
+    // never open a TLS connection. The line names the row, not the host: a host
+    // outside the allowlist can be a server that names a person or a company.
     const checked = checkImapRow(row, provider);
     if (!checked.ok) {
       if (checked.reason === "host-not-allowlisted") {
-        console.warn(
-          `[${scope}] poll skipped — host not allowlisted for row ${row.id}: ${row.imapHost}`,
-        );
+        console.warn(`[${scope}] poll skipped — host not allowlisted for row ${row.id}`);
       } else if (checked.reason === "host-provider-mismatch") {
-        console.warn(
-          `[${scope}] poll skipped — host does not match provider for row ${row.id}: ${row.imapHost}`,
-        );
+        console.warn(`[${scope}] poll skipped — host does not match provider for row ${row.id}`);
       }
       continue;
     }
@@ -208,6 +238,9 @@ export async function syncImapAccountsForUser(
       surfaceSkippedPoll(row.id, userId, scope); // its previous poll is still running
       continue;
     }
+    // A refused password is not sent again before its retry time, nor at all once
+    // the poll has given up on it: the state is on the row, so a restart obeys it.
+    if (authBackoffVerdict(row, new Date()) !== "poll") continue;
     if (userHost && isPausedForPolling(row, credentialKey)) continue;
     beginPoll(row.id);
     try {
@@ -234,12 +267,19 @@ export async function syncImapAccountsForUser(
       // The host answered, held or not: a stall is over, whatever the poll then stored.
       if (userHost) clearPollBackoff(row.id);
       if (!result.held) {
-        // A login that works again clears a reconnect flag a refused login set.
+        // A login that works again clears a reconnect flag a refused login set, and
+        // the login backoff with it.
         await prisma.linkedInboxAccount.updateMany({
           where: { id: row.id, userId },
-          data: { ...syncSucceededFields(), needsReconnect: false },
+          data: { ...syncSucceededFields(), needsReconnect: false, ...AUTH_BACKOFF_CLEARED },
         });
         clearPollFailure(row.id);
+      } else if ((row.imapAuthFailures ?? 0) > 0) {
+        // Held, but its login worked: the password is good again.
+        await prisma.linkedInboxAccount.updateMany({
+          where: { id: row.id, userId },
+          data: { ...AUTH_BACKOFF_CLEARED },
+        });
       }
     } catch (err) {
       total.errors += 1;
@@ -249,6 +289,7 @@ export async function syncImapAccountsForUser(
         rowId: row.id,
         credentialKey,
         passwordCipher: checked.passwordCipher,
+        authFailuresBefore: row.imapAuthFailures,
       });
     } finally {
       endPoll(row.id);

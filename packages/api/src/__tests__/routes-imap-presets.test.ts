@@ -101,14 +101,144 @@ describe("flag off (default): the preset surface does not exist", () => {
   });
 });
 
+/** A mailbox of the preset as /status selects it. */
+const OWNED_ROW = {
+  email: "me@example.com",
+  imapHost: "imap.mail.yahoo.com:993",
+  createdAt: new Date("2026-11-01T00:00:00.000Z"),
+  lastSyncedAt: null,
+  needsReconnect: false,
+  syncErrorCode: null,
+  syncErrorAt: null,
+};
+/** The user owns a mailbox of `provider` only. */
+const ownsOnly = (provider: string) =>
+  db.findFirst.mockImplementation((async (args: { where: { userId: string; provider: string } }) =>
+    args.where.userId === "user-1" && args.where.provider === provider
+      ? { id: "row-1" }
+      : null) as never);
+
+describe("flag turned off after users connected: the way out stays open to the owner", () => {
+  beforeEach(() => {
+    delete process.env.IMAP_PRESETS_ENABLED;
+  });
+
+  it("an owner can list and disconnect the mailbox; connect stays dark", async () => {
+    ownsOnly("YAHOO");
+    db.findMany.mockResolvedValue([OWNED_ROW] as never);
+    db.deleteMany.mockResolvedValue({ count: 1 });
+    const { app, headers } = await buildApp();
+
+    const status = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({
+      connectOpen: false,
+      accounts: [{ email: "me@example.com", needsReconnect: false }],
+    });
+
+    const disconnect = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/disconnect",
+      headers,
+      payload: { email: "me@example.com" },
+    });
+    expect(disconnect.statusCode).toBe(200);
+    expect(db.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", provider: "YAHOO", email: "me@example.com" },
+    });
+
+    const connect = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/connect",
+      headers,
+      payload: BODY,
+    });
+    expect(connect.statusCode).toBe(404);
+    expect(verifyImapCredentials).not.toHaveBeenCalled();
+    expect(db.upsert).not.toHaveBeenCalled();
+  });
+
+  it("asks only about the user's own mailboxes of that preset", async () => {
+    ownsOnly("YAHOO");
+    const { app, headers } = await buildApp();
+    await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+    expect(db.findFirst).toHaveBeenCalledWith({
+      where: { userId: "user-1", provider: "YAHOO" },
+      select: { id: true },
+    });
+  });
+
+  it("a mailbox of another preset opens nothing here: the same cloaked 404", async () => {
+    ownsOnly("DAUM");
+    const { app, headers } = await buildApp();
+    for (const [method, path] of [
+      ["GET", "status"],
+      ["POST", "disconnect"],
+    ] as const) {
+      const url = `/api/yahoo-imap/${path}`;
+      const res = await app.inject({ method, url, headers });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({
+        message: `Route ${method}:${url} not found`,
+        error: "Not Found",
+        statusCode: 404,
+      });
+    }
+    expect(db.deleteMany).not.toHaveBeenCalled();
+    const daum = await app.inject({ method: "GET", url: "/api/daum-imap/status", headers });
+    expect(daum.statusCode).toBe(200);
+  });
+
+  it("without a valid session it is still a route that does not exist, and nothing is looked up", async () => {
+    ownsOnly("YAHOO");
+    const { app } = await buildApp();
+    for (const authorization of [undefined, "Bearer not-a-token", "Basic abc"]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/yahoo-imap/disconnect",
+        headers: authorization ? { authorization } : {},
+        payload: { email: "me@example.com" },
+      });
+      expect(res.statusCode).toBe(404);
+    }
+    expect(db.findFirst).not.toHaveBeenCalled();
+    expect(db.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("cohort mode", () => {
+  it("an owner outside the cohort can still list and disconnect, but not connect", async () => {
+    process.env.IMAP_PRESETS_ENABLED = "cohort";
+    process.env.ROLLOUT_COHORT_USER_IDS = "someone-else";
+    ownsOnly("YAHOO");
+    db.findMany.mockResolvedValue([OWNED_ROW] as never);
+    const { app, headers } = await buildApp();
+    const status = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({ connectOpen: false });
+    const disconnect = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/disconnect",
+      headers,
+    });
+    expect(disconnect.statusCode).toBe(200);
+    const connect = await app.inject({
+      method: "POST",
+      url: "/api/yahoo-imap/connect",
+      headers,
+      payload: BODY,
+    });
+    expect(connect.statusCode).toBe(404);
+    expect(verifyImapCredentials).not.toHaveBeenCalled();
+  });
+
   it("lets a cohort user in", async () => {
     process.env.IMAP_PRESETS_ENABLED = "cohort";
     process.env.ROLLOUT_COHORT_USER_IDS = "user-1";
     const { app, headers } = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ connected: false, accounts: [] });
+    expect(res.json()).toMatchObject({ connected: false, accounts: [], connectOpen: true });
   });
 
   it("answers 404 to anyone outside the cohort, and never connects", async () => {
@@ -229,6 +359,9 @@ describe("flag on: connect is pinned to the preset's host", () => {
       needsReconnect: false,
       syncErrorCode: null,
       syncErrorAt: null,
+      // A new password starts the login backoff over (mail/imap-auth-backoff.ts).
+      imapAuthFailures: 0,
+      imapAuthRetryAt: null,
     });
   });
 });
