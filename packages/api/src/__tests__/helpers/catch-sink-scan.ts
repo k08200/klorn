@@ -31,7 +31,7 @@ const SANITIZERS = new Set([
   "formatDbFailureFacts",
   // pim/caldav/caldav-errors.ts: a constant class per error kind, codes held to a token shape.
   "caldavErrorClass",
-  // report-failure.ts: the stack's frame lines only, or null when the header cannot be matched.
+  // error-frames.ts: the stack's frame lines only, or null when the header cannot be matched.
   "originalFrames",
 ]);
 

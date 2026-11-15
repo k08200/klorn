@@ -9,6 +9,8 @@
  * through. The fence error predicate used to close the loop
  * data-wipe-fence -> report-db-failure -> report-failure -> data-wipe-fence
  * (and sentry -> data-wipe-fence -> ... -> sentry); it now lives in a leaf.
+ * The facts and frames the process-fault integrations need (sentry.ts builds
+ * them in) are leaves for the same reason.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -23,15 +25,22 @@ const srcDir = join(here, "..");
 /** The modules a catch reports through, and the leaves they depend on. */
 const REPORTING_MODULES = [
   "sentry.ts",
+  "sentry-process-faults.ts",
   "report-failure.ts",
   "report-db-failure.ts",
   "llm/report-llm-failure.ts",
   "privacy/data-wipe-fence.ts",
   "privacy/data-wipe-fence-error.ts",
+  "db-failure-facts.ts",
+  "error-frames.ts",
 ] as const;
 
 /** Modules that must import nothing at runtime, so no cycle can ever pass through them. */
-const LEAVES = ["privacy/data-wipe-fence-error.ts"] as const;
+const LEAVES = [
+  "privacy/data-wipe-fence-error.ts",
+  "db-failure-facts.ts",
+  "error-frames.ts",
+] as const;
 
 /** Whether a declaration loads its module at runtime (`import type` and all-type specifiers do not). */
 function loadsAtRuntime(node: ts.ImportDeclaration | ts.ExportDeclaration): boolean {

@@ -65,6 +65,18 @@ describe("Sentry init options", () => {
     expect(options.beforeSendSpan).toBeTypeOf("function");
   });
 
+  it("replaces the SDK's two process-fault integrations, which send and print the raw error", () => {
+    const options = buildSentryInitOptions(TEST_SENTRY_DSN, "production");
+    const names = Array.isArray(options.integrations)
+      ? options.integrations.map((integration) => integration.name)
+      : [];
+    // Same names as the SDK's defaults, so Sentry.init keeps these instead
+    // (sentry-wiring-process-faults.test.ts checks the running client).
+    expect(names).toEqual(
+      expect.arrayContaining(["Fastify", "OnUncaughtException", "OnUnhandledRejection"]),
+    );
+  });
+
   it("keeps the v10 data-collection baseline instead of v11's permissive default", () => {
     const options = buildSentryInitOptions(TEST_SENTRY_DSN, "production");
     expect(options.dataCollection).toMatchObject({
