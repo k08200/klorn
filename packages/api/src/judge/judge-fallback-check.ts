@@ -38,8 +38,10 @@
  *      "unknown (restarted since)" → this process has not seen a failed call
  *      since boot (or a different instance served the judge); go to step 2.
  *   2. Render logs: `[JUDGE] LLM feature extraction attempt` (per-email judge
- *      failure with the cause chain) and `[LLM-FAILURE]` (one structured line
- *      per provider failure class per minute, with a suppressed count).
+ *      failure: class, status, cause class and provider type/code, never the
+ *      provider's message) and `[LLM-FAILURE]` (one structured line per
+ *      provider failure class per minute, with a suppressed count). For the
+ *      provider's own wording, check its dashboard or console.
  *   3. `[cost-guard]` lines / GET /api/admin/flags `costGuard`: a tripped daily
  *      ceiling blocks the call BEFORE dispatch, so no provider error exists.
  *   4. GET /api/admin/judge-health (admin) for the last check + top error;

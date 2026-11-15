@@ -354,13 +354,14 @@ describe("connection store", () => {
   });
 
   it("stores the signing secret encrypted and never a user token", async () => {
+    const signingSecret = "8f742231b10e8888abcd99eeeeee85a5";
     db.prisma.slackConnection.findUnique.mockResolvedValueOnce({
       id: "c1",
       teamId: null,
       slackUserId: null,
     });
     await saveSlackCredentials("user-1", {
-      signingSecret: "8f742231b10e8888abcd99eeeeee85a5",
+      signingSecret,
       teamId: "T0001",
       slackUserId: "U0001",
       workspaceUrl: "https://acme.slack.com/",
@@ -368,9 +369,16 @@ describe("connection store", () => {
     });
     const args = db.prisma.slackConnection.update.mock.calls[0]?.[0];
     expect(args.where).toEqual({ userId: "user-1" });
-    expect(args.data.signingSecretCipher).not.toContain("8f742231");
-    expect(decryptToken(args.data.signingSecretCipher)).toBe("8f742231b10e8888abcd99eeeeee85a5");
-    expect(JSON.stringify(args.data)).not.toMatch(/xox|token/i);
+    // The one secret-named column is ciphertext of the secret; no token column.
+    expect(Object.keys(args.data).filter((key) => /token|secret/i.test(key))).toEqual([
+      "signingSecretCipher",
+    ]);
+    expect(decryptToken(args.data.signingSecretCipher)).toBe(signingSecret);
+    expect(JSON.stringify(args.data)).not.toContain(signingSecret);
+    // No Slack token in any plaintext column. The ciphertext stays out of this
+    // match: it is random base64 and spells "xox" in roughly 1 run in 400.
+    const plainColumns = Object.entries(args.data).filter(([key]) => key !== "signingSecretCipher");
+    expect(JSON.stringify(plainColumns)).not.toMatch(/xox|token/i);
     expect(db.prisma.slackEpisode.deleteMany).not.toHaveBeenCalled();
   });
 

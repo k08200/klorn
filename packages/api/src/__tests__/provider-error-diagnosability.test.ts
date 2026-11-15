@@ -9,8 +9,11 @@
  * second failure from logs alone was impossible.
  *
  * Two invariants pinned here:
- *   1. the upstream message survives into the operator log and the error chain,
- *      with key-shaped tokens redacted and the user-facing message unchanged;
+ *   1. the upstream error survives on the error chain (`cause`) with the
+ *      user-facing message unchanged, and the operator log names it by class,
+ *      HTTP status and the provider's machine-readable type/code. The log never
+ *      quotes the provider's message: it can quote the request, which on a BYOK
+ *      call is someone else's mail or chat text;
  *   2. a deployment with no failover provider (single Anthropic key) never
  *      locks its ONLY provider out for an hour on an unspecified 429 — that
  *      turns a transient upstream blip into a fleet-wide outage of our own
@@ -63,7 +66,7 @@ describe("redactProviderMessage", () => {
   });
 });
 
-describe("markKeyLimited — upstream reason survives into the operator log", () => {
+describe("markKeyLimited — the operator log names the failure, never quotes it", () => {
   beforeEach(() => {
     clearFallbackState();
   });
@@ -73,15 +76,21 @@ describe("markKeyLimited — upstream reason survives into the operator log", ()
     clearFallbackState();
   });
 
-  it("logs the upstream provider message alongside the classification", () => {
+  it("logs the classification with the error's class, status and type, not its message", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     markKeyLimited(
       "anthropic:env",
-      new Error("429 rate_limit_error: This request would exceed your rate limit"),
+      Object.assign(
+        new Error("429 This request would exceed your rate limit; near CANARY-mail-text"),
+        { status: 429, type: "rate_limit_error" },
+      ),
     );
     const line = warn.mock.calls.map((c) => String(c[0])).join("\n");
     expect(line).toContain("[MODEL-FALLBACK]");
-    expect(line).toContain("429 rate_limit_error: This request would exceed your rate limit");
+    expect(line).toContain("ambiguous quota error");
+    expect(line).toContain("Error 429, type=rate_limit_error");
+    expect(line).not.toContain("CANARY-mail-text");
+    expect(line).not.toContain("would exceed your rate limit");
   });
 
   it("still logs when the caller passed no error at all", () => {

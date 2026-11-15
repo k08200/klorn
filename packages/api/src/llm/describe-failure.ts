@@ -38,3 +38,106 @@ export function llmFailureStatus(err: unknown): number | null {
   }
   return null;
 }
+
+/**
+ * A provider's machine-readable type or code: one bounded token, never a phrase.
+ * Anything with whitespace or past 64 characters is treated as free text and
+ * dropped, so a provider that put a sentence in `code` cannot carry it out.
+ */
+const PROVIDER_CODE_SHAPE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
+function enumLike(value: unknown): string | null {
+  return typeof value === "string" && PROVIDER_CODE_SHAPE.test(value) ? value : null;
+}
+
+interface ProviderErrorFields {
+  readonly type?: unknown;
+  readonly code?: unknown;
+  readonly errorCode?: unknown;
+}
+
+/** How far down `cause` the codes are looked for: exhausted chain → 402 wrapper → SDK error. */
+const CAUSE_DEPTH = 2;
+
+function causeOf(err: unknown): unknown {
+  return (err as { cause?: unknown } | null | undefined)?.cause;
+}
+
+function causeChain(err: unknown): unknown[] {
+  const chain = [err];
+  for (let depth = 0; depth < CAUSE_DEPTH; depth++) {
+    const cause = causeOf(chain[chain.length - 1]);
+    if (cause === undefined || cause === null) break;
+    chain.push(cause);
+  }
+  return chain;
+}
+
+/**
+ * The provider's error type and code, read from the SDK fields that hold them
+ * (Anthropic: `type`, `errorCode`; OpenAI: `type`, `code`) on the error or,
+ * for a wrapper such as the exhausted chain or the Anthropic credit-limit 402,
+ * on its causes.
+ */
+function providerErrorCodes(err: unknown): { type: string | null; code: string | null } {
+  for (const candidate of causeChain(err)) {
+    const fields = candidate as ProviderErrorFields | null | undefined;
+    const type = enumLike(fields?.type);
+    const code = enumLike(fields?.errorCode) ?? enumLike(fields?.code);
+    if (type !== null || code !== null) return { type, code };
+  }
+  return { type: null, code: null };
+}
+
+/**
+ * A class name, held to the same token shape as the provider codes so the
+ * facts stay enum-like by construction. Class names are code-defined today.
+ */
+function safeFailureName(err: unknown): string {
+  return enumLike(llmFailureName(err)) ?? "Error";
+}
+
+/** What a failure report may say about an LLM error. */
+export interface LlmFailureFacts {
+  readonly errorName: string;
+  /** The wrapped error's class: what failed under an exhausted chain. */
+  readonly causeName: string | null;
+  readonly status: number | null;
+  readonly providerErrorType: string | null;
+  readonly providerErrorCode: string | null;
+  readonly messageLength: number;
+}
+
+/**
+ * The facts of an LLM failure that are safe for Sentry and the log: class
+ * name, HTTP status, the provider's type and code, and the message's length.
+ * Never the message: a provider error can quote the request, and on a BYOK
+ * call from the mail judge, Slack or the KakaoTalk import that request is
+ * someone else's mail or chat text.
+ */
+export function llmFailureFacts(err: unknown): LlmFailureFacts {
+  const { type, code } = providerErrorCodes(err);
+  const cause = causeOf(err);
+  return {
+    errorName: safeFailureName(err),
+    causeName: cause instanceof Error ? safeFailureName(cause) : null,
+    status: llmFailureStatus(err),
+    providerErrorType: type,
+    providerErrorCode: code,
+    messageLength: err instanceof Error ? err.message.length : 0,
+  };
+}
+
+/** One log fragment, e.g. "RateLimitError 429, type=rate_limit_error, message 87 chars". */
+export function formatLlmFailureFacts(facts: LlmFailureFacts): string {
+  const head = facts.status === null ? facts.errorName : `${facts.errorName} ${facts.status}`;
+  return [
+    head,
+    facts.causeName === null ? null : `cause=${facts.causeName}`,
+    facts.providerErrorType === null ? null : `type=${facts.providerErrorType}`,
+    facts.providerErrorCode === null ? null : `code=${facts.providerErrorCode}`,
+    `message ${facts.messageLength} chars`,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(", ");
+}

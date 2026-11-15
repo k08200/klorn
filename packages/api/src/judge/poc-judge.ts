@@ -30,6 +30,7 @@ import {
 } from "../learning/sender-policy.js";
 import type { SenderTraitKind } from "../learning/sender-trait-policy.js";
 import type { SenderTraitFact } from "../learning/sender-trait-store.js";
+import { formatLlmFailureFacts, llmFailureFacts } from "../llm/describe-failure.js";
 import { asString, asUnitInterval, isNonFinitePresent } from "../llm/llm-coerce.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { describeErrorChain } from "../llm/model-fallback.js";
@@ -568,20 +569,25 @@ async function extractFeaturesWithLlm(
     } catch (err) {
       // Surface WHY in plain logs — captureError is a no-op without a
       // Sentry DSN (e.g. CI), which made eval fallbacks undiagnosable.
-      // Include the cause chain: a quota failure arrives as the generic
-      // AllProvidersExhaustedError and the provider's actual words (429 body,
-      // rate-limit window) live on `cause`. Logging only `.message` is what
-      // left the 2026-08-02 eval outage unexplained.
-      const message = describeErrorChain(err);
+      // The facts reach through the exhausted-chain wrapper to its cause for
+      // the status and the provider's type/code (the 2026-08-02 eval outage
+      // went unexplained when only the wrapper was logged). Never the
+      // message, on the error or its cause: the provider's words and
+      // JSON.parse's can quote this mail. Sentry gets a fresh Error for the
+      // same reason, since it would send the raw one's message and cause.
+      const facts = llmFailureFacts(err);
       console.warn(
-        `[JUDGE] LLM feature extraction attempt ${attempt}/${JUDGE_LLM_ATTEMPTS} failed: ${message}`,
+        `[JUDGE] LLM feature extraction attempt ${attempt}/${JUDGE_LLM_ATTEMPTS} failed: ${formatLlmFailureFacts(facts)}`,
       );
       if (attempt === JUDGE_LLM_ATTEMPTS) {
-        captureError(err, { tags: { scope: "poc-judge.llm" } });
-        // Hand the final failure reason back to the caller (e.g. the
-        // playground surfaces it so a visitor sees "401 User not found"
-        // instead of a generic, undebuggable fallback).
-        onError?.(message);
+        captureError(new Error(`Judge LLM feature extraction failed (${facts.errorName})`), {
+          tags: { scope: "poc-judge.llm" },
+          extra: { ...facts },
+        });
+        // Hand the final failure reason back to the caller: the playground
+        // shows a visitor the failure of their own key and sample ("401 User
+        // not found") instead of a generic, undebuggable fallback.
+        onError?.(describeErrorChain(err));
       }
     }
   }
@@ -906,6 +912,11 @@ export async function judgeEmail(
   context: JudgeContext = EMPTY_JUDGE_CONTEXT,
   credentials?: ProviderCredentials,
   modelOverride?: string,
+  /**
+   * Gets the failure in the provider's own words (credential-redacted), which
+   * can quote the mail judged. Only for a caller whose reader owns that mail
+   * and key: the playground. Never wire it to production mail.
+   */
   onLlmError?: (message: string) => void,
   language?: string | null,
   /**
