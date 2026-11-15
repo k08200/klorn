@@ -5,6 +5,9 @@
  * - The retention purge runs at most every 10 minutes and runs even while
  *   SLACK_ENABLED is off: switching the flag off must not stop stored Slack
  *   text from expiring.
+ * - While the flag is on, each tick also judges ready episodes
+ *   (judge-sweep.ts), which itself stands down under
+ *   BACKGROUND_AGENTS_DISABLED.
  * - While the flag is off, ticks between purges touch no database at all.
  */
 
@@ -13,6 +16,7 @@ import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.j
 import { createSchedulerLease } from "../scheduler-lease.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
+import { judgeReadySlackEpisodes } from "./judge-sweep.js";
 import { purgeExpiredSlackData } from "./purge.js";
 
 export const SLACK_SCHEDULER_INTERVAL_MS = 30_000;
@@ -40,6 +44,7 @@ export async function runSlackWork(now: Date = new Date()): Promise<void> {
       );
     }
   }
+  if (slackLive()) await judgeReadySlackEpisodes(now);
 }
 
 export async function slackSchedulerTick(

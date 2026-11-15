@@ -9,9 +9,13 @@
 
 import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
+import { INTERRUPT_SLOT_ROOT } from "../judge/v3/interrupt-budget.js";
+import { deleteSlackCommitments } from "./commitments.js";
 import { slackEventsUrl } from "./manifest.js";
+import { SLACK_TITLE_PREFIX } from "./push-strings.js";
 import { isUniqueViolation } from "./unique-violation.js";
 
 const HOOK_ID_BYTES = 16;
@@ -128,9 +132,11 @@ export async function saveSlackCredentials(
     ? [
         prisma.slackMessage.deleteMany({ where: { userId } }),
         prisma.slackEpisode.deleteMany({ where: { userId } }),
+        ...slackNotificationCleanup(userId),
       ]
     : [];
   await prisma.$transaction([...wipe, update]);
+  if (switched) await deleteSlackCommitments(userId);
   return "saved";
 }
 
@@ -146,13 +152,39 @@ export async function setSlackOptInChannels(
   return result.count > 0;
 }
 
-/** Disconnect: the signing secret and every stored Slack row of this user, atomically. */
+/**
+ * The Slack-derived rows outside the Slack tables, as one batch: interrupt
+ * slot rows that carried a Slack push are kept (deleting one would hand the
+ * day's spent budget back, background.ts) but emptied of Slack text; every
+ * other Slack bell row is deleted.
+ */
+function slackNotificationCleanup(userId: string): Prisma.PrismaPromise<unknown>[] {
+  return [
+    prisma.notification.updateMany({
+      where: {
+        userId,
+        dedupeKey: { startsWith: INTERRUPT_SLOT_ROOT },
+        OR: [{ type: "slack" }, { title: { startsWith: SLACK_TITLE_PREFIX } }],
+      },
+      data: { type: HIDDEN_CLAIM_TYPE, isRead: true, title: "", message: "", link: null },
+    }),
+    prisma.notification.deleteMany({ where: { userId, type: "slack" } }),
+  ];
+}
+
+/**
+ * Disconnect: the signing secret and every stored Slack row of this user
+ * (messages, episodes, Slack bell text) atomically, then the Slack-sourced
+ * commitments and their queue mirrors.
+ */
 export async function disconnectSlack(userId: string): Promise<void> {
   await prisma.$transaction([
     prisma.slackMessage.deleteMany({ where: { userId } }),
     prisma.slackEpisode.deleteMany({ where: { userId } }),
+    ...slackNotificationCleanup(userId),
     prisma.slackConnection.deleteMany({ where: { userId } }),
   ]);
+  await deleteSlackCommitments(userId);
 }
 
 export interface SlackHook {
