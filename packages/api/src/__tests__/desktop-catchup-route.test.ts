@@ -200,6 +200,7 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
     expect(res).toEqual({
       held: false,
       summaryTitle: "{count} urgent emails while Klorn was closed",
+      heldSummaryTitle: "{count} urgent emails during quiet hours",
       items: [],
     });
   });
@@ -208,6 +209,7 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
     seed({}, { notificationLanguage: "ko" });
     const res = await desktopCatchUp(USER, [], NOW);
     expect(res.summaryTitle).toBe("Klorn이 꺼져 있는 동안 긴급 메일 {count}건");
+    expect(res.heldSummaryTitle).toBe("방해 금지 시간 동안 긴급 메일 {count}건");
   });
 });
 
@@ -224,6 +226,7 @@ describe("desktopCatchUp — the live frame's gate applies", () => {
     const res = await desktopCatchUp(USER, ["n1"], NOW);
     expect(res.held).toBe(true);
     expect(res.items).toEqual([]);
+    expect(res.heldSummaryTitle).toBe("{count} urgent emails during quiet hours");
     // Quiet hours over (09:00 the next morning in Seoul): the mail comes back.
     const later = await desktopCatchUp(USER, ["n1"], new Date("2026-11-09T00:00:00.000Z"));
     expect(later.held).toBe(false);

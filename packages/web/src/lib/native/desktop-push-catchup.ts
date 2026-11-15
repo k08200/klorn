@@ -6,6 +6,12 @@
 //   - only PUSH mail from the last 72h that is still open;
 //   - during quiet hours nothing is shown or recorded: the next pass after
 //     they end shows it.
+// The same holds for mail whose live frame came untagged during quiet hours
+// while Klorn was running (./desktop-catchup.ts planLiveAlert keeps its row
+// unrecorded, `held`): one toast, or ONE summary titled "N urgent emails
+// during quiet hours" when every mail in it waited live — "while Klorn was
+// closed" as soon as one of them arrived while it was not running, as the
+// Mac's HeldBanners does.
 //
 // The bell rows say which interrupts the shell may have missed (their id is
 // the id the live frame carried, so one ledger covers both paths). The server
@@ -111,13 +117,18 @@ function parseMissedMail(value: unknown): DesktopMissedMail | null {
 /** The server's answer, validated. Null for anything malformed. */
 export function parseCatchUpResponse(raw: unknown): DesktopCatchUpResponse | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-  const { held, summaryTitle, items } = raw as Record<string, unknown>;
+  const { held, summaryTitle, heldSummaryTitle, items } = raw as Record<string, unknown>;
   if (typeof held !== "boolean" || typeof summaryTitle !== "string" || !Array.isArray(items)) {
     return null;
   }
   if (!summaryTitle.includes(COUNT_TOKEN)) return null;
   const parsed = items.map(parseMissedMail).filter((m): m is DesktopMissedMail => m !== null);
-  return { held, summaryTitle, items: parsed };
+  // Optional (a server before it sends none): only its wording is lost.
+  const quietTitle =
+    typeof heldSummaryTitle === "string" && heldSummaryTitle.includes(COUNT_TOKEN)
+      ? { heldSummaryTitle }
+      : {};
+  return { held, summaryTitle, ...quietTitle, items: parsed };
 }
 
 /** "A, B, C +2": distinct senders in order, at most `max` named. */
@@ -183,9 +194,12 @@ export function planPushCatchUp({
   sent,
 }: PushCatchUpInput): PushCatchUpPlan {
   const { ask, settled } = pushCatchUpCandidates(ledger, rows, nowMs);
-  // First run: everything already in the bell is old news.
+  const held = new Set(ledger.held ?? []);
+  // First run: everything already in the bell is old news — except mail whose
+  // live frame this launch already held (it arrived while running).
   if (!ledger.baselineEstablished) {
-    return { toast: null, next: recording(ledger, [...ask, ...settled]) };
+    const old = [...ask, ...settled].filter((id) => !held.has(id));
+    return { toast: null, next: recording(ledger, old) };
   }
   // Not asked, no answer, or quiet hours: keep the askable rows for a later
   // pass; only rows that can never toast are recorded.
@@ -196,8 +210,14 @@ export function planPushCatchUp({
   const answered = ask.filter((id) => named.has(id));
   const asked = new Set(answered);
   const missed = distinctMail(response.items.filter((item) => asked.has(item.id)));
+  // Every mail waited live → "during quiet hours"; any mail missed while
+  // closed → "while Klorn was closed" (the Mac's SummaryKind rule). A hold
+  // from a gate lookup error (rare) also reads as quiet hours.
+  const allHeldLive = missed.every((item) => held.has(item.id));
+  const title =
+    allHeldLive && response.heldSummaryTitle ? response.heldSummaryTitle : response.summaryTitle;
   return {
-    toast: summarizeMissed(missed, response.summaryTitle),
+    toast: summarizeMissed(missed, title),
     next: recording(ledger, [
       ...answered,
       ...settled,

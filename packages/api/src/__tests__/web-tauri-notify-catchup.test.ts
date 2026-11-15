@@ -21,6 +21,7 @@ vi.mock("../../../web/src/lib/native/shell", () => ({
 const NOW = Date.parse("2026-11-08T12:00:00.000Z");
 const HOUR = 3_600_000;
 const SUMMARY = "{count} urgent emails while Klorn was closed";
+const HELD_SUMMARY = "{count} urgent emails during quiet hours";
 
 function mailRow(id: string) {
   return {
@@ -41,6 +42,17 @@ function missed(id: string, sender: string) {
     title: sender,
     body: "Subject",
     createdAt: new Date(NOW - HOUR).toISOString(),
+  };
+}
+
+/** A live frame for one mail as quiet hours send it: without `alert`. */
+function untaggedFrame(id: string) {
+  return {
+    id,
+    type: "email",
+    title: "Urgent email",
+    message: "Kim: x",
+    mail: { emailId: `mail-${id}`, title: "Kim", body: "x" },
   };
 }
 
@@ -118,6 +130,61 @@ describe("catchUpDesktopAlerts — urgent mail", () => {
     serve({ held: false, summaryTitle: SUMMARY, items: [missed("n1", "Kim")] });
     await catchUpDesktopAlerts("u4", rows);
     expect(banners()).toEqual([{ title: "Kim", body: "Subject", open: "/email/mail-n1" }]);
+  });
+
+  it("mail that rang live during quiet hours: no toast, then ONE summary after they end", async () => {
+    const { catchUpDesktopAlerts, deliverDesktopAlert } = await freshModule();
+    await catchUpDesktopAlerts("u6", []);
+    // Quiet hours: the server sends the frames without `alert`.
+    for (const id of ["n1", "n2"]) await deliverDesktopAlert("u6", untaggedFrame(id));
+    const rows = [mailRow("n1"), mailRow("n2")];
+    serve({ held: true, summaryTitle: SUMMARY, heldSummaryTitle: HELD_SUMMARY, items: [] });
+    await catchUpDesktopAlerts("u6", rows);
+    expect(apiFetch).toHaveBeenCalledWith("/api/notifications/desktop-catchup?ids=n1,n2");
+    expect(banners()).toEqual([]);
+    vi.setSystemTime(NOW + 5 * 60_000 + 1);
+    serve({
+      held: false,
+      summaryTitle: SUMMARY,
+      heldSummaryTitle: HELD_SUMMARY,
+      items: [missed("n1", "Kim"), missed("n2", "Lee")],
+    });
+    await catchUpDesktopAlerts("u6", rows);
+    await catchUpDesktopAlerts("u6", rows);
+    expect(banners()).toEqual([
+      { title: "2 urgent emails during quiet hours", body: "Kim, Lee", open: "/today" },
+    ]);
+  });
+
+  it("a restart during quiet hours keeps the held mail (persisted ledger)", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+      },
+    });
+    try {
+      const first = await freshModule();
+      await first.catchUpDesktopAlerts("u7", []);
+      for (const id of ["n1", "n2"]) await first.deliverDesktopAlert("u7", untaggedFrame(id));
+      // Relaunch: a new module, nothing in memory, only the stored ledger.
+      const relaunched = await freshModule();
+      serve({
+        held: false,
+        summaryTitle: SUMMARY,
+        heldSummaryTitle: HELD_SUMMARY,
+        items: [missed("n1", "Kim"), missed("n2", "Lee")],
+      });
+      await relaunched.catchUpDesktopAlerts("u7", [mailRow("n1"), mailRow("n2")]);
+      expect(apiFetch).toHaveBeenCalledWith("/api/notifications/desktop-catchup?ids=n1,n2");
+      // Still titled for quiet hours: the holds survived the restart.
+      expect(banners()).toEqual([
+        { title: "2 urgent emails during quiet hours", body: "Kim, Lee", open: "/today" },
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("a failed request records nothing, so the next pass asks again", async () => {

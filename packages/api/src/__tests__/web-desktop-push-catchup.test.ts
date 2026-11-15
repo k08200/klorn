@@ -39,6 +39,7 @@ const NOW = Date.parse("2026-11-08T12:00:00.000Z");
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const SUMMARY = notificationCopy("en").missedWhileClosed("{count}");
+const HELD_SUMMARY = notificationCopy("en").heldDuringQuietHours("{count}");
 
 /** A PUSH bell row as GET /api/notifications returns it. */
 function mailRow(id: string, ageMs: number, extra: Record<string, unknown> = {}) {
@@ -65,7 +66,19 @@ function missed(id: string, sender: string, ageMs = 10 * MIN): DesktopMissedMail
 }
 
 function answer(items: DesktopMissedMail[], held = false): DesktopCatchUpResponse {
-  return { held, summaryTitle: SUMMARY, items };
+  return { held, summaryTitle: SUMMARY, heldSummaryTitle: HELD_SUMMARY, items };
+}
+
+/** A live frame for one mail; untagged unless `tagged` (quiet hours untag it). */
+function mailFrame(id: string, emailId = `mail-${id}`, tagged = false) {
+  return {
+    id,
+    type: "email",
+    title: "Urgent email",
+    message: "Kim: Q4 budget",
+    ...(tagged ? { alert: "push" } : {}),
+    mail: { emailId, title: "Kim", body: "Q4 budget" },
+  };
 }
 
 /** The pass as the shell runs it: by default the question named every row. */
@@ -348,7 +361,7 @@ describe("planPushCatchUp — after the baseline", () => {
     expect(pushCatchUpCandidates(live.next, [mailRow("n1", HOUR)], NOW).ask).toEqual([]);
   });
 
-  it("an untagged live frame (gate said no) in any language is recorded, never caught up", () => {
+  it("an untagged live frame (quiet hours) in any language is held, then asked about", () => {
     const frame = {
       id: "n1",
       type: "email",
@@ -358,7 +371,12 @@ describe("planPushCatchUp — after the baseline", () => {
     };
     const live = planLiveAlert(established(), frame);
     expect(live.alert).toBeNull();
-    expect(live.next.notified).toEqual(["n1"]);
+    expect(live.next.notified).toEqual([]);
+    // Left to its live frame while it settles, then asked like any missed row.
+    expect(pushCatchUpCandidates(live.next, [mailRow("n1", SETTLE_MS - 1_000)], NOW).ask).toEqual(
+      [],
+    );
+    expect(pushCatchUpCandidates(live.next, [mailRow("n1", HOUR)], NOW).ask).toEqual(["n1"]);
   });
 
   it("never mutates its input ledger", () => {
@@ -374,7 +392,163 @@ describe("planPushCatchUp — after the baseline", () => {
   });
 });
 
+describe("mail held during quiet hours while Klorn runs (live frame untagged)", () => {
+  /** Live frames for `ids`, as the shell receives them during quiet hours. */
+  function heldLive(ids: string[], ledger = established()): AlertLedger {
+    return ids.reduce((acc, id) => planLiveAlert(acc, mailFrame(id)).next, ledger);
+  }
+
+  it("two or more → ONE summary titled for quiet hours after they end, then never again", () => {
+    const rows = [mailRow("n1", HOUR), mailRow("n2", HOUR)];
+    const quiet = planAll({
+      ledger: heldLive(["n1", "n2"]),
+      rows,
+      nowMs: NOW,
+      response: answer([], true),
+    });
+    expect(quiet.toast).toBeNull();
+    expect(quiet.next.notified).toEqual([]);
+    expect(quiet.next.held).toEqual(["n1", "n2"]);
+
+    const after = planAll({
+      ledger: quiet.next,
+      rows,
+      nowMs: NOW + 2 * HOUR,
+      response: answer([missed("n1", "Kim"), missed("n2", "Lee")]),
+    });
+    expect(after.toast).toEqual({
+      id: "missed:n1",
+      kind: "push",
+      title: "2 urgent emails during quiet hours",
+      body: "Kim, Lee",
+      open: "/today",
+    });
+    expect(after.next.notified).toEqual(["n1", "n2", "mail:mail-n1", "mail:mail-n2"]);
+    expect(after.next.held).toEqual([]);
+    // Nothing left to ask, and a re-ring of the same mail never toasts live.
+    expect(pushCatchUpCandidates(after.next, rows, NOW + 2 * HOUR).ask).toEqual([]);
+    expect(planLiveAlert(after.next, mailFrame("n3", "mail-n1", true)).alert).toBeNull();
+  });
+
+  it("one held mail → its own toast, opening it (as the Mac)", () => {
+    const after = planAll({
+      ledger: heldLive(["n1"]),
+      rows: [mailRow("n1", HOUR)],
+      nowMs: NOW,
+      response: answer([missed("n1", "Kim")]),
+    });
+    expect(after.toast).toMatchObject({ id: "n1", title: "Kim", open: "/email/mail-n1" });
+    expect(after.next.held).toEqual([]);
+  });
+
+  it("held mail plus mail missed while closed → the 'while Klorn was closed' title (as the Mac)", () => {
+    const after = planAll({
+      ledger: heldLive(["n1"]),
+      rows: [mailRow("n1", HOUR), mailRow("n2", HOUR)],
+      nowMs: NOW,
+      response: answer([missed("n1", "Kim"), missed("n2", "Lee")]),
+    });
+    expect(after.toast?.title).toBe("2 urgent emails while Klorn was closed");
+  });
+
+  it("a server without the quiet-hours title → the closed title, never no toast", () => {
+    const { heldSummaryTitle: _drop, ...older } = answer([
+      missed("n1", "Kim"),
+      missed("n2", "Lee"),
+    ]);
+    const after = planAll({
+      ledger: heldLive(["n1", "n2"]),
+      rows: [mailRow("n1", HOUR), mailRow("n2", HOUR)],
+      nowMs: NOW,
+      response: older,
+    });
+    expect(after.toast?.title).toBe("2 urgent emails while Klorn was closed");
+  });
+
+  it("read meanwhile (the server leaves it out) → recorded and released, no toast for it", () => {
+    const after = planAll({
+      ledger: heldLive(["n1", "n2"]),
+      rows: [mailRow("n1", HOUR), mailRow("n2", HOUR)],
+      nowMs: NOW,
+      response: answer([missed("n2", "Lee")]),
+    });
+    expect(after.toast).toMatchObject({ id: "n2", title: "Lee" });
+    expect(after.next.notified).toEqual(["n1", "n2", "mail:mail-n2"]);
+    expect(after.next.held).toEqual([]);
+  });
+
+  it("cleared meanwhile → never asked: Clear all marks the row read and the bell drops it", () => {
+    const ledger = heldLive(["n1", "n2"]);
+    // Clear all sets isRead (and clearedAt, which hides the row from the bell).
+    const readRow = pushCatchUpCandidates(ledger, [mailRow("n1", HOUR, { isRead: true })], NOW);
+    expect(readRow).toEqual({ ask: [], settled: ["n1"] });
+    expect(pushCatchUpCandidates(ledger, [], NOW).ask).toEqual([]);
+    const plan = planAll({
+      ledger,
+      rows: [mailRow("n1", HOUR, { isRead: true })],
+      nowMs: NOW,
+      response: null,
+    });
+    expect(plan.toast).toBeNull();
+    expect(plan.next.notified).toEqual(["n1"]);
+    expect(plan.next.held).toEqual(["n2"]);
+  });
+
+  it("first run: a mail held live before the baseline pass is not swallowed by it", () => {
+    const ledger = heldLive(["n1"], freshLedger("user-1"));
+    const baseline = planPushCatchUp({
+      ledger,
+      rows: [mailRow("n1", HOUR), mailRow("old", HOUR)],
+      nowMs: NOW,
+      response: null,
+      sent: [],
+    });
+    expect(baseline.toast).toBeNull();
+    expect(baseline.next.notified).toEqual(["old"]);
+    const afterBaseline = { ...baseline.next, baselineEstablished: true };
+    expect(pushCatchUpCandidates(afterBaseline, [mailRow("n1", HOUR)], NOW).ask).toEqual(["n1"]);
+  });
+
+  it("an empty answer (alerts off, or MEETING-lane mail) records and releases, no toast", () => {
+    const after = planAll({
+      ledger: heldLive(["n1", "n2"]),
+      rows: [mailRow("n1", HOUR), mailRow("n2", HOUR)],
+      nowMs: NOW,
+      response: answer([]),
+    });
+    expect(after.toast).toBeNull();
+    expect(after.next.notified).toEqual(["n1", "n2"]);
+    expect(after.next.held).toEqual([]);
+  });
+
+  it("a tagged re-ring of a held mail toasts live; the held row then settles silently", () => {
+    const rerung = planLiveAlert(heldLive(["n1"]), mailFrame("n3", "mail-n1", true));
+    expect(rerung.alert?.open).toBe("/email/mail-n1");
+    const after = planAll({
+      ledger: rerung.next,
+      rows: [mailRow("n3", HOUR), mailRow("n1", HOUR)],
+      nowMs: NOW,
+      response: answer([missed("n1", "Kim")]),
+    });
+    expect(after.toast).toBeNull();
+    expect(after.next.notified).toContain("n1");
+    expect(after.next.held).toEqual([]);
+  });
+});
+
 describe("parseCatchUpResponse — the server's answer is validated", () => {
+  it("keeps the quiet-hours title when well formed, drops only it when not", () => {
+    const base = { held: false, summaryTitle: SUMMARY, items: [] };
+    expect(parseCatchUpResponse({ ...base, heldSummaryTitle: HELD_SUMMARY })).toEqual({
+      ...base,
+      heldSummaryTitle: HELD_SUMMARY,
+    });
+    expect(parseCatchUpResponse(base)).toEqual(base);
+    for (const bad of [3, "no count token", null]) {
+      expect(parseCatchUpResponse({ ...base, heldSummaryTitle: bad })).toEqual(base);
+    }
+  });
+
   it("keeps well-formed items and drops malformed ones", () => {
     const parsed = parseCatchUpResponse({
       held: false,
@@ -411,6 +585,7 @@ describe("the summary title exists in every notification language", () => {
       const title = notificationCopy(lang).missedWhileClosed(4);
       expect(title, lang).toContain("4");
       expect(title, lang).toContain("Klorn");
+      expect(notificationCopy(lang).heldDuringQuietHours("{count}"), lang).toContain("{count}");
     }
   });
 });
