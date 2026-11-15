@@ -57,6 +57,7 @@ const { signToken, getUserId, requireAuth, AuthenticationRequiredError } = await
   "../auth.js"
 );
 const { handleError } = await import("../error-handler.js");
+const { registerJsonBodyParser } = await import("../json-body-parser.js");
 const { registerApiRoutes } = await import("../register-api-routes.js");
 const { installRouteAuthGuard, requireActiveSession } = await import(
   "../security/route-auth-guard.js"
@@ -90,11 +91,7 @@ beforeAll(async () => {
   app = Fastify();
   app.setErrorHandler(handleError);
   // index.ts's raw-body JSON parser: the Stripe/Paddle signature checks read it.
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
-    const str = (body as string) || "{}";
-    (req as unknown as { rawBody: string }).rawBody = str;
-    done(null, JSON.parse(str));
-  });
+  registerJsonBodyParser(app);
   await registerApiRoutes(app);
   await app.ready();
 });
@@ -152,6 +149,64 @@ describe("no or invalid token → 401, never 500", () => {
   it("answers a HEAD probe of a guarded GET with 401 too", async () => {
     const res = await app.inject({ method: "HEAD", url: "/api/briefing/status" });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// A body that is not JSON is the caller's mistake: 400, not the bare
+// SyntaxError a 500 used to be (with an error log line and a Sentry event per
+// garbage request). The guard is a route-level onRequest hook, so it still
+// answers a guarded route 401 before the body is read; parsing runs first only
+// where no guard stands in front of it: an exempt route, or a path no route
+// owns (Fastify parses the body before it answers a 404).
+describe("a malformed JSON body on the real route set is 400, never 500", () => {
+  const MALFORMED = { "content-type": "application/json" };
+  const BAD_BODY = "{bad";
+  const GUARDED_POST = "/api/notifications/desktop/receipts";
+
+  it("POST /api/auth/login (an exempt route) is 400", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      headers: MALFORMED,
+      payload: BAD_BODY,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid JSON body" });
+  });
+
+  it("POST to a path no route owns is 400, not a 404 behind a 500", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/clear-all",
+      headers: MALFORMED,
+      payload: BAD_BODY,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid JSON body" });
+  });
+
+  it("a guarded POST route answers 401 before it reads the body", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: GUARDED_POST,
+      headers: MALFORMED,
+      payload: BAD_BODY,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("a guarded POST route answers 400 once the session is live", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: GUARDED_POST,
+      headers: {
+        ...MALFORMED,
+        ...bearer(signToken({ userId: USER_ID, email: "guard@example.com" })),
+      },
+      payload: BAD_BODY,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid JSON body" });
   });
 });
 
