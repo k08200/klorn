@@ -12,6 +12,7 @@
  */
 
 import { redactCredentials } from "../security/credential-redaction.js";
+import { formatLlmFailureFacts, llmFailureFacts } from "./describe-failure.js";
 
 /** How long to stay on a credit-exhausted state before retrying the paid model */
 const CREDIT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
@@ -130,20 +131,17 @@ export function classifyKeyLimitError(error: unknown): CooldownKind {
 const PROVIDER_MESSAGE_LOG_CAP = 200;
 
 /**
- * Operator-safe rendering of an upstream provider error.
+ * The provider's own wording for an upstream error, minus anything shaped like
+ * a credential, capped so a giant HTML error page can't flood a reader.
  *
- * The 2026-07/08 judge outage was undiagnosable precisely because this text was
- * thrown away: the log recorded our own classification ("ambiguous quota
- * error") while the provider's actual wording — the only thing that says
- * WHETHER it was an RPM trip, a per-key spend cap, or an account limit — never
- * reached anyone. Keep the provider's wording verbatim, minus anything shaped
- * like a credential, capped so a giant HTML error page can't flood the log.
+ * For readers who own the request: the playground visitor (describeErrorChain
+ * → judgeEmail's onLlmError) and the offline eval CLI. Not for Sentry or the
+ * production log — a provider message can quote the request, which on a
+ * production call is someone's mail or chat. Those report llmFailureFacts
+ * (describe-failure.ts): class, status and the provider's type/code.
  *
  * The credential patterns are shared with the playground route and the Sentry
- * boundary (security/credential-redaction.ts). They used to live here alone,
- * and the local copy missed both of Google's key shapes and OpenAI's masked
- * echo form — this text goes to console.warn AND captureError
- * (judge/poc-judge.ts), so a miss here is a miss in error reporting.
+ * boundary (security/credential-redaction.ts).
  */
 export function redactProviderMessage(error: unknown): string | null {
   const raw =
@@ -162,13 +160,13 @@ export function redactProviderMessage(error: unknown): string | null {
 }
 
 /**
- * Render an error for an operator log INCLUDING its cause chain.
+ * Render an error INCLUDING its cause chain, in the provider's own words.
  *
  * `AllProvidersExhaustedError` deliberately carries a generic, user-safe
- * message; the provider's real failure rides on `cause`. A caller that logs
- * only `err.message` (poc-judge did) therefore records "All AI providers are
- * unavailable" and nothing about why — the exact hole that made the 2026-08-02
- * 429 un-root-causable while the 401 was trivially readable.
+ * message; the provider's real failure rides on `cause`, so a reader shown only
+ * `err.message` learns nothing about why. Same audience as
+ * redactProviderMessage: a reader who owns the request, never Sentry or the
+ * production log.
  */
 export function describeErrorChain(error: unknown, depth = 2): string {
   const head = redactProviderMessage(error) ?? String(error);
@@ -229,11 +227,12 @@ export function markKeyLimited(
       break;
   }
   s.keyLimitedUntil = until;
-  const upstream = redactProviderMessage(error);
+  // The failure's facts, never the provider's message: it can quote the
+  // request (someone's mail or chat on a BYOK call). The cooldown label above
+  // already says which quota window the message pointed at.
+  const facts = error === undefined ? "" : ` (${formatLlmFailureFacts(llmFailureFacts(error))})`;
   console.warn(
-    `[MODEL-FALLBACK] ${safeLogToken(provider)} hit ${label} — locked out until ${new Date(until).toISOString()}${
-      upstream ? ` — upstream said: ${upstream}` : ""
-    }`,
+    `[MODEL-FALLBACK] ${safeLogToken(provider)} hit ${label} — locked out until ${new Date(until).toISOString()}${facts}`,
   );
 }
 

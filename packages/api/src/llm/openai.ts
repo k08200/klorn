@@ -12,6 +12,7 @@ import {
 import { getProviderChain, type Provider, type ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
+import { formatLlmFailureFacts, llmFailureFacts } from "./describe-failure.js";
 import { resolveJudgeModel } from "./judge-model-gate.js";
 import { llmCallerFeature } from "./llm-caller.js";
 import { type DispatchFailureTracker, trackDispatchFailures } from "./llm-failure-log.js";
@@ -26,7 +27,6 @@ import {
   isProviderUnavailable,
   markCreditExhausted,
   markKeyLimited,
-  redactProviderMessage,
 } from "./model-fallback.js";
 
 export { UserRateLimitedError };
@@ -414,27 +414,46 @@ function hasUserOwnedProvider(chain: Provider[], playgroundOnly: boolean): boole
 //     outage was un-root-causable for exactly this reason.
 // Sentry volume is bounded by the cooldown itself: once marked, the provider
 // loop skips this quotaKey outright until it expires.
+//
+// Neither audience gets the provider's message, and Sentry never gets the raw
+// error (whose message and cause it would send): a provider error can quote the
+// request, which on a BYOK call from the mail judge, Slack or the KakaoTalk
+// import is someone else's mail or chat. The failure's facts (class, status,
+// provider type/code, message length) plus provider and key kind are what an
+// operator acts on.
 function signalKeyFailover(provider: Provider, err: unknown, userId?: string): void {
-  const upstream = redactProviderMessage(err);
+  const facts = llmFailureFacts(err);
+  const described = formatLlmFailureFacts(facts);
+  const where = signalContext(provider);
   if (provider.ownedByUser !== true) {
     console.warn(
-      `[MODEL-FALLBACK] env key (${provider.quotaKey}) hit its limit — no user key to fall back to${
-        upstream ? `; upstream said: ${upstream}` : ""
-      }`,
+      `[MODEL-FALLBACK] env key (${provider.quotaKey}) hit its limit — no user key to fall back to (${described})`,
     );
-    captureError(err, {
+    captureError(new Error(`Shared LLM key hit its limit (${facts.errorName})`), {
       tags: { scope: "llm.env_key_limited" },
-      extra: { quotaKey: provider.quotaKey, provider: provider.name, upstream },
+      extra: { ...where, ...facts },
     });
     return;
   }
   console.warn(
-    `[BYOK] user key (${provider.quotaKey}) hit its limit — falling back to the shared env key; the user's own key is no longer serving requests`,
+    `[BYOK] user key (${provider.quotaKey}) hit its limit — falling back to the shared env key; the user's own key is no longer serving requests (${described})`,
   );
-  captureError(err, {
-    tags: { scope: "byok.user_key_failover" },
-    extra: { userId: userId ?? null, quotaKey: provider.quotaKey, upstream },
-  });
+  captureError(
+    new Error(`User key hit its limit; failed over to the shared key (${facts.errorName})`),
+    {
+      tags: { scope: "byok.user_key_failover" },
+      extra: { userId: userId ?? null, ...where, ...facts },
+    },
+  );
+}
+
+/** Which provider, and whose key it runs on: the user's own (BYOK) or Klorn's shared one. */
+function signalContext(provider: Provider) {
+  return {
+    quotaKey: provider.quotaKey,
+    provider: provider.name,
+    keyKind: provider.ownedByUser === true ? ("byok" as const) : ("platform" as const),
+  };
 }
 
 /**
@@ -462,16 +481,18 @@ export const hasFailoverProviderForTest = hasFailoverProvider;
  * key stopped serving, and the counterpart to signalKeyFailover's BYOK branch.
  */
 function signalUserKeyUnusable(provider: Provider, err: unknown, userId?: string): void {
-  const upstream = redactProviderMessage(err);
+  // Facts only, never the provider's message: see signalKeyFailover.
+  const facts = llmFailureFacts(err);
   console.warn(
-    `[BYOK] user key (${provider.quotaKey}) is not serving — falling back to the shared env key${
-      upstream ? `; upstream said: ${upstream}` : ""
-    }`,
+    `[BYOK] user key (${provider.quotaKey}) is not serving — falling back to the shared env key (${formatLlmFailureFacts(facts)})`,
   );
-  captureError(err, {
-    tags: { scope: "byok.user_key_unusable" },
-    extra: { userId: userId ?? null, quotaKey: provider.quotaKey, upstream },
-  });
+  captureError(
+    new Error(`User key is not serving; failed over to the shared key (${facts.errorName})`),
+    {
+      tags: { scope: "byok.user_key_unusable" },
+      extra: { userId: userId ?? null, ...signalContext(provider), ...facts },
+    },
+  );
 }
 
 const PROVIDERS_EXHAUSTED_BASE =
