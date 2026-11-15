@@ -162,12 +162,20 @@ describePg("KakaoTalk import storage on Postgres", () => {
     }
   });
 
-  it("a second upload of the same chat makes no duplicate commitments", async () => {
+  it("a second upload of the same chat adds no duplicate, keeps user edits and takes the rows over", async () => {
     const userId = await newUser();
     const otherId = await newUser();
     const chatAt = hoursAgo(2);
     const first = await newImport(userId, chatAt);
     await processAll();
+    const edited = await prisma.commitment.findFirstOrThrow({
+      where: { threadId: kakaoImportThreadId(first.id) },
+      select: { id: true },
+    });
+    await prisma.commitment.update({
+      where: { id: edited.id },
+      data: { title: "My own words", confirmedAt: new Date() },
+    });
     const again = await newImport(userId, chatAt);
     await newImport(otherId, chatAt);
     await processAll();
@@ -178,20 +186,30 @@ describePg("KakaoTalk import storage on Postgres", () => {
       commitmentsCreated: 0,
       duplicatesSkipped: 2,
     });
-    // The rows stay the first upload's; another user's identical chat is theirs.
+    expect(await prisma.commitment.findUniqueOrThrow({ where: { id: edited.id } })).toMatchObject({
+      title: "My own words",
+      threadId: kakaoImportThreadId(again.id),
+    });
+    // Deleting the older upload (to free a slot) keeps what the newer one carried.
+    expect(await deleteKakaoImport(userId, first.id)).toBe(true);
     expect(
-      await prisma.commitment.count({ where: { threadId: kakaoImportThreadId(first.id) } }),
+      await prisma.commitment.count({ where: { threadId: kakaoImportThreadId(again.id) } }),
     ).toBe(2);
-    expect(await prisma.commitment.count({ where: { userId: otherId, sourceType: "KAKAO" } })).toBe(
-      2,
-    );
-    const keys = await prisma.commitment.findMany({
+    // Another user's identical chat is theirs, under a different digest.
+    const theirs = await prisma.commitment.findMany({
+      where: { userId: otherId, sourceType: "KAKAO" },
+      select: { dedupKey: true },
+    });
+    const mine = await prisma.commitment.findMany({
       where: { userId, sourceType: "KAKAO" },
       select: { dedupKey: true },
     });
-    for (const { dedupKey } of keys) {
+    expect(theirs).toHaveLength(2);
+    for (const { dedupKey } of [...mine, ...theirs]) {
       expect(dedupKey).toMatch(/^kakao:kakao-message:[0-9a-f]{32}:[0-9a-f]{16}$/);
     }
+    const mineKeys = new Set(mine.map((row) => row.dedupKey));
+    expect(theirs.some((row) => mineKeys.has(row.dedupKey))).toBe(false);
   });
 
   it("sweeps what a deleted import left behind, and only that, idempotently", async () => {

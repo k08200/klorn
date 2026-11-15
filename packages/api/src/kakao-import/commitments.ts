@@ -3,8 +3,8 @@
  * §4): the existing ledger ingestion with sourceType KAKAO. Always suggested,
  * never confirmed on its own (capped below the 0.7 line in
  * pim/commitment-ingestion.ts, like Slack). Every derived row carries the
- * threadId of the import that first made it, so deleting an import deletes
- * what it made, and the orphan sweep deletes what a deleted import left.
+ * threadId of the latest import whose messages produced it, so deleting that
+ * import deletes it, and the orphan sweep deletes what a deleted import left.
  */
 
 import { createHash } from "node:crypto";
@@ -32,21 +32,22 @@ function identityPart(value: string): string {
 }
 
 /**
- * One chat message's identity, whichever upload carried it: who said it, in
- * which minute (a PC .csv export has seconds, a .txt export does not) and
- * what, as one digest. Two uploads of the same chat give a message the same
- * identity, so the ledger's dedup key (the user, this, the candidate's text)
- * folds a re-import onto the commitments the first upload made. Only the
- * digest is kept, never the words or the name.
+ * One chat message's identity for one user, whichever upload carried it: who
+ * said it, in which minute (a PC .csv export has seconds, a .txt export does
+ * not) and what, as one digest that also covers the user's id (two people
+ * holding the same chat get unrelated digests). Two uploads of the same chat
+ * give a message the same identity, so the ledger's dedup key folds a
+ * re-import onto the commitments already made. Only the digest is kept, never
+ * the words or the name.
  */
-export function kakaoMessageIdentity(message: {
-  readonly speaker: string;
-  readonly sentAt: Date;
-  readonly text: string;
-}): string {
+export function kakaoMessageIdentity(
+  userId: string,
+  message: { readonly speaker: string; readonly sentAt: Date; readonly text: string },
+): string {
   const minute = Math.floor(message.sentAt.getTime() / MINUTE_MS);
   const digest = createHash("sha256")
-    .update(`${identityPart(message.speaker)}\n${minute}\n${identityPart(message.text)}`)
+    .update(`${userId}\n${identityPart(message.speaker)}\n${minute}\n`)
+    .update(identityPart(message.text))
     .digest("hex")
     .slice(0, IDENTITY_HEX_LEN);
   return `kakao-message:${digest}`;
@@ -76,9 +77,11 @@ export function extractKakaoCommitments(
     threadId: kakaoImportThreadId(input.importId),
     // One commitment per message: the same words from two speakers, or on two
     // days, are two promises (owner and due date differ). A re-run of the
-    // same message dedups, and so does the same message in a second upload of
-    // the chat: the row stays the first import's (its threadId).
-    dedupScope: kakaoMessageIdentity(input),
+    // same message dedups, and so does the same message in a later upload of
+    // the chat: the row moves to that upload (threadId) and keeps everything
+    // else, user edits included, with no LLM call.
+    dedupScope: kakaoMessageIdentity(input.userId, input),
+    onDuplicate: "reattach",
     text: input.text,
     // The other speaker's display name tells the card who owes what; the
     // user's own messages need no name.

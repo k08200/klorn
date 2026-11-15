@@ -33,6 +33,25 @@ export function resetKakaoSchedulerState(): void {
   lastPurgeAt = 0;
 }
 
+/** The orphan sweep, on its own: a failure is reported by name and the tick goes on. */
+async function sweepOrphans(): Promise<void> {
+  try {
+    const swept = await sweepOrphanKakaoCommitments();
+    if (swept.commitments > 0) {
+      console.log(
+        `${LOG_PREFIX} orphan sweep: deleted ${swept.commitments} commitments of ${swept.imports} deleted imports`,
+      );
+    }
+  } catch (err) {
+    const name = err instanceof Error ? err.name : typeof err;
+    console.error(`${LOG_PREFIX} orphan sweep failed: ${name}`);
+    captureError(new Error(`kakao-import: orphan sweep failed (${name})`), {
+      tags: { scope: "kakao-import.orphan-sweep" },
+      extra: { errorName: name },
+    });
+  }
+}
+
 /** One tick's work, run under the lease. */
 export async function runKakaoWork(now: Date = new Date()): Promise<void> {
   if (now.getTime() - lastPurgeAt >= KAKAO_PURGE_INTERVAL_MS) {
@@ -45,12 +64,7 @@ export async function runKakaoWork(now: Date = new Date()): Promise<void> {
         `${LOG_PREFIX} retention: deleted ${purged.messages} messages, expired ${purged.expired} imports`,
       );
     }
-    const swept = await sweepOrphanKakaoCommitments();
-    if (swept.commitments > 0) {
-      console.log(
-        `${LOG_PREFIX} orphan sweep: deleted ${swept.commitments} commitments of ${swept.imports} deleted imports`,
-      );
-    }
+    await sweepOrphans();
   }
   if (kakaoImportLive()) await processNextKakaoImport(now);
 }

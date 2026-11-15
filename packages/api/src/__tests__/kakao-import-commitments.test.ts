@@ -53,13 +53,13 @@ beforeEach(() => {
 
 describe("kakaoMessageIdentity", () => {
   it("is the same for the same message in any upload, export format or spacing", () => {
-    const id = kakaoMessageIdentity(MESSAGE);
+    const id = kakaoMessageIdentity("user-1", MESSAGE);
     // A PC .csv carries seconds where a .txt export does not.
-    expect(kakaoMessageIdentity({ ...MESSAGE, sentAt: new Date("2026-11-14T12:03:41.000Z") })).toBe(
-      id,
-    );
     expect(
-      kakaoMessageIdentity({
+      kakaoMessageIdentity("user-1", { ...MESSAGE, sentAt: new Date("2026-11-14T12:03:41.000Z") }),
+    ).toBe(id);
+    expect(
+      kakaoMessageIdentity("user-1", {
         speaker: " 이민호 ",
         sentAt: SENT_AT,
         text: "금요일까지   계약서\n보내드릴게요. ",
@@ -67,7 +67,7 @@ describe("kakaoMessageIdentity", () => {
     ).toBe(id);
     // NFD (as some exports write Hangul) and NFC are one message.
     expect(
-      kakaoMessageIdentity({
+      kakaoMessageIdentity("user-1", {
         speaker: MESSAGE.speaker.normalize("NFD"),
         sentAt: SENT_AT,
         text: MESSAGE.text.normalize("NFD"),
@@ -76,25 +76,31 @@ describe("kakaoMessageIdentity", () => {
   });
 
   it("differs when the speaker, the minute or the words differ", () => {
-    const id = kakaoMessageIdentity(MESSAGE);
-    expect(kakaoMessageIdentity({ ...MESSAGE, speaker: "김지수" })).not.toBe(id);
+    const id = kakaoMessageIdentity("user-1", MESSAGE);
+    expect(kakaoMessageIdentity("user-1", { ...MESSAGE, speaker: "김지수" })).not.toBe(id);
     expect(
-      kakaoMessageIdentity({ ...MESSAGE, sentAt: new Date("2026-11-14T12:04:00.000Z") }),
+      kakaoMessageIdentity("user-1", { ...MESSAGE, sentAt: new Date("2026-11-14T12:04:00.000Z") }),
     ).not.toBe(id);
-    expect(kakaoMessageIdentity({ ...MESSAGE, text: "월요일까지 계약서 보내드릴게요." })).not.toBe(
-      id,
+    expect(
+      kakaoMessageIdentity("user-1", { ...MESSAGE, text: "월요일까지 계약서 보내드릴게요." }),
+    ).not.toBe(id);
+  });
+
+  it("is the user's own: two people holding the same chat get unrelated digests", () => {
+    expect(kakaoMessageIdentity("user-2", MESSAGE)).not.toBe(
+      kakaoMessageIdentity("user-1", MESSAGE),
     );
   });
 
   it("is a hash: neither the words nor the speaker appear in it", () => {
-    const id = kakaoMessageIdentity(MESSAGE);
+    const id = kakaoMessageIdentity("user-1", MESSAGE);
     expect(id).toMatch(/^kakao-message:[0-9a-f]{32}$/);
     expect(id).not.toContain("이민호");
   });
 });
 
 describe("extractKakaoCommitments", () => {
-  it("dedups on the message's identity, so a re-import folds onto the first import's rows", async () => {
+  it("dedups on the message's identity, so a re-import folds onto the rows already made", async () => {
     const base = {
       userId: "user-1",
       fromMe: false,
@@ -106,8 +112,10 @@ describe("extractKakaoCommitments", () => {
     await extractKakaoCommitments({ ...base, importId: "imp-1", seq: 4 });
     await extractKakaoCommitments({ ...base, importId: "imp-2", seq: 9 });
     const [first, second] = mocks.extract.mock.calls.map(([input]) => input);
-    expect(first.dedupScope).toBe(kakaoMessageIdentity(MESSAGE));
+    expect(first.dedupScope).toBe(kakaoMessageIdentity("user-1", MESSAGE));
     expect(second.dedupScope).toBe(first.dedupScope);
+    // A duplicate moves to the newer upload and keeps whatever the user edited.
+    expect([first.onDuplicate, second.onDuplicate]).toEqual(["reattach", "reattach"]);
     // Each import still names itself on what it makes, so deleting it finds them.
     expect([first.threadId, first.sourceId]).toEqual([
       "kakao-import:imp-1",

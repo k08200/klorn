@@ -138,7 +138,7 @@ budget.
    | `sourceType` | `KAKAO` (new enum value, own migration) |
    | `threadId` | `kakao-import:<importId>` |
    | `sourceId` | `kakao-import:<importId>:<seq>` |
-   | dedup scope | the message's identity (`kakaoMessageIdentity`): a SHA-256 digest of the normalized speaker name, the minute it was sent and the normalized text. The same words from two speakers or on two days are two promises; a re-run of the same message, or the same message in a second upload of the chat, dedups |
+   | dedup scope | the message's identity (`kakaoMessageIdentity`): a SHA-256 digest of the user's id, the normalized speaker name, the minute it was sent and the normalized text. The same words from two speakers or on two days are two promises; a re-run of the same message, or the same message in a later upload of the chat, dedups |
    | `referenceDate` | the message's own time, so "내일" resolves against when it was written, in the user's zone |
    | `senderIsUser` | whether the user wrote it |
    | `contextTitle` | `KakaoTalk · <speaker>` for others, `KakaoTalk` for the user |
@@ -174,17 +174,24 @@ The pass yields to the event loop every 20 messages, so a long import cannot hol
 the API's loop. It stands down under `BACKGROUND_AGENTS_DISABLED`; the purge does not.
 
 **Re-importing.** Dedup is per message, across the user's imports. A message's
-identity is a digest of who said it, in which minute (a PC `.csv` export carries
-seconds, a `.txt` one does not, so seconds are dropped) and what, after Unicode
-NFC, whitespace collapsing and lower-casing. Re-importing an overlapping export of
-the same chat counts the messages already made into commitments as duplicates
-(`duplicatesSkipped`) instead of suggesting them again. The commitment stays the
-first import's (its `threadId`): deleting that import deletes it, deleting the
-second does not. The digest is all that is kept for this; no chat title, speaker
-list or text is stored to recognise a chat. Two identical messages from one
-speaker in one minute are one message. The refiner still runs for a duplicate
-candidate before the ledger finds it, so a re-import spends up to the
-40-candidate cap again.
+identity is a digest of the user's id, who said it, in which minute (a PC `.csv`
+export carries seconds, a `.txt` one does not, so seconds are dropped) and what,
+after Unicode NFC, whitespace collapsing and lower-casing. Re-importing an
+overlapping export of the same chat counts the messages already made into
+commitments as duplicates (`duplicatesSkipped`) instead of suggesting them again:
+- A duplicate is matched before the refiner, so it costs no LLM call and does not
+  count against the 40-candidate cap.
+- The existing commitment is left as it is (title, due date, confirmation, status,
+  queue state, user edits included). Only its `sourceId`/`threadId` move to the
+  newer upload (`onDuplicate: "reattach"` in `pim/commitment-ingestion.ts`).
+- So a commitment belongs to the latest upload that carried its message. Deleting
+  an older upload, for example to free one of the 20 slots, keeps it; deleting
+  that latest upload deletes it.
+
+The digest is all that is kept for this; no chat title, speaker list or text is
+stored to recognise a chat. Two identical messages from one speaker in one minute
+are one message, in one chat or two. Changing the account time zone between two
+uploads changes the computed minute, so those uploads do not dedupe.
 
 **Who is "me".** Speakers are told apart by display name only. A participant whose
 name equals the user's, or two people with one name, cannot be separated: their
