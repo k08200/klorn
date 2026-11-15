@@ -346,8 +346,10 @@ describe("reconcileLinkedInboxes", () => {
 
     // The bad inbox is captured, not swallowed silently...
     expect(m.captureError).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({ extra: { linkedInboxAccountId: "link-bad" } }),
+      expect.objectContaining({ message: "[EMAIL-SYNC] linked-inbox reconcile failed (Error)" }),
+      expect.objectContaining({
+        extra: expect.objectContaining({ linkedInboxAccountId: "link-bad", errorName: "Error" }),
+      }),
     );
     // ...and the healthy inbox still reconciled.
     expect(m.deleteMany).toHaveBeenCalledWith({

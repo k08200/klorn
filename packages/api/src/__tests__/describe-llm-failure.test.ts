@@ -1,6 +1,17 @@
-import { AuthenticationError, BadRequestError, InternalServerError } from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import {
+  APIConnectionError,
+  AuthenticationError,
+  BadRequestError,
+  InternalServerError,
+  RateLimitError,
+} from "openai";
 import { describe, expect, it } from "vitest";
-import { describeLlmFailure } from "../llm/describe-failure.js";
+import {
+  describeLlmFailure,
+  formatLlmFailureFacts,
+  llmFailureFacts,
+} from "../llm/describe-failure.js";
 import { AllProvidersExhaustedError } from "../llm/openai.js";
 
 /**
@@ -49,5 +60,166 @@ describe("describeLlmFailure", () => {
     );
 
     expect(describeLlmFailure(err)).not.toContain("SECRET");
+  });
+});
+
+/**
+ * What a failover signal may tell Sentry and the log about a provider failure.
+ * A provider's message can quote the request — someone's mail, Slack or
+ * KakaoTalk text on a BYOK call — so the facts are the class, the status, the
+ * provider's machine-readable type and code, and the message's length.
+ */
+describe("llmFailureFacts", () => {
+  const CANARY = "CANARY-mail-body-7f3a";
+
+  it("reads the type and stable code off an Anthropic SDK error, never its message", () => {
+    const err = new Anthropic.RateLimitError(
+      429,
+      {
+        type: "error",
+        error: {
+          type: "rate_limit_error",
+          message: `Too many tokens in: ${CANARY}`,
+          details: { error_code: "output_tokens_per_minute" },
+        },
+      },
+      `429 Too many tokens in: ${CANARY}`,
+      new Headers(),
+    );
+
+    const facts = llmFailureFacts(err);
+
+    expect(facts).toEqual({
+      errorName: "RateLimitError",
+      causeName: null,
+      status: 429,
+      providerErrorType: "rate_limit_error",
+      providerErrorCode: "output_tokens_per_minute",
+      messageLength: err.message.length,
+    });
+    expect(JSON.stringify(facts)).not.toContain(CANARY);
+  });
+
+  it("reads code and type off an OpenAI SDK error", () => {
+    const err = new RateLimitError(
+      429,
+      { message: CANARY, type: "insufficient_quota", code: "insufficient_quota" },
+      CANARY,
+      new Headers(),
+    );
+
+    expect(llmFailureFacts(err)).toMatchObject({
+      errorName: "RateLimitError",
+      status: 429,
+      providerErrorType: "insufficient_quota",
+      providerErrorCode: "insufficient_quota",
+    });
+  });
+
+  it("falls back to the cause for a wrapper such as the Anthropic credit-limit 402", () => {
+    const cause = new Anthropic.BadRequestError(
+      400,
+      { type: "error", error: { type: "invalid_request_error", message: CANARY } },
+      CANARY,
+      new Headers(),
+    );
+    const wrapper = Object.assign(new Error(`402 credit exhausted — ${CANARY}`, { cause }), {
+      name: "AnthropicCreditExhaustedError",
+      status: 402,
+    });
+
+    const facts = llmFailureFacts(wrapper);
+
+    expect(facts).toMatchObject({
+      errorName: "AnthropicCreditExhaustedError",
+      causeName: "BadRequestError",
+      status: 402,
+      providerErrorType: "invalid_request_error",
+      providerErrorCode: null,
+    });
+    expect(JSON.stringify(facts)).not.toContain(CANARY);
+  });
+
+  it("names the cause and reads codes two levels down an exhausted chain", () => {
+    const original = new Anthropic.BadRequestError(
+      400,
+      { type: "error", error: { type: "invalid_request_error", message: CANARY } },
+      CANARY,
+      new Headers(),
+    );
+    const credit = Object.assign(
+      new Error(`402 credit exhausted — ${CANARY}`, { cause: original }),
+      {
+        name: "AnthropicCreditExhaustedError",
+        status: 402,
+      },
+    );
+    const exhausted = new AllProvidersExhaustedError("All AI providers are unavailable.", {
+      cause: credit,
+    });
+
+    const facts = llmFailureFacts(exhausted);
+
+    expect(facts).toMatchObject({
+      errorName: "AllProvidersExhaustedError",
+      causeName: "AnthropicCreditExhaustedError",
+      status: 402,
+      providerErrorType: "invalid_request_error",
+    });
+    expect(formatLlmFailureFacts(facts)).toBe(
+      `AllProvidersExhaustedError 402, cause=AnthropicCreditExhaustedError, type=invalid_request_error, message ${exhausted.message.length} chars`,
+    );
+    expect(JSON.stringify(facts)).not.toContain(CANARY);
+  });
+
+  it("says what failed under the wrapper when the cause has no status", () => {
+    const exhausted = new AllProvidersExhaustedError("All AI providers are unavailable.", {
+      cause: new APIConnectionError({ message: `connect failed for ${CANARY}` }),
+    });
+
+    expect(llmFailureFacts(exhausted)).toMatchObject({
+      errorName: "AllProvidersExhaustedError",
+      causeName: "APIConnectionError",
+      status: null,
+    });
+  });
+
+  it("falls back to 'Error' for a name that is not an identifier", () => {
+    const err = Object.assign(new Error("boom"), { name: `Failed on ${CANARY} text` });
+
+    expect(llmFailureFacts(err).errorName).toBe("Error");
+  });
+
+  it("drops a type or code that is free text rather than an enum-like token", () => {
+    const err = Object.assign(new Error("boom"), {
+      status: 400,
+      type: `quoted: ${CANARY}`,
+      code: "x".repeat(200),
+    });
+
+    expect(llmFailureFacts(err)).toMatchObject({
+      providerErrorType: null,
+      providerErrorCode: null,
+    });
+  });
+
+  it("describes a non-Error throw without reading it", () => {
+    expect(llmFailureFacts(CANARY)).toEqual({
+      errorName: "UnknownError",
+      causeName: null,
+      status: null,
+      providerErrorType: null,
+      providerErrorCode: null,
+      messageLength: 0,
+    });
+  });
+
+  it("formats the facts as one log fragment with no message text", () => {
+    const err = Object.assign(new Error(CANARY), { status: 429, type: "rate_limit_error" });
+
+    const line = formatLlmFailureFacts(llmFailureFacts(err));
+
+    expect(line).toBe(`Error 429, type=rate_limit_error, message ${CANARY.length} chars`);
+    expect(line).not.toContain(CANARY);
   });
 });

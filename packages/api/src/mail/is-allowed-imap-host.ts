@@ -18,6 +18,15 @@ const ALLOWED_IMAP_PORTS = new Set(["993"]); // IMAPS (TLS) only
 const ALLOWED_IMAP_HOSTS = new Set([
   "imap.naver.com", // Naver (Phase 0b)
   "imap.mail.me.com", // iCloud (Phase 2)
+  // App-password presets (provider phase 2, imap-preset-providers.ts), each the
+  // one host its provider documents:
+  "imap.daum.net", // Daum
+  "imap.kakao.com", // Kakao
+  "imap.mail.yahoo.com", // Yahoo
+  "imap.aol.com", // AOL
+  "imap.fastmail.com", // Fastmail
+  "imap.zoho.com", // Zoho (personal and free organization accounts)
+  "imappro.zoho.com", // Zoho (paid organization accounts)
 ]);
 
 export function isAllowedImapHost(hostInput: string): boolean {

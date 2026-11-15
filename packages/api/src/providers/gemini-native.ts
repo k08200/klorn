@@ -176,17 +176,39 @@ async function callGemini(
     const text = await res.text().catch(() => "");
     // NAMED on purpose: the reply/draft routes surface `err.name` to the
     // user, and a bare `Error` told the founder nothing for a day
-    // (2026-08-10). The message keeps the body for operators/Sentry; the
-    // name is what reaches the UI.
+    // (2026-08-10). The message keeps the body for the playground and the
+    // offline CLIs; it can quote the request, so Sentry and the log get
+    // llmFailureFacts instead, which read `code` ("RESOURCE_EXHAUSTED") to
+    // tell a quota 429 from a rate 429.
     const err = new Error(`Gemini ${res.status}: ${text || "(no body)"}`) as Error & {
       status: number;
+      code?: string;
     };
     err.name = `GeminiHttp${res.status}Error`;
     err.status = res.status;
+    const code = geminiErrorStatus(text);
+    if (code !== null) err.code = code;
     throw err;
   }
 
   return res;
+}
+
+/**
+ * The machine-readable status of a Gemini error body
+ * (`{"error":{"code":429,"status":"RESOURCE_EXHAUSTED",…}}`, or that inside a
+ * one-element array from the streaming endpoint), or null.
+ */
+export function geminiErrorStatus(body: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const envelope = Array.isArray(parsed) ? parsed[0] : parsed;
+  const status = (envelope as { error?: { status?: unknown } } | null)?.error?.status;
+  return typeof status === "string" ? status : null;
 }
 
 function extractText(data: GeminiResponse): string {

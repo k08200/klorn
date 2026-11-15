@@ -15,7 +15,7 @@
  */
 
 import { executeToolCall } from "../agentcore/tool-executor.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import {
   CREATE_DRAFT_TOOL_NAME,
   createdDraftIdentity,
@@ -195,7 +195,7 @@ export async function runMcpWriteCall(call: McpWriteCall): Promise<McpToolResult
   try {
     auditId = await recordAllowedWrite({ ...audit, bodyHash: contentHashFor(name, args) });
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[MCP] write audit insert failed", err, {
       tags: { scope: "mcp.write-audit.insert" },
       extra: { userId, apiKeyId, tool: name },
     });

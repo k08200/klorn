@@ -17,8 +17,10 @@
  * production are byte-identical until an operator opts in.
  */
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import { EMBEDDING_TIMEOUT_MS, llmRequestTimeoutMs } from "./llm/llm-timeout.js";
+import { logLlmFailure } from "./llm/report-llm-failure.js";
+import { createOpenAIClient } from "./providers/openai-client.js";
 
 // Enable by setting EMBEDDING_MODEL (e.g. "nomic-embed-text" for local Ollama).
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "";
@@ -39,7 +41,7 @@ let client: OpenAI | null = null;
 function getClient(): OpenAI | null {
   if (!isEmbeddingEnabled()) return null;
   if (!client) {
-    client = new OpenAI({
+    client = createOpenAIClient({
       baseURL: EMBEDDING_BASE_URL,
       apiKey: EMBEDDING_API_KEY,
       timeout: llmRequestTimeoutMs(EMBEDDING_TIMEOUT_MS),
@@ -95,10 +97,8 @@ export async function embedTexts(texts: readonly string[]): Promise<(number[] | 
   } catch (err) {
     // Log a signal (invisible via captureError alone when Sentry is off) and
     // leave the missing slots null — caller falls back to lexical ranking.
-    console.warn(
-      "[embedding] embedTexts failed, falling back to lexical:",
-      err instanceof Error ? err.message : String(err),
-    );
+    // Facts only: the input is mail text, and an endpoint's error can echo it.
+    logLlmFailure("[embedding] embedTexts failed, falling back to lexical", err);
   }
   return out;
 }

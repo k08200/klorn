@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>データ処理とサブプロセッサー — Klorn</title>
-<meta name="description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Vercel、Anthropic、Paddle、Apple。">
+<meta name="description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Cloudflare、Anthropic、Paddle、Apple。">
 <meta property="og:title" content="データ処理とサブプロセッサー — Klorn">
-<meta property="og:description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Vercel、Anthropic、Paddle、Apple。">
+<meta property="og:description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Cloudflare、Anthropic、Paddle、Apple。">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://klorn.ai/ja/dpa/">
 <meta property="og:locale" content="ja_JP">
@@ -15,7 +15,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="データ処理とサブプロセッサー — Klorn">
-<meta name="twitter:description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Vercel、Anthropic、Paddle、Apple。">
+<meta name="twitter:description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Cloudflare、Anthropic、Paddle、Apple。">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
 <link rel="canonical" href="https://klorn.ai/ja/dpa/">
 <link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/">
@@ -79,7 +79,7 @@
       <tr><th>Render</th><td class="us">APIのホスティング、シンガポールリージョン</td><td>APIが処理するすべて（通信中およびメモリ上）</td></tr>
       <tr><th>Supabase</th><td class="us">マネージドPostgres、ソウル（ap-northeast-2）</td><td>保存されているすべてのアカウント、メール、分類のデータ</td></tr>
       <tr><th>GitHub</th><td class="us">夜間のデータベースバックアップの保存（Actionsのアーティファクト、14日後に期限切れ）</td><td>暗号化されたファイルのみ。データベースは一時的なGitHubランナーにコピーされてそこで暗号化され、保存されるのは暗号文だけです。復号するためのキーがGitHubに保存されることはありません</td></tr>
-      <tr><th>Vercel</th><td class="us">ウェブアプリのホスティング</td><td>通信中のリクエストとレスポンス</td></tr>
+      <tr><th>Cloudflare</th><td class="us">ウェブアプリのホスティング（Cloudflare Pages：app.klorn.ai の静的ホスティングとCDN）</td><td>通信中のリクエストとレスポンス</td></tr>
       <tr><th>Google（Gemini API）</th><td class="us">モデル呼び出し</td><td>分類や下書きのために送られるメッセージのテキスト。送信データを学習に使わないAPI規約のもとで扱われます</td></tr>
       <tr><th>Anthropic（Claude API）</th><td class="us">モデル呼び出し</td><td>同じメッセージのテキスト。送信データを学習に使わない商用API規約のもとで扱われます。既定では30日以内に削除され、利用ポリシーの執行で問題とされたコンテンツに限り、より長く保持されます</td></tr>
       <tr><th>Paddle</th><td class="us">決済と販売代理（Merchant of Record）</td><td>請求情報。<strong>メールの内容は含みません</strong></td></tr>

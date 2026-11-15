@@ -538,13 +538,17 @@ export const CLIENT_RELATIONSHIP_KEYS = [
   "pinned",
   "vip",
   "dismissCount",
+  // Klorn Teams: the sender is on the organization's company domains. A
+  // boolean only; absent when the user has no organization domains.
+  "orgCompanyDomain",
 ] as const satisfies ReadonlyArray<keyof RelationshipSnapshot>;
 
 /** The WHO reason: only the relationship features that are known. */
 function relationshipReason(rel: RelationshipSnapshot | null): PolicyReason | null {
   if (!rel) return null;
-  const known = CLIENT_RELATIONSHIP_KEYS.filter((k) => rel[k] !== null).map(
-    (k): [string, ReasonParamValue] => [k, rel[k]],
+  // An absent optional fact (undefined) is as unknown as a null one.
+  const known = CLIENT_RELATIONSHIP_KEYS.filter((k) => rel[k] !== null && rel[k] !== undefined).map(
+    (k): [string, ReasonParamValue] => [k, rel[k] ?? null],
   );
   return known.length === 0 ? null : reason("relationship", { params: Object.fromEntries(known) });
 }

@@ -5,8 +5,9 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
+import { effectivePlan } from "./org/effective-tier.js";
 import { localEventSource } from "./pim/calendar-rows.js";
-import { captureError } from "./sentry.js";
+import { captureDbFailure, dbFailureFacts, logDbFailure } from "./report-db-failure.js";
 
 /**
  * The signing secret for every JWT. Falls back to a hardcoded string that is
@@ -220,7 +221,7 @@ const SESSION_ENDED = {
  * when EVERY check answered and none ended it; a check that threw leaves it
  * "unavailable" (undecided), unless another check definitively ended it.
  */
-type SessionVerdict =
+export type SessionVerdict =
   | { kind: "active" }
   | { kind: "ended" }
   | { kind: "unavailable"; error: unknown };
@@ -236,6 +237,24 @@ function settleSessionChecks(
 }
 
 /**
+ * The session checks every bearer of a verified JWT must pass: the device was
+ * not kicked by another login, and the token predates no global revocation
+ * (password reset). Shared by requireAuth and the WebSocket handshake so the
+ * two can't drift: a check that threw is "unavailable" (retry), never "ended".
+ */
+export async function checkSessionActive(
+  rawToken: string,
+  payload: JwtPayload,
+): Promise<SessionVerdict> {
+  return settleSessionChecks(
+    await Promise.allSettled([
+      isDeviceSessionValid(rawToken),
+      sessionRevokedForToken(payload).then((revoked) => !revoked),
+    ]),
+  );
+}
+
+/**
  * At most one Sentry report per this interval per process: in a database
  * outage every authenticated request fails the session check, and one event
  * says as much as thousands. Every failure is still logged.
@@ -243,11 +262,13 @@ function settleSessionChecks(
 const SESSION_CHECK_REPORT_INTERVAL_MS = 30_000;
 let lastSessionCheckReportAt = Number.NEGATIVE_INFINITY;
 
-function reportSessionCheckFailure(err: unknown): void {
+export function reportSessionCheckFailure(err: unknown): void {
   const now = Date.now();
   if (now - lastSessionCheckReportAt < SESSION_CHECK_REPORT_INTERVAL_MS) return;
   lastSessionCheckReportAt = now;
-  captureError(err, { tags: { scope: "auth.session-check" } });
+  captureDbFailure("[AUTH] session check failed", err, {
+    tags: { scope: "auth.session-check" },
+  });
 }
 
 /**
@@ -258,7 +279,7 @@ function reportSessionCheckFailure(err: unknown): void {
  * never reaches the caller.
  */
 function sendSessionCheckUnavailable(request: FastifyRequest, reply: FastifyReply, err: unknown) {
-  request.log.error({ err }, "session check failed: database unavailable");
+  request.log.error({ failure: dbFailureFacts(err) }, "session check failed: database unavailable");
   reportSessionCheckFailure(err);
   return reply.code(503).header("Retry-After", String(SESSION_CHECK_RETRY_AFTER_SECONDS)).send({
     error: "Couldn't verify your session right now. Please try again.",
@@ -268,7 +289,7 @@ function sendSessionCheckUnavailable(request: FastifyRequest, reply: FastifyRepl
 }
 
 /** The token's payload, or null when its signature or expiry fails. */
-function verifiedPayload(rawToken: string): JwtPayload | null {
+export function verifiedPayload(rawToken: string): JwtPayload | null {
   try {
     return verifyToken(rawToken);
   } catch {
@@ -292,12 +313,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   if (!payload) return reply.code(401).send({ error: "Invalid or expired token" });
   // Verify the session is still active: device not kicked by another login,
   // AND the token was not issued before a global revocation (password reset).
-  const verdict = settleSessionChecks(
-    await Promise.allSettled([
-      isDeviceSessionValid(rawToken),
-      sessionRevokedForToken(payload).then((revoked) => !revoked),
-    ]),
-  );
+  const verdict = await checkSessionActive(rawToken, payload);
   if (verdict.kind === "ended") return reply.code(401).send(SESSION_ENDED);
   if (verdict.kind === "unavailable") {
     return sendSessionCheckUnavailable(request, reply, verdict.error);
@@ -361,8 +377,7 @@ export async function registerDevice(
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  const planConfig = getEffectivePlan(user?.plan || "FREE", user?.role);
-  const limit = planConfig.deviceLimit;
+  const limit = await deviceLimitFor(userId, user);
 
   const device = await db.device.create({
     data: {
@@ -390,6 +405,34 @@ export async function registerDevice(
   }
 
   return device.id;
+}
+
+/**
+ * The device limit for this sign-in: the effective plan's (a Klorn Teams seat
+ * counts; no query while TEAMS_ENABLED is closed to the user). The limit
+ * evicts the oldest sessions, so a failed seat lookup must not shrink it to
+ * the own plan's and sign a seat holder out elsewhere: the sign-in proceeds,
+ * the failure is reported, and this sign-in evicts nothing (Infinity). The
+ * next sign-in with a healthy lookup enforces the limit again.
+ */
+async function deviceLimitFor(
+  userId: string,
+  user: { plan: string; role: string | null } | null,
+): Promise<number> {
+  try {
+    const plan = await effectivePlan({ id: userId, plan: user?.plan || "FREE" });
+    return getEffectivePlan(plan, user?.role ?? undefined).deviceLimit;
+  } catch (err) {
+    logDbFailure("[AUTH] device-limit seat lookup failed — evicting nothing this sign-in", err, {
+      ids: { userId },
+    });
+    captureDbFailure(
+      "[AUTH] device-limit seat lookup failed — evicting nothing this sign-in",
+      err,
+      { tags: { scope: "auth.device-limit.seat-lookup" }, extra: { userId } },
+    );
+    return Number.POSITIVE_INFINITY;
+  }
 }
 
 /** Validate that a token's device session is still active */

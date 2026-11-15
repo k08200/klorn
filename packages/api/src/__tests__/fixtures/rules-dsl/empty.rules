@@ -1,0 +1,9 @@
+# Klorn rules (Rules DSL v1). One rule per sender: an address or a domain.
+# Lanes: PUSH, MEETING, QUEUE, INFO, SILENT. Lines starting with # are ignored.
+# Edit, then Validate and Apply in Settings > Lanes. Comments are not saved.
+version 1
+
+# No rules yet. For example:
+# rule "Investors always interrupt"
+#   when from domain "example.com"
+#   then lane PUSH

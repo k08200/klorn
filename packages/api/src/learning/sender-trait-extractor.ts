@@ -3,6 +3,7 @@ import { asString, asUnitInterval } from "../llm/llm-coerce.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
+import { captureLlmFailure, logLlmFailure, offeredKeyKind } from "../llm/report-llm-failure.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
@@ -93,11 +94,14 @@ export async function extractTraitsFromEmails(
     }
     return out;
   } catch (err) {
-    console.warn(
-      "[TRAITS] extraction failed — skipping sender:",
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, { tags: { scope: "sender-traits.extract" } });
+    // Facts only: the provider's error can quote the sampled mail, and
+    // parseLlmJson's SyntaxError quotes the model's reply.
+    const label = "[TRAITS] extraction failed — skipping sender";
+    logLlmFailure(label, err);
+    captureLlmFailure(label, err, {
+      tags: { scope: "sender-traits.extract" },
+      extra: { keyKind: offeredKeyKind(opts.credentials), model: JUDGE_MODEL },
+    });
     opts.onFailure?.(err);
     return [];
   }
@@ -189,8 +193,11 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
     if (r.status === "fulfilled") traitsWritten += r.value;
     else {
       sendersFailed++;
-      console.warn("[TRAITS] sender failed for", userId, ":", r.reason);
-      captureError(r.reason, { tags: { scope: "sender-traits.sender", userId } });
+      // The reason is often the extraction failure rethrown through
+      // onFailure, so it gets the same facts-only report.
+      const label = "[TRAITS] sender failed";
+      logLlmFailure(label, r.reason, { ids: { userId } });
+      captureLlmFailure(label, r.reason, { tags: { scope: "sender-traits.sender", userId } });
     }
   });
   return { sendersProcessed: senders.length, sendersFailed, traitsWritten };
@@ -224,8 +231,9 @@ export async function extractSenderTraitsForAllUsers(): Promise<void> {
     try {
       summaries.push(await extractSenderTraitsForUser(u.id));
     } catch (err) {
-      console.error("[TRAITS] batch failed for user", u.id, err);
-      captureError(err, { tags: { scope: "sender-traits.batch", userId: u.id } });
+      const label = "[TRAITS] batch failed for user";
+      logLlmFailure(label, err, { level: "error", ids: { userId: u.id } });
+      captureLlmFailure(label, err, { tags: { scope: "sender-traits.batch", userId: u.id } });
     }
   }
   // One line per weekly run, success or not — the store sat empty for weeks

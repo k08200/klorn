@@ -238,6 +238,19 @@ export function icloudInboxEnabled(): boolean {
     (process.env.ICLOUD_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Fixed-host app-password IMAP presets — provider phase 2 (Daum, Kakao, Yahoo,
+// AOL, Fastmail, Zoho; mail/imap-preset-providers.ts). OFF by default (repo
+// doctrine). Takes the rollout cohort: while off every /api/<preset>-imap route
+// answers the cloaked 404 (even before authentication), the providers list and the
+// IMAP poll leave the presets out; in `cohort` mode only ROLLOUT_COHORT_USER_IDS
+// see the routes and tiles and have their preset rows polled. Read per call.
+export const IMAP_PRESETS_FLAGS = ["IMAP_PRESETS_ENABLED"] as const;
+
+/** Whether the presets exist at all (on, or cohort for someone); per-user access is featureOpenTo. */
+export function imapPresetsLive(): boolean {
+  return flagMode("IMAP_PRESETS_ENABLED") !== "off";
+}
+
 // Outlook inbox linking via Microsoft Graph OAuth — Phase 3 of the
 // multi-provider plan. OFF by default and dark until the CASA Letter of
 // Assessment (same freeze as ICLOUD_INBOX_ENABLED): while OFF, every
@@ -704,6 +717,26 @@ export function teamModeEnabled(): boolean {
   );
 }
 
+// Klorn Teams v1 (src/org/, routes/orgs.ts): organizations, seats, invites,
+// org free/busy and admin ceilings (docs/design/pricing-tiers.md "Team
+// (company) plan"). OFF by default (repo doctrine). Takes the rollout cohort
+// (flagMode above): `cohort` opens it only to ROLLOUT_COHORT_USER_IDS. While
+// off every /api/orgs route answers the default 404, even unauthenticated; no
+// seat is entitled (org/effective-tier.ts) and no org ceiling applies
+// (org/ceilings.ts), so turning it off is the kill switch for the whole plan.
+// Separate from TEAM_MODE_ENABLED, which gates the per-user saved teams.
+export const TEAMS_FLAG = "TEAMS_ENABLED";
+export function teamsLive(): boolean {
+  return flagMode(TEAMS_FLAG) !== "off";
+}
+export function teamsOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [TEAMS_FLAG]);
+}
+/** The team_availability tool: saved teams (team mode) or organization members. */
+export function teamAvailabilityOpenTo(userId: string): boolean {
+  return teamModeEnabled() || teamsOpenTo(userId);
+}
+
 // Smart actions (routes/smart-actions.ts): "Draft reply → Send" and "Add to
 // calendar" one-tap flows from the briefing picks and the mail reader. OFF by
 // default (repo doctrine). Takes the rollout cohort (flagMode above): `cohort`
@@ -716,6 +749,63 @@ export function smartActionsLive(): boolean {
 }
 export function smartActionsOpenTo(userId: string): boolean {
   return featureOpenTo(userId, [SMART_ACTIONS_FLAG]);
+}
+
+// Klorn Vault (routes/vault-export.ts): the user's own lanes, senders,
+// commitments and one note per mail as an Obsidian-compatible markdown zip,
+// streamed and stored nowhere. OFF by default (repo doctrine). Takes the rollout
+// cohort (flagMode above): `cohort` opens the route and `user.vaultExport` only
+// to ROLLOUT_COHORT_USER_IDS. While off the route answers the default 404, even
+// unauthenticated. Read per call, so a flip needs no redeploy.
+export const VAULT_EXPORT_FLAG = "VAULT_EXPORT_ENABLED";
+export function vaultExportLive(): boolean {
+  return flagMode(VAULT_EXPORT_FLAG) !== "off";
+}
+export function vaultExportOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [VAULT_EXPORT_FLAG]);
+}
+
+// Rules DSL (routes/rules-dsl.ts, docs/design/rules-dsl.md): the user's lane
+// pins as editable text with validate, dry-run and apply. OFF by default (repo
+// doctrine). Takes the rollout cohort (flagMode above): `cohort` opens the
+// routes and `user.rulesDsl` only to ROLLOUT_COHORT_USER_IDS. While off the
+// routes answer the default 404, even unauthenticated. Read per call, so a flip
+// needs no redeploy.
+export const RULES_DSL_FLAG = "RULES_DSL_ENABLED";
+export function rulesDslLive(): boolean {
+  return flagMode(RULES_DSL_FLAG) !== "off";
+}
+export function rulesDslOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [RULES_DSL_FLAG]);
+}
+
+// Slack integration v1 (docs/providers/slack.md): an internal Slack app per
+// user, read-and-judge only. OFF by default (repo doctrine). `cohort` opens
+// the routes, the events webhook and `user.slack` only to
+// ROLLOUT_COHORT_USER_IDS. While off every /api/slack route answers the
+// default 404, even unauthenticated. Read per call: a flip needs no redeploy.
+export const SLACK_FLAG = "SLACK_ENABLED";
+export const SLACK_FLAGS = [SLACK_FLAG] as const;
+export function slackLive(): boolean {
+  return flagMode(SLACK_FLAG) !== "off";
+}
+export function slackOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, SLACK_FLAGS);
+}
+
+// KakaoTalk chat-export import v1 (docs/providers/kakaotalk-import.md): the
+// user uploads one exported chat; Klorn suggests commitments from its recent
+// window. OFF by default (repo doctrine). `cohort` opens the routes, the
+// processing pass and `user.kakaoImport` only to ROLLOUT_COHORT_USER_IDS.
+// While off every /api/kakao-import route answers the default 404, even
+// unauthenticated. Read per call: a flip needs no redeploy.
+export const KAKAO_IMPORT_FLAG = "KAKAO_IMPORT_ENABLED";
+export const KAKAO_IMPORT_FLAGS = [KAKAO_IMPORT_FLAG] as const;
+export function kakaoImportLive(): boolean {
+  return flagMode(KAKAO_IMPORT_FLAG) !== "off";
+}
+export function kakaoImportOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, KAKAO_IMPORT_FLAGS);
 }
 
 export function appleLoginEnabled(): boolean {
@@ -812,6 +902,13 @@ export const DAILY_COST_CAP_CENTS = intEnv("DAILY_COST_CAP_CENTS", 100);
 // classifications, enough to feel Klorn sort + auto-handle your inbox before
 // the wall. Entitled users (paid/trial/admin) keep DAILY_COST_CAP_CENTS.
 export const FREE_DAILY_COST_CAP_CENTS = intEnv("FREE_DAILY_COST_CAP_CENTS", 10);
+
+// Klorn Teams seat target (pricing-tiers.md: $0.80 / seat / day, POOLED across
+// the team). A seat holder's daily cap is the pool (seats x this) minus the
+// other seated members' spend today, bounded by the 10x anomaly brake, and
+// never below their own plan's cap (billing/team-cost-pool.ts). Read only
+// while TEAMS_ENABLED is open to the user.
+export const TEAM_SEAT_DAILY_COST_CAP_CENTS = intEnv("TEAM_SEAT_DAILY_COST_CAP_CENTS", 80);
 
 // Slice of the per-user daily cap that ONLY the firewall judge may spend.
 // Chat, agent, briefing and summarize stop at (cap - reserve); the judge may

@@ -37,6 +37,7 @@
  * sendMail and createDraft a plain draft, exactly as before B0b.
  */
 
+import { logDbFailure } from "../../report-db-failure.js";
 import { markLinkedInboxForReconnect } from "../gmail.js";
 import { resolveOutlookBearer } from "../outlook-token.js";
 import { asciiLower } from "../text-normalize.js";
@@ -164,7 +165,7 @@ async function graphCall(
     // has already flagged the inbox when it was an authorization failure.
     if (options.markReconnect !== false) {
       void markLinkedInboxForReconnect(ctx.userId, ctx.rowId, "OUTLOOK").catch((err) => {
-        console.warn(`[outlook-actions] reconnect mark failed for row ${ctx.rowId}:`, err);
+        logDbFailure("[outlook-actions] reconnect mark failed", err, { ids: { rowId: ctx.rowId } });
       });
     }
     return { error: "Outlook authorization expired — reconnect the inbox in Settings" };
@@ -296,7 +297,10 @@ async function discardDraft(ctx: OutlookCtx, draft: ReplyDraft): Promise<void> {
     const out = await graphCall(cleanup, "DELETE", draft.path, undefined, { markReconnect: false });
     if ("error" in out) warnStrayDraft(ctx, draft.id, "the delete was refused for authorization");
   } catch (err) {
-    warnStrayDraft(ctx, draft.id, err instanceof Error ? err.message : "the delete failed");
+    // Facts only: Graph's error text can quote the draft's recipients or subject.
+    logDbFailure("[outlook-actions] reply draft may remain in Drafts: the delete failed", err, {
+      ids: { draftId: draft.id, rowId: ctx.rowId },
+    });
   }
 }
 

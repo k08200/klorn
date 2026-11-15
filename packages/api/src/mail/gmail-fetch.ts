@@ -6,8 +6,8 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { Semaphore } from "../semaphore.js";
-import { captureError } from "../sentry.js";
 import { extractAttachmentContentIsolated } from "./attachment-extract-isolated.js";
 import { isPlainAddress, parseAddress } from "./email-address.js";
 import { isReadableEmailAttachment } from "./email-attachment-text.js";
@@ -58,6 +58,11 @@ export interface GmailRawEmail {
   // (mail/klorn-inbound-map.ts). Only the Klorn mailbox has them; written on
   // create only, into EmailMessage.authentication.
   authentication?: { spf: string; dkim: string; dmarc: string } | null;
+  // The RFC 5322 Message-ID the IMAP poll read from the envelope (imap-envelope.ts
+  // envelopeMessageId), so a message moved out of INBOX in another client can still
+  // be found for its attachments (attachment-bytes.ts). Written on create, and once
+  // on a re-sync of a row that has none. Gmail and Outlook leave it out (null rows).
+  messageIdHeader?: string | null;
   // Header signals for the attention engine v3 facts shadow
   // (judge/v3/pre-facts.ts). In memory only, never persisted. Gmail-only, so
   // optional for the same reason as hasListUnsubscribe.
@@ -389,8 +394,8 @@ async function fetchMessageDetails(
         // Anything else (transient 429/5xx, a single unparseable message):
         // drop just this one rather than sinking the whole batch — it stays
         // in the inbox and is retried next sync. Never silent.
-        console.warn(`[GMAIL-FETCH] Skipped message ${id} for user ${userId}:`, err);
-        captureError(err, {
+        logDbFailure("[GMAIL-FETCH] Skipped message", err, { ids: { userId, gmailId: id } });
+        captureDbFailure("[GMAIL-FETCH] Skipped message", err, {
           tags: { scope: "gmail.fetch.message" },
           extra: { userId, gmailId: id },
         });
@@ -489,7 +494,7 @@ export async function fetchGmailEmailById(
         console.warn(
           `[GMAIL-FETCH] linked-inbox auth error for user ${userId} (gmailId ${gmailId}); primary token left intact`,
         );
-        captureError(err, {
+        captureDbFailure("[GMAIL-FETCH] linked-inbox auth error (by id)", err, {
           tags: { scope: "gmail.fetch.by-id.linked-auth" },
           extra: { userId, gmailId },
         });
@@ -542,7 +547,7 @@ export async function fetchGmailThread(
         console.warn(
           `[GMAIL-FETCH] linked-inbox auth error for user ${userId} (thread ${threadId}); primary token left intact`,
         );
-        captureError(err, {
+        captureDbFailure("[GMAIL-FETCH] linked-inbox auth error (thread)", err, {
           tags: { scope: "gmail.fetch.thread.linked-auth" },
           extra: { userId, threadId },
         });

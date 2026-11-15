@@ -14,11 +14,12 @@
 
 import type OpenAI from "openai";
 import { trackTokenUsage } from "../billing/token-usage.js";
-import { teamModeEnabled } from "../config.js";
+import { teamAvailabilityOpenTo } from "../config.js";
 import { costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { AGENT_MODEL, createCompletion, type DailyCostCapCode } from "../llm/openai.js";
-import { captureError } from "../sentry.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { ALL_TOOLS, executeToolCall } from "./tool-executor.js";
 
 export const CHAT_TOOL_NAMES: ReadonlySet<string> = new Set([
@@ -127,9 +128,9 @@ export async function runChatTurn(opts: {
   const chatTools = ALL_TOOLS.filter(
     (t) =>
       CHAT_TOOL_NAMES.has(t.function.name) &&
-      // Team mode ships dark until team pricing exists — don't advertise a
-      // tool the executor will refuse.
-      (t.function.name !== "team_availability" || teamModeEnabled()),
+      // Team mode and Klorn Teams ship dark — don't advertise a tool the
+      // executor will refuse.
+      (t.function.name !== "team_availability" || teamAvailabilityOpenTo(userId)),
   );
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -233,8 +234,13 @@ export async function runChatTurn(opts: {
               // A failing tool must not kill the turn — surface it to the
               // model so it can answer honestly.
               const msg = err instanceof Error ? err.message : String(err);
-              console.error(`[CHAT] tool ${fn.name} failed for user ${userId}:`, msg);
-              captureError(err, { tags: { scope: "chat.tool", userId, tool: fn.name } });
+              logDbFailure("[CHAT] tool failed", err, {
+                level: "error",
+                ids: { tool: fn.name, userId },
+              });
+              captureDbFailure("[CHAT] tool failed", err, {
+                tags: { scope: "chat.tool", userId, tool: fn.name },
+              });
               result = JSON.stringify({ error: `Tool failed: ${msg}` });
             }
           }
@@ -258,9 +264,15 @@ export async function runChatTurn(opts: {
     if (capped) {
       return { reply: capped.error, eventDraft: null, error: capped.error, errorCode: capped.code };
     }
+    // The user gets the message back (it is their chat and mail); the log
+    // and Sentry get facts only, since the provider's error can quote both.
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[CHAT] turn failed for user ${userId}:`, msg);
-    captureError(err, { tags: { scope: "chat.turn", userId } });
+    const label = "[CHAT] turn failed";
+    logLlmFailure(label, err, { level: "error", ids: { userId } });
+    captureLlmFailure(label, err, {
+      tags: { scope: "chat.turn", userId },
+      extra: { model: AGENT_MODEL },
+    });
     return {
       reply: "Sorry — I couldn't process that right now. Please try again in a moment.",
       eventDraft: null,

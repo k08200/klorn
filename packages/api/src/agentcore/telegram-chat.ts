@@ -17,7 +17,8 @@ import { prisma } from "../db.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendTelegramMessage } from "../notify/telegram.js";
 import { findUserIdByTelegramChatId } from "../notify/telegram-link.js";
-import { captureError } from "../sentry.js";
+import { effectivePlan } from "../org/effective-tier.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { recordDedupKey, wasRecentlyDeduped } from "./agent-dedup.js";
 import { runChatTurn } from "./chat-engine.js";
 
@@ -225,7 +226,12 @@ export async function handleTelegramChatMessage(input: {
       if (shouldSendNotice(chatId)) await sendTelegramMessage(chatId, UNLINKED_NOTICE);
       return;
     }
-    if (PAYWALL_ENABLED && isHardPaywalled(user.plan, user.role ?? undefined)) {
+    // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+    // TEAMS_ENABLED is closed to the user or the paywall is off.
+    if (
+      PAYWALL_ENABLED &&
+      isHardPaywalled(await effectivePlan({ id: userId, plan: user.plan }), user.role ?? undefined)
+    ) {
       if (shouldSendNotice(chatId)) {
         await sendTelegramMessage(chatId, await noticeFor(userId, "paywalled"));
       }
@@ -291,7 +297,10 @@ export async function handleTelegramChatMessage(input: {
         },
       });
     } catch (err) {
-      captureError(err, { tags: { scope: "telegram-chat.persist" }, extra: { userId } });
+      captureDbFailure("[TELEGRAM-CHAT] persist failed", err, {
+        tags: { scope: "telegram-chat.persist" },
+        extra: { userId },
+      });
     }
 
     for (const chunk of chunkTelegramReply(reply)) {
@@ -303,6 +312,8 @@ export async function handleTelegramChatMessage(input: {
     }
   } catch (err) {
     // Fire-and-forget contract: nothing here may reach the webhook handler.
-    captureError(err, { tags: { scope: "telegram-chat.turn" } });
+    captureDbFailure("[TELEGRAM-CHAT] turn failed", err, {
+      tags: { scope: "telegram-chat.turn" },
+    });
   }
 }

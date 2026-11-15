@@ -32,8 +32,8 @@
 
 import { ImapFlow, type ImapFlowOptions } from "imapflow";
 
+import { logDbFailure } from "../report-db-failure.js";
 import { armTimer } from "./imap-session-deadline.js";
-import { sanitizeLogText } from "./log-text.js";
 import { PinnedAddressError, resolvePinnedAddress } from "./pinned-address.js";
 
 const MIB = 1024 * 1024;
@@ -112,7 +112,9 @@ function logRefusal(logScope: string, hostname: string, err: unknown): void {
   } else if (err instanceof Error && err.message === CONNECT_TIMEOUT_MESSAGE) {
     console.warn(`[${logScope}] connection to ${hostname} ${CONNECT_TIMEOUT_MESSAGE}`);
   } else {
-    console.warn(`[${logScope}] connect to ${hostname} failed: ${sanitizeLogText(err)}`);
+    // Facts only, and not the host: a user-chosen server's reply text can quote
+    // anything, and its name is the user's own.
+    logDbFailure("[imap] connect failed", err, { ids: { logScope } });
   }
 }
 

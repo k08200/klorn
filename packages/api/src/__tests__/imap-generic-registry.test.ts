@@ -105,11 +105,11 @@ describe("hostMatchesProvider", () => {
 
   it("generic: replaced by the host grammar, so any public name passes and nothing internal does", () => {
     const generic = IMAP_PROVIDERS.IMAP;
-    expect(hostMatchesProvider("imap.fastmail.com:993", generic)).toBe(true);
-    expect(hostMatchesProvider("IMAP.Fastmail.com", generic)).toBe(true);
+    expect(hostMatchesProvider("imap.purelymail.com:993", generic)).toBe(true);
+    expect(hostMatchesProvider("IMAP.Purelymail.com", generic)).toBe(true);
     expect(hostMatchesProvider("127.0.0.1:993", generic)).toBe(false);
     expect(hostMatchesProvider("printer.local", generic)).toBe(false);
-    expect(hostMatchesProvider("imap.fastmail.com:143", generic)).toBe(false);
+    expect(hostMatchesProvider("imap.purelymail.com:143", generic)).toBe(false);
     expect(hostMatchesProvider("", generic)).toBe(false);
   });
 });

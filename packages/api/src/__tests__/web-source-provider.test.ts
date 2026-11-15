@@ -14,6 +14,13 @@ describe("sourceGlyph", () => {
     ["ICLOUD", "iC", "iCloud"],
     ["IMAP", "IMAP", "IMAP"],
     ["KLORN", "K", "Klorn"],
+    ["DAUM", "D", "Daum"],
+    ["KAKAO", "Ka", "Kakao"],
+    ["YAHOO", "Y", "Yahoo"],
+    ["AOL", "AOL", "AOL"],
+    ["FASTMAIL", "F", "Fastmail"],
+    ["ZOHO", "Z", "Zoho"],
+    ["ZOHOPRO", "Z", "Zoho (organization)"],
   ])("maps %s to the %s monogram", (provider, glyph, name) => {
     expect(sourceGlyph(provider)).toEqual({ glyph, name });
   });
@@ -23,7 +30,7 @@ describe("sourceGlyph", () => {
   });
 
   it("falls back to a neutral glyph (not IMAP's) for unknown or missing providers", () => {
-    expect(sourceGlyph("YAHOO")).toEqual({ glyph: "@", name: "another mail account" });
+    expect(sourceGlyph("SOMETHING_NEW")).toEqual({ glyph: "@", name: "another mail account" });
     expect(sourceGlyph(null).glyph).toBe("@");
     expect(sourceGlyph("").glyph).toBe("@");
   });

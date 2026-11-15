@@ -10,11 +10,16 @@
  * re-ingests as new.
  */
 
-import { genericImapEnabled, icloudInboxEnabled } from "../config.js";
+import { genericImapEnabled, icloudInboxEnabled, imapPresetsLive } from "../config.js";
 import { parseGenericImapHost } from "./generic-imap-host.js";
+import { IMAP_PRESET_KEYS, type ImapPresetKey } from "./imap-preset-keys.js";
+import { IMAP_PRESET_PROVIDERS } from "./imap-preset-providers.js";
 
-/** Providers with one fixed, allowlisted host (and a fixed SMTP endpoint). */
-export type FixedHostImapProviderKey = "NAVER" | "ICLOUD";
+/**
+ * Providers with one fixed, allowlisted host (and a fixed SMTP endpoint): Naver,
+ * iCloud, and the app-password presets of provider phase 2 (imap-preset-providers.ts).
+ */
+export type FixedHostImapProviderKey = "NAVER" | "ICLOUD" | ImapPresetKey;
 /** `IMAP` is the generic provider: the user supplies the host (step B4). */
 export type ImapProviderKey = FixedHostImapProviderKey | "IMAP";
 
@@ -123,6 +128,7 @@ export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
     smtp: null,
     webmailUrl: null,
   },
+  ...IMAP_PRESET_PROVIDERS,
 };
 
 /**
@@ -147,13 +153,16 @@ export function hostMatchesProvider(host: string, provider: ImapProviderConfig):
  * Providers the poll scheduler may select rows for. NAVER predates the flag
  * doctrine and is always on; ICLOUD stays dark until ICLOUD_INBOX_ENABLED
  * (CASA surface freeze — see the flag comment in config.ts); generic IMAP stays
- * dark until GENERIC_IMAP_ENABLED (step B4). Evaluated per tick so a flag is
- * togglable without a restart.
+ * dark until GENERIC_IMAP_ENABLED (step B4); the app-password presets stay dark
+ * until IMAP_PRESETS_ENABLED is on or `cohort` (in cohort mode the scheduler then
+ * polls only the cohort's rows, and the connect routes let only the cohort in).
+ * Evaluated per tick so a flag is togglable without a restart.
  */
 export function enabledImapProviderKeys(): ImapProviderKey[] {
   return [
     "NAVER",
     ...(icloudInboxEnabled() ? (["ICLOUD"] as const) : []),
+    ...(imapPresetsLive() ? IMAP_PRESET_KEYS : []),
     ...(genericImapEnabled() ? (["IMAP"] as const) : []),
   ];
 }

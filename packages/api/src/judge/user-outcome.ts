@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   type AttentionSourceName,
   type EngagementOutcome,
@@ -27,8 +27,11 @@ const MAX_LOGGED_REF = 64;
 
 function logLookupError(op: string, ref: string, err: unknown): void {
   const shown = JSON.stringify(ref.slice(0, MAX_LOGGED_REF));
-  console.warn(`[user-outcome] ${op} failed for ${shown}`, err);
-  captureError(err, { tags: { area: "decision-label", op }, extra: { ref: shown } });
+  logDbFailure("[user-outcome] stamp lookup failed", err, { ids: { op, ref: shown } });
+  captureDbFailure("[user-outcome] stamp lookup failed", err, {
+    tags: { area: "decision-label", op },
+    extra: { ref: shown },
+  });
 }
 
 /** Stamp an EMAIL ledger row (sourceId = EmailMessage.id). */

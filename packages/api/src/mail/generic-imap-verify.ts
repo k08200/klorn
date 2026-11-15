@@ -18,8 +18,8 @@
  * oracle for a host the user chose.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { verifyImapCredentials } from "./imap-sync.js";
-import { sanitizeLogText } from "./log-text.js";
 
 type VerifyArgs = Parameters<typeof verifyImapCredentials>[0];
 type VerifyResult = Awaited<ReturnType<typeof verifyImapCredentials>>;
@@ -43,7 +43,7 @@ export async function verifyGenericImapCredentials(args: VerifyArgs): Promise<Ve
     console.warn(`[${logScope}] connect verification failed: ${result.code}`);
     return GENERIC_FAILURE;
   } catch (err) {
-    console.warn(`[${logScope}] connect verification threw: ${sanitizeLogText(err)}`);
+    logDbFailure("[imap] connect verification threw", err, { ids: { logScope } });
     return GENERIC_FAILURE;
   }
 }

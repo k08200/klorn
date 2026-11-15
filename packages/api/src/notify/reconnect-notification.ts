@@ -33,8 +33,21 @@ const PROVIDER_COPY = {
   ICLOUD: { slug: "icloud", label: "iCloud Mail" },
   NAVER: { slug: "naver", label: "Naver Mail" },
   IMAP: { slug: "imap", label: "IMAP mailbox" },
+  // App-password presets (provider phase 2): the same IMAP poll flags them.
+  DAUM: { slug: "daum", label: "Daum Mail" },
+  KAKAO: { slug: "kakao", label: "Kakao Mail" },
+  YAHOO: { slug: "yahoo", label: "Yahoo Mail" },
+  AOL: { slug: "aol", label: "AOL Mail" },
+  FASTMAIL: { slug: "fastmail", label: "Fastmail" },
+  ZOHO: { slug: "zoho", label: "Zoho Mail" },
+  ZOHOPRO: { slug: "zohopro", label: "Zoho Mail" },
 } as const;
 export type ReconnectProvider = keyof typeof PROVIDER_COPY;
+
+/** The product name the reconnect alert speaks for this provider. */
+export function reconnectProviderLabel(provider: ReconnectProvider): string {
+  return PROVIDER_COPY[provider].label;
+}
 
 function reconnectTitle(label: string): string {
   return `${label} disconnected — 1 click to reconnect`;

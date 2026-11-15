@@ -16,8 +16,8 @@
  */
 
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
-import { captureError } from "../sentry.js";
 import { syncImapAccountsForUser } from "./imap-accounts.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 
@@ -33,8 +33,10 @@ export function startFirstImapSync(
       if (result && result.inserted > 0) notifyConversationsUpdated(userId);
     })
     .catch((err) => {
-      console.warn(`[${provider.logScope}] first sync failed for row ${rowId}:`, err);
-      captureError(err, {
+      logDbFailure("[imap] first sync failed", err, {
+        ids: { logScope: provider.logScope, rowId },
+      });
+      captureDbFailure("[imap] first sync failed", err, {
         tags: { scope: "imap-first-sync" },
         extra: { userId, linkedInboxAccountId: rowId },
       });

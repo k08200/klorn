@@ -16,6 +16,8 @@
 // - the first pass for an account is a silent baseline;
 // - an id is bannered at most once, and the record survives restarts (the
 //   ledger lives in localStorage, shared with the live path);
+// - a mail is bannered at most once, however many bell rows name it (its
+//   `mail:<emailId>` entry, ./desktop-alerts.ts mailLedgerKey);
 // - at most CATCHUP_MAX meeting banners per pass, newest first; the rest are
 //   recorded;
 // plus a freshness cutoff: meeting reminders older than 2 minutes, and rows
@@ -27,10 +29,16 @@
 //
 // Preference gate: rows do not record whether the server's gate (category
 // opt-out + quiet hours, notify/notification-prefs.ts) allowed a banner. So
-// catch-up (a) records every interrupt frame that arrived live — tagged or
-// not — so a frame the gate held back is never bannered later from the
-// refetch, (b) leaves rows younger than SETTLE_MS to their live frame, and
-// (c) honours the category opt-outs (allowedKindsFromConfig).
+// (a) an untagged meeting frame, or one naming no single mail, is recorded
+// as it arrives, so the refetch never banners what the gate held back;
+// (b) an untagged frame about one mail is HELD instead (`held`): its row is
+// left for ./desktop-push-catchup.ts, whose server question applies the same
+// gate again — quiet hours answer `held` until they end, then the mail toasts
+// once (alone, or in one summary), unless it was read, cleared, handled or
+// already toasted meanwhile; an opt-out answers nothing and the row is
+// recorded. As on the Mac (HeldBanners.swift), meetings are not held;
+// (c) rows younger than SETTLE_MS are left to their live frame, and (d) the
+// category opt-outs are honoured (allowedKindsFromConfig).
 //
 // Pure functions over plain inputs, unit-tested without a browser
 // (packages/api/src/__tests__/web-desktop-catchup.test.ts).
@@ -39,6 +47,7 @@ import type { DesktopAlertKind } from "@klorn/contract";
 import {
   type DesktopAlert,
   MESSAGE_SCAN_MAX,
+  mailKeyOf,
   parseDesktopAlert,
   parseMailToast,
   planDesktopAlert,
@@ -61,6 +70,11 @@ export const MEETING_CATCHUP_WINDOW_MS = 2 * 60 * 1000;
 export const SETTLE_MS = 30 * 1000;
 export const ALL_ALERT_KINDS: ReadonlySet<DesktopAlertKind> = new Set(["push", "meeting"]);
 
+/** Held ids kept at most, newest kept (the Mac's HeldBanners.maxHeld). Far
+ *  above the bell's 30-row page, the only rows a catch-up can ask about; the
+ *  cap only bounds the stored record (an id is dropped once recorded). */
+export const HELD_CAP = 200;
+
 const OWNER_MAX = 200;
 
 /** What has been announced, for one account, across launches. */
@@ -69,8 +83,16 @@ export interface AlertLedger {
   owner: string;
   /** False until the first catch-up pass recorded the bell silently. */
   baselineEstablished: boolean;
-  /** Announced (or silently recorded) notification ids, oldest first. */
+  /** Announced (or silently recorded) notification ids, plus `mail:<emailId>`
+   *  for each mail toasted, oldest first. */
   notified: string[];
+  /** Bell row ids whose live frame came untagged (quiet hours) for one mail
+   *  not toasted yet, oldest first: not recorded, so the urgent-mail catch-up
+   *  still asks about them. Read only to title the summary "during quiet
+   *  hours" when every mail in it waited live (else "while Klorn was
+   *  closed", as the Mac) and to keep them out of a first-run baseline.
+   *  Absent on a ledger saved before holds. */
+  held?: string[];
 }
 
 export function freshLedger(owner: string): AlertLedger {
@@ -92,18 +114,36 @@ export function parseLedger(raw: string | null): AlertLedger | null {
     return null;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-  const { owner, baselineEstablished, notified } = parsed as Record<string, unknown>;
+  const { owner, baselineEstablished, notified, held } = parsed as Record<string, unknown>;
   if (typeof owner !== "string" || owner.length === 0 || owner.length > OWNER_MAX) return null;
   if (typeof baselineEstablished !== "boolean" || !Array.isArray(notified)) return null;
   return {
     owner,
     baselineEstablished,
-    notified: notified.filter((v): v is string => typeof v === "string").slice(-SEEN_CAP),
+    notified: stringItems(notified).slice(-SEEN_CAP),
+    // A malformed held list costs only the summary's wording: drop it, keep
+    // the ledger (losing that would make the next pass a silent baseline).
+    ...(Array.isArray(held) ? { held: stringItems(held).slice(-HELD_CAP) } : {}),
   };
 }
 
+function stringItems(values: readonly unknown[]): string[] {
+  return values.filter((v): v is string => typeof v === "string");
+}
+
+/** The ledger with `ids` recorded; a recorded id is no longer held. */
 export function recording(ledger: AlertLedger, ids: readonly string[]): AlertLedger {
-  return { ...ledger, notified: [...ledger.notified, ...ids].slice(-SEEN_CAP) };
+  const next = { ...ledger, notified: [...ledger.notified, ...ids].slice(-SEEN_CAP) };
+  if (!ledger.held) return next;
+  const done = new Set(ids);
+  return { ...next, held: ledger.held.filter((id) => !done.has(id)) };
+}
+
+/** The ledger with `id` held (once, at most HELD_CAP, newest kept). */
+function holding(ledger: AlertLedger, id: string): AlertLedger {
+  const held = ledger.held ?? [];
+  if (held.includes(id)) return ledger;
+  return { ...ledger, held: [...held, id].slice(-HELD_CAP) };
 }
 
 export interface InterruptRow {
@@ -150,15 +190,21 @@ export interface LiveAlertPlan {
   next: AlertLedger;
 }
 
-/** One real-time frame. A tagged frame banners once; an untagged interrupt
- *  frame (the server's gate said no) is recorded silently so catch-up never
- *  banners it later. Never establishes the baseline. */
+/** One real-time frame. A tagged frame banners once. An untagged interrupt
+ *  frame (the server's gate said no) about one mail not toasted yet is held
+ *  for the urgent-mail catch-up, which asks the gate again and toasts it once
+ *  quiet hours end; any other untagged interrupt frame is recorded silently
+ *  so catch-up never banners it later. Never establishes the baseline. */
 export function planLiveAlert(ledger: AlertLedger, payload: unknown): LiveAlertPlan {
   const tagged = planDesktopAlert(ledger.notified, payload);
   if (tagged.alert) return { alert: tagged.alert, next: { ...ledger, notified: tagged.seen } };
   const interrupt = interruptFromRow(payload);
   if (!interrupt || ledger.notified.includes(interrupt.alert.id)) {
     return { alert: null, next: ledger };
+  }
+  const mailKey = mailKeyOf(interrupt.alert);
+  if (mailKey && !ledger.notified.includes(mailKey)) {
+    return { alert: null, next: holding(ledger, interrupt.alert.id) };
   }
   return { alert: null, next: recording(ledger, [interrupt.alert.id]) };
 }

@@ -34,7 +34,7 @@
 
 import type { DriveSummaryErrorCode } from "@klorn/contract";
 import type { CallPriority } from "../billing/quota-limiter.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { StorageError } from "../storage/errors.js";
 import type { DriveProviderEnabledMap } from "./drive-scope.js";
 import { driveProvidersFor } from "./drive-scope.js";
@@ -296,7 +296,10 @@ export async function runClaimedSummary(
   try {
     return await summariseSource(ctx, source);
   } catch (err) {
-    captureError(err, { tags: { scope: "drive.summary.run" }, extra: { userId: row.userId } });
+    captureDbFailure("[DRIVE] summary run failed", err, {
+      tags: { scope: "drive.summary.run" },
+      extra: { userId: row.userId },
+    });
     return await attemptFailed(ctx, "internal");
   }
 }

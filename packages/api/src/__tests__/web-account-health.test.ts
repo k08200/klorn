@@ -108,10 +108,19 @@ describe("status", () => {
       expect(page).toContain(`id="${id}"`);
     }
     expect(page).toContain("<AccountHealthSection />");
+    // The app-password presets: one card each, under accountSectionId's own id
+    // (pinned per preset in web-imap-presets.test.ts).
+    expect(accountSectionId("DAUM", "linked")).toBe("account-daum");
+    expect(accountSectionId("ZOHOPRO", "linked")).toBe("account-zohopro");
+    expect(page).toContain('id={accountSectionId(preset.provider, "linked") ?? undefined}');
   });
 
-  it("shows sync status and the reconnect form on both IMAP cards", () => {
-    for (const file of ["icloud-imap-section.tsx", "naver-imap-section.tsx"]) {
+  it("shows sync status and the reconnect form on every IMAP card", () => {
+    for (const file of [
+      "icloud-imap-section.tsx",
+      "naver-imap-section.tsx",
+      "imap-preset-section.tsx",
+    ]) {
       const source = readFileSync(join(__dirname, "../../../web/src/components", file), "utf8");
       expect(source).toContain("<ImapAccountStatus");
     }

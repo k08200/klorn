@@ -57,6 +57,7 @@ function email(id: string, from: string, subject: string, userId = USER): Row {
     from,
     to: "me@example.com",
     subject,
+    isRead: false,
     createdAt: new Date(NOW.getTime() - 2 * HOUR),
   };
 }
@@ -166,6 +167,24 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
     expect(res.items.map((i) => i.id)).toEqual(["legacy"]);
   });
 
+  it("drops mail already read in the mailbox, as the Mac does", async () => {
+    // Read in Gmail, or bulk-marked read in Klorn (which leaves the bell row
+    // unread): the user has seen it, so a "missed" toast after a relaunch
+    // would announce mail that was already handled.
+    seed({
+      notification: [bell("n-read-mail", "e1"), bell("n-unread-mail", "e2")],
+      emailMessage: [
+        { ...email("e1", "Kim <k@x.com>", "seen already"), isRead: true },
+        email("e2", "Lee <l@x.com>", "still unread"),
+      ],
+      attentionItem: [item("e1"), item("e2")],
+    });
+
+    const res = await desktopCatchUp(USER, ["n-read-mail", "n-unread-mail"], NOW);
+
+    expect(res.items.map((i) => i.id)).toEqual(["n-unread-mail"]);
+  });
+
   it("answers only about the ids it was asked about", async () => {
     seed({
       notification: [bell("asked", "e1"), bell("not-asked", "e2")],
@@ -181,6 +200,7 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
     expect(res).toEqual({
       held: false,
       summaryTitle: "{count} urgent emails while Klorn was closed",
+      heldSummaryTitle: "{count} urgent emails during quiet hours",
       items: [],
     });
   });
@@ -189,6 +209,7 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
     seed({}, { notificationLanguage: "ko" });
     const res = await desktopCatchUp(USER, [], NOW);
     expect(res.summaryTitle).toBe("Klorn이 꺼져 있는 동안 긴급 메일 {count}건");
+    expect(res.heldSummaryTitle).toBe("방해 금지 시간 동안 긴급 메일 {count}건");
   });
 });
 
@@ -205,6 +226,7 @@ describe("desktopCatchUp — the live frame's gate applies", () => {
     const res = await desktopCatchUp(USER, ["n1"], NOW);
     expect(res.held).toBe(true);
     expect(res.items).toEqual([]);
+    expect(res.heldSummaryTitle).toBe("{count} urgent emails during quiet hours");
     // Quiet hours over (09:00 the next morning in Seoul): the mail comes back.
     const later = await desktopCatchUp(USER, ["n1"], new Date("2026-11-09T00:00:00.000Z"));
     expect(later.held).toBe(false);

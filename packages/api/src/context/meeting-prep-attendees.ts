@@ -37,6 +37,7 @@ import {
   type ProviderMeeting,
 } from "../pim/calendar-providers/types.js";
 import type { CalendarReadRow } from "../pim/calendar-read.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { withTimeout } from "../with-timeout.js";
 import { PREP_HORIZON_MS } from "./meeting-prep-link.js";
 
@@ -77,13 +78,6 @@ const sourceKey = (provider: string, accountId: string | null): string =>
   `${provider}:${accountId ?? PRIMARY_SOURCE}`;
 const sourceOf = (row: CalendarReadRow): string => sourceKey(row.provider, row.sourceAccountId);
 
-/** Error class and provider code only: a provider error can carry request details. */
-function describeError(err: unknown): string {
-  const name = err instanceof Error ? err.name : typeof err;
-  const code = (err as { code?: unknown } | null)?.code;
-  return typeof code === "string" || typeof code === "number" ? `${name} code=${code}` : name;
-}
-
 /** Which accounts the rows live in: the login calendar, and linked accounts by id. */
 interface NeededSources {
   readonly keys: ReadonlySet<string>;
@@ -117,7 +111,7 @@ async function connectLinked(userId: string, ids: readonly string[]): Promise<So
         if (!session || isCalendarUnsupported(session) || !canList(session)) return [];
         return [{ key: sourceKey(account.provider, account.id), session }];
       } catch (err) {
-        console.warn(`[MEETING_PREP] linked calendar connect failed: ${describeError(err)}`);
+        logDbFailure("[MEETING_PREP] linked calendar connect failed", err);
         return [];
       }
     }),
@@ -144,7 +138,7 @@ async function connectOrNull(userId: string, needed: NeededSources): Promise<Sou
       "meeting-prep.connect",
     );
   } catch (err) {
-    console.warn(`[MEETING_PREP] calendar connect failed: ${describeError(err)}`);
+    logDbFailure("[MEETING_PREP] calendar connect failed", err);
     return null;
   }
 }
@@ -175,7 +169,7 @@ async function listSource(
     const listing = await withTimeout(list(window), LISTING_TIMEOUT_MS, "meeting-prep.attendees");
     return { ok: true, key, index: indexWanted(listing.meetings, wanted) };
   } catch (err) {
-    console.warn(`[MEETING_PREP] attendee listing failed: ${describeError(err)}`);
+    logDbFailure("[MEETING_PREP] attendee listing failed", err);
     return { ok: false };
   }
 }

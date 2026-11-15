@@ -4,7 +4,13 @@
  * The API sends codes (status, errorCode); every word is the user's locale.
  */
 
-import type { AccountHealthStatus, InboxProvider, MailSyncErrorCode } from "@klorn/contract";
+import type {
+  AccountHealthEntry,
+  AccountHealthStatus,
+  InboxProvider,
+  MailSyncErrorCode,
+} from "@klorn/contract";
+import { IMAP_PRESET_LABEL, imapPresetFor } from "./imap-presets";
 
 /** Product names, not translated. */
 export const PROVIDER_LABEL: Record<InboxProvider, string> = {
@@ -14,11 +20,14 @@ export const PROVIDER_LABEL: Record<InboxProvider, string> = {
   NAVER: "Naver Mail",
   IMAP: "IMAP",
   KLORN: "Klorn",
+  ...IMAP_PRESET_LABEL,
 };
 
 /**
  * Where in Settings -> Accounts the account's own controls (reconnect) live; null
- * for a provider without a card on the web (generic IMAP, the Klorn address).
+ * for a provider without a reconnect on the web: the Klorn address, and generic
+ * IMAP, whose card (account-imap) is display-only while its routes are dark —
+ * a Reconnect link that lands on nothing to press would not be honest.
  */
 export function accountSectionId(
   provider: InboxProvider,
@@ -31,8 +40,10 @@ export function accountSectionId(
     case "NAVER":
     case "OUTLOOK":
       return `account-${provider.toLowerCase()}`;
-    default:
-      return null;
+    default: {
+      const preset = imapPresetFor(provider);
+      return preset ? `account-${preset.slug}` : null;
+    }
   }
 }
 
@@ -124,4 +135,20 @@ export function imapAccountStatus(account: ImapStatusAccount): AccountHealthStat
   if (account.needsReconnect) return "reconnect";
   if (account.syncErrorCode) return "error";
   return account.lastSyncedAt ? "ok" : "pending";
+}
+
+/** The generic IMAP accounts (a user-supplied server) among Account health's list. */
+export function genericImapAccounts(accounts: readonly AccountHealthEntry[]): AccountHealthEntry[] {
+  return accounts.filter((account) => account.provider === "IMAP");
+}
+
+/**
+ * The reason line on the display-only generic IMAP card. A refused sign-in says
+ * so without "Reconnect …": the web has no reconnect for these accounts.
+ */
+export function genericImapProblemKey(account: AccountHealthEntry): string | null {
+  if (account.status === "reconnect" || account.errorCode === "auth") {
+    return "imapGeneric.authRefused";
+  }
+  return syncProblemKey(account.status, account.errorCode, account.provider);
 }

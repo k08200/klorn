@@ -23,6 +23,11 @@ export interface SubscriptionState {
   hasPortal?: boolean;
   /** The plan itself, so a paid account with nothing to manage can say why. */
   plan?: string;
+  /**
+   * A Klorn Teams seat already covers this personal Pro, which still renews.
+   * Klorn never cancels it for the user; the manager says so instead.
+   */
+  teamSeatCoversPersonalPlan?: boolean;
 }
 
 /** Plans that cost money, and therefore owe the user an explanation when the
@@ -39,15 +44,17 @@ export function hasPendingCancel(state: SubscriptionState): boolean {
 }
 
 /**
- * Localized medium date ("Sep 21, 2026" / "2026년 9월 21일"). Returns null for
- * a missing or unparseable value so callers fall back to the no-date copy
- * rather than rendering "Invalid Date".
+ * Medium date in the reader's UI locale ("Sep 21, 2026" / "2026년 9월 21일" /
+ * "21. Sept. 2026"), for the billing dates inside translated sentences
+ * (Settings → Billing and Settings → Team). Every UI locale code is a valid
+ * Intl locale. Returns null for a missing or unparseable value so callers fall
+ * back to the no-date copy rather than rendering "Invalid Date".
  */
 export function formatBillingDate(iso: string | null | undefined, locale: Locale): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(locale === "ko" ? "ko-KR" : "en-US", {
+  return date.toLocaleDateString(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -92,6 +99,7 @@ interface BillingStatusPayload {
   renewsAt?: string | null;
   cancelAt?: string | null;
   canCancelInApp?: boolean;
+  teamSeatCoversPersonalPlan?: boolean;
 }
 
 /**
@@ -107,6 +115,7 @@ export function toSubscriptionState(status: BillingStatusPayload): SubscriptionS
     canCancelInApp: status.canCancelInApp,
     hasPortal: Boolean(status.stripeId || status.hasPaddleCustomer),
     plan: status.plan,
+    teamSeatCoversPersonalPlan: status.teamSeatCoversPersonalPlan === true,
   };
 }
 

@@ -36,7 +36,7 @@ import { hasAnyMailSource } from "../mail/mail-source.js";
 import { labelableDomain, senderLabelEntriesFor } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { laneCountsUserLimit, replyIfQueryTimedOut } from "./lane-read-guards.js";
 
@@ -161,7 +161,10 @@ async function senderFactsFor(
       },
     };
   } catch (err) {
-    captureError(err, { tags: { scope: "email.readerContext.senderFacts" }, extra: { userId } });
+    captureDbFailure("[EMAIL] reader context sender facts failed", err, {
+      tags: { scope: "email.readerContext.senderFacts" },
+      extra: { userId },
+    });
     return {
       firstContact: false,
       repliedCount: null,

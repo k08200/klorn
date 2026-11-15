@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
+import { logDbFailure } from "./report-db-failure.js";
 
 /**
  * Tenant-scoped and system-scoped query execution for Postgres Row-Level
@@ -144,7 +145,7 @@ function resolveRlsMode(): Promise<RlsMode> {
         // runs routed call sites with no context bound. Not cached, so one
         // transient failure cannot pin the process to the slow path.
         detectedMode = null;
-        console.warn("[rls] role probe failed, assuming RLS is enforced:", error);
+        logDbFailure("[rls] role probe failed, assuming RLS is enforced", error);
         return "enforced" as const;
       });
   }

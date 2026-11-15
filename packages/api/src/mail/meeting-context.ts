@@ -19,10 +19,12 @@
 
 import { prisma } from "../db.js";
 import { parseEventText } from "../event-parse.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { checkAttendeeBusy, checkConflicts, getAttendeeBusyBlocks } from "../pim/calendar.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { type SuggestedSlot, suggestAlternativeSlots } from "../pim/slot-suggest.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import { extractEmailAddress } from "./email-address.js";
@@ -127,8 +129,9 @@ export async function getMeetingContext(
       proposed = { title: parsed.title, startTime: parsed.startTime, endTime: parsed.endTime };
     }
   } catch (err) {
-    // LLM transport failure — the reading pane must still open.
-    console.warn(`[MEETING-CTX] parse failed for email ${email.id}:`, err);
+    // LLM transport failure — the reading pane must still open. Facts only:
+    // the provider's error can quote this mail.
+    logLlmFailure("[MEETING-CTX] parse failed", err, { ids: { emailId: email.id } });
   }
 
   if (!proposed) {
@@ -155,7 +158,7 @@ export async function getMeetingContext(
       conflict = { hasConflicts: result.hasConflicts, message: result.message || "" };
     }
   } catch (err) {
-    console.warn(`[MEETING-CTX] conflict check failed for email ${email.id}:`, err);
+    logDbFailure("[MEETING-CTX] conflict check failed", err, { ids: { emailId: email.id } });
   }
 
   // Team mode v1: is the SENDER free at their own proposed time? Their
@@ -173,7 +176,7 @@ export async function getMeetingContext(
       );
     }
   } catch (err) {
-    console.warn(`[MEETING-CTX] attendee busy check failed for email ${email.id}:`, err);
+    logDbFailure("[MEETING-CTX] attendee busy check failed", err, { ids: { emailId: email.id } });
   }
 
   // Team mode v2: when the proposal clashes — my calendar conflicts or the
@@ -218,7 +221,7 @@ export async function getMeetingContext(
         timeZone,
       });
     } catch (err) {
-      console.warn(`[MEETING-CTX] alternative slots failed for email ${email.id}:`, err);
+      logDbFailure("[MEETING-CTX] alternative slots failed", err, { ids: { emailId: email.id } });
     }
   }
 
@@ -251,7 +254,7 @@ export async function getMeetingContext(
         allDay: row.allDay,
       }));
   } catch (err) {
-    console.warn(`[MEETING-CTX] nearby lookup failed for email ${email.id}:`, err);
+    logDbFailure("[MEETING-CTX] nearby lookup failed", err, { ids: { emailId: email.id } });
   }
 
   const context: MeetingContext = {

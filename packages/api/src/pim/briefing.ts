@@ -16,8 +16,10 @@ import { recordFeedback } from "../learning/feedback.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendPushNotification } from "../notify/push.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
@@ -193,11 +195,12 @@ export default async function generateBriefing(
     // gets a useful briefing instead of an error or empty screen.
     // Log the reason — without it, "AI summary unavailable" is invisible
     // in prod and the user has no idea whether the issue is credentials,
-    // the cost cap, or a transient provider outage.
-    console.warn(
-      `[BRIEFING] LLM call failed for ${userId} — falling back to rule-based view:`,
-      err instanceof Error ? err.message : err,
-    );
+    // the cost cap, or a transient provider outage. Facts only in the log:
+    // the provider's error can quote the briefing's mail. The reason below
+    // goes back to this user, whose mail it is.
+    logLlmFailure("[BRIEFING] LLM call failed — falling back to rule-based view", err, {
+      ids: { userId },
+    });
     return fallback(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
   }
 }
@@ -319,7 +322,7 @@ async function healFallbackBriefing(
     });
     return { content, llm };
   } catch (err) {
-    console.warn(`[BRIEFING] fallback self-heal failed for ${userId}:`, err);
+    logDbFailure("[BRIEFING] fallback self-heal failed", err, { ids: { userId } });
     return null;
   }
 }
@@ -605,10 +608,7 @@ export function briefingRoutes(app: FastifyInstance) {
       const { buildBriefingStructure } = await import("./briefing-structure.js");
       structured = await buildBriefingStructure(userId);
     } catch (err) {
-      console.warn(
-        "[BRIEFING] structure build failed:",
-        err instanceof Error ? err.message : String(err),
-      );
+      logDbFailure("[BRIEFING] structure build failed", err, { ids: { userId } });
     }
 
     const meetingPrep = await prepWork;

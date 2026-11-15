@@ -3,9 +3,16 @@ import type Stripe from "stripe";
 import { ADVERTISED_PRO_PRICE_WEB } from "../billing/advertised-price.js";
 import { verifyPaddleSignature } from "../billing/paddle.js";
 import { checkPaddlePriceEvent } from "../billing/paddle-price-check.js";
+import { checkTeamPaddlePriceEvent } from "../billing/paddle-team-price-check.js";
 import { PLANS, stripe } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
+import {
+  applyTeamSubscriptionEvent,
+  isTeamSubscription,
+  teamOwnerForTransaction,
+} from "../org/seat-billing.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 import { pushNotification } from "../websocket.js";
@@ -204,7 +211,10 @@ export async function webhookRoutes(app: FastifyInstance) {
           id?: string;
           status?: string;
           customer_id?: string;
-          custom_data?: { userId?: string } | null;
+          custom_data?: { userId?: string; orgId?: string; kind?: string } | null;
+          subscription_id?: string | null;
+          items?: Array<{ price?: { id?: string } | null; quantity?: number }> | null;
+          billing_cycle?: { interval?: string; frequency?: number } | null;
           next_billed_at?: string | null;
           scheduled_change?: { action?: string; effective_at?: string | null } | null;
         };
@@ -218,7 +228,21 @@ export async function webhookRoutes(app: FastifyInstance) {
       });
       if (alreadyProcessed) return { received: true };
 
-      if (body.event_type.startsWith("subscription.")) {
+      const teamPaymentOwner =
+        body.event_type === "transaction.payment_failed"
+          ? await teamOwnerForTransaction(body.data)
+          : false;
+      if (body.event_type.startsWith("subscription.") && (await isTeamSubscription(body.data))) {
+        // Klorn Teams seats (org/seat-billing.ts): the organization's seats and
+        // status. Taken before the Pro path, which maps an event to a user and
+        // writes User.plan — a team subscription must never reach it, even
+        // when its Paddle customer is a Pro subscriber's.
+        await applyTeamSubscriptionEvent({
+          eventId: body.event_id,
+          occurredAt: body.occurred_at,
+          data: body.data,
+        });
+      } else if (body.event_type.startsWith("subscription.")) {
         const data = body.data;
         // Primary mapping: the userId we attached at checkout. Fallback: the
         // customer id stored on a previous event for this user.
@@ -327,6 +351,19 @@ export async function webhookRoutes(app: FastifyInstance) {
             }
           }
         }
+      } else if (teamPaymentOwner !== false) {
+        // A team seat payment failed: the organization's owner hears about it
+        // (a Pro subscriber with the same Paddle customer must not be told
+        // their own plan is at risk).
+        if (teamPaymentOwner) {
+          await notifyUser(
+            teamPaymentOwner,
+            "billing",
+            "Team payment failed",
+            "The latest payment for your team's seats failed. Update the payment method to keep the seats.",
+            "/settings/team",
+          );
+        }
       } else if (body.event_type === "transaction.payment_failed") {
         const customerId = body.data.customer_id;
         const user = customerId
@@ -356,14 +393,24 @@ export async function webhookRoutes(app: FastifyInstance) {
             advertised: ADVERTISED_PRO_PRICE_WEB,
           });
         } catch (err) {
-          captureError(err, { tags: { scope: "paddle.webhook.price_check" } });
+          captureDbFailure("[PADDLE] webhook price check failed", err, {
+            tags: { scope: "paddle.webhook.price_check" },
+          });
+        }
+        // The team seat prices, separately: a failure above must not skip it.
+        try {
+          checkTeamPaddlePriceEvent({ eventType: body.event_type, data: body.data });
+        } catch (err) {
+          captureDbFailure("[PADDLE] webhook team price check failed", err, {
+            tags: { scope: "paddle.webhook.team_price_check" },
+          });
         }
       }
       // Other event types are acknowledged and ignored.
 
       await prisma.webhookEvent.create({ data: { id: body.event_id } }).catch((err) => {
         if ((err as { code?: string })?.code !== "P2002") {
-          captureError(err, {
+          captureDbFailure("[PADDLE] webhook dedup write failed", err, {
             tags: { scope: "paddle.webhook.dedup" },
             extra: { id: body.event_id },
           });
@@ -432,7 +479,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       await prisma.webhookEvent.create({ data: { id: event.id } }).catch((err) => {
         // A PK conflict from a raced duplicate is expected; surface anything else.
         if ((err as { code?: string })?.code !== "P2002") {
-          captureError(err, {
+          captureDbFailure("[REVENUECAT] webhook dedup write failed", err, {
             tags: { scope: "revenuecat.webhook.dedup" },
             extra: { id: event.id },
           });
@@ -498,7 +545,7 @@ async function notifyUser(
   // work inside sendPushNotification can crash the dyno (no unhandledRejection
   // handler) — same guard every other call site uses.
   sendPushNotification(userId, { title, body: message, url }).catch((err) => {
-    console.warn("[WEBHOOK] push failed", err);
-    captureError(err, { tags: { scope: "webhook.push", userId } });
+    logDbFailure("[WEBHOOK] push failed", err, { ids: { userId } });
+    captureDbFailure("[WEBHOOK] push failed", err, { tags: { scope: "webhook.push", userId } });
   });
 }

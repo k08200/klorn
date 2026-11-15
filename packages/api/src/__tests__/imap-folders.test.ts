@@ -112,4 +112,14 @@ describe("findTrustedFolder", () => {
     });
     expect(findTrustedFolder([nested], "\\Archive")).toBe("INBOX/Archive");
   });
+
+  it("applies the same rules to the read-only lookup roles (\\All, \\Sent, \\Junk)", () => {
+    for (const role of ["\\All", "\\Sent", "\\Junk"] as const) {
+      const flagged = folder({ path: `x${role}`, specialUse: role, specialUseSource: "extension" });
+      const guessed = folder({ path: `y${role}`, specialUse: role, specialUseSource: "name" });
+      const inbox = folder({ path: "INBOX", specialUse: role, specialUseSource: "extension" });
+      expect(findTrustedFolder([inbox, guessed, flagged], role)).toBe(`x${role}`);
+      expect(findTrustedFolder([inbox, guessed], role)).toBeNull();
+    }
+  });
 });

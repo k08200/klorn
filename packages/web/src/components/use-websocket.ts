@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAuthToken } from "../lib/api";
 import { shellKind } from "../lib/native/shell";
+import { wsReconnectDelayMs } from "../lib/ws-close-policy";
 
 // Match the API default in lib/api.ts so WS and HTTP point at the same host
 // in local dev (Klorn API runs on :3001 via docker-compose).
@@ -68,7 +69,14 @@ export function useWebSocket(userId: string) {
         return;
       }
       setConnected(true);
-      reconnectAttemptsRef.current = 0;
+      // The backoff does NOT reset here: the server completes the upgrade
+      // before its session check, so a rejected socket (1013, 4001) opens and
+      // then closes. Resetting on open pinned every retry at ~1s through a
+      // database outage. It resets on the server's "connected" welcome, which
+      // is sent only once the session check passed. `connected` still flips
+      // true here, so a rejected socket reads as connected while the check
+      // runs; the bell's refetch on that flip is also what lets an HTTP 401
+      // sign out promptly after a 4001.
       // Half-open detection (ported from the desktop RealtimeClient, which
       // fixed the 2026-08-06 "web ~1s, desktop stale" miss in the other
       // direction): a socket that sleeps through macOS suspend or a NAT
@@ -97,6 +105,7 @@ export function useWebSocket(userId: string) {
 
         switch (msg.type) {
           case "connected":
+            reconnectAttemptsRef.current = 0;
             setClientId((msg.payload as { clientId: string }).clientId);
             setConnectedClients(
               (msg.payload as { connectedClients: Array<{ clientId: string; type: string }> })
@@ -131,20 +140,18 @@ export function useWebSocket(userId: string) {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
       if (!mountedRef.current) return;
       setConnected(false);
-      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (cap). Jitter avoids a
-      // thundering herd if many clients reconnect at once after a server blip.
+      // Exponential backoff with jitter (1s … 30s cap); a 4001 (session over)
+      // waits the cap. The socket never signs out — see ws-close-policy.ts.
       const attempt = reconnectAttemptsRef.current;
       reconnectAttemptsRef.current = attempt + 1;
-      const base = Math.min(30_000, 1_000 * 2 ** attempt);
-      const delay = base + Math.random() * 1_000;
-      reconnectRef.current = setTimeout(connect, delay);
+      reconnectRef.current = setTimeout(connect, wsReconnectDelayMs(event.code, attempt));
     };
 
     ws.onerror = () => {

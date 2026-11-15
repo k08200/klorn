@@ -28,6 +28,9 @@ vi.mock("../db.js", () => ({
 
 const purgeUserObjects = vi.hoisted(() => vi.fn());
 vi.mock("../storage/runtime.js", () => ({ purgeUserObjects }));
+// Organization ownership handover (org/account-deletion.ts) has its own proof
+// in orgs-pg.test.ts; this file's prisma mock has no org tables.
+vi.mock("../org/account-deletion.js", () => ({ handOverOrgBeforeAccountDeletion: vi.fn() }));
 
 const purgeUserData = vi.hoisted(() => vi.fn());
 const revokeUserAccess = vi.hoisted(() => vi.fn());
@@ -233,10 +236,26 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     // The record stays pending: the fence keeps rejecting inserts and the
     // data-wipe sweep finishes the purge.
     await expect(purgeAllUserData("user-1")).resolves.toBe("pending");
-    expect(logged).toHaveBeenCalledWith(expect.stringContaining("user-1"), purgeError);
-    expect(captureError).toHaveBeenCalledWith(purgeError, {
+    expect(logged).toHaveBeenCalledWith(
+      "[USER-DELETION] Data wipe purge failed; the sweep finishes it (userId=user-1): Error, message 9 chars",
+    );
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
       tags: { scope: "user-deletion.purge", userId: "user-1" },
+      extra: {
+        errorName: "Error",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: purgeError.message.length,
+      },
     });
+    // Sentry gets a fresh Error built from the label, never the original.
+    const reported = captureError.mock.calls[0]?.[0] as Error;
+    expect(reported).not.toBe(purgeError);
+    expect(reported.message).toBe(
+      "[USER-DELETION] Data wipe purge failed; the sweep finishes it (Error)",
+    );
     expect(calls.order).not.toContain("stamp");
     logged.mockRestore();
   });

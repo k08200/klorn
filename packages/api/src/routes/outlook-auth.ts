@@ -44,7 +44,7 @@ import {
   getOutlookAuthUrl,
   outlookConfigured,
 } from "../mail/outlook-oauth.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { handOffAccountLink, linkStartScheme } from "./link-handoff.js";
 import {
@@ -181,8 +181,10 @@ export async function finishOutlookInboxLink(userId: string, code: string): Prom
     return "/settings?inbox=success";
   } catch (err) {
     // console first — captureError is a no-op without a Sentry DSN.
-    console.error("[outlook-oauth] callback failed:", err);
-    captureError(err, { tags: { scope: "outlook-oauth.callback" } });
+    logDbFailure("[outlook-oauth] callback failed", err, { level: "error" });
+    captureDbFailure("[outlook-oauth] callback failed", err, {
+      tags: { scope: "outlook-oauth.callback" },
+    });
     return "/settings?inbox=failed";
   }
 }

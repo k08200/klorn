@@ -43,7 +43,7 @@
 import type { Prisma } from "@prisma/client";
 import { imapMoveActionsEnabled } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   clearRepairBackoff,
   heldAlertDue,
@@ -59,7 +59,7 @@ import {
   nextResetStep,
   type ValidityState,
 } from "./imap-uidvalidity-reset.js";
-import { describeFailure, sanitizedError } from "./providers/action-failure.js";
+import { sanitizedError } from "./providers/action-failure.js";
 import { recentlyMovedSourceIds } from "./providers/imap-moved.js";
 
 export interface ReconcileArgs extends ValidityState {
@@ -83,12 +83,14 @@ export function resetPollGuardState(): void {
 function capture(args: ReconcileArgs, err: unknown, scope: string): void {
   const { provider, userId, linkedInboxAccountId, stored, live } = args;
   try {
-    captureError(err, {
+    captureDbFailure("[imap] poll guard report", err, {
       tags: { scope: `${provider.logScope}.${scope}` },
       extra: { userId, linkedInboxAccountId, stored, live },
     });
   } catch (reportErr) {
-    console.warn(`[${provider.logScope}] could not report ${scope}: ${describeFailure(reportErr)}`);
+    logDbFailure("[imap] could not report", reportErr, {
+      ids: { logScope: provider.logScope, scope },
+    });
   }
 }
 
@@ -123,9 +125,9 @@ async function write(
       data,
     });
   } catch (err) {
-    console.warn(
-      `[${args.provider.logScope}] could not ${what} for row ${args.linkedInboxAccountId}: ${describeFailure(err)}`,
-    );
+    logDbFailure("[imap] could not write the UIDVALIDITY state of a row", err, {
+      ids: { logScope: args.provider.logScope, rowId: args.linkedInboxAccountId, what },
+    });
   }
 }
 
@@ -155,9 +157,9 @@ async function repair(args: ReconcileArgs, now: Date): Promise<void> {
     }
   } catch (err) {
     const next = new Date(noteRepairFailure(rowId, now)).toISOString();
-    console.warn(
-      `[${provider.logScope}] UIDVALIDITY repair failed for row ${rowId} (stored ${stored}, live ${live}), rolled back; holding, next attempt after ${next}: ${describeFailure(err)}`,
-    );
+    logDbFailure("[imap] UIDVALIDITY repair failed, rolled back; holding", err, {
+      ids: { logScope: provider.logScope, rowId, stored, live, nextAttemptAfter: next },
+    });
     if (heldAlertDue("repair-failed", rowId, now)) {
       // Sanitized: a Prisma error can quote the colliding gmailId (an address).
       capture(args, sanitizedError(err), "uidvalidity-repair");
@@ -228,9 +230,9 @@ export async function removeRecentlyMovedRows(scope: {
     });
     return count;
   } catch (err) {
-    console.warn(
-      `[${scope.provider.logScope}] could not remove rows for recently moved messages (row ${scope.linkedInboxAccountId}): ${describeFailure(err)}`,
-    );
+    logDbFailure("[imap] could not remove rows for recently moved messages", err, {
+      ids: { logScope: scope.provider.logScope, rowId: scope.linkedInboxAccountId },
+    });
     return 0;
   }
 }

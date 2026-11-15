@@ -13,12 +13,12 @@
 
 import { ImapFlow, type ImapFlowOptions } from "imapflow";
 
+import { logDbFailure } from "../report-db-failure.js";
 import { parseGenericImapHost } from "./generic-imap-host.js";
 import { createPinnedImapClient } from "./imap-pinned-client.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "./imap-providers.js";
 import { limitSessionTime } from "./imap-session-deadline.js";
 import { isAllowedImapHost } from "./is-allowed-imap-host.js";
-import { sanitizeLogText } from "./log-text.js";
 
 const DEFAULT_IMAPS_PORT = 993;
 
@@ -95,12 +95,11 @@ export function createImapClient(opts: ImapClientOptions): ImapFlow {
     ...(opts.greetingTimeout !== undefined ? { greetingTimeout: opts.greetingTimeout } : {}),
   };
   const client = buildClient(opts, shape);
-  const where = opts.accountId ? ` for row ${opts.accountId}` : "";
   client.on("error", (err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    // A user-chosen server's text is logged as one capped line (log-text.ts).
-    const shown = provider.hostPolicy === "user-supplied" ? sanitizeLogText(message) : message;
-    console.warn(`[${provider.logScope}] connection error${where}: ${shown}`);
+    // Facts only: a server's text can quote a mailbox, a message or an address.
+    logDbFailure("[imap] connection error", err, {
+      ids: { logScope: provider.logScope, rowId: opts.accountId },
+    });
   });
   return client;
 }

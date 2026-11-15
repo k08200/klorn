@@ -119,6 +119,19 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // McpWriteAudit: what an agent changed through the user's API keys — opaque
   // message ids and argument hashes, no content, but still the user's history.
   await tx.mcpWriteAudit.deleteMany(scope);
+  // DataExportAudit: the user's own exports (format, outcome, counts), no content.
+  await tx.dataExportAudit.deleteMany(scope);
+  // RuleChangeAudit: the user's own Rules DSL applies (counts, text hash), no rules.
+  await tx.ruleChangeAudit.deleteMany(scope);
+  // Slack (docs/providers/slack.md): message text, episode verdicts, and the
+  // connection holding the encrypted signing secret.
+  await tx.slackMessage.deleteMany(scope);
+  await tx.slackEpisode.deleteMany(scope);
+  await tx.slackConnection.deleteMany(scope);
+  // KakaoTalk import (docs/providers/kakaotalk-import.md): message text awaiting
+  // processing, then the import rows (counts and timestamps, no text).
+  await tx.kakaoImportMessage.deleteMany(scope);
+  await tx.kakaoImport.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);
@@ -186,4 +199,7 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.pmfResponse.deleteMany(scope);
   // Third-party addresses the user typed (like contacts); owner-scoped, never shared.
   await tx.team.deleteMany(scope);
+  // The free/busy consent goes back to its default (not shared). Membership
+  // itself stays: it is the account's seat, not data obtained from a provider.
+  await tx.availabilityGrant.deleteMany(scope);
 }

@@ -9,6 +9,7 @@ import {
   type ReconnectProvider,
 } from "../notify/reconnect-notification.js";
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import {
@@ -223,7 +224,7 @@ async function notifyGmailReconnect(
     ? ensureGmailReconnectNotification(userId, { linkedInboxAccountId, provider })
     : ensureGmailReconnectNotification(userId, { provider });
   await pending.catch((err) => {
-    console.warn(`[GOOGLE] reconnect notification failed for user ${userId}:`, err);
+    logDbFailure("[GOOGLE] reconnect notification failed", err, { ids: { userId } });
   });
 }
 
@@ -373,10 +374,10 @@ export async function getAuthedClient(
     try {
       await persistRefreshedGoogleToken(token.id, userId, newTokens);
     } catch (err) {
-      console.error(
-        `[GOOGLE] Failed to persist refreshed token for user ${userId}:`,
-        err instanceof Error ? err.message : err,
-      );
+      logDbFailure("[GOOGLE] Failed to persist refreshed token", err, {
+        level: "error",
+        ids: { userId },
+      });
     }
   });
 
@@ -534,10 +535,10 @@ export function buildLinkedCalendarClient(
     try {
       await persistRefreshedLinkedToken(row.id, userId, newTokens);
     } catch (err) {
-      console.error(
-        `[GOOGLE] Failed to persist refreshed linked-calendar token for user ${userId}:`,
-        err instanceof Error ? err.message : err,
-      );
+      logDbFailure("[GOOGLE] Failed to persist refreshed linked-calendar token", err, {
+        level: "error",
+        ids: { userId },
+      });
     }
   });
   return { client: oauth2, id: row.id, email: row.email };
@@ -545,11 +546,13 @@ export function buildLinkedCalendarClient(
 
 function flagLinkedCalendarForReconnect(userId: string, linkedAccountId: string): void {
   void markLinkedCalendarForReconnect(userId, linkedAccountId).catch((markErr) => {
-    console.error(
-      `[GOOGLE] Failed to flag linked calendar ${linkedAccountId} for reconnect:`,
-      markErr,
-    );
-    captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
+    logDbFailure("[GOOGLE] Failed to flag linked calendar for reconnect", markErr, {
+      level: "error",
+      ids: { linkedAccountId },
+    });
+    captureDbFailure("[GOOGLE] Failed to flag linked calendar for reconnect", markErr, {
+      tags: { scope: "gmail.linked-calendar.mark-reconnect" },
+    });
   });
 }
 
@@ -572,10 +575,10 @@ async function persistRefreshedLinkedToken(
       await prisma.linkedCalendarAccount
         .updateMany({ where: { id: rowId, userId }, data: { needsReconnect: false } })
         .catch((err) => {
-          console.error(
-            `[GOOGLE] Failed to clear reconnect flag for linked calendar ${rowId}:`,
-            err instanceof Error ? err.message : err,
-          );
+          logDbFailure("[GOOGLE] Failed to clear reconnect flag for linked calendar", err, {
+            level: "error",
+            ids: { rowId },
+          });
         });
     }
     return;
@@ -640,10 +643,10 @@ async function persistRefreshedInboxToken(
       await prisma.linkedInboxAccount
         .updateMany({ where: { id: rowId, userId }, data: { needsReconnect: false } })
         .catch((err) => {
-          console.error(
-            `[GOOGLE] Failed to clear reconnect flag for linked inbox ${rowId}:`,
-            err instanceof Error ? err.message : err,
-          );
+          logDbFailure("[GOOGLE] Failed to clear reconnect flag for linked inbox", err, {
+            level: "error",
+            ids: { rowId },
+          });
         });
     }
     return;
@@ -703,13 +706,18 @@ function buildInboxOAuthClient(
     // surface it to an operator. Fire-and-forget (this fn is sync) but never
     // silent on failure of the flag write itself.
     console.warn(`[GOOGLE] Skipping linked inbox ${row.id} — token decrypt failed`);
-    captureError(err, {
+    captureDbFailure("[GOOGLE] Skipping linked inbox — token decrypt failed", err, {
       tags: { scope: "gmail.linked-inbox.decrypt" },
       extra: { rowId: row.id, userId },
     });
     void markLinkedInboxForReconnect(userId, row.id).catch((markErr) => {
-      console.error(`[GOOGLE] Failed to flag linked inbox ${row.id} for reconnect:`, markErr);
-      captureError(markErr, { tags: { scope: "gmail.linked-inbox.mark-reconnect" } });
+      logDbFailure("[GOOGLE] Failed to flag linked inbox for reconnect", markErr, {
+        level: "error",
+        ids: { linkedInboxAccountId: row.id },
+      });
+      captureDbFailure("[GOOGLE] Failed to flag linked inbox for reconnect", markErr, {
+        tags: { scope: "gmail.linked-inbox.mark-reconnect" },
+      });
     });
     return null;
   }
@@ -720,8 +728,13 @@ function buildInboxOAuthClient(
     // (mirror of the decrypt-failure branch above).
     console.warn(`[GOOGLE] Linked inbox ${row.id} has empty tokens — flagging for reconnect`);
     void markLinkedInboxForReconnect(userId, row.id).catch((markErr) => {
-      console.error(`[GOOGLE] Failed to flag linked inbox ${row.id} for reconnect:`, markErr);
-      captureError(markErr, { tags: { scope: "gmail.linked-inbox.mark-reconnect" } });
+      logDbFailure("[GOOGLE] Failed to flag linked inbox for reconnect", markErr, {
+        level: "error",
+        ids: { linkedInboxAccountId: row.id },
+      });
+      captureDbFailure("[GOOGLE] Failed to flag linked inbox for reconnect", markErr, {
+        tags: { scope: "gmail.linked-inbox.mark-reconnect" },
+      });
     });
     return null;
   }
@@ -736,10 +749,10 @@ function buildInboxOAuthClient(
     try {
       await persistRefreshedInboxToken(row.id, userId, newTokens);
     } catch (err) {
-      console.error(
-        `[GOOGLE] Failed to persist refreshed linked-inbox token for user ${userId}:`,
-        err instanceof Error ? err.message : err,
-      );
+      logDbFailure("[GOOGLE] Failed to persist refreshed linked-inbox token", err, {
+        level: "error",
+        ids: { userId },
+      });
     }
   });
   return oauth2;
@@ -1088,10 +1101,9 @@ export async function getReplyHeaders(
     return { messageId: find("Message-ID"), references: find("References") };
   } catch (err) {
     // Non-fatal — reply still threads by threadId. Log a signal, don't swallow.
-    console.warn(
-      "[gmail] getReplyHeaders failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[gmail] getReplyHeaders failed", err, {
+      ids: { userId, gmailMessageId, linkedInboxAccountId },
+    });
     return {};
   }
 }
@@ -1555,11 +1567,13 @@ export async function registerLinkedInboxWatch(
     // return (the renewal loop reads it to count/continue per account).
     if (isGoogleAuthError(err)) {
       await markLinkedInboxForReconnect(userId, linkedInboxAccountId).catch((markErr) => {
-        console.error(
-          `[GMAIL-WATCH] Failed to flag linked inbox ${linkedInboxAccountId} for reconnect:`,
-          markErr,
-        );
-        captureError(markErr, { tags: { scope: "gmail-watch.mark-reconnect" } });
+        logDbFailure("[GMAIL-WATCH] Failed to flag linked inbox for reconnect", markErr, {
+          level: "error",
+          ids: { linkedInboxAccountId },
+        });
+        captureDbFailure("[GMAIL-WATCH] Failed to flag linked inbox for reconnect", markErr, {
+          tags: { scope: "gmail-watch.mark-reconnect" },
+        });
       });
     }
     const msg = err instanceof Error ? err.message : String(err);
@@ -1639,7 +1653,10 @@ export async function ensureFreshGmailWatch(
       console.log(`[GMAIL-WATCH] Self-healed expiring watch for ${userId}`);
     }
   } catch (err) {
-    captureError(err, { tags: { scope: "gmail-watch.ensure" }, extra: { userId } });
+    captureDbFailure("[GMAIL-WATCH] self-heal failed", err, {
+      tags: { scope: "gmail-watch.ensure" },
+      extra: { userId },
+    });
   }
 }
 

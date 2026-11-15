@@ -14,7 +14,10 @@ const TABLES = [
   "attentionFacts",
   "llmUsageLog",
   "mcpWriteAudit",
+  "dataExportAudit",
+  "ruleChangeAudit",
   "imapMovedMessage",
+  "notification",
 ] as const;
 
 const prismaMock = vi.hoisted(() => {
@@ -31,7 +34,10 @@ const prismaMock = vi.hoisted(() => {
     attentionFacts: make(),
     llmUsageLog: make(),
     mcpWriteAudit: make(),
+    dataExportAudit: make(),
+    ruleChangeAudit: make(),
     imapMovedMessage: make(),
+    notification: make(),
   };
 });
 
@@ -108,6 +114,19 @@ describe("log-retention", () => {
       expect(arg.select).toEqual({ id: true });
       expect(arg.take).toBeGreaterThan(0);
     }
+  });
+
+  it("deletes only notifications the user cleared, never a row still in the bell", async () => {
+    const notifications = tableMock("notification");
+    notifications.findMany.mockResolvedValueOnce([{ id: "n1" }]);
+
+    await runLogRetentionSweep(NOW);
+
+    const find = notifications.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    expect(find.where.clearedAt).toEqual({ not: null });
+    expect(notifications.deleteMany.mock.calls[0]?.[0]).toEqual({
+      where: { id: { in: ["n1"] }, clearedAt: { not: null } },
+    });
   });
 
   it("pages deletes in bounded batches until a short page ends the loop", async () => {

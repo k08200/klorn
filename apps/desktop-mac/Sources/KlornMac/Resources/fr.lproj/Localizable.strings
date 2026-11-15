@@ -411,6 +411,28 @@
 "account.naver.error.unavailable" = "Naver Mail n’est pas encore disponible sur ce serveur.";
 "account.imap.error.insecure" = "Klorn n’envoie un mot de passe d’app que par une connexion sécurisée (HTTPS).";
 "account.imap.submit" = "Connecter";
+"account.preset.connect" = "Connecter une boîte %@…";
+"account.preset.title" = "Connecter une boîte %@";
+"account.preset.body" = "Cette boîte se connecte en IMAP (beta). Klorn classe chaque nouveau message dans les mêmes voies que Gmail.";
+"account.preset.email" = "Adresse e-mail";
+"account.preset.password" = "Mot de passe d’application";
+"account.preset.help.link" = "Ouvrir l’aide de %@";
+"account.preset.error.authFailed" = "%@ a refusé la connexion. Suivez les étapes ci-dessus, puis réessayez.";
+"account.preset.error.unavailable" = "%@ n’est pas encore disponible sur ce serveur.";
+"account.daum.name" = "Daum";
+"account.kakao.name" = "Kakao";
+"account.yahoo.name" = "Yahoo";
+"account.aol.name" = "AOL";
+"account.fastmail.name" = "Fastmail";
+"account.zoho.name" = "Zoho";
+"account.zohopro.name" = "Zoho (organisation)";
+"account.daum.password.hint" = "Activez IMAP dans les réglages de Daum Mail, configurez la validation en deux étapes, puis créez un mot de passe d’application et saisissez-le ici — pas votre mot de passe de connexion.";
+"account.kakao.password.hint" = "Activez IMAP dans les réglages de Kakao Mail, configurez la validation en deux étapes de votre compte Kakao, puis créez un mot de passe d’application et saisissez-le ici — pas votre mot de passe de connexion.";
+"account.yahoo.password.hint" = "Créez un mot de passe d’application dans les réglages de sécurité de votre compte Yahoo et saisissez-le ici — pas votre mot de passe de connexion.";
+"account.aol.password.hint" = "Créez un mot de passe d’application dans les réglages de sécurité de votre compte AOL et saisissez-le ici — pas votre mot de passe de connexion.";
+"account.fastmail.password.hint" = "Dans les réglages de Fastmail, créez un mot de passe d’application avec accès IMAP et SMTP et saisissez-le ici — pas votre mot de passe de connexion.";
+"account.zoho.password.hint" = "Activez l’accès IMAP dans les réglages de Zoho Mail ainsi que la validation en deux étapes, puis créez un mot de passe spécifique à l’application et saisissez-le ici — pas votre mot de passe de connexion.";
+"account.zohopro.password.hint" = "Pour les comptes d’organisation Zoho Mail payants, sur votre propre domaine. Activez l’accès IMAP dans les réglages de Zoho Mail (l’administrateur de votre organisation devra peut-être l’autoriser) ainsi que la validation en deux étapes, puis créez un mot de passe spécifique à l’application et saisissez-le ici — pas votre mot de passe de connexion.";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "MODE DE RÉPONSE";

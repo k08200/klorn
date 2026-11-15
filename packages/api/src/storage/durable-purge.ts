@@ -16,7 +16,7 @@
  * PURGE_ALERT_AFTER_ATTEMPTS on also as `scope: storage.purge.stuck`.
  */
 
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { printableStorageError, StorageError } from "./errors.js";
 import {
   markPurgePending,
@@ -56,7 +56,7 @@ async function attemptPurge(userId: string): Promise<Attempt> {
 async function recordFailure(userId: string, error: unknown): Promise<void> {
   const { code, message, retryable } = printableStorageError(error);
   console.error(`${LOG_PREFIX} purge failed (${code}), the sweep retries it: ${message}`);
-  captureError(error, {
+  captureDbFailure("[STORAGE] purge failed", error, {
     tags: { scope: "storage.purge", storageCode: code, retryable: String(retryable) },
   });
   const attempts = await recordPurgePassFailed(userId, code, new Date());
@@ -65,7 +65,7 @@ async function recordFailure(userId: string, error: unknown): Promise<void> {
     `${LOG_PREFIX} purge still failing after ${attempts} attempts (${code}) for user ${userId}; ` +
       "see the D3 purge runbook",
   );
-  captureError(error, {
+  captureDbFailure("[STORAGE] purge still failing", error, {
     tags: { scope: "storage.purge.stuck", storageCode: code, attempts: String(attempts) },
     extra: { userId },
   });

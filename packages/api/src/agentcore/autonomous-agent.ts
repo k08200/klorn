@@ -38,13 +38,16 @@ import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 import { loadMemoriesForPrompt } from "../learning/memory.js";
 import { getFeedbackPolicyContextForPrompt } from "../learning/policy-extraction.js";
 import { AGENT_MODEL, createCompletion } from "../llm/openai.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import { isNoReplyAddress } from "../mail/gmail.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { humanizeAutoExec } from "../notify/notification-format.js";
 import { notificationSuppressionReason } from "../notify/notification-policy.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
-import { captureError } from "../sentry.js";
+import { agentModeUnderOrgCeiling } from "../org/ceilings.js";
+import { effectivePlan } from "../org/effective-tier.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
 import { type AgentContext, gatherAgentContext } from "./agent-context.js";
@@ -113,7 +116,7 @@ async function logAgentAction(
       data: { userId, action, summary, tool, reasoning },
     });
   } catch (err) {
-    console.warn("[AGENT] logAgentAction failed (audit gap):", err);
+    logDbFailure("[AGENT] logAgentAction failed (audit gap)", err);
     // Logging is non-critical — silently fail before migration
   }
 }
@@ -130,6 +133,9 @@ async function getAgentFeedback(userId: string): Promise<string> {
           { title: { startsWith: LEGACY_AGENT_NOTIFICATION_PREFIX } },
         ],
         createdAt: { gte: since },
+        // Cleared from the bell: marked read but not engaged with; left out, as
+        // when clearing deleted the row.
+        clearedAt: null,
       },
       select: { title: true, isRead: true, type: true },
     });
@@ -169,7 +175,7 @@ async function getAgentFeedback(userId: string): Promise<string> {
 
     return feedback;
   } catch (err) {
-    console.warn("[AGENT] getAgentFeedback failed:", err);
+    logDbFailure("[AGENT] getAgentFeedback failed", err);
     return "";
   }
 }
@@ -221,7 +227,7 @@ async function getProposalHistory(userId: string): Promise<string> {
 
     return summary;
   } catch (err) {
-    console.warn("[AGENT] getProposalHistory failed:", err);
+    logDbFailure("[AGENT] getProposalHistory failed", err);
     return "";
   }
 }
@@ -292,14 +298,31 @@ export async function runAgentForUser(
     console.log(`[AGENT] ${userId} already in flight — skipping re-entrant run`);
     return;
   }
-  const startTime = Date.now();
-  const agentModePolicy = getAgentModePolicy(mode);
+  // Claimed before the first await, so the check above stays atomic.
   runningUsers.add(userId);
+  // Every run (scheduler, new-mail trigger, manual) takes this entry, so the
+  // organization's agent mode cap (org/ceilings.ts) is enforced here once.
+  let cappedMode: Awaited<ReturnType<typeof agentModeUnderOrgCeiling>>;
+  try {
+    cappedMode = await agentModeUnderOrgCeiling(userId, mode);
+  } catch (err) {
+    runningUsers.delete(userId);
+    throw err;
+  }
+  if (cappedMode === "OFF") {
+    runningUsers.delete(userId);
+    console.log(`[AGENT] ${userId} skipped — the organization turned the agent off`);
+    return;
+  }
+  const startTime = Date.now();
+  const agentModePolicy = getAgentModePolicy(cappedMode);
 
   try {
     // Load user plan and model for tool gating
     const agentUser = await prisma.user.findUnique({ where: { id: userId } });
-    const userPlan = agentUser?.plan || "FREE";
+    // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+    // TEAMS_ENABLED is closed to the user.
+    const userPlan = await effectivePlan({ id: userId, plan: agentUser?.plan || "FREE" });
     // Thread role so planHasFeature's ADMIN bypass applies to the in-loop tool
     // gate too — without it an ADMIN on a FREE plan has every tool rejected
     // mid-loop once the paywall locks FREE (the scheduler already passes role).
@@ -811,7 +834,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   "agent_proposal",
                   // Agent-originated: always ambient (push-bucket.ts).
                   { bucket: "ambient" },
-                ).catch((err) => console.warn("[AGENT] proposal push failed", err));
+                ).catch((err) => logDbFailure("[AGENT] proposal push failed", err));
               }
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
@@ -964,7 +987,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 // it cannot use up the interrupt room the firewall's PUSH
                 // mail, meeting alerts and reminders need (push-bucket.ts).
                 { bucket: "ambient" },
-              ).catch((err) => console.warn("[AGENT] notify push failed", err));
+              ).catch((err) => logDbFailure("[AGENT] notify push failed", err));
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
 
@@ -977,7 +1000,8 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 "notify_user",
                 args.category,
               );
-              console.log(`[AGENT] Notified ${userId}: ${agentTitle}`);
+              // The title is model-written from mail: ids only in the log.
+              console.log(`[AGENT] Notified ${userId}`);
             }
           }
         } else {
@@ -1138,7 +1162,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 "agent_proposal",
                 // Agent-originated: always ambient (push-bucket.ts).
                 { bucket: "ambient" },
-              ).catch((err) => console.warn("[AGENT] risk push failed", err));
+              ).catch((err) => logDbFailure("[AGENT] risk push failed", err));
 
               // Notify sidebar to refresh
               pushNotification(userId, {
@@ -1215,7 +1239,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 reason: "already replied to this email",
               });
               await logAgentAction(userId, "skip", `Dedup: already replied to "${emailSubject}"`);
-              console.log(`[AGENT] Skipped duplicate email reply for ${userId}: ${emailSubject}`);
+              console.log(`[AGENT] Skipped duplicate email reply for ${userId}`);
               messages.push({
                 role: "tool",
                 content: result,
@@ -1245,9 +1269,8 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
           // Gated by AutomationConfig.autoMarkReadEnabled (default off) so users who rely
           // on Gmail's unread state as a fallback inbox don't silently lose it.
           if (fnName === "send_email" && !result.includes('"error"')) {
-            console.log(
-              `[AGENT] Marked email as replied: ${(args as { subject?: string }).subject}`,
-            );
+            // The subject is the model's, from the mail: ids only in the log.
+            console.log(`[AGENT] Marked email as replied for ${userId}`);
 
             const markReadConfig = (await prisma.automationConfig.findUnique({
               where: { userId },
@@ -1294,17 +1317,17 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                           actions.markAsRead(userId, ue.gmailId, ue.linkedInboxAccountId),
                         )
                         .catch((err: unknown) =>
-                          console.warn(`[AGENT] Failed to mark ${ue.gmailId} as read:`, err),
+                          logDbFailure("[AGENT] Failed to mark message as read", err, {
+                            ids: { gmailId: ue.gmailId },
+                          }),
                         );
-                      console.log(
-                        `[AGENT] Marked Gmail message as read: ${ue.gmailId} (${ue.subject})`,
-                      );
+                      console.log(`[AGENT] Marked Gmail message as read: ${ue.gmailId}`);
                     } else {
                       await prisma.emailMessage.update({
                         where: { id: ue.id },
                         data: { isRead: true },
                       });
-                      console.log(`[AGENT] Marked DB email as read (no gmailId): ${ue.subject}`);
+                      console.log(`[AGENT] Marked DB email as read (no gmailId): ${ue.id}`);
                     }
                     // Log processing so we can distinguish Eve-touched vs user-read emails later.
                     await (
@@ -1323,12 +1346,12 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                         },
                       })
                       .catch((err: unknown) =>
-                        console.warn("[AGENT] EmailProcessingLog insert failed:", err),
+                        logDbFailure("[AGENT] EmailProcessingLog insert failed", err),
                       );
                   }
                 }
               } catch (err) {
-                console.warn(`[AGENT] Failed to mark email as read in Gmail:`, err);
+                logDbFailure("[AGENT] Failed to mark email as read in Gmail", err);
               }
             } else {
               console.log(
@@ -1444,8 +1467,11 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
     }
     const message = err instanceof Error ? err.message : "Unknown error";
     await logAgentAction(userId, "error", `Agent error after ${elapsed}ms: ${message}`);
-    console.error(`[AGENT] Error for ${userId} after ${elapsed}ms:`, err);
-    captureError(err, {
+    // The agent log row is the user's own; the console and Sentry get facts
+    // only, since the provider's error can quote the mail in the agent's context.
+    const label = "[AGENT] cycle failed";
+    logLlmFailure(label, err, { level: "error", ids: { userId, elapsedMs: elapsed } });
+    captureLlmFailure(label, err, {
       tags: { area: "autonomous_agent" },
       extra: { userId, elapsedMs: elapsed },
     });

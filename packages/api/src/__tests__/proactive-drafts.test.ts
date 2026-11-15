@@ -33,6 +33,9 @@ vi.mock("../config.js", () => ({
   get PAYWALL_ENABLED() {
     return state.paywall;
   },
+  // The entitlement check resolves a Klorn Teams seat (org/effective-tier.ts);
+  // with TEAMS_ENABLED off it reads nothing.
+  teamsOpenTo: () => false,
 }));
 
 vi.mock("../billing/stripe.js", () => ({
@@ -115,6 +118,8 @@ import {
   resetProactiveDraftStateForTests,
   runProactiveDrafts,
 } from "../mail/proactive-drafts.js";
+import { captureError } from "../sentry.js";
+import { callText, LLM_CANARY, providerErrorQuotingMail } from "./helpers/canary.js";
 
 const NOW = new Date("2026-09-29T09:00:00Z");
 const TODAY = "2026-09-29";
@@ -264,6 +269,20 @@ describe("runProactiveDrafts — drafting", () => {
     expect(state.captured).toHaveLength(1);
     expect(state.stamps.get("e2")).toEqual(NOW);
     expect(state.counter.count).toBe(2);
+  });
+
+  it("reports a provider error that quotes the mail as facts only", async () => {
+    vi.mocked(captureError).mockClear();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failing = vi.fn(async () => {
+      throw providerErrorQuotingMail();
+    });
+
+    await runProactiveDrafts("u1", failing, NOW);
+
+    expect(state.captured).toHaveLength(2);
+    expect(callText(vi.mocked(captureError)) + callText(warn)).not.toContain(LLM_CANARY);
+    warn.mockRestore();
   });
 });
 

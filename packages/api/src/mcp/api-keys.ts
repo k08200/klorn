@@ -10,7 +10,7 @@ import crypto from "node:crypto";
 import type { ApiKeyPermissionWire } from "@klorn/contract";
 import { mcpWriteToolsEnabled } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 
 const KEY_PREFIX = "klorn_sk_";
 /** Chars of the raw key kept for display ("klorn_sk_ab12cd"). */
@@ -74,7 +74,10 @@ export async function authenticateApiKey(
     void prisma.apiKey
       .update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })
       .catch((err: unknown) =>
-        captureError(err, { tags: { scope: "api-key.last-used" }, extra: { keyId: key.id } }),
+        captureDbFailure("[MCP] API key last-used bump failed", err, {
+          tags: { scope: "api-key.last-used" },
+          extra: { keyId: key.id },
+        }),
       );
   }
   return {

@@ -381,6 +381,16 @@ func runSelfChecks() async -> Bool {
     check("backoff doubles", RealtimeClient.nextBackoff(1) == 2)
     check("backoff caps at 30 s",
           RealtimeClient.nextBackoff(20) == 30 && RealtimeClient.nextBackoff(30) == 30)
+    // Close codes of the server's handshake session check (websocket.ts). The
+    // socket never signs out — a 401 on the HTTP poll does (sessionRejected).
+    check("a 4001 close (session over) waits out the capped backoff before retrying",
+          RealtimeClient.backoffAfterClose(code: 4001, current: 1) == 30)
+    check("a 1013 close (session check unavailable) keeps the exponential backoff",
+          RealtimeClient.backoffAfterClose(code: 1013, current: 1) == 1
+          && RealtimeClient.backoffAfterClose(code: 1013, current: 8) == 8)
+    check("any other close keeps the exponential backoff",
+          RealtimeClient.backoffAfterClose(code: 1006, current: 4) == 4
+          && RealtimeClient.backoffAfterClose(code: 0, current: 2) == 2)
     check("ping cadence comfortably exceeds the pong timeout",
           RealtimeClient.pingIntervalSeconds > RealtimeClient.pongTimeoutSeconds
           && RealtimeClient.pongTimeoutSeconds > 0)

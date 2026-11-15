@@ -39,7 +39,7 @@
 
 import { attentionAgingEnabled } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
 
 export const SILENT_MAX_AGE_DAYS = 14;
@@ -155,8 +155,10 @@ async function resolveActedElsewhere(now: Date): Promise<number> {
       canWrap = false;
     }
   } catch (err) {
-    console.warn("[ATTENTION-AGING] acted-elsewhere scan failed:", err);
-    captureError(err, { tags: { scope: "attention-aging.acted" } });
+    logDbFailure("[ATTENTION-AGING] acted-elsewhere scan failed", err);
+    captureDbFailure("[ATTENTION-AGING] acted-elsewhere scan failed", err, {
+      tags: { scope: "attention-aging.acted" },
+    });
   }
   return resolved;
 }

@@ -29,8 +29,9 @@ import {
   getOutlookAuthUrl,
   outlookConfigured,
 } from "../mail/outlook-oauth.js";
+import { effectivePlan } from "../org/effective-tier.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { linkStartScheme } from "./link-handoff.js";
 
@@ -120,7 +121,11 @@ async function linkAccount(code: string, userId: string): Promise<LinkOutcome> {
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  if (!linker || !isEntitled(linker.plan, linker.role)) return "failed";
+  if (!linker) return "failed";
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  if (!isEntitled(await effectivePlan({ id: userId, plan: linker.plan }), linker.role)) {
+    return "failed";
+  }
   const email = normalizeEmail(accountEmail);
   if (await isOverCap(userId, email)) return "limit";
   await saveAccount(userId, email, tokens);
@@ -155,8 +160,10 @@ export async function finishOutlookCalendarLink(params: {
       return calendarLinkPath("failed");
     }
     // console first — captureError is a no-op without a Sentry DSN.
-    console.error("[outlook-oauth] calendar callback failed:", err);
-    captureError(err, { tags: { scope: "outlook-oauth.calendar-callback" } });
+    logDbFailure("[outlook-oauth] calendar callback failed", err, { level: "error" });
+    captureDbFailure("[outlook-oauth] calendar callback failed", err, {
+      tags: { scope: "outlook-oauth.calendar-callback" },
+    });
     return calendarLinkPath("failed");
   }
 }

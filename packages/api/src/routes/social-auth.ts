@@ -18,6 +18,7 @@ import type { SocialIdentity, SocialProviderId } from "../auth/social-identity.j
 import { completeSocialLogin } from "../auth/social-login.js";
 import { signToken, verifyToken } from "../auth.js";
 import { appleLoginEnabled, naverLoginEnabled } from "../config.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { clientAddress } from "../security/client-address.js";
 import { desktopHandoffPage, desktopLoginTokens, isAllowedNativeScheme } from "./auth.js";
 
@@ -295,7 +296,10 @@ export function socialAuthRoutes(
         }
         return reply.redirect(redirect);
       } catch (err) {
-        console.error(`[SOCIAL] ${provider.id} login completion failed:`, err);
+        logDbFailure("[SOCIAL] login completion failed", err, {
+          level: "error",
+          ids: { provider: provider.id },
+        });
         return reply.redirect(`${webUrl}/login?error=${provider.id}_failed`);
       }
     };

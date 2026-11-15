@@ -21,7 +21,7 @@
  *     sending the same request again.
  */
 
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { StorageError } from "../storage/errors.js";
 import { getUserStorage } from "../storage/runtime.js";
 import type { UserStorage } from "../storage/user-storage.js";
@@ -141,7 +141,10 @@ async function deleteRowsOfGoneFiles(userId: string, gone: readonly string[]): P
     await deleteKlornDriveRows(userId, gone);
   } catch (err) {
     console.error(`[DRIVE] partial folder delete could not remove its rows for user ${userId}`);
-    captureError(err, { tags: { scope: "drive.delete.rows" }, extra: { userId } });
+    captureDbFailure("[DRIVE] partial folder delete could not remove its rows", err, {
+      tags: { scope: "drive.delete.rows" },
+      extra: { userId },
+    });
   }
 }
 

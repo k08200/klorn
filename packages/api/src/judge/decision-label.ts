@@ -20,7 +20,7 @@ import type { LiveTier } from "@klorn/contract";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import type { TierFeatures } from "./tier-policy.js";
 import type { Tier } from "./tiers.js";
 
@@ -76,8 +76,12 @@ export type AttentionSourceName =
 function logRecorderError(op: string, sourceId: string, err: unknown): void {
   // console first: captureError is a no-op when Sentry is uninitialized, so a
   // bare captureError would be silent in dev / self-host. (CLAUDE.md rule.)
-  console.warn(`[decision-label] ${op} failed for ${sourceId}`, err);
-  captureError(err, { tags: { area: "decision-label", op }, extra: { sourceId } });
+  // The failure's facts only, never the error object; `op` names the step.
+  logDbFailure("[decision-label] recorder step failed", err, { ids: { op, sourceId } });
+  captureDbFailure("[decision-label] recorder step failed", err, {
+    tags: { area: "decision-label", op },
+    extra: { sourceId },
+  });
 }
 
 /**
@@ -277,6 +281,36 @@ export async function stampProviderEngagement(
   } catch (err) {
     logRecorderError(`stamp-provider-${kind.toLowerCase()}`, sourceIds[0] ?? "", err);
     return 0;
+  }
+}
+
+/**
+ * The mails among these that Klorn's interrupt already rang (rangAt set): the
+ * per-mail "already rang?" fact the mail interrupt paths dedupe on. It lives on
+ * the decision ledger, so nothing done to the bell (Clear all, a deleted row)
+ * erases it, and every ring path writes it (firewall push, urgent sweep,
+ * quiet-hours summary). EMAIL rows only, scoped to the user.
+ *
+ * Never throws, and fails OPEN on purpose: a failed read is logged and reported,
+ * and returns no mail, so the callers dedupe on the bell-row marker they read as
+ * well (a cleared row still counts there). That marker is an independent
+ * backstop, so a ledger outage costs the second layer, never a PUSH interrupt;
+ * a duplicate needs the ledger read to fail AND the bell row to be gone.
+ */
+export async function findRungEmailIds(
+  userId: string,
+  sourceIds: readonly string[],
+): Promise<Set<string>> {
+  if (sourceIds.length === 0) return new Set();
+  try {
+    const rows = await prisma.decisionLabel.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: [...sourceIds] }, rangAt: { not: null } },
+      select: { sourceId: true },
+    });
+    return new Set(rows.map((r) => r.sourceId));
+  } catch (err) {
+    logRecorderError("find-rang", sourceIds[0] ?? "", err);
+    return new Set();
   }
 }
 

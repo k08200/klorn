@@ -17,6 +17,7 @@ import type {
   MailSyncErrorCode,
 } from "@klorn/contract";
 import { prisma } from "../db.js";
+import { IMAP_PRESET_KEYS } from "./imap-preset-keys.js";
 import { SYNC_ERROR_CODES } from "./sync-error-code.js";
 
 const PROVIDERS: readonly InboxProvider[] = [
@@ -26,6 +27,7 @@ const PROVIDERS: readonly InboxProvider[] = [
   "OUTLOOK",
   "IMAP",
   "KLORN",
+  ...IMAP_PRESET_KEYS,
 ];
 
 interface StatusInput {

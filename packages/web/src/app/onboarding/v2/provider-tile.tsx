@@ -12,6 +12,7 @@ import { BetaChip } from "../../../components/ui/beta-chip";
 import Button from "../../../components/ui/button";
 import type { AccountHealth } from "../../../lib/connected-accounts";
 import { useT } from "../../../lib/i18n";
+import { IMAP_PRESETS } from "../../../lib/imap-presets";
 import { sourceGlyph } from "../../../lib/source-provider";
 import type { ProviderTile, TileAction } from "./model";
 
@@ -44,7 +45,11 @@ interface ProviderTileProps {
 }
 
 /** Live sources that are newer than Gmail / Google Calendar. */
-const BETA_PROVIDERS = new Set<string>(["NAVER", "ICLOUD"]);
+const BETA_PROVIDERS = new Set<string>([
+  "NAVER",
+  "ICLOUD",
+  ...IMAP_PRESETS.map((preset) => preset.provider),
+]);
 
 export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTileProps) {
   const { t } = useT();

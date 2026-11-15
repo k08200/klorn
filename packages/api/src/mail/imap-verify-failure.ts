@@ -7,8 +7,8 @@
  * logged here instead, as one capped line with the password masked out.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import { sanitizeLogText } from "./log-text.js";
 import { isImapAuthFailure } from "./providers/imap-session.js";
 
 /**
@@ -52,8 +52,6 @@ const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
 const NETWORK_ERROR_TEXT =
   /\b(?:ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|EHOSTUNREACH|ENETUNREACH)\b|timeout|failed to receive greeting/i;
 
-const REDACTED = "[redacted]";
-
 function errorCode(err: unknown): string | undefined {
   if (typeof err !== "object" || err === null) return undefined;
   const code = (err as { code?: unknown }).code;
@@ -76,13 +74,15 @@ function isAuthFailure(err: unknown, text: string): boolean {
 }
 
 /**
- * Only the code and the message are logged — never the error object, whose
- * fields (response, command) are where a library would carry what was sent.
+ * Only the error's facts are logged (class, code, status, message length) —
+ * never its message, which a server writes and which can quote what was sent
+ * (the user, the host, the password), nor the error object, whose fields
+ * (response, command) are where a library would carry it.
  */
-function logVerifyFailure(provider: ImapProviderConfig, err: unknown, password: string): void {
-  const raw = `${errorCode(err) ?? "no-code"}: ${errorText(err)}`;
-  const masked = password ? raw.split(password).join(REDACTED) : raw;
-  console.warn(`[${provider.logScope}] connect verification failed: ${sanitizeLogText(masked)}`);
+function logVerifyFailure(provider: ImapProviderConfig, err: unknown): void {
+  logDbFailure("[imap] connect verification failed", err, {
+    ids: { logScope: provider.logScope },
+  });
 }
 
 export function classifyVerifyFailure(
@@ -93,7 +93,7 @@ export function classifyVerifyFailure(
   if (isAuthFailure(err, text)) {
     return { ok: false, message: args.provider.authFailureHint, code: "IMAP_AUTH_FAILED" };
   }
-  logVerifyFailure(args.provider, err, args.password);
+  logVerifyFailure(args.provider, err);
   if (isNetworkFailure(err, text)) {
     return { ok: false, message: IMAP_UNREACHABLE_MESSAGE(args.host), code: "IMAP_UNREACHABLE" };
   }

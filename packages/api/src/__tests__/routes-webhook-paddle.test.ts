@@ -35,6 +35,8 @@ vi.mock("../db.js", () => {
         return { id: "n1", createdAt: new Date() };
       }),
     },
+    // No organization holds a subscription here: every event is a Pro one.
+    organization: { findUnique: vi.fn(async () => null) },
     webhookEvent: {
       findUnique: vi.fn(async () => processedEvent),
       create: vi.fn(async () => ({})),
@@ -354,6 +356,34 @@ describe("POST /api/webhook/paddle", () => {
     expect(userUpdates[0].data).toMatchObject({ plan: "PRO" });
     expect(userUpdates[0].data).not.toHaveProperty("subscriptionCancelAt");
     expect(userUpdates[0].data).not.toHaveProperty("subscriptionEventAt");
+    await app.close();
+  });
+
+  it("checks an edited team seat price against $30 a month, without touching plans", async () => {
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    process.env.PADDLE_TEAM_PRICE_ID_MONTHLY = "pri_team_month";
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const app = await buildApp();
+    const res = await post(
+      app,
+      JSON.stringify({
+        event_id: "evt_team_price",
+        event_type: "price.updated",
+        data: {
+          id: "pri_team_month",
+          status: "active",
+          unit_price: { amount: "3500", currency_code: "USD" },
+          billing_cycle: { interval: "month", frequency: 1 },
+        },
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(userUpdates).toHaveLength(0);
+    expect(errors.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(
+      /team month price pri_team_month was edited and does not match \$30\.00 per seat per month/,
+    );
+    errors.mockRestore();
+    delete process.env.PADDLE_TEAM_PRICE_ID_MONTHLY;
     await app.close();
   });
 

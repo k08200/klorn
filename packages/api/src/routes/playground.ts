@@ -24,6 +24,7 @@ import { DEMO_DAILY_BUDGET_CENTS, PLAYGROUND_NO_KEY_DEMO_ENABLED } from "../conf
 import { judgeEmail } from "../judge/poc-judge.js";
 import { TIERS } from "../judge/tiers.js";
 import { JUDGE_MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { clientAddressBucket } from "../security/client-address.js";
 import { redactCredentials } from "../security/credential-redaction.js";
@@ -213,7 +214,6 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
     return reply.code(429).send({ error: "demo_budget_exhausted", byokAvailable: true });
   }
 
-  let llmError: string | undefined;
   try {
     const result = await judgeEmail(
       {
@@ -226,15 +226,14 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
       undefined,
       undefined, // no credentials — the server's env chain pays (global cost caps still apply)
       JUDGE_MODEL, // Defense 3: pinned, and pinning is what suppresses escalation
-      (message) => {
-        llmError = scrubKeys(message);
-      },
     );
 
     if (result.source === "keyword-fallback") {
       // Server-side outage/quota problem, not the visitor's fault — never show
       // a keyword guess as Klorn's verdict; nudge toward BYOK instead.
-      console.warn(`[PLAYGROUND_DEMO] llm did not run: ${sanitizeForLog(llmError ?? "?")}`);
+      // The judge already logged the failure's facts ([JUDGE] LLM feature
+      // extraction ... failed); the upstream message is not repeated here.
+      console.warn("[PLAYGROUND_DEMO] llm did not run");
       return reply.code(502).send({
         error: "The demo model didn't run — try again in a minute, or use your own API key.",
         byokAvailable: true,
@@ -264,8 +263,7 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
       model: JUDGE_MODEL,
     });
   } catch (err) {
-    const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));
-    console.warn(`[PLAYGROUND_DEMO] classify failed: ${message}`);
+    logLlmFailure("[PLAYGROUND_DEMO] classify failed", err);
     return reply.code(502).send({
       error: "Demo classification failed — try again shortly, or use your own API key.",
       byokAvailable: true,
@@ -355,12 +353,11 @@ export function playgroundRoutes(app: FastifyInstance) {
           decidedBy: result.decidedBy,
         });
       } catch (err) {
-        // Log WHY (message only) but NEVER the body or the key. captureError
-        // is intentionally not called with any request context here. Scrub any
-        // key-shaped token AND strip control chars (the message can carry a
-        // user-supplied model id) so it can't forge log entries.
-        const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));
-        console.warn(`[PLAYGROUND] classify failed: ${message}`);
+        // Log the failure's facts (class, status, code, size) but NEVER the
+        // message, body or key: the message can carry a user-supplied model id
+        // or key-shaped token. captureError is intentionally not called with
+        // any request context here.
+        logLlmFailure("[PLAYGROUND] classify failed", err);
         return reply.code(502).send({
           error: "Classification failed. Check your API key and model, then retry.",
         });

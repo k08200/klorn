@@ -23,7 +23,7 @@
  */
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   needsAttachmentScan,
   rememberAttachmentScan,
@@ -41,13 +41,17 @@ import {
   parseParams,
 } from "./imap-body.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
-import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
+import {
+  capStored,
+  envelopeMessageId,
+  envelopeSubject,
+  MAX_STORED_CC_LENGTH,
+} from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { liveUidValidity } from "./imap-uidvalidity.js";
 import { classifyVerifyFailure, type VerifyFailure } from "./imap-verify-failure.js";
-import { sanitizeLogText } from "./log-text.js";
 import { MAX_STORED_BODY_CHARS, snippetFromBody } from "./stored-mail-text.js";
 
 interface VerifyArgs {
@@ -219,6 +223,8 @@ function toPersistCall(
       isStarred,
       receivedAt,
       attachments,
+      // Finds the message for its attachments after it leaves INBOX (attachment-bytes.ts).
+      messageIdHeader: envelopeMessageId(env.messageId),
     },
     {
       linkedInboxAccountId: args.linkedInboxAccountId ?? null,
@@ -280,7 +286,10 @@ async function attachmentsOf(
     if (parts.length === 0) rememberAttachmentScan(args.userId, stableId);
     return await imapRawAttachments(parts);
   } catch (err) {
-    console.warn(`[${args.provider.logScope}] attachments skipped for ${stableId}`, err);
+    // Not stableId: it embeds the mailbox address.
+    logDbFailure("[imap] attachments skipped", err, {
+      ids: { logScope: args.provider.logScope, uid: msg.uid },
+    });
     return [];
   }
 }
@@ -376,8 +385,11 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
           // console first: captureError is a no-op without a Sentry DSN, so in
           // dev/self-host a persist failure would drop this email from triage
           // with no trace.
-          console.warn(`[${scope}] persist failed for ${stableId}`, err);
-          captureError(err, {
+          // Not stableId in the line: it embeds the mailbox address.
+          logDbFailure("[imap] persist failed", err, {
+            ids: { logScope: scope, userId: args.userId, uid: msg.uid },
+          });
+          captureDbFailure("[imap] persist failed", err, {
             tags: { scope: `${scope}.upsert` },
             extra: { userId: args.userId, stableId },
           });
@@ -402,17 +414,13 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
   } catch (err) {
     result.errors += 1;
     const userHost = args.provider.hostPolicy === "user-supplied";
-    const text = err instanceof Error ? err.message : String(err);
     // console first — captureError is silent without a Sentry DSN (self-host/dev).
-    // A user-supplied host's text is logged as one capped line.
-    console.warn(
-      `[${scope}] sync failed for ${args.userId}:`,
-      userHost ? sanitizeLogText(text) : text,
-    );
+    // Facts only: a server's reply text can quote a mailbox, a message or an address.
+    logDbFailure("[imap] sync failed", err, { ids: { logScope: scope, userId: args.userId } });
     // A generic poll is reported once per account and failure kind by the fan-out
     // (imap-accounts.ts), not on every tick from here.
     if (!userHost) {
-      captureError(err, {
+      captureDbFailure("[imap] sync failed", err, {
         tags: { scope: `${scope}.sync` },
         extra: { userId: args.userId },
       });

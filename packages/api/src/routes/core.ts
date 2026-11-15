@@ -6,6 +6,7 @@ import { db, prisma } from "../db.js";
 import { exportDriveFiles } from "../drive/drive-export.js";
 import { getPublicJudgeHealth, type PublicJudgeHealth } from "../judge/judge-fallback-check.js";
 import { healthResponse } from "../ops/health-response.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
 import { purgeAllUserData } from "../user-deletion.js";
 import { getClientCount } from "../websocket.js";
@@ -76,7 +77,7 @@ export function registerCoreRoutes(app: FastifyInstance): void {
     try {
       judge = getPublicJudgeHealth();
     } catch (err) {
-      console.warn("[JUDGE-HEALTH] public judge health read failed:", err);
+      logDbFailure("[JUDGE-HEALTH] public judge health read failed", err);
     }
     const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled(), judge });
     reply.code(report.statusCode);

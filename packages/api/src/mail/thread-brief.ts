@@ -21,7 +21,9 @@ import { asString, asStringArray } from "../llm/llm-coerce.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { getProviderChain } from "../providers/index.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { extractEmailAddress } from "./email-address.js";
 import { fetchGmailThread, type GmailRawEmail } from "./gmail-fetch.js";
@@ -147,7 +149,7 @@ export async function cachedThreadBrief(
     });
     return row ? toBrief(row, false) : null;
   } catch (err) {
-    console.warn("[THREAD-BRIEF] cache read failed:", err);
+    logDbFailure("[THREAD-BRIEF] cache read failed", err, { ids: { userId, threadId } });
     return null;
   }
 }
@@ -166,7 +168,7 @@ export async function getThreadBrief(
   if (!threadId) return EMPTY_BRIEF;
 
   const messages = await fetchGmailThread(userId, threadId).catch((err) => {
-    console.warn(`[THREAD-BRIEF] thread fetch failed for ${threadId}:`, err);
+    logDbFailure("[THREAD-BRIEF] thread fetch failed", err, { ids: { userId, threadId } });
     return null;
   });
   // No thread (deleted, IMAP account, auth gone) → whatever is cached, else
@@ -221,7 +223,9 @@ export async function getThreadBrief(
       parsed = raw as Record<string, unknown>;
     }
   } catch (err) {
-    console.warn(`[THREAD-BRIEF] generation failed for ${threadId}:`, err);
+    // Facts only: the provider's error can quote the thread, and
+    // parseLlmJson's SyntaxError quotes the model's reply.
+    logLlmFailure("[THREAD-BRIEF] generation failed", err, { ids: { threadId } });
     return (await cachedThreadBrief(userId, threadId)) ?? EMPTY_BRIEF;
   }
 
@@ -254,7 +258,7 @@ export async function getThreadBrief(
   } catch (err) {
     // A failed write costs a re-read next time; it must not lose the answer
     // the user is waiting for.
-    console.warn(`[THREAD-BRIEF] persist failed for ${threadId}:`, err);
+    logDbFailure("[THREAD-BRIEF] persist failed", err, { ids: { userId, threadId } });
   }
 
   return toBrief({ ...data, lastMessageAt }, true);

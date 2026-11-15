@@ -29,15 +29,13 @@ import { prisma } from "../../db.js";
 import { markLinkedCalendarForReconnect } from "../../mail/gmail.js";
 import { type OutlookTokens, refreshOutlookTokens } from "../../mail/outlook-oauth.js";
 import { refreshedTokenUpdate } from "../../mail/outlook-token-update.js";
-import { captureError } from "../../sentry.js";
+import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 
 /**
  * Refresh this long before the token lapses, so one sync (a few paged requests)
  * never starts with a token that expires in the middle of it.
  */
 const EXPIRY_SLACK_MS = 5 * 60_000;
-/** How much of a database error's first line is logged; the rest can carry row values. */
-const MAX_LOGGED_ERROR_LENGTH = 200;
 
 export interface OutlookCalendarTokenSource {
   /** A usable bearer token, refreshed at most once per source. Rejects when the account needs a re-link. */
@@ -65,11 +63,14 @@ function oauthError(code: string, detail: string): Error {
 
 function flagForReconnect(userId: string, linkedAccountId: string): void {
   void markLinkedCalendarForReconnect(userId, linkedAccountId).catch((markErr) => {
-    console.error(
-      `[OUTLOOK-CAL] Failed to flag linked calendar ${linkedAccountId} for reconnect:`,
-      markErr,
-    );
-    captureError(markErr, { tags: { scope: "outlook-calendar.mark-reconnect" } });
+    logDbFailure("[OUTLOOK-CAL] Failed to flag linked calendar for reconnect", markErr, {
+      level: "error",
+      ids: { linkedAccountId },
+    });
+    captureDbFailure("[OUTLOOK-CAL] Failed to flag linked calendar for reconnect", markErr, {
+      tags: { scope: "outlook-calendar.mark-reconnect" },
+      extra: { linkedCalendarAccountId: linkedAccountId },
+    });
   });
 }
 
@@ -106,22 +107,14 @@ function hasTimeLeft(expiresAt: Date | null): boolean {
   return expiresAt !== null && expiresAt.getTime() > Date.now() + EXPIRY_SLACK_MS;
 }
 
-/** A database error as one safe line: class, code and the first line of its message, capped. */
-function describeDbError(err: unknown): string {
-  if (!(err instanceof Error)) return typeof err;
-  const code = (err as { code?: unknown }).code;
-  const firstLine = err.message.split("\n").find((line) => line.trim() !== "") ?? "";
-  return `${err.name}${typeof code === "string" ? ` ${code}` : ""}: ${firstLine.slice(0, MAX_LOGGED_ERROR_LENGTH)}`;
-}
-
 /**
  * Save a refreshed token pair (the write rule is shared with the mail path, see
  * mail/outlook-token-update.ts). `previousCipher` is the refresh cipher the new
  * pair replaces: a rotation matches only a row that still holds it. Answers
  * whether the write landed: false means another refresh stored first, or that the
  * save failed (reported, and the sync goes on: the new token is valid in memory).
- * The log and Sentry get a sanitised summary, never the raw database error, whose
- * message can carry the row values being written.
+ * The log and Sentry get the failure's facts (report-db-failure.ts), never the
+ * raw database error, whose message can carry the row values being written.
  */
 async function persistRefreshed(
   userId: string,
@@ -137,11 +130,10 @@ async function persistRefreshed(
     });
     return written.count > 0;
   } catch (err) {
-    const summary = describeDbError(err);
-    console.warn(
-      `[OUTLOOK-CAL] token persist failed for ${linkedAccountId} (syncing anyway): ${summary}`,
-    );
-    captureError(new Error(summary), {
+    logDbFailure("[OUTLOOK-CAL] token persist failed (syncing anyway)", err, {
+      ids: { linkedAccountId },
+    });
+    captureDbFailure("[OUTLOOK-CAL] token persist failed", err, {
       tags: { scope: "outlook-calendar.token-persist" },
       extra: { userId, linkedCalendarAccountId: linkedAccountId },
     });
@@ -174,7 +166,9 @@ async function readLatestTokens(
       expiresAt: row.expiresAt,
     };
   } catch (err) {
-    console.warn(`[OUTLOOK-CAL] re-reading ${linkedAccountId} failed: ${describeDbError(err)}`);
+    logDbFailure("[OUTLOOK-CAL] re-reading the token row failed", err, {
+      ids: { linkedAccountId },
+    });
     return null;
   }
 }

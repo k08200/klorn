@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { callText } from "./helpers/canary.js";
+import { DB_CANARY, validationErrorQuotingText } from "./helpers/prisma-canary.js";
 
 const upsertSpy = vi.fn(async () => ({}));
 const updateManySpy = vi.fn(async () => ({ count: 0 }));
@@ -780,5 +782,68 @@ describe("upsertAttentionForEmailJudgement — status preservation", () => {
     expect(call.update.agentTierKeyId).toBeNull();
     // A new row carries no stamp either (the column defaults to null).
     expect(call.create.agentTierSetAt ?? null).toBeNull();
+  });
+});
+
+describe("a failed mirror upsert is logged as facts, never the Prisma message", () => {
+  // PrismaClientValidationError renders the rejected call's values: here the
+  // canary stands for the meeting title or commitment words the upsert carried.
+  const NOW = new Date("2026-04-28T10:00:00Z").getTime();
+  let consoleSpies: Array<ReturnType<typeof vi.spyOn>>;
+
+  beforeEach(() => {
+    consoleSpies = (["log", "info", "warn", "error"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {}),
+    );
+  });
+
+  afterEach(() => {
+    for (const spy of consoleSpies) spy.mockRestore();
+  });
+
+  const sinkText = () =>
+    `${consoleSpies.map((spy) => callText(spy)).join("\n")}\n${callText(captureErrorSpy)}`;
+
+  it("a CalendarEvent upsert", async () => {
+    upsertSpy.mockRejectedValueOnce(validationErrorQuotingText());
+
+    await upsertAttentionForCalendarEvent(
+      {
+        id: "e-fail",
+        userId: "u",
+        title: `${DB_CANARY} board meeting`,
+        startTime: new Date(NOW + 90 * 60 * 1000),
+      },
+      NOW,
+    );
+
+    expect(upsertSpy).toHaveBeenCalledOnce();
+    expect(sinkText()).toContain("[attention-mirror] upsert failed for CalendarEvent");
+    expect(sinkText()).not.toContain(DB_CANARY);
+    expect(sinkText()).toContain("calendarEventId=e-fail");
+    expect(sinkText()).toContain("PrismaClientValidationError");
+  });
+
+  it("a Commitment upsert", async () => {
+    upsertSpy.mockRejectedValueOnce(validationErrorQuotingText());
+
+    await upsertAttentionForCommitment(
+      {
+        id: "c-fail",
+        userId: "u",
+        title: `${DB_CANARY} send the deck`,
+        description: `${DB_CANARY} before Friday`,
+        status: "OPEN",
+        dueAt: new Date(NOW + 4 * 60 * 60 * 1000),
+        confidence: 0.9,
+      },
+      NOW,
+    );
+
+    expect(upsertSpy).toHaveBeenCalledOnce();
+    expect(sinkText()).toContain("[attention-mirror] upsert failed for Commitment");
+    expect(sinkText()).not.toContain(DB_CANARY);
+    expect(sinkText()).toContain("commitmentId=c-fail");
+    expect(sinkText()).toContain("PrismaClientValidationError");
   });
 });

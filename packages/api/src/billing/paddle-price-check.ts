@@ -20,6 +20,7 @@
  * the precedent here is the judge model gate: degrade, not amputate.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 
 /** Minor units per major unit. Paddle returns amounts as integer cents. */
@@ -51,7 +52,7 @@ export function parseAdvertisedAmount(price: string): number {
 }
 
 /** Minor units as a dollar string — 2950 is "$29.50", never "$29.5". */
-function formatCents(cents: number): string {
+export function formatCents(cents: number): string {
   return `$${(cents / CENTS_PER_DOLLAR).toFixed(2)}`;
 }
 
@@ -59,6 +60,22 @@ export interface PriceComparison {
   ok: boolean;
   /** Every disagreement found, not just the first. */
   problems: string[];
+}
+
+/** What a price surface promises about one Paddle price object. */
+export interface PriceExpectation {
+  /** The amount quoted, in USD minor units. */
+  cents: number;
+  /** The amount as the surface writes it, for messages ("$29.99"). */
+  label: string;
+  /** How often it bills: every surface says "per month" or "per year". */
+  interval: "month" | "year";
+  /** The trial every surface promises, in days; null when none is promised (not checked). */
+  trialDays: number | null;
+  /** The env var that wires this price, named when it is archived. */
+  envName: string;
+  /** Quantities checkout and seat changes send; the price must allow all of them. Unset: not checked. */
+  quantity?: { min: number; max: number };
 }
 
 /**
@@ -70,55 +87,130 @@ export interface PriceComparison {
  * "agrees".
  */
 export function comparePaddlePrice(opts: { advertised: string; price: unknown }): PriceComparison {
-  const problems: string[] = [];
-
   let advertisedAmount: number;
   try {
     advertisedAmount = parseAdvertisedAmount(opts.advertised);
   } catch (err) {
     return { ok: false, problems: [(err as Error).message] };
   }
-
-  if (typeof opts.price !== "object" || opts.price === null) {
-    return {
-      ok: false,
-      problems: [
-        `Paddle price response was ${typeof opts.price}, not an object — cannot confirm what is charged`,
-      ],
-    };
-  }
-
-  const price = opts.price as {
-    status?: unknown;
-    tax_mode?: unknown;
-    unit_price?: { amount?: unknown; currency_code?: unknown };
-    billing_cycle?: { interval?: unknown; frequency?: unknown } | null;
-    trial_period?: { interval?: unknown; frequency?: unknown } | null;
-  };
-
-  // --- what it charges -----------------------------------------------------
   // Compared in integer cents. The advertised string is the one with a decimal
   // point, so it is the one converted; comparing dollars would make 29.99 a
   // float on both sides for no reason.
-  const advertisedCents = Math.round(advertisedAmount * CENTS_PER_DOLLAR);
+  return comparePriceObject(opts.price, {
+    cents: Math.round(advertisedAmount * CENTS_PER_DOLLAR),
+    label: opts.advertised,
+    interval: "month",
+    trialDays: EXPECTED_TRIAL_DAYS,
+    envName: "PADDLE_PRO_PRICE_ID",
+  });
+}
+
+type PaddlePriceShape = {
+  status?: unknown;
+  tax_mode?: unknown;
+  unit_price?: { amount?: unknown; currency_code?: unknown };
+  billing_cycle?: { interval?: unknown; frequency?: unknown } | null;
+  trial_period?: { interval?: unknown; frequency?: unknown } | null;
+  quantity?: { minimum?: unknown; maximum?: unknown } | null;
+};
+
+/** Which quantities: a price allows 1–100 by default, and a seat count outside its range fails at Paddle. */
+function quantityProblems(price: PaddlePriceShape, expected: PriceExpectation): string[] {
+  if (!expected.quantity) return [];
+  const min = Number(price.quantity?.minimum);
+  const max = Number(price.quantity?.maximum);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return ["Paddle price has no quantity range — cannot confirm every seat count can be bought"];
+  }
+  if (min <= expected.quantity.min && max >= expected.quantity.max) return [];
+  return [
+    `Paddle price allows quantities ${min}–${max}, but seats can be ${expected.quantity.min}–` +
+      `${expected.quantity.max}: a seat count outside Paddle's range fails at checkout or on a seat change`,
+  ];
+}
+
+/** What it charges: whole minor units, equal to the quoted amount. */
+function amountProblems(price: PaddlePriceShape, expected: PriceExpectation): string[] {
   const rawAmount = price.unit_price?.amount;
   if (typeof rawAmount !== "string" && typeof rawAmount !== "number") {
-    problems.push("Paddle price has no unit_price.amount — cannot confirm what is charged");
-  } else {
-    const cents = Number(rawAmount);
-    if (!Number.isFinite(cents) || !Number.isInteger(cents)) {
-      problems.push(`Paddle unit_price.amount is not whole minor units: ${String(rawAmount)}`);
-    } else if (cents !== advertisedCents) {
-      const direction = cents > advertisedCents ? "charges more than" : "charges less than";
-      problems.push(
-        `Paddle ${direction} the site advertises: billing ${formatCents(cents)} ` +
-          `against an advertised ${opts.advertised}.` +
-          (cents > advertisedCents
-            ? " Customers are being billed above the price they were quoted."
-            : ""),
-      );
-    }
+    return ["Paddle price has no unit_price.amount — cannot confirm what is charged"];
   }
+  const cents = Number(rawAmount);
+  if (!Number.isFinite(cents) || !Number.isInteger(cents)) {
+    return [`Paddle unit_price.amount is not whole minor units: ${String(rawAmount)}`];
+  }
+  if (cents === expected.cents) return [];
+  const direction = cents > expected.cents ? "charges more than" : "charges less than";
+  return [
+    `Paddle ${direction} the site advertises: billing ${formatCents(cents)} ` +
+      `against an advertised ${expected.label}.` +
+      (cents > expected.cents
+        ? " Customers are being billed above the price they were quoted."
+        : ""),
+  ];
+}
+
+/** How often: every surface names one cycle. */
+function cycleProblems(price: PaddlePriceShape, expected: PriceExpectation): string[] {
+  // $29.99 on a yearly cycle, or a null cycle (one-time charge), matches on
+  // amount and is still the wrong product.
+  const cycle = price.billing_cycle;
+  if (!cycle) {
+    return [
+      `Paddle price has no billing_cycle — it is a one-time charge, but every surface says per ${expected.interval}`,
+    ];
+  }
+  if (cycle.interval !== expected.interval || Number(cycle.frequency) !== 1) {
+    return [
+      `Paddle bills every ${String(cycle.frequency)} ${String(cycle.interval)}(s), ` +
+        `but every surface says per ${expected.interval}`,
+    ];
+  }
+  return [];
+}
+
+/** With what trial, when one is promised. */
+function trialProblems(price: PaddlePriceShape, expected: PriceExpectation): string[] {
+  if (expected.trialDays === null) return [];
+  // createPaddleCheckout sends only price_id and quantity, so a price without
+  // a trial bills immediately while the pages promise seven free days.
+  const trial = price.trial_period;
+  if (!trial) {
+    return [
+      `Paddle price has no trial_period, but every price surface promises a ` +
+        `${expected.trialDays}-day trial — the first charge lands immediately`,
+    ];
+  }
+  // A one-week trial IS seven days; alarming on it would be noise.
+  const days =
+    trial.interval === "day"
+      ? Number(trial.frequency)
+      : trial.interval === "week"
+        ? Number(trial.frequency) * 7
+        : Number.NaN;
+  if (days === expected.trialDays) return [];
+  return [
+    `Paddle trial is ${String(trial.frequency)} ${String(trial.interval)}(s), ` +
+      `but the pages promise ${expected.trialDays} days`,
+  ];
+}
+
+/**
+ * Compare a Paddle price object against what a surface promises. Pure; the
+ * Pro price (comparePaddlePrice) and the team seat prices
+ * (paddle-team-price-check.ts) both go through it.
+ */
+export function comparePriceObject(raw: unknown, expected: PriceExpectation): PriceComparison {
+  if (typeof raw !== "object" || raw === null) {
+    return {
+      ok: false,
+      problems: [
+        `Paddle price response was ${typeof raw}, not an object — cannot confirm what is charged`,
+      ],
+    };
+  }
+  const price = raw as PaddlePriceShape;
+  const problems: string[] = [...amountProblems(price, expected)];
 
   // --- in what currency ----------------------------------------------------
   const currency = price.unit_price?.currency_code;
@@ -126,20 +218,7 @@ export function comparePaddlePrice(opts: { advertised: string; price: unknown })
     problems.push(`Paddle price is in ${String(currency)}, but every surface quotes US dollars`);
   }
 
-  // --- how often -----------------------------------------------------------
-  // Every surface says "/month". $29.99 on a yearly cycle, or a null cycle
-  // (one-time charge), matches on amount and is still the wrong product.
-  const cycle = price.billing_cycle;
-  if (!cycle) {
-    problems.push(
-      "Paddle price has no billing_cycle — it is a one-time charge, but every surface says per month",
-    );
-  } else if (cycle.interval !== "month" || Number(cycle.frequency) !== 1) {
-    problems.push(
-      `Paddle bills every ${String(cycle.frequency)} ${String(cycle.interval)}(s), ` +
-        `but every surface says per month`,
-    );
-  }
+  problems.push(...cycleProblems(price, expected));
 
   // --- plus tax, or including it -------------------------------------------
   // tax_mode "external" means the customer pays the quoted price PLUS tax, so
@@ -164,40 +243,62 @@ export function comparePaddlePrice(opts: { advertised: string; price: unknown })
     );
   }
 
-  // --- with what trial -----------------------------------------------------
-  // createPaddleCheckout sends only price_id and quantity, so a price without
-  // a trial bills immediately while the pages promise seven free days.
-  const trial = price.trial_period;
-  if (!trial) {
-    problems.push(
-      `Paddle price has no trial_period, but every price surface promises a ` +
-        `${EXPECTED_TRIAL_DAYS}-day trial — the first charge lands immediately`,
-    );
-  } else {
-    // A one-week trial IS seven days; alarming on it would be noise.
-    const days =
-      trial.interval === "day"
-        ? Number(trial.frequency)
-        : trial.interval === "week"
-          ? Number(trial.frequency) * 7
-          : Number.NaN;
-    if (days !== EXPECTED_TRIAL_DAYS) {
-      problems.push(
-        `Paddle trial is ${String(trial.frequency)} ${String(trial.interval)}(s), ` +
-          `but the pages promise ${EXPECTED_TRIAL_DAYS} days`,
-      );
-    }
-  }
+  problems.push(...trialProblems(price, expected));
+  problems.push(...quantityProblems(price, expected));
 
   // --- and is it even live -------------------------------------------------
   if (price.status !== "active") {
     problems.push(
       `Paddle price status is "${String(price.status)}" — an archived or ` +
-        `inactive price is still wired to PADDLE_PRO_PRICE_ID`,
+        `inactive price is still wired to ${expected.envName}`,
     );
   }
 
   return { ok: problems.length === 0, problems };
+}
+
+/**
+ * GET /prices/{id}: the response body, or null when it could not be read
+ * (logged; a 4xx is also reported, a 5xx or network error is not). Never throws.
+ */
+export async function fetchPaddlePrice(
+  priceId: string,
+  fetchImpl?: typeof fetch,
+): Promise<unknown | null> {
+  const base =
+    process.env.PADDLE_ENV === "sandbox"
+      ? "https://sandbox-api.paddle.com"
+      : "https://api.paddle.com";
+  const doFetch = fetchImpl ?? fetch;
+  try {
+    const res = await doFetch(`${base}/prices/${encodeURIComponent(priceId)}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${process.env.PADDLE_API_KEY}` },
+      // Without this an unresponsive Paddle leaves the promise pending for the
+      // process lifetime. It is void-ed at boot, so nothing would ever notice.
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      // Never echo the key; Paddle's body carries request ids worth having.
+      const detail = await res.text().catch(() => "");
+      const line = `[PADDLE] could not read price ${priceId}: ${res.status} ${detail.slice(0, 200)}`;
+      console.warn(line);
+      // 4xx is us, not them: a key without the Price:Read permission disables
+      // this guard permanently and silently. 5xx and network errors are
+      // transient and must not page anyone.
+      if (res.status >= 400 && res.status < 500) {
+        captureError(new Error(line), {
+          tags: { scope: "billing.paddle.price_unreadable" },
+          extra: { priceId, status: res.status },
+        });
+      }
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    logDbFailure("[PADDLE] price check could not reach Paddle", err);
+    return null;
+  }
 }
 
 /**
@@ -219,39 +320,8 @@ export async function checkPaddlePriceMatchesAdvertised(opts: {
   // the production constant would alarm forever and train everyone to ignore
   // this check, which is worse than not having it.
   const sandbox = process.env.PADDLE_ENV === "sandbox";
-  const base = sandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
-  const doFetch = opts.fetchImpl ?? fetch;
-
-  let body: unknown;
-  try {
-    const res = await doFetch(`${base}/prices/${encodeURIComponent(priceId)}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      // Without this an unresponsive Paddle leaves the promise pending for the
-      // process lifetime. It is void-ed at boot, so nothing would ever notice.
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      // Never echo the key; Paddle's body carries request ids worth having.
-      const detail = await res.text().catch(() => "");
-      const line = `[PADDLE] could not read price ${priceId}: ${res.status} ${detail.slice(0, 200)}`;
-      console.warn(line);
-      // 4xx is us, not them: a key without the Price:Read permission disables
-      // this guard permanently and silently. 5xx and network errors are
-      // transient and must not page anyone.
-      if (res.status >= 400 && res.status < 500) {
-        captureError(new Error(line), {
-          tags: { scope: "billing.paddle.price_unreadable" },
-          extra: { priceId, status: res.status },
-        });
-      }
-      return null;
-    }
-    body = await res.json();
-  } catch (err) {
-    console.warn(`[PADDLE] price check could not reach Paddle: ${(err as Error).message}`);
-    return null;
-  }
+  const body = await fetchPaddlePrice(priceId, opts.fetchImpl);
+  if (body === null) return null;
 
   if (sandbox) {
     const result = comparePaddlePrice({

@@ -157,6 +157,8 @@ model User {
   contactDossiers            ContactDossier[]
   threadBriefs               ThreadBrief[]
   teams                      Team[]
+  orgMembership              OrgMembership?
+  availabilityGrant          AvailabilityGrant?
   commitments                Commitment[]
   feedbackEvents             FeedbackEvent[]
   decisionLabels             DecisionLabel[]
@@ -185,7 +187,14 @@ model User {
   learnedRules               LearnedRule[]
   apiKeys                    ApiKey[]
   mcpWriteAudits             McpWriteAudit[]
+  dataExportAudits           DataExportAudit[]
+  ruleChangeAudits           RuleChangeAudit[]
   imapMovedMessages          ImapMovedMessage[]
+  slackConnection            SlackConnection?
+  slackEpisodes              SlackEpisode[]
+  slackMessages              SlackMessage[]
+  kakaoImports               KakaoImport[]
+  kakaoImportMessages        KakaoImportMessage[]
 }
 
 enum UserRole {
@@ -272,6 +281,186 @@ model McpWriteAudit {
   @@index([userId, createdAt])
   @@index([apiKeyId, createdAt])
   @@index([createdAt]) // the retention sweep's range scan
+}
+
+/// One row per data export the user started (Klorn Vault, routes/vault-export.ts).
+/// The audit trail and the per-user cooldown both read it: an export started
+/// within VAULT_EXPORT_COOLDOWN_MS of the last one is refused, across restarts.
+///
+/// Never holds export content: the archive is streamed to the user and kept
+/// nowhere. `outcome` is `started` until the stream ends, then `ok`, `partial`
+/// (a size/count/time limit cut the mail notes), `aborted` (the client went
+/// away) or `error`. Swept after 90 days by log-retention.ts, removed with the
+/// User (cascade) and by purgeUserData.
+model DataExportAudit {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format        String // "vault-markdown"
+  includeBodies Boolean
+  outcome       String // started | ok | partial | aborted | error
+  noteCount     Int?
+  byteCount     Int?
+  createdAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  @@index([userId, createdAt])
+  @@index([createdAt]) // the retention sweep's range scan
+}
+
+/// One row per Rules DSL apply (routes/rules-dsl.ts, docs/design/rules-dsl.md):
+/// how many lane pins the text added, changed and removed, and a SHA-256 of
+/// the applied text so two applies of the same file can be recognised.
+///
+/// Never holds rule content: no names, senders or lanes. Swept after 90 days
+/// by log-retention.ts, removed with the User (cascade) and by purgeUserData.
+model RuleChangeAudit {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source       String // "rules-dsl"
+  ruleCount    Int // rules in the applied text
+  addedCount   Int
+  changedCount Int
+  removedCount Int // rows deleted, older duplicate copies included
+  textHash     String // SHA-256 hex of the applied text
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt]) // the retention sweep's range scan
+}
+
+/// Slack integration v1 (docs/providers/slack.md): one internal Slack app per
+/// user, read-and-judge only. The signing secret is AES-256-GCM
+/// (crypto-tokens.ts) and never leaves the API; the user token is checked with
+/// auth.test on connect and never stored. Behind SLACK_ENABLED.
+model SlackConnection {
+  id                  String         @id @default(uuid())
+  userId              String         @unique
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Random 128-bit hex; the Request URL is /api/slack/events/<hookId>.
+  hookId              String         @unique
+  teamId              String?
+  slackUserId         String?
+  workspaceUrl        String?
+  signingSecretCipher String?
+  optInChannelIds     String[]       @default([])
+  credentialsSetAt    DateTime?
+  lastEventAt         DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  episodes            SlackEpisode[]
+  messages            SlackMessage[]
+}
+
+/// One burst of Slack conversation, judged into one lane. Keeps the verdict
+/// and a short reason for 90 days; the text lives in SlackMessage (7 days).
+model SlackEpisode {
+  id            String          @id @default(uuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId  String
+  connection    SlackConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  channelId     String
+  channelType   String // im | mpim | channel | group
+  /// thread_ts, or "" for top-level messages.
+  threadKey     String
+  /// OPEN | JUDGING | JUDGED | ANSWERED | EMPTY | OVER_CAP (judge-sweep.ts)
+  status        String          @default("OPEN")
+  mentionsUser  Boolean         @default(false)
+  messageCount  Int             @default(0)
+  firstTs       String
+  lastTs        String
+  startedAt     DateTime        @default(now())
+  lastMessageAt DateTime        @default(now())
+  claimedAt     DateTime?
+  tier          String?
+  reason        String?
+  judgedAt      DateTime?
+  notifiedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  messages      SlackMessage[]
+
+  @@index([connectionId, channelId, threadKey, status])
+  @@index([connectionId, status])
+  @@index([status, lastMessageAt])
+  @@index([userId, createdAt])
+  @@index([createdAt]) // the 90-day purge
+}
+
+/// A kept Slack message's text, purged 7 days after receipt. The unique
+/// (connectionId, eventId) makes a Slack retry or replay a no-op.
+model SlackMessage {
+  id           String          @id @default(uuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   SlackConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  episodeId    String
+  episode      SlackEpisode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  eventId      String
+  channelId    String
+  ts           String
+  threadTs     String?
+  senderId     String
+  text         String
+  createdAt    DateTime        @default(now())
+
+  @@unique([connectionId, eventId])
+  @@index([connectionId, channelId, ts])
+  @@index([connectionId, createdAt]) // the per-connection storage caps
+  @@index([episodeId])
+  @@index([createdAt]) // the 7-day purge
+}
+
+/// One uploaded KakaoTalk chat export (docs/providers/kakaotalk-import.md).
+/// Counts and timestamps only: no file name, no chat title, no speaker names.
+/// status: PENDING (messages stored, waiting) | PROCESSING | DONE | FAILED.
+/// Derived commitments carry threadId "kakao-import:<id>", so deleting an import can
+/// remove everything made from it.
+model KakaoImport {
+  id                 String               @id @default(uuid())
+  userId             String
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             String               @default("PENDING")
+  format             String
+  totalMessages      Int
+  windowMessages     Int
+  speakerCount       Int
+  windowStart        DateTime
+  windowEnd          DateTime
+  candidatesFound    Int                  @default(0)
+  commitmentsCreated Int                  @default(0)
+  duplicatesSkipped  Int                  @default(0)
+  errorCode          String?
+  claimedAt          DateTime?
+  processedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  messages           KakaoImportMessage[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt]) // the processing pass picks the oldest PENDING
+}
+
+/// One in-window message of an import awaiting processing: deleted when the
+/// import is processed, and in any case 7 days after upload (the purge).
+model KakaoImportMessage {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importId  String
+  import    KakaoImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  seq       Int
+  sentAt    DateTime
+  speaker   String
+  fromMe    Boolean
+  text      String
+  createdAt DateTime    @default(now())
+
+  @@unique([importId, seq])
+  @@index([userId])
+  @@index([createdAt]) // the 7-day purge
 }
 
 enum McpAuditOutcome {
@@ -516,6 +705,15 @@ enum InboxProvider {
   OUTLOOK
   IMAP
   KLORN
+  // Fixed-host app-password IMAP presets (provider phase 2,
+  // mail/imap-preset-providers.ts). ZOHOPRO = a Zoho organization mailbox.
+  DAUM
+  KAKAO
+  YAHOO
+  AOL
+  FASTMAIL
+  ZOHO
+  ZOHOPRO
 }
 
 // A SECONDARY mail account linked for FULL INBOX access so the firewall runs
@@ -1209,6 +1407,16 @@ model Notification {
   // NULLs are DISTINCT in the unique index, so ordinary notifications never
   // collide — the winner of the create is the only caller that sends the push.
   dedupeKey       String?
+  // When the user cleared this row from the bell ("Clear all"); null = shown.
+  // A cleared row is kept, read, out of the bell, so the "already notified?"
+  // reads that look back over bell rows (urgent mail, the day's briefing,
+  // proactive nudges, ...) still see it: clearing is a UI action and never
+  // rings anything again. The next clear deletes rows past the longest such
+  // window (notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS, 7 days); the
+  // log-retention sweep deletes cleared rows after 30 days. A reader that lists
+  // the bell must filter `clearedAt: null` (or `isRead: false`);
+  // notification-cleared-readers-guard.test.ts fails on one that does not.
+  clearedAt       DateTime?
   createdAt       DateTime       @default(now())
 
   @@unique([userId, dedupeKey])
@@ -1608,6 +1816,14 @@ model EmailMessage {
   listUnsubscribeMailto   String?
   listUnsubscribeUrl      String?
   listUnsubscribeOneClick Boolean           @default(false)
+  // The RFC 5322 Message-ID as the IMAP poll read it from the envelope (trimmed,
+  // <= 998 chars, no control characters; imap-envelope.ts envelopeMessageId). An
+  // IMAP row's gmailId names an INBOX UID, which stops serving once the user moves
+  // the message in another client; attachment-bytes.ts then finds the message in
+  // the account's role folders by this value. NULL for Gmail/Outlook/Klorn rows and
+  // for IMAP rows not re-touched since the column was added. No index: it is read
+  // from the row the caller already holds, never queried by.
+  messageIdHeader         String?
   isRead                  Boolean           @default(false)
   isStarred               Boolean           @default(false)
   priority                EmailPriority     @default(NORMAL)
@@ -2437,7 +2653,7 @@ model Commitment {
   // When the user confirmed a suggested (low-confidence, rule-mined) row. A
   // row is "confirmed" when this is set or confidence >= 0.7
   // (pim/commitment-confirmation.ts); only a confirmed row may interrupt.
-  confirmedAt DateTime?
+  confirmedAt           DateTime?
   // When a later reply in the thread suggested the promise was kept: the
   // user's own send (owner USER, "likely done") or the counterparty writing
   // again (owner COUNTERPARTY, "likely delivered"). The evidence's own time.
@@ -2495,6 +2711,7 @@ enum CommitmentSource {
   SLACK
   NOTE
   CALENDAR
+  KAKAO
 }
 
 // ─── Feedback Ledger ───────────────────────────────────────────────────────
@@ -2708,6 +2925,143 @@ model Team {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, name])
+}
+
+/// Klorn Teams v1 (docs/design/pricing-tiers.md "Team (company) plan",
+/// docs/design/team-mode-v3.md). An organization is a scheduling and billing
+/// object. It holds no mail, and no organization role reads a member's mail,
+/// attention items or commitments (src/org/privacy.ts lists what it can see).
+/// Seat entitlement is derived from OrgMembership at read time
+/// (src/org/effective-tier.ts) and is never written to User.plan.
+model Organization {
+  id                      String              @id @default(uuid())
+  name                    String              @db.VarChar(80)
+  slug                    String              @unique @db.VarChar(48)
+  /// Lowercase domains the company sends from. A member's judge reads them as
+  /// one relationship fact, orgCompanyDomain (src/org/org-domains.ts), never as
+  /// a lane or a pin (pricing-tiers.md launch feature 6).
+  companyDomains          String[]            @default([])
+  /// Admin ceiling: no unattended reply leaves any member's account.
+  autoReplyDisabled       Boolean             @default(false)
+  /// Admin ceiling: the highest agent mode a member runs. null = no cap;
+  /// "OFF" | "SHADOW" | "SUGGEST" (src/org/ceilings.ts).
+  agentModeCap            String?             @db.VarChar(16)
+  /// Seat billing (Paddle, quantity-based). Written only by the team
+  /// subscription webhook; seatsPurchased is the subscription quantity.
+  seatsPurchased          Int                 @default(0)
+  billingInterval         String?             @db.VarChar(8)
+  subscriptionStatus      String?             @db.VarChar(16)
+  paddleCustomerId        String?
+  paddleSubscriptionId    String?             @unique
+  subscriptionEventAt     DateTime?
+  /// When a period-end cancel takes effect (Paddle scheduled_change), or
+  /// null. Written by the owner's cancel route and confirmed by the webhook;
+  /// the seats stay until Paddle's final canceled event.
+  subscriptionCancelAt    DateTime?
+  /// The Klorn user who bought the team subscription (the checkout's
+  /// custom_data.payerUserId), stored by the webhook only when they are an
+  /// owner of this organization at that moment; null for subscriptions bought
+  /// before it was recorded, or when it ends. Seat increases and resume accept
+  /// it (while that user is still an owner) before falling back to the Paddle
+  /// customer email; the billing portal never does (src/org/seat-management.ts).
+  /// A plain id, no relation: a deleted user can never call.
+  payerUserId             String?
+  /// The seat quantity the subscription reported when it attached to this
+  /// organization (its checkout's count), stored by the webhook; null when it
+  /// attached before this was recorded, reported no quantity, or ended. Bounds
+  /// what a recorded payer whose email Paddle does not bill can add
+  /// (recordedPayerSeatCap, src/org/seat-cap.ts).
+  seatsAtAttach           Int?
+  /// The owner who scheduled the pending period-end cancel through Klorn, and
+  /// when, or null (a cancel made in Paddle's portal has no Klorn actor). That
+  /// owner may take back this cancel while still an owner; cleared when the
+  /// cancel is taken back, removed in Paddle, or takes effect. A plain id, no
+  /// relation, like payerUserId.
+  cancelRequestedByUserId String?
+  cancelRequestedAt       DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  memberships             OrgMembership[]
+  invites                 OrgInvite[]
+  availabilityGrants      AvailabilityGrant[]
+  auditEvents             OrgAuditEvent[]
+}
+
+/// Never ADMIN: that name means a Klorn operator in User.role.
+enum OrgRole {
+  OWNER
+  MEMBER
+}
+
+/// One organization per account in v1 (userId is unique). Exactly one OWNER
+/// per organization; ownership moves only by transfer.
+model OrgMembership {
+  id       String       @id @default(uuid())
+  orgId    String
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId   String       @unique
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     OrgRole      @default(MEMBER)
+  joinedAt DateTime     @default(now())
+
+  @@index([orgId, joinedAt])
+}
+
+/// An invitation by email. Only the SHA-256 of the token is stored; the raw
+/// token exists in the invite mail alone. Single use (acceptedAt is set by a
+/// conditional update), expires, and binds to the invited address.
+model OrgInvite {
+  id           String       @id @default(uuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Lowercase address the invite is bound to.
+  email        String       @db.VarChar(320)
+  tokenHash    String       @unique @db.Char(64)
+  invitedById  String?
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@index([orgId, createdAt])
+}
+
+enum AvailabilityScope {
+  NONE
+  FREEBUSY
+}
+
+/// A member's consent to share free/busy (start and end times only) with
+/// their organization. Default NONE; revocable; read on every query.
+model AvailabilityGrant {
+  userId    String            @id
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId     String
+  org       Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scope     AvailabilityScope @default(NONE)
+  updatedAt DateTime          @updatedAt
+
+  @@index([orgId])
+}
+
+/// Audit log of admin actions and cross-member free/busy reads. Actor and
+/// target ids are plain ids (no foreign key) so a row outlives the account it
+/// names. detail holds no mail data: window bounds, an invited address, a
+/// changed setting.
+model OrgAuditEvent {
+  id           String       @id @default(uuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actorUserId  String?
+  action       String       @db.VarChar(48)
+  targetUserId String?
+  detail       Json?
+  createdAt    DateTime     @default(now())
+
+  @@index([orgId, createdAt])
+  /// The retention sweep's range (src/org/audit-retention.ts, 400 days).
+  @@index([createdAt])
 }
 
 /// Team-of-one memory: per-sender relationship context distilled from the

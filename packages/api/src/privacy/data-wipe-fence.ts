@@ -39,6 +39,7 @@
  * reference it.
  */
 
+import { logDbFailure } from "../report-db-failure.js";
 import { newWork, workStartedAt } from "../work-context.js";
 
 /** Fence window after the purge commits; far above the snapshot's refresh plus a pool wait. */
@@ -71,6 +72,15 @@ export const FENCED_MODELS = [
   "AttentionItem",
   "DecisionLabel",
   "AttentionFacts",
+  // Slack (docs/providers/slack.md): an event landing during a wipe must not
+  // re-create the user's Slack data or connection.
+  "SlackConnection",
+  "SlackEpisode",
+  "SlackMessage",
+  // KakaoTalk import (docs/providers/kakaotalk-import.md): a processing pass
+  // running during a wipe must not re-create the import or its message text.
+  "KakaoImport",
+  "KakaoImportMessage",
   "LearnedRule",
   "SenderTrait",
   "SenderLabel",
@@ -133,8 +143,14 @@ export const UNFENCED_MODELS: Record<string, string> = {
   PmfResponse: "a survey answer the user typed, not derived from mail",
   StoragePurge: "the stored-object purge queue, written by the wipe itself",
   DataWipe: "the fence's own record",
+  DataExportAudit:
+    "an export the user started: format, outcome and counts, no mail data; the wipe deletes it",
+  RuleChangeAudit:
+    "a rules apply the user made: counts and a text hash, no mail data; the wipe deletes it",
   SendClaim:
     "an in-flight Send's claim (mail id + payload hash), released once its receipt is written; that receipt insert is fenced",
+  OrgMembership: "organization membership, an account relationship with no mail data",
+  AvailabilityGrant: "the free/busy consent the user sets, no mail data; the wipe resets it",
 };
 
 /** Fenced tables without a userId: the owner is the parent row's. */
@@ -229,7 +245,7 @@ export function startDataWipeRefresh(): void {
   if (refreshTimer) return;
   const refresh = () =>
     refreshDataWipes().catch((err: unknown) => {
-      console.error("[DATA-WIPE] Could not refresh the wipe snapshot:", err);
+      logDbFailure("[DATA-WIPE] Could not refresh the wipe snapshot", err, { level: "error" });
     });
   void refresh();
   refreshTimer = setInterval(newWork(refresh), FENCE_REFRESH_MS);
@@ -259,7 +275,7 @@ function blocks(state: DataWipeState, startedAt: Date): boolean {
 function refreshIfStale(): void {
   if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) {
     refreshDataWipes().catch((err: unknown) => {
-      console.error("[DATA-WIPE] Could not refresh the wipe snapshot:", err);
+      logDbFailure("[DATA-WIPE] Could not refresh the wipe snapshot", err, { level: "error" });
     });
   }
 }

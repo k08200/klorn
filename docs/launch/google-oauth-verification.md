@@ -244,8 +244,11 @@ transitive) — driven to **zero** via in-range updates plus `pnpm.overrides`
 continuously.
 
 **Transport security:** All traffic is HTTPS. TLS 1.3 supported on both
-`app.klorn.ai` (Vercel) and `klorn-api.onrender.com` (Render/Cloudflare); TLS
-1.0/1.1 rejected; AEAD ciphers only (CHACHA20-POLY1305 / no CBC). HSTS enabled
+`app.klorn.ai` (Cloudflare Pages since 2026-11-13; Vercel before) and
+`klorn-api.onrender.com` (Render/Cloudflare); TLS 1.0/1.1 rejected on both.
+AEAD ciphers only (CHACHA20-POLY1305 / no CBC) on the API. `app.klorn.ai`
+negotiates CHACHA20-POLY1305 by default but, measured 2026-11-14 on Cloudflare
+Pages, also accepts TLS 1.2 CBC and static-RSA suites. HSTS enabled
 with `includeSubDomains` (max-age 2y web, 1y API).
 
 **Security headers:** CSP (`default-src 'self'`, `object-src 'none'`,

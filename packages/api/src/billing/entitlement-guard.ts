@@ -1,13 +1,14 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { effectiveTier } from "../org/effective-tier.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { isEntitled, isHardPaywalled } from "./stripe.js";
 
 async function loadPlanRole(
   request: FastifyRequest,
   reply: FastifyReply,
-): Promise<{ plan: string; role?: string } | null> {
+): Promise<{ tier: string; role?: string } | null> {
   const userId = (request as unknown as { userId?: string }).userId;
   if (!userId) {
     reply.code(401).send({ error: "Authentication required" });
@@ -18,12 +19,18 @@ async function loadPlanRole(
       where: { id: userId },
       select: { plan: true, role: true },
     });
-    return { plan: user?.plan ?? "FREE", role: user?.role ?? undefined };
+    // A Klorn Teams seat counts: the tier is derived from membership at read
+    // time (org/effective-tier.ts) and never written to User.plan.
+    const tier = await effectiveTier({ id: userId, plan: user?.plan ?? "FREE" });
+    return { tier, role: user?.role ?? undefined };
   } catch (err) {
     // Fail CLOSED (re-throw → Fastify 500): an access guard must not admit a
     // request when it can't determine entitlement. Surface it so a DB fault on
-    // the guard path isn't invisible. captureError no-ops when Sentry is off.
-    captureError(err, { tags: { scope: "entitlement-guard.load-plan" }, extra: { userId } });
+    // the guard path isn't invisible. captureDbFailure no-ops when Sentry is off.
+    captureDbFailure("[entitlement-guard] plan load failed", err, {
+      tags: { scope: "entitlement-guard.load-plan" },
+      extra: { userId },
+    });
     throw err;
   }
 }
@@ -48,7 +55,7 @@ export async function requireEntitled(request: FastifyRequest, reply: FastifyRep
 
   const who = await loadPlanRole(request, reply);
   if (!who) return;
-  if (!isEntitled(who.plan, who.role)) {
+  if (!isEntitled(who.tier, who.role)) {
     return reply.code(403).send({
       error: "An active subscription is required to use this feature.",
       code: "ENTITLEMENT_REQUIRED",
@@ -72,7 +79,7 @@ export async function requireAppAccess(request: FastifyRequest, reply: FastifyRe
 
   const who = await loadPlanRole(request, reply);
   if (!who) return;
-  if (isHardPaywalled(who.plan, who.role)) {
+  if (isHardPaywalled(who.tier, who.role)) {
     return reply.code(403).send({
       error: "An active subscription is required.",
       code: "ENTITLEMENT_REQUIRED",

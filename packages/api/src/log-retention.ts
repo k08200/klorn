@@ -22,12 +22,12 @@
 
 import { prisma } from "./db.js";
 import { MOVED_MESSAGE_RETENTION_DAYS } from "./mail/providers/imap-moved.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
   registerScheduler,
 } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
 import { newWork } from "./work-context.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,6 +36,18 @@ const FIRST_SWEEP_DELAY_MS = 5 * 60 * 1000; // let the server warm up first
 const DELETE_BATCH_SIZE = 5000;
 /** MCP write audit (A2a): a security/activity trail, not a learning input. */
 export const MCP_WRITE_AUDIT_RETENTION_DAYS = 90;
+/** Klorn Vault export audit rows (vault/vault-audit.ts): who exported, when, no content. */
+export const DATA_EXPORT_AUDIT_RETENTION_DAYS = 90;
+/** Rules DSL apply audit rows (mail/rules-dsl-store.ts): who applied, when, counts. */
+export const RULE_CHANGE_AUDIT_RETENTION_DAYS = 90;
+/**
+ * Bell rows the user cleared (Notification.clearedAt). "Clear all" keeps them,
+ * read and out of the bell, only so the "already notified?" reads (7 days at
+ * most, notify/urgent-dedup.ts NOTIFIED_LOOKBACK_MS) still see them; the next
+ * clear deletes those past that window, and this deletes the rest of a user who
+ * never clears again. The shortest window this sweep allows.
+ */
+export const CLEARED_NOTIFICATION_RETENTION_DAYS = 30;
 
 export interface LogRetentionPolicy {
   name: string;
@@ -140,6 +152,29 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
     deleteByIds: (ids) => prisma.mcpWriteAudit.deleteMany({ where: { id: { in: ids } } }),
   },
   {
+    // The user's data exports (Klorn Vault): format, outcome, counts. The
+    // export cooldown only reads the last few minutes; createdAt is indexed.
+    name: "dataExportAudit",
+    column: "createdAt",
+    days: DATA_EXPORT_AUDIT_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.dataExportAudit
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.dataExportAudit.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // The user's Rules DSL applies: counts and a text hash, no rule content.
+    name: "ruleChangeAudit",
+    column: "createdAt",
+    days: RULE_CHANGE_AUDIT_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.ruleChangeAudit
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.ruleChangeAudit.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
     // Where trash/archive parked a Naver or iCloud message so undo can restore it
     // (step B2). Undo consumes a record; the rest expire with Trash's own window.
     // recordMove also sweeps its own account on every move, but an account that
@@ -152,6 +187,23 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.imapMovedMessage.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // Cleared bell rows only (clearedAt set); a row still in the bell is never
+    // touched here.
+    name: "notification",
+    column: "createdAt",
+    days: CLEARED_NOTIFICATION_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.notification
+        .findMany({
+          where: { createdAt: { lt: cutoff }, clearedAt: { not: null } },
+          select: { id: true },
+          take,
+        })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) =>
+      prisma.notification.deleteMany({ where: { id: { in: ids }, clearedAt: { not: null } } }),
   },
 ];
 
@@ -208,8 +260,14 @@ export async function runLogRetentionSweep(
       }
     } catch (err) {
       result[policy.name] = -1;
-      console.error(`[RETENTION] sweep failed for ${policy.name}:`, err);
-      captureError(err, { tags: { scope: "log-retention" }, extra: { table: policy.name } });
+      logDbFailure("[RETENTION] sweep failed", err, {
+        level: "error",
+        ids: { table: policy.name },
+      });
+      captureDbFailure("[RETENTION] sweep failed", err, {
+        tags: { scope: "log-retention" },
+        extra: { table: policy.name },
+      });
     }
   }
   return result;
@@ -235,13 +293,17 @@ export function startLogRetentionScheduler(): void {
       firstRunTimer = null;
       recordSchedulerTick("log-retention");
       runLogRetentionSweep().catch((err) =>
-        captureError(err, { tags: { scope: "log-retention.first-sweep" } }),
+        captureDbFailure("[RETENTION] first sweep failed", err, {
+          tags: { scope: "log-retention.first-sweep" },
+        }),
       );
       intervalId = setInterval(
         newWork(() => {
           recordSchedulerTick("log-retention");
           runLogRetentionSweep().catch((err) =>
-            captureError(err, { tags: { scope: "log-retention.sweep" } }),
+            captureDbFailure("[RETENTION] sweep failed", err, {
+              tags: { scope: "log-retention.sweep" },
+            }),
           );
         }),
         SWEEP_INTERVAL_MS,

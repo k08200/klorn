@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import type { CommitmentKind, CommitmentSource } from "@prisma/client";
 import { prisma } from "../db.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
+import type { ProviderCredentials } from "../providers/index.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import { type DueContext, pickDueAt } from "./commitment-due.js";
@@ -41,6 +42,14 @@ export interface CommitmentIngestionInput {
   senderEmail?: string | null; // email source: set to From address; used for trust score
   senderIsUser?: boolean; // email source: true when the user authored the message themselves
   listUnsubscribe?: boolean; // email source: true when the mail carried a List-Unsubscribe header
+  credentials?: ProviderCredentials; // the user's BYOK keys for the LLM pass; env providers when absent
+  llmFeature?: string; // usage-ledger label for the LLM pass; read from the call stack when absent
+  dedupScope?: string; // what one candidate text is unique within; default threadId, then sourceId
+  // A candidate whose dedupKey already has a row: "refresh" (the default)
+  // refines it again and updates the row; "reattach" leaves the row as it is
+  // (the user may have edited it), skips the LLM, and only moves its
+  // sourceId/threadId to this source (KakaoTalk re-uploads).
+  onDuplicate?: "refresh" | "reattach";
 }
 
 export interface CommitmentIngestionResult {
@@ -58,7 +67,7 @@ function hashText(value: string): string {
 }
 
 function buildDedupKey(input: CommitmentIngestionInput, candidate: CommitmentCandidate): string {
-  const scope = input.threadId || input.sourceId;
+  const scope = input.dedupScope || input.threadId || input.sourceId;
   return `${input.sourceType.toLowerCase()}:${scope}:${hashText(candidate.text)}`;
 }
 
@@ -82,22 +91,54 @@ function confidenceForCandidate(candidate: CommitmentCandidate): number {
   return candidate.dueHint ? 0.55 : 0.45;
 }
 
+/** Sources whose text is written by someone who may not be the user. */
+const SENDERS_VOICE_SOURCES: ReadonlySet<CommitmentSource> = new Set(["EMAIL", "SLACK", "KAKAO"]);
+
 /**
  * EMAIL text is written by the SENDER: a first-person promise in a received
  * email ("I'll push it back to them now") is the sender's commitment, not the
  * user's — the rule extractor's USER owner is a perspective it cannot know.
  * Only when the user authored the message themselves (senderIsUser) does
- * first-person mean the user. Non-email sources (chat, notes) are the user's
- * own voice, so the candidate owner stands.
+ * first-person mean the user. SLACK text is the same: Klorn stores only other
+ * people's Slack messages (docs/providers/slack.md §10). KAKAO is a chat export
+ * holding both sides: each message says whether the user wrote it
+ * (docs/providers/kakaotalk-import.md §4). Other sources (chat, notes) are the
+ * user's own voice, so the candidate owner stands.
  */
 function ownerForCandidate(
   input: CommitmentIngestionInput,
   candidate: CommitmentCandidate,
 ): CommitmentInput["owner"] {
-  if (input.sourceType === "EMAIL" && candidate.owner === "USER" && input.senderIsUser !== true) {
+  const sendersVoice = SENDERS_VOICE_SOURCES.has(input.sourceType);
+  if (sendersVoice && candidate.owner === "USER" && input.senderIsUser !== true) {
     return "COUNTERPARTY";
   }
   return candidate.owner;
+}
+
+/** Below the 0.7 confirmation line (pim/commitment-confirmation.ts). */
+const SUGGESTED_MAX_CONFIDENCE = 0.69;
+
+/**
+ * Slack and KakaoTalk commitments stay suggested until the user confirms one
+ * (docs/providers/slack.md §10, docs/providers/kakaotalk-import.md §4): their
+ * text is someone else's and may be written to steer the refiner, so it never
+ * lands as confirmed on its own.
+ */
+const SUGGESTED_ONLY_SOURCES: ReadonlySet<CommitmentSource> = new Set(["SLACK", "KAKAO"]);
+
+function capSuggested(input: CommitmentIngestionInput, confidence: number): number {
+  return SUGGESTED_ONLY_SOURCES.has(input.sourceType)
+    ? Math.min(confidence, SUGGESTED_MAX_CONFIDENCE)
+    : confidence;
+}
+
+/**
+ * The LLM pass learns who wrote a KAKAO message (an export holds both sides);
+ * other sources keep their prompt unchanged.
+ */
+function authoredByUserFor(input: CommitmentIngestionInput): boolean | undefined {
+  return input.sourceType === "KAKAO" ? input.senderIsUser === true : undefined;
 }
 
 function buildCommitmentInput(
@@ -123,7 +164,7 @@ function buildCommitmentInput(
     sourceId: input.sourceId,
     threadId: input.threadId ?? null,
     evidenceText: compactText(candidate.text, 500),
-    confidence: refinement?.confidence ?? confidenceForCandidate(candidate),
+    confidence: capSuggested(input, refinement?.confidence ?? confidenceForCandidate(candidate)),
     dedupKey,
   };
 }
@@ -143,6 +184,70 @@ function ingestionTimeZone(
     candidates.some((candidate) => candidate.dueHint !== null) ||
     (candidates.length > 0 && isCommitmentLlmRefinementEnabled());
   return readsDates ? getUserTimeZone(input.userId) : Promise.resolve(normalizeTimeZone(undefined));
+}
+
+function optionalRefinerContext(input: CommitmentIngestionInput) {
+  const authoredByUser = authoredByUserFor(input);
+  return {
+    ...(authoredByUser === undefined ? {} : { authoredByUser }),
+    ...(input.credentials ? { credentials: input.credentials } : {}),
+    ...(input.llmFeature ? { feature: input.llmFeature } : {}),
+  };
+}
+
+/**
+ * "reattach": if the candidate's row exists, point it at this source and say
+ * so. Nothing else on the row changes, and no LLM call is made for it.
+ */
+async function reattachExisting(input: CommitmentIngestionInput, dedupKey: string) {
+  const existing = await prisma.commitment.findUnique({
+    where: { userId_dedupKey: { userId: input.userId, dedupKey } },
+    select: { id: true, sourceId: true, threadId: true },
+  });
+  if (!existing) return false;
+  const threadId = input.threadId ?? null;
+  if (existing.sourceId !== input.sourceId || existing.threadId !== threadId) {
+    await prisma.commitment.updateMany({
+      where: { id: existing.id, userId: input.userId },
+      data: { sourceId: input.sourceId, threadId },
+    });
+  }
+  return true;
+}
+
+/** One candidate into the ledger: a new row, an existing one, or none (the refiner said no). */
+async function ingestCandidate(
+  input: CommitmentIngestionInput,
+  candidate: CommitmentCandidate,
+  dueContext: DueContext,
+): Promise<"created" | "duplicate" | "rejected"> {
+  const dedupKey = buildDedupKey(input, candidate);
+  if (input.onDuplicate === "reattach" && (await reattachExisting(input, dedupKey))) {
+    return "duplicate";
+  }
+  const refinement = await maybeRefineCommitmentCandidateWithLlm({
+    candidate,
+    sourceType: input.sourceType,
+    sourceText: input.text,
+    contextTitle: input.contextTitle,
+    referenceDate: dueContext.referenceDate,
+    timeZone: dueContext.timeZone,
+    userId: input.userId,
+    ...optionalRefinerContext(input),
+  });
+  if (refinement?.isCommitment === false) return "rejected";
+  const usableRefinement = refinement?.isCommitment === true ? refinement : null;
+
+  const existing = await prisma.commitment.findUnique({
+    where: { userId_dedupKey: { userId: input.userId, dedupKey } },
+    select: { id: true },
+  });
+
+  await upsertCommitment(
+    input.userId,
+    buildCommitmentInput(input, candidate, usableRefinement, dedupKey, dueContext),
+  );
+  return existing ? "duplicate" : "created";
 }
 
 /**
@@ -179,31 +284,9 @@ export async function extractAndUpsertCommitmentsFromText(
   let duplicatesSkipped = 0;
 
   for (const candidate of candidates) {
-    const refinement = await maybeRefineCommitmentCandidateWithLlm({
-      candidate,
-      sourceType: input.sourceType,
-      sourceText: input.text,
-      contextTitle: input.contextTitle,
-      referenceDate: dueContext.referenceDate,
-      timeZone: dueContext.timeZone,
-      userId: input.userId,
-    });
-    if (refinement?.isCommitment === false) continue;
-    const usableRefinement = refinement?.isCommitment === true ? refinement : null;
-
-    const dedupKey = buildDedupKey(input, candidate);
-    const existing = await prisma.commitment.findUnique({
-      where: { userId_dedupKey: { userId: input.userId, dedupKey } },
-      select: { id: true },
-    });
-
-    await upsertCommitment(
-      input.userId,
-      buildCommitmentInput(input, candidate, usableRefinement, dedupKey, dueContext),
-    );
-
-    if (existing) duplicatesSkipped++;
-    else commitmentsCreated++;
+    const outcome = await ingestCandidate(input, candidate, dueContext);
+    if (outcome === "created") commitmentsCreated++;
+    else if (outcome === "duplicate") duplicatesSkipped++;
   }
 
   return {

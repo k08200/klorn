@@ -4,8 +4,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { PAGE_SHELL } from "../../../components/page-shell";
 import { apiFetch } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
 import { captureClientError } from "../../../lib/sentry";
 import { legacyAnchorSection, settingsSectionHref } from "../sections";
+import { showTeamSection } from "./org/model";
 import { SettingsNav } from "./settings-nav";
 
 /** `null` while the probe is in flight. */
@@ -53,12 +55,13 @@ function useLegacyAnchorRedirect(pathname: string) {
 export function SettingsShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const teamAvailable = useTeamProbe();
+  const { user } = useAuth();
   useLegacyAnchorRedirect(pathname);
 
   return (
     <TeamAvailabilityContext.Provider value={teamAvailable}>
       <div className={`${PAGE_SHELL} md:flex md:gap-8`}>
-        <SettingsNav pathname={pathname} showTeam={teamAvailable === true} />
+        <SettingsNav pathname={pathname} showTeam={showTeamSection(teamAvailable, user?.teams)} />
         <div className="min-w-0 flex-1">{children}</div>
       </div>
     </TeamAvailabilityContext.Provider>

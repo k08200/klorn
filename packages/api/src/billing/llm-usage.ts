@@ -19,7 +19,7 @@
 
 import { LLM_USAGE_LOG_DISABLED } from "../config.js";
 import { estimateModelCostUsd, promptCacheUsageOf } from "../llm/model-fallback.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 // NOTE: db.js (Prisma) is imported LAZILY inside the async functions below.
 // openai.ts imports this module statically, and a static db.js import here
 // would run Prisma's .env autoload BEFORE providers/index.js initializes —
@@ -194,11 +194,12 @@ export async function trueUpCostLedgers(input: {
   } catch (err) {
     // Fire-and-forget settlement: a failure here silently drops a real charge
     // (env-fallthrough cost that should land on the cap/ceiling), so signal it
-    // — captureError alone is invisible without a Sentry DSN.
-    console.warn("[llm-usage] cost true-up failed (model in Sentry extra)", err);
-    captureError(err, {
+    // — captureDbFailure alone is invisible without a Sentry DSN.
+    logDbFailure("[llm-usage] cost true-up failed (model in Sentry extra)", err);
+    // `llmModel`, not `model`: the failure's own `model` fact (the Prisma model) would overwrite it.
+    captureDbFailure("[llm-usage] cost true-up failed (model in Sentry extra)", err, {
       tags: { component: "llm-usage" },
-      extra: { model: input.model, phase: "true-up" },
+      extra: { llmModel: input.model, phase: "true-up" },
     });
   }
 }
@@ -244,12 +245,17 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
     });
   } catch (err) {
     // Ground-truth usage ledger write failed — signal before the silent
-    // captureError so a broken ledger is visible without a Sentry DSN.
-    console.warn("[llm-usage] usage-ledger write failed (provider/model in Sentry extra)", err);
-    captureError(err, {
-      tags: { component: "llm-usage" },
-      extra: { provider: input.provider, model: input.model, source: input.source },
-    });
+    // captureDbFailure so a broken ledger is visible without a Sentry DSN.
+    logDbFailure("[llm-usage] usage-ledger write failed (provider/model in Sentry extra)", err);
+    // `llmModel`, not `model`: the failure's own `model` fact (the Prisma model) would overwrite it.
+    captureDbFailure(
+      "[llm-usage] usage-ledger write failed (provider/model in Sentry extra)",
+      err,
+      {
+        tags: { component: "llm-usage" },
+        extra: { provider: input.provider, llmModel: input.model, source: input.source },
+      },
+    );
   }
 }
 

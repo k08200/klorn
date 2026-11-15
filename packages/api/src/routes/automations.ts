@@ -17,12 +17,12 @@ import {
 import { listReplyTonePolicies, normalizeReplyTone } from "../learning/reply-tone.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
 import {
   NOTIFICATION_LANGUAGES,
   resolveNotificationLanguage,
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
-import { captureError } from "../sentry.js";
 import { normalizeTimeZone, normalizeTimeZoneMode, parseTimeZoneInput } from "../time-zone.js";
 
 // MEDIUM-risk tools that users may pre-approve for AUTO mode.
@@ -323,7 +323,11 @@ export async function automationRoutes(app: FastifyInstance) {
       } catch (err) {
         const capped = costCapRefusal(err);
         if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
-        captureError(err, { tags: { scope: "automations.guideline-advice" }, extra: { userId } });
+        // Facts only: the provider's error can quote the guideline.
+        captureLlmFailure("Guideline advice failed", err, {
+          tags: { scope: "automations.guideline-advice" },
+          extra: { userId, model: DRAFT_MODEL },
+        });
         return reply.code(502).send({ error: "Advice generation failed" });
       }
     },
@@ -344,7 +348,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
       // Run in background so the response returns immediately
       runAgentForUser(userId, mode).catch((err) => {
-        console.error(`[AGENT] Manual run failed for ${userId}:`, err);
+        logLlmFailure("[AGENT] Manual run failed", err, { level: "error", ids: { userId } });
       });
 
       return { triggered: true, mode };
@@ -409,6 +413,9 @@ export async function automationRoutes(app: FastifyInstance) {
           type: "email",
           createdAt: { gte: sinceUtc },
           title: { in: [...URGENT_EMAIL_TITLES] },
+          // A row cleared from the bell leaves this card too, as when clearing
+          // deleted it (the row is kept only for the dedupe reads).
+          clearedAt: null,
         },
         orderBy: { createdAt: "desc" },
         select: { id: true, message: true, link: true, createdAt: true },

@@ -15,7 +15,7 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export async function purgeLegacyGitHubAttention(): Promise<number> {
   try {
@@ -29,8 +29,10 @@ export async function purgeLegacyGitHubAttention(): Promise<number> {
     return count;
   } catch (err) {
     // Never blocks boot: a failed pass simply retries on the next restart.
-    console.warn("[GITHUB-PURGE] cleanup failed:", err);
-    captureError(err, { tags: { scope: "github.legacy-purge" } });
+    logDbFailure("[GITHUB-PURGE] cleanup failed", err);
+    captureDbFailure("[GITHUB-PURGE] cleanup failed", err, {
+      tags: { scope: "github.legacy-purge" },
+    });
     return 0;
   }
 }

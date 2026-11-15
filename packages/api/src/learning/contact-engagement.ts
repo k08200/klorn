@@ -10,6 +10,7 @@
 
 import { prisma } from "../db.js";
 import { extractEmailAddress } from "../mail/email-address.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 export type Engagement = "outbound" | "dismiss";
 
@@ -39,10 +40,6 @@ export async function recordContactEngagement(
       },
     });
   } catch (err) {
-    console.warn(
-      "[contact-engagement] record failed",
-      kind,
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[contact-engagement] record failed", err, { ids: { kind } });
   }
 }

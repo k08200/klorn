@@ -12,8 +12,8 @@
 import { asEnum } from "../llm/llm-coerce.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
+import { captureLlmFailure, logLlmFailure, offeredKeyKind } from "../llm/report-llm-failure.js";
 import type { ProviderCredentials } from "../providers/index.js";
-import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 
 export type EmailPriority = "high" | "medium" | "low";
@@ -46,7 +46,16 @@ export interface ClassifiableEmail {
    * the v2 transactional detector to keep marketing out of the INFO lane.
    */
   hasListUnsubscribe?: boolean;
+  /**
+   * Set when the item is a Slack conversation episode, not an email
+   * (docs/providers/slack.md §8): the judge scores it with a Slack prompt and
+   * skips its email-address shortcuts and floors. `body` holds the messages.
+   */
+  slack?: { conversation: SlackConversationKind };
 }
+
+/** How a Slack episode reached the user: DM, group DM, @mention, or a followed channel. */
+export type SlackConversationKind = "dm" | "group_dm" | "mention" | "opt_in";
 
 export interface ClassifiedLabel {
   priority: EmailPriority;
@@ -283,8 +292,14 @@ async function classifyBatchWithLlm(
     // Fall back to the keyword path, but leave a signal: a misconfigured BYOK
     // key (401) or a quota-locked model would otherwise silently degrade every
     // batch with no trace (captureError is a no-op without a Sentry DSN).
-    console.warn("[CLASSIFIER] LLM batch failed — falling back to keyword path", err);
-    captureError(err, { tags: { scope: "email-classifier.llm" } });
+    // Facts only: the provider's error can quote the batch's mail, and
+    // parseLlmJson's SyntaxError quotes the model's reply.
+    const label = "[CLASSIFIER] LLM batch failed — falling back to keyword path";
+    logLlmFailure(label, err);
+    captureLlmFailure(label, err, {
+      tags: { scope: "email-classifier.llm" },
+      extra: { keyKind: offeredKeyKind(credentials), model: JUDGE_MODEL, batchSize: emails.length },
+    });
     return null;
   }
 }

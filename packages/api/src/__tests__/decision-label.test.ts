@@ -11,6 +11,7 @@ vi.mock("../db.js", () => {
   const prisma = {
     decisionLabel: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       upsert: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -23,6 +24,7 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 import { prisma } from "../db.js";
 import {
   ENGAGEMENT_OUTCOMES,
+  findRungEmailIds,
   recordDecision,
   recordEmailDecision,
   stampDecisionOutcome,
@@ -34,6 +36,7 @@ import { captureError } from "../sentry.js";
 
 type DecisionLabelMock = {
   findUnique: ReturnType<typeof vi.fn>;
+  findMany: ReturnType<typeof vi.fn>;
   upsert: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
 };
@@ -312,5 +315,40 @@ describe("stampDecisionRang (the interrupt actually fired)", () => {
     decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
     await expect(stampDecisionRang("user-1", ["e1"], AT)).resolves.toBeUndefined();
     expect(captureError).toHaveBeenCalled();
+  });
+});
+
+describe("findRungEmailIds (the per-mail 'already rang' fact)", () => {
+  it("reads the user's EMAIL rows that rang, in one query", async () => {
+    decisionLabel.findMany.mockResolvedValue([{ sourceId: "e2" }]);
+
+    const rung = await findRungEmailIds("user-1", ["e1", "e2"]);
+
+    expect([...rung]).toEqual(["e2"]);
+    expect(decisionLabel.findMany).toHaveBeenCalledTimes(1);
+    expect(decisionLabel.findMany.mock.calls[0][0]).toEqual({
+      where: {
+        userId: "user-1",
+        source: "EMAIL",
+        sourceId: { in: ["e1", "e2"] },
+        rangAt: { not: null },
+      },
+      select: { sourceId: true },
+    });
+  });
+
+  it("skips the query for an empty list", async () => {
+    expect((await findRungEmailIds("user-1", [])).size).toBe(0);
+    expect(decisionLabel.findMany).not.toHaveBeenCalled();
+  });
+
+  it("a failed read is reported and names no mail (callers keep the bell-row dedupe)", async () => {
+    decisionLabel.findMany.mockRejectedValue(new Error("db down"));
+    const rung = await findRungEmailIds("user-1", ["e1"]);
+    expect(rung.size).toBe(0);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ tags: expect.objectContaining({ op: "find-rang" }) }),
+    );
   });
 });

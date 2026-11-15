@@ -36,6 +36,13 @@ import {
   summarizeTraitRuns,
 } from "../learning/sender-trait-extractor.js";
 import { computeTraitSourceSig } from "../learning/sender-trait-signature.js";
+import { captureError } from "../sentry.js";
+import {
+  callText,
+  exhaustedOverQuotingError,
+  LLM_CANARY,
+  NON_JSON_REPLY,
+} from "./helpers/canary.js";
 
 const emails = [
   { from: "vc@fund.com", subject: "Investment", snippet: "we want to invest", labels: [] },
@@ -309,5 +316,40 @@ describe("extractTraitsFromEmails — evidence is stored as plain text", () => {
     const traits = await extractTraitsFromEmails(emails, {});
 
     expect(traits[0]?.evidenceText).toBe("we want to invest");
+  });
+});
+
+describe("sender-trait failure reports carry no provider or model text", () => {
+  beforeEach(() => {
+    prismaMock.emailMessage.findMany
+      .mockReset()
+      .mockResolvedValue([{ from: "a@x.com", subject: "s", snippet: "b", labels: [] }]);
+    prismaMock.senderTrait.findMany.mockReset().mockResolvedValue([]);
+    vi.mocked(captureError).mockClear();
+  });
+
+  it.each([
+    [
+      "an exhausted chain over a quoting provider error",
+      () => createCompletionMock.mockRejectedValueOnce(exhaustedOverQuotingError()),
+    ],
+    [
+      "a non-JSON reply",
+      () =>
+        createCompletionMock.mockResolvedValueOnce({
+          choices: [{ message: { content: NON_JSON_REPLY } }],
+        }),
+    ],
+  ])("reports %s at extraction and per sender as facts only", async (_label, arrange) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    arrange();
+
+    const summary = await extractSenderTraitsForUser("user-1");
+
+    expect(summary.sendersFailed).toBe(1);
+    const scopes = vi.mocked(captureError).mock.calls.map((call) => call[1]?.tags?.scope);
+    expect(scopes).toEqual(["sender-traits.extract", "sender-traits.sender"]);
+    expect(callText(vi.mocked(captureError)) + callText(warn)).not.toContain(LLM_CANARY);
+    warn.mockRestore();
   });
 });

@@ -525,7 +525,8 @@ describe("sendEmail — failures", () => {
     });
     expect(result).toEqual({ error: "Naver did not accept the sending address." });
     expect(result).not.toEqual({ error: "Naver rejected the recipient address." });
-    expect(loggedText()).toContain("command=MAIL FROM");
+    expect(loggedText()).toContain("send refused by the server");
+    expect(loggedText()).toContain("EENVELOPE");
     // not a rejected password: no cooldown, the next send connects
     const retry = await naver.sendEmail("u1", "bob@example.com", "Hi", "b", [], {
       linkedInboxAccountId: "row-1",

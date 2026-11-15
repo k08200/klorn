@@ -1084,6 +1084,8 @@ const en: Record<string, string> = {
     "This plan isn't billed on the web, so there is nothing to cancel here. If you subscribed in the mobile app, manage it there.",
   "billing.enterpriseBilling":
     "Enterprise is billed by agreement — contact sales to change the plan.",
+  "billing.teamSeatCoversPro":
+    "Your team seat already includes everything in Pro. Your personal Pro still renews — cancel it if you no longer need both.",
   "billing.keepSubscription": "Keep subscription",
   "billing.renewsOn": "Renews on {date}",
   "billing.trialFirstCharge": "Free trial · first charge on {date}",
@@ -2056,6 +2058,7 @@ const en: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook and Microsoft 365 mail.",
   "onboardingV2.tile.naver.scope": "Naver Mail, with an app password.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, with an app-specific password.",
+  "onboardingV2.tile.preset.scope": "Mail, with an app password.",
   "onboardingV2.tile.readOnly":
     "Read-only for now. Reply, archive and mark as read in the provider's own app.",
   "onboardingV2.health.connected": "Connected",
@@ -2067,6 +2070,9 @@ const en: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "Connect iCloud Mail",
   "onboardingV2.sheet.icloud.body":
     "A one-time connection. Apple asks for an app-specific password, not your Apple Account password. Klorn stores it encrypted.",
+  "onboardingV2.sheet.preset.title": "Connect {provider}",
+  "onboardingV2.sheet.preset.body":
+    "A one-time connection. The form says which password {provider} asks for. Klorn stores it encrypted.",
   "onboardingV2.sheet.close": "Close",
   "onboardingV2.sheet.done": "Done",
   "onboardingV2.return.okTitle": "{provider} connected.",
@@ -2233,6 +2239,37 @@ const en: Record<string, string> = {
   "imap.naver.advancedHost": "Advanced: IMAP host",
   "imap.naver.hostLabel": "IMAP host",
   "imap.naver.connect": "Connect Naver Mail",
+  "imapPreset.body":
+    "Connect a {provider} mailbox via IMAP. Klorn sorts every incoming message into the same {count} lanes as Gmail.",
+  "imapPreset.error.status": "Could not load {provider} connection status.",
+  "imapPreset.confirmDisconnect.title": "Disconnect {email}?",
+  "imapPreset.emailLabel": "Email address",
+  "imapPreset.passwordLabel.app": "App password",
+  "imapPreset.help.link": "{provider} help",
+  "imapPreset.help.stored": "Klorn stores it encrypted, never the plaintext.",
+  "imapPreset.connect": "Connect {provider}",
+  "imapPreset.error.auth":
+    "{provider} did not accept that address and password. Follow the steps above, then try again.",
+  "imapPreset.error.tooManyAttempts": "Too many attempts. Wait a few minutes, then try again.",
+  "imapPreset.hint.daum":
+    "Turn on IMAP in Daum Mail settings, set up two-step verification, then create an app password. Your Daum password will not work here.",
+  "imapPreset.hint.kakao":
+    "Turn on IMAP in Kakao Mail settings, set up two-step verification for your Kakao account, then create an app password. Your Kakao password will not work here.",
+  "imapPreset.hint.yahoo":
+    "Create an app password in your Yahoo account's security settings. Your Yahoo password will not work here.",
+  "imapPreset.hint.aol":
+    "Create an app password in your AOL account's security settings. Your AOL password will not work here.",
+  "imapPreset.hint.fastmail":
+    "Create an app password with IMAP and SMTP access in Fastmail settings (Privacy & Security). Your Fastmail password will not work here.",
+  "imapPreset.hint.zoho":
+    "Turn on IMAP access in Zoho Mail settings, turn on two-factor authentication, then create an application-specific password. Your Zoho password will not work here.",
+  "imapPreset.hint.zohopro":
+    "For paid Zoho organization (custom-domain) accounts. Turn on IMAP access in Zoho Mail settings (your admin may need to allow it), turn on two-factor authentication, then create an application-specific password. Your Zoho password will not work here.",
+  "imapGeneric.title": "Other mail servers (IMAP)",
+  "imapGeneric.body":
+    "Accounts connected with a mail server address. Shown for reference: this page cannot reconnect or remove them.",
+  "imapGeneric.authRefused":
+    "The mail server refused the saved sign-in. This page cannot reconnect it.",
   "telegram.error.status": "Could not load Telegram link status.",
   "telegram.error.link": "Could not start Telegram linking.",
   "telegram.error.disconnect": "Could not disconnect Telegram.",
@@ -2968,6 +3005,344 @@ const en: Record<string, string> = {
     "The reminder needs a connected Google Calendar, so none was set.",
   "smartActions.event.saveHint": "Fill in the title, day, start time and length to save.",
   "smartActions.event.savedWhen": "{date} at {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Export as markdown",
+  "vaultExport.desc":
+    "Export your Klorn data as markdown: lanes, senders, commitments and one note per mail, ready to open in Obsidian or any editor.",
+  "vaultExport.button": "Download .zip",
+  "vaultExport.includeText": "Include mail text",
+  "vaultExport.includeText.desc":
+    "Adds the text of each mail Klorn still keeps. Without it, notes hold the subject, preview and Klorn's decision.",
+  "vaultExport.done": "Markdown export downloaded.",
+  "vaultExport.error.cooldown": "You exported recently. Try again in {minutes} min.",
+  "vaultExport.error.inProgress": "An export is already running. Wait for it to finish.",
+  "vaultExport.error.busy": "Exports are busy right now. Try again in a minute.",
+  "vaultExport.error.unavailable": "Markdown export isn't available for this account.",
+  "vaultExport.error.failed": "Markdown export failed. Try again.",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn reads your Slack DMs, group DMs and mentions of you, and judges them into your lanes. It never posts, reacts or marks anything read.",
+  "slack.start": "Start setup",
+  "slack.step.manifest": "Download the app manifest. It already holds your Request URL.",
+  "slack.downloadManifest": "Download manifest",
+  "slack.requestUrl": "Request URL",
+  "slack.step.create":
+    "In Slack, create an app from the manifest (Create New App → From a manifest) and install it to your workspace.",
+  "slack.openSlackApps": "Open Slack apps",
+  "slack.step.paste":
+    "Paste the app's Signing Secret (Basic Information) and User OAuth Token (OAuth & Permissions). Klorn checks the token and does not keep it.",
+  "slack.signingSecret": "Signing secret",
+  "slack.userToken": "User OAuth Token",
+  "slack.connect": "Connect",
+  "slack.step.verify":
+    "In Slack's Event Subscriptions, press Retry so Slack verifies the Request URL.",
+  "slack.setupAgain": "Setup steps",
+  "slack.connected": "Slack connected",
+  "slack.status.connected": "Connected to {workspace}",
+  "slack.status.waiting": "Waiting for Slack to verify the Request URL.",
+  "slack.status.lastEvent": "Last event from Slack: {time}",
+  "slack.channels.title": "Channels to follow",
+  "slack.channels.desc":
+    "Every message in these channels is judged, not only mentions of you. Paste channel IDs (channel details → About), separated by commas or spaces.",
+  "slack.channels.save": "Save channels",
+  "slack.channels.saved": "Channels saved",
+  "slack.disconnect": "Disconnect",
+  "slack.disconnect.title": "Disconnect Slack?",
+  "slack.disconnect.message":
+    "Klorn deletes the signing secret, every Slack message and verdict it stored, and the commitments it found in Slack. Delete the app in Slack too.",
+  "slack.disconnected": "Slack disconnected. Klorn deleted what it stored.",
+  "slack.error.invalid-signing-secret": "That is not a Slack signing secret.",
+  "slack.error.bot-token": "That is a bot token. Paste the User OAuth Token (xoxp-…).",
+  "slack.error.invalid-user-token": "That is not a Slack user token (xoxp-…).",
+  "slack.error.slack-rejected-token": "Slack did not accept this token.",
+  "slack.error.slack-unreachable": "Could not reach Slack. Try again.",
+  "slack.error.bad-response": "Slack answered in a way Klorn could not use. Try again.",
+  "slack.error.missing-scopes": "The token is missing scopes Klorn needs: {scopes}",
+  "slack.error.extra-scopes":
+    "The token has scopes Klorn must not hold: {scopes}. Remove them from the app and reinstall it.",
+  "slack.error.invalid-channels": "Use up to 50 channel IDs like C0123456789.",
+  "slack.error.public-url-missing":
+    "This Klorn server has no public URL, so Slack cannot reach it.",
+  "slack.error.not-started": "Start the Slack setup first.",
+  "slack.error.rate-limited": "Too many attempts. Try again later.",
+  "slack.error.generic": "Something went wrong with Slack. Try again.",
+  "slack.retry": "Try again",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "KakaoTalk chat import",
+  "kakaoImport.desc":
+    "Upload one chat you exported from KakaoTalk. Klorn reads its last 30 days and suggests commitments for you to confirm. A one-time import, not a sync.",
+  "kakaoImport.howTo.title": "How to export a chat",
+  "kakaoImport.howTo.mobile":
+    "Phone: open the chat, tap ≡ → Settings (⚙) → Export chat → Export text only. If you get a .zip, unzip it and upload the .txt inside.",
+  "kakaoImport.howTo.pc":
+    "PC or Mac: open the chat, open ≡ → Export chat (Save chat), and save it as .txt or .csv.",
+  "kakaoImport.file": "Exported chat (.txt or .csv, UTF-8, up to 10 MB)",
+  "kakaoImport.preview": "Check file",
+  "kakaoImport.previewSummary":
+    "{total} messages in the file. Klorn will read {window} text messages from the last {days} days.",
+  "kakaoImport.truncated": "Only the most recent ones are read.",
+  "kakaoImport.me.legend": "Which name is you?",
+  "kakaoImport.me.count": "{count} recent messages",
+  "kakaoImport.consent":
+    "This file holds other people's messages, and I may share this chat with Klorn. Klorn sends recent messages that look like promises to its AI model and deletes the stored chat text within 7 days at most. Suggested commitments keep a short quote and the speaker's name until you delete them.",
+  "kakaoImport.import": "Import",
+  "kakaoImport.cancel": "Cancel",
+  "kakaoImport.imported": "Import started. Suggestions will appear in Commitments → To confirm.",
+  "kakaoImport.history.title": "Imports",
+  "kakaoImport.importedAt": "Imported {time}",
+  "kakaoImport.status.PENDING": "Waiting",
+  "kakaoImport.status.PROCESSING": "Reading",
+  "kakaoImport.status.DONE": "Done",
+  "kakaoImport.status.FAILED": "Failed",
+  "kakaoImport.result": "{created} new suggestions from {messages} messages.",
+  "kakaoImport.result.partial":
+    "{created} new suggestions from {messages} messages. Stopped early at the per-import limit.",
+  "kakaoImport.result.waiting": "Reading {messages} messages…",
+  "kakaoImport.result.expired": "Expired before it was read. Import the chat again.",
+  "kakaoImport.result.failed": "Klorn could not read this import. Delete it and try again.",
+  "kakaoImport.delete": "Delete",
+  "kakaoImport.delete.title": "Delete this import?",
+  "kakaoImport.delete.message":
+    "Klorn deletes the import and every commitment that came from it, including ones you already confirmed.",
+  "kakaoImport.deleted": "Import deleted, with its suggestions.",
+  "kakaoImport.retry": "Try again",
+  "kakaoImport.error.empty-file": "The file is empty.",
+  "kakaoImport.error.file-too-large": "The file is larger than 10 MB.",
+  "kakaoImport.error.unsupported-encoding":
+    "The file is not UTF-8 text. Export it again from KakaoTalk.",
+  "kakaoImport.error.zip-not-supported":
+    "Unzip the export and upload the .txt or .csv file inside.",
+  "kakaoImport.error.unknown-format": "This does not look like a KakaoTalk chat export.",
+  "kakaoImport.error.no-messages": "The export holds no messages.",
+  "kakaoImport.error.too-many-lines": "The file has too many lines.",
+  "kakaoImport.error.too-many-messages": "The file has too many messages.",
+  "kakaoImport.error.too-many-speakers": "The chat has too many participants (500 at most).",
+  "kakaoImport.error.invalid-upload": "Klorn could not read the upload. Try again.",
+  "kakaoImport.error.consent-required": "Confirm that you may import this chat first.",
+  "kakaoImport.error.speaker-not-found": "Pick your own name from the list.",
+  "kakaoImport.error.too-many-imports":
+    "You can keep 20 imports at most. Delete an older one first.",
+  "kakaoImport.error.busy": "Imports are busy right now. Try again in a minute.",
+  "kakaoImport.error.import-in-progress":
+    "Wait for your imports in progress to finish before adding another.",
+  "kakaoImport.error.not-found": "That import no longer exists.",
+  "kakaoImport.error.rate-limited": "Too many attempts. Try again later.",
+  "kakaoImport.error.generic": "Something went wrong with the KakaoTalk import. Try again.",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "Rules as text",
+  "rulesDsl.desc":
+    "See and edit your lane rules as plain text. Keep a copy in git or your notes, check it, preview it on recent mail, then apply.",
+  "rulesDsl.editorLabel": "Rules text",
+  "rulesDsl.validate": "Check",
+  "rulesDsl.dryRun": "Preview on recent mail",
+  "rulesDsl.apply": "Apply",
+  "rulesDsl.reload": "Reload",
+  "rulesDsl.loading": "Loading your rules…",
+  "rulesDsl.valid": "No problems found. Rules: {n}.",
+  "rulesDsl.errorsTitle": "Problems to fix: {n}",
+  "rulesDsl.errorAt": "Line {line}, column {column}:",
+  "rulesDsl.errorsTruncated": "Only the first 50 problems are listed.",
+  "rulesDsl.preview.title": "Preview",
+  "rulesDsl.preview.summary":
+    "Of your last {examined} sorted mails, {changed} would land in a different lane.",
+  "rulesDsl.preview.none": "None of your last {examined} sorted mails would change lane.",
+  "rulesDsl.preview.manualKept": "Mails you moved yourself keep their lane: {n}.",
+  "rulesDsl.preview.toJudge": "decided by Klorn again",
+  "rulesDsl.preview.count": "Mails: {n}",
+  "rulesDsl.preview.examples": "Examples",
+  "rulesDsl.preview.note": "Rules apply to new mail. Mail that is already sorted keeps its lane.",
+  "rulesDsl.confirm.title": "Apply these rules?",
+  "rulesDsl.confirm.message":
+    "Your lane rules will be replaced by this text. Reply rules and learned rules stay as they are. New mail follows the new rules.",
+  "rulesDsl.confirm.label": "Apply rules",
+  "rulesDsl.applied": "Rules applied: {added} added, {changed} changed, {removed} removed.",
+  "rulesDsl.error.changed": "Your rules changed since you opened them. Reload, then apply again.",
+  "rulesDsl.error.invalid": "The rules text has problems. Fix them, then try again.",
+  "rulesDsl.error.tooLarge": "The rules text is too large.",
+  "rulesDsl.error.rateLimited": "Too many requests. Try again in a minute.",
+  "rulesDsl.error.unavailable": "Rules as text isn't available for this account.",
+  "rulesDsl.notApplicable":
+    "Your rules are over the text editor's limits (500 rules, 64 KiB), so they can't be applied from here. Edit them in the list above.",
+  "rulesDsl.error.failed": "Something went wrong. Try again.",
+  // Klorn Teams: Settings → Team organization pages and the invite accept page
+  "settings.org.title": "Organization",
+  "settings.org.loading": "Loading your organization…",
+  "settings.org.intro":
+    "Create an organization so your team can find time together through the assistant. Your organization never sees your mail.",
+  "settings.org.create.name": "Organization name",
+  "settings.org.create.button": "Create organization",
+  "settings.org.role.owner": "Owner",
+  "settings.org.role.member": "Member",
+  "settings.org.members.title": "Members",
+  "settings.org.members.you": "(you)",
+  "settings.org.members.seated": "Seat",
+  "settings.org.members.unseated": "No seat",
+  "settings.org.members.sharesFreeBusy": "Shares free/busy",
+  "settings.org.members.makeOwner": "Make owner",
+  "settings.org.members.remove": "Remove",
+  "settings.org.members.confirmRemove": "Remove {name} from the organization?",
+  "settings.org.members.confirmTransfer": "Make {name} the owner? You will become a member.",
+  "settings.org.invite.title": "Invite by email",
+  "settings.org.invite.label": "Email address",
+  "settings.org.invite.placeholder": "name@company.com",
+  "settings.org.invite.button": "Send invite",
+  "settings.org.invite.sent": "Invite sent to {email}.",
+  "settings.org.invite.pending": "Pending invites",
+  "settings.org.invite.expires": "Expires {date}",
+  "settings.org.invite.revoke": "Revoke",
+  "settings.org.freeBusy.label": "Share my free/busy with the organization",
+  "settings.org.freeBusy.hint":
+    "Busy times only — never event titles, attendees or locations. You can turn it off at any time.",
+  "settings.org.admin.title": "Admin controls",
+  "settings.org.admin.autoReplyOff": "Turn off auto-reply for everyone",
+  "settings.org.admin.agentCap": "Highest agent mode",
+  "settings.org.admin.appliesToAll": "Applies to everyone in the organization, the owner included.",
+  "settings.org.cap.none": "No limit",
+  "settings.org.cap.suggest": "Up to Review",
+  "settings.org.cap.shadow": "Up to Observe",
+  "settings.org.cap.off": "Agent off",
+  "settings.org.seats.title": "Seats",
+  "settings.org.seats.summary": "{used} members · {purchased} seats",
+  "settings.org.seats.status.active": "Active",
+  "settings.org.seats.status.trialing": "Trial",
+  "settings.org.seats.status.pastDue": "Payment overdue",
+  "settings.org.seats.status.paused": "Paused",
+  "settings.org.seats.status.canceled": "Canceled",
+  "settings.org.seats.status.none": "No subscription",
+  "settings.org.checkout.unavailable": "Team billing isn't available yet. Nothing will be charged.",
+  "settings.org.checkout.seats": "Seats (2–150)",
+  "settings.org.checkout.monthly": "Pay monthly · {price} per seat",
+  "settings.org.checkout.annual": "Pay yearly · {price} per seat per month",
+  "settings.org.checkout.monthlyPlain": "Pay monthly",
+  "settings.org.checkout.annualPlain": "Pay yearly",
+  "settings.org.seats.change": "Seats ({min}–{max})",
+  "settings.org.seats.changeAction": "Update seats",
+  "settings.org.seats.floor":
+    "At least {min}: the team minimum, and one seat for every member. Paddle charges or credits the difference for the rest of this billing period.",
+  "settings.org.seats.payerOnly":
+    "Adding seats charges the card on file right away, so only the person who pays for the team can add them. Any owner can remove seats.",
+  "settings.org.seats.capped":
+    "Without the email address that pays for the team, you can raise seats to {max} in this change. The person whose email pays can add more. Any owner can remove seats.",
+  "settings.org.seats.cappedNone":
+    "Without the email address that pays for the team, you can't add seats right now. The person whose email pays can add more. Any owner can remove seats.",
+  "settings.org.seats.pending": "Sent to Paddle. {seats} seats show here once Paddle confirms.",
+  "settings.org.seats.unchanged": "The organization already has {seats} seats.",
+  "settings.org.subscription.cancel": "Cancel subscription",
+  "settings.org.subscription.cancelTitle": "Cancel the team subscription?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Everyone keeps their seat until the end of the period already paid for. Then the team plan ends for every member, and nothing more is charged.",
+  "settings.org.subscription.cancelConfirm": "Cancel at period end",
+  "settings.org.subscription.keep": "Keep subscription",
+  "settings.org.subscription.keepPayerOnly":
+    "Only the person who pays for the team, or the owner who set it to end here, can keep it, because billing restarts on the payer's card.",
+  "settings.org.subscription.portalPayerOnly":
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
+  "settings.org.subscription.endsOn": "The subscription ends on {date}. Seats stay until then.",
+  "settings.org.subscription.endsSoon":
+    "The subscription ends at the end of this billing period. Seats stay until then.",
+  "settings.org.subscription.portal": "Manage billing",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "The organization has more members than that. Remove members before you remove their seats.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Seats can change only while the subscription is active. Whoever pays can fix the payment method in the billing portal.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "The subscription is set to end. Keep it first, then change seats.",
+  "settings.org.error.NO_SUBSCRIPTION": "This organization has no team subscription.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "A paused subscription can only be ended from the billing portal.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "The billing portal opens only for the email address that pays for the team. That person can also use the link in Paddle's receipt emails.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "Only the person who pays for the team can add seats, because the card on file is charged right away. Ask them to add seats from their own Klorn account (Paddle's receipt emails go to them). You can still remove seats.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "That's more seats than you can add without the email address that pays for the team. The person whose email pays can add more from their own Klorn account (Paddle's receipt emails go to them). You can still remove seats.",
+  "settings.org.error.SEATS_CHANGED":
+    "The seat count changed while this was saving. Check the current count and try again.",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team, or the owner who set it to end in Klorn, can do it. Ask the payer to keep it from their own Klorn account (Paddle's receipt emails go to them).",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle didn't answer, so nothing was changed. Try again in a minute.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle didn't confirm the change, so it may not have gone through. Check again in a minute before you retry.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "Team billing isn't available right now. Nothing was changed.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "This subscription can't change seats here. Contact support.",
+  "settings.org.transparency.title": "What your organization can see",
+  "settings.org.transparency.can": "Can see",
+  "settings.org.transparency.cannot": "Never sees",
+  "settings.org.transparency.notSharing": "(you are not sharing it)",
+  "settings.org.transparency.reads": "Recent reads of your free/busy",
+  "settings.org.transparency.noReads": "No one has read your free/busy yet.",
+  "settings.org.transparency.read": "{who} · {date}",
+  "settings.org.transparency.formerMember": "A former member",
+  "settings.org.transparency.domains": "Company domains in your triage",
+  "settings.org.transparency.domainsLine":
+    "Verified mail from {domains} is named as from a colleague at your company in your triage reasons. Your organization never sees which mail that was.",
+  "settings.org.visible.roles": "Your name, email address and role",
+  "settings.org.visible.seats": "Whether you hold a paid seat",
+  "settings.org.visible.cost": "The seat price and the subscription's state",
+  "settings.org.visible.freeBusy": "Your busy times, only while you share them",
+  "settings.org.visible.auditLog": "Admin actions and who read your free/busy",
+  "settings.org.never.mail": "Your mail",
+  "settings.org.never.attentionItems": "Your lanes and alerts",
+  "settings.org.never.commitments": "Your commitments",
+  "settings.org.never.drafts": "Your drafts and replies",
+  "settings.org.never.dossiers": "Your contact notes",
+  "settings.org.never.eventDetails": "Event titles, attendees and locations",
+  "settings.org.never.chat": "Your assistant chats",
+  "settings.org.never.contacts": "Your contacts",
+  "settings.org.never.usage": "Your usage",
+  "settings.org.leave.button": "Leave organization",
+  "settings.org.leave.confirm": "Leave {org}?",
+  "settings.org.leave.ownerHint":
+    "As the owner, make someone else the owner before you leave. Alone in the organization, leaving closes it.",
+  "settings.org.error.generic": "Something went wrong. Try again.",
+  "settings.org.error.EMAIL_NOT_VERIFIED": "Verify your email address first.",
+  "settings.org.error.ALREADY_IN_ORG": "You are already in an organization.",
+  "settings.org.error.ALREADY_MEMBER": "That address is already a member.",
+  "settings.org.error.INVALID_EMAIL": "Enter a valid email address.",
+  "settings.org.error.INVALID_NAME":
+    "Give the organization a name of up to 80 characters (not a link).",
+  "settings.org.error.INVALID_DOMAINS": "Company domains must be up to 10 domain names.",
+  "settings.org.error.INVITE_LIMIT": "Too many invites today. Try again tomorrow.",
+  "settings.org.error.MEMBER_LIMIT": "An organization holds up to 150 members and pending invites.",
+  "settings.org.error.OWNER_MUST_TRANSFER": "Make another member the owner before you leave.",
+  "settings.org.error.SUBSCRIPTION_ACTIVE":
+    "This organization has a team subscription. Cancel it first.",
+  "settings.org.error.INVITE_EMAIL_FAILED": "The invite email could not be sent. Try again.",
+  "settings.org.error.INVITE_EXPIRED": "This invite has expired. Ask for a new one.",
+  "settings.org.error.INVITE_USED": "This invite was already used.",
+  "settings.org.error.INVITE_INVALID": "This invite link is not valid.",
+  "settings.org.error.INVITE_EMAIL_MISMATCH":
+    "This invite was sent to a different address. Sign in with that address to accept it.",
+  "settings.org.error.TEAM_CHECKOUT_UNAVAILABLE":
+    "Team billing isn't available yet. Nothing was charged.",
+  "settings.org.error.INVALID_SEATS": "Choose 2–150 seats. For larger teams, contact us.",
+  "settings.org.error.rate-limited": "Too many requests. Try again later.",
+  "teamInvite.loading": "Checking the invite…",
+  "teamInvite.missing": "Open this page from the link in your invite email.",
+  "teamInvite.title": "Join {org}",
+  "teamInvite.body":
+    "{org} will see your name, email address, role and seat. It never sees your mail, your lanes or your commitments. It can also turn off auto-reply or limit the agent for everyone.",
+  "teamInvite.accept": "Join {org}",
+  "teamInvite.joined": "You joined {org}.",
+  "teamInvite.openSettings": "Open team settings",
+  "settings.org.error.OWNER_ONLY": "Only the organization's owner can do this.",
+  "settings.org.error.NOT_IN_ORG": "You are not in an organization.",
+  "settings.org.error.MEMBER_NOT_FOUND": "That member is no longer in the organization.",
+  "settings.org.error.INVITE_NOT_FOUND": "That invite is no longer pending.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "Make someone else the owner before removing the owner.",
+  "settings.org.retry": "Try again",
+  "settings.org.loadFailed": "This part could not be loaded.",
+  "settings.org.transparency.ceilings": "Limits your organization sets for you",
+  "settings.org.transparency.ceiling.none": "None",
+  "settings.org.transparency.ceiling.autoReplyOff": "Auto-reply is off",
+  "settings.org.transparency.ceiling.cap.off": "The agent is off",
+  "settings.org.transparency.ceiling.cap.shadow": "The agent only observes",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "The agent only suggests; it never acts on its own",
 };
 
 export default en;

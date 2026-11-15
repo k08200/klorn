@@ -25,12 +25,14 @@ import {
   allowedKindsFromConfig,
   CATCHUP_MAX,
   freshLedger,
+  HELD_CAP,
   interruptFromRow,
   MEETING_CATCHUP_WINDOW_MS,
   PUSH_BELL_TITLE,
   parseLedger,
   planCatchUp,
   planLiveAlert,
+  recording,
   resolveLedger,
   SETTLE_MS,
 } from "../../../web/src/lib/native/desktop-catchup";
@@ -312,14 +314,77 @@ describe("planLiveAlert — the real-time path shares the ledger", () => {
     expect(plan(first.next, [pushRow("n1", 2 * MIN)]).toBanner).toEqual([]);
   });
 
-  it("records an UNTAGGED interrupt frame silently — the server's gate said no", () => {
+  it("records an UNTAGGED frame that names no single mail — nothing could catch it up", () => {
     // Quiet hours / opted out: the server sent the frame without `alert`.
-    // Catch-up must not banner it a minute later from the bell refetch.
+    // Without `mail` there is no one mail for the urgent-mail catch-up to ask
+    // about, and the meeting catch-up must not banner it from the refetch.
     const { alert: _drop, ...untagged } = tagged;
     const result = planLiveAlert(established(), untagged);
     expect(result.alert).toBeNull();
     expect(result.next.notified).toEqual(["n1"]);
+    expect(result.next.held).toBeUndefined();
     expect(plan(result.next, [pushRow("n1", 2 * MIN)]).toBanner).toEqual([]);
+  });
+
+  const mailFrame = (id: string, emailId = `mail-${id}`) => ({
+    id,
+    type: "email",
+    title: PUSH_BELL_TITLE,
+    message: "Kim: Q4 budget",
+    mail: { emailId, title: "Kim", body: "Q4 budget" },
+  });
+
+  it("HOLDS an untagged frame about one mail (quiet hours) instead of recording it", () => {
+    // The gap this closes: recorded, the urgent-mail catch-up never asked about
+    // the row, so mail that rang during quiet hours never toasted afterwards.
+    const result = planLiveAlert(established(), mailFrame("n1"));
+    expect(result.alert).toBeNull();
+    expect(result.next.notified).toEqual([]);
+    expect(result.next.held).toEqual(["n1"]);
+  });
+
+  it("records (does not hold) an untagged frame for a mail already toasted", () => {
+    const result = planLiveAlert(established(["mail:mail-n1"]), mailFrame("n2", "mail-n1"));
+    expect(result.alert).toBeNull();
+    expect(result.next.notified).toEqual(["mail:mail-n1", "n2"]);
+    expect(result.next.held).toBeUndefined();
+  });
+
+  it("holds a frame once (both bells hand it over), at most HELD_CAP, newest kept", () => {
+    const once = planLiveAlert(established(), mailFrame("n1"));
+    expect(planLiveAlert(once.next, mailFrame("n1")).next).toBe(once.next);
+    let ledger = established();
+    for (let i = 0; i < HELD_CAP + 3; i++) ledger = planLiveAlert(ledger, mailFrame(`n${i}`)).next;
+    expect(ledger.held).toHaveLength(HELD_CAP);
+    expect(ledger.held?.[0]).toBe("n3");
+    expect(ledger.held?.at(-1)).toBe(`n${HELD_CAP + 2}`);
+    expect(ledger.notified).toEqual([]);
+  });
+
+  it("a tagged frame for another mail leaves the holds alone", () => {
+    const held = planLiveAlert(established(), mailFrame("n1")).next;
+    const next = planLiveAlert(held, { ...mailFrame("n2"), alert: "push" });
+    expect(next.alert?.id).toBe("n2");
+    expect(next.next.held).toEqual(["n1"]);
+  });
+
+  it("still records an untagged meeting frame — a held reminder is stale by morning", () => {
+    const frame = {
+      id: "m1",
+      type: "meeting",
+      title: "Meeting in 5 min: Standup",
+      message: "Standup starts soon [evt_1]",
+    };
+    const result = planLiveAlert(established(), frame);
+    expect(result.next.notified).toEqual(["m1"]);
+    expect(result.next.held).toBeUndefined();
+  });
+
+  it("recording an id releases its hold; a ledger without holds gains none", () => {
+    const ledger: AlertLedger = { ...established(), held: ["n1", "n2"] };
+    expect(recording(ledger, ["n1"])).toEqual({ ...established(["n1"]), held: ["n2"] });
+    expect("held" in recording(established(), ["a"])).toBe(false);
+    expect(ledger.held).toEqual(["n1", "n2"]);
   });
 
   it("leaves the ledger alone for frames that are not interrupts", () => {
@@ -366,6 +431,21 @@ describe("ledger storage is untrusted input, scoped to one account", () => {
     const ledger = parseLedger(raw);
     expect(ledger?.notified).toHaveLength(SEEN_CAP);
     expect(ledger?.notified.every((id) => typeof id === "string")).toBe(true);
+  });
+
+  it("round-trips held ids; a ledger saved before holds still reads", () => {
+    const ledger: AlertLedger = { ...established(["a"]), held: ["n1"] };
+    expect(parseLedger(JSON.stringify(ledger))).toEqual(ledger);
+    expect(parseLedger(JSON.stringify(established(["a"])))?.held).toBeUndefined();
+  });
+
+  it("a malformed held list is dropped — the ledger (and its baseline) is kept", () => {
+    const base = { owner: "u", baselineEstablished: true, notified: ["a"] };
+    expect(parseLedger(JSON.stringify({ ...base, held: "n1" }))).toEqual(base);
+    const many = [7, "x", ...Array.from({ length: HELD_CAP + 5 }, (_, i) => `h-${i}`)];
+    const held = parseLedger(JSON.stringify({ ...base, held: many }))?.held;
+    expect(held).toHaveLength(HELD_CAP);
+    expect(held?.at(-1)).toBe(`h-${HELD_CAP + 4}`);
   });
 
   it("another account's ledger is never reused — that account starts a new baseline", () => {

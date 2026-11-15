@@ -41,13 +41,18 @@ import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../billing/
 import {
   appleLoginEnabled,
   INIT_SYNC_EMAIL_COUNT,
+  kakaoImportOpenTo,
   keyboardTriageEnabled,
   mailV2Enabled,
   naverLoginEnabled,
   onboardingV2Enabled,
+  rulesDslOpenTo,
+  slackOpenTo,
   smartActionsOpenTo,
   teamModeEnabled,
+  teamsOpenTo,
   unifiedHomeEnabled,
+  vaultExportOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
@@ -74,16 +79,22 @@ import {
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
+import {
+  effectiveTier,
+  normalizeTier,
+  seatCoversPersonalPlan,
+  type Tier,
+} from "../org/effective-tier.js";
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { clientAddress } from "../security/client-address.js";
 import {
   clearLoginAttempts,
   loginThrottleRemainingMs,
   recordLoginAttempt,
 } from "../security/login-throttle.js";
-import { captureError } from "../sentry.js";
 import { localMinuteOfDay, normalizeTimeZone, normalizeTimeZoneMode } from "../time-zone.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 import { isGoogleLinkMarker } from "./google-link-finish.js";
@@ -304,10 +315,30 @@ export async function runLoginBriefingCatchUp(userId: string): Promise<void> {
 export function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
   const timer = setTimeout(() => {
     runLoginBriefingCatchUp(userId).catch((err) => {
-      console.warn(`[AUTH] Login briefing catch-up failed for ${userId}:`, err);
+      logDbFailure("[AUTH] Login briefing catch-up failed", err, { ids: { userId } });
     });
   }, delayMs);
   timer.unref?.();
+}
+
+/**
+ * The plan /me reports as effective: the user's own, or a Klorn Teams seat
+ * derived from membership (org/effective-tier.ts, never written to
+ * User.plan). A failed seat lookup falls back to the user's own plan instead
+ * of failing the session bootstrap, whose catch answers 401 (a logout).
+ */
+export async function effectiveTierOrOwnPlan(userId: string, plan: string): Promise<Tier> {
+  try {
+    return await withDbRetry(() => effectiveTier({ id: userId, plan }), {
+      label: "me.effective_tier",
+    });
+  } catch (err) {
+    captureDbFailure("[AUTH] effective tier lookup failed", err, {
+      tags: { scope: "auth.me.effective-tier" },
+      extra: { userId },
+    });
+    return normalizeTier(plan);
+  }
 }
 
 export function authRoutes(app: FastifyInstance) {
@@ -405,7 +436,10 @@ export function authRoutes(app: FastifyInstance) {
       // failure here strands the user unverified (and so never welcomed), so
       // leave a console signal even though the request still succeeds.
       sendVerificationEmail(normalizedEmail, rawVerifyToken).catch((err) =>
-        console.error(`[AUTH] verification email failed for ${user.id}:`, err),
+        logDbFailure("[AUTH] verification email failed", err, {
+          level: "error",
+          ids: { userId: user.id },
+        }),
       );
 
       // Auto-create AutomationConfig with defaults. Fire-and-forget, but never
@@ -413,7 +447,9 @@ export function authRoutes(app: FastifyInstance) {
       // failed create must leave a trace (login init-sync also self-heals it).
       prisma.automationConfig
         .create({ data: { userId: user.id } })
-        .catch((err) => console.warn(`[AUTH] automationConfig create failed for ${user.id}`, err));
+        .catch((err) =>
+          logDbFailure("[AUTH] automationConfig create failed", err, { ids: { userId: user.id } }),
+        );
 
       const token = signToken({ userId: user.id, email: user.email });
 
@@ -427,6 +463,8 @@ export function authRoutes(app: FastifyInstance) {
       });
       triggerDueLoginBriefing(user.id, 10_000);
 
+      // entitled/paywalled from the effective plan, like /me (a Klorn Teams seat counts).
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
       return reply.code(201).send({
         token,
         user: {
@@ -437,10 +475,10 @@ export function authRoutes(app: FastifyInstance) {
           role: user.role,
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -541,7 +579,10 @@ export function authRoutes(app: FastifyInstance) {
             }),
           )
           .catch((err) =>
-            captureError(err, { tags: { scope: "auth.rehash" }, extra: { userId: user.id } }),
+            captureDbFailure("[AUTH] password rehash failed", err, {
+              tags: { scope: "auth.rehash" },
+              extra: { userId: user.id },
+            }),
           )
           .finally(() => rehashInFlight.delete(user.id));
       }
@@ -556,6 +597,8 @@ export function authRoutes(app: FastifyInstance) {
         ipAddress: ip,
       });
 
+      // entitled/paywalled from the effective plan, like /me (a Klorn Teams seat counts).
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
       return reply.send({
         token,
         user: {
@@ -566,10 +609,10 @@ export function authRoutes(app: FastifyInstance) {
           role: user.role,
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -614,11 +657,13 @@ export function authRoutes(app: FastifyInstance) {
         await prisma.user
           .update({ where: { id: user.id }, data: { role: "ADMIN" } })
           .catch((err) => {
-            console.error(
-              `[AUTH] Failed to promote ADMIN_EMAILS user ${user.id} to role ADMIN:`,
-              err,
-            );
-            captureError(err, { tags: { scope: "auth.admin-promote", userId: user.id } });
+            logDbFailure("[AUTH] Failed to promote ADMIN_EMAILS user to role ADMIN", err, {
+              level: "error",
+              ids: { userId: user.id },
+            });
+            captureDbFailure("[AUTH] Failed to promote ADMIN_EMAILS user to role ADMIN", err, {
+              tags: { scope: "auth.admin-promote", userId: user.id },
+            });
           });
         user.role = "ADMIN";
       }
@@ -632,6 +677,10 @@ export function authRoutes(app: FastifyInstance) {
         () => prisma.linkedInboxAccount.count({ where: { userId: user.id } }),
         { label: "me.linked_inbox_count" },
       );
+      // The plan the user actually gets: their own, or a Klorn Teams seat
+      // derived from membership (org/effective-tier.ts, never written to
+      // User.plan). No query while TEAMS_ENABLED is closed to the user.
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
 
       return reply.send({
         user: {
@@ -643,11 +692,17 @@ export function authRoutes(app: FastifyInstance) {
           // Whether the user may use paid features (active sub / trial / comped
           // / admin). Gates Pro-only capabilities. Always true while
           // PAYWALL_ENABLED is off, so nothing gates pre-launch.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
+          // Same answer as `plan` unless a Klorn Teams seat raises it.
+          effectiveTier: tier,
+          // A team seat already covers this user's own paid Pro, which still
+          // renews: Settings → Billing says so next to the personal cancel.
+          // Klorn never cancels it (org/effective-tier.ts).
+          teamSeatCoversPersonalPlan: seatCoversPersonalPlan(user.plan, tier, user),
           // Whether to hard-wall the app on entry (pure subscriber-only mode).
           // Always false with the usable free tier — free users get in and are
           // bounded by the free daily cost cap instead.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -698,6 +753,26 @@ export function authRoutes(app: FastifyInstance) {
           // to calendar" only when this is true — the same answer the
           // /api/smart-actions routes give this user.
           smartActions: smartActionsOpenTo(user.id),
+          // Server-driven client flag (TEAMS_ENABLED, cohort-aware): the web
+          // shows the organization pages only when this is true — the same
+          // answer the /api/orgs routes give this user.
+          teams: teamsOpenTo(user.id),
+          // Server-driven client flag (VAULT_EXPORT_ENABLED, cohort-aware): the
+          // web offers "Export as markdown" in Settings only when this is true
+          // — the same answer GET /api/user/me/vault/export gives this user.
+          vaultExport: vaultExportOpenTo(user.id),
+          // Server-driven client flag (RULES_DSL_ENABLED, cohort-aware): the
+          // web shows the rules text editor in Settings → Lanes only when this
+          // is true — the same answer the /api/email/rules/dsl routes give.
+          rulesDsl: rulesDslOpenTo(user.id),
+          // Server-driven client flag (SLACK_ENABLED, cohort-aware): the web
+          // shows the Slack panel in Settings → Integrations only when this
+          // is true — the same answer the /api/slack routes give this user.
+          slack: slackOpenTo(user.id),
+          // Server-driven client flag (KAKAO_IMPORT_ENABLED, cohort-aware): the
+          // web shows the KakaoTalk import panel in Settings → Integrations
+          // only when this is true — the same answer /api/kakao-import gives.
+          kakaoImport: kakaoImportOpenTo(user.id),
         },
       });
     } catch {
@@ -724,6 +799,8 @@ export function authRoutes(app: FastifyInstance) {
         data: { ...(name !== undefined && { name: name.trim() }) },
       });
 
+      // entitled/paywalled from the effective plan, like /me (a Klorn Teams seat counts).
+      const tier = await effectiveTierOrOwnPlan(user.id, user.plan);
       return reply.send({
         user: {
           id: user.id,
@@ -733,10 +810,10 @@ export function authRoutes(app: FastifyInstance) {
           role: user.role,
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
-          entitled: isEntitled(user.plan, user.role),
+          entitled: isEntitled(tier, user.role),
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
-          paywalled: isHardPaywalled(user.plan, user.role),
+          paywalled: isHardPaywalled(tier, user.role),
           // Whether the web (Stripe) checkout can complete (key + PRO price
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
@@ -1366,7 +1443,10 @@ export function authRoutes(app: FastifyInstance) {
           if (isNewGoogleUser) {
             void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch(
               (err) =>
-                console.error(`[WELCOME] google sign-in welcome failed for ${user!.id}:`, err),
+                logDbFailure("[WELCOME] google sign-in welcome failed", err, {
+                  level: "error",
+                  ids: { userId: user!.id },
+                }),
             );
           }
 
@@ -1444,8 +1524,10 @@ export function authRoutes(app: FastifyInstance) {
         // internal infrastructure detail (hostnames, library internals, stack
         // fragments). Log the real error server-side; show a generic message. The
         // message is now a constant, so the desktop HTML needs no escaping.
-        console.error("[OAUTH] callback failed:", err instanceof Error ? err.message : String(err));
-        captureError(err, { tags: { scope: "auth.oauth.callback" } });
+        logDbFailure("[OAUTH] callback failed", err, { level: "error" });
+        captureDbFailure("[OAUTH] callback failed", err, {
+          tags: { scope: "auth.oauth.callback" },
+        });
         const message = "Google authorization failed. Please try again.";
         if (statePayload.email === "__google_login__") {
           return reply.redirect(`${webUrl}/login?error=${encodeURIComponent(message)}`);
@@ -1738,7 +1820,10 @@ export function authRoutes(app: FastifyInstance) {
       // welcome (once per user, enforced inside the helper). Fire-and-forget so
       // it never delays the redirect, but log on rejection — never silent.
       void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch((err) =>
-        console.error(`[WELCOME] post-verify welcome failed for ${user.id}:`, err),
+        logDbFailure("[WELCOME] post-verify welcome failed", err, {
+          level: "error",
+          ids: { userId: user.id },
+        }),
       );
 
       // Validate WEB_URL to prevent open redirect — only allow http(s) origins
@@ -1824,8 +1909,11 @@ export function authRoutes(app: FastifyInstance) {
     // reliable app-triggered path for linked mail to appear. Gated + per-account
     // isolated inside the helper; a failure is logged (and surfaces here), never fatal.
     await syncLinkedInboxesForUser(userId).catch((err) => {
-      console.warn(`[INIT-SYNC] linked inbox fan-out failed for ${userId}:`, err);
-      captureError(err, { tags: { scope: "auth.init-sync.linked" }, extra: { userId } });
+      logDbFailure("[INIT-SYNC] linked inbox fan-out failed", err, { ids: { userId } });
+      captureDbFailure("[INIT-SYNC] linked inbox fan-out failed", err, {
+        tags: { scope: "auth.init-sync.linked" },
+        extra: { userId },
+      });
     });
 
     // 1. Sync Google Calendar events (next 30 days)
@@ -1841,7 +1929,7 @@ export function authRoutes(app: FastifyInstance) {
       );
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
-      console.warn("[AUTH] init-sync calendar sync failed (non-auth):", err);
+      logDbFailure("[AUTH] init-sync calendar sync failed (non-auth)", err, { ids: { userId } });
       // Calendar sync failed — continue with other syncs
     }
 
@@ -1896,7 +1984,9 @@ export function authRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
-      console.warn("[AUTH] init-sync Gmail contact sync failed (non-auth):", err);
+      logDbFailure("[AUTH] init-sync Gmail contact sync failed (non-auth)", err, {
+        ids: { userId },
+      });
       // Gmail contact sync failed — skip
     }
 
@@ -1912,13 +2002,16 @@ export function authRoutes(app: FastifyInstance) {
       // Sync button. Sweep a floor of 10 (not just newCount): mail ingested by
       // an earlier login that never got summarized must not be stranded forever.
       summarizeUnsummarizedEmails(userId, Math.max(emailResult.newCount, 10)).catch((err) => {
-        console.warn("[AUTH] init-sync background summarize failed:", err);
+        logDbFailure("[AUTH] init-sync background summarize failed", err, { ids: { userId } });
         // The daily budget line is expected back-pressure, not a fault.
         if (err instanceof Error && err.name === "DailyCostCapExceededError") return;
-        captureError(err, { tags: { scope: "auth.init-sync.summarize" }, extra: { userId } });
+        captureDbFailure("[AUTH] init-sync background summarize failed", err, {
+          tags: { scope: "auth.init-sync.summarize" },
+          extra: { userId },
+        });
       });
     } catch (err) {
-      console.warn("[AUTH] init-sync email sync failed:", err);
+      logDbFailure("[AUTH] init-sync email sync failed", err, { ids: { userId } });
       // Email sync failed — skip
     }
 

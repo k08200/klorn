@@ -1073,6 +1073,8 @@ const ko: Record<string, string> = {
     "이 플랜은 웹에서 결제된 것이 아니라 여기서 취소할 것이 없습니다. 모바일 앱에서 구독했다면 앱에서 관리하세요.",
   "billing.enterpriseBilling":
     "엔터프라이즈는 별도 계약으로 청구됩니다 — 플랜 변경은 영업팀에 문의하세요.",
+  "billing.teamSeatCoversPro":
+    "팀 좌석에 Pro 기능이 모두 포함되어 있습니다. 개인 Pro는 계속 갱신되니, 둘 다 필요하지 않다면 해지하세요.",
   "billing.keepSubscription": "구독 유지",
   "billing.renewsOn": "{date}에 갱신",
   "billing.trialFirstCharge": "무료 체험 · {date}에 첫 결제",
@@ -2044,6 +2046,7 @@ const ko: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook 및 Microsoft 365 메일.",
   "onboardingV2.tile.naver.scope": "네이버 메일. 앱 비밀번호로 연결합니다.",
   "onboardingV2.tile.icloud.scope": "iCloud 메일. 앱 암호로 연결합니다.",
+  "onboardingV2.tile.preset.scope": "메일. 앱 비밀번호로 연결합니다.",
   "onboardingV2.tile.readOnly":
     "현재는 읽기 전용입니다. 답장, 보관, 읽음 표시는 해당 메일 서비스에서 하세요.",
   "onboardingV2.health.connected": "연결됨",
@@ -2055,6 +2058,9 @@ const ko: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "iCloud 메일 연결",
   "onboardingV2.sheet.icloud.body":
     "한 번만 연결하면 됩니다. Apple 계정 비밀번호가 아니라 앱 암호가 필요합니다. Klorn은 이를 암호화해 저장합니다.",
+  "onboardingV2.sheet.preset.title": "{provider} 연결",
+  "onboardingV2.sheet.preset.body":
+    "한 번만 연결하면 됩니다. {provider}에 필요한 비밀번호는 아래 양식에 안내되어 있습니다. Klorn은 이를 암호화해 저장합니다.",
   "onboardingV2.sheet.close": "닫기",
   "onboardingV2.sheet.done": "완료",
   "onboardingV2.return.okTitle": "{provider} 연결 완료.",
@@ -2220,6 +2226,37 @@ const ko: Record<string, string> = {
   "imap.naver.advancedHost": "고급: IMAP 호스트",
   "imap.naver.hostLabel": "IMAP 호스트",
   "imap.naver.connect": "네이버 메일 연결",
+  "imapPreset.body":
+    "IMAP으로 {provider} 메일함을 연결합니다. Klorn은 들어오는 모든 메일을 Gmail과 같은 {count}개 레인으로 분류합니다.",
+  "imapPreset.error.status": "{provider} 연결 상태를 불러오지 못했습니다.",
+  "imapPreset.confirmDisconnect.title": "{email} 연결을 해제할까요?",
+  "imapPreset.emailLabel": "이메일 주소",
+  "imapPreset.passwordLabel.app": "앱 비밀번호",
+  "imapPreset.help.link": "{provider} 도움말",
+  "imapPreset.help.stored": "Klorn은 이를 암호화해 저장하며 평문은 저장하지 않습니다.",
+  "imapPreset.connect": "{provider} 연결",
+  "imapPreset.error.auth":
+    "{provider}에서 이 주소와 비밀번호를 받지 않았습니다. 위 안내대로 설정한 뒤 다시 시도하세요.",
+  "imapPreset.error.tooManyAttempts": "시도 횟수가 너무 많습니다. 몇 분 뒤 다시 시도하세요.",
+  "imapPreset.hint.daum":
+    "Daum 메일 설정에서 IMAP을 켜고 2단계 인증을 설정한 뒤 앱 비밀번호를 만드세요. Daum 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.kakao":
+    "카카오메일 설정에서 IMAP을 켜고 카카오계정에 2단계 인증을 설정한 뒤 앱 비밀번호를 만드세요. 카카오계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.yahoo":
+    "Yahoo 계정 보안 설정에서 앱 비밀번호를 만드세요. Yahoo 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.aol":
+    "AOL 계정 보안 설정에서 앱 비밀번호를 만드세요. AOL 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.fastmail":
+    "Fastmail 설정(Privacy & Security)에서 IMAP과 SMTP 접근 권한이 있는 앱 비밀번호를 만드세요. Fastmail 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.zoho":
+    "Zoho Mail 설정에서 IMAP 접근을 켜고 2단계 인증을 설정한 뒤 애플리케이션 전용 비밀번호를 만드세요. Zoho 계정 비밀번호로는 연결되지 않습니다.",
+  "imapPreset.hint.zohopro":
+    "유료 Zoho 조직(자체 도메인) 계정용입니다. Zoho Mail 설정에서 IMAP 접근을 켜고(관리자 허용이 필요할 수 있습니다) 2단계 인증을 설정한 뒤 애플리케이션 전용 비밀번호를 만드세요. Zoho 계정 비밀번호로는 연결되지 않습니다.",
+  "imapGeneric.title": "기타 메일 서버 (IMAP)",
+  "imapGeneric.body":
+    "메일 서버 주소로 연결한 계정입니다. 참고용으로만 표시하며, 이 페이지에서는 다시 연결하거나 삭제할 수 없습니다.",
+  "imapGeneric.authRefused":
+    "메일 서버가 저장된 로그인을 거부했습니다. 이 페이지에서는 다시 연결할 수 없습니다.",
   "telegram.error.status": "Telegram 연결 상태를 불러오지 못했습니다.",
   "telegram.error.link": "Telegram 연결을 시작하지 못했습니다.",
   "telegram.error.disconnect": "Telegram 연결을 해제하지 못했습니다.",
@@ -2956,6 +2993,344 @@ const ko: Record<string, string> = {
     "알림은 Google 캘린더가 연결되어 있어야 해서 설정하지 않았어요.",
   "smartActions.event.saveHint": "저장하려면 제목, 날짜, 시작 시간, 길이를 채워 주세요.",
   "smartActions.event.savedWhen": "{date} {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "마크다운으로 내보내기",
+  "vaultExport.desc":
+    "Klorn 데이터를 마크다운으로 내보냅니다. 레인, 발신자, 약속, 메일별 노트가 담기며 Obsidian이나 다른 편집기에서 바로 열 수 있습니다.",
+  "vaultExport.button": ".zip 다운로드",
+  "vaultExport.includeText": "메일 본문 포함",
+  "vaultExport.includeText.desc":
+    "Klorn에 아직 남아 있는 메일 본문을 함께 담습니다. 끄면 노트에는 제목, 미리보기, Klorn의 판단만 담깁니다.",
+  "vaultExport.done": "마크다운 내보내기 파일을 다운로드했습니다.",
+  "vaultExport.error.cooldown": "최근에 내보냈습니다. {minutes}분 뒤에 다시 시도하세요.",
+  "vaultExport.error.inProgress": "이미 내보내는 중입니다. 끝날 때까지 기다려 주세요.",
+  "vaultExport.error.busy": "지금은 내보내기 요청이 많습니다. 잠시 뒤에 다시 시도하세요.",
+  "vaultExport.error.unavailable": "이 계정에서는 마크다운 내보내기를 사용할 수 없습니다.",
+  "vaultExport.error.failed": "마크다운 내보내기에 실패했습니다. 다시 시도하세요.",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn이 Slack DM, 그룹 DM, 회원님 멘션을 읽고 레인으로 분류합니다. 글을 올리거나 반응하거나 읽음 처리하지 않습니다.",
+  "slack.start": "설정 시작",
+  "slack.step.manifest": "앱 매니페스트를 내려받으세요. Request URL이 이미 들어 있습니다.",
+  "slack.downloadManifest": "매니페스트 내려받기",
+  "slack.requestUrl": "요청 URL (Request URL)",
+  "slack.step.create":
+    "Slack에서 매니페스트로 앱을 만들고(Create New App → From a manifest) 워크스페이스에 설치하세요.",
+  "slack.openSlackApps": "Slack 앱 페이지 열기",
+  "slack.step.paste":
+    "앱의 Signing Secret(Basic Information)과 User OAuth Token(OAuth & Permissions)을 붙여 넣으세요. Klorn은 토큰을 확인만 하고 보관하지 않습니다.",
+  "slack.signingSecret": "서명 비밀값 (Signing Secret)",
+  "slack.userToken": "사용자 OAuth 토큰",
+  "slack.connect": "연결",
+  "slack.step.verify":
+    "Slack의 Event Subscriptions에서 Retry를 눌러 Slack이 Request URL을 확인하게 하세요.",
+  "slack.setupAgain": "설정 단계",
+  "slack.connected": "Slack이 연결되었습니다",
+  "slack.status.connected": "{workspace}에 연결됨",
+  "slack.status.waiting": "Slack이 Request URL을 확인하기를 기다리는 중입니다.",
+  "slack.status.lastEvent": "Slack에서 받은 마지막 이벤트: {time}",
+  "slack.channels.title": "팔로우할 채널",
+  "slack.channels.desc":
+    "이 채널의 모든 메시지를 분류합니다(멘션만이 아님). 채널 ID(채널 세부정보 → 정보)를 쉼표나 공백으로 구분해 붙여 넣으세요.",
+  "slack.channels.save": "채널 저장",
+  "slack.channels.saved": "채널을 저장했습니다",
+  "slack.disconnect": "연결 해제",
+  "slack.disconnect.title": "Slack 연결을 해제할까요?",
+  "slack.disconnect.message":
+    "Klorn이 서명 비밀값, 저장한 모든 Slack 메시지와 판정, Slack에서 찾은 약속을 삭제합니다. Slack에서도 앱을 삭제하세요.",
+  "slack.disconnected": "Slack 연결을 해제했습니다. Klorn이 저장한 데이터를 삭제했습니다.",
+  "slack.error.invalid-signing-secret": "Slack 서명 비밀값이 아닙니다.",
+  "slack.error.bot-token": "봇 토큰입니다. User OAuth Token(xoxp-…)을 붙여 넣으세요.",
+  "slack.error.invalid-user-token": "Slack 사용자 토큰(xoxp-…)이 아닙니다.",
+  "slack.error.slack-rejected-token": "Slack이 이 토큰을 받아들이지 않았습니다.",
+  "slack.error.slack-unreachable": "Slack에 연결하지 못했습니다. 다시 시도하세요.",
+  "slack.error.bad-response": "Slack의 응답을 처리할 수 없었습니다. 다시 시도하세요.",
+  "slack.error.missing-scopes": "토큰에 Klorn이 필요한 권한이 없습니다: {scopes}",
+  "slack.error.extra-scopes":
+    "토큰에 Klorn이 가져서는 안 되는 권한이 있습니다: {scopes}. 앱에서 제거한 뒤 다시 설치하세요.",
+  "slack.error.invalid-channels": "C0123456789 같은 채널 ID를 최대 50개까지 쓰세요.",
+  "slack.error.public-url-missing": "이 Klorn 서버에 공개 URL이 없어 Slack이 접근할 수 없습니다.",
+  "slack.error.not-started": "먼저 Slack 설정을 시작하세요.",
+  "slack.error.rate-limited": "시도가 너무 많습니다. 나중에 다시 시도하세요.",
+  "slack.error.generic": "Slack 처리 중 문제가 생겼습니다. 다시 시도하세요.",
+  "slack.retry": "다시 시도",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "카카오톡 대화 가져오기",
+  "kakaoImport.desc":
+    "카카오톡에서 내보낸 대화 하나를 올리세요. Klorn이 최근 30일 대화를 읽고 확인할 약속을 제안합니다. 동기화가 아니라 한 번만 가져옵니다.",
+  "kakaoImport.howTo.title": "대화 내보내는 방법",
+  "kakaoImport.howTo.mobile":
+    "휴대폰: 채팅방 → ≡ 메뉴 → 설정(⚙) → 대화 내용 내보내기 → 텍스트만 보내기. .zip 파일이면 압축을 풀고 안의 .txt 파일을 올리세요.",
+  "kakaoImport.howTo.pc":
+    "PC·Mac: 채팅방 → ≡ 메뉴 → 대화 내보내기(대화 저장) → .txt 또는 .csv로 저장.",
+  "kakaoImport.file": "내보낸 대화 파일 (.txt 또는 .csv, UTF-8, 최대 10MB)",
+  "kakaoImport.preview": "파일 확인",
+  "kakaoImport.previewSummary":
+    "파일에 메시지 {total}개가 있습니다. 최근 {days}일의 텍스트 메시지 {window}개를 읽습니다.",
+  "kakaoImport.truncated": "가장 최근 메시지만 읽습니다.",
+  "kakaoImport.me.legend": "어느 이름이 본인인가요?",
+  "kakaoImport.me.count": "최근 메시지 {count}개",
+  "kakaoImport.consent":
+    "이 파일에는 다른 사람의 메시지가 들어 있으며, 이 대화를 Klorn에 공유해도 됩니다. Klorn은 약속처럼 보이는 최근 메시지를 AI 모델에 보내고, 저장한 대화 원문은 늦어도 7일 안에 삭제합니다. 제안된 약속에는 짧은 인용과 말한 사람의 이름이 남으며, 직접 삭제할 때까지 유지됩니다.",
+  "kakaoImport.import": "가져오기",
+  "kakaoImport.cancel": "취소",
+  "kakaoImport.imported": "가져오기를 시작했습니다. 제안은 약속 → 확인 필요에 표시됩니다.",
+  "kakaoImport.history.title": "가져온 대화",
+  "kakaoImport.importedAt": "{time} 가져옴",
+  "kakaoImport.status.PENDING": "대기 중",
+  "kakaoImport.status.PROCESSING": "읽는 중",
+  "kakaoImport.status.DONE": "완료",
+  "kakaoImport.status.FAILED": "실패",
+  "kakaoImport.result": "메시지 {messages}개에서 새 제안 {created}개.",
+  "kakaoImport.result.partial":
+    "메시지 {messages}개에서 새 제안 {created}개. 가져오기 한도에 닿아 일찍 멈췄습니다.",
+  "kakaoImport.result.waiting": "메시지 {messages}개를 읽는 중…",
+  "kakaoImport.result.expired": "읽기 전에 만료되었습니다. 대화를 다시 가져오세요.",
+  "kakaoImport.result.failed": "이 대화를 읽지 못했습니다. 삭제하고 다시 시도하세요.",
+  "kakaoImport.delete": "삭제",
+  "kakaoImport.delete.title": "이 가져오기를 삭제할까요?",
+  "kakaoImport.delete.message":
+    "Klorn이 이 가져오기와 여기서 나온 약속을 모두 삭제합니다. 이미 확인한 약속도 포함됩니다.",
+  "kakaoImport.deleted": "가져오기와 제안을 삭제했습니다.",
+  "kakaoImport.retry": "다시 시도",
+  "kakaoImport.error.empty-file": "파일이 비어 있습니다.",
+  "kakaoImport.error.file-too-large": "파일이 10MB보다 큽니다.",
+  "kakaoImport.error.unsupported-encoding":
+    "UTF-8 텍스트 파일이 아닙니다. 카카오톡에서 다시 내보내세요.",
+  "kakaoImport.error.zip-not-supported": "압축을 풀고 안의 .txt 또는 .csv 파일을 올리세요.",
+  "kakaoImport.error.unknown-format": "카카오톡 대화 내보내기 파일이 아닌 것 같습니다.",
+  "kakaoImport.error.no-messages": "내보낸 파일에 메시지가 없습니다.",
+  "kakaoImport.error.too-many-lines": "파일의 줄이 너무 많습니다.",
+  "kakaoImport.error.too-many-messages": "파일의 메시지가 너무 많습니다.",
+  "kakaoImport.error.too-many-speakers": "대화 참여자가 너무 많습니다(최대 500명).",
+  "kakaoImport.error.invalid-upload": "업로드를 읽지 못했습니다. 다시 시도하세요.",
+  "kakaoImport.error.consent-required": "먼저 이 대화를 가져와도 되는지 확인해 주세요.",
+  "kakaoImport.error.speaker-not-found": "목록에서 본인 이름을 고르세요.",
+  "kakaoImport.error.too-many-imports":
+    "가져오기는 최대 20개까지 보관할 수 있습니다. 오래된 것을 먼저 삭제하세요.",
+  "kakaoImport.error.busy": "지금은 가져오기가 많습니다. 잠시 후 다시 시도하세요.",
+  "kakaoImport.error.import-in-progress": "진행 중인 가져오기가 끝난 뒤에 새로 추가하세요.",
+  "kakaoImport.error.not-found": "이 가져오기는 더 이상 없습니다.",
+  "kakaoImport.error.rate-limited": "시도가 너무 많습니다. 잠시 후 다시 시도하세요.",
+  "kakaoImport.error.generic": "카카오톡 가져오기에 문제가 생겼습니다. 다시 시도하세요.",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "텍스트로 규칙 편집",
+  "rulesDsl.desc":
+    "레인 규칙을 일반 텍스트로 보고 고칠 수 있습니다. git이나 노트에 사본을 두고, 검사하고, 최근 메일로 미리 본 뒤 적용하세요.",
+  "rulesDsl.editorLabel": "규칙 텍스트",
+  "rulesDsl.validate": "검사",
+  "rulesDsl.dryRun": "최근 메일로 미리 보기",
+  "rulesDsl.apply": "적용",
+  "rulesDsl.reload": "다시 불러오기",
+  "rulesDsl.loading": "규칙을 불러오는 중…",
+  "rulesDsl.valid": "문제가 없습니다. 규칙 {n}개.",
+  "rulesDsl.errorsTitle": "고칠 문제: {n}개",
+  "rulesDsl.errorAt": "{line}번째 줄, {column}번째 칸:",
+  "rulesDsl.errorsTruncated": "처음 50개 문제만 표시합니다.",
+  "rulesDsl.preview.title": "미리 보기",
+  "rulesDsl.preview.summary":
+    "최근 분류된 메일 {examined}통 중 {changed}통이 다른 레인으로 갑니다.",
+  "rulesDsl.preview.none": "최근 분류된 메일 {examined}통 중 레인이 바뀌는 메일은 없습니다.",
+  "rulesDsl.preview.manualKept": "직접 옮긴 메일 {n}통은 레인을 유지합니다.",
+  "rulesDsl.preview.toJudge": "Klorn이 다시 판단",
+  "rulesDsl.preview.count": "{n}통",
+  "rulesDsl.preview.examples": "예시",
+  "rulesDsl.preview.note": "규칙은 새 메일부터 적용됩니다. 이미 분류된 메일은 레인을 유지합니다.",
+  "rulesDsl.confirm.title": "이 규칙을 적용할까요?",
+  "rulesDsl.confirm.message":
+    "레인 규칙이 이 텍스트로 바뀝니다. 답장 규칙과 학습된 규칙은 그대로 둡니다. 새 메일은 새 규칙을 따릅니다.",
+  "rulesDsl.confirm.label": "규칙 적용",
+  "rulesDsl.applied": "규칙을 적용했습니다: 추가 {added}개, 변경 {changed}개, 삭제 {removed}개.",
+  "rulesDsl.error.changed": "규칙을 연 뒤에 규칙이 바뀌었습니다. 다시 불러온 뒤 적용하세요.",
+  "rulesDsl.error.invalid": "규칙 텍스트에 문제가 있습니다. 고친 뒤 다시 시도하세요.",
+  "rulesDsl.error.tooLarge": "규칙 텍스트가 너무 큽니다.",
+  "rulesDsl.error.rateLimited": "요청이 너무 많습니다. 잠시 뒤에 다시 시도하세요.",
+  "rulesDsl.error.unavailable": "이 계정에서는 텍스트 규칙 편집을 사용할 수 없습니다.",
+  "rulesDsl.notApplicable":
+    "규칙이 텍스트 편집기 한도(규칙 500개, 64 KiB)를 넘어 여기서 적용할 수 없습니다. 위 목록에서 편집하세요.",
+  "rulesDsl.error.failed": "문제가 발생했습니다. 다시 시도하세요.",
+  // Klorn Teams: Settings → Team organization pages and the invite accept page
+  "settings.org.title": "조직",
+  "settings.org.loading": "조직을 불러오는 중…",
+  "settings.org.intro":
+    "조직을 만들면 팀원들과 어시스턴트로 일정을 맞출 수 있습니다. 조직은 회원님의 메일을 볼 수 없습니다.",
+  "settings.org.create.name": "조직 이름",
+  "settings.org.create.button": "조직 만들기",
+  "settings.org.role.owner": "소유자",
+  "settings.org.role.member": "멤버",
+  "settings.org.members.title": "멤버",
+  "settings.org.members.you": "(나)",
+  "settings.org.members.seated": "시트 있음",
+  "settings.org.members.unseated": "시트 없음",
+  "settings.org.members.sharesFreeBusy": "바쁜 시간 공유 중",
+  "settings.org.members.makeOwner": "소유자로 지정",
+  "settings.org.members.remove": "내보내기",
+  "settings.org.members.confirmRemove": "{name}님을 조직에서 내보낼까요?",
+  "settings.org.members.confirmTransfer": "{name}님을 소유자로 지정할까요? 나는 멤버가 됩니다.",
+  "settings.org.invite.title": "이메일로 초대",
+  "settings.org.invite.label": "이메일 주소",
+  "settings.org.invite.placeholder": "name@company.com",
+  "settings.org.invite.button": "초대 보내기",
+  "settings.org.invite.sent": "{email}로 초대를 보냈습니다.",
+  "settings.org.invite.pending": "대기 중인 초대",
+  "settings.org.invite.expires": "{date} 만료",
+  "settings.org.invite.revoke": "취소",
+  "settings.org.freeBusy.label": "조직에 내 바쁜 시간 공유",
+  "settings.org.freeBusy.hint":
+    "바쁜 시간대만 공유합니다. 일정 제목, 참석자, 장소는 공유하지 않습니다. 언제든 끌 수 있습니다.",
+  "settings.org.admin.title": "관리자 설정",
+  "settings.org.admin.autoReplyOff": "모든 멤버의 자동 답장 끄기",
+  "settings.org.admin.agentCap": "에이전트 모드 상한",
+  "settings.org.admin.appliesToAll": "소유자를 포함해 조직의 모든 멤버에게 적용됩니다.",
+  "settings.org.cap.none": "제한 없음",
+  "settings.org.cap.suggest": "검토까지",
+  "settings.org.cap.shadow": "관찰까지",
+  "settings.org.cap.off": "에이전트 끄기",
+  "settings.org.seats.title": "시트",
+  "settings.org.seats.summary": "멤버 {used}명 · 시트 {purchased}개",
+  "settings.org.seats.status.active": "활성",
+  "settings.org.seats.status.trialing": "체험 중",
+  "settings.org.seats.status.pastDue": "결제 연체",
+  "settings.org.seats.status.paused": "일시 중지",
+  "settings.org.seats.status.canceled": "해지됨",
+  "settings.org.seats.status.none": "구독 없음",
+  "settings.org.checkout.unavailable":
+    "팀 결제는 아직 열리지 않았습니다. 요금이 청구되지 않습니다.",
+  "settings.org.checkout.seats": "시트 수 (2–150)",
+  "settings.org.checkout.monthly": "월간 결제 · 시트당 {price}",
+  "settings.org.checkout.annual": "연간 결제 · 시트당 월 {price}",
+  "settings.org.checkout.monthlyPlain": "월간 결제",
+  "settings.org.checkout.annualPlain": "연간 결제",
+  "settings.org.seats.change": "시트 수 ({min}–{max})",
+  "settings.org.seats.changeAction": "시트 변경",
+  "settings.org.seats.floor":
+    "최소 {min}개: 팀 최소 시트 수 이상, 멤버마다 1개씩 필요합니다. 차액은 이번 결제 기간의 남은 날짜만큼 Paddle이 청구하거나 크레딧으로 돌려줍니다.",
+  "settings.org.seats.payerOnly":
+    "시트를 추가하면 등록된 카드로 바로 청구되므로, 팀 요금을 결제하는 사람만 추가할 수 있습니다. 시트 줄이기는 모든 소유자가 할 수 있습니다.",
+  "settings.org.seats.capped":
+    "팀 요금을 결제하는 이메일 주소가 아니면 이번 변경에서는 시트를 최대 {max}개까지 늘릴 수 있습니다. 결제하는 이메일의 주인은 더 추가할 수 있습니다. 시트 줄이기는 모든 소유자가 할 수 있습니다.",
+  "settings.org.seats.cappedNone":
+    "팀 요금을 결제하는 이메일 주소가 아니면 지금은 시트를 추가할 수 없습니다. 결제하는 이메일의 주인은 추가할 수 있습니다. 시트 줄이기는 모든 소유자가 할 수 있습니다.",
+  "settings.org.seats.pending":
+    "Paddle에 보냈습니다. Paddle이 확인하면 시트 {seats}개로 표시됩니다.",
+  "settings.org.seats.unchanged": "조직에 이미 시트 {seats}개가 있습니다.",
+  "settings.org.subscription.cancel": "구독 해지",
+  "settings.org.subscription.cancelTitle": "팀 구독을 해지할까요?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "이미 결제한 기간이 끝날 때까지는 모두 시트를 유지합니다. 그 후 모든 멤버의 팀 플랜이 끝나고 더 이상 청구되지 않습니다.",
+  "settings.org.subscription.cancelConfirm": "기간 종료 시 해지",
+  "settings.org.subscription.keep": "구독 유지",
+  "settings.org.subscription.keepPayerOnly":
+    "구독을 유지하면 결제하는 사람의 카드로 청구가 다시 시작되므로, 팀 요금을 결제하는 사람이나 여기서 종료를 예약한 소유자만 유지할 수 있습니다.",
+  "settings.org.subscription.portalPayerOnly":
+    "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
+  "settings.org.subscription.endsOn": "구독이 {date}에 끝납니다. 그때까지 시트는 유지됩니다.",
+  "settings.org.subscription.endsSoon":
+    "구독이 이번 결제 기간이 끝날 때 종료됩니다. 그때까지 시트는 유지됩니다.",
+  "settings.org.subscription.portal": "결제 관리",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "멤버 수가 그보다 많습니다. 시트를 줄이기 전에 멤버를 먼저 내보내 주세요.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "구독이 활성 상태일 때만 시트를 바꿀 수 있습니다. 결제하는 사람이 결제 포털에서 결제 수단을 고칠 수 있습니다.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "구독 해지가 예약되어 있습니다. 먼저 구독을 유지한 뒤 시트를 바꿔 주세요.",
+  "settings.org.error.NO_SUBSCRIPTION": "이 조직에는 팀 구독이 없습니다.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "일시 중지된 구독은 결제 포털에서만 종료할 수 있습니다.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "결제 포털은 팀 요금을 결제하는 이메일 주소로만 열립니다. 결제하는 사람은 Paddle 영수증 이메일의 링크도 사용할 수 있습니다.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "등록된 카드로 바로 청구되기 때문에 시트 추가는 팀 요금을 결제하는 사람만 할 수 있습니다. 그 사람에게 본인 Klorn 계정에서 추가해 달라고 요청하세요(Paddle 영수증 이메일을 받는 사람입니다). 시트 줄이기는 지금도 할 수 있습니다.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "팀 요금을 결제하는 이메일 주소 없이 추가할 수 있는 시트 수를 넘었습니다. 결제하는 이메일의 주인은 본인 Klorn 계정에서 더 추가할 수 있습니다(Paddle 영수증 이메일을 받는 사람입니다). 시트 줄이기는 지금도 할 수 있습니다.",
+  "settings.org.error.SEATS_CHANGED":
+    "저장하는 동안 시트 수가 바뀌었습니다. 현재 시트 수를 확인하고 다시 시도하세요.",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "구독을 유지하면 결제하는 사람의 카드로 청구가 다시 시작되므로, 팀 요금을 결제하는 사람이나 Klorn에서 종료를 예약한 소유자만 할 수 있습니다. 결제하는 사람에게 본인 Klorn 계정에서 유지해 달라고 요청하세요(Paddle 영수증 이메일을 받는 사람입니다).",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle이 응답하지 않아 아무것도 변경되지 않았습니다. 잠시 후 다시 시도하세요.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle이 변경을 확인하지 않아 반영되지 않았을 수 있습니다. 다시 시도하기 전에 잠시 후 확인해 주세요.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "지금은 팀 결제를 이용할 수 없습니다. 바뀐 것은 없습니다.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "이 구독은 여기서 시트를 바꿀 수 없습니다. 지원팀에 문의해 주세요.",
+  "settings.org.transparency.title": "조직이 볼 수 있는 것",
+  "settings.org.transparency.can": "볼 수 있음",
+  "settings.org.transparency.cannot": "절대 볼 수 없음",
+  "settings.org.transparency.notSharing": "(현재 공유하지 않음)",
+  "settings.org.transparency.reads": "최근 내 바쁜 시간을 조회한 기록",
+  "settings.org.transparency.noReads": "아직 아무도 내 바쁜 시간을 조회하지 않았습니다.",
+  "settings.org.transparency.read": "{who} · {date}",
+  "settings.org.transparency.formerMember": "이전 멤버",
+  "settings.org.transparency.domains": "내 분류에 쓰이는 회사 도메인",
+  "settings.org.transparency.domainsLine":
+    "{domains}에서 온 인증된 메일은 분류 이유에 '회사 동료'로 표시됩니다. 조직은 어떤 메일이었는지 볼 수 없습니다.",
+  "settings.org.visible.roles": "이름, 이메일 주소, 역할",
+  "settings.org.visible.seats": "유료 시트 보유 여부",
+  "settings.org.visible.cost": "시트 가격과 구독 상태",
+  "settings.org.visible.freeBusy": "바쁜 시간대 (공유하는 동안만)",
+  "settings.org.visible.auditLog": "관리자 작업과 내 바쁜 시간을 조회한 사람",
+  "settings.org.never.mail": "내 메일",
+  "settings.org.never.attentionItems": "내 레인과 알림",
+  "settings.org.never.commitments": "내 약속",
+  "settings.org.never.drafts": "내 초안과 답장",
+  "settings.org.never.dossiers": "내 연락처 메모",
+  "settings.org.never.eventDetails": "일정 제목, 참석자, 장소",
+  "settings.org.never.chat": "내 어시스턴트 대화",
+  "settings.org.never.contacts": "내 연락처",
+  "settings.org.never.usage": "내 사용량",
+  "settings.org.leave.button": "조직 나가기",
+  "settings.org.leave.confirm": "{org}에서 나갈까요?",
+  "settings.org.leave.ownerHint":
+    "소유자는 다른 멤버를 소유자로 지정한 뒤 나갈 수 있습니다. 혼자 남은 조직에서 나가면 조직이 닫힙니다.",
+  "settings.org.error.generic": "문제가 생겼습니다. 다시 시도해 주세요.",
+  "settings.org.error.EMAIL_NOT_VERIFIED": "먼저 이메일 주소를 인증해 주세요.",
+  "settings.org.error.ALREADY_IN_ORG": "이미 조직에 속해 있습니다.",
+  "settings.org.error.ALREADY_MEMBER": "이미 멤버인 주소입니다.",
+  "settings.org.error.INVALID_EMAIL": "올바른 이메일 주소를 입력해 주세요.",
+  "settings.org.error.INVALID_NAME": "조직 이름은 80자 이내로 입력해 주세요 (링크 불가).",
+  "settings.org.error.INVALID_DOMAINS": "회사 도메인은 최대 10개까지 입력할 수 있습니다.",
+  "settings.org.error.INVITE_LIMIT":
+    "오늘 보낼 수 있는 초대를 모두 보냈습니다. 내일 다시 시도해 주세요.",
+  "settings.org.error.MEMBER_LIMIT": "조직은 멤버와 대기 중인 초대를 합쳐 최대 150명까지입니다.",
+  "settings.org.error.OWNER_MUST_TRANSFER": "나가기 전에 다른 멤버를 소유자로 지정해 주세요.",
+  "settings.org.error.SUBSCRIPTION_ACTIVE":
+    "이 조직에는 팀 구독이 있습니다. 먼저 구독을 해지해 주세요.",
+  "settings.org.error.INVITE_EMAIL_FAILED": "초대 메일을 보내지 못했습니다. 다시 시도해 주세요.",
+  "settings.org.error.INVITE_EXPIRED": "만료된 초대입니다. 새 초대를 요청해 주세요.",
+  "settings.org.error.INVITE_USED": "이미 사용된 초대입니다.",
+  "settings.org.error.INVITE_INVALID": "유효하지 않은 초대 링크입니다.",
+  "settings.org.error.INVITE_EMAIL_MISMATCH":
+    "다른 주소로 보낸 초대입니다. 그 주소로 로그인한 뒤 수락해 주세요.",
+  "settings.org.error.TEAM_CHECKOUT_UNAVAILABLE":
+    "팀 결제는 아직 열리지 않았습니다. 요금이 청구되지 않았습니다.",
+  "settings.org.error.INVALID_SEATS":
+    "시트는 2–150개 사이로 선택해 주세요. 더 큰 팀은 문의해 주세요.",
+  "settings.org.error.rate-limited": "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+  "teamInvite.loading": "초대를 확인하는 중…",
+  "teamInvite.missing": "초대 메일의 링크로 이 페이지를 열어 주세요.",
+  "teamInvite.title": "{org}에 참여",
+  "teamInvite.body":
+    "{org}은(는) 회원님의 이름, 이메일 주소, 역할, 시트를 볼 수 있습니다. 메일, 레인, 약속은 절대 볼 수 없습니다. 또한 모든 멤버의 자동 답장을 끄거나 에이전트를 제한할 수 있습니다.",
+  "teamInvite.accept": "{org}에 참여",
+  "teamInvite.joined": "{org}에 참여했습니다.",
+  "teamInvite.openSettings": "팀 설정 열기",
+  "settings.org.error.OWNER_ONLY": "조직 소유자만 할 수 있습니다.",
+  "settings.org.error.NOT_IN_ORG": "조직에 속해 있지 않습니다.",
+  "settings.org.error.MEMBER_NOT_FOUND": "이미 조직에 없는 멤버입니다.",
+  "settings.org.error.INVITE_NOT_FOUND": "이미 대기 중이 아닌 초대입니다.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "소유자를 내보내려면 먼저 다른 멤버를 소유자로 지정해 주세요.",
+  "settings.org.retry": "다시 시도",
+  "settings.org.loadFailed": "이 부분을 불러오지 못했습니다.",
+  "settings.org.transparency.ceilings": "조직이 정한 나의 제한",
+  "settings.org.transparency.ceiling.none": "없음",
+  "settings.org.transparency.ceiling.autoReplyOff": "자동 답장이 꺼져 있습니다",
+  "settings.org.transparency.ceiling.cap.off": "에이전트가 꺼져 있습니다",
+  "settings.org.transparency.ceiling.cap.shadow": "에이전트는 관찰만 합니다",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "에이전트는 제안만 하고 스스로 실행하지 않습니다",
 };
 
 export default ko;

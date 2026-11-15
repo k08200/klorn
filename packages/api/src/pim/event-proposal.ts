@@ -13,7 +13,7 @@
 
 import type { ParsedEvent } from "../event-parse.js";
 import { costCapRefusal } from "../llm/cost-cap-refusal.js";
-import { captureError } from "../sentry.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { localDateTimeToUtc } from "../time-zone.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import { readOverlappingTimedEvents } from "./calendar-read.js";
@@ -95,7 +95,11 @@ async function modelDetails(
   } catch (err) {
     // The deterministic proposal stands without the model; only a real fault alerts.
     if (!costCapRefusal(err)) {
-      captureError(err, { tags: { scope: "smart-actions.event-details" }, extra: { userId } });
+      // Facts only: the provider's error can quote the mail.
+      captureLlmFailure("Event proposal: model details failed", err, {
+        tags: { scope: "smart-actions.event-details" },
+        extra: { userId },
+      });
     }
     return null;
   }

@@ -348,6 +348,8 @@ describe("every AttentionItem reader is accounted for", () => {
     "pim/focus-digest.ts", // a count of arrivals, no title
     "routes/commitments.ts",
     "routes/email-lanes.ts", // one mail's EMAIL item: lane and reason, no title
+    "vault/vault-export.ts", // the user's own EMAIL items: lane, status, reason; no title
+    "mail/rules-dsl-store.ts", // Rules DSL dry-run: EMAIL items' lane and manual flag only
   ];
   // Show items of every source, so they drop the ones whose calendar event is hidden.
   const FILTERS_CALENDAR_ITEMS = ["pim/briefing-structure.ts", "pim/inbox-summary.ts"];

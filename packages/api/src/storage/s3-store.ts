@@ -25,6 +25,7 @@
 import { Readable } from "node:stream";
 import { ReadableStream } from "node:stream/web";
 import { AwsV4Signer } from "aws4fetch";
+import { logDbFailure } from "../report-db-failure.js";
 import { StorageError, type StorageErrorCode } from "./errors.js";
 import { assertValidObjectKey, parseObjectKey } from "./keys.js";
 import { mediaTypeOf, SIGNED_DOWNLOAD_CONTENT_TYPE } from "./limits.js";
@@ -288,9 +289,9 @@ export class S3ObjectStore implements ObjectStore {
     try {
       await this.deleteAt(key);
     } catch (err) {
-      const code = err instanceof StorageError ? err.code : "upstream";
-      console.warn(
-        `${LOG_PREFIX} a failed upload may have left an object behind: the clean-up delete failed too (${code})`,
+      logDbFailure(
+        "[STORAGE] a failed upload may have left an object behind: the clean-up delete failed too",
+        err,
       );
     }
   }

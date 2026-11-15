@@ -16,8 +16,9 @@ import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { authenticateApiKey } from "../mcp/api-keys.js";
 import { buildMcpServer } from "../mcp/server.js";
+import { effectivePlan } from "../org/effective-tier.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { clientAddress } from "../security/client-address.js";
-import { captureError } from "../sentry.js";
 
 /**
  * Per-key buckets ONLY for syntactically valid klorn_sk_ tokens — anything
@@ -60,14 +61,17 @@ export async function mcpRoutes(app: FastifyInstance) {
     // paywall is on, MCP must not be a free side door to the identical
     // toolset. Checked here because requireEntitled reads the session's
     // userId, which an API-key request does not carry.
-    if (PAYWALL_ENABLED && !isEntitled(user.plan, user.role ?? undefined)) {
+    // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+    // TEAMS_ENABLED is closed to the key's owner.
+    const plan = await effectivePlan({ id: key.userId, plan: user.plan });
+    if (PAYWALL_ENABLED && !isEntitled(plan, user.role ?? undefined)) {
       return reply.code(403).send({
         error: "An active subscription is required to use this feature.",
         code: "ENTITLEMENT_REQUIRED",
       });
     }
 
-    const server = buildMcpServer(key.userId, user.plan, {
+    const server = buildMcpServer(key.userId, plan, {
       keyId: key.keyId,
       permission: key.permission,
     });
@@ -90,7 +94,10 @@ export async function mcpRoutes(app: FastifyInstance) {
       await server.connect(transport);
       await transport.handleRequest(request.raw, reply.raw, request.body);
     } catch (err) {
-      captureError(err, { tags: { scope: "mcp.transport" }, extra: { userId: key.userId } });
+      captureDbFailure("[MCP] transport failed", err, {
+        tags: { scope: "mcp.transport" },
+        extra: { userId: key.userId },
+      });
       if (!reply.raw.headersSent) {
         reply.raw.writeHead(500, { "content-type": "application/json" });
         reply.raw.end(JSON.stringify({ error: "MCP transport failure." }));

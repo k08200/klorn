@@ -75,6 +75,7 @@ import { v3TodayFields } from "../judge/v3/read-fields.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { boundedFromValue } from "../mail/email-address.js";
@@ -89,6 +90,7 @@ import { draftReadyFor, replyStateOf } from "../mail/reply-state.js";
 import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
@@ -346,7 +348,10 @@ function healStaleAttentionItem(
       // re-judge it is a no-op.
       await refreshHashKeepingLane(userId, row);
     } catch (err) {
-      captureError(err, { tags: { scope: "firewall.hashRejudge" }, extra: { emailDbId } });
+      captureLlmFailure("[FIREWALL] hash re-judge failed", err, {
+        tags: { scope: "firewall.hashRejudge" },
+        extra: { emailDbId },
+      });
     }
   })();
 }
@@ -748,7 +753,9 @@ export async function firewallRoutes(app: FastifyInstance) {
           });
           return new Map(accountRows.map((a) => [a.id, { provider: a.provider, email: a.email }]));
         } catch (err) {
-          captureError(err, { tags: { scope: "firewall.linkedAccounts" } });
+          captureDbFailure("[FIREWALL] linked accounts read failed", err, {
+            tags: { scope: "firewall.linkedAccounts" },
+          });
           return null;
         }
       };
@@ -761,7 +768,9 @@ export async function firewallRoutes(app: FastifyInstance) {
           });
           return new Set(groups.map((g) => g.emailId));
         } catch (err) {
-          captureError(err, { tags: { scope: "firewall.attachments" } });
+          captureDbFailure("[FIREWALL] attachment lookup failed", err, {
+            tags: { scope: "firewall.attachments" },
+          });
           return null;
         }
       };
@@ -801,7 +810,9 @@ export async function firewallRoutes(app: FastifyInstance) {
           });
           repliedMap = new Map(engagementRows.map((r) => [r.contactEmail, r.outboundCount]));
         } catch (err) {
-          captureError(err, { tags: { scope: "firewall.rowSignals" } });
+          captureDbFailure("[FIREWALL] row signals read failed", err, {
+            tags: { scope: "firewall.rowSignals" },
+          });
         }
       }
 
@@ -820,7 +831,9 @@ export async function firewallRoutes(app: FastifyInstance) {
         companyDomains = owner?.companyDomains ?? [];
         primaryEmail = owner?.email ?? null;
       } catch (err) {
-        captureError(err, { tags: { scope: "firewall.companyDomains" } });
+        captureDbFailure("[FIREWALL] company domains read failed", err, {
+          tags: { scope: "firewall.companyDomains" },
+        });
       }
 
       // The user's own corrections ("this sender is a customer") — the top
@@ -829,7 +842,9 @@ export async function firewallRoutes(app: FastifyInstance) {
       try {
         userLabels = await senderLabelsFor(userId, [...senderAddrs]);
       } catch (err) {
-        captureError(err, { tags: { scope: "firewall.senderLabels" } });
+        captureDbFailure("[FIREWALL] sender labels read failed", err, {
+          tags: { scope: "firewall.senderLabels" },
+        });
       }
 
       const accountContext = { primaryEmail, linked: linkedAccounts, withAttachment };

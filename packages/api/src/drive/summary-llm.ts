@@ -17,6 +17,7 @@
 import type { ChatCompletion } from "openai/resources/chat/completions";
 import { usdToFractionalCents } from "../billing/cents.js";
 import type { CallPriority } from "../billing/quota-limiter.js";
+import { llmFailureStatus } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { estimateModelCostUsd, promptCacheUsageOf } from "../llm/model-fallback.js";
@@ -59,15 +60,6 @@ export type DriveSummaryFailure =
  * Any other 4xx is about the request itself: a content error.
  */
 const NOT_CONTENT_4XX = new Set([401, 402, 403, 408, 429]);
-
-/** The HTTP status of a provider error, raw or as the exhausted chain's cause. */
-function providerStatus(err: unknown): number | null {
-  for (const candidate of [err, (err as { cause?: unknown } | null)?.cause]) {
-    const status = (candidate as { status?: unknown } | null)?.status;
-    if (typeof status === "number") return status;
-  }
-  return null;
-}
 
 export type DriveSummaryResult =
   | {
@@ -132,7 +124,7 @@ function failureOf(err: unknown): Extract<DriveSummaryResult, { ok: false }> {
       ? { ok: false, code: "daily-limit" }
       : { ok: false, code: "rate-limited", retryAfterMs: err.retryAfterMs };
   }
-  const status = providerStatus(err);
+  const status = llmFailureStatus(err);
   if (status !== null && status >= 400 && status < 500 && !NOT_CONTENT_4XX.has(status)) {
     // The provider refused this request (400, 413, 422...): it will refuse it
     // again, so it spends the failure budget and ends FAILED.

@@ -35,7 +35,9 @@ import { firewallRoutes } from "./routes/firewall.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
 import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "./routes/google-drive-link.js";
 import { imapConnectRoutes } from "./routes/imap-connect.js";
+import { registerImapPresetRoutes } from "./routes/imap-preset-routes.js";
 import { inboxRoutes } from "./routes/inbox.js";
+import { kakaoImportRoutes } from "./routes/kakao-import.js";
 import { klornDriveRoutes, klornDriveRoutesEnabled } from "./routes/klorn-drive.js";
 import { klornMailboxInboundRoutes } from "./routes/klorn-mailbox-inbound.js";
 import { linkCompleteRoutes } from "./routes/link-complete.js";
@@ -43,6 +45,7 @@ import { mcpRoutes } from "./routes/mcp.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { opsRoutes } from "./routes/ops.js";
+import { orgRoutes } from "./routes/orgs.js";
 import { outlookAuthRoutes } from "./routes/outlook-auth.js";
 import { patternRoutes } from "./routes/patterns.js";
 import { phoneRoutes } from "./routes/phone.js";
@@ -51,14 +54,18 @@ import { playgroundRoutes } from "./routes/playground.js";
 import { pmfRoutes } from "./routes/pmf.js";
 import { providersAvailableRoutes } from "./routes/providers-available.js";
 import { receiptRoutes } from "./routes/receipt.js";
+import { rulesDslRoutes } from "./routes/rules-dsl.js";
 import { screenerRoutes } from "./routes/screener.js";
 import { skillRoutes } from "./routes/skills.js";
+import { slackConnectionRoutes } from "./routes/slack-connection.js";
+import { slackEventsRoutes } from "./routes/slack-events.js";
 import { smartActionsRoutes } from "./routes/smart-actions.js";
 import { smsRoutes } from "./routes/sms.js";
 import { appleAuthProvider, naverAuthProvider, socialAuthRoutes } from "./routes/social-auth.js";
 import { teamRoutes } from "./routes/teams.js";
 import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
+import { vaultExportRoutes } from "./routes/vault-export.js";
 import { webhookRoutes } from "./routes/webhook.js";
 import { installRouteAuthGuard } from "./security/route-auth-guard.js";
 
@@ -77,6 +84,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(billingRoutes, { prefix: "/api/billing" });
   await app.register(deviceRoutes, { prefix: "/api/devices" });
   await app.register(teamRoutes, { prefix: "/api/teams" });
+  await app.register(orgRoutes, { prefix: "/api/orgs" });
   await app.register(webhookRoutes, { prefix: "/api/webhook" });
   await app.register(chatRoutes, { prefix: "/api/chat" });
   await app.register(chatConversationRoutes, { prefix: "/api/chat" });
@@ -101,6 +109,8 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(feedbackRoutes, { prefix: "/api/feedback" });
   await app.register(calendarRoutes, { prefix: "/api/calendar" });
   await app.register(smartActionsRoutes, { prefix: "/api/smart-actions" });
+  await app.register(vaultExportRoutes, { prefix: "/api/user/me/vault" });
+  await app.register(rulesDslRoutes, { prefix: "/api/email/rules/dsl" });
   await app.register(emailRoutes, { prefix: "/api/email" });
   await app.register(apiKeyRoutes, { prefix: "/api/keys" });
   await app.register(mcpRoutes, { prefix: "/api/mcp" });
@@ -123,6 +133,9 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(imapConnectRoutes(IMAP_PROVIDERS.IMAP, { gate: genericImapEnabled }), {
     prefix: "/api/generic-imap",
   });
+  // Provider phase 2: the app-password presets (Daum, Kakao, Yahoo, AOL, Fastmail,
+  // Zoho), one /api/<preset>-imap plugin each, dark until IMAP_PRESETS_ENABLED.
+  await registerImapPresetRoutes(app);
   // Phase 3: dark until OUTLOOK_INBOX_ENABLED — same 404 gate as iCloud.
   await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
     prefix: "/api/auth/outlook",
@@ -154,6 +167,14 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(klornMailboxInboundRoutes({ gate: klornMailboxEnabled }), {
     prefix: "/api/mailbox",
   });
+  // Slack integration v1 (docs/providers/slack.md), dark until SLACK_ENABLED. The
+  // events webhook is its own plugin: its raw-body parser must not reach any
+  // other route, and it verifies Slack's signature before parsing anything.
+  await app.register(slackEventsRoutes, { prefix: "/api/slack" });
+  await app.register(slackConnectionRoutes, { prefix: "/api/slack" });
+  // KakaoTalk chat-export import v1 (docs/providers/kakaotalk-import.md), dark
+  // until KAKAO_IMPORT_ENABLED. Its multipart parser is scoped to the plugin.
+  await app.register(kakaoImportRoutes, { prefix: "/api/kakao-import" });
   // Which account types this deployment can connect, for the first run's provider
   // grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
   await app.register(providersAvailableRoutes, { prefix: "/api/providers" });

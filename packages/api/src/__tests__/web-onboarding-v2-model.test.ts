@@ -6,9 +6,12 @@
  * sorting check shows, and how an OAuth callback turns into a fixed result.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { EmailLaneCounts, FirewallItem, ProviderAvailability } from "@klorn/contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  formSheetFor,
   growSample,
   hasPrimaryGoogle,
   laneTotal,
@@ -160,6 +163,77 @@ describe("providerTiles", () => {
   it("offers Manage, not a second form, on a connected form provider", () => {
     const naver = account({ scope: "n1", linkedId: "n1", provider: "NAVER" });
     expect(providerTiles([ALL[2]], [naver])[0].action).toBe("manage");
+  });
+
+  it("draws a form tile for each app-password preset the server offers, in its order", () => {
+    const presets = (["DAUM", "KAKAO", "YAHOO", "AOL", "FASTMAIL", "ZOHO", "ZOHOPRO"] as const).map(
+      (provider) => available({ provider, readOnly: true }),
+    );
+    const tiles = providerTiles([...ALL.slice(0, 4), ...presets, ALL[4]], []);
+    expect(tiles.map((tile) => tile.provider)).toEqual([
+      "GOOGLE",
+      "OUTLOOK",
+      "NAVER",
+      "ICLOUD",
+      "DAUM",
+      "KAKAO",
+      "YAHOO",
+      "AOL",
+      "FASTMAIL",
+      "ZOHO",
+      "ZOHOPRO",
+    ]);
+    const presetTiles = tiles.slice(4);
+    expect(presetTiles.every((tile) => tile.kind === "form")).toBe(true);
+    expect(presetTiles.every((tile) => tile.action === "connect")).toBe(true);
+    expect(presetTiles.map((tile) => tile.noteKeys)).toEqual(
+      presetTiles.map(() => ["onboardingV2.tile.readOnly"]),
+    );
+    expect(presetTiles.map((tile) => tile.scopeKey)).toEqual([
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
+      "onboardingV2.tile.preset.scope",
+    ]);
+  });
+
+  it("scopes the offered providers to the signed-in user (the presets follow a per-user cohort)", () => {
+    const hook = readFileSync(
+      join(__dirname, "../../../web/src/app/onboarding/v2/use-provider-availability.ts"),
+      "utf8",
+    );
+    expect(hook).toContain('queryKey: ["providers", "available", user?.id ?? null]');
+  });
+
+  it("draws no preset tile the server did not offer (flag off or outside the cohort)", () => {
+    expect(providerTiles(ALL, []).some((tile) => tile.provider === "DAUM")).toBe(false);
+  });
+});
+
+describe("formSheetFor", () => {
+  it("opens each form provider's own sheet, never Naver's for a newer provider", () => {
+    expect(formSheetFor("NAVER")).toBe("NAVER");
+    expect(formSheetFor("ICLOUD")).toBe("ICLOUD");
+    for (const provider of [
+      "DAUM",
+      "KAKAO",
+      "YAHOO",
+      "AOL",
+      "FASTMAIL",
+      "ZOHO",
+      "ZOHOPRO",
+    ] as const) {
+      expect(formSheetFor(provider)).toBe(provider);
+    }
+  });
+
+  it("has no sheet for an OAuth provider or generic IMAP", () => {
+    expect(formSheetFor("GOOGLE")).toBeNull();
+    expect(formSheetFor("OUTLOOK")).toBeNull();
+    expect(formSheetFor("IMAP")).toBeNull();
   });
 });
 

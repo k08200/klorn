@@ -1078,6 +1078,8 @@ const ja: Record<string, string> = {
     "このプランはウェブで課金されていないため、ここで解約するものはありません。モバイルアプリで登録した場合は、そちらで管理してください。",
   "billing.enterpriseBilling":
     "Enterpriseは個別契約での請求です — プラン変更は営業にご連絡ください。",
+  "billing.teamSeatCoversPro":
+    "チームのシートに Pro の機能がすべて含まれています。個人の Pro は引き続き更新されるため、両方が不要なら解約してください。",
   "billing.keepSubscription": "解約を取り消す",
   "billing.renewsOn": "{date} に更新",
   "billing.trialFirstCharge": "無料トライアル中 · 最初の請求は {date}",
@@ -2050,6 +2052,7 @@ const ja: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Outlook と Microsoft 365 のメール。",
   "onboardingV2.tile.naver.scope": "Naver メール。アプリパスワードで接続します。",
   "onboardingV2.tile.icloud.scope": "iCloud メール。アプリ用パスワードで接続します。",
+  "onboardingV2.tile.preset.scope": "メール。アプリパスワードで接続します。",
   "onboardingV2.tile.readOnly":
     "現在は読み取り専用です。返信・アーカイブ・既読は、そのメールサービス側で行ってください。",
   "onboardingV2.health.connected": "接続済み",
@@ -2061,6 +2064,9 @@ const ja: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "iCloud メールを接続",
   "onboardingV2.sheet.icloud.body":
     "接続は一度だけです。Apple Account のパスワードではなく、アプリ用パスワードが必要です。Klorn は暗号化して保存します。",
+  "onboardingV2.sheet.preset.title": "{provider} を接続",
+  "onboardingV2.sheet.preset.body":
+    "接続は一度だけです。{provider} で必要なパスワードはフォームに記載しています。Klorn は暗号化して保存します。",
   "onboardingV2.sheet.close": "閉じる",
   "onboardingV2.sheet.done": "完了",
   "onboardingV2.return.okTitle": "{provider} を接続しました。",
@@ -2237,6 +2243,38 @@ const ja: Record<string, string> = {
   "imap.naver.advancedHost": "詳細設定: IMAP ホスト",
   "imap.naver.hostLabel": "IMAP ホスト",
   "imap.naver.connect": "Naver メールを接続",
+  "imapPreset.body":
+    "IMAP で {provider} のメールボックスを接続します。Klorn は受信するすべてのメールを Gmail と同じ {count} つのレーンに分類します。",
+  "imapPreset.error.status": "{provider} の接続状態を読み込めませんでした。",
+  "imapPreset.confirmDisconnect.title": "{email} の接続を解除しますか？",
+  "imapPreset.emailLabel": "メールアドレス",
+  "imapPreset.passwordLabel.app": "アプリパスワード",
+  "imapPreset.help.link": "{provider} のヘルプ",
+  "imapPreset.help.stored": "Klorn は暗号化して保存し、平文では保存しません。",
+  "imapPreset.connect": "{provider} を接続",
+  "imapPreset.error.auth":
+    "{provider} がこのアドレスとパスワードを受け付けませんでした。上の手順に従ってから、もう一度お試しください。",
+  "imapPreset.error.tooManyAttempts":
+    "試行回数が多すぎます。数分待ってから、もう一度お試しください。",
+  "imapPreset.hint.daum":
+    "Daum メールの設定で IMAP を有効にし、2 段階認証を設定してからアプリパスワードを作成してください。Daum のパスワードでは接続できません。",
+  "imapPreset.hint.kakao":
+    "Kakao メールの設定で IMAP を有効にし、Kakao アカウントで 2 段階認証を設定してからアプリパスワードを作成してください。Kakao のパスワードでは接続できません。",
+  "imapPreset.hint.yahoo":
+    "Yahoo アカウントのセキュリティ設定でアプリパスワードを作成してください。Yahoo のパスワードでは接続できません。",
+  "imapPreset.hint.aol":
+    "AOL アカウントのセキュリティ設定でアプリパスワードを作成してください。AOL のパスワードでは接続できません。",
+  "imapPreset.hint.fastmail":
+    "Fastmail の設定（Privacy & Security）で、IMAP と SMTP のアクセス権を持つアプリパスワードを作成してください。Fastmail のパスワードでは接続できません。",
+  "imapPreset.hint.zoho":
+    "Zoho Mail の設定で IMAP アクセスを有効にし、2 要素認証をオンにしてから、アプリケーション固有のパスワードを作成してください。Zoho のパスワードでは接続できません。",
+  "imapPreset.hint.zohopro":
+    "有料の Zoho 組織（独自ドメイン）のアカウント用です。Zoho Mail の設定で IMAP アクセスを有効にし（管理者の許可が必要な場合があります）、2 要素認証をオンにしてから、アプリケーション固有のパスワードを作成してください。Zoho のパスワードでは接続できません。",
+  "imapGeneric.title": "その他のメールサーバー（IMAP）",
+  "imapGeneric.body":
+    "メールサーバーのアドレスで接続したアカウントです。参考として表示しています。このページでは再接続も削除もできません。",
+  "imapGeneric.authRefused":
+    "メールサーバーが保存済みのサインインを拒否しました。このページでは再接続できません。",
   "telegram.error.status": "Telegram の連携状態を読み込めませんでした。",
   "telegram.error.link": "Telegram の連携を開始できませんでした。",
   "telegram.error.disconnect": "Telegram の接続を解除できませんでした。",
@@ -2991,6 +3029,356 @@ const ja: Record<string, string> = {
     "通知には Google カレンダーの接続が必要なため、設定しませんでした。",
   "smartActions.event.saveHint": "保存するには、タイトル・日付・開始時刻・長さを入力してください。",
   "smartActions.event.savedWhen": "{date} {time}（{zone}）",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Markdown で書き出す",
+  "vaultExport.desc":
+    "Klorn のデータを Markdown で書き出します。レーン、送信者、約束、メールごとのノートを含み、Obsidian などのエディタでそのまま開けます。",
+  "vaultExport.button": ".zip をダウンロード",
+  "vaultExport.includeText": "メール本文を含める",
+  "vaultExport.includeText.desc":
+    "Klorn がまだ保持しているメール本文を追加します。オフの場合、ノートには件名、プレビュー、Klorn の判断だけが入ります。",
+  "vaultExport.done": "Markdown の書き出しをダウンロードしました。",
+  "vaultExport.error.cooldown":
+    "最近書き出したばかりです。{minutes} 分後にもう一度お試しください。",
+  "vaultExport.error.inProgress": "書き出しはすでに実行中です。完了するまでお待ちください。",
+  "vaultExport.error.busy": "現在、書き出しが混み合っています。1 分ほどしてからお試しください。",
+  "vaultExport.error.unavailable": "このアカウントでは Markdown の書き出しを利用できません。",
+  "vaultExport.error.failed": "Markdown の書き出しに失敗しました。もう一度お試しください。",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn は Slack の DM、グループ DM、あなたへのメンションを読み、レーンに振り分けます。投稿・リアクション・既読化は一切しません。",
+  "slack.start": "設定を開始",
+  "slack.step.manifest": "アプリのマニフェストをダウンロードします。Request URL は記入済みです。",
+  "slack.downloadManifest": "マニフェストをダウンロード",
+  "slack.requestUrl": "リクエスト URL（Request URL）",
+  "slack.step.create":
+    "Slack でマニフェストからアプリを作成し（Create New App → From a manifest）、ワークスペースにインストールします。",
+  "slack.openSlackApps": "Slack のアプリページを開く",
+  "slack.step.paste":
+    "アプリの Signing Secret（Basic Information）と User OAuth Token（OAuth & Permissions）を貼り付けます。Klorn はトークンを確認するだけで保存しません。",
+  "slack.signingSecret": "署名シークレット（Signing Secret）",
+  "slack.userToken": "ユーザー OAuth トークン",
+  "slack.connect": "接続",
+  "slack.step.verify": "Slack の Event Subscriptions で Retry を押し、Request URL を検証させます。",
+  "slack.setupAgain": "設定手順",
+  "slack.connected": "Slack を接続しました",
+  "slack.status.connected": "{workspace} に接続済み",
+  "slack.status.waiting": "Slack による Request URL の検証を待っています。",
+  "slack.status.lastEvent": "Slack からの最新イベント: {time}",
+  "slack.channels.title": "フォローするチャンネル",
+  "slack.channels.desc":
+    "これらのチャンネルでは、メンションだけでなくすべてのメッセージを振り分けます。チャンネル ID（チャンネル詳細 → 概要）をカンマか空白で区切って貼り付けます。",
+  "slack.channels.save": "チャンネルを保存",
+  "slack.channels.saved": "チャンネルを保存しました",
+  "slack.disconnect": "接続を解除",
+  "slack.disconnect.title": "Slack の接続を解除しますか？",
+  "slack.disconnect.message":
+    "Klorn は署名シークレット、保存したすべての Slack メッセージと判定、Slack から見つけた約束を削除します。Slack 側でもアプリを削除してください。",
+  "slack.disconnected": "Slack の接続を解除しました。Klorn は保存したデータを削除しました。",
+  "slack.error.invalid-signing-secret": "Slack の署名シークレットではありません。",
+  "slack.error.bot-token":
+    "これはボットトークンです。User OAuth Token（xoxp-…）を貼り付けてください。",
+  "slack.error.invalid-user-token": "Slack のユーザートークン（xoxp-…）ではありません。",
+  "slack.error.slack-rejected-token": "Slack がこのトークンを受け付けませんでした。",
+  "slack.error.slack-unreachable": "Slack に接続できませんでした。もう一度お試しください。",
+  "slack.error.bad-response": "Slack の応答を処理できませんでした。もう一度お試しください。",
+  "slack.error.missing-scopes": "トークンに Klorn が必要なスコープがありません: {scopes}",
+  "slack.error.extra-scopes":
+    "トークンに Klorn が持つべきでないスコープがあります: {scopes}。アプリから削除して再インストールしてください。",
+  "slack.error.invalid-channels": "C0123456789 のようなチャンネル ID を最大 50 個まで使えます。",
+  "slack.error.public-url-missing":
+    "この Klorn サーバーには公開 URL がないため、Slack から到達できません。",
+  "slack.error.not-started": "先に Slack の設定を開始してください。",
+  "slack.error.rate-limited": "試行回数が多すぎます。しばらくしてからお試しください。",
+  "slack.error.generic": "Slack の処理で問題が発生しました。もう一度お試しください。",
+  "slack.retry": "再試行",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "KakaoTalkのトークを取り込む",
+  "kakaoImport.desc":
+    "KakaoTalkから書き出したトークを1つアップロードしてください。Klornが直近30日分を読み、確認用の約束を提案します。同期ではなく1回限りの取り込みです。",
+  "kakaoImport.howTo.title": "トークの書き出し方",
+  "kakaoImport.howTo.mobile":
+    "スマートフォン：トークを開き、≡ → 設定（⚙）→ トーク内容を書き出す → テキストのみ送信。.zipの場合は解凍し、中の.txtをアップロードしてください。",
+  "kakaoImport.howTo.pc":
+    "PC・Mac：トークを開き、≡ → トークを書き出す（トークを保存）→ .txt または .csv で保存。",
+  "kakaoImport.file": "書き出したトーク（.txt または .csv、UTF-8、最大10MB）",
+  "kakaoImport.preview": "ファイルを確認",
+  "kakaoImport.previewSummary":
+    "ファイルには{total}件のメッセージがあります。直近{days}日のテキストメッセージ{window}件を読みます。",
+  "kakaoImport.truncated": "最新のものだけを読みます。",
+  "kakaoImport.me.legend": "あなたの名前はどれですか？",
+  "kakaoImport.me.count": "直近のメッセージ{count}件",
+  "kakaoImport.consent":
+    "このファイルには他の人のメッセージが含まれており、私はこのトークをKlornと共有してかまいません。Klornは約束のように見える直近のメッセージをAIモデルに送り、保存したトーク本文は遅くとも7日以内に削除します。提案された約束には短い引用と発言者の名前が残り、あなたが削除するまで保持されます。",
+  "kakaoImport.import": "取り込む",
+  "kakaoImport.cancel": "キャンセル",
+  "kakaoImport.imported": "取り込みを開始しました。提案は 約束 → 確認待ち に表示されます。",
+  "kakaoImport.history.title": "取り込み履歴",
+  "kakaoImport.importedAt": "{time}に取り込み",
+  "kakaoImport.status.PENDING": "待機中",
+  "kakaoImport.status.PROCESSING": "読み取り中",
+  "kakaoImport.status.DONE": "完了",
+  "kakaoImport.status.FAILED": "失敗",
+  "kakaoImport.result": "{messages}件のメッセージから新しい提案{created}件。",
+  "kakaoImport.result.partial":
+    "{messages}件のメッセージから新しい提案{created}件。取り込みごとの上限に達したため途中で停止しました。",
+  "kakaoImport.result.waiting": "{messages}件のメッセージを読み取り中…",
+  "kakaoImport.result.expired": "読み取る前に期限切れになりました。もう一度取り込んでください。",
+  "kakaoImport.result.failed":
+    "この取り込みを読み取れませんでした。削除してもう一度お試しください。",
+  "kakaoImport.delete": "削除",
+  "kakaoImport.delete.title": "この取り込みを削除しますか？",
+  "kakaoImport.delete.message":
+    "Klornはこの取り込みと、そこから生まれたすべての約束を削除します。すでに確認した約束も含まれます。",
+  "kakaoImport.deleted": "取り込みと提案を削除しました。",
+  "kakaoImport.retry": "再試行",
+  "kakaoImport.error.empty-file": "ファイルが空です。",
+  "kakaoImport.error.file-too-large": "ファイルが10MBを超えています。",
+  "kakaoImport.error.unsupported-encoding":
+    "UTF-8のテキストファイルではありません。KakaoTalkからもう一度書き出してください。",
+  "kakaoImport.error.zip-not-supported":
+    "解凍して、中の.txtまたは.csvファイルをアップロードしてください。",
+  "kakaoImport.error.unknown-format": "KakaoTalkのトーク書き出しファイルではないようです。",
+  "kakaoImport.error.no-messages": "書き出したファイルにメッセージがありません。",
+  "kakaoImport.error.too-many-lines": "ファイルの行数が多すぎます。",
+  "kakaoImport.error.too-many-messages": "ファイルのメッセージが多すぎます。",
+  "kakaoImport.error.too-many-speakers": "トークの参加者が多すぎます（最大500人）。",
+  "kakaoImport.error.invalid-upload":
+    "アップロードを読み取れませんでした。もう一度お試しください。",
+  "kakaoImport.error.consent-required": "まず、このトークを取り込んでよいことを確認してください。",
+  "kakaoImport.error.speaker-not-found": "一覧からあなたの名前を選んでください。",
+  "kakaoImport.error.too-many-imports":
+    "保存できる取り込みは最大20件です。古いものを先に削除してください。",
+  "kakaoImport.error.busy": "現在、取り込みが混み合っています。1分ほどしてからお試しください。",
+  "kakaoImport.error.import-in-progress": "処理中の取り込みが終わってから追加してください。",
+  "kakaoImport.error.not-found": "この取り込みはもう存在しません。",
+  "kakaoImport.error.rate-limited": "試行回数が多すぎます。しばらくしてからお試しください。",
+  "kakaoImport.error.generic": "KakaoTalkの取り込みで問題が発生しました。もう一度お試しください。",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "テキストでルールを編集",
+  "rulesDsl.desc":
+    "レーンのルールをプレーンテキストで確認・編集できます。git やノートにコピーを残し、チェックして、最近のメールでプレビューしてから適用します。",
+  "rulesDsl.editorLabel": "ルールのテキスト",
+  "rulesDsl.validate": "チェック",
+  "rulesDsl.dryRun": "最近のメールでプレビュー",
+  "rulesDsl.apply": "適用",
+  "rulesDsl.reload": "再読み込み",
+  "rulesDsl.loading": "ルールを読み込んでいます…",
+  "rulesDsl.valid": "問題はありません。ルール {n} 件。",
+  "rulesDsl.errorsTitle": "修正が必要な問題: {n} 件",
+  "rulesDsl.errorAt": "{line} 行目、{column} 列目:",
+  "rulesDsl.errorsTruncated": "最初の 50 件の問題のみ表示しています。",
+  "rulesDsl.preview.title": "プレビュー",
+  "rulesDsl.preview.summary":
+    "直近で振り分けたメール {examined} 通のうち、{changed} 通が別のレーンに入ります。",
+  "rulesDsl.preview.none":
+    "直近で振り分けたメール {examined} 通で、レーンが変わるものはありません。",
+  "rulesDsl.preview.manualKept": "手動で移動したメール {n} 通はレーンを保持します。",
+  "rulesDsl.preview.toJudge": "Klorn が改めて判断",
+  "rulesDsl.preview.count": "{n} 通",
+  "rulesDsl.preview.examples": "例",
+  "rulesDsl.preview.note":
+    "ルールは新しいメールから適用されます。振り分け済みのメールはレーンを保持します。",
+  "rulesDsl.confirm.title": "このルールを適用しますか?",
+  "rulesDsl.confirm.message":
+    "レーンのルールがこのテキストに置き換わります。返信ルールと学習済みルールはそのままです。新しいメールは新しいルールに従います。",
+  "rulesDsl.confirm.label": "ルールを適用",
+  "rulesDsl.applied":
+    "ルールを適用しました: 追加 {added} 件、変更 {changed} 件、削除 {removed} 件。",
+  "rulesDsl.error.changed":
+    "開いた後にルールが変更されました。再読み込みしてから適用してください。",
+  "rulesDsl.error.invalid":
+    "ルールのテキストに問題があります。修正してからもう一度お試しください。",
+  "rulesDsl.error.tooLarge": "ルールのテキストが大きすぎます。",
+  "rulesDsl.error.rateLimited": "リクエストが多すぎます。1 分ほどしてからお試しください。",
+  "rulesDsl.error.unavailable": "このアカウントではテキストでのルール編集を利用できません。",
+  "rulesDsl.notApplicable":
+    "ルールがテキストエディターの上限（ルール 500 件、64 KiB）を超えているため、ここでは適用できません。上の一覧で編集してください。",
+  "rulesDsl.error.failed": "問題が発生しました。もう一度お試しください。",
+  // Klorn Teams: Settings → Team organization pages and the invite accept page
+  "settings.org.title": "組織",
+  "settings.org.loading": "組織を読み込んでいます…",
+  "settings.org.intro":
+    "組織を作ると、チームでアシスタントを通じて予定を合わせられます。組織があなたのメールを見ることはありません。",
+  "settings.org.create.name": "組織名",
+  "settings.org.create.button": "組織を作成",
+  "settings.org.role.owner": "オーナー",
+  "settings.org.role.member": "メンバー",
+  "settings.org.members.title": "メンバー",
+  "settings.org.members.you": "(あなた)",
+  "settings.org.members.seated": "シートあり",
+  "settings.org.members.unseated": "シートなし",
+  "settings.org.members.sharesFreeBusy": "空き時間を共有中",
+  "settings.org.members.makeOwner": "オーナーにする",
+  "settings.org.members.remove": "削除",
+  "settings.org.members.confirmRemove": "{name} を組織から削除しますか？",
+  "settings.org.members.confirmTransfer":
+    "{name} をオーナーにしますか？あなたはメンバーになります。",
+  "settings.org.invite.title": "メールで招待",
+  "settings.org.invite.label": "メールアドレス",
+  "settings.org.invite.placeholder": "name@company.com",
+  "settings.org.invite.button": "招待を送信",
+  "settings.org.invite.sent": "{email} に招待を送りました。",
+  "settings.org.invite.pending": "保留中の招待",
+  "settings.org.invite.expires": "{date} に期限切れ",
+  "settings.org.invite.revoke": "取り消す",
+  "settings.org.freeBusy.label": "組織に自分の予定の空き状況を共有",
+  "settings.org.freeBusy.hint":
+    "共有するのは予定のある時間帯だけです。予定のタイトル、参加者、場所は共有しません。いつでもオフにできます。",
+  "settings.org.admin.title": "管理者設定",
+  "settings.org.admin.autoReplyOff": "全員の自動返信をオフにする",
+  "settings.org.admin.agentCap": "エージェントモードの上限",
+  "settings.org.admin.appliesToAll": "オーナーを含む組織の全員に適用されます。",
+  "settings.org.cap.none": "制限なし",
+  "settings.org.cap.suggest": "レビューまで",
+  "settings.org.cap.shadow": "観察まで",
+  "settings.org.cap.off": "エージェントをオフ",
+  "settings.org.seats.title": "シート",
+  "settings.org.seats.summary": "メンバー {used} 人 · シート {purchased}",
+  "settings.org.seats.status.active": "有効",
+  "settings.org.seats.status.trialing": "トライアル中",
+  "settings.org.seats.status.pastDue": "支払い遅延",
+  "settings.org.seats.status.paused": "一時停止中",
+  "settings.org.seats.status.canceled": "解約済み",
+  "settings.org.seats.status.none": "サブスクリプションなし",
+  "settings.org.checkout.unavailable": "チームの支払いはまだ利用できません。料金は発生しません。",
+  "settings.org.checkout.seats": "シート数 (2–150)",
+  "settings.org.checkout.monthly": "月払い · 1シート {price}",
+  "settings.org.checkout.annual": "年払い · 1シートあたり月 {price}",
+  "settings.org.checkout.monthlyPlain": "月払い",
+  "settings.org.checkout.annualPlain": "年払い",
+  "settings.org.seats.change": "シート数 ({min}–{max})",
+  "settings.org.seats.changeAction": "シート数を変更",
+  "settings.org.seats.floor":
+    "最低 {min}：チームの最小シート数以上、メンバー 1 人につき 1 シートが必要です。差額は今回の請求期間の残り日数分を Paddle が請求またはクレジットします。",
+  "settings.org.seats.payerOnly":
+    "シートを追加すると登録済みのカードにすぐ請求されるため、チームの料金を支払っている人だけが追加できます。シートの削減はどのオーナーでもできます。",
+  "settings.org.seats.capped":
+    "チームの料金を支払っているメールアドレスでない場合、今回の変更で増やせるのは最大 {max} シートまでです。支払っているメールアドレスの人はさらに追加できます。シートの削減はどのオーナーでもできます。",
+  "settings.org.seats.cappedNone":
+    "チームの料金を支払っているメールアドレスでない場合、今はシートを追加できません。支払っているメールアドレスの人は追加できます。シートの削減はどのオーナーでもできます。",
+  "settings.org.seats.pending":
+    "Paddle に送信しました。Paddle が確認すると {seats} シートと表示されます。",
+  "settings.org.seats.unchanged": "この組織はすでに {seats} シートです。",
+  "settings.org.subscription.cancel": "サブスクリプションを解約",
+  "settings.org.subscription.cancelTitle": "チームのサブスクリプションを解約しますか？",
+  "settings.org.subscription.cancelMessageNoDate":
+    "支払い済みの期間が終わるまでは全員がシートを保持します。その後、全メンバーのチームプランが終了し、以降の請求はありません。",
+  "settings.org.subscription.cancelConfirm": "期間終了時に解約",
+  "settings.org.subscription.keep": "サブスクリプションを継続",
+  "settings.org.subscription.keepPayerOnly":
+    "継続すると支払い担当者のカードへの請求が再開されるため、継続できるのはチームの料金を支払っている人か、ここで終了を設定したオーナーだけです。",
+  "settings.org.subscription.portalPayerOnly":
+    "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
+  "settings.org.subscription.endsOn":
+    "サブスクリプションは {date} に終了します。それまでシートは保持されます。",
+  "settings.org.subscription.endsSoon":
+    "サブスクリプションは今回の請求期間の終わりに終了します。それまでシートは保持されます。",
+  "settings.org.subscription.portal": "請求を管理",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "メンバー数がそれより多いです。シートを減らす前にメンバーを外してください。",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "シート数はサブスクリプションが有効なときだけ変更できます。支払い担当者が請求ポータルで支払い方法を修正できます。",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "サブスクリプションの解約が予約されています。先に継続してからシート数を変更してください。",
+  "settings.org.error.NO_SUBSCRIPTION": "この組織にはチームのサブスクリプションがありません。",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "一時停止中のサブスクリプションは請求ポータルからのみ終了できます。",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "請求ポータルはチームの料金を支払っているメールアドレスでのみ開けます。支払い担当者は Paddle の領収書メールのリンクも使えます。",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "登録済みのカードにすぐ請求されるため、シートを追加できるのはチームの料金を支払っている人だけです。その人に自分の Klorn アカウントから追加するよう依頼してください（Paddle の領収書メールを受け取っている人です）。シートの削減は引き続きできます。",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "チームの料金を支払っているメールアドレスなしで追加できるシート数を超えています。支払っているメールアドレスの人は、自分の Klorn アカウントからさらに追加できます（Paddle の領収書メールを受け取っている人です）。シートの削減は引き続きできます。",
+  "settings.org.error.SEATS_CHANGED":
+    "保存中にシート数が変わりました。現在のシート数を確認して、もう一度お試しください。",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "サブスクリプションを継続すると支払い担当者のカードへの請求が再開されるため、チームの料金を支払っている人か、Klorn で終了を設定したオーナーだけが操作できます。支払い担当者に自分の Klorn アカウントから継続するよう依頼してください（Paddle の領収書メールを受け取っている人です）。",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle から応答がなかったため、何も変更されていません。少し待ってからもう一度お試しください。",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle が変更を確認しなかったため、反映されていない可能性があります。再試行する前に少し待ってから確認してください。",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "現在チームの請求は利用できません。何も変更されていません。",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "このサブスクリプションはここではシート数を変更できません。サポートにお問い合わせください。",
+  "settings.org.transparency.title": "組織が見られるもの",
+  "settings.org.transparency.can": "見られるもの",
+  "settings.org.transparency.cannot": "決して見られないもの",
+  "settings.org.transparency.notSharing": "(現在は共有していません)",
+  "settings.org.transparency.reads": "最近あなたの空き状況を見た人",
+  "settings.org.transparency.noReads": "まだ誰もあなたの空き状況を見ていません。",
+  "settings.org.transparency.read": "{who} · {date}",
+  "settings.org.transparency.formerMember": "以前のメンバー",
+  "settings.org.transparency.domains": "あなたの振り分けに使われる会社ドメイン",
+  "settings.org.transparency.domainsLine":
+    "{domains} からの認証済みメールは、振り分けの理由で「社内の同僚」と表示されます。どのメールだったかを組織が見ることはありません。",
+  "settings.org.visible.roles": "名前、メールアドレス、役割",
+  "settings.org.visible.seats": "有料シートの有無",
+  "settings.org.visible.cost": "シート料金とサブスクリプションの状態",
+  "settings.org.visible.freeBusy": "予定のある時間帯 (共有している間のみ)",
+  "settings.org.visible.auditLog": "管理者の操作と、あなたの空き状況を見た人",
+  "settings.org.never.mail": "あなたのメール",
+  "settings.org.never.attentionItems": "あなたのレーンと通知",
+  "settings.org.never.commitments": "あなたの約束",
+  "settings.org.never.drafts": "あなたの下書きと返信",
+  "settings.org.never.dossiers": "あなたの連絡先メモ",
+  "settings.org.never.eventDetails": "予定のタイトル、参加者、場所",
+  "settings.org.never.chat": "あなたのアシスタントとの会話",
+  "settings.org.never.contacts": "あなたの連絡先",
+  "settings.org.never.usage": "あなたの利用状況",
+  "settings.org.leave.button": "組織を退出",
+  "settings.org.leave.confirm": "{org} から退出しますか？",
+  "settings.org.leave.ownerHint":
+    "オーナーは別のメンバーをオーナーにしてから退出できます。1人だけの組織から退出すると組織は閉じられます。",
+  "settings.org.error.generic": "問題が発生しました。もう一度お試しください。",
+  "settings.org.error.EMAIL_NOT_VERIFIED": "先にメールアドレスを確認してください。",
+  "settings.org.error.ALREADY_IN_ORG": "すでに組織に所属しています。",
+  "settings.org.error.ALREADY_MEMBER": "そのアドレスはすでにメンバーです。",
+  "settings.org.error.INVALID_EMAIL": "有効なメールアドレスを入力してください。",
+  "settings.org.error.INVALID_NAME": "組織名は80文字以内で入力してください (リンクは不可)。",
+  "settings.org.error.INVALID_DOMAINS": "会社のドメインは10個まで指定できます。",
+  "settings.org.error.INVITE_LIMIT":
+    "今日送れる招待の上限に達しました。明日もう一度お試しください。",
+  "settings.org.error.MEMBER_LIMIT": "組織はメンバーと保留中の招待を合わせて最大150です。",
+  "settings.org.error.OWNER_MUST_TRANSFER": "退出する前に別のメンバーをオーナーにしてください。",
+  "settings.org.error.SUBSCRIPTION_ACTIVE":
+    "この組織にはチームのサブスクリプションがあります。先に解約してください。",
+  "settings.org.error.INVITE_EMAIL_FAILED":
+    "招待メールを送信できませんでした。もう一度お試しください。",
+  "settings.org.error.INVITE_EXPIRED": "この招待は期限切れです。新しい招待を依頼してください。",
+  "settings.org.error.INVITE_USED": "この招待はすでに使用されています。",
+  "settings.org.error.INVITE_INVALID": "この招待リンクは無効です。",
+  "settings.org.error.INVITE_EMAIL_MISMATCH":
+    "この招待は別のアドレスに送られています。そのアドレスでサインインして承認してください。",
+  "settings.org.error.TEAM_CHECKOUT_UNAVAILABLE":
+    "チームの支払いはまだ利用できません。料金は発生していません。",
+  "settings.org.error.INVALID_SEATS":
+    "シート数は2〜150で選んでください。それ以上はお問い合わせください。",
+  "settings.org.error.rate-limited": "リクエストが多すぎます。しばらくしてからお試しください。",
+  "teamInvite.loading": "招待を確認しています…",
+  "teamInvite.missing": "招待メールのリンクからこのページを開いてください。",
+  "teamInvite.title": "{org} に参加",
+  "teamInvite.body":
+    "{org} はあなたの名前、メールアドレス、役割、シートを見られます。メール、レーン、約束を見ることは決してありません。 また、全員の自動返信をオフにしたり、エージェントを制限したりできます。",
+  "teamInvite.accept": "{org} に参加",
+  "teamInvite.joined": "{org} に参加しました。",
+  "teamInvite.openSettings": "チーム設定を開く",
+  "settings.org.error.OWNER_ONLY": "組織のオーナーだけが操作できます。",
+  "settings.org.error.NOT_IN_ORG": "組織に所属していません。",
+  "settings.org.error.MEMBER_NOT_FOUND": "そのメンバーはもう組織にいません。",
+  "settings.org.error.INVITE_NOT_FOUND": "その招待はもう保留中ではありません。",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "オーナーを削除する前に別のメンバーをオーナーにしてください。",
+  "settings.org.retry": "再試行",
+  "settings.org.loadFailed": "この部分を読み込めませんでした。",
+  "settings.org.transparency.ceilings": "組織があなたに設定している制限",
+  "settings.org.transparency.ceiling.none": "なし",
+  "settings.org.transparency.ceiling.autoReplyOff": "自動返信はオフです",
+  "settings.org.transparency.ceiling.cap.off": "エージェントはオフです",
+  "settings.org.transparency.ceiling.cap.shadow": "エージェントは観察のみ行います",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "エージェントは提案のみ行い、自分では実行しません",
 };
 
 export default ja;

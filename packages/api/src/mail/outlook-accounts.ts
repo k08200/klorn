@@ -13,7 +13,7 @@
  */
 
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { markLinkedInboxForReconnect } from "./gmail.js";
 import { syncOutlookInbox } from "./outlook-sync.js";
 import { resolveAccessToken } from "./outlook-token.js";
@@ -63,7 +63,9 @@ export async function syncOutlookAccountsForUser(
       total.errors += result.errors;
       if (result.authFailed) {
         void markLinkedInboxForReconnect(userId, row.id, "OUTLOOK").catch((markErr) => {
-          console.warn(`[outlook-accounts] reconnect mark failed for row ${row.id}:`, markErr);
+          logDbFailure("[outlook-accounts] reconnect mark failed", markErr, {
+            ids: { rowId: row.id },
+          });
         });
         await recordSyncError(userId, row.id, "auth");
         total.errors += 1;
@@ -95,8 +97,8 @@ export async function syncOutlookAccountsForUser(
       total.errors += 1;
       await recordSyncError(userId, row.id, "error");
       // console first — captureError is a no-op without a Sentry DSN.
-      console.warn(`[outlook-accounts] sync failed for row ${row.id}:`, err);
-      captureError(err, {
+      logDbFailure("[outlook-accounts] sync failed", err, { ids: { rowId: row.id } });
+      captureDbFailure("[outlook-accounts] sync failed", err, {
         tags: { scope: "outlook-accounts.account-sync" },
         extra: { userId, linkedInboxAccountId: row.id },
       });

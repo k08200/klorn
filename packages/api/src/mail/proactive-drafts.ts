@@ -29,7 +29,8 @@
 import { isEntitled } from "../billing/stripe.js";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
-import { captureError } from "../sentry.js";
+import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
+import { effectivePlan } from "../org/effective-tier.js";
 
 export function isProactiveDraftEnabled(): boolean {
   return process.env.PROACTIVE_DRAFT_ENABLED === "true";
@@ -121,7 +122,11 @@ async function entitledForDrafts(userId: string): Promise<boolean> {
     where: { id: userId },
     select: { plan: true, role: true },
   });
-  return isEntitled(user?.plan ?? "FREE", user?.role ?? undefined);
+  // A Klorn Teams seat counts (org/effective-tier.ts).
+  return isEntitled(
+    await effectivePlan({ id: userId, plan: user?.plan ?? "FREE" }),
+    user?.role ?? undefined,
+  );
 }
 
 /** Fresh, unanswered, never-attempted PUSH mail that needs a reply — newest first. */
@@ -209,8 +214,14 @@ async function sweep(userId: string, draftFor: DraftBuilder, now: Date): Promise
       }
     } catch (err) {
       // A real fault on this mail: its attempt stays spent, the next mail runs.
-      console.warn("[PROACTIVE-DRAFT] draft failed:", err instanceof Error ? err.message : err);
-      captureError(err, { tags: { scope: "proactive-drafts.draft" }, extra: { userId, emailId } });
+      // Facts only: a provider error that is not back-pressure arrives raw
+      // from the draft call, and its message can quote this mail.
+      const label = "[PROACTIVE-DRAFT] draft failed";
+      logLlmFailure(label, err, { ids: { userId, emailId } });
+      captureLlmFailure(label, err, {
+        tags: { scope: "proactive-drafts.draft" },
+        extra: { userId, emailId },
+      });
     }
   }
   return written;
@@ -235,8 +246,13 @@ export async function runProactiveDrafts(
   try {
     return await sweep(userId, draftFor, now);
   } catch (err) {
-    console.warn("[PROACTIVE-DRAFT] sweep failed:", err instanceof Error ? err.message : err);
-    captureError(err, { tags: { scope: "proactive-drafts.sweep" }, extra: { userId } });
+    // Facts only: the sweep drafts over this user's mail, so a provider or
+    // database error that escapes it can quote that mail.
+    logLlmFailure("[PROACTIVE-DRAFT] sweep failed", err, { ids: { userId } });
+    captureLlmFailure("[PROACTIVE-DRAFT] sweep failed", err, {
+      tags: { scope: "proactive-drafts.sweep" },
+      extra: { userId },
+    });
     return 0;
   } finally {
     sweeping.delete(userId);

@@ -11,6 +11,7 @@ import {
   type NotificationLanguage,
   resolveNotificationLanguage,
 } from "../notify/notification-strings.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { briefingCopy } from "./briefing-copy.js";
@@ -161,10 +162,7 @@ async function readSource<T>(
     return await read();
   } catch (err) {
     failures.push(label);
-    console.warn(
-      `[BRIEFING] ${label} read failed for ${userId}:`,
-      err instanceof Error ? err.message : err,
-    );
+    logDbFailure("[BRIEFING] source read failed", err, { ids: { source: label, userId } });
     return empty;
   }
 }

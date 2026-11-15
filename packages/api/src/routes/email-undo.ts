@@ -18,9 +18,9 @@ import type { EmailUndoActionResponse } from "@klorn/contract";
 import { imapMoveActionsEnabled } from "../config.js";
 import { syncEmailByGmailId } from "../mail/email-sync.js";
 import { IMAP_PROVIDERS, type ImapProviderKey } from "../mail/imap-providers.js";
-import { describeFailure } from "../mail/providers/action-failure.js";
 import { findMovedAccountId, type MoveRoleName } from "../mail/providers/imap-moved.js";
 import type { MailProviderActions, SimpleMailActionResult } from "../mail/providers/types.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 const isImapProviderKey = (key: string): key is ImapProviderKey =>
   Object.hasOwn(IMAP_PROVIDERS, key);
@@ -41,9 +41,9 @@ export async function findParkedInbox(
   try {
     return await findMovedAccountId(userId, gmailId, role);
   } catch (err) {
-    console.warn(
-      `[EMAIL] could not look up the recorded move for an undo (${describeFailure(err)})`,
-    );
+    logDbFailure("[EMAIL] could not look up the recorded move for an undo", err, {
+      ids: { userId },
+    });
     return null;
   }
 }
@@ -91,7 +91,7 @@ export async function completeUndo(
     if (!synced) return late;
     return { payload: { success: true, gmailId: restoredId, emailId: synced.emailId } };
   } catch (err) {
-    console.warn(`[EMAIL] re-sync after an IMAP undo failed (${describeFailure(err)})`);
+    logDbFailure("[EMAIL] re-sync after an IMAP undo failed", err, { ids: { userId } });
     return late;
   }
 }

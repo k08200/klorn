@@ -18,7 +18,7 @@
 
 import { prisma } from "../db.js";
 import { type ThresholdConfig, TIER_THRESHOLDS } from "../judge/tier-policy.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 export interface AppliedOverride {
   knob: string;
@@ -172,8 +172,12 @@ export async function refreshOverrideCache(): Promise<boolean> {
     );
     return true;
   } catch (err) {
-    console.error("[ontology] override cache refresh failed; cache unchanged", err);
-    captureError(err, { tags: { scope: "ontology.override-cache" } });
+    logDbFailure("[ontology] override cache refresh failed; cache unchanged", err, {
+      level: "error",
+    });
+    captureDbFailure("[ontology] override cache refresh failed; cache unchanged", err, {
+      tags: { scope: "ontology.override-cache" },
+    });
     return false;
   }
 }

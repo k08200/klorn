@@ -26,6 +26,7 @@ import type { FastifyInstance } from "fastify";
 import { handleTelegramChatMessage, telegramChatEnabled } from "../agentcore/telegram-chat.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import {
   answerTelegramCallback,
   isTelegramConfigured,
@@ -38,7 +39,7 @@ import {
   getLinkedTelegramChatId,
   unlinkTelegram,
 } from "../notify/telegram-link.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
 // Override buttons can only move DOWN the interrupt ladder (QUEUE/SILENT).
@@ -106,8 +107,10 @@ export async function telegramRoutes(app: FastifyInstance) {
     } catch (err) {
       // Contain everything: a 5xx would make Telegram redeliver the same
       // update in a retry loop. Operators see it via Sentry instead.
-      console.error("[TELEGRAM] Webhook handler failed:", err);
-      captureError(err, { tags: { scope: "telegram.webhook" } });
+      logDbFailure("[TELEGRAM] Webhook handler failed", err, { level: "error" });
+      captureDbFailure("[TELEGRAM] Webhook handler failed", err, {
+        tags: { scope: "telegram.webhook" },
+      });
     }
     return reply.code(200).send({ ok: true });
   });
@@ -130,7 +133,9 @@ async function handleMessage(
   if (!match) {
     if (telegramChatEnabled()) {
       void handleTelegramChatMessage({ chatId, text, updateId }).catch((err) =>
-        captureError(err, { tags: { scope: "telegram-chat.dispatch" } }),
+        captureLlmFailure("[TELEGRAM] chat dispatch failed", err, {
+          tags: { scope: "telegram-chat.dispatch" },
+        }),
       );
     }
     return;

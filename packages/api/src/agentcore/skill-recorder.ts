@@ -18,6 +18,7 @@
 import { prisma } from "../db.js";
 import { likeContainsPattern } from "../db-like.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 const MIN_REPEAT = 3; // sequence must repeat this many times
 const LOOK_BACK_DAYS = 30;
@@ -64,7 +65,7 @@ export async function detectAndProposeSkills(userId: string): Promise<number> {
     }
     return proposed;
   } catch (err) {
-    console.warn("[SKILL-RECORDER] detectAndProposeSkills failed:", err);
+    logDbFailure("[SKILL-RECORDER] detectAndProposeSkills failed", err);
     return 0;
   }
 }
@@ -277,11 +278,13 @@ export async function detectSkillsForAllUsers(): Promise<void> {
       try {
         await detectAndProposeSkills(userId);
       } catch (err) {
-        console.warn("[SKILL-RECORDER] detectAndProposeSkills failed for", userId, err);
+        logDbFailure("[SKILL-RECORDER] detectAndProposeSkills failed for user", err, {
+          ids: { userId },
+        });
         // skip individual failures
       }
     }
   } catch (err) {
-    console.error("[SKILL-RECORDER] Batch run failed:", err);
+    logDbFailure("[SKILL-RECORDER] Batch run failed", err, { level: "error" });
   }
 }

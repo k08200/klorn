@@ -10,8 +10,8 @@
 
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
-import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 import { newWork } from "../work-context.js";
 import { mailReminderEmailId } from "./mail-reminder.js";
@@ -65,11 +65,16 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     await prisma.reminder
       .updateMany({ where: { id: reminder.id }, data: { status: "PENDING" } })
       .catch(() => {});
-    console.error(
-      `[REMINDER] notification create failed for ${reminder.id}, reverted to PENDING:`,
-      err,
-    );
-    captureError(err, { tags: { scope: "reminder.deliver" }, extra: { reminderId: reminder.id } });
+    // Facts only: the create's arguments quote the title, which for a mail
+    // reminder is the mail's subject, and a Prisma error renders them.
+    logDbFailure("[REMINDER] notification create failed, reverted to PENDING", err, {
+      level: "error",
+      ids: { reminderId: reminder.id },
+    });
+    captureDbFailure("[REMINDER] notification create failed", err, {
+      tags: { scope: "reminder.deliver" },
+      extra: { reminderId: reminder.id },
+    });
     return false;
   }
 
@@ -101,14 +106,18 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     "system",
     { bucket: "interrupt" },
   ).catch((err) => {
-    console.error(`[REMINDER] Push delivery failed for ${reminder.id}:`, err);
-    captureError(err, {
+    logDbFailure("[REMINDER] Push delivery failed", err, {
+      level: "error",
+      ids: { reminderId: reminder.id },
+    });
+    captureDbFailure("[REMINDER] Push delivery failed", err, {
       tags: { scope: "reminder.push", userId: reminder.userId },
       extra: { reminderId: reminder.id },
     });
   });
 
-  console.log(`[REMINDER] Delivered: "${reminder.title}" to user ${reminder.userId}`);
+  // Id, not title: a mail reminder's title quotes the mail's subject.
+  console.log(`[REMINDER] Delivered ${reminder.id} to user ${reminder.userId}`);
   return true;
 }
 
@@ -131,8 +140,13 @@ export function scheduleReminderDeliveryCheck(reminderId: string, remindAt: Date
 
   const timer = setTimeout(() => {
     deliverDueReminderById(reminderId).catch((err) => {
-      console.error(`[REMINDER] Direct delivery check failed for ${reminderId}:`, err);
-      captureError(err, { tags: { scope: "reminder.direct-delivery", reminderId } });
+      logDbFailure("[REMINDER] Direct delivery check failed", err, {
+        level: "error",
+        ids: { reminderId },
+      });
+      captureDbFailure("[REMINDER] Direct delivery check failed", err, {
+        tags: { scope: "reminder.direct-delivery", reminderId },
+      });
     });
   }, delayMs + 500);
   timer.unref?.();
@@ -170,8 +184,8 @@ async function checkDueReminders() {
   try {
     await deliverDueReminders();
   } catch (err) {
-    console.error("[REMINDER] Scheduler error:", err);
-    captureError(err, { tags: { scope: "reminder.scheduler" } });
+    logDbFailure("[REMINDER] Scheduler error", err, { level: "error" });
+    captureDbFailure("[REMINDER] Scheduler error", err, { tags: { scope: "reminder.scheduler" } });
   }
 }
 

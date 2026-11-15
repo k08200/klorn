@@ -11,7 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import type { ScoredOutcome } from "../judge/selective-threshold.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
 import {
   type ProposalCandidate,
@@ -189,8 +189,10 @@ export async function recomputeOntologyProposalsSafe(
       `[ontology] proposals recomputed: ${candidates.length} active, ${result.dismissed} dismissed`,
     );
   } catch (err) {
-    console.error("[ontology] proposal recompute failed", err);
-    captureError(err, { tags: { scope: "ontology.recompute" } });
+    logDbFailure("[ontology] proposal recompute failed", err, { level: "error" });
+    captureDbFailure("[ontology] proposal recompute failed", err, {
+      tags: { scope: "ontology.recompute" },
+    });
   }
 }
 

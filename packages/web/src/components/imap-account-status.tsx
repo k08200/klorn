@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The sync status of one connected IMAP mailbox (iCloud, Naver), under its card
+ * The sync status of one connected IMAP mailbox (iCloud, Naver, the app-password
+ * presets of lib/imap-presets.ts), under its card
  * in Settings -> Accounts: last successful sync, why the last one failed in
  * plain language, and — when the provider refused the stored app password —
  * an inline reconnect form. Apple revokes app-specific passwords when the Apple
@@ -9,7 +10,7 @@
  * "Reconnect needed" after one poll.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   ACCOUNT_HEALTH_REFRESH_EVENT,
   type ImapStatusAccount,
@@ -19,12 +20,16 @@ import {
 } from "../lib/account-health";
 import { apiFetch } from "../lib/api";
 import { useT } from "../lib/i18n";
+import type { ImapPresetSlug } from "../lib/imap-presets";
 import { captureClientError } from "../lib/sentry";
 import Button from "./ui/button";
 import { Input } from "./ui/input";
 
+/** The route segment of the provider's connect routes: `/api/<kind>-imap/*`. */
+export type ImapAccountKind = "icloud" | "naver" | ImapPresetSlug;
+
 interface ImapAccountStatusProps {
-  kind: "icloud" | "naver";
+  kind: ImapAccountKind;
   account: ImapStatusAccount;
   /** The reconnect succeeded: the caller reloads its status. */
   onReconnected: () => void | Promise<void>;
@@ -32,7 +37,10 @@ interface ImapAccountStatusProps {
 
 export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountStatusProps) {
   const { t } = useT();
-  const provider = kind === "icloud" ? "ICLOUD" : "NAVER";
+  // The wire provider is the slug in capitals (ICLOUD, NAVER, DAUM, …).
+  const provider = kind.toUpperCase() as Uppercase<ImapAccountKind>;
+  // A card can list several mailboxes, each with its own reconnect field.
+  const fieldId = `${kind}-reconnect-password-${useId()}`;
   const status = imapAccountStatus(account);
   const sync = lastSyncCopy(account.lastSyncedAt, Date.now(), provider);
   const problem = syncProblemKey(status, account.syncErrorCode ?? null, provider);
@@ -84,7 +92,7 @@ export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountS
         <form onSubmit={reconnect} className="flex flex-wrap items-end gap-2">
           <div className="min-w-56 flex-1">
             <Input
-              id={`${kind}-reconnect-password`}
+              id={fieldId}
               label={t("accountHealth.reconnect.passwordLabel")}
               type="password"
               value={password}

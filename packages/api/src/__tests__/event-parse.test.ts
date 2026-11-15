@@ -22,6 +22,7 @@ vi.mock("../user-timezone.js", () => ({
 }));
 
 import { parseEventText } from "../event-parse.js";
+import { callText, LLM_CANARY, NON_JSON_REPLY } from "./helpers/canary.js";
 
 function llmJson(obj: unknown) {
   return {
@@ -140,5 +141,26 @@ describe("parseEventText", () => {
   it("propagates LLM transport failures to the caller", async () => {
     createCompletion.mockRejectedValueOnce(new Error("provider down"));
     await expect(parseEventText("u1", "내일 미팅", NOW)).rejects.toThrow("provider down");
+  });
+});
+
+describe("parseEventText failure reports carry no model text", () => {
+  it("sends Sentry and the console the parse failure's facts, not the reply JSON.parse quotes", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    createCompletion.mockResolvedValueOnce({
+      choices: [{ message: { role: "assistant", content: NON_JSON_REPLY } }],
+    });
+
+    expect(await parseEventText("u1", "내일 미팅", NOW)).toBeNull();
+
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: { scope: "parse_event.json", userId: "u1" },
+        extra: expect.objectContaining({ errorName: "SyntaxError", keyKind: "platform" }),
+      }),
+    );
+    expect(callText(captureError) + callText(error)).not.toContain(LLM_CANARY);
+    error.mockRestore();
   });
 });

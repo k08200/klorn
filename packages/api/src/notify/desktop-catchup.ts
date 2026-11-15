@@ -7,8 +7,8 @@
  * back the ones that still deserve a toast:
  *   - an urgent-mail bell row of this user (any language's title), naming one
  *     mail (sourceEmailId), unread, from the last 72 hours;
- *   - whose mail is still an OPEN PUSH item (handled, moved or archived mail
- *     never toasts late);
+ *   - whose mail is still an OPEN PUSH item and not read in the mailbox
+ *     (handled, moved, archived or already-read mail never toasts late);
  *   - shaped like every other mail notification (decision N1,
  *     mail-push-content.ts).
  * The last two are open-push-mail.ts, shared with the server's quiet-hours
@@ -16,7 +16,9 @@
  * The same gate a live frame passes decides: a category opt-out returns
  * nothing, quiet hours return `held` so the shell waits and asks again later.
  * The shell keeps the once-per-id ledger and decides one toast vs. a summary
- * (packages/web lib/native/desktop-push-catchup.ts).
+ * (packages/web lib/native/desktop-push-catchup.ts), and which of the two
+ * summary titles fits: quiet hours held mail it saw ring live, or it was
+ * closed.
  */
 
 import type { DesktopCatchUpResponse } from "@klorn/contract";
@@ -48,12 +50,17 @@ export async function desktopCatchUp(
   now: Date = new Date(),
 ): Promise<DesktopCatchUpResponse> {
   const language = await getUserNotificationLanguage(userId);
-  const summaryTitle = notificationCopy(language).missedWhileClosed("{count}");
-  if (ids.length === 0) return { held: false, summaryTitle, items: [] };
+  const copy = notificationCopy(language);
+  // The shell picks: quiet hours held mail it saw ring live, or it was closed.
+  const titles = {
+    summaryTitle: copy.missedWhileClosed("{count}"),
+    heldSummaryTitle: copy.heldDuringQuietHours("{count}"),
+  };
+  if (ids.length === 0) return { held: false, ...titles, items: [] };
 
   const gate = await evaluateNotificationGate(userId, "email_urgent", now);
   if (!gate.allowed) {
-    return { held: gate.reason === "quiet_hours", summaryTitle, items: [] };
+    return { held: gate.reason === "quiet_hours", ...titles, items: [] };
   }
 
   const rows = await prisma.notification.findMany({
@@ -64,7 +71,10 @@ export async function desktopCatchUp(
     },
     select: { id: true, sourceEmailId: true, createdAt: true },
   });
-  const mail = await openPushMail(userId, rows, language);
+  // Mail already read in the mailbox (Gmail, or a bulk mark-read that leaves
+  // the bell row unread) was seen: no late toast for it, as on the Mac
+  // (HeldBanners) and in the quiet-hours summary.
+  const mail = await openPushMail(userId, rows, language, { skipReadMail: true });
   const items = mail.map((m) => ({
     id: m.bellId,
     emailId: m.emailId,
@@ -72,5 +82,5 @@ export async function desktopCatchUp(
     body: m.body,
     createdAt: m.createdAt.toISOString(),
   }));
-  return { held: false, summaryTitle, items };
+  return { held: false, ...titles, items };
 }

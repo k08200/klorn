@@ -957,6 +957,14 @@ func providerLabel(_ provider: String?) -> String {
     case "NAVER": "Naver"
     case "ICLOUD": "iCloud"
     case "OUTLOOK": "Outlook"
+    case "DAUM": "Daum"
+    case "KAKAO": "Kakao"
+    case "YAHOO": "Yahoo"
+    case "AOL": "AOL"
+    case "FASTMAIL": "Fastmail"
+    case "ZOHO": "Zoho"
+    // Same brand, its own hosts: the qualifier keeps the two rows apart.
+    case "ZOHOPRO": L("account.zohopro.name")
     default: L("inbox.provider.generic")
     }
 }

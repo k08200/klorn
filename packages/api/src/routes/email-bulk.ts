@@ -20,7 +20,7 @@ import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import type { MailProviderActions } from "../mail/providers/types.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -86,7 +86,7 @@ async function applyBulkReadAction(
         })
         .catch((err) => {
           // Local write below still happens (accepted divergence) — but never silently.
-          console.warn(`[EMAIL-BULK] toggleRead threw for ${email.id}:`, err);
+          logDbFailure("[EMAIL-BULK] toggleRead threw", err, { ids: { emailId: email.id } });
         }),
     ),
   );
@@ -223,11 +223,11 @@ async function applyBulkArchiveAction(
     try {
       await resolveAttentionForEmails(userId, archivedIds);
     } catch (err) {
-      console.warn(
-        "[EMAIL-BULK] attention resolve failed:",
-        err instanceof Error ? err.message : err,
-      );
-      captureError(err, { tags: { scope: "email-bulk.archive.resolve" }, extra: { userId } });
+      logDbFailure("[EMAIL-BULK] attention resolve failed", err, { ids: { userId } });
+      captureDbFailure("[EMAIL-BULK] attention resolve failed", err, {
+        tags: { scope: "email-bulk.archive.resolve" },
+        extra: { userId },
+      });
     }
   }
   return {

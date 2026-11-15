@@ -13,7 +13,7 @@
 import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { URGENT_EMAIL_TITLES } from "./notification-strings.js";
 
 export interface OpenedEmail {
@@ -63,11 +63,10 @@ export async function markEmailBellRowsRead(userId: string, email: OpenedEmail):
  */
 export function noteEmailBellRowsRead(userId: string, email: OpenedEmail): void {
   void markEmailBellRowsRead(userId, email).catch((err) => {
-    console.warn(
-      `[NOTIFY] could not mark bell rows read for email ${email.id}:`,
-      err instanceof Error ? err.message : String(err),
-    );
-    captureError(err, {
+    logDbFailure("[NOTIFY] could not mark bell rows read for email", err, {
+      ids: { emailId: email.id },
+    });
+    captureDbFailure("[NOTIFY] could not mark bell rows read for email", err, {
       tags: { scope: "notifications.email-open-read" },
       extra: { userId, emailId: email.id },
     });

@@ -12,6 +12,7 @@ import { db } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
 import type { SentOrigin } from "../../mail/sent-messages.js";
+import { orgCompanyDomainsFor } from "../../org/org-domains.js";
 import { isSenderAddressIndexEnabled, lookupPinnedTier } from "../judge-context.js";
 import {
   buildRelationshipSnapshot,
@@ -76,6 +77,12 @@ export interface RelationshipLoaderDeps extends CoAttendanceDeps {
   /** Throws on a lookup failure (unknown), returns null for "no pin". */
   pinnedTier(userId: string, address: string): Promise<string | null>;
   senderCategory(userId: string, address: string): Promise<string | null>;
+  /**
+   * The user's organization's company domains (Klorn Teams). Answers [] with
+   * no query while TEAMS_ENABLED is closed to the user. Optional: a loader
+   * without it (replay, older fakes) produces no org fact.
+   */
+  orgCompanyDomains?(userId: string): Promise<readonly string[]>;
 }
 
 export const prismaRelationshipDeps: RelationshipLoaderDeps = {
@@ -134,6 +141,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   async senderCategory(userId, address) {
     return (await senderLabelsFor(userId, [address])).get(address) ?? null;
   },
+  orgCompanyDomains: orgCompanyDomainsFor,
   coAttendanceCoverage: readCoAttendanceCoverage,
   coAttendanceRow: readCoAttendanceRow,
   coAttendanceOwnAddresses: readCoAttendanceOwnAddresses,
@@ -224,7 +232,8 @@ export async function loadRelationshipSnapshot(
   const sender = senderMailbox(input.senderAddress);
   if (!sender) return { ...UNKNOWN_RELATIONSHIP };
   const { userId } = input;
-  const [sentData, inboundData, dismissCount, pinnedTier, senderCategory, coAttendance] =
+  const orgDomains = deps.orgCompanyDomains;
+  const [sentData, inboundData, dismissCount, pinnedTier, senderCategory, coAttendance, org] =
     await Promise.all([
       loadSent(userId, sender, deps),
       loadInbound(userId, sender, deps, input.excludeEmailId),
@@ -235,6 +244,8 @@ export async function loadRelationshipSnapshot(
         () => loadCoAttendance(deps, userId, sender, input.now ?? new Date()),
         "co-attendance",
       ),
+      // A failed lookup is no fact (unknown), never a failed snapshot.
+      orgDomains ? settle(() => orgDomains(userId), "org-domains") : undefined,
     ]);
   const userSent = await loadThreadSends(
     userId,
@@ -255,5 +266,6 @@ export async function loadRelationshipSnapshot(
     pinnedTier,
     senderCategory,
     coAttendance,
+    orgCompanyDomains: org ?? [],
   });
 }

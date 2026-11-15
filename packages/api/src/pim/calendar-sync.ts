@@ -6,7 +6,7 @@
  */
 
 import { calendarHideDeclinedEnabled } from "../config.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import {
   reconcileCancelledEvents,
@@ -146,11 +146,12 @@ async function removeDeclinedRows(
       if (oldest !== undefined) reportedDeclinedFailures.delete(oldest);
     }
     reportedDeclinedFailures.add(account);
-    console.warn(
-      "[CALENDAR] declined-invitation removal failed (reported once per account until it succeeds):",
-      err instanceof Error ? err.message : String(err),
+    logDbFailure(
+      "[CALENDAR] declined-invitation removal failed (reported once per account until it succeeds)",
+      err,
+      { ids: { userId, linkedAccountId } },
     );
-    captureError(err, {
+    captureDbFailure("[CALENDAR] declined-invitation removal failed", err, {
       tags: { scope: "calendar.declined_removal" },
       extra: { userId, linkedAccountId },
     });

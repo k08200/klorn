@@ -34,6 +34,7 @@ import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { cohortReadout, pmfSummary } from "../product/cohort.js";
 import { getProviderChain } from "../providers/index.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 
@@ -411,8 +412,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
     // Notification read rate
     const [notifSent, notifRead] = await Promise.all([
-      prisma.notification.count({ where: { createdAt: { gte: last7d } } }),
-      prisma.notification.count({ where: { createdAt: { gte: last7d }, isRead: true } }),
+      // Rows cleared from the bell are read but were never engaged with: left
+      // out of both counts, as when clearing deleted them.
+      prisma.notification.count({ where: { createdAt: { gte: last7d }, clearedAt: null } }),
+      prisma.notification.count({
+        where: { createdAt: { gte: last7d }, isRead: true, clearedAt: null },
+      }),
     ]);
     const readRate = notifSent > 0 ? notifRead / notifSent : 0;
 
@@ -637,7 +642,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     if (status === "APPROVED" && previous.status !== "APPROVED") {
       sendBetaInviteEmail(entry.email, entry.name).catch((err) => {
-        console.error("[ADMIN] Failed to send beta invite email:", err);
+        logDbFailure("[ADMIN] Failed to send beta invite email", err, { level: "error" });
       });
     }
 

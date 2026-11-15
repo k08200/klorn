@@ -19,7 +19,24 @@
  */
 
 // KLORN: the Klorn address (step E1a), mail Klorn receives itself: no credentials.
-export type InboxProviderName = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP" | "KLORN";
+// DAUM … ZOHOPRO: the app-password presets (imap-preset-keys.ts), IMAP rows like
+// NAVER's. Spelled out so klorn-mailbox-schema.test.ts can compare this union with
+// the Prisma enum and the contract; dispatch.ts's Record over it makes the
+// compiler hold the preset list to it.
+export type InboxProviderName =
+  | "GOOGLE"
+  | "NAVER"
+  | "ICLOUD"
+  | "OUTLOOK"
+  | "IMAP"
+  | "KLORN"
+  | "DAUM"
+  | "KAKAO"
+  | "YAHOO"
+  | "AOL"
+  | "FASTMAIL"
+  | "ZOHO"
+  | "ZOHOPRO";
 
 export type InboxAuthKind = "oauth" | "imap" | "none" | "broken";
 

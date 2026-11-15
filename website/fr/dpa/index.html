@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Traitement des données et sous-traitants ultérieurs — Klorn</title>
-<meta name="description" content="Comment obtenir un DPA, et la liste complète des sous-traitants ultérieurs qui peuvent accéder aux données dans le service hébergé — Google, Render, Vercel, Anthropic, Paddle et Apple.">
+<meta name="description" content="Comment obtenir un DPA, et la liste complète des sous-traitants ultérieurs qui peuvent accéder aux données dans le service hébergé — Google, Render, Cloudflare, Anthropic, Paddle et Apple.">
 <meta property="og:title" content="Traitement des données et sous-traitants ultérieurs — Klorn">
-<meta property="og:description" content="Comment obtenir un DPA, et la liste complète des sous-traitants ultérieurs qui peuvent accéder aux données dans le service hébergé — Google, Render, Vercel, Anthropic, Paddle et Apple.">
+<meta property="og:description" content="Comment obtenir un DPA, et la liste complète des sous-traitants ultérieurs qui peuvent accéder aux données dans le service hébergé — Google, Render, Cloudflare, Anthropic, Paddle et Apple.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://klorn.ai/fr/dpa/">
 <meta property="og:locale" content="fr_FR">
@@ -15,7 +15,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Traitement des données et sous-traitants ultérieurs — Klorn">
-<meta name="twitter:description" content="Comment obtenir un DPA, et la liste complète des sous-traitants ultérieurs qui peuvent accéder aux données dans le service hébergé — Google, Render, Vercel, Anthropic, Paddle et Apple.">
+<meta name="twitter:description" content="Comment obtenir un DPA, et la liste complète des sous-traitants ultérieurs qui peuvent accéder aux données dans le service hébergé — Google, Render, Cloudflare, Anthropic, Paddle et Apple.">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k3">
 <link rel="canonical" href="https://klorn.ai/fr/dpa/">
 <link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/">
@@ -79,7 +79,7 @@
       <tr><th>Render</th><td class="us">Hébergement de l’API, région de Singapour</td><td>Tout ce que l’API traite, en transit et en mémoire</td></tr>
       <tr><th>Supabase</th><td class="us">Postgres managé, Séoul (ap-northeast-2)</td><td>Toutes les données stockées de compte, d’e-mails et de classement</td></tr>
       <tr><th>GitHub</th><td class="us">Stockage des sauvegardes nocturnes de la base de données (artefacts Actions, qui expirent au bout de 14 jours)</td><td>Uniquement des fichiers chiffrés. La base de données est copiée sur un runner GitHub temporaire, chiffrée sur place, et seul le texte chiffré est stocké ; la clé permettant de le lire n’est jamais stockée sur GitHub</td></tr>
-      <tr><th>Vercel</th><td class="us">Hébergement de l’app web</td><td>Requêtes et réponses en transit</td></tr>
+      <tr><th>Cloudflare</th><td class="us">Hébergement de l’app web (Cloudflare Pages : hébergement statique et CDN pour app.klorn.ai)</td><td>Requêtes et réponses en transit</td></tr>
       <tr><th>Google (API Gemini)</th><td class="us">Appels aux modèles</td><td>Le texte des messages envoyé pour classement ou rédaction, selon des conditions d’API qui excluent l’entraînement sur les données soumises</td></tr>
       <tr><th>Anthropic (API Claude)</th><td class="us">Appels aux modèles</td><td>Le même texte des messages, selon des conditions d’API commerciales qui excluent l’entraînement sur les données soumises. Supprimé sous 30 jours par défaut, plus longtemps uniquement pour le contenu signalé dans le cadre de l’application de la politique d’utilisation</td></tr>
       <tr><th>Paddle</th><td class="us">Paiements et revendeur officiel (merchant of record)</td><td>Informations de facturation. <strong>Aucun contenu d’e-mail</strong></td></tr>

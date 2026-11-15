@@ -7,8 +7,11 @@
  */
 
 import type { CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
+import { llmFailureName, llmFailureStatus } from "../llm/describe-failure.js";
 import { parseLlmJson } from "../llm/llm-json.js";
-import { createCompletion, MODEL } from "../llm/openai.js";
+import { type CompletionOptions, createCompletion, MODEL } from "../llm/openai.js";
+import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
+import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { validDateKey } from "./commitment-due-calendar.js";
@@ -35,6 +38,12 @@ export interface CommitmentRefinementInput {
   timeZone?: string;
   /** When provided, the LLM call is gated by the user's daily cost cap. */
   userId?: string;
+  /** KAKAO only: whether the user wrote the message (an export holds both sides). */
+  authoredByUser?: boolean;
+  /** The user's BYOK keys; env providers when absent. */
+  credentials?: ProviderCredentials;
+  /** Usage-ledger label; read from the call stack when absent. */
+  feature?: string;
 }
 
 export interface CommitmentRefinement {
@@ -120,6 +129,23 @@ function parseRefinement(raw: RawRefinement): CommitmentRefinement {
   };
 }
 
+function authorLine(input: CommitmentRefinementInput): string {
+  if (input.authoredByUser === undefined) return "";
+  return input.authoredByUser
+    ? "\nMessage author: USER (the user wrote this message: a first-person promise in it is owed by USER)"
+    : "\nMessage author: COUNTERPARTY (someone else wrote this message: a first-person promise in it is theirs, owner=COUNTERPARTY, never USER)";
+}
+
+function completionOptions(input: CommitmentRefinementInput): CompletionOptions {
+  if (!input.userId) return {};
+  return {
+    userId: input.userId,
+    priority: "background",
+    ...(input.credentials ? { credentials: input.credentials } : {}),
+    ...(input.feature ? { feature: input.feature } : {}),
+  };
+}
+
 function promptFor(input: CommitmentRefinementInput): string {
   const referenceDate = input.referenceDate ?? new Date();
   const timeZone = input.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -133,7 +159,7 @@ Context title: ${input.contextTitle ? wrapUntrusted(input.contextTitle, "commitm
 Rule candidate:
 ${wrapUntrusted(input.candidate.text, "commitment:candidate")}
 
-Candidate owner guess: ${input.candidate.owner}
+Candidate owner guess: ${input.candidate.owner}${authorLine(input)}
 Candidate due hint: ${input.candidate.dueHint ? wrapUntrusted(input.candidate.dueHint, "commitment:dueHint") : "(none)"}
 
 Source context:
@@ -175,17 +201,41 @@ Rules:
 - Never guess AM/PM: a bare hour with no 오전/오후/AM/PM ("8시", "at 8", "8:00") is ambiguous, so dueAt=null (keep it in dueText).
 - Automated or bulk mail (appointment systems, order/shipping/queue notices, no-reply boilerplate) never makes a commitment: isCommitment=false.
 - Second-person policy text telling the RECIPIENT what will happen ("You will not be allowed…", "You will be required…") is a notice, not a commitment: isCommitment=false.
-- For EMAIL sources the text is written by the SENDER: a first-person promise ("I'll…", "보내드릴게요") is owed by the sender (owner=COUNTERPARTY), never USER, unless the source says the user authored it.
+- For EMAIL and SLACK sources the text is written by the SENDER: a first-person promise ("I'll…", "보내드릴게요") is owed by the sender (owner=COUNTERPARTY), never USER, unless the source says the user authored it.
 - confidence: 0.0 to 1.0. Use 0.75+ only for explicit commitments where you can name who owes what; automated notices and boilerplate must stay below 0.5.`,
         },
         { role: "user", content: promptFor(input) },
       ],
     },
-    input.userId ? { userId: input.userId, priority: "background" as const } : {},
+    completionOptions(input),
   );
 
   const raw = response.choices[0]?.message?.content || "{}";
   return parseRefinement(parseLlmJson<RawRefinement>(raw));
+}
+
+/**
+ * A failed refinement, told to Sentry as the error's name, the provider's HTTP
+ * status and the sizes of what was sent. Never the error itself: a provider
+ * error can quote the request, and JSON.parse's message quotes the model's
+ * reply, both carrying someone else's mail, Slack or KakaoTalk text (as the
+ * Slack and Kakao paths report). A write the data-wipe fence refused is left
+ * out, as captureError leaves it out.
+ */
+function reportRefinementFailure(err: unknown, input: CommitmentRefinementInput): void {
+  if (isDataWipeFenceError(err)) return;
+  const errorName = llmFailureName(err);
+  captureError(new Error(`commitment refiner failed (${errorName})`), {
+    tags: { scope: "commitment.llm_refinement" },
+    extra: {
+      errorName,
+      status: llmFailureStatus(err),
+      sourceType: input.sourceType,
+      contextTitleLength: input.contextTitle?.length ?? 0,
+      candidateTextLength: input.candidate.text.length,
+      sourceTextLength: input.sourceText.length,
+    },
+  });
 }
 
 export async function maybeRefineCommitmentCandidateWithLlm(
@@ -195,14 +245,7 @@ export async function maybeRefineCommitmentCandidateWithLlm(
   try {
     return await refineCommitmentCandidateWithLlm(input);
   } catch (err) {
-    captureError(err, {
-      tags: { scope: "commitment.llm_refinement" },
-      extra: {
-        sourceType: input.sourceType,
-        contextTitle: input.contextTitle,
-        candidateText: input.candidate.text,
-      },
-    });
+    reportRefinementFailure(err, input);
     return null;
   }
 }

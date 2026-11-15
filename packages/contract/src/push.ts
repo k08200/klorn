@@ -82,10 +82,14 @@ export interface DesktopMissedMail extends DesktopMailToast {
  * `held` is true while the user's quiet hours suppress urgent-mail alerts: the
  * shell then shows nothing and asks again later. `summaryTitle` is the
  * "N urgent emails while Klorn was closed" title in the user's notification
- * language, with `{count}` standing for N.
+ * language, with `{count}` standing for N. `heldSummaryTitle` is the
+ * "N urgent emails during quiet hours" title, same shape, used when every
+ * mail in the summary rang live while quiet hours held it back (optional: a
+ * shell must still toast, with `summaryTitle`, when it is absent).
  */
 export interface DesktopCatchUpResponse {
   held: boolean;
   summaryTitle: string;
+  heldSummaryTitle?: string;
   items: DesktopMissedMail[];
 }

@@ -38,8 +38,10 @@
  *      "unknown (restarted since)" → this process has not seen a failed call
  *      since boot (or a different instance served the judge); go to step 2.
  *   2. Render logs: `[JUDGE] LLM feature extraction attempt` (per-email judge
- *      failure with the cause chain) and `[LLM-FAILURE]` (one structured line
- *      per provider failure class per minute, with a suppressed count).
+ *      failure: class, status, cause class and provider type/code, never the
+ *      provider's message) and `[LLM-FAILURE]` (one structured line per
+ *      provider failure class per minute, with a suppressed count). For the
+ *      provider's own wording, check its dashboard or console.
  *   3. `[cost-guard]` lines / GET /api/admin/flags `costGuard`: a tripped daily
  *      ceiling blocks the call BEFORE dispatch, so no provider error exists.
  *   4. GET /api/admin/judge-health (admin) for the last check + top error;
@@ -55,6 +57,7 @@ import {
   type AdminOpsDelivery,
   createAdminOpsNotifications,
 } from "../ops/admin-ops-notification.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import type { JudgeSource } from "./judge-health.js";
 
@@ -278,7 +281,7 @@ async function raiseAlarm(
   try {
     delivery = await createAdminOpsNotifications({ dedupeKey, title: ALARM_TITLE, message });
   } catch (err) {
-    console.warn("[JUDGE-HEALTH] ops notification failed:", err);
+    logDbFailure("[JUDGE-HEALTH] ops notification failed", err);
   }
   if (!shouldBeLoud(delivery, dedupeKey)) return;
 
@@ -335,7 +338,7 @@ function refreshIfStale(now: number): void {
   refreshing = measure(now)
     .then(() => undefined)
     .catch((err: unknown) => {
-      console.warn("[JUDGE-HEALTH] fallback snapshot refresh failed:", err);
+      logDbFailure("[JUDGE-HEALTH] fallback snapshot refresh failed", err);
     })
     .finally(() => {
       refreshing = null;

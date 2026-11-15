@@ -21,6 +21,8 @@
 import { prisma } from "../db.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
 import { extractEmailAddress } from "../mail/email-address.js";
+import { orgCeilingsFor } from "../org/ceilings.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { REPLY_LEDGER_PREFIX } from "./auto-reply-ledger-keys.js";
 
 export const MAX_UNATTENDED_REPLIES_PER_DAY = 20;
@@ -33,7 +35,7 @@ const UTC_DAY_KEY_LENGTH = 10;
 const LOOP_PRONE_LOCAL_PART =
   /^(?:mailer-daemon|postmaster|do[-_.]?not[-_.]?reply|no[-_.]?reply|bounces?|auto[-_.]?(?:reply|responder|confirm)|autoresponder|notify|alerts?)(?:$|[+._-])/;
 
-export type UnattendedReplyBlock = "machine-or-list" | "own-address" | "daily-cap";
+export type UnattendedReplyBlock = "org-policy" | "machine-or-list" | "own-address" | "daily-cap";
 
 export interface GuardEmail {
   from: string;
@@ -92,7 +94,7 @@ async function noteDailyCap(userId: string, now: Date): Promise<void> {
     });
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code;
-    if (code !== "P2002") console.warn("[AUTOMATION] auto-reply cap notice failed:", err);
+    if (code !== "P2002") logDbFailure("[AUTOMATION] auto-reply cap notice failed", err);
   }
 }
 
@@ -102,6 +104,9 @@ export async function unattendedReplyBlock(
   email: GuardEmail,
   now: Date = new Date(),
 ): Promise<UnattendedReplyBlock | null> {
+  // The user's organization turned auto-reply off (org/ceilings.ts). First,
+  // so a blocked reply costs no LLM draft and no ledger row.
+  if ((await orgCeilingsFor(userId)).autoReplyDisabled) return "org-policy";
   if (isMachineOrListMail(email)) return "machine-or-list";
   const address = extractEmailAddress(email.from);
   if (address && (await isOwnAddress(userId, address))) return "own-address";

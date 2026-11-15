@@ -17,7 +17,7 @@ import { prisma } from "../db.js";
 import { sendEmailPayloadHash } from "../judge/attention-floor.js";
 import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { parseAddress } from "./email-address.js";
 import { mailActionsFor } from "./providers/dispatch.js";
 import { SendOutcomeUnknownError } from "./providers/send-outcome-unknown.js";
@@ -155,7 +155,7 @@ async function writeReceipt(
   try {
     return { receipt: await openReceipt(input, receiptInput) };
   } catch (err) {
-    captureError(err, {
+    captureDbFailure("[email-replies] receipt write failed", err, {
       tags: { scope: "email-replies.receipt" },
       extra: { userId: input.userId, emailId: receiptInput.emailId, route: input.route },
     });
@@ -182,7 +182,7 @@ async function writeClaimedReceipt(
   } catch (err) {
     // Nothing was written, so nothing can go out: the answer for a receipt that
     // cannot be written.
-    captureError(err, {
+    captureDbFailure("[email-replies] send claim failed", err, {
       tags: { scope: "email-replies.send-claim" },
       extra: { userId: input.userId, emailId: key.emailId, route: input.route },
     });
@@ -278,7 +278,7 @@ export async function sendReplyToEmail(input: ReplySendInput): Promise<ReplySend
     if (!(err instanceof SendOutcomeUnknownError)) throw err;
     // The provider could not say whether the reply went out. Nothing is recorded as
     // answered, and the user is told not to simply retry: that could deliver twice.
-    captureError(err, {
+    captureDbFailure("[email-replies] send outcome unknown", err, {
       tags: { scope: "email-replies.send-outcome-unknown" },
       extra: { userId: uid, emailId: dbEmail.id, route: input.route },
     });

@@ -91,6 +91,18 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       // Read per request by config.ts smartActionsLive/smartActionsOpenTo
       // (routes/smart-actions.ts, /me user.smartActions). True for "true" or "cohort".
       SMART_ACTIONS_ENABLED: cohortCapableFlag(env, "SMART_ACTIONS_ENABLED"),
+      // Read per request by config.ts vaultExportLive/vaultExportOpenTo
+      // (routes/vault-export.ts, /me user.vaultExport). True for "true" or "cohort".
+      VAULT_EXPORT_ENABLED: cohortCapableFlag(env, "VAULT_EXPORT_ENABLED"),
+      // Read per request by config.ts rulesDslLive/rulesDslOpenTo
+      // (routes/rules-dsl.ts, /me user.rulesDsl). True for "true" or "cohort".
+      RULES_DSL_ENABLED: cohortCapableFlag(env, "RULES_DSL_ENABLED"),
+      // Read per request by config.ts slackLive/slackOpenTo (routes/slack-*.ts,
+      // /me user.slack). True for "true" or "cohort".
+      SLACK_ENABLED: cohortCapableFlag(env, "SLACK_ENABLED"),
+      // Read per request by config.ts kakaoImportLive/kakaoImportOpenTo
+      // (routes/kakao-import.ts, /me user.kakaoImport). True for "true" or "cohort".
+      KAKAO_IMPORT_ENABLED: cohortCapableFlag(env, "KAKAO_IMPORT_ENABLED"),
       // Attention engine v3 policy (P3): interrupt budget on PUSH notifications.
       // Founder flip only, after replay + shadow data. Requires JUDGE_V3_SHADOW.
       JUDGE_V3_POLICY: dynamicFlag(env, "JUDGE_V3_POLICY"),

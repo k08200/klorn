@@ -194,19 +194,22 @@ describe("verifyGenericImapCredentials: what is logged", () => {
       call.map(String).join(" "),
     );
 
-  it("server text cannot forge or split a log line", async () => {
+  it("server text never reaches the log, so it cannot forge or split a line", async () => {
     fake.connect.mockRejectedValue(new Error("boom\r\n[generic-imap] FORGED: connected ok\nmore"));
     await verifyGenericImapCredentials(args);
     const lines = loggedLines();
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) expect(line).not.toMatch(/[\r\n]/);
-    expect(lines.join(" ")).toContain("FORGED");
+    expect(lines.join(" ")).not.toContain("FORGED");
   });
 
-  it("server text is capped, so a hostile server cannot flood the log", async () => {
+  it("server text never reaches the log, so a hostile server cannot flood it", async () => {
     fake.connect.mockRejectedValue(new Error(`x${"A".repeat(50_000)}`));
     await verifyGenericImapCredentials(args);
-    for (const line of loggedLines()) expect(line.length).toBeLessThan(600);
+    for (const line of loggedLines()) {
+      expect(line.length).toBeLessThan(600);
+      expect(line).not.toContain("AAAA");
+    }
   });
 
   it("the same holds when verification throws instead of returning", async () => {

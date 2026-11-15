@@ -19,6 +19,11 @@
 # schema by itself. The Prisma client is generated at image build time
 # (Dockerfile.api).
 #
+# Image version: KLORN_VERSION (in .env.selfhost) picks the tag of BOTH
+# images — a release like 0.4.1, or `latest` (the default when unset).
+# `klorn upgrade <version>` (packages/cli) pins it for you after a backup and
+# the migration; see docs/self-host-cli.md.
+#
 # Full guide (OAuth client setup, env reference, updates): docs/self-hosting.md
 
 services:
@@ -42,7 +47,7 @@ services:
       retries: 5
 
   api:
-    image: ghcr.io/k08200/klorn-api:latest
+    image: ghcr.io/k08200/klorn-api:${KLORN_VERSION:-latest}
     # To build from source, remove the image: line and uncomment:
     # build:
     #   context: .
@@ -132,7 +137,7 @@ services:
         condition: service_healthy
 
   web:
-    image: ghcr.io/k08200/klorn-web:latest
+    image: ghcr.io/k08200/klorn-web:${KLORN_VERSION:-latest}
     # NEXT_PUBLIC_API_URL is inlined into the client bundle at BUILD time —
     # a runtime env entry cannot change it. The published image is baked
     # with the single-host default (http://localhost:3001). If browsers

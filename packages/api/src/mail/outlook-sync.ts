@@ -23,7 +23,7 @@
  */
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
-import { captureError } from "../sentry.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   needsAttachmentScan,
   rememberAttachmentScan,
@@ -117,7 +117,10 @@ async function attachmentsOf(
     if (rows.length === 0) rememberAttachmentScan(args.userId, stableId);
     return rows;
   } catch (err) {
-    console.warn(`[outlook-sync] attachments skipped for ${stableId}`, err);
+    // Not stableId: it embeds the mailbox address.
+    logDbFailure("[outlook-sync] attachments skipped", err, {
+      ids: { userId: args.userId, messageId: msg.id },
+    });
     return [];
   }
 }
@@ -243,8 +246,11 @@ export async function syncOutlookInbox(args: OutlookSyncArgs): Promise<OutlookSy
       } catch (err) {
         result.errors += 1;
         // console first: captureError is a no-op without a Sentry DSN.
-        console.warn(`[outlook-sync] persist failed for ${stableId}`, err);
-        captureError(err, {
+        // Not stableId in the line: it embeds the mailbox address.
+        logDbFailure("[outlook-sync] persist failed", err, {
+          ids: { userId: args.userId, messageId: msg.id },
+        });
+        captureDbFailure("[outlook-sync] persist failed", err, {
           tags: { scope: "outlook-sync.upsert" },
           extra: { userId: args.userId, stableId },
         });

@@ -23,7 +23,12 @@ import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { CURATED_MODELS, isCuratedModel } from "../llm/model-catalog.js";
 import { MODEL } from "../llm/openai.js";
-import { captureError } from "../sentry.js";
+import {
+  effectivePlan,
+  effectivePlanOrOwn,
+  seatCoversPersonalPlan,
+} from "../org/effective-tier.js";
+import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;
@@ -45,8 +50,11 @@ async function persistOrReportDrift(
   try {
     await prisma.user.update({ where: { id: userId }, data });
   } catch (err) {
-    console.error("[BILLING] provider action applied but local write failed", err);
-    captureError(err, {
+    logDbFailure("[BILLING] provider action applied but local write failed", err, {
+      level: "error",
+      ids: { userId },
+    });
+    captureDbFailure("[BILLING] provider action applied but local write failed", err, {
       tags: { scope: "billing.subscription.persist_drift" },
       extra: { userId, ...data },
     });
@@ -62,6 +70,7 @@ export async function billingRoutes(app: FastifyInstance) {
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const userId = getUserId(request);
+      // The plan the checkout asks for. effective-tier: not a gate
       const { plan } = request.body as {
         plan: "PRO";
       };
@@ -104,8 +113,10 @@ export async function billingRoutes(app: FastifyInstance) {
           // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
           // a distinct customer and bypasses this guard; that needs Stripe Radar /
           // address canonicalization (product control), not just code.
-          console.warn("[BILLING] customer lookup by email failed", err);
-          captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
+          logDbFailure("[BILLING] customer lookup by email failed", err, { ids: { userId } });
+          captureDbFailure("[BILLING] customer lookup by email failed", err, {
+            tags: { scope: "billing.checkout.customer_lookup" },
+          });
         }
       }
 
@@ -213,7 +224,11 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
-    const planConfig = getEffectivePlan(user.plan, user.role);
+    // A Klorn Teams seat counts (org/effective-tier.ts); no query while
+    // TEAMS_ENABLED is closed to the user. Display only, so a failed seat
+    // lookup shows the own plan instead of failing the page.
+    const plan = await effectivePlanOrOwn({ id: userId, plan: user.plan });
+    const planConfig = getEffectivePlan(plan, user.role);
 
     // Count user messages and tokens this billing period (current calendar month)
     const now = new Date();
@@ -252,6 +267,9 @@ export async function billingRoutes(app: FastifyInstance) {
       renewsAt: user.subscriptionRenewsAt?.toISOString() ?? null,
       cancelAt: user.subscriptionCancelAt?.toISOString() ?? null,
       canCancelInApp: isPaddleConfigured() && Boolean(user.paddleSubscriptionId),
+      // A team seat already covers this personal plan while it still renews:
+      // the page says so next to the personal cancel. Klorn never cancels it.
+      teamSeatCoversPersonalPlan: seatCoversPersonalPlan(user.plan, plan, user),
     };
   });
 
@@ -261,7 +279,9 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
-    const features = PLAN_FEATURES[user.plan];
+    // A Klorn Teams seat counts (org/effective-tier.ts). Display only.
+    const plan = await effectivePlanOrOwn({ id: userId, plan: user.plan });
+    const features = PLAN_FEATURES[plan];
     const featureList = features ? Array.from(features) : [];
 
     return {
@@ -346,7 +366,10 @@ export async function billingRoutes(app: FastifyInstance) {
       // downgraded user can remove theirs. The chat-model CHOICE is for
       // everyone — the per-user daily cost cap is the spend guard.
       const isSettingKey = typeof anthropicApiKey === "string" && anthropicApiKey.trim().length > 0;
-      if (isSettingKey && !isEntitled(user.plan, user.role)) {
+      if (
+        isSettingKey &&
+        !isEntitled(await effectivePlan({ id: userId, plan: user.plan }), user.role)
+      ) {
         return reply.code(403).send({
           error: "BYOK requires an active subscription",
           code: "ENTITLEMENT_REQUIRED",

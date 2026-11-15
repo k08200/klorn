@@ -22,6 +22,7 @@ import {
 } from "../mail/gmail-mailbox.js";
 import { fetchInlineImage } from "../mail/inline-image.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 function isMailbox(value: string): value is Mailbox {
   return (MAILBOXES as readonly string[]).includes(value);
@@ -132,7 +133,9 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
           .header("cache-control", "private, max-age=3600")
           .send(image.bytes);
       } catch (err) {
-        console.warn(`[EMAIL] live inline image fetch failed for ${gmailId}/${cid}:`, err);
+        logDbFailure("[EMAIL] live inline image fetch failed", err, {
+          ids: { userId: uid, gmailId },
+        });
         return reply.code(404).send({ error: "Inline image not found" });
       }
     },

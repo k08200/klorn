@@ -18,9 +18,15 @@ vi.mock("../mail/gmail.js", () => ({
   sendEmail: vi.fn(),
 }));
 vi.mock("../db.js", () => ({ prisma: {}, db: {} }));
+vi.mock("../sentry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../sentry.js")>()),
+  captureError: vi.fn(),
+}));
 
 import { CHAT_TOOL_NAMES } from "../agentcore/chat-engine.js";
 import { ALL_TOOLS, executeToolCall } from "../agentcore/tool-executor.js";
+import { captureError } from "../sentry.js";
+import { callText, exhaustedOverQuotingError, LLM_CANARY } from "./helpers/canary.js";
 
 const call = (args: Record<string, unknown>) => executeToolCall("user-1", "sender_context", args);
 
@@ -58,5 +64,21 @@ describe("sender_context tool", () => {
     });
     const empty = JSON.parse(await call({ sender_email: "new@nowhere.com" }));
     expect(empty.info).toMatch(/No stored mail/);
+  });
+});
+
+describe("sender_context tool failure", () => {
+  it("hands the model the error as before, and Sentry the facts only", async () => {
+    vi.mocked(captureError).mockClear();
+    getSenderDossier.mockRejectedValueOnce(exhaustedOverQuotingError());
+
+    const out = JSON.parse(await call({ sender_email: "sellers@paddle.com" }));
+
+    expect(out.error).toBe("All AI providers are unavailable");
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ tags: { area: "tool_executor", tool: "sender_context" } }),
+    );
+    expect(callText(vi.mocked(captureError))).not.toContain(LLM_CANARY);
   });
 });

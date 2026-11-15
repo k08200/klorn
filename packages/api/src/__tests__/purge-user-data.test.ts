@@ -160,6 +160,8 @@ describe("purgeUserData covers every user-scoped model (schema-driven guard)", (
     dataWipe: "the data-wipe fence's record: it must outlive the purge it describes",
     klornAddress:
       "the account's Klorn address: deleting it would let the handle be issued again (L5)",
+    orgMembership:
+      "the account's organization seat: an account relationship, not provider data; leaving is its own action",
   };
 
   it("deletes or deliberately keeps every model that has a userId", async () => {

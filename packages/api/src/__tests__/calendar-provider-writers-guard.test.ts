@@ -269,6 +269,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",
     "pim/team-availability.ts",
+    "org/org-availability.ts", // a co-member's busy times under their free/busy grant
   ];
   // Returns every row on purpose.
   const EXPORTS_EVERYTHING = [
@@ -393,6 +394,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       "pim/inbox-summary.ts",
       "pim/meeting-prep-pack.ts",
       "pim/team-availability.ts",
+      "org/org-availability.ts",
       "learning/interaction-graph.ts",
     ];
     // Modules that reach LLM-adjacent code, with the exact specifiers they use and why
@@ -402,7 +404,8 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
         "routes/calendar.ts",
         // event-parse: dynamic import in POST /parse-event. cost-cap-refusal:
         // maps a cap-refused call's error to its 429 body — no prompt.
-        ["../event-parse.js", "../llm/cost-cap-refusal.js"],
+        // report-llm-failure: logs a failed parse as facts — no prompt.
+        ["../event-parse.js", "../llm/cost-cap-refusal.js", "../llm/report-llm-failure.js"],
         "event-parse sends the user's own spoken or typed utterance to the model, never a row",
       ],
       [

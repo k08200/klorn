@@ -18,6 +18,9 @@ vi.mock("aws4fetch", async (importOriginal) => {
   return await importOriginal<typeof import("aws4fetch")>();
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+// Organization ownership handover (org/account-deletion.ts) has its own proof
+// in orgs-pg.test.ts; this file's prisma mock has no org tables.
+vi.mock("../org/account-deletion.js", () => ({ handOverOrgBeforeAccountDeletion: vi.fn() }));
 vi.mock("../db.js", () => ({
   prisma: {
     $transaction: vi.fn(async () => []),

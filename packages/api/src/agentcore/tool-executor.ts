@@ -5,7 +5,7 @@
  */
 
 import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
-import { teamModeEnabled } from "../config.js";
+import { teamAvailabilityOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import {
   type ActionReceipt,
@@ -17,6 +17,7 @@ import {
 } from "../judge/attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
+import { captureLlmFailure } from "../llm/report-llm-failure.js";
 import { findUserEmail } from "../mail/email-lookup.js";
 import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmail.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
@@ -40,6 +41,8 @@ import {
   summarizeMeeting,
 } from "../pim/meeting.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
+import { teamAvailabilityMembers } from "../pim/team-availability-members.js";
+import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
@@ -88,15 +91,21 @@ const TEAM_AVAILABILITY_TOOL = {
   function: {
     name: "team_availability",
     description:
-      "Find time slots where the USER and a group of people are all free. Pass either the " +
-      "name of one of the user's saved teams (team_name) or an explicit members list of " +
-      "email addresses. Members whose calendars are not visible come back in " +
+      "Find time slots where the USER and a group of people are all free. Pass the name " +
+      "of one of the user's saved teams (team_name), an explicit members list of email " +
+      "addresses, or org_members: true for everyone in the user's Klorn organization. " +
+      "Organization members are read only when they share free/busy (busy times only). " +
+      "Members whose calendars are not visible come back in " +
       "unknownMembers — their availability is UNKNOWN, do not claim they are free. Use for " +
       "questions like 'AX팀 내일 언제 다 돼?' or 'find an hour for me, alice@ and bob@ this week'.",
     parameters: {
       type: "object",
       properties: {
         team_name: { type: "string", description: "Name of one of the user's saved teams." },
+        org_members: {
+          type: "boolean",
+          description: "true = everyone else in the user's Klorn organization.",
+        },
         members: {
           type: "array",
           items: { type: "string" },
@@ -360,7 +369,10 @@ async function executeToolCallInternal(
               origin: opts.sentOrigin ?? "approved",
             });
           } catch (err) {
-            captureError(err, { tags: { scope: "tool-executor.sent-record" }, extra: { userId } });
+            captureDbFailure("[TOOL-EXECUTOR] sent-record failed", err, {
+              tags: { scope: "tool-executor.sent-record" },
+              extra: { userId },
+            });
           }
         }
         return JSON.stringify(sent);
@@ -383,7 +395,7 @@ async function executeToolCallInternal(
       case "list_events":
         return JSON.stringify(await listEvents(userId, safeInt(args.max_results, 10, 200)));
       case "team_availability": {
-        if (!teamModeEnabled()) {
+        if (!teamAvailabilityOpenTo(userId)) {
           return JSON.stringify({
             error: "Team mode is not part of the current plan.",
             code: "TEAM_REQUIRED",
@@ -396,26 +408,9 @@ async function executeToolCallInternal(
             error: "Too many availability checks — try again in a minute.",
           });
         }
-        let members: string[] = [];
-        if (typeof args.team_name === "string" && args.team_name.trim()) {
-          const teams = await prisma.team.findMany({
-            where: { userId },
-            select: { name: true, members: true },
-          });
-          const wanted = args.team_name.trim().toLowerCase();
-          const team = teams.find((t) => t.name.toLowerCase() === wanted);
-          if (!team) {
-            return JSON.stringify({
-              error: `No saved team named "${args.team_name}".`,
-              availableTeams: teams.map((t) => t.name),
-            });
-          }
-          members = Array.isArray(team.members)
-            ? team.members.filter((m): m is string => typeof m === "string")
-            : [];
-        } else if (Array.isArray(args.members)) {
-          members = args.members.filter((m): m is string => typeof m === "string");
-        }
+        const resolved = await teamAvailabilityMembers(userId, args);
+        if ("error" in resolved) return JSON.stringify(resolved);
+        const { members } = resolved;
         if (members.length === 0) {
           return JSON.stringify({ error: "Provide team_name (a saved team) or a members list." });
         }
@@ -676,8 +671,12 @@ async function executeToolCallInternal(
       });
       throw err;
     }
+    // The model gets the message back as the tool result; Sentry gets facts
+    // only. LLM-backed tools (sender_context, summarize_meeting) throw
+    // provider errors that can quote mail, and every tool runs on
+    // model-written arguments that an error message can echo.
     const message = err instanceof Error ? err.message : "Unknown error";
-    captureError(err, {
+    captureLlmFailure("Agent tool failed", err, {
       tags: { area: "tool_executor", tool: functionName },
       extra: { userId, argKeys: Object.keys(args) },
     });

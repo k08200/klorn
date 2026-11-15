@@ -642,6 +642,14 @@ describe("the job", () => {
     await driveGoogleRefreshTick();
     expect(google.captureError).toHaveBeenCalledWith(expect.any(Error), {
       tags: { scope: "drive.google.refresh.sweep" },
+      extra: {
+        errorName: "Error",
+        code: null,
+        model: null,
+        operation: null,
+        status: null,
+        messageLength: "database is down".length,
+      },
     });
     const entry = getSchedulerHealth().schedulers.find((s) => s.name === "drive-google-refresh");
     expect(entry?.lastSeenAt).toBe(NOW.getTime());

@@ -12,7 +12,11 @@
 import type { DesktopMailToast } from "@klorn/contract";
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
-import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
+import {
+  autoModeReplyFailureReporter,
+  recipientFromHeader,
+  runAutoModeSweep,
+} from "./agentcore/auto-mode-sweep.js";
 import {
   HIDDEN_CLAIM_TYPE,
   replyLedgerKey,
@@ -45,7 +49,7 @@ import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import { sweepOverrideUndoSnapshots } from "./judge/attention-override.js";
-import { stampDecisionRang } from "./judge/decision-label.js";
+import { findRungEmailIds, stampDecisionRang } from "./judge/decision-label.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import { FIREWALL_PUSH_RECENCY_MS } from "./judge/firewall-push.js";
 import { isJudgeV3PolicyEnabled } from "./judge/v3/flags.js";
@@ -53,6 +57,7 @@ import {
   effectiveAutoReplyGuideline,
   normalizeAttentionMode,
 } from "./learning/auto-reply-guideline.js";
+import { captureLlmFailure, logLlmFailure } from "./llm/report-llm-failure.js";
 import { autoReplyEmailWhere } from "./mail/auto-reply-scope.js";
 import { syncRecentCandidateIntakes } from "./mail/email-candidate-intake.js";
 import { generateGuidelineReply } from "./mail/email-reply.js";
@@ -84,10 +89,13 @@ import { sendSms } from "./notify/sms.js";
 import {
   buildUrgentDedupMessage,
   latestNotifiedAt,
+  NOTIFIED_LOOKBACK_MS,
   unnotifiedEmails,
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
+import { AutoReplyBlockedByOrgError } from "./org/ceilings.js";
+import { effectivePlansOrOwn } from "./org/effective-tier.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -98,6 +106,7 @@ import {
 import { enqueueCoAttendance } from "./pim/coattendance/coattendance-job.js";
 import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { createSchedulerLease } from "./scheduler-lease.js";
@@ -346,8 +355,10 @@ async function notifyCandidateEmails(userId: string): Promise<void> {
       },
       "email_candidate",
     ).catch((err) => {
-      console.warn(`[AUTOMATION] Candidate email push failed for ${userId}:`, err);
-      captureError(err, { tags: { scope: "automation.candidate-push", userId } });
+      logDbFailure("[AUTOMATION] Candidate email push failed", err, { ids: { userId } });
+      captureDbFailure("[AUTOMATION] Candidate email push failed", err, {
+        tags: { scope: "automation.candidate-push", userId },
+      });
     });
   }
 }
@@ -394,7 +405,7 @@ async function dbHeartbeat(): Promise<void> {
     });
   } catch (err) {
     // Don't crash the scheduler on a stuck DB — the next tick will try again.
-    console.warn("[AUTOMATION] DB heartbeat failed (will retry next tick):", err);
+    logDbFailure("[AUTOMATION] DB heartbeat failed (will retry next tick)", err);
   }
 }
 
@@ -475,9 +486,11 @@ export async function maybeNudgeFreeDailyLimit(
     });
   } catch (err) {
     // The nudge is best-effort UX — never let it break the classify tick or
-    // spam retries. Log a signal (console + captureError) instead of swallowing.
-    console.warn(`[AUTOMATION] free-limit nudge failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "automation.free-limit-nudge", userId } });
+    // spam retries. Log a signal (console + Sentry) instead of swallowing.
+    logDbFailure("[AUTOMATION] free-limit nudge failed", err, { ids: { userId } });
+    captureDbFailure("[AUTOMATION] free-limit nudge failed", err, {
+      tags: { scope: "automation.free-limit-nudge", userId },
+    });
   }
 }
 
@@ -604,8 +617,11 @@ async function rewriteLedgerAsFailed(
   try {
     await prisma.notification.update({ where: { id: ledgerId }, data });
   } catch (err) {
-    console.warn(`[AUTOMATION] ${scope}: failure-ledger update failed`, err);
-    captureError(err, { tags: { scope }, extra: { ledgerId } });
+    logDbFailure("[AUTOMATION] failure-ledger update failed", err, { ids: { scope, ledgerId } });
+    captureDbFailure("[AUTOMATION] failure-ledger update failed", err, {
+      tags: { scope },
+      extra: { ledgerId },
+    });
   }
 }
 
@@ -616,6 +632,8 @@ async function rewriteLedgerAsFailed(
  * rather than tell the user the reply "failed" and invite a second one.
  */
 function deliveryUnknown(sendErr: unknown): boolean {
+  // The organization's auto-reply ceiling refused it before anything left.
+  if (sendErr instanceof AutoReplyBlockedByOrgError) return false;
   return !(sendErr instanceof AutoReplyNotSentError && sendErr.reason === "unsupported");
 }
 
@@ -884,6 +902,201 @@ export function urgentMailPushPayload(input: {
   };
 }
 
+/**
+ * The urgent-mail sweep, run at the end of each user cycle: unread mail marked
+ * URGENT, synced in the last hour, rings once as an interrupt. Throws what its
+ * reads throw; the user cycle catches it like any other failure of the tick.
+ */
+export async function sweepUrgentEmails(config: {
+  userId: string;
+  notificationLanguage?: string | null;
+}): Promise<void> {
+  // Check for urgent unread emails — notify only for NEW urgent emails
+  // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
+  // and, like the firewall push, received in its recency window: a late sync
+  // or backfill that surfaces old mail does not ring it as urgent now.
+  // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
+  // under the daily interrupt budget is the only email interrupt
+  // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
+  // the budget, so it stands down for that user.
+  const keywordUrgent = isJudgeV3PolicyEnabled(config.userId)
+    ? []
+    : await prisma.emailMessage.findMany({
+        where: {
+          userId: config.userId,
+          priority: "URGENT",
+          isRead: false,
+          syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+          receivedAt: { gte: new Date(Date.now() - FIREWALL_PUSH_RECENCY_MS) },
+        },
+        orderBy: { receivedAt: "desc" },
+        select: {
+          id: true,
+          gmailId: true,
+          subject: true,
+          from: true,
+          summary: true,
+          createdAt: true,
+          receivedAt: true,
+          linkedInboxAccountId: true,
+        },
+      });
+  // Lane contract (tier-ontology-v2.md): the keyword priority never
+  // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
+  // here: a safety net for PUSH mail the firewall push did not ring (its
+  // bell row's [gmailId] marker dedupes below). When the judge's LLM did
+  // not run (outage, spend cap, unusable key) the keyword fallback cannot
+  // reach PUSH for an ordinary sender, so mail it left in QUEUE (and nobody
+  // moved since) rings here too. Mail the judge has not reached yet waits
+  // for the judge's own push.
+  const ringItemByEmail = await urgentSweepItemIdsFailClosed(config.userId, keywordUrgent);
+  const urgentEmails = keywordUrgent.filter((e) => ringItemByEmail.has(e.id));
+  // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
+  // history: rung once already, never again. Gmail rows read nothing more.
+  // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
+  // alert of a mixed batch must still go out.
+  const urgentHistory = await findReingestedHistoryFailClosed(
+    config.userId,
+    urgentEmails,
+    "urgent-sweep",
+  );
+  const ringableUrgent = urgentEmails.filter((e) => !urgentHistory.has(e.id));
+
+  if (ringableUrgent.length > 0) {
+    // Check which urgent emails we already notified about (by gmailId in message, last 7
+    // days). A row the user cleared from the bell is kept (clearedAt) and still counts.
+    const recentUrgentNotifs = await prisma.notification.findMany({
+      where: {
+        userId: config.userId,
+        type: "email",
+        // Every language's title plus the legacy ones: a row written
+        // before a language switch (or before the title was localized)
+        // still marks its mails as notified.
+        title: { in: [...URGENT_EMAIL_TITLES] },
+        createdAt: { gte: new Date(Date.now() - NOTIFIED_LOOKBACK_MS) },
+      },
+      select: { message: true, createdAt: true },
+    });
+    // Only notify for urgent emails we haven't notified about yet. For an IMAP
+    // id a marker counts only from the row's creation on (step B2b: a repair
+    // can hand a re-keyed row's id to a new message); Gmail ids as before.
+    const unmarked = unnotifiedEmails(ringableUrgent, latestNotifiedAt(recentUrgentNotifs));
+    // ...and never for one that already rang (this sweep, the firewall push or a
+    // quiet-hours summary): the ledger's per-mail fact, which no bell action
+    // erases. A new message is a new row, with its own ledger row, and rings.
+    const rung = await findRungEmailIds(
+      config.userId,
+      unmarked.map((e) => e.id),
+    );
+    const newUrgent = unmarked.filter((e) => !rung.has(e.id));
+    if (rung.size > 0) {
+      // Not silent: a mail skipped here is the first thing to check when a PUSH
+      // mail rang nothing (the firewall gate logs its own ledger dedupe too).
+      console.log(
+        `[AUTOMATION] Urgent sweep skipped ${rung.size} mail that already rang for user ${config.userId}`,
+      );
+    }
+
+    if (newUrgent.length > 0) {
+      // User-visible body: who + what, no internal IDs.
+      // DB message keeps a trailing [id1,id2,…] marker for EVERY
+      // notified email so the dedup read above records all of them
+      // (not just the first) and they aren't re-notified next tick.
+      // Klorn's own copy follows the user's notification language;
+      // the email subject/summary inside it stays as written.
+      const notificationLanguage = config.notificationLanguage;
+      const userBody = formatUrgentEmailBody(newUrgent, notificationLanguage);
+      const dbMessage = buildUrgentDedupMessage(
+        userBody,
+        newUrgent.map((e) => e.gmailId),
+      );
+
+      // Atomic + winner-only (dedupeKey = urgentDedupeKey(lead)): the
+      // read-based marker filter above is the primary per-message
+      // dedup; this closes the residual concurrent-tick race on one batch so
+      // the bell + web-push + SMS fire at most once. A P2002 loser returns
+      // null and we skip ALL follow-on side-effects below.
+      // A push about ONE mail says what every surface says about it
+      // (decision N1 + NC1 reason line): the live frame, the device
+      // push, Telegram. A batch keeps the digest.
+      const leadContent =
+        newUrgent.length === 1
+          ? await urgentLeadPushContent(config.userId, newUrgent[0], notificationLanguage ?? "en")
+          : null;
+      const notification = await ensureUrgentEmailNotification(
+        config.userId,
+        newUrgent[0],
+        dbMessage,
+        userBody,
+        notificationLanguage,
+        leadContent ? { emailId: newUrgent[0].id, ...leadContent } : undefined,
+      );
+
+      // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
+      // re-fire the web-push / SMS side-effects for the same batch.
+      if (notification) {
+        // The lead's open item (read with the lane above). Lets the
+        // Telegram channel attach tier-override buttons.
+        const attentionItemId = ringItemByEmail.get(newUrgent[0].id) ?? null;
+
+        sendPushNotification(
+          config.userId,
+          urgentMailPushPayload({
+            notificationId: notification.id,
+            title: leadContent?.title ?? notificationCopy(notificationLanguage).urgentMailTitle,
+            body: leadContent?.body ?? userBody,
+            leads: newUrgent,
+            attentionItemId,
+            language: notificationLanguage,
+          }),
+          "email_urgent",
+          // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
+          { bucket: "interrupt" },
+          // Unawaited (don't block the tick) but guarded: an
+          // unhandled rejection from the push internals would
+          // otherwise crash the single dyno. Matches the candidate
+          // push path above.
+        )
+          // A ring past every hold gate is recorded on each named
+          // mail's ledger row (IP24; stampDecisionRang never throws).
+          .then((summary) =>
+            summary.dispatchedAt
+              ? stampDecisionRang(
+                  config.userId,
+                  newUrgent.map((e) => e.id),
+                  summary.dispatchedAt,
+                )
+              : undefined,
+          )
+          .catch((err) => {
+            logDbFailure("[AUTOMATION] Urgent email push failed", err, {
+              ids: { userId: config.userId },
+            });
+            captureDbFailure("[AUTOMATION] Urgent email push failed", err, {
+              tags: { scope: "automation.urgent-push", userId: config.userId },
+            });
+          });
+
+        // Admin-only SMS escalation. Gated inside sendSms (admin +
+        // phone + daily cap). Best-effort: never throws, never
+        // blocks the scheduler. Body covers the first urgent email;
+        // if many landed at once the user still gets the bell + push
+        // for the rest via the existing notification record.
+        const lead = newUrgent[0];
+        const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
+        sendSms(config.userId, smsBody).catch((err) => {
+          logDbFailure("[AUTOMATION] Urgent email SMS failed", err, {
+            ids: { userId: config.userId },
+          });
+          captureDbFailure("[AUTOMATION] Urgent email SMS failed", err, {
+            tags: { scope: "automation.urgent-sms", userId: config.userId },
+          });
+        });
+      }
+    }
+  }
+}
+
 async function runAutomations() {
   recordSchedulerTick("automation");
   // Skip if this process is still running the previous tick (see schedulerInFlight).
@@ -899,8 +1112,10 @@ async function runAutomations() {
   } catch (err) {
     // The tick catches its own errors; this keeps anything that escapes from
     // becoming an unhandled rejection of the interval callback.
-    console.error("[AUTOMATION] Scheduler tick failed:", err);
-    captureError(err, { tags: { scope: "automation.scheduler" } });
+    logDbFailure("[AUTOMATION] Scheduler tick failed", err, { level: "error" });
+    captureDbFailure("[AUTOMATION] Scheduler tick failed", err, {
+      tags: { scope: "automation.scheduler" },
+    });
   } finally {
     schedulerInFlight = false;
   }
@@ -926,8 +1141,10 @@ async function runAutomationTick(): Promise<void> {
     } catch (err) {
       // Escalate: a systemic outbox failure must not look like a routine
       // skipped tick. Contained so the rest of the tick runs.
-      console.error("[OUTBOX] drain errored:", err);
-      captureError(err, { tags: { scope: "automation.outbox-drain" } });
+      logDbFailure("[OUTBOX] drain errored", err, { level: "error" });
+      captureDbFailure("[OUTBOX] drain errored", err, {
+        tags: { scope: "automation.outbox-drain" },
+      });
     }
 
     // Attention aging (flag-gated, hourly): resolve items the user already
@@ -944,8 +1161,10 @@ async function runAutomationTick(): Promise<void> {
           }
         })
         .catch((err) => {
-          console.warn("[ATTENTION-AGING] sweep errored:", err);
-          captureError(err, { tags: { scope: "automation.attention-aging" } });
+          logDbFailure("[ATTENTION-AGING] sweep errored", err);
+          captureDbFailure("[ATTENTION-AGING] sweep errored", err, {
+            tags: { scope: "automation.attention-aging" },
+          });
         });
     }
 
@@ -957,8 +1176,10 @@ async function runAutomationTick(): Promise<void> {
     ) {
       lastOverrideUndoSweepAt = Date.now();
       sweepOverrideUndoSnapshots().catch((err) => {
-        console.warn("[OVERRIDE-UNDO] snapshot sweep errored:", err);
-        captureError(err, { tags: { scope: "automation.override-undo-sweep" } });
+        logDbFailure("[OVERRIDE-UNDO] snapshot sweep errored", err);
+        captureDbFailure("[OVERRIDE-UNDO] snapshot sweep errored", err, {
+          tags: { scope: "automation.override-undo-sweep" },
+        });
       });
     }
 
@@ -979,8 +1200,10 @@ async function runAutomationTick(): Promise<void> {
           if (removed > 0) console.log(`[CALENDAR] expired device calendar sources=${removed}`);
         })
         .catch((err) => {
-          console.warn("[CALENDAR] device source expiry errored:", err);
-          captureError(err, { tags: { scope: "automation.device-source-expiry" } });
+          logDbFailure("[CALENDAR] device source expiry errored", err);
+          captureDbFailure("[CALENDAR] device source expiry errored", err, {
+            tags: { scope: "automation.device-source-expiry" },
+          });
         });
     }
 
@@ -994,8 +1217,10 @@ async function runAutomationTick(): Promise<void> {
       import("./judge/judge-fallback-check.js")
         .then(({ runJudgeFallbackCheck }) => runJudgeFallbackCheck())
         .catch((err) => {
-          console.warn("[AUTOMATION] Judge fallback check failed:", err);
-          captureError(err, { tags: { scope: "automation.judge-fallback-check" } });
+          logDbFailure("[AUTOMATION] Judge fallback check failed", err);
+          captureDbFailure("[AUTOMATION] Judge fallback check failed", err, {
+            tags: { scope: "automation.judge-fallback-check" },
+          });
         });
     }
 
@@ -1007,8 +1232,10 @@ async function runAutomationTick(): Promise<void> {
       import("./ops/db-size-check.js")
         .then(({ runDbSizeCheck }) => runDbSizeCheck())
         .catch((err) => {
-          console.warn("[AUTOMATION] Database size check failed:", err);
-          captureError(err, { tags: { scope: "automation.db-size-check" } });
+          logDbFailure("[AUTOMATION] Database size check failed", err);
+          captureDbFailure("[AUTOMATION] Database size check failed", err, {
+            tags: { scope: "automation.db-size-check" },
+          });
         });
     }
 
@@ -1023,8 +1250,10 @@ async function runAutomationTick(): Promise<void> {
           }
         })
         .catch((err) => {
-          console.warn("[GMAIL-WATCH] Renewal sweep errored:", err);
-          captureError(err, { tags: { scope: "automation.gmail-watch-renewal" } });
+          logDbFailure("[GMAIL-WATCH] Renewal sweep errored", err);
+          captureDbFailure("[GMAIL-WATCH] Renewal sweep errored", err, {
+            tags: { scope: "automation.gmail-watch-renewal" },
+          });
         });
     }
 
@@ -1069,8 +1298,11 @@ async function runAutomationTick(): Promise<void> {
       // Keep role alongside plan so planHasFeature's ADMIN bypass works here too
       // — without it, an ADMIN on a FREE plan would have background jobs
       // silently suppressed once the paywall locks FREE.
+      // A Klorn Teams seat counts (org/effective-tier.ts): one batch lookup per
+      // batch, none while TEAMS_ENABLED is off. Every gate below reads this map.
+      const plans = await effectivePlansOrOwn(automationUsers);
       const automationPlanMap = new Map(
-        automationUsers.map((u) => [u.id, { plan: u.plan, role: u.role }]),
+        automationUsers.map((u) => [u.id, { plan: plans.get(u.id) ?? "FREE", role: u.role }]),
       );
 
       // Pre-fetch which users have a usable Google token. Abandoned signups
@@ -1117,11 +1349,10 @@ async function runAutomationTick(): Promise<void> {
             config.userId,
           );
         } catch (err) {
-          console.warn(
-            `[scheduler] user cycle skipped (timeout or error) for ${config.userId}:`,
-            err instanceof Error ? err.message : String(err),
-          );
-          captureError(err, {
+          logLlmFailure("[scheduler] user cycle skipped (timeout or error)", err, {
+            ids: { userId: config.userId },
+          });
+          captureLlmFailure("[scheduler] user cycle skipped (timeout or error)", err, {
             tags: { scope: "scheduler.user-cycle" },
             extra: { userId: config.userId },
           });
@@ -1147,7 +1378,7 @@ async function runAutomationTick(): Promise<void> {
     try {
       await sendFocusWindowDigests();
     } catch (err) {
-      console.warn("[SCHEDULER] focus digest sweep failed:", err);
+      logDbFailure("[SCHEDULER] focus digest sweep failed", err);
     }
 
     // --- Quiet hours: ring held urgent mail once when the window ends ---
@@ -1156,7 +1387,7 @@ async function runAutomationTick(): Promise<void> {
     try {
       await sendQuietHoursSummaries();
     } catch (err) {
-      console.warn("[SCHEDULER] quiet-hours summary sweep failed:", err);
+      logDbFailure("[SCHEDULER] quiet-hours summary sweep failed", err);
     }
 
     const todayUtc = new Date().toISOString().slice(0, 10);
@@ -1170,7 +1401,7 @@ async function runAutomationTick(): Promise<void> {
       import("./pim/daily-digest.js")
         .then(({ sendDailyDigests }) => sendDailyDigests())
         .catch((err) => {
-          console.error("[AUTOMATION] Daily digest failed:", err);
+          logDbFailure("[AUTOMATION] Daily digest failed", err, { level: "error" });
         });
     }
 
@@ -1184,8 +1415,10 @@ async function runAutomationTick(): Promise<void> {
       import("./pim/weekly-report.js")
         .then(({ sendWeeklySignalReports }) => sendWeeklySignalReports())
         .catch((err) => {
-          console.error("[AUTOMATION] Weekly signal report failed:", err);
-          captureError(err, { tags: { scope: "automation.weekly-report" } });
+          logDbFailure("[AUTOMATION] Weekly signal report failed", err, { level: "error" });
+          captureDbFailure("[AUTOMATION] Weekly signal report failed", err, {
+            tags: { scope: "automation.weekly-report" },
+          });
         });
     }
 
@@ -1197,8 +1430,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/voice-profile-extractor.js")
         .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
         .catch((err) => {
-          console.error("[AUTOMATION] Voice profile extraction failed:", err);
-          captureError(err, { tags: { scope: "automation.voice-profile" } });
+          logLlmFailure("[AUTOMATION] Voice profile extraction failed", err, { level: "error" });
+          captureLlmFailure("[AUTOMATION] Voice profile extraction failed", err, {
+            tags: { scope: "automation.voice-profile" },
+          });
         });
     }
 
@@ -1210,8 +1445,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/sender-trait-extractor.js")
         .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
         .catch((err) => {
-          console.error("[AUTOMATION] Sender trait extraction failed:", err);
-          captureError(err, { tags: { scope: "automation.sender-traits" } });
+          logLlmFailure("[AUTOMATION] Sender trait extraction failed", err, { level: "error" });
+          captureLlmFailure("[AUTOMATION] Sender trait extraction failed", err, {
+            tags: { scope: "automation.sender-traits" },
+          });
         });
     }
 
@@ -1224,8 +1461,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/learned-rule-store.js")
         .then(({ recomputeLearnedRulesForAllUsers }) => recomputeLearnedRulesForAllUsers())
         .catch((err) => {
-          console.error("[AUTOMATION] Learned-rule recompute failed:", err);
-          captureError(err, { tags: { scope: "automation.learned-rules" } });
+          logDbFailure("[AUTOMATION] Learned-rule recompute failed", err, { level: "error" });
+          captureDbFailure("[AUTOMATION] Learned-rule recompute failed", err, {
+            tags: { scope: "automation.learned-rules" },
+          });
         });
     }
 
@@ -1239,8 +1478,10 @@ async function runAutomationTick(): Promise<void> {
       import("./judge/calibration-snapshot.js")
         .then(({ runDailyCalibrationSnapshots }) => runDailyCalibrationSnapshots())
         .catch((err) => {
-          console.warn("[AUTOMATION] Calibration snapshot failed:", err);
-          captureError(err, { tags: { scope: "automation.calibration-snapshot" } });
+          logDbFailure("[AUTOMATION] Calibration snapshot failed", err);
+          captureDbFailure("[AUTOMATION] Calibration snapshot failed", err, {
+            tags: { scope: "automation.calibration-snapshot" },
+          });
         });
       // --- Daily: ontology write-side proposals ---
       // Turn the same override ledger into advisory threshold-change proposals
@@ -1249,8 +1490,10 @@ async function runAutomationTick(): Promise<void> {
       import("./learning/ontology-proposals-store.js")
         .then(({ recomputeOntologyProposalsSafe }) => recomputeOntologyProposalsSafe())
         .catch((err) => {
-          console.warn("[AUTOMATION] Ontology proposal recompute failed:", err);
-          captureError(err, { tags: { scope: "automation.ontology-proposals" } });
+          logDbFailure("[AUTOMATION] Ontology proposal recompute failed", err);
+          captureDbFailure("[AUTOMATION] Ontology proposal recompute failed", err, {
+            tags: { scope: "automation.ontology-proposals" },
+          });
         });
 
       // --- Daily: judge-health heartbeat ---
@@ -1261,19 +1504,25 @@ async function runAutomationTick(): Promise<void> {
       import("./judge/judge-health.js")
         .then(({ runJudgeHeartbeatCheck }) => runJudgeHeartbeatCheck())
         .catch((err) => {
-          console.warn("[AUTOMATION] Judge heartbeat check failed:", err);
-          captureError(err, { tags: { scope: "automation.judge-heartbeat" } });
+          logDbFailure("[AUTOMATION] Judge heartbeat check failed", err);
+          captureDbFailure("[AUTOMATION] Judge heartbeat check failed", err, {
+            tags: { scope: "automation.judge-heartbeat" },
+          });
         });
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
     await resurrectSnoozedItems().catch((err) => {
-      console.warn("[AUTOMATION] Snooze resurrection failed:", err);
-      captureError(err, { tags: { scope: "automation.snooze-resurrection" } });
+      logDbFailure("[AUTOMATION] Snooze resurrection failed", err);
+      captureDbFailure("[AUTOMATION] Snooze resurrection failed", err, {
+        tags: { scope: "automation.snooze-resurrection" },
+      });
     });
   } catch (err) {
-    console.error("[AUTOMATION] Scheduler error:", err);
-    captureError(err, { tags: { scope: "automation.scheduler" } });
+    logDbFailure("[AUTOMATION] Scheduler error", err, { level: "error" });
+    captureDbFailure("[AUTOMATION] Scheduler error", err, {
+      tags: { scope: "automation.scheduler" },
+    });
   }
 }
 
@@ -1281,7 +1530,11 @@ async function runAutomationTick(): Promise<void> {
 // `prisma.user.findMany({ select: { plan, role } })` result so `role` stays the
 // Prisma `UserRole` enum (planHasFeature's ADMIN bypass) rather than a widened
 // `string | null` — matching the inline map this cycle was extracted from.
-type PlanRole = Pick<Awaited<ReturnType<typeof prisma.user.findMany>>[number], "plan" | "role">;
+/** The effective plan (effectivePlans: own plan or a Klorn Teams seat) and the role. */
+type PlanRole = { plan: string } & Pick<
+  Awaited<ReturnType<typeof prisma.user.findMany>>[number],
+  "role"
+>;
 
 /**
  * Per-batch locals a user cycle closes over. Bundled so `runUserCycle` can be
@@ -1308,8 +1561,10 @@ async function syncLinkedOnlyMailbox(userId: string): Promise<void> {
     if (newCount > 0) notifyConversationsUpdated(userId);
     await backfillEmailAttentionItems(userId);
   } catch (err) {
-    console.warn(`[AUTOMATION] Linked-only mailbox sync failed for ${userId}:`, err);
-    captureError(err, { tags: { scope: "automation.linked-only-sync", userId } });
+    logLlmFailure("[AUTOMATION] Linked-only mailbox sync failed", err, { ids: { userId } });
+    captureLlmFailure("[AUTOMATION] Linked-only mailbox sync failed", err, {
+      tags: { scope: "automation.linked-only-sync", userId },
+    });
   }
 }
 
@@ -1327,6 +1582,7 @@ async function runUserCycle(
 ): Promise<void> {
   const { automationPlanMap, googleConnectedUserIds, linkedGoogleUserIds } = ctx;
   const configUserEntry = automationPlanMap.get(config.userId);
+  // effective-tier: resolved (automationPlanMap holds effectivePlansOrOwn)
   const configUserPlan = configUserEntry?.plan || "FREE";
   const configUserRole = configUserEntry?.role;
   const timeZone = normalizeTimeZone(config.timezone);
@@ -1361,8 +1617,11 @@ async function runUserCycle(
             console.log(`[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`);
             briefingSentToday.set(config.userId, today);
           } else {
-            console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
-            captureError(err, {
+            logLlmFailure("[AUTOMATION] Briefing failed", err, {
+              level: "error",
+              ids: { userId: config.userId },
+            });
+            captureLlmFailure("[AUTOMATION] Briefing failed", err, {
               tags: { scope: "automation.briefing", userId: config.userId },
               extra: { briefingTime: config.briefingTime, timeZone },
             });
@@ -1385,15 +1644,13 @@ async function runUserCycle(
         await syncPrimaryCalendarWindow(session, config.userId, userTimezone);
       }
     } catch (err) {
-      const gaxiosErr = err as {
-        response?: { status?: number; data?: { error?: { message?: string } } };
-        message?: string;
-      };
-      const status = gaxiosErr.response?.status;
-      console.error(
-        `[AUTOMATION] Calendar sync failed for ${config.userId} (HTTP ${status}):`,
-        gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
-      );
+      const status = (err as { response?: { status?: number } }).response?.status;
+      // The provider's message can quote the event it rejected; the facts
+      // carry the HTTP status.
+      logDbFailure("[AUTOMATION] Calendar sync failed", err, {
+        level: "error",
+        ids: { userId: config.userId },
+      });
 
       // 401/403 = token invalid — notify user to reconnect. Atomic + winner-only
       // (dedupeKey = "calendar-disconnect:<dayKey>") so concurrent ticks can't
@@ -1414,8 +1671,10 @@ async function runUserCycle(
       try {
         await syncLinkedCalendars(config.userId);
       } catch (err) {
-        console.warn(`[AUTOMATION] Linked calendar sync failed for ${config.userId}:`, err);
-        captureError(err, {
+        logDbFailure("[AUTOMATION] Linked calendar sync failed", err, {
+          ids: { userId: config.userId },
+        });
+        captureDbFailure("[AUTOMATION] Linked calendar sync failed", err, {
           tags: { scope: "automation.linked-calendar-sync", userId: config.userId },
         });
       }
@@ -1482,10 +1741,9 @@ async function runUserCycle(
           console.log(`[AUTOMATION] Summaries paused for ${config.userId} — daily cost cap`);
           await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
             (nudgeErr) => {
-              console.warn(
-                `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
-                nudgeErr,
-              );
+              logDbFailure("[AUTOMATION] free-limit nudge threw unexpectedly", nudgeErr, {
+                ids: { userId: config.userId },
+              });
             },
           );
         }
@@ -1516,13 +1774,18 @@ async function runUserCycle(
           try {
             linkedInboxes = await getLinkedInboxClients(config.userId);
           } catch (err) {
-            console.warn(
-              `[AUTOMATION] Linked-inbox lookup failed for ${config.userId} — skipping fan-out this tick:`,
+            logDbFailure(
+              "[AUTOMATION] Linked-inbox lookup failed — skipping fan-out this tick",
               err,
+              {
+                ids: { userId: config.userId },
+              },
             );
-            captureError(err, {
-              tags: { scope: "automation.linked-inbox-lookup", userId: config.userId },
-            });
+            captureDbFailure(
+              "[AUTOMATION] Linked-inbox lookup failed — skipping fan-out this tick",
+              err,
+              { tags: { scope: "automation.linked-inbox-lookup", userId: config.userId } },
+            );
           }
           for (const inbox of linkedInboxes) {
             try {
@@ -1563,15 +1826,14 @@ async function runUserCycle(
               }
               if (err instanceof Error && err.message === "Gmail not connected") {
                 console.warn(
-                  `[AUTOMATION] Linked inbox ${inbox.email} not connected (revoked?) for ${config.userId}`,
+                  `[AUTOMATION] Linked inbox ${inbox.id} not connected (revoked?) for ${config.userId}`,
                 );
                 continue;
               }
-              console.warn(
-                `[AUTOMATION] Linked-inbox sync failed for ${config.userId} / ${inbox.email}:`,
-                err,
-              );
-              captureError(err, {
+              logLlmFailure("[AUTOMATION] Linked-inbox sync failed", err, {
+                ids: { userId: config.userId, linkedInboxAccountId: inbox.id },
+              });
+              captureLlmFailure("[AUTOMATION] Linked-inbox sync failed", err, {
                 tags: { scope: "automation.linked-inbox-sync", userId: config.userId },
                 extra: { linkedInboxAccountId: inbox.id },
               });
@@ -1687,12 +1949,13 @@ async function runUserCycle(
               // Auto-reply touches an outbound send — a silent failure
               // here means a configured rule fired nothing with no trace.
               // The claim row keeps the mail from being retried. console
-              // first: captureError is a no-op without a Sentry DSN.
-              console.warn(
-                `[AUTOMATION] auto-reply failed for ${email.gmailId} (user ${config.userId})`,
-                err,
-              );
-              captureError(err, {
+              // first: captureError is a no-op without a Sentry DSN. Facts
+              // only: the reply model's error can quote this mail.
+              const label = "[AUTOMATION] auto-reply failed";
+              logLlmFailure(label, err, {
+                ids: { gmailId: email.gmailId, userId: config.userId },
+              });
+              captureLlmFailure(label, err, {
                 tags: { scope: "automation.auto-reply" },
                 extra: { userId: config.userId, gmailId: email.gmailId },
               });
@@ -1748,15 +2011,13 @@ async function runUserCycle(
               await prisma.attentionItem
                 .update({ where: { id: itemId }, data: { status: "RESOLVED" } })
                 .catch((err) =>
-                  console.warn(`[AUTOMATION] auto-mode resolve failed for ${itemId}`, err),
+                  logDbFailure("[AUTOMATION] auto-mode resolve failed", err, {
+                    ids: { attentionItemId: itemId },
+                  }),
                 );
             },
             warn: (message) => console.warn(message),
-            reportError: (err, itemId) =>
-              captureError(err, {
-                tags: { scope: "automation.auto-mode-reply" },
-                extra: { userId: config.userId, itemId },
-              }),
+            reportError: autoModeReplyFailureReporter(config.userId),
             now: Date.now,
           });
         }
@@ -1778,176 +2039,7 @@ async function runUserCycle(
           lastReconcileAt.set(config.userId, Date.now());
         }
 
-        // Check for urgent unread emails — notify only for NEW urgent emails
-        // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-        // and, like the firewall push, received in its recency window: a late sync
-        // or backfill that surfaces old mail does not ring it as urgent now.
-        // For a user under policy v3 (JUDGE_V3_POLICY), the judge's PUSH lane
-        // under the daily interrupt budget is the only email interrupt
-        // (attention-engine-v3.md §3(5)); this keyword sweep would ring outside
-        // the budget, so it stands down for that user.
-        const keywordUrgent = isJudgeV3PolicyEnabled(config.userId)
-          ? []
-          : await prisma.emailMessage.findMany({
-              where: {
-                userId: config.userId,
-                priority: "URGENT",
-                isRead: false,
-                syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-                receivedAt: { gte: new Date(Date.now() - FIREWALL_PUSH_RECENCY_MS) },
-              },
-              orderBy: { receivedAt: "desc" },
-              select: {
-                id: true,
-                gmailId: true,
-                subject: true,
-                from: true,
-                summary: true,
-                createdAt: true,
-                receivedAt: true,
-                linkedInboxAccountId: true,
-              },
-            });
-        // Lane contract (tier-ontology-v2.md): the keyword priority never
-        // outranks the judge's lane, so only mail whose OPEN item is PUSH rings
-        // here: a safety net for PUSH mail the firewall push did not ring (its
-        // bell row's [gmailId] marker dedupes below). When the judge's LLM did
-        // not run (outage, spend cap, unusable key) the keyword fallback cannot
-        // reach PUSH for an ordinary sender, so mail it left in QUEUE (and nobody
-        // moved since) rings here too. Mail the judge has not reached yet waits
-        // for the judge's own push.
-        const ringItemByEmail = await urgentSweepItemIdsFailClosed(config.userId, keywordUrgent);
-        const urgentEmails = keywordUrgent.filter((e) => ringItemByEmail.has(e.id));
-        // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
-        // history: rung once already, never again. Gmail rows read nothing more.
-        // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
-        // alert of a mixed batch must still go out.
-        const urgentHistory = await findReingestedHistoryFailClosed(
-          config.userId,
-          urgentEmails,
-          "urgent-sweep",
-        );
-        const ringableUrgent = urgentEmails.filter((e) => !urgentHistory.has(e.id));
-
-        if (ringableUrgent.length > 0) {
-          // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
-          const recentUrgentNotifs = await prisma.notification.findMany({
-            where: {
-              userId: config.userId,
-              type: "email",
-              // Every language's title plus the legacy ones: a row written
-              // before a language switch (or before the title was localized)
-              // still marks its mails as notified.
-              title: { in: [...URGENT_EMAIL_TITLES] },
-              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-            },
-            select: { message: true, createdAt: true },
-          });
-          // Only notify for urgent emails we haven't notified about yet. For an IMAP
-          // id a marker counts only from the row's creation on (step B2b: a repair
-          // can hand a re-keyed row's id to a new message); Gmail ids as before.
-          const newUrgent = unnotifiedEmails(ringableUrgent, latestNotifiedAt(recentUrgentNotifs));
-
-          if (newUrgent.length > 0) {
-            // User-visible body: who + what, no internal IDs.
-            // DB message keeps a trailing [id1,id2,…] marker for EVERY
-            // notified email so the dedup read above records all of them
-            // (not just the first) and they aren't re-notified next tick.
-            // Klorn's own copy follows the user's notification language;
-            // the email subject/summary inside it stays as written.
-            const notificationLanguage = (config as { notificationLanguage?: string | null })
-              .notificationLanguage;
-            const userBody = formatUrgentEmailBody(newUrgent, notificationLanguage);
-            const dbMessage = buildUrgentDedupMessage(
-              userBody,
-              newUrgent.map((e) => e.gmailId),
-            );
-
-            // Atomic + winner-only (dedupeKey = urgentDedupeKey(lead)): the
-            // read-based marker filter above is the primary per-message
-            // dedup; this closes the residual concurrent-tick race on one batch so
-            // the bell + web-push + SMS fire at most once. A P2002 loser returns
-            // null and we skip ALL follow-on side-effects below.
-            // A push about ONE mail says what every surface says about it
-            // (decision N1 + NC1 reason line): the live frame, the device
-            // push, Telegram. A batch keeps the digest.
-            const leadContent =
-              newUrgent.length === 1
-                ? await urgentLeadPushContent(
-                    config.userId,
-                    newUrgent[0],
-                    notificationLanguage ?? "en",
-                  )
-                : null;
-            const notification = await ensureUrgentEmailNotification(
-              config.userId,
-              newUrgent[0],
-              dbMessage,
-              userBody,
-              notificationLanguage,
-              leadContent ? { emailId: newUrgent[0].id, ...leadContent } : undefined,
-            );
-
-            // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
-            // re-fire the web-push / SMS side-effects for the same batch.
-            if (notification) {
-              // The lead's open item (read with the lane above). Lets the
-              // Telegram channel attach tier-override buttons.
-              const attentionItemId = ringItemByEmail.get(newUrgent[0].id) ?? null;
-
-              sendPushNotification(
-                config.userId,
-                urgentMailPushPayload({
-                  notificationId: notification.id,
-                  title:
-                    leadContent?.title ?? notificationCopy(notificationLanguage).urgentMailTitle,
-                  body: leadContent?.body ?? userBody,
-                  leads: newUrgent,
-                  attentionItemId,
-                  language: notificationLanguage,
-                }),
-                "email_urgent",
-                // The urgent keyword sweep: an interrupt caller (push-bucket.ts).
-                { bucket: "interrupt" },
-                // Unawaited (don't block the tick) but guarded: an
-                // unhandled rejection from the push internals would
-                // otherwise crash the single dyno. Matches the candidate
-                // push path above.
-              )
-                // A ring past every hold gate is recorded on each named
-                // mail's ledger row (IP24; stampDecisionRang never throws).
-                .then((summary) =>
-                  summary.dispatchedAt
-                    ? stampDecisionRang(
-                        config.userId,
-                        newUrgent.map((e) => e.id),
-                        summary.dispatchedAt,
-                      )
-                    : undefined,
-                )
-                .catch((err) => {
-                  console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
-                  captureError(err, {
-                    tags: { scope: "automation.urgent-push", userId: config.userId },
-                  });
-                });
-
-              // Admin-only SMS escalation. Gated inside sendSms (admin +
-              // phone + daily cap). Best-effort: never throws, never
-              // blocks the scheduler. Body covers the first urgent email;
-              // if many landed at once the user still gets the bell + push
-              // for the rest via the existing notification record.
-              const lead = newUrgent[0];
-              const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
-              sendSms(config.userId, smsBody).catch((err) => {
-                console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
-                captureError(err, {
-                  tags: { scope: "automation.urgent-sms", userId: config.userId },
-                });
-              });
-            }
-          }
-        }
+        await sweepUrgentEmails(config);
       } catch (err) {
         const errName = err instanceof Error ? err.name : "";
         // "Gmail not connected" is an expected state: the pre-filter
@@ -1973,18 +2065,20 @@ async function runUserCycle(
           // would abort the rest of this tick's users. Belt and suspenders.
           await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
             (nudgeErr) => {
-              console.warn(
-                `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
-                nudgeErr,
-              );
+              logDbFailure("[AUTOMATION] free-limit nudge threw unexpectedly", nudgeErr, {
+                ids: { userId: config.userId },
+              });
             },
           );
         } else {
           // Token expired, rate-limited, or network flake — log +
           // capture so "Eve stopped reading email" doesn't become an
           // invisible outage. Returns early so the next tick still tries.
-          console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
-          captureError(err, {
+          logLlmFailure("[AUTOMATION] Email sync failed", err, {
+            level: "error",
+            ids: { userId: config.userId },
+          });
+          captureLlmFailure("[AUTOMATION] Email sync failed", err, {
             tags: { scope: "automation.email-sync", userId: config.userId },
           });
         }
@@ -2016,8 +2110,8 @@ async function runUserCycle(
   const perUserProactive = config.proactiveActions === true;
   if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
     runProactiveActions(config.userId).catch((err) => {
-      console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
-      captureError(err, {
+      logDbFailure("[PROACTIVE] Failed", err, { level: "error", ids: { userId: config.userId } });
+      captureDbFailure("[PROACTIVE] Failed", err, {
         tags: { scope: "automation.proactive", userId: config.userId },
       });
     });
@@ -2032,8 +2126,8 @@ async function runUserCycle(
   const phoneOptIn = (config as unknown as Record<string, unknown>).phoneEscalationEnabled === true;
   if (PHONE_ESCALATION_ENABLED && phoneOptIn) {
     escalateUnackedPush(config.userId).catch((err) => {
-      console.warn(`[PHONE] Escalation sweep failed for ${config.userId}:`, err);
-      captureError(err, {
+      logDbFailure("[PHONE] Escalation sweep failed", err, { ids: { userId: config.userId } });
+      captureDbFailure("[PHONE] Escalation sweep failed", err, {
         tags: { scope: "automation.phone-escalation", userId: config.userId },
       });
     });

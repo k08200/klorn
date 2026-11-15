@@ -14,6 +14,7 @@ import type { LiveTier } from "@klorn/contract";
 import { Prisma } from "@prisma/client";
 import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { CLEAR_AGENT_TIER } from "./agent-tier.js";
 import type { AttentionSourceName } from "./decision-label.js";
 import { manualOverrideReason, normalizeTier, type Tier, toLiveTier } from "./tiers.js";
@@ -569,10 +570,9 @@ export async function findOpenEmailAttentionItemId(
   } catch (err) {
     // Don't swallow silently — a DB error here breaks override dedup, and
     // captureError is invisible without a Sentry DSN.
-    console.warn(
-      "[attention-override] findOpenEmailAttentionItemId failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[attention-override] findOpenEmailAttentionItemId failed", err, {
+      ids: { userId, emailId: emailDbId },
+    });
     return null;
   }
 }

@@ -18,10 +18,11 @@ import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
+import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
 import { newWork } from "./work-context.js";
 
@@ -81,11 +82,17 @@ export async function getNotifications(
   userId: string,
   options?: { unreadOnly?: boolean; limit?: number },
 ): Promise<NotificationDTO[]> {
-  // Hidden claims (in-flight or cleared unattended-reply locks) are not bell
-  // entries.
-  const where: { userId: string; type: { not: string }; isRead?: boolean } = {
+  // Hidden claims (in-flight or cleared unattended-reply locks) and rows the
+  // user cleared are not bell entries.
+  const where: {
+    userId: string;
+    type: { not: string };
+    clearedAt: null;
+    isRead?: boolean;
+  } = {
     userId,
     type: { not: HIDDEN_CLAIM_TYPE },
+    clearedAt: null,
   };
   if (options?.unreadOnly) where.isRead = false;
 
@@ -145,24 +152,42 @@ const KEPT_NOTIFICATION_ROWS = {
   OR: [...REPLY_CLAIM_ROWS.OR, { dedupeKey: { startsWith: INTERRUPT_SLOT_ROOT } }],
 };
 
+/**
+ * "Clear all": empty the bell. A UI action only, so it never makes anything ring
+ * again. The "already notified?" reads look back over bell rows (urgent mail by
+ * its marker, the day's briefing by its dedupeKey, proactive nudges by type and
+ * day, a meeting alert by its event), so a row still inside that look-back is
+ * hidden, not deleted: read, with clearedAt set, and kept as it was otherwise.
+ * Deleting those rows made the urgent sweep ring the same unread mail again on
+ * every channel (2026-11-14). Older rows no read looks at are deleted, and the
+ * log-retention sweep deletes cleared rows after 30 days.
+ */
 export async function clearNotifications(userId: string): Promise<void> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - NOTIFIED_LOOKBACK_MS);
   // Unattended-reply claims (`auto-reply:` / legacy `auto-mode-reply:`) are
   // at-most-once LOCKS: deleting one lets a still-OPEN failed item be
-  // re-drafted and re-sent. Delete everything else; hide the claims instead
-  // (read + hidden type), so the bell is visually cleared and the lock stays.
+  // re-drafted and re-sent. They are hidden instead (read + hidden type) at
+  // any age, so the bell is visually cleared and the lock stays.
   // Interrupt-budget slots (`interrupt:<day>:<n>`, attention engine v3) are
   // kept the same way: deleting one would hand the day's spent budget back.
   // The explicit `dedupeKey: null` branch matters: SQL `NOT (col LIKE ..)` is
   // NULL, not true, for a NULL column, so ordinary rows would otherwise survive.
+  const ordinaryRows = { OR: [{ dedupeKey: null }, { NOT: KEPT_NOTIFICATION_ROWS.OR }] };
   await prisma.notification.deleteMany({
-    where: { userId, OR: [{ dedupeKey: null }, { NOT: KEPT_NOTIFICATION_ROWS.OR }] },
+    where: { userId, ...ordinaryRows, createdAt: { lt: cutoff } },
+  });
+  await prisma.notification.updateMany({
+    // Up to the click: a row written while this runs is not one the user saw.
+    where: { userId, ...ordinaryRows, createdAt: { gte: cutoff, lte: now }, clearedAt: null },
+    data: { clearedAt: now, isRead: true },
   });
   await prisma.notification.updateMany({
     where: { userId, ...KEPT_NOTIFICATION_ROWS, type: { not: HIDDEN_CLAIM_TYPE } },
     data: { type: HIDDEN_CLAIM_TYPE, isRead: true },
   });
   // Drop the mirrored queue entries — without this, the queue keeps showing
-  // FOLLOWUP rows pointing at notifications that no longer exist.
+  // FOLLOWUP rows pointing at notifications the bell no longer shows.
   await prisma.attentionItem.deleteMany({ where: { userId, source: "NOTIFICATION" } });
 }
 
@@ -188,10 +213,7 @@ async function meetingPushPath(userId: string, googleEventId: string): Promise<s
     if (!row || !isCalendarRowVisible(row)) return CALENDAR_PATH;
     return `${CALENDAR_PATH}/${encodeURIComponent(row.id)}`;
   } catch (err) {
-    console.warn(
-      "[BACKGROUND] meeting event lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[BACKGROUND] meeting event lookup failed", err, { ids: { userId } });
     return CALENDAR_PATH;
   }
 }
@@ -284,11 +306,13 @@ async function checkUpcomingMeetings() {
                 { bucket: "interrupt" },
               );
             } catch (err) {
-              console.warn("[BACKGROUND] meeting push failed", err);
+              // A web-push error can quote the payload (the meeting title).
+              logDbFailure("[BACKGROUND] meeting push failed", err, { ids: { userId } });
             }
 
+            // Id, not title: an invite's title can quote a mail subject.
             console.log(
-              `[BG] Upcoming meeting: "${meeting.summary}" in ${Math.ceil(minutesUntil)}min for user ${userId}`,
+              `[BG] Upcoming meeting ${meeting.id} in ${Math.ceil(minutesUntil)}min for user ${userId}`,
             );
           }
         }
@@ -296,15 +320,19 @@ async function checkUpcomingMeetings() {
         // A single user's check can fail (expired Google token, transient DB
         // error) — skip that user, but never silently: a systemic failure
         // (DB down, every token bad) must still surface a signal.
-        console.warn(`[BACKGROUND] meeting check failed for user ${userId}:`, err);
-        captureError(err, { tags: { scope: "background.meeting-check-user" } });
+        logDbFailure("[BACKGROUND] meeting check failed for user", err, { ids: { userId } });
+        captureDbFailure("[BACKGROUND] meeting check failed for user", err, {
+          tags: { scope: "background.meeting-check-user" },
+        });
       }
     }
   } catch (err) {
     // The whole sweep is best-effort, but a throw here aborted it for everyone
     // — surface it rather than hiding the outage.
-    console.warn("[BACKGROUND] meeting check sweep failed:", err);
-    captureError(err, { tags: { scope: "background.meeting-check" } });
+    logDbFailure("[BACKGROUND] meeting check sweep failed", err);
+    captureDbFailure("[BACKGROUND] meeting check sweep failed", err, {
+      tags: { scope: "background.meeting-check" },
+    });
   } finally {
     meetingCheckInFlight = false;
   }

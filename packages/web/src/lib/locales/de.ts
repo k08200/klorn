@@ -1118,6 +1118,8 @@ const de: Record<string, string> = {
     "Dieser Tarif wird nicht über das Web abgerechnet, hier gibt es also nichts zu kündigen. Wenn du in der mobilen App abonniert hast, verwalte es dort.",
   "billing.enterpriseBilling":
     "Enterprise wird nach Vereinbarung abgerechnet — für einen Tarifwechsel wende dich an den Vertrieb.",
+  "billing.teamSeatCoversPro":
+    "Dein Team-Platz enthält bereits alles aus Pro. Dein persönliches Pro verlängert sich weiter – kündige es, wenn du nicht beides brauchst.",
   "billing.keepSubscription": "Abo behalten",
   "billing.renewsOn": "Verlängert sich am {date}",
   "billing.trialFirstCharge": "Kostenlose Testphase · erste Abbuchung am {date}",
@@ -2129,6 +2131,7 @@ const de: Record<string, string> = {
   "onboardingV2.tile.outlook.scope": "Mail von Outlook und Microsoft 365.",
   "onboardingV2.tile.naver.scope": "Naver Mail, mit einem App-Passwort.",
   "onboardingV2.tile.icloud.scope": "iCloud Mail, mit einem anwendungsspezifischen Passwort.",
+  "onboardingV2.tile.preset.scope": "E-Mail, mit einem App-Passwort.",
   "onboardingV2.tile.readOnly":
     "Vorerst nur lesend. Antworten, Archivieren und Als-gelesen-Markieren erfolgen in der App des Anbieters.",
   "onboardingV2.health.connected": "Verbunden",
@@ -2140,6 +2143,9 @@ const de: Record<string, string> = {
   "onboardingV2.sheet.icloud.title": "iCloud Mail verbinden",
   "onboardingV2.sheet.icloud.body":
     "Eine einmalige Verbindung. Apple verlangt ein anwendungsspezifisches Passwort, nicht das Passwort Ihres Apple Accounts. Klorn speichert es verschlüsselt.",
+  "onboardingV2.sheet.preset.title": "{provider} verbinden",
+  "onboardingV2.sheet.preset.body":
+    "Eine einmalige Verbindung. Das Formular nennt das Passwort, das {provider} verlangt. Klorn speichert es verschlüsselt.",
   "onboardingV2.sheet.close": "Schließen",
   "onboardingV2.sheet.done": "Fertig",
   "onboardingV2.return.okTitle": "{provider} verbunden.",
@@ -2317,6 +2323,38 @@ const de: Record<string, string> = {
   "imap.naver.advancedHost": "Erweitert: IMAP-Host",
   "imap.naver.hostLabel": "IMAP-Host",
   "imap.naver.connect": "Naver Mail verbinden",
+  "imapPreset.body":
+    "Verbinden Sie ein {provider}-Postfach per IMAP. Klorn sortiert jede eingehende Nachricht in dieselben {count} Spuren wie bei Gmail.",
+  "imapPreset.error.status": "Der Verbindungsstatus von {provider} konnte nicht geladen werden.",
+  "imapPreset.confirmDisconnect.title": "{email} trennen?",
+  "imapPreset.emailLabel": "E-Mail-Adresse",
+  "imapPreset.passwordLabel.app": "App-Passwort",
+  "imapPreset.help.link": "Hilfe von {provider}",
+  "imapPreset.help.stored": "Klorn speichert es verschlüsselt, nie im Klartext.",
+  "imapPreset.connect": "{provider} verbinden",
+  "imapPreset.error.auth":
+    "{provider} hat diese Adresse und dieses Passwort nicht akzeptiert. Folgen Sie den Schritten oben und versuchen Sie es erneut.",
+  "imapPreset.error.tooManyAttempts":
+    "Zu viele Versuche. Warten Sie einige Minuten und versuchen Sie es dann erneut.",
+  "imapPreset.hint.daum":
+    "Aktivieren Sie IMAP in den Einstellungen von Daum Mail, richten Sie die Bestätigung in zwei Schritten ein und erstellen Sie dann ein App-Passwort. Ihr Daum-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.kakao":
+    "Aktivieren Sie IMAP in den Einstellungen von Kakao Mail, richten Sie für Ihr Kakao-Konto die Bestätigung in zwei Schritten ein und erstellen Sie dann ein App-Passwort. Ihr Kakao-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.yahoo":
+    "Erstellen Sie ein App-Passwort in den Sicherheitseinstellungen Ihres Yahoo-Kontos. Ihr Yahoo-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.aol":
+    "Erstellen Sie ein App-Passwort in den Sicherheitseinstellungen Ihres AOL-Kontos. Ihr AOL-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.fastmail":
+    "Erstellen Sie in den Fastmail-Einstellungen (Privacy & Security) ein App-Passwort mit IMAP- und SMTP-Zugriff. Ihr Fastmail-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.zoho":
+    "Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail, schalten Sie die Zwei-Faktor-Authentifizierung ein und erstellen Sie dann ein anwendungsspezifisches Passwort. Ihr Zoho-Passwort funktioniert hier nicht.",
+  "imapPreset.hint.zohopro":
+    "Für Konten kostenpflichtiger Zoho-Organisationen (eigene Domain). Aktivieren Sie den IMAP-Zugriff in den Einstellungen von Zoho Mail (Ihr Administrator muss ihn eventuell erlauben), schalten Sie die Zwei-Faktor-Authentifizierung ein und erstellen Sie dann ein anwendungsspezifisches Passwort. Ihr Zoho-Passwort funktioniert hier nicht.",
+  "imapGeneric.title": "Andere Mailserver (IMAP)",
+  "imapGeneric.body":
+    "Konten, die mit einer Mailserver-Adresse verbunden sind. Nur zur Information: Auf dieser Seite lassen sie sich weder neu verbinden noch entfernen.",
+  "imapGeneric.authRefused":
+    "Der Mailserver hat die gespeicherte Anmeldung abgelehnt. Auf dieser Seite lässt sich das Konto nicht neu verbinden.",
   "telegram.error.status": "Telegram-Verknüpfungsstatus konnte nicht geladen werden.",
   "telegram.error.link": "Telegram-Verknüpfung konnte nicht gestartet werden.",
   "telegram.error.disconnect": "Telegram konnte nicht getrennt werden.",
@@ -3090,6 +3128,355 @@ const de: Record<string, string> = {
     "Die Erinnerung braucht einen verbundenen Google Kalender, deshalb wurde keine gesetzt.",
   "smartActions.event.saveHint": "Titel, Tag, Startzeit und Dauer ausfüllen, um zu speichern.",
   "smartActions.event.savedWhen": "{date} um {time} ({zone})",
+  // Klorn Vault markdown export (VAULT_EXPORT_ENABLED, Settings → Data).
+  "vaultExport.title": "Als Markdown exportieren",
+  "vaultExport.desc":
+    "Exportiere deine Klorn-Daten als Markdown: Lanes, Absender, Zusagen und eine Notiz pro Mail, bereit für Obsidian oder jeden Editor.",
+  "vaultExport.button": "ZIP herunterladen",
+  "vaultExport.includeText": "Mailtext einschließen",
+  "vaultExport.includeText.desc":
+    "Fügt den Text jeder Mail hinzu, den Klorn noch aufbewahrt. Ohne diese Option enthalten die Notizen Betreff, Vorschau und Klorns Entscheidung.",
+  "vaultExport.done": "Markdown-Export heruntergeladen.",
+  "vaultExport.error.cooldown":
+    "Du hast gerade erst exportiert. Versuche es in {minutes} Min. erneut.",
+  "vaultExport.error.inProgress": "Ein Export läuft bereits. Warte, bis er fertig ist.",
+  "vaultExport.error.busy": "Gerade laufen viele Exporte. Versuche es in einer Minute erneut.",
+  "vaultExport.error.unavailable": "Der Markdown-Export ist für dieses Konto nicht verfügbar.",
+  "vaultExport.error.failed": "Der Markdown-Export ist fehlgeschlagen. Versuche es erneut.",
+  "slack.title": "Slack",
+  "slack.desc":
+    "Klorn liest deine Slack-Direktnachrichten, Gruppennachrichten und Erwähnungen und ordnet sie deinen Spuren zu. Es postet nie, reagiert nicht und markiert nichts als gelesen.",
+  "slack.start": "Einrichtung starten",
+  "slack.step.manifest": "Lade das App-Manifest herunter. Es enthält bereits deine Request URL.",
+  "slack.downloadManifest": "Manifest herunterladen",
+  "slack.requestUrl": "Anfrage-URL (Request URL)",
+  "slack.step.create":
+    "Erstelle in Slack eine App aus dem Manifest (Create New App → From a manifest) und installiere sie in deinem Workspace.",
+  "slack.openSlackApps": "Slack-Apps öffnen",
+  "slack.step.paste":
+    "Füge das Signing Secret der App (Basic Information) und das User OAuth Token (OAuth & Permissions) ein. Klorn prüft das Token und speichert es nicht.",
+  "slack.signingSecret": "Signaturgeheimnis (Signing Secret)",
+  "slack.userToken": "Benutzer-OAuth-Token",
+  "slack.connect": "Verbinden",
+  "slack.step.verify":
+    "Klicke in Slacks Event Subscriptions auf Retry, damit Slack die Request URL prüft.",
+  "slack.setupAgain": "Einrichtungsschritte",
+  "slack.connected": "Slack verbunden",
+  "slack.status.connected": "Verbunden mit {workspace}",
+  "slack.status.waiting": "Warte darauf, dass Slack die Request URL prüft.",
+  "slack.status.lastEvent": "Letztes Ereignis von Slack: {time}",
+  "slack.channels.title": "Gefolgte Kanäle",
+  "slack.channels.desc":
+    "Jede Nachricht in diesen Kanälen wird eingeordnet, nicht nur Erwähnungen. Füge Kanal-IDs ein (Kanaldetails → Info), getrennt durch Kommas oder Leerzeichen.",
+  "slack.channels.save": "Kanäle speichern",
+  "slack.channels.saved": "Kanäle gespeichert",
+  "slack.disconnect": "Trennen",
+  "slack.disconnect.title": "Slack trennen?",
+  "slack.disconnect.message":
+    "Klorn löscht das Signaturgeheimnis, alle gespeicherten Slack-Nachrichten und Urteile sowie die in Slack gefundenen Zusagen. Lösche die App auch in Slack.",
+  "slack.disconnected": "Slack getrennt. Klorn hat die gespeicherten Daten gelöscht.",
+  "slack.error.invalid-signing-secret": "Das ist kein Slack-Signaturgeheimnis.",
+  "slack.error.bot-token": "Das ist ein Bot-Token. Füge das User OAuth Token (xoxp-…) ein.",
+  "slack.error.invalid-user-token": "Das ist kein Slack-Benutzertoken (xoxp-…).",
+  "slack.error.slack-rejected-token": "Slack hat dieses Token nicht akzeptiert.",
+  "slack.error.slack-unreachable": "Slack ist nicht erreichbar. Versuche es erneut.",
+  "slack.error.bad-response": "Slacks Antwort war für Klorn nicht verwendbar. Versuche es erneut.",
+  "slack.error.missing-scopes": "Dem Token fehlen Berechtigungen, die Klorn braucht: {scopes}",
+  "slack.error.extra-scopes":
+    "Das Token hat Berechtigungen, die Klorn nicht haben darf: {scopes}. Entferne sie aus der App und installiere sie neu.",
+  "slack.error.invalid-channels": "Verwende bis zu 50 Kanal-IDs wie C0123456789.",
+  "slack.error.public-url-missing":
+    "Dieser Klorn-Server hat keine öffentliche URL, daher erreicht Slack ihn nicht.",
+  "slack.error.not-started": "Starte zuerst die Slack-Einrichtung.",
+  "slack.error.rate-limited": "Zu viele Versuche. Versuche es später erneut.",
+  "slack.error.generic": "Mit Slack ist etwas schiefgelaufen. Versuche es erneut.",
+  "slack.retry": "Erneut versuchen",
+  // KakaoTalk chat-export import (KAKAO_IMPORT_ENABLED, Settings → Integrations).
+  "kakaoImport.title": "KakaoTalk-Chat importieren",
+  "kakaoImport.desc":
+    "Lade einen Chat hoch, den du aus KakaoTalk exportiert hast. Klorn liest die letzten 30 Tage und schlägt dir Zusagen zum Bestätigen vor. Ein einmaliger Import, keine Synchronisierung.",
+  "kakaoImport.howTo.title": "So exportierst du einen Chat",
+  "kakaoImport.howTo.mobile":
+    "Smartphone: Chat öffnen, ≡ → Einstellungen (⚙) → Chat exportieren → Nur Text exportieren. Bei einer .zip-Datei: entpacken und die .txt-Datei darin hochladen.",
+  "kakaoImport.howTo.pc":
+    "PC oder Mac: Chat öffnen, ≡ → Chat exportieren (Chat speichern) und als .txt oder .csv speichern.",
+  "kakaoImport.file": "Exportierter Chat (.txt oder .csv, UTF-8, höchstens 10 MB)",
+  "kakaoImport.preview": "Datei prüfen",
+  "kakaoImport.previewSummary":
+    "{total} Nachrichten in der Datei. Klorn liest {window} Textnachrichten der letzten {days} Tage.",
+  "kakaoImport.truncated": "Nur die neuesten werden gelesen.",
+  "kakaoImport.me.legend": "Welcher Name bist du?",
+  "kakaoImport.me.count": "{count} aktuelle Nachrichten",
+  "kakaoImport.consent":
+    "Diese Datei enthält Nachrichten anderer Personen, und ich darf diesen Chat mit Klorn teilen. Klorn sendet aktuelle Nachrichten, die wie Zusagen aussehen, an sein KI-Modell und löscht den gespeicherten Chattext spätestens nach 7 Tagen. Vorgeschlagene Zusagen behalten ein kurzes Zitat und den Namen der Person, bis du sie löschst.",
+  "kakaoImport.import": "Importieren",
+  "kakaoImport.cancel": "Abbrechen",
+  "kakaoImport.imported": "Import gestartet. Vorschläge erscheinen unter Zusagen → Zu bestätigen.",
+  "kakaoImport.history.title": "Importe",
+  "kakaoImport.importedAt": "Importiert {time}",
+  "kakaoImport.status.PENDING": "Wartet",
+  "kakaoImport.status.PROCESSING": "Wird gelesen",
+  "kakaoImport.status.DONE": "Fertig",
+  "kakaoImport.status.FAILED": "Fehlgeschlagen",
+  "kakaoImport.result": "{created} neue Vorschläge aus {messages} Nachrichten.",
+  "kakaoImport.result.partial":
+    "{created} neue Vorschläge aus {messages} Nachrichten. Vorzeitig beim Limit pro Import angehalten.",
+  "kakaoImport.result.waiting": "{messages} Nachrichten werden gelesen…",
+  "kakaoImport.result.expired": "Abgelaufen, bevor er gelesen wurde. Importiere den Chat erneut.",
+  "kakaoImport.result.failed":
+    "Klorn konnte diesen Import nicht lesen. Lösche ihn und versuche es erneut.",
+  "kakaoImport.delete": "Löschen",
+  "kakaoImport.delete.title": "Diesen Import löschen?",
+  "kakaoImport.delete.message":
+    "Klorn löscht den Import und alle daraus entstandenen Zusagen, auch bereits bestätigte.",
+  "kakaoImport.deleted": "Import samt Vorschlägen gelöscht.",
+  "kakaoImport.retry": "Erneut versuchen",
+  "kakaoImport.error.empty-file": "Die Datei ist leer.",
+  "kakaoImport.error.file-too-large": "Die Datei ist größer als 10 MB.",
+  "kakaoImport.error.unsupported-encoding":
+    "Die Datei ist kein UTF-8-Text. Exportiere sie erneut aus KakaoTalk.",
+  "kakaoImport.error.zip-not-supported":
+    "Entpacke den Export und lade die .txt- oder .csv-Datei darin hoch.",
+  "kakaoImport.error.unknown-format": "Das sieht nicht nach einem KakaoTalk-Chatexport aus.",
+  "kakaoImport.error.no-messages": "Der Export enthält keine Nachrichten.",
+  "kakaoImport.error.too-many-lines": "Die Datei hat zu viele Zeilen.",
+  "kakaoImport.error.too-many-messages": "Die Datei hat zu viele Nachrichten.",
+  "kakaoImport.error.too-many-speakers": "Der Chat hat zu viele Teilnehmende (höchstens 500).",
+  "kakaoImport.error.invalid-upload": "Klorn konnte den Upload nicht lesen. Versuche es erneut.",
+  "kakaoImport.error.consent-required": "Bestätige zuerst, dass du diesen Chat importieren darfst.",
+  "kakaoImport.error.speaker-not-found": "Wähle deinen eigenen Namen aus der Liste.",
+  "kakaoImport.error.too-many-imports":
+    "Du kannst höchstens 20 Importe behalten. Lösche zuerst einen älteren.",
+  "kakaoImport.error.busy": "Importe sind gerade ausgelastet. Versuche es in einer Minute erneut.",
+  "kakaoImport.error.import-in-progress":
+    "Warte, bis deine laufenden Importe fertig sind, bevor du einen weiteren hinzufügst.",
+  "kakaoImport.error.not-found": "Dieser Import existiert nicht mehr.",
+  "kakaoImport.error.rate-limited": "Zu viele Versuche. Versuche es später erneut.",
+  "kakaoImport.error.generic":
+    "Beim KakaoTalk-Import ist etwas schiefgelaufen. Versuche es erneut.",
+  // Rules as text (Rules DSL, RULES_DSL_ENABLED, Settings → Lanes).
+  "rulesDsl.title": "Regeln als Text",
+  "rulesDsl.desc":
+    "Sieh dir deine Spurregeln als reinen Text an und bearbeite sie. Bewahre eine Kopie in git oder deinen Notizen auf, prüfe sie, teste sie an aktuellen Mails und wende sie dann an.",
+  "rulesDsl.editorLabel": "Regeltext",
+  "rulesDsl.validate": "Prüfen",
+  "rulesDsl.dryRun": "Vorschau mit aktuellen Mails",
+  "rulesDsl.apply": "Anwenden",
+  "rulesDsl.reload": "Neu laden",
+  "rulesDsl.loading": "Deine Regeln werden geladen…",
+  "rulesDsl.valid": "Keine Probleme gefunden. Regeln: {n}.",
+  "rulesDsl.errorsTitle": "Zu behebende Probleme: {n}",
+  "rulesDsl.errorAt": "Zeile {line}, Spalte {column}:",
+  "rulesDsl.errorsTruncated": "Nur die ersten 50 Probleme werden angezeigt.",
+  "rulesDsl.preview.title": "Vorschau",
+  "rulesDsl.preview.summary":
+    "Von deinen letzten {examined} sortierten Mails würden {changed} in einer anderen Spur landen.",
+  "rulesDsl.preview.none":
+    "Keine deiner letzten {examined} sortierten Mails würde die Spur wechseln.",
+  "rulesDsl.preview.manualKept": "Selbst verschobene Mails, die ihre Spur behalten: {n}.",
+  "rulesDsl.preview.toJudge": "wieder von Klorn entschieden",
+  "rulesDsl.preview.count": "E-Mails: {n}",
+  "rulesDsl.preview.examples": "Beispiele",
+  "rulesDsl.preview.note":
+    "Regeln gelten für neue Mails. Bereits sortierte Mails behalten ihre Spur.",
+  "rulesDsl.confirm.title": "Diese Regeln anwenden?",
+  "rulesDsl.confirm.message":
+    "Deine Spurregeln werden durch diesen Text ersetzt. Antwortregeln und gelernte Regeln bleiben unverändert. Neue Mails folgen den neuen Regeln.",
+  "rulesDsl.confirm.label": "Regeln anwenden",
+  "rulesDsl.applied":
+    "Regeln angewendet: {added} hinzugefügt, {changed} geändert, {removed} entfernt.",
+  "rulesDsl.error.changed":
+    "Deine Regeln haben sich seit dem Öffnen geändert. Lade neu und wende sie erneut an.",
+  "rulesDsl.error.invalid": "Der Regeltext enthält Probleme. Behebe sie und versuche es erneut.",
+  "rulesDsl.error.tooLarge": "Der Regeltext ist zu groß.",
+  "rulesDsl.error.rateLimited": "Zu viele Anfragen. Versuche es in einer Minute erneut.",
+  "rulesDsl.error.unavailable": "Regeln als Text sind für dieses Konto nicht verfügbar.",
+  "rulesDsl.notApplicable":
+    "Deine Regeln überschreiten die Grenzen des Texteditors (500 Regeln, 64 KiB) und können hier nicht angewendet werden. Bearbeite sie in der Liste oben.",
+  "rulesDsl.error.failed": "Etwas ist schiefgelaufen. Versuche es erneut.",
+  // Klorn Teams: Settings → Team organization pages and the invite accept page
+  "settings.org.title": "Organisation",
+  "settings.org.loading": "Organisation wird geladen …",
+  "settings.org.intro":
+    "Mit einer Organisation findet dein Team über den Assistenten gemeinsame Termine. Deine Organisation sieht deine E-Mails nie.",
+  "settings.org.create.name": "Name der Organisation",
+  "settings.org.create.button": "Organisation erstellen",
+  "settings.org.role.owner": "Inhaber",
+  "settings.org.role.member": "Mitglied",
+  "settings.org.members.title": "Mitglieder",
+  "settings.org.members.you": "(du)",
+  "settings.org.members.seated": "Platz",
+  "settings.org.members.unseated": "Kein Platz",
+  "settings.org.members.sharesFreeBusy": "Teilt Verfügbarkeit",
+  "settings.org.members.makeOwner": "Zum Inhaber machen",
+  "settings.org.members.remove": "Entfernen",
+  "settings.org.members.confirmRemove": "{name} aus der Organisation entfernen?",
+  "settings.org.members.confirmTransfer": "{name} zum Inhaber machen? Du wirst Mitglied.",
+  "settings.org.invite.title": "Per E-Mail einladen",
+  "settings.org.invite.label": "E-Mail-Adresse",
+  "settings.org.invite.placeholder": "name@firma.de",
+  "settings.org.invite.button": "Einladung senden",
+  "settings.org.invite.sent": "Einladung an {email} gesendet.",
+  "settings.org.invite.pending": "Offene Einladungen",
+  "settings.org.invite.expires": "Läuft ab am {date}",
+  "settings.org.invite.revoke": "Zurückziehen",
+  "settings.org.freeBusy.label": "Meine Verfügbarkeit mit der Organisation teilen",
+  "settings.org.freeBusy.hint":
+    "Nur belegte Zeiten – nie Titel, Teilnehmende oder Orte von Terminen. Du kannst es jederzeit ausschalten.",
+  "settings.org.admin.title": "Admin-Einstellungen",
+  "settings.org.admin.autoReplyOff": "Automatische Antworten für alle ausschalten",
+  "settings.org.admin.agentCap": "Höchster Agentenmodus",
+  "settings.org.admin.appliesToAll": "Gilt für alle in der Organisation, auch für den Inhaber.",
+  "settings.org.cap.none": "Keine Grenze",
+  "settings.org.cap.suggest": "Bis Prüfen",
+  "settings.org.cap.shadow": "Bis Beobachten",
+  "settings.org.cap.off": "Agent aus",
+  "settings.org.seats.title": "Plätze",
+  "settings.org.seats.summary": "{used} Mitglieder · {purchased} Plätze",
+  "settings.org.seats.status.active": "Aktiv",
+  "settings.org.seats.status.trialing": "Testphase",
+  "settings.org.seats.status.pastDue": "Zahlung überfällig",
+  "settings.org.seats.status.paused": "Pausiert",
+  "settings.org.seats.status.canceled": "Gekündigt",
+  "settings.org.seats.status.none": "Kein Abo",
+  "settings.org.checkout.unavailable":
+    "Team-Abrechnung ist noch nicht verfügbar. Es wird nichts berechnet.",
+  "settings.org.checkout.seats": "Plätze (2–150)",
+  "settings.org.checkout.monthly": "Monatlich zahlen · {price} pro Platz",
+  "settings.org.checkout.annual": "Jährlich zahlen · {price} pro Platz und Monat",
+  "settings.org.checkout.monthlyPlain": "Monatlich zahlen",
+  "settings.org.checkout.annualPlain": "Jährlich zahlen",
+  "settings.org.seats.change": "Plätze ({min}–{max})",
+  "settings.org.seats.changeAction": "Plätze ändern",
+  "settings.org.seats.floor":
+    "Mindestens {min}: das Team-Minimum und ein Platz pro Mitglied. Paddle berechnet oder erstattet die Differenz für den Rest dieses Abrechnungszeitraums.",
+  "settings.org.seats.payerOnly":
+    "Zusätzliche Plätze werden sofort von der hinterlegten Karte abgebucht, deshalb kann nur die Person, die für das Team bezahlt, Plätze hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+  "settings.org.seats.capped":
+    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du mit dieser Änderung höchstens auf {max} Plätze erhöhen. Die Person mit der zahlenden E-Mail-Adresse kann mehr hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+  "settings.org.seats.cappedNone":
+    "Ohne die E-Mail-Adresse, die für das Team bezahlt, kannst du gerade keine Plätze hinzufügen. Die Person mit der zahlenden E-Mail-Adresse kann welche hinzufügen. Jeder Inhaber kann Plätze entfernen.",
+  "settings.org.seats.pending":
+    "An Paddle gesendet. {seats} Plätze erscheinen hier, sobald Paddle bestätigt.",
+  "settings.org.seats.unchanged": "Die Organisation hat bereits {seats} Plätze.",
+  "settings.org.subscription.cancel": "Abo kündigen",
+  "settings.org.subscription.cancelTitle": "Team-Abo kündigen?",
+  "settings.org.subscription.cancelMessageNoDate":
+    "Alle behalten ihren Platz bis zum Ende des bereits bezahlten Zeitraums. Danach endet der Team-Plan für alle Mitglieder, und es wird nichts mehr berechnet.",
+  "settings.org.subscription.cancelConfirm": "Zum Periodenende kündigen",
+  "settings.org.subscription.keep": "Abo behalten",
+  "settings.org.subscription.keepPayerOnly":
+    "Nur die Person, die für das Team bezahlt, oder der Inhaber, der das Ende hier eingestellt hat, kann das Abo behalten, weil die Karte der zahlenden Person dann wieder belastet wird.",
+  "settings.org.subscription.portalPayerOnly":
+    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
+  "settings.org.subscription.endsOn": "Das Abo endet am {date}. Bis dahin bleiben die Plätze.",
+  "settings.org.subscription.endsSoon":
+    "Das Abo endet zum Ende dieses Abrechnungszeitraums. Bis dahin bleiben die Plätze.",
+  "settings.org.subscription.portal": "Abrechnung verwalten",
+  "settings.org.error.SEATS_BELOW_MEMBERS":
+    "Die Organisation hat mehr Mitglieder. Entferne Mitglieder, bevor du ihre Plätze entfernst.",
+  "settings.org.error.SUBSCRIPTION_NOT_ACTIVE":
+    "Plätze lassen sich nur bei aktivem Abo ändern. Wer bezahlt, kann die Zahlungsmethode im Abrechnungsportal korrigieren.",
+  "settings.org.error.CANCEL_SCHEDULED":
+    "Das Abo ist gekündigt. Behalte es zuerst, dann ändere die Plätze.",
+  "settings.org.error.NO_SUBSCRIPTION": "Diese Organisation hat kein Team-Abo.",
+  "settings.org.error.SUBSCRIPTION_PAUSED":
+    "Ein pausiertes Abo lässt sich nur im Abrechnungsportal beenden.",
+  "settings.org.error.PORTAL_PAYER_ONLY":
+    "Das Abrechnungsportal öffnet sich nur für die E-Mail-Adresse, die für das Team bezahlt. Diese Person kann auch den Link in den Paddle-Belegen nutzen.",
+  "settings.org.error.SEATS_INCREASE_PAYER_ONLY":
+    "Nur die Person, die für das Team bezahlt, kann Plätze hinzufügen, weil die hinterlegte Karte sofort belastet wird. Bitte sie, die Plätze in ihrem eigenen Klorn-Konto hinzuzufügen (sie erhält die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
+  "settings.org.error.SEATS_INCREASE_CAPPED":
+    "Das sind mehr Plätze, als du ohne die zahlende E-Mail-Adresse hinzufügen kannst. Die Person mit dieser E-Mail-Adresse kann in ihrem eigenen Klorn-Konto mehr hinzufügen (sie erhält die Paddle-Belege). Plätze entfernen kannst du weiterhin.",
+  "settings.org.error.SEATS_CHANGED":
+    "Die Anzahl der Plätze hat sich beim Speichern geändert. Prüfe die aktuelle Anzahl und versuche es erneut.",
+  "settings.org.error.RESUME_PAYER_ONLY":
+    "Wenn das Abo bleibt, wird die Karte der zahlenden Person wieder belastet, deshalb können das nur sie oder der Inhaber, der das Ende in Klorn eingestellt hat. Bitte die zahlende Person, das Abo in ihrem eigenen Klorn-Konto zu behalten (sie erhält die Paddle-Belege).",
+  "settings.org.error.BILLING_PROVIDER_READ_FAILED":
+    "Paddle hat nicht geantwortet, deshalb wurde nichts geändert. Versuche es in einer Minute erneut.",
+  "settings.org.error.BILLING_PROVIDER_ERROR":
+    "Paddle hat die Änderung nicht bestätigt, sie ist also womöglich nicht durchgegangen. Prüfe es in einer Minute, bevor du es erneut versuchst.",
+  "settings.org.error.TEAM_BILLING_UNAVAILABLE":
+    "Die Team-Abrechnung ist gerade nicht verfügbar. Nichts wurde geändert.",
+  "settings.org.error.SEAT_CHANGE_UNSUPPORTED":
+    "Bei diesem Abo lassen sich die Plätze hier nicht ändern. Kontaktiere den Support.",
+  "settings.org.transparency.title": "Was deine Organisation sehen kann",
+  "settings.org.transparency.can": "Sieht",
+  "settings.org.transparency.cannot": "Sieht nie",
+  "settings.org.transparency.notSharing": "(du teilst sie nicht)",
+  "settings.org.transparency.reads": "Wer zuletzt deine Verfügbarkeit abgefragt hat",
+  "settings.org.transparency.noReads": "Noch niemand hat deine Verfügbarkeit abgefragt.",
+  "settings.org.transparency.read": "{who} · {date}",
+  "settings.org.transparency.formerMember": "Ein ehemaliges Mitglied",
+  "settings.org.transparency.domains": "Firmen-Domains in deiner Sortierung",
+  "settings.org.transparency.domainsLine":
+    "Verifizierte Mails von {domains} werden in den Gründen deiner Sortierung als von einer Kollegin oder einem Kollegen deiner Firma genannt. Deine Organisation sieht nie, welche Mail das war.",
+  "settings.org.visible.roles": "Dein Name, deine E-Mail-Adresse und deine Rolle",
+  "settings.org.visible.seats": "Ob du einen bezahlten Platz hast",
+  "settings.org.visible.cost": "Der Platzpreis und der Status des Abos",
+  "settings.org.visible.freeBusy": "Deine belegten Zeiten, nur solange du sie teilst",
+  "settings.org.visible.auditLog": "Admin-Aktionen und wer deine Verfügbarkeit abgefragt hat",
+  "settings.org.never.mail": "Deine E-Mails",
+  "settings.org.never.attentionItems": "Deine Lanes und Benachrichtigungen",
+  "settings.org.never.commitments": "Deine Zusagen",
+  "settings.org.never.drafts": "Deine Entwürfe und Antworten",
+  "settings.org.never.dossiers": "Deine Kontaktnotizen",
+  "settings.org.never.eventDetails": "Titel, Teilnehmende und Orte von Terminen",
+  "settings.org.never.chat": "Deine Chats mit dem Assistenten",
+  "settings.org.never.contacts": "Deine Kontakte",
+  "settings.org.never.usage": "Deine Nutzung",
+  "settings.org.leave.button": "Organisation verlassen",
+  "settings.org.leave.confirm": "{org} verlassen?",
+  "settings.org.leave.ownerHint":
+    "Als Inhaber machst du zuerst jemand anderen zum Inhaber. Bist du allein, schließt das Verlassen die Organisation.",
+  "settings.org.error.generic": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+  "settings.org.error.EMAIL_NOT_VERIFIED": "Bestätige zuerst deine E-Mail-Adresse.",
+  "settings.org.error.ALREADY_IN_ORG": "Du bist bereits in einer Organisation.",
+  "settings.org.error.ALREADY_MEMBER": "Diese Adresse ist bereits Mitglied.",
+  "settings.org.error.INVALID_EMAIL": "Gib eine gültige E-Mail-Adresse ein.",
+  "settings.org.error.INVALID_NAME": "Der Name darf höchstens 80 Zeichen lang und kein Link sein.",
+  "settings.org.error.INVALID_DOMAINS": "Firmendomains: höchstens 10 Domainnamen.",
+  "settings.org.error.INVITE_LIMIT": "Zu viele Einladungen heute. Versuche es morgen erneut.",
+  "settings.org.error.MEMBER_LIMIT":
+    "Eine Organisation hat höchstens 150 Mitglieder und offene Einladungen.",
+  "settings.org.error.OWNER_MUST_TRANSFER":
+    "Mache vor dem Verlassen ein anderes Mitglied zum Inhaber.",
+  "settings.org.error.SUBSCRIPTION_ACTIVE":
+    "Diese Organisation hat ein Team-Abo. Kündige es zuerst.",
+  "settings.org.error.INVITE_EMAIL_FAILED":
+    "Die Einladung konnte nicht gesendet werden. Bitte versuche es erneut.",
+  "settings.org.error.INVITE_EXPIRED": "Diese Einladung ist abgelaufen. Bitte um eine neue.",
+  "settings.org.error.INVITE_USED": "Diese Einladung wurde bereits verwendet.",
+  "settings.org.error.INVITE_INVALID": "Dieser Einladungslink ist ungültig.",
+  "settings.org.error.INVITE_EMAIL_MISMATCH":
+    "Diese Einladung ging an eine andere Adresse. Melde dich mit dieser Adresse an, um sie anzunehmen.",
+  "settings.org.error.TEAM_CHECKOUT_UNAVAILABLE":
+    "Team-Abrechnung ist noch nicht verfügbar. Es wurde nichts berechnet.",
+  "settings.org.error.INVALID_SEATS": "Wähle 2–150 Plätze. Für größere Teams kontaktiere uns.",
+  "settings.org.error.rate-limited": "Zu viele Anfragen. Versuche es später erneut.",
+  "teamInvite.loading": "Einladung wird geprüft …",
+  "teamInvite.missing": "Öffne diese Seite über den Link in deiner Einladungs-E-Mail.",
+  "teamInvite.title": "{org} beitreten",
+  "teamInvite.body":
+    "{org} sieht deinen Namen, deine E-Mail-Adresse, deine Rolle und deinen Platz – nie aber deine E-Mails, Lanes oder Zusagen. Sie kann außerdem automatische Antworten für alle ausschalten oder den Agenten begrenzen.",
+  "teamInvite.accept": "{org} beitreten",
+  "teamInvite.joined": "Du bist {org} beigetreten.",
+  "teamInvite.openSettings": "Team-Einstellungen öffnen",
+  "settings.org.error.OWNER_ONLY": "Nur der Inhaber der Organisation kann das tun.",
+  "settings.org.error.NOT_IN_ORG": "Du bist in keiner Organisation.",
+  "settings.org.error.MEMBER_NOT_FOUND": "Dieses Mitglied ist nicht mehr in der Organisation.",
+  "settings.org.error.INVITE_NOT_FOUND": "Diese Einladung ist nicht mehr offen.",
+  "settings.org.error.CANNOT_REMOVE_OWNER":
+    "Mache zuerst jemand anderen zum Inhaber, bevor du den Inhaber entfernst.",
+  "settings.org.retry": "Erneut versuchen",
+  "settings.org.loadFailed": "Dieser Teil konnte nicht geladen werden.",
+  "settings.org.transparency.ceilings": "Grenzen, die deine Organisation für dich setzt",
+  "settings.org.transparency.ceiling.none": "Keine",
+  "settings.org.transparency.ceiling.autoReplyOff": "Automatische Antworten sind aus",
+  "settings.org.transparency.ceiling.cap.off": "Der Agent ist aus",
+  "settings.org.transparency.ceiling.cap.shadow": "Der Agent beobachtet nur",
+  "settings.org.transparency.ceiling.cap.suggest":
+    "Der Agent schlägt nur vor und handelt nie selbst",
 };
 
 export default de;

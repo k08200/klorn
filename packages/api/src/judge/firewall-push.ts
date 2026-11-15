@@ -32,7 +32,9 @@ import {
   notificationCopy,
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
-import { stampDecisionRang } from "./decision-label.js";
+import { NOTIFIED_LOOKBACK_MS } from "../notify/urgent-dedup.js";
+import { logDbFailure } from "../report-db-failure.js";
+import { findRungEmailIds, stampDecisionRang } from "./decision-label.js";
 import type { JudgeableEmailRow } from "./email-firewall.js";
 import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
 import type { BellRow } from "./v3/push-budget-gate.js";
@@ -43,7 +45,7 @@ import type { BellRow } from "./v3/push-budget-gate.js";
 // for it is not. The urgent sweep (automation-scheduler.ts) reads the same
 // window, so neither path rings stale mail.
 export const FIREWALL_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
-const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const PUSH_DEDUP_WINDOW_MS = NOTIFIED_LOOKBACK_MS;
 // The bell row shares its title (notificationCopy().urgentMailTitle, in the
 // user's notification language) with the urgent-priority sweep
 // (automation-scheduler.ts) so the two dedup against each other: whichever
@@ -76,10 +78,11 @@ async function pushDedupeFloor(email: JudgeableEmailRow): Promise<Date> {
 
 /**
  * The gates every firewall push passes first, spending no budget: the 6h
- * recency rule, the IMAP re-ingest skip and the 7-day dedupe. `policyUser`:
- * for a user under policy v3, a cleared bell hides interrupt-budget slot rows
- * (type "claim") instead of deleting them, and they still mark the mail as
- * already pushed. For everyone else the dedupe query is exactly as it was.
+ * recency rule, the IMAP re-ingest skip, the ledger's "already rang" fact and
+ * the 7-day bell-row dedupe. A cleared bell row (clearedAt) still counts: it
+ * is kept, not deleted. `policyUser`: for a user under policy v3, a cleared
+ * bell hides interrupt-budget slot rows (type "claim") instead, and they still
+ * mark the mail as already pushed.
  */
 export async function firewallPushGatesPass(
   userId: string,
@@ -106,6 +109,17 @@ export async function firewallPushGatesPass(
     console.log(
       `[PUSH] Firewall PUSH suppressed (re-ingested after an IMAP UIDVALIDITY repair) ` +
         `for email ${email.gmailId} user ${userId}`,
+    );
+    return false;
+  }
+
+  // Rang already (this path, the urgent sweep or a quiet-hours summary): the
+  // ledger's per-mail fact, which no bell action erases. The bell-row marker
+  // below still covers an interrupt the hold gates held (no ring recorded).
+  if ((await findRungEmailIds(userId, [email.id])).has(email.id)) {
+    console.log(
+      // The row id, not gmailId: an IMAP gmailId carries the mailbox address.
+      `[PUSH] Firewall PUSH deduped (already rang) for email ${email.id} user ${userId}`,
     );
     return false;
   }
@@ -181,10 +195,7 @@ async function findOpenMailItem(
       select: { id: true, ...REASON_ITEM_SELECT },
     });
   } catch (err) {
-    console.warn(
-      "[PUSH] open firewall item lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[PUSH] open firewall item lookup failed", err);
     return null;
   }
   if (!row) return null;
@@ -214,10 +225,7 @@ async function mailReason(
     );
     return reasons.get(email.id) ?? null;
   } catch (err) {
-    console.warn(
-      "[PUSH] firewall reason lookup failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logDbFailure("[PUSH] firewall reason lookup failed", err);
     return null;
   }
 }

@@ -1,0 +1,12 @@
+# my rules, kept in git
+version 1
+
+rule "investors"   # VCs
+then lane push
+	when from domain "@SequoiaCap.com"
+
+rule "ceo"
+      when from address "CEO@Acme.io"
+      disabled
+      then lane Meeting
+      note "board season"
