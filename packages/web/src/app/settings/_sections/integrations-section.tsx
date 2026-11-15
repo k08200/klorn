@@ -4,6 +4,7 @@ import { ApiKeysSection } from "../../../components/api-keys-section";
 import { TelegramSection } from "../../../components/telegram-section";
 import { useT } from "../../../lib/i18n";
 import { PANEL, SECTION_TITLE } from "./shared";
+import { SlackPanel } from "./slack-panel";
 
 export function IntegrationsSection() {
   const { t } = useT();
@@ -16,6 +17,9 @@ export function IntegrationsSection() {
           <ApiKeysSection />
         </div>
       </section>
+
+      {/* Slack (renders nothing unless /me user.slack) */}
+      <SlackPanel />
 
       {/* Telegram channel */}
       <section className="mb-8">

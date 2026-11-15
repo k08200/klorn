@@ -69,6 +69,9 @@ interface User {
   // Server-driven client flag: the API's RULES_DSL_ENABLED, cohort-aware.
   // True shows "Rules as text" in Settings → Lanes. Undefined = off.
   rulesDsl?: boolean;
+  // Server-driven client flag: the API's SLACK_ENABLED, cohort-aware. True
+  // shows the Slack panel in Settings → Integrations. Undefined = off.
+  slack?: boolean;
   // Server-driven client flag: the API's TEAMS_ENABLED (Klorn Teams),
   // cohort-aware. True shows the organization pages in Settings → Team and the
   // invite accept page. Undefined (older API) = off.
