@@ -27,6 +27,11 @@ calendar time.
     checksum, asks for the database name (or `--yes`), stops the api,
     snapshots the target, and replaces its `public` schema in a single
     transaction (so rolling back over newer migrations works).
+  - `backup prune [--keep <N>] [--older-than <days>] [--yes]` — retention
+    for the backup directory. A dry run unless `--yes`; never deletes the
+    newest backup; touches only the CLI's own `klorn-<stamp>[-<label>].dump`
+    files and their sidecars, never a symlink; any per-file failure is
+    reported and exits 1.
   - `up` / `upgrade <version>` — compose up with a health wait; upgrade
     pulls, backs up, migrates with the new image, pins `KLORN_VERSION`,
     restarts and waits for the new version.

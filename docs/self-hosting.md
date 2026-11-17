@@ -455,7 +455,8 @@ in the same override.
 ## Backup & restore
 
 The [`klorn` CLI](self-host-cli.md) does all of this with checksums and
-guard rails: `pnpm klorn backup create`, `pnpm klorn backup list`, and
+guard rails: `pnpm klorn backup create`, `pnpm klorn backup list`,
+`pnpm klorn backup prune` (retention), and
 `pnpm klorn backup restore <file> --target compose` (see its
 [restore safety rules](self-host-cli.md#restore-safety-rules)). The manual
 commands below are what it automates.

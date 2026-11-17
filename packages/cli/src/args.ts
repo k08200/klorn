@@ -26,6 +26,8 @@ const OPTIONS = {
   "api-url": { type: "string" },
   "web-url": { type: "string" },
   timeout: { type: "string" },
+  keep: { type: "string" },
+  "older-than": { type: "string" },
 } as const;
 
 function parseTimeout(raw: string | undefined): number | undefined {
@@ -33,6 +35,15 @@ function parseTimeout(raw: string | undefined): number | undefined {
   const value = Number(raw);
   if (!Number.isInteger(value) || value <= 0) {
     throw new UsageError("--timeout must be a positive number of seconds");
+  }
+  return value;
+}
+
+function parsePositiveInt(raw: string | undefined, flag: string): number | undefined {
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1) {
+    throw new UsageError(`${flag} must be a whole number of 1 or more`);
   }
   return value;
 }
@@ -64,6 +75,8 @@ export function parseCli(argv: readonly string[]): ParsedCli {
       apiUrl: v["api-url"],
       webUrl: v["web-url"],
       timeoutSec: parseTimeout(v.timeout),
+      keep: parsePositiveInt(v.keep, "--keep"),
+      olderThanDays: parsePositiveInt(v["older-than"], "--older-than"),
     },
   };
 }
@@ -76,6 +89,8 @@ Usage:
   klorn migrate deploy [--yes] [--no-backup] back up, then prisma migrate deploy
   klorn backup create [--label <name>]       pg_dump (custom format) + sha256
   klorn backup list [--json]
+  klorn backup prune [--keep <N>] [--older-than <days>] [--yes] [--json]
+                                             dry run unless --yes; always keeps the newest
   klorn backup restore <file> --target <db> [--yes] [--no-backup] [--i-know]
   klorn up                                   docker compose up -d, wait for health
   klorn upgrade <version> [--yes] [--no-backup] [--allow-downgrade]
@@ -93,6 +108,8 @@ Options:
   --api-url <url>           default: $KLORN_API_URL, NEXT_PUBLIC_API_URL, http://localhost:3001
   --web-url <url>           default: $KLORN_WEB_URL, WEB_URL, http://localhost:3000
   --timeout <seconds>       health wait: up and restore (180), upgrade (300)
+  --keep <N>                prune: keep the N newest backups
+  --older-than <days>       prune: delete only backups older than this (with --keep: both must apply)
   -y, --yes                 skip confirmation prompts
   -h, --help
 
