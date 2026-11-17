@@ -3140,6 +3140,16 @@ const zh: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.off": "代理已关闭",
   "settings.org.transparency.ceiling.cap.shadow": "代理只观察",
   "settings.org.transparency.ceiling.cap.suggest": "代理只提出建议，不会自行执行",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} 未连接。请在设置中重新连接。",
+  "providerFailure.scope":
+    "{service} 未授予 Klorn 所需的权限。请在设置中重新连接，并允许所有请求的权限。",
+  "providerFailure.notFound": "{service} 找不到该项目。它可能已被移动或删除。",
+  "providerFailure.rateLimited": "{service} 目前正在限制请求。请一分钟后重试。",
+  "providerFailure.unavailable": "{service} 目前不可用。请稍后重试。",
+  "providerFailure.tooManyRequests": "当前请求过多。请一分钟后重试。",
+  "providerFailure.dailyCap": "今天的 AI 额度已用完。明天会重置。",
+  "providerFailure.internal": "Klorn 这边出了问题。请稍后重试。",
 };
 
 export default zh;

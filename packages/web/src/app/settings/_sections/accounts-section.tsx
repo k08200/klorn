@@ -24,6 +24,7 @@ import { accountSectionId } from "../../../lib/account-health";
 import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { IMAP_PRESETS } from "../../../lib/imap-presets";
+import { providerFailureText } from "../../../lib/provider-failure";
 import { captureClientError } from "../../../lib/sentry";
 import { AccountHealthSection } from "./account-health";
 import { PANEL, PRIMARY_BTN, SECTION_TITLE } from "./shared";
@@ -89,7 +90,11 @@ export function AccountsSection() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: t("settings.toast.requestFailed") }));
-        toast(body.error || t("settings.toast.gmailPushEnableFailed"), "error");
+        toast(
+          providerFailureText(t, body, "Gmail") ??
+            (body.error || t("settings.toast.gmailPushEnableFailed")),
+          "error",
+        );
         return;
       }
       const data = (await res.json()) as { expiration?: string };
@@ -114,7 +119,11 @@ export function AccountsSection() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: t("settings.toast.requestFailed") }));
-        toast(body.error || t("settings.toast.gmailPushDisableFailed"), "error");
+        toast(
+          providerFailureText(t, body, "Gmail") ??
+            (body.error || t("settings.toast.gmailPushDisableFailed")),
+          "error",
+        );
         return;
       }
       setGmailPushEnabled(false);

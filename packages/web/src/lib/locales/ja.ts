@@ -3379,6 +3379,20 @@ const ja: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "エージェントは観察のみ行います",
   "settings.org.transparency.ceiling.cap.suggest":
     "エージェントは提案のみ行い、自分では実行しません",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} が接続されていません。設定から再接続してください。",
+  "providerFailure.scope":
+    "{service} で Klorn に必要な権限が許可されていません。設定から再接続し、要求されたすべての権限を許可してください。",
+  "providerFailure.notFound":
+    "{service} でその項目が見つかりません。移動または削除された可能性があります。",
+  "providerFailure.rateLimited":
+    "{service} が現在リクエストを制限しています。1 分後にもう一度お試しください。",
+  "providerFailure.unavailable":
+    "現在 {service} を利用できません。しばらくしてからもう一度お試しください。",
+  "providerFailure.tooManyRequests": "現在リクエストが多すぎます。1 分後にもう一度お試しください。",
+  "providerFailure.dailyCap": "本日の AI 利用上限に達しました。明日リセットされます。",
+  "providerFailure.internal":
+    "Klorn 側で問題が発生しました。しばらくしてからもう一度お試しください。",
 };
 
 export default ja;

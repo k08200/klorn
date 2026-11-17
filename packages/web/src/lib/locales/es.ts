@@ -3428,6 +3428,20 @@ const es: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "El agente solo observa",
   "settings.org.transparency.ceiling.cap.suggest":
     "El agente solo sugiere; nunca actúa por su cuenta",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} no está conectado. Vuelve a conectarlo en Ajustes.",
+  "providerFailure.scope":
+    "{service} no concedió un permiso que Klorn necesita. Vuelve a conectarlo en Ajustes y permite todos los permisos solicitados.",
+  "providerFailure.notFound":
+    "{service} no encontró ese elemento. Puede que se haya movido o eliminado.",
+  "providerFailure.rateLimited":
+    "{service} está limitando las solicitudes ahora mismo. Inténtalo de nuevo en un minuto.",
+  "providerFailure.unavailable":
+    "{service} no está disponible ahora mismo. Inténtalo de nuevo en breve.",
+  "providerFailure.tooManyRequests":
+    "Hay demasiadas solicitudes ahora mismo. Inténtalo de nuevo en un minuto.",
+  "providerFailure.dailyCap": "Se agotó el límite de IA de hoy. Se restablece mañana.",
+  "providerFailure.internal": "Algo salió mal por nuestra parte. Inténtalo de nuevo en breve.",
 };
 
 export default es;

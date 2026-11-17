@@ -3343,6 +3343,17 @@ const en: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "The agent only observes",
   "settings.org.transparency.ceiling.cap.suggest":
     "The agent only suggests; it never acts on its own",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} is not connected. Reconnect it in Settings.",
+  "providerFailure.scope":
+    "{service} didn't grant a permission Klorn needs. Reconnect it in Settings and allow every requested permission.",
+  "providerFailure.notFound":
+    "{service} couldn't find that item. It may have been moved or deleted.",
+  "providerFailure.rateLimited": "{service} is limiting requests right now. Try again in a minute.",
+  "providerFailure.unavailable": "{service} is unavailable right now. Try again shortly.",
+  "providerFailure.tooManyRequests": "Too many requests right now. Try again in a minute.",
+  "providerFailure.dailyCap": "Today's AI limit is used up. It resets tomorrow.",
+  "providerFailure.internal": "Something went wrong on our side. Try again shortly.",
 };
 
 export default en;
