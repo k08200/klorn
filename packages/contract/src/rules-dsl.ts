@@ -7,12 +7,23 @@
 
 import type { LiveTier } from "./firewall.js";
 
+/**
+ * What an error's message is built from: strings and numbers only (the
+ * offending token cut to 40 characters, a limit, a line number). `variant`
+ * tells apart the several messages one code can stand for.
+ */
+export type RulesDslErrorParams = Readonly<Record<string, string | number>>;
+
 /** One problem in the text; line and column are 1-based. */
 export interface RulesDslErrorWire {
   line: number;
   column: number;
+  /** Stable: clients switch on it. */
   code: string;
+  /** English. Always present, and what a client shows for a code it does not know. */
   message: string;
+  /** Absent from servers that predate localized errors. */
+  params?: RulesDslErrorParams;
 }
 
 /** `GET /api/email/rules/dsl/export` */

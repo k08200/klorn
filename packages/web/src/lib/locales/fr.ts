@@ -3273,6 +3273,53 @@ const fr: Record<string, string> = {
   "rulesDsl.notApplicable":
     "Vos règles dépassent les limites de l'éditeur de texte (500 règles, 64 Kio) : elles ne peuvent pas être appliquées ici. Modifiez-les dans la liste ci-dessus.",
   "rulesDsl.error.failed": "Une erreur s'est produite. Réessayez.",
+  "rulesDsl.problem.missing-version": "La première instruction doit être : version 1",
+  "rulesDsl.problem.unsupported-version":
+    'Version non prise en charge : "{found}". Ce Klorn lit la version 1.',
+  "rulesDsl.problem.unexpected-token.version-repeated":
+    "version 1 ne peut apparaître qu'une fois, au tout début.",
+  "rulesDsl.problem.unexpected-token.statement":
+    "Élément inattendu : {found}. Une ligne commence par rule, when, then, note ou disabled.",
+  "rulesDsl.problem.unexpected-token.expected-here": "Attendu ici : {expected}.",
+  "rulesDsl.problem.unexpected-token.expected-found": "Attendu : {expected}. Trouvé : {found}.",
+  "rulesDsl.problem.unexpected-token.extra": "Élément inattendu après l'instruction : {found}.",
+  "rulesDsl.problem.unterminated-string":
+    "Cette chaîne n'a pas de guillemet fermant sur la même ligne.",
+  "rulesDsl.problem.bad-escape": 'Dans une chaîne, seuls \\" et \\\\ peuvent être échappés.',
+  "rulesDsl.problem.forbidden-character":
+    "{codePoint} : les caractères invisibles, de contrôle ou de direction du texte ne sont pas autorisés.",
+  "rulesDsl.problem.statement-outside-rule":
+    '"{keyword}" doit se trouver dans une règle. Commencez-en une avec : rule "nom"',
+  "rulesDsl.problem.empty-rule-name": "Une règle doit avoir un nom.",
+  "rulesDsl.problem.duplicate-clause": 'Cette règle contient déjà une ligne "{keyword}".',
+  "rulesDsl.problem.too-many-conditions":
+    "Une règle n'a qu'une seule condition d'expéditeur. Écrivez une autre règle pour un autre expéditeur.",
+  "rulesDsl.problem.missing-when": 'Cette règle a besoin d\'un expéditeur : when from address "…"',
+  "rulesDsl.problem.missing-then":
+    "Cette règle a besoin d'une voie : then lane PUSH (ou PUSH, MEETING, QUEUE, INFO ou SILENT)",
+  "rulesDsl.problem.unknown-lane":
+    'Voie inconnue : "{token}". Utilisez PUSH, MEETING, QUEUE, INFO ou SILENT.',
+  "rulesDsl.problem.retired-lane":
+    '"{token}" est une valeur retirée, pas une voie. Utilisez PUSH, MEETING, QUEUE, INFO ou SILENT.',
+  "rulesDsl.problem.invalid-address": '"{value}" n\'est pas une adresse e-mail valide.',
+  "rulesDsl.problem.invalid-domain":
+    '"{value}" n\'est pas un domaine valide. Écrivez-le comme example.com.',
+  "rulesDsl.problem.public-domain":
+    '"{value}" est un domaine de messagerie public depuis lequel n\'importe qui peut écrire. Écrivez plutôt une règle pour une seule adresse.',
+  "rulesDsl.problem.duplicate-sender":
+    "La règle de la ligne {firstLine} couvre déjà cet expéditeur. Une règle par expéditeur.",
+  "rulesDsl.problem.text-too-large": "Le texte des règles ne peut pas dépasser {maxKib} Kio.",
+  "rulesDsl.problem.too-many-rules": "Un fichier ne peut pas contenir plus de {max} règles.",
+  "rulesDsl.problem.string-too-long.name":
+    "Le nom d'une règle ne peut pas dépasser {max} caractères.",
+  "rulesDsl.problem.string-too-long.note": "Une note ne peut pas dépasser {max} caractères.",
+  "rulesDsl.problem.string-too-long.sender": "Un expéditeur ne peut pas dépasser {max} caractères.",
+  "rulesDsl.problem.string-too-long.sender-lowercased":
+    "Un expéditeur ne peut pas dépasser {max} caractères (comptés en minuscules).",
+  "rulesDsl.problem.expect.string": 'une chaîne "entre guillemets"',
+  "rulesDsl.problem.expect.lane": "une voie (PUSH, MEETING, QUEUE, INFO ou SILENT)",
+  "rulesDsl.problem.expect.either": "{a} ou {b}",
+  "rulesDsl.problem.found.string": "une chaîne",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "Organisation",
   "settings.org.loading": "Chargement de votre organisation…",

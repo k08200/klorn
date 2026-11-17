@@ -100,12 +100,12 @@ function cut(text: string, max: number, forbiddenTo: string): string {
 }
 
 /**
- * User text quoted back in an error message: at most `quoteChars` characters,
- * control characters replaced, so a message never echoes an unbounded or
- * multi-line input.
+ * User text quoted back in an error message or carried in an error's params:
+ * at most `quoteChars` characters (`…` appended), control characters replaced,
+ * so an error never echoes an unbounded or multi-line input.
  */
-export function quoteForMessage(text: string): string {
-  return `"${cut(text, RULES_DSL_LIMITS.quoteChars, "�")}"`;
+export function truncateForMessage(text: string): string {
+  return cut(text, RULES_DSL_LIMITS.quoteChars, "�");
 }
 
 /**
