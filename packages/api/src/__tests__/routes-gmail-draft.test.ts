@@ -153,3 +153,59 @@ describe("POST /api/email/:id/gmail-draft", () => {
     await app.close();
   });
 });
+
+describe("POST /api/email/:id/gmail-draft — attachment failures", () => {
+  const draft = (extra: Record<string, unknown>) => ({
+    to: "boss@corp.com",
+    subject: "Re: hi",
+    body: "sounds good",
+    ...extra,
+  });
+
+  it("answers a failed attachment read with a code, never the thrown text", async () => {
+    const { listEmailAttachments } = await import("../mail/email-attachments.js");
+    vi.mocked(listEmailAttachments).mockRejectedValueOnce(
+      Object.assign(new Error("Invalid `prisma.emailAttachment.findMany()` invocation: CANARY"), {
+        name: "PrismaClientValidationError",
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/gmail-draft",
+      payload: draft({ includeBriefAttachment: true }),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).not.toContain("CANARY");
+    expect(res.json()).toEqual({
+      error: "Something went wrong on our side. Try again shortly.",
+      code: "INTERNAL_ERROR",
+    });
+    expect(createEmailDraft).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("keeps Klorn's own sentence when the attachments are too large", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.emailAttachment.findMany).mockResolvedValueOnce([
+      {
+        gmailAttachmentId: "a1",
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: 20_000_000,
+      },
+    ] as never);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/gmail-draft",
+      payload: draft({ attachmentIds: ["att-1"] }),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: "The attachments are too large to include in a Gmail draft.",
+      code: "ATTACHMENTS_TOO_LARGE",
+    });
+    await app.close();
+  });
+});

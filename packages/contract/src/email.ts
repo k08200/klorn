@@ -13,6 +13,7 @@
 
 import type { V3ItemBlock, V3TodayFields } from "./attention-v3.js";
 import type { LiveTier, TrustWire } from "./firewall.js";
+import type { ProviderFailureCode } from "./provider-failure.js";
 
 export type EmailPriority = "URGENT" | "NORMAL" | "LOW";
 
@@ -370,7 +371,11 @@ export interface EmailThreadListResponse {
 export interface EmailBulkActionResponse {
   success: boolean;
   updatedCount: number;
-  failed: Array<{ id: string; error: string }>;
+  /**
+   * Each message that was not archived. `code` is set when the provider call
+   * threw (provider-failure.ts); a provider's soft `{ error }` answer has none.
+   */
+  failed: Array<{ id: string; error: string; code?: ProviderFailureCode }>;
 }
 
 /** `POST /api/email/:id/{archive,delete}/undo` — success payload. */

@@ -102,6 +102,29 @@ describe("POST /api/email/bulk — decision ledger", () => {
     expect(calls[0].where.sourceId).toEqual({ in: ["e1"] });
   });
 
+  it("lists a thrown archive failure by its code, never the provider's text", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    archive.mockImplementation(async (_u: string, gmailId: string) => {
+      if (gmailId !== "g-e2") return { success: true };
+      throw Object.assign(new Error("CANARY-bulk quoted subject"), {
+        name: "GaxiosError",
+        response: { status: 429 },
+      });
+    });
+    const app = await buildApp();
+    const res = await bulk(app, "archive");
+
+    expect(res.body).not.toContain("CANARY");
+    expect(res.json().failed).toEqual([
+      {
+        id: "e2",
+        error:
+          "Gmail archive failed. Your mail provider is limiting requests right now. Try again in a minute.",
+        code: "PROVIDER_RATE_LIMITED",
+      },
+    ]);
+  });
+
   it("does not stamp a bulk mark-read: nobody opened those mails", async () => {
     const app = await buildApp();
     const res = await bulk(app, "mark-read");

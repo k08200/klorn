@@ -392,7 +392,14 @@ describe("POST /api/email/bulk archive", () => {
     expect(res.json()).toEqual({
       success: false,
       updatedCount: 1,
-      failed: [{ id: "e-a", error: "pooler dropped" }],
+      // Classified, never the thrown text (public-failure.ts).
+      failed: [
+        {
+          id: "e-a",
+          error: "Gmail archive failed. Something went wrong on our side. Try again shortly.",
+          code: "INTERNAL_ERROR",
+        },
+      ],
     });
   });
 });
