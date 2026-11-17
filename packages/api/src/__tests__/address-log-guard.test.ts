@@ -10,7 +10,8 @@
  * The check is by name: a value called `email`, `address`, `recipient`,
  * `calendarId`, `user.email`, `fromAddress`, … handed to a sink (console.*,
  * request.log.*, captureError / Sentry.*, a failure reporter's ids / extra),
- * directly, in a template, or as the receiver of a method (`email.trim()`).
+ * directly, in a template, as the receiver of a method (`email.trim()`), or
+ * under an address key (`{ email: login }`) unless addressLogTag reduced it.
  * A field read off it (`email.id`, `email.gmailId`) is a different value and
  * is not flagged. An address that travels under another name (a calendar id
  * inside `reasons`) is outside what a name check can see; those sites have
@@ -77,6 +78,13 @@ interface Finding {
   readonly text: string;
 }
 
+/** A call to an address sanitizer: what it returns carries none of the address. */
+function isReduced(expr: ts.Expression): boolean {
+  if (!ts.isCallExpression(expr)) return false;
+  const name = calleeName(expr);
+  return name !== null && ADDRESS_SANITIZERS.has(name);
+}
+
 /** Address-named values in `expr`, by the text that names them. */
 function addressValues(expr: ts.Node): string[] {
   if (ts.isIdentifier(expr)) return ADDRESS_NAME.test(expr.text) ? [expr.text] : [];
@@ -87,10 +95,13 @@ function addressValues(expr: ts.Node): string[] {
   if (ts.isPropertyAccessExpression(expr)) {
     return ADDRESS_NAME.test(expr.name.text) ? [expr.getText()] : [];
   }
-  // `{ email: x }` says what x is, whatever x is called.
+  // `{ email: x }` says what x is, whatever x is called, unless x is reduced.
   if (ts.isPropertyAssignment(expr)) {
     const key = ts.isIdentifier(expr.name) || ts.isStringLiteral(expr.name) ? expr.name.text : "";
-    return ADDRESS_NAME.test(key) ? [`${key}:`] : addressValues(expr.initializer);
+    if (!ADDRESS_NAME.test(key) || isReduced(expr.initializer)) {
+      return addressValues(expr.initializer);
+    }
+    return [`${key}:`];
   }
   if (ts.isCallExpression(expr)) {
     const name = calleeName(expr);
@@ -204,6 +215,7 @@ describe("the address guard itself", () => {
 
   it.each([
     ["the keyed tag", "console.warn(`[X] no inbox for ${addressLogTag(email)}`);"],
+    ["the keyed tag under an address key", "request.log.warn({ email: addressLogTag(e) }, 'x');"],
     ["the row id", "console.warn(`[X] refusing for user ${user.id}`);"],
     ["a field of an email row", "console.log(`[X] skipped ${email.gmailId} (${email.id})`);"],
     ["a count", "console.log(`[X] ${totalEmails} total`);"],

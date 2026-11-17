@@ -34,6 +34,8 @@ const REPORTING_MODULES = [
   "db-failure-facts.ts",
   "error-frames.ts",
   // The address tag the log lines use (mail/email.ts and the routes import it).
+  // Its key is built at module top from auth.ts, which a cycle would hand it
+  // uninitialised (a TDZ crash at boot).
   "security/address-log-tag.ts",
 ] as const;
 

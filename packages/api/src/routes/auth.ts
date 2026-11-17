@@ -653,7 +653,7 @@ export function authRoutes(app: FastifyInstance) {
       // Only promote a VERIFIED account: a self-serve unverified row on an
       // ADMIN_EMAILS address (pre-registration) must not auto-escalate to ADMIN
       // before the real owner proves ownership (security audit 2026-07-21).
-      if (user.role !== "ADMIN" && user.emailVerified && isAdminEmail(user.email)) {
+      if (user.role !== "ADMIN" && user.emailVerified && isAdminEmail(user.email, user.id)) {
         await prisma.user
           .update({ where: { id: user.id }, data: { role: "ADMIN" } })
           .catch((err) => {
