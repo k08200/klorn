@@ -34,6 +34,7 @@ import { buildSentryInitOptions } from "../sentry.js";
 import {
   UNCAUGHT_EXCEPTION_INTEGRATION,
   UNHANDLED_REJECTION_INTEGRATION,
+  uncaughtExceptionFactsIntegration,
 } from "../sentry-process-faults.js";
 import { walk } from "./helpers/catch-sink-scan.js";
 import {
@@ -223,6 +224,122 @@ describe("the uncaught-exception listener", () => {
     } finally {
       exit.mockRestore();
       process.off("uncaughtException", other);
+    }
+  });
+});
+
+/** Mechanism objects in the payload: Sentry's source context quotes this file's string literals. */
+function fatalEvents(payload: string): number {
+  return payload.match(/"mechanism":\{"type":"auto\.node\.onuncaughtexception"/g)?.length ?? 0;
+}
+
+/**
+ * A fresh exception listener (fresh first/exiting state) on the running
+ * client, with the process seen as having no other uncaughtException listener
+ * (vitest's is hidden) unless `others` says so, `client.close` resolved without
+ * closing, and `process.exit` recorded instead of run.
+ */
+function productionExceptionListener() {
+  const client = Sentry.getClient();
+  if (client === undefined) throw new Error("Sentry is not initialised");
+  const before = new Set(process.listeners("uncaughtException"));
+  uncaughtExceptionFactsIntegration().setup?.(client);
+  const listener = process.listeners("uncaughtException").find((l) => !before.has(l)) as Listener;
+  const others: Array<() => void> = [];
+  const realListeners = process.listeners.bind(process);
+  const listeners = vi
+    .spyOn(process, "listeners")
+    .mockImplementation(((event: string) =>
+      event === "uncaughtException"
+        ? [listener, ...others]
+        : realListeners(event as "exit")) as typeof process.listeners);
+  const close = vi.spyOn(client, "close").mockResolvedValue(true);
+  const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+  const restore = (): void => {
+    listeners.mockRestore();
+    close.mockRestore();
+    exit.mockRestore();
+    process.off("uncaughtException", listener);
+  };
+  return { listener, others, close, exit, restore };
+}
+
+describe("the uncaught-exception listener with no other listener (production)", () => {
+  it("reports the first exception, flushes and exits 1 once; a later one is only printed", async () => {
+    const run = productionExceptionListener();
+    try {
+      run.listener(faultQuotingTheCall());
+      await vi.waitFor(() => expect(run.exit).toHaveBeenCalledWith(1));
+      run.listener(new Error(`while exiting ${MESSAGE_CANARY}`));
+      await Sentry.flush(SENTRY_FLUSH_MS);
+
+      expect(run.close).toHaveBeenCalledTimes(1);
+      expect(run.close).toHaveBeenCalledWith(2_000);
+      expect(run.exit).toHaveBeenCalledTimes(1);
+      expect(fatalEvents(capture.sent())).toBe(1);
+      expect(printedText()).toContain("Uncaught exception (PrismaClientValidationError); exiting");
+      expect(printedText()).toContain("Uncaught exception (Error); while exiting");
+      expectNoCanary(capture.sent());
+      expectNoCanary(printedText());
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("still exits for a fault Sentry already captured, without sending it again", async () => {
+    const run = productionExceptionListener();
+    try {
+      const fault = faultQuotingTheCall();
+      Object.defineProperty(fault, "__sentry_captured__", { value: true, enumerable: false });
+      run.listener(fault);
+      await vi.waitFor(() => expect(run.exit).toHaveBeenCalledWith(1));
+      await Sentry.flush(SENTRY_FLUSH_MS);
+
+      expect(fatalEvents(capture.sent())).toBe(0);
+      expect(printedText()).toContain("; exiting");
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("reports a fault whose fields throw on read, and still exits", async () => {
+    const run = productionExceptionListener();
+    try {
+      const hostile = new Proxy(new Error(MESSAGE_CANARY), {
+        get(target, key) {
+          if (key === "code" || key === "message") throw new Error(CAUSE_CANARY);
+          return Reflect.get(target, key);
+        },
+      });
+      expect(() => run.listener(hostile)).not.toThrow();
+      await vi.waitFor(() => expect(run.exit).toHaveBeenCalledWith(1));
+      await Sentry.flush(SENTRY_FLUSH_MS);
+
+      expect(capture.sent()).toContain("Uncaught exception (UnreadableFault)");
+      expectNoCanary(capture.sent());
+      expectNoCanary(printedText());
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("exits on a later exception once the other listener is gone, without a second report", async () => {
+    const run = productionExceptionListener();
+    try {
+      run.others.push(() => undefined);
+      run.listener(faultQuotingTheCall());
+      expect(run.exit).not.toHaveBeenCalled();
+      run.others.length = 0;
+      run.listener(new Error(`later ${MESSAGE_CANARY}`));
+      await vi.waitFor(() => expect(run.exit).toHaveBeenCalledWith(1));
+      await Sentry.flush(SENTRY_FLUSH_MS);
+
+      expect(run.close).toHaveBeenCalledTimes(1);
+      expect(fatalEvents(capture.sent())).toBe(1);
+      expectNoCanary(capture.sent());
+      expectNoCanary(printedText());
+    } finally {
+      run.restore();
     }
   });
 });

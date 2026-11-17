@@ -35,6 +35,9 @@
  *   - The SDK's `onFatalError` option is not consulted (Klorn sets none).
  *   - When a later exception finds the other listeners gone, the process exits
  *     at once; the SDK waits 2 s first.
+ *   - The fault itself is not marked captured (only the fresh Error is), so
+ *     one object rejecting several promises is reported once per rejection;
+ *     the SDK reports it once.
  *   - The printed line is not sandboxed from Sentry's console breadcrumbs
  *     (`consoleSandbox` is not exported by @sentry/node), so it can ride on a
  *     later event; it holds the same facts and frames as the event.
@@ -86,22 +89,28 @@ interface FaultFacts {
   readonly kind: string;
 }
 
+/** `read()`, or `fallback` when reading the fault throws. */
+function attempt<T>(read: () => T, fallback: T): T {
+  try {
+    return read();
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Read once, guarded: a thrown value can be anything, a getter on it can
  * throw, and a throw here would escape the listener (Node then exits 7 from
- * the exception path, unflushed, printing the new error).
+ * the exception path, unflushed, printing the new error). Facts and frames are
+ * read apart, so a stack that cannot be read still leaves the class and code.
  */
 function readFaultFacts(fault: unknown): FaultFacts {
-  try {
-    const facts = dbFailureFacts(fault);
-    return {
-      facts,
-      frames: originalFrames(fault),
-      kind: fault instanceof Error ? facts.errorName : `non-Error ${typeof fault}`,
-    };
-  } catch {
-    return { facts: UNREADABLE_FACTS, frames: null, kind: UNREADABLE_FACTS.errorName };
-  }
+  const facts = attempt(() => dbFailureFacts(fault), UNREADABLE_FACTS);
+  const frames = attempt(() => originalFrames(fault), null);
+  const isError = attempt(() => fault instanceof Error, false);
+  const kind =
+    facts === UNREADABLE_FACTS || isError ? facts.errorName : `non-Error ${typeof fault}`;
+  return { facts, frames, kind };
 }
 
 /** A field of the fault, or undefined when it is not an object or the read throws. */
