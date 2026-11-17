@@ -3177,6 +3177,49 @@ const en: Record<string, string> = {
   "rulesDsl.notApplicable":
     "Your rules are over the text editor's limits (500 rules, 64 KiB), so they can't be applied from here. Edit them in the list above.",
   "rulesDsl.error.failed": "Something went wrong. Try again.",
+  "rulesDsl.problem.missing-version": "The first statement must be: version 1",
+  "rulesDsl.problem.unsupported-version":
+    'Unsupported version "{found}". This Klorn reads version 1.',
+  "rulesDsl.problem.unexpected-token.version-repeated": "version 1 may appear only once, first.",
+  "rulesDsl.problem.unexpected-token.statement":
+    "Unexpected {found}. A line starts with rule, when, then, note or disabled.",
+  "rulesDsl.problem.unexpected-token.expected-here": "Expected {expected} here.",
+  "rulesDsl.problem.unexpected-token.expected-found": "Expected {expected}, found {found}.",
+  "rulesDsl.problem.unexpected-token.extra": "Unexpected {found} after the statement.",
+  "rulesDsl.problem.unterminated-string": "This string has no closing quote on the same line.",
+  "rulesDsl.problem.bad-escape": 'Only \\" and \\\\ can be escaped inside a string.',
+  "rulesDsl.problem.forbidden-character":
+    "Invisible, control or text-direction character {codePoint} is not allowed.",
+  "rulesDsl.problem.statement-outside-rule":
+    '"{keyword}" belongs inside a rule. Start one with: rule "name"',
+  "rulesDsl.problem.empty-rule-name": "A rule needs a name.",
+  "rulesDsl.problem.duplicate-clause": 'This rule already has a "{keyword}" line.',
+  "rulesDsl.problem.too-many-conditions":
+    "A rule has one sender condition. Write another rule for another sender.",
+  "rulesDsl.problem.missing-when": 'This rule needs a sender: when from address "…"',
+  "rulesDsl.problem.missing-then":
+    "This rule needs a lane: then lane PUSH (or PUSH, MEETING, QUEUE, INFO or SILENT)",
+  "rulesDsl.problem.unknown-lane":
+    'Unknown lane "{token}". Use PUSH, MEETING, QUEUE, INFO or SILENT.',
+  "rulesDsl.problem.retired-lane":
+    '"{token}" is a retired value, not a lane. Use PUSH, MEETING, QUEUE, INFO or SILENT.',
+  "rulesDsl.problem.invalid-address": '"{value}" is not a valid email address.',
+  "rulesDsl.problem.invalid-domain": '"{value}" is not a valid domain. Write it like example.com.',
+  "rulesDsl.problem.public-domain":
+    '"{value}" is a public mailbox domain anyone can mail from. Write a rule for one address instead.',
+  "rulesDsl.problem.duplicate-sender":
+    "The rule on line {firstLine} already covers this sender. One rule per sender.",
+  "rulesDsl.problem.text-too-large": "The rules text can be at most {maxKib} KiB.",
+  "rulesDsl.problem.too-many-rules": "At most {max} rules per file.",
+  "rulesDsl.problem.string-too-long.name": "A rule name can be at most {max} characters.",
+  "rulesDsl.problem.string-too-long.note": "A note can be at most {max} characters.",
+  "rulesDsl.problem.string-too-long.sender": "A sender can be at most {max} characters.",
+  "rulesDsl.problem.string-too-long.sender-lowercased":
+    "A sender can be at most {max} characters (counted lowercased).",
+  "rulesDsl.problem.expect.string": 'a "quoted" string',
+  "rulesDsl.problem.expect.lane": "a lane (PUSH, MEETING, QUEUE, INFO or SILENT)",
+  "rulesDsl.problem.expect.either": "{a} or {b}",
+  "rulesDsl.problem.found.string": "a string",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "Organization",
   "settings.org.loading": "Loading your organization…",

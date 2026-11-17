@@ -3308,6 +3308,53 @@ const de: Record<string, string> = {
   "rulesDsl.notApplicable":
     "Deine Regeln überschreiten die Grenzen des Texteditors (500 Regeln, 64 KiB) und können hier nicht angewendet werden. Bearbeite sie in der Liste oben.",
   "rulesDsl.error.failed": "Etwas ist schiefgelaufen. Versuche es erneut.",
+  "rulesDsl.problem.missing-version": "Die erste Anweisung muss lauten: version 1",
+  "rulesDsl.problem.unsupported-version":
+    'Nicht unterstützte Version "{found}". Dieses Klorn liest version 1.',
+  "rulesDsl.problem.unexpected-token.version-repeated":
+    "version 1 darf nur einmal vorkommen, und zwar ganz am Anfang.",
+  "rulesDsl.problem.unexpected-token.statement":
+    "Unerwartet: {found}. Eine Zeile beginnt mit rule, when, then, note oder disabled.",
+  "rulesDsl.problem.unexpected-token.expected-here": "Hier wird {expected} erwartet.",
+  "rulesDsl.problem.unexpected-token.expected-found": "Erwartet: {expected}, gefunden: {found}.",
+  "rulesDsl.problem.unexpected-token.extra":
+    "Nach der Anweisung steht noch etwas Unerwartetes: {found}.",
+  "rulesDsl.problem.unterminated-string":
+    "Diese Zeichenfolge hat in derselben Zeile kein schließendes Anführungszeichen.",
+  "rulesDsl.problem.bad-escape": 'In einer Zeichenfolge können nur \\" und \\\\ maskiert werden.',
+  "rulesDsl.problem.forbidden-character":
+    "{codePoint}: Unsichtbare Zeichen, Steuerzeichen und Zeichen zur Textrichtung sind nicht erlaubt.",
+  "rulesDsl.problem.statement-outside-rule":
+    '"{keyword}" gehört in eine Regel. Beginne mit: rule "Name"',
+  "rulesDsl.problem.empty-rule-name": "Eine Regel braucht einen Namen.",
+  "rulesDsl.problem.duplicate-clause": 'Diese Regel hat bereits eine Zeile "{keyword}".',
+  "rulesDsl.problem.too-many-conditions":
+    "Eine Regel hat genau eine Absenderbedingung. Schreibe für einen anderen Absender eine weitere Regel.",
+  "rulesDsl.problem.missing-when": 'Diese Regel braucht einen Absender: when from address "…"',
+  "rulesDsl.problem.missing-then":
+    "Diese Regel braucht eine Spur: then lane PUSH (oder PUSH, MEETING, QUEUE, INFO oder SILENT)",
+  "rulesDsl.problem.unknown-lane":
+    'Unbekannte Spur "{token}". Verwende PUSH, MEETING, QUEUE, INFO oder SILENT.',
+  "rulesDsl.problem.retired-lane":
+    '"{token}" ist ein veralteter Wert und keine Spur. Verwende PUSH, MEETING, QUEUE, INFO oder SILENT.',
+  "rulesDsl.problem.invalid-address": '"{value}" ist keine gültige E-Mail-Adresse.',
+  "rulesDsl.problem.invalid-domain":
+    '"{value}" ist keine gültige Domain. Schreibe sie wie example.com.',
+  "rulesDsl.problem.public-domain":
+    '"{value}" ist eine öffentliche Maildomain, von der jeder senden kann. Schreibe stattdessen eine Regel für eine einzelne Adresse.',
+  "rulesDsl.problem.duplicate-sender":
+    "Die Regel in Zeile {firstLine} deckt diesen Absender bereits ab. Pro Absender gibt es eine Regel.",
+  "rulesDsl.problem.text-too-large": "Der Regeltext darf höchstens {maxKib} KiB groß sein.",
+  "rulesDsl.problem.too-many-rules": "Höchstens {max} Regeln pro Datei.",
+  "rulesDsl.problem.string-too-long.name": "Ein Regelname darf höchstens {max} Zeichen lang sein.",
+  "rulesDsl.problem.string-too-long.note": "Eine Notiz darf höchstens {max} Zeichen lang sein.",
+  "rulesDsl.problem.string-too-long.sender": "Ein Absender darf höchstens {max} Zeichen lang sein.",
+  "rulesDsl.problem.string-too-long.sender-lowercased":
+    "Ein Absender darf höchstens {max} Zeichen lang sein (in Kleinbuchstaben gezählt).",
+  "rulesDsl.problem.expect.string": 'eine Zeichenfolge in "Anführungszeichen"',
+  "rulesDsl.problem.expect.lane": "eine Spur (PUSH, MEETING, QUEUE, INFO oder SILENT)",
+  "rulesDsl.problem.expect.either": "{a} oder {b}",
+  "rulesDsl.problem.found.string": "eine Zeichenfolge",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "Organisation",
   "settings.org.loading": "Organisation wird geladen …",
