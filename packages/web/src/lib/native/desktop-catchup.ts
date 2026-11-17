@@ -36,7 +36,9 @@
 // gate again — quiet hours answer `held` until they end, then the mail toasts
 // once (alone, or in one summary), unless it was read, cleared, handled or
 // already toasted meanwhile; an opt-out answers nothing and the row is
-// recorded. As on the Mac (HeldBanners.swift), meetings are not held;
+// recorded. An untagged Slack PUSH frame (api slack/notify.ts sends one when
+// the push will not ring) is held the same way and answered by the same
+// question. As on the Mac (HeldBanners.swift), meetings are not held;
 // (c) rows younger than SETTLE_MS are left to their live frame, and (d) the
 // category opt-outs are honoured (allowedKindsFromConfig).
 //
@@ -69,6 +71,10 @@ export const MEETING_CATCHUP_WINDOW_MS = 2 * 60 * 1000;
  *  row, then evaluates the gate, then sends the (tagged or untagged) frame. */
 export const SETTLE_MS = 30 * 1000;
 export const ALL_ALERT_KINDS: ReadonlySet<DesktopAlertKind> = new Set(["push", "meeting"]);
+/** The bell row type of a Slack PUSH (api slack/notify.ts SLACK_NOTIFICATION_TYPE). */
+export const SLACK_ROW_TYPE = "slack";
+/** Bell row ids are uuids; anything else is never held or asked about. */
+const ROW_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** Held ids kept at most, newest kept (the Mac's HeldBanners.maxHeld). Far
  *  above the bell's 30-row page, the only rows a catch-up can ask about; the
@@ -190,14 +196,27 @@ export interface LiveAlertPlan {
   next: AlertLedger;
 }
 
+/** The row id of a Slack PUSH frame, or null for any other payload. */
+function slackFrameId(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
+  const { type, id } = payload as Record<string, unknown>;
+  return type === SLACK_ROW_TYPE && typeof id === "string" && ROW_ID_PATTERN.test(id) ? id : null;
+}
+
 /** One real-time frame. A tagged frame banners once. An untagged interrupt
- *  frame (the server's gate said no) about one mail not toasted yet is held
- *  for the urgent-mail catch-up, which asks the gate again and toasts it once
- *  quiet hours end; any other untagged interrupt frame is recorded silently
- *  so catch-up never banners it later. Never establishes the baseline. */
+ *  frame (the server's gate said no) about one mail not toasted yet, or an
+ *  untagged Slack PUSH frame, is held for the urgent catch-up, which asks the
+ *  gate again and toasts it once quiet hours end; any other untagged
+ *  interrupt frame is recorded silently so catch-up never banners it later.
+ *  Never establishes the baseline. */
 export function planLiveAlert(ledger: AlertLedger, payload: unknown): LiveAlertPlan {
   const tagged = planDesktopAlert(ledger.notified, payload);
   if (tagged.alert) return { alert: tagged.alert, next: { ...ledger, notified: tagged.seen } };
+  const slackId = slackFrameId(payload);
+  if (slackId) {
+    if (ledger.notified.includes(slackId)) return { alert: null, next: ledger };
+    return { alert: null, next: holding(ledger, slackId) };
+  }
   const interrupt = interruptFromRow(payload);
   if (!interrupt || ledger.notified.includes(interrupt.alert.id)) {
     return { alert: null, next: ledger };

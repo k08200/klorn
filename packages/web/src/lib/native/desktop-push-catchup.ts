@@ -13,6 +13,13 @@
 // closed" as soon as one of them arrived while it was not running, as the
 // Mac's HeldBanners does.
 //
+// A Slack PUSH whose live frame came untagged during quiet hours is held the
+// same way and joins this catch-up: the server answers it under the same gate
+// (unread, last 72h, not answered in Slack since) with the row's own text, the
+// live Slack push's; one toast for one, and a summary that holds one is
+// titled "N urgent messages …". Only held Slack rows are asked about: one that
+// rang live, or that the budget held back, never toasts late.
+//
 // The bell rows say which interrupts the shell may have missed (their id is
 // the id the live frame carried, so one ledger covers both paths). The server
 // (GET /api/notifications/desktop-catchup, api notify/desktop-catchup.ts)
@@ -23,15 +30,21 @@
 // Pure functions over plain inputs, unit-tested without a browser
 // (packages/api/src/__tests__/web-desktop-push-catchup.test.ts).
 
-import type { DesktopCatchUpResponse, DesktopMissedMail } from "@klorn/contract";
+import type {
+  DesktopCatchUpResponse,
+  DesktopMissedMail,
+  DesktopMissedSlack,
+} from "@klorn/contract";
 import {
+  BODY_MAX,
   type DesktopAlert,
+  MESSAGE_SCAN_MAX,
   mailLedgerKey,
   parseMailToast,
   TITLE_MAX,
   TODAY_PATH,
 } from "./desktop-alerts";
-import { type AlertLedger, recording, SETTLE_MS } from "./desktop-catchup";
+import { type AlertLedger, recording, SETTLE_MS, SLACK_ROW_TYPE } from "./desktop-catchup";
 
 /** Only mail from the last 72 hours is caught up (decision N6). */
 export const PUSH_CATCHUP_WINDOW_MS = 72 * 60 * 60 * 1000;
@@ -64,24 +77,33 @@ function isMailRow(record: Record<string, unknown>): boolean {
   );
 }
 
-/** Sort the bell's unseen mail rows. Rows younger than SETTLE_MS are left to
- *  their live frame (neither asked nor recorded). Never throws. */
+/** A Slack PUSH row whose live frame the shell held (quiet hours). */
+function isHeldSlackRow(record: Record<string, unknown>, id: string, held: ReadonlySet<string>) {
+  return record.type === SLACK_ROW_TYPE && held.has(id);
+}
+
+/** Sort the bell's unseen mail rows and held Slack rows. Rows younger than
+ *  SETTLE_MS are left to their live frame (neither asked nor recorded). Never
+ *  throws. */
 export function pushCatchUpCandidates(
   ledger: AlertLedger,
   rows: readonly unknown[],
   nowMs: number,
 ): PushCandidates {
   const known = new Set(ledger.notified);
+  const held = new Set(ledger.held ?? []);
   const ask: string[] = [];
   const settled: string[] = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     if (typeof row !== "object" || row === null || Array.isArray(row)) continue;
     const record = row as Record<string, unknown>;
     const id = rowId(record);
-    if (!id || known.has(id) || !isMailRow(record)) continue;
+    if (!id || known.has(id)) continue;
+    const mailRow = isMailRow(record);
+    if (!mailRow && !isHeldSlackRow(record, id, held)) continue;
     known.add(id);
     // Another row for a mail already toasted: never again (one mail, one toast).
-    if (known.has(mailLedgerKey(record.sourceEmailId as string))) {
+    if (mailRow && known.has(mailLedgerKey(record.sourceEmailId as string))) {
       settled.push(id);
       continue;
     }
@@ -114,21 +136,58 @@ function parseMissedMail(value: unknown): DesktopMissedMail | null {
   };
 }
 
+/** A held Slack row's toast, capped as a live toast is. Null when malformed. */
+function parseMissedSlack(value: unknown): DesktopMissedSlack | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const id = rowId(record);
+  const { title, body, createdAt } = record;
+  if (!id || typeof title !== "string" || typeof body !== "string") return null;
+  if (typeof createdAt !== "string") return null;
+  const cleanTitle = title.trim();
+  if (!cleanTitle) return null;
+  return {
+    id,
+    title: cleanTitle.slice(0, TITLE_MAX),
+    body: body.slice(0, MESSAGE_SCAN_MAX).trim().slice(0, BODY_MAX),
+    createdAt,
+  };
+}
+
+/** The optional summary titles that are well formed (a server before them sends none). */
+function optionalTitles(record: Record<string, unknown>) {
+  const titles: Partial<
+    Pick<
+      DesktopCatchUpResponse,
+      "heldSummaryTitle" | "messagesSummaryTitle" | "heldMessagesSummaryTitle"
+    >
+  > = {};
+  for (const key of [
+    "heldSummaryTitle",
+    "messagesSummaryTitle",
+    "heldMessagesSummaryTitle",
+  ] as const) {
+    const value = record[key];
+    if (typeof value === "string" && value.includes(COUNT_TOKEN)) titles[key] = value;
+  }
+  return titles;
+}
+
 /** The server's answer, validated. Null for anything malformed. */
 export function parseCatchUpResponse(raw: unknown): DesktopCatchUpResponse | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-  const { held, summaryTitle, heldSummaryTitle, items } = raw as Record<string, unknown>;
+  const record = raw as Record<string, unknown>;
+  const { held, summaryTitle, items, slack } = record;
   if (typeof held !== "boolean" || typeof summaryTitle !== "string" || !Array.isArray(items)) {
     return null;
   }
   if (!summaryTitle.includes(COUNT_TOKEN)) return null;
   const parsed = items.map(parseMissedMail).filter((m): m is DesktopMissedMail => m !== null);
-  // Optional (a server before it sends none): only its wording is lost.
-  const quietTitle =
-    typeof heldSummaryTitle === "string" && heldSummaryTitle.includes(COUNT_TOKEN)
-      ? { heldSummaryTitle }
-      : {};
-  return { held, summaryTitle, ...quietTitle, items: parsed };
+  const slackItems = (Array.isArray(slack) ? slack : [])
+    .map(parseMissedSlack)
+    .filter((m): m is DesktopMissedSlack => m !== null);
+  // Optional titles: a malformed or missing one costs only its wording.
+  return { held, summaryTitle, ...optionalTitles(record), items: parsed, slack: slackItems };
 }
 
 /** "A, B, C +2": distinct senders in order, at most `max` named. */
@@ -139,10 +198,14 @@ export function formatSenders(names: readonly string[], max = SUMMARY_SENDERS_MA
   return rest > 0 ? `${shown} +${rest}` : shown;
 }
 
-/** One toast for what was missed: the mail itself when one, else a summary
- *  that opens Today. `items` newest first. */
+/** A missed mail, or a Slack message held during quiet hours. */
+export type MissedItem = DesktopMissedMail | DesktopMissedSlack;
+
+/** One toast for what was missed: the mail itself (opening it) or the Slack
+ *  message (as its live toast, opening nothing) when one, else a summary that
+ *  opens Today. `items` newest first. */
 export function summarizeMissed(
-  items: readonly DesktopMissedMail[],
+  items: readonly MissedItem[],
   summaryTitle: string,
 ): DesktopAlert | null {
   if (items.length === 0) return null;
@@ -153,7 +216,7 @@ export function summarizeMissed(
       kind: "push",
       title: first.title,
       body: first.body,
-      open: `/email/${first.emailId}`,
+      open: "emailId" in first ? `/email/${first.emailId}` : null,
     };
   }
   return {
@@ -209,21 +272,39 @@ export function planPushCatchUp({
   const named = new Set(sent);
   const answered = ask.filter((id) => named.has(id));
   const asked = new Set(answered);
-  const missed = distinctMail(response.items.filter((item) => asked.has(item.id)));
-  // Every mail waited live → "during quiet hours"; any mail missed while
-  // closed → "while Klorn was closed" (the Mac's SummaryKind rule). A hold
-  // from a gate lookup error (rare) also reads as quiet hours.
-  const allHeldLive = missed.every((item) => held.has(item.id));
-  const title =
-    allHeldLive && response.heldSummaryTitle ? response.heldSummaryTitle : response.summaryTitle;
+  const mail = distinctMail(response.items.filter((item) => asked.has(item.id)));
+  const slack = (response.slack ?? []).filter((item) => asked.has(item.id));
+  const missed = slack.length > 0 ? newestFirst([...mail, ...slack]) : mail;
   return {
-    toast: summarizeMissed(missed, title),
+    toast: summarizeMissed(missed, summaryTitleFor(response, missed, held, slack.length > 0)),
     next: recording(ledger, [
       ...answered,
       ...settled,
-      ...missed.map((item) => mailLedgerKey(item.emailId)),
+      ...mail.map((item) => mailLedgerKey(item.emailId)),
     ]),
   };
+}
+
+/** Every item waited live → "during quiet hours"; any mail missed while
+ *  closed → "while Klorn was closed" (the Mac's SummaryKind rule). A hold
+ *  from a gate lookup error (rare) also reads as quiet hours. With a Slack
+ *  message among them, the "urgent messages" wording of the same pick. */
+function summaryTitleFor(
+  response: DesktopCatchUpResponse,
+  missed: readonly MissedItem[],
+  held: ReadonlySet<string>,
+  withSlack: boolean,
+): string {
+  const allHeldLive = missed.every((item) => held.has(item.id));
+  const quiet = withSlack ? response.heldMessagesSummaryTitle : response.heldSummaryTitle;
+  const closed = withSlack ? response.messagesSummaryTitle : undefined;
+  if (allHeldLive && quiet) return quiet;
+  return closed ?? response.summaryTitle;
+}
+
+/** Newest first, by the row's time; ties keep their order. */
+function newestFirst(items: readonly MissedItem[]): MissedItem[] {
+  return [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 /** One entry per mail, the first (newest) row kept: two rows for one mail are

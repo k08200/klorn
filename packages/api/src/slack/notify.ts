@@ -5,7 +5,14 @@
  * hours and focus window), then the open clients and device push with the
  * urgent-interrupt category. The bell row's link is the Slack permalink; the
  * device push opens Today (service workers only open same-origin paths).
- * Held by the budget: a bell row the user can find later, no ring.
+ * Held by the budget: a bell row the user can find later, no ring. Will not
+ * ring (quiet hours, focus, the urgent-mail opt-out): the bell row plus its
+ * live frame, which desktopAlertTag leaves untagged, so no device push and no
+ * banner; the Windows shell holds such a frame and toasts it once quiet hours
+ * end (packages/web lib/native/desktop-push-catchup.ts, as for PUSH mail). The
+ * row names its episode (dedupeKey slack:<episodeId>), so that late toast is
+ * dropped once the user replied in Slack. `ring: false` (a late re-judge,
+ * rejudge.ts) asks for the bell row only.
  *
  * Slack's share is bounded so other people's messages cannot crowd out mail:
  * at most SLACK_RINGS_PER_DAY Slack rings a (UTC) day (past it, a bell row
@@ -39,6 +46,8 @@ export interface SlackPushInput {
   preview: string;
   reason: string;
   link: string | null;
+  /** False: a bell row only, never a ring or a live frame. Default true. */
+  ring?: boolean;
   now?: Date;
 }
 
@@ -86,16 +95,15 @@ async function writeHeldRow(
   }
 }
 
-async function ring(
+/** The bell's real-time frame, tagged for a desktop banner only where the gate allows one. */
+async function sendLiveFrame(
   userId: string,
   notification: { id: string; createdAt: Date },
   content: { title: string; body: string },
   link: string | null,
-  language: string,
 ): Promise<void> {
-  const [{ pushNotification }, { sendPushNotification }, { desktopAlertTag }] = await Promise.all([
+  const [{ pushNotification }, { desktopAlertTag }] = await Promise.all([
     import("../websocket.js"),
-    import("../notify/push.js"),
     import("../notify/desktop-alert.js"),
   ]);
   pushNotification(userId, {
@@ -107,6 +115,29 @@ async function ring(
     ...(link ? { link } : {}),
     ...(await desktopAlertTag(userId, "push")),
   });
+}
+
+/** Names the episode on a row admitPushNotification wrote, as a held row is named. */
+async function linkRowToEpisode(notificationId: string, episodeId: string): Promise<void> {
+  try {
+    await prisma.notification.updateMany({
+      where: { id: notificationId, dedupeKey: null },
+      data: { dedupeKey: `slack:${episodeId}` },
+    });
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+  }
+}
+
+async function ring(
+  userId: string,
+  notification: { id: string; createdAt: Date },
+  content: { title: string; body: string },
+  link: string | null,
+  language: string,
+): Promise<void> {
+  await sendLiveFrame(userId, notification, content, link);
+  const { sendPushNotification } = await import("../notify/push.js");
   await sendPushNotification(
     userId,
     {
@@ -139,7 +170,7 @@ export async function notifySlackPush(input: SlackPushInput): Promise<SlackPushO
     message: content.body,
     ...(input.link ? { link: input.link } : {}),
   };
-  if (today.rings >= SLACK_RINGS_PER_DAY) {
+  if (input.ring === false || today.rings >= SLACK_RINGS_PER_DAY) {
     await writeHeldRow(input.userId, input.episodeId, row);
     return "held";
   }
@@ -152,7 +183,11 @@ export async function notifySlackPush(input: SlackPushInput): Promise<SlackPushO
     await writeHeldRow(input.userId, input.episodeId, row);
     return "held";
   }
-  if (admission.status === "unbudgeted") return "unbudgeted";
+  if (admission.status === "unbudgeted") {
+    await linkRowToEpisode(admission.notification.id, input.episodeId);
+    await sendLiveFrame(input.userId, admission.notification, content, input.link);
+    return "unbudgeted";
+  }
   await ring(input.userId, admission.notification, content, input.link, language);
   return "admitted";
 }

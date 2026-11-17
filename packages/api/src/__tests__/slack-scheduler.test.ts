@@ -12,6 +12,8 @@ const purge = vi.hoisted(() => ({
 vi.mock("../slack/purge.js", () => purge);
 const sweep = vi.hoisted(() => ({ judgeReadySlackEpisodes: vi.fn(async () => 0) }));
 vi.mock("../slack/judge-sweep.js", () => sweep);
+const rejudge = vi.hoisted(() => ({ rejudgeFallbackSlackEpisodes: vi.fn(async () => 0) }));
+vi.mock("../slack/rejudge.js", () => rejudge);
 vi.mock("../scheduler-lease.js", () => ({
   createSchedulerLease: () => ({
     runExclusive: async (work: () => Promise<void>) => (await work(), true),
@@ -74,6 +76,18 @@ describe("slackSchedulerTick", () => {
     await slackSchedulerTick(at(30_000));
     await slackSchedulerTick(at(60_000));
     expect(sweep.judgeReadySlackEpisodes).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-judges keyword-fallback verdicts after the judge pass, only while on", async () => {
+    const order: string[] = [];
+    sweep.judgeReadySlackEpisodes.mockImplementation(async () => (order.push("judge"), 0));
+    rejudge.rejudgeFallbackSlackEpisodes.mockImplementation(async () => (order.push("rejudge"), 0));
+    await slackSchedulerTick(T0);
+    expect(rejudge.rejudgeFallbackSlackEpisodes).not.toHaveBeenCalled();
+    process.env.SLACK_ENABLED = "true";
+    await slackSchedulerTick(at(30_000));
+    expect(rejudge.rejudgeFallbackSlackEpisodes).toHaveBeenCalledWith(at(30_000));
+    expect(order).toEqual(["judge", "rejudge"]);
   });
 
   it("a failing purge is reported, not thrown, and retried after the interval, not every tick", async () => {

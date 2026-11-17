@@ -16,6 +16,15 @@ import { slackPlainText } from "./text.js";
 
 /** The short reason kept on the episode after the text expires. */
 export const SLACK_REASON_MAX = 200;
+/** The judge's mark for a verdict no model made (poc-judge.ts keywordFallbackJudgement). */
+export const SLACK_FALLBACK_SOURCE = "keyword-fallback";
+
+export interface SlackVerdict {
+  tier: LiveTier;
+  reason: string;
+  /** A Slack item skips every shortcut, so the model or the keyword fallback decided. */
+  source: "llm" | typeof SLACK_FALLBACK_SOURCE;
+}
 const MESSAGE_CHARS = 600;
 const EPISODE_CHARS = 1500;
 const MESSAGE_SEPARATOR = " | ";
@@ -45,13 +54,16 @@ export function slackEpisodeText(messages: ReadonlyArray<{ text: string }>): str
  * Null when no message has any text left (nothing to judge). Judged as
  * backlog, i.e. outside the slice of the daily cap reserved for incoming mail:
  * Slack volume is set by other people and must never leave mail unjudged.
+ * `source` says whether a model made the verdict ("llm") or the judge fell
+ * back to keywords because none answered ("keyword-fallback"): only the
+ * latter is re-judged later (rejudge.ts).
  */
 export async function judgeSlackEpisode(input: {
   userId: string;
   channelType: string;
   mentionsUser: boolean;
   messages: ReadonlyArray<{ text: string }>;
-}): Promise<{ tier: LiveTier; reason: string } | null> {
+}): Promise<SlackVerdict | null> {
   const lines = slackEpisodeLines(input.messages);
   if (lines.length === 0) return null;
   const [credentials, language] = await Promise.all([
@@ -77,5 +89,6 @@ export async function judgeSlackEpisode(input: {
   return {
     tier: toLiveTier(judgement.tier),
     reason: judgement.reason.slice(0, SLACK_REASON_MAX),
+    source: judgement.source === SLACK_FALLBACK_SOURCE ? SLACK_FALLBACK_SOURCE : "llm",
   };
 }

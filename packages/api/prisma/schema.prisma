@@ -378,12 +378,22 @@ model SlackEpisode {
   reason        String?
   judgedAt      DateTime?
   notifiedAt    DateTime?
+  /// Where the stored verdict came from: "llm" | "keyword-fallback" (the judge
+  /// could not reach a model). Null before 2026-11-17 and for "Could not be judged".
+  verdictSource String?
+  /// The one re-judge of a keyword-fallback verdict was claimed (rejudge.ts);
+  /// released only when the model was still unreachable.
+  rejudgedAt    DateTime?
+  /// The user replied in the conversation after this episode's last message:
+  /// no ring from then on, whatever the verdict (episodes.ts).
+  answeredAt    DateTime?
   createdAt     DateTime        @default(now())
   messages      SlackMessage[]
 
   @@index([connectionId, channelId, threadKey, status])
   @@index([connectionId, status])
   @@index([status, lastMessageAt])
+  @@index([verdictSource, rejudgedAt, lastMessageAt]) // the fallback re-judge pass
   @@index([userId, createdAt])
   @@index([createdAt]) // the 90-day purge
 }

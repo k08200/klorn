@@ -19,10 +19,18 @@
  * (packages/web lib/native/desktop-push-catchup.ts), and which of the two
  * summary titles fits: quiet hours held mail it saw ring live, or it was
  * closed.
+ *
+ * Held Slack PUSH rows (slack/notify.ts sends an untagged frame when the push
+ * will not ring) are answered too, under the same gate: this user's Slack
+ * rows, asked about, unread (neither read nor cleared), from the last 72
+ * hours, whose episode the user did not answer in Slack since. The toast is
+ * the row's own title and message, the live Slack push's text. A summary
+ * holding one takes the "urgent messages" titles.
  */
 
-import type { DesktopCatchUpResponse } from "@klorn/contract";
+import type { DesktopCatchUpResponse, DesktopMissedSlack } from "@klorn/contract";
 import { prisma } from "../db.js";
+import { SLACK_NOTIFICATION_TYPE } from "../slack/notify.js";
 import { evaluateNotificationGate } from "./notification-prefs.js";
 import { getUserNotificationLanguage, notificationCopy } from "./notification-strings.js";
 import { openPushMail, unreadUrgentMailRows } from "./open-push-mail.js";
@@ -33,6 +41,8 @@ export const DESKTOP_CATCHUP_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const DESKTOP_CATCHUP_MAX_IDS = 30;
 const ID_MAX = 64;
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+/** A Slack bell row names its episode as dedupeKey "slack:<episodeId>" (slack/notify.ts). */
+const SLACK_ROW_KEY_PREFIX = "slack:";
 
 /** The bell row ids in `?ids=a,b,c`, or null when the list is malformed. */
 export function parseCatchUpIds(raw: unknown): string[] | null {
@@ -55,19 +65,22 @@ export async function desktopCatchUp(
   const titles = {
     summaryTitle: copy.missedWhileClosed("{count}"),
     heldSummaryTitle: copy.heldDuringQuietHours("{count}"),
+    messagesSummaryTitle: copy.messagesWhileClosed("{count}"),
+    heldMessagesSummaryTitle: copy.messagesDuringQuietHours("{count}"),
   };
-  if (ids.length === 0) return { held: false, ...titles, items: [] };
+  if (ids.length === 0) return { held: false, ...titles, items: [], slack: [] };
 
   const gate = await evaluateNotificationGate(userId, "email_urgent", now);
   if (!gate.allowed) {
-    return { held: gate.reason === "quiet_hours", ...titles, items: [] };
+    return { held: gate.reason === "quiet_hours", ...titles, items: [], slack: [] };
   }
 
+  const since = new Date(now.getTime() - DESKTOP_CATCHUP_WINDOW_MS);
   const rows = await prisma.notification.findMany({
     where: {
       ...unreadUrgentMailRows(userId),
       id: { in: [...ids] },
-      createdAt: { gte: new Date(now.getTime() - DESKTOP_CATCHUP_WINDOW_MS) },
+      createdAt: { gte: since },
     },
     select: { id: true, sourceEmailId: true, createdAt: true },
   });
@@ -82,5 +95,54 @@ export async function desktopCatchUp(
     body: m.body,
     createdAt: m.createdAt.toISOString(),
   }));
-  return { held: false, ...titles, items };
+  return { held: false, ...titles, items, slack: await heldSlackRows(userId, ids, since) };
+}
+
+/** The asked Slack PUSH rows that still deserve a toast, newest first. */
+async function heldSlackRows(
+  userId: string,
+  ids: readonly string[],
+  since: Date,
+): Promise<DesktopMissedSlack[]> {
+  const rows = await prisma.notification.findMany({
+    where: {
+      userId,
+      type: SLACK_NOTIFICATION_TYPE,
+      isRead: false,
+      id: { in: [...ids] },
+      createdAt: { gte: since },
+    },
+    select: { id: true, title: true, message: true, createdAt: true, dedupeKey: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (rows.length === 0) return [];
+  const answered = await answeredEpisodeIds(userId, rows);
+  return rows
+    .filter((row) => !answered.has(episodeIdOf(row.dedupeKey) ?? ""))
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      body: row.message,
+      createdAt: row.createdAt.toISOString(),
+    }));
+}
+
+function episodeIdOf(dedupeKey: string | null): string | null {
+  return dedupeKey?.startsWith(SLACK_ROW_KEY_PREFIX)
+    ? dedupeKey.slice(SLACK_ROW_KEY_PREFIX.length)
+    : null;
+}
+
+/** Of these rows' episodes, the ones the user replied to in Slack since. */
+async function answeredEpisodeIds(
+  userId: string,
+  rows: ReadonlyArray<{ dedupeKey: string | null }>,
+): Promise<Set<string>> {
+  const episodeIds = rows.map((row) => episodeIdOf(row.dedupeKey)).filter((id) => id !== null);
+  if (episodeIds.length === 0) return new Set();
+  const answered = await prisma.slackEpisode.findMany({
+    where: { userId, id: { in: episodeIds }, answeredAt: { not: null } },
+    select: { id: true },
+  });
+  return new Set(answered.map((episode) => episode.id));
 }
