@@ -56,17 +56,11 @@ function sign(rawBody: string): string {
 
 async function buildApp() {
   const { webhookRoutes } = await import("../routes/webhook.js");
+  const { registerJsonBodyParser } = await import("../json-body-parser.js");
   const app = Fastify();
-  // Mirror index.ts: capture the raw body so signature verification sees the
-  // exact bytes Paddle signed.
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
-    (req as unknown as { rawBody: string }).rawBody = body as string;
-    try {
-      done(null, JSON.parse(body as string));
-    } catch (err) {
-      done(err as Error);
-    }
-  });
+  // The production parser (index.ts): signature verification must see the
+  // exact bytes Paddle signed in its rawBody.
+  registerJsonBodyParser(app);
   await app.register(webhookRoutes, { prefix: "/api/webhook" });
   return app;
 }

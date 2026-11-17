@@ -4,7 +4,12 @@
  *
  * Dark until KAKAO_IMPORT_ENABLED (Fastify's default 404, even
  * unauthenticated); every route is requireAuth + cohortGate and acts on the
- * session user's own rows only. Two steps: POST /preview parses the file and
+ * session user's own rows only. The list and the delete are the way out: they
+ * stay open to a user who owns an import while the flag or the cohort is closed
+ * to them (owner-exit-gate.ts), so turning the flag off never traps an imported
+ * chat; preview, upload and the one-import read stay dark.
+ *
+ * Two steps: POST /preview parses the file and
  * returns its speakers and counts, storing nothing; POST / re-sends the file
  * with the speaker the user picked as themselves and the consent that it holds
  * other people's messages, and stores the in-window messages for processing.
@@ -28,12 +33,14 @@ import {
   createKakaoImport,
   deleteKakaoImport,
   getKakaoImport,
+  hasKakaoImport,
   listKakaoImports,
 } from "../kakao-import/store.js";
 import { kakaoWindow, previewKakaoExport, selectWindowMessages } from "../kakao-import/window.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { type OwnerExit, ownerExitCohortGate, ownerExitGate } from "./owner-exit-gate.js";
 import { type RouteRateLimit, rateLimitHook } from "./rate-limit-hook.js";
 
 const PREVIEW_LIMIT: RouteRateLimit = { max: 30, timeWindow: "1 hour" };
@@ -263,19 +270,97 @@ async function deleteHandler(request: IdRequest, reply: FastifyReply) {
   return deleted ? reply.code(HTTP_NO_CONTENT).send() : sendError(reply, "not-found");
 }
 
+/** Owners are users with an import, in any status; scoped to their own rows. */
+const KAKAO_OWNER_EXIT: OwnerExit = { surface: "kakao-import", owns: hasKakaoImport };
+
+type RouteHook = ReturnType<typeof rateLimitHook>;
+
+/** One per-user budget per action, shared by every route that spends it. */
+interface KakaoLimits {
+  readonly preview: RouteHook;
+  readonly import: RouteHook;
+  readonly read: RouteHook;
+  readonly delete: RouteHook;
+}
+
+/**
+ * The list and the delete: open to the cohort like the rest, and also to a user
+ * who owns an import while the flag or the cohort is closed to them. Everyone
+ * else gets the same 404 as the dark routes.
+ */
+function wayOutRoutes(limits: KakaoLimits): (app: FastifyInstance) => Promise<void> {
+  return async function routes(app: FastifyInstance) {
+    app.addHook("onRequest", ownerExitGate(KAKAO_OWNER_EXIT, kakaoImportLive));
+    app.get(
+      "/",
+      {
+        preHandler: [
+          requireAuth,
+          ownerExitCohortGate(KAKAO_OWNER_EXIT, KAKAO_IMPORT_FLAGS),
+          limits.read,
+        ],
+        config: { rateLimit: READ_LIMIT },
+      },
+      async (request) => ({ imports: await listKakaoImports(getUserId(request)) }),
+    );
+    app.delete<{ Params: { id: string } }>(
+      "/:id",
+      {
+        preHandler: [
+          requireAuth,
+          ownerExitCohortGate(KAKAO_OWNER_EXIT, KAKAO_IMPORT_FLAGS),
+          limits.delete,
+        ],
+        config: { rateLimit: DELETE_LIMIT },
+      },
+      deleteHandler,
+    );
+  };
+}
+
+/** Preview, upload and the one-import read: dark while the flag is off, the cohort only. */
+function uploadRoutes(limits: KakaoLimits): (app: FastifyInstance) => Promise<void> {
+  return async function routes(app: FastifyInstance) {
+    app.addHook("onRequest", darkRouteGate(kakaoImportLive));
+    // Scoped to this plugin. The file limit is one byte over the cap, so a file
+    // over it is refused rather than silently cut to size.
+    await app.register(multipart, {
+      limits: {
+        fileSize: KAKAO_MAX_FILE_BYTES + 1,
+        files: 1,
+        fields: UPLOAD_FIELDS.size,
+        fieldSize: FIELD_MAX_BYTES,
+        parts: UPLOAD_FIELDS.size + 1,
+      },
+    });
+    app.post(
+      "/preview",
+      {
+        preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), limits.preview],
+        config: { rateLimit: PREVIEW_LIMIT },
+      },
+      previewHandler,
+    );
+    app.post(
+      "/",
+      {
+        preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), limits.import],
+        config: { rateLimit: IMPORT_LIMIT },
+      },
+      importHandler,
+    );
+    app.get<{ Params: { id: string } }>(
+      "/:id",
+      {
+        preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), limits.read],
+        config: { rateLimit: READ_LIMIT },
+      },
+      getHandler,
+    );
+  };
+}
+
 export async function kakaoImportRoutes(app: FastifyInstance) {
-  app.addHook("onRequest", darkRouteGate(kakaoImportLive));
-  // Scoped to this plugin. The file limit is one byte over the cap, so a file
-  // over it is refused rather than silently cut to size.
-  await app.register(multipart, {
-    limits: {
-      fileSize: KAKAO_MAX_FILE_BYTES + 1,
-      files: 1,
-      fields: UPLOAD_FIELDS.size,
-      fieldSize: FIELD_MAX_BYTES,
-      parts: UPLOAD_FIELDS.size + 1,
-    },
-  });
   const perUser = (name: string, limit: RouteRateLimit) =>
     rateLimitHook(
       app,
@@ -283,49 +368,12 @@ export async function kakaoImportRoutes(app: FastifyInstance) {
       (request) => `kakao-import:${name}:user:${getUserId(request)}`,
       RATE_LIMITED,
     );
-  const previewLimit = perUser("preview", PREVIEW_LIMIT);
-  const importLimit = perUser("import", IMPORT_LIMIT);
-  const readLimit = perUser("read", READ_LIMIT);
-  const deleteLimit = perUser("delete", DELETE_LIMIT);
-
-  app.post(
-    "/preview",
-    {
-      preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), previewLimit],
-      config: { rateLimit: PREVIEW_LIMIT },
-    },
-    previewHandler,
-  );
-  app.post(
-    "/",
-    {
-      preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), importLimit],
-      config: { rateLimit: IMPORT_LIMIT },
-    },
-    importHandler,
-  );
-  app.get(
-    "/",
-    {
-      preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), readLimit],
-      config: { rateLimit: READ_LIMIT },
-    },
-    async (request) => ({ imports: await listKakaoImports(getUserId(request)) }),
-  );
-  app.get<{ Params: { id: string } }>(
-    "/:id",
-    {
-      preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), readLimit],
-      config: { rateLimit: READ_LIMIT },
-    },
-    getHandler,
-  );
-  app.delete<{ Params: { id: string } }>(
-    "/:id",
-    {
-      preHandler: [requireAuth, cohortGate(KAKAO_IMPORT_FLAGS), deleteLimit],
-      config: { rateLimit: DELETE_LIMIT },
-    },
-    deleteHandler,
-  );
+  const limits: KakaoLimits = {
+    preview: perUser("preview", PREVIEW_LIMIT),
+    import: perUser("import", IMPORT_LIMIT),
+    read: perUser("read", READ_LIMIT),
+    delete: perUser("delete", DELETE_LIMIT),
+  };
+  await app.register(wayOutRoutes(limits));
+  await app.register(uploadRoutes(limits));
 }

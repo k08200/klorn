@@ -62,6 +62,7 @@ import {
   googleDriveRoutesEnabled,
 } from "../drive/drive-scope.js";
 import { DRIVE_LINK_STATE_MARKER } from "../drive/providers/google-auth.js";
+import { kakaoImportWayOut } from "../kakao-import/store.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
 import { boundedFromValue, extractEmailAddress } from "../mail/email-address.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
@@ -89,6 +90,7 @@ import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
+import { addressLogTag } from "../security/address-log-tag.js";
 import { clientAddress } from "../security/client-address.js";
 import {
   clearLoginAttempts,
@@ -517,15 +519,14 @@ export function authRoutes(app: FastifyInstance) {
       // what the central error handler renders for the per-IP limiter
       // ({ error: <message> }) so the lockout is not an account-existence
       // oracle, and each locked attempt is logged for lockout-DoS detection
-      // (email hashed — no PII in logs).
+      // (the address as a keyed tag: a plain hash of it could be checked
+      // against a list of guessed addresses).
       const throttleRemainingMs = loginThrottleRemainingMs(normalizedEmail);
       if (throttleRemainingMs > 0) {
         const retryAfterSec = Math.ceil(throttleRemainingMs / 1000);
         const retryAfterMin = Math.ceil(retryAfterSec / 60);
         request.log.warn(
-          {
-            account: crypto.createHash("sha256").update(normalizedEmail).digest("hex").slice(0, 12),
-          },
+          { account: addressLogTag(normalizedEmail) },
           "per-account login throttle tripped",
         );
         return reply
@@ -653,7 +654,7 @@ export function authRoutes(app: FastifyInstance) {
       // Only promote a VERIFIED account: a self-serve unverified row on an
       // ADMIN_EMAILS address (pre-registration) must not auto-escalate to ADMIN
       // before the real owner proves ownership (security audit 2026-07-21).
-      if (user.role !== "ADMIN" && user.emailVerified && isAdminEmail(user.email)) {
+      if (user.role !== "ADMIN" && user.emailVerified && isAdminEmail(user.email, user.id)) {
         await prisma.user
           .update({ where: { id: user.id }, data: { role: "ADMIN" } })
           .catch((err) => {
@@ -773,6 +774,10 @@ export function authRoutes(app: FastifyInstance) {
           // web shows the KakaoTalk import panel in Settings → Integrations
           // only when this is true — the same answer /api/kakao-import gives.
           kakaoImport: kakaoImportOpenTo(user.id),
+          // True when the import is closed to this user but they still own an
+          // import: Settings then shows the list and delete only, the routes'
+          // way out (routes/kakao-import.ts), so a closed flag traps no chat.
+          kakaoImportWayOut: await kakaoImportWayOut(user.id),
         },
       });
     } catch {

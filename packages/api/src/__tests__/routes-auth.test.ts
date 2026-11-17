@@ -75,6 +75,8 @@ const REHASH_WAIT = { timeout: 15_000, interval: 50 };
 
 type StoredWaitlist = { email: string; status: string };
 const waitlistByEmail = new Map<string, StoredWaitlist>();
+/** Users who own a KakaoTalk import (prisma.kakaoImport.findFirst below). */
+const kakaoOwners = new Set<string>();
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -186,6 +188,12 @@ vi.mock("../db.js", () => {
       deleteMany: vi.fn(async () => ({ count: 0 })),
       update: vi.fn(async () => ({})),
       count: vi.fn(async () => 1),
+    },
+    // /me's kakaoImportWayOut asks whether a user owns a KakaoTalk import.
+    kakaoImport: {
+      findFirst: vi.fn(async ({ where }: { where: { userId: string } }) =>
+        kakaoOwners.has(where.userId) ? { id: "import-1" } : null,
+      ),
     },
   };
   return { prisma, db: prisma };
@@ -896,6 +904,33 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.close();
   });
 
+  it("logs a locked account as a keyed tag, never the address or its plain hash", async () => {
+    const { LOGIN_THROTTLE_MAX_FAILURES } = await import("../security/login-throttle.js");
+    const { addressLogTag } = await import("../security/address-log-tag.js");
+    const { authRoutes } = await import("../routes/auth.js");
+    const lines: string[] = [];
+    const app = Fastify({
+      logger: { level: "warn", stream: { write: (line: string) => lines.push(line) } },
+    });
+    await app.register(authRoutes, { prefix: "/api/auth" });
+    const address = "tagged.account@example.com";
+
+    for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES; i++) {
+      expect((await failLogin(app, address)).statusCode).toBe(401);
+    }
+    expect((await failLogin(app, address)).statusCode).toBe(429);
+    await app.close();
+
+    const tripped = lines.filter((line) => line.includes("per-account login throttle tripped"));
+    expect(tripped).toHaveLength(1);
+    expect(JSON.parse(tripped[0] as string).account).toBe(addressLogTag(address));
+    const plainHash = crypto.createHash("sha256").update(address).digest("hex").slice(0, 12);
+    for (const line of lines) {
+      expect(line).not.toContain("tagged.account");
+      expect(line).not.toContain(plainHash);
+    }
+  });
+
   it("counts unknown-email failures the same way (no existence oracle via lockout)", async () => {
     const { LOGIN_THROTTLE_MAX_FAILURES } = await import("../security/login-throttle.js");
     const app = await buildApp();
@@ -1420,6 +1455,57 @@ describe("GET /api/auth/me", () => {
       delete process.env.KAKAO_IMPORT_ENABLED;
       delete process.env.ROLLOUT_COHORT_USER_IDS;
     }
+    await app.close();
+  });
+
+  it("reports user.kakaoImportWayOut: closed to this user, but they own an import", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "kakao-way-out@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user as { id: string; kakaoImport: boolean; kakaoImportWayOut: boolean };
+    const { prisma } = await import("../db.js");
+    const ownership = vi.mocked(prisma.kakaoImport.findFirst);
+
+    delete process.env.KAKAO_IMPORT_ENABLED;
+    const { id, kakaoImportWayOut } = await me();
+    expect(kakaoImportWayOut).toBe(false);
+    try {
+      kakaoOwners.add(id);
+      expect(await me()).toMatchObject({ kakaoImport: false, kakaoImportWayOut: true });
+      expect(ownership).toHaveBeenLastCalledWith({ where: { userId: id }, select: { id: true } });
+      // Open to the user: the whole panel, no way-out mode and no lookup.
+      process.env.KAKAO_IMPORT_ENABLED = "true";
+      ownership.mockClear();
+      expect(await me()).toMatchObject({ kakaoImport: true, kakaoImportWayOut: false });
+      expect(ownership).not.toHaveBeenCalled();
+      // Closed again by a narrowed cohort: the way out again.
+      process.env.KAKAO_IMPORT_ENABLED = "cohort";
+      process.env.ROLLOUT_COHORT_USER_IDS = "someone-else";
+      expect(await me()).toMatchObject({ kakaoImport: false, kakaoImportWayOut: true });
+    } finally {
+      kakaoOwners.delete(id);
+      delete process.env.KAKAO_IMPORT_ENABLED;
+      delete process.env.ROLLOUT_COHORT_USER_IDS;
+    }
+    await app.close();
+  });
+
+  it("a failed ownership lookup leaves /me answering, with no way out shown", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "kakao-way-out-db@example.com");
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.kakaoImport.findFirst).mockRejectedValueOnce(new Error("pool timeout"));
+    delete process.env.KAKAO_IMPORT_ENABLED;
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: authHeader(token),
+    });
+    // Not the 401 /me answers for anything that throws: the client would sign out.
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.kakaoImportWayOut).toBe(false);
     await app.close();
   });
 

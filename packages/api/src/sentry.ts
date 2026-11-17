@@ -14,16 +14,24 @@
  * Every outbound payload goes through security/sentry-scrub.ts first. That is
  * four hooks, not one: a BYOK provider key travelling in a request URL reaches
  * Sentry on breadcrumbs and spans, which `beforeSend` cannot see.
+ *
+ * An unhandled rejection or an uncaught exception reaches Sentry and the
+ * console as facts only (sentry-process-faults.ts), not as the SDK's default
+ * integrations would send and print it.
  */
 
 import * as Sentry from "@sentry/node";
-import { isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
+import { isDataWipeFenceError } from "./privacy/data-wipe-fence-error.js";
 import {
   scrubSentryBreadcrumb,
   scrubSentryErrorEvent,
   scrubSentrySpan,
   scrubSentryTransaction,
 } from "./security/sentry-scrub.js";
+import {
+  uncaughtExceptionFactsIntegration,
+  unhandledRejectionFactsIntegration,
+} from "./sentry-process-faults.js";
 
 const DSN = process.env.SENTRY_DSN || "";
 const ENV = process.env.NODE_ENV || "development";
@@ -88,6 +96,13 @@ export function buildSentryInitOptions(dsn: string, env: string): Sentry.NodeOpt
       // skips data-wipe fence rejections and cost-cap refusals; keep that the
       // only path, as in v10.
       Sentry.fastifyIntegration({ shouldHandleError: () => false }),
+      // In place of the SDK's defaults of the same names, which send and print
+      // the raw error (message and cause): a missing `.catch` on a Prisma call
+      // would put the call's arguments in Sentry and the platform log. These
+      // send and print facts and frames, and keep the SDK's process behaviour
+      // (sentry-process-faults.ts).
+      uncaughtExceptionFactsIntegration(),
+      unhandledRejectionFactsIntegration(),
     ],
     // All four hooks, because a credential reaches Sentry by four routes and
     // scrubbing one of them is what let a BYOK Gemini key ride out on a

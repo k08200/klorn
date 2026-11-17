@@ -255,7 +255,7 @@ export async function finishGooglePrimaryConnect(
     !!tokens.refresh_token || !!existingIntegrationToken?.refreshToken;
   if (!integrationHasUsableRefreshToken) {
     console.warn(
-      `[GOOGLE] Refusing to save partial integration token for ${user.email} — refresh_token missing, no prior token to preserve`,
+      `[GOOGLE] Refusing to save partial integration token for user ${user.id} — refresh_token missing, no prior token to preserve`,
     );
     return { next: "/settings?google=offline_access_denied" };
   }

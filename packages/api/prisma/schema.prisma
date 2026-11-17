@@ -2683,6 +2683,9 @@ model Commitment {
   @@unique([userId, dedupKey])
   @@index([userId, status, dueAt])
   @@index([userId, threadId])
+  // The KakaoTalk orphan sweep (kakao-import/commitments.ts) reads Kakao
+  // commitments of every user; without this it read the whole table each run.
+  @@index([sourceType, threadId])
 }
 
 // AI-generated step-by-step fulfillment plan for a commitment.

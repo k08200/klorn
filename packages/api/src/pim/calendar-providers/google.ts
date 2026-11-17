@@ -136,10 +136,15 @@ async function freeBusyAcrossCalendars(calendar: calendar_v3.Calendar, window: C
   // calendar the token can't read returns { errors:[...] } with empty busy. If
   // we ignored it, that calendar would look free - a silent false "no conflict".
   // Surface it so the gap is visible instead of becoming a missed double-book.
-  const failed = Object.entries(calendars).filter(([, c]) => (c?.errors?.length ?? 0) > 0);
+  // Counted by Google's reason code, never by calendar id: an id is an address
+  // (the user's own, or a colleague's shared calendar).
+  const failed = Object.values(calendars).filter((c) => (c?.errors?.length ?? 0) > 0);
   if (failed.length > 0) {
-    const reasons = failed.map(([id, c]) => `${id}:${c?.errors?.[0]?.reason ?? "unknown"}`);
-    console.warn(`[CALENDAR] freebusy partial — ${failed.length} calendar(s) failed: ${reasons}`);
+    const reasons = countFreeBusyReasons(failed);
+    const summary = Object.entries(reasons)
+      .map(([reason, count]) => `${reason}=${count}`)
+      .join(", ");
+    console.warn(`[CALENDAR] freebusy partial — ${failed.length} calendar(s) failed: ${summary}`);
     captureError(new Error("freebusy partial result"), {
       tags: { scope: "calendar.freebusy_partial" },
       extra: { failedCount: failed.length, reasons },
@@ -147,6 +152,21 @@ async function freeBusyAcrossCalendars(calendar: calendar_v3.Calendar, window: C
   }
 
   return summarizeFreeBusy(calendars, calendarLabelMap(list.data.items));
+}
+
+/** Google's reason codes are tokens (notFound, internalError); anything else is counted as "other". */
+const FREEBUSY_REASON = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+
+function countFreeBusyReasons(
+  failed: ReadonlyArray<calendar_v3.Schema$FreeBusyCalendar | undefined>,
+): Record<string, number> {
+  const reasons = failed.map((c) => {
+    const raw = c?.errors?.[0]?.reason;
+    return typeof raw === "string" && FREEBUSY_REASON.test(raw) ? raw : "other";
+  });
+  return Object.fromEntries(
+    [...new Set(reasons)].map((reason) => [reason, reasons.filter((r) => r === reason).length]),
+  );
 }
 
 function toPersonFreeBusy(
