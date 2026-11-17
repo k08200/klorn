@@ -6,13 +6,17 @@
  * their availability and their reason from this one plan, so the two can not
  * drift. The archive rule is the reader's Archive button's rule (demo mail, an
  * account that needs reconnecting); the lane rule is the reader's lane menu's
- * (demo mail, a mail with no lane yet). Reasons are i18n keys; callers
- * translate them.
+ * (demo mail, a mail with no lane yet); Later (a reminder, POST
+ * /api/email/:id/later) is blocked only on demo mail, like the reader's.
+ * Reasons are i18n keys; callers translate them.
+ *
+ * Directions (mobile redesign PR3, MB1, LOCKED 2026-11-14): right is Done
+ * (the archive), left is Later.
  */
 
 import type { LiveTier } from "@klorn/contract";
 
-export type RowActionId = "archive" | "lanes";
+export type RowActionId = "archive" | "lanes" | "later";
 
 export interface RowAction {
   id: RowActionId;
@@ -23,9 +27,10 @@ export interface RowAction {
 export interface RowActionPlan {
   archive: RowAction;
   lanes: RowAction;
-  /** Finger moving right reveals and runs this one. */
+  later: RowAction;
+  /** Finger moving right reveals and runs this one (Done). */
   swipeRight: RowActionId;
-  /** Finger moving left reveals this one (it opens the lane sheet). */
+  /** Finger moving left reveals and runs this one (Later). */
   swipeLeft: RowActionId;
   /** The row's own actions, in order; a superset of the swipe actions. */
   menu: readonly RowActionId[];
@@ -55,18 +60,27 @@ export function laneBlockedReason(input: Pick<RowActionInput, "isDemo" | "tier">
   return null;
 }
 
+export function laterBlockedReason(input: Pick<RowActionInput, "isDemo">): string | null {
+  return input.isDemo ? REASON_DEMO : null;
+}
+
 export function rowActionPlan(input: RowActionInput): RowActionPlan {
   return {
     archive: { id: "archive", blockedReason: archiveBlockedReason(input) },
     lanes: { id: "lanes", blockedReason: laneBlockedReason(input) },
+    later: { id: "later", blockedReason: laterBlockedReason(input) },
     swipeRight: "archive",
-    swipeLeft: "lanes",
-    menu: ["lanes", "archive"],
+    swipeLeft: "later",
+    menu: ["later", "archive", "lanes"],
   };
+}
+
+/** One of the plan's actions by id. */
+export function planAction(plan: RowActionPlan, id: RowActionId): RowAction {
+  return plan[id];
 }
 
 /** The action a swipe direction maps to, with its availability. */
 export function swipeAction(plan: RowActionPlan, direction: "left" | "right"): RowAction {
-  const id = direction === "right" ? plan.swipeRight : plan.swipeLeft;
-  return id === "archive" ? plan.archive : plan.lanes;
+  return planAction(plan, direction === "right" ? plan.swipeRight : plan.swipeLeft);
 }

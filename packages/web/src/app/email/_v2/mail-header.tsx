@@ -10,6 +10,10 @@
  * select with its counts, and a search button that opens the field in the
  * row. The account and filter menus and Sync move into More there, so
  * nothing the taller header offers is lost.
+ *
+ * Below 600px (mobile redesign PR3, MB1) the lane control is a row of chips
+ * under the header instead (lane-chips.tsx): all five lanes and All, each
+ * with its count, scrolling sideways with a fade at the edge.
  */
 
 import type { EmailLaneCounts, LiveTier } from "@klorn/contract";
@@ -24,6 +28,7 @@ import { sourceGlyph } from "../../../lib/source-provider";
 import { useMailSubscriptionsAvailable } from "../../../lib/use-mail-subscriptions";
 import { useMediaQuery } from "../../../lib/use-media-query";
 import { ComposeIcon, MoreIcon, SearchIcon, SyncIcon } from "./icons";
+import { LaneChips } from "./lane-chips";
 import {
   type AccountOption,
   ALL_ACCOUNTS,
@@ -353,6 +358,13 @@ export function MailHeader(props: MailHeaderProps) {
       <div
         className={`flex items-center gap-2 max-md:flex-col max-md:items-stretch max-md:gap-0 phone-landscape:hidden ${compact ? "flex-col items-stretch" : ""}`}
       >
+        <LaneChips
+          value={view.lane}
+          counts={counts}
+          onChange={(lane) => onChange({ lane })}
+          disabled={threads}
+          className="rail:hidden"
+        />
         <SegmentedControl
           ariaLabel={t("mailV2.lanes.label")}
           segments={segments}
@@ -360,7 +372,7 @@ export function MailHeader(props: MailHeaderProps) {
           value={threads ? null : view.lane}
           onChange={(lane) => onChange({ lane })}
           disabled={threads}
-          className="flex-1 max-md:-mx-4 max-md:scroll-px-4 max-md:px-4"
+          className="flex-1 max-rail:hidden max-md:-mx-4 max-md:scroll-px-4 max-md:px-4"
         />
         <div className={`flex items-center gap-2 ${compact ? "justify-end" : ""}`}>
           {accounts.length > 1 && (

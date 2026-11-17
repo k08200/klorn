@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
 import { homePath, landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
 import { useT } from "../lib/i18n";
+import { isFullScreenReader } from "../lib/mail-routes";
 import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
 import IosInstallHint from "./ios-install-hint";
@@ -70,6 +71,17 @@ const DOCK_SCROLL_PADDING =
   "scroll-pb-[max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] rail:scroll-pb-[calc(72px+env(safe-area-inset-bottom))]";
 const DOCKLESS_SCROLL_PADDING = "max-rail:scroll-pb-[calc(62px+env(safe-area-inset-bottom))]";
 
+/**
+ * The phone reader is full screen (mobile redesign PR3, MB1): no tab bar, no
+ * floating assistant button, no phone header; its own action bar sits on the
+ * bottom edge and pads its own end (reader-v2.tsx), so <main> keeps only the
+ * home-indicator inset below 600px. From 600px it is the dock's clearance.
+ */
+const READER_CLEARANCE =
+  "[--main-clear:env(safe-area-inset-bottom)] rail:[--main-clear:calc(72px+env(safe-area-inset-bottom))] pb-(--main-clear)";
+const READER_SCROLL_PADDING =
+  "scroll-pb-[calc(76px+env(safe-area-inset-bottom))] rail:scroll-pb-[calc(72px+env(safe-area-inset-bottom))]";
+
 function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
@@ -117,6 +129,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const showDock = !DOCKLESS_ROUTES.some((route) => pathname.startsWith(route));
   const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
   const sectionLabel = t(currentSectionLabelKey(pathname, user?.unifiedHome === true));
+  const phoneReader = isFullScreenReader(pathname, user);
+  const clearance = phoneReader
+    ? `${READER_CLEARANCE} ${READER_SCROLL_PADDING}`
+    : showDock
+      ? `${DOCK_CLEARANCE} ${DOCK_SCROLL_PADDING}`
+      : `${DOCKLESS_CLEARANCE} ${DOCKLESS_SCROLL_PADDING}`;
 
   if (!showSidebar) {
     return <>{children}</>;
@@ -142,26 +160,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Phone header (below 600px) — pt-safe respects iPhone notch in PWA.
             The bottom tab bar, plus the bell and the account avatar here, are
             the whole phone nav. */}
-        <div
-          data-testid="phone-header"
-          className="relative z-10 rail:hidden flex items-center gap-3 pl-4 pr-2 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content"
-        >
-          <img src="/brand/mark.svg?v=matte2" alt="" className="h-6 w-6" />
-          <div className="min-w-0">
-            <p className="text-role-body font-semibold leading-none text-ink">Klorn</p>
-            {/* The section name is redundant with each screen's large title, so
+        {!phoneReader && (
+          <div
+            data-testid="phone-header"
+            className="relative z-10 rail:hidden flex items-center gap-3 pl-4 pr-2 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content"
+          >
+            <img src="/brand/mark.svg?v=matte2" alt="" className="h-6 w-6" />
+            <div className="min-w-0">
+              <p className="text-role-body font-semibold leading-none text-ink">Klorn</p>
+              {/* The section name is redundant with each screen's large title, so
                 it's visually hidden — kept in the DOM (sr-only) for screen
                 readers and the navigation e2e checks. */}
-            <p className="sr-only" data-testid="mobile-section-label">
-              {sectionLabel}
-            </p>
+              <p className="sr-only" data-testid="mobile-section-label">
+                {sectionLabel}
+              </p>
+            </div>
+            <PhoneHeaderActions />
           </div>
-          <PhoneHeaderActions />
-        </div>
+        )}
         <main
           id="main"
           tabIndex={-1}
-          className={`scroll-stable relative z-10 flex-1 overflow-y-auto ${showDock ? `${DOCK_CLEARANCE} ${DOCK_SCROLL_PADDING}` : `${DOCKLESS_CLEARANCE} ${DOCKLESS_SCROLL_PADDING}`} focus:outline-none`}
+          className={`scroll-stable relative z-10 flex-1 overflow-y-auto ${clearance} focus:outline-none`}
         >
           {/* Inline, so it pushes content down rather than covering it; only on
               the home screen and Settings, where installing is on-topic. */}
@@ -173,7 +193,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Global assistant — bottom-right on every app surface. The chat page
           and the whole assistant hub (W7) are the assistant already, so the
           dock stays out of the way there. */}
-      {showDock && <AssistantDock unified={unifiedHome} />}
+      {showDock && <AssistantDock unified={unifiedHome} fullScreenReader={phoneReader} />}
     </div>
   );
 }

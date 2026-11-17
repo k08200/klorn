@@ -21,6 +21,15 @@
  * An optional `leading` control (Mail's select checkbox) is a sibling too: it
  * sits over the unread dot, appears on hover / focus, and stays while
  * `leadingPinned`; the dot yields to it.
+ *
+ * The `brief` variant is Mail's list row (mobile redesign PR3, MB1 "Editorial
+ * Brief", LOCKED 2026-11-14): a 34px monogram, the sender 14.5/600 with the
+ * time 12.5 on the right, the subject 14.5 on one line, then why — a verified
+ * quote in curly quotes, else "Klorn's call · …" in muted ink, else the
+ * snippet (`why`, already worded by the caller; plain text only). The leading
+ * control takes the avatar's place. On a touch screen (hover: none), where
+ * the hover overlay never shows, `touchActions` stays visible instead: one
+ * 44px button that opens the row's actions.
  */
 
 import type { LiveTier, Tier } from "@klorn/contract";
@@ -29,6 +38,7 @@ import type { ReactNode } from "react";
 import { useT } from "../../lib/i18n";
 import { toLiveTier } from "../../lib/tiers";
 import { LANE_INK_CLASS, LaneChip } from "./lane-chip";
+import { MonogramAvatar } from "./monogram-avatar";
 import { SourceBadge, type SourceProvider } from "./source-badge";
 
 export interface MailRowSource {
@@ -77,7 +87,19 @@ export interface MailRowProps {
   leading?: ReactNode;
   /** Keep `leading` visible regardless of hover (a selection is in progress). */
   leadingPinned?: boolean;
+  /** Mail's MB1 list row: avatar, sender and time, subject, why. */
+  variant?: "default" | "brief";
+  /** brief: why the mail is in its lane, already worded; replaces `reason`. */
+  why?: MailRowWhy | null;
+  /** brief: always-visible actions on a touch screen (hover: none). */
+  touchActions?: ReactNode;
   className?: string;
+}
+
+export interface MailRowWhy {
+  /** "quote": verified evidence, ink; "judgment": the judge's own text, muted. */
+  kind: "quote" | "judgment";
+  text: string;
 }
 
 const BODY_CLASS =
@@ -191,10 +213,152 @@ function RowContent(props: MailRowProps) {
   );
 }
 
+/** Line 1 of the brief row: unread, sender, the quiet badges, time. */
+function BriefMeta(props: MailRowProps) {
+  const { t } = useT();
+  const { sender, time, timeIso, tier, source, unread, hasAttachment, tierPending } = props;
+  const timeYields = props.actions
+    ? "transition-opacity duration-120 ease-fluid group-focus-within:opacity-0 group-hover:opacity-0 [@media(hover:none)]:opacity-100"
+    : "";
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {unread && <span className="sr-only">{t("mailRow.unread")}</span>}
+      <span
+        className={`min-w-0 truncate text-[0.90625rem] leading-5 font-semibold ${unread ? "text-ink" : "text-ink-mid"}`}
+      >
+        {sender}
+      </span>
+      {(props.threadCount ?? 0) > 1 && <ThreadCount count={props.threadCount ?? 0} />}
+      {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
+      {tier && <LaneChip tier={tier} />}
+      {!tier && tierPending && (
+        <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-role-caption text-ink-muted">
+          {tierPending}
+        </span>
+      )}
+      {hasAttachment && (
+        <>
+          <PaperclipGlyph />
+          <span className="sr-only">{t("mailRow.hasAttachment")}</span>
+        </>
+      )}
+      <span className="flex-1" />
+      <time
+        dateTime={timeIso}
+        className={`shrink-0 text-[0.78125rem] leading-4 tabular-nums text-ink-muted ${timeYields}`}
+      >
+        {time}
+      </time>
+    </span>
+  );
+}
+
+function BriefContent(props: MailRowProps) {
+  const { subject, snippet, why } = props;
+  return (
+    <>
+      <BriefMeta {...props} />
+      <span
+        className={`min-w-0 truncate text-[0.90625rem] leading-5 ${props.unread ? "font-medium text-ink" : "text-ink-soft"}`}
+      >
+        {subject}
+      </span>
+      {why ? (
+        <span
+          data-testid="row-why"
+          className={`min-w-0 truncate text-[0.78125rem] leading-4 ${why.kind === "quote" ? "text-ink-soft" : "text-ink-muted"}`}
+        >
+          {why.text}
+        </span>
+      ) : snippet ? (
+        <span className="min-w-0 truncate text-[0.78125rem] leading-4 text-ink-muted">
+          {snippet}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/** Shown on hover / focus; also while pinned. On a touch screen, only while pinned. */
+function revealClass(pinned: boolean | undefined): string {
+  return pinned
+    ? ""
+    : "pointer-events-none opacity-0 transition-opacity duration-120 ease-fluid group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100";
+}
+
+/** Mail's MB1 row: the avatar column, the three lines, a 44px touch action. */
+function BriefMailRow(props: MailRowProps) {
+  const { href, onOpen, selected = false, actions, leading, touchActions, className = "" } = props;
+  const current = selected ? ("true" as const) : undefined;
+  const avatarYields = !leading
+    ? ""
+    : props.leadingPinned
+      ? "opacity-0"
+      : "group-focus-within:opacity-0 group-hover:opacity-0";
+  const bodyClass = `focus-ring flex min-h-14 w-full min-w-0 items-start gap-3 py-2.5 pl-4 text-left focus-visible:-outline-offset-2 ${touchActions ? "pr-4 [@media(hover:none)]:pr-14" : "pr-4"}`;
+  const content = (
+    <>
+      <span className="relative mt-0.5 shrink-0">
+        <MonogramAvatar
+          name={props.sender}
+          size={34}
+          testId="row-avatar"
+          className={`transition-opacity duration-120 ease-fluid ${avatarYields}`}
+        />
+        {props.unread && (
+          <span
+            aria-hidden="true"
+            className="absolute -left-2.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-accent-solid"
+          />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <BriefContent {...props} />
+      </span>
+    </>
+  );
+  return (
+    <div
+      data-testid="mail-row"
+      className={`group relative transition-colors duration-120 ease-fluid ${
+        selected
+          ? "bg-accent-solid/6"
+          : "hover:bg-surface-raised focus-within:bg-surface-raised [@media(hover:none)]:hover:bg-transparent"
+      } ${className}`}
+    >
+      {selected && (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-accent-solid" />
+      )}
+      {href ? (
+        <Link href={href} aria-current={current} className={bodyClass}>
+          {content}
+        </Link>
+      ) : (
+        <button type="button" onClick={onOpen} aria-current={current} className={bodyClass}>
+          {content}
+        </button>
+      )}
+      {leading && (
+        // Over the avatar: 16px gutter + 34px avatar + its gap, the row's full height.
+        <div className={`absolute inset-y-0 left-0 flex w-14 ${revealClass(props.leadingPinned)}`}>
+          {leading}
+        </div>
+      )}
+      {actions && <div className={OVERLAY_CLASS}>{actions}</div>}
+      {touchActions && (
+        <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 [@media(hover:none)]:block">
+          {touchActions}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const OVERLAY_CLASS =
   "pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-control bg-surface-panel p-1 opacity-0 shadow-menu ring-1 ring-line-strong transition-opacity duration-120 ease-fluid group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 [@media(hover:none)]:hidden";
 
 export function MailRow(props: MailRowProps) {
+  if (props.variant === "brief") return <BriefMailRow {...props} />;
   const { href, onOpen, selected = false, actions, leading, className = "" } = props;
   const lane = props.lane ? toLiveTier(props.lane) : null;
   const current = selected ? ("true" as const) : undefined;

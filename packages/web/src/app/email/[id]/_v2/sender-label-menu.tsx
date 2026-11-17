@@ -93,7 +93,13 @@ export function SenderLabelMenu({ label, onCorrect }: SenderLabelMenuProps) {
   }
 
   return (
-    <Menu label={accessibleName} sections={sections} active={label.correction !== null} scroll>
+    <Menu
+      label={accessibleName}
+      sections={sections}
+      active={label.correction !== null}
+      scroll
+      tall="phone"
+    >
       <TagIcon />
       <span className="truncate">{current ?? t("mailV2.reader.label.add")}</span>
     </Menu>
