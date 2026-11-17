@@ -8,35 +8,56 @@ export type DslLane = LiveTier;
 
 export const DSL_LANES: readonly DslLane[] = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"];
 
-export type DslErrorCode =
-  | "missing-version"
-  | "unsupported-version"
-  | "unexpected-token"
-  | "unterminated-string"
-  | "bad-escape"
-  | "forbidden-character"
-  | "statement-outside-rule"
-  | "empty-rule-name"
-  | "duplicate-clause"
-  | "too-many-conditions"
-  | "missing-when"
-  | "missing-then"
-  | "unknown-lane"
-  | "retired-lane"
-  | "invalid-address"
-  | "invalid-domain"
-  | "public-domain"
-  | "duplicate-sender"
-  | "text-too-large"
-  | "too-many-rules"
-  | "string-too-long";
+/**
+ * Every code the parser and compiler can emit. Stable: clients switch on it,
+ * and the web has a localized message for each (see errors.ts).
+ */
+export const DSL_ERROR_CODES = [
+  "missing-version",
+  "unsupported-version",
+  "unexpected-token",
+  "unterminated-string",
+  "bad-escape",
+  "forbidden-character",
+  "statement-outside-rule",
+  "empty-rule-name",
+  "duplicate-clause",
+  "too-many-conditions",
+  "missing-when",
+  "missing-then",
+  "unknown-lane",
+  "retired-lane",
+  "invalid-address",
+  "invalid-domain",
+  "public-domain",
+  "duplicate-sender",
+  "text-too-large",
+  "too-many-rules",
+  "string-too-long",
+] as const;
+
+export type DslErrorCode = (typeof DSL_ERROR_CODES)[number];
+
+/**
+ * The values a message is built from (the offending token cut to 40
+ * characters, a limit, a line number), so a client can say it in its own
+ * language. Strings and numbers only. A code that has several distinct
+ * messages (`unexpected-token`, `string-too-long`) carries a `variant`.
+ */
+export type DslParams = Readonly<Record<string, string | number>>;
+
+/** What a failure is, before it is placed at a line and column. */
+export interface DslProblem {
+  code: DslErrorCode;
+  /** English, for API consumers and as the web's fallback. */
+  message: string;
+  params: DslParams;
+}
 
 /** One problem in the text; line and column are 1-based (UTF-16 code units). */
-export interface DslError {
+export interface DslError extends DslProblem {
   line: number;
   column: number;
-  code: DslErrorCode;
-  message: string;
 }
 
 export interface DslFailure {

@@ -3252,6 +3252,57 @@ const es: Record<string, string> = {
   "rulesDsl.notApplicable":
     "Tus reglas superan los límites del editor de texto (500 reglas, 64 KiB), así que no se pueden aplicar desde aquí. Edítalas en la lista de arriba.",
   "rulesDsl.error.failed": "Algo salió mal. Inténtalo de nuevo.",
+  "rulesDsl.problem.missing-version": "La primera instrucción debe ser: version 1",
+  "rulesDsl.problem.unsupported-version":
+    'Versión no admitida: "{found}". Este Klorn lee la versión 1.',
+  "rulesDsl.problem.unexpected-token.version-repeated":
+    "version 1 solo puede aparecer una vez, y al principio.",
+  "rulesDsl.problem.unexpected-token.statement":
+    "Elemento inesperado: {found}. Una línea empieza por rule, when, then, note o disabled.",
+  "rulesDsl.problem.unexpected-token.expected-here": "Aquí se esperaba: {expected}.",
+  "rulesDsl.problem.unexpected-token.expected-found":
+    "Se esperaba {expected}, pero se encontró {found}.",
+  "rulesDsl.problem.unexpected-token.extra":
+    "Hay algo inesperado después de la instrucción: {found}.",
+  "rulesDsl.problem.unterminated-string":
+    "Esta cadena no tiene comillas de cierre en la misma línea.",
+  "rulesDsl.problem.bad-escape": 'Dentro de una cadena solo se pueden escapar \\" y \\\\.',
+  "rulesDsl.problem.forbidden-character":
+    "No se permiten caracteres invisibles, de control ni de dirección del texto ({codePoint}).",
+  "rulesDsl.problem.statement-outside-rule":
+    '"{keyword}" debe ir dentro de una regla. Empieza una con: rule "nombre"',
+  "rulesDsl.problem.empty-rule-name": "Una regla necesita un nombre.",
+  "rulesDsl.problem.duplicate-clause": 'Esta regla ya tiene una línea "{keyword}".',
+  "rulesDsl.problem.too-many-conditions":
+    "Una regla tiene una sola condición de remitente. Escribe otra regla para otro remitente.",
+  "rulesDsl.problem.missing-when": 'Esta regla necesita un remitente: when from address "…"',
+  "rulesDsl.problem.missing-then":
+    "Esta regla necesita un carril: then lane PUSH (o PUSH, MEETING, QUEUE, INFO o SILENT)",
+  "rulesDsl.problem.unknown-lane":
+    'Carril desconocido: "{token}". Usa PUSH, MEETING, QUEUE, INFO o SILENT.',
+  "rulesDsl.problem.retired-lane":
+    '"{token}" es un valor retirado, no un carril. Usa PUSH, MEETING, QUEUE, INFO o SILENT.',
+  "rulesDsl.problem.invalid-address": '"{value}" no es una dirección de correo válida.',
+  "rulesDsl.problem.invalid-domain":
+    '"{value}" no es un dominio válido. Escríbelo como example.com.',
+  "rulesDsl.problem.public-domain":
+    '"{value}" es un dominio de correo público desde el que puede escribir cualquiera. Escribe una regla para una sola dirección.',
+  "rulesDsl.problem.duplicate-sender":
+    "La regla de la línea {firstLine} ya cubre a este remitente. Una regla por remitente.",
+  "rulesDsl.problem.text-too-large":
+    "El texto de las reglas puede ocupar como máximo {maxKib} KiB.",
+  "rulesDsl.problem.too-many-rules": "Como máximo {max} reglas por archivo.",
+  "rulesDsl.problem.string-too-long.name":
+    "El nombre de una regla puede tener como máximo {max} caracteres.",
+  "rulesDsl.problem.string-too-long.note": "Una nota puede tener como máximo {max} caracteres.",
+  "rulesDsl.problem.string-too-long.sender":
+    "Un remitente puede tener como máximo {max} caracteres.",
+  "rulesDsl.problem.string-too-long.sender-lowercased":
+    "Un remitente puede tener como máximo {max} caracteres (contados en minúsculas).",
+  "rulesDsl.problem.expect.string": 'una cadena "entre comillas"',
+  "rulesDsl.problem.expect.lane": "un carril (PUSH, MEETING, QUEUE, INFO o SILENT)",
+  "rulesDsl.problem.expect.either": "{a} o {b}",
+  "rulesDsl.problem.found.string": "una cadena",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "Organización",
   "settings.org.loading": "Cargando tu organización…",

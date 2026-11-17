@@ -105,7 +105,15 @@ function cut(text: string, max: number, forbiddenTo: string): string {
  * multi-line input.
  */
 export function quoteForMessage(text: string): string {
-  return `"${cut(text, RULES_DSL_LIMITS.quoteChars, "�")}"`;
+  return `"${truncateForMessage(text)}"`;
+}
+
+/**
+ * The same cut text without the quotes: what an error carries in `params`, so
+ * a client can put it into a sentence of its own language.
+ */
+export function truncateForMessage(text: string): string {
+  return cut(text, RULES_DSL_LIMITS.quoteChars, "�");
 }
 
 /**

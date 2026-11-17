@@ -507,6 +507,126 @@ describe("review hardening", () => {
   });
 });
 
+describe("error params (what the web localizes from)", () => {
+  const rule = (...lines: string[]) => ok(`rule "a"\n${lines.join("\n")}`);
+
+  it("keeps the English message and adds a params object to every error", () => {
+    const error = firstError(rule('when from address "a@b.co"', "then lane URGENT"));
+    expect(error).toMatchObject({
+      code: "unknown-lane",
+      message: 'Unknown lane "URGENT". Use PUSH, MEETING, QUEUE, INFO or SILENT.',
+      params: { token: "URGENT" },
+    });
+  });
+
+  it("names the retired word the user wrote, not a lane", () => {
+    expect(firstError(rule('when from address "a@b.co"', "then lane auto")).params).toEqual({
+      token: "auto",
+    });
+  });
+
+  it("cuts an offending token to the same 40 characters as the message", () => {
+    const error = firstError(rule('when from address "a@b.co"', `then lane ${"x".repeat(5000)}`));
+    expect(error.params.token).toBe(`${"x".repeat(40)}…`);
+  });
+
+  it("carries the position of a duplicate sender's first rule", () => {
+    const text = ok(
+      'rule "a"\nwhen from address "a@b.co"\nthen lane PUSH\nrule "b"\nwhen from address "A@B.co"\nthen lane INFO',
+    );
+    expect(firstError(text)).toMatchObject({ code: "duplicate-sender", params: { firstLine: 2 } });
+  });
+
+  it("gives each limit its value", () => {
+    expect(firstError(`version 1\n#${"x".repeat(RULES_DSL_LIMITS.maxTextBytes)}`)).toMatchObject({
+      code: "text-too-large",
+      params: { maxKib: 64 },
+    });
+    const many = Array.from(
+      { length: RULES_DSL_LIMITS.maxRules + 1 },
+      (_, i) => `rule "r${i}"\nwhen from address "u${i}@b.co"\nthen lane PUSH`,
+    ).join("\n");
+    expect(firstError(ok(many))).toMatchObject({ code: "too-many-rules", params: { max: 500 } });
+    expect(firstError(ok(`rule "${"n".repeat(121)}"`))).toMatchObject({
+      code: "string-too-long",
+      params: { variant: "name", max: 120 },
+    });
+    expect(firstError(rule(`note "${"n".repeat(501)}"`))).toMatchObject({
+      code: "string-too-long",
+      params: { variant: "note", max: 500 },
+    });
+    expect(firstError(rule(`when from address "${"a".repeat(255)}"`))).toMatchObject({
+      code: "string-too-long",
+      params: { variant: "sender", max: 254 },
+    });
+    expect(
+      firstError(rule(`when from address "${"İ".repeat(200)}"`, "then lane PUSH")),
+    ).toMatchObject({
+      code: "string-too-long",
+      params: { variant: "sender-lowercased", max: 254 },
+    });
+  });
+
+  it("splits the one unexpected-token code into variants, each with what it needs", () => {
+    expect(firstError("version 1\nversion 1").params).toEqual({ variant: "version-repeated" });
+    expect(firstError("version 1\nfoo").params).toEqual({
+      variant: "statement",
+      foundKind: "word",
+      found: "foo",
+    });
+    expect(firstError("version 1\nrule").params).toEqual({
+      variant: "expected-here",
+      expectedKind: "string",
+    });
+    expect(firstError("version 1\nrule foo").params).toEqual({
+      variant: "expected-found",
+      expectedKind: "string",
+      foundKind: "word",
+      found: "foo",
+    });
+    expect(firstError(rule('when from address "a@b.co"', "then lane PUSH extra")).params).toEqual({
+      variant: "extra",
+      foundKind: "word",
+      found: "extra",
+    });
+    expect(firstError(rule('when from address "a@b.co"', 'then lane "x"')).params).toEqual({
+      variant: "expected-found",
+      expectedKind: "lane",
+      foundKind: "string",
+    });
+  });
+
+  it("gives a clause outside a rule, a repeated clause and an invisible character their detail", () => {
+    expect(firstError(ok('when from address "a@b.co"')).params).toEqual({ keyword: "when" });
+    expect(firstError(rule('note "x"', 'note "y"')).params).toEqual({ keyword: "note" });
+    expect(firstError(ok('rule "a\u200bb"')).params).toEqual({ codePoint: "U+200B" });
+  });
+
+  it("quotes a refused sender back as a truncated value", () => {
+    expect(firstError(rule('when from address "nope"', "then lane PUSH")).params).toEqual({
+      value: "nope",
+    });
+    expect(firstError(rule('when from domain "gmail.com"', "then lane PUSH")).params).toEqual({
+      value: "gmail.com",
+    });
+  });
+
+  it("never puts more than 40 characters of user input in a param", () => {
+    for (const text of [
+      ok("x".repeat(5000)),
+      rule('when from address "a@b.co"', `then lane ${"x".repeat(5000)}`),
+      rule(`when from address "${"y".repeat(240)}"`, "then lane PUSH"),
+    ]) {
+      for (const error of errorsOf(text)) {
+        for (const value of Object.values(error.params)) {
+          expect(String(value)).not.toContain("x".repeat(41));
+          expect(String(value)).not.toContain("y".repeat(41));
+        }
+      }
+    }
+  });
+});
+
 describe("the module stays pure", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = join(here, "..", "rules-dsl");

@@ -2986,6 +2986,47 @@ const zh: Record<string, string> = {
   "rulesDsl.notApplicable":
     "你的规则超出了文本编辑器的上限（500 条规则、64 KiB），无法在此应用。请在上方列表中编辑。",
   "rulesDsl.error.failed": "出了点问题。请重试。",
+  "rulesDsl.problem.missing-version": "第一条语句必须是：version 1",
+  "rulesDsl.problem.unsupported-version": '不支持的版本："{found}"。当前的 Klorn 读取 version 1。',
+  "rulesDsl.problem.unexpected-token.version-repeated": "version 1 只能出现一次，且必须在最前面。",
+  "rulesDsl.problem.unexpected-token.statement":
+    "意外的内容：{found}。每一行必须以 rule、when、then、note 或 disabled 开头。",
+  "rulesDsl.problem.unexpected-token.expected-here": "这里需要：{expected}。",
+  "rulesDsl.problem.unexpected-token.expected-found": "需要：{expected}；实际是：{found}。",
+  "rulesDsl.problem.unexpected-token.extra": "语句后面有多余的内容：{found}。",
+  "rulesDsl.problem.unterminated-string": "这个字符串在同一行内没有结束引号。",
+  "rulesDsl.problem.bad-escape": '字符串内只能转义 \\" 和 \\\\。',
+  "rulesDsl.problem.forbidden-character":
+    "不允许使用不可见字符、控制字符或文字方向字符（{codePoint}）。",
+  "rulesDsl.problem.statement-outside-rule":
+    '"{keyword}" 必须写在规则内部。请先用 rule "名称" 开始一条规则。',
+  "rulesDsl.problem.empty-rule-name": "规则需要一个名称。",
+  "rulesDsl.problem.duplicate-clause": '这条规则已经有一行 "{keyword}"。',
+  "rulesDsl.problem.too-many-conditions":
+    "一条规则只能有一个发件人条件。其他发件人请另写一条规则。",
+  "rulesDsl.problem.missing-when": '这条规则需要发件人：when from address "…"',
+  "rulesDsl.problem.missing-then":
+    "这条规则需要通道：then lane PUSH（或 PUSH、MEETING、QUEUE、INFO、SILENT 之一）",
+  "rulesDsl.problem.unknown-lane":
+    '未知的通道："{token}"。请使用 PUSH、MEETING、QUEUE、INFO 或 SILENT。',
+  "rulesDsl.problem.retired-lane":
+    '"{token}" 是已停用的值，不是通道。请使用 PUSH、MEETING、QUEUE、INFO 或 SILENT。',
+  "rulesDsl.problem.invalid-address": '"{value}" 不是有效的邮箱地址。',
+  "rulesDsl.problem.invalid-domain": '"{value}" 不是有效的域名。请写成 example.com 的形式。',
+  "rulesDsl.problem.public-domain":
+    '"{value}" 是任何人都可以使用的公共邮箱域名。请改为针对单个地址写规则。',
+  "rulesDsl.problem.duplicate-sender":
+    "第 {firstLine} 行的规则已经涵盖了这个发件人。每个发件人只能有一条规则。",
+  "rulesDsl.problem.text-too-large": "规则文本最多 {maxKib} KiB。",
+  "rulesDsl.problem.too-many-rules": "每个文件最多 {max} 条规则。",
+  "rulesDsl.problem.string-too-long.name": "规则名称最多 {max} 个字符。",
+  "rulesDsl.problem.string-too-long.note": "备注最多 {max} 个字符。",
+  "rulesDsl.problem.string-too-long.sender": "发件人最多 {max} 个字符。",
+  "rulesDsl.problem.string-too-long.sender-lowercased": "发件人转为小写后最多 {max} 个字符。",
+  "rulesDsl.problem.expect.string": '用 "引号" 括起来的字符串',
+  "rulesDsl.problem.expect.lane": "一个通道（PUSH、MEETING、QUEUE、INFO 或 SILENT）",
+  "rulesDsl.problem.expect.either": "{a} 或 {b}",
+  "rulesDsl.problem.found.string": "字符串",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "组织",
   "settings.org.loading": "正在加载组织…",

@@ -3206,6 +3206,51 @@ const ja: Record<string, string> = {
   "rulesDsl.notApplicable":
     "ルールがテキストエディターの上限（ルール 500 件、64 KiB）を超えているため、ここでは適用できません。上の一覧で編集してください。",
   "rulesDsl.error.failed": "問題が発生しました。もう一度お試しください。",
+  "rulesDsl.problem.missing-version": "最初の文は version 1 にしてください。",
+  "rulesDsl.problem.unsupported-version":
+    '未対応のバージョンです: "{found}"。この Klorn は version 1 を読み込みます。',
+  "rulesDsl.problem.unexpected-token.version-repeated": "version 1 は先頭に一度だけ書けます。",
+  "rulesDsl.problem.unexpected-token.statement":
+    "想定外の入力です: {found}。行は rule、when、then、note、disabled のいずれかで始めてください。",
+  "rulesDsl.problem.unexpected-token.expected-here": "ここには {expected} が必要です。",
+  "rulesDsl.problem.unexpected-token.expected-found":
+    "必要なもの: {expected}。入力されたもの: {found}。",
+  "rulesDsl.problem.unexpected-token.extra": "文の後ろに余分な入力があります: {found}。",
+  "rulesDsl.problem.unterminated-string": "同じ行に文字列の閉じ引用符がありません。",
+  "rulesDsl.problem.bad-escape": '文字列の中でエスケープできるのは \\" と \\\\ だけです。',
+  "rulesDsl.problem.forbidden-character":
+    "不可視文字、制御文字、文字方向制御文字（{codePoint}）は使えません。",
+  "rulesDsl.problem.statement-outside-rule":
+    '"{keyword}" はルールの中に書く必要があります。先に rule "名前" でルールを始めてください。',
+  "rulesDsl.problem.empty-rule-name": "ルールには名前が必要です。",
+  "rulesDsl.problem.duplicate-clause": 'このルールには "{keyword}" の行がすでにあります。',
+  "rulesDsl.problem.too-many-conditions":
+    "ルールに書ける送信者の条件は 1 つだけです。別の送信者には別のルールを書いてください。",
+  "rulesDsl.problem.missing-when": 'このルールには送信者が必要です: when from address "…"',
+  "rulesDsl.problem.missing-then":
+    "このルールにはレーンが必要です: then lane PUSH（PUSH、MEETING、QUEUE、INFO、SILENT のいずれか）",
+  "rulesDsl.problem.unknown-lane":
+    '不明なレーンです: "{token}"。PUSH、MEETING、QUEUE、INFO、SILENT のいずれかを使ってください。',
+  "rulesDsl.problem.retired-lane":
+    '"{token}" は廃止された値で、レーンとしては使えません。PUSH、MEETING、QUEUE、INFO、SILENT のいずれかを使ってください。',
+  "rulesDsl.problem.invalid-address": '"{value}" は有効なメールアドレスではありません。',
+  "rulesDsl.problem.invalid-domain":
+    '"{value}" は有効なドメインではありません。example.com の形式で書いてください。',
+  "rulesDsl.problem.public-domain":
+    '"{value}" は誰でも送信できる公開メールのドメインです。代わりに 1 つのアドレスに対するルールを書いてください。',
+  "rulesDsl.problem.duplicate-sender":
+    "{firstLine} 行目のルールがすでにこの送信者を扱っています。送信者ごとにルールは 1 つです。",
+  "rulesDsl.problem.text-too-large": "ルールのテキストは最大 {maxKib} KiB までです。",
+  "rulesDsl.problem.too-many-rules": "1 つのファイルに書けるルールは最大 {max} 件です。",
+  "rulesDsl.problem.string-too-long.name": "ルール名は最大 {max} 文字までです。",
+  "rulesDsl.problem.string-too-long.note": "メモは最大 {max} 文字までです。",
+  "rulesDsl.problem.string-too-long.sender": "送信者は最大 {max} 文字までです。",
+  "rulesDsl.problem.string-too-long.sender-lowercased":
+    "送信者は小文字にした状態で最大 {max} 文字までです。",
+  "rulesDsl.problem.expect.string": '"引用符"で囲んだ文字列',
+  "rulesDsl.problem.expect.lane": "レーン（PUSH、MEETING、QUEUE、INFO、SILENT のいずれか）",
+  "rulesDsl.problem.expect.either": "{a} または {b}",
+  "rulesDsl.problem.found.string": "文字列",
   // Klorn Teams: Settings → Team organization pages and the invite accept page
   "settings.org.title": "組織",
   "settings.org.loading": "組織を読み込んでいます…",
