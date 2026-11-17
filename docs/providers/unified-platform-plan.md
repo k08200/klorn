@@ -1579,10 +1579,10 @@ OFF. Not flippable until the security review below signs off.
   Only a rejected LOGIN, which needs a full verified TLS session and an IMAP
   greeting first, gets its own hint, because the user has to fix the password. Host
   syntax errors are static messages (they depend on the input, not on the
-  network). Raw library errors are never returned, only logged server-side, and
-  what is logged from a user-chosen server (a library or TLS message) is one line
-  capped at 240 characters (`mail/log-text.ts`), so it cannot forge log lines or
-  flood a log.
+  network). Raw library errors are never returned, and what is logged
+  server-side about them is facts only (class, code, message length;
+  `imap-verify-failure.ts` through `logDbFailure`), never the text a user-chosen
+  server sent, so it cannot forge log lines or flood a log.
 - D6 Every boundary re-checks. `checkImapRow` validates the stored host with the
   grammar for a generic row (and with the exact allowlist and host pin for
   Naver and iCloud, unchanged), so a row edited by hand still cannot reach

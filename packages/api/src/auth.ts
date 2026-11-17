@@ -48,18 +48,20 @@ export function isDemoAccessEnabled(): boolean {
   return isDevOrTestEnv() && process.env.ENABLE_DEMO_USER === "true";
 }
 
-export function isAdminEmail(email: string | null | undefined): boolean {
+/**
+ * Whether `email` is in ADMIN_EMAILS. `userId` is the account asking, for the
+ * audit line: a leaked ADMIN_EMAILS env can be traced after the fact by the
+ * accounts it admitted, without the log holding their addresses.
+ */
+export function isAdminEmail(email: string | null | undefined, userId: string): boolean {
   if (!email) return false;
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  const normalized = email.trim().toLowerCase();
-  const allowed = adminEmails.includes(normalized);
+  const allowed = adminEmails.includes(email.trim().toLowerCase());
   if (allowed) {
-    // Audit log: every env-granted admin access is recorded so a leaked
-    // ADMIN_EMAILS env can be traced after the fact.
-    console.log(`[AUDIT][ADMIN_ENV] env-granted admin access for ${normalized}`);
+    console.log(`[AUDIT][ADMIN_ENV] env-granted admin access for user ${userId}`);
   }
   return allowed;
 }
@@ -351,7 +353,7 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
   // An ADMIN_EMAILS address counts only once verified — the same rule as the
   // /me promotion: register hands out a session before verification, so an
   // unverified row on an unclaimed admin address must not reach admin routes.
-  const isEnvAdmin = user?.emailVerified === true && isAdminEmail(user.email);
+  const isEnvAdmin = user?.emailVerified === true && isAdminEmail(user.email, user.id);
   if (!user || (user.role !== "ADMIN" && !isEnvAdmin)) {
     return reply.code(403).send({ error: "Admin access required" });
   }

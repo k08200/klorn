@@ -41,12 +41,20 @@
 
 import { logDbFailure } from "../report-db-failure.js";
 import { newWork, workStartedAt } from "../work-context.js";
+import { DataWipeFenceError } from "./data-wipe-fence-error.js";
+
+// The error class and its predicate live in a leaf module, so the failure
+// reporters can skip a fence rejection without importing this file (which
+// reports through them). Re-exported for the fence's own callers.
+export {
+  DATA_WIPE_FENCE_MARKER,
+  DATA_WIPE_FENCE_SQLSTATE,
+  DataWipeFenceError,
+  isDataWipeFenceError,
+} from "./data-wipe-fence-error.js";
 
 /** Fence window after the purge commits; far above the snapshot's refresh plus a pool wait. */
 export const DATA_WIPE_FENCE_MS = 5 * 60_000;
-
-/** In the trigger's exception text, so a rejected insert is recognizable. */
-export const DATA_WIPE_FENCE_MARKER = "klorn_data_wipe_fence";
 
 /** Background refresh of the snapshot of recent wipes. */
 export const FENCE_REFRESH_MS = 30_000;
@@ -159,41 +167,6 @@ export const PARENT_SCOPED_MODELS: Record<string, { parent: string; key: string 
   ConversationSummary: { parent: "Conversation", key: "conversationId" },
   CommitmentPath: { parent: "Commitment", key: "commitmentId" },
 };
-
-export class DataWipeFenceError extends Error {
-  readonly statusCode = 409;
-  readonly code = "DATA_WIPE_IN_PROGRESS";
-
-  constructor() {
-    super("This account's data was wiped after this work began, so nothing was written.");
-    this.name = "DataWipeFenceError";
-  }
-}
-
-/** The trigger's SQLSTATE (migration 20261019010000_data_wipe_fence). */
-export const DATA_WIPE_FENCE_SQLSTATE = "KW001";
-
-const PRISMA_REQUEST_ERRORS = new Set([
-  "PrismaClientKnownRequestError",
-  "PrismaClientUnknownRequestError",
-]);
-
-/**
- * True for the app check's error and for the trigger's. Prisma reports the
- * trigger as a known request error with `meta.code` KW001 for raw SQL, and as
- * an unknown request error whose message carries the code for a model query.
- * Only those classes count: a validation error echoes the caller's input, which
- * could contain the marker.
- */
-export function isDataWipeFenceError(err: unknown): boolean {
-  if (err instanceof DataWipeFenceError) return true;
-  if (!(err instanceof Error) || !PRISMA_REQUEST_ERRORS.has(err.constructor.name)) return false;
-  const meta = (err as { meta?: { code?: unknown } }).meta;
-  if (meta?.code === DATA_WIPE_FENCE_SQLSTATE) return true;
-  return (
-    err.message.includes(DATA_WIPE_FENCE_MARKER) && err.message.includes(DATA_WIPE_FENCE_SQLSTATE)
-  );
-}
 
 export interface DataWipeState {
   purgedAt: Date | null;

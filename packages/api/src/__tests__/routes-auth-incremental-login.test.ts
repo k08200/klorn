@@ -174,17 +174,28 @@ describe("Google connect callback → complete (__oauth_state__)", () => {
     vi.mocked(getOAuth2Client).mockReturnValueOnce({
       getToken: vi.fn(async () => ({ tokens: { access_token: "at" } })),
     } as unknown as ReturnType<typeof getOAuth2Client>);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    const res = await callbackThenComplete(
-      app,
-      `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
-      U1,
-    );
+    try {
+      const res = await callbackThenComplete(
+        app,
+        `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+        U1,
+      );
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().next).toBe("/settings?google=offline_access_denied");
-    expect(userTokenUpsert).not.toHaveBeenCalled();
-    expect(registerGmailWatch).not.toHaveBeenCalled();
-    await app.close();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().next).toBe("/settings?google=offline_access_denied");
+      expect(userTokenUpsert).not.toHaveBeenCalled();
+      expect(registerGmailWatch).not.toHaveBeenCalled();
+      // The refusal names the account by its row id, never by its address.
+      const lines = warn.mock.calls.map((args) => args.map(String).join(" "));
+      const refusal = lines.filter((line) => line.includes("Refusing to save partial"));
+      expect(refusal).toHaveLength(1);
+      expect(refusal[0]).toContain("user u1");
+      for (const line of lines) expect(line).not.toContain("login@example.com");
+    } finally {
+      warn.mockRestore();
+      await app.close();
+    }
   });
 });

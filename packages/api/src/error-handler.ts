@@ -1,10 +1,10 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { originalFrames } from "./error-frames.js";
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "./llm/cost-cap-refusal.js";
 import { isLlmFailure, llmFailureFacts } from "./llm/describe-failure.js";
 import { captureLlmFailure } from "./llm/report-llm-failure.js";
 import { DataWipeFenceError, isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
 import { captureDbFailure, dbFailureFacts } from "./report-db-failure.js";
-import { originalFrames } from "./report-failure.js";
 
 /**
  * Global Fastify error handler.

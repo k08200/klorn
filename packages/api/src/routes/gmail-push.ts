@@ -30,6 +30,7 @@ import { getAuthedInboxClient, registerGmailWatch, stopGmailWatch } from "../mai
 import { createSingleFlight } from "../mail/sync-single-flight.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
+import { addressLogTag } from "../security/address-log-tag.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
@@ -228,8 +229,11 @@ export async function gmailPushRoutes(app: FastifyInstance) {
     // Unknown address — ack to drain the subscription, but LOG: if a lookup
     // bug (normalization, unmigrated column) ever lands here for a real
     // account, every realtime push for that user is discarded forever and only
-    // the polling fallback remains. This line is the only signal.
-    console.warn(`[GMAIL-PUSH] no user/linked inbox for address, draining: ${email}`);
+    // the polling fallback remains. This line is the only signal. No row
+    // matched, so there is no id to name: the address goes out as a keyed tag
+    // (repeats of one mailbox line up; addressLogTag(candidate) computed with
+    // the server's JWT_SECRET tells whether a given address is the one).
+    console.warn(`[GMAIL-PUSH] no user/linked inbox for address ${addressLogTag(email)}, draining`);
     return reply.code(204).send();
   });
 

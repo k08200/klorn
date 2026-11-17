@@ -904,6 +904,33 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.close();
   });
 
+  it("logs a locked account as a keyed tag, never the address or its plain hash", async () => {
+    const { LOGIN_THROTTLE_MAX_FAILURES } = await import("../security/login-throttle.js");
+    const { addressLogTag } = await import("../security/address-log-tag.js");
+    const { authRoutes } = await import("../routes/auth.js");
+    const lines: string[] = [];
+    const app = Fastify({
+      logger: { level: "warn", stream: { write: (line: string) => lines.push(line) } },
+    });
+    await app.register(authRoutes, { prefix: "/api/auth" });
+    const address = "tagged.account@example.com";
+
+    for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES; i++) {
+      expect((await failLogin(app, address)).statusCode).toBe(401);
+    }
+    expect((await failLogin(app, address)).statusCode).toBe(429);
+    await app.close();
+
+    const tripped = lines.filter((line) => line.includes("per-account login throttle tripped"));
+    expect(tripped).toHaveLength(1);
+    expect(JSON.parse(tripped[0] as string).account).toBe(addressLogTag(address));
+    const plainHash = crypto.createHash("sha256").update(address).digest("hex").slice(0, 12);
+    for (const line of lines) {
+      expect(line).not.toContain("tagged.account");
+      expect(line).not.toContain(plainHash);
+    }
+  });
+
   it("counts unknown-email failures the same way (no existence oracle via lockout)", async () => {
     const { LOGIN_THROTTLE_MAX_FAILURES } = await import("../security/login-throttle.js");
     const app = await buildApp();
