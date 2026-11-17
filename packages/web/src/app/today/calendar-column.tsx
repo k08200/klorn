@@ -26,7 +26,7 @@ import { useTodayEvents } from "./use-today-data";
 
 const CALENDAR_HREF = "/calendar";
 
-function clock(iso: string, time: TimeContext): string {
+export function clock(iso: string, time: TimeContext): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(time.locale, {
