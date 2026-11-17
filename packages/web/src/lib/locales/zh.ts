@@ -3000,7 +3000,7 @@ const zh: Record<string, string> = {
   "rulesDsl.problem.unterminated-string": "这个字符串在同一行内没有结束引号。",
   "rulesDsl.problem.bad-escape": '字符串内只能转义 \\" 和 \\\\。',
   "rulesDsl.problem.forbidden-character":
-    "不允许使用不可见字符、控制字符或文字方向字符（{codePoint}）。",
+    "{codePoint}：不允许使用不可见字符、控制字符或文字方向字符。",
   "rulesDsl.problem.statement-outside-rule":
     '"{keyword}" 必须写在规则内部。请先用 rule "名称" 开始一条规则。',
   "rulesDsl.problem.empty-rule-name": "规则需要一个名称。",
@@ -3013,11 +3013,11 @@ const zh: Record<string, string> = {
   "rulesDsl.problem.unknown-lane":
     '未知的通道："{token}"。请使用 PUSH、MEETING、QUEUE、INFO 或 SILENT。',
   "rulesDsl.problem.retired-lane":
-    '"{token}" 是已停用的值，不是通道。请使用 PUSH、MEETING、QUEUE、INFO 或 SILENT。',
+    '"{token}" 是已废弃的值，不是通道。请使用 PUSH、MEETING、QUEUE、INFO 或 SILENT。',
   "rulesDsl.problem.invalid-address": '"{value}" 不是有效的邮箱地址。',
   "rulesDsl.problem.invalid-domain": '"{value}" 不是有效的域名。请写成 example.com 的形式。',
   "rulesDsl.problem.public-domain":
-    '"{value}" 是任何人都可以使用的公共邮箱域名。请改为针对单个地址写规则。',
+    '"{value}" 是公共邮箱域名，任何人都可以用它发邮件。请改为针对单个地址写规则。',
   "rulesDsl.problem.duplicate-sender":
     "第 {firstLine} 行的规则已经涵盖了这个发件人。每个发件人只能有一条规则。",
   "rulesDsl.problem.text-too-large": "规则文本最多 {maxKib} KiB。",

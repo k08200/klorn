@@ -3170,13 +3170,14 @@ const ko: Record<string, string> = {
     "version 1은 맨 처음에 한 번만 쓸 수 있습니다.",
   "rulesDsl.problem.unexpected-token.statement":
     "예상하지 못한 입력: {found}. 줄은 rule, when, then, note, disabled 중 하나로 시작해야 합니다.",
-  "rulesDsl.problem.unexpected-token.expected-here": "여기에 필요한 값: {expected}.",
-  "rulesDsl.problem.unexpected-token.expected-found": "필요한 값: {expected}. 입력된 값: {found}.",
+  "rulesDsl.problem.unexpected-token.expected-here": "여기에 필요한 항목: {expected}.",
+  "rulesDsl.problem.unexpected-token.expected-found":
+    "필요한 항목: {expected}. 입력된 값: {found}.",
   "rulesDsl.problem.unexpected-token.extra": "구문 뒤에 불필요한 입력이 있습니다: {found}.",
   "rulesDsl.problem.unterminated-string": "같은 줄에 문자열을 닫는 따옴표가 없습니다.",
   "rulesDsl.problem.bad-escape": '문자열 안에서는 \\" 와 \\\\ 두 가지만 이스케이프할 수 있습니다.',
   "rulesDsl.problem.forbidden-character":
-    "보이지 않는 문자, 제어 문자, 텍스트 방향 문자({codePoint})는 쓸 수 없습니다.",
+    "{codePoint}: 보이지 않는 문자, 제어 문자, 텍스트 방향 문자는 쓸 수 없습니다.",
   "rulesDsl.problem.statement-outside-rule":
     '"{keyword}" 줄은 규칙 안에 있어야 합니다. 먼저 규칙을 시작하세요: rule "이름"',
   "rulesDsl.problem.empty-rule-name": "규칙에는 이름이 필요합니다.",
@@ -3190,7 +3191,7 @@ const ko: Record<string, string> = {
     '알 수 없는 레인: "{token}". PUSH, MEETING, QUEUE, INFO, SILENT 중 하나를 쓰세요.',
   "rulesDsl.problem.retired-lane":
     '사용이 중단된 값이라 레인으로 쓸 수 없습니다: "{token}". PUSH, MEETING, QUEUE, INFO, SILENT 중 하나를 쓰세요.',
-  "rulesDsl.problem.invalid-address": '올바른 이메일 주소가 아닙니다: "{value}"',
+  "rulesDsl.problem.invalid-address": '올바른 이메일 주소가 아닙니다: "{value}".',
   "rulesDsl.problem.invalid-domain": '올바른 도메인이 아닙니다: "{value}". example.com처럼 쓰세요.',
   "rulesDsl.problem.public-domain":
     '누구나 메일을 보낼 수 있는 공용 메일 도메인입니다: "{value}". 대신 주소 하나에 대한 규칙을 쓰세요.',
@@ -3202,7 +3203,7 @@ const ko: Record<string, string> = {
   "rulesDsl.problem.string-too-long.note": "메모는 최대 {max}자까지 쓸 수 있습니다.",
   "rulesDsl.problem.string-too-long.sender": "발신자는 최대 {max}자까지 쓸 수 있습니다.",
   "rulesDsl.problem.string-too-long.sender-lowercased":
-    "발신자는 소문자로 바꿔 센 길이로 최대 {max}자까지 쓸 수 있습니다.",
+    "발신자는 소문자로 변환한 길이 기준으로 최대 {max}자까지 쓸 수 있습니다.",
   "rulesDsl.problem.expect.string": '"따옴표"로 묶은 문자열',
   "rulesDsl.problem.expect.lane": "레인(PUSH, MEETING, QUEUE, INFO, SILENT 중 하나)",
   "rulesDsl.problem.expect.either": "{a} 또는 {b}",

@@ -3323,7 +3323,7 @@ const de: Record<string, string> = {
     "Diese Zeichenfolge hat in derselben Zeile kein schließendes Anführungszeichen.",
   "rulesDsl.problem.bad-escape": 'In einer Zeichenfolge können nur \\" und \\\\ maskiert werden.',
   "rulesDsl.problem.forbidden-character":
-    "Unsichtbare Zeichen, Steuerzeichen und Zeichen zur Textrichtung ({codePoint}) sind nicht erlaubt.",
+    "{codePoint}: Unsichtbare Zeichen, Steuerzeichen und Zeichen zur Textrichtung sind nicht erlaubt.",
   "rulesDsl.problem.statement-outside-rule":
     '"{keyword}" gehört in eine Regel. Beginne mit: rule "Name"',
   "rulesDsl.problem.empty-rule-name": "Eine Regel braucht einen Namen.",

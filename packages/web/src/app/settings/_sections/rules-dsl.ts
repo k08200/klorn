@@ -30,29 +30,32 @@ function isErrorWire(value: unknown): value is RulesDslErrorWire {
   );
 }
 
-/** The most params one error may carry, and the longest text one may hold. */
+/** The most params one error may carry, how many keys are looked at, and the longest text one may hold. */
 const MAX_PARAMS = 12;
+const MAX_SCANNED_PARAMS = 64;
 const MAX_PARAM_CHARS = 200;
 const PARAM_NAME = /^[A-Za-z][A-Za-z0-9]{0,31}$/;
 
 /**
- * The params of a server error: strings and finite numbers under plain names,
- * nothing else. A param that is too long is dropped whole rather than shown
- * cut, so the message falls back to the server's English text.
+ * The params of a server error: strings and finite numbers under plain names
+ * (never one that shadows an Object.prototype member), nothing else, and only
+ * the first few keys are even looked at. A param that is too long is dropped
+ * whole rather than shown cut, so the message falls back to the server's
+ * English text.
  */
 function paramsFrom(value: unknown): RulesDslErrorParams | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const params: Record<string, string | number> = {};
-  let count = 0;
+  let scanned = 0;
+  let kept = 0;
   for (const [name, raw] of Object.entries(value)) {
-    if (count >= MAX_PARAMS) break;
-    if (!PARAM_NAME.test(name)) continue;
-    const ok =
-      (typeof raw === "string" && raw.length <= MAX_PARAM_CHARS) ||
-      (typeof raw === "number" && Number.isFinite(raw));
-    if (!ok) continue;
-    params[name] = raw as string | number;
-    count += 1;
+    scanned += 1;
+    if (scanned > MAX_SCANNED_PARAMS || kept >= MAX_PARAMS) break;
+    if (!PARAM_NAME.test(name) || name in Object.prototype) continue;
+    if (typeof raw === "string" && raw.length <= MAX_PARAM_CHARS) params[name] = raw;
+    else if (typeof raw === "number" && Number.isFinite(raw)) params[name] = raw;
+    else continue;
+    kept += 1;
   }
   return params;
 }

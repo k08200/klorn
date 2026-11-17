@@ -3287,7 +3287,7 @@ const fr: Record<string, string> = {
     "Cette chaîne n'a pas de guillemet fermant sur la même ligne.",
   "rulesDsl.problem.bad-escape": 'Dans une chaîne, seuls \\" et \\\\ peuvent être échappés.',
   "rulesDsl.problem.forbidden-character":
-    "Les caractères invisibles, de contrôle ou de direction du texte ({codePoint}) ne sont pas autorisés.",
+    "{codePoint} : les caractères invisibles, de contrôle ou de direction du texte ne sont pas autorisés.",
   "rulesDsl.problem.statement-outside-rule":
     '"{keyword}" doit se trouver dans une règle. Commencez-en une avec : rule "nom"',
   "rulesDsl.problem.empty-rule-name": "Une règle doit avoir un nom.",
@@ -3309,7 +3309,7 @@ const fr: Record<string, string> = {
   "rulesDsl.problem.duplicate-sender":
     "La règle de la ligne {firstLine} couvre déjà cet expéditeur. Une règle par expéditeur.",
   "rulesDsl.problem.text-too-large": "Le texte des règles ne peut pas dépasser {maxKib} Kio.",
-  "rulesDsl.problem.too-many-rules": "Au plus {max} règles par fichier.",
+  "rulesDsl.problem.too-many-rules": "Un fichier ne peut pas contenir plus de {max} règles.",
   "rulesDsl.problem.string-too-long.name":
     "Le nom d'une règle ne peut pas dépasser {max} caractères.",
   "rulesDsl.problem.string-too-long.note": "Une note ne peut pas dépasser {max} caractères.",

@@ -100,17 +100,9 @@ function cut(text: string, max: number, forbiddenTo: string): string {
 }
 
 /**
- * User text quoted back in an error message: at most `quoteChars` characters,
- * control characters replaced, so a message never echoes an unbounded or
- * multi-line input.
- */
-export function quoteForMessage(text: string): string {
-  return `"${truncateForMessage(text)}"`;
-}
-
-/**
- * The same cut text without the quotes: what an error carries in `params`, so
- * a client can put it into a sentence of its own language.
+ * User text quoted back in an error message or carried in an error's params:
+ * at most `quoteChars` characters (`…` appended), control characters replaced,
+ * so an error never echoes an unbounded or multi-line input.
  */
 export function truncateForMessage(text: string): string {
   return cut(text, RULES_DSL_LIMITS.quoteChars, "�");

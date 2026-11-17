@@ -169,15 +169,15 @@ Codes: `missing-version`, `unsupported-version`, `unexpected-token`,
 
 ### Localized errors
 
-`code` is stable and `message` is always English (API and CLI consumers read
-those two). `params` is additive: the values the message is built from, as
+`code` is stable and `message` is always English (API consumers read those
+two). `params` is additive: the values the message is built from, as
 strings and numbers only, so a client can say the same thing in the user's
 language without parsing English.
 
 | Code | Params |
 |---|---|
 | `unsupported-version` | `found` |
-| `unexpected-token` | `variant`: `version-repeated`; `statement` (`foundKind`, `found`); `expected-here` (`expectedKind`, `expectedWords`); `expected-found` (the two before); `extra` (`foundKind`, `found`) |
+| `unexpected-token` | `variant`: `version-repeated`; `statement` (`foundKind`, `found`); `expected-here` (`expectedKind`, and `expectedWords` when that is `word`); `expected-found` (the same, plus `foundKind`, `found`); `extra` (`foundKind`, `found`) |
 | `forbidden-character` | `codePoint` (`U+200B`) |
 | `statement-outside-rule`, `duplicate-clause` | `keyword` |
 | `unknown-lane`, `retired-lane` | `token` |
@@ -195,13 +195,19 @@ language without parsing English.
   (`…` appended) with control characters replaced, exactly as in the message.
 - A message's id is its `code`, or `code.variant`. The web renders it from the
   key `rulesDsl.problem.<id>` in every locale it ships (`packages/web/src/lib/locales/*`),
-  and shows the English `message` for a code it has no key for, for a server
-  that sent no `params`, or for a param the text needs and did not get.
+  and shows the English `message` for a code it has no key for, or when the
+  text needs a param the error did not carry (a server that predates `params`
+  still gets localized text for the messages that need none).
 - The retired lane names (`AUTO`, `CALL`) are reported as `retired-lane`; the
   texts in every language list the five live lanes (PUSH, MEETING, QUEUE,
   INFO, SILENT) and never offer a retired one.
-- A new message needs its `DSL_MESSAGE_IDS` entry (`rules-dsl/errors.ts`) and a
-  key in all 7 locales; `rules-dsl-error-i18n.test.ts` fails otherwise.
+- A new message needs its `DSL_MESSAGE_IDS` entry (`rules-dsl/errors.ts`; a
+  builder cannot be written without one) and a key in all 7 locales, with the
+  same `{placeholders}` as English. The four phrase keys
+  `rulesDsl.problem.expect.string`, `.expect.lane`, `.expect.either` and
+  `.found.string` fill `{expected}` and `{found}` in the `unexpected-token`
+  sentences. `rules-dsl-error-i18n.test.ts` fails if any of it is missing,
+  stale or unreachable.
 
 ## 8. Security limits
 

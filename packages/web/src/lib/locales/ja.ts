@@ -3215,14 +3215,14 @@ const ja: Record<string, string> = {
   "rulesDsl.problem.unexpected-token.version-repeated": "version 1 は先頭に一度だけ書けます。",
   "rulesDsl.problem.unexpected-token.statement":
     "想定外の入力です: {found}。行は rule、when、then、note、disabled のいずれかで始めてください。",
-  "rulesDsl.problem.unexpected-token.expected-here": "ここには {expected} が必要です。",
+  "rulesDsl.problem.unexpected-token.expected-here": "ここに必要なもの: {expected}。",
   "rulesDsl.problem.unexpected-token.expected-found":
     "必要なもの: {expected}。入力されたもの: {found}。",
   "rulesDsl.problem.unexpected-token.extra": "文の後ろに余分な入力があります: {found}。",
   "rulesDsl.problem.unterminated-string": "同じ行に文字列の閉じ引用符がありません。",
   "rulesDsl.problem.bad-escape": '文字列の中でエスケープできるのは \\" と \\\\ だけです。',
   "rulesDsl.problem.forbidden-character":
-    "不可視文字、制御文字、文字方向制御文字（{codePoint}）は使えません。",
+    "{codePoint}: 不可視文字、制御文字、文字方向制御文字は使えません。",
   "rulesDsl.problem.statement-outside-rule":
     '"{keyword}" はルールの中に書く必要があります。先に rule "名前" でルールを始めてください。',
   "rulesDsl.problem.empty-rule-name": "ルールには名前が必要です。",

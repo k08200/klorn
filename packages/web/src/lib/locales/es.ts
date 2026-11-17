@@ -3271,7 +3271,7 @@ const es: Record<string, string> = {
     "Esta cadena no tiene comillas de cierre en la misma línea.",
   "rulesDsl.problem.bad-escape": 'Dentro de una cadena solo se pueden escapar \\" y \\\\.',
   "rulesDsl.problem.forbidden-character":
-    "No se permiten caracteres invisibles, de control ni de dirección del texto ({codePoint}).",
+    "{codePoint}: no se permiten caracteres invisibles, de control ni de dirección del texto.",
   "rulesDsl.problem.statement-outside-rule":
     '"{keyword}" debe ir dentro de una regla. Empieza una con: rule "nombre"',
   "rulesDsl.problem.empty-rule-name": "Una regla necesita un nombre.",
@@ -3289,7 +3289,7 @@ const es: Record<string, string> = {
   "rulesDsl.problem.invalid-domain":
     '"{value}" no es un dominio válido. Escríbelo como example.com.',
   "rulesDsl.problem.public-domain":
-    '"{value}" es un dominio de correo público desde el que puede escribir cualquiera. Escribe una regla para una sola dirección.',
+    '"{value}" es un dominio de correo público desde el que puede escribir cualquiera. Escribe en su lugar una regla para una sola dirección.',
   "rulesDsl.problem.duplicate-sender":
     "La regla de la línea {firstLine} ya cubre a este remitente. Una regla por remitente.",
   "rulesDsl.problem.text-too-large":

@@ -77,7 +77,7 @@ describe("dslErrorsFrom params", () => {
   it("drops params of any other type or an unsafe name, but keeps the error", () => {
     // JSON.parse, so "__proto__" is a real own key, as it would be off the wire.
     const params = JSON.parse(
-      '{"ok":"yes","nested":{"a":1},"list":["x"],"flag":true,"nothing":null,"bad-name":"x","__proto__":"x","infinite":1e999}',
+      '{"ok":"yes","nested":{"a":1},"list":["x"],"flag":true,"nothing":null,"bad-name":"x","__proto__":"x","toString":"x","constructor":"x","infinite":1e999}',
     );
     const [error] = dslErrorsFrom({ errors: [{ ...base, params }] });
     expect(error).toMatchObject({ line: 2, column: 3, code: "unknown-lane" });
@@ -97,6 +97,10 @@ describe("dslErrorsFrom params", () => {
       errors: [{ ...base, params: { ...many, long: "y".repeat(5000) } }],
     });
     expect(Object.keys(error?.params ?? {}).length).toBeLessThanOrEqual(12);
+    // Junk keys cost a scan each: only the first few are even looked at.
+    const junk = Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`bad-${i}`, "x"]));
+    const [scanned] = dslErrorsFrom({ errors: [{ ...base, params: { ...junk, late: "y" } }] });
+    expect(scanned?.params).toEqual({});
     // A param that is too long is dropped whole, never shown cut: the message
     // then falls back to the server's English text.
     const [long] = dslErrorsFrom({
