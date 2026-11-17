@@ -194,7 +194,10 @@ Verified events are kept only when **all** hold:
    judged; it marks the open episodes of that conversation whose last
    message is older than the reply **answered** (no judgment, no
    notification, no LLM spend), and a reply inside a thread also answers the
-   top-level episode holding the thread's parent message;
+   top-level episode holding the thread's parent message. An episode the
+   judge already claimed or judged keeps its verdict but is stamped
+   `answeredAt`, which the judge re-reads right before ringing: a reply that
+   lands while the judge call is in flight still stops the ring;
 5. `is_ext_shared_channel` is not true (Slack Connect content belongs partly
    to another organization; see §13);
 6. the conversation is a DM (`channel_type` `im`) or group DM (`mpim`), or a
@@ -234,8 +237,29 @@ stored first, guarded on the claim (a disconnect mid-judge writes nothing);
 the ring and the commitment pass then run best-effort, so a failure in either
 never rewrites the verdict and a retaken claim never rings twice. A judge
 error lands the episode in QUEUE, the default lane, instead of retrying
-forever. A keyword-fallback verdict (LLM down or the user's daily cap hit) is
-final in v1 — there is no re-judge sweep for Slack yet.
+forever. The verdict's source is stored with it (`verdictSource`: `llm` or
+`keyword-fallback`).
+
+A keyword-fallback verdict (no model answered: provider outage, the user's
+daily cap, an unusable key) is re-judged once the model answers again
+(`slack/rejudge.ts`, after the judge pass on the same tick, 3 episodes a tick,
+newest first). Its verdict is replaced at most once: the claim (`rejudgedAt`)
+is kept, and released only when the call fell back again and fewer than 3
+calls were made (`rejudgeAttempts`) — that user is then left alone for 10
+minutes, so an outage costs one call per user per 10 minutes, and an episode
+whose text keeps breaking the model's answer is given up after 3. Any other
+failure spends the attempt. Only while the text is kept (7 days), never after
+the user replied, and only while the connection is under its daily caps,
+checked before the claim (a full day leaves the episode for later, nothing
+spent). The episode keeps its `judgedAt`, so a backlog re-judged after
+midnight never takes the new day's slots from fresh episodes. An upgrade to
+PUSH is a correction of a
+lane already shown, so it alerts by the age of the last message: up to 30
+minutes it rings as a first judgment would (budget, Slack caps, quiet hours,
+the reply re-check); up to 72 hours — Today's "Needs you now" window — a bell
+row only; older, nothing (the lane is corrected silently, as the mail
+fallback re-judge does). A SILENT fallback skipped the commitment pass, so a
+re-judge out of SILENT runs it.
 
 ## 8. Judging
 
@@ -292,7 +316,25 @@ text comes from `slackPushContent` (`slack/push-content.ts`, sibling of
 mentioned / Followed channel" in all 7 notification languages, body the
 first message as one plain line (180 chars) and the judge's reason. A push
 the budget holds is written as a bell row (deduped per episode) and does not
-ring. Slack's share is bounded so other people's messages cannot crowd out
+ring.
+
+A push that will not ring (quiet hours, focus window, the urgent-push
+opt-out) writes the bell row, named after its episode (`slack:<episodeId>`),
+and sends its live frame untagged — no device push, no banner. The Windows
+shell holds such a frame and toasts it once quiet hours end, through the
+urgent-mail catch-up (`GET /api/notifications/desktop-catchup`, decision N6):
+the same gate, unread (so neither read nor cleared) and from the last 72
+hours, not answered in Slack since, at most once (the shell's ledger, which
+survives a restart). The toast is the bell row's own title and body — the
+live push's text, nothing more; one held item is its own toast, two or more
+are one summary ("N urgent messages during quiet hours", or "… while Klorn
+was closed" when some mail was missed while it was closed). Only a held frame
+is caught up: a Slack push that rang (its row holds a budget slot, refused
+server-side too) or that the budget held never toasts late, and one that came
+while the shell was not running is not toasted later either (unlike mail,
+which the shell can ask about by its row alone).
+
+Slack's share is bounded so other people's messages cannot crowd out
 mail: at most **2 Slack rings** and **20 Slack bell rows** per user per UTC
 day (past the rings cap a quiet bell row, past the rows cap nothing), Slack
 never uses the trusted-sender reserve, and a PUSH verdict on talk older than

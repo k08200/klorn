@@ -184,31 +184,59 @@ export async function ingestSlackMessage(input: SlackIngestInput): Promise<Inges
  * The user replied in this conversation: its open episodes from before the
  * reply need no judgment and no notification. A reply inside a thread also
  * answers the top-level episode holding the thread's parent message. Only
- * episodes whose last message is older than the reply are closed, so a late
+ * episodes whose last message is older than the reply are touched, so a late
  * or replayed reply cannot silence newer messages. Returns how many closed.
+ *
+ * An episode the judge already claimed (JUDGING) or judged keeps its status
+ * and verdict but is stamped answeredAt: the judge re-reads that stamp right
+ * before ringing (judge-sweep.ts alertSlackEpisode), so a reply that lands
+ * while the judge call is in flight still stops the ring.
  */
 export async function markSlackConversationAnswered(input: {
   connectionId: string;
   channel: string;
   threadTs: string | null;
   ts: string;
+  now?: Date;
 }): Promise<number> {
-  const before = { connectionId: input.connectionId, channelId: input.channel, status: "OPEN" };
-  const own = await prisma.slackEpisode.updateMany({
-    where: { ...before, threadKey: episodeThreadKey(input.threadTs), lastTs: { lt: input.ts } },
-    data: { status: "ANSWERED" },
-  });
-  if (!input.threadTs) return own.count;
+  const now = input.now ?? new Date();
+  const conversation = { connectionId: input.connectionId, channelId: input.channel };
+  const own = await answerEpisodes(
+    { ...conversation, threadKey: episodeThreadKey(input.threadTs), lastTs: { lt: input.ts } },
+    now,
+  );
+  if (!input.threadTs) return own;
   const parent = await prisma.slackMessage.findFirst({
     where: { connectionId: input.connectionId, channelId: input.channel, ts: input.threadTs },
     select: { episodeId: true },
   });
-  if (!parent) return own.count;
-  const top = await prisma.slackEpisode.updateMany({
-    where: { ...before, id: parent.episodeId, lastTs: { lt: input.ts } },
-    data: { status: "ANSWERED" },
+  if (!parent) return own;
+  const top = await answerEpisodes(
+    { ...conversation, id: parent.episodeId, lastTs: { lt: input.ts } },
+    now,
+  );
+  return own + top;
+}
+
+type AnsweredScope = {
+  connectionId: string;
+  channelId: string;
+  lastTs: { lt: string };
+  threadKey?: string;
+  id?: string;
+};
+
+/** Closes the scope's OPEN episodes and stamps the claimed or judged ones. */
+async function answerEpisodes(scope: AnsweredScope, now: Date): Promise<number> {
+  const closed = await prisma.slackEpisode.updateMany({
+    where: { ...scope, status: "OPEN" },
+    data: { status: "ANSWERED", answeredAt: now },
   });
-  return own.count + top.count;
+  await prisma.slackEpisode.updateMany({
+    where: { ...scope, status: { in: ["JUDGING", "JUDGED"] }, answeredAt: null },
+    data: { answeredAt: now },
+  });
+  return closed.count;
 }
 
 /** Slack's message_deleted: drop Klorn's copy of that message. */

@@ -160,6 +160,50 @@ describe("checkConflicts — multi-calendar free/busy", () => {
     expect(captureError.mock.calls[0]?.[1]?.tags?.scope).toBe("calendar.freebusy_partial");
   });
 
+  it("reports a partial free/busy result by reason counts, never by calendar id (an address)", async () => {
+    calendarListMock.mockResolvedValue({
+      data: {
+        items: [
+          { id: "primary", primary: true, accessRole: "owner" },
+          { id: "colleague.name@company.com", accessRole: "writer", summary: "Colleague" },
+          { id: "team-x@group.calendar.google.com", accessRole: "writer", summary: "Team" },
+          { id: "third@company.com", accessRole: "writer", summary: "Third" },
+        ],
+      },
+    });
+    freebusyMock.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: { busy: [] },
+          "colleague.name@company.com": { errors: [{ reason: "notFound" }], busy: [] },
+          "team-x@group.calendar.google.com": { errors: [{ reason: "notFound" }], busy: [] },
+          // A reason that is not a code token is counted, not quoted.
+          "third@company.com": { errors: [{ reason: "third@company.com denied" }], busy: [] },
+        },
+      },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      await checkConflicts("user-1", START, END);
+
+      expect(captureError).toHaveBeenCalledTimes(1);
+      expect(captureError.mock.calls[0]?.[1]?.extra).toEqual({
+        failedCount: 3,
+        reasons: { notFound: 2, other: 1 },
+      });
+      const reported = [JSON.stringify(captureError.mock.calls), ...warn.mock.calls.flat()].join(
+        "\n",
+      );
+      expect(reported).toContain("notFound");
+      for (const id of ["colleague.name", "team-x@group", "third@company.com"]) {
+        expect(reported).not.toContain(id);
+      }
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("reports no conflicts when every calendar is free", async () => {
     calendarListMock.mockResolvedValue({
       data: { items: [{ id: "primary", primary: true, accessRole: "owner" }] },

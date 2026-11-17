@@ -54,6 +54,8 @@ const TITLES: Record<NotificationLanguage, KindTitles> = {
 
 /** Every Slack push title starts with this; disconnect finds Slack bell rows by it. */
 export const SLACK_TITLE_PREFIX = "Slack · ";
+/** The bell row type of a Slack push (notify.ts); the Windows catch-up reads it too. */
+export const SLACK_NOTIFICATION_TYPE = "slack";
 
 export function slackPushTitle(kind: SlackConversationKind, language: string): string {
   return `${SLACK_TITLE_PREFIX}${TITLES[resolveNotificationLanguage(language)][kind]}`;
