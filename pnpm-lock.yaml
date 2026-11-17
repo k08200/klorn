@@ -122,6 +122,9 @@ importers:
       sanitize-html:
         specifier: ^2.18.0
         version: 2.18.1
+      secure-json-parse:
+        specifier: 4.1.0
+        version: 4.1.0
       stripe:
         specifier: ^23.1.0
         version: 23.1.0(@types/node@25.5.0)

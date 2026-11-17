@@ -23,6 +23,7 @@ import {
   kakaoImportFailure,
   kakaoImportPanelVisible,
   kakaoImportResult,
+  kakaoImportWayOutOnly,
 } from "./kakao-import-settings";
 import { PANEL } from "./shared";
 
@@ -33,7 +34,8 @@ const RADIO = "size-4 shrink-0 accent-accent-solid focus-ring";
 const FILE_INPUT =
   "block w-full min-h-11 text-role-body text-ink-mid file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-control file:border file:border-line-strong file:bg-surface-panel file:px-4 file:text-ink hover:file:bg-surface-hover focus-ring";
 
-function useKakaoImports(enabled: boolean) {
+/** `poll`: refresh while an import is in progress; off when processing is off too. */
+function useKakaoImports(enabled: boolean, poll: boolean) {
   const [imports, setImports] = useState<KakaoImportSummary[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const reload = useCallback(async () => {
@@ -48,7 +50,7 @@ function useKakaoImports(enabled: boolean) {
   useEffect(() => {
     if (enabled) void reload();
   }, [enabled, reload]);
-  const polling = enabled && (imports ?? []).some(kakaoImportActive);
+  const polling = enabled && poll && (imports ?? []).some(kakaoImportActive);
   useEffect(() => {
     if (!polling) return;
     const timer = setInterval(() => void reload(), POLL_MS);
@@ -379,18 +381,22 @@ export function KakaoImportPanel() {
   const { user } = useAuth();
   const { t } = useT();
   const visible = kakaoImportPanelVisible(user);
-  const { imports, reload, loadFailed } = useKakaoImports(visible);
+  // Closed to this user, but they own imports: list and delete only, no upload.
+  const wayOut = kakaoImportWayOutOnly(user);
+  const { imports, reload, loadFailed } = useKakaoImports(visible || wayOut, visible);
 
-  if (!visible) return null;
+  if (!visible && !wayOut) return null;
+  // The way out after its last import was deleted: nothing left to show.
+  if (!visible && imports?.length === 0) return null;
   return (
     <section className="mb-8">
       <div className={`${PANEL} space-y-4 p-4`}>
         <div>
           <h3 className="font-medium">{t("kakaoImport.title")}</h3>
-          <p className="text-role-body text-ink-mid">{t("kakaoImport.desc")}</p>
+          {visible ? <p className="text-role-body text-ink-mid">{t("kakaoImport.desc")}</p> : null}
         </div>
-        <ExportSteps />
-        <UploadForm onImported={reload} />
+        {visible ? <ExportSteps /> : null}
+        {visible ? <UploadForm onImported={reload} /> : null}
         <ImportList imports={imports} loadFailed={loadFailed} reload={reload} />
       </div>
     </section>

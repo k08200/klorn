@@ -62,7 +62,8 @@ import { verifyImapCredentials } from "../mail/imap-sync.js";
 import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
 import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
-import { ownerExitCohortGate, ownerExitGate } from "./imap-owner-exit.js";
+import { imapOwnerExit } from "./imap-owner-exit.js";
+import { ownerExitCohortGate, ownerExitGate } from "./owner-exit-gate.js";
 
 const GENERIC_HOST_HINT =
   "Enter your mail server's host name, for example imap.example.com. Only port 993 (IMAP over TLS) is supported.";
@@ -347,11 +348,11 @@ function wayOutRoutes(
 ): (app: FastifyInstance) => Promise<void> {
   return async function routes(app: FastifyInstance) {
     if (opts.gate) {
-      app.addHook("onRequest", ownerExitGate(cfg, opts.gate));
+      app.addHook("onRequest", ownerExitGate(imapOwnerExit(cfg), opts.gate));
     }
     app.addHook("preHandler", requireAuth);
     if (opts.cohortFlags) {
-      app.addHook("preHandler", ownerExitCohortGate(cfg, opts.cohortFlags));
+      app.addHook("preHandler", ownerExitCohortGate(imapOwnerExit(cfg), opts.cohortFlags));
     }
 
     app.get("/status", async (request) => {

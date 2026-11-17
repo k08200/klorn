@@ -74,8 +74,10 @@ export async function memoryRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const memory = await db.memory.findUnique({ where: { id } });
-    if (!memory) return reply.code(404).send({ error: "Memory not found" });
-    if (memory.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    // Another user's id gets the same 404 as a missing one: no answer says it exists.
+    if (!memory || memory.userId !== userId) {
+      return reply.code(404).send({ error: "Memory not found" });
+    }
     await db.memory.delete({ where: { id } });
     return reply.code(204).send();
   });

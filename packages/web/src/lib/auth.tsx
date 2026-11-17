@@ -75,6 +75,9 @@ interface User {
   // Server-driven client flag: the API's KAKAO_IMPORT_ENABLED, cohort-aware.
   // True shows the KakaoTalk import panel in Settings → Integrations.
   kakaoImport?: boolean;
+  // True when the import is closed to this user but they own an import: the
+  // panel then shows their imports with delete only. Undefined = false.
+  kakaoImportWayOut?: boolean;
   // Server-driven client flag: the API's TEAMS_ENABLED (Klorn Teams),
   // cohort-aware. True shows the organization pages in Settings → Team and the
   // invite accept page. Undefined (older API) = off.

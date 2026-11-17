@@ -216,10 +216,10 @@ export async function calendarRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!event || !isCalendarRowVisible(event)) {
+    // Another user's id gets the same 404 as a missing one: no answer says it exists.
+    if (!event || !isCalendarRowVisible(event) || event.userId !== uid) {
       return reply.code(404).send({ error: "Event not found" });
     }
-    if (event.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
     const [labelled] = await withSourceLabels(uid, [withReadOnlyFlag(event)]);
     return labelled;
   });
@@ -312,10 +312,9 @@ export async function calendarRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!existing || !isCalendarRowVisible(existing)) {
+    if (!existing || !isCalendarRowVisible(existing) || existing.userId !== uid) {
       return reply.code(404).send({ error: "Event not found" });
     }
-    if (existing.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
     if (isLinkedCalendarRow(existing)) return reply.code(409).send({ error: LINKED_READ_ONLY });
 
     const body = request.body as Record<string, unknown>;
@@ -394,10 +393,9 @@ export async function calendarRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!event || !isCalendarRowVisible(event)) {
+    if (!event || !isCalendarRowVisible(event) || event.userId !== userId) {
       return reply.code(404).send({ error: "Event not found" });
     }
-    if (event.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
     if (isLinkedCalendarRow(event)) return reply.code(409).send({ error: LINKED_READ_ONLY });
 
     // Delete from Google Calendar if synced

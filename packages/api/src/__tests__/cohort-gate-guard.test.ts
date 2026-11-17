@@ -1,8 +1,15 @@
 /**
  * Every drive, smart-action, vault-export and rules-dsl route checks the rollout cohort
  * (L23) after authentication, so a route added later cannot skip it. The one exception is unlinking a Google
- * account: auth only, so a user outside the cohort can always remove a grant.
+ * account: auth only, so a user outside the cohort can always remove a grant. The KakaoTalk
+ * import's list and delete check the cohort with ownerExitCohortGate instead: the cohort, or a
+ * user who owns an import (routes/owner-exit-gate.ts), so a narrowed cohort never traps a chat.
  */
+
+/** Routes whose cohort check also lets an owner out, by file: the gate each one uses. */
+const OWNER_EXIT_CHAINS: Record<string, string[]> = {
+  "kakao-import.ts": ["ownerExitCohortGate", "ownerExitCohortGate"],
+};
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
@@ -27,7 +34,13 @@ describe("the cohort-gated routes", () => {
     );
     expect(chains.length).toBeGreaterThan(0);
     const exempt = chains.filter((chain) => !/^\[requireAuth, cohortGate\(/.test(chain));
-    expect(exempt).toEqual(file === "google-drive-link.ts" ? ["requireAuth"] : []);
+    const ownerExits = exempt.filter((chain) =>
+      /^\[requireAuth, ownerExitCohortGate\(/.test(chain),
+    );
+    expect(ownerExits.map(() => "ownerExitCohortGate")).toEqual(OWNER_EXIT_CHAINS[file] ?? []);
+    expect(exempt.filter((chain) => !ownerExits.includes(chain))).toEqual(
+      file === "google-drive-link.ts" ? ["requireAuth"] : [],
+    );
   });
 
   it("exempts only the Google unlink", () => {
