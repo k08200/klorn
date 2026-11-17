@@ -116,22 +116,28 @@ describe("sendTelegramMessage", () => {
 
     const result = await sendTelegramMessage("777", "hello");
     expect(result.ok).toBe(false);
-    expect(result.description).toBeTruthy();
-    expect(result.description).not.toContain(TOKEN);
+    expect(result.description).toBe("telegram sendMessage error: Error");
+    expect(JSON.stringify(result)).not.toContain(TOKEN);
+    expect(JSON.stringify(result)).not.toContain("ECONNREFUSED https");
   });
 
-  it("returns ok:false on a Bot API error response, with redacted description", async () => {
+  it("returns ok:false on a Bot API error response, with the status and code as facts", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: false,
       status: 400,
-      json: async () => ({ ok: false, description: "Bad Request: chat not found" }),
+      json: async () => ({
+        ok: false,
+        error_code: 400,
+        description: "Bad Request: CANARY-telegram quoted text",
+      }),
     })) as unknown as typeof fetch;
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await sendTelegramMessage("777", "hello");
     expect(result.ok).toBe(false);
-    expect(result.description).toContain("chat not found");
-    expect(result.description).not.toContain(TOKEN);
+    expect(result.description).toBe("telegram sendMessage failed: status=400 error_code=400");
+    expect(JSON.stringify(result)).not.toContain("CANARY");
+    expect(JSON.stringify(result)).not.toContain(TOKEN);
   });
 });
 

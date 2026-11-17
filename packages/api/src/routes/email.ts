@@ -103,6 +103,7 @@ import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { effectivePlan } from "../org/effective-tier.js";
 import { createTask } from "../pim/tasks.js";
+import { publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
@@ -1595,7 +1596,14 @@ export async function emailRoutes(app: FastifyInstance) {
 
         return result;
       } catch (err) {
-        return { error: err instanceof Error ? err.message : "Sync failed" };
+        // Still 200 with { error } (clients read that as the dead-token
+        // shape), now with a code and its fixed sentence: never the
+        // provider's or the database's text (public-failure.ts).
+        const failure = publicFailure(err, "gmail");
+        if (failure.code !== "PROVIDER_AUTH_FAILED") {
+          logDbFailure("[EMAIL-SYNC] Manual sync failed", err, { ids: { userId: uid } });
+        }
+        return failure;
       }
     },
   );
@@ -1799,9 +1807,7 @@ export async function emailRoutes(app: FastifyInstance) {
         tags: { scope: "email.reconcile.manual" },
         extra: { userId: uid },
       });
-      return reply
-        .code(500)
-        .send({ error: err instanceof Error ? err.message : "Reconcile failed" });
+      return reply.code(500).send(publicFailure(err, "gmail"));
     }
   });
 

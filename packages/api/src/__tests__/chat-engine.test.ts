@@ -229,20 +229,25 @@ describe("runChatTurn", () => {
 
     const result = await runChatTurn({ userId: "u1", history: [], userText: "hi" });
 
-    expect(result.error).toContain("provider down");
+    expect(result.error).not.toContain("provider down");
+    expect(result.error).toBe("Something went wrong on our side. Try again shortly.");
     expect(result.eventDraft).toBeNull();
     expect(result.reply.length).toBeGreaterThan(0);
-    expect(result.errorCode).toBeUndefined();
+    expect(result.errorCode).toBe("INTERNAL_ERROR");
     expect(captureError).toHaveBeenCalled();
   });
 
-  it("keeps the provider's words for the user's own result, and out of the log and Sentry", async () => {
+  it("keeps the provider's words out of the result (stored as turnError), the log and Sentry", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     createCompletion.mockRejectedValueOnce(providerErrorQuotingMail());
 
     const result = await runChatTurn({ userId: "u1", history: [], userText: "hi" });
 
-    expect(result.error).toContain(LLM_CANARY);
+    expect(JSON.stringify(result)).not.toContain(LLM_CANARY);
+    expect(result.errorCode).toBe("PROVIDER_RATE_LIMITED");
+    expect(result.error).toBe(
+      "The AI provider is limiting requests right now. Try again in a minute.",
+    );
     expect(captureError).toHaveBeenCalledWith(
       expect.any(Error),
       expect.objectContaining({ tags: { scope: "chat.turn", userId: "u1" } }),
@@ -294,5 +299,25 @@ describe("runChatTurn", () => {
 
     expect(result.reply).toBe("Sorry, mail lookup failed.");
     expect(result.error).toBeUndefined();
+  });
+
+  it("hands the model a failed tool's classification, never the thrown text", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    executeToolCall.mockRejectedValueOnce(providerErrorQuotingMail());
+    createCompletion
+      .mockResolvedValueOnce(toolCallResponse("list_emails", {}))
+      .mockResolvedValueOnce(textResponse("Mail is busy."));
+
+    await runChatTurn({ userId: "u1", history: [], userText: "mail?" });
+
+    const secondRound = createCompletion.mock.calls[1][0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const toolMessage = secondRound.messages.find((m) => m.role === "tool");
+    expect(toolMessage?.content).not.toContain(LLM_CANARY);
+    expect(JSON.parse(toolMessage?.content ?? "{}")).toEqual({
+      error: "Tool failed: provider rate limited",
+      code: "PROVIDER_RATE_LIMITED",
+    });
   });
 });

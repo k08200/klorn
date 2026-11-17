@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 const executeToolCallMock = vi.fn(async (_userId: string, fn: string) => {
-  if (fn === "fail_tool") throw new Error("Tool failed");
+  if (fn === "fail_tool") throw new Error("CANARY-batch quoted mail body");
+  if (fn === "rate_limited_tool") {
+    throw Object.assign(new Error("CANARY-batch provider text"), { status: 429 });
+  }
   return JSON.stringify({ tool: fn, ok: true });
 });
 
@@ -45,8 +48,24 @@ describe("executeBatchToolCalls", () => {
     ]);
     expect(results).toHaveLength(3);
     expect(results[0].error).toBeUndefined();
-    expect(results[1].error).toBe("Tool failed");
+    expect(results[1].error).toBe("Tool failed: internal error");
+    expect(results[1].code).toBe("INTERNAL_ERROR");
     expect(results[2].error).toBeUndefined();
+  });
+
+  it("reports a thrown error as its classification, never its text", async () => {
+    const single = await executeBatchToolCalls("u1", [
+      { id: "c1", functionName: "rate_limited_tool", args: {} },
+    ]);
+    const many = await executeBatchToolCalls("u1", [
+      { id: "c1", functionName: "fail_tool", args: {} },
+      { id: "c2", functionName: "rate_limited_tool", args: {} },
+    ]);
+    expect(single[0]).toMatchObject({
+      error: "Tool failed: provider rate limited",
+      code: "PROVIDER_RATE_LIMITED",
+    });
+    expect(JSON.stringify([single, many])).not.toContain("CANARY");
   });
 
   it("preserves order regardless of execution timing", async () => {

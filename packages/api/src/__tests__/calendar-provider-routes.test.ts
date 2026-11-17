@@ -368,7 +368,11 @@ describe("POST /api/calendar/sync — Google request and failure handling (chara
     getAuthedClient.mockResolvedValue(null);
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
-    expect(res.json()).toEqual({ error: "Google not connected", synced: 0 });
+    expect(res.json()).toEqual({
+      error: "Google not connected",
+      code: "PROVIDER_AUTH_FAILED",
+      synced: 0,
+    });
     expect(eventsList).not.toHaveBeenCalled();
     await app.close();
   });
@@ -380,20 +384,25 @@ describe("POST /api/calendar/sync — Google request and failure handling (chara
     const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
     expect(res.json()).toEqual({
       error: "Google not connected. Please reconnect your Google account.",
+      code: "PROVIDER_AUTH_FAILED",
       synced: 0,
     });
     expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("user-1");
     await app.close();
   });
 
-  it("reports any other failure with its status and message", async () => {
+  it("reports any other failure by its code, never the API's message", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     eventsList.mockRejectedValue({
       response: { status: 500, data: { error: { message: "backend down" } } },
     });
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
-    expect(res.json()).toEqual({ error: "Sync failed (500): backend down", synced: 0 });
+    expect(res.json()).toEqual({
+      error: "Google Calendar is unavailable right now. Try again shortly.",
+      code: "PROVIDER_UNAVAILABLE",
+      synced: 0,
+    });
     errSpy.mockRestore();
     await app.close();
   });

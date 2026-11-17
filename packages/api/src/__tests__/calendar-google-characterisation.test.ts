@@ -201,7 +201,10 @@ describe("listEvents (agent list_events tool)", () => {
     m.eventsList.mockRejectedValue({
       response: { status: 500, data: { error: { message: "backend down" } } },
     });
-    expect(await listEvents("u1")).toEqual({ error: "Calendar API error (500): backend down" });
+    expect(await listEvents("u1")).toEqual({
+      error: "Google Calendar is unavailable right now. Try again shortly.",
+      code: "PROVIDER_UNAVAILABLE",
+    });
     expect(m.markGoogleTokenForReconnect).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
@@ -271,7 +274,9 @@ describe("createEvent", () => {
       response: { status: 403, data: { error: { message: "quota" } } },
     });
     expect(await createEvent("u1", "x", START, END)).toEqual({
-      error: "Calendar API error (403): quota",
+      error:
+        "Google Calendar did not grant a permission Klorn needs. Reconnect it in Settings and allow every requested permission.",
+      code: "PROVIDER_SCOPE_MISSING",
     });
     expect(m.markGoogleTokenForReconnect).not.toHaveBeenCalled();
     errSpy.mockRestore();
@@ -306,7 +311,8 @@ describe("updateEvent", () => {
       response: { status: 404, data: { error: { message: "Not Found" } } },
     });
     expect(await updateEvent("u1", "evt-9", { summary: "x" })).toEqual({
-      error: "Calendar API error (404): Not Found",
+      error: "Google Calendar could not find that item. It may have been moved or deleted.",
+      code: "PROVIDER_NOT_FOUND",
     });
     errSpy.mockRestore();
   });

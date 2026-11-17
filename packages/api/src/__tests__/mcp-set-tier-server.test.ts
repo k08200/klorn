@@ -211,3 +211,26 @@ describe("a read_write key with the flag on", () => {
     expect(db.tables.mcpWriteAudit[0]).toMatchObject({ outcome: "error", reason: "tool_error" });
   });
 });
+
+describe("a read tool that throws", () => {
+  it("answers in-band with the classification, never the thrown text", async () => {
+    executeToolCall.mockRejectedValueOnce(
+      Object.assign(new Error("CANARY-mcp quoted mail body"), { status: 503 }),
+    );
+    const client = await connect("read");
+    const result = await client.callTool({ name: "list_emails", arguments: {} });
+    expect(JSON.stringify(result)).not.toContain("CANARY");
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Tool failed: provider unavailable",
+            code: "PROVIDER_UNAVAILABLE",
+          }),
+        },
+      ],
+      isError: true,
+    });
+  });
+});

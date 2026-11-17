@@ -7,7 +7,11 @@
  * paths stay byte-identical.
  */
 
-import type { ReplyOptionsResponseWire, ReplyOptionTone } from "@klorn/contract";
+import type {
+  ProviderFailureCode,
+  ReplyOptionsResponseWire,
+  ReplyOptionTone,
+} from "@klorn/contract";
 import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
@@ -40,12 +44,37 @@ import {
 import { SEND_RECEIPT_UNAVAILABLE_MESSAGE } from "../mail/send-receipt.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
 import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
+import { publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { parseJsonArray, safeAttachmentFilename } from "./email.js";
 import { buildEmailAttachmentBrief } from "./email-attachments.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+/** A Klorn-written refusal to attach the originals; its sentence goes to the client as is. */
+class DraftAttachmentError extends Error {
+  constructor(
+    message: string,
+    readonly code: "ATTACHMENTS_TOO_LARGE" | "PROVIDER_AUTH_FAILED",
+  ) {
+    super(message);
+    this.name = "DraftAttachmentError";
+  }
+}
+
+/**
+ * A failed attachment fetch as the client sees it: Klorn's own refusal as
+ * written, anything else (Gmail, the database) as a code and its fixed
+ * sentence, never the thrown text (public-failure.ts).
+ */
+function draftAttachmentFailure(err: unknown): {
+  error: string;
+  code: DraftAttachmentError["code"] | ProviderFailureCode;
+} {
+  if (err instanceof DraftAttachmentError) return { error: err.message, code: err.code };
+  return publicFailure(err, "gmail");
+}
 
 async function fetchOriginalAttachmentsForDraft(input: {
   userId: string;
@@ -74,13 +103,16 @@ async function fetchOriginalAttachmentsForDraft(input: {
 
   const totalSize = rows.reduce((sum, row) => sum + (row.size ?? 0), 0);
   if (totalSize > 18_000_000) {
-    throw new Error("The attachments are too large to include in a Gmail draft.");
+    throw new DraftAttachmentError(
+      "The attachments are too large to include in a Gmail draft.",
+      "ATTACHMENTS_TOO_LARGE",
+    );
   }
 
   // The source message may live on a linked secondary inbox (#757) — fetch
   // its attachments from THAT account, not always the primary.
   const auth = await resolveMailClient(input.userId, input.linkedInboxAccountId);
-  if (!auth) throw new Error("Gmail not connected.");
+  if (!auth) throw new DraftAttachmentError("Gmail not connected.", "PROVIDER_AUTH_FAILED");
 
   const { google } = await import("googleapis");
   const gmail = google.gmail({ version: "v1", auth });
@@ -574,9 +606,10 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           });
         }
       } catch (err) {
-        return reply
-          .code(409)
-          .send({ error: err instanceof Error ? err.message : "Attachment fetch failed" });
+        if (!(err instanceof DraftAttachmentError)) {
+          logDbFailure("[EMAIL] draft attachment fetch failed", err, { ids: { userId: uid } });
+        }
+        return reply.code(409).send(draftAttachmentFailure(err));
       }
 
       const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);

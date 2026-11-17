@@ -113,7 +113,10 @@ describe("check_calendar_conflicts through executeToolCall", () => {
 
     const raw = await executeToolCall("u1", "check_calendar_conflicts", args);
 
-    expect(JSON.parse(raw)).toEqual({ error: "Could not read the synced calendar right now." });
+    expect(JSON.parse(raw)).toEqual({
+      error: "Could not read the synced calendar right now.",
+      code: "SERVICE_UNAVAILABLE",
+    });
     expect(raw).not.toContain("s3cret");
     spy.mockRestore();
   });

@@ -1,7 +1,9 @@
+import { ToolUnavailableError } from "../agentcore/tool-failure.js";
 import { unifiedCalendarReadEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { type BusyConflict, toAbsoluteInstant } from "../google-calendar-time.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { publicFailure } from "../public-failure.js";
 import { logDbFailure } from "../report-db-failure.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -105,14 +107,10 @@ export async function listEvents(userId: string, maxResults = 10) {
       await markGoogleTokenForReconnect(userId);
       return { error: "Google Calendar not connected. Please reconnect your Google account." };
     }
-    const gaxiosErr = err as {
-      response?: { status?: number; data?: { error?: { message?: string; status?: string } } };
-      message?: string;
-    };
-    const status = gaxiosErr.response?.status;
-    const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
+    // A tool result the model reads, and a route's answer: a code and its
+    // fixed sentence, never the API's message, which can quote the event.
     logDbFailure("[CALENDAR] listEvents failed", err, { level: "error", ids: { userId } });
-    return { error: `Calendar API error (${status}): ${apiMsg}` };
+    return publicFailure(err, "googleCalendar");
   }
 }
 
@@ -171,14 +169,10 @@ export async function createEvent(
       await markGoogleTokenForReconnect(userId);
       return { error: "Google Calendar not connected. Please reconnect your Google account." };
     }
-    const gaxiosErr = err as {
-      response?: { status?: number; data?: { error?: { message?: string; status?: string } } };
-      message?: string;
-    };
-    const status = gaxiosErr.response?.status;
-    const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
+    // A tool result the model reads, and a route's answer: a code and its
+    // fixed sentence, never the API's message, which can quote the event.
     logDbFailure("[CALENDAR] createEvent failed", err, { level: "error", ids: { userId } });
-    return { error: `Calendar API error (${status}): ${apiMsg}` };
+    return publicFailure(err, "googleCalendar");
   }
 }
 
@@ -216,14 +210,10 @@ export async function updateEvent(userId: string, eventId: string, patch: Google
       await markGoogleTokenForReconnect(userId);
       return { error: "Google Calendar not connected. Please reconnect your Google account." };
     }
-    const gaxiosErr = err as {
-      response?: { status?: number; data?: { error?: { message?: string } } };
-      message?: string;
-    };
-    const status = gaxiosErr.response?.status;
-    const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
+    // A tool result the model reads, and a route's answer: a code and its
+    // fixed sentence, never the API's message, which can quote the event.
     logDbFailure("[CALENDAR] updateEvent failed", err, { level: "error", ids: { userId } });
-    return { error: `Calendar API error (${status}): ${apiMsg}` };
+    return publicFailure(err, "googleCalendar");
   }
 }
 
@@ -468,7 +458,7 @@ async function withRowConflicts(
     // The tool executor hands an error's message to the model and to MCP clients:
     // log the facts here and throw a constant (still fail-closed).
     logDbFailure("[CALENDAR] conflict rows read failed", err, { level: "error", ids: { userId } });
-    throw new Error(ROWS_UNREADABLE);
+    throw new ToolUnavailableError(ROWS_UNREADABLE);
   }
   const rowConflicts = rows.map((row) => toRowConflict(row, window.userZone));
   return mergeConflicts(rowConflicts, rows, live);
