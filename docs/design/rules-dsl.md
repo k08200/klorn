@@ -152,7 +152,7 @@ whatever else changes.
 Parse and compile return every error up to a cap of 50 (then `truncated: true`):
 
 ```json
-{ "line": 4, "column": 13, "code": "unknown-lane", "message": "Unknown lane \"URGENT\". Use PUSH, MEETING, QUEUE, INFO or SILENT." }
+{ "line": 4, "column": 13, "code": "unknown-lane", "message": "Unknown lane \"URGENT\". Use PUSH, MEETING, QUEUE, INFO or SILENT.", "params": { "token": "URGENT" } }
 ```
 
 Lines and columns are 1-based; a column counts UTF-16 code units, which is
@@ -166,6 +166,42 @@ Codes: `missing-version`, `unsupported-version`, `unexpected-token`,
 `too-many-conditions`, `missing-when`, `missing-then`, `unknown-lane`,
 `retired-lane`, `invalid-address`, `invalid-domain`, `public-domain`,
 `duplicate-sender`, `text-too-large`, `too-many-rules`, `string-too-long`.
+
+### Localized errors
+
+`code` is stable and `message` is always English (API and CLI consumers read
+those two). `params` is additive: the values the message is built from, as
+strings and numbers only, so a client can say the same thing in the user's
+language without parsing English.
+
+| Code | Params |
+|---|---|
+| `unsupported-version` | `found` |
+| `unexpected-token` | `variant`: `version-repeated`; `statement` (`foundKind`, `found`); `expected-here` (`expectedKind`, `expectedWords`); `expected-found` (the two before); `extra` (`foundKind`, `found`) |
+| `forbidden-character` | `codePoint` (`U+200B`) |
+| `statement-outside-rule`, `duplicate-clause` | `keyword` |
+| `unknown-lane`, `retired-lane` | `token` |
+| `invalid-address`, `invalid-domain`, `public-domain` | `value` |
+| `duplicate-sender` | `firstLine` (the line of the rule that already covers the sender) |
+| `text-too-large` | `maxKib` |
+| `too-many-rules` | `max` |
+| `string-too-long` | `variant`: `name`, `note`, `sender` or `sender-lowercased`; `max` |
+| the rest | none |
+
+- `foundKind` is `word` or `string`; a string's text is never echoed, so it has
+  no `found`. `expectedKind` is `string`, `lane` or `word`; `expectedWords` is
+  the accepted words joined by `|` (`address|domain`).
+- User text in a param (`found`, `token`, `value`) is cut to 40 characters
+  (`…` appended) with control characters replaced, exactly as in the message.
+- A message's id is its `code`, or `code.variant`. The web renders it from the
+  key `rulesDsl.problem.<id>` in every locale it ships (`packages/web/src/lib/locales/*`),
+  and shows the English `message` for a code it has no key for, for a server
+  that sent no `params`, or for a param the text needs and did not get.
+- The retired lane names (`AUTO`, `CALL`) are reported as `retired-lane`; the
+  texts in every language list the five live lanes (PUSH, MEETING, QUEUE,
+  INFO, SILENT) and never offer a retired one.
+- A new message needs its `DSL_MESSAGE_IDS` entry (`rules-dsl/errors.ts`) and a
+  key in all 7 locales; `rules-dsl-error-i18n.test.ts` fails otherwise.
 
 ## 8. Security limits
 
