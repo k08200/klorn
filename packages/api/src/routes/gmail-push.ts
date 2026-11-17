@@ -231,8 +231,8 @@ export async function gmailPushRoutes(app: FastifyInstance) {
     // account, every realtime push for that user is discarded forever and only
     // the polling fallback remains. This line is the only signal. No row
     // matched, so there is no id to name: the address goes out as a keyed tag
-    // (repeats of one mailbox line up; addressLogTag(candidate) on the server
-    // tells whether a given address is the one).
+    // (repeats of one mailbox line up; addressLogTag(candidate) computed with
+    // the server's JWT_SECRET tells whether a given address is the one).
     console.warn(`[GMAIL-PUSH] no user/linked inbox for address ${addressLogTag(email)}, draining`);
     return reply.code(204).send();
   });

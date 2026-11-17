@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
+import { addressLogTag } from "../security/address-log-tag.js";
 import { captureError } from "../sentry.js";
 import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
 import { parseAddress } from "./email-address.js";
@@ -8,13 +9,6 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "Klorn <onboarding@resend.dev>";
 const WEB_URL = process.env.WEB_URL || "http://localhost:8001";
-
-/** Mask email for safe logging: "user@example.com" → "u***@example.com" */
-function maskEmail(email: string): string {
-  const at = email.indexOf("@");
-  if (at <= 0) return "***";
-  return email[0] + "***" + email.slice(at);
-}
 
 /** Extract the bare address from a `Name <addr@x>` header, or pass through. */
 function addressOf(fromHeader: string): string {
@@ -54,10 +48,10 @@ function safeHttpUrl(raw: string | undefined | null): string | null {
 
 export async function sendPasswordResetEmail(to: string, resetToken: string): Promise<boolean> {
   const resetUrl = `${WEB_URL}/reset-password?token=${resetToken}`;
-  const safeAddr = maskEmail(to);
+  const addressTag = addressLogTag(to);
 
   if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — reset link generated for", safeAddr);
+    console.log("[EMAIL] No RESEND_API_KEY — reset link generated for", addressTag);
     return true;
   }
 
@@ -85,7 +79,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
         </div>
       `,
     });
-    console.log("[EMAIL] Password reset email sent to", safeAddr);
+    console.log("[EMAIL] Password reset email sent to", addressTag);
     return true;
   } catch (err) {
     logDbFailure("[EMAIL] Failed to send reset email", err, { level: "error" });
@@ -95,12 +89,12 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
 
 export async function sendBetaInviteEmail(to: string, name?: string | null): Promise<boolean> {
   const loginUrl = `${WEB_URL}/login`;
-  const safeAddr = maskEmail(to);
+  const addressTag = addressLogTag(to);
   const safeName = name?.trim()?.replace(/[<>]/g, "");
   const greeting = safeName ? `Hi ${escapeHtml(safeName)},` : "Hi,";
 
   if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — invite link generated for", safeAddr);
+    console.log("[EMAIL] No RESEND_API_KEY — invite link generated for", addressTag);
     return true;
   }
 
@@ -137,7 +131,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
         </div>
       `,
     });
-    console.log("[EMAIL] Beta invite email sent to", safeAddr);
+    console.log("[EMAIL] Beta invite email sent to", addressTag);
     return true;
   } catch (err) {
     logDbFailure("[EMAIL] Failed to send invite email", err, { level: "error" });
@@ -160,9 +154,9 @@ export async function sendOrgInviteEmail(input: {
   orgName: string;
   inviterName: string | null;
 }): Promise<boolean> {
-  const safeAddr = maskEmail(input.to);
+  const addressTag = addressLogTag(input.to);
   if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — organization invite generated for", safeAddr);
+    console.log("[EMAIL] No RESEND_API_KEY — organization invite generated for", addressTag);
     return true;
   }
   const acceptUrl = `${WEB_URL}/team-invite#token=${encodeURIComponent(input.token)}`;
@@ -196,7 +190,7 @@ export async function sendOrgInviteEmail(input: {
         </div>
       `,
     });
-    console.log("[EMAIL] Organization invite sent to", safeAddr);
+    console.log("[EMAIL] Organization invite sent to", addressTag);
     return true;
   } catch (err) {
     logDbFailure("[EMAIL] Failed to send organization invite", err, { level: "error" });
@@ -206,10 +200,10 @@ export async function sendOrgInviteEmail(input: {
 
 export async function sendVerificationEmail(to: string, verifyToken: string): Promise<boolean> {
   const verifyUrl = `${WEB_URL}/verify-email?token=${verifyToken}`;
-  const safeAddr = maskEmail(to);
+  const addressTag = addressLogTag(to);
 
   if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — verify link generated for", safeAddr);
+    console.log("[EMAIL] No RESEND_API_KEY — verify link generated for", addressTag);
     return true;
   }
 
@@ -237,7 +231,7 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
         </div>
       `,
     });
-    console.log("[EMAIL] Verification email sent to", safeAddr);
+    console.log("[EMAIL] Verification email sent to", addressTag);
     return true;
   } catch (err) {
     logDbFailure("[EMAIL] Failed to send verification email", err, { level: "error" });
@@ -350,12 +344,12 @@ export async function sendWelcomeEmail(
   to: string,
   name?: string | null,
 ): Promise<WelcomeSendResult> {
-  const safeAddr = maskEmail(to);
+  const addressTag = addressLogTag(to);
   const founder = resolveFounder();
   const content = buildWelcomeEmail(to, name, founder);
 
   if (!resend) {
-    console.warn("[EMAIL] No RESEND_API_KEY — welcome email skipped for", safeAddr);
+    console.warn("[EMAIL] No RESEND_API_KEY — welcome email skipped for", addressTag);
     return "skipped";
   }
 
@@ -382,7 +376,7 @@ export async function sendWelcomeEmail(
       html: content.html,
       text: content.text,
     });
-    console.log("[EMAIL] Welcome email sent to", safeAddr);
+    console.log("[EMAIL] Welcome email sent to", addressTag);
     return "sent";
   } catch (err) {
     // Log + capture the REAL Resend error here so Sentry gets the actual cause
@@ -437,14 +431,14 @@ export async function sendDigestEmail(
   opts: { language?: string; webUrl?: string } = {},
 ): Promise<boolean> {
   if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", maskEmail(to));
+    console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", addressLogTag(to));
     return false;
   }
   const unsubscribeUrl = digestUnsubscribeUrl(opts.webUrl ?? WEB_URL);
   if (!unsubscribeUrl) {
     console.error(
       "[EMAIL] digest NOT sent to",
-      maskEmail(to),
+      addressLogTag(to),
       "— WEB_URL yields no usable unsubscribe target; refusing to send a recurring mail with no opt-out",
     );
     captureError(new Error("digest unsubscribe URL unavailable"), {

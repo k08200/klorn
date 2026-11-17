@@ -28,7 +28,7 @@ const srcDir = join(here, "..");
 
 /** Names that hold an address (or a list of them). Counts such as `totalEmails` do not match. */
 const ADDRESS_NAME =
-  /^(email|emails|emailAddress|emailAddresses|address|addresses|mailbox|recipient|recipients|sender|senders|from|to|cc|bcc|replyTo|calendarId|calendarIds)$|[a-z](Email|EmailAddress|Address|Addresses|Recipient|Sender)$/;
+  /^(email|emails|emailAddress|emailAddresses|emailLower|address|addresses|addr|mailbox|recipient|recipients|sender|senders|from|to|cc|ccs|bcc|replyTo|attendee|attendees|organizer|participants|calendarId|calendarIds)$|[a-z](Email|EmailAddress|Address|Addresses|Addr|Recipient|Recipients|Sender|Attendees)$/;
 
 /** Calls that may take an address: their result carries none of it. */
 const ADDRESS_SANITIZERS = new Set(["addressLogTag"]);
@@ -42,23 +42,22 @@ const OPERATOR_ONLY_DIRS: ReadonlyArray<{ dir: string; reason: string }> = [
   },
 ];
 
-/** Single sinks that may carry part of an address, matched by file and a fragment of the call. */
-const ALLOWED: ReadonlyArray<{ file: string; fragment: string; reason: string }> = [
-  {
-    file: "mail/email.ts",
-    fragment: "[EMAIL] No RESEND_API_KEY — digest not sent to",
-    reason:
-      "maskEmail: the first character and the domain only, as on the file's other send lines (held in `safeAddr`).",
-  },
-  {
-    file: "mail/email.ts",
-    fragment: "[EMAIL] digest NOT sent to",
-    reason: "maskEmail, as above.",
-  },
+/**
+ * Single sinks that may carry part of an address. Matched by file, by a
+ * fragment that includes the reduction itself (so swapping it for the raw
+ * value fails), and by exactly the names found.
+ */
+const ALLOWED: ReadonlyArray<{
+  file: string;
+  fragment: string;
+  names: readonly string[];
+  reason: string;
+}> = [
   {
     file: "pim/linked-calendar-failure.ts",
-    fragment: "accountDomain",
-    reason: 'The domain only (`email.split("@")[1]`), to tell providers apart in Sentry.',
+    fragment: 'accountDomain: email.split("@")[1]',
+    names: ["email"],
+    reason: "The domain only, to tell providers apart in Sentry.",
   },
 ];
 
@@ -88,7 +87,11 @@ function addressValues(expr: ts.Node): string[] {
   if (ts.isPropertyAccessExpression(expr)) {
     return ADDRESS_NAME.test(expr.name.text) ? [expr.getText()] : [];
   }
-  if (ts.isPropertyAssignment(expr)) return addressValues(expr.initializer);
+  // `{ email: x }` says what x is, whatever x is called.
+  if (ts.isPropertyAssignment(expr)) {
+    const key = ts.isIdentifier(expr.name) || ts.isStringLiteral(expr.name) ? expr.name.text : "";
+    return ADDRESS_NAME.test(key) ? [`${key}:`] : addressValues(expr.initializer);
+  }
   if (ts.isCallExpression(expr)) {
     const name = calleeName(expr);
     if (name !== null && ADDRESS_SANITIZERS.has(name)) return [];
@@ -134,7 +137,13 @@ function scanFile(file: string, code: string): { findings: Finding[]; sinks: num
 function isAllowed(f: Finding): boolean {
   return (
     OPERATOR_ONLY_DIRS.some((d) => f.file.startsWith(d.dir)) ||
-    ALLOWED.some((a) => a.file === f.file && f.text.includes(a.fragment))
+    ALLOWED.some(
+      (a) =>
+        a.file === f.file &&
+        f.text.includes(a.fragment) &&
+        a.names.length === f.names.length &&
+        a.names.every((name, i) => f.names[i] === name),
+    )
   );
 }
 
@@ -163,7 +172,9 @@ describe("address log guard (all of packages/api/src)", () => {
 
   it("keeps every allowlist entry live", () => {
     for (const entry of ALLOWED) {
-      const live = findings.some((f) => f.file === entry.file && f.text.includes(entry.fragment));
+      const live = findings.some(
+        (f) => isAllowed(f) && f.file === entry.file && f.text.includes(entry.fragment),
+      );
       expect(live, `${entry.file}: ${entry.fragment}`).toBe(true);
     }
   });
@@ -185,6 +196,8 @@ describe("the address guard itself", () => {
     ],
     ["an address in a reporter's ids", "logDbFailure('[X] failed', err, { ids: { to } });"],
     ["a suffixed name", "console.error('[X]', fromAddress);"],
+    ["a value under an address key", "request.log.warn({ email: row.login }, 'x');"],
+    ["a reduced address under a short name", "console.log('[X] sent to', safeAddr);"],
   ])("flags %s", (_label, body) => {
     expect(scanned(body)).toHaveLength(1);
   });

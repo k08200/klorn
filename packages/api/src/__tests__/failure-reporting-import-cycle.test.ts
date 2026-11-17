@@ -33,6 +33,8 @@ const REPORTING_MODULES = [
   "privacy/data-wipe-fence-error.ts",
   "db-failure-facts.ts",
   "error-frames.ts",
+  // The address tag the log lines use (mail/email.ts and the routes import it).
+  "security/address-log-tag.ts",
 ] as const;
 
 /** Modules that must import nothing at runtime, so no cycle can ever pass through them. */

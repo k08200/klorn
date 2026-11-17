@@ -7,9 +7,13 @@
  * account, prefer the internal row id. Where there is no row (an address no
  * account matches), use this tag: stable for one address, so repeats of the
  * same one line up, and keyed with the server secret, so it cannot be checked
- * against a list of guessed addresses the way a plain hash can. An operator
- * who needs to know whether a given address produced a line computes
- * `addressLogTag(candidate)` on the server and compares.
+ * against a list of guessed addresses the way a plain hash can. Whether a given
+ * address produced a line is answered by computing `addressLogTag(candidate)`
+ * with the same JWT_SECRET (there is no endpoint for it). Rotating JWT_SECRET
+ * changes every tag, so tags from before a rotation match nothing after it.
+ *
+ * A tag is still a pseudonym: it stays in logs after the account is wiped or
+ * deleted, as the line it is in does.
  *
  * Same key construction as notify/push-later-token.ts, with its own purpose
  * string, so this key signs nothing else.

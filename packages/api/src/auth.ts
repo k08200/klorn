@@ -55,13 +55,15 @@ export function isAdminEmail(email: string | null | undefined): boolean {
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
   const normalized = email.trim().toLowerCase();
-  const allowed = adminEmails.includes(normalized);
-  if (allowed) {
+  const entry = adminEmails.indexOf(normalized);
+  if (entry >= 0) {
     // Audit log: every env-granted admin access is recorded so a leaked
-    // ADMIN_EMAILS env can be traced after the fact.
-    console.log(`[AUDIT][ADMIN_ENV] env-granted admin access for ${normalized}`);
+    // ADMIN_EMAILS env can be traced after the fact. The entry's position
+    // (1-based) names the account to whoever holds the env, without putting
+    // the address in the log.
+    console.log(`[AUDIT][ADMIN_ENV] env-granted admin access for ADMIN_EMAILS entry ${entry + 1}`);
   }
-  return allowed;
+  return entry >= 0;
 }
 
 export interface JwtPayload {
