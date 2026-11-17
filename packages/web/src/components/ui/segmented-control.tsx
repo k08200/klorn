@@ -69,13 +69,13 @@ function targetIndex(key: string, from: number, length: number): number | null {
 /** A sub-pixel tolerance, so a row that just fits never reads as scrollable. */
 const EDGE_SLACK_PX = 1;
 
-interface Overflow {
+export interface Overflow {
   start: boolean;
   end: boolean;
 }
 
-/** Whether the row has segments hidden past its start and end edges. */
-function useOverflow(ref: RefObject<HTMLDivElement | null>): Overflow {
+/** Whether a horizontal scroll row has items hidden past its start and end edges. */
+export function useOverflow(ref: RefObject<HTMLDivElement | null>): Overflow {
   const [overflow, setOverflow] = useState<Overflow>({ start: false, end: false });
   useEffect(() => {
     const el = ref.current;

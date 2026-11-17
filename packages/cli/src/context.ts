@@ -50,6 +50,10 @@ export interface Options {
   apiUrl?: string;
   webUrl?: string;
   timeoutSec?: number;
+  /** backup prune: keep this many of the newest backups. */
+  keep?: number;
+  /** backup prune: delete only backups older than this many days. */
+  olderThanDays?: number;
 }
 
 export interface EnvFileState {

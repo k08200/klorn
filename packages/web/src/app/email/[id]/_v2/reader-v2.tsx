@@ -12,6 +12,11 @@
  * Order: a back bar that stays in reach, the header with everything that left
  * the list row, the actions, then the message first and Klorn's reading of it
  * beside (or, on a phone, below) it.
+ *
+ * On a phone (mobile redesign PR3, MB1, LOCKED 2026-11-14) the reader is full
+ * screen: the shell drops its header, tab bar and floating assistant button
+ * (app-shell.tsx), the top bar carries Back, the assistant and More, and
+ * Reply · Later · Done sit on the bottom edge (reader-actions.tsx).
  */
 
 import type { LiveTier } from "@klorn/contract";
@@ -20,7 +25,9 @@ import { type ReactNode, useEffect } from "react";
 import MailHtmlBody from "../../../../components/mail-html-body";
 import Button from "../../../../components/ui/button";
 import EmptyState from "../../../../components/ui/empty-state";
+import { useLaneName } from "../../../../components/ui/lane-chip";
 import { Skeleton, SkeletonGroup } from "../../../../components/ui/skeleton";
+import { openAssistant } from "../../../../lib/assistant-ask";
 import { useT } from "../../../../lib/i18n";
 import { linkifyText } from "../../../../lib/linkify";
 import { useDisplayTimeZone } from "../../../../lib/use-time-zone";
@@ -29,7 +36,12 @@ import type { ReminderKey } from "../../_v2/reminders";
 import { UndoBar } from "../../_v2/undo-bar";
 import { UNDO_NOTICE_SECONDS, type useLaneMove } from "../../use-lane-move";
 import type { EmailDetail, UndoNotice } from "../types";
-import { ReaderActionsRow, ReaderBottomBar } from "./reader-actions";
+import {
+  type ReaderActionsProps,
+  ReaderActionsRow,
+  ReaderBottomBar,
+  ReaderPhoneMore,
+} from "./reader-actions";
 import { type ReaderFacts, ReaderHeader } from "./reader-header";
 import { SenderLabelMenu } from "./sender-label-menu";
 import type { ReaderContext } from "./use-reader-context";
@@ -74,8 +86,14 @@ export interface ReaderV2Props {
   slots: ReaderSlots;
 }
 
-function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
+interface TopBarProps extends ReaderV2Props {
+  /** The phone's More; absent while the mail loads. */
+  actions: ReaderActionsProps | null;
+}
+
+function TopBar({ reader, keyboardTriage, onOpen, actions }: TopBarProps) {
   const { t } = useT();
+  const laneName = useLaneName();
   const { view, context } = reader;
   const hint = (label: string, key: string) => (keyboardTriage ? `${label} (${key})` : label);
   const newerId = context?.newerId ?? null;
@@ -83,7 +101,7 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
   return (
     <nav
       aria-label={t("mailV2.reader.back")}
-      className="sticky top-0 z-20 -mx-4 flex items-center gap-1 bg-surface-canvas px-1 md:-mx-8 md:px-5"
+      className="sticky top-0 z-20 -mx-4 flex items-center gap-1 bg-surface-canvas px-1 max-rail:pt-[env(safe-area-inset-top)] md:-mx-8 md:px-5"
     >
       <Link
         href="/email"
@@ -95,14 +113,36 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
           {t("nav.mail")}
           <span className="text-ink-muted">
             {" · "}
-            {view.lane === "ALL" ? t("mailV2.lane.all") : view.lane}
+            {view.lane === "ALL" ? t("mailV2.lane.all") : laneName(view.lane)}
           </span>
         </span>
       </Link>
       <span className="flex-1" />
+      {/* Phone only: the floating button stands down on the full-screen reader. */}
       <Button
         variant="ghost"
         size="icon"
+        aria-label={t("assistantDock.open")}
+        data-testid="reader-assistant"
+        onClick={openAssistant}
+        className="size-11 rail:hidden"
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-7 items-center justify-center rounded-full bg-accent-solid text-role-caption font-bold text-accent-solid-ink"
+        >
+          K
+        </span>
+      </Button>
+      {actions && (
+        <span className="rail:hidden">
+          <ReaderPhoneMore {...actions} />
+        </span>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="max-rail:hidden"
         aria-label={t("keys.prev")}
         title={newerId ? hint(t("keys.prev"), "K") : t("mailV2.reader.noPrev")}
         disabled={!newerId}
@@ -113,6 +153,7 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
       <Button
         variant="ghost"
         size="icon"
+        className="max-rail:hidden"
         aria-label={t("keys.next")}
         title={olderId ? hint(t("keys.next"), "J") : t("mailV2.reader.noNext")}
         disabled={!olderId}
@@ -126,7 +167,7 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
 
 function PlainBody({ body }: { body: string }) {
   return (
-    <pre className="whitespace-pre-wrap break-keep font-sans text-role-body leading-6 text-ink-strong [overflow-wrap:anywhere]">
+    <pre className="whitespace-pre-wrap break-keep font-sans text-role-body leading-[1.55] text-ink-strong [overflow-wrap:anywhere]">
       {linkifyText(body)}
     </pre>
   );
@@ -223,8 +264,8 @@ export function ReaderV2(props: ReaderV2Props) {
   };
 
   return (
-    <div className="flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 pb-40 md:px-8 md:pb-10">
-      <TopBar {...props} />
+    <div className="flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 pb-28 md:px-8 md:pb-10">
+      <TopBar {...props} actions={actions || null} />
 
       {props.error && current && (
         <div

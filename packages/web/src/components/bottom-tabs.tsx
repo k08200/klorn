@@ -13,6 +13,7 @@ import {
   withFiles,
 } from "../lib/home";
 import { useT } from "../lib/i18n";
+import { isFullScreenReader } from "../lib/mail-routes";
 import { NavIcon, type NavIconType } from "./nav-icons";
 
 type AuthUser = ReturnType<typeof useAuth>["user"];
@@ -81,6 +82,9 @@ export default function BottomTabs() {
   const { t } = useT();
   const { user } = useAuth();
   const tabs = shellTabs(user);
+  // The phone reader is full screen (MB1): its own bar holds Reply / Later /
+  // Done. The bar never shows from 600px, so nothing changes there.
+  if (isFullScreenReader(pathname, user)) return null;
 
   return (
     <nav
