@@ -71,11 +71,6 @@ async function ownsMailboxOf(cfg: ImapProviderConfig, userId: string): Promise<b
  */
 const ownerChecked = new WeakMap<FastifyRequest, string>();
 
-/** Test hook. */
-export function resetOwnerExitState(): void {
-  notOwnerUntil.clear();
-}
-
 /**
  * The user a bearer token names, when its signature and expiry verify; null
  * otherwise. Only decides 404 or not: requireAuth still checks the session.
