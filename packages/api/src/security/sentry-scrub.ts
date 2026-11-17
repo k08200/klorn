@@ -32,11 +32,15 @@
  * `beforeSend` without importing Sentry's types here — this module stays pure
  * and testable against synthetic events, with no DSN and no network.
  *
- * Every string these hooks pass on also loses its mail addresses
- * (mail-address-redaction.ts), keys included: the console integration
+ * Every text these hooks scrub for credentials (messages, exception values,
+ * breadcrumb and span data, extra, tags, contexts, header values, keys at any
+ * depth), plus the request path and the transaction name, also loses its mail
+ * addresses (mail-address-redaction.ts): the console integration
  * (@sentry/core integrations/console.js, a default) stores each console.*
  * call as a breadcrumb, line and raw arguments, so an address in any log line
- * rode on the next error event whatever the log sites did.
+ * rode on the next error event whatever the log sites did. Fields left as they
+ * are hold no free text from this code: `user` (never set; dataCollection
+ * keeps the SDK from filling it), exception `type`, breadcrumb `category`.
  *
  * Everything returns a NEW object; a hook that mutated its input would also
  * mutate the live breadcrumb buffer the next event reads from.
@@ -108,6 +112,8 @@ interface ScrubbableRequest {
  */
 interface ScrubbableEventCommon {
   message?: string;
+  /** The transaction's name, or the error's: an unmatched route's is its raw path. */
+  transaction?: string;
   request?: ScrubbableRequest;
   breadcrumbs?: ScrubbableBreadcrumb[];
   extra?: Record<string, unknown>;
@@ -184,6 +190,8 @@ function scrubValue(value: unknown, depth: number, budget: ScrubBudget): unknown
       // A credential-named field is redacted whatever its value's shape — the
       // patterns cannot recognise an opaque token, but the name gives it away.
       // The key itself is text too: a logged map can be keyed by address.
+      // Two address keys both become the marker and the later value wins; that
+      // loses a value, never an address.
       out[redactText(key)] =
         isCredentialName(key) && entry !== undefined && entry !== null
           ? "[REDACTED]"
@@ -250,7 +258,9 @@ function scrubRequest(request: ScrubbableRequest): ScrubbableRequest {
     // The OAuth callback's ?code=…&state=… is a live authorization code and a
     // signed state JWT; drop the query entirely rather than per-parameter
     // (security audit 2026-07-20).
-    ...(request.url !== undefined ? { url: request.url.split("?")[0] } : {}),
+    // The path is text a client chose; no route takes an address in it, but a
+    // request for one that does not exist can carry one.
+    ...(request.url !== undefined ? { url: redactText(request.url.split("?")[0] ?? "") } : {}),
     ...(request.query_string !== undefined ? { query_string: undefined } : {}),
     ...(headers !== undefined ? { headers } : {}),
     // requestDataIntegration stores a PARSED cookie object beside the header.
@@ -265,6 +275,7 @@ function scrubEventCommon<T extends ScrubbableEventCommon>(event: T): T {
   return {
     ...event,
     ...(event.message !== undefined ? { message: redactText(event.message) } : {}),
+    ...(event.transaction !== undefined ? { transaction: redactText(event.transaction) } : {}),
     ...(event.request !== undefined ? { request: scrubRequest(event.request) } : {}),
     ...(event.breadcrumbs !== undefined
       ? { breadcrumbs: event.breadcrumbs.map(scrubSentryBreadcrumb) }

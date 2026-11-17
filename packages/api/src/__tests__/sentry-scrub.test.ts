@@ -409,3 +409,15 @@ describe("mail addresses — every hook", () => {
     expectNoAddress(transaction);
   });
 });
+
+describe("mail addresses — the request path and the transaction name", () => {
+  it("an unmatched route's raw path, on the request and as the transaction name", () => {
+    const scrubbed = scrubSentryTransaction({
+      transaction: "GET /api/u/alice@example.com",
+      request: { url: "https://api.klorn.ai/api/u/alice@example.com?x=1" },
+    });
+    expect(JSON.stringify(scrubbed)).not.toContain("alice");
+    expect(scrubbed.request?.url).toBe("https://api.klorn.ai/api/u/[ADDRESS]");
+    expect(scrubbed.transaction).toBe("GET /api/u/[ADDRESS]");
+  });
+});

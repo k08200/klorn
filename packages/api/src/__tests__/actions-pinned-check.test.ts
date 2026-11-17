@@ -27,7 +27,7 @@ const PIN = "trufflesecurity/trufflehog@3bd2b5887eb0efb8fa18bfd1d296032924e4ffdc
 const DIGEST = `sha256:${"2e".repeat(32)}`;
 
 let fixture = 0;
-function check(stepWith: string): { status: number | null; output: string } {
+function check(stepWith: string, pin = PIN): { status: number | null; output: string } {
   const dir = join(scratch, `case-${fixture++}`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
@@ -37,7 +37,7 @@ function check(stepWith: string): { status: number | null; output: string } {
       "  security:",
       "    steps:",
       "      - name: Scan for hardcoded secrets",
-      `        uses: ${PIN}`,
+      `        uses: ${pin}`,
       stepWith,
       "      - name: Next step",
       "        run: echo next",
@@ -67,6 +67,15 @@ describe("check-actions-pinned: an action that pulls a container image by tag", 
     const { status, output } = check(stepWith);
     expect(status).toBe(1);
     expect(output).toContain("trufflesecurity/trufflehog");
+    expect(output).toContain("version");
+  });
+
+  it("checks the action whatever the case of its owner/repo", () => {
+    const { status, output } = check(
+      "        with:\n          version: latest",
+      PIN.replace("trufflesecurity/trufflehog", "TruffleSecurity/TruffleHog"),
+    );
+    expect(status).toBe(1);
     expect(output).toContain("version");
   });
 

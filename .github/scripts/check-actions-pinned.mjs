@@ -59,7 +59,8 @@ function stepInput(lines, usesIndex, name) {
 
 /** A violation when an image-pulling action's tag input does not pin its release by digest. */
 function imageTagViolation(lines, usesIndex, ref, rest) {
-  const repo = ref.split("@")[0];
+  // GitHub owner/repo names are case-insensitive in `uses:`.
+  const repo = ref.split("@")[0].toLowerCase();
   const input = IMAGE_TAG_INPUTS[repo];
   if (!input) return null;
   const release = COMMENT_RELEASE.exec(rest)?.[1];

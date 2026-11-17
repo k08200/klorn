@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { replyRouteNotFound } from "../routes/dark-route-gate.js";
 import { clientAddress } from "./client-address.js";
 
 /**
@@ -38,12 +39,17 @@ export function serializeRequestForLog(req: FastifyRequest) {
 /**
  * The not-found handler (index.ts). Fastify's default (fastify/lib/four-oh-four.js
  * basic404) logs `Route GET:<url> not found` with the raw URL, query included,
- * past the `req` serializer. Same line and same body, path only: clients tell a
- * route that is not deployed by that body (web notification-center.ts matches
- * `Route <METHOD>:<path> not found`).
+ * past the `req` serializer. This logs that line with the path only, and
+ * answers exactly as the default does (replyRouteNotFound): a dark route
+ * (dark-route-gate.ts) answers with that same body and must stay
+ * indistinguishable from a missing one, and clients tell an undeployed route
+ * by it (web notification-center.ts). The body echoes the query back only to
+ * the client that sent it.
+ *
+ * Unlike the default it logs even under Fastify's `disableRequestLogging`,
+ * which the API does not set.
  */
 export function answerRouteNotFound(request: FastifyRequest, reply: FastifyReply) {
-  const message = `Route ${request.method}:${pathOfRequestTarget(request.url)} not found`;
-  request.log.info(message);
-  return reply.code(404).send({ message, error: "Not Found", statusCode: 404 });
+  request.log.info(`Route ${request.method}:${pathOfRequestTarget(request.url)} not found`);
+  return replyRouteNotFound(request, reply);
 }

@@ -9,7 +9,11 @@
 import { Writable } from "node:stream";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { answerRouteNotFound, serializeRequestForLog } from "../security/request-log.js";
+import {
+  answerRouteNotFound,
+  pathOfRequestTarget,
+  serializeRequestForLog,
+} from "../security/request-log.js";
 
 interface LoggedRequest {
   readonly method?: string;
@@ -23,6 +27,7 @@ interface LoggedRequest {
 async function logLines(
   url: string,
   headers: Record<string, string> = {},
+  notFound: "klorn" | "fastify-default" = "klorn",
 ): Promise<{ lines: string[]; response: { statusCode: number; body: string } }> {
   const lines: string[] = [];
   const stream = new Writable({
@@ -35,7 +40,7 @@ async function logLines(
     trustProxy: true,
     logger: { level: "info", stream, serializers: { req: serializeRequestForLog } },
   });
-  app.setNotFoundHandler(answerRouteNotFound);
+  if (notFound === "klorn") app.setNotFoundHandler(answerRouteNotFound);
   app.get("/api/ping", async () => ({ ok: true }));
   app.get("/api/boom", async () => {
     throw new Error("boom");
@@ -113,19 +118,38 @@ describe("the request log carries the path, never the query string", () => {
   });
 
   it("an unmatched route: no 'Route GET:<url> not found' line with the query", async () => {
-    const { lines, response } = await logLines(`/api/missing${QUERY}#frag=secret-frag`);
+    const { lines, response } = await logLines(`/api/missing${QUERY}`);
     expect(response.statusCode).toBe(404);
     expectNoQuery(lines);
-    expect(lines.join("\n")).not.toContain("secret-frag");
     expect(lines.some((line) => line.includes("Route GET:/api/missing not found"))).toBe(true);
   });
 
-  it("an unmatched route keeps Fastify's 404 body shape, which clients match on", async () => {
-    const { response } = await logLines(`/api/missing${QUERY}`);
-    expect(JSON.parse(response.body)).toEqual({
-      message: "Route GET:/api/missing not found",
-      error: "Not Found",
-      statusCode: 404,
-    });
+  it("Fastify's default 404 handler is what logged the query", async () => {
+    const { lines } = await logLines(`/api/missing${QUERY}`, {}, "fastify-default");
+    expect(lines.some((line) => line.includes("4%2F0AbOauthCode-9f2"))).toBe(true);
+  });
+
+  // A dark route (dark-route-gate.ts) answers with Fastify's default body and
+  // must stay indistinguishable from a missing route; clients also match it.
+  it("an unmatched route answers byte-for-byte as Fastify's default 404", async () => {
+    const ours = await logLines(`/api/missing${QUERY}`);
+    const fastify = await logLines(`/api/missing${QUERY}`, {}, "fastify-default");
+    expect(ours.response).toEqual(fastify.response);
+  });
+});
+
+describe("pathOfRequestTarget", () => {
+  it.each([
+    ["/api/ping", "/api/ping"],
+    ["/api/ping?code=1&state=2", "/api/ping"],
+    ["/api/ping#frag", "/api/ping"],
+    ["/a#b?c", "/a"],
+    ["/a?b#c", "/a"],
+    ["/?x", "/"],
+    // An encoded `?` is path data to the router, not a query separator.
+    ["/a%3Fb", "/a%3Fb"],
+    ["", ""],
+  ])("%j -> %j", (target, path) => {
+    expect(pathOfRequestTarget(target)).toBe(path);
   });
 });
