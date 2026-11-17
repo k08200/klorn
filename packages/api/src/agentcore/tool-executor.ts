@@ -47,6 +47,7 @@ import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
+import { ToolValidationError, toolFailureResult } from "./tool-failure.js";
 import { capToolResult } from "./tool-result-budget.js";
 
 const TIME_TOOL = {
@@ -208,10 +209,10 @@ export function isToolAllowedForPlan(toolName: string, plan: string, role?: stri
   return planHasFeature(plan, featureKey, role);
 }
 
-/** Basic string guard — returns trimmed string or throws */
+/** Basic string guard — returns trimmed string or throws (the message names the parameter only). */
 function requireString(val: unknown, name: string): string {
   if (typeof val !== "string" || val.trim().length === 0) {
-    throw new Error(`Missing or invalid parameter: ${name}`);
+    throw new ToolValidationError(`Missing or invalid parameter: ${name}`);
   }
   return val.trim();
 }
@@ -671,15 +672,16 @@ async function executeToolCallInternal(
       });
       throw err;
     }
-    // The model gets the message back as the tool result; Sentry gets facts
-    // only. LLM-backed tools (sender_context, summarize_meeting) throw
-    // provider errors that can quote mail, and every tool runs on
-    // model-written arguments that an error message can echo.
-    const message = err instanceof Error ? err.message : "Unknown error";
+    // The model gets the failure's classification as the tool result, and
+    // Sentry gets facts only. LLM-backed tools (sender_context,
+    // summarize_meeting) throw provider errors that can quote mail, a Prisma
+    // error renders other rows' values, and every tool runs on model-written
+    // arguments that an error message can echo — read back by the model, any
+    // of those is a prompt-injection channel (tool-failure.ts).
     captureLlmFailure("Agent tool failed", err, {
       tags: { area: "tool_executor", tool: functionName },
       extra: { userId, argKeys: Object.keys(args) },
     });
-    return JSON.stringify({ error: message });
+    return toolFailureResult(err);
   }
 }

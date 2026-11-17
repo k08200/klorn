@@ -15,6 +15,7 @@
  */
 
 import { executeToolCall } from "../agentcore/tool-executor.js";
+import { toolFailure } from "../agentcore/tool-failure.js";
 import { captureDbFailure } from "../report-db-failure.js";
 import {
   CREATE_DRAFT_TOOL_NAME,
@@ -208,6 +209,8 @@ export async function runMcpWriteCall(call: McpWriteCall): Promise<McpToolResult
     return textResult(result);
   } catch (err) {
     await settleWriteAudit(audit, auditId, { outcome: "error", reason: "exception" });
-    return errorResult(err instanceof Error ? err.message : "Tool failed.");
+    // The classification, never the thrown text (tool-failure.ts).
+    const { error, code } = toolFailure(err);
+    return errorResult(error, { code });
   }
 }

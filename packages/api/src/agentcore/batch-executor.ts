@@ -6,6 +6,7 @@
  */
 
 import { executeToolCall } from "./tool-executor.js";
+import { type ToolFailureCode, toolFailure } from "./tool-failure.js";
 
 /** Maximum concurrent tool executions per batch */
 const MAX_CONCURRENT_TOOLS = 3;
@@ -19,7 +20,13 @@ export interface BatchToolCall {
 export interface BatchToolResult {
   id: string;
   result: string;
+  /** The failure's classification (tool-failure.ts), never the thrown text. */
   error?: string;
+  code?: ToolFailureCode;
+}
+
+function failedResult(id: string, err: unknown): BatchToolResult {
+  return { id, result: "", ...toolFailure(err) };
 }
 
 /**
@@ -36,13 +43,7 @@ export async function executeBatchToolCalls(
       const result = await executeToolCall(userId, calls[0].functionName, calls[0].args);
       return [{ id: calls[0].id, result }];
     } catch (err) {
-      return [
-        {
-          id: calls[0].id,
-          result: "",
-          error: err instanceof Error ? err.message : "Unknown error",
-        },
-      ];
+      return [failedResult(calls[0].id, err)];
     }
   }
 
@@ -73,11 +74,7 @@ export async function executeBatchToolCalls(
       const result = await executeToolCall(userId, call.functionName, call.args);
       results[i] = { id: call.id, result };
     } catch (err) {
-      results[i] = {
-        id: call.id,
-        result: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      results[i] = failedResult(call.id, err);
     } finally {
       release();
     }
