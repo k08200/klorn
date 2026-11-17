@@ -238,6 +238,8 @@ describe("storage caps", () => {
 });
 
 describe("own replies and deletions", () => {
+  const REPLY_AT = new Date("2026-11-14T10:15:00Z");
+
   it("the user's reply answers only episodes older than the reply", async () => {
     db.prisma.slackEpisode.updateMany.mockResolvedValueOnce({ count: 1 });
     expect(
@@ -246,17 +248,23 @@ describe("own replies and deletions", () => {
         channel: "D0DM",
         threadTs: null,
         ts: "1763114500.000100",
+        now: REPLY_AT,
       }),
     ).toBe(1);
+    const scope = {
+      connectionId: "conn-1",
+      channelId: "D0DM",
+      threadKey: "",
+      lastTs: { lt: "1763114500.000100" },
+    };
     expect(db.prisma.slackEpisode.updateMany.mock.calls[0]?.[0]).toEqual({
-      where: {
-        connectionId: "conn-1",
-        channelId: "D0DM",
-        status: "OPEN",
-        threadKey: "",
-        lastTs: { lt: "1763114500.000100" },
-      },
-      data: { status: "ANSWERED" },
+      where: { ...scope, status: "OPEN" },
+      data: { status: "ANSWERED", answeredAt: REPLY_AT },
+    });
+    // One the judge already claimed or judged keeps its verdict, stamped so it never rings.
+    expect(db.prisma.slackEpisode.updateMany.mock.calls[1]?.[0]).toEqual({
+      where: { ...scope, status: { in: ["JUDGING", "JUDGED"] }, answeredAt: null },
+      data: { answeredAt: REPLY_AT },
     });
     expect(db.prisma.slackMessage.findFirst).not.toHaveBeenCalled();
   });
@@ -264,25 +272,36 @@ describe("own replies and deletions", () => {
   it("a reply in a thread also answers the top-level episode holding the parent message", async () => {
     db.prisma.slackEpisode.updateMany
       .mockResolvedValueOnce({ count: 0 })
-      .mockResolvedValueOnce({ count: 1 });
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
     db.prisma.slackMessage.findFirst.mockResolvedValueOnce({ episodeId: "ep-top" } as never);
     const closed = await markSlackConversationAnswered({
       connectionId: "conn-1",
       channel: "C0PUB",
       threadTs: "1763114400.000100",
       ts: "1763114500.000100",
+      now: REPLY_AT,
     });
     expect(closed).toBe(1);
     expect(db.prisma.slackMessage.findFirst.mock.calls[0]?.[0]).toEqual({
       where: { connectionId: "conn-1", channelId: "C0PUB", ts: "1763114400.000100" },
       select: { episodeId: true },
     });
-    expect(db.prisma.slackEpisode.updateMany.mock.calls[1]?.[0]?.where).toEqual({
+    const top = {
       connectionId: "conn-1",
       channelId: "C0PUB",
-      status: "OPEN",
       id: "ep-top",
       lastTs: { lt: "1763114500.000100" },
+    };
+    expect(db.prisma.slackEpisode.updateMany.mock.calls[2]?.[0]?.where).toEqual({
+      ...top,
+      status: "OPEN",
+    });
+    expect(db.prisma.slackEpisode.updateMany.mock.calls[3]?.[0]?.where).toEqual({
+      ...top,
+      status: { in: ["JUDGING", "JUDGED"] },
+      answeredAt: null,
     });
   });
 

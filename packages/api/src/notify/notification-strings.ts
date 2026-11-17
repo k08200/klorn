@@ -59,6 +59,13 @@ interface NotificationCopy {
    * (desktop-catchup.ts), for mail that rang live during quiet hours.
    */
   heldDuringQuietHours: (count: number | string) => string;
+  /**
+   * The Windows shell's catch-up summary when a held Slack PUSH is among the
+   * toasted (desktop-catchup.ts): "urgent messages", since not all are mail.
+   * The closed / quiet-hours pick is the same as for the two mail titles.
+   */
+  messagesWhileClosed: (count: number | string) => string;
+  messagesDuringQuietHours: (count: number | string) => string;
   actionComplete: { title: string; body: (action: string) => string };
   tools: Record<
     string,
@@ -77,6 +84,8 @@ const EN: NotificationCopy = {
   urgentDigest: (count, who, what) => `${count} urgent emails. Latest: ${who} - ${what}`,
   missedWhileClosed: (count) => `${count} urgent emails while Klorn was closed`,
   heldDuringQuietHours: (count) => `${count} urgent emails during quiet hours`,
+  messagesWhileClosed: (count) => `${count} urgent messages while Klorn was closed`,
+  messagesDuringQuietHours: (count) => `${count} urgent messages during quiet hours`,
   actionComplete: { title: "Action complete", body: (action) => `${action} finished.` },
   tools: {
     send_email: { title: "Email sent", body: (v) => `Sent "${v.subject}" to ${v.to}.` },
@@ -123,6 +132,8 @@ const KO: NotificationCopy = {
   urgentDigest: (count, who, what) => `긴급 메일 ${count}건. 최신: ${who} - ${what}`,
   missedWhileClosed: (count) => `Klorn이 꺼져 있는 동안 긴급 메일 ${count}건`,
   heldDuringQuietHours: (count) => `방해 금지 시간 동안 긴급 메일 ${count}건`,
+  messagesWhileClosed: (count) => `Klorn이 꺼져 있는 동안 긴급 메시지 ${count}건`,
+  messagesDuringQuietHours: (count) => `방해 금지 시간 동안 긴급 메시지 ${count}건`,
   actionComplete: { title: "작업 완료", body: (action) => `${action} 작업을 마쳤습니다.` },
   tools: {
     send_email: { title: "메일 보냄", body: (v) => `"${v.subject}"을(를) ${v.to}에게 보냈습니다.` },
@@ -164,6 +175,8 @@ const JA: NotificationCopy = {
   urgentDigest: (count, who, what) => `緊急メール${count}件。最新: ${who} - ${what}`,
   missedWhileClosed: (count) => `Klornが閉じている間に緊急メール${count}件`,
   heldDuringQuietHours: (count) => `通知しない時間中に緊急メール${count}件`,
+  messagesWhileClosed: (count) => `Klornが閉じている間に緊急メッセージ${count}件`,
+  messagesDuringQuietHours: (count) => `通知しない時間中に緊急メッセージ${count}件`,
   actionComplete: { title: "処理完了", body: (action) => `${action} が完了しました。` },
   tools: {
     send_email: {
@@ -211,6 +224,8 @@ const ZH: NotificationCopy = {
   urgentDigest: (count, who, what) => `${count} 封紧急邮件。最新：${who} - ${what}`,
   missedWhileClosed: (count) => `Klorn 关闭期间有 ${count} 封紧急邮件`,
   heldDuringQuietHours: (count) => `免打扰时段内有 ${count} 封紧急邮件`,
+  messagesWhileClosed: (count) => `Klorn 关闭期间有 ${count} 条紧急消息`,
+  messagesDuringQuietHours: (count) => `免打扰时段内有 ${count} 条紧急消息`,
   actionComplete: { title: "操作完成", body: (action) => `${action} 已完成。` },
   tools: {
     send_email: { title: "邮件已发送", body: (v) => `已将“${v.subject}”发送给 ${v.to}。` },
@@ -251,6 +266,8 @@ const ES: NotificationCopy = {
   urgentDigest: (count, who, what) => `${count} correos urgentes. Último: ${who} - ${what}`,
   missedWhileClosed: (count) => `${count} correos urgentes mientras Klorn estaba cerrado`,
   heldDuringQuietHours: (count) => `${count} correos urgentes durante las horas de silencio`,
+  messagesWhileClosed: (count) => `${count} mensajes urgentes mientras Klorn estaba cerrado`,
+  messagesDuringQuietHours: (count) => `${count} mensajes urgentes durante las horas de silencio`,
   actionComplete: { title: "Acción completada", body: (action) => `${action} ha terminado.` },
   tools: {
     send_email: { title: "Correo enviado", body: (v) => `Se envió "${v.subject}" a ${v.to}.` },
@@ -298,6 +315,8 @@ const FR: NotificationCopy = {
   urgentDigest: (count, who, what) => `${count} e-mails urgents. Dernier : ${who} - ${what}`,
   missedWhileClosed: (count) => `${count} e-mails urgents pendant que Klorn était fermé`,
   heldDuringQuietHours: (count) => `${count} e-mails urgents pendant les heures calmes`,
+  messagesWhileClosed: (count) => `${count} messages urgents pendant que Klorn était fermé`,
+  messagesDuringQuietHours: (count) => `${count} messages urgents pendant les heures calmes`,
   actionComplete: { title: "Action terminée", body: (action) => `${action} est terminé.` },
   tools: {
     send_email: { title: "E-mail envoyé", body: (v) => `« ${v.subject} » envoyé à ${v.to}.` },
@@ -348,6 +367,8 @@ const DE: NotificationCopy = {
   urgentDigest: (count, who, what) => `${count} dringende E-Mails. Zuletzt: ${who} - ${what}`,
   missedWhileClosed: (count) => `${count} dringende E-Mails, während Klorn geschlossen war`,
   heldDuringQuietHours: (count) => `${count} dringende E-Mails während der Ruhezeiten`,
+  messagesWhileClosed: (count) => `${count} dringende Nachrichten, während Klorn geschlossen war`,
+  messagesDuringQuietHours: (count) => `${count} dringende Nachrichten während der Ruhezeiten`,
   actionComplete: { title: "Aktion abgeschlossen", body: (action) => `${action} ist fertig.` },
   tools: {
     send_email: { title: "E-Mail gesendet", body: (v) => `„${v.subject}" an ${v.to} gesendet.` },

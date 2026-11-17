@@ -16,7 +16,13 @@
  * disconnect mid-judge writes nothing), then the ring and the commitments run
  * best-effort — a failure in either never rewrites the verdict, and a retaken
  * claim can never ring twice. Episodes older than SLACK_RING_RECENCY_MS (after
- * an outage or the brake) are judged but do not ring.
+ * an outage or the brake) are judged but do not ring. A reply the user sent
+ * while the judge call was in flight (episodes.ts stamps answeredAt on the
+ * claimed episode) keeps the verdict but stops the ring: it is re-read right
+ * before ringing.
+ *
+ * The verdict's source is stored with it; a keyword-fallback verdict (no
+ * model answered) is re-judged once later by rejudge.ts.
  */
 
 import { cohortRestriction, SLACK_FLAGS } from "../config.js";
@@ -25,7 +31,12 @@ import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
 import { extractSlackCommitments } from "./commitments.js";
 import { EPISODE_MAX_MESSAGES, EPISODE_MAX_WAIT_MS, EPISODE_QUIET_MS } from "./episodes.js";
-import { judgeSlackEpisode, slackConversationKind, slackEpisodeText } from "./judge-episode.js";
+import {
+  judgeSlackEpisode,
+  type SlackVerdict,
+  slackConversationKind,
+  slackEpisodeText,
+} from "./judge-episode.js";
 import { notifySlackPush } from "./notify.js";
 import { slackPermalink } from "./permalink.js";
 
@@ -41,7 +52,7 @@ export const SLACK_RING_RECENCY_MS = 6 * 3_600_000;
 export const SLACK_CLAIM_TIMEOUT_MS = 10 * 60_000;
 const DAY_MS = 86_400_000;
 
-type ReadyEpisode = {
+export type ReadyEpisode = {
   id: string;
   userId: string;
   connectionId: string;
@@ -54,7 +65,7 @@ type ReadyEpisode = {
   connection: { workspaceUrl: string | null };
 };
 
-const READY_SELECT = {
+export const READY_SELECT = {
   id: true,
   userId: true,
   connectionId: true,
@@ -102,7 +113,7 @@ async function claim(episodeId: string, now: Date): Promise<boolean> {
 
 const OPT_IN_WHERE = { channelType: { in: ["channel", "group"] }, mentionsUser: false };
 
-async function overDailyCap(episode: ReadyEpisode, now: Date): Promise<boolean> {
+export async function overDailyCap(episode: ReadyEpisode, now: Date): Promise<boolean> {
   const dayStart = new Date(Math.floor(now.getTime() / DAY_MS) * DAY_MS);
   const judgedToday = {
     connectionId: episode.connectionId,
@@ -125,17 +136,34 @@ async function settle(episodeId: string, data: Record<string, unknown>): Promise
   return count === 1;
 }
 
-async function ringIfPush(
+export type FirstMessage = { text: string; ts: string; threadTs: string | null };
+
+/** Whether the user has not replied since the episode's last message. */
+async function stillUnanswered(episodeId: string): Promise<boolean> {
+  const row = await prisma.slackEpisode.findFirst({
+    where: { id: episodeId, answeredAt: null },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/**
+ * Alerts the user about a PUSH episode: a ring under the interrupt budget, or
+ * (ring: false) a bell row only. Nothing at all once the user replied: the
+ * reply is re-read here, after the verdict and right before the alert, so one
+ * that landed while the judge call was in flight still counts. Best-effort:
+ * a failure is reported and never touches the stored verdict.
+ */
+export async function alertSlackEpisode(
   episode: ReadyEpisode,
-  verdict: { tier: string; reason: string },
-  first: { text: string; ts: string; threadTs: string | null },
-  tickNow: Date,
+  verdict: { reason: string },
+  first: FirstMessage,
+  options: { ring: boolean },
 ): Promise<void> {
-  if (verdict.tier !== "PUSH") return;
-  if (tickNow.getTime() - episode.lastMessageAt.getTime() > SLACK_RING_RECENCY_MS) return;
   // Quiet hours, focus and the budget day are read at ring time, not tick start.
   const now = new Date();
   try {
+    if (!(await stillUnanswered(episode.id))) return;
     const outcome = await notifySlackPush({
       userId: episode.userId,
       episodeId: episode.id,
@@ -148,6 +176,7 @@ async function ringIfPush(
         first.ts,
         first.threadTs,
       ),
+      ring: options.ring,
       now,
     });
     if (outcome === "admitted") {
@@ -168,8 +197,19 @@ async function ringIfPush(
   }
 }
 
+async function ringIfPush(
+  episode: ReadyEpisode,
+  verdict: SlackVerdict,
+  first: FirstMessage,
+  tickNow: Date,
+): Promise<void> {
+  if (verdict.tier !== "PUSH") return;
+  if (tickNow.getTime() - episode.lastMessageAt.getTime() > SLACK_RING_RECENCY_MS) return;
+  await alertSlackEpisode(episode, verdict, first, { ring: true });
+}
+
 /** Followed-channel chatter between other people is not the user's ledger. */
-async function commitmentsIfDirect(
+export async function commitmentsIfDirect(
   episode: ReadyEpisode,
   tier: string,
   messages: ReadonlyArray<{ text: string }>,
@@ -220,6 +260,7 @@ async function judgeOne(episode: ReadyEpisode, now: Date): Promise<void> {
     status: "JUDGED",
     tier: verdict.tier,
     reason: verdict.reason,
+    verdictSource: verdict.source,
     judgedAt: now,
   });
   if (!kept) return;
@@ -254,13 +295,23 @@ async function judgeOrQueue(episode: ReadyEpisode, now: Date): Promise<void> {
   }
 }
 
+/**
+ * Whose episodes a judge pass may touch: null for everyone, else the cohort's
+ * user ids. "none" while the flag is off, the cohort is empty, or the
+ * background brake is on (no LLM calls).
+ */
+export function slackJudgeReach(): string[] | null | "none" {
+  if (isBackgroundAgentsDisabled()) return "none";
+  const reach = cohortRestriction(SLACK_FLAGS);
+  if (reach.kind === "none") return "none";
+  if (reach.kind === "all") return null;
+  return reach.userIds.length === 0 ? "none" : reach.userIds;
+}
+
 /** One judge pass; returns how many episodes this pass claimed. */
 export async function judgeReadySlackEpisodes(now: Date = new Date()): Promise<number> {
-  if (isBackgroundAgentsDisabled()) return 0;
-  const reach = cohortRestriction(SLACK_FLAGS);
-  if (reach.kind === "none") return 0;
-  const userIds = reach.kind === "only" ? reach.userIds : null;
-  if (userIds && userIds.length === 0) return 0;
+  const userIds = slackJudgeReach();
+  if (userIds === "none") return 0;
   const ready: ReadyEpisode[] = await prisma.slackEpisode.findMany({
     where: readyWhere(now, userIds),
     orderBy: { lastMessageAt: "asc" },
