@@ -88,7 +88,7 @@ export function laneThreads(counts: EmailLaneCounts | null, lane: LiveTier): num
   return counts[lane].threads ?? counts[lane].total;
 }
 
-function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
+export function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
   const { t } = useT();
   const laneName = useLaneName();
   const mail = useLaneMail(lane, true);
