@@ -2,8 +2,10 @@
 
 /**
  * Mail v2 reader actions (productization plan §1/§3, P5b). One set of actions,
- * two layouts: a row under the header from 768px, and on a phone a bottom bar
- * (Reply, Archive) whose More menu holds the rest. Every action is one the
+ * two layouts: a row under the header from 600px, and on a phone (mobile
+ * redesign PR3, MB1, LOCKED 2026-11-14) a bottom bar — Reply, Later, Done —
+ * with the rest (lanes, the other reminders, read state, star, delete) in the
+ * top bar's More menu. Every action is one the
  * reader already had; this file only arranges them. An action that cannot run
  * says why (demo mail, a mail with no lane yet, an account that needs
  * reconnecting) instead of silently doing nothing.
@@ -15,7 +17,7 @@ import { useLaneName } from "../../../../components/ui/lane-chip";
 import { Menu, type MenuSection } from "../../../../components/ui/menu";
 import { useT } from "../../../../lib/i18n";
 import { CORE_TIERS } from "../../../../lib/tiers";
-import { ArchiveIcon, MoreIcon, ReplyIcon } from "../../_v2/icons";
+import { ArchiveIcon, ClockIcon, MoreIcon, ReplyIcon } from "../../_v2/icons";
 import { LANE_DOT } from "../../_v2/mail-header";
 import { REMINDER_KEYS, REMINDER_LABEL_KEYS, type ReminderKey } from "../../_v2/reminders";
 import type { EmailDetail } from "../types";
@@ -135,7 +137,7 @@ export function ReaderLaneMenu(props: ReaderActionsProps) {
   const { t } = useT();
   const { lanes } = useReaderMenus(props);
   return (
-    <Menu label={t("mailV2.reader.moveTo")} align="end-from-md" sections={[lanes]}>
+    <Menu label={t("mailV2.reader.moveTo")} align="end-from-md" tall="phone" sections={[lanes]}>
       {t("mailV2.reader.moveTo")}
     </Menu>
   );
@@ -207,54 +209,77 @@ export function ReaderActionsRow(props: ReaderActionsProps) {
   );
 }
 
+/** Later from the phone bar: one tap, the reader's first reminder choice. */
+const QUICK_LATER: ReminderKey = "later-today";
+
 /**
- * Below 600px (the bottom tab bar's range): Reply and Archive stay in reach above the tab bar; the lane,
- * the reminder and the rest open upward from More. 44px targets throughout.
- * The bar sits 74px plus the home-indicator inset above the bottom, clear of
- * the tab bar on an iPhone, and stops 80px short of the right edge so it never
- * covers the assistant dock button (right 16px, 48px square; on the same row
- * under UNIFIED_HOME, 96px up otherwise).
+ * Below 600px: the reader is full screen (no tab bar, no floating assistant
+ * button), so Reply, Later and Done sit on the bottom edge above the
+ * home-indicator inset, full width, 44px each. Later is one tap (later
+ * today, POST /api/email/:id/later); the other times are in More.
  */
 export function ReaderBottomBar(props: ReaderActionsProps) {
   const { t } = useT();
-  const { lanes, remind, more, archiveBlocked, idle } = useReaderMenus(props);
+  const { archiveBlocked, idle } = useReaderMenus(props);
+  const laterBlocked = props.isDemo ? t("keys.reason.demo") : null;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a toolbar groups actions; <menu>/<fieldset> are not that
     <div
       role="toolbar"
       aria-label={t("mailV2.reader.actions")}
-      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-4 right-20 z-30 flex items-center gap-1 rounded-control border border-line bg-surface-elevated p-1 shadow-menu rail:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-[1.4fr_1fr_1fr] gap-2 border-t border-line bg-surface-panel/95 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-menu rail:hidden backdrop-blur-xl"
     >
       <Button
         variant="primary"
-        size="sm"
+        size="lg"
         icon={<ReplyIcon />}
         onClick={props.onReply}
-        className="flex-1"
+        className="px-3"
       >
         {t("keys.reply")}
       </Button>
       <Button
         variant="secondary"
-        size="sm"
+        size="lg"
+        icon={<ClockIcon />}
+        title={laterBlocked ?? t(REMINDER_LABEL_KEYS[QUICK_LATER])}
+        disabled={laterBlocked !== null || props.reminderBusy}
+        loading={props.reminderBusy}
+        onClick={() => props.onRemind(QUICK_LATER)}
+        className="px-3"
+      >
+        {t("mailV2.reader.later")}
+      </Button>
+      <Button
+        variant="secondary"
+        size="lg"
         icon={<ArchiveIcon />}
         title={archiveBlocked ?? undefined}
         disabled={archiveBlocked !== null || !idle}
         loading={props.busy === "archive"}
         onClick={props.onArchive}
-        className="flex-1"
+        className="px-3"
       >
-        {t("mailV2.row.archive")}
+        {t("mailV2.reader.done")}
       </Button>
-      <Menu
-        label={t("mailV2.more.label")}
-        variant="icon"
-        align="end"
-        side="top"
-        sections={[lanes, remind, more]}
-      >
-        <MoreIcon />
-      </Menu>
     </div>
+  );
+}
+
+/** The phone's More (in the reader's top bar): lanes, every reminder, the rest. */
+export function ReaderPhoneMore(props: ReaderActionsProps) {
+  const { t } = useT();
+  const { lanes, remind, more } = useReaderMenus(props);
+  return (
+    <Menu
+      label={t("mailV2.more.label")}
+      variant="icon"
+      align="end"
+      tall
+      scroll
+      sections={[remind, lanes, more]}
+    >
+      <MoreIcon />
+    </Menu>
   );
 }

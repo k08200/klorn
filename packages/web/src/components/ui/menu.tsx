@@ -71,6 +71,11 @@ interface MenuProps {
   /** A long list: cap the popover's height and scroll inside it. */
   scroll?: boolean;
   disabled?: boolean;
+  /**
+   * A 44px trigger (WCAG 2.5.8) on every pointer (`true`) or below the rail
+   * step, on a phone (`"phone"`); otherwise it grows only on a coarse pointer.
+   */
+  tall?: boolean | "phone";
   className?: string;
 }
 
@@ -171,6 +176,13 @@ function MenuRow({ item, onDone }: { item: MenuItem; onDone: () => void }) {
 
 type MenuVariant = "chip" | "secondary" | "icon" | "secondaryIcon";
 
+const TALL_CLASS: Record<MenuVariant, { always: string; phone: string }> = {
+  chip: { always: "h-11", phone: "max-rail:h-11" },
+  secondary: { always: "h-11", phone: "max-rail:h-11" },
+  icon: { always: "size-11", phone: "max-rail:size-11" },
+  secondaryIcon: { always: "size-11", phone: "max-rail:size-11" },
+};
+
 const TRIGGER_CLASS: Record<MenuVariant, string> = {
   chip: "h-8 rounded-chip pointer-coarse:h-11",
   secondary: "h-9 rounded-control pointer-coarse:h-11",
@@ -189,6 +201,7 @@ export function Menu({
   active = false,
   scroll = false,
   disabled = false,
+  tall = false,
   className = "",
 }: MenuProps) {
   const [open, setOpen] = useState(false);
@@ -264,7 +277,8 @@ export function Menu({
   // Trigger roles follow ui/button (design detail pass W3): `chip` draws 28px
   // in a 32px hit area, `secondary` and the icon variants are 36px; all grow
   // to 44px on a coarse pointer.
-  const triggerClass = TRIGGER_CLASS[variant];
+  const tallClass = tall ? TALL_CLASS[variant][tall === true ? "always" : "phone"] : "";
+  const triggerClass = `${TRIGGER_CLASS[variant]} ${tallClass}`;
   const faceOpen = active || open;
 
   return (

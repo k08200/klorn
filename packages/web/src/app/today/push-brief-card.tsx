@@ -16,8 +16,8 @@ import { useState } from "react";
 import { useToast } from "../../components/toast";
 import Button from "../../components/ui/button";
 import { useLaneName } from "../../components/ui/lane-chip";
+import { MonogramAvatar } from "../../components/ui/monogram-avatar";
 import { useT } from "../../lib/i18n";
-import { monogram } from "../../lib/notification-center";
 import { captureClientError } from "../../lib/sentry";
 import { formatRowTime, senderName } from "../email/_v2/model";
 import { postReminder } from "../email/_v2/post-reminder";
@@ -26,11 +26,6 @@ import { pushWhy } from "./brief-model";
 import type { TimeContext } from "./mail-column";
 
 const CARD_LATER: ReminderKey = "later-today";
-
-// The notification center's monogram fill: white initials stay above 4.5:1
-// on every hue at this lightness (notification-row.tsx).
-const AVATAR_SAT = 28;
-const AVATAR_LIGHT = 34;
 
 const ACTION_BASE =
   "focus-ring flex min-h-11 items-center justify-center rounded-control px-3 text-role-label font-semibold transition-colors duration-120 ease-fluid";
@@ -79,7 +74,7 @@ export function PushBriefCard({ email, time, isDemo, primary, compact }: PushBri
       className="flex flex-col gap-2 rounded-card bg-surface-panel p-4 shadow-[0_1px_2px_rgb(10_14_20/0.05)] ring-1 ring-inset ring-line"
     >
       <div className="flex items-center gap-2.5">
-        <SenderAvatar name={sender} />
+        <MonogramAvatar name={sender} />
         <span className="min-w-0 flex-1 truncate text-role-label font-semibold text-ink">
           {sender}
         </span>
@@ -142,22 +137,6 @@ export function PushBriefCard({ email, time, isDemo, primary, compact }: PushBri
         )}
       </div>
     </article>
-  );
-}
-
-function SenderAvatar({ name }: { name: string }) {
-  const { initials, hue } = monogram(name);
-  return (
-    <span
-      aria-hidden="true"
-      className="avatar-ring flex size-7.5 shrink-0 items-center justify-center rounded-full text-role-caption font-semibold"
-      style={{
-        backgroundColor: `hsl(${hue} ${AVATAR_SAT}% ${AVATAR_LIGHT}%)`,
-        color: "hsl(0 0% 100%)",
-      }}
-    >
-      {initials}
-    </span>
   );
 }
 

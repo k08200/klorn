@@ -7,7 +7,11 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ASSISTANT_ASK_EVENT, type AssistantAskDetail } from "../lib/assistant-ask";
+import {
+  ASSISTANT_ASK_EVENT,
+  ASSISTANT_OPEN_EVENT,
+  type AssistantAskDetail,
+} from "../lib/assistant-ask";
 import type { DailyCapCode } from "../lib/daily-cap";
 import { useT } from "../lib/i18n";
 import { type AssistantChatMessage, useAssistantChat } from "../lib/use-assistant-chat";
@@ -31,7 +35,14 @@ const SUGGESTION_KEYS = [
  */
 const LIFTED_BOTTOM = "bottom-[calc(74px+env(safe-area-inset-bottom))]";
 
-export default function AssistantDock({ unified = false }: { unified?: boolean }) {
+export default function AssistantDock({
+  unified = false,
+  fullScreenReader = false,
+}: {
+  unified?: boolean;
+  /** The phone reader is open (MB1): the button stands down below 600px. */
+  fullScreenReader?: boolean;
+}) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   // The dock floats over whatever page the user is on; on an email page that
@@ -67,6 +78,15 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
     window.addEventListener(ASSISTANT_ASK_EVENT, onAsk);
     return () => window.removeEventListener(ASSISTANT_ASK_EVENT, onAsk);
   }, [setInput]);
+
+  // The phone reader has no floating button (it would sit on the action bar);
+  // its top bar opens the dock instead.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen);
+  }, []);
+  const fabHidden = fullScreenReader ? "max-rail:hidden" : "";
 
   // Focus the composer when the panel opens; Escape closes it.
   useEffect(() => {
@@ -249,7 +269,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
         onClick={() => setOpen((p) => !p)}
         aria-expanded={open}
         aria-label={open ? t("assistantDock.close") : t("assistantDock.open")}
-        className={`glow-primary ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[81] flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-accent-solid-ink transition duration-150 hover:opacity-90 active:scale-[0.94] md:bottom-5 md:right-5`}
+        className={`glow-primary ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[81] ${fabHidden} flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-accent-solid-ink transition duration-150 hover:opacity-90 active:scale-[0.94] md:bottom-5 md:right-5`}
       >
         {open ? (
           <svg

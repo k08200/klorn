@@ -160,8 +160,14 @@ describe("lane segments never overlap", () => {
     expect(SEGMENTED).toContain("snap-start");
     expect(SEGMENTED).toContain("data-more-start=");
     expect(SEGMENTED).toContain("data-more-end=");
-    expect(CSS).toMatch(/\.segmented-track\[data-more-end\]\s*{\s*mask-image:/);
-    expect(CSS).toMatch(/\.segmented-track\[data-more-start\]\s*{\s*mask-image:/);
+    // The phone's lane chips (components/ui/toggle-chips.tsx) share the fade.
+    expect(CSS).toMatch(
+      /\.segmented-track\[data-more-end\],\s*\.chip-track\[data-more-end\]\s*{\s*mask-image:/,
+    );
+    expect(CSS).toMatch(
+      /\.segmented-track\[data-more-start\],\s*\.chip-track\[data-more-start\]\s*{\s*mask-image:/,
+    );
+    expect(read("components/ui/toggle-chips.tsx")).toMatch(/chip-track[^`]*overflow-x-auto/);
   });
 });
 

@@ -646,14 +646,18 @@ body {
 
 /* A segmented row wider than its column scrolls inside itself
    (components/ui/segmented-control.tsx); the edge with segments past it
-   fades out, so a lane scrolled out of view still reads as there. */
-.segmented-track[data-more-start] {
+   fades out, so a lane scrolled out of view still reads as there. The
+   phone's lane chips (app/email/_v2/lane-chips.tsx) fade the same way. */
+.segmented-track[data-more-start],
+.chip-track[data-more-start] {
   mask-image: linear-gradient(to right, transparent, black 2rem);
 }
-.segmented-track[data-more-end] {
+.segmented-track[data-more-end],
+.chip-track[data-more-end] {
   mask-image: linear-gradient(to left, transparent, black 2rem);
 }
-.segmented-track[data-more-start][data-more-end] {
+.segmented-track[data-more-start][data-more-end],
+.chip-track[data-more-start][data-more-end] {
   mask-image: linear-gradient(
     to right,
     transparent,
