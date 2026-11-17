@@ -26,8 +26,9 @@
  * Persisted on the row (LinkedInboxAccount.imapAuthFailures, imapAuthRetryAt),
  * so a restart or a deploy does not forget it and log in again at once. A
  * login that works (imap-accounts.ts) and a reconnect with a new password
- * (routes/imap-connect.ts) start over. The stop sends the reconnect alert once
- * more (imap-accounts.ts), and the mail actions refuse a stopped row without
+ * (routes/imap-connect.ts) start over. The stop asks for the reconnect alert
+ * once more (imap-accounts.ts; still at most one per account per UTC day), and
+ * the mail actions and the undo re-ingest refuse a stopped row without
  * connecting (providers/imap-account.ts `findCheckedAccount`); while the poll is
  * only waiting, an action may still try, under its own 15-minute cooldown.
  */

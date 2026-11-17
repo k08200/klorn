@@ -276,6 +276,39 @@ describe("the way out behind the production route guard (flag off)", () => {
     expect(db.findFirst).toHaveBeenCalledTimes(1);
   });
 
+  it("the remembered answer expires after NOT_OWNER_TTL_MS", async () => {
+    const { NOT_OWNER_TTL_MS } = await import("../routes/imap-owner-exit.js");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { app, headers } = await buildGuardedApp();
+      const first = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+      expect(first.statusCode).toBe(404);
+      // A mailbox appears (another instance, a rollback): seen once the answer expires.
+      ownsOnly("YAHOO");
+      vi.setSystemTime(Date.now() + NOT_OWNER_TTL_MS - 1);
+      const cached = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+      expect(cached.statusCode).toBe(404);
+      vi.setSystemTime(Date.now() + 2);
+      const fresh = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+      expect(fresh.statusCode).toBe(200);
+      expect(db.findFirst).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a database failure in the ownership check is the cloaked 404, not a 500", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    db.findFirst.mockRejectedValue(new Error("pool timeout") as never);
+    const { app, headers } = await buildGuardedApp();
+    const res = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+    expect(res.statusCode).toBe(404);
+    // Not remembered: the next probe asks again.
+    db.findFirst.mockResolvedValue({ id: "row-1" } as never);
+    const retry = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
+    expect(retry.statusCode).toBe(200);
+  });
+
   it("an owner is never remembered: each probe asks again", async () => {
     ownsOnly("YAHOO");
     const { app, headers } = await buildGuardedApp();
@@ -283,7 +316,7 @@ describe("the way out behind the production route guard (flag off)", () => {
       const res = await app.inject({ method: "GET", url: "/api/yahoo-imap/status", headers });
       expect(res.statusCode).toBe(200);
     }
-    // Once in onRequest per probe (the flag is off, so no cohort check follows).
+    // Once per probe: the cohort check reuses the onRequest verdict (no second query).
     expect(db.findFirst).toHaveBeenCalledTimes(3);
   });
 });

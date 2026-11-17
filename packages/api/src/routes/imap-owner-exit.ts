@@ -23,6 +23,7 @@ import { getUserId, verifiedPayload } from "../auth.js";
 import { featureOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import type { ImapProviderConfig } from "../mail/imap-providers.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { replyRouteNotFound } from "./dark-route-gate.js";
 
 /**
@@ -49,16 +50,29 @@ function rememberNotOwner(key: string, now: number): void {
   notOwnerUntil.set(key, now + NOT_OWNER_TTL_MS);
 }
 
-/** Does this user have a mailbox of this provider? Scoped to their own rows. */
+/**
+ * Does this user have a mailbox of this provider? Scoped to their own rows. A
+ * database failure answers no, without remembering it: the caller then gives the
+ * same cloaked 404 as for a non-owner (a 500 would show the dark route exists),
+ * and the next request asks again.
+ */
 async function ownsMailboxOf(cfg: ImapProviderConfig, userId: string): Promise<boolean> {
   const key = `${cfg.provider}:${userId}`;
   const now = Date.now();
   const until = notOwnerUntil.get(key);
   if (until !== undefined && now < until) return false;
-  const row = await prisma.linkedInboxAccount.findFirst({
-    where: { userId, provider: cfg.provider },
-    select: { id: true },
-  });
+  let row: { id: string } | null;
+  try {
+    row = await prisma.linkedInboxAccount.findFirst({
+      where: { userId, provider: cfg.provider },
+      select: { id: true },
+    });
+  } catch (err) {
+    logDbFailure("[imap-owner-exit] ownership check failed", err, {
+      ids: { provider: cfg.provider, userId },
+    });
+    return false;
+  }
   if (row !== null) return true;
   rememberNotOwner(key, now);
   return false;

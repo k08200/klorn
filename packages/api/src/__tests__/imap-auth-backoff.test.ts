@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fake = vi.hoisted(() => ({
   syncImapInbox: vi.fn(),
+  syncImapMessage: vi.fn(),
   decryptToken: vi.fn(() => "app-pw"),
   captureError: vi.fn(),
   notify: vi.fn(async () => undefined),
@@ -42,6 +43,10 @@ vi.mock("../db.js", () => {
     linkedInboxAccount: {
       findMany: async ({ where }: { where: Record<string, unknown> }) =>
         fake.rows.filter((row) => matches(row, where)).map((row) => ({ ...row })),
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const found = fake.rows.find((row) => matches(row, where));
+        return found ? { ...found } : null;
+      },
       updateMany: async (args: {
         where: Record<string, unknown>;
         data: Record<string, unknown>;
@@ -71,7 +76,7 @@ vi.mock("../mail/gmail.js", () => ({
 }));
 vi.mock("../mail/imap-sync.js", () => ({
   syncImapInbox: (...args: unknown[]) => fake.syncImapInbox(...args),
-  syncImapMessage: vi.fn(),
+  syncImapMessage: (...args: unknown[]) => fake.syncImapMessage(...args),
 }));
 
 const {
@@ -81,7 +86,9 @@ const {
   IMAP_AUTH_RETRY_DELAYS_MS,
   nextAuthBackoff,
 } = await import("../mail/imap-auth-backoff.js");
-const { syncImapAccountsForUser } = await import("../mail/imap-accounts.js");
+const { syncImapAccountsForUser, syncImapMessageForUser } = await import(
+  "../mail/imap-accounts.js"
+);
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { isCredentialRefusal, imapSyncErrorCode } = await import("../mail/sync-error-code.js");
 const { resetPollFailureState } = await import("../mail/imap-poll-failures.js");
@@ -265,7 +272,8 @@ describe("the poll of a fixed-host mailbox whose password is refused", () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringMatching(/row row-y.*polling stopped until the mailbox is reconnected/),
     );
-    // The row was flagged at the 1st refusal; the stop says "reconnect" once more.
+    // The row was flagged at the 1st refusal; the stop asks for the alert once more
+    // (the notification module still sends at most one per account per UTC day).
     expect(fake.notify).toHaveBeenCalledTimes(1);
     expect(fake.notify).toHaveBeenCalledWith("u1", "row-y", "YAHOO");
 
@@ -371,6 +379,24 @@ describe("the poll of a fixed-host mailbox whose password is refused", () => {
     vi.setSystemTime(at(HOUR));
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.IMAP);
     expect(fake.syncImapInbox).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the undo re-ingest (one message by id)", () => {
+  const MESSAGE_ID = "yahoo-imap:me@example.com:101";
+
+  it("does not log in to a mailbox the poll stopped", async () => {
+    seedRow({ imapAuthFailures: 4, imapAuthRetryAt: null, needsReconnect: true });
+    expect(await syncImapMessageForUser("u1", YAHOO, "row-y", MESSAGE_ID)).toBeNull();
+    expect(fake.syncImapMessage).not.toHaveBeenCalled();
+  });
+
+  it("still re-ingests while the poll is only waiting", async () => {
+    seedRow({ imapAuthFailures: 2, imapAuthRetryAt: at(HOUR), needsReconnect: true });
+    fake.syncImapMessage.mockResolvedValue({ emailId: "e1" });
+    expect(await syncImapMessageForUser("u1", YAHOO, "row-y", MESSAGE_ID)).toEqual({
+      emailId: "e1",
+    });
   });
 });
 

@@ -99,9 +99,11 @@ function isPausedForPolling(
  * Flag a row whose login was rejected for reconnect, and alert the user once a day.
  * Conditional on the cipher the poll began with: a user who relinked while this
  * poll's login was being rejected has a NEW password, which must not be flagged.
- * The alert goes out when this poll set the flag, and once more when this poll is
- * the one that stopped the polling (`stopped`): the 1st refusal's alert may be hours
- * old by then. Never throws.
+ * The alert goes out when this poll set the flag, and is asked for once more when
+ * this poll is the one that stopped the polling (`stopped`): the 1st refusal's alert
+ * may be hours old by then. The notification module still sends at most one per
+ * account per UTC day, so a stop on the same day as the 1st refusal stays silent.
+ * Never throws.
  */
 async function flagForReconnect(
   provider: ImapProviderConfig,
@@ -322,6 +324,8 @@ export async function syncImapMessageForUser(
   if (!row) return null;
   const checked = checkImapRow(row, provider);
   if (!checked.ok) return null;
+  // The poll gave up on this password (imap-auth-backoff.ts): never send it again.
+  if (authBackoffVerdict(row, new Date()) === "stopped") return null;
   const uid = parseImapMessageId(messageId, provider.idPrefix, checked.email);
   if (uid === null) return null;
   return syncImapMessage({
