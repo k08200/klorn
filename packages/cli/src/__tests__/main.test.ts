@@ -47,6 +47,7 @@ describe("run", () => {
     expect(code).toBe(0);
     expect(h.out.join("\n")).toMatch(/klorn doctor/);
     expect(h.out.join("\n")).toMatch(/klorn backup restore/);
+    expect(h.out.join("\n")).toMatch(/klorn backup prune/);
   });
 
   it("exits 2 on an unknown command", async () => {
