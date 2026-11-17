@@ -53,6 +53,8 @@ export function meetingCount(events: readonly CalendarEventWire[]): number {
   return events.filter((event) => !event.allDay).length;
 }
 
+// lane-subset: the quiet footer lists only the lanes Klorn sorted away; PUSH
+// and MEETING have their own place on the brief (cards, the Meeting block).
 const QUIET_LANES: readonly LiveTier[] = ["QUEUE", "INFO", "SILENT"];
 
 /** The lanes Klorn sorted away, by threads, only those that hold mail. */
