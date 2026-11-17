@@ -2305,6 +2305,8 @@ const de: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Für einen weiteren Kalender ist ein Pro-Abo erforderlich.",
   "imap.error.connectFailed": "Verbindung fehlgeschlagen.",
   "imap.error.disconnectFailed": "Trennen fehlgeschlagen.",
+  "imap.connectPaused":
+    "Klorn hat die Synchronisierung von {provider} pausiert. Sie können dieses Postfach weiterhin trennen.",
   "imap.confirmDisconnect.message":
     "Bereits sortierte E-Mails bleiben erhalten. Sie können das Postfach jederzeit wieder verbinden.",
   "imap.hostSince": "Host: {host} · seit",

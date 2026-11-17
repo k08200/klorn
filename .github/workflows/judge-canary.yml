@@ -76,17 +76,17 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.key.outputs.present == 'true'
         with:
           node-version: 22
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         if: steps.key.outputs.present == 'true'
 
       - name: Install dependencies
@@ -117,7 +117,7 @@ jobs:
 
       - name: Restore previous baseline
         if: steps.key.outputs.present == 'true'
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: canary-baseline.json
           # The exact key never matches (run_id is unique); the prefix
@@ -185,7 +185,7 @@ jobs:
 
       - name: Persist baseline to cache
         if: steps.key.outputs.present == 'true' && steps.scored.outputs.ok == 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: canary-baseline.json
           key: judge-canary-baseline-${{ github.run_id }}

@@ -20,7 +20,18 @@ export interface PresetAccount extends ImapStatusAccount {
 export interface PresetStatus {
   /** Whether a NEW mailbox may be connected now (the first is free, a second Pro). */
   canConnect?: boolean;
+  /**
+   * False while the preset's flag is closed to this user and /status answers only
+   * because they still own a mailbox of it: disconnect works, connect does not.
+   * Absent from an older API, which only answered when connect was open.
+   */
+  connectOpen?: boolean;
   accounts?: PresetAccount[];
+}
+
+/** May this card offer the connect and reconnect forms? */
+export function presetConnectOpen(status: Pick<PresetStatus, "connectOpen"> | null): boolean {
+  return status?.connectOpen !== false;
 }
 
 export interface PresetProbe {
