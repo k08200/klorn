@@ -537,7 +537,13 @@ describe("MCP write gate — allowed write (flag ON, read_write key)", () => {
     executeToolCallMock.mockRejectedValueOnce(new Error("boom"));
     const got = await callResult("rw", "mark_read", { email_id: "g-42" });
     expect(got).toEqual({
-      content: [{ type: "text", text: JSON.stringify({ error: "boom" }) }],
+      // The classification, never the thrown text (agentcore/tool-failure.ts).
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ error: "Tool failed: internal error", code: "INTERNAL_ERROR" }),
+        },
+      ],
       isError: true,
     });
     expect(auditUpdate).toHaveBeenCalledWith({
@@ -564,7 +570,7 @@ describe("MCP write gate — allowed write (flag ON, read_write key)", () => {
     auditUpdate.mockRejectedValueOnce(new Error("db down"));
     const got = await callResult("rw", "mark_read", { email_id: "g-42" });
     expect(got.isError).toBe(true);
-    expect(JSON.parse(got.content[0].text).error).toBe("boom");
+    expect(JSON.parse(got.content[0].text).error).toBe("Tool failed: internal error");
   });
 
   it("still serves read tools to a read_write key without touching the audit table", async () => {

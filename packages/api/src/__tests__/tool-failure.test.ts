@@ -5,7 +5,11 @@
  */
 import { describe, expect, it } from "vitest";
 import { FloorReceiptRequiredError } from "../agentcore/floor-receipt-error.js";
-import { ToolValidationError, toolFailure } from "../agentcore/tool-failure.js";
+import {
+  ToolUnavailableError,
+  ToolValidationError,
+  toolFailure,
+} from "../agentcore/tool-failure.js";
 import { SendOutcomeUnknownError } from "../mail/providers/send-outcome-unknown.js";
 
 const CANARY = "CANARY-tool quoted mail body";
@@ -15,6 +19,15 @@ describe("toolFailure", () => {
     expect(toolFailure(new ToolValidationError("Missing or invalid parameter: to"))).toEqual({
       error: "Missing or invalid parameter: to",
       code: "INVALID_ARGUMENT",
+    });
+  });
+
+  it("passes a tool's own unavailable sentence through as SERVICE_UNAVAILABLE", () => {
+    expect(
+      toolFailure(new ToolUnavailableError("Could not read the synced calendar right now.")),
+    ).toEqual({
+      error: "Could not read the synced calendar right now.",
+      code: "SERVICE_UNAVAILABLE",
     });
   });
 

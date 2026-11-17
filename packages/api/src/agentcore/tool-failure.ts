@@ -5,9 +5,10 @@
  * provider message quoting a mail would be a prompt-injection channel, and a
  * Prisma message would hand it values from other rows.
  *
- * The only message that passes through is a tool argument the model got
- * wrong (it needs the parameter name to retry); Klorn's other refusals answer
- * a fixed sentence per class.
+ * The only messages that pass through are Klorn's own constants: a tool
+ * argument the model got wrong (it needs the parameter name to retry) and a
+ * tool's ToolUnavailableError sentence; Klorn's other refusals answer a fixed
+ * sentence per class.
  */
 import { ActionReceiptMismatchError, ActionReceiptSchemaError } from "../judge/attention-floor.js";
 import { SendOutcomeUnknownError } from "../mail/providers/send-outcome-unknown.js";
@@ -19,6 +20,18 @@ export class ToolValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ToolValidationError";
+  }
+}
+
+/**
+ * A tool's own Klorn-written "cannot answer right now" sentence (a constant,
+ * never built from a caught error). It reaches the model as written, with the
+ * transient SERVICE_UNAVAILABLE code.
+ */
+export class ToolUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ToolUnavailableError";
   }
 }
 
@@ -72,6 +85,8 @@ export interface ToolFailure {
  */
 function klornWritten(err: unknown): ToolFailure | null {
   if (err instanceof ToolValidationError) return { error: err.message, code: "INVALID_ARGUMENT" };
+  if (err instanceof ToolUnavailableError)
+    return { error: err.message, code: "SERVICE_UNAVAILABLE" };
   if (err instanceof FloorReceiptRequiredError) {
     return {
       error: "Tool refused: this action runs only after the user approves it in Klorn.",

@@ -1,3 +1,4 @@
+import { ToolUnavailableError } from "../agentcore/tool-failure.js";
 import { unifiedCalendarReadEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { type BusyConflict, toAbsoluteInstant } from "../google-calendar-time.js";
@@ -457,7 +458,7 @@ async function withRowConflicts(
     // The tool executor hands an error's message to the model and to MCP clients:
     // log the facts here and throw a constant (still fail-closed).
     logDbFailure("[CALENDAR] conflict rows read failed", err, { level: "error", ids: { userId } });
-    throw new Error(ROWS_UNREADABLE);
+    throw new ToolUnavailableError(ROWS_UNREADABLE);
   }
   const rowConflicts = rows.map((row) => toRowConflict(row, window.userZone));
   return mergeConflicts(rowConflicts, rows, live);
