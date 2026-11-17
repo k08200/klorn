@@ -24,6 +24,7 @@ import {
 
 const GEMINI_KEY = `AIzaSy${"W".repeat(33)}`;
 const VERIFIER = "opaque-desktop-verifier-hooks-3d70";
+const MAIL_ADDRESS = "hooks.person@example.com";
 
 let capture: SentryCapture;
 
@@ -84,5 +85,18 @@ describe("each scrub hook on its own (event-level hooks removed)", () => {
     expect(payload).toContain("generativelanguage.googleapis.com");
     expect(payload).not.toContain(GEMINI_KEY);
     expect(payload).not.toContain(VERIFIER);
+  });
+
+  it("beforeBreadcrumb alone keeps a mail address in a console line off the wire", async () => {
+    // The console integration (a default) records each console.* call as a
+    // breadcrumb: the joined line as `message`, the raw arguments as `data`.
+    console.warn("[mail] hooks-console-marker send failed for", MAIL_ADDRESS, { to: MAIL_ADDRESS });
+    Sentry.captureException(new Error("hooks-file-address-marker"));
+    await Sentry.flush(SENTRY_FLUSH_MS);
+
+    const payload = capture.sent();
+    expect(payload).toContain("hooks-console-marker");
+    expect(payload).not.toContain(MAIL_ADDRESS);
+    expect(payload).not.toContain("example.com");
   });
 });

@@ -7,7 +7,8 @@
  *   - a server that keeps yielding messages is cut off at `limit`, so a lying
  *     server cannot make one poll unbounded;
  *   - a failed generic poll is reported once, by the account fan-out
- *     (imap-accounts.ts), not here, and its log line is one capped line;
+ *     (imap-accounts.ts), not here, and its log line is the error's facts,
+ *     never the server's text;
  *   - Naver and iCloud are byte-identical: the whole TEXT, no cap, and the same
  *     report and log as before.
  */

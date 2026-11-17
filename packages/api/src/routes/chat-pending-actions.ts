@@ -479,13 +479,15 @@ export async function chatRoutes(app: FastifyInstance) {
       if (!action)
         return reply.code(404).send({ error: "Pending action not found or not actionable" });
 
-      // Snooze the corresponding AttentionItem (the queue entry for this PA)
+      // Snooze the corresponding AttentionItem (the queue entry for this PA).
+      // Scoped to the caller as well: the findFirst above already proved the
+      // action is theirs, but this write should not depend on that check.
       await (
         prisma.attentionItem as unknown as {
           updateMany: (args: unknown) => Promise<unknown>;
         }
       ).updateMany({
-        where: { source: "PENDING_ACTION", sourceId: actionId },
+        where: { userId, source: "PENDING_ACTION", sourceId: actionId },
         data: { status: "SNOOZED", snoozedUntil: snoozeDate, lastAmplifiedAt: null },
       });
 

@@ -11,9 +11,11 @@
  * - Gmail/Calendar sync failures
  * - LLM API errors
  *
- * Every outbound payload goes through security/sentry-scrub.ts first. That is
- * four hooks, not one: a BYOK provider key travelling in a request URL reaches
- * Sentry on breadcrumbs and spans, which `beforeSend` cannot see.
+ * Every outbound payload goes through security/sentry-scrub.ts first, which
+ * takes out credentials and mail addresses. That is four hooks, not one: a BYOK
+ * provider key travelling in a request URL reaches Sentry on breadcrumbs and
+ * spans, which `beforeSend` cannot see, and so does an address in any console
+ * line (the console integration makes each one a breadcrumb).
  *
  * An unhandled rejection or an uncaught exception reaches Sentry and the
  * console as facts only (sentry-process-faults.ts), not as the SDK's default
