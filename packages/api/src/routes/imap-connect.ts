@@ -26,6 +26,9 @@
  * `opts.cohortFlags` (the app-password presets): once the gate lets a request in,
  * a flag in `cohort` mode lets in only ROLLOUT_COHORT_USER_IDS, after
  * authentication, with the same 404 for everyone else (routes/cohort-gate.ts).
+ * Except the way out: /status and /disconnect stay open to a user who owns a
+ * mailbox of the provider, so a flag closed after users connected never traps
+ * their mailboxes (routes/imap-owner-exit.ts). /connect stays dark.
  *
  * Generic IMAP (step B4, `cfg.hostPolicy === "user-supplied"`): the body's `host`
  * is REQUIRED and is a DNS name on port 993, checked by the host grammar before
@@ -44,11 +47,13 @@ import {
   normalizeMailAccountEmail,
   SECOND_MAIL_ACCOUNT_REFUSAL,
 } from "../billing/mail-account-entitlement.js";
+import { featureOpenTo } from "../config.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { takeGenericImapAttempt } from "../mail/generic-imap-attempts.js";
 import { type HostRejection, parseGenericImapHost } from "../mail/generic-imap-host.js";
 import { verifyGenericImapCredentials } from "../mail/generic-imap-verify.js";
+import { AUTH_BACKOFF_CLEARED } from "../mail/imap-auth-backoff.js";
 import { startFirstImapSync } from "../mail/imap-first-sync.js";
 import { clearPollBackoff } from "../mail/imap-poll-backoff.js";
 import { isImapPresetKey } from "../mail/imap-preset-keys.js";
@@ -57,6 +62,7 @@ import { verifyImapCredentials } from "../mail/imap-sync.js";
 import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
 import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { ownerExitCohortGate, ownerExitGate } from "./imap-owner-exit.js";
 
 const GENERIC_HOST_HINT =
   "Enter your mail server's host name, for example imap.example.com. Only port 993 (IMAP over TLS) is supported.";
@@ -240,6 +246,7 @@ async function saveGenericAccount(cfg: ImapProviderConfig, args: SaveArgs): Prom
           needsReconnect: false,
           syncErrorCode: null,
           syncErrorAt: null,
+          ...AUTH_BACKOFF_CLEARED,
         },
       });
       return updated.count === 1 ? { ok: true, id: current.id } : { ok: false };
@@ -274,10 +281,11 @@ async function saveFixedAccount(cfg: ImapProviderConfig, args: SaveArgs): Promis
       imapHost,
       imapPasswordCipher: encryptToken(password),
       // A successful re-verify clears the reconnect prompt, and the failure
-      // recorded against the old password.
+      // recorded against the old password, and starts the login backoff over.
       needsReconnect: false,
       syncErrorCode: null,
       syncErrorAt: null,
+      ...AUTH_BACKOFF_CLEARED,
     },
   });
   return { ok: true, id: saved?.id };
@@ -321,20 +329,29 @@ function verifyRefusalBody(verify: { message?: string; code?: string }) {
 const verifierFor = (cfg: ImapProviderConfig) =>
   cfg.hostPolicy === "user-supplied" ? verifyGenericImapCredentials : verifyImapCredentials;
 
-export function imapConnectRoutes(
+type ConnectRouteOptions = { gate?: () => boolean; cohortFlags?: readonly string[] };
+
+/** Is /connect open to this user: the flag on (or the user in its cohort)? */
+const connectOpenTo = (opts: ConnectRouteOptions, userId: string): boolean =>
+  (opts.gate?.() ?? true) && (!opts.cohortFlags || featureOpenTo(userId, opts.cohortFlags));
+
+/**
+ * /status and /disconnect: the way out. Open to the provider's users like
+ * /connect, and also to a user who owns a mailbox of the provider while its flag
+ * is closed to them (routes/imap-owner-exit.ts), so turning a flag off never
+ * traps a connected mailbox. Everyone else gets the same 404 as /connect.
+ */
+function wayOutRoutes(
   cfg: ImapProviderConfig,
-  opts: { gate?: () => boolean; cohortFlags?: readonly string[] } = {},
+  opts: ConnectRouteOptions,
 ): (app: FastifyInstance) => Promise<void> {
   return async function routes(app: FastifyInstance) {
-    // Feature-flag gate FIRST — shared darkRouteGate (see its doc comment
-    // for why onRequest and why the body must match Fastify's default 404).
     if (opts.gate) {
-      app.addHook("onRequest", darkRouteGate(opts.gate));
+      app.addHook("onRequest", ownerExitGate(cfg, opts.gate));
     }
     app.addHook("preHandler", requireAuth);
-    // Hooks run in order: the user is known here, and nothing below has run yet.
     if (opts.cohortFlags) {
-      app.addHook("preHandler", cohortGate(opts.cohortFlags));
+      app.addHook("preHandler", ownerExitCohortGate(cfg, opts.cohortFlags));
     }
 
     app.get("/status", async (request) => {
@@ -354,6 +371,10 @@ export function imapConnectRoutes(
       });
       const first = rows[0];
       return {
+        // Whether this provider takes connects from this user at all: false while its
+        // flag is closed to them and only the way out is open (routes/imap-owner-exit
+        // .ts). The settings UI then offers disconnect, not the connect or reconnect form.
+        connectOpen: connectOpenTo(opts, userId),
         // Whether a NEW mailbox may be connected now (the first one is free,
         // a second needs Pro). The settings UI shows the form or the Pro note.
         canConnect: await canConnectNewMailAccount(userId),
@@ -376,6 +397,42 @@ export function imapConnectRoutes(
         })),
       };
     });
+
+    // No body schema on purpose: the deployed web client POSTs with NO body at
+    // all, and a schema would 400 that. The optional email is validated by hand.
+    app.post<{ Body: { email?: string } | null }>("/disconnect", async (request, reply) => {
+      const userId = getUserId(request);
+      const email = request.body?.email;
+      if (email !== undefined && (typeof email !== "string" || email.length > 200)) {
+        reply.code(400);
+        return { ok: false, message: "email must be a string" };
+      }
+      // No email (the legacy client shape) removes every account for this
+      // provider — exactly what the old single-account disconnect did.
+      await prisma.linkedInboxAccount.deleteMany({
+        where: { userId, provider: cfg.provider, ...(email ? { email } : {}) },
+      });
+      return { ok: true };
+    });
+  };
+}
+
+/** /connect: dark while the flag is off, the cohort only in cohort mode. */
+function connectRoutes(
+  cfg: ImapProviderConfig,
+  opts: ConnectRouteOptions,
+): (app: FastifyInstance) => Promise<void> {
+  return async function routes(app: FastifyInstance) {
+    // Feature-flag gate FIRST — shared darkRouteGate (see its doc comment
+    // for why onRequest and why the body must match Fastify's default 404).
+    if (opts.gate) {
+      app.addHook("onRequest", darkRouteGate(opts.gate));
+    }
+    app.addHook("preHandler", requireAuth);
+    // Hooks run in order: the user is known here, and nothing below has run yet.
+    if (opts.cohortFlags) {
+      app.addHook("preHandler", cohortGate(opts.cohortFlags));
+    }
 
     app.post<{
       Body: { email: string; password: string; host?: string };
@@ -474,22 +531,16 @@ export function imapConnectRoutes(
         return { ok: true, email, host: imapHost, firstSync };
       },
     );
+  };
+}
 
-    // No body schema on purpose: the deployed web client POSTs with NO body at
-    // all, and a schema would 400 that. The optional email is validated by hand.
-    app.post<{ Body: { email?: string } | null }>("/disconnect", async (request, reply) => {
-      const userId = getUserId(request);
-      const email = request.body?.email;
-      if (email !== undefined && (typeof email !== "string" || email.length > 200)) {
-        reply.code(400);
-        return { ok: false, message: "email must be a string" };
-      }
-      // No email (the legacy client shape) removes every account for this
-      // provider — exactly what the old single-account disconnect did.
-      await prisma.linkedInboxAccount.deleteMany({
-        where: { userId, provider: cfg.provider, ...(email ? { email } : {}) },
-      });
-      return { ok: true };
-    });
+export function imapConnectRoutes(
+  cfg: ImapProviderConfig,
+  opts: ConnectRouteOptions = {},
+): (app: FastifyInstance) => Promise<void> {
+  // Two encapsulated children under this plugin's prefix: each keeps its own gate.
+  return async function routes(app: FastifyInstance) {
+    await app.register(wayOutRoutes(cfg, opts));
+    await app.register(connectRoutes(cfg, opts));
   };
 }

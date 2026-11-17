@@ -2206,6 +2206,8 @@ const ko: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "캘린더를 추가로 연결하려면 Pro 구독이 필요합니다.",
   "imap.error.connectFailed": "연결하지 못했습니다.",
   "imap.error.disconnectFailed": "연결을 해제하지 못했습니다.",
+  "imap.connectPaused":
+    "Klorn이 {provider} 동기화를 일시 중지했습니다. 이 메일함의 연결은 계속 해제할 수 있습니다.",
   "imap.confirmDisconnect.message":
     "이미 분류된 메일은 그대로 남습니다. 언제든 메일함을 다시 연결할 수 있습니다.",
   "imap.hostSince": "호스트: {host} · 연결 시각",

@@ -2085,6 +2085,7 @@ const zh: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "连接其他日历需要 Pro 订阅。",
   "imap.error.connectFailed": "连接失败。",
   "imap.error.disconnectFailed": "断开连接失败。",
+  "imap.connectPaused": "Klorn 已暂停 {provider} 同步。你仍可以断开此邮箱的连接。",
   "imap.confirmDisconnect.message": "已分类的邮件会保留。你可以随时重新连接该邮箱。",
   "imap.hostSince": "主机：{host} · 连接于",
   "imap.icloud.title": "iCloud 邮件",

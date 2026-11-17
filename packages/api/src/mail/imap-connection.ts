@@ -115,6 +115,7 @@ function buildClient(opts: ImapClientOptions, shape: ClientShape): ImapFlow {
       port: parsed.port,
       options: shape,
       logScope: provider.logScope,
+      accountId: opts.accountId,
     });
   }
   if (hostRejection(opts.host, provider) !== null) throw refused();

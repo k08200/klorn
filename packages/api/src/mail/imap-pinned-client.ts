@@ -78,6 +78,12 @@ export interface PinnedClientArgs {
   options: Omit<ImapFlowOptions, "host" | "port" | "secure" | "servername" | "tls" | "proxy">;
   /** Log prefix, e.g. "generic-imap". */
   logScope: string;
+  /**
+   * The LinkedInboxAccount row, named in log lines in place of the host: a host the
+   * user supplied can name a person or a company. Absent while a connect is verified
+   * (no row yet). Never a credential.
+   */
+  accountId?: string;
   /** Override of GENERIC_SESSION_DEADLINE_MS, for tests. */
   sessionDeadlineMs?: number;
 }
@@ -102,15 +108,24 @@ function withDeadline<T>(ms: number, work: Promise<T>, onExpire: () => void): Pr
   });
 }
 
-function logRefusal(logScope: string, hostname: string, err: unknown): void {
+/** Who a log line is about: the account row when there is one, never the host. */
+interface LogSubject {
+  logScope: string;
+  accountId?: string;
+}
+
+const forRow = (who: LogSubject): string => (who.accountId ? ` for row ${who.accountId}` : "");
+
+function logRefusal(who: LogSubject, err: unknown): void {
+  const { logScope } = who;
   if (err instanceof PinnedAddressError) {
     const resolver = err.resolverCode ? ` (${err.resolverCode})` : "";
     const blocked = err.blocked.length > 0 ? ` [${err.blocked.join(", ")}]` : "";
     console.warn(
-      `[${logScope}] refused a connection to ${hostname}: ${err.code}${resolver}${blocked}`,
+      `[${logScope}] refused a connection to the server${forRow(who)}: ${err.code}${resolver}${blocked}`,
     );
   } else if (err instanceof Error && err.message === CONNECT_TIMEOUT_MESSAGE) {
-    console.warn(`[${logScope}] connection to ${hostname} ${CONNECT_TIMEOUT_MESSAGE}`);
+    console.warn(`[${logScope}] connection to the server${forRow(who)} timed out`);
   } else {
     // Facts only, and not the host: a user-chosen server's reply text can quote
     // anything, and its name is the user's own.
@@ -125,11 +140,7 @@ function logRefusal(logScope: string, hostname: string, err: unknown): void {
  * bytes that crossed the line, and every later one, never reach the parser. A library
  * build without that stream is left as it is.
  */
-function budgetSessionBytes(
-  client: ImapFlow,
-  who: { hostname: string; logScope: string },
-  cutOff: () => void,
-): void {
+function budgetSessionBytes(client: ImapFlow, who: LogSubject, cutOff: () => void): void {
   const streamer = (client as unknown as { streamer?: ByteSink }).streamer;
   if (!streamer || typeof streamer.write !== "function") return;
   const forward = streamer.write.bind(streamer);
@@ -140,8 +151,9 @@ function budgetSessionBytes(
     received += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
     if (received <= GENERIC_SESSION_BYTE_BUDGET) return forward(chunk, ...rest);
     exhausted = true;
+    const subject = who.accountId ? ` row ${who.accountId}:` : "";
     console.warn(
-      `[${who.logScope}] ${who.hostname}: the session exceeded its ${GENERIC_SESSION_BYTE_BUDGET / MIB} MiB byte budget; closed`,
+      `[${who.logScope}]${subject} the session exceeded its ${GENERIC_SESSION_BYTE_BUDGET / MIB} MiB byte budget; closed`,
     );
     cutOff();
     return true;
@@ -158,8 +170,10 @@ export function createPinnedImapClient(args: PinnedClientArgs): ImapFlow {
     port,
     options,
     logScope,
+    accountId,
     sessionDeadlineMs = GENERIC_SESSION_DEADLINE_MS,
   } = args;
+  const who: LogSubject = { logScope, accountId };
   const connectBudgetMs = options.connectionTimeout ?? GENERIC_CONNECTION_TIMEOUT_MS;
 
   // Read by imapflow at connect time; `host` is filled in once the name is checked.
@@ -206,7 +220,7 @@ export function createPinnedImapClient(args: PinnedClientArgs): ImapFlow {
   };
   // The connection ended by itself (error, server BYE): nothing is left to cut off.
   client.on("close", () => cancelSessionDeadline());
-  budgetSessionBytes(client, { hostname, logScope }, () => {
+  budgetSessionBytes(client, who, () => {
     cancelSessionDeadline();
     hardClose();
   });
@@ -225,7 +239,7 @@ export function createPinnedImapClient(args: PinnedClientArgs): ImapFlow {
       await withDeadline(connectBudgetMs, connectPinned(), hardClose);
     } catch (err) {
       cancelSessionDeadline();
-      logRefusal(logScope, hostname, err);
+      logRefusal(who, err);
       throw err;
     }
   };
