@@ -43,9 +43,12 @@ const db = vi.hoisted(() => ({
     notification: {
       create: vi.fn(async () => ({ id: "n-held" })),
       count: vi.fn(async () => 0),
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
     slackEpisode: {
       findMany: vi.fn(),
+      // The reply re-check before a ring: unanswered.
+      findFirst: vi.fn(async () => ({ id: "ep-1" })),
       updateMany: vi.fn(async () => ({ count: 1 })),
       update: vi.fn(async () => ({})),
       count: vi.fn(async () => 0),
@@ -328,7 +331,13 @@ describe("judgeReadySlackEpisodes", () => {
     // The verdict is stored first, guarded on the claim; notifiedAt only after a ring.
     expect(db.prisma.slackEpisode.updateMany.mock.calls[1]?.[0]).toEqual({
       where: { id: "ep-1", status: "JUDGING" },
-      data: { status: "JUDGED", tier: "PUSH", reason: "Prod down, needs you now", judgedAt: NOW },
+      data: {
+        status: "JUDGED",
+        tier: "PUSH",
+        reason: "Prod down, needs you now",
+        verdictSource: "llm",
+        judgedAt: NOW,
+      },
     });
     expect(db.prisma.slackEpisode.updateMany.mock.calls[2]?.[0]).toMatchObject({
       where: { id: "ep-1" },

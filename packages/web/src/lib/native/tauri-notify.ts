@@ -89,9 +89,9 @@ async function postBanner(alert: DesktopAlert, context: string): Promise<void> {
 
 /** Banner one real-time notification frame if it is a server-tagged PUSH /
  *  meeting interrupt not yet bannered for this account. An untagged frame
- *  about one mail (quiet hours) is held for the urgent-mail catch-up below,
- *  which toasts it once they end; any other untagged interrupt frame is
- *  recorded silently. No-op outside Tauri. */
+ *  about one mail, or an untagged Slack PUSH frame (quiet hours), is held for
+ *  the urgent catch-up below, which toasts it once they end; any other
+ *  untagged interrupt frame is recorded silently. No-op outside Tauri. */
 export async function deliverDesktopAlert(owner: string, payload: unknown): Promise<void> {
   if (shellKind() !== "tauri") return;
   const ledger = readLedger(owner);

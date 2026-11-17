@@ -77,6 +77,20 @@ export interface DesktopMissedMail extends DesktopMailToast {
 }
 
 /**
+ * One Slack PUSH whose live frame the desktop shell held during quiet hours
+ * (api slack/notify.ts): the bell row's own title and message, which are the
+ * live Slack push's text, nothing more. Clicking it only brings Klorn back,
+ * as the live Slack toast does.
+ */
+export interface DesktopMissedSlack {
+  /** The bell row id: the id the live frame carried. */
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+/**
  * GET /api/notifications/desktop-catchup?ids=… (decision N6). Of the bell rows
  * the shell asks about, the PUSH mails from the last 72h that are still open.
  * `held` is true while the user's quiet hours suppress urgent-mail alerts: the
@@ -86,10 +100,19 @@ export interface DesktopMissedMail extends DesktopMailToast {
  * "N urgent emails during quiet hours" title, same shape, used when every
  * mail in the summary rang live while quiet hours held it back (optional: a
  * shell must still toast, with `summaryTitle`, when it is absent).
+ *
+ * `slack` holds the asked Slack PUSH rows, unread, from the last 72h and not
+ * answered in Slack since; a summary that includes one is titled
+ * `messagesSummaryTitle` / `heldMessagesSummaryTitle` ("N urgent messages …",
+ * same `{count}` shape and the same closed / quiet-hours pick). All three are
+ * optional: a server before them sends none.
  */
 export interface DesktopCatchUpResponse {
   held: boolean;
   summaryTitle: string;
   heldSummaryTitle?: string;
+  messagesSummaryTitle?: string;
+  heldMessagesSummaryTitle?: string;
   items: DesktopMissedMail[];
+  slack?: DesktopMissedSlack[];
 }

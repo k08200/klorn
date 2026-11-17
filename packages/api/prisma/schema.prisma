@@ -356,34 +356,46 @@ model SlackConnection {
 /// One burst of Slack conversation, judged into one lane. Keeps the verdict
 /// and a short reason for 90 days; the text lives in SlackMessage (7 days).
 model SlackEpisode {
-  id            String          @id @default(uuid())
-  userId        String
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  connectionId  String
-  connection    SlackConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  channelId     String
-  channelType   String // im | mpim | channel | group
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId    String
+  connection      SlackConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  channelId       String
+  channelType     String // im | mpim | channel | group
   /// thread_ts, or "" for top-level messages.
-  threadKey     String
+  threadKey       String
   /// OPEN | JUDGING | JUDGED | ANSWERED | EMPTY | OVER_CAP (judge-sweep.ts)
-  status        String          @default("OPEN")
-  mentionsUser  Boolean         @default(false)
-  messageCount  Int             @default(0)
-  firstTs       String
-  lastTs        String
-  startedAt     DateTime        @default(now())
-  lastMessageAt DateTime        @default(now())
-  claimedAt     DateTime?
-  tier          String?
-  reason        String?
-  judgedAt      DateTime?
-  notifiedAt    DateTime?
-  createdAt     DateTime        @default(now())
-  messages      SlackMessage[]
+  status          String          @default("OPEN")
+  mentionsUser    Boolean         @default(false)
+  messageCount    Int             @default(0)
+  firstTs         String
+  lastTs          String
+  startedAt       DateTime        @default(now())
+  lastMessageAt   DateTime        @default(now())
+  claimedAt       DateTime?
+  tier            String?
+  reason          String?
+  judgedAt        DateTime?
+  notifiedAt      DateTime?
+  /// Where the stored verdict came from: "llm" | "keyword-fallback" (the judge
+  /// could not reach a model). Null before 2026-11-17 and for "Could not be judged".
+  verdictSource   String?
+  /// The one re-judge of a keyword-fallback verdict was claimed (rejudge.ts);
+  /// released only when the model was still unreachable.
+  rejudgedAt      DateTime?
+  /// Re-judge calls made; past SLACK_REJUDGE_MAX_ATTEMPTS a fallback is final.
+  rejudgeAttempts Int             @default(0)
+  /// The user replied in the conversation after this episode's last message:
+  /// no ring from then on, whatever the verdict (episodes.ts).
+  answeredAt      DateTime?
+  createdAt       DateTime        @default(now())
+  messages        SlackMessage[]
 
   @@index([connectionId, channelId, threadKey, status])
   @@index([connectionId, status])
   @@index([status, lastMessageAt])
+  @@index([verdictSource, rejudgedAt, lastMessageAt]) // the fallback re-judge pass
   @@index([userId, createdAt])
   @@index([createdAt]) // the 90-day purge
 }

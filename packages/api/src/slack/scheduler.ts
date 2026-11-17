@@ -6,8 +6,8 @@
  *   SLACK_ENABLED is off: switching the flag off must not stop stored Slack
  *   text from expiring.
  * - While the flag is on, each tick also judges ready episodes
- *   (judge-sweep.ts), which itself stands down under
- *   BACKGROUND_AGENTS_DISABLED.
+ *   (judge-sweep.ts), then re-judges a few keyword-fallback verdicts
+ *   (rejudge.ts); both stand down under BACKGROUND_AGENTS_DISABLED.
  * - While the flag is off, ticks between purges touch no database at all.
  */
 
@@ -18,6 +18,7 @@ import { createSchedulerLease } from "../scheduler-lease.js";
 import { newWork } from "../work-context.js";
 import { judgeReadySlackEpisodes } from "./judge-sweep.js";
 import { purgeExpiredSlackData } from "./purge.js";
+import { rejudgeFallbackSlackEpisodes } from "./rejudge.js";
 
 export const SLACK_SCHEDULER_INTERVAL_MS = 30_000;
 export const SLACK_PURGE_INTERVAL_MS = 10 * 60_000;
@@ -44,7 +45,11 @@ export async function runSlackWork(now: Date = new Date()): Promise<void> {
       );
     }
   }
-  if (slackLive()) await judgeReadySlackEpisodes(now);
+  if (!slackLive()) return;
+  await judgeReadySlackEpisodes(now);
+  // After the fresh episodes: a slow re-judge never delays a new judgment. Its
+  // own clock, since the judge pass may have taken minutes.
+  await rejudgeFallbackSlackEpisodes(new Date());
 }
 
 export async function slackSchedulerTick(

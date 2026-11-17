@@ -201,7 +201,10 @@ describe("desktopCatchUp — which missed mails still deserve a toast", () => {
       held: false,
       summaryTitle: "{count} urgent emails while Klorn was closed",
       heldSummaryTitle: "{count} urgent emails during quiet hours",
+      messagesSummaryTitle: "{count} urgent messages while Klorn was closed",
+      heldMessagesSummaryTitle: "{count} urgent messages during quiet hours",
       items: [],
+      slack: [],
     });
   });
 

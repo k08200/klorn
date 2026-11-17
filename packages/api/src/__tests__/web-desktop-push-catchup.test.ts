@@ -539,13 +539,15 @@ describe("mail held during quiet hours while Klorn runs (live frame untagged)", 
 describe("parseCatchUpResponse — the server's answer is validated", () => {
   it("keeps the quiet-hours title when well formed, drops only it when not", () => {
     const base = { held: false, summaryTitle: SUMMARY, items: [] };
+    // A server before held Slack rows sends no `slack`: parsed as none.
+    const parsedBase = { ...base, slack: [] };
     expect(parseCatchUpResponse({ ...base, heldSummaryTitle: HELD_SUMMARY })).toEqual({
-      ...base,
+      ...parsedBase,
       heldSummaryTitle: HELD_SUMMARY,
     });
-    expect(parseCatchUpResponse(base)).toEqual(base);
+    expect(parseCatchUpResponse(base)).toEqual(parsedBase);
     for (const bad of [3, "no count token", null]) {
-      expect(parseCatchUpResponse({ ...base, heldSummaryTitle: bad })).toEqual(base);
+      expect(parseCatchUpResponse({ ...base, heldSummaryTitle: bad })).toEqual(parsedBase);
     }
   });
 
