@@ -4,7 +4,8 @@
  * backtracking), so cost is linear in the input whatever it holds.
  */
 
-import type { DslErrorCode } from "./types.js";
+import { problems } from "./errors.js";
+import type { DslProblem } from "./types.js";
 
 export interface Token {
   kind: "word" | "string";
@@ -15,10 +16,8 @@ export interface Token {
   end: number;
 }
 
-export interface LineError {
+export interface LineError extends DslProblem {
   column: number;
-  code: DslErrorCode;
-  message: string;
 }
 
 export type TokenizeResult = { tokens: Token[] } | { error: LineError };
@@ -41,11 +40,7 @@ function readString(line: string, start: number): { token: Token; next: number }
     if (ch === "\\") {
       const next = line[i + 1];
       if (next !== '"' && next !== "\\") {
-        return {
-          column: i + 1,
-          code: "bad-escape",
-          message: 'Only \\" and \\\\ can be escaped inside a string.',
-        };
+        return { column: i + 1, ...problems.badEscape() };
       }
       chunks.push(next);
       i += 2;
@@ -54,11 +49,7 @@ function readString(line: string, start: number): { token: Token; next: number }
     chunks.push(ch);
     i += 1;
   }
-  return {
-    column: start + 1,
-    code: "unterminated-string",
-    message: "This string has no closing quote on the same line.",
-  };
+  return { column: start + 1, ...problems.unterminatedString() };
 }
 
 function wordEnd(line: string, start: number): number {

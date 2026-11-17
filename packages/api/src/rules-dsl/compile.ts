@@ -5,17 +5,17 @@
  */
 
 import { validateTierPin } from "../mail/pin-validate.js";
+import { problems } from "./errors.js";
 import { RULES_DSL_LIMITS } from "./limits.js";
 import { failure, parseRules } from "./parse.js";
-import { quoteForMessage } from "./text.js";
 import type {
   AstRule,
   CompiledRule,
   CompileResult,
   DslAst,
   DslError,
-  DslErrorCode,
   DslFailure,
+  DslProblem,
 } from "./types.js";
 
 /** Identity of a rule: its sender. One rule per sender in a file. */
@@ -23,30 +23,21 @@ export function senderKey(rule: Pick<CompiledRule, "scope" | "value">): string {
   return `${rule.scope}:${rule.value}`;
 }
 
-function senderError(rule: AstRule, code: string): { code: DslErrorCode; message: string } {
-  const value = quoteForMessage(rule.sender.value);
+function senderError(rule: AstRule, code: string): DslProblem {
+  const value = rule.sender.value;
   switch (code) {
     case "address":
-      return { code: "invalid-address", message: `${value} is not a valid email address.` };
+      return problems.invalidAddress(value);
     case "too-long":
-      return {
-        code: "string-too-long",
-        message: `A sender can be at most ${RULES_DSL_LIMITS.maxValueChars} characters (counted lowercased).`,
-      };
+      return problems.stringTooLong("sender-lowercased");
     case "public-domain":
-      return {
-        code: "public-domain",
-        message: `${value} is a public mailbox domain anyone can mail from. Write a rule for one address instead.`,
-      };
+      return problems.publicDomain(value);
     default:
-      return {
-        code: "invalid-domain",
-        message: `${value} is not a valid domain. Write it like example.com.`,
-      };
+      return problems.invalidDomain(value);
   }
 }
 
-function compileRule(rule: AstRule): CompiledRule | { code: DslErrorCode; message: string } {
+function compileRule(rule: AstRule): CompiledRule | DslProblem {
   const validated = validateTierPin({
     scope: rule.sender.scope === "address" ? "sender" : "domain",
     value: rule.sender.value,
@@ -79,11 +70,7 @@ export function compileRules(ast: DslAst): CompileResult {
     const key = senderKey(compiled);
     const earlier = firstLine.get(key);
     if (earlier !== undefined) {
-      errors.push({
-        ...at,
-        code: "duplicate-sender",
-        message: `The rule on line ${earlier} already covers this sender. One rule per sender.`,
-      });
+      errors.push({ ...at, ...problems.duplicateSender(earlier) });
       continue;
     }
     firstLine.set(key, rule.line);

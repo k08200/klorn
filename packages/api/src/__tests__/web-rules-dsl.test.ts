@@ -5,6 +5,9 @@
  * to its copy.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   dslErrorsFrom,
@@ -58,6 +61,71 @@ describe("dslErrorsFrom", () => {
       message: "m",
     }));
     expect(dslErrorsFrom({ errors })).toHaveLength(50);
+  });
+});
+
+describe("dslErrorsFrom params", () => {
+  const base = { line: 2, column: 3, code: "unknown-lane", message: "Unknown lane" };
+
+  it("keeps string and number params, which the localized message is built from", () => {
+    const [error] = dslErrorsFrom({
+      errors: [{ ...base, params: { token: "URGENT", max: 120, variant: "name" } }],
+    });
+    expect(error?.params).toEqual({ token: "URGENT", max: 120, variant: "name" });
+  });
+
+  it("drops params of any other type or an unsafe name, but keeps the error", () => {
+    // JSON.parse, so "__proto__" is a real own key, as it would be off the wire.
+    const params = JSON.parse(
+      '{"ok":"yes","nested":{"a":1},"list":["x"],"flag":true,"nothing":null,"bad-name":"x","__proto__":"x","toString":"x","constructor":"x","infinite":1e999}',
+    );
+    const [error] = dslErrorsFrom({ errors: [{ ...base, params }] });
+    expect(error).toMatchObject({ line: 2, column: 3, code: "unknown-lane" });
+    expect(error?.params).toEqual({ ok: "yes" });
+  });
+
+  it("ignores a params value that is not an object", () => {
+    for (const params of ["x", 5, null, ["a"]]) {
+      const [error] = dslErrorsFrom({ errors: [{ ...base, params }] });
+      expect(error).toEqual(base);
+    }
+  });
+
+  it("bounds how many params and how much text one error can carry", () => {
+    const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`p${i}`, "x"]));
+    const [error] = dslErrorsFrom({
+      errors: [{ ...base, params: { ...many, long: "y".repeat(5000) } }],
+    });
+    expect(Object.keys(error?.params ?? {}).length).toBeLessThanOrEqual(12);
+    // Junk keys cost a scan each: only the first few are even looked at.
+    const junk = Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`bad-${i}`, "x"]));
+    const [scanned] = dslErrorsFrom({ errors: [{ ...base, params: { ...junk, late: "y" } }] });
+    expect(scanned?.params).toEqual({});
+    // A param that is too long is dropped whole, never shown cut: the message
+    // then falls back to the server's English text.
+    const [long] = dslErrorsFrom({
+      errors: [{ ...base, params: { long: "y".repeat(5000), ok: "z" } }],
+    });
+    expect(long?.params).toEqual({ ok: "z" });
+  });
+});
+
+describe("the editor renders problems as text", () => {
+  const panel = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../web/src/app/settings/_sections/rules-dsl-panel.tsx",
+    ),
+    "utf8",
+  );
+
+  it("shows the localized problem, not the server's English message", () => {
+    expect(panel).toContain("dslErrorText(error, t)");
+    expect(panel).not.toMatch(/\{error\.message\}/);
+  });
+
+  it("never injects markup: no innerHTML anywhere in the editor", () => {
+    expect(panel).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
   });
 });
 

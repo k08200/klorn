@@ -409,7 +409,15 @@ describe("POST /validate", () => {
     expect(res.json()).toMatchObject({
       ok: false,
       ruleCount: 0,
-      errors: [{ line: 4, column: 11, code: "retired-lane" }],
+      errors: [
+        {
+          line: 4,
+          column: 11,
+          code: "retired-lane",
+          message: expect.stringContaining("retired"),
+          params: { token: "AUTO" },
+        },
+      ],
     });
     expect(writes()).toEqual([]);
   });
@@ -488,7 +496,14 @@ describe("POST /dry-run", () => {
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({
       code: "invalid-rules",
-      errors: [{ line: 2, column: 1, code: "unexpected-token" }],
+      errors: [
+        {
+          line: 2,
+          column: 1,
+          code: "unexpected-token",
+          params: { variant: "statement", foundKind: "word", found: "bogus" },
+        },
+      ],
     });
     expect(store.calls.filter((c) => c.model === "attentionItem")).toEqual([]);
   });

@@ -16,6 +16,7 @@ export {
   dryRunRules,
   proposedPinRules,
 } from "./dry-run.js";
+export { DSL_MESSAGE_IDS, type DslMessageId, messageIdOf } from "./errors.js";
 export {
   type ApplyPlan,
   buildInventory,
@@ -30,13 +31,16 @@ export {
 export { RULES_DSL_LIMITS } from "./limits.js";
 export { parseRules } from "./parse.js";
 export { type ReadOnlyEntry, type SerializeInput, serializeRules } from "./serialize.js";
-export type {
-  CompiledRule,
-  CompileResult,
-  DslAst,
-  DslError,
-  DslErrorCode,
-  DslFailure,
-  DslLane,
-  ParseResult,
+export {
+  type CompiledRule,
+  type CompileResult,
+  DSL_ERROR_CODES,
+  type DslAst,
+  type DslError,
+  type DslErrorCode,
+  type DslFailure,
+  type DslLane,
+  type DslParams,
+  type DslProblem,
+  type ParseResult,
 } from "./types.js";

@@ -23,6 +23,7 @@ import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import {
   dslErrorsFrom,
+  dslErrorText,
   dslFailureKey,
   offsetOfPosition,
   RULES_DSL_PATHS,
@@ -138,8 +139,12 @@ export function RulesDslPanel({ onApplied }: { onApplied?: () => void }) {
       text,
     });
     if (!reply?.ok) return;
-    setErrors(reply.data.errors);
+    // Same reader as a 400's body: params are checked before they reach the text.
+    const found = dslErrorsFrom(reply.data);
+    setErrors(found);
     setTruncated(reply.data.truncated);
+    // A refusal with nothing readable to list must still say something.
+    if (!reply.data.ok && found.length === 0) toast(t("rulesDsl.error.failed"), "error");
     if (reply.data.ok) setStatus(t("rulesDsl.valid", { n: String(reply.data.ruleCount) }));
   };
 
@@ -286,7 +291,7 @@ function ErrorList({
                     column: String(error.column),
                   })}
                 </span>{" "}
-                {error.message}
+                {dslErrorText(error, t)}
               </span>
             </Button>
           </li>

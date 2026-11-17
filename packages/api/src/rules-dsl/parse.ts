@@ -4,8 +4,9 @@
  * is matched against a fixed token shape. Pure.
  */
 
+import { type Expect, problems } from "./errors.js";
 import { RULES_DSL_LIMITS } from "./limits.js";
-import { findForbidden, quoteForMessage, utf8ByteLength } from "./text.js";
+import { findForbidden, utf8ByteLength } from "./text.js";
 import { type Token, tokenizeLine } from "./tokenize.js";
 import {
   type AstRule,
@@ -13,24 +14,15 @@ import {
   type AstWhen,
   DSL_LANES,
   type DslError,
-  type DslErrorCode,
   type DslFailure,
   type DslLane,
+  type DslProblem,
   type ParseResult,
 } from "./types.js";
 
-const LANE_LIST = "PUSH, MEETING, QUEUE, INFO or SILENT";
 const RETIRED_LANES = new Set(["AUTO", "CALL"]);
-const STATEMENTS = "rule, when, then, note or disabled";
 const BOM = 0xfeff;
 const CLAUSES: ReadonlySet<string> = new Set(["when", "then", "note", "disabled"]);
-
-/** A token shape: a fixed word, one of several words, a string, or any word. */
-type Expect =
-  | { word: string }
-  | { oneOf: readonly string[] }
-  | { string: true }
-  | { anyWord: true };
 
 interface RuleBuilder {
   name: string;
@@ -59,8 +51,8 @@ class Parser {
     this.lineNo = lineNo;
   }
 
-  fail(column: number, code: DslErrorCode, message: string): void {
-    this.errors.push({ line: this.lineNo, column, code, message });
+  fail(column: number, problem: DslProblem): void {
+    this.errors.push({ line: this.lineNo, column, ...problem });
     if (this.current) this.current.broken = true;
   }
 
@@ -73,20 +65,16 @@ class Parser {
         this.version(tokens, lineLength);
         return;
       }
-      this.fail(head.column, "missing-version", "The first statement must be: version 1");
+      this.fail(head.column, problems.missingVersion());
     }
     if (keyword === "version") {
-      this.fail(head.column, "unexpected-token", "version 1 may appear only once, first.");
+      this.fail(head.column, problems.versionRepeated());
     } else if (keyword === "rule") {
       this.rule(tokens, lineLength);
     } else if (CLAUSES.has(keyword)) {
       this.clause(keyword, tokens, lineLength);
     } else {
-      this.fail(
-        head.column,
-        "unexpected-token",
-        `Unexpected ${describe(head)}. A line starts with ${STATEMENTS}.`,
-      );
+      this.fail(head.column, problems.unknownStatement(head));
     }
   }
 
@@ -98,25 +86,17 @@ class Parser {
       if (!got) {
         // Just after the last token (and one space), not past a trailing comment.
         const at = i > 0 ? (tokens[i - 1] as Token).end + 1 : lineLength + 1;
-        this.fail(at, "unexpected-token", `Expected ${expected(want)} here.`);
+        this.fail(at, problems.expectedHere(want));
         return null;
       }
       if (!accepts(want, got)) {
-        this.fail(
-          got.column,
-          "unexpected-token",
-          `Expected ${expected(want)}, found ${describe(got)}.`,
-        );
+        this.fail(got.column, problems.expectedFound(want, got));
         return null;
       }
     }
     const extra = tokens[shape.length];
     if (extra) {
-      this.fail(
-        extra.column,
-        "unexpected-token",
-        `Unexpected ${describe(extra)} after the statement.`,
-      );
+      this.fail(extra.column, problems.extraToken(extra));
       return null;
     }
     return tokens;
@@ -125,11 +105,7 @@ class Parser {
   private version(tokens: Token[], lineLength: number): void {
     const number = tokens[1];
     if (number?.kind === "word" && number.text !== "1" && tokens.length === 2) {
-      this.fail(
-        number.column,
-        "unsupported-version",
-        `Unsupported version ${quoteForMessage(number.text)}. This Klorn reads version 1.`,
-      );
+      this.fail(number.column, problems.unsupportedVersion(number.text));
       return;
     }
     this.match(tokens, [{ word: "version" }, { word: "1" }], lineLength);
@@ -140,7 +116,7 @@ class Parser {
     this.finishRule();
     this.ruleCount += 1;
     if (this.ruleCount > RULES_DSL_LIMITS.maxRules) {
-      this.fail(column, "too-many-rules", `At most ${RULES_DSL_LIMITS.maxRules} rules per file.`);
+      this.fail(column, problems.tooManyRules());
       this.stopped = true;
       return false;
     }
@@ -162,10 +138,10 @@ class Parser {
    * A line that could not be tokenized. When it is a rule header, it still
    * opens a (broken) rule, so its clauses do not pile onto the rule above.
    */
-  badLine(line: string, column: number, code: DslErrorCode, message: string): void {
+  badLine(line: string, column: number, problem: DslProblem): void {
     const head = ruleHeaderColumn(line);
     if (head !== null && this.sawStatement && !this.startRule(head)) return;
-    this.fail(column, code, message);
+    this.fail(column, problem);
   }
 
   private rule(tokens: Token[], lineLength: number): void {
@@ -175,13 +151,9 @@ class Parser {
     if (!matched) return;
     const name = matched[1] as Token;
     if (name.text.length > RULES_DSL_LIMITS.maxNameChars) {
-      this.fail(
-        name.column,
-        "string-too-long",
-        tooLong("A rule name", RULES_DSL_LIMITS.maxNameChars),
-      );
+      this.fail(name.column, problems.stringTooLong("name"));
     } else if (name.text.trim() === "") {
-      this.fail(name.column, "empty-rule-name", "A rule needs a name.");
+      this.fail(name.column, problems.emptyRuleName());
     }
     this.current.name = name.text;
   }
@@ -190,11 +162,7 @@ class Parser {
     const head = tokens[0] as Token;
     const rule = this.current;
     if (!rule) {
-      this.fail(
-        head.column,
-        "statement-outside-rule",
-        `"${keyword}" belongs inside a rule. Start one with: rule "name"`,
-      );
+      this.fail(head.column, problems.statementOutsideRule(keyword));
       return;
     }
     if (keyword === "when") this.senderClause(rule, tokens, lineLength);
@@ -205,18 +173,14 @@ class Parser {
   }
 
   private duplicate(head: Token, keyword: string): void {
-    this.fail(head.column, "duplicate-clause", `This rule already has a "${keyword}" line.`);
+    this.fail(head.column, problems.duplicateClause(keyword));
   }
 
   private senderClause(rule: RuleBuilder, tokens: Token[], lineLength: number): void {
     const head = tokens[0] as Token;
     rule.senderCount += 1;
     if (rule.senderCount > RULES_DSL_LIMITS.maxConditionsPerRule) {
-      this.fail(
-        head.column,
-        "too-many-conditions",
-        "A rule has one sender condition. Write another rule for another sender.",
-      );
+      this.fail(head.column, problems.tooManyConditions());
       return;
     }
     const shape: Expect[] = [
@@ -229,11 +193,7 @@ class Parser {
     if (!matched) return;
     const value = matched[3] as Token;
     if (value.text.length > RULES_DSL_LIMITS.maxValueChars) {
-      this.fail(
-        value.column,
-        "string-too-long",
-        tooLong("A sender", RULES_DSL_LIMITS.maxValueChars),
-      );
+      this.fail(value.column, problems.stringTooLong("sender"));
       return;
     }
     rule.sender = {
@@ -260,19 +220,11 @@ class Parser {
     const laneToken = matched[2] as Token;
     const upper = asciiUpper(laneToken.text);
     if (RETIRED_LANES.has(upper)) {
-      this.fail(
-        laneToken.column,
-        "retired-lane",
-        `${quoteForMessage(laneToken.text)} is a retired value, not a lane. Use ${LANE_LIST}.`,
-      );
+      this.fail(laneToken.column, problems.retiredLane(laneToken.text));
       return;
     }
     if (!(DSL_LANES as readonly string[]).includes(upper)) {
-      this.fail(
-        laneToken.column,
-        "unknown-lane",
-        `Unknown lane ${quoteForMessage(laneToken.text)}. Use ${LANE_LIST}.`,
-      );
+      this.fail(laneToken.column, problems.unknownLane(laneToken.text));
       return;
     }
     rule.target = { lane: upper as DslLane, line: this.lineNo, column: head.column };
@@ -288,7 +240,7 @@ class Parser {
     if (!matched) return;
     const text = matched[1] as Token;
     if (text.text.length > RULES_DSL_LIMITS.maxNoteChars) {
-      this.fail(text.column, "string-too-long", tooLong("A note", RULES_DSL_LIMITS.maxNoteChars));
+      this.fail(text.column, problems.stringTooLong("note"));
       return;
     }
     rule.note = text.text;
@@ -298,11 +250,10 @@ class Parser {
     const rule = this.current;
     this.current = null;
     if (!rule || rule.broken) return;
-    const at = (code: DslErrorCode, message: string) =>
-      this.errors.push({ line: rule.line, column: rule.column, code, message });
-    if (!rule.sender) at("missing-when", 'This rule needs a sender: when from address "…"');
-    if (!rule.target)
-      at("missing-then", `This rule needs a lane: then lane PUSH (or ${LANE_LIST})`);
+    const at = (problem: DslProblem) =>
+      this.errors.push({ line: rule.line, column: rule.column, ...problem });
+    if (!rule.sender) at(problems.missingWhen());
+    if (!rule.target) at(problems.missingThen());
     if (!rule.sender || !rule.target) return;
     this.rules.push({
       name: rule.name,
@@ -318,12 +269,7 @@ class Parser {
   finishFile(): void {
     this.finishRule();
     if (!this.sawStatement) {
-      this.errors.push({
-        line: 1,
-        column: 1,
-        code: "missing-version",
-        message: "The first statement must be: version 1",
-      });
+      this.errors.push({ line: 1, column: 1, ...problems.missingVersion() });
     }
   }
 }
@@ -334,17 +280,6 @@ function accepts(want: Expect, got: Token): boolean {
   if ("word" in want) return got.text === want.word;
   if ("oneOf" in want) return want.oneOf.includes(got.text);
   return true;
-}
-
-function expected(want: Expect): string {
-  if ("string" in want) return 'a "quoted" string';
-  if ("word" in want) return `"${want.word}"`;
-  if ("oneOf" in want) return want.oneOf.map((w) => `"${w}"`).join(" or ");
-  return `a lane (${LANE_LIST})`;
-}
-
-function describe(token: Token): string {
-  return token.kind === "string" ? "a string" : quoteForMessage(token.text);
 }
 
 /** Uppercase a-z only: `ſilent` must not fold into SILENT. */
@@ -365,10 +300,6 @@ function ruleHeaderColumn(line: string): number | null {
   return next === undefined || next === " " || next === "\t" || next === '"' || next === "#"
     ? i + 1
     : null;
-}
-
-function tooLong(what: string, max: number): string {
-  return `${what} can be at most ${max} characters.`;
 }
 
 /** Sorted by position, capped: what every failure returns. */
@@ -393,14 +324,7 @@ function* lines(text: string): Generator<string> {
 export function parseRules(text: string): ParseResult {
   const max = RULES_DSL_LIMITS.maxTextBytes;
   if (utf8ByteLength(text, max) > max) {
-    return failure([
-      {
-        line: 1,
-        column: 1,
-        code: "text-too-large",
-        message: `The rules text can be at most ${max / 1024} KiB.`,
-      },
-    ]);
+    return failure([{ line: 1, column: 1, ...problems.textTooLarge() }]);
   }
   const parser = new Parser();
   let lineNo = 0;
@@ -412,17 +336,12 @@ export function parseRules(text: string): ParseResult {
     const bad = findForbidden(line);
     if (bad !== -1) {
       const hex = line.charCodeAt(bad).toString(16).toUpperCase().padStart(4, "0");
-      parser.badLine(
-        line,
-        bad + 1,
-        "forbidden-character",
-        `Invisible, control or text-direction character U+${hex} is not allowed.`,
-      );
+      parser.badLine(line, bad + 1, problems.forbiddenCharacter(hex));
     } else {
       const tokenized = tokenizeLine(line);
       if ("error" in tokenized) {
-        const { column, code, message } = tokenized.error;
-        parser.badLine(line, column, code, message);
+        const { column, ...problem } = tokenized.error;
+        parser.badLine(line, column, problem);
       } else if (tokenized.tokens.length > 0) {
         parser.statement(tokenized.tokens, line.length);
       }
