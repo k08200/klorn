@@ -3,8 +3,9 @@
  *
  * The client only ever gets a static sentence plus a stable code. The library's
  * own text never leaves the server: it can name internal addresses, quote the
- * server's reply, or (in principle) echo the command that failed. That text is
- * logged here instead, as one capped line with the password masked out.
+ * server's reply, or (in principle) echo the command that failed. It is not
+ * logged either: logVerifyFailure logs the error's facts only (class, code,
+ * status, message length) through logDbFailure.
  */
 
 import { logDbFailure } from "../report-db-failure.js";
