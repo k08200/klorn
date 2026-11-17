@@ -467,3 +467,33 @@ describe("another user's ids answer the not-found 404", () => {
     await app.close();
   });
 });
+
+describe("POST /api/chat/pending-actions/:actionId/snooze", () => {
+  it("snoozes the queue entry by the caller's id as well as the action's", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.pendingAction.findFirst).mockResolvedValueOnce({
+      id: "pa-1",
+      toolName: "create_event",
+      conversationId: "c-1",
+      toolArgs: {},
+    } as never);
+    const attentionUpdate = vi.mocked(prisma.attentionItem.updateMany);
+    attentionUpdate.mockClear();
+    const snoozeUntil = new Date(Date.now() + 60 * 60_000).toISOString();
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/pending-actions/pa-1/snooze",
+      payload: { snoozeUntil },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(attentionUpdate).toHaveBeenCalledTimes(1);
+    expect(attentionUpdate.mock.calls[0]?.[0]).toMatchObject({
+      where: { userId: "test-user-id", source: "PENDING_ACTION", sourceId: "pa-1" },
+      data: { status: "SNOOZED" },
+    });
+  });
+});
