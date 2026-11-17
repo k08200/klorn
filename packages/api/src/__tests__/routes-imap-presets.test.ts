@@ -277,7 +277,7 @@ describe("the way out behind the production route guard (flag off)", () => {
   });
 
   it("the remembered answer expires after NOT_OWNER_TTL_MS", async () => {
-    const { NOT_OWNER_TTL_MS } = await import("../routes/imap-owner-exit.js");
+    const { NOT_OWNER_TTL_MS } = await import("../routes/owner-exit-gate.js");
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       const { app, headers } = await buildGuardedApp();

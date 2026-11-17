@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import Fastify from "fastify";
 import { Resend } from "resend";
 import { expect, vi } from "vitest";
+import { registerJsonBodyParser } from "../../json-body-parser.js";
 
 export interface Mailbox {
   id: string;
@@ -289,22 +290,14 @@ export function tearDownInbound(): void {
 
 type RoutesFactory = (app: FastifyInstance) => Promise<void>;
 
-/** Mirror index.ts: the JSON parser keeps the exact bytes Resend signed. */
+/** The production JSON parser (index.ts): its rawBody keeps the exact bytes Resend signed. */
 export async function buildInboundApp(
   routes: RoutesFactory,
   plugins: Array<(app: FastifyInstance) => Promise<void>> = [],
 ): Promise<FastifyInstance> {
   const app = Fastify();
   for (const plugin of plugins) await plugin(app);
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
-    try {
-      const str = (body as string) || "{}";
-      (req as unknown as { rawBody: string }).rawBody = str;
-      done(null, JSON.parse(str));
-    } catch (err) {
-      done(err as Error, undefined);
-    }
-  });
+  registerJsonBodyParser(app);
   await app.register(routes, { prefix: "/api/mailbox" });
   await app.ready();
   return app;

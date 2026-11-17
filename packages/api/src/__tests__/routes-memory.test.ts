@@ -124,7 +124,7 @@ describe("memory routes", () => {
     await app.close();
   });
 
-  it("returns 403 when deleting other user's memory", async () => {
+  it("answers another user's delete with the not-found 404 and deletes nothing", async () => {
     const app = await buildApp();
     const c = await app.inject({
       method: "POST",
@@ -137,7 +137,21 @@ describe("memory routes", () => {
       url: `/api/memories/${c.json().id}`,
       headers: auth(OTHER),
     });
-    expect(res.statusCode).toBe(403);
+    const absent = await app.inject({
+      method: "DELETE",
+      url: "/api/memories/00000000-0000-4000-8000-000000000000",
+      headers: auth(OTHER),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Memory not found" });
+    expect(res.json()).toEqual(absent.json());
+    // Still there for its owner.
+    const kept = await app.inject({
+      method: "DELETE",
+      url: `/api/memories/${c.json().id}`,
+      headers: auth(),
+    });
+    expect(kept.statusCode).toBe(204);
     await app.close();
   });
 

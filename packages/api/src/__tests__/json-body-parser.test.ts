@@ -118,6 +118,73 @@ describe("a malformed JSON body is the caller's mistake: 400, not 500", () => {
   });
 });
 
+// Fastify's own parser refuses these (secure-json-parse, protoAction and
+// constructorAction "error"); replacing it must not drop that. JSON.parse makes
+// `__proto__` an own key, which Object.assign or a deep merge downstream then
+// writes into a prototype.
+describe("a prototype-poisoning key is refused like Fastify's own parser refuses it", () => {
+  it.each([
+    ["a top-level __proto__", '{"__proto__":{"isAdmin":true}}'],
+    ["a nested __proto__", '{"a":{"b":{"__proto__":{"isAdmin":true}}}}'],
+    ["a __proto__ inside an array", '{"items":[{"__proto__":{"isAdmin":true}}]}'],
+    ["a unicode-escaped __proto__", '{"\\u005f_proto__":{"isAdmin":true}}'],
+    ["constructor.prototype", '{"constructor":{"prototype":{"isAdmin":true}}}'],
+    ["a nested constructor.prototype", '{"a":{"constructor":{"prototype":{"x":1}}}}'],
+  ])("answers the same 400 for %s, before the handler runs", async (_label, payload) => {
+    vi.mocked(captureError).mockClear();
+    const wired = await buildApp();
+    const res = await wired.app.inject({
+      method: "POST",
+      url: "/echo",
+      headers: JSON_HEADER,
+      payload,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "Invalid JSON body" });
+    expect(wired.reached).not.toHaveBeenCalled();
+    expectQuiet(wired);
+  });
+
+  it("refuses with the same fixed error, no cause", async () => {
+    const app = Fastify();
+    registerJsonBodyParser(app);
+    let seen: unknown;
+    app.setErrorHandler((err, _request, reply) => {
+      seen = err;
+      reply.code(400).send({});
+    });
+    app.post("/echo", async () => ({}));
+    await app.ready();
+    openApps.push(app);
+    await app.inject({
+      method: "POST",
+      url: "/echo",
+      headers: JSON_HEADER,
+      payload: '{"__proto__":{"isAdmin":true}}',
+    });
+    expect(seen).toBeInstanceOf(InvalidJsonBodyError);
+    expect((seen as Error).cause).toBeUndefined();
+  });
+
+  it("still accepts keys that only look alike", async () => {
+    const wired = await buildApp();
+    // A string constructor and a "proto" key are ordinary data; Fastify's
+    // parser lets them through too.
+    const payload = '{"constructor":"Acme Inc.","proto":1,"__proto":2,"prototype":{"a":1}}';
+    const res = await wired.app.inject({
+      method: "POST",
+      url: "/echo",
+      headers: JSON_HEADER,
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      body: { constructor: "Acme Inc.", proto: 1, __proto: 2, prototype: { a: 1 } },
+      rawBody: payload,
+    });
+  });
+});
+
 describe("a valid JSON body is parsed as before and keeps its raw bytes", () => {
   it("parses the body and sets rawBody to the exact bytes sent", async () => {
     vi.mocked(captureError).mockClear();
@@ -134,6 +201,19 @@ describe("a valid JSON body is parsed as before and keeps its raw bytes", () => 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ body: { b: 2, a: [1, 2], c: "é" }, rawBody: payload });
     expectQuiet(wired);
+  });
+
+  it("accepts a leading byte-order mark, as Fastify's own parser does, and keeps it in rawBody", async () => {
+    const wired = await buildApp();
+    const payload = '\uFEFF{"a":1}';
+    const res = await wired.app.inject({
+      method: "POST",
+      url: "/echo",
+      headers: JSON_HEADER,
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ body: { a: 1 }, rawBody: payload });
   });
 
   it("treats an empty body under a JSON content-type as {}", async () => {

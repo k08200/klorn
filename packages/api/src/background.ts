@@ -124,16 +124,29 @@ export async function getNotifications(
   });
 }
 
-export async function markNotificationRead(notificationId: string): Promise<void> {
-  await prisma.notification.update({
-    where: { id: notificationId },
+/**
+ * Mark one of the user's bell rows read; false when there is no such row. The
+ * write itself is scoped: another user's row, a missing one, a hidden claim and
+ * a row cleared from the bell match nothing, the same rows the bell never shows.
+ * One conditional statement, so a "Clear all" that deletes or hides the row
+ * while this runs ends as "not found", never as an update of a row that is gone
+ * (Prisma P2025, a 500).
+ */
+export async function markNotificationRead(
+  userId: string,
+  notificationId: string,
+): Promise<boolean> {
+  const { count } = await prisma.notification.updateMany({
+    where: { id: notificationId, userId, type: { not: HIDDEN_CLAIM_TYPE }, clearedAt: null },
     data: { isRead: true },
   });
+  if (count === 0) return false;
   // Mirror the read state onto the FOLLOWUP queue entry, if one exists.
   await prisma.attentionItem.updateMany({
-    where: { source: "NOTIFICATION", sourceId: notificationId, status: "OPEN" },
+    where: { userId, source: "NOTIFICATION", sourceId: notificationId, status: "OPEN" },
     data: { status: "DISMISSED", resolvedAt: new Date() },
   });
+  return true;
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {

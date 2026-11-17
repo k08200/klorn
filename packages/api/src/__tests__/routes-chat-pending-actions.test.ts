@@ -418,3 +418,52 @@ describe("POST /api/chat/pending-actions/:actionId/approve — decision ledger",
     expect(failed.body).toBe(ok.body);
   });
 });
+
+// Another user's action or conversation gets the answer a missing id gets: a
+// 403 there said the id exists and is someone's.
+describe("another user's ids answer the not-found 404", () => {
+  async function missingAnswer(url: string, payload?: Record<string, unknown>) {
+    const kept = row;
+    row = null as unknown as Row;
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url, ...(payload ? { payload } : {}) });
+    await app.close();
+    row = kept;
+    return res;
+  }
+
+  it.each([
+    ["approve", "/api/chat/pending-actions/pa-1/approve", undefined],
+    ["reject", "/api/chat/pending-actions/pa-1/reject", { reason: "not mine" }],
+  ] as const)("%s: 404 like a missing action, and nothing changes", async (_n, url, payload) => {
+    const absent = await missingAnswer(url, payload);
+    row = makeRow({ userId: "someone-else" });
+    const before = { ...row };
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url, ...(payload ? { payload } : {}) });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Action not found" });
+    expect(res.json()).toEqual(absent.json());
+    expect(row).toEqual(before);
+    expect(updateManyCalls).toEqual([]);
+    expect(executeToolCallSpy).not.toHaveBeenCalled();
+    expect(recordFeedbackSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("a conversation of another user: 404 like a missing one", async () => {
+    const { prisma } = await import("../db.js");
+    const url = "/api/chat/conversations/c-1/pending-actions";
+    const app = await buildApp();
+    const absent = await app.inject({ method: "GET", url });
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValueOnce({
+      id: "c-1",
+      userId: "someone-else",
+    } as never);
+    const res = await app.inject({ method: "GET", url });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Conversation not found" });
+    expect(res.json()).toEqual(absent.json());
+    await app.close();
+  });
+});

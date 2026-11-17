@@ -204,7 +204,7 @@ describe("commitment routes", () => {
     await app.close();
   });
 
-  it("returns 403 when another user reads our commitment", async () => {
+  it("answers another user's read of our commitment with the not-found 404", async () => {
     const c = seed({ userId: "user-1" });
     const app = await buildApp();
     const res = await app.inject({
@@ -212,7 +212,8 @@ describe("commitment routes", () => {
       url: `/api/commitments/${c.id}`,
       headers: auth(OTHER),
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Commitment not found" });
     await app.close();
   });
 
@@ -341,7 +342,7 @@ describe("commitment routes", () => {
       headers: auth(OTHER),
       payload: { confirmed: true },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(commitments[0]?.confirmedAt).toBeUndefined();
     await app.close();
   });
@@ -413,15 +414,20 @@ describe("commitment routes — another user's commitment", () => {
     { method: "POST" as const, url: `/api/commitments/${id}/path/materialize-all` },
   ];
 
-  it("refuses every route with 403, leaks none of the row, and writes nothing", async () => {
+  it("refuses every route with the 404 a missing id gets, leaks none of the row, and writes nothing", async () => {
     const c = seedOwned();
     const before = JSON.stringify({ commitments, paths });
     const { prisma } = await import("../db.js");
     const { createCompletion } = await import("../llm/openai.js");
     const app = await buildApp();
-    for (const call of crossUserCalls(c.id)) {
+    const missing = crossUserCalls("missing");
+    for (const [index, call] of crossUserCalls(c.id).entries()) {
       const res = await app.inject({ ...call, headers: auth(OTHER) });
-      expect(res.statusCode, `${call.method} ${call.url}`).toBe(403);
+      const absent = await app.inject({ ...missing[index], headers: auth(OTHER) });
+      // The same answer as an id that does not exist: it never says the id is someone's.
+      expect(res.statusCode, `${call.method} ${call.url}`).toBe(404);
+      expect(res.json(), `${call.method} ${call.url}`).toEqual(absent.json());
+      expect(res.json()).toEqual({ error: "Commitment not found" });
       for (const secret of OWNER_ONLY) expect(res.body).not.toContain(secret);
       expect(res.body).not.toContain(c.id);
     }

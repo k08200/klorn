@@ -132,8 +132,10 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const commitment = await getCommitment(id);
-    if (!commitment) return reply.code(404).send({ error: "Commitment not found" });
-    if (commitment.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    // Another user's id gets the same 404 as a missing one: no answer says it exists.
+    if (!commitment || commitment.userId !== userId) {
+      return reply.code(404).send({ error: "Commitment not found" });
+    }
     return commitment;
   });
 
@@ -142,8 +144,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);
-    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    if (!existing || existing.userId !== userId) {
+      return reply.code(404).send({ error: "Commitment not found" });
+    }
 
     const body = request.body as Record<string, unknown>;
     const patch: Record<string, unknown> = {};
@@ -228,8 +231,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);
-    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    if (!existing || existing.userId !== userId) {
+      return reply.code(404).send({ error: "Commitment not found" });
+    }
     await deleteCommitmentService(id, userId);
     return reply.code(204).send();
   });
@@ -241,8 +245,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);
-    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    if (!existing || existing.userId !== userId) {
+      return reply.code(404).send({ error: "Commitment not found" });
+    }
     const path = await getOrBuildPath(userId, id);
     return { success: true, path };
   });
@@ -255,8 +260,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const { id } = request.params as { id: string };
       const existing = await getCommitment(id);
-      if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-      if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      if (!existing || existing.userId !== userId) {
+        return reply.code(404).send({ error: "Commitment not found" });
+      }
       const path = await buildPath(userId, id);
       return { success: true, path };
     },
@@ -270,8 +276,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const { id, index } = request.params as { id: string; index: string };
       const existing = await getCommitment(id);
-      if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-      if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      if (!existing || existing.userId !== userId) {
+        return reply.code(404).send({ error: "Commitment not found" });
+      }
       const stepIndex = Number.parseInt(index, 10);
       if (!Number.isFinite(stepIndex) || stepIndex < 0)
         return reply.code(400).send({ error: "Invalid step index" });
@@ -285,8 +292,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);
-    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    if (!existing || existing.userId !== userId) {
+      return reply.code(404).send({ error: "Commitment not found" });
+    }
     const result = await materializeAllSteps(userId, id);
     return { success: true, ...result };
   });

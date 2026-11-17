@@ -4,7 +4,9 @@
  * awaiting processing. Every query is scoped to the session user.
  */
 
+import { kakaoImportOpenTo } from "../config.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { deleteKakaoImportCommitments } from "./commitments.js";
 import type { KakaoFormat } from "./parse.js";
 import type { KakaoTimedMessage, KakaoWindow } from "./window.js";
@@ -159,6 +161,31 @@ export async function listKakaoImports(userId: string): Promise<KakaoImportSumma
     select: SUMMARY_SELECT,
   });
   return rows.map(toSummary);
+}
+
+/**
+ * Does the user have any import, in any status? Decides whether the list and
+ * the delete stay open to them while the flag is closed (routes/kakao-import.ts).
+ */
+export async function hasKakaoImport(userId: string): Promise<boolean> {
+  const row = await prisma.kakaoImport.findFirst({ where: { userId }, select: { id: true } });
+  return row !== null;
+}
+
+/**
+ * /me's `kakaoImportWayOut`: the import is closed to this user, but they own an
+ * import, so Settings shows the list and delete only (the API's way out). No
+ * lookup while the import is open to them. A database failure answers false,
+ * logged: /me answers 401 to anything that throws, which signs the client out.
+ */
+export async function kakaoImportWayOut(userId: string): Promise<boolean> {
+  if (kakaoImportOpenTo(userId)) return false;
+  try {
+    return await hasKakaoImport(userId);
+  } catch (err) {
+    logDbFailure("[KAKAO] /me way-out lookup failed", err, { ids: { userId } });
+    return false;
+  }
 }
 
 export async function getKakaoImport(

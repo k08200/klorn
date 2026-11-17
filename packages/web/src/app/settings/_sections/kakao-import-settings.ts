@@ -50,6 +50,17 @@ export function kakaoImportPanelVisible(
   return user?.kakaoImport === true;
 }
 
+/**
+ * The import is closed to this user but they still own an import (/me
+ * user.kakaoImportWayOut): the panel shows their imports with delete only, no
+ * upload, so turning the flag off never traps a chat.
+ */
+export function kakaoImportWayOutOnly(
+  user: { kakaoImport?: boolean; kakaoImportWayOut?: boolean } | null | undefined,
+): boolean {
+  return user?.kakaoImport !== true && user?.kakaoImportWayOut === true;
+}
+
 const KNOWN_ERRORS = new Set([
   "empty-file",
   "file-too-large",

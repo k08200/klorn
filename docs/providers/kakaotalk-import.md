@@ -225,8 +225,10 @@ How it is deleted:
 - **Delete this import** (`DELETE /api/kakao-import/:id`). It deletes every `KAKAO`
   commitment with the import's `threadId` and their queue mirrors first, then the
   import and its messages (cascade). If the first step fails the row stays, so the
-  user can retry. While the flag is off the route is dark: stored text still expires
-  within 7 days, and account deletion still removes everything.
+  user can retry. While the flag is off, or the cohort excludes the user, the route
+  stays open to a user who owns an import (the way out, `routes/owner-exit-gate.ts`),
+  and dark to everyone else. Stored text still expires within 7 days, and account
+  deletion still removes everything.
 - **Orphan sweep** (`sweepOrphanKakaoCommitments`, `commitments.ts`). It runs with
   the purge, on the same 10-minute interval and whatever the flags say. It deletes
   every `KAKAO` commitment (and its queue mirror) whose `kakao-import:<id>` thread
@@ -274,6 +276,14 @@ All routes are under `/api/kakao-import`. They answer Fastify's default 404 whil
 the flag is off, even unauthenticated. Each one runs `requireAuth` then
 `cohortGate`, and acts on the session user's own rows only.
 
+The exception is the way out, `GET /` and `DELETE /:id`. While the flag is off,
+or the cohort excludes the user, these stay open to a user who owns at least one
+import. The check runs before authentication: the bearer token must verify, then
+`requireAuth` checks the session. Everyone else gets the same default 404, which
+needs no session. A "no import" answer is remembered for 60 s, and a database
+error answers 404. `POST /preview`, `POST /` and `GET /:id` stay dark. This is the
+same pattern as the IMAP way out (#1785).
+
 | Route | Body | Answer |
 |---|---|---|
 | `POST /preview` | multipart: `file` | `{ preview: { format, totalMessages, windowMessages, windowTruncated, speakers: [{name,total,inWindow}], firstAt, lastAt, windowStart, windowEnd, windowDays } }`; stores nothing |
@@ -290,7 +300,10 @@ Parse refusals map to these statuses:
 - 503: `busy` (both upload routes, when the instance's upload slots are taken)
 
 The web learns the flag from `/api/auth/me` `user.kakaoImport`. The panel lives in
-Settings → Integrations and renders nothing while the flag is off. It has six parts:
+Settings → Integrations. While the flag is off it renders nothing, except for a user
+with `user.kakaoImportWayOut`, which means the import is closed to them but they own
+an import. That user sees only their imports, each with Delete. When the import is
+open, the panel has six parts:
 1. export instructions (phone; PC/Mac);
 2. a file picker that checks the 10 MB cap client-side;
 3. "Check file", which shows the preview;

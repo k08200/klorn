@@ -33,6 +33,7 @@ import { kakaoImportThreadId } from "../kakao-import/commitments.js";
 import {
   createKakaoImport,
   deleteKakaoImport,
+  hasKakaoImport,
   KAKAO_MAX_ACTIVE_IMPORTS_PER_USER,
   KAKAO_MAX_IMPORTS_PER_USER,
 } from "../kakao-import/store.js";
@@ -213,5 +214,20 @@ describe("deleteKakaoImport", () => {
     mocks.commitmentDeleteMany.mockRejectedValue(new Error("db down"));
     await expect(deleteKakaoImport("user-1", "imp-1")).rejects.toThrow("db down");
     expect(mocks.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("hasKakaoImport", () => {
+  it("asks about the user's own imports only, any status", async () => {
+    expect(await hasKakaoImport("user-1")).toBe(true);
+    expect(mocks.findFirst).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      select: { id: true },
+    });
+  });
+
+  it("is false for a user with no import", async () => {
+    mocks.findFirst.mockResolvedValue(null);
+    expect(await hasKakaoImport("user-2")).toBe(false);
   });
 });

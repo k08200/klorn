@@ -26,6 +26,7 @@ const store = vi.hoisted(() => ({
   listKakaoImports: vi.fn(),
   getKakaoImport: vi.fn(),
   deleteKakaoImport: vi.fn(),
+  hasKakaoImport: vi.fn(),
 }));
 vi.mock("../kakao-import/store.js", () => ({ ...store, KAKAO_MAX_IMPORTS_PER_USER: 20 }));
 vi.mock("../user-timezone.js", () => ({ getUserTimeZone: vi.fn(async () => "Asia/Seoul") }));
@@ -112,6 +113,7 @@ beforeEach(async () => {
   store.listKakaoImports.mockResolvedValue([summary()]);
   store.getKakaoImport.mockResolvedValue(summary());
   store.deleteKakaoImport.mockResolvedValue(true);
+  store.hasKakaoImport.mockResolvedValue(false);
   app = await build();
 });
 
