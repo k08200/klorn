@@ -23,10 +23,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The SHA pin freezes the action's script, not the scanner: it runs
+      # `docker run ghcr.io/trufflesecurity/trufflehog:<version>`, and `version`
+      # defaults to `latest`. Pin the image of the same release by digest; bump
+      # both together (check-actions-pinned.mjs fails a pin bump that leaves
+      # this behind).
       - name: Scan for hardcoded secrets
         uses: trufflesecurity/trufflehog@3bd2b5887eb0efb8fa18bfd1d296032924e4ffdc # v3.99.9
         with:
           extra_args: --only-verified
+          version: 3.99.9@sha256:2ec535840f860aa27f11fee20222fb790326ecd66325c96bd49d02ec6af46eca
 
       - name: Check for .env files in commits
         run: |

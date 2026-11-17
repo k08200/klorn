@@ -24,7 +24,7 @@ import {
 } from "../privacy/data-wipe-fence.js";
 import { runDataWipeSweep } from "../privacy/data-wipe-sweep.js";
 import { finishDataWipe, purgeAllUserData } from "../user-deletion.js";
-import { runAsNewWork } from "../work-context.js";
+import { runAsNewWork, workStartedAt } from "../work-context.js";
 
 const describePg = url ? describe : describe.skip;
 const created: string[] = [];
@@ -65,6 +65,22 @@ const settledWithin = (promise: Promise<unknown>, ms: number) =>
     ),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
   ]);
+
+/** Resolves once the trigger's clock (now() in UTC) has reached the account's fenceUntil. */
+async function untilDatabaseClockPasses(userId: string): Promise<void> {
+  const pollMs = 25;
+  // ~40s, inside the 60s test timeout: only a database clock far behind the
+  // app's could need it, and then this says so instead of a bare timeout.
+  const maxPolls = 1_600;
+  for (let poll = 0; poll < maxPolls; poll++) {
+    const [row] = await prisma.$queryRaw<Array<{ passed: boolean }>>`
+      SELECT "fenceUntil" <= (now() AT TIME ZONE 'UTC') AS "passed"
+      FROM "DataWipe" WHERE "userId" = ${userId}`;
+    if (row?.passed) return;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  throw new Error("the database clock never reached the wipe's fenceUntil");
+}
 
 afterAll(async () => {
   if (!url) return;
@@ -175,14 +191,25 @@ describePg("the app check, after the trigger's window", () => {
   it("rejects work that began before fenceUntil, inside interactive transactions too", async () => {
     const userId = await newUser();
     await runAsNewWork(async () => {
-      // The wipe finished and its window already ended, so the trigger lets
-      // inserts through again; this work began before the window ended.
+      // The wipe's instants come from this work's own start, not from either
+      // clock's "now": the app check compares the work's start (app clock)
+      // with fenceUntil, and a fenceUntil of the database's now() + 200ms
+      // left a 200ms margin that load or app/database clock skew could eat.
+      const startedAt = workStartedAt().getTime();
+      const fenceUntil = new Date(startedAt + 200).toISOString();
+      // A refresh still in flight from an earlier write would hand back a
+      // snapshot read before this insert; let it land first.
+      await refreshDataWipes();
       await prisma.$executeRaw`
         INSERT INTO "DataWipe" ("userId", "requestedAt", "purgedAt", "fenceUntil", "updatedAt")
-        VALUES (${userId}, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC',
-                (now() AT TIME ZONE 'UTC') + interval '200 milliseconds', now() AT TIME ZONE 'UTC')`;
+        VALUES (${userId}, ${new Date(startedAt).toISOString()}::timestamp,
+                ${new Date(startedAt).toISOString()}::timestamp, ${fenceUntil}::timestamp,
+                now() AT TIME ZONE 'UTC')`;
       await refreshDataWipes();
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      // The wipe finished and its window ended, so the trigger lets inserts
+      // through again; this work began before the window ended. Wait for the
+      // database's own clock to pass fenceUntil instead of sleeping a fixed time.
+      await untilDatabaseClockPasses(userId);
       await rawNote(userId, "trigger allows it now");
 
       await expect(

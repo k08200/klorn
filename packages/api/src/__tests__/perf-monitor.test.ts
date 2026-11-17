@@ -111,4 +111,34 @@ describe("perf-monitor", () => {
 
     await app.close();
   });
+
+  // An unmatched request has no route template. Keying it by the raw URL put
+  // its query string (tokens, addresses) into /api/admin/perf and the
+  // slow-request Sentry breadcrumb, and gave every distinct URL its own
+  // never-evicted entry.
+  it("files every unmatched request under one key, without its path or query", async () => {
+    const app = Fastify();
+    attachPerfMonitor(app);
+    app.get("/known", async () => ({ ok: true }));
+
+    for (let i = 0; i < 5; i++) {
+      await app.inject({
+        method: "GET",
+        url: `/missing-${i}?token=tok-${i}&to=alice%40example.com`,
+      });
+    }
+    await app.inject({ method: "GET", url: "/known?token=tok-known" });
+
+    const snapshot = getPerfSnapshot();
+    const text = JSON.stringify(snapshot);
+    expect(text).not.toContain("tok-");
+    expect(text).not.toContain("alice");
+    expect(text).not.toContain("/missing-");
+    const unmatched = snapshot.filter((r) => !r.route.includes("/known"));
+    expect(unmatched).toHaveLength(1);
+    expect(unmatched[0]?.count).toBe(5);
+    expect(snapshot.find((r) => r.route === "GET /known")?.count).toBe(1);
+
+    await app.close();
+  });
 });

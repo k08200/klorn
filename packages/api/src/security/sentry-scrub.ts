@@ -32,11 +32,27 @@
  * `beforeSend` without importing Sentry's types here — this module stays pure
  * and testable against synthetic events, with no DSN and no network.
  *
+ * Every text these hooks scrub for credentials (messages, exception values,
+ * breadcrumb and span data, extra, tags, contexts, header values, keys at any
+ * depth), plus the request path and the transaction name, also loses its mail
+ * addresses (mail-address-redaction.ts): the console integration
+ * (@sentry/core integrations/console.js, a default) stores each console.*
+ * call as a breadcrumb, line and raw arguments, so an address in any log line
+ * rode on the next error event whatever the log sites did. Fields left as they
+ * are hold no free text from this code: `user` (never set; dataCollection
+ * keeps the SDK from filling it), exception `type`, breadcrumb `category`.
+ *
  * Everything returns a NEW object; a hook that mutated its input would also
  * mutate the live breadcrumb buffer the next event reads from.
  */
 
 import { isCredentialName, redactCredentials } from "./credential-redaction.js";
+import { redactMailAddresses } from "./mail-address-redaction.js";
+
+/** Credentials, then mail addresses: what no string may carry to Sentry. */
+function redactText(text: string): string {
+  return redactMailAddresses(redactCredentials(text));
+}
 
 /**
  * Nesting depth beyond which a value is replaced rather than walked.
@@ -96,6 +112,8 @@ interface ScrubbableRequest {
  */
 interface ScrubbableEventCommon {
   message?: string;
+  /** The transaction's name, or the error's: an unmatched route's is its raw path. */
+  transaction?: string;
   request?: ScrubbableRequest;
   breadcrumbs?: ScrubbableBreadcrumb[];
   extra?: Record<string, unknown>;
@@ -140,7 +158,7 @@ interface ScrubBudget {
  * wearing a safety hat.
  */
 function scrubValue(value: unknown, depth: number, budget: ScrubBudget): unknown {
-  if (typeof value === "string") return redactCredentials(value);
+  if (typeof value === "string") return redactText(value);
   if (value === null || typeof value !== "object") return value;
   if (budget.seen.has(value)) return "[CIRCULAR]";
   if (depth >= MAX_SCRUB_DEPTH) return "[DEPTH-CAPPED]";
@@ -171,7 +189,10 @@ function scrubValue(value: unknown, depth: number, budget: ScrubBudget): unknown
       budget.remaining -= 1;
       // A credential-named field is redacted whatever its value's shape — the
       // patterns cannot recognise an opaque token, but the name gives it away.
-      out[key] =
+      // The key itself is text too: a logged map can be keyed by address.
+      // Two address keys both become the marker and the later value wins; that
+      // loses a value, never an address.
+      out[redactText(key)] =
         isCredentialName(key) && entry !== undefined && entry !== null
           ? "[REDACTED]"
           : scrubValue(entry, depth + 1, budget);
@@ -192,11 +213,11 @@ function scrubBag(bag: Record<string, unknown> | undefined): Record<string, unkn
   >;
 }
 
-/** `beforeBreadcrumb` — the outgoing-fetch breadcrumb's `http.query`. */
+/** `beforeBreadcrumb` — the outgoing-fetch breadcrumb's query, a console line's text and arguments. */
 export function scrubSentryBreadcrumb<T extends ScrubbableBreadcrumb>(breadcrumb: T): T {
   return {
     ...breadcrumb,
-    ...(breadcrumb.message !== undefined ? { message: redactCredentials(breadcrumb.message) } : {}),
+    ...(breadcrumb.message !== undefined ? { message: redactText(breadcrumb.message) } : {}),
     ...(breadcrumb.data !== undefined ? { data: scrubBag(breadcrumb.data) } : {}),
   } as T;
 }
@@ -205,7 +226,7 @@ export function scrubSentryBreadcrumb<T extends ScrubbableBreadcrumb>(breadcrumb
 export function scrubSentrySpan<T extends ScrubbableSpan>(span: T): T {
   return {
     ...span,
-    ...(span.description !== undefined ? { description: redactCredentials(span.description) } : {}),
+    ...(span.description !== undefined ? { description: redactText(span.description) } : {}),
     ...(span.data !== undefined ? { data: scrubBag(span.data) } : {}),
   } as T;
 }
@@ -218,10 +239,7 @@ function scrubRequest(request: ScrubbableRequest): ScrubbableRequest {
           .filter(([name]) => !isCredentialHeader(name))
           // A header that is not itself a credential can still CARRY one:
           // `Referer: …?gk=AIza…` reached the wire before this pass existed.
-          .map(([name, value]) => [
-            name,
-            typeof value === "string" ? redactCredentials(value) : value,
-          ]),
+          .map(([name, value]) => [name, typeof value === "string" ? redactText(value) : value]),
       )
     : request.headers;
 
@@ -240,7 +258,9 @@ function scrubRequest(request: ScrubbableRequest): ScrubbableRequest {
     // The OAuth callback's ?code=…&state=… is a live authorization code and a
     // signed state JWT; drop the query entirely rather than per-parameter
     // (security audit 2026-07-20).
-    ...(request.url !== undefined ? { url: request.url.split("?")[0] } : {}),
+    // The path is text a client chose; no route takes an address in it, but a
+    // request for one that does not exist can carry one.
+    ...(request.url !== undefined ? { url: redactText(request.url.split("?")[0] ?? "") } : {}),
     ...(request.query_string !== undefined ? { query_string: undefined } : {}),
     ...(headers !== undefined ? { headers } : {}),
     // requestDataIntegration stores a PARSED cookie object beside the header.
@@ -254,15 +274,15 @@ function scrubRequest(request: ScrubbableRequest): ScrubbableRequest {
 function scrubEventCommon<T extends ScrubbableEventCommon>(event: T): T {
   return {
     ...event,
-    ...(event.message !== undefined ? { message: redactCredentials(event.message) } : {}),
+    ...(event.message !== undefined ? { message: redactText(event.message) } : {}),
+    ...(event.transaction !== undefined ? { transaction: redactText(event.transaction) } : {}),
     ...(event.request !== undefined ? { request: scrubRequest(event.request) } : {}),
     ...(event.breadcrumbs !== undefined
       ? { breadcrumbs: event.breadcrumbs.map(scrubSentryBreadcrumb) }
       : {}),
     ...(event.extra !== undefined ? { extra: scrubBag(event.extra) } : {}),
-    // perf-monitor.ts tags a span with `request.routeOptions?.url || request.url`,
-    // so a raw URL with its query can land in a tag when no route template
-    // matched.
+    // A tag is free text set by any caller; perf-monitor.ts once put a raw
+    // request URL, query included, in its route tag when no route matched.
     ...(event.tags !== undefined ? { tags: scrubBag(event.tags) } : {}),
     ...(event.contexts !== undefined
       ? { contexts: scrubBag(event.contexts as Record<string, unknown>) }
@@ -293,9 +313,7 @@ export function scrubSentryErrorEvent<T extends ScrubbableErrorEvent>(event: T):
           exception: {
             ...event.exception,
             values: event.exception.values.map((entry) =>
-              entry.value !== undefined
-                ? { ...entry, value: redactCredentials(entry.value) }
-                : entry,
+              entry.value !== undefined ? { ...entry, value: redactText(entry.value) } : entry,
             ),
           },
         }

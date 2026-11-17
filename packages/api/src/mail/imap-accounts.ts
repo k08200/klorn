@@ -145,8 +145,9 @@ async function backOffRefusedLogin(
 }
 
 /**
- * A poll failed. Log it (one capped line for a generic host: the text came from a
- * server the user chose), flag a row whose password was refused for reconnect at once (Apple revokes app-specific passwords when the account password
+ * A poll failed. Log its facts (class, code, status, message length; never the
+ * text, which for a generic host came from a server the user chose), flag a row
+ * whose password was refused for reconnect at once (Apple revokes app-specific passwords when the account password
  * changes: Settings says "reconnect" after this one poll) and back its next login
  * off, record why for Settings, and report to Sentry once per account and failure
  * kind instead of on every tick. Never throws.

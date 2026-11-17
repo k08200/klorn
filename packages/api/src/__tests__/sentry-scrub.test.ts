@@ -337,3 +337,87 @@ describe("scrubValue — bounded work on hostile input", () => {
     expect(JSON.stringify(scrubbed)).not.toContain(KEY);
   });
 });
+
+// The console integration (@sentry/core integrations/console.js, a default)
+// stores every console.* call as a breadcrumb: the joined line as `message`,
+// the raw arguments as `data.arguments`. It rides on the next error event, so
+// an address in ANY log line reached Sentry, whatever the log sites did.
+describe("mail addresses — every hook", () => {
+  const ADDRESSES = ["alice@example.com", "bob.smith+tag@mail.example.org", "홍길동@example.kr"];
+
+  function expectNoAddress(payload: unknown): void {
+    const text = JSON.stringify(payload);
+    for (const address of ADDRESSES) expect(text).not.toContain(address);
+    expect(text).not.toContain("example.com");
+  }
+
+  it("a console breadcrumb: the joined message and the raw arguments", () => {
+    const scrubbed = scrubSentryBreadcrumb({
+      category: "console",
+      level: "warning",
+      message: `[mail] send failed for ${ADDRESSES[0]}`,
+      data: {
+        logger: "console",
+        arguments: [
+          "[mail] send failed for",
+          ADDRESSES[0],
+          { to: [ADDRESSES[1]], cc: { name: "Hong", address: ADDRESSES[2] } },
+        ],
+      },
+    });
+    expectNoAddress(scrubbed);
+    expect(scrubbed.message).toBe("[mail] send failed for [ADDRESS]");
+    expect(scrubbed.data?.logger).toBe("console");
+  });
+
+  it("an address used as an object key in a logged map", () => {
+    const scrubbed = scrubSentryBreadcrumb({
+      category: "console",
+      data: { arguments: [{ [ADDRESSES[0]]: 3, [ADDRESSES[1]]: 1 }] },
+    });
+    expectNoAddress(scrubbed);
+  });
+
+  it("an address percent-encoded in a fetch breadcrumb's query", () => {
+    const scrubbed = scrubSentryBreadcrumb({
+      category: "http",
+      data: { url: "https://api.example.net/v1/lookup", "url.query": "?q=alice%40example.com" },
+    });
+    expectNoAddress(scrubbed);
+    expect(scrubbed.data?.url).toBe("https://api.example.net/v1/lookup");
+  });
+
+  it("an error event: message, exception value, extra, tags and attached breadcrumbs", () => {
+    const scrubbed = scrubSentryErrorEvent({
+      message: `no account for ${ADDRESSES[0]}`,
+      exception: { values: [{ type: "Error", value: `rejected ${ADDRESSES[1]}` }] },
+      extra: { recipient: ADDRESSES[2] },
+      tags: { route: `/api/x?to=${ADDRESSES[0]}` },
+      breadcrumbs: [{ category: "console", message: `retry ${ADDRESSES[0]}` }],
+    });
+    expectNoAddress(scrubbed);
+    expect(scrubbed.exception?.values?.[0]?.type).toBe("Error");
+  });
+
+  it("a span and a transaction", () => {
+    const span = scrubSentrySpan({ description: `GET /lookup?email=${ADDRESSES[0]}` });
+    const transaction = scrubSentryTransaction({
+      message: ADDRESSES[1],
+      spans: [{ data: { "db.statement": `select 1 -- ${ADDRESSES[2]}` } }],
+    });
+    expectNoAddress(span);
+    expectNoAddress(transaction);
+  });
+});
+
+describe("mail addresses — the request path and the transaction name", () => {
+  it("an unmatched route's raw path, on the request and as the transaction name", () => {
+    const scrubbed = scrubSentryTransaction({
+      transaction: "GET /api/u/alice@example.com",
+      request: { url: "https://api.klorn.ai/api/u/alice@example.com?x=1" },
+    });
+    expect(JSON.stringify(scrubbed)).not.toContain("alice");
+    expect(scrubbed.request?.url).toBe("https://api.klorn.ai/api/u/[ADDRESS]");
+    expect(scrubbed.transaction).toBe("GET /api/u/[ADDRESS]");
+  });
+});
