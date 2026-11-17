@@ -60,11 +60,12 @@ const SENTINEL_CALLERS = [
   "routes/billing.ts",
 ];
 
-// A value import of the resolver, or of the pooled-cost module built on it
-// (cost-guard.ts). `import type` does not count.
+// A value import of the resolver, of its cached form (seat-cache.ts, BYOK), or
+// of the pooled-cost module built on it (cost-guard.ts). `import type` does
+// not count.
 const RESOLVER_IMPORT =
-  /import\s+\{[^}]*\}\s+from\s+"(?:\.\.?\/)+(?:org\/)?effective-tier\.js"|import\s+\{[^}]*\}\s+from\s+"\.\/team-cost-pool\.js"/;
-const RESOLVER_CALL = /\beffective(?:Plans?|PlanOrOwn|PlansOrOwn|Tier|TierOrOwnPlan)\(/g;
+  /import\s+\{[^}]*\}\s+from\s+"(?:\.\.?\/)+(?:org\/)?(?:effective-tier|seat-cache)\.js"|import\s+\{[^}]*\}\s+from\s+"\.\/team-cost-pool\.js"/;
+const RESOLVER_CALL = /\beffective(?:Plans?|PlanOrOwn|PlansOrOwn|PlanCached|Tier|TierOrOwnPlan)\(/g;
 const OWN_PLAN_MARKER = /effective-tier: (?:own plan|resolved|not a gate)/;
 
 function walk(dir: string): string[] {
@@ -145,7 +146,7 @@ function rawPlanArguments({ rel, raw, text }: Source): string[] {
   for (const match of text.matchAll(helperCall)) {
     const index = match.index ?? 0;
     const args = callArgs(text, index + (match[1]?.length ?? 0)).replace(
-      /\beffective(?:Plans?|PlanOrOwn|PlansOrOwn|Tier|TierOrOwnPlan)\([^)]*\)/g,
+      /\beffective(?:Plans?|PlanOrOwn|PlansOrOwn|PlanCached|Tier|TierOrOwnPlan)\([^)]*\)/g,
       "RESOLVED",
     );
     if (/\.plan\b/.test(args) && !OWN_PLAN_MARKER.test(lineBefore(raw, index))) {
@@ -282,5 +283,20 @@ describe("plan gates read the effective plan", () => {
       )
       .map(({ rel }) => rel);
     expect(users.filter((rel) => !lenientCallers.has(rel))).toEqual([]);
+  });
+
+  it("keeps the cached (30 s stale) seat lookups to the two per-LLM-call paths", () => {
+    // They trust a read for SEAT_CACHE_TTL_MS and read a failed lookup as "no
+    // seat" for 5 s; access gates need the fresh, fail-closed effectivePlan.
+    const cachedCallers = new Set(["llm/llm-credentials.ts", "billing/team-cost-pool.ts"]);
+    const users = sources
+      .filter(
+        ({ rel, text }) =>
+          rel !== "org/seat-cache.ts" &&
+          (/\b(?:effectivePlanCached|cachedHeldTeamSeat)\(/.test(text) ||
+            /from\s+"(?:\.\.?\/)+(?:org\/)?seat-cache\.js"/.test(text)),
+      )
+      .map(({ rel }) => rel);
+    expect(users.sort()).toEqual([...cachedCallers].sort());
   });
 });

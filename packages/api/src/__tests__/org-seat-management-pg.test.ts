@@ -132,6 +132,10 @@ function stubPaddle(opts: {
   fail?: (call: PaddleCall) => boolean;
   /** The failed answer's body; Paddle's error envelope names a code. */
   failBody?: string;
+  /** The failed answer's status (400 unless set). */
+  failStatus?: number;
+  /** No answer at all: the request throws this (a timeout, the network). */
+  throwOn?: (call: PaddleCall) => Error | null;
   /** Runs as each request arrives, before it is answered. */
   onCall?: (call: PaddleCall) => Promise<void>;
 }) {
@@ -146,9 +150,11 @@ function stubPaddle(opts: {
       };
       calls.push(entry);
       await opts.onCall?.(entry);
+      const thrown = opts.throwOn?.(entry);
+      if (thrown) throw thrown;
       if (opts.fail?.(entry)) {
         const text = opts.failBody ?? '{"error":{"code":"bad_request"}}';
-        return { ok: false, status: 400, text: async () => text };
+        return { ok: false, status: opts.failStatus ?? 400, text: async () => text };
       }
       const read = entry.url.includes("/customers/") ? opts.customer : opts.live;
       const data = { data: (entry.method === "GET" ? read : opts.answer) ?? {} };
@@ -157,6 +163,18 @@ function stubPaddle(opts: {
   );
   vi.stubGlobal("fetch", fetchMock);
   return calls;
+}
+
+/** The organization's seat change audit rows: action → details. */
+async function seatChangeRows(orgId: string): Promise<Record<string, unknown[]>> {
+  const rows = await prisma.orgAuditEvent.findMany({
+    where: { orgId, action: { startsWith: "billing.seats_change_" } },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { action: true, detail: true },
+  });
+  const byAction: Record<string, unknown[]> = {};
+  for (const row of rows) byAction[row.action] = [...(byAction[row.action] ?? []), row.detail];
+  return byAction;
 }
 
 /** An owner who took the organization over by transfer: not the Paddle customer. */
@@ -381,12 +399,178 @@ describePg("team seat changes (real Postgres)", () => {
     expect(res.statusCode).toBe(502);
     expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
     expect(JSON.stringify(res.json())).not.toContain("bad_request");
+    // Paddle answered and refused: nothing changed there, so nothing is on record.
     expect(
       await prisma.orgAuditEvent.count({
-        where: { orgId, action: "billing.seats_change_requested" },
+        where: { orgId, action: { startsWith: "billing.seats_change_" } },
       }),
     ).toBe(0);
     expect(captured.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a change Paddle never answered on record: the request, then why it is unconfirmed", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_u1");
+    stubPaddle({
+      live: liveSubscription({ id: "sub_seat_u1" }),
+      customer: { email: owner.email },
+      throwOn: (c) =>
+        c.method === "PATCH"
+          ? new DOMException("The operation was aborted due to timeout", "TimeoutError")
+          : null,
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "BILLING_PROVIDER_ERROR" });
+    const rows = await seatChangeRows(orgId);
+    expect(rows).toEqual({
+      "billing.seats_change_requested": [{ from: 3, to: 4, payer: "email" }],
+      "billing.seats_change_unconfirmed": [{ from: 3, to: 4, failure: "PROVIDER_UNAVAILABLE" }],
+    });
+    expect(JSON.stringify(rows)).not.toMatch(/abort|timeout/i);
+  });
+
+  it("records a Paddle server fault as unconfirmed, without Paddle's text", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_u2");
+    stubPaddle({
+      live: liveSubscription({ id: "sub_seat_u2" }),
+      customer: { email: owner.email },
+      fail: (c) => c.method === "PATCH",
+      failStatus: 503,
+      failBody: '{"error":{"code":"internal_error","detail":"upstream said something"}}',
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 2 });
+    expect(res.statusCode).toBe(502);
+    const rows = await seatChangeRows(orgId);
+    expect(rows).toEqual({
+      "billing.seats_change_requested": [{ from: 3, to: 2 }],
+      "billing.seats_change_unconfirmed": [{ from: 3, to: 2, failure: "PROVIDER_UNAVAILABLE" }],
+    });
+    expect(JSON.stringify(rows)).not.toMatch(/internal_error|upstream/);
+  });
+
+  it("counts an unconfirmed change against a request that read Paddle before it", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_u3");
+    let raced = false;
+    // While this request (3 → 2, a decrease) reads Paddle, another raises the
+    // count to 4 and Paddle never answers it: Paddle may now hold 4, so "2"
+    // is no longer known to be a decrease.
+    const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_u3" }),
+      customer: { email: owner.email },
+      // undici's shape for a dropped connection: "fetch failed" with a coded cause.
+      throwOn: (c) =>
+        c.method === "PATCH"
+          ? new TypeError("fetch failed", {
+              cause: Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+            })
+          : null,
+      onCall: async (c) => {
+        if (raced || c.method !== "GET") return;
+        raced = true;
+        const other = await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 });
+        expect(other.statusCode).toBe(502);
+      },
+    });
+    const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 2 });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "SEATS_CHANGED" });
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+    expect(await seatChangeRows(orgId)).toEqual({
+      "billing.seats_change_requested": [{ from: 3, to: 4, payer: "email" }],
+      "billing.seats_change_unconfirmed": [{ from: 3, to: 4, failure: "PROVIDER_UNAVAILABLE" }],
+    });
+  });
+
+  it("refuses a change whose live read came while an earlier change's Paddle call was still running", async () => {
+    const { heir } = await transferredOrg("sub_seat_u6");
+    let racer: ReturnType<typeof call> | null = null;
+    // The heir (not the payer) lowers 10 → 5. While that call is still on its
+    // way to Paddle, a second request reads the count (still 10, so "8" looks
+    // like a decrease) after the first one's audit row was committed.
+    const calls: PaddleCall[] = stubPaddle({
+      live: liveSubscription({
+        id: "sub_seat_u6",
+        items: [{ price: { id: "pri_team_month" }, quantity: 10 }],
+      }),
+      onCall: async (c) => {
+        if (c.method !== "PATCH" || racer) return;
+        racer = call(heir, "POST", "/api/orgs/current/seats", { seats: 8 });
+        while (calls.filter((x) => x.method === "GET").length < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      },
+    });
+    const first = await call(heir, "POST", "/api/orgs/current/seats", { seats: 5 });
+    expect(first.statusCode).toBe(202);
+    const second = await (racer as ReturnType<typeof call> | null);
+    expect(second?.statusCode).toBe(409);
+    expect(second?.json()).toMatchObject({ code: "SEATS_CHANGED" });
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+  });
+
+  it("keeps the request on record when the locked transaction fails after Paddle accepted", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_u4");
+    const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_u4" }),
+      customer: { email: owner.email },
+    });
+    const patched = () => calls.some((c) => c.method === "PATCH");
+    const realTransaction = prisma.$transaction.bind(prisma) as (
+      work: (tx: unknown) => Promise<unknown>,
+      options?: unknown,
+    ) => Promise<unknown>;
+    // The org lock's transaction rolls back after the Paddle call returned
+    // (an expired transaction, a lost commit): Paddle holds the new count.
+    const spy = vi.spyOn(prisma, "$transaction").mockImplementation(((
+      work: (tx: unknown) => Promise<unknown>,
+      options?: unknown,
+    ) =>
+      realTransaction(async (tx) => {
+        const result = await work(tx);
+        if (patched()) throw new Error("commit lost");
+        return result;
+      }, options)) as never);
+    try {
+      const res = await call(owner, "POST", "/api/orgs/current/seats", { seats: 2 });
+      expect(res.statusCode).toBeGreaterThanOrEqual(500);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(patched()).toBe(true);
+    expect(await seatChangeRows(orgId)).toEqual({
+      "billing.seats_change_requested": [{ from: 3, to: 2 }],
+    });
+  });
+
+  it("starts no change from a count read while the last change is unconfirmed, for two minutes", async () => {
+    const { owner, orgId } = await subscribedOrg("sub_seat_u5");
+    stubPaddle({
+      live: liveSubscription({ id: "sub_seat_u5" }),
+      customer: { email: owner.email },
+      throwOn: (c) => (c.method === "PATCH" ? new DOMException("timed out", "TimeoutError") : null),
+    });
+    expect((await call(owner, "POST", "/api/orgs/current/seats", { seats: 4 })).statusCode).toBe(
+      502,
+    );
+    // Paddle may still apply 4 after this request reads 3: "2" is no longer
+    // known to be a decrease.
+    const calls = stubPaddle({
+      live: liveSubscription({ id: "sub_seat_u5" }),
+      customer: { email: owner.email },
+    });
+    const blocked = await call(owner, "POST", "/api/orgs/current/seats", { seats: 2 });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({ code: "SEATS_CHANGED" });
+    expect(calls.map((c) => c.method)).toEqual(["GET"]);
+
+    // Three minutes on (both rows aged), the doubt is over.
+    await prisma.orgAuditEvent.updateMany({
+      where: { orgId, action: { startsWith: "billing.seats_change_" } },
+      data: { createdAt: new Date(Date.now() - 3 * 60_000) },
+    });
+    const later = await call(owner, "POST", "/api/orgs/current/seats", { seats: 2 });
+    expect(later.statusCode).toBe(202);
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "PATCH"]);
   });
 
   it("is off with a clear code while the Paddle key is unset", async () => {

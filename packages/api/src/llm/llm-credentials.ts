@@ -1,7 +1,7 @@
 import { isEntitled } from "../billing/stripe.js";
 import { decryptOptional } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
-import { effectivePlan } from "../org/effective-tier.js";
+import { effectivePlanCached } from "../org/seat-cache.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isCuratedModel } from "./model-catalog.js";
@@ -94,7 +94,7 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
   // key is ignored (resolves to the shared env key, which the locked FREE tier
   // can't reach anyway). Entitled users (paid/trial/comped/admin) keep BYOK.
   // The model choice above survives either way.
-  // A Klorn Teams seat counts (org/effective-tier.ts).
+  // A Klorn Teams seat counts (org/effective-tier.ts, read via org/seat-cache.ts).
   if (!(await byokEntitled(userId, user))) {
     return { userModel: chosenModel };
   }
@@ -109,7 +109,10 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
 /**
  * Whether the user may bring their own key: the effective plan (own plan or a
  * Klorn Teams seat) is entitled. TOTAL like its caller: a failed seat lookup
- * is reported and counts as no seat, never as a throw.
+ * is reported and counts as no seat, never as a throw. This runs on every LLM
+ * call, so the seat is read through the short-lived seat cache: a removed
+ * seat stops granting BYOK within SEAT_CACHE_TTL_MS (30 s), and a failed
+ * lookup is reported once and then counts as no seat for 5 s.
  */
 async function byokEntitled(
   userId: string,
@@ -122,7 +125,7 @@ async function byokEntitled(
   const ownPlan = user.plan ?? "FREE";
   if (isEntitled(ownPlan, role)) return true;
   try {
-    return isEntitled(await effectivePlan({ id: userId, plan: ownPlan }), role);
+    return isEntitled(await effectivePlanCached({ id: userId, plan: ownPlan }), role);
   } catch (err) {
     logDbFailure("[BYOK] seat lookup failed — treating the user as seatless", err, {
       ids: { userId },

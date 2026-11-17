@@ -127,8 +127,10 @@ describe("cost cap — TEAMS_ENABLED on, seat holder", () => {
     // pool 2 x 80 = 160, the owner spent 70 → 90; above the 10¢ free cap.
     expect(await checkCostGate("u-me")).toMatchObject({ capCents: 90, freeCapApplied: false });
     const args = db.llmCostLedger.groupBy.mock.calls[0]?.[0];
-    // Only the OTHER seated members (seats 2: owner + me), today, cents only.
-    expect(args.where).toEqual({ userId: { in: ["u-owner"] }, dayKey: TODAY });
+    // Only the seated members (seats 2: owner + me; never u-other), today,
+    // cents only. Read once for the organization; my own share is left out
+    // of my pool arithmetic.
+    expect(args.where).toEqual({ userId: { in: ["u-owner", "u-me"] }, dayKey: TODAY });
     expect(args._sum).toEqual({ cents: true });
   });
 
@@ -228,6 +230,104 @@ describe("cost cap — TEAMS_ENABLED on, seat holder", () => {
     await checkCostGate("u-me");
     expect(db.orgMembership.findUnique).toHaveBeenCalledTimes(1);
     expect(db.llmCostLedger.groupBy).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads one organization's pool once per window for all of its members", async () => {
+    // 150 seats, every member busy: before, each member's cache miss cost a
+    // membership, a roster and a ledger read (450 queries per window).
+    const members = 150;
+    const roster = Array.from({ length: members }, (_, i) =>
+      seated(`m-${i}`, `u-${i}`, i === 0 ? "OWNER" : "MEMBER", 1 + (i % 28)),
+    );
+    db.orgMembership.findUnique.mockImplementation(async (args: { where: { userId: string } }) => {
+      const mine = roster.find((m) => m.userId === args.where.userId);
+      return mine
+        ? {
+            id: mine.id,
+            orgId: "org-1",
+            org: { seatsPurchased: members, subscriptionStatus: "active" },
+          }
+        : null;
+    });
+    db.orgMembership.findMany.mockResolvedValue(roster);
+    db.llmCostLedger.groupBy.mockResolvedValue([{ userId: "u-0", _sum: { cents: 11_000 } }]);
+    db.user.findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
+    const { checkCostGate } = await gate();
+    const caps = new Map<string, Set<number>>();
+    for (let round = 0; round < 2; round++) {
+      for (const member of roster) {
+        const cap = (await checkCostGate(member.userId)).capCents;
+        caps.set(member.userId, new Set([...(caps.get(member.userId) ?? []), cap]));
+      }
+    }
+    // u-0 sees only the others' floors: 12000 - 149 x 40 left, stopped at the
+    // 800¢ brake. Everyone else sees u-0's 11000¢ too: nothing left, so their
+    // own 10¢ free cap.
+    expect([...(caps.get("u-0") ?? [])]).toEqual([800]);
+    for (const member of roster.slice(1)) {
+      expect([...(caps.get(member.userId) ?? [])]).toEqual([10]);
+    }
+    const queries =
+      db.orgMembership.findUnique.mock.calls.length +
+      db.orgMembership.findMany.mock.calls.length +
+      db.llmCostLedger.groupBy.mock.calls.length;
+    expect(queries).toBe(3);
+  });
+
+  it("shares one ledger read among members whose calls overlap", async () => {
+    const roster = Array.from({ length: 40 }, (_, i) =>
+      seated(`m-${i}`, `u-${i}`, i === 0 ? "OWNER" : "MEMBER", 1 + (i % 28)),
+    );
+    db.orgMembership.findUnique.mockImplementation(async (args: { where: { userId: string } }) => {
+      const mine = roster.find((m) => m.userId === args.where.userId);
+      return mine
+        ? { id: mine.id, orgId: "org-1", org: { seatsPurchased: 40, subscriptionStatus: "active" } }
+        : null;
+    });
+    db.orgMembership.findMany.mockResolvedValue(roster);
+    db.llmCostLedger.groupBy.mockResolvedValue([]);
+    db.user.findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
+    const { checkCostGate } = await gate();
+    await Promise.all(roster.map((member) => checkCostGate(member.userId)));
+    expect(db.orgMembership.findMany).toHaveBeenCalledTimes(1);
+    expect(db.llmCostLedger.groupBy).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-reads the pool after the window, so new spend and a removed seat count", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
+      seatHeld(2, { "u-owner": 70 });
+      db.user.findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
+      const { checkCostGate } = await gate();
+      expect(await checkCostGate("u-me")).toMatchObject({ capCents: 90 });
+      seatHeld(2, { "u-owner": 120 });
+      vi.setSystemTime(new Date(`${TODAY}T12:00:29Z`));
+      expect(await checkCostGate("u-me")).toMatchObject({ capCents: 90 });
+      vi.setSystemTime(new Date(`${TODAY}T12:00:30Z`));
+      // 160 - 120 = 40, above the 10¢ free cap.
+      expect(await checkCostGate("u-me")).toMatchObject({ capCents: 40 });
+      // The owner removes me: the pool is gone at the next window.
+      db.orgMembership.findUnique.mockResolvedValue(null);
+      vi.setSystemTime(new Date(`${TODAY}T12:01:00Z`));
+      expect(await checkCostGate("u-me")).toMatchObject({ capCents: 10, freeCapApplied: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sizes the judge reserve from the pooled cap, as the v3 shadow's headroom check reads it", async () => {
+    // judge/v3/shadow-budget.ts admits the shadow on checkCostGate(userId), the
+    // ordinary gate: its cap is the effective one minus the judge reserve.
+    env({ JUDGE_BUDGET_RESERVE_CENTS: "25" });
+    seatHeld(2, { "u-owner": 5 });
+    db.user.findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
+    const { checkCostGate } = await gate();
+    // Pool 160 - the owner's 40¢ floor = 120 (own plan: 10¢). The reserve is
+    // min(25, 120 / 2) = 25 off the pooled 120, not min(25, 10 / 2) = 5 off
+    // the own plan's cap.
+    expect(await checkCostGate("u-me", { reserved: true })).toMatchObject({ capCents: 120 });
+    expect(await checkCostGate("u-me")).toMatchObject({ capCents: 95 });
   });
 
   it("ignores a user outside the cohort in cohort mode", async () => {

@@ -13,6 +13,10 @@
  * later (after the allocator with model step-down), so a seat is always a
  * standard TEAM seat here. While TEAMS_ENABLED is closed to the user it reads
  * nothing and returns the own plan untouched.
+ *
+ * seat-cache.ts holds the cached forms for the two lookups that run on every
+ * LLM call (BYOK on a seat, the pooled cost cap). Every other gate keeps the
+ * uncached resolvers here, so an owner's change shows there at once.
  */
 
 import { teamsOpenTo } from "../config.js";
@@ -79,14 +83,14 @@ export interface TeamSeat {
   orgId: string;
   seatsPurchased: number;
   /** User ids holding the organization's purchased seats (this user included). */
-  seatedUserIds: string[];
+  seatedUserIds: readonly string[];
 }
 
 /**
  * The paid seat this user holds, or null. Null without a query while
  * TEAMS_ENABLED is closed to the user. seatedUserIds is for the pooled LLM
- * cost cap (billing/team-cost-pool.ts), which sums cost only; it never leaves
- * the server.
+ * cost cap (billing/team-cost-pool.ts, through seat-cache.ts), which sums
+ * cost only; it never leaves the server.
  */
 export async function heldTeamSeat(userId: string): Promise<TeamSeat | null> {
   if (!teamsOpenTo(userId)) return null;
@@ -118,7 +122,7 @@ export async function holdsTeamSeat(userId: string): Promise<boolean> {
 }
 
 /** A seat never raises these: TEAM is what a seat grants, ENTERPRISE is above it. */
-function seatCannotRaise(plan: string): boolean {
+export function seatCannotRaise(plan: string): boolean {
   const own = normalizeTier(plan);
   return own === "TEAM" || own === "ENTERPRISE";
 }
