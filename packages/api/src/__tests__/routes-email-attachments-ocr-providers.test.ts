@@ -225,6 +225,23 @@ describe("POST /:id/attachments/ocr → IMAP mailbox", () => {
     ]);
   });
 
+  it("stores a failed vision call as a code and facts, never the provider's text", async () => {
+    createVisionCompletion.mockRejectedValue(
+      Object.assign(new Error("429 while reading: CANARY-ocr invoice text"), { status: 429 }),
+    );
+
+    const res = await ocr();
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.stringify(attachmentUpdate.mock.calls)).not.toContain("CANARY");
+    expect(updates()).toEqual([
+      {
+        analysisStatus: "VISION_FAILED",
+        analysisError: "Vision OCR failed (PROVIDER_RATE_LIMITED; Error 429)",
+      },
+    ]);
+  });
+
   it("marks a row VISION_FAILED with the session layer's short error (502)", async () => {
     runAccountTask.mockResolvedValue({ error: "iCloud did not answer in time." });
 

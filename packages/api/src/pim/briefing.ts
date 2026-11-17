@@ -13,6 +13,7 @@ import { meetingPrepRoutes } from "../context/meeting-prep-routes.js";
 import { meetingPrepForUser } from "../context/meeting-prep-surface.js";
 import { prisma } from "../db.js";
 import { recordFeedback } from "../learning/feedback.js";
+import { describeLlmFailure } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
@@ -195,13 +196,12 @@ export default async function generateBriefing(
     // gets a useful briefing instead of an error or empty screen.
     // Log the reason — without it, "AI summary unavailable" is invisible
     // in prod and the user has no idea whether the issue is credentials,
-    // the cost cap, or a transient provider outage. Facts only in the log:
-    // the provider's error can quote the briefing's mail. The reason below
-    // goes back to this user, whose mail it is.
+    // the cost cap, or a transient provider outage. Facts only, in the log
+    // and in the reason: the provider's error can quote the briefing's mail.
     logLlmFailure("[BRIEFING] LLM call failed — falling back to rule-based view", err, {
       ids: { userId },
     });
-    return fallback(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+    return fallback(describeLlmFailure(err));
   }
 }
 

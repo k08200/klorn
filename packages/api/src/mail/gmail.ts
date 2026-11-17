@@ -9,6 +9,7 @@ import {
   type ReconnectProvider,
 } from "../notify/reconnect-notification.js";
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
+import { classifyFailure, type ProviderFailureCode } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -1376,9 +1377,29 @@ export function gmailWatchLabelIds(): string[] {
   return spamIntakeEnabled() ? ["INBOX", "SPAM"] : ["INBOX"];
 }
 
+/**
+ * A failed watch or stop call: a fixed sentence plus its code. The renewal
+ * loop and the self-heal log it, and POST /api/gmail/watch/{enable,disable}
+ * answer it to the client as is, so it never carries the API's message,
+ * which can quote the request (public-failure.ts).
+ */
+interface WatchFailure {
+  error: string;
+  code?: ProviderFailureCode;
+}
+
+function watchFailure(label: string, err: unknown): { error: string; code: ProviderFailureCode } {
+  return { error: label, code: classifyFailure(err) };
+}
+
+/** "Gmail watch failed (PROVIDER_UNAVAILABLE)": the fixed sentence plus its code, for a log line. */
+function describeWatchFailure(failure: WatchFailure): string {
+  return failure.code ? `${failure.error} (${failure.code})` : failure.error;
+}
+
 export async function registerGmailWatch(
   userId: string,
-): Promise<{ historyId: string; expiration: string } | { error: string }> {
+): Promise<{ historyId: string; expiration: string } | WatchFailure> {
   const topic = process.env.GMAIL_PUBSUB_TOPIC;
   if (!topic) return { error: "GMAIL_PUBSUB_TOPIC not configured" };
 
@@ -1410,13 +1431,14 @@ export async function registerGmailWatch(
       expiration: String(res.data.expiration ?? ""),
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { error: `Gmail watch failed: ${msg}` };
+    return watchFailure("Gmail watch failed", err);
   }
 }
 
 /** Stop the Gmail push watch for a user. Idempotent. */
-export async function stopGmailWatch(userId: string): Promise<{ ok: boolean; error?: string }> {
+export async function stopGmailWatch(
+  userId: string,
+): Promise<{ ok: boolean; error?: string; code?: ProviderFailureCode }> {
   const auth = await getAuthedClient(userId);
   if (!auth) return { ok: false, error: "Gmail not connected" };
 
@@ -1429,8 +1451,7 @@ export async function stopGmailWatch(userId: string): Promise<{ ok: boolean; err
     });
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: msg };
+    return { ok: false, ...watchFailure("Gmail watch stop failed", err) };
   }
 }
 
@@ -1467,10 +1488,10 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
   for (const t of tokens) {
     const result = await registerGmailWatch(t.userId);
     if ("error" in result) {
-      console.warn(`[GMAIL-WATCH] Renew failed for ${t.userId}: ${result.error}`);
+      console.warn(`[GMAIL-WATCH] Renew failed for ${t.userId}: ${describeWatchFailure(result)}`);
       // A lapsed watch means real-time email push silently dies for this
       // user — that must page the operator, not vanish into stdout.
-      captureError(new Error(`Gmail watch renew failed: ${result.error}`), {
+      captureError(new Error(`Gmail watch renew failed: ${describeWatchFailure(result)}`), {
         tags: { scope: "gmail-watch.renew" },
         extra: { userId: t.userId },
       });
@@ -1506,12 +1527,15 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
       const result = await registerLinkedInboxWatch(row.userId, row.id);
       if ("error" in result) {
         console.warn(
-          `[GMAIL-WATCH] Linked renew failed for ${row.userId}/${row.id}: ${result.error}`,
+          `[GMAIL-WATCH] Linked renew failed for ${row.userId}/${row.id}: ${describeWatchFailure(result)}`,
         );
-        captureError(new Error(`Linked inbox watch renew failed: ${result.error}`), {
-          tags: { scope: "gmail-watch.renew-linked" },
-          extra: { userId: row.userId, linkedInboxAccountId: row.id },
-        });
+        captureError(
+          new Error(`Linked inbox watch renew failed: ${describeWatchFailure(result)}`),
+          {
+            tags: { scope: "gmail-watch.renew-linked" },
+            extra: { userId: row.userId, linkedInboxAccountId: row.id },
+          },
+        );
         failed++;
       } else {
         renewed++;
@@ -1530,7 +1554,7 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
 export async function registerLinkedInboxWatch(
   userId: string,
   linkedInboxAccountId: string,
-): Promise<{ historyId: string; expiration: string } | { error: string }> {
+): Promise<{ historyId: string; expiration: string } | WatchFailure> {
   const topic = process.env.GMAIL_PUBSUB_TOPIC;
   if (!topic) return { error: "GMAIL_PUBSUB_TOPIC not configured" };
 
@@ -1576,8 +1600,7 @@ export async function registerLinkedInboxWatch(
         });
       });
     }
-    const msg = err instanceof Error ? err.message : String(err);
-    return { error: `Linked inbox watch failed: ${msg}` };
+    return watchFailure("Linked inbox watch failed", err);
   }
 }
 
@@ -1585,7 +1608,7 @@ export async function registerLinkedInboxWatch(
 export async function stopLinkedInboxWatch(
   userId: string,
   linkedInboxAccountId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; code?: ProviderFailureCode }> {
   const auth = await getAuthedInboxClient(userId, linkedInboxAccountId);
   if (!auth) return { ok: false, error: "Linked inbox not connected" };
 
@@ -1598,8 +1621,7 @@ export async function stopLinkedInboxWatch(
     });
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: msg };
+    return { ok: false, ...watchFailure("Linked inbox watch stop failed", err) };
   }
 }
 
@@ -1645,7 +1667,7 @@ export async function ensureFreshGmailWatch(
 
     const result = await register(userId);
     if ("error" in result) {
-      captureError(new Error(`Gmail watch self-heal failed: ${result.error}`), {
+      captureError(new Error(`Gmail watch self-heal failed: ${describeWatchFailure(result)}`), {
         tags: { scope: "gmail-watch.ensure" },
         extra: { userId },
       });

@@ -172,7 +172,9 @@ export async function executeOneClickUnsubscribe(
     });
     if (res.statusCode >= 200 && res.statusCode < 400) return { ok: true };
     return { ok: false, reason: `http-${res.statusCode}` };
-  } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : "request-failed" };
+  } catch {
+    // A code, never the transport error's text: that can quote the
+    // unsubscribe URL, whose token is per recipient.
+    return { ok: false, reason: "request-error" };
   }
 }

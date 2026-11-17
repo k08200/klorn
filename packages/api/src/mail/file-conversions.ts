@@ -1071,10 +1071,12 @@ function readTemplateConverterConfig(
       throw new Error("args must be a JSON string array");
     }
     return { bin, args: parsed };
-  } catch (err) {
+  } catch {
+    // A fixed sentence: the route answers it to the client, and a JSON.parse
+    // error would quote the operator's argument string.
     throw new FileConversionError(
       "converter_misconfigured",
-      err instanceof Error ? err.message : "Converter arguments are misconfigured.",
+      "Converter arguments are misconfigured.",
       500,
     );
   }
@@ -1088,7 +1090,7 @@ function engineSource(envNames: string[], available: boolean): "env" | "auto" | 
 function runExternalConverter(bin: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { shell: false, windowsHide: true });
-    let stderr = "";
+
     const timeoutMs = converterTimeoutMs();
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
@@ -1101,12 +1103,13 @@ function runExternalConverter(bin: string, args: string[]): Promise<void> {
       );
     }, timeoutMs);
     child.stdout?.resume();
-    child.stderr?.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (err) => {
+    child.stderr?.resume();
+    // The route answers a FileConversionError's message to the client: fixed
+    // sentences only, never a spawn error's text or the converter's stderr,
+    // which can quote the attachment's paths or content.
+    child.on("error", () => {
       clearTimeout(timer);
-      reject(new FileConversionError("converter_failed", err.message, 500));
+      reject(new FileConversionError("converter_failed", "The converter could not start.", 500));
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -1115,11 +1118,7 @@ function runExternalConverter(bin: string, args: string[]): Promise<void> {
         return;
       }
       reject(
-        new FileConversionError(
-          "converter_failed",
-          (stderr || `The converter exited with code ${code}.`).slice(0, 700),
-          500,
-        ),
+        new FileConversionError("converter_failed", `The converter exited with code ${code}.`, 500),
       );
     });
   });

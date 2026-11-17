@@ -14,6 +14,7 @@ import { prisma } from "../db.js";
 import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { fetchStoredAttachmentBytes, openAttachmentSource } from "../mail/attachment-bytes.js";
 import {
   analyzeEmailAttachmentsForEmail,
@@ -41,6 +42,7 @@ import {
   MAX_VISION_ATTACHMENT_BYTES,
   VISION_OCR_MAX_TOKENS,
 } from "../mail/vision-attachment-policy.js";
+import { storedFailure } from "../public-failure.js";
 import { dbFailureFacts } from "../report-db-failure.js";
 import { attachmentDisposition } from "../storage/download-name.js";
 import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
@@ -729,9 +731,17 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
         }
 
         try {
-          // 404/413/502 fail this row only, with the fetcher's short error.
+          // 404/413/502 fail this row only, with the fetcher's short error:
+          // a fixed sentence the fetcher wrote (mail/attachment-bytes.ts).
           const fetched = await source.fetch(row);
-          if (!fetched.ok) throw new Error(fetched.error);
+          if (!fetched.ok) {
+            await prisma.emailAttachment.update({
+              where: { id: row.id },
+              data: { analysisStatus: "VISION_FAILED", analysisError: fetched.error },
+            });
+            results.push({ attachmentId: row.id, filename: row.filename, status: "failed" });
+            continue;
+          }
           const analysis = await analyzeVisualAttachment({
             userId: uid,
             filename: row.filename,
@@ -753,11 +763,14 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           });
           results.push({ attachmentId: row.id, filename: row.filename, status: "analyzed" });
         } catch (err) {
+          // Stored and shown (the attachment card, exports): a code and facts,
+          // never the provider's text, which can quote the attachment.
+          logLlmFailure("[ATTACHMENTS] vision OCR failed", err, { ids: { attachmentId: row.id } });
           await prisma.emailAttachment.update({
             where: { id: row.id },
             data: {
               analysisStatus: "VISION_FAILED",
-              analysisError: err instanceof Error ? err.message.slice(0, 500) : "Vision OCR failed",
+              analysisError: storedFailure("Vision OCR failed", err),
             },
           });
           results.push({ attachmentId: row.id, filename: row.filename, status: "failed" });
