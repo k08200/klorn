@@ -86,7 +86,7 @@ describe("slackSchedulerTick", () => {
     expect(rejudge.rejudgeFallbackSlackEpisodes).not.toHaveBeenCalled();
     process.env.SLACK_ENABLED = "true";
     await slackSchedulerTick(at(30_000));
-    expect(rejudge.rejudgeFallbackSlackEpisodes).toHaveBeenCalledWith(at(30_000));
+    expect(rejudge.rejudgeFallbackSlackEpisodes).toHaveBeenCalledWith(expect.any(Date));
     expect(order).toEqual(["judge", "rejudge"]);
   });
 

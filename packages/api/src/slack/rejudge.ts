@@ -6,16 +6,20 @@
  * up to SLACK_REJUDGE_BATCH such episodes (newest first) and judges them again
  * with the same judge, under the same rules as the first judgment:
  *
- * - once per episode: the claim (rejudgedAt) is taken before the call and
- *   kept. It is released only when the call fell back to keywords again (no
- *   model yet), and then that user is left alone for SLACK_REJUDGE_RETRY_MS,
- *   so an outage costs one attempt per user per interval, never a loop. Any
- *   other failure spends the attempt;
+ * - its verdict is replaced at most once: the claim (rejudgedAt) is taken
+ *   before the call and kept. It is released only when the call fell back to
+ *   keywords again (no model yet) and fewer than SLACK_REJUDGE_MAX_ATTEMPTS
+ *   calls were made; that user is then left alone for SLACK_REJUDGE_RETRY_MS.
+ *   So an outage costs one call per user per interval, and an episode whose
+ *   text keeps breaking the model's answer is given up after three. Any other
+ *   failure spends the attempt;
  * - only while the text is kept (SLACK_MESSAGE_RETENTION_DAYS after the
  *   episode started), never after the user replied in the conversation;
- * - under the per-connection daily caps (judge-sweep.ts overDailyCap): past
- *   them the attempt is spent without a model call. A re-judged episode counts
- *   on the day it was re-judged (judgedAt moves), so one episode uses one slot;
+ * - only while the connection is under its daily caps (judge-sweep.ts
+ *   overDailyCap), checked before the claim: a full day leaves the episode for
+ *   later and that user waits, nothing is spent. The episode keeps its
+ *   judgedAt, so a backlog re-judged after midnight never takes the new day's
+ *   slots from fresh episodes;
  * - stand down with SLACK_ENABLED, the cohort and BACKGROUND_AGENTS_DISABLED.
  *
  * An upgrade to PUSH (the fallback said anything else) is a correction of a
@@ -52,12 +56,15 @@ export const SLACK_REJUDGE_BATCH = 3;
 export const SLACK_REJUDGE_RING_FRESH_MS = 30 * 60_000;
 /** Older upgrades get a bell row up to Today's 72 h PUSH window, then nothing. */
 export const SLACK_REJUDGE_BELL_MAX_AGE_MS = 72 * 3_600_000;
-/** After a re-judge fell back again, that user's episodes wait this long. */
+/** After a re-judge fell back again (or the day was full), that user waits this long. */
 export const SLACK_REJUDGE_RETRY_MS = 10 * 60_000;
+/** Re-judge calls one episode may take; the third fallback in a row is final. */
+export const SLACK_REJUDGE_MAX_ATTEMPTS = 3;
 const DAY_MS = 86_400_000;
 
 type FallbackEpisode = ReadyEpisode & { tier: string | null };
-type Outcome = "rejudged" | "degraded" | "spent";
+/** degraded: no model yet; full: the connection's day is full. Both make the user wait. */
+type Outcome = "rejudged" | "degraded" | "full" | "spent";
 
 /** userId → when its episodes may be tried again (per process; a restart retries once). */
 const retryAt = new Map<string, number>();
@@ -86,16 +93,17 @@ async function claim(episodeId: string, now: Date): Promise<boolean> {
       status: "JUDGED",
       verdictSource: SLACK_FALLBACK_SOURCE,
       rejudgedAt: null,
+      answeredAt: null,
     },
-    data: { rejudgedAt: now },
+    data: { rejudgedAt: now, rejudgeAttempts: { increment: 1 } },
   });
   return count === 1;
 }
 
-/** The model is still out of reach: hand the attempt back for a later pass. */
+/** The model is still out of reach: hand the attempt back, unless it was the last. */
 async function release(episodeId: string, now: Date): Promise<void> {
   await prisma.slackEpisode.updateMany({
-    where: { id: episodeId, rejudgedAt: now },
+    where: { id: episodeId, rejudgedAt: now, rejudgeAttempts: { lt: SLACK_REJUDGE_MAX_ATTEMPTS } },
     data: { rejudgedAt: null },
   });
 }
@@ -113,7 +121,6 @@ async function alertUpgrade(
 }
 
 async function rejudgeClaimed(episode: FallbackEpisode, now: Date): Promise<Outcome> {
-  if (await overDailyCap(episode, now)) return "spent";
   const messages = await prisma.slackMessage.findMany({
     where: { episodeId: episode.id },
     orderBy: { ts: "asc" },
@@ -134,7 +141,7 @@ async function rejudgeClaimed(episode: FallbackEpisode, now: Date): Promise<Outc
   }
   const { count } = await prisma.slackEpisode.updateMany({
     where: { id: episode.id, status: "JUDGED", rejudgedAt: now },
-    data: { tier: verdict.tier, reason: verdict.reason, verdictSource: "llm", judgedAt: now },
+    data: { tier: verdict.tier, reason: verdict.reason, verdictSource: "llm" },
   });
   if (count !== 1) return "spent";
   await alertUpgrade(episode, verdict, first, now);
@@ -146,8 +153,9 @@ async function rejudgeClaimed(episode: FallbackEpisode, now: Date): Promise<Outc
 }
 
 async function rejudgeOne(episode: FallbackEpisode, now: Date): Promise<Outcome> {
-  if (!(await claim(episode.id, now))) return "spent";
   try {
+    if (await overDailyCap(episode, now)) return "full";
+    if (!(await claim(episode.id, now))) return "spent";
     return await rejudgeClaimed(episode, now);
   } catch (err) {
     logDbFailure("[SLACK] re-judging an episode failed", err, {
@@ -185,7 +193,9 @@ export async function rejudgeFallbackSlackEpisodes(now: Date = new Date()): Prom
     if (retryAt.has(episode.userId)) continue;
     const outcome = await rejudgeOne(episode, now);
     if (outcome === "rejudged") rejudged += 1;
-    if (outcome === "degraded") retryAt.set(episode.userId, now.getTime() + SLACK_REJUDGE_RETRY_MS);
+    if (outcome === "degraded" || outcome === "full") {
+      retryAt.set(episode.userId, now.getTime() + SLACK_REJUDGE_RETRY_MS);
+    }
   }
   return rejudged;
 }

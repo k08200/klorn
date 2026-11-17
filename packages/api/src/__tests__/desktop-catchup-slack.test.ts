@@ -95,9 +95,12 @@ describe("desktopCatchUp — held Slack rows", () => {
         slackRow("theirs", { userId: "user-2" }),
         slackRow("unasked"),
         slackRow("legacy", { dedupeKey: null }),
+        // A rung row holds a budget slot: it already alerted, never again.
+        slackRow("rung", { dedupeKey: "interrupt:2026-11-08:0" }),
       ],
     });
-    const res = await desktopCatchUp(USER, ["read", "cleared", "old", "theirs", "legacy"], NOW);
+    const asked = ["read", "cleared", "old", "theirs", "legacy", "rung"];
+    const res = await desktopCatchUp(USER, asked, NOW);
     expect(res.slack?.map((s) => s.id)).toEqual(["legacy"]);
   });
 

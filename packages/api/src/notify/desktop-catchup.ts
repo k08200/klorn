@@ -30,7 +30,7 @@
 
 import type { DesktopCatchUpResponse, DesktopMissedSlack } from "@klorn/contract";
 import { prisma } from "../db.js";
-import { SLACK_NOTIFICATION_TYPE } from "../slack/notify.js";
+import { SLACK_NOTIFICATION_TYPE } from "../slack/push-strings.js";
 import { evaluateNotificationGate } from "./notification-prefs.js";
 import { getUserNotificationLanguage, notificationCopy } from "./notification-strings.js";
 import { openPushMail, unreadUrgentMailRows } from "./open-push-mail.js";
@@ -43,6 +43,14 @@ const ID_MAX = 64;
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 /** A Slack bell row names its episode as dedupeKey "slack:<episodeId>" (slack/notify.ts). */
 const SLACK_ROW_KEY_PREFIX = "slack:";
+/**
+ * Rows a will-not-ring push wrote ("slack:<episodeId>", or none before the
+ * episode was named). A rung row holds an interrupt-budget slot key instead:
+ * it already alerted, so it is never toasted late, whatever the shell asks.
+ */
+const UNRUNG_SLACK_ROW = {
+  OR: [{ dedupeKey: null }, { dedupeKey: { startsWith: SLACK_ROW_KEY_PREFIX } }],
+};
 
 /** The bell row ids in `?ids=a,b,c`, or null when the list is malformed. */
 export function parseCatchUpIds(raw: unknown): string[] | null {
@@ -111,6 +119,7 @@ async function heldSlackRows(
       isRead: false,
       id: { in: [...ids] },
       createdAt: { gte: since },
+      ...UNRUNG_SLACK_ROW,
     },
     select: { id: true, title: true, message: true, createdAt: true, dedupeKey: true },
     orderBy: { createdAt: "desc" },

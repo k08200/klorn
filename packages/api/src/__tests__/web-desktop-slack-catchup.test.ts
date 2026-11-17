@@ -319,6 +319,7 @@ describe("parseCatchUpResponse — Slack items", () => {
         { id: "bad id!", title: "t", body: "b", createdAt: "2026-11-17T07:00:00.000Z" },
         { id: "s3", title: "  ", body: "b", createdAt: "2026-11-17T07:00:00.000Z" },
         { id: "s4", title: "t", body: 3, createdAt: "2026-11-17T07:00:00.000Z" },
+        { id: "s5", title: "t", body: "b", createdAt: "not a date" },
       ],
     });
     expect(parsed?.slack?.map((s) => s.id)).toEqual(["s1", "s2"]);

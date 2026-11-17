@@ -26,10 +26,10 @@ import type { SlackConversationKind } from "../judge/email-classifier.js";
 import { admitPushNotification } from "../judge/v3/push-budget-gate.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { slackPushContent } from "./push-content.js";
-import { SLACK_TITLE_PREFIX } from "./push-strings.js";
+import { SLACK_NOTIFICATION_TYPE, SLACK_TITLE_PREFIX } from "./push-strings.js";
 import { isUniqueViolation } from "./unique-violation.js";
 
-export const SLACK_NOTIFICATION_TYPE = "slack";
+export { SLACK_NOTIFICATION_TYPE };
 /** Slack rings a day: under the default stranger slots, so mail keeps at least one. */
 export const SLACK_RINGS_PER_DAY = 2;
 /** Slack bell rows a day (rung, held or quiet-hours), so the bell cannot be flooded. */

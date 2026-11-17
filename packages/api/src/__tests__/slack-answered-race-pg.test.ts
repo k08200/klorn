@@ -141,7 +141,8 @@ describePg("Slack judge races on Postgres", () => {
     });
 
     const pass = judgeReadySlackEpisodes(new Date());
-    await inJudge;
+    // A pass that fails before the judge call surfaces its error, not a timeout.
+    await Promise.race([inJudge, pass]);
     expect((await episodeOf(connectionId)).status).toBe("JUDGING");
     await markSlackConversationAnswered({
       connectionId,
@@ -215,5 +216,31 @@ describePg("Slack judge races on Postgres", () => {
     judge.judgeEmail.mockResolvedValue({ ...llmPush, tier: "INFO" });
     expect(await rejudgeFallbackSlackEpisodes(new Date())).toBe(1);
     expect(await episodeOf(connectionId)).toMatchObject({ tier: "INFO", verdictSource: "llm" });
+  });
+
+  it("a model that keeps falling back is given up after three calls", async () => {
+    const { connectionId } = await readyEpisode();
+    judge.judgeEmail.mockResolvedValue({
+      tier: "QUEUE",
+      reason: "k",
+      features: {},
+      source: "keyword-fallback",
+    });
+    await judgeReadySlackEpisodes(new Date());
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      resetSlackRejudgeState();
+      expect(await rejudgeFallbackSlackEpisodes(new Date())).toBe(0);
+    }
+    const spent = await prisma.slackEpisode.findFirstOrThrow({
+      where: { connectionId },
+      select: { rejudgedAt: true, rejudgeAttempts: true, verdictSource: true },
+    });
+    expect(spent.rejudgeAttempts).toBe(3);
+    expect(spent.rejudgedAt).not.toBeNull();
+    expect(spent.verdictSource).toBe("keyword-fallback");
+    judge.judgeEmail.mockClear();
+    resetSlackRejudgeState();
+    expect(await rejudgeFallbackSlackEpisodes(new Date())).toBe(0);
+    expect(judge.judgeEmail).not.toHaveBeenCalled();
   });
 });

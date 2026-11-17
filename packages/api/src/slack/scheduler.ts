@@ -47,8 +47,9 @@ export async function runSlackWork(now: Date = new Date()): Promise<void> {
   }
   if (!slackLive()) return;
   await judgeReadySlackEpisodes(now);
-  // After the fresh episodes: a slow re-judge never delays a new judgment.
-  await rejudgeFallbackSlackEpisodes(now);
+  // After the fresh episodes: a slow re-judge never delays a new judgment. Its
+  // own clock, since the judge pass may have taken minutes.
+  await rejudgeFallbackSlackEpisodes(new Date());
 }
 
 export async function slackSchedulerTick(

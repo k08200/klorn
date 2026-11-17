@@ -4,11 +4,14 @@
 --                               re-judge pass (slack/rejudge.ts) can find
 --                               the verdicts no model made
 --   SlackEpisode.rejudgedAt     the one re-judge of such a verdict was claimed
+--   SlackEpisode.rejudgeAttempts  re-judge calls made (a model that keeps
+--                               falling back stops being asked after 3)
 --   SlackEpisode.answeredAt     the user replied after the episode's last
 --                               message: it never rings from then on
 --
--- EXPAND ONLY. Three nullable columns (a catalog update, no table rewrite, no
--- backfill) and one index on a table written only while SLACK_ENABLED is on
+-- EXPAND ONLY. Three nullable columns and one constant default (a catalog
+-- update, no table rewrite, no backfill) and one index on a table written
+-- only while SLACK_ENABLED is on
 -- (off in production, so the table is empty or tiny). The previous instance
 -- keeps writing rows without them during the swap; null (unknown source, no
 -- re-judge, no reply on record) is correct for those rows, which the re-judge
@@ -23,6 +26,7 @@ SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE "SlackEpisode" ADD COLUMN "verdictSource" TEXT,
 ADD COLUMN "rejudgedAt" TIMESTAMP(3),
+ADD COLUMN "rejudgeAttempts" INTEGER NOT NULL DEFAULT 0,
 ADD COLUMN "answeredAt" TIMESTAMP(3);
 
 -- CreateIndex

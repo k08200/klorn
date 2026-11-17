@@ -143,7 +143,7 @@ function parseMissedSlack(value: unknown): DesktopMissedSlack | null {
   const id = rowId(record);
   const { title, body, createdAt } = record;
   if (!id || typeof title !== "string" || typeof body !== "string") return null;
-  if (typeof createdAt !== "string") return null;
+  if (typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt))) return null;
   const cleanTitle = title.trim();
   if (!cleanTitle) return null;
   return {

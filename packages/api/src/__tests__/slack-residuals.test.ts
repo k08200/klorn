@@ -72,6 +72,7 @@ import {
   resetSlackRejudgeState,
   SLACK_REJUDGE_BATCH,
   SLACK_REJUDGE_BELL_MAX_AGE_MS,
+  SLACK_REJUDGE_MAX_ATTEMPTS,
   SLACK_REJUDGE_RETRY_MS,
   SLACK_REJUDGE_RING_FRESH_MS,
 } from "../slack/rejudge.js";
@@ -177,17 +178,19 @@ describe("rejudgeFallbackSlackEpisodes", () => {
     expect(await rejudgeFallbackSlackEpisodes(NOW)).toBe(1);
     const [claim, verdict] = episodeWrites();
     expect(claim).toEqual({
-      where: { id: "ep-1", status: "JUDGED", verdictSource: "keyword-fallback", rejudgedAt: null },
-      data: { rejudgedAt: NOW },
+      where: {
+        id: "ep-1",
+        status: "JUDGED",
+        verdictSource: "keyword-fallback",
+        rejudgedAt: null,
+        answeredAt: null,
+      },
+      data: { rejudgedAt: NOW, rejudgeAttempts: { increment: 1 } },
     });
+    // judgedAt stays: a backlog re-judged after midnight takes none of the new day's slots.
     expect(verdict).toEqual({
       where: { id: "ep-1", status: "JUDGED", rejudgedAt: NOW },
-      data: {
-        tier: "PUSH",
-        reason: "Payroll is wrong, needs you",
-        verdictSource: "llm",
-        judgedAt: NOW,
-      },
+      data: { tier: "PUSH", reason: "Payroll is wrong, needs you", verdictSource: "llm" },
     });
     expect(judge.judgeEmail).toHaveBeenCalledTimes(1);
   });
@@ -252,8 +255,9 @@ describe("rejudgeFallbackSlackEpisodes", () => {
   it("model still unreachable: releases the claim and leaves that user alone for a while", async () => {
     judge.judgeEmail.mockResolvedValue(fallback);
     expect(await rejudgeFallbackSlackEpisodes(NOW)).toBe(0);
+    // Released only below the attempt limit: the third fallback in a row is final.
     expect(episodeWrites().at(-1)).toEqual({
-      where: { id: "ep-1", rejudgedAt: NOW },
+      where: { id: "ep-1", rejudgedAt: NOW, rejudgeAttempts: { lt: SLACK_REJUDGE_MAX_ATTEMPTS } },
       data: { rejudgedAt: null },
     });
     // Within the retry interval the user's episodes are not even read.
@@ -286,12 +290,16 @@ describe("rejudgeFallbackSlackEpisodes", () => {
     expect(claimed).toEqual(["ep-1", "ep-3"]);
   });
 
-  it("past the per-connection daily cap the attempt is spent without a model call", async () => {
+  it("a full day leaves the episode unclaimed for later, with no model call, and the user waits", async () => {
     db.prisma.slackEpisode.count.mockResolvedValue(SLACK_JUDGED_EPISODES_PER_DAY);
     expect(await rejudgeFallbackSlackEpisodes(NOW)).toBe(0);
     expect(judge.judgeEmail).not.toHaveBeenCalled();
-    // Spent, not released: the claim stays.
-    expect(episodeWrites()).toHaveLength(1);
+    expect(episodeWrites()).toHaveLength(0);
+    db.prisma.slackEpisode.findMany.mockClear();
+    await rejudgeFallbackSlackEpisodes(new Date(NOW.getTime() + MINUTE));
+    expect(db.prisma.slackEpisode.findMany.mock.calls[0]?.[0]?.where?.userId).toEqual({
+      notIn: ["user-1"],
+    });
   });
 
   it("an episode with no text left is not judged, and the attempt is spent", async () => {
