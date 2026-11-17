@@ -26,6 +26,9 @@ function value(src: string, name: string): string {
   return m[1].trim().replace(/\s+/g, " ");
 }
 
+/** A px design value as the rem the CSS states (16px root). */
+const rem = (px: number) => `${px / 16}rem`;
+
 const ROOT = block(":root");
 const DARK = block(".dark");
 const THEME = block("@theme");
@@ -119,10 +122,12 @@ describe("v2 type roles (web column)", () => {
     caption: 12,
     mono: 13,
   } as const;
+  // Sizes are rem so they follow the browser's text size; at the default
+  // 16px root each one is exactly its px design value.
   for (const [role, px] of Object.entries(ROLES)) {
-    it(`text-role-${role} is ${px}px`, () => {
-      expect(value(THEME, `text-role-${role}`)).toBe(`${px}px`);
-      expect(value(THEME, `text-role-${role}--line-height`)).toMatch(/^\d+px$/);
+    it(`text-role-${role} is ${px}px at a 16px root (${rem(px)})`, () => {
+      expect(value(THEME, `text-role-${role}`)).toBe(rem(px));
+      expect(value(THEME, `text-role-${role}--line-height`)).toMatch(/^\d+(?:\.\d+)?rem$/);
     });
   }
 
@@ -136,6 +141,43 @@ describe("v2 type roles (web column)", () => {
     expect(value(THEME, "text-role-meta--font-weight")).toBe("400");
     expect(value(THEME, "text-role-label--font-weight")).toBe("500");
     expect(THEME).not.toMatch(/--text-role-(?:label|meta)--letter-spacing/);
+  });
+});
+
+describe("v2 type roles (phone column)", () => {
+  /** The `:root` overrides inside one top-level @media block. */
+  function media(query: string): string {
+    const start = CSS.indexOf(`\n@media ${query} {`);
+    if (start < 0) throw new Error(`no @media ${query} block in globals.css`);
+    return CSS.slice(start, CSS.indexOf("\n}", start + 1));
+  }
+  const PHONE = media("(width < 37.5rem)");
+  const COVER = media("(width < 22.5rem)");
+
+  it("below 600px: page 22 · title 19 · head 16 · meta 12.5", () => {
+    expect(value(PHONE, "text-role-page")).toBe(rem(22));
+    expect(value(PHONE, "text-role-title")).toBe(rem(19));
+    expect(value(PHONE, "text-role-head")).toBe(rem(16));
+    expect(value(PHONE, "text-role-meta")).toBe(rem(12.5));
+    for (const role of ["page", "title", "head", "meta"]) {
+      expect(value(PHONE, `text-role-${role}--line-height`)).toMatch(/^\d+(?:\.\d+)?rem$/);
+    }
+  });
+
+  it("body, label, caption and mono keep their desktop size on a phone", () => {
+    expect(PHONE).not.toMatch(/--text-role-(?:body|label|caption|mono)\b/);
+  });
+
+  it("below 360px only the page role drops again, to 20", () => {
+    expect(value(COVER, "text-role-page")).toBe(rem(20));
+    expect(COVER).not.toMatch(/--text-role-(?!page\b)/);
+  });
+
+  it("the phone scale steps on the rail breakpoint (600px), before the cover step", () => {
+    expect(CSS).toMatch(/--breakpoint-rail:\s*37\.5rem;/);
+    expect(CSS.indexOf("\n@media (width < 37.5rem) {")).toBeLessThan(
+      CSS.indexOf("\n@media (width < 22.5rem) {"),
+    );
   });
 });
 

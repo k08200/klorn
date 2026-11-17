@@ -73,7 +73,7 @@ interface MailPane {
 }
 
 /**
- * `pane`: the list half of the ≥700px split view (email/layout.tsx) — a
+ * `pane`: the list half of the ≥600px split view (email/layout.tsx) — a
  * 280–440px column with its own scroll, the open mail marked, and the list's hotkeys
  * standing down while the reader beside it is open.
  */
