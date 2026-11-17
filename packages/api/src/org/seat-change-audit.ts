@@ -205,8 +205,10 @@ export async function recordSeatChangeUnconfirmed(
       lastError = err;
     }
   }
+  // Seat counts, named so no address scan mistakes them for mail headers.
+  const { orgId, from: seatsFrom, to: seatsTo } = attempt;
   captureDbFailure("[ORG] audit of an unconfirmed seat change failed", lastError, {
     tags: { scope: "org.billing.audit_seat_change" },
-    extra: { orgId: attempt.orgId, from: attempt.from, to: attempt.to, failure },
+    extra: { orgId, seatsFrom, seatsTo, failure },
   });
 }

@@ -101,8 +101,8 @@ describe("seat change audit rows", () => {
         tags: { scope: "org.billing.audit_seat_change" },
         extra: expect.objectContaining({
           orgId: "org-1",
-          from: 3,
-          to: 5,
+          seatsFrom: 3,
+          seatsTo: 5,
           failure: "PROVIDER_UNAVAILABLE",
         }),
       }),
