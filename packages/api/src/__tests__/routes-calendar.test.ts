@@ -147,7 +147,7 @@ describe("calendar routes", () => {
     await app.close();
   });
 
-  it("returns 403 for other user's event", async () => {
+  it("answers another user's read of an event with the not-found 404", async () => {
     const app = await buildApp();
     const c = await app.inject({
       method: "POST",
@@ -164,7 +164,37 @@ describe("calendar routes", () => {
       url: `/api/calendar/${c.json().id}`,
       headers: auth(OTHER),
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Event not found" });
+    await app.close();
+  });
+
+  it("answers another user's update of an event with the not-found 404", async () => {
+    const app = await buildApp();
+    const c = await app.inject({
+      method: "POST",
+      url: "/api/calendar",
+      headers: auth(),
+      payload: {
+        title: "Mine",
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 3600_000).toISOString(),
+      },
+    });
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/calendar/${c.json().id}`,
+      headers: auth(OTHER),
+      payload: { title: "Taken over" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Event not found" });
+    const own = await app.inject({
+      method: "GET",
+      url: `/api/calendar/${c.json().id}`,
+      headers: auth(),
+    });
+    expect(own.json().title).toBe("Mine");
     await app.close();
   });
 
@@ -211,7 +241,7 @@ describe("calendar routes", () => {
     await app.close();
   });
 
-  it("returns 403 when deleting other user's event", async () => {
+  it("answers another user's delete of an event with the not-found 404", async () => {
     const app = await buildApp();
     const c = await app.inject({
       method: "POST",
@@ -228,7 +258,8 @@ describe("calendar routes", () => {
       url: `/api/calendar/${c.json().id}`,
       headers: auth(OTHER),
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "Event not found" });
     await app.close();
   });
 });

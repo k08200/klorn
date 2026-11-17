@@ -13,6 +13,7 @@ import {
   kakaoImportFailure,
   kakaoImportPanelVisible,
   kakaoImportResult,
+  kakaoImportWayOutOnly,
 } from "../../../web/src/app/settings/_sections/kakao-import-settings";
 import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
@@ -51,6 +52,18 @@ describe("kakaoImportPanelVisible", () => {
     expect(kakaoImportPanelVisible({ kakaoImport: false })).toBe(false);
     expect(kakaoImportPanelVisible({})).toBe(false);
     expect(kakaoImportPanelVisible(null)).toBe(false);
+  });
+});
+
+describe("kakaoImportWayOutOnly", () => {
+  it("is true only when the import is closed to the user and /me says they own one", () => {
+    expect(kakaoImportWayOutOnly({ kakaoImport: false, kakaoImportWayOut: true })).toBe(true);
+    expect(kakaoImportWayOutOnly({ kakaoImportWayOut: true })).toBe(true);
+    // Open: the whole panel, not the way-out one.
+    expect(kakaoImportWayOutOnly({ kakaoImport: true, kakaoImportWayOut: true })).toBe(false);
+    expect(kakaoImportWayOutOnly({ kakaoImport: false, kakaoImportWayOut: false })).toBe(false);
+    expect(kakaoImportWayOutOnly({})).toBe(false);
+    expect(kakaoImportWayOutOnly(null)).toBe(false);
   });
 });
 

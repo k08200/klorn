@@ -62,6 +62,7 @@ import {
   googleDriveRoutesEnabled,
 } from "../drive/drive-scope.js";
 import { DRIVE_LINK_STATE_MARKER } from "../drive/providers/google-auth.js";
+import { kakaoImportWayOut } from "../kakao-import/store.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
 import { boundedFromValue, extractEmailAddress } from "../mail/email-address.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
@@ -773,6 +774,10 @@ export function authRoutes(app: FastifyInstance) {
           // web shows the KakaoTalk import panel in Settings → Integrations
           // only when this is true — the same answer /api/kakao-import gives.
           kakaoImport: kakaoImportOpenTo(user.id),
+          // True when the import is closed to this user but they still own an
+          // import: Settings then shows the list and delete only, the routes'
+          // way out (routes/kakao-import.ts), so a closed flag traps no chat.
+          kakaoImportWayOut: await kakaoImportWayOut(user.id),
         },
       });
     } catch {

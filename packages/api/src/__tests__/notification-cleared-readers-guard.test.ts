@@ -549,7 +549,8 @@ describe("bell readers leave cleared rows out", () => {
       "notify/notification-center.ts#notificationDelivery",
       "routes/automations.ts#automationRoutes",
       "routes/admin.ts#adminRoutes",
-      "routes/notifications.ts#notificationRoutes",
+      // Mark-read no longer reads first: its write skips cleared rows
+      // (background.ts markNotificationRead, notification-mark-read.test.ts).
     ]) {
       expect(hiding).toContain(key);
     }

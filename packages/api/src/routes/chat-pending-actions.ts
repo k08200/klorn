@@ -184,8 +184,10 @@ export async function chatRoutes(app: FastifyInstance) {
       const conversation = await prisma.conversation.findUnique({
         where: { id },
       });
-      if (!conversation) return reply.code(404).send({ error: "Conversation not found" });
-      if (conversation.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      // Another user's id gets the same 404 as a missing one: no answer says it exists.
+      if (!conversation || conversation.userId !== userId) {
+        return reply.code(404).send({ error: "Conversation not found" });
+      }
 
       type ActionRow = {
         id: string;
@@ -235,8 +237,9 @@ export async function chatRoutes(app: FastifyInstance) {
         where: { id: actionId },
       });
 
-      if (!action) return reply.code(404).send({ error: "Action not found" });
-      if (action.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      if (!action || action.userId !== userId) {
+        return reply.code(404).send({ error: "Action not found" });
+      }
       if (action.status !== "PENDING") {
         return reply.code(400).send({ error: `Action already ${action.status.toLowerCase()}` });
       }
@@ -370,8 +373,9 @@ export async function chatRoutes(app: FastifyInstance) {
         where: { id: actionId },
       });
 
-      if (!action) return reply.code(404).send({ error: "Action not found" });
-      if (action.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      if (!action || action.userId !== userId) {
+        return reply.code(404).send({ error: "Action not found" });
+      }
       if (action.status !== "PENDING") {
         return reply.code(400).send({ error: `Action already ${action.status.toLowerCase()}` });
       }
