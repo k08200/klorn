@@ -30,7 +30,7 @@ import {
   resolveClientAddressConfig,
 } from "./security/client-address.js";
 import { rateLimitOptions } from "./security/rate-limit-identity.js";
-import { serializeRequestForLog } from "./security/request-log.js";
+import { answerRouteNotFound, serializeRequestForLog } from "./security/request-log.js";
 import { parseAllowedCidrs } from "./security/scanner-allowlist.js";
 import { flushSentry, initSentry } from "./sentry.js";
 import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
@@ -75,6 +75,9 @@ attachPerfMonitor(app);
 // Global error handler: never reflect a 5xx's raw message to the client
 // (Fastify's default does). 4xx pass through; 5xx are logged + generic.
 app.setErrorHandler(handleError);
+// Fastify's default 404 logs the raw URL, query string included; this one logs
+// and answers with the path only (security/request-log.ts).
+app.setNotFoundHandler(answerRouteNotFound);
 // Every request is a unit of work with its own start time; the data-wipe fence
 // rejects writes from work that began before the account's wipe finished.
 registerWorkContextHook(app);

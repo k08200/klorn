@@ -301,9 +301,10 @@ export function parseDeliveryResponse(body: unknown): string | null {
 // The route answers 404 for a row that is not the caller's AND for a row
 // deleted after the list loaded (api routes/notifications.ts, body
 // {"error":"Notification not found"}). Neither says the route is missing, so a
-// 404 disables only that row. Only Fastify's own unmatched-route body
-// ({"message":"Route GET:<url> not found", …}; the API registers no custom
-// not-found handler) proves the route is not deployed. apiFetch exposes the
+// 404 disables only that row. Only the unmatched-route body
+// ({"message":"Route GET:<path> not found", …}: Fastify's shape, kept by the
+// API's not-found handler, security/request-log.ts) proves the route is not
+// deployed. apiFetch exposes the
 // body, not the headers, as `API <status>: <body>`.
 
 const FASTIFY_ROUTE_MISSING = /^Route [A-Z]+:\S+ not found$/;

@@ -12,6 +12,12 @@ import { addBreadcrumb, captureError } from "./sentry.js";
 
 const SLOW_THRESHOLD_MS = 1000;
 const MAX_SAMPLES_PER_ROUTE = 100;
+/**
+ * The key for a request no route matched. Its URL would carry the query string
+ * (tokens, addresses) into /api/admin/perf and the slow-request breadcrumb, and
+ * a key per distinct URL would grow `stats` without bound.
+ */
+const UNMATCHED_ROUTE = "(unmatched)";
 
 interface RouteStats {
   samples: number[];
@@ -43,7 +49,7 @@ export function attachPerfMonitor(app: FastifyInstance): void {
     const start = (request as unknown as { _perfStart?: number })._perfStart;
     if (!start) return;
     const duration = Date.now() - start;
-    const routeKey = `${request.method} ${request.routeOptions?.url || request.url}`;
+    const routeKey = `${request.method} ${request.routeOptions?.url || UNMATCHED_ROUTE}`;
     const isError = reply.statusCode >= 500;
     record(routeKey, duration, isError);
 
