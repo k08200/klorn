@@ -715,6 +715,67 @@ describe("email routes (demo mode)", () => {
     await app.close();
   });
 
+  it("answers a failed sync with a code and its fixed sentence, never the provider's text", async () => {
+    const emailSync = await import("../mail/email-sync.js");
+    const app = await buildApp();
+    vi.mocked(emailSync.syncEmails).mockRejectedValueOnce(
+      Object.assign(new Error("CANARY-sync quoted mail body"), {
+        name: "GaxiosError",
+        response: { status: 503, data: { error: { message: "CANARY-sync" } } },
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/sync",
+      headers: auth(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain("CANARY");
+    expect(res.json()).toEqual({
+      error: "Gmail is unavailable right now. Try again shortly.",
+      code: "PROVIDER_UNAVAILABLE",
+    });
+
+    vi.mocked(emailSync.syncEmails).mockRejectedValueOnce(new Error("Gmail not connected"));
+    const dead = await app.inject({
+      method: "POST",
+      url: "/api/email/sync",
+      headers: auth(),
+      payload: {},
+    });
+    // Web clients still match "not connected" in the sentence (older builds).
+    expect(dead.json()).toEqual({
+      error: "Gmail is not connected. Reconnect it in Settings.",
+      code: "PROVIDER_AUTH_FAILED",
+    });
+    await app.close();
+  });
+
+  it("answers a failed reconcile with a code, never the database's text", async () => {
+    const emailSync = await import("../mail/email-sync.js");
+    const app = await buildApp();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(emailSync.reconcileEmails).mockRejectedValueOnce(
+      Object.assign(new Error("Invalid `prisma.emailMessage.update()` invocation: CANARY-db"), {
+        name: "PrismaClientValidationError",
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/reconcile",
+      headers: auth(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("CANARY");
+    expect(res.json()).toEqual({
+      error: "Something went wrong on our side. Try again shortly.",
+      code: "INTERNAL_ERROR",
+    });
+    await app.close();
+  });
+
   it("answers zeroed stats, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({

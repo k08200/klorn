@@ -45,11 +45,18 @@ import { createHash } from "node:crypto";
 import { db } from "../db.js";
 import type { ActionReceipt } from "../judge/attention-floor.js";
 import { isConnectionError, isKeyLimitError } from "../llm/model-fallback.js";
+import { classifyFailure, failureFacts } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { stableStringify } from "../stable-json.js";
 import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
 import { executeToolCall } from "./tool-executor.js";
+import {
+  isToolFailureCode,
+  type ToolFailureCode,
+  TRANSIENT_TOOL_FAILURE_CODES,
+  toolFailure,
+} from "./tool-failure.js";
 
 export type OutboxStatus = "QUEUED" | "IN_PROGRESS" | "COMPLETED" | "DEAD";
 
@@ -107,11 +114,18 @@ export function isTransientToolError(err: unknown): boolean {
     name === "FloorReceiptRequiredError" ||
     name === "ActionReceiptMismatchError" ||
     name === "ActionReceiptSchemaError" ||
-    name === "ToolValidationError"
+    name === "ToolValidationError" ||
+    // The provider may have delivered it: a retry can send twice.
+    name === "SendOutcomeUnknownError"
   ) {
     return false;
   }
+  // A swallowed failure tool-executor already classified: its code decides.
+  if (err instanceof SwallowedToolError && err.code !== null) {
+    return TRANSIENT_TOOL_FAILURE_CODES.has(err.code);
+  }
   if (isConnectionError(err) || isKeyLimitError(err)) return true;
+  if (TRANSIENT_TOOL_FAILURE_CODES.has(classifyFailure(err))) return true;
   const message = err instanceof Error ? err.message.toLowerCase() : "";
   if (!message) return false;
   if (/\b(502|503|504|429)\b/.test(message)) return true;
@@ -126,29 +140,71 @@ function backoffMs(attempts: number): number {
 }
 
 /**
- * Detect the EXACT failure shape tool-executor returns for a non-floor tool
- * that errored without throwing: `JSON.stringify({ error: message })`. Match
- * is strict (a single `error` string key) so a tool that legitimately
- * returns an `error` field alongside real data is NOT mistaken for a
- * failure. Returns the message, or null if the result is a normal success.
+ * A tool failure that came back as a result instead of a throw. Its text is
+ * the tool's own (Klorn-written) or tool-failure.ts's classification, never a
+ * caught error's message.
  */
-function extractSwallowedToolError(result: string): string | null {
+class SwallowedToolError extends Error {
+  constructor(
+    message: string,
+    readonly code: ToolFailureCode | null,
+  ) {
+    super(message);
+    this.name = "SwallowedToolError";
+  }
+}
+
+/**
+ * Detect the EXACT failure shapes a tool answers without throwing: a tool's
+ * own `{ error: message }`, or tool-executor's classified `{ error, code }`
+ * (tool-failure.ts). Match is strict (those keys only, a known code) so a
+ * tool that legitimately returns an `error` field alongside real data is NOT
+ * mistaken for a failure. Returns null if the result is a normal success.
+ */
+function extractSwallowedToolError(result: string): SwallowedToolError | null {
   if (typeof result !== "string" || !result.startsWith("{")) return null;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(result) as Record<string, unknown>;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      Object.keys(parsed).length === 1 &&
-      typeof parsed.error === "string" &&
-      parsed.error.length > 0
-    ) {
-      return parsed.error;
-    }
+    parsed = JSON.parse(result);
   } catch {
-    // not JSON — a normal string result
+    return null; // not JSON — a normal string result
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const fields = parsed as Record<string, unknown>;
+  const keys = Object.keys(fields);
+  if (typeof fields.error !== "string" || fields.error.length === 0) return null;
+  if (keys.length === 1) return new SwallowedToolError(fields.error, null);
+  if (keys.length === 2 && isToolFailureCode(fields.code)) {
+    return new SwallowedToolError(fields.error, fields.code);
   }
   return null;
+}
+
+/** What a failed attempt stores and shows: `shown` to the user, `stored` in lastError. */
+interface OutboxFailure {
+  readonly shown: string;
+  readonly stored: string;
+}
+
+/**
+ * A failed attempt in words that are safe to store and show: the swallowed
+ * result's own text, or a thrown error's classification plus facts. Never a
+ * thrown error's message — it lands in lastError, PendingAction.result, the
+ * chat message, the feedback row and the approve route's answer, and a
+ * Prisma or provider message can quote other rows or the mail.
+ */
+function outboxFailure(err: unknown): OutboxFailure {
+  if (err instanceof SwallowedToolError) {
+    const shown = stripUntrusted(err.message);
+    return { shown, stored: err.code === null ? shown : `${err.code}: ${shown}` };
+  }
+  const { error, code } = toolFailure(err);
+  const klornWritten =
+    code === "INVALID_ARGUMENT" || code === "ACTION_REFUSED" || code === "SEND_OUTCOME_UNKNOWN";
+  return {
+    shown: error,
+    stored: klornWritten ? `${code}: ${error}` : `${code} (${failureFacts(err)})`,
+  };
 }
 
 interface OutboxRowInput {
@@ -265,7 +321,7 @@ async function runOutboxAttempt(
     // (transient → retry, anything else → dead). Floor actions still throw,
     // so this only catches the non-floor swallowed case.
     const toolError = extractSwallowedToolError(result);
-    if (toolError) throw new Error(toolError);
+    if (toolError) throw toolError;
 
     await db.actionOutbox.update({
       where: { id: row.id },
@@ -280,8 +336,9 @@ async function runOutboxAttempt(
     await onOutboxCompleted(row, result);
     return { kind: "completed", result };
   } catch (err) {
-    // Stored and shown as text, like the result above.
-    const message = stripUntrusted(err instanceof Error ? err.message : String(err));
+    // Stored and shown as text, like the result above: a classification,
+    // never the thrown text (outboxFailure).
+    const failure = outboxFailure(err);
     const transient = isTransientToolError(err);
     const canRetry = transient && attemptNo < row.maxAttempts;
 
@@ -296,12 +353,12 @@ async function runOutboxAttempt(
             category: "transient",
             attemptNo,
             maxAttempts: row.maxAttempts,
-            message,
+            message: failure.stored,
           }),
           nextAttemptAt,
         },
       });
-      return { kind: "retry", error: message, nextAttemptAt };
+      return { kind: "retry", error: failure.shown, nextAttemptAt };
     }
 
     await db.actionOutbox.update({
@@ -313,13 +370,13 @@ async function runOutboxAttempt(
           category: transient ? "transient-exhausted" : "permanent",
           attemptNo,
           maxAttempts: row.maxAttempts,
-          message,
+          message: failure.stored,
         }),
         completedAt: now,
       },
     });
-    await onOutboxDead(row, message);
-    return { kind: "dead", error: message };
+    await onOutboxDead(row, failure.shown);
+    return { kind: "dead", error: failure.shown };
   }
 }
 

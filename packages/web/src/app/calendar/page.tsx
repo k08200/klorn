@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProviderFailureCode } from "@klorn/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ import ErrorAlert from "../../components/ui/error-alert";
 import VoiceButton from "../../components/voice-button";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { providerFailureText } from "../../lib/provider-failure";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
@@ -150,7 +152,12 @@ function CalendarView() {
 
   const syncMutation = useMutation({
     mutationFn: () =>
-      apiFetch<{ success?: boolean; synced?: number; error?: string }>("/api/calendar/sync", {
+      apiFetch<{
+        success?: boolean;
+        synced?: number;
+        error?: string;
+        code?: ProviderFailureCode;
+      }>("/api/calendar/sync", {
         method: "POST",
         body: JSON.stringify({}),
       }),
@@ -160,10 +167,14 @@ function CalendarView() {
     },
     onSuccess: (result) => {
       if (result.error) {
-        if (result.error.toLowerCase().includes("google not connected")) {
+        // The code decides; the substring is for a server older than codes.
+        if (
+          result.code === "PROVIDER_AUTH_FAILED" ||
+          result.error.toLowerCase().includes("google not connected")
+        ) {
           setGoogleConnected(false);
         }
-        setError(result.error);
+        setError(providerFailureText(t, result, "Google Calendar") ?? result.error);
         return;
       }
       const synced = result.synced ?? 0;

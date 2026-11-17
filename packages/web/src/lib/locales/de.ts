@@ -3491,6 +3491,24 @@ const de: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "Der Agent beobachtet nur",
   "settings.org.transparency.ceiling.cap.suggest":
     "Der Agent schlägt nur vor und handelt nie selbst",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect":
+    "{service} ist nicht verbunden. Verbinde es in den Einstellungen neu.",
+  "providerFailure.scope":
+    "{service} hat eine Berechtigung, die Klorn braucht, nicht erteilt. Verbinde es in den Einstellungen neu und erlaube alle angefragten Berechtigungen.",
+  "providerFailure.notFound":
+    "{service} konnte das Element nicht finden. Es wurde möglicherweise verschoben oder gelöscht.",
+  "providerFailure.rateLimited":
+    "{service} begrenzt gerade Anfragen. Versuche es in einer Minute erneut.",
+  "providerFailure.unavailable":
+    "{service} ist gerade nicht erreichbar. Versuche es gleich noch einmal.",
+  "providerFailure.tooManyRequests":
+    "Gerade zu viele Anfragen. Versuche es in einer Minute erneut.",
+  "providerFailure.dailyCap":
+    "Das heutige KI-Limit ist aufgebraucht. Es wird morgen zurückgesetzt.",
+  "providerFailure.serviceUnavailable":
+    "Klorn ist kurz nicht erreichbar. Versuche es gleich noch einmal.",
+  "providerFailure.internal": "Bei uns ist etwas schiefgelaufen. Versuche es gleich noch einmal.",
 };
 
 export default de;

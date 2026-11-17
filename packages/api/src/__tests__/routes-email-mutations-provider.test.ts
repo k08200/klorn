@@ -288,4 +288,49 @@ describe("email mutation routes × provider", () => {
       });
     });
   });
+
+  describe("a provider failure reaches the client as a code, never as its text", () => {
+    /** A googleapis error quoting the request, as gaxios raises it. */
+    const providerError = (status: number) =>
+      Object.assign(new Error("CANARY-gmail quoted subject"), {
+        name: "GaxiosError",
+        response: { status, data: { error: { message: "CANARY-gmail", errors: [] } } },
+      });
+
+    beforeEach(() => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      db.emailFindFirst.mockResolvedValue(PRIMARY_EMAIL);
+    });
+
+    it.each([
+      ["DELETE", "/api/email/e-google", "trashEmail", 429, "PROVIDER_RATE_LIMITED", "Delete"],
+      [
+        "POST",
+        "/api/email/e-google/archive",
+        "archiveEmail",
+        403,
+        "PROVIDER_SCOPE_MISSING",
+        "Archive",
+      ],
+      ["POST", "/api/email/gm-1/delete/undo", "untrashEmail", 404, "PROVIDER_NOT_FOUND", "Undo"],
+      [
+        "POST",
+        "/api/email/gm-1/archive/undo",
+        "unarchiveEmail",
+        503,
+        "PROVIDER_UNAVAILABLE",
+        "Undo",
+      ],
+    ] as const)("%s %s: 502 with %s's code", async (method, url, fn, status, code, verb) => {
+      gmail[fn].mockRejectedValueOnce(providerError(status));
+      const app = await buildApp();
+      const res = await app.inject({ method, url, headers: auth(), payload: {} });
+      expect(res.statusCode).toBe(502);
+      expect(res.body).not.toContain("CANARY");
+      const body = res.json();
+      expect(body.code).toBe(code);
+      expect(body.error).toMatch(new RegExp(`^${verb} failed\\. Your mail provider`));
+      await app.close();
+    });
+  });
 });

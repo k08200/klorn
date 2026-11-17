@@ -33,6 +33,7 @@ import {
 } from "../mail/send-receipt.js";
 import { recordSentMessage } from "../mail/sent-messages.js";
 import { noteEmailBellRowsRead } from "../notify/email-bell.js";
+import { type PublicFailure, publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { safeAttachmentFilename } from "./email.js";
 import { completeUndo, findParkedInbox } from "./email-undo.js";
@@ -131,6 +132,16 @@ function resolveUndoLinkedInbox(body: unknown): string | null {
     parsedBody.linkedInboxAccountId.trim()
     ? parsedBody.linkedInboxAccountId.trim()
     : null;
+}
+
+/**
+ * A thrown provider call as the client sees it: "<Verb> failed." plus the
+ * fixed sentence for its code (public-failure.ts). Never the provider's
+ * message, which can quote the mail.
+ */
+function providerActionFailure(verb: "Delete" | "Archive" | "Undo", err: unknown): PublicFailure {
+  const failure = publicFailure(err, "mail");
+  return { error: `${verb} failed. ${failure.error}`, code: failure.code };
 }
 
 const SEND_OUTCOME_UNKNOWN_MESSAGE =
@@ -635,12 +646,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
-      const gErr = err as { message?: string };
       logDbFailure("[EMAIL] Gmail trash failed", err, {
         level: "error",
         ids: { emailId: email.id },
       });
-      return reply.code(502).send({ error: `Gmail delete failed: ${gErr.message || "unknown"}` });
+      return reply.code(502).send(providerActionFailure("Delete", err));
     }
 
     // Gmail succeeded — DB already cleaned by trashEmail(). The ledger keys on
@@ -671,8 +681,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if ("failure" in done) return reply.code(502).send({ error: done.failure });
       return done.payload;
     } catch (err) {
-      const gErr = err as { message?: string };
-      return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });
+      logDbFailure("[EMAIL] trash undo failed", err, { level: "error", ids: { userId: uid } });
+      return reply.code(502).send(providerActionFailure("Undo", err));
     }
   });
 
@@ -705,12 +715,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
-      const gErr = err as { message?: string };
       logDbFailure("[EMAIL] Gmail archive failed", err, {
         level: "error",
         ids: { emailId: email.id },
       });
-      return reply.code(502).send({ error: `Gmail archive failed: ${gErr.message || "unknown"}` });
+      return reply.code(502).send(providerActionFailure("Archive", err));
     }
 
     // Retention analytics: archiving is the core "I handled this card" signal.
@@ -740,8 +749,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if ("failure" in done) return reply.code(502).send({ error: done.failure });
       return done.payload;
     } catch (err) {
-      const gErr = err as { message?: string };
-      return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });
+      logDbFailure("[EMAIL] archive undo failed", err, { level: "error", ids: { userId: uid } });
+      return reply.code(502).send(providerActionFailure("Undo", err));
     }
   });
 }

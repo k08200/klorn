@@ -17,6 +17,7 @@ import type { ApiKeyPermissionWire } from "@klorn/contract";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { executeToolCall } from "../agentcore/tool-executor.js";
+import { toolFailure } from "../agentcore/tool-failure.js";
 import { isMcpWriteTool, mcpToolDefs } from "./tool-gate.js";
 import { errorResult, type McpToolResult, textResult, unknownToolResult } from "./tool-result.js";
 import { recordRefusedWrite } from "./write-audit.js";
@@ -38,8 +39,10 @@ async function runReadTool(
   } catch (err) {
     // executeToolCall already maps most failures to {"error"} strings; a
     // throw here is the floor-action stop or a genuine crash — either way
-    // an in-band tool error, never a dead transport.
-    return errorResult(err instanceof Error ? err.message : "Tool failed.");
+    // an in-band tool error, never a dead transport, and never the thrown
+    // text: the MCP client hands it to its model (tool-failure.ts).
+    const { error, code } = toolFailure(err);
+    return errorResult(error, { code });
   }
 }
 
