@@ -9,6 +9,7 @@ import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
 import IosInstallHint from "./ios-install-hint";
 import NavRail from "./nav-rail";
+import PhoneHeaderActions from "./phone-header-actions";
 import ShellSkeleton from "./shell-skeleton";
 import Sidebar from "./sidebar";
 
@@ -134,13 +135,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* The skip link is rendered once for every route by the root layout
           (components/skip-link.tsx); it jumps past the sidebar to #main. */}
       {/* Device classes: bottom tabs below 600px, the rail from 600px, the
-          sidebar from 1024px (globals.css, --breakpoint-rail). */}
+          sidebar from 840px (globals.css, --breakpoint-rail / -wide). */}
       <NavRail />
       <Sidebar />
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden pr-safe">
         {/* Phone header (below 600px) — pt-safe respects iPhone notch in PWA.
-            The bottom tab bar + account sheet are the whole phone nav. */}
-        <div className="relative z-10 rail:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content">
+            The bottom tab bar, plus the bell and the account avatar here, are
+            the whole phone nav. */}
+        <div
+          data-testid="phone-header"
+          className="relative z-10 rail:hidden flex items-center gap-3 pl-4 pr-2 h-12 pt-safe border-b border-line bg-surface-panel/95 backdrop-blur-xl shrink-0 box-content"
+        >
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-role-body font-semibold leading-none text-ink">Klorn</p>
@@ -151,6 +156,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {sectionLabel}
             </p>
           </div>
+          <PhoneHeaderActions />
         </div>
         <main
           id="main"
