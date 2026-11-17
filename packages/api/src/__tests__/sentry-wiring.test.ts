@@ -29,6 +29,7 @@ const VERIFIER = "opaque-desktop-verifier-9c1e";
 const SESSION_COOKIE = "opaque-session-cookie-51ab";
 const AUTH_EXTRA = "opaque-authorization-extra-77d2";
 const SECRETS = [GEMINI_KEY, OAUTH_CODE, VERIFIER, SESSION_COOKIE, AUTH_EXTRA];
+const MAIL_ADDRESS = "wiring.person+tag@example.com";
 
 /** `<trace id>-<span id>-1`: an incoming trace whose sampling decision is "sampled". */
 const SAMPLED_TRACE_HEADER = "0123456789abcdef0123456789abcdef-0123456789abcdef-1";
@@ -113,6 +114,19 @@ describe("Sentry wiring (real SDK, captured envelopes)", () => {
     const payload = sent();
     expect(payload).toContain("provider echoed");
     expectNoSecret(payload);
+  });
+
+  it("an error event carries no mail address from a console line or the error message", async () => {
+    // The console integration (a default) records this line as a breadcrumb.
+    console.warn(`[mail] wiring-console-marker send failed for ${MAIL_ADDRESS}`);
+    Sentry.captureException(new Error(`wiring-error-marker no account for ${MAIL_ADDRESS}`));
+    await Sentry.flush(FLUSH_MS);
+
+    const payload = sent();
+    expect(payload).toContain("wiring-console-marker");
+    expect(payload).toContain("wiring-error-marker");
+    expect(payload).not.toContain(MAIL_ADDRESS);
+    expect(payload).not.toContain("example.com");
   });
 
   it("a transaction and its child spans carry no credential", async () => {
