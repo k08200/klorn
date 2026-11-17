@@ -12,10 +12,12 @@
  * Reads from Paddle happen before the organization's lock; each change then
  * runs under the lock with exactly one Paddle call, time-bounded so the lock
  * wait plus the call fit the interactive transaction's 15 s timeout
- * (INTERACTIVE_TX_OPTIONS). The audit row is written before that call in the
- * same transaction, so a refused call leaves no row behind. A call that times
- * out may still have reached Paddle; the answer says so, and a seat change is
- * "set the count to N", so retrying it is safe.
+ * (INTERACTIVE_TX_OPTIONS). The seat change's audit row is committed under
+ * the lock before that call and taken back if Paddle refuses, so a refused
+ * call leaves no row behind (seat-change-audit.ts). A call that times out may
+ * still have reached Paddle; the answer says so, the audit log keeps it as
+ * unconfirmed, and a seat change is "set the count to N", so retrying it is
+ * safe.
  *
  * The owner is the organization's billing admin: any owner can remove seats
  * (it lowers the charge; the member floor still holds) or cancel at the
@@ -54,6 +56,7 @@ import {
   setPaddleSeatQuantity,
 } from "../billing/paddle-team.js";
 import { prisma } from "../db.js";
+import { classifyFailure } from "../public-failure.js";
 import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { type OrgAuditAction, recordOrgAudit } from "./audit.js";
@@ -63,10 +66,20 @@ import { type OrgTx, ownerInTx, requireVerifiedEmail, withOrgLock } from "./org-
 import { requireOwner } from "./org-members.js";
 import { MAX_SELF_SERVE_SEATS, MIN_TEAM_SEATS } from "./org-shape.js";
 import { recordedPayerSeatCap } from "./seat-cap.js";
+import {
+  assertNoSeatChangeSince,
+  type LiveRead,
+  lastSeatChange,
+  type PayerBasis,
+  paddleRefused,
+  recordSeatChangeRequest,
+  recordSeatChangeUnconfirmed,
+  SEAT_CHANGE_CALL_TIMEOUT_MS,
+  type SeatChangeAttempt,
+  withdrawSeatChangeRequest,
+} from "./seat-change-audit.js";
 
-/** One Paddle call under the lock: the 15 s transaction keeps ~9 s for the lock wait. */
-const PADDLE_CALL_TIMEOUT_MS = 6_000;
-const CALL = { timeoutMs: PADDLE_CALL_TIMEOUT_MS };
+const CALL = { timeoutMs: SEAT_CHANGE_CALL_TIMEOUT_MS };
 
 export type SeatChangeResult = { status: "pending" | "unchanged"; seats: number };
 
@@ -271,9 +284,6 @@ interface PayerRefusal {
   error: OrgError;
 }
 
-/** How an owner passed the payer check, as the audit detail records it. */
-type PayerBasis = "recorded" | "email";
-
 /**
  * The owner the team checkout recorded as its buyer (Organization.payerUserId).
  * Callers have already checked that `userId` is an owner (and re-check it
@@ -423,86 +433,40 @@ async function requireIncreasePayer(
   });
 }
 
-const SEATS_CHANGE_ACTION = "billing.seats_change_requested" satisfies OrgAuditAction;
-
-/** The newest seat change requested through Klorn, or null: a mark taken before the live read. */
-type SeatChangeMark = { id: string; createdAt: Date } | null;
-
-function lastSeatChange(orgId: string): Promise<SeatChangeMark> {
-  return prisma.orgAuditEvent.findFirst({
-    where: { orgId, action: SEATS_CHANGE_ACTION },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, createdAt: true },
-  });
-}
-
-const SEATS_CHANGED = () =>
-  new OrgError(
-    409,
-    "SEATS_CHANGED",
-    "The seat count changed while this request was waiting. Check the count and try again.",
-  );
-
-/**
- * Under the lock: a seat change committed since `mark` (its audit row is
- * written in the same transaction as its Paddle call) means the live quantity
- * read before the lock is stale, and with it the increase-or-decrease call —
- * so two concurrent decreases cannot add up to an unchecked increase.
- */
-async function assertNoSeatChangeSince(
-  tx: OrgTx,
-  orgId: string,
-  mark: SeatChangeMark,
-): Promise<void> {
-  const since = mark
-    ? {
-        OR: [
-          { createdAt: { gt: mark.createdAt } },
-          { createdAt: mark.createdAt, id: { not: mark.id } },
-        ],
-      }
-    : {};
-  const newer = await tx.orgAuditEvent.findFirst({
-    where: { orgId, action: SEATS_CHANGE_ACTION, ...since },
-    select: { id: true },
-  });
-  if (newer) throw SEATS_CHANGED();
-}
-
 interface SeatChange {
-  userId: string;
-  orgId: string;
   subscriptionId: string;
-  item: { priceId: string; quantity: number };
-  seats: number;
-  mark: SeatChangeMark;
-  /** How the payer check passed (increases only). */
-  payer: PayerBasis | null;
+  priceId: string;
+  read: LiveRead;
+  attempt: SeatChangeAttempt;
 }
 
 /** The locked part of a seat change: re-check what may have moved, audit, one Paddle call. */
 async function applySeatChange(tx: OrgTx, change: SeatChange): Promise<SeatChangeResult> {
-  const { userId, orgId, subscriptionId, item, seats } = change;
+  const { subscriptionId, priceId, attempt } = change;
+  const { actorUserId: userId, orgId, to: seats } = attempt;
   await ownerInTx(tx, userId, orgId);
   // What may have moved since the reads before the lock: the subscription, a
   // cancel, a member who joined, another seat change.
   if (seatTarget(await billingInTx(tx, orgId)) !== subscriptionId) throw NOT_ACTIVE();
   await assertMemberFloor(tx, orgId, seats);
-  await assertNoSeatChangeSince(tx, orgId, change.mark);
-  await recordOrgAudit(tx, {
-    orgId,
-    action: SEATS_CHANGE_ACTION,
-    actorUserId: userId,
-    detail: { from: item.quantity, to: seats, ...(change.payer ? { payer: change.payer } : {}) },
-  });
+  await assertNoSeatChangeSince(tx, orgId, change.read);
+  const requestId = await recordSeatChangeRequest(attempt);
   try {
-    await setPaddleSeatQuantity({ subscriptionId, priceId: item.priceId, quantity: seats }, CALL);
+    await setPaddleSeatQuantity({ subscriptionId, priceId, quantity: seats }, CALL);
   } catch (err) {
     // A cancel made in the portal after the live read: Paddle refuses the
     // update while it is pending, so the change itself is the last check. An
     // expected refusal, not a provider fault (no report).
-    if (isPaddleErrorCode(err, PENDING_SCHEDULED_CHANGE)) throw CANCEL_SCHEDULED();
-    throw providerError(err, orgId, "set_seats");
+    const pendingCancel = isPaddleErrorCode(err, PENDING_SCHEDULED_CHANGE);
+    if (pendingCancel || paddleRefused(err)) {
+      await withdrawSeatChangeRequest(requestId, orgId);
+      throw pendingCancel ? CANCEL_SCHEDULED() : providerError(err, orgId, "set_seats");
+    }
+    // No answer, or a Paddle fault: the new count may be live. The request
+    // stays on record, with why it is unconfirmed.
+    const answer = providerError(err, orgId, "set_seats");
+    await recordSeatChangeUnconfirmed(attempt, classifyFailure(err));
+    throw answer;
   }
   return { status: "pending", seats };
 }
@@ -523,7 +487,7 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
   const subscriptionId = seatTarget(stored);
   await assertMemberFloor(prisma, orgId, seats);
   requirePaddleKey();
-  const mark = await lastSeatChange(orgId);
+  const read: LiveRead = { startedAt: new Date(), mark: await lastSeatChange(orgId) };
   const item = await liveSeatItem(subscriptionId, orgId);
   if (item.quantity === seats) {
     return { status: stored.seatsPurchased === seats ? "unchanged" : "pending", seats };
@@ -532,9 +496,15 @@ export async function changeSeats(userId: string, body: unknown): Promise<SeatCh
     seats > item.quantity
       ? await requireIncreasePayer(userId, orgId, stored, item.quantity, seats)
       : null;
-  return withOrgLock(orgId, (tx) =>
-    applySeatChange(tx, { userId, orgId, subscriptionId, item, seats, mark, payer }),
-  );
+  const attempt: SeatChangeAttempt = {
+    orgId,
+    actorUserId: userId,
+    from: item.quantity,
+    to: seats,
+    payer,
+  };
+  const change: SeatChange = { subscriptionId, priceId: item.priceId, read, attempt };
+  return withOrgLock(orgId, (tx) => applySeatChange(tx, change));
 }
 
 /** The subscription a period-end cancel may act on: billing, and not paused. */

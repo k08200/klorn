@@ -23,6 +23,7 @@ export type OrgAuditAction =
   | "billing.checkout_started"
   | "billing.subscription_changed"
   | "billing.seats_change_requested"
+  | "billing.seats_change_unconfirmed"
   | "billing.seats_increase_refused"
   | "billing.cancel_scheduled"
   | "billing.cancel_removed"

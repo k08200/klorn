@@ -76,7 +76,10 @@ each teammate's calendar. A company that adopts Klorn also removes the
   their own-plan caps), bounded per member at 10× the seat target (the
   anomaly brake), and never less than their own plan's cap. Unfilled paid
   seats feed the pool; a member removed mid-day drops out of the sum. The sum
-  reads cost cents only, re-read at most every 30 s per user.
+  reads cost cents only, re-read at most every 30 s per organization (one
+  roster and one ledger read serve every member; `org/seat-cache.ts`). BYOK
+  on a seat reads the same 30 s seat cache, so a removed seat stops both
+  within 30 s; every other plan gate reads the seat uncached.
 - Global ceiling (`billing/global-cost-ceiling.ts`): until the scaling
   breaker (PR6) is built, `GLOBAL_DAILY_COST_CAP_CENTS` (default 5000¢) stays
   the base for everyone else, and every purchased seat of an organization
@@ -202,10 +205,19 @@ subscription webhook does.
   change call itself and answered `CANCEL_SCHEDULED`, with no audit row.
 - **A stale live read is refused.** Whether a request is an increase is
   decided from the live quantity read before the org lock. Under the lock, a
-  seat change committed since that read (its audit row commits with its
-  Paddle call) answers `SEATS_CHANGED`, so two concurrent decreases by a
-  non-payer cannot add up to an unchecked increase.
-- **Audit.** Every allowed change is `billing.seats_change_requested`; a
+  seat change requested since that read answers `SEATS_CHANGED`, so two
+  concurrent decreases by a non-payer cannot add up to an unchecked increase.
+  Its audit row is committed under the lock before its Paddle call, so a
+  change requested up to 10 s (the call's 6 s timeout plus clock margin)
+  before the read answers the same — Paddle may have answered the read before
+  applying it; a second change within ~10 s of the last one is refused and
+  can be retried. So does a change still unconfirmed from the last two
+  minutes: Paddle may apply it after a later request read the count.
+- **Audit.** Every allowed change is `billing.seats_change_requested` (taken
+  back when Paddle refuses the call, so a refused change leaves no row). A
+  call Paddle never answered — a timeout, a dropped connection, a 5xx — also
+  writes `billing.seats_change_unconfirmed` with the failure class (a
+  `ProviderFailureCode`, never Paddle's text): the new count may be live. A
   refused payer check is `billing.seats_increase_refused`,
   `billing.resume_refused` or `billing.portal_refused`, with the reason class
   only (`not_payer`,

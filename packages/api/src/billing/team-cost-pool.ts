@@ -26,7 +26,13 @@
 
 import { TEAM_SEAT_DAILY_COST_CAP_CENTS } from "../config.js";
 import { prisma } from "../db.js";
-import { heldTeamSeat } from "../org/effective-tier.js";
+import type { TeamSeat } from "../org/effective-tier.js";
+import {
+  __resetSeatCacheForTest,
+  cachedHeldTeamSeat,
+  SEAT_CACHE_TTL_MS,
+} from "../org/seat-cache.js";
+import { createSharedRead } from "../shared-read.js";
 
 /** pricing-tiers.md "anomaly brake": 10x the target stops a runaway loop. */
 export const TEAM_MEMBER_BRAKE_MULTIPLIER = 10;
@@ -35,57 +41,88 @@ export const TEAM_MEMBER_BRAKE_MULTIPLIER = 10;
 export const TEAM_MEMBER_FLOOR_SHARE = 0.5;
 
 /**
- * The pool is re-read at most this often per user and day. resolveCapCents
- * runs twice per LLM call (check, then record), and a cache miss costs three
- * queries (membership, roster, ledger). Staleness is bounded: other members'
- * spend in the last 30 s, and a lapsed or removed seat keeps its pool for 30 s.
+ * Today's spend is read at most this often per organization, the seat
+ * lookup's window (org/seat-cache.ts, which reads one roster per
+ * organization). resolveCapCents runs twice per LLM call; one ledger read per
+ * organization and window serves every member (concurrent misses share it),
+ * where a read per member cost a 150-seat team 150. Staleness is bounded:
+ * other members' spend in the last 30 s, and a lapsed or removed seat keeps
+ * its pool for 30 s.
  */
-const POOL_TTL_MS = 30_000;
-/** A failed lookup is retried after 5 s, not on every call (no report flood). */
+const SPEND_TTL_MS = SEAT_CACHE_TTL_MS;
+/** A failed read is retried after 5 s, not on every call (no report flood). */
 const FAILURE_TTL_MS = 5_000;
-const POOL_CACHE_MAX = 5_000;
+const SPEND_CACHE_MAX = 1_000;
 
-interface CachedPool {
+/** One organization's seated members' spend today: null after a failed read. */
+interface CachedSpend {
   dayKey: string;
   expiresAt: number;
-  capCents: number | null;
+  spent: ReadonlyMap<string, number> | null;
 }
 
-const poolCache = new Map<string, CachedPool>();
+const spendCache = new Map<string, CachedSpend>();
+const sharedSpendRead = createSharedRead<ReadonlyMap<string, number>>();
 
 function utcDayKey(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
-async function othersCountedSpend(others: string[], dayKey: string): Promise<number> {
-  if (others.length === 0) return 0;
-  const rows = await prisma.llmCostLedger.groupBy({
-    by: ["userId"],
-    where: { userId: { in: others }, dayKey },
-    _sum: { cents: true },
-  });
-  const spent = new Map(rows.map((row) => [row.userId, row._sum.cents ?? 0]));
-  const floor = Math.floor(TEAM_SEAT_DAILY_COST_CAP_CENTS * TEAM_MEMBER_FLOOR_SHARE);
-  return others.reduce((sum, id) => sum + Math.max(spent.get(id) ?? 0, floor), 0);
+function remember(orgId: string, entry: CachedSpend): void {
+  spendCache.delete(orgId);
+  if (spendCache.size >= SPEND_CACHE_MAX) {
+    const oldest = spendCache.keys().next().value;
+    if (oldest !== undefined) spendCache.delete(oldest);
+  }
+  spendCache.set(orgId, entry);
 }
 
-async function computePoolCapCents(userId: string, dayKey: string): Promise<number | null> {
-  const seat = await heldTeamSeat(userId);
-  if (!seat) return null;
+/**
+ * Today's ledger cents per seated member of the seat's organization. A member
+ * seated after the read counts at the floor until the next one.
+ */
+async function seatedSpendToday(
+  seat: TeamSeat,
+  dayKey: string,
+  now: number,
+): Promise<ReadonlyMap<string, number> | null> {
+  const cached = spendCache.get(seat.orgId);
+  if (cached && cached.dayKey === dayKey && now < cached.expiresAt) return cached.spent;
+  return sharedSpendRead(`${seat.orgId}:${dayKey}`, () => readSeatedSpend(seat, dayKey, now));
+}
+
+async function readSeatedSpend(
+  seat: TeamSeat,
+  dayKey: string,
+  now: number,
+): Promise<ReadonlyMap<string, number>> {
+  const rows = await prisma.llmCostLedger
+    .groupBy({
+      by: ["userId"],
+      where: { userId: { in: [...seat.seatedUserIds] }, dayKey },
+      _sum: { cents: true },
+    })
+    .catch((err: unknown) => {
+      remember(seat.orgId, { dayKey, expiresAt: now + FAILURE_TTL_MS, spent: null });
+      throw err;
+    });
+  const spent: ReadonlyMap<string, number> = new Map(
+    rows.map((row) => [row.userId, row._sum.cents ?? 0]),
+  );
+  remember(seat.orgId, { dayKey, expiresAt: now + SPEND_TTL_MS, spent });
+  return spent;
+}
+
+/** What the pool leaves `userId`: the others count at least the floor, all of it under the brake. */
+function poolLeftCents(userId: string, seat: TeamSeat, spent: ReadonlyMap<string, number>): number {
+  const floor = Math.floor(TEAM_SEAT_DAILY_COST_CAP_CENTS * TEAM_MEMBER_FLOOR_SHARE);
+  const counted = seat.seatedUserIds.reduce(
+    (sum, id) => (id === userId ? sum : sum + Math.max(spent.get(id) ?? 0, floor)),
+    0,
+  );
   const pool = seat.seatsPurchased * TEAM_SEAT_DAILY_COST_CAP_CENTS;
-  const others = seat.seatedUserIds.filter((id) => id !== userId);
-  const counted = await othersCountedSpend(others, dayKey);
   const brake = TEAM_SEAT_DAILY_COST_CAP_CENTS * TEAM_MEMBER_BRAKE_MULTIPLIER;
   return Math.min(Math.max(0, pool - counted), brake);
-}
-
-function remember(userId: string, entry: CachedPool): void {
-  poolCache.delete(userId);
-  if (poolCache.size >= POOL_CACHE_MAX) {
-    const oldest = poolCache.keys().next().value;
-    if (oldest !== undefined) poolCache.delete(oldest);
-  }
-  poolCache.set(userId, entry);
 }
 
 /**
@@ -95,22 +132,16 @@ function remember(userId: string, entry: CachedPool): void {
  * back — and then reads as "no pool" for FAILURE_TTL_MS.
  */
 export async function teamPoolCapCents(userId: string, now = new Date()): Promise<number | null> {
-  const dayKey = utcDayKey(now);
-  const cached = poolCache.get(userId);
-  if (cached && cached.dayKey === dayKey && now.getTime() < cached.expiresAt) {
-    return cached.capCents;
-  }
-  try {
-    const capCents = await computePoolCapCents(userId, dayKey);
-    remember(userId, { dayKey, expiresAt: now.getTime() + POOL_TTL_MS, capCents });
-    return capCents;
-  } catch (err) {
-    remember(userId, { dayKey, expiresAt: now.getTime() + FAILURE_TTL_MS, capCents: null });
-    throw err;
-  }
+  const seat = await cachedHeldTeamSeat(userId, now.getTime());
+  if (!seat) return null;
+  if (!seat.seatedUserIds.some((id) => id !== userId))
+    return poolLeftCents(userId, seat, new Map());
+  const spent = await seatedSpendToday(seat, utcDayKey(now), now.getTime());
+  return spent === null ? null : poolLeftCents(userId, seat, spent);
 }
 
-/** Test seam: forget every cached pool. */
+/** Test seam: forget every cached pool (and the seats it reads). */
 export function __resetTeamPoolCacheForTest(): void {
-  poolCache.clear();
+  spendCache.clear();
+  __resetSeatCacheForTest();
 }
