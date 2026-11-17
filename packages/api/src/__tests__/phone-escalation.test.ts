@@ -337,17 +337,44 @@ describe("placeEscalationCall — hard caps", () => {
     expect(callCreates).toHaveLength(0);
   });
 
+  // The daily cap counts calls since 00:00 UTC of `now`. These pass a fixed
+  // `now` instead of reading the wall clock: seeded "20 minutes ago" from the
+  // real clock, a run between 00:00 and 00:20 UTC put every seed in yesterday
+  // and the cap never engaged.
+  const NOON_UTC = new Date("2026-06-12T12:00:00Z");
+
   it("enforces the default daily cap of 3 calls per user", async () => {
     for (let i = 0; i < 3; i++) {
       seedEscalation({
         notificationId: `prior-${i}`,
-        createdAt: new Date(Date.now() - 20 * MINUTES),
+        createdAt: new Date(NOON_UTC.getTime() - 20 * MINUTES),
       });
     }
     const { placeEscalationCall } = await loadModule();
-    const result = await placeEscalationCall("u1", { notificationId: "n-new", title: "T" });
+    const result = await placeEscalationCall(
+      "u1",
+      { notificationId: "n-new", title: "T" },
+      NOON_UTC,
+    );
     expect(result).toEqual({ placed: false, reason: "daily_cap_reached" });
     expect(callCreates).toHaveLength(0);
+  });
+
+  it("counts the cap per UTC day: yesterday's calls do not count against today", async () => {
+    const justAfterMidnight = new Date("2026-06-12T00:05:00Z");
+    for (let i = 0; i < 3; i++) {
+      seedEscalation({
+        notificationId: `prior-${i}`,
+        createdAt: new Date("2026-06-11T23:40:00Z"),
+      });
+    }
+    const { placeEscalationCall } = await loadModule();
+    const result = await placeEscalationCall(
+      "u1",
+      { notificationId: "n-new", title: "T" },
+      justAfterMidnight,
+    );
+    expect(result).toEqual({ placed: true });
   });
 
   it("honors PHONE_ESCALATION_DAILY_CAP overrides", async () => {
@@ -355,11 +382,15 @@ describe("placeEscalationCall — hard caps", () => {
     for (let i = 0; i < 3; i++) {
       seedEscalation({
         notificationId: `prior-${i}`,
-        createdAt: new Date(Date.now() - 20 * MINUTES),
+        createdAt: new Date(NOON_UTC.getTime() - 20 * MINUTES),
       });
     }
     const { placeEscalationCall } = await loadModule();
-    const result = await placeEscalationCall("u1", { notificationId: "n-new", title: "T" });
+    const result = await placeEscalationCall(
+      "u1",
+      { notificationId: "n-new", title: "T" },
+      NOON_UTC,
+    );
     expect(result).toEqual({ placed: true });
   });
 
