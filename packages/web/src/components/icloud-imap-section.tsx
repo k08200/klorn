@@ -26,6 +26,8 @@ interface ICloudImapStatus {
   connected: boolean;
   /** Whether a NEW mailbox may be connected now (first free, second Pro). */
   canConnect?: boolean;
+  /** False when only the way out is open (the flag is off): disconnect, not reconnect. */
+  connectOpen?: boolean;
   email: string | null;
   host: string | null;
   connectedAt: string | null;
@@ -240,7 +242,14 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
             </div>
           </div>
           {firstAccount && (
-            <ImapAccountStatus kind="icloud" account={firstAccount} onReconnected={loadStatus} />
+            <ImapAccountStatus
+              kind="icloud"
+              account={firstAccount}
+              onReconnected={loadStatus}
+              // False while ICLOUD_INBOX_ENABLED is off and /status answers only
+              // because this user still owns the mailbox: disconnect, no reconnect.
+              canReconnect={status.connectOpen !== false}
+            />
           )}
           {firstSync !== null && <FirstSyncNote started={firstSync} />}
           {error && (

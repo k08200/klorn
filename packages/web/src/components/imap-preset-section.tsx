@@ -31,6 +31,7 @@ import {
   type PresetAccount,
   type PresetStatus,
   presetCardView,
+  presetConnectOpen,
   presetProbeReducer,
 } from "../lib/imap-preset-status";
 import type { ImapPreset } from "../lib/imap-presets";
@@ -181,6 +182,7 @@ export function ImapPresetSection({ preset, embedded = false, onChanged }: ImapP
               preset={preset}
               account={account}
               busy={busy}
+              canReconnect={presetConnectOpen(probe.status)}
               onDisconnect={disconnect}
               onReconnected={loadStatus}
             />
@@ -238,6 +240,8 @@ interface PresetAccountRowProps {
   preset: ImapPreset;
   account: PresetAccount;
   busy: boolean;
+  /** The preset's connect route is open to this user (presetConnectOpen). */
+  canReconnect: boolean;
   onDisconnect: (email: string) => void;
   onReconnected: () => Promise<void>;
 }
@@ -246,6 +250,7 @@ function PresetAccountRow({
   preset,
   account,
   busy,
+  canReconnect,
   onDisconnect,
   onReconnected,
 }: PresetAccountRowProps) {
@@ -276,7 +281,12 @@ function PresetAccountRow({
           </Button>
         </div>
       </div>
-      <ImapAccountStatus kind={preset.slug} account={account} onReconnected={onReconnected} />
+      <ImapAccountStatus
+        kind={preset.slug}
+        account={account}
+        onReconnected={onReconnected}
+        canReconnect={canReconnect}
+      />
     </div>
   );
 }

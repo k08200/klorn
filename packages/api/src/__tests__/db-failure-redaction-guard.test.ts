@@ -71,7 +71,7 @@ const ALLOWED: ReadonlyArray<{ file: string; fragment: string; reason: string }>
     file: "mail/imap-pinned-client.ts",
     fragment: "refused a connection to",
     reason:
-      "Inside `instanceof PinnedAddressError`: its code, resolver code and blocked addresses are set by our own address check (mail/pinned-address.ts), never by the server; the host is the user's own IMAP server.",
+      "Inside `instanceof PinnedAddressError`: its code, resolver code and blocked addresses are set by our own address check (mail/pinned-address.ts), never by the server; the line names the account row, never the user's host.",
   },
 ];
 

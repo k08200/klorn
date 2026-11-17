@@ -16,6 +16,7 @@ import {
   type ImapStatusAccount,
   imapAccountStatus,
   lastSyncCopy,
+  PROVIDER_LABEL,
   syncProblemKey,
 } from "../lib/account-health";
 import { apiFetch } from "../lib/api";
@@ -33,9 +34,20 @@ interface ImapAccountStatusProps {
   account: ImapStatusAccount;
   /** The reconnect succeeded: the caller reloads its status. */
   onReconnected: () => void | Promise<void>;
+  /**
+   * False when the provider's connect route is closed to this user (its flag was
+   * turned off after they connected): no reconnect form, which could only fail,
+   * and a line saying the mailbox is not synced but can still be disconnected.
+   */
+  canReconnect?: boolean;
 }
 
-export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountStatusProps) {
+export function ImapAccountStatus({
+  kind,
+  account,
+  onReconnected,
+  canReconnect = true,
+}: ImapAccountStatusProps) {
   const { t } = useT();
   // The wire provider is the slug in capitals (ICLOUD, NAVER, DAUM, …).
   const provider = kind.toUpperCase() as Uppercase<ImapAccountKind>;
@@ -80,7 +92,8 @@ export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountS
   return (
     <div className="mt-2 space-y-2">
       <p className="text-role-caption text-ink-mid">{t(sync.key, sync.vars)}</p>
-      {problem && (
+      {/* A paused provider is not polled: its last failure is stale news. */}
+      {problem && canReconnect && (
         <p
           role={status === "reconnect" ? "alert" : undefined}
           className="text-role-body text-state-danger-ink"
@@ -88,7 +101,12 @@ export function ImapAccountStatus({ kind, account, onReconnected }: ImapAccountS
           {t(problem)}
         </p>
       )}
-      {status === "reconnect" && (
+      {!canReconnect && (
+        <p className="text-role-body text-ink-mid">
+          {t("imap.connectPaused", { provider: PROVIDER_LABEL[provider] })}
+        </p>
+      )}
+      {canReconnect && status === "reconnect" && (
         <form onSubmit={reconnect} className="flex flex-wrap items-end gap-2">
           <div className="min-w-56 flex-1">
             <Input

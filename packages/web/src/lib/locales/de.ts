@@ -243,6 +243,15 @@ const de: Record<string, string> = {
   "today.lane.push.older": "Ältere {lane}-Mails ansehen",
   "today.cover.openInbox": "Gesamten Posteingang öffnen",
   "today.cover.meter": "{used} von {limit} Unterbrechungen heute",
+  "today.brief.headline.none": "Gerade wartet nichts auf dich",
+  "today.brief.headline.one": "1 wartet jetzt auf dich",
+  "today.brief.headline.many": "{count} warten jetzt auf dich",
+  "today.brief.meetings.one": "1 Termin",
+  "today.brief.meetings.many": "{count} Termine",
+  "today.brief.next.label": "Als Nächstes",
+  "today.brief.next.now": "Jetzt",
+  "today.brief.next.one": "Danach",
+  "today.brief.quiet": "Still sortiert",
   "today.held.title": "Zurückgehalten · {count}",
   "today.held.caption":
     "Dringend, aber das heutige Limit war erreicht, daher kam keine Benachrichtigung.",
@@ -2293,6 +2302,8 @@ const de: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Für einen weiteren Kalender ist ein Pro-Abo erforderlich.",
   "imap.error.connectFailed": "Verbindung fehlgeschlagen.",
   "imap.error.disconnectFailed": "Trennen fehlgeschlagen.",
+  "imap.connectPaused":
+    "Klorn hat die Synchronisierung von {provider} pausiert. Sie können dieses Postfach weiterhin trennen.",
   "imap.confirmDisconnect.message":
     "Bereits sortierte E-Mails bleiben erhalten. Sie können das Postfach jederzeit wieder verbinden.",
   "imap.hostSince": "Host: {host} · seit",

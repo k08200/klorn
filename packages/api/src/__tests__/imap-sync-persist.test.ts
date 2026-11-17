@@ -46,7 +46,8 @@ const judgeEmail = vi.hoisted(() => vi.fn());
 vi.mock("../judge/email-firewall.js", () => ({ persistGmailEmail }));
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
 vi.mock("../db.js", () => ({ prisma: {}, db: {} }));
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock("../sentry.js", () => ({ captureError }));
 
 const { syncImapInbox } = await import("../mail/imap-sync.js");
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
@@ -97,6 +98,42 @@ describe("syncImapInbox → shared persist path", () => {
     vi.clearAllMocks();
     imap.ctorOpts.length = 0;
     armImap();
+  });
+
+  it("a persist failure names the account row and the UID, never the mailbox address", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    persistGmailEmail.mockRejectedValue(new Error("persist broke"));
+
+    const result = await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    expect(result.errors).toBe(2);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        extra: expect.objectContaining({
+          userId: "u1",
+          linkedInboxAccountId: "acc-naver",
+          uid: 101,
+        }),
+      }),
+    );
+    const sent = JSON.stringify(captureError.mock.calls);
+    const logged = JSON.stringify([...error.mock.calls, ...warn.mock.calls]);
+    for (const text of [sent, logged]) {
+      expect(text).not.toContain("me@naver.com");
+      expect(text).not.toContain("stableId");
+    }
+    expect(logged).toContain("acc-naver");
+    error.mockRestore();
+    warn.mockRestore();
   });
 
   it("hands each message to persistGmailEmail as a normalized raw email", async () => {

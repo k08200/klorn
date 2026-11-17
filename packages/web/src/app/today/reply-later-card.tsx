@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * One mail as a card with Reply and Later — the cover screen's "Needs you
- * now" cards (cover-view.tsx) and Today's "Held back" group (held-back.tsx).
+ * One mail as a card with Reply and Later — Today's "Held back" group
+ * (held-back.tsx). The phone brief's PUSH cards are push-brief-card.tsx.
  * Later is one tap: the reader's first choice, later today.
  */
 
