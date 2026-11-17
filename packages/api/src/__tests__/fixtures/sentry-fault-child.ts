@@ -24,7 +24,7 @@ const META_CANARY = process.env.FAULT_META_CANARY ?? "";
  * a tick; an uncaught exception ends the process after the SDK's shutdown
  * flush (up to 2 s), so its check waits well past that.
  */
-const ALIVE_AFTER_MS = mode === "rejection" ? 1_000 : 6_000;
+const ALIVE_AFTER_MS = mode === "rejection" ? 1_000 : 10_000;
 
 if (!envelopeFile || !MESSAGE_CANARY || !CAUSE_CANARY || !META_CANARY) {
   throw new Error("usage: sentry-fault-child.ts <mode> <variant> <envelope file>, canaries in env");

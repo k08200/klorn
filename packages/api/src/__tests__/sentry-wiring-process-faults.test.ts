@@ -128,6 +128,7 @@ describe("the unhandled-rejection listener", () => {
     const payload = capture.sent();
     expect(payload).toContain("auto.node.onunhandledrejection");
     expect(payload).toContain('"level":"error"');
+    expect(payload).toContain('"unhandledPromiseRejection":true');
     expect(payload).toContain("Unhandled promise rejection (PrismaClientValidationError)");
     expect(payload).toContain('"model":"Reminder"');
     expect(payload).toContain("faultQuotingTheCall");
@@ -147,7 +148,38 @@ describe("the unhandled-rejection listener", () => {
     const payload = capture.sent();
     expect(payload).toContain(`Unhandled promise rejection (non-Error ${typeof reason})`);
     expectNoCanary(payload);
-    expect(printedText()).toContain("UnknownError");
+    expect(printedText()).toContain(
+      `(non-Error ${typeof reason}); the process keeps running: UnknownError`,
+    );
+    expectNoCanary(printedText());
+  });
+
+  it("does not send again a fault Sentry already captured, as the SDK's client drops it", async () => {
+    const fault = faultQuotingTheCall();
+    Object.defineProperty(fault, "__sentry_captured__", { value: true, enumerable: false });
+    ourListener("unhandledRejection", "onUnhandledRejectionFacts")(fault);
+    await Sentry.flush(SENTRY_FLUSH_MS);
+
+    expect(capture.sent()).not.toContain("auto.node.onunhandledrejection");
+    expect(printedText()).toContain(
+      "Unhandled promise rejection (PrismaClientValidationError); the process keeps running",
+    );
+    expectNoCanary(printedText());
+  });
+
+  it("reports a fault whose fields throw on read, instead of throwing from the listener", async () => {
+    const hostile = new Proxy(new Error(MESSAGE_CANARY), {
+      get(target, key) {
+        if (key === "stack" || key === "message" || key === "code") throw new Error(CAUSE_CANARY);
+        return Reflect.get(target, key);
+      },
+    });
+    const listener = ourListener("unhandledRejection", "onUnhandledRejectionFacts");
+    expect(() => listener(hostile)).not.toThrow();
+    await Sentry.flush(SENTRY_FLUSH_MS);
+
+    expect(capture.sent()).toContain("Unhandled promise rejection (UnreadableFault)");
+    expectNoCanary(capture.sent());
     expectNoCanary(printedText());
   });
 
@@ -163,7 +195,7 @@ describe("the unhandled-rejection listener", () => {
 });
 
 describe("the uncaught-exception listener", () => {
-  it("leaves the process to another uncaughtException listener, reports the first fault as fatal facts, and only prints a later one", async () => {
+  it("leaves the process to another uncaughtException listener, reports the first fault as fatal facts, and only prints later ones", async () => {
     // Another listener (vitest's, and this one) means the process is not this
     // listener's to end, as with the SDK's. The exit path runs in the child test.
     const other = (): void => undefined;
@@ -185,8 +217,7 @@ describe("the uncaught-exception listener", () => {
         1,
       );
       expectNoCanary(payload);
-      expect(printedText()).toContain("left to another uncaughtException listener");
-      expect(printedText()).toContain("after the first one");
+      expect(printedText().match(/left to another uncaughtException listener/g)).toHaveLength(2);
       expectNoCanary(printedText());
       expect(exit).not.toHaveBeenCalled();
     } finally {

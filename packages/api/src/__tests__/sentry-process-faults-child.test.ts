@@ -120,6 +120,7 @@ describe("an unhandled rejection", () => {
 
     expect(after.envelope).toContain("auto.node.onunhandledrejection");
     expect(after.envelope).toContain('"level":"error"');
+    expect(after.envelope).toContain('"unhandledPromiseRejection":true');
     expect(after.envelope).toContain("PrismaClientValidationError");
     expect(after.envelope).toContain("faultQuotingTheCall");
     expect(leaked(after.envelope)).toEqual([]);
