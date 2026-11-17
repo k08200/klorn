@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseCli, USAGE } from "./args.js";
-import { backupCreate, backupList } from "./commands/backup.js";
+import { backupCreate, backupList, backupPrune } from "./commands/backup.js";
 import { doctor } from "./commands/doctor.js";
 import { migrateDeploy, migrateStatus } from "./commands/migrate.js";
 import { backupRestore } from "./commands/restore.js";
@@ -32,6 +32,7 @@ const COMMANDS: ReadonlyMap<string, Command> = new Map([
   ],
   ["backup create", { handler: backupCreate, args: 0, flags: ["db", "label", "json"] }],
   ["backup list", { handler: backupList, args: 0, flags: ["json"] }],
+  ["backup prune", { handler: backupPrune, args: 0, flags: ["keep", "older-than", "yes", "json"] }],
   [
     "backup restore",
     { handler: backupRestore, args: 1, flags: ["target", "yes", "no-backup", "i-know", "timeout"] },

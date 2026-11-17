@@ -298,6 +298,64 @@ describe("claimAndRunOutboxRow", () => {
     expect(outboxStore.get("ob-1")?.status).toBe("DEAD");
   });
 
+  it("reads tool-executor's classified failure ({error, code}) by its code", async () => {
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({ error: "Tool failed: provider unavailable", code: "PROVIDER_UNAVAILABLE" }),
+    );
+    expect((await claimAndRunOutboxRow(seedRow(), NOW)).kind).toBe("retry");
+    expect(outboxStore.get("ob-1")?.lastError).toBe(
+      "[transient] attempt 1/5: PROVIDER_UNAVAILABLE: Tool failed: provider unavailable",
+    );
+
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({ error: "Tool failed: internal error", code: "INTERNAL_ERROR" }),
+    );
+    expect((await claimAndRunOutboxRow(seedRow(), NOW)).kind).toBe("dead");
+    expect(paStore.get("pa-1")?.result).toBe("Tool failed: internal error");
+  });
+
+  it("retries a swallowed database pool timeout and dead-letters a send of unknown outcome", async () => {
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({
+        error: "Tool failed: service temporarily unavailable",
+        code: "SERVICE_UNAVAILABLE",
+      }),
+    );
+    expect((await claimAndRunOutboxRow(seedRow(), NOW)).kind).toBe("retry");
+
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({
+        error:
+          "Tool failed: the message may already have been sent; check Sent Items before retrying.",
+        code: "SEND_OUTCOME_UNKNOWN",
+      }),
+    );
+    expect((await claimAndRunOutboxRow(seedRow(), NOW)).kind).toBe("dead");
+  });
+
+  it("stores and answers a thrown failure's classification, never its text", async () => {
+    const canary = "CANARY-outbox quoted mail body";
+    executeToolCall.mockRejectedValue(
+      Object.assign(new Error(`Invalid \`prisma.note.create()\` invocation: ${canary}`), {
+        name: "PrismaClientValidationError",
+      }),
+    );
+    const outcome = await claimAndRunOutboxRow(seedRow(), NOW);
+
+    expect(outcome).toEqual({ kind: "dead", error: "Tool failed: internal error" });
+    const stored = JSON.stringify([
+      [...outboxStore.values()],
+      [...paStore.values()],
+      messages,
+      recordFeedback.mock.calls,
+    ]);
+    expect(stored).not.toContain("CANARY");
+    expect(outboxStore.get("ob-1")?.lastError).toBe(
+      "[permanent] attempt 1/5: INTERNAL_ERROR (PrismaClientValidationError)",
+    );
+    expect(paStore.get("pa-1")?.result).toBe("Tool failed: internal error");
+  });
+
   it("does NOT mistake a tool result that legitimately carries an error field", async () => {
     // {conflicts, error:null} or {error, data} are real results, not the
     // strict single-key {error:string} failure shape.
@@ -316,7 +374,7 @@ describe("claimAndRunOutboxRow", () => {
 
   it("retries a transient failure with backoff, staying QUEUED", async () => {
     const row = seedRow();
-    executeToolCall.mockRejectedValue(new Error("503 upstream"));
+    executeToolCall.mockRejectedValue(Object.assign(new Error("503 upstream"), { status: 503 }));
     const outcome = await claimAndRunOutboxRow(row, NOW);
     expect(outcome.kind).toBe("retry");
     const stored = outboxStore.get("ob-1");
@@ -326,19 +384,23 @@ describe("claimAndRunOutboxRow", () => {
     expect((stored?.nextAttemptAt as Date).getTime()).toBe(NOW.getTime() + 30_000);
     // PA stays EXECUTED (claimed), not FAILED
     expect(paStore.get("pa-1")?.status).toBe("EXECUTED");
-    // lastError is structured: category + attempt progress + message
-    expect(stored?.lastError).toBe("[transient] attempt 1/5: 503 upstream");
+    // lastError is structured: category + attempt progress + code and facts
+    expect(stored?.lastError).toBe("[transient] attempt 1/5: PROVIDER_UNAVAILABLE (Error 503)");
   });
 
   it("dead-letters a transient failure on the last allowed attempt", async () => {
     const row = seedRow({ attempts: 4, maxAttempts: 5 });
-    executeToolCall.mockRejectedValue(new Error("timeout"));
+    executeToolCall.mockRejectedValue(
+      Object.assign(new Error("timeout"), { name: "TimeoutError" }),
+    );
     const outcome = await claimAndRunOutboxRow(row, NOW);
     expect(outcome.kind).toBe("dead");
     expect(outboxStore.get("ob-1")?.status).toBe("DEAD");
     expect(paStore.get("pa-1")?.status).toBe("FAILED");
     // out of retries on a transient error → category says so
-    expect(outboxStore.get("ob-1")?.lastError).toBe("[transient-exhausted] attempt 5/5: timeout");
+    expect(outboxStore.get("ob-1")?.lastError).toBe(
+      "[transient-exhausted] attempt 5/5: PROVIDER_UNAVAILABLE (TimeoutError)",
+    );
   });
 
   it("dead-letters a permanent failure immediately, regardless of attempts left", async () => {

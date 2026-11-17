@@ -376,6 +376,9 @@ describe("flag ON: connect with a user-supplied host", () => {
         needsReconnect: false,
         syncErrorCode: null,
         syncErrorAt: null,
+        // A new password starts the login backoff over (mail/imap-auth-backoff.ts).
+        imapAuthFailures: 0,
+        imapAuthRetryAt: null,
       },
     });
     expect(db.create).not.toHaveBeenCalled();

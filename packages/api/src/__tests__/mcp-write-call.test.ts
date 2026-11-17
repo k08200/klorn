@@ -206,10 +206,16 @@ describe("runMcpWriteCall", () => {
   });
 
   it("settles error/exception when execution throws, and answers in-band", async () => {
-    executeToolCall.mockRejectedValueOnce(new Error("boom"));
+    executeToolCall.mockRejectedValueOnce(new Error("CANARY-write quoted mail body"));
     const result = await runMcpWriteCall(callFor(freshUser()));
+    expect(JSON.stringify(result)).not.toContain("CANARY");
     expect(result).toEqual({
-      content: [{ type: "text", text: JSON.stringify({ error: "boom" }) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ error: "Tool failed: internal error", code: "INTERNAL_ERROR" }),
+        },
+      ],
       isError: true,
     });
     expect(update).toHaveBeenCalledWith({
@@ -231,7 +237,7 @@ describe("runMcpWriteCall", () => {
     executeToolCall.mockRejectedValueOnce(new Error("boom"));
     const thrown = await runMcpWriteCall(callFor(freshUser()));
     expect(thrown.isError).toBe(true);
-    expect(JSON.parse(thrown.content[0]?.text ?? "{}").error).toBe("boom");
+    expect(JSON.parse(thrown.content[0]?.text ?? "{}").error).toBe("Tool failed: internal error");
   });
 
   it("refuses without executing when the audit insert fails, reporting user and key", async () => {

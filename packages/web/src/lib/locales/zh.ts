@@ -1736,6 +1736,9 @@ const zh: Record<string, string> = {
   "mailV2.reader.draftWithKlorn": "用 Klorn 起草",
   "mailV2.reader.later": "稍后",
   "mailV2.reader.done": "完成",
+  "mailV2.row.select": "选择",
+  "mailV2.row.moreFor": "更多操作：{subject}",
+  "mailV2.reader.whyRang": "为何提醒",
   "mailV2.reader.unsorted": "Klorn 尚未对这封邮件分类。",
   "mailV2.reader.label.add": "添加标签",
   "mailV2.reader.label.a11y": "发件人标签：{label}。更正标签",
@@ -2085,6 +2088,7 @@ const zh: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "连接其他日历需要 Pro 订阅。",
   "imap.error.connectFailed": "连接失败。",
   "imap.error.disconnectFailed": "断开连接失败。",
+  "imap.connectPaused": "Klorn 已暂停 {provider} 同步。你仍可以断开此邮箱的连接。",
   "imap.confirmDisconnect.message": "已分类的邮件会保留。你可以随时重新连接该邮箱。",
   "imap.hostSince": "主机：{host} · 连接于",
   "imap.icloud.title": "iCloud 邮件",
@@ -3149,6 +3153,17 @@ const zh: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.off": "代理已关闭",
   "settings.org.transparency.ceiling.cap.shadow": "代理只观察",
   "settings.org.transparency.ceiling.cap.suggest": "代理只提出建议，不会自行执行",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} 未连接。请在设置中重新连接。",
+  "providerFailure.scope":
+    "{service} 未授予 Klorn 所需的权限。请在设置中重新连接，并允许所有请求的权限。",
+  "providerFailure.notFound": "{service} 找不到该项目。它可能已被移动或删除。",
+  "providerFailure.rateLimited": "{service} 目前正在限制请求。请一分钟后重试。",
+  "providerFailure.unavailable": "{service} 目前不可用。请稍后重试。",
+  "providerFailure.tooManyRequests": "当前请求过多。请一分钟后重试。",
+  "providerFailure.dailyCap": "今天的 AI 额度已用完。明天会重置。",
+  "providerFailure.serviceUnavailable": "Klorn 暂时不可用。请稍后重试。",
+  "providerFailure.internal": "Klorn 这边出了问题。请稍后重试。",
 };
 
 export default zh;

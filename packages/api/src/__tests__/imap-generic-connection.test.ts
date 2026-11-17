@@ -311,8 +311,9 @@ describe("generic client: size limits on what a server may send", () => {
 describe("generic client: time bounds", () => {
   it("the DNS wait counts against the connect timeout: a resolver that never answers ends the connect on time", async () => {
     vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     fake.resolve.mockImplementation(() => new Promise(() => {}));
-    const client = build();
+    const client = build({ accountId: "row-g" });
     const outcome = client.connect().then(
       () => "connected",
       (err: Error) => err.message,
@@ -325,6 +326,10 @@ describe("generic client: time bounds", () => {
     expect(await outcome).toMatch(/timed out/i);
     expect(fake.connect).not.toHaveBeenCalled();
     expect(fake.close).toHaveBeenCalledTimes(1);
+    // The line names the row, not the user's server.
+    const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(line).toContain("connection to the server for row row-g timed out");
+    expect(line).not.toContain("example.com");
   });
 
   it("DNS and the socket share ONE budget: 4 s of DNS leaves the connection only the rest", async () => {
@@ -419,6 +424,27 @@ describe("generic client: what is logged when a name is refused", () => {
     expect(line).toContain("unresolvable (ENOTFOUND)");
   });
 
+  // A user-supplied host can name a person or a company: the line names the row.
+  it("names the account row, never the user's server", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fake.resolve.mockResolvedValue(["10.0.0.5"]);
+    await expect(build({ accountId: "row-g" }).connect()).rejects.toBeInstanceOf(
+      PinnedAddressError,
+    );
+    const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(line).toContain("refused a connection to the server for row row-g: blocked-address");
+    expect(line).not.toContain("example.com");
+  });
+
+  it("a verify (no row yet) names neither a row nor the server", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fake.resolve.mockResolvedValue(["10.0.0.5"]);
+    await expect(build().connect()).rejects.toBeInstanceOf(PinnedAddressError);
+    const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(line).toContain("refused a connection to the server: blocked-address");
+    expect(line).not.toContain("example.com");
+  });
+
   it("names the blocked class and the addresses for the ops log", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     fake.resolve.mockResolvedValue([PUBLIC_IP, "169.254.169.254"]);
@@ -500,15 +526,17 @@ describe("generic client: a byte budget for the whole session (every command, ev
     expect(fake.close).toHaveBeenCalledTimes(1);
   });
 
-  it("logs the cut-off once, as one line, naming the host and the budget", () => {
+  it("logs the cut-off once, as one line, naming the row and the budget, never the host", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const write = writeOf(build());
+    const write = writeOf(build({ accountId: "row-g" }));
     write(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET + 1));
     write(Buffer.alloc(MIB));
     write(Buffer.alloc(MIB));
     const lines = warn.mock.calls.map((call) => call.join(" ")).filter((l) => /budget/i.test(l));
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("imap.example.com");
+    expect(lines[0]).toContain("row row-g");
+    expect(lines[0]).toContain("MiB byte budget");
+    expect(lines[0]).not.toContain("example.com");
     expect(lines[0]).not.toMatch(/[\r\n]/);
   });
 

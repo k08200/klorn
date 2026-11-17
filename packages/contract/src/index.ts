@@ -23,6 +23,7 @@ export type * from "./inbox-summary.js";
 export type * from "./meeting-prep.js";
 export type * from "./notification-center.js";
 export type * from "./orgs.js";
+export type * from "./provider-failure.js";
 export type * from "./providers.js";
 export type * from "./push.js";
 export type * from "./receipt.js";

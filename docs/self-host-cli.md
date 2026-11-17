@@ -50,6 +50,7 @@ that checkout's prisma).
 | `klorn migrate deploy [--yes] [--no-backup]` | Back up, then `prisma migrate deploy`. |
 | `klorn backup create [--label <name>]` | `pg_dump` (custom format) into the backup directory, with a sha256. |
 | `klorn backup list [--json]` | The backups in the backup directory, newest first. |
+| `klorn backup prune [--keep <N>] [--older-than <days>] [--yes] [--json]` | Retention: delete old backups. A dry run unless `--yes`; the newest backup is never deleted. |
 | `klorn backup restore <file> --target <db> [--yes] [--no-backup] [--i-know]` | Replace the target's Klorn tables with a dump. |
 | `klorn up` | `docker compose up -d`, then wait until `/api/health` is ok. |
 | `klorn upgrade <version> [--yes] [--no-backup] [--allow-downgrade]` | Pull, back up, migrate, restart, and verify a release. |
@@ -59,7 +60,8 @@ Common options: `--compose-file`, `--env-file`, `--backup-dir` (default
 `$KLORN_API_URL`, else `NEXT_PUBLIC_API_URL` from the env file, else
 `http://localhost:3001`), `--web-url` (default `$KLORN_WEB_URL`, else
 `WEB_URL`, else `http://localhost:3000`), `--timeout <seconds>` (health wait:
-`up` and `restore` 180, `upgrade` 300), `-y/--yes`.
+`up` and `restore` 180, `upgrade` 300), `-y/--yes` (skip a confirmation
+prompt; for `backup prune` it is what makes the deletion real).
 
 ## Which database: `--db` and `--target`
 
@@ -160,12 +162,47 @@ pnpm klorn backup list
 key and every Google connection has to be reconnected. Keep a copy of
 `.env.selfhost` too — somewhere other than next to the dumps.
 
-There is no retention policy yet; prune old dumps yourself. A nightly cron
-entry, for example:
+A nightly cron entry, for example, with retention after it:
 
 ```cron
 15 3 * * * cd /srv/klorn && pnpm -s klorn backup create --label nightly >> /var/log/klorn-backup.log 2>&1
+45 3 * * * cd /srv/klorn && pnpm -s klorn backup prune --keep 14 --older-than 30 --yes >> /var/log/klorn-backup.log 2>&1
 ```
+
+### Retention: `klorn backup prune`
+
+```bash
+pnpm klorn backup prune --keep 14                     # dry run: lists what would go
+pnpm klorn backup prune --keep 14 --older-than 30 --yes
+```
+
+At least one rule is required.
+
+- `--keep <N>` — keep the N newest backups.
+- `--older-than <days>` — delete only backups older than that, by the
+  timestamp in the file name (not the file's mtime, which a copy resets).
+- With both, a backup is deleted only when **both** select it: it is beyond
+  the N newest **and** older than the cutoff. Either rule alone protects it.
+  `--keep 14 --older-than 30` means "at least 14 backups, and nothing younger
+  than 30 days".
+- **Dry run by default.** Without `--yes` it prints what it would delete and
+  the space it would free, and deletes nothing.
+- **The newest backup is never deleted**, whatever the rules say.
+- Labels get no special treatment: an old `pre-upgrade` or `pre-restore` dump
+  goes like any other, so leave a margin.
+- It touches only `klorn-<timestamp>[-<label>].dump` regular files and their
+  `.sha256` sidecars in the backup directory. Other files, a `.partial` dump
+  (a backup in progress), a sidecar with no dump, directories and symlinks
+  are left alone; a symlink is never followed. A backup whose sidecar is not a
+  regular file is skipped and reported, not half-deleted.
+- It refuses a backup directory that is `/` or a home directory, and one that
+  other users can write to.
+- The dump is deleted first, then its sidecar. Any file it fails to delete is
+  reported on stderr (and in `--json` under `errors`), the rest continue, and
+  the exit code is 1.
+
+`--json` prints `{ dir, dryRun, rules, total, kept, candidates, candidateBytes,
+deleted, freedBytes, errors }`; `bytes` counts the dump and its sidecar.
 
 ### Restore safety rules
 

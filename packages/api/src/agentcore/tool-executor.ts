@@ -46,7 +46,9 @@ import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
+import { FloorReceiptRequiredError } from "./floor-receipt-error.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
+import { ToolValidationError, toolFailureResult } from "./tool-failure.js";
 import { capToolResult } from "./tool-result-budget.js";
 
 const TIME_TOOL = {
@@ -208,10 +210,10 @@ export function isToolAllowedForPlan(toolName: string, plan: string, role?: stri
   return planHasFeature(plan, featureKey, role);
 }
 
-/** Basic string guard — returns trimmed string or throws */
+/** Basic string guard — returns trimmed string or throws (the message names the parameter only). */
 function requireString(val: unknown, name: string): string {
   if (typeof val !== "string" || val.trim().length === 0) {
-    throw new Error(`Missing or invalid parameter: ${name}`);
+    throw new ToolValidationError(`Missing or invalid parameter: ${name}`);
   }
   return val.trim();
 }
@@ -223,23 +225,9 @@ function safeInt(val: unknown, fallback: number, max: number): number {
   return Math.min(Math.round(n), max);
 }
 
-/**
- * Deterministic-floor enforcement on the caller side. When the tool being
- * invoked is in FLOOR_ACTIONS, the caller MUST provide a verified
- * ActionReceipt — otherwise this throws FloorReceiptRequiredError and the
- * action is refused before any side-effect.
- *
- * The receipt is minted at /approve time (chat-pending-actions.ts) so
- * direct executeToolCall callers (autonomous-agent, batch-executor) that
- * try to side-step the user approval flow now fail closed instead of
- * silently sending mail / forwarding / hard-deleting.
- */
-export class FloorReceiptRequiredError extends Error {
-  constructor(public readonly toolName: string) {
-    super(`floor action "${toolName}" requires a verified ActionReceipt — none provided`);
-    this.name = "FloorReceiptRequiredError";
-  }
-}
+// FloorReceiptRequiredError lives in floor-receipt-error.ts so tool-failure.ts
+// can match it with `instanceof` without importing this module.
+export { FloorReceiptRequiredError };
 
 /**
  * Server-side context for a call. Never derived from tool args, so a model
@@ -671,15 +659,16 @@ async function executeToolCallInternal(
       });
       throw err;
     }
-    // The model gets the message back as the tool result; Sentry gets facts
-    // only. LLM-backed tools (sender_context, summarize_meeting) throw
-    // provider errors that can quote mail, and every tool runs on
-    // model-written arguments that an error message can echo.
-    const message = err instanceof Error ? err.message : "Unknown error";
+    // The model gets the failure's classification as the tool result, and
+    // Sentry gets facts only. LLM-backed tools (sender_context,
+    // summarize_meeting) throw provider errors that can quote mail, a Prisma
+    // error renders other rows' values, and every tool runs on model-written
+    // arguments that an error message can echo — read back by the model, any
+    // of those is a prompt-injection channel (tool-failure.ts).
     captureLlmFailure("Agent tool failed", err, {
       tags: { area: "tool_executor", tool: functionName },
       extra: { userId, argKeys: Object.keys(args) },
     });
-    return JSON.stringify({ error: message });
+    return toolFailureResult(err);
   }
 }

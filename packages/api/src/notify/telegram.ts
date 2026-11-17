@@ -25,8 +25,16 @@ export interface TelegramInlineButton {
 
 export interface TelegramCallResult {
   ok: boolean;
+  /**
+   * Facts only, for a log line: the method, the HTTP status, Telegram's
+   * numeric `error_code`, or the thrown error's class. Never Telegram's
+   * `description` or an error's message — free text that can quote the
+   * request, and a fetch error's text embeds the token-bearing URL.
+   */
   description?: string;
 }
+
+const TELEGRAM_ERROR_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
 /** True when a BotFather token is configured (Telegram channel enabled). */
 export function isTelegramConfigured(): boolean {
@@ -66,20 +74,16 @@ async function callTelegram(
     });
     const json = (await res.json().catch(() => null)) as {
       ok?: boolean;
-      description?: string;
+      error_code?: unknown;
     } | null;
     if (!res.ok || !json?.ok) {
-      return {
-        ok: false,
-        description: redactBotToken(
-          `telegram ${method} failed: status=${res.status} ${json?.description ?? ""}`.trim(),
-        ),
-      };
+      const code = Number.isInteger(json?.error_code) ? ` error_code=${json?.error_code}` : "";
+      return { ok: false, description: `telegram ${method} failed: status=${res.status}${code}` };
     }
     return { ok: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, description: redactBotToken(`telegram ${method} error: ${message}`) };
+    const name = err instanceof Error && TELEGRAM_ERROR_NAME.test(err.name) ? err.name : "Error";
+    return { ok: false, description: `telegram ${method} error: ${name}` };
   }
 }
 

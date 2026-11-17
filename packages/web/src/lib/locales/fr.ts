@@ -1889,6 +1889,9 @@ const fr: Record<string, string> = {
   "mailV2.reader.draftWithKlorn": "Rédiger avec Klorn",
   "mailV2.reader.later": "Plus tard",
   "mailV2.reader.done": "Terminé",
+  "mailV2.row.select": "Sélectionner",
+  "mailV2.row.moreFor": "Plus d’actions : {subject}",
+  "mailV2.reader.whyRang": "Pourquoi cette alerte",
   "mailV2.reader.unsorted": "Klorn n'a pas encore classé ce courrier.",
   "mailV2.reader.label.add": "Ajouter une étiquette",
   "mailV2.reader.label.a11y": "Étiquette de l'expéditeur : {label}. Corriger l'étiquette",
@@ -2277,6 +2280,8 @@ const fr: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Connecter un autre agenda nécessite un abonnement Pro.",
   "imap.error.connectFailed": "La connexion a échoué.",
   "imap.error.disconnectFailed": "La déconnexion a échoué.",
+  "imap.connectPaused":
+    "Klorn a mis en pause la synchronisation {provider}. Vous pouvez toujours déconnecter cette boîte.",
   "imap.confirmDisconnect.message":
     "Les e-mails déjà classés sont conservés. Vous pouvez reconnecter la boîte à tout moment.",
   "imap.hostSince": "Hôte : {host} · depuis",
@@ -3455,6 +3460,22 @@ const fr: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "L’agent observe seulement",
   "settings.org.transparency.ceiling.cap.suggest":
     "L’agent propose seulement et n’agit jamais seul",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} n'est pas connecté. Reconnectez-le dans les Réglages.",
+  "providerFailure.scope":
+    "{service} n'a pas accordé une autorisation dont Klorn a besoin. Reconnectez-le dans les Réglages et acceptez toutes les autorisations demandées.",
+  "providerFailure.notFound":
+    "{service} n'a pas trouvé cet élément. Il a peut-être été déplacé ou supprimé.",
+  "providerFailure.rateLimited":
+    "{service} limite les requêtes en ce moment. Réessayez dans une minute.",
+  "providerFailure.unavailable":
+    "{service} est indisponible pour le moment. Réessayez dans un instant.",
+  "providerFailure.tooManyRequests": "Trop de requêtes en ce moment. Réessayez dans une minute.",
+  "providerFailure.dailyCap":
+    "La limite d'IA du jour est atteinte. Elle sera réinitialisée demain.",
+  "providerFailure.serviceUnavailable":
+    "Klorn est brièvement indisponible. Réessayez dans un instant.",
+  "providerFailure.internal": "Un problème est survenu de notre côté. Réessayez dans un instant.",
 };
 
 export default fr;

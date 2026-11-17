@@ -1835,6 +1835,9 @@ const ja: Record<string, string> = {
   "mailV2.reader.draftWithKlorn": "Klorn で下書き",
   "mailV2.reader.later": "あとで",
   "mailV2.reader.done": "完了",
+  "mailV2.row.select": "選択",
+  "mailV2.row.moreFor": "その他の操作: {subject}",
+  "mailV2.reader.whyRang": "通知した理由",
   "mailV2.reader.unsorted": "Klorn はまだこのメールを振り分けていません。",
   "mailV2.reader.label.add": "ラベルを追加",
   "mailV2.reader.label.a11y": "送信者ラベル: {label}。ラベルを修正",
@@ -2221,6 +2224,8 @@ const ja: Record<string, string> = {
     "別のカレンダーを接続するには Pro サブスクリプションが必要です。",
   "imap.error.connectFailed": "接続に失敗しました。",
   "imap.error.disconnectFailed": "接続の解除に失敗しました。",
+  "imap.connectPaused":
+    "Klorn は {provider} の同期を一時停止しています。このメールボックスの接続解除は引き続き行えます。",
   "imap.confirmDisconnect.message":
     "分類済みのメールはそのまま残ります。メールボックスはいつでも再接続できます。",
   "imap.hostSince": "ホスト: {host} · 接続日時",
@@ -3388,6 +3393,22 @@ const ja: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "エージェントは観察のみ行います",
   "settings.org.transparency.ceiling.cap.suggest":
     "エージェントは提案のみ行い、自分では実行しません",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} が接続されていません。設定から再接続してください。",
+  "providerFailure.scope":
+    "{service} で Klorn に必要な権限が許可されていません。設定から再接続し、要求されたすべての権限を許可してください。",
+  "providerFailure.notFound":
+    "{service} でその項目が見つかりません。移動または削除された可能性があります。",
+  "providerFailure.rateLimited":
+    "{service} が現在リクエストを制限しています。1 分後にもう一度お試しください。",
+  "providerFailure.unavailable":
+    "現在 {service} を利用できません。しばらくしてからもう一度お試しください。",
+  "providerFailure.tooManyRequests": "現在リクエストが多すぎます。1 分後にもう一度お試しください。",
+  "providerFailure.dailyCap": "本日の AI 利用上限に達しました。明日リセットされます。",
+  "providerFailure.serviceUnavailable":
+    "Klorn が一時的に利用できません。しばらくしてからもう一度お試しください。",
+  "providerFailure.internal":
+    "Klorn 側で問題が発生しました。しばらくしてからもう一度お試しください。",
 };
 
 export default ja;

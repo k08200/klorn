@@ -3,6 +3,8 @@ import { prisma } from "../db.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { logLlmFailure } from "../llm/report-llm-failure.js";
+import { storedFailure } from "../public-failure.js";
 import { wrapUntrusted } from "../untrusted.js";
 
 const MAX_STORED_TEXT = 24_000;
@@ -685,6 +687,12 @@ async function analyzeAttachmentRows(
       `;
       analyzed++;
     } catch (err) {
+      // analysisError is shown on the attachment card and in the file
+      // exports: a code and facts, never the provider's text or a
+      // SyntaxError's quote of the model's answer (public-failure.ts).
+      logLlmFailure("[ATTACHMENTS] AI analysis failed, using the heuristic", err, {
+        ids: { userId, attachmentId: row.id },
+      });
       const fallback = heuristicAttachmentAnalysis(
         row.filename,
         row.mimeType,
@@ -698,7 +706,7 @@ async function analyzeAttachmentRows(
           "keyPoints" = ${JSON.stringify(fallback.keyPoints)}::jsonb,
           "extractedFields" = ${JSON.stringify(fallback.extractedFields)}::jsonb,
           "analysisStatus" = 'FALLBACK',
-          "analysisError" = ${err instanceof Error ? err.message.slice(0, 500) : "analysis failed"},
+          "analysisError" = ${storedFailure("AI analysis failed", err)},
           "updatedAt" = NOW()
         WHERE "id" = ${row.id}
       `;

@@ -1905,6 +1905,9 @@ const de: Record<string, string> = {
   "mailV2.reader.draftWithKlorn": "Mit Klorn entwerfen",
   "mailV2.reader.later": "Später",
   "mailV2.reader.done": "Erledigt",
+  "mailV2.row.select": "Auswählen",
+  "mailV2.row.moreFor": "Weitere Aktionen: {subject}",
+  "mailV2.reader.whyRang": "Warum es klingelte",
   "mailV2.reader.unsorted": "Klorn hat diese Mail noch nicht einsortiert.",
   "mailV2.reader.label.add": "Label hinzufügen",
   "mailV2.reader.label.a11y": "Absender-Label: {label}. Label korrigieren",
@@ -2302,6 +2305,8 @@ const de: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Für einen weiteren Kalender ist ein Pro-Abo erforderlich.",
   "imap.error.connectFailed": "Verbindung fehlgeschlagen.",
   "imap.error.disconnectFailed": "Trennen fehlgeschlagen.",
+  "imap.connectPaused":
+    "Klorn hat die Synchronisierung von {provider} pausiert. Sie können dieses Postfach weiterhin trennen.",
   "imap.confirmDisconnect.message":
     "Bereits sortierte E-Mails bleiben erhalten. Sie können das Postfach jederzeit wieder verbinden.",
   "imap.hostSince": "Host: {host} · seit",
@@ -3486,6 +3491,24 @@ const de: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "Der Agent beobachtet nur",
   "settings.org.transparency.ceiling.cap.suggest":
     "Der Agent schlägt nur vor und handelt nie selbst",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect":
+    "{service} ist nicht verbunden. Verbinde es in den Einstellungen neu.",
+  "providerFailure.scope":
+    "{service} hat eine Berechtigung, die Klorn braucht, nicht erteilt. Verbinde es in den Einstellungen neu und erlaube alle angefragten Berechtigungen.",
+  "providerFailure.notFound":
+    "{service} konnte das Element nicht finden. Es wurde möglicherweise verschoben oder gelöscht.",
+  "providerFailure.rateLimited":
+    "{service} begrenzt gerade Anfragen. Versuche es in einer Minute erneut.",
+  "providerFailure.unavailable":
+    "{service} ist gerade nicht erreichbar. Versuche es gleich noch einmal.",
+  "providerFailure.tooManyRequests":
+    "Gerade zu viele Anfragen. Versuche es in einer Minute erneut.",
+  "providerFailure.dailyCap":
+    "Das heutige KI-Limit ist aufgebraucht. Es wird morgen zurückgesetzt.",
+  "providerFailure.serviceUnavailable":
+    "Klorn ist kurz nicht erreichbar. Versuche es gleich noch einmal.",
+  "providerFailure.internal": "Bei uns ist etwas schiefgelaufen. Versuche es gleich noch einmal.",
 };
 
 export default de;

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  planAction,
   REASON_DEMO,
   REASON_NOT_CLASSIFIED,
   REASON_RECONNECT,
@@ -170,7 +171,7 @@ describe("releaseOutcome", () => {
     expect(releaseOutcome(track, BOTH)).toEqual({ kind: "commit", direction: "right" });
   });
 
-  it("commits left (lanes) on a fast short fling", () => {
+  it("commits left (Later) on a fast short fling", () => {
     const track = drag(
       [
         [-15, 0],
@@ -256,17 +257,26 @@ describe("rowActionPlan (no swipe-only actions)", () => {
     for (const direction of ["left", "right"] as const) {
       const action = swipeAction(plan, direction);
       expect(plan.menu).toContain(action.id);
-      const menuAction = action.id === "archive" ? plan.archive : plan.lanes;
-      expect(menuAction.blockedReason).toBe(action.blockedReason);
+      expect(planAction(plan, action.id).blockedReason).toBe(action.blockedReason);
     }
   });
 
-  it("maps right to archive and left to the lane picker", () => {
+  it("maps right to Done (archive) and left to Later (MB1)", () => {
     const plan = rowActionPlan({ isDemo: false, needsReconnect: false, tier: "QUEUE" });
     expect(swipeAction(plan, "right").id).toBe("archive");
-    expect(swipeAction(plan, "left").id).toBe("lanes");
+    expect(swipeAction(plan, "left").id).toBe("later");
     expect(plan.archive.blockedReason).toBeNull();
+    expect(plan.later.blockedReason).toBeNull();
     expect(plan.lanes.blockedReason).toBeNull();
+  });
+
+  it("blocks Later only on demo mail", () => {
+    expect(
+      rowActionPlan({ isDemo: true, needsReconnect: false, tier: "QUEUE" }).later.blockedReason,
+    ).toBe(REASON_DEMO);
+    expect(
+      rowActionPlan({ isDemo: false, needsReconnect: true, tier: null }).later.blockedReason,
+    ).toBeNull();
   });
 
   it("uses the reader's archive rule: demo, then an account that needs reconnecting", () => {

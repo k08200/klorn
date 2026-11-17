@@ -67,15 +67,15 @@ jobs:
       - name: Skip without signing secrets
         if: env.HAS_SECRETS != 'true'
         run: echo "::notice::Android signing secrets are not set — skipping the Android release."
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_SECRETS == 'true'
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: env.HAS_SECRETS == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         if: env.HAS_SECRETS == 'true'
         with:
           distribution: temurin
@@ -113,14 +113,14 @@ jobs:
           rm -f "$RUNNER_TEMP/upload.jks"
       # Kept on the run either way: Google requires the first bundle of a new
       # app to be uploaded by hand in the Play Console.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: env.HAS_SECRETS == 'true'
         with:
           name: klorn-android-release
           path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
       - name: Upload to Google Play (internal)
         if: env.HAS_SECRETS == 'true' && env.HAS_PLAY == 'true'
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: ai.klorn.app
@@ -137,7 +137,7 @@ jobs:
       - name: Skip without App Store Connect secrets
         if: env.HAS_SECRETS != 'true'
         run: echo "::notice::App Store Connect secrets are not set — skipping the iOS release."
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_SECRETS == 'true'
       - name: Select the newest Xcode
         if: env.HAS_SECRETS == 'true'
@@ -145,7 +145,7 @@ jobs:
           XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
           xcodebuild -version
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: env.HAS_SECRETS == 'true'
         with:
           node-version: 22

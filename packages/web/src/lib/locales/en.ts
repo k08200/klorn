@@ -1846,6 +1846,9 @@ const en: Record<string, string> = {
   "mailV2.reader.draftWithKlorn": "Draft with Klorn",
   "mailV2.reader.later": "Later",
   "mailV2.reader.done": "Done",
+  "mailV2.row.select": "Select",
+  "mailV2.row.moreFor": "More actions: {subject}",
+  "mailV2.reader.whyRang": "Why it rang",
   "mailV2.reader.unsorted": "Klorn hasn't sorted this mail yet.",
   "mailV2.reader.label.add": "Add a label",
   "mailV2.reader.label.a11y": "Sender label: {label}. Correct the label",
@@ -2218,6 +2221,7 @@ const en: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Connecting another calendar needs a Pro subscription.",
   "imap.error.connectFailed": "Connection failed.",
   "imap.error.disconnectFailed": "Disconnect failed.",
+  "imap.connectPaused": "Klorn has paused {provider} sync. You can still disconnect this mailbox.",
   "imap.confirmDisconnect.message":
     "Existing classified emails stay. You can reconnect the mailbox any time.",
   "imap.hostSince": "Host: {host} · since",
@@ -3352,6 +3356,18 @@ const en: Record<string, string> = {
   "settings.org.transparency.ceiling.cap.shadow": "The agent only observes",
   "settings.org.transparency.ceiling.cap.suggest":
     "The agent only suggests; it never acts on its own",
+  // Provider failures (api: public-failure.ts) — keyed by the response code.
+  "providerFailure.reconnect": "{service} is not connected. Reconnect it in Settings.",
+  "providerFailure.scope":
+    "{service} didn't grant a permission Klorn needs. Reconnect it in Settings and allow every requested permission.",
+  "providerFailure.notFound":
+    "{service} couldn't find that item. It may have been moved or deleted.",
+  "providerFailure.rateLimited": "{service} is limiting requests right now. Try again in a minute.",
+  "providerFailure.unavailable": "{service} is unavailable right now. Try again shortly.",
+  "providerFailure.tooManyRequests": "Too many requests right now. Try again in a minute.",
+  "providerFailure.dailyCap": "Today's AI limit is used up. It resets tomorrow.",
+  "providerFailure.serviceUnavailable": "Klorn is briefly unavailable. Try again shortly.",
+  "providerFailure.internal": "Something went wrong on our side. Try again shortly.",
 };
 
 export default en;

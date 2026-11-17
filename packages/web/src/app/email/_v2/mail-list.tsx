@@ -15,10 +15,18 @@
  * in progress; Shift extends the range) and the trailing actions — lane,
  * remind, read state, archive.
  *
- * On touch a row also swipes (P10): right archives, left opens the lane
- * sheet. Both read the same plan as the trailing actions (row-actions.ts), so
- * a swipe never offers what the keyboard cannot reach, and a blocked action
- * says why instead of doing nothing.
+ * On touch a row also swipes (P10; directions from the mobile redesign PR3,
+ * MB1, LOCKED 2026-11-14): right is Done (the archive), left is Later (a
+ * reminder later today, POST /api/email/:id/later). Both read the same plan
+ * as the row's own actions (row-actions.ts), so a swipe never offers what a
+ * button cannot reach, and a blocked action says why instead of doing
+ * nothing. On a touch screen (hover: none) the hover overlay never shows, so
+ * the row keeps one 44px "More actions" button with Later, Done, read state,
+ * Select, the other reminders and the lanes.
+ *
+ * The row is MailRow's `brief` variant: a monogram, the sender and time, the
+ * subject, and why the mail is in its lane by the notification center's rule
+ * (pushWhy: a verified quote, else "Klorn's call · …", plain text only).
  */
 
 import type { EmailListItem, EmailThreadRow, LiveTier } from "@klorn/contract";
@@ -26,15 +34,23 @@ import { useEffect, useRef, useState } from "react";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
-import { MailRow } from "../../../components/ui/mail-row";
+import { MailRow, type MailRowWhy } from "../../../components/ui/mail-row";
 import { Menu, type MenuSection } from "../../../components/ui/menu";
 import { MailRowSkeleton, SkeletonGroup } from "../../../components/ui/skeleton";
 import { SwipeRow } from "../../../components/ui/swipe-row";
 import { useT } from "../../../lib/i18n";
 import { CORE_TIERS } from "../../../lib/tiers";
+import { pushWhy } from "../../today/brief-model";
 import { TRIAGE_ROW_ATTR } from "../use-list-triage";
-import { ArchiveIcon, ClockIcon, InboxIcon, LanesIcon, ReadIcon, UnreadIcon } from "./icons";
-import { LaneSheet } from "./lane-sheet";
+import {
+  ArchiveIcon,
+  ClockIcon,
+  InboxIcon,
+  LanesIcon,
+  MoreIcon,
+  ReadIcon,
+  UnreadIcon,
+} from "./icons";
 import { LANE_DOT } from "./mail-header";
 import {
   type AccountOption,
@@ -48,6 +64,7 @@ import {
   senderName,
 } from "./model";
 import { REMINDER_KEYS, REMINDER_LABEL_KEYS, type ReminderKey } from "./reminders";
+import { QUICK_LATER, RowActionSheet, type RowActionTarget } from "./row-action-sheet";
 import { type RowActionPlan, rowActionPlan } from "./row-actions";
 
 const SKELETON_ROWS = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -104,13 +121,14 @@ interface RowPickProps {
  */
 function RowPick({ label, picked, onPick }: RowPickProps) {
   return (
-    <label className="flex h-full w-9 cursor-pointer items-center pl-1.5 pointer-coarse:w-11 pointer-coarse:pl-2">
+    // The avatar's column (56px), the row's full height: past 44px either way.
+    <label className="flex h-full w-full cursor-pointer items-center justify-center">
       <input
         type="checkbox"
         aria-label={label}
         checked={picked}
         onChange={(event) => onPick((event.nativeEvent as MouseEvent).shiftKey === true)}
-        className="focus-ring size-4 cursor-pointer rounded-chip accent-accent-solid"
+        className="focus-ring size-4 cursor-pointer rounded-chip accent-accent-solid pointer-coarse:size-5 [@media(hover:none)]:size-5"
       />
     </label>
   );
@@ -215,21 +233,53 @@ function RowActions({ email, plan, busy, archiveBlocked, menuSide, ...on }: RowA
   );
 }
 
+/**
+ * A touch screen's way to every row action (hover: none, where the overlay
+ * never shows): one 44px button, named for the mail, that opens the row's
+ * action sheet (row-action-sheet.tsx).
+ */
+function TouchActions({ subject, onOpen }: { subject: string; onOpen: () => void }) {
+  const { t } = useT();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={t("mailV2.row.moreFor", { subject })}
+      aria-haspopup="dialog"
+      onClick={onOpen}
+      className="size-11"
+    >
+      <MoreIcon />
+    </Button>
+  );
+}
+
+/** Why the mail is in its lane, worded for the row; null when nothing is recorded. */
+function useRowWhy(email: EmailListItem): MailRowWhy | null {
+  const { t } = useT();
+  const why = pushWhy(email);
+  if (!why) return null;
+  return why.kind === "quote"
+    ? why
+    : { kind: "judgment", text: t("notifCenter.judgment", { text: why.text }) };
+}
+
 interface MailRowItemProps extends Omit<MailRowsProps, "emails" | "cursorId" | "pickedIds"> {
   email: EmailListItem;
   cursor: boolean;
   picked: boolean;
   selecting: boolean;
-  /** A left swipe: open the lane sheet for this mail. */
-  onLanes: (email: EmailListItem) => void;
   /** One of the last rows: its menus open upward so they stay on screen. */
   nearEnd: boolean;
+  /** Open the touch action sheet for this row. */
+  onActions: (target: RowActionTarget) => void;
 }
 
 function MailRowItem(props: MailRowItemProps) {
   const { email, view, accounts, time, cursor, picked, selecting } = props;
   const { t } = useT();
   const { toast } = useToast();
+  const why = useRowWhy(email);
   const account = rowAccount(email, accounts);
   const subject = email.subject || t("mailV2.noSubject");
   const plan = rowActionPlan({
@@ -238,30 +288,33 @@ function MailRowItem(props: MailRowItemProps) {
     tier: email.tier,
   });
   const archiveBlocked = plan.archive.blockedReason ? t(plan.archive.blockedReason) : null;
+  const laterBlocked = plan.later.blockedReason ? t(plan.later.blockedReason) : null;
   const laneBlocked = plan.lanes.blockedReason ? t(plan.lanes.blockedReason) : null;
+  const menuSide = props.nearEnd ? "top" : "bottom";
   return (
     <li {...{ [TRIAGE_ROW_ATTR]: email.id }}>
       {picked && <span className="sr-only">{t("mailV2.bulk.rowSelected")}</span>}
       <SwipeRow
         disabled={selecting || props.busy}
         right={{
-          label: t("mailV2.row.archive"),
+          label: t("mailV2.reader.done"),
           icon: <ArchiveIcon />,
           blockedReason: archiveBlocked,
           exits: true,
         }}
-        left={{ label: t("mailV2.reader.moveTo"), icon: <LanesIcon />, blockedReason: laneBlocked }}
+        left={{ label: t("mailV2.reader.later"), icon: <ClockIcon />, blockedReason: laterBlocked }}
         onCommit={(direction) => {
           if (direction === "right") props.onArchive(email);
-          else props.onLanes(email);
+          else props.onRemind(email, QUICK_LATER);
         }}
         onBlocked={(_direction, reason) => toast(reason, "info")}
       >
         <MailRow
+          variant="brief"
           sender={senderName(email.from)}
           subject={subject}
           snippet={email.snippet ?? undefined}
-          reason={email.tierReason ?? null}
+          why={why}
           threadCount={email.threadCount}
           lane={email.tier}
           time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
@@ -297,7 +350,21 @@ function MailRowItem(props: MailRowItemProps) {
                 onSetRead={(isRead) => props.onSetRead(email, isRead)}
                 onRemind={(key) => props.onRemind(email, key)}
                 onMoveLane={(tier) => props.onMoveLane(email, tier)}
-                menuSide={props.nearEnd ? "top" : "bottom"}
+                menuSide={menuSide}
+              />
+            )
+          }
+          touchActions={
+            props.readOnly || selecting ? undefined : (
+              <TouchActions
+                subject={subject}
+                onOpen={() =>
+                  props.onActions({
+                    email,
+                    subject,
+                    blocked: { archive: archiveBlocked, later: laterBlocked, lanes: laneBlocked },
+                  })
+                }
               />
             )
           }
@@ -309,9 +376,8 @@ function MailRowItem(props: MailRowItemProps) {
 
 export function MailRows(props: MailRowsProps) {
   const { emails, cursorId, pickedIds, ...rest } = props;
-  const { t } = useT();
-  const [laneTarget, setLaneTarget] = useState<EmailListItem | null>(null);
   const selecting = pickedIds.size > 0;
+  const [sheet, setSheet] = useState<RowActionTarget | null>(null);
   return (
     <>
       <ul className="flex flex-col divide-y divide-line-soft">
@@ -323,22 +389,20 @@ export function MailRows(props: MailRowsProps) {
             cursor={cursorId === email.id}
             picked={pickedIds.has(email.id)}
             selecting={selecting}
-            onLanes={setLaneTarget}
             nearEnd={index >= emails.length - MENU_UP_ROWS}
+            onActions={setSheet}
           />
         ))}
       </ul>
-      <LaneSheet
-        target={
-          laneTarget && {
-            subject: laneTarget.subject || t("mailV2.noSubject"),
-            tier: laneTarget.tier,
-          }
-        }
-        onPick={(tier) => {
-          if (laneTarget) props.onMoveLane(laneTarget, tier);
-        }}
-        onClose={() => setLaneTarget(null)}
+      <RowActionSheet
+        target={sheet}
+        busy={props.busy}
+        onClose={() => setSheet(null)}
+        onArchive={props.onArchive}
+        onRemind={props.onRemind}
+        onSetRead={props.onSetRead}
+        onSelect={(email) => props.onPick(email, false)}
+        onMoveLane={props.onMoveLane}
       />
     </>
   );

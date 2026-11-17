@@ -385,13 +385,15 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
           // console first: captureError is a no-op without a Sentry DSN, so in
           // dev/self-host a persist failure would drop this email from triage
           // with no trace.
-          // Not stableId in the line: it embeds the mailbox address.
+          // Not stableId, in the line or in Sentry: it embeds the mailbox address.
+          // The account row and the UID name the message as well.
+          const linkedInboxAccountId = args.linkedInboxAccountId ?? null;
           logDbFailure("[imap] persist failed", err, {
-            ids: { logScope: scope, userId: args.userId, uid: msg.uid },
+            ids: { logScope: scope, userId: args.userId, linkedInboxAccountId, uid: msg.uid },
           });
           captureDbFailure("[imap] persist failed", err, {
             tags: { scope: `${scope}.upsert` },
-            extra: { userId: args.userId, stableId },
+            extra: { userId: args.userId, linkedInboxAccountId, uid: msg.uid },
           });
         }
         // A user-supplied host must not yield more than the window it was asked for.

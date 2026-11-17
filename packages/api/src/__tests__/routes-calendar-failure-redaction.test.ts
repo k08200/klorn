@@ -238,4 +238,20 @@ describe("calendar routes — a Google failure reaches the console and Sentry as
     expect(sinkText()).not.toContain(DB_CANARY);
     await app.close();
   });
+
+  it("POST /sync: the response carries a code and its fixed sentence, never the API's words", async () => {
+    vi.mocked(syncPrimaryCalendarWindow).mockRejectedValueOnce(googleErrorQuotingEvent());
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers: auth });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain(DB_CANARY);
+    expect(res.json()).toEqual({
+      error: "Something went wrong on our side. Try again shortly.",
+      code: "INTERNAL_ERROR",
+      synced: 0,
+    });
+    await app.close();
+  });
 });

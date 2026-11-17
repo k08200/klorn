@@ -47,6 +47,7 @@ import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { agentModeUnderOrgCeiling } from "../org/ceilings.js";
 import { effectivePlan } from "../org/effective-tier.js";
+import { storedFailure } from "../public-failure.js";
 import { logDbFailure } from "../report-db-failure.js";
 import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
@@ -1465,10 +1466,10 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
       console.log(`[AGENT] ${reason} for ${userId}; skipping cycle`);
       return;
     }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    await logAgentAction(userId, "error", `Agent error after ${elapsed}ms: ${message}`);
-    // The agent log row is the user's own; the console and Sentry get facts
-    // only, since the provider's error can quote the mail in the agent's context.
+    // The agent log row is stored and shown in the activity feed, the console
+    // and Sentry: all get a code and facts only, since the provider's error
+    // can quote the mail in the agent's context (public-failure.ts).
+    await logAgentAction(userId, "error", storedFailure(`Agent error after ${elapsed}ms`, err));
     const label = "[AGENT] cycle failed";
     logLlmFailure(label, err, { level: "error", ids: { userId, elapsedMs: elapsed } });
     captureLlmFailure(label, err, {

@@ -21,23 +21,18 @@ import type { ReactNode } from "react";
 import EmptyState from "../../components/ui/empty-state";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
+import { mailReaderId } from "../../lib/mail-routes";
 import { useMediaQuery } from "../../lib/use-media-query";
 import { MailV2 } from "./_v2/mail-v2";
 
 // From the rail step (globals.css, --breakpoint-rail), or on a hinge.
 const SPLIT_QUERY = "(min-width: 37.5rem), (horizontal-viewport-segments: 2)";
-const READER_PATH = /^\/email\/([^/]+)$/;
-
-function openEmailId(pathname: string): string | null {
-  const match = READER_PATH.exec(pathname);
-  return match && match[1] !== "candidates" ? decodeURIComponent(match[1]) : null;
-}
 
 export default function EmailLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
   const { user } = useAuth();
   const wide = useMediaQuery(SPLIT_QUERY);
-  const selectedId = openEmailId(pathname);
+  const selectedId = mailReaderId(pathname);
   const splitRoute = pathname === "/email" || selectedId !== null;
   const split = wide && user?.mailV2 === true && splitRoute;
   // `children` keeps the same place in the tree whether or not the split is

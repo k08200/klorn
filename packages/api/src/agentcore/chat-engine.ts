@@ -19,8 +19,10 @@ import { costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { AGENT_MODEL, createCompletion, type DailyCostCapCode } from "../llm/openai.js";
 import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
+import { type ProviderFailureCode, publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { ALL_TOOLS, executeToolCall } from "./tool-executor.js";
+import { toolFailureResult } from "./tool-failure.js";
 
 export const CHAT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "list_emails",
@@ -51,10 +53,13 @@ export interface EventDraft {
 export interface ChatTurnResult {
   reply: string;
   eventDraft: EventDraft | null;
-  /** Set only when the turn itself failed (LLM unreachable etc.) */
+  /** Set only when the turn itself failed: a fixed sentence chosen by `errorCode`. */
   error?: string;
-  /** Set only when the daily cost cap refused the turn — clients branch on it. */
-  errorCode?: DailyCostCapCode;
+  /**
+   * Set whenever `error` is. Clients branch on the daily-cap codes and ignore
+   * the rest (public-failure.ts); never the provider's text.
+   */
+  errorCode?: DailyCostCapCode | ProviderFailureCode;
 }
 
 const CHAT_SYSTEM_PROMPT = `You are Klorn's assistant. You work ONLY on this user's own Klorn data: their email, their calendar, and their daily briefing.
@@ -231,9 +236,9 @@ export async function runChatTurn(opts: {
             try {
               result = await executeToolCall(userId, fn.name, args);
             } catch (err) {
-              // A failing tool must not kill the turn — surface it to the
-              // model so it can answer honestly.
-              const msg = err instanceof Error ? err.message : String(err);
+              // A failing tool must not kill the turn — surface its
+              // classification to the model so it can answer honestly. Never
+              // the thrown text: the model reads it back (tool-failure.ts).
               logDbFailure("[CHAT] tool failed", err, {
                 level: "error",
                 ids: { tool: fn.name, userId },
@@ -241,7 +246,7 @@ export async function runChatTurn(opts: {
               captureDbFailure("[CHAT] tool failed", err, {
                 tags: { scope: "chat.tool", userId, tool: fn.name },
               });
-              result = JSON.stringify({ error: `Tool failed: ${msg}` });
+              result = toolFailureResult(err);
             }
           }
         }
@@ -264,9 +269,11 @@ export async function runChatTurn(opts: {
     if (capped) {
       return { reply: capped.error, eventDraft: null, error: capped.error, errorCode: capped.code };
     }
-    // The user gets the message back (it is their chat and mail); the log
-    // and Sentry get facts only, since the provider's error can quote both.
-    const msg = err instanceof Error ? err.message : String(err);
+    // The result is stored with the turn (Message.metadata.turnError) and
+    // answered to the client, so it carries a code and that code's fixed
+    // sentence; the log and Sentry get facts only. A provider's error can
+    // quote the chat and mail, and a SyntaxError quotes the model's answer.
+    const failure = publicFailure(err, "ai");
     const label = "[CHAT] turn failed";
     logLlmFailure(label, err, { level: "error", ids: { userId } });
     captureLlmFailure(label, err, {
@@ -276,7 +283,8 @@ export async function runChatTurn(opts: {
     return {
       reply: "Sorry — I couldn't process that right now. Please try again in a moment.",
       eventDraft: null,
-      error: msg,
+      error: failure.error,
+      errorCode: failure.code,
     };
   }
 }

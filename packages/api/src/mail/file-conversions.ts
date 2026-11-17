@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { logDbFailure } from "../report-db-failure.js";
 import {
   buildCsvConversion,
   buildDocxConversion,
@@ -846,7 +847,7 @@ async function convertImageFormat(
     throw new FileConversionError(
       "converter_unavailable",
       [
-        `${sourceFormat?.toUpperCase() ?? "IMAGE"} → ${target.toUpperCase()} image converter is not connected on the server yet.`,
+        `${namedImageFormat(sourceFormat)} → ${target.toUpperCase()} image converter is not connected on the server yet.`,
         `Install a converter like ImageMagick and set EVE_IMAGE_CONVERTER_BIN or EVE_IMAGE_TO_${target.toUpperCase()}_BIN to enable real re-encoding.`,
       ].join(" "),
       501,
@@ -1071,10 +1072,12 @@ function readTemplateConverterConfig(
       throw new Error("args must be a JSON string array");
     }
     return { bin, args: parsed };
-  } catch (err) {
+  } catch {
+    // A fixed sentence: the route answers it to the client, and a JSON.parse
+    // error would quote the operator's argument string.
     throw new FileConversionError(
       "converter_misconfigured",
-      err instanceof Error ? err.message : "Converter arguments are misconfigured.",
+      "Converter arguments are misconfigured.",
       500,
     );
   }
@@ -1088,7 +1091,7 @@ function engineSource(envNames: string[], available: boolean): "env" | "auto" | 
 function runExternalConverter(bin: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { shell: false, windowsHide: true });
-    let stderr = "";
+
     const timeoutMs = converterTimeoutMs();
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
@@ -1101,12 +1104,18 @@ function runExternalConverter(bin: string, args: string[]): Promise<void> {
       );
     }, timeoutMs);
     child.stdout?.resume();
-    child.stderr?.on("data", (chunk) => {
-      stderr += String(chunk);
+    // Counted, never kept: stderr can quote the attachment's paths or content.
+    let stderrBytes = 0;
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      stderrBytes += chunk.length;
     });
+    // The route answers a FileConversionError's message to the client: fixed
+    // sentences only, never a spawn error's text or the converter's stderr,
+    // which can quote the attachment's paths or content.
     child.on("error", (err) => {
       clearTimeout(timer);
-      reject(new FileConversionError("converter_failed", err.message, 500));
+      logDbFailure("[CONVERT] converter could not start", err);
+      reject(new FileConversionError("converter_failed", "The converter could not start.", 500));
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -1114,12 +1123,9 @@ function runExternalConverter(bin: string, args: string[]): Promise<void> {
         resolve();
         return;
       }
+      console.warn(`[CONVERT] converter exited with code ${code}, stderr ${stderrBytes} bytes`);
       reject(
-        new FileConversionError(
-          "converter_failed",
-          (stderr || `The converter exited with code ${code}.`).slice(0, 700),
-          500,
-        ),
+        new FileConversionError("converter_failed", `The converter exited with code ${code}.`, 500),
       );
     });
   });
@@ -1199,6 +1205,20 @@ function isImageAttachment(attachment: AttachmentForConversion): boolean {
     attachment.mimeType.toLowerCase().startsWith("image/") ||
     /\.(png|jpg|jpeg|webp|gif|heic|svg)$/i.test(lower)
   );
+}
+
+/** Formats a refusal may name; anything else (a filename's own extension) reads "IMAGE". */
+const NAMED_IMAGE_FORMATS: ReadonlySet<string> = new Set([
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "svg",
+  "heic",
+]);
+
+function namedImageFormat(format: string | null): string {
+  return format !== null && NAMED_IMAGE_FORMATS.has(format) ? format.toUpperCase() : "IMAGE";
 }
 
 function inferImageFormat(attachment: AttachmentForConversion): string | null {

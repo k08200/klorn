@@ -20,6 +20,7 @@ import { decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
 import { logDbFailure } from "../../report-db-failure.js";
 import { captureError } from "../../sentry.js";
+import { authBackoffVerdict } from "../imap-auth-backoff.js";
 import { checkImapRow } from "../imap-connection.js";
 import { parseImapMessageId } from "../imap-message-id.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
@@ -35,6 +36,8 @@ interface AccountRow {
   imapHost: string | null;
   imapPasswordCipher: string | null;
   inboxUidValidity: string | null;
+  imapAuthFailures: number;
+  imapAuthRetryAt: Date | null;
 }
 
 /** A row that passed the credential, allowlist and host-pin checks. */
@@ -110,6 +113,8 @@ export async function findCheckedAccount(
         imapHost: true,
         imapPasswordCipher: true,
         inboxUidValidity: true,
+        imapAuthFailures: true,
+        imapAuthRetryAt: true,
       },
     });
   } catch (err) {
@@ -130,6 +135,13 @@ export async function findCheckedAccount(
       checked.reason === "missing-credentials"
         ? `${provider.label} mailbox credentials are missing. ${reconnectHint(provider.label)}`
         : `${provider.label} mailbox is not connected.`,
+    );
+  }
+  // The poll gave up on this password after repeated refusals (imap-auth-backoff.ts):
+  // an action must not send it to the provider again. Only a reconnect helps.
+  if (authBackoffVerdict(row, new Date()) === "stopped") {
+    return fail(
+      `${provider.label} rejected the saved app password. ${reconnectHint(provider.label)}`,
     );
   }
   return {

@@ -8,7 +8,7 @@
  * byte-identical.
  */
 
-import type { EmailBulkActionResponse } from "@klorn/contract";
+import type { EmailBulkActionResponse, ProviderFailureCode } from "@klorn/contract";
 import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
@@ -20,6 +20,7 @@ import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import type { MailProviderActions } from "../mail/providers/types.js";
+import { publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -112,14 +113,22 @@ async function applyBulkPriorityAction(
 }
 
 /** What happened to one message: archived, or why not. */
-type ArchiveResult = { ok: true } | { ok: false; error: string };
+type ArchiveResult = { ok: true } | { ok: false; error: string; code?: ProviderFailureCode };
 
 const ARCHIVE_FAILED = "Gmail archive failed";
 
-const archiveError = (err: unknown): ArchiveResult => ({
-  ok: false,
-  error: err instanceof Error ? err.message : ARCHIVE_FAILED,
-});
+/**
+ * A thrown archive as the client lists it: a code and its fixed sentence
+ * (public-failure.ts), never the provider's message, which can quote the mail.
+ */
+const archiveError = (err: unknown): ArchiveResult => {
+  const failure = publicFailure(err, "mail");
+  // A dead grant fails every message of the batch the same way: no line each.
+  if (failure.code !== "PROVIDER_AUTH_FAILED") {
+    logDbFailure("[EMAIL-BULK] archive failed", err, { level: "error" });
+  }
+  return { ok: false, error: `${ARCHIVE_FAILED}. ${failure.error}`, code: failure.code };
+};
 
 async function archiveOne(
   userId: string,
@@ -207,12 +216,14 @@ async function applyBulkArchiveAction(
   emails: EmailMessage[],
 ): Promise<BulkEmailActionResult & { payload: EmailBulkActionResponse; archivedIds: string[] }> {
   const results = await archiveAll(userId, emails);
-  const failed: Array<{ id: string; error: string }> = [];
+  const failed: EmailBulkActionResponse["failed"] = [];
   const archivedIds: string[] = [];
   for (const email of emails) {
     const result = results.get(email.id);
     if (result?.ok) archivedIds.push(email.id);
-    else failed.push({ id: email.id, error: result?.error ?? ARCHIVE_FAILED });
+    else if (result && !result.ok && result.code) {
+      failed.push({ id: email.id, error: result.error, code: result.code });
+    } else failed.push({ id: email.id, error: result?.error ?? ARCHIVE_FAILED });
   }
   if (archivedIds.length > 0) {
     await prisma.emailMessage.deleteMany({ where: { userId, id: { in: archivedIds } } });

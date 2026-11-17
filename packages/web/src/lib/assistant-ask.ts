@@ -17,3 +17,11 @@ export function askAssistant(text: string): void {
     new CustomEvent<AssistantAskDetail>(ASSISTANT_ASK_EVENT, { detail: { text } }),
   );
 }
+
+/** Open the dock without a question (the phone reader's top-bar button). */
+export const ASSISTANT_OPEN_EVENT = "klorn:assistant-open";
+
+export function openAssistant(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(ASSISTANT_OPEN_EVENT));
+}

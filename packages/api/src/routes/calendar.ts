@@ -32,6 +32,7 @@ import { withSourceLabels } from "../pim/calendar-source-label.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { safeMeetingLink } from "../pim/meeting-link.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
+import { publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
 const listEventsQuerySchema = {
@@ -429,7 +430,7 @@ export async function calendarRoutes(app: FastifyInstance) {
     // The session resolves CLIENT_ID/SECRET-backed credentials (automatic token refresh).
     const session = await connectPrimaryCalendar(uid);
     if (!session) {
-      return { error: "Google not connected", synced: 0 };
+      return { error: "Google not connected", code: "PROVIDER_AUTH_FAILED", synced: 0 };
     }
 
     try {
@@ -443,19 +444,17 @@ export async function calendarRoutes(app: FastifyInstance) {
     } catch (err) {
       if (isGoogleAuthError(err)) {
         await markGoogleTokenForReconnect(uid);
-        return { error: "Google not connected. Please reconnect your Google account.", synced: 0 };
+        return {
+          error: "Google not connected. Please reconnect your Google account.",
+          code: "PROVIDER_AUTH_FAILED",
+          synced: 0,
+        };
       }
-      const gaxiosErr = err as {
-        response?: { status?: number; data?: { error?: { message?: string } } };
-        message?: string;
-      };
-      const status = gaxiosErr.response?.status;
-      const apiMsg =
-        gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
-      // The log gets facts (the status among them), never the API's message
-      // or its `errors` list, which can quote an event.
+      // The log gets facts (the status among them) and the client a code and
+      // its fixed sentence, never the API's message or its `errors` list,
+      // which can quote an event (public-failure.ts).
       logDbFailure("[CALENDAR SYNC] Failed", err, { level: "error", ids: { userId: uid } });
-      return { error: `Sync failed (${status}): ${apiMsg}`, synced: 0 };
+      return { ...publicFailure(err, "googleCalendar"), synced: 0 };
     }
   });
 
