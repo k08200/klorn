@@ -3391,6 +3391,8 @@ const ja: Record<string, string> = {
     "現在 {service} を利用できません。しばらくしてからもう一度お試しください。",
   "providerFailure.tooManyRequests": "現在リクエストが多すぎます。1 分後にもう一度お試しください。",
   "providerFailure.dailyCap": "本日の AI 利用上限に達しました。明日リセットされます。",
+  "providerFailure.serviceUnavailable":
+    "Klorn が一時的に利用できません。しばらくしてからもう一度お試しください。",
   "providerFailure.internal":
     "Klorn 側で問題が発生しました。しばらくしてからもう一度お試しください。",
 };

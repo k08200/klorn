@@ -3353,6 +3353,7 @@ const en: Record<string, string> = {
   "providerFailure.unavailable": "{service} is unavailable right now. Try again shortly.",
   "providerFailure.tooManyRequests": "Too many requests right now. Try again in a minute.",
   "providerFailure.dailyCap": "Today's AI limit is used up. It resets tomorrow.",
+  "providerFailure.serviceUnavailable": "Klorn is briefly unavailable. Try again shortly.",
   "providerFailure.internal": "Something went wrong on our side. Try again shortly.",
 };
 

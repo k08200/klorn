@@ -24,6 +24,8 @@ export type ProviderFailureCode =
   /** Klorn's daily AI budget for the user's plan is spent. */
   | "DAILY_COST_CAP"
   | "DAILY_COST_CAP_FREE"
+  /** Klorn's own database could not be reached or answered in time: transient. */
+  | "SERVICE_UNAVAILABLE"
   /** Anything else: a database fault, a code fault, an unreadable model answer. */
   | "INTERNAL_ERROR";
 

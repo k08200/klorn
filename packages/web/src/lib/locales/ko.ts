@@ -3343,6 +3343,7 @@ const ko: Record<string, string> = {
     "지금 {service}을(를) 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
   "providerFailure.tooManyRequests": "지금 요청이 너무 많습니다. 1분 후 다시 시도하세요.",
   "providerFailure.dailyCap": "오늘의 AI 한도를 모두 사용했습니다. 내일 초기화됩니다.",
+  "providerFailure.serviceUnavailable": "Klorn을 잠시 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
   "providerFailure.internal": "Klorn 쪽에서 문제가 발생했습니다. 잠시 후 다시 시도하세요.",
 };
 

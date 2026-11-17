@@ -314,6 +314,25 @@ describe("claimAndRunOutboxRow", () => {
     expect(paStore.get("pa-1")?.result).toBe("Tool failed: internal error");
   });
 
+  it("retries a swallowed database pool timeout and dead-letters a send of unknown outcome", async () => {
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({
+        error: "Tool failed: service temporarily unavailable",
+        code: "SERVICE_UNAVAILABLE",
+      }),
+    );
+    expect((await claimAndRunOutboxRow(seedRow(), NOW)).kind).toBe("retry");
+
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({
+        error:
+          "Tool failed: the message may already have been sent; check Sent Items before retrying.",
+        code: "SEND_OUTCOME_UNKNOWN",
+      }),
+    );
+    expect((await claimAndRunOutboxRow(seedRow(), NOW)).kind).toBe("dead");
+  });
+
   it("stores and answers a thrown failure's classification, never its text", async () => {
     const canary = "CANARY-outbox quoted mail body";
     executeToolCall.mockRejectedValue(

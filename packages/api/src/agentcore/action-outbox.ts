@@ -114,7 +114,9 @@ export function isTransientToolError(err: unknown): boolean {
     name === "FloorReceiptRequiredError" ||
     name === "ActionReceiptMismatchError" ||
     name === "ActionReceiptSchemaError" ||
-    name === "ToolValidationError"
+    name === "ToolValidationError" ||
+    // The provider may have delivered it: a retry can send twice.
+    name === "SendOutcomeUnknownError"
   ) {
     return false;
   }
@@ -197,7 +199,8 @@ function outboxFailure(err: unknown): OutboxFailure {
     return { shown, stored: err.code === null ? shown : `${err.code}: ${shown}` };
   }
   const { error, code } = toolFailure(err);
-  const klornWritten = code === "INVALID_ARGUMENT" || code === "ACTION_REFUSED";
+  const klornWritten =
+    code === "INVALID_ARGUMENT" || code === "ACTION_REFUSED" || code === "SEND_OUTCOME_UNKNOWN";
   return {
     shown: error,
     stored: klornWritten ? `${code}: ${error}` : `${code} (${failureFacts(err)})`,

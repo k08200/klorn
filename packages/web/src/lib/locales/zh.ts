@@ -3149,6 +3149,7 @@ const zh: Record<string, string> = {
   "providerFailure.unavailable": "{service} 目前不可用。请稍后重试。",
   "providerFailure.tooManyRequests": "当前请求过多。请一分钟后重试。",
   "providerFailure.dailyCap": "今天的 AI 额度已用完。明天会重置。",
+  "providerFailure.serviceUnavailable": "Klorn 暂时不可用。请稍后重试。",
   "providerFailure.internal": "Klorn 这边出了问题。请稍后重试。",
 };
 

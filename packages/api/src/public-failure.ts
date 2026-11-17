@@ -19,17 +19,21 @@ import { dbFailureFacts } from "./report-db-failure.js";
 
 export type { ProviderFailureCode };
 
-export const PROVIDER_FAILURE_CODES: readonly ProviderFailureCode[] = [
-  "PROVIDER_AUTH_FAILED",
-  "PROVIDER_SCOPE_MISSING",
-  "PROVIDER_NOT_FOUND",
-  "PROVIDER_RATE_LIMITED",
-  "PROVIDER_UNAVAILABLE",
-  "RATE_LIMITED",
-  "DAILY_COST_CAP",
-  "DAILY_COST_CAP_FREE",
-  "INTERNAL_ERROR",
-];
+/** Every code once; the Record makes the compiler reject a code missing from this list. */
+const CODE_PRESENCE = {
+  PROVIDER_AUTH_FAILED: true,
+  PROVIDER_SCOPE_MISSING: true,
+  PROVIDER_NOT_FOUND: true,
+  PROVIDER_RATE_LIMITED: true,
+  PROVIDER_UNAVAILABLE: true,
+  RATE_LIMITED: true,
+  DAILY_COST_CAP: true,
+  DAILY_COST_CAP_FREE: true,
+  SERVICE_UNAVAILABLE: true,
+  INTERNAL_ERROR: true,
+} as const satisfies Record<ProviderFailureCode, true>;
+
+export const PROVIDER_FAILURE_CODES = Object.keys(CODE_PRESENCE) as readonly ProviderFailureCode[];
 
 const CODE_SET: ReadonlySet<string> = new Set(PROVIDER_FAILURE_CODES);
 
@@ -48,10 +52,12 @@ const SERVICE_LABEL: Readonly<Record<FailureService, string>> = {
 };
 
 /** The account a reconnect sentence names ("not connected" is what web clients match). */
-const ACCOUNT_LABEL: Readonly<Record<Exclude<FailureService, "ai">, string>> = {
+const ACCOUNT_LABEL: Readonly<Record<FailureService, string>> = {
   gmail: "Gmail",
   googleCalendar: "Google Calendar",
   mail: "Your mail account",
+  // Unused: aiFailureMessage answers every auth failure for the AI provider.
+  ai: "The AI provider",
 };
 
 /**
@@ -96,6 +102,12 @@ const UNREACHABLE_CODES: ReadonlySet<string> = new Set([
   "UND_ERR_CONNECT_TIMEOUT",
   "UND_ERR_HEADERS_TIMEOUT",
   "UND_ERR_SOCKET",
+  // imapflow's connection codes (mail/imap-verify-failure.ts names the same set).
+  "ETIMEOUT",
+  "CONNECT_TIMEOUT",
+  "GREETING_TIMEOUT",
+  "NoConnection",
+  "EConnectionClosed",
 ]);
 
 /** Error classes that mean "no answer came back", whatever the status. */
@@ -112,6 +124,7 @@ const CAUSE_DEPTH = 4;
 /** A reason token is a bounded identifier, never a phrase. */
 const REASON_TOKEN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const STATUS_UNAUTHORIZED = 401;
+const STATUS_PAYMENT_REQUIRED = 402;
 const STATUS_FORBIDDEN = 403;
 const STATUS_NOT_FOUND = 404;
 const STATUS_GONE = 410;
@@ -177,7 +190,10 @@ function klornLimit(err: unknown): ProviderFailureCode | null {
 
 function fromStatus(status: number | null, reasons: readonly string[]): ProviderFailureCode | null {
   if (status === null) return null;
-  if (status === STATUS_UNAUTHORIZED) return "PROVIDER_AUTH_FAILED";
+  // 402: an AI provider refusing a key with no credit left; the account owner must act.
+  if (status === STATUS_UNAUTHORIZED || status === STATUS_PAYMENT_REQUIRED) {
+    return "PROVIDER_AUTH_FAILED";
+  }
   if (status === STATUS_FORBIDDEN) {
     return reasons.some((r) => QUOTA_REASONS.has(r))
       ? "PROVIDER_RATE_LIMITED"
@@ -189,12 +205,37 @@ function fromStatus(status: number | null, reasons: readonly string[]): Provider
   return null;
 }
 
+/** Every undici transport failure (UND_ERR_BODY_TIMEOUT, UND_ERR_CLOSED, …). */
+const UNDICI_CODE = /^UND_ERR_/;
+
 function isUnreachable(err: unknown): boolean {
   return causeChain(err).some((candidate) => {
     const code = systemCode(candidate);
     return (
-      (code !== null && UNREACHABLE_CODES.has(code)) || UNAVAILABLE_NAMES.has(errorName(candidate))
+      (code !== null && (UNREACHABLE_CODES.has(code) || UNDICI_CODE.test(code))) ||
+      UNAVAILABLE_NAMES.has(errorName(candidate))
     );
+  });
+}
+
+/**
+ * Prisma codes for a database that could not be reached or answered in time:
+ * P1001 unreachable, P1002 timed out, P1008 operation timeout, P1017 server
+ * closed the connection, P2024 connection-pool timeout. Transient, and not
+ * the user's provider: SERVICE_UNAVAILABLE.
+ */
+const DB_UNAVAILABLE_CODES: ReadonlySet<string> = new Set([
+  "P1001",
+  "P1002",
+  "P1008",
+  "P1017",
+  "P2024",
+]);
+
+function isDatabaseUnavailable(err: unknown): boolean {
+  return causeChain(err).some((candidate) => {
+    const code = dbFailureFacts(candidate).code;
+    return code !== null && DB_UNAVAILABLE_CODES.has(code);
   });
 }
 
@@ -206,19 +247,37 @@ export function classifyFailure(err: unknown): ProviderFailureCode {
   const reasons = causeChain(err).flatMap(googleReasons);
   if (reasons.some((r) => DEAD_GRANT_ERRORS.has(r))) return "PROVIDER_AUTH_FAILED";
   if (reasons.some((r) => QUOTA_REASONS.has(r))) return "PROVIDER_RATE_LIMITED";
+  if (isDatabaseUnavailable(err)) return "SERVICE_UNAVAILABLE";
   const byStatus = fromStatus(failureStatus(err), reasons);
   if (byStatus !== null) return byStatus;
   return isUnreachable(err) ? "PROVIDER_UNAVAILABLE" : "INTERNAL_ERROR";
 }
 
+/**
+ * The AI provider's sentences. A refused key may be Klorn's own (no setting
+ * for the user to fix), so the refusal names the user's own key only as a
+ * condition; a 404 is a retired model, not a missing item.
+ */
+function aiFailureMessage(code: ProviderFailureCode): string | null {
+  switch (code) {
+    case "PROVIDER_AUTH_FAILED":
+    case "PROVIDER_SCOPE_MISSING":
+      return "The AI provider refused the request. If you use your own API key, check its key and credit in Settings.";
+    case "PROVIDER_NOT_FOUND":
+      return "The AI model is unavailable right now. Try again shortly.";
+    default:
+      return null;
+  }
+}
+
 /** The fixed English sentence for a code. Clients localize by the code instead. */
 export function providerFailureMessage(code: ProviderFailureCode, service: FailureService): string {
+  const ai = service === "ai" ? aiFailureMessage(code) : null;
+  if (ai !== null) return ai;
   const label = SERVICE_LABEL[service];
   switch (code) {
     case "PROVIDER_AUTH_FAILED":
-      return service === "ai"
-        ? "The AI provider rejected the API key. Check it in Settings."
-        : `${ACCOUNT_LABEL[service]} is not connected. Reconnect it in Settings.`;
+      return `${ACCOUNT_LABEL[service]} is not connected. Reconnect it in Settings.`;
     case "PROVIDER_SCOPE_MISSING":
       return `${label} did not grant a permission Klorn needs. Reconnect it in Settings and allow every requested permission.`;
     case "PROVIDER_NOT_FOUND":
@@ -232,6 +291,8 @@ export function providerFailureMessage(code: ProviderFailureCode, service: Failu
     case "DAILY_COST_CAP":
     case "DAILY_COST_CAP_FREE":
       return "Today's AI limit is used up. It resets tomorrow.";
+    case "SERVICE_UNAVAILABLE":
+      return "Klorn is briefly unavailable. Try again shortly.";
     case "INTERNAL_ERROR":
       return "Something went wrong on our side. Try again shortly.";
   }

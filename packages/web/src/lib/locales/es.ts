@@ -3441,6 +3441,8 @@ const es: Record<string, string> = {
   "providerFailure.tooManyRequests":
     "Hay demasiadas solicitudes ahora mismo. Inténtalo de nuevo en un minuto.",
   "providerFailure.dailyCap": "Se agotó el límite de IA de hoy. Se restablece mañana.",
+  "providerFailure.serviceUnavailable":
+    "Klorn no está disponible por un momento. Inténtalo de nuevo en breve.",
   "providerFailure.internal": "Algo salió mal por nuestra parte. Inténtalo de nuevo en breve.",
 };
 

@@ -15,6 +15,7 @@ const KEYS: Readonly<Record<ProviderFailureCode, string>> = {
   RATE_LIMITED: "providerFailure.tooManyRequests",
   DAILY_COST_CAP: "providerFailure.dailyCap",
   DAILY_COST_CAP_FREE: "providerFailure.dailyCap",
+  SERVICE_UNAVAILABLE: "providerFailure.serviceUnavailable",
   INTERNAL_ERROR: "providerFailure.internal",
 };
 

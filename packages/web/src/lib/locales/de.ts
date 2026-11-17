@@ -3492,6 +3492,8 @@ const de: Record<string, string> = {
     "Gerade zu viele Anfragen. Versuche es in einer Minute erneut.",
   "providerFailure.dailyCap":
     "Das heutige KI-Limit ist aufgebraucht. Es wird morgen zurückgesetzt.",
+  "providerFailure.serviceUnavailable":
+    "Klorn ist kurz nicht erreichbar. Versuche es gleich noch einmal.",
   "providerFailure.internal": "Bei uns ist etwas schiefgelaufen. Versuche es gleich noch einmal.",
 };
 

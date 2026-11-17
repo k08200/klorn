@@ -101,6 +101,33 @@ describe("classifyFailure", () => {
   });
 });
 
+describe("classifyFailure — transient infrastructure", () => {
+  it("reads Prisma's unreachable and pool-timeout codes as SERVICE_UNAVAILABLE", () => {
+    for (const code of ["P1001", "P1002", "P1008", "P1017", "P2024"]) {
+      expect(classifyFailure(named("PrismaClientKnownRequestError", CANARY, { code }))).toBe(
+        "SERVICE_UNAVAILABLE",
+      );
+    }
+    expect(classifyFailure(named("PrismaClientKnownRequestError", CANARY, { code: "P2002" }))).toBe(
+      "INTERNAL_ERROR",
+    );
+  });
+
+  it("reads any undici transport code and imapflow's connection codes as PROVIDER_UNAVAILABLE", () => {
+    for (const code of ["UND_ERR_BODY_TIMEOUT", "UND_ERR_CLOSED", "NoConnection", "ETIMEOUT"]) {
+      expect(classifyFailure(named("TypeError", CANARY, { cause: { code } }))).toBe(
+        "PROVIDER_UNAVAILABLE",
+      );
+    }
+  });
+
+  it("reads a 402 (a key with no credit left) as PROVIDER_AUTH_FAILED", () => {
+    expect(classifyFailure(named("APIError", CANARY, { status: 402 }))).toBe(
+      "PROVIDER_AUTH_FAILED",
+    );
+  });
+});
+
 describe("providerFailureMessage", () => {
   it("has a fixed sentence for every code and service, naming the service", () => {
     for (const code of PROVIDER_FAILURE_CODES) {
@@ -119,8 +146,15 @@ describe("providerFailureMessage", () => {
     );
   });
 
-  it("tells an AI key failure to check the key, not to reconnect an account", () => {
-    expect(providerFailureMessage("PROVIDER_AUTH_FAILED", "ai")).toMatch(/API key/);
+  it("tells an AI key failure to check the user's own key, never to reconnect an account", () => {
+    for (const code of ["PROVIDER_AUTH_FAILED", "PROVIDER_SCOPE_MISSING"] as const) {
+      const message = providerFailureMessage(code, "ai");
+      expect(message).toMatch(/If you use your own API key/);
+      expect(message).not.toMatch(/reconnect/i);
+    }
+    expect(providerFailureMessage("PROVIDER_NOT_FOUND", "ai")).toBe(
+      "The AI model is unavailable right now. Try again shortly.",
+    );
   });
 });
 

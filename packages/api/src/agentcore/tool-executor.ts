@@ -46,6 +46,7 @@ import { captureDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
+import { FloorReceiptRequiredError } from "./floor-receipt-error.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { ToolValidationError, toolFailureResult } from "./tool-failure.js";
 import { capToolResult } from "./tool-result-budget.js";
@@ -224,23 +225,9 @@ function safeInt(val: unknown, fallback: number, max: number): number {
   return Math.min(Math.round(n), max);
 }
 
-/**
- * Deterministic-floor enforcement on the caller side. When the tool being
- * invoked is in FLOOR_ACTIONS, the caller MUST provide a verified
- * ActionReceipt — otherwise this throws FloorReceiptRequiredError and the
- * action is refused before any side-effect.
- *
- * The receipt is minted at /approve time (chat-pending-actions.ts) so
- * direct executeToolCall callers (autonomous-agent, batch-executor) that
- * try to side-step the user approval flow now fail closed instead of
- * silently sending mail / forwarding / hard-deleting.
- */
-export class FloorReceiptRequiredError extends Error {
-  constructor(public readonly toolName: string) {
-    super(`floor action "${toolName}" requires a verified ActionReceipt — none provided`);
-    this.name = "FloorReceiptRequiredError";
-  }
-}
+// FloorReceiptRequiredError lives in floor-receipt-error.ts so tool-failure.ts
+// can match it with `instanceof` without importing this module.
+export { FloorReceiptRequiredError };
 
 /**
  * Server-side context for a call. Never derived from tool args, so a model
