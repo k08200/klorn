@@ -205,8 +205,9 @@ export async function chatConversationRoutes(app: FastifyInstance) {
         reply: result.reply,
         eventDraft: result.eventDraft,
         ...(result.error ? { error: result.error } : {}),
-        // Only the daily cost cap carries a code (DAILY_COST_CAP_FREE /
-        // DAILY_COST_CAP) — clients show the cap, not a false "try again".
+        // Set whenever `error` is (public-failure.ts). Clients branch on the
+        // daily-cap codes (DAILY_COST_CAP_FREE / DAILY_COST_CAP) to show the
+        // cap instead of a false "try again", and ignore the rest.
         ...(result.errorCode ? { errorCode: result.errorCode } : {}),
       };
     },

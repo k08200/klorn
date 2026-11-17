@@ -1389,6 +1389,8 @@ interface WatchFailure {
 }
 
 function watchFailure(label: string, err: unknown): { error: string; code: ProviderFailureCode } {
+  // The facts (class, status, code) go to the log here; callers only see the code.
+  logDbFailure("[GMAIL-WATCH] watch or stop call failed", err);
   return { error: label, code: classifyFailure(err) };
 }
 

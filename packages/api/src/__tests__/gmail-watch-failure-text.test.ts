@@ -2,8 +2,8 @@
  * The Gmail watch helpers answer a failed watch/stop call as `{ error, code }`
  * where `error` is a fixed sentence. Their callers log it (the renewal loop,
  * the self-heal) and answer it to the client (POST /api/gmail/watch/enable
- * and /disable send the result as is), so it must never carry the API's
- * message, which can quote the request.
+ * sends the result as is; /disable sends its `error`), so it must never carry
+ * the API's message, which can quote the request.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

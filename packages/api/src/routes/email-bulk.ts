@@ -122,8 +122,11 @@ const ARCHIVE_FAILED = "Gmail archive failed";
  * (public-failure.ts), never the provider's message, which can quote the mail.
  */
 const archiveError = (err: unknown): ArchiveResult => {
-  logDbFailure("[EMAIL-BULK] archive failed", err, { level: "error" });
   const failure = publicFailure(err, "mail");
+  // A dead grant fails every message of the batch the same way: no line each.
+  if (failure.code !== "PROVIDER_AUTH_FAILED") {
+    logDbFailure("[EMAIL-BULK] archive failed", err, { level: "error" });
+  }
   return { ok: false, error: `${ARCHIVE_FAILED}. ${failure.error}`, code: failure.code };
 };
 
