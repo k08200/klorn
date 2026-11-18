@@ -279,6 +279,9 @@ final class AppModel {
     /// A banner tapped before the first sync (cold launch): its item opens
     /// as soon as a queue arrives (`applyPendingReveal`).
     @ObservationIgnored var pendingRevealItemID: String?
+    /// The pending reveal came from a banner's Reply (2026-11-18): open the
+    /// composer too once the mail is revealed, as a warm launch does.
+    @ObservationIgnored var pendingRevealOpensReply = false
     private var pollTask: Task<Void, Never>?
     private var realtime: RealtimeClient?
     /// Error from the last add-account attempt; cleared on the next attempt.
@@ -2543,6 +2546,7 @@ final class AppModel {
         permissionAnswers = nil
         didOfferLoginItem = false
         pendingRevealItemID = nil
+        pendingRevealOpensReply = false
         // Read before the Keychain is cleared: the device-calendar removals owed at
         // sign-out are sent with this session's token.
         let sessionToken = tokenStore.load()
@@ -3240,10 +3244,15 @@ final class AppModel {
     /// Cleared either way: a tap must not jump the window later on.
     private func applyPendingReveal() {
         guard let id = pendingRevealItemID else { return }
+        let opensReply = pendingRevealOpensReply
         pendingRevealItemID = nil
+        pendingRevealOpensReply = false
         guard let item = knownItem(id: id) else { return }
         revealInMail(item)
         Task { await select(item) }
+        // The same request a warm Reply makes: the reading pane opens the
+        // composer once this mail has loaded. Nothing is sent.
+        if opensReply { requestReply(to: item) }
     }
 
     /// Re-read the permission (the user may have changed it in System
