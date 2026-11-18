@@ -257,7 +257,7 @@ private func planUpgradeStringChecks() -> [(String, Bool)] {
         "plan.upgrade", "plan.upgrade.a11yHint", "proposals.needsPro", "commitments.needsPro",
         "chat.cap.free", "chat.cap.daily", "chat.send.failed", "chat.event.failed",
     ]
-    check("every new sentence is in all seven catalogues",
+    check("every new sentence is in every shipped catalogue",
           L10n.shipped.allSatisfy { code in
               let catalogue = L10n.keys(forLanguage: code)
               return keys.allSatisfy(catalogue.contains)

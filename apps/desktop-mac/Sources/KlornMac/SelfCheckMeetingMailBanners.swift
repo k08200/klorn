@@ -167,7 +167,7 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           && PushAlerter.announcement(for: [meeting("b")]) == L("push.announce.meeting", 1)
           && !L("push.announce.meeting", 3).contains("%") && L("push.announce.meeting", 3).contains("3"))
     check("the new and changed strings exist in every locale",
-          ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
+          L10n.shipped.allSatisfy { locale in
               let strings = bannerSourceText(sourceDir, "Resources/\(locale).lproj/Localizable.strings")
               return strings.contains("\"push.announce.meeting\" = ")
                   && ["prefs.banners.detail", "auto.notify.emailUrgent.detail"].allSatisfy { key in

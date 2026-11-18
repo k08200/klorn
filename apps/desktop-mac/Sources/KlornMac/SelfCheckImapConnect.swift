@@ -298,7 +298,7 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     ]
     let presetStems = ImapMailProvider.allCases.filter(\.usesPresetCopy).map { $0.rawValue.lowercased() }
     let perPreset = presetStems.flatMap { ["account.\($0).name", "account.\($0).password.hint"] }
-    for language in ["en", "ko", "ja", "zh", "es", "fr", "de"] {
+    for language in L10n.shipped {
         let url = sourceDir.appendingPathComponent("Resources/\(language).lproj/Localizable.strings")
         let table = NSDictionary(contentsOf: url) as? [String: String] ?? [:]
         let missing = (keys + presetFormats + perPreset).filter { (table[$0] ?? "").isEmpty }

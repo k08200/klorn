@@ -76,9 +76,19 @@ cp -R "$RES_BUNDLE" "$APP/Contents/Resources/"
 # plain `swift build`, a full Contents/Resources tree from the --arch
 # (Xcode-style) build. Foundation's Bundle API reads both; accept both here.
 SHIPPED="$APP/Contents/Resources/KlornMac_KlornMac.bundle"
-for code in en ko; do
+# Klorn ships exactly en, ko and zh (2026-11-17). A missing one would be dead
+# localization; any other .lproj is a stale build output (SwiftPM does not prune
+# resources deleted from the source tree) that would ship a retired language.
+for code in en ko zh; do
   [ -d "$SHIPPED/$code.lproj" ] || [ -d "$SHIPPED/Contents/Resources/$code.lproj" ] \
     || { echo "✗ resource bundle is missing $code.lproj — localization would be dead"; exit 1; }
+done
+for lproj in "$SHIPPED"/*.lproj "$SHIPPED"/Contents/Resources/*.lproj; do
+  [ -d "$lproj" ] || continue
+  case "$(basename "$lproj")" in
+    en.lproj|ko.lproj|zh.lproj) ;;
+    *) echo "✗ resource bundle carries $(basename "$lproj") — Klorn ships en, ko, zh only; clean .build and rebuild"; exit 1 ;;
+  esac
 done
 echo "▸ resource bundle: $(du -sh "$APP/Contents/Resources/KlornMac_KlornMac.bundle" | cut -f1) ($(ls "$APP/Contents/Resources/KlornMac_KlornMac.bundle" | tr '\n' ' '))"
 
@@ -124,8 +134,17 @@ for lproj in Resources/InfoPlist/*.lproj; do
   mkdir -p "$APP/Contents/Resources/$(basename "$lproj")"
   cp "$lproj/InfoPlist.strings" "$APP/Contents/Resources/$(basename "$lproj")/"
 done
-[ -f "$APP/Contents/Resources/ko.lproj/InfoPlist.strings" ] \
-  || { echo "✗ InfoPlist.strings missing — the calendar prompt would not be localised"; exit 1; }
+for code in en ko zh; do
+  [ -f "$APP/Contents/Resources/$code.lproj/InfoPlist.strings" ] \
+    || { echo "✗ $code InfoPlist.strings missing — the calendar prompt would not be localised"; exit 1; }
+done
+for lproj in "$APP"/Contents/Resources/*.lproj; do
+  [ -d "$lproj" ] || continue
+  case "$(basename "$lproj")" in
+    en.lproj|ko.lproj|zh.lproj) ;;
+    *) echo "✗ the app carries $(basename "$lproj") — Klorn ships en, ko, zh only"; exit 1 ;;
+  esac
+done
 
 # Dock/Finder icon: build AppIcon.icns from the source PNG (the matte K).
 ICON_SRC="Resources/AppIcon.png"
