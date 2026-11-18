@@ -941,14 +941,9 @@ body {
   }
 }
 
-/* Pretendard carries some Hanja, so for Japanese and Chinese UI the platform's
-   own CJK face goes ahead of it — otherwise one line of kanji/hanzi would mix
-   Korean-style glyphs with the system font's. html[lang] is set by i18n.tsx. */
-:root:lang(ja) {
-  --font-sans:
-    var(--font-geist-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI",
-    "Yu Gothic", Meiryo, "Pretendard Variable", ui-sans-serif, system-ui, sans-serif;
-}
+/* Pretendard carries some Hanja, so for Chinese UI the platform's own CJK face
+   goes ahead of it — otherwise one line of hanzi would mix Korean-style glyphs
+   with the system font's. html[lang] (zh-Hans) is set by i18n.tsx. */
 :root:lang(zh) {
   --font-sans:
     var(--font-geist-sans), "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",

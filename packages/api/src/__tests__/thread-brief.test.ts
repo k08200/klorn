@@ -119,6 +119,14 @@ describe("getThreadBrief", () => {
     expect(upsert.create.analyzedMessageCount).toBe(3);
   });
 
+  it("asks for the prose in Simplified Chinese with lang=zh", async () => {
+    state.thread = THREAD;
+    await getThreadBrief("u1", "t1", { lang: "zh" });
+    const system = (state.completions[0] as { messages: { content: string }[] }).messages[0]
+      .content;
+    expect(system).toContain("Write every value in Simplified Chinese.");
+  });
+
   it("serves the cache when the thread has not grown, and regenerates when it has", async () => {
     state.thread = THREAD;
     state.cached = {

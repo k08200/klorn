@@ -134,6 +134,18 @@ describe("POST /api/email/:id/summarize", () => {
     await app.close();
   });
 
+  it("asks for Simplified Chinese when lang is zh", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: "/api/email/e1/summarize",
+      headers: auth(),
+      payload: { lang: "zh" },
+    });
+    expect(summarizeEmailOnDemand.mock.calls[0][2]).toBe("zh");
+    await app.close();
+  });
+
   it("defaults to English when lang is missing or unknown", async () => {
     const app = await buildApp();
     await app.inject({

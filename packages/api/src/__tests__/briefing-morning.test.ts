@@ -384,10 +384,12 @@ describe("the model call", () => {
   });
 
   it("asks for the user's language in the user message, not the cached system prompt", async () => {
-    s.language = "ja";
+    s.language = "zh";
     s.mails = [mail("a")];
     await generateBriefing("u1", NOW);
-    expect(s.requests[0]?.messages[1]?.content).toContain("Write every field in Japanese");
+    expect(s.requests[0]?.messages[1]?.content).toContain(
+      "Write every field in Simplified Chinese",
+    );
     expect(s.requests[0]?.messages[0]?.content).toBe(BRIEFING_SYSTEM_PROMPT);
   });
 

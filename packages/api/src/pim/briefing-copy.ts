@@ -8,6 +8,7 @@
  */
 
 import type { NotificationLanguage } from "../notify/notification-strings.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 
 export interface BriefingCopy {
   /** Push and bell title for a delivered briefing. */
@@ -25,7 +26,7 @@ export interface BriefingCopy {
   languageLine: string;
 }
 
-const COPY: Record<NotificationLanguage, BriefingCopy> = {
+const COPY: Record<ShippedLanguage, BriefingCopy> = {
   en: {
     pushTitle: "Daily briefing ready",
     top: "Top 3 Today",
@@ -49,18 +50,6 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     languageLine:
       "Write every field in Korean (자연스러운 한국어). Keep product/tool names as-is. The quote stays in the mail's own language.",
   },
-  ja: {
-    pushTitle: "今日のブリーフィング",
-    top: "今日の Top 3",
-    connected: "関連する項目",
-    other: "その他",
-    quietHeadline:
-      "前回のブリーフィング以降、新しいものはありません。1日以内の予定や期限もありません。",
-    noMailHeadline: "接続されたメールアカウントがなく、1日以内の予定や期限もありません。",
-    stillOpen: "まだ対応中のメール",
-    languageLine:
-      "Write every field in Japanese (自然な日本語). Keep product/tool names as-is. The quote stays in the mail's own language.",
-  },
   zh: {
     pushTitle: "今日简报",
     top: "今日 Top 3",
@@ -72,49 +61,10 @@ const COPY: Record<NotificationLanguage, BriefingCopy> = {
     languageLine:
       "Write every field in Simplified Chinese. Keep product/tool names as-is. The quote stays in the mail's own language.",
   },
-  es: {
-    pushTitle: "Tu resumen del día",
-    top: "Top 3 de hoy",
-    connected: "Elementos relacionados",
-    other: "Todo lo demás",
-    quietHeadline:
-      "Nada nuevo desde tu último resumen, y nada programado ni pendiente en el próximo día.",
-    noMailHeadline:
-      "No hay ninguna cuenta de correo conectada, y nada programado ni pendiente en el próximo día.",
-    stillOpen: "Aún abiertos",
-    languageLine:
-      "Write every field in Spanish. Keep product/tool names as-is. The quote stays in the mail's own language.",
-  },
-  fr: {
-    pushTitle: "Votre briefing du jour",
-    top: "Top 3 du jour",
-    connected: "Éléments liés",
-    other: "Tout le reste",
-    quietHeadline:
-      "Rien de nouveau depuis votre dernier briefing, et rien de prévu ni d'échéance dans la journée à venir.",
-    noMailHeadline:
-      "Aucun compte mail n'est connecté, et rien de prévu ni d'échéance dans la journée à venir.",
-    stillOpen: "Encore ouverts",
-    languageLine:
-      "Write every field in French. Keep product/tool names as-is. The quote stays in the mail's own language.",
-  },
-  de: {
-    pushTitle: "Dein Tagesbriefing",
-    top: "Top 3 heute",
-    connected: "Zusammenhänge",
-    other: "Alles andere",
-    quietHeadline:
-      "Nichts Neues seit deinem letzten Briefing, und in den nächsten 24 Stunden ist nichts geplant oder fällig.",
-    noMailHeadline:
-      "Kein Mailkonto ist verbunden, und in den nächsten 24 Stunden ist nichts geplant oder fällig.",
-    stillOpen: "Noch offen",
-    languageLine:
-      "Write every field in German. Keep product/tool names as-is. The quote stays in the mail's own language.",
-  },
 };
 
 export function briefingCopy(lang: NotificationLanguage): BriefingCopy {
-  return COPY[lang] ?? COPY.en;
+  return COPY[toShippedLanguage(lang)];
 }
 
 /**

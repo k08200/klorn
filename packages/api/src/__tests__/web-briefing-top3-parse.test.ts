@@ -9,12 +9,12 @@
 
 import { describe, expect, it } from "vitest";
 import { extractTopActions } from "../../../web/src/app/briefing/use-briefing";
-import { NOTIFICATION_LANGUAGES } from "../notify/notification-strings.js";
 import { briefingCopy } from "../pim/briefing-copy.js";
 import { renderBriefingAnswer } from "../pim/briefing-picks.js";
+import { SHIPPED_LANGUAGES } from "../shipped-languages.js";
 
 describe("server-rendered Top 3 is what the web client parses", () => {
-  it.each(NOTIFICATION_LANGUAGES)("%s", (lang) => {
+  it.each(SHIPPED_LANGUAGES)("%s", (lang) => {
     const text = renderBriefingAnswer(
       {
         signal: "Signal line.",
