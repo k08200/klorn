@@ -32,7 +32,7 @@ import { clampText } from "../notify/clamp-text.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendPushNotification } from "../notify/push.js";
-import { isWithinQuietHours } from "../notify/quiet-hours.js";
+import { isWithinQuietHours, lastEndedQuietWindow } from "../notify/quiet-hours.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
@@ -40,6 +40,7 @@ import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import {
   isLocalTimeWithin,
+  localDateKey,
   localDayOfWeek,
   localDayUtcRange,
   localMinuteOfDay,
@@ -74,13 +75,20 @@ const UNANSWERED_MAX_AGE_DAYS = 7;
 /** The follow-up suggestion: older than this, up to FOLLOW_UP_MAX_AGE_DAYS. */
 const FOLLOW_UP_MIN_AGE_HOURS = 72;
 const FOLLOW_UP_MAX_AGE_DAYS = 14;
-const UNANSWERED_TAKE = 5;
-const FOLLOW_UP_TAKE = 3;
-/** Rows read for the merged reminder before one-per-thread folding. */
-const REPLY_WAIT_SCAN = 20;
-/** The merged reminder's user-local delivery window, [start, end) hours. */
+/**
+ * Rows read per reminder before one-per-thread folding: the title counts what
+ * waits, so the read is not cut to the lines shown.
+ */
+const REPLY_WAIT_SCAN = 100;
+/** Follow-up lines that get a contact lookup (the ones listed). */
+const FOLLOW_UP_LISTED = 3;
+/**
+ * The merged reminder's user-local delivery window, [start, end) hours. When
+ * quiet hours end later than its start, it runs as long after they end.
+ */
 const REPLY_WAIT_WINDOW_START_HOUR = 9;
 const REPLY_WAIT_WINDOW_END_HOUR = 12;
+const REPLY_WAIT_WINDOW_MS = (REPLY_WAIT_WINDOW_END_HOUR - REPLY_WAIT_WINDOW_START_HOUR) * HOUR_MS;
 /** Both reminder types: the merged one dedupes against either, so a flip mid-day never sends twice. */
 const REPLY_WAIT_TYPES = ["email_followup", "followup"];
 /** The push body cap (the bell row keeps the whole message). */
@@ -133,13 +141,19 @@ async function withReason(
   language: string,
 ): Promise<WaitingMail[]> {
   if (mails.length !== 1) return mails;
-  const [item] = await prisma.attentionItem.findMany({
-    where: { userId, source: "EMAIL", sourceId: { in: [mails[0].id] } },
-    select: { sourceId: true, tierReason: true },
-    take: 1,
-  });
-  const reason = item ? resolveTierReason(item.tierReason, language) : null;
-  return [{ ...mails[0], reason }];
+  try {
+    const [item] = await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: [mails[0].id] } },
+      select: { sourceId: true, tierReason: true },
+      take: 1,
+    });
+    const reason = item ? resolveTierReason(item.tierReason, language) : null;
+    return [{ ...mails[0], reason }];
+  } catch (err) {
+    // The reason is a detail: the reminder goes out without it.
+    logDbFailure("[PROACTIVE] wait reason read failed", err, { ids: { userId } });
+    return mails;
+  }
 }
 
 async function sentReplyWaitToday(userId: string, tz: string, types: string[]): Promise<boolean> {
@@ -164,6 +178,8 @@ async function notifyReplyWait(userId: string, rows: WaitingMail[]): Promise<voi
  */
 async function checkUnansweredEmails(userId: string, tz: string): Promise<void> {
   if (waitDigestOpenTo(userId)) return checkReplyWait(userId, tz);
+  // Dedupe before the (ordered, so sorted) read: same outcome, one cheap read a tick.
+  if (await sentReplyWaitToday(userId, tz, ["email_followup"])) return;
   const now = Date.now();
   const rows = await prisma.emailMessage.findMany({
     where: {
@@ -177,44 +193,50 @@ async function checkUnansweredEmails(userId: string, tz: string): Promise<void> 
     },
     select: WAITING_SELECT,
     orderBy: REPLY_WAIT_ORDER,
-    take: UNANSWERED_TAKE,
+    take: REPLY_WAIT_SCAN,
   });
   const mails = oneMailPerThread(rows);
   if (mails.length === 0) return;
-  if (await sentReplyWaitToday(userId, tz, ["email_followup"])) return;
   await notifyReplyWait(userId, mails);
+}
+
+/**
+ * Whether the merged reminder may go out now: never inside quiet hours;
+ * inside [REPLY_WAIT_WINDOW_START_HOUR, REPLY_WAIT_WINDOW_END_HOUR) local; or,
+ * when today's quiet hours ended after the window opened, for as long after
+ * they ended — so quiet hours that cover the morning delay the reminder, not
+ * drop it.
+ */
+async function inReplyWaitWindow(userId: string, tz: string, now: Date): Promise<boolean> {
+  const minute = localMinuteOfDay(now, tz);
+  if (minute < REPLY_WAIT_WINDOW_START_HOUR * 60) return false;
+  const row = await prisma.automationConfig.findUnique({
+    where: { userId },
+    select: { quietHoursStart: true, quietHoursEnd: true },
+  });
+  const quiet = {
+    quietHoursStart: row?.quietHoursStart ?? null,
+    quietHoursEnd: row?.quietHoursEnd ?? null,
+  };
+  if (isWithinQuietHours(now, quiet, tz)) return false;
+  if (minute < REPLY_WAIT_WINDOW_END_HOUR * 60) return true;
+  const ended = lastEndedQuietWindow(now, quiet, tz);
+  if (!ended || ended.endDateKey !== localDateKey(now, tz)) return false;
+  return (
+    localMinuteOfDay(ended.end, tz) > REPLY_WAIT_WINDOW_START_HOUR * 60 &&
+    now.getTime() - ended.end.getTime() < REPLY_WAIT_WINDOW_MS
+  );
 }
 
 /**
  * The merged reminder (NOTIFY_WAIT_DIGEST): one "wait" notification for every
  * mail that still needs the user's reply, UNANSWERED_THRESHOLD_HOURS to
- * FOLLOW_UP_MAX_AGE_DAYS old, bulk mail out. Sent once per local day inside
- * the morning window, and only outside the user's quiet hours: a window that
- * opens during them waits for them to end.
+ * FOLLOW_UP_MAX_AGE_DAYS old, bulk mail out, at any priority (needsReply is
+ * the signal). Sent once per local day inside inReplyWaitWindow.
  */
 async function checkReplyWait(userId: string, tz: string): Promise<void> {
   const now = new Date();
-  const minute = localMinuteOfDay(now, tz);
-  if (minute < REPLY_WAIT_WINDOW_START_HOUR * 60 || minute >= REPLY_WAIT_WINDOW_END_HOUR * 60) {
-    return;
-  }
-  const quiet = await prisma.automationConfig.findUnique({
-    where: { userId },
-    select: { quietHoursStart: true, quietHoursEnd: true },
-  });
-  if (
-    quiet &&
-    isWithinQuietHours(
-      now,
-      {
-        quietHoursStart: quiet.quietHoursStart ?? null,
-        quietHoursEnd: quiet.quietHoursEnd ?? null,
-      },
-      tz,
-    )
-  ) {
-    return;
-  }
+  if (!(await inReplyWaitWindow(userId, tz, now))) return;
   if (await sentReplyWaitToday(userId, tz, REPLY_WAIT_TYPES)) return;
   const rows = await prisma.emailMessage.findMany({
     where: {
@@ -485,17 +507,17 @@ async function checkFollowUpSuggestions(userId: string, tz: string): Promise<voi
     },
     select: WAITING_SELECT,
     orderBy: REPLY_WAIT_ORDER,
-    take: FOLLOW_UP_TAKE,
+    take: REPLY_WAIT_SCAN,
   });
   const stale = oneMailPerThread(rows);
   if (stale.length === 0) return;
   if (await sentReplyWaitToday(userId, tz, ["followup"])) return;
 
   const withContext = await Promise.all(
-    stale.map(async (e) => ({
+    stale.map(async (e, i) => ({
       from: e.from,
       subject: e.subject,
-      context: await getContactContext(userId, e.from),
+      context: i < FOLLOW_UP_LISTED ? await getContactContext(userId, e.from) : "",
     })),
   );
   const language = await getUserNotificationLanguage(userId);

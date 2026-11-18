@@ -15,10 +15,9 @@ describe("clampText", () => {
   it("never splits a grapheme cluster", () => {
     const family = "👨‍👩‍👧‍👦";
     const out = clampText(`${"a".repeat(8)}${family}${family}`, 12);
-    expect(out.length).toBeLessThanOrEqual(12);
-    // The kept part either holds the whole family emoji or none of it.
-    const kept = out.replace(/…$/, "").slice(8);
-    expect(kept === "" || kept === family).toBe(true);
+    // The family emoji (11 code units) does not fit in the room left: none of it is kept.
+    expect(out).toBe("aaaaaaaa…");
+    expect(clampText(`ab${family}${family}`, 14)).toBe(`ab${family}…`);
   });
 
   it("keeps a curly quote pair whole when the cut lands inside it", () => {
@@ -49,6 +48,19 @@ describe("clampText", () => {
 
   it("keeps line breaks of a multi-line body", () => {
     expect(clampText("Line one\nLine two", 50)).toBe("Line one\nLine two");
+  });
+
+  it("makes room for several open quotes and stays within the limit", () => {
+    const out = clampText("“a “b “c “d “e “f “g “h “i “j “k “l", 12);
+    expect(out.length).toBeLessThanOrEqual(12);
+    expect(out.split("“").length).toBe(out.split("”").length);
+  });
+
+  it("handles text made only of quotation marks", () => {
+    for (const text of ['""""""""""', "““““““““““", "「「「「「「「「「「"]) {
+      const out = clampText(text, 6);
+      expect(out.length).toBeLessThanOrEqual(6);
+    }
   });
 
   it("returns an empty string for a non-positive limit", () => {

@@ -156,6 +156,33 @@ describe("replyWaitContent", () => {
   });
 });
 
+describe("addresses in free text", () => {
+  it("folds an address in a subject or a reason to its domain", () => {
+    const c = replyWaitContent(
+      [
+        mail(
+          "Jun Park <jun@x.com>",
+          "Re: bob@acme.com invoice",
+          3 * DAY + 1,
+          "Asked by cfo@acme.co.kr",
+        ),
+      ],
+      "en",
+      NOW,
+    );
+    expect(c?.subtitle).toBe("Re: acme.com invoice");
+    expect(c?.body).toBe("Waiting 3 days for your reply · Asked by acme.co.kr");
+  });
+});
+
+describe("contactContextLabel bounds", () => {
+  it("shows at most three tags", () => {
+    expect(
+      contactContextLabel({ company: null, role: null, tags: "a, b, c, d, e, auto-added" }),
+    ).toBe(" (a, b, c)");
+  });
+});
+
 describe("followUpContent", () => {
   it("localizes and pluralizes the follow-up suggestion", () => {
     const one = followUpContent(

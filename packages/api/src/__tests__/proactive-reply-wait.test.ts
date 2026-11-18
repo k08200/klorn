@@ -15,6 +15,8 @@ const db = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   mails: [] as Array<Record<string, unknown>>,
   existing: null as Row | null,
+  findFirstArgs: [] as Array<Record<string, unknown>>,
+  itemsFail: false,
   contacts: [] as Row[],
   items: [] as Row[],
   emailFindMany: [] as Array<Record<string, unknown>>,
@@ -33,7 +35,10 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 0),
     },
     notification: {
-      findFirst: vi.fn(async () => db.existing),
+      findFirst: vi.fn(async (args: Record<string, unknown>) => {
+        db.findFirstArgs.push(args);
+        return db.existing;
+      }),
       create: vi.fn(async ({ data }: { data: Row }) => {
         db.created.push(data);
         return { id: `n${db.created.length}`, createdAt: new Date(), ...data };
@@ -44,7 +49,12 @@ vi.mock("../db.js", () => {
         return db.contacts.find((c) => c.email === where.email.equals) ?? null;
       }),
     },
-    attentionItem: { findMany: vi.fn(async () => db.items) },
+    attentionItem: {
+      findMany: vi.fn(async () => {
+        if (db.itemsFail) throw new Error("items down");
+        return db.items;
+      }),
+    },
     calendarEvent: { findMany: vi.fn(empty) },
     task: { findMany: vi.fn(empty), count: vi.fn(async () => 0) },
   };
@@ -89,6 +99,8 @@ beforeEach(() => {
   db.config = { timezone: "Asia/Seoul", notificationLanguage: "ko" };
   db.mails = [];
   db.existing = null;
+  db.findFirstArgs = [];
+  db.itemsFail = false;
   db.contacts = [];
   db.items = [];
   db.emailFindMany = [];
@@ -254,6 +266,84 @@ describe("reply-wait reminders, NOTIFY_WAIT_DIGEST on", () => {
     db.existing = { id: "n0", type: "followup" };
     await runProactiveActions("u1");
     expect(db.created).toEqual([]);
+  });
+
+  it("dedupes on both reminder types since the start of the user's local day", async () => {
+    vi.setSystemTime(MORNING);
+    db.mails = [waiting("Jun Park <jun@x.com>", "Deck")];
+    await runProactiveActions("u1");
+    const where = db.findFirstArgs
+      .map((a) => a.where as Row)
+      .find((w) => JSON.stringify(w.type).includes("followup"));
+    expect(where).toMatchObject({
+      userId: "u1",
+      type: { in: ["email_followup", "followup"] },
+      // 2026-11-18 00:00 in Seoul.
+      createdAt: { gte: new Date("2026-11-17T15:00:00.000Z") },
+    });
+  });
+
+  it("reads mail 48 hours to 14 days old", async () => {
+    vi.setSystemTime(MORNING);
+    await runProactiveActions("u1");
+    const where = db.emailFindMany[0].where as { receivedAt: { lte: Date; gte: Date } };
+    expect(where.receivedAt.lte).toEqual(new Date(MORNING.getTime() - 48 * 60 * 60 * 1000));
+    expect(where.receivedAt.gte).toEqual(new Date(MORNING.getTime() - 14 * DAY));
+  });
+
+  it("opens at 09:00 and closes at 12:00 local", async () => {
+    db.mails = [waiting("Jun Park <jun@x.com>", "Deck")];
+    const seoul = (hhmm: string) => new Date(`2026-11-18T${hhmm}:00.000+09:00`);
+    const sentAt = async (hhmm: string) => {
+      db.created = [];
+      vi.setSystemTime(seoul(hhmm));
+      await runProactiveActions("u1");
+      return db.created.length;
+    };
+    expect(await sentAt("08:59")).toBe(0);
+    expect(await sentAt("09:00")).toBe(1);
+    expect(await sentAt("11:59")).toBe(1);
+    expect(await sentAt("12:00")).toBe(0);
+  });
+
+  it("quiet hours that cover the morning delay the reminder instead of dropping it", async () => {
+    db.config = {
+      timezone: "Asia/Seoul",
+      notificationLanguage: "en",
+      quietHoursStart: "22:00",
+      quietHoursEnd: "12:30",
+    };
+    db.mails = [waiting("Jun Park <jun@x.com>", "Deck")];
+    vi.setSystemTime(new Date("2026-11-18T12:10:00.000+09:00"));
+    await runProactiveActions("u1");
+    expect(db.created).toEqual([]);
+    vi.setSystemTime(new Date("2026-11-18T12:40:00.000+09:00"));
+    await runProactiveActions("u1");
+    expect(db.created).toHaveLength(1);
+    db.created = [];
+    vi.setSystemTime(new Date("2026-11-18T15:40:00.000+09:00"));
+    await runProactiveActions("u1");
+    expect(db.created).toEqual([]);
+  });
+
+  it("counts every waiting thread in the title, not just the listed lines", async () => {
+    vi.setSystemTime(MORNING);
+    db.mails = Array.from({ length: 25 }, (_, i) => waiting(`P${i} <p${i}@x.com>`, `S${i}`));
+    await runProactiveActions("u1");
+    expect(db.created[0]).toMatchObject({ title: "답장 대기 25건" });
+    expect(String(db.created[0].message).split("\n")).toHaveLength(3);
+  });
+
+  it("sends the single reminder without its reason when the reason read fails", async () => {
+    vi.setSystemTime(MORNING);
+    db.config = { timezone: "Asia/Seoul", notificationLanguage: "en" };
+    db.mails = [waiting("Jun Park <jun@x.com>", "Deck")];
+    db.itemsFail = true;
+    await runProactiveActions("u1");
+    expect(db.created[0]).toMatchObject({
+      title: "Jun Park",
+      message: "Deck\nWaiting 3 days for your reply",
+    });
   });
 
   it("cohort: only listed users get the new behavior", async () => {
