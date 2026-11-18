@@ -96,20 +96,22 @@ function isPausedForPolling(
 }
 
 /**
- * Flag a row whose login was rejected for reconnect, and alert the user once a day.
+ * Flag a row whose login was rejected for reconnect, and alert the user.
  * Conditional on the cipher the poll began with: a user who relinked while this
  * poll's login was being rejected has a NEW password, which must not be flagged.
- * The alert goes out when this poll set the flag, and is asked for once more when
- * this poll is the one that stopped the polling (`stopped`): the 1st refusal's alert
- * may be hours old by then. The notification module still sends at most one per
- * account per UTC day, so a stop on the same day as the 1st refusal stays silent.
- * Never throws.
+ * The alert goes out when this poll set the flag (at most once per account per UTC
+ * day), and once more when this poll is the one that stopped the polling
+ * (`stoppedAt`): the 1st refusal's alert may be hours old by then. That one is
+ * keyed by the stop (founder decision LOCKED 2026-11-17), so a stop on the same UTC
+ * day as the 1st refusal is no longer swallowed by the daily dedupe; only the poll
+ * whose conditional write reached the limit gets a stop, so it is sent once. A stop
+ * that also set the flag sends that one alert, not two. Never throws.
  */
 async function flagForReconnect(
   provider: ImapProviderConfig,
   ids: { userId: string; rowId: string },
   passwordCipher: string,
-  stopped: boolean,
+  stoppedAt: Date | null,
 ): Promise<void> {
   const { userId, rowId } = ids;
   try {
@@ -117,7 +119,11 @@ async function flagForReconnect(
       where: { id: rowId, userId, imapPasswordCipher: passwordCipher, needsReconnect: false },
       data: { needsReconnect: true },
     });
-    if (count > 0 || stopped) await notifyLinkedInboxReconnect(userId, rowId, provider.provider);
+    if (stoppedAt) {
+      await notifyLinkedInboxReconnect(userId, rowId, provider.provider, { stoppedAt });
+    } else if (count > 0) {
+      await notifyLinkedInboxReconnect(userId, rowId, provider.provider);
+    }
   } catch (flagErr) {
     logDbFailure("[imap] could not flag row for reconnect", flagErr, {
       ids: { logScope: provider.logScope, rowId },
@@ -129,19 +135,21 @@ async function flagForReconnect(
  * Back the refused password off (imap-auth-backoff.ts): the next login waits, and
  * the refusal that reaches the limit stops the poll until the user reconnects.
  * Every IMAP row counts; a generic row is paused by its reconnect flag anyway.
- * Resolves true when this refusal is the one that stopped the poll.
+ * Resolves the instant of the stop when this refusal is the one that stopped the
+ * poll (the one conditional write that reached the limit), else null.
  */
 async function backOffRefusedLogin(
   provider: ImapProviderConfig,
   ids: { userId: string; rowId: string },
   credential: { passwordCipher: string; failuresBefore: number | null | undefined },
-): Promise<boolean> {
-  const written = await recordImapAuthRefusal({ ...ids, ...credential, now: new Date() });
-  if (!written || written.imapAuthFailures < IMAP_AUTH_FAILURE_LIMIT) return false;
+): Promise<Date | null> {
+  const now = new Date();
+  const written = await recordImapAuthRefusal({ ...ids, ...credential, now });
+  if (!written || written.imapAuthFailures < IMAP_AUTH_FAILURE_LIMIT) return null;
   console.warn(
     `[${provider.logScope}] login refused ${IMAP_AUTH_FAILURE_LIMIT} times in a row for row ${ids.rowId}; polling stopped until the mailbox is reconnected`,
   );
-  return true;
+  return now;
 }
 
 /**
@@ -181,12 +189,12 @@ async function handlePollFailure(
     // tick; a fixed host's poll waits out the login backoff below instead (its actions
     // keep their own cooldown, and refuse a row the backoff has stopped).
     if (userHost) startCredentialCooldown(provider, rowId, credentialKey);
-    const stopped = await backOffRefusedLogin(
+    const stoppedAt = await backOffRefusedLogin(
       provider,
       { userId, rowId },
       { passwordCipher, failuresBefore: ctx.authFailuresBefore },
     );
-    await flagForReconnect(provider, { userId, rowId }, passwordCipher, stopped);
+    await flagForReconnect(provider, { userId, rowId }, passwordCipher, stoppedAt);
   }
   await recordSyncError(userId, rowId, imapSyncErrorCode(err), passwordCipher);
   if (shouldReportPollFailure(rowId, kind)) {
