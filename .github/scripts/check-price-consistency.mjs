@@ -16,9 +16,10 @@
  *   discount; two different public prices for one product.
  *
  * So: lib/pricing.ts is the source of truth, every static page is compared
- * against it, and native >= web is asserted. de/fr write prices in European
- * format (29,99 $, not $29.99) and a naive /\$[\d.]+/ sweep silently skips them —
- * both forms are matched here on purpose.
+ * against it, and native >= web is asserted. Both notations are matched on
+ * purpose: the retired de/fr pages wrote the European form (29,99 $, not
+ * $29.99), which a naive /\$[\d.]+/ sweep silently skips, and nothing stops a
+ * translation from reaching for it again.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -35,7 +36,7 @@ function readConst(source, name) {
   return match[1];
 }
 
-/** Dollars in "$29.99", "$34.99" or "29,99 $" — the de/fr form included. */
+/** Dollars in "$29.99", "$34.99" or "29,99 $" — the European form included. */
 function amount(price) {
   const parsed = Number(price.replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -98,12 +99,14 @@ const RETIRED_PRICES = ["8.99", "7.99"];
 const SELF = ".github/scripts/check-price-consistency.mjs";
 
 /**
- * Pages that are supposed to state Klorn's own price. If one of these yields
- * no price at all, the selectors above have gone blind rather than the page
- * having become correct.
+ * Pages that are supposed to state Klorn's own price, in every language the
+ * site ships (en at the root, ko, zh). If one of these yields no price at all,
+ * the selectors above have gone blind rather than the page having become
+ * correct. The retired /ja/, /de/, /es/ and /fr/ URLs are redirect stubs with
+ * no copy; check-website-lockstep.sh holds them in that shape.
  */
 const QUOTES_A_PRICE =
-  /^website\/(?:[a-z]{2}\/)?(?:index\.html|pricing\/index\.html|(?:[a-z]{2}\/)?vs\/[^/]+\/index\.html)$/;
+  /^website\/(?:(?:ko|zh)\/)?(?:index\.html|pricing\/index\.html|vs\/[^/]+\/index\.html)$/;
 
 for (const page of pages) {
   const html = readFileSync(page, "utf8");
@@ -115,16 +118,16 @@ for (const page of pages) {
   //    `td.us` is a general "Klorn's side" class, also used on /self-host/,
   //    /security/ and in blog tables — scoping to the whole cell would fail
   //    the build the first time one of those mentions "a $5 VPS". Only the
-  //    price row is read, in the labels all seven languages use for it.
+  //    price row is read, in the labels the three shipped languages use for it.
   const priceRows = [
     ...html.matchAll(
-      /<tr><th>(?:Price|Published price|공개 가격|가격|公開価格|価格|公开价格|价格|Precio publicado|Precio|Prix public|Prix|Öffentlicher Preis|Preis)<\/th>([\s\S]*?)<\/tr>/g,
+      /<tr><th>(?:Price|Published price|공개 가격|가격|公开价格|价格)<\/th>([\s\S]*?)<\/tr>/g,
     ),
   ].map((m) => m[1]);
 
   const ours = [
     ...html.matchAll(/<div class="amt[^"]*">([\s\S]*?)<\/div>/g),
-    // Translated pages link their own locale's pricing page (/ja/pricing/).
+    // Translated pages link their own locale's pricing page (/zh/pricing/).
     ...html.matchAll(/<a href="\/(?:[a-z]{2}\/)?pricing\/">([^<]*)</g),
     // Inside a price row, only OUR column. The other cell is the competitor's
     // published price and is none of this guard's business.

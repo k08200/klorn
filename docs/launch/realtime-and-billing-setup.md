@@ -96,6 +96,6 @@ Founder steps:
    features already follow `user.plan`, and since 2026-10-24 every signup
    starts on FREE.
 
-The landing already says $29.99/mo with a 7-day trial (all 7 locales). Keep the
-price string, the Paddle price, and `TRIAL_DAYS` in sync — three places,
-one number.
+The landing already says $29.99/mo with a 7-day trial (all 3 locales: en,
+ko, zh). Keep the price string, the Paddle price, and `TRIAL_DAYS` in sync —
+three places, one number.
