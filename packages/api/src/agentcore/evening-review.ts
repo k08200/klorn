@@ -45,6 +45,7 @@ import { senderName } from "../notify/notification-format.js";
 import type { NotificationLanguage } from "../notify/notification-strings.js";
 import { readCalendarRows } from "../pim/calendar-read.js";
 import { COMMITMENT_CONFIRMED_MIN_CONFIDENCE } from "../pim/commitment-confirmation.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 import { localDayUtcRange, localMinuteOfDay } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 
@@ -125,7 +126,7 @@ interface EveningCopy {
 }
 
 /** One column per shipped language: tsc names any entry a new language misses. */
-const COPY: Record<NotificationLanguage, EveningCopy> = {
+const COPY: Record<ShippedLanguage, EveningCopy> = {
   en: {
     title: (n) => `${n} thing${n === 1 ? "" : "s"} still open today`,
     earlyStartTitle: "Early start tomorrow",
@@ -148,17 +149,6 @@ const COPY: Record<NotificationLanguage, EveningCopy> = {
     noSubject: "(제목 없음)",
     timeLocale: "ko-KR",
   },
-  ja: {
-    title: (n) => `今日まだ残っていること ${n}件`,
-    earlyStartTitle: "明日は早い予定があります",
-    openMail: (n) => `今日のメールで未対応 (${n})`,
-    commitments: (n) => `今日が期限・期限切れ (${n})`,
-    theyOwe: (n) => `相手の対応待ち (${n})`,
-    overdue: "期限切れ",
-    firstMeeting: (time, title) => `明日の最初の予定 ${time}: ${title}`,
-    noSubject: "(件名なし)",
-    timeLocale: "ja-JP",
-  },
   zh: {
     title: (n) => `今天还有 ${n} 件事未完成`,
     earlyStartTitle: "明天有早间日程",
@@ -169,40 +159,6 @@ const COPY: Record<NotificationLanguage, EveningCopy> = {
     firstMeeting: (time, title) => `明天第一个日程 ${time}：${title}`,
     noSubject: "(无主题)",
     timeLocale: "zh-CN",
-  },
-  es: {
-    title: (n) => (n === 1 ? "1 asunto pendiente hoy" : `${n} asuntos pendientes hoy`),
-    earlyStartTitle: "Mañana empiezas temprano",
-    openMail: (n) => `Correo de hoy aún pendiente (${n})`,
-    commitments: (n) => `Vence hoy o vencido (${n})`,
-    theyOwe: (n) => `Esperando a otros (${n})`,
-    overdue: "vencido",
-    firstMeeting: (time, title) => `Mañana empieza a las ${time}: ${title}`,
-    noSubject: "(sin asunto)",
-    timeLocale: "es-ES",
-  },
-  fr: {
-    title: (n) =>
-      n === 1 ? "1 point encore ouvert aujourd'hui" : `${n} points encore ouverts aujourd'hui`,
-    earlyStartTitle: "Début matinal demain",
-    openMail: (n) => `Mails du jour encore en attente (${n})`,
-    commitments: (n) => `Échéance aujourd'hui ou dépassée (${n})`,
-    theyOwe: (n) => `En attente des autres (${n})`,
-    overdue: "en retard",
-    firstMeeting: (time, title) => `Demain, premier rendez-vous à ${time} : ${title}`,
-    noSubject: "(sans objet)",
-    timeLocale: "fr-FR",
-  },
-  de: {
-    title: (n) => (n === 1 ? "1 offener Punkt heute" : `${n} offene Punkte heute`),
-    earlyStartTitle: "Morgen früher Start",
-    openMail: (n) => `Heutige Mails noch offen (${n})`,
-    commitments: (n) => `Heute fällig oder überfällig (${n})`,
-    theyOwe: (n) => `Warten auf andere (${n})`,
-    overdue: "überfällig",
-    firstMeeting: (time, title) => `Morgen erster Termin um ${time}: ${title}`,
-    noSubject: "(kein Betreff)",
-    timeLocale: "de-DE",
   },
 };
 
@@ -298,7 +254,7 @@ export function composeEveningReview(
   timeZone: string,
 ): EveningReviewMessage | null {
   if (!eveningReviewHasContent(input, timeZone)) return null;
-  const copy = COPY[lang] ?? COPY.en;
+  const copy = COPY[toShippedLanguage(lang)];
   const sections = openSections(input, copy, lang);
   const prepped = preppedMeetings(input);
   const prepSections: ReviewSection[] = prepped.map((p) => ({

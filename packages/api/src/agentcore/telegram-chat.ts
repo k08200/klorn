@@ -19,6 +19,7 @@ import { sendTelegramMessage } from "../notify/telegram.js";
 import { findUserIdByTelegramChatId } from "../notify/telegram-link.js";
 import { effectivePlan } from "../org/effective-tier.js";
 import { captureDbFailure } from "../report-db-failure.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 import { recordDedupKey, wasRecentlyDeduped } from "./agent-dedup.js";
 import { runChatTurn } from "./chat-engine.js";
 
@@ -92,37 +93,13 @@ const NOTICES = {
     paywalled: "Klorn과 채팅하려면 활성 구독이 필요합니다.",
     eventDraft: "캘린더 초안으로 준비해 두었습니다 — Klorn 앱에서 확인해 주세요.",
   },
-  ja: {
-    tooLong: "メッセージが長すぎます — Klorn チャットは 4000 文字までです。",
-    rateLimited: "メッセージが多すぎます — 少し待ってからもう一度お試しください。",
-    paywalled: "Klorn とチャットするには有効なサブスクリプションが必要です。",
-    eventDraft: "カレンダーの下書きを用意しました — Klorn アプリで確認してください。",
-  },
   zh: {
     tooLong: "消息太长 — Klorn 聊天最多接受 4000 个字符。",
     rateLimited: "消息太频繁 — 请稍等一分钟再试。",
     paywalled: "与 Klorn 聊天需要有效的订阅。",
     eventDraft: "已准备好日历草稿 — 请在 Klorn 应用中确认。",
   },
-  de: {
-    tooLong: "Die Nachricht ist zu lang — Klorn-Chat nimmt bis zu 4000 Zeichen an.",
-    rateLimited: "Zu viele Nachrichten — warte eine Minute und versuche es erneut.",
-    paywalled: "Für den Chat mit Klorn ist ein aktives Abo erforderlich.",
-    eventDraft: "Als Kalenderentwurf vorbereitet — bestätige ihn in der Klorn-App.",
-  },
-  es: {
-    tooLong: "El mensaje es demasiado largo — el chat de Klorn admite hasta 4000 caracteres.",
-    rateLimited: "Demasiados mensajes — espera un minuto e inténtalo de nuevo.",
-    paywalled: "Se necesita una suscripción activa para chatear con Klorn.",
-    eventDraft: "Lo preparé como borrador de calendario — confírmalo en la app de Klorn.",
-  },
-  fr: {
-    tooLong: "Message trop long — le chat Klorn accepte jusqu'à 4000 caractères.",
-    rateLimited: "Trop de messages — attendez une minute et réessayez.",
-    paywalled: "Un abonnement actif est requis pour discuter avec Klorn.",
-    eventDraft: "Préparé comme brouillon d'agenda — confirmez-le dans l'app Klorn.",
-  },
-} as const;
+} as const satisfies Record<ShippedLanguage, Record<string, string>>;
 
 /** Unlinked chats have no user, so no language preference — fixed English. */
 const UNLINKED_NOTICE =
@@ -130,8 +107,7 @@ const UNLINKED_NOTICE =
 
 async function noticeFor(userId: string, key: keyof (typeof NOTICES)["en"]): Promise<string> {
   const language = await getUserNotificationLanguage(userId).catch(() => "en" as const);
-  const table = NOTICES[language as keyof typeof NOTICES] ?? NOTICES.en;
-  return table[key];
+  return NOTICES[toShippedLanguage(language)][key];
 }
 
 /** Split a reply for Telegram's message cap, preferring newline boundaries. */

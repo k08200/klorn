@@ -51,26 +51,58 @@ describe("activeUiLocale", () => {
     stubBrowser("{not json");
     expect(activeUiLocale()).toBe("en");
   });
+
+  it("ships exactly en, ko and zh", async () => {
+    const { UI_LOCALES } = await import("../../../web/src/lib/ui-locale");
+    expect([...UI_LOCALES]).toEqual(["en", "ko", "zh"]);
+  });
+
+  it.each(["zh"])("honours the shipped %s", async (language) => {
+    stubBrowser({ language });
+    const { activeUiLocale } = await import("../../../web/src/lib/ui-locale");
+    expect(activeUiLocale()).toBe(language);
+  });
+
+  it.each([
+    "ja",
+    "es",
+    "fr",
+    "de",
+  ])("reads a profile still holding the retired %s as English", async (language) => {
+    stubBrowser({ language });
+    const { activeUiLocale } = await import("../../../web/src/lib/ui-locale");
+    expect(activeUiLocale()).toBe("en");
+  });
 });
 
 describe("apiFetch", () => {
   it("sends the UI locale as Accept-Language", async () => {
+    stubBrowser({ language: "zh" });
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { apiFetch } = await import("../../../web/src/lib/api");
+    await apiFetch("/api/inbox/firewall/");
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect((init.headers as Record<string, string>)["Accept-Language"]).toBe("zh");
+  });
+
+  it("sends English for a profile still holding a retired locale", async () => {
     stubBrowser({ language: "ja" });
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const { apiFetch } = await import("../../../web/src/lib/api");
     await apiFetch("/api/inbox/firewall/");
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect((init.headers as Record<string, string>)["Accept-Language"]).toBe("ja");
+    expect((init.headers as Record<string, string>)["Accept-Language"]).toBe("en");
   });
 
   it("lets a caller override the header", async () => {
-    stubBrowser({ language: "ja" });
+    stubBrowser({ language: "zh" });
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const { apiFetch } = await import("../../../web/src/lib/api");
-    await apiFetch("/api/x", { headers: { "Accept-Language": "de" } });
+    await apiFetch("/api/x", { headers: { "Accept-Language": "ko" } });
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect((init.headers as Record<string, string>)["Accept-Language"]).toBe("de");
+    expect((init.headers as Record<string, string>)["Accept-Language"]).toBe("ko");
   });
 });

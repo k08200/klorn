@@ -36,10 +36,10 @@ import { parseLlmJson } from "../llm/llm-json.js";
 import { describeErrorChain } from "../llm/model-fallback.js";
 import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
 import { prioritiesJudgeBlock } from "../mail/triage-priorities.js";
-import { resolveNotificationLanguage } from "../notify/notification-strings.js";
 import { tierV2Enabled } from "../ops/feature-flags.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { detectCiNoise, isCiNoiseSilentEnabled } from "./ci-noise.js";
 import type { ClassifiableEmail, SlackConversationKind } from "./email-classifier.js";
@@ -335,9 +335,13 @@ ${lines.join("\n")}`;
  * else leaves the prompt byte-identical to the English default, so the judge's
  * scoring behaviour (and its eval baseline) is untouched.
  */
+const REASON_LANGUAGE_INSTRUCTION: Readonly<Partial<Record<ShippedLanguage, string>>> = {
+  ko: "\nWrite the reason in Korean. The scores stay unchanged — only the reason's language.",
+  zh: "\nWrite the reason in Simplified Chinese. The scores stay unchanged — only the reason's language.",
+};
+
 function reasonLanguageInstruction(language?: string | null): string {
-  if (resolveNotificationLanguage(language) !== "ko") return "";
-  return "\nWrite the reason in Korean. The scores stay unchanged — only the reason's language.";
+  return REASON_LANGUAGE_INSTRUCTION[toShippedLanguage(language)] ?? "";
 }
 
 function buildJudgePrompt(

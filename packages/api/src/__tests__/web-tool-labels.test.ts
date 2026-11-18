@@ -3,11 +3,7 @@
 // same arrangement as web-meeting-link.test.ts. The helper and the locale
 // tables have no imports, which keeps the cross-package import trivial.
 import { describe, expect, it } from "vitest";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import {
@@ -16,7 +12,7 @@ import {
   UNKNOWN_TOOL_LABEL_KEY,
 } from "../../../web/src/lib/tool-labels";
 
-const LOCALES = { en, ko, ja, zh, es, fr, de } as const;
+const LOCALES = { en, ko, zh } as const;
 
 describe("toolLabelKey", () => {
   it("maps a known tool id to its own label key", () => {

@@ -15,6 +15,7 @@ import { captureLlmFailure, logLlmFailure, offeredKeyKind } from "../llm/report-
 import { senderEmail } from "../notify/notification-format.js";
 import { getProviderChain, type ProviderCredentials } from "../providers/index.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
+import { OUTPUT_LANGUAGE_NAME, type ShippedLanguage } from "../shipped-languages.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { htmlToPlainText } from "./email-text.js";
@@ -134,7 +135,7 @@ export async function summarizeEmailOnDemand(
     /** Which mailbox the message lives on; absent = primary. */
     linkedInboxAccountId?: string | null;
   },
-  lang: "en" | "ko",
+  lang: ShippedLanguage,
 ): Promise<(AISummaryResult & { needsReply: boolean; needsReplyReason: string | null }) | null> {
   const credentials = await getUserLlmCredentials(userId);
   if (getProviderChain(credentials).length === 0) return null;
@@ -187,12 +188,12 @@ export async function summarizeEmailOnDemand(
  *  numbers/dates/names, actionItems naming the concrete move (+ deadline when
  *  the email states one). Output language follows the user's UI. */
 function detailedAnalysisPrompt(
-  lang: "en" | "ko",
+  lang: ShippedLanguage,
   purpose?: string | null,
   companyDomains: readonly string[] = [],
   priorities: string | null = null,
 ): string {
-  const language = lang === "ko" ? "Korean" : "English";
+  const language = OUTPUT_LANGUAGE_NAME[lang];
   return `${analysisPreamble(purpose, companyDomains, priorities)}${EMAIL_ANALYSIS_BODY}
 
 ## Detailed mode overrides (this request only)

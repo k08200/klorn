@@ -1,6 +1,6 @@
 /**
  * Settings -> Accounts -> Account health (web/src/lib/account-health.ts): how a
- * connected mail account's status, last sync and failure read, in all 7 locales.
+ * connected mail account's status, last sync and failure read, in all 3 locales.
  */
 
 import { readFileSync } from "node:fs";
@@ -13,11 +13,7 @@ import {
   statusChip,
   syncProblemKey,
 } from "../../../web/src/lib/account-health";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import { accountHealthStatus } from "../mail/account-health";
@@ -127,8 +123,8 @@ describe("status", () => {
   });
 });
 
-describe("copy, all 7 locales", () => {
-  const LOCALES = { en, ko, ja, zh, de, fr, es } as const;
+describe("copy, all 3 locales", () => {
+  const LOCALES = { en, ko, zh } as const;
   const KEYS = Object.keys(en).filter((key) => key.startsWith("accountHealth."));
 
   it("has the whole Account Health set", () => {
