@@ -5,15 +5,24 @@ import { signToken, verifyToken } from "../auth.js";
 import { getLoginAuthUrl, getOAuth2Client } from "../mail/gmail.js";
 import { isAllowedNativeScheme } from "../routes/auth.js";
 import {
+  _resetPasswordResetThrottleForTests,
+  PASSWORD_RESET_MAX_REQUESTS,
+  PASSWORD_RESET_REUSE_MS,
+  PASSWORD_RESET_WINDOW_MS,
+} from "../security/password-reset-throttle.js";
+import {
   _resetRegisterThrottleForTests,
   REGISTER_THROTTLE_MAX_ATTEMPTS,
   recordRegisterAttempt,
 } from "../security/register-throttle.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 
-// The per-address register throttle is process-wide: without a reset, the
-// tests that register the same address would add up across the file.
-beforeEach(() => _resetRegisterThrottleForTests());
+// The per-address register and reset-mail throttles are process-wide: without
+// a reset, the tests that use the same address would add up across the file.
+beforeEach(() => {
+  _resetRegisterThrottleForTests();
+  _resetPasswordResetThrottleForTests();
+});
 
 // Stub email sender — auth register fires it non-blocking and swallows errors,
 // but we want to assert it was called with the right token.
@@ -2023,6 +2032,216 @@ describe("POST /api/auth/forgot-password", () => {
       "forgot2@example.com",
       expect.any(String),
     );
+    await app.close();
+  });
+});
+
+describe("POST /api/auth/forgot-password — per-address window and link reuse", () => {
+  const T0 = new Date("2026-11-18T09:00:00.000Z").getTime();
+  const MINUTE = 60 * 1000;
+  // Past the reuse window, well inside the per-address window.
+  const STEP = PASSWORD_RESET_REUSE_MS + MINUTE;
+
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const forgot = (app: ReturnType<typeof Fastify>, email: string) =>
+    app.inject({ method: "POST", url: "/api/auth/forgot-password", payload: { email } });
+  const reset = (app: ReturnType<typeof Fastify>, token: string, newPassword = "newpassword1") =>
+    app.inject({
+      method: "POST",
+      url: "/api/auth/reset-password",
+      payload: { token, newPassword },
+    });
+  const mailedToken = (index: number) => sendPasswordResetEmailSpy.mock.calls[index]?.[1] as string;
+  const hashOf = (raw: string) => crypto.createHash("sha256").update(raw).digest("hex");
+
+  it("mails at most PASSWORD_RESET_MAX_REQUESTS links per address per window, then answers the same 200 and mails nothing", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "victim@example.com");
+
+    for (let i = 0; i < PASSWORD_RESET_MAX_REQUESTS; i++) {
+      vi.setSystemTime(T0 + i * STEP);
+      const res = await forgot(app, "victim@example.com");
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+    }
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(PASSWORD_RESET_MAX_REQUESTS);
+    const lastToken = mailedToken(PASSWORD_RESET_MAX_REQUESTS - 1);
+    const storedBeforeLock = userStore.get("user-1")?.resetToken;
+    expect(storedBeforeLock).toBe(hashOf(lastToken));
+
+    // Locked: the same body as any request, no mail, and the stored link is
+    // untouched — the newest mailed link still works.
+    vi.setSystemTime(T0 + PASSWORD_RESET_MAX_REQUESTS * STEP);
+    const locked = await forgot(app, "victim@example.com");
+    expect(locked.statusCode).toBe(200);
+    expect(locked.json()).toEqual({ success: true });
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(PASSWORD_RESET_MAX_REQUESTS);
+    expect(userStore.get("user-1")?.resetToken).toBe(storedBeforeLock);
+    expect((await reset(app, lastToken)).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("counts a differently written form of the address in the same window", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "case@example.com");
+    for (let i = 0; i < PASSWORD_RESET_MAX_REQUESTS; i++) {
+      vi.setSystemTime(T0 + i * STEP);
+      await forgot(app, i % 2 === 0 ? "case@example.com" : "  CASE@Example.com ");
+    }
+    vi.setSystemTime(T0 + PASSWORD_RESET_MAX_REQUESTS * STEP);
+    await forgot(app, "Case@example.com");
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(PASSWORD_RESET_MAX_REQUESTS);
+    await app.close();
+  });
+
+  it("mails again once the window has passed", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "later@example.com");
+    for (let i = 0; i <= PASSWORD_RESET_MAX_REQUESTS; i++) {
+      vi.setSystemTime(T0 + i * STEP);
+      await forgot(app, "later@example.com");
+    }
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(PASSWORD_RESET_MAX_REQUESTS);
+
+    vi.setSystemTime(T0 + PASSWORD_RESET_WINDOW_MS);
+    await forgot(app, "later@example.com");
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(PASSWORD_RESET_MAX_REQUESTS + 1);
+    await app.close();
+  });
+
+  it("locks an address with no account the same way, before any account lookup", async () => {
+    const app = await buildApp();
+    const { prisma } = await import("../db.js");
+    const lookups = () =>
+      vi
+        .mocked(prisma.user.findUnique)
+        .mock.calls.filter(
+          ([args]) =>
+            (args as { where: { email?: string } }).where.email === "ghost-lock@example.com",
+        ).length;
+    for (let i = 0; i < PASSWORD_RESET_MAX_REQUESTS; i++) {
+      const res = await forgot(app, "ghost-lock@example.com");
+      expect(res.json()).toEqual({ success: true });
+    }
+    expect(lookups()).toBe(PASSWORD_RESET_MAX_REQUESTS);
+
+    const locked = await forgot(app, "ghost-lock@example.com");
+    expect(locked.statusCode).toBe(200);
+    expect(locked.json()).toEqual({ success: true });
+    expect(lookups()).toBe(PASSWORD_RESET_MAX_REQUESTS);
+    expect(sendPasswordResetEmailSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("keeps a link mailed moments ago live instead of retiring it with a second mail", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "twice@example.com");
+
+    await forgot(app, "twice@example.com");
+    const first = mailedToken(0);
+    vi.setSystemTime(T0 + PASSWORD_RESET_REUSE_MS - MINUTE);
+    const again = await forgot(app, "twice@example.com");
+
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toEqual({ success: true });
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(1);
+    expect(userStore.get("user-1")?.resetToken).toBe(hashOf(first));
+    expect((await reset(app, first)).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("mails a fresh link and retires the old one once the reuse window has passed", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "rotate@example.com");
+
+    await forgot(app, "rotate@example.com");
+    const first = mailedToken(0);
+    vi.setSystemTime(T0 + PASSWORD_RESET_REUSE_MS);
+    await forgot(app, "rotate@example.com");
+    const second = mailedToken(1);
+
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(2);
+    expect(second).not.toBe(first);
+    expect((await reset(app, first)).statusCode).toBe(400);
+    expect((await reset(app, second)).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("does not replace or mail when another request replaced the link it read", async () => {
+    const app = await buildApp();
+    const { prisma } = await import("../db.js");
+    await registerAndGetToken(app, "race@example.com");
+
+    await forgot(app, "race@example.com");
+    const first = mailedToken(0);
+    vi.setSystemTime(T0 + STEP);
+    // This request read the row before a concurrent one replaced the link.
+    const stored = userStore.get("user-1");
+    vi.mocked(prisma.user.findUnique).mockImplementationOnce((async () => ({
+      ...stored,
+      resetToken: "f".repeat(64),
+    })) as never);
+    const raced = await forgot(app, "race@example.com");
+
+    expect(raced.json()).toEqual({ success: true });
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(1);
+    expect(userStore.get("user-1")?.resetToken).toBe(hashOf(first));
+    await app.close();
+  });
+
+  it("issues a new link at once after the previous one was used", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "used@example.com");
+
+    await forgot(app, "used@example.com");
+    expect((await reset(app, mailedToken(0))).statusCode).toBe(200);
+    await forgot(app, "used@example.com");
+
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(2);
+    expect((await reset(app, mailedToken(1), "newpassword2")).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("puts the previous link back when the new mail fails, and does not hold off a retry", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "flaky@example.com");
+
+    await forgot(app, "flaky@example.com");
+    const first = mailedToken(0);
+    const firstExp = userStore.get("user-1")?.resetTokenExp;
+
+    vi.setSystemTime(T0 + STEP);
+    sendPasswordResetEmailSpy.mockResolvedValueOnce(false);
+    const failed = await forgot(app, "flaky@example.com");
+    expect(failed.json()).toEqual({ success: true });
+    expect(userStore.get("user-1")?.resetToken).toBe(hashOf(first));
+    expect(userStore.get("user-1")?.resetTokenExp).toEqual(firstExp);
+
+    // The failed attempt did not count as a fresh link: a retry right away mails.
+    await forgot(app, "flaky@example.com");
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(3);
+    expect((await reset(app, mailedToken(2))).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("leaves no link behind when the first mail fails", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "nomail@example.com");
+
+    sendPasswordResetEmailSpy.mockResolvedValueOnce(false);
+    await forgot(app, "nomail@example.com");
+    // The store's user never had a link (Prisma reads that column as null).
+    expect(userStore.get("user-1")?.resetToken ?? null).toBeNull();
+    expect(userStore.get("user-1")?.resetTokenExp ?? null).toBeNull();
+
+    await forgot(app, "nomail@example.com");
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(2);
     await app.close();
   });
 });

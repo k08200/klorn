@@ -33,6 +33,8 @@ import {
   TERMINAL_INVITE_CODES,
 } from "../../../web/src/app/settings/_sections/org/model";
 import en from "../../../web/src/lib/locales/en";
+import ko from "../../../web/src/lib/locales/ko";
+import zh from "../../../web/src/lib/locales/zh";
 import { SESSION_STATE_PREFIXES } from "../../../web/src/lib/logout-cleanup";
 
 const TOKEN = "a".repeat(64);
@@ -160,6 +162,7 @@ describe("seat management after purchase", () => {
         "PORTAL_PAYER_ONLY",
         "SEATS_BELOW_MEMBERS",
         "SEATS_CHANGED",
+        "SEATS_CHANGE_IN_FLIGHT",
         "RESUME_PAYER_ONLY",
         "BILLING_PROVIDER_READ_FAILED",
         "SEATS_INCREASE_PAYER_ONLY",
@@ -174,6 +177,19 @@ describe("seat management after purchase", () => {
       const key = orgErrorKey(new Error(`API 409: {"code":"${code}"}`));
       expect(key).toBe(`settings.org.error.${code}`);
       expect(en[key], key).toBeTypeOf("string");
+    }
+  });
+
+  it("says an earlier seat change is still settling, in every shipped language, not the generic error", () => {
+    // seat-change-audit.ts answers SEATS_CHANGE_IN_FLIGHT (409) when nothing
+    // changed since the read but an earlier change may still move the count.
+    const key = orgErrorKey(new Error('API 409: {"error":"…","code":"SEATS_CHANGE_IN_FLIGHT"}'));
+    expect(key).toBe("settings.org.error.SEATS_CHANGE_IN_FLIGHT");
+    for (const [name, table] of Object.entries({ en, ko, zh })) {
+      const text = table[key];
+      expect(text, name).toBeTypeOf("string");
+      expect(text, name).not.toBe(table["settings.org.error.generic"]);
+      expect(text, name).not.toBe(table["settings.org.error.SEATS_CHANGED"]);
     }
   });
 });

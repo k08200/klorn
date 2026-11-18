@@ -3327,6 +3327,8 @@ const en: Record<string, string> = {
     "That's more seats than you can add without the email address that pays for the team. The person whose email pays can add more from their own Klorn account (Paddle's receipt emails go to them). You can still remove seats.",
   "settings.org.error.SEATS_CHANGED":
     "The seat count changed while this was saving. Check the current count and try again.",
+  "settings.org.error.SEATS_CHANGE_IN_FLIGHT":
+    "An earlier seat change is still being processed, so nothing was changed. Try again in a few minutes.",
   "settings.org.error.RESUME_PAYER_ONLY":
     "Keeping the subscription restarts billing on the payer's card, so only the person who pays for the team, or the owner who set it to end in Klorn, can do it. Ask the payer to keep it from their own Klorn account (Paddle's receipt emails go to them).",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":

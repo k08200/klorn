@@ -98,6 +98,12 @@ import {
   recordLoginAttempt,
 } from "../security/login-throttle.js";
 import {
+  PASSWORD_RESET_TOKEN_TTL_MS,
+  passwordResetThrottleRemainingMs,
+  recordPasswordResetRequest,
+  resetLinkIsFresh,
+} from "../security/password-reset-throttle.js";
+import {
   recordRegisterAttempt,
   registerThrottleRemainingMs,
 } from "../security/register-throttle.js";
@@ -1712,21 +1718,45 @@ export function authRoutes(app: FastifyInstance) {
       if (!hasMeaningfulText(normalizedEmail))
         return reply.code(400).send({ error: "Email required" });
 
+      // Per-address window on top of the per-IP limit (password-reset-throttle.ts):
+      // counted for every address alike, before the lookup and before any
+      // await. A locked address gets the same answer as any other and no mail.
+      if (passwordResetThrottleRemainingMs(normalizedEmail) > 0) {
+        return reply.send({ success: true });
+      }
+      recordPasswordResetRequest(normalizedEmail);
+
       const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       // Always return success to prevent email enumeration
       if (!user) return reply.send({ success: true });
 
+      // A link mailed moments ago stays the live one: no second mail that
+      // would retire the first (password-reset-throttle.ts).
+      if (resetLinkIsFresh(user)) return reply.send({ success: true });
+
       // Only the hash is stored (one-time-token.ts); the raw token exists
       // only in the reset email.
       const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
-      const resetTokenExp = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      const resetTokenExp = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
 
-      await prisma.user.update({
-        where: { id: user.id },
+      // Compare-and-swap on the link this request read: of two concurrent
+      // requests (a double submit) only one replaces it and mails.
+      const claimed = await prisma.user.updateMany({
+        where: { id: user.id, resetToken: user.resetToken },
         data: { resetToken: resetTokenHash, resetTokenExp },
       });
+      if (claimed.count === 0) return reply.send({ success: true });
 
-      await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+      const sent = await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+      if (!sent) {
+        // Nobody holds the new token, so put the previous link back (only if
+        // this request's token is still the stored one): a failed send must
+        // neither kill a link already mailed nor hold off a retry as "fresh".
+        await prisma.user.updateMany({
+          where: { id: user.id, resetToken: resetTokenHash },
+          data: { resetToken: user.resetToken, resetTokenExp: user.resetTokenExp },
+        });
+      }
 
       return reply.send({ success: true });
     },
