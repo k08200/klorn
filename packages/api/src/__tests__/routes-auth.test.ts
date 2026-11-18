@@ -7,6 +7,7 @@ import { isAllowedNativeScheme } from "../routes/auth.js";
 import {
   _resetRegisterThrottleForTests,
   REGISTER_THROTTLE_MAX_ATTEMPTS,
+  recordRegisterAttempt,
 } from "../security/register-throttle.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 
@@ -610,26 +611,40 @@ describe("POST /api/auth/register", () => {
       await app.close();
     });
 
-    it("answers a locked attempt before any lookup: nothing is created and no mail goes out", async () => {
+    it("answers a locked attempt before any lookup, alike for a taken and a fresh address", async () => {
       const app = await buildApp();
-      // Fill one fresh address's window with refused attempts (beta gate on):
-      // it never existed, so the lock cannot be told apart from a taken one.
-      process.env.BETA_GATE_ENABLED = "true";
       for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS; i++) {
-        expect((await attempt(app, "fresh@example.com", `10.0.2.${i + 1}`)).statusCode).toBe(403);
+        await attempt(app, "taken@example.com", `10.0.0.${i + 1}`);
       }
-      delete process.env.BETA_GATE_ENABLED;
+      // A window full of attempts on an address that never got an account
+      // (each one lost to a refusal or a race): the route cannot tell.
+      for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS; i++) {
+        recordRegisterAttempt("fresh@example.com");
+      }
       sendVerificationEmailSpy.mockClear();
       const { prisma } = await import("../db.js");
       const lookups = vi.mocked(prisma.user.findUnique).mock.calls.length;
 
-      const locked = await attempt(app, "fresh@example.com", "10.0.3.1");
+      const taken = await attempt(app, "taken@example.com", "10.0.3.1");
+      const fresh = await attempt(app, "fresh@example.com", "10.0.3.2");
 
-      expect(locked.statusCode).toBe(429);
+      expect([taken.statusCode, fresh.statusCode]).toEqual([429, 429]);
+      expect(fresh.json()).toEqual(taken.json());
       expect(vi.mocked(prisma.user.findUnique).mock.calls.length).toBe(lookups);
       expect(userByEmail.has("fresh@example.com")).toBe(false);
       await new Promise((resolve) => setImmediate(resolve));
       expect(sendVerificationEmailSpy).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("does not count an attempt the beta gate refuses", async () => {
+      const app = await buildApp();
+      process.env.BETA_GATE_ENABLED = "true";
+      for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS + 2; i++) {
+        expect((await attempt(app, "invitee@example.com", `10.0.2.${i + 1}`)).statusCode).toBe(403);
+      }
+      delete process.env.BETA_GATE_ENABLED;
+      expect((await attempt(app, "invitee@example.com", "10.0.3.1")).statusCode).toBe(201);
       await app.close();
     });
 

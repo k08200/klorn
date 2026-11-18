@@ -66,12 +66,14 @@ describe("redactMailAddresses", () => {
     expect(redactMailAddresses(input)).toBe(expected);
   });
 
-  it("follows a quoted local part folded across lines, and takes the line when no opening quote is left", () => {
+  it("follows a quoted local part folded across lines, and takes the line when no opening quote is on it", () => {
     // RFC 5322 lets a quoted string fold: the opening quote may sit a line up.
     expect(redactMailAddresses('To: "Kim\r\n Lee"@example.com')).toBe(`To: ${M}`);
     // A stray closing quote with no opening: the line up to it goes, not only
     // the domain, and the line before stays.
     expect(redactMailAddresses('first line\nlog: x"@example.com')).toBe(`first line\n${M}`);
+    // An opening quote on an earlier, unfolded line is not this one's.
+    expect(redactMailAddresses('say "hi"\nline two\nfoo"@y.co')).toBe(`say "hi"\nline two\n${M}`);
   });
 
   it.each([

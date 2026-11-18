@@ -349,8 +349,10 @@ export async function effectiveTierOrOwnPlan(userId: string, plan: string): Prom
 
 /**
  * The 429 for a per-account lock (login-throttle.ts, register-throttle.ts):
- * the same `{ error }` body the central error handler renders for the per-IP
- * limiter, so a lock never tells an address with an account from one without.
+ * the `{ error: "Rate limit exceeded, retry in …" }` shape the central error
+ * handler renders for the per-IP limiter (the time here is whole minutes, and
+ * only `retry-after` is set). It depends on the address's attempts alone, so
+ * a lock never tells an address with an account from one without.
  */
 function sendAccountThrottled(reply: FastifyReply, remainingMs: number) {
   const retryAfterSec = Math.ceil(remainingMs / 1000);
@@ -415,19 +417,6 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Name cannot be empty" });
       }
 
-      // Per-address window on top of the per-IP limit (register-throttle.ts):
-      // checked and recorded with no await between, before any lookup, for
-      // every address alike, so the lock is no existence oracle of its own.
-      const registerThrottleMs = registerThrottleRemainingMs(normalizedEmail);
-      if (registerThrottleMs > 0) {
-        request.log.warn(
-          { account: addressLogTag(normalizedEmail) },
-          "per-address register throttle tripped",
-        );
-        return sendAccountThrottled(reply, registerThrottleMs);
-      }
-      recordRegisterAttempt(normalizedEmail);
-
       // Beta gate: when BETA_GATE_ENABLED=true, registration is restricted to
       // waitlist entries that an admin has approved. Approval only opens the
       // door: every new account starts on FREE (the schema default), and Pro
@@ -445,6 +434,20 @@ export function authRoutes(app: FastifyInstance) {
           error: "Early access is invite-only. Request access at /early-access.",
         });
       }
+
+      // Per-address window on top of the per-IP limit (register-throttle.ts):
+      // checked and recorded with no await between, before the account
+      // lookup, for every address alike, so the lock is no existence oracle of
+      // its own. After the beta gate: an attempt it refuses is not counted.
+      const registerThrottleMs = registerThrottleRemainingMs(normalizedEmail);
+      if (registerThrottleMs > 0) {
+        request.log.warn(
+          { account: addressLogTag(normalizedEmail) },
+          "per-address register throttle tripped",
+        );
+        return sendAccountThrottled(reply, registerThrottleMs);
+      }
+      recordRegisterAttempt(normalizedEmail);
 
       const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (existing) {

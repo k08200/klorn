@@ -56,7 +56,8 @@ remark an assessor may probe.
 > (`routes/commitments.ts:87-93` then). A 403 told the caller the id exists and
 > is someone else's; the 404 gives no such existence oracle. The scoping itself
 > is unchanged, and `packages/api/src/__tests__/ownership-not-found-guard.test.ts`
-> now fails CI on any owner-mismatch 403 in route source.
+> now fails CI on an owner comparison answered with a 403 in route source
+> (a source scan for that shape, not a proof that none can exist).
 
 ## 4 — Communications
 

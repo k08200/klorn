@@ -29,10 +29,11 @@
  *
  * A local part is taken whole whatever its length: RFC 5321 caps a valid one
  * at 64 characters, but cutting a longer run there left its head behind. A
- * quoted local part (`"kim lee"@…`) runs back to its opening quote, across a
- * folded line too, and its JSON-escaped form (`\"kim lee\"@…`) to the escaped
- * opening quote with its backslash. A closing quote with no opening one takes
- * its line up to the `@`. Not recognised: a JSON-escaped quoted local part
+ * quoted local part (`"kim lee"@…`) runs back to its opening quote on its line
+ * — a folded line (a line break before a space or tab, RFC 5322) counts as the
+ * same line — and its JSON-escaped form (`\"kim lee\"@…`) to the escaped
+ * opening quote with its backslash. A closing quote with no opening one on its
+ * line takes the line up to the `@`. Not recognised: a JSON-escaped quoted local part
  * that itself holds an escaped quote (`\"kim \\\"x\\\" lee\"@…` keeps
  * `\"kim \\\"x\\`). The marker carries nothing of the address.
  */
@@ -50,6 +51,8 @@ const PERCENT = 0x25;
 const QUOTE = 0x22;
 const BACKSLASH = 0x5c;
 const LINE_FEED = 0x0a;
+const SPACE = 0x20;
+const TAB = 0x09;
 const DOT = 0x2e;
 const HYPHEN = 0x2d;
 const UNDERSCORE = 0x5f;
@@ -138,13 +141,19 @@ class QuoteMarks {
   }
 }
 
+/** A line break before a space or tab folds the line (RFC 5322): the next line continues it. */
+function isFold(text: string, next: number): boolean {
+  const code = text.charCodeAt(next);
+  return code === SPACE || code === TAB;
+}
+
 /** Where the pass stands: what is copied, and where the local part it is in would start. */
 interface ScanState {
   /** Everything before `copied` is already kept (or replaced by a marker). */
   copied: number;
   /** Start of the run of local-part characters that ends at the current index. */
   runStart: number;
-  /** Start of the current line. */
+  /** Start of the current line; a folded line (a break before a space or tab) continues it. */
   lineStart: number;
   quotes: QuoteMarks;
 }
@@ -153,8 +162,9 @@ interface ScanState {
 function localPartStart(text: string, index: number, state: ScanState): number {
   const { copied, runStart, lineStart, quotes } = state;
   if (text.charCodeAt(index - 1) !== QUOTE) return Math.max(runStart, copied);
+  const floor = Math.max(lineStart, copied);
   const opening = quotes.openingFor(index - 1);
-  return opening >= copied ? opening : Math.max(lineStart, copied);
+  return opening >= floor ? opening : floor;
 }
 
 /**
@@ -184,7 +194,7 @@ export function redactMailAddresses(text: string): string {
     }
     const code = text.charCodeAt(index);
     if (code === QUOTE) state.quotes.see(text, index);
-    if (code === LINE_FEED) state.lineStart = index + 1;
+    if (code === LINE_FEED && !isFold(text, index + 1)) state.lineStart = index + 1;
     if (!isLocalChar(code)) state.runStart = index + 1;
     index++;
   }

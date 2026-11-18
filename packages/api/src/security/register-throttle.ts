@@ -4,19 +4,24 @@
  * POST /register answers 409 for an address that already has an account and
  * hands a session back at once (no verification step), so it is an
  * account-existence oracle by design; docs/security/account-enumeration.md
- * records why that residual is accepted. The per-IP route limit (5/15min)
- * prices a sweep of many addresses from one source; this window prices
- * hammering one address from many sources, which the per-IP limit cannot see.
+ * records why that residual is accepted. This window does not bound that
+ * oracle — one request per address answers it, and only the per-IP route
+ * limit (5/15min) prices a sweep of many addresses. It bounds repeat attempts
+ * on one address from many sources, which the per-IP limit cannot see.
  *
- * Attempts are counted after input validation and BEFORE any lookup, in the
- * same synchronous section as the check (login-throttle.ts idiom), and for
- * every address alike, so a locked address answers the same 429 as the per-IP
- * limiter whether or not it has an account. A successful registration does
- * not clear the window: the address is taken from then on.
+ * Attempts are counted after input validation and the beta gate, BEFORE the
+ * account lookup, in the same synchronous section as the check
+ * (login-throttle.ts idiom), and for every address alike, so a locked address
+ * answers the same 429 whether or not it has an account. A successful
+ * registration does not clear the window: the address is taken from then on.
  *
  * The threshold is twice the per-IP limit, so one person retrying from one
- * network never trips it. Lockout-DoS is not a concern here: whoever could
- * burn an address's attempts could as well register it first.
+ * network never trips it. Residual lockout: two or more coordinated source
+ * addresses can lock sign-up for an address for the rest of a 15-minute
+ * window. Whoever can do that can as well register the address first (the
+ * owner then takes it back by password reset or Google sign-in), so the lock
+ * adds no reach of its own; it does stop sign-up until the window ends.
+ * Attempts the beta gate refuses are not counted.
  */
 
 import { createAccountWindowThrottle } from "./account-window-throttle.js";

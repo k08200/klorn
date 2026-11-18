@@ -209,10 +209,13 @@ subscription webhook does.
   concurrent decreases by a non-payer cannot add up to an unchecked increase.
   Its audit row is committed under the lock before its Paddle call, so a
   change requested up to 10 s (the call's 6 s timeout plus clock margin)
-  before the read answers the same — Paddle may have answered the read before
-  applying it; a second change within ~10 s of the last one is refused and
-  can be retried. So does a change still unconfirmed from the last two
-  minutes: Paddle may apply it after a later request read the count.
+  before the read is refused too — Paddle may have answered the read before
+  applying it — and so is a change still unconfirmed from the last two
+  minutes: Paddle may apply it after a later request read the count. Those
+  two answer `SEATS_CHANGE_IN_FLIGHT` (409): nothing changed since the read,
+  an earlier change is still settling, and the same request can be retried
+  once it has (a second change within ~10 s of the last one, or within two
+  minutes of an unconfirmed one). The web shows its generic error for it.
 - **Audit.** Every allowed change is `billing.seats_change_requested` (taken
   back when Paddle refuses the call, so a refused change leaves no row). A
   call Paddle never answered — a timeout, a dropped connection, a 5xx — also

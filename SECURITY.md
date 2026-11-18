@@ -126,7 +126,7 @@ below names something that can make the claim fail.
   factor.
 - **Sign-up tells whether an address has an account.** Register answers 409
   for a taken address because it hands a new account a session at once, with
-  no verification step; it is bounded per IP and per address. Why it stays and
+  no verification step; only the per-IP limit prices a sweep. Why it stays and
   what closing it takes: [`docs/security/account-enumeration.md`](docs/security/account-enumeration.md).
 - **`AUTO_TIER_EXECUTION` changes the shape of C3 when enabled.** It is off by
   default; every claim above is stated for the default configuration.
