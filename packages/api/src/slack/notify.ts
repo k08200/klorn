@@ -9,10 +9,13 @@
  * ring (quiet hours, focus, the urgent-mail opt-out): the bell row plus its
  * live frame, which desktopAlertTag leaves untagged, so no device push and no
  * banner; the Windows shell holds such a frame and toasts it once quiet hours
- * end (packages/web lib/native/desktop-push-catchup.ts, as for PUSH mail). The
- * row names its episode (dedupeKey slack:<episodeId>), so that late toast is
- * dropped once the user replied in Slack. `ring: false` (a late re-judge,
- * rejudge.ts) asks for the bell row only.
+ * end (packages/web lib/native/desktop-push-catchup.ts, as for PUSH mail), and
+ * the server's quiet-hours summary counts it for the phone and the browser
+ * (notify/quiet-hours-summary.ts). The row names its episode (dedupeKey
+ * slack:<episodeId>), so that late ring is dropped once the user replied in
+ * Slack. `ring: false` (a late re-judge, rejudge.ts) asks for the bell row
+ * only. A row held for good (the budget, the ring cap, `ring: false`) is named
+ * slack-held:<episodeId> instead, so nothing rings it later.
  *
  * Slack's share is bounded so other people's messages cannot crowd out mail:
  * at most SLACK_RINGS_PER_DAY Slack rings a (UTC) day (past it, a bell row
@@ -26,7 +29,12 @@ import type { SlackConversationKind } from "../judge/email-classifier.js";
 import { admitPushNotification } from "../judge/v3/push-budget-gate.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { slackPushContent } from "./push-content.js";
-import { SLACK_NOTIFICATION_TYPE, SLACK_TITLE_PREFIX } from "./push-strings.js";
+import {
+  SLACK_HELD_ROW_KEY_PREFIX,
+  SLACK_NOTIFICATION_TYPE,
+  SLACK_ROW_KEY_PREFIX,
+  SLACK_TITLE_PREFIX,
+} from "./push-strings.js";
 import { isUniqueViolation } from "./unique-violation.js";
 
 export { SLACK_NOTIFICATION_TYPE };
@@ -87,7 +95,7 @@ async function writeHeldRow(
 ): Promise<void> {
   try {
     await prisma.notification.create({
-      data: { userId, ...row, dedupeKey: `slack:${episodeId}` },
+      data: { userId, ...row, dedupeKey: `${SLACK_HELD_ROW_KEY_PREFIX}${episodeId}` },
       select: { id: true },
     });
   } catch (err) {
@@ -122,7 +130,7 @@ async function linkRowToEpisode(notificationId: string, episodeId: string): Prom
   try {
     await prisma.notification.updateMany({
       where: { id: notificationId, dedupeKey: null },
-      data: { dedupeKey: `slack:${episodeId}` },
+      data: { dedupeKey: `${SLACK_ROW_KEY_PREFIX}${episodeId}` },
     });
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;

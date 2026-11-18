@@ -25,6 +25,15 @@
  *   - ambient bucket, never interrupt (push-bucket.ts): none of it is new, and
  *     it must not use up the room live interrupts need. sendPushNotification
  *     still applies the category opt-out, so "Urgent email" off means no ring.
+ *   - Slack PUSH held during quiet hours counts too, while Slack is open to the
+ *     user (SLACK_ENABLED, its cohort): the Slack row a will-not-ring push
+ *     wrote inside the window ("slack:<episodeId>", slack/notify.ts), unread,
+ *     whose episode the user did not answer in Slack since (held-slack-rows.ts,
+ *     the Windows catch-up's rule). One held Slack row alone rings as its live
+ *     push (opening Today); a summary holding one is worded "N urgent messages
+ *     during quiet hours", as the Windows shell words its own. A Slack row that
+ *     rang live or was held for good ("slack-held:") never rings here. Slack
+ *     off: not one read more than the mail-only sweep.
  *
  * Desktop apps: the summary rides only sendPushNotification's channels (web
  * push subscriptions, Telegram, FCM, APNs), never the real-time frame the
@@ -40,9 +49,12 @@
  */
 
 import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
+import { slackOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import { stampDecisionRang } from "../judge/decision-label.js";
 import { logDbFailure } from "../report-db-failure.js";
+import { SLACK_NOTIFICATION_TYPE, SLACK_ROW_KEY_PREFIX } from "../slack/push-strings.js";
+import { withoutAnsweredEpisodes } from "./held-slack-rows.js";
 import type { MailPushLane } from "./mail-push-content.js";
 import {
   type NotificationLanguage,
@@ -66,7 +78,15 @@ const DISABLED_VALUES = ["true", "1", "yes", "on"];
 /** sendPushNotification's skip reason when a per-user rate bucket refused. */
 const RATE_LIMITED = "rate_limited";
 
-/** What the sweep rings: the summary, or the one held mail in N1 shape. */
+/** A Slack PUSH held during quiet hours: its bell row, which carries the live push's text. */
+export interface HeldSlackRow {
+  bellId: string;
+  title: string;
+  body: string;
+  createdAt: Date;
+}
+
+/** What the sweep rings: the summary, the one held mail in N1 shape, or the one held Slack push. */
 interface HeldMailPush {
   title: string;
   body: string;
@@ -133,19 +153,21 @@ async function summarizeHeldMail(config: QuietConfigRow, now: Date): Promise<boo
 
   const language = resolveNotificationLanguage(config.notificationLanguage);
   const held = await heldPushMail(userId, window, language);
-  if (held.length === 0) return false;
-  if (!(await claimWindow(userId, dedupeKey, held.length))) return false;
+  const slack = await heldSlackPush(userId, window);
+  const count = held.length + slack.length;
+  if (count === 0) return false;
+  if (!(await claimWindow(userId, dedupeKey, count))) return false;
 
   const result = await sendPushNotification(
     userId,
-    quietSummaryPush(held, language),
+    quietSummaryPush(held, language, slack),
     "email_urgent",
     // Held mail is not news: ambient, never the interrupt bucket.
     { bucket: "ambient" },
   );
   // The held mail rang now: its ledger rows record the ring (IP24). A summary
   // the gates held again records nothing.
-  if (result.dispatchedAt) {
+  if (result.dispatchedAt && held.length > 0) {
     await stampDecisionRang(
       userId,
       held.map((m) => m.emailId),
@@ -184,11 +206,46 @@ async function heldPushMail(
   });
 }
 
-/** The push for what was held: the mail itself when one, else one summary. */
+/**
+ * The window's held Slack PUSH that still deserves a ring, newest first. Slack
+ * closed to this user (flag off, or outside its cohort): none, and no read.
+ * Named rows only: a Slack row with no key is from before episodes were named,
+ * or a second row of an episode whose named row already stands for it.
+ */
+async function heldSlackPush(userId: string, window: QuietWindow): Promise<HeldSlackRow[]> {
+  if (!slackOpenTo(userId)) return [];
+  const rows = await prisma.notification.findMany({
+    where: {
+      userId,
+      type: SLACK_NOTIFICATION_TYPE,
+      isRead: false,
+      createdAt: { gte: window.start, lt: window.end },
+      dedupeKey: { startsWith: SLACK_ROW_KEY_PREFIX },
+    },
+    select: { id: true, title: true, message: true, createdAt: true, dedupeKey: true },
+    orderBy: { createdAt: "desc" },
+    take: QUIET_SUMMARY_MAX_MAIL,
+  });
+  const deserving = await withoutAnsweredEpisodes(userId, rows);
+  return deserving.map((row) => ({
+    bellId: row.id,
+    title: row.title,
+    body: row.message,
+    createdAt: row.createdAt,
+  }));
+}
+
+/**
+ * The push for what was held: the mail itself when one, else one summary. With
+ * held Slack PUSH among it: the Slack push itself when it is all there is, else
+ * one summary worded "urgent messages", naming every item newest first.
+ */
 export function quietSummaryPush(
   held: readonly OpenPushMail[],
   language: NotificationLanguage,
+  slack: readonly HeldSlackRow[] = [],
 ): HeldMailPush {
+  if (slack.length > 0) return withSlackPush(held, language, slack);
   const [first] = held;
   if (held.length === 1) {
     return {
@@ -205,6 +262,30 @@ export function quietSummaryPush(
   return {
     title: notificationCopy(language).heldDuringQuietHours(held.length),
     body: formatSenders(held.map((m) => m.title)),
+    url: TODAY_PATH,
+  };
+}
+
+function withSlackPush(
+  held: readonly OpenPushMail[],
+  language: NotificationLanguage,
+  slack: readonly HeldSlackRow[],
+): HeldMailPush {
+  const [only] = slack;
+  if (held.length === 0 && slack.length === 1) {
+    // As the live Slack push (slack/notify.ts ring): its text, opening Today.
+    return {
+      title: only.title,
+      body: only.body,
+      url: TODAY_PATH,
+      bellNotificationId: only.bellId,
+      language,
+    };
+  }
+  const items = [...held, ...slack].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return {
+    title: notificationCopy(language).messagesDuringQuietHours(items.length),
+    body: formatSenders(items.map((item) => item.title)),
     url: TODAY_PATH,
   };
 }
