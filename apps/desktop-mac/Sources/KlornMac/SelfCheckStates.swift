@@ -179,10 +179,11 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           text("AppModel.swift").components(separatedBy: "loadError = Self.describe(error)").count == 2
           && text("AppModel.swift").contains("loadOffline = kind == .offline"))
     // Only a refresh may raise the "couldn't refresh" banner; pin, unpin,
-    // dismiss and snooze failures go to the action notice.
+    // dismiss and snooze failures, and a banner's Later / Done, go to the
+    // action notice.
     check("only the queue refresh records a load failure; actions have their own channel",
           text("AppModel.swift").components(separatedBy: "            noteLoadFailure(error)\n").count == 2
-          && text("AppModel.swift").components(separatedBy: "noteActionFailure(error)\n").count == 4)
+          && text("AppModel.swift").components(separatedBy: "noteActionFailure(error)\n").count == 6)
     check("every retry control goes through the guarded retry",
           users(of: "await model.retry" + "Load()") == ["SurfaceState.swift"]
           && !text("SurfaceState.swift").contains("await model.loadQueue()"))

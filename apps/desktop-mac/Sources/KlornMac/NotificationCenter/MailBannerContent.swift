@@ -32,12 +32,21 @@ enum MailBannerContent {
     static let fromMax = 1000
 
     static func compose(from: String?, subject: String?, reason: NotificationReason?) -> (title: String, body: String) {
+        let parts = lines(from: from, subject: subject, reason: reason)
+        return (parts.title, parts.reason.isEmpty ? parts.subject : "\(parts.subject)\n\(parts.reason)")
+    }
+
+    /// The same words as `compose`, kept apart: the Mac banner (NT3, founder
+    /// decision 2026-11-17) puts the subject on the subtitle line and the
+    /// reason in the body. `reason` is "" when there is none. Pure.
+    static func lines(
+        from: String?, subject: String?, reason: NotificationReason?
+    ) -> (title: String, subject: String, reason: String) {
         let sender = senderTitle(from ?? "")
-        let title = sender.isEmpty ? "Klorn" : sender
         let line = plainLine(subject, subjectMax)
-        let subjectLine = line.isEmpty ? L("banner.noSubject") : line
-        let why = reasonLine(reason)
-        return (title, why.isEmpty ? subjectLine : "\(subjectLine)\n\(why)")
+        return (sender.isEmpty ? "Klorn" : sender,
+                line.isEmpty ? L("banner.noSubject") : line,
+                reasonLine(reason))
     }
 
     /// mail-push-content.ts:92-101: the verified quote in curly quotes (its

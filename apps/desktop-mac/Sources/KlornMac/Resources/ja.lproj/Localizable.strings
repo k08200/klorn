@@ -344,7 +344,15 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "両者空き: %@";
-"meeting.banner.body" = "%d分後に始まります。";
+"meeting.banner.soon" = "%d分後";
+"banner.action.reply" = "返信";
+"banner.action.later" = "後で";
+"banner.action.done" = "完了";
+"banner.action.join" = "参加";
+"meeting.provider.meet" = "Google Meet";
+"meeting.provider.zoom" = "Zoom";
+"meeting.provider.teams" = "Microsoft Teams";
+"meeting.provider.webex" = "Webex";
 "meeting.proposedSlot" = "提案: %@";
 "meeting.slotFree" = "その時間はカレンダーが空いています";
 "meeting.slotBusy" = "既存の予定と重なります";

@@ -163,31 +163,52 @@ final class InMemoryPushLedgerStore: PushLedgerStoring {
 /// What one banner says. Sender, subject and the judge's reason
 /// (`MailBannerContent`): never the mail's body text, so a banner on a
 /// shared screen never shows the mail's contents. Pure.
+///
+/// NT3 layout (founder decision 2026-11-17): title = sender, subtitle =
+/// subject, body = the reason line (a verified quote, else the reason). With
+/// no reason the subject is the body and there is no subtitle.
 struct PushBanner: Equatable, Sendable {
     let identifier: String
     let title: String
     let body: String
-    /// The lane name on a MEETING-mail banner, so it reads differently from
-    /// PUSH at a glance. nil (no line) for PUSH and meeting-soon banners.
+    /// The subject on a mail banner, led by the lane name on a MEETING-lane
+    /// mail so it reads differently from PUSH at a glance. nil (no line) for
+    /// summaries and meeting reminders.
     var subtitle: String? = nil
-    /// Time Sensitive for one PUSH or MEETING mail; the default level for
-    /// summaries and meeting reminders (`BannerInterruption`).
+    /// Time Sensitive for one PUSH or MEETING mail and an imminent meeting;
+    /// the default level for summaries (`BannerInterruption`).
     var interruption: BannerInterruption = .standard
+    /// The buttons (`BannerActions`): Reply / Later / Done on a mail, Join on
+    /// a meeting with a safe link. nil (none) for summaries.
+    var category: BannerCategory? = nil
+    /// The Notification Center group: per mail, the meetings', or the
+    /// summaries' shared one.
+    var thread: String = PushNotifier.threadIdentifier
+    /// What a background button needs (the mail id for Later, the join
+    /// link). Plain strings, never mail content.
+    var userInfo: [String: String] = [:]
 
     /// `row`: the bell row for this mail (`NotificationCenterStore.row(forEmail:)`),
     /// when the store already holds it. Its verified quote is the reason line
     /// the server rang with (NC1); without one, the judge's reason on the item.
     static func make(for item: FirewallItem, row: NotificationWire? = nil) -> PushBanner {
-        let content = MailBannerContent.compose(
+        let words = MailBannerContent.lines(
             from: item.email?.from.map(decodeHTMLEntities),
             subject: decodeHTMLEntities(item.email?.subject ?? item.title),
             reason: bannerReason(item: item, row: row))
+        let subject = words.reason.isEmpty ? nil : words.subject
+        let lane = item.tier == .meeting ? Tier.meeting.label : nil
+        let subtitle = [lane, subject].compactMap { $0 }.joined(separator: " · ")
+        let emailID = item.email?.emailDbId
         return PushBanner(
             identifier: PushNotifier.notificationIdentifier(for: item.id),
-            title: content.title,
-            body: content.body,
-            subtitle: item.tier == .meeting ? Tier.meeting.label : nil,
-            interruption: .forLane(item.tier))
+            title: words.title,
+            body: words.reason.isEmpty ? words.subject : words.reason,
+            subtitle: subtitle.isEmpty ? nil : subtitle,
+            interruption: .forLane(item.tier),
+            category: emailID == nil ? nil : .mail,
+            thread: emailID.map(PushNotifier.mailThreadIdentifier(for:)) ?? PushNotifier.threadIdentifier,
+            userInfo: emailID.map { [BannerActions.emailIDKey: $0] } ?? [:])
     }
 
     /// The bell row's reason when it carries a verified quote; otherwise the
@@ -262,28 +283,25 @@ struct BannerMail: Equatable, Sendable {
     }
 }
 
-/// The "starting soon" banner for a meeting: the title and start time, and
-/// a short line with the minutes left. No description, attendees or mail
-/// content. Pure (`now` and the time formatter are inputs).
+/// The "starting soon" banner for a meeting (NT3): the title, and a line
+/// with the minutes left and the video service ("In 8 min · Google Meet").
+/// No description, location, attendees or the link itself in the words; a
+/// safe https join link rides along for the Join button. Imminent, so Time
+/// Sensitive. Pure (`now` is an input).
 enum MeetingBanner {
-    /// "3:20 PM" in the display zone (`Date.formatted` reads this Mac's).
-    static func shortTime(_ date: Date) -> String {
-        var style = Date.FormatStyle(date: .omitted, time: .shortened)
-        style.timeZone = DisplayTimeZone.current
-        return date.formatted(style)
-    }
-
-    static func make(
-        for event: CalendarEventWire, now: Date,
-        time: (Date) -> String = { MeetingBanner.shortTime($0) }
-    ) -> PushBanner {
+    static func make(for event: CalendarEventWire, now: Date) -> PushBanner {
         let start = meetingStart(event.startTime)
-        let title = event.title.isEmpty ? "Klorn" : event.title
         let minutes = start.map { max(1, Int(($0.timeIntervalSince(now) / 60).rounded())) } ?? 1
+        let link = MeetingLink.safeURL(event.meetingLink)
+        let provider = link.flatMap(MeetingProvider.name(for:))
         return PushBanner(
             identifier: PushNotifier.meetingIdentifier(for: event.id),
-            title: start.map { "\(title) · \(time($0))" } ?? title,
-            body: L("meeting.banner.body", minutes))
+            title: event.title.isEmpty ? "Klorn" : event.title,
+            body: [L("meeting.banner.soon", minutes), provider].compactMap { $0 }.joined(separator: " · "),
+            interruption: .timeSensitive,
+            category: link == nil ? nil : .meetingJoin,
+            thread: PushNotifier.meetingThreadIdentifier,
+            userInfo: link.map { [BannerActions.meetingLinkKey: $0.absoluteString] } ?? [:])
     }
 }
 
@@ -409,9 +427,18 @@ final class SystemPushNotifier: PushNotifying {
         if let subtitle = banner.subtitle { content.subtitle = subtitle }
         content.body = banner.body
         content.sound = .default
-        content.threadIdentifier = PushNotifier.threadIdentifier
+        content.threadIdentifier = banner.thread
         content.interruptionLevel = banner.interruption.level(entitled: entitled)
+        if let category = banner.category { content.categoryIdentifier = category.rawValue }
+        if !banner.userInfo.isEmpty { content.userInfo = banner.userInfo }
         return content
+    }
+
+    /// The Reply / Later / Done and Join buttons, registered once at launch
+    /// before the first banner can be posted. Unbundled `swift run`: nothing.
+    static func registerCategories() {
+        guard PushNotifier.isAvailable else { return }
+        UNUserNotificationCenter.current().setNotificationCategories(BannerActions.categories())
     }
 
     /// Sign-out: take this account's banners out of Notification Center —
@@ -478,8 +505,8 @@ enum NotificationCenterCalls {
 
 /// Announces newly arrived PUSH and MEETING mail: a VoiceOver announcement
 /// always, and a banner per item while the Settings ▸ Notifications switch is
-/// on. The
-/// banner is informational only — lanes classify, nothing here acts on mail.
+/// on. Posting acts on nothing — lanes classify; a banner's buttons act only
+/// when the user presses one (`WindowRouter.handleNotificationResponse`).
 @MainActor
 final class PushAlerter {
     private let model: AppModel
@@ -573,7 +600,9 @@ enum PushNotifier {
     /// mail it counts appended, so each is its own notification. Never parsed
     /// back into an item; a tap opens Today.
     nonisolated static let morePrefix = "klorn-more-"
-    /// Groups Klorn's banners into one stack in Notification Center.
+    /// Groups Klorn's summary banners into one stack in Notification Center
+    /// (mail and meetings have their own: `mailThreadIdentifier`,
+    /// `meetingThreadIdentifier`).
     nonisolated static let threadIdentifier = "klorn-push"
 
     @MainActor static var isAvailable: Bool { Bundle.main.bundleIdentifier != nil }

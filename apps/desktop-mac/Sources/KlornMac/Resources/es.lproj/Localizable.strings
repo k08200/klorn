@@ -344,7 +344,15 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "Ambos libres: %@";
-"meeting.banner.body" = "Empieza en %d min.";
+"meeting.banner.soon" = "En %d min";
+"banner.action.reply" = "Responder";
+"banner.action.later" = "Más tarde";
+"banner.action.done" = "Hecho";
+"banner.action.join" = "Unirse";
+"meeting.provider.meet" = "Google Meet";
+"meeting.provider.zoom" = "Zoom";
+"meeting.provider.teams" = "Microsoft Teams";
+"meeting.provider.webex" = "Webex";
 "meeting.proposedSlot" = "Propuesto: %@";
 "meeting.slotFree" = "Ese hueco está libre en tu calendario";
 "meeting.slotBusy" = "Choca con un evento existente";
