@@ -70,8 +70,9 @@ calendar time.
 ### Changed
 - Klorn now ships three languages: English, Korean and Simplified Chinese.
   The Japanese, Spanish, French and German web locales are removed; a
-  browser or saved profile in one of them shows English, and Settings reads
-  and saves a notification language outside en/ko/zh as English. Daily
+  browser or saved profile in one of them shows English, Settings saves a
+  notification language outside en/ko/zh as English, and a migration rewrites
+  a stored ja/es/fr/de notification language to English. Daily
   digest mail, the judge's PUSH reason and the on-demand summary, sender
   dossier and thread brief now also come in Simplified Chinese.
 - **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail

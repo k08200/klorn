@@ -331,17 +331,20 @@ ${lines.join("\n")}`;
 
 /**
  * The reason is shown to the user as "why this was PUSH", so it has to be in a
- * language they read. Only languages we ship UI for get an instruction; anything
- * else leaves the prompt byte-identical to the English default, so the judge's
- * scoring behaviour (and its eval baseline) is untouched.
+ * language they read. Every shipped non-English language (ko, zh) gets an
+ * instruction — the table is keyed so a new shipped language fails the build
+ * until it has one. English and anything unshipped leave the prompt
+ * byte-identical to the English default, so the judge's scoring behaviour (and
+ * its eval baseline) is untouched.
  */
-const REASON_LANGUAGE_INSTRUCTION: Readonly<Partial<Record<ShippedLanguage, string>>> = {
+const REASON_LANGUAGE_INSTRUCTION: Readonly<Record<Exclude<ShippedLanguage, "en">, string>> = {
   ko: "\nWrite the reason in Korean. The scores stay unchanged — only the reason's language.",
   zh: "\nWrite the reason in Simplified Chinese. The scores stay unchanged — only the reason's language.",
 };
 
 function reasonLanguageInstruction(language?: string | null): string {
-  return REASON_LANGUAGE_INSTRUCTION[toShippedLanguage(language)] ?? "";
+  const shipped = toShippedLanguage(language);
+  return shipped === "en" ? "" : REASON_LANGUAGE_INSTRUCTION[shipped];
 }
 
 function buildJudgePrompt(

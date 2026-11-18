@@ -98,7 +98,7 @@ export async function automationRoutes(app: FastifyInstance) {
       preApprovableTools: Array.from(PRE_APPROVABLE_TOOLS),
       replyTone: normalizeReplyTone(configAny.replyTone),
       replyTones: listReplyTonePolicies(),
-      notificationLanguage: toShippedLanguage(configAny.notificationLanguage as string | null),
+      notificationLanguage: toShippedLanguage(configAny.notificationLanguage),
       notificationLanguages: Array.from(SHIPPED_LANGUAGES),
       notifyEmailUrgent: configAny.notifyEmailUrgent ?? true,
       notifyMeeting: configAny.notifyMeeting ?? true,
@@ -189,7 +189,7 @@ export async function automationRoutes(app: FastifyInstance) {
     // retired ja/es/fr/de) would be persisted and then silently fall back to
     // English on every notification. Fold it to a shipped one: en, ko, zh.
     if ("notificationLanguage" in data) {
-      data.notificationLanguage = toShippedLanguage(data.notificationLanguage as string | null);
+      data.notificationLanguage = toShippedLanguage(data.notificationLanguage);
     }
 
     // Client-supplied zone: reject anything Intl does not know (400) rather
@@ -250,7 +250,7 @@ export async function automationRoutes(app: FastifyInstance) {
       preApprovableTools: Array.from(PRE_APPROVABLE_TOOLS),
       replyTone: normalizeReplyTone(configAny.replyTone),
       replyTones: listReplyTonePolicies(),
-      notificationLanguage: toShippedLanguage(configAny.notificationLanguage as string | null),
+      notificationLanguage: toShippedLanguage(configAny.notificationLanguage),
       notificationLanguages: Array.from(SHIPPED_LANGUAGES),
       notifyEmailUrgent: configAny.notifyEmailUrgent ?? true,
       notifyMeeting: configAny.notifyMeeting ?? true,

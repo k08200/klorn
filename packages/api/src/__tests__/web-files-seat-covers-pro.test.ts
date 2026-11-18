@@ -34,7 +34,7 @@ describe("a team seat that already covers Pro is said, not acted on", () => {
   it("has the copy in every locale, never promising an automatic cancel", () => {
     const dir = join(webSrc, "lib/locales");
     const locales = readdirSync(dir).filter((name) => name.endsWith(".ts"));
-    expect(locales.length).toBe(7);
+    expect(locales.length).toBe(3);
     for (const name of locales) {
       const text = readFileSync(join(dir, name), "utf8");
       expect(text, name).toContain(`"${KEY}"`);

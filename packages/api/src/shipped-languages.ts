@@ -18,10 +18,10 @@ export function isShippedLanguage(value: unknown): value is ShippedLanguage {
 
 /**
  * Narrow a stored or requested code to a shipped language. Regional tags fold
- * onto their base ("zh-TW" / "zh_Hans" → zh, "ko-KR" → ko); anything else is
- * English.
+ * onto their base ("zh-TW" / "zh_Hans" → zh, "ko-KR" → ko); anything else —
+ * including a non-string from a request body — is English.
  */
-export function toShippedLanguage(raw: string | null | undefined): ShippedLanguage {
+export function toShippedLanguage(raw: unknown): ShippedLanguage {
   if (typeof raw !== "string" || !raw) return DEFAULT_LANGUAGE;
   const base = raw.trim().toLowerCase().split(/[-_]/)[0];
   return isShippedLanguage(base) ? base : DEFAULT_LANGUAGE;

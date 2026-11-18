@@ -5,9 +5,8 @@
  * ship, must read as English rather than as a blank or a throw.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { UI_LOCALES } from "../../../web/src/lib/ui-locale";
 import {
   isShippedLanguage,
   OUTPUT_LANGUAGE_NAME,
@@ -21,10 +20,7 @@ describe("SHIPPED_LANGUAGES", () => {
   });
 
   it("matches the web app's UI_LOCALES", () => {
-    const source = readFileSync(resolve(__dirname, "../../../web/src/lib/ui-locale.ts"), "utf8");
-    const match = /export const UI_LOCALES = (\[[^\]]*\]) as const;/.exec(source);
-    expect(match, "UI_LOCALES literal not found").not.toBeNull();
-    expect(JSON.parse(match?.[1] ?? "[]")).toEqual([...SHIPPED_LANGUAGES]);
+    expect([...UI_LOCALES]).toEqual([...SHIPPED_LANGUAGES]);
   });
 
   it("names an output language for every shipped code", () => {

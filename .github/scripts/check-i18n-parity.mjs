@@ -432,7 +432,7 @@ for (const path of PROSE_GUARD_SKIP.keys()) {
 }
 
 if (proseProblems > 0) {
-  console.error("\nPass the string through t() and add its key to all seven locale tables.");
+  console.error("\nPass the string through t() and add its key to all three locale tables (en, ko, zh).");
   process.exit(1);
 }
 

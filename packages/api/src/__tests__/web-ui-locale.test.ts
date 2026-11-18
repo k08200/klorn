@@ -57,10 +57,10 @@ describe("activeUiLocale", () => {
     expect([...UI_LOCALES]).toEqual(["en", "ko", "zh"]);
   });
 
-  it.each(["zh"])("honours the shipped %s", async (language) => {
-    stubBrowser({ language });
+  it("honours Simplified Chinese", async () => {
+    stubBrowser({ language: "zh" });
     const { activeUiLocale } = await import("../../../web/src/lib/ui-locale");
-    expect(activeUiLocale()).toBe(language);
+    expect(activeUiLocale()).toBe("zh");
   });
 
   it.each([
