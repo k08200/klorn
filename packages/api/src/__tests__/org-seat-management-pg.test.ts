@@ -33,6 +33,8 @@ import { registerApiRoutes } from "../register-api-routes.js";
 
 const describePg = url ? describe : describe.skip;
 const SECRET = "pdl_ntfset_seats_test";
+const IN_FLIGHT_MESSAGE =
+  "An earlier seat change is still being processed, so the current count is not certain yet. Try again in a few minutes.";
 const createdUsers: string[] = [];
 let app: FastifyInstance;
 
@@ -504,7 +506,12 @@ describePg("team seat changes (real Postgres)", () => {
     expect(first.statusCode).toBe(202);
     const second = await (racer as ReturnType<typeof call> | null);
     expect(second?.statusCode).toBe(409);
-    expect(second?.json()).toMatchObject({ code: "SEATS_CHANGED" });
+    // Nothing changed since the second request looked: the first change is
+    // still on its way, which is a different answer from "it changed".
+    expect(second?.json()).toEqual({
+      code: "SEATS_CHANGE_IN_FLIGHT",
+      error: IN_FLIGHT_MESSAGE,
+    });
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
   });
 
@@ -560,7 +567,7 @@ describePg("team seat changes (real Postgres)", () => {
     });
     const blocked = await call(owner, "POST", "/api/orgs/current/seats", { seats: 2 });
     expect(blocked.statusCode).toBe(409);
-    expect(blocked.json()).toMatchObject({ code: "SEATS_CHANGED" });
+    expect(blocked.json()).toEqual({ code: "SEATS_CHANGE_IN_FLIGHT", error: IN_FLIGHT_MESSAGE });
     expect(calls.map((c) => c.method)).toEqual(["GET"]);
 
     // Three minutes on (both rows aged), the doubt is over.
